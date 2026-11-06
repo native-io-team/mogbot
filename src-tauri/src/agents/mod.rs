@@ -14,6 +14,7 @@
 //! - [`codex`]: Codex's command line and JSONL, mapped onto the same turn steps
 //! - [`codex_app`]: Codex's app-server: streaming, approval cards, interrupt
 //! - [`context`]: how full a conversation is, only as its engine reports it
+//! - [`tidy`]: compaction on for every turn, and the app's own tidy between turns
 //! - [`mcp`]: the tools agents get (team, projects, management, approvals)
 //! - [`permissions`]: "Always allow" rules and how narrowly they match
 //! - [`policy`]: what each agent may do (projects, folders, apps, browser, independence, rules), and the team default
@@ -121,6 +122,7 @@ pub mod takeover;
 pub mod task;
 pub mod team_setup;
 pub mod templates;
+pub mod tidy;
 pub mod tray;
 pub mod usage;
 pub mod usage_plan;

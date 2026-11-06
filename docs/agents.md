@@ -304,6 +304,111 @@ routine on another model (check-ins default to Haiku) leaves it alone, since
 that model's window isn't the conversation's. A fresh start, an engine switch
 or a model change clears it.
 
+### Keeping context healthy (`src-tauri/src/agents/tidy.rs`)
+
+Two layers, both engines. **Every turn** has the engine's own compaction on
+and tuned, so nothing in the user's config can leave an agent to run into
+the wall mid-task. **Between turns** the app tidies a conversation that has
+grown past 70% of its window, at a moment nothing else needs the agent.
+
+*Every turn.* Claude Code gets `--settings '{"autoCompactEnabled":true}'`
+(command-line settings outrank the user's files), `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=85`
+(it can only lower the threshold), and this app's own `DISABLE_AUTO_COMPACT`
+/ `DISABLE_COMPACT` are removed from the turn's environment. Codex gets
+`-c compact_prompt=…` (our summary instructions) and, once a reading has
+named the model's window, `-c model_auto_compact_token_limit=<85% of it>`;
+on its first turn, Codex's own default threshold. These also reach a
+take-over (its command line is the turn's).
+
+*Between turns* (`runner::maybe_tidy`). After a turn that **finished**, with
+nothing queued, no card waiting on the user, not taken over, not a turn
+answering outside text (it can't write its memory), and not a bound agent
+with no copy open (its turn would run in the user's own folder), when the
+reading is ≥ 70%: two quiet turns in the same conversation, whose words never
+reach the chat (`tidy::QuietTurn`; no drafts, no bubbles, no vanished-session
+retry, no "Interrupted" note):
+
+1. **Memory first.** An app-owned prompt (`tidy::memory_prompt`) asks the
+   agent to update `## Memory` in its CLAUDE.md with durable facts, and to
+   keep exactly one `In progress:` line (task, where it stands, open asks,
+   files, branches, links) while work is unfinished, replacing any earlier one.
+2. **Compact**, with `tidy::KEEP` as the instructions (the task in progress,
+   decisions, open asks, every file/branch/PR/URL/project touched, and the
+   memory pointer): `/compact <KEEP>` as a `--print --resume` prompt on Claude
+   Code; `thread/compact/start` on Codex's app-server, which ends on its
+   `contextCompaction` item. The reading is cleared (the engine reports the
+   next one).
+3. **Fallback.** On `codex exec` (no way to compact a thread), or when the
+   engine didn't report a compaction, the next message starts a fresh
+   conversation instead, through the same checks as Start fresh, with memory
+   (step 1) as the hand-off.
+
+Either way the chat gets one quiet line, "Tidied this conversation's memory —
+nothing lost" (a divider when it started fresh). Anything sent meanwhile
+waits like any message during a turn; a tidy gives way to it between its two
+steps, and Stop stops it. Its tokens are the agent's, never a routine's.
+
+*The system prompt* tells every agent the same, in one paragraph: what is
+sure to carry over, drop `In progress:` when done, put big output (logs,
+command output, page dumps, data) in a file and read back only what's
+needed, and what any summary keeps. It is held to a budget
+(`runner/prompt_budget_tests.rs`): a plain agent's app-owned prompt is 10,192
+characters, a Codex agent's 10,757, the Chief's 14,141 before its team list.
+Measured with Claude Code (Haiku 5.5, `--append-system-prompt-file`, input
+tokens over a bare run): 3,347 tokens before this work and **3,269** after for a
+plain agent, 4,583 and **4,505** for the Chief, while gaining the paragraph
+above. Trimmed: the logins rules' repeat of the secrets rules, the Chrome
+profiles sentence, the team brief, and a duplicate push rule; "Ship Studio"
+in two engine lines became "the app".
+
+**Observed vs assumed** (docs fetched 2026-11-05; Claude Code 2.1.318 and
+Codex 0.166 on this Mac):
+
+- Observed: `/compact <instructions>` as the prompt of `claude --print
+  --resume` compacts (a `system/status` "compacting", then
+  `system/compact_boundary` with `compact_metadata.trigger: "manual"`,
+  `pre_tokens` 29,470 → `post_tokens` 9,602, and a `result` with no
+  `assistant` event); the summary kept the fictional project and its open
+  ask. `--settings` with `autoCompactEnabled` is accepted.
+- Observed (`claude --help`): `--system-prompt-snapshot` is on by default:
+  the system prompt (ours included) is recorded on a conversation's first
+  request and reused verbatim on every resume **until it is compacted**. So a
+  changed policy, level or (for a bound agent) memory reaches an old
+  conversation only after a compaction or a fresh start; the tidy is also
+  what refreshes it. The bound agent's memory section now says it may be
+  older than the file.
+- Documented ([context-window](https://code.claude.com/docs/en/context-window.md),
+  [memory](https://code.claude.com/docs/en/memory.md)): after compaction the
+  system prompt still applies and the project-root CLAUDE.md is re-read from
+  disk (an unbound agent's home is its cwd). `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE`,
+  `DISABLE_AUTO_COMPACT`, `DISABLE_COMPACT`
+  ([env-vars](https://code.claude.com/docs/en/env-vars.md));
+  `autoCompactEnabled` is a settings.json key
+  ([settings-reference](https://code.claude.com/docs/en/settings-reference.md));
+  native-1M models auto-compact at about 967K by default
+  ([model-config](https://code.claude.com/docs/en/model-config.md)); a
+  PreCompact hook can block but not add instructions, and SessionStart
+  `compact` re-injects context ([hooks](https://code.claude.com/docs/en/hooks.md)).
+  We add no hooks: the user's own still run, and one that blocks compaction
+  would block ours (the tidy then starts fresh).
+- Assumed: that Claude Code's *automatic* compaction reads our system prompt's
+  "any summary keeps…" line (the system prompt applies, but the summariser's
+  own prompt isn't documented); that auto-compaction runs in `--print` as
+  interactively (docs imply it, not observed: no agent has come near it).
+- Codex, from 0.166's own schema (`codex app-server generate-json-schema`):
+  `thread/compact/start {threadId}`, a `contextCompaction` thread item, the
+  deprecated `thread/compacted` notification, and config keys
+  `compact_prompt`, `model_auto_compact_token_limit` and its `_scope`. **Not
+  observed live** (no Codex account on this Mac): the order of notifications
+  after `thread/compact/start`, whether `compact_prompt` applies when OpenAI
+  compacts remotely, and Codex's default threshold when no limit is set.
+  A compaction that never reports ends with the turn and falls back to a fresh
+  start.
+- Real readings on this Mac (read-only, 2026-11-05): fifteen Claude agents on
+  Opus 5.5 with 1M windows, 3–9% full. At 70% of 1M a conversation is ~700k
+  tokens re-read on every resume, so the threshold may want an absolute cap
+  too; not done (a product decision).
+
 **Process trees.** Each turn's `claude` leads its own process group
 (`agents::procs`). Stop, interrupt, the timeout and quitting walk its process
 tree first (a backgrounded child that called `setsid` has left the group but

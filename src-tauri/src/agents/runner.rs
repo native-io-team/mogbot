@@ -1747,6 +1747,17 @@ pub fn start_fresh(app: &AppHandle, agent_id: &str) -> Result<store::Agent, Comm
 /// conversation: never a turn that read the old session and writes it back
 /// under a divider saying it's gone. Two at once record one divider.
 fn begin_fresh(agent_id: &str) -> Result<(store::Agent, AgentMessage), CommandError> {
+    begin_fresh_as(agent_id, FRESH_LINE, false)
+}
+
+/// [`begin_fresh`] with its divider's words. `worker`: asked by the agent's
+/// own worker between turns (a tidy, `tidy`), which is the turn "running":
+/// refused instead when anything is queued for it.
+fn begin_fresh_as(
+    agent_id: &str,
+    text: &str,
+    worker: bool,
+) -> Result<(store::Agent, AgentMessage), CommandError> {
     // Read before the inbox lock, which every agent's status waits on. A
     // card is only ever raised by a running turn, which the busy check
     // below refuses, so nothing can slip in between.
@@ -1761,7 +1772,12 @@ fn begin_fresh(agent_id: &str) -> Result<(store::Agent, AgentMessage), CommandEr
     }
     // A running or waiting turn is in the old conversation, and would record
     // it again when its session is confirmed.
-    if mine.is_some_and(|r| r.running || r.queued) {
+    let busy = if worker {
+        mine.is_some_and(|r| !r.queue.is_empty())
+    } else {
+        mine.is_some_and(|r| r.running || r.queued)
+    };
+    if busy {
         return Err(CommandError::expected(format!(
             "{name} is working. Start fresh once it's done, or stop it first."
         )));
@@ -1798,7 +1814,7 @@ fn begin_fresh(agent_id: &str) -> Result<(store::Agent, AgentMessage), CommandEr
         r.interrupted = None;
         r.interrupted_in = None;
     }
-    let mut line = new_message(agent_id, MessageKind::Note, FRESH_LINE);
+    let mut line = new_message(agent_id, MessageKind::Note, text);
     line.fresh = true;
     store::append_message(&line)?;
     drop(runtimes);
@@ -1875,6 +1891,18 @@ fn take_interrupt(agent_id: &str) -> bool {
     });
     runtime.interrupted_in = runtime.room.as_ref().map(|r| r.room_id.clone());
     true
+}
+
+/// Forget what [`take_interrupt`] left for the next turn.
+fn clear_interrupted(agent_id: &str) {
+    if let Some(r) = RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get_mut(agent_id)
+    {
+        r.interrupted = None;
+        r.interrupted_in = None;
+    }
 }
 
 /// A card the turn in progress is waiting on: the status says "Needs your
@@ -2640,7 +2668,125 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         }
         clear_room(&agent_id);
         notify::turn_ended(&app, &agent_id);
+        // A long conversation is tidied now, between turns (`tidy`).
+        maybe_tidy(&app, &agent_id, finished).await;
     }
+}
+
+/// Whether anything is queued for the agent.
+fn has_queue(agent_id: &str) -> bool {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .is_some_and(|r| !r.queue.is_empty())
+}
+
+/// After a turn: tidy the conversation if its reading says so and nothing
+/// needs the agent first (`tidy::between_turns`).
+async fn maybe_tidy(app: &AppHandle, agent_id: &str, finished: bool) {
+    if QUITTING.load(Ordering::SeqCst) {
+        return;
+    }
+    let Ok(agent) = store::get(agent_id) else {
+        return;
+    };
+    if !super::tidy::due(agent.context.as_ref()) {
+        return;
+    }
+    let moment = super::tidy::Moment {
+        finished,
+        queued: has_queue(agent_id),
+        waiting_on_user: store::pending_approvals(agent_id).map_or(true, |p| !p.is_empty()),
+        driven: driven(agent_id),
+        outside: from_outside(agent_id),
+        in_users_folder: agent.project.is_some() && super::task::active(&agent).is_none(),
+    };
+    if !super::tidy::between_turns(moment) {
+        return;
+    }
+    tidy(app, agent_id, &agent).await;
+    // Its cost is the agent's, never a routine's.
+    let _ = take_turn_usage(agent_id);
+    set_status(app, agent_id, Status::idle());
+}
+
+/// Tidy the agent's conversation: memory first, then the engine compacts, or
+/// (when it can't) the next message starts fresh. Either way one quiet line.
+async fn tidy(app: &AppHandle, agent_id: &str, agent: &store::Agent) {
+    use super::tidy::{QuietTurn, Way};
+    let Some(binary) = super::engine::binary(agent.engine).await else {
+        return;
+    };
+    let way = super::tidy::way(Driver::pick(agent.engine, &binary).await);
+    let Ok(home) = store::agent_home(agent_id) else {
+        return;
+    };
+    let claude_md = home.join("CLAUDE.md").to_string_lossy().into_owned();
+    tracing::info!("[Agents] tidying {agent_id}'s conversation ({way:?})");
+    let working = |activity: &str| Status {
+        state: "working",
+        activity: Some(activity.to_string()),
+        since: Some(store::now_ms()),
+        work: None,
+        room: None,
+    };
+    set_status(app, agent_id, working(super::tidy::ACTIVITY));
+    let memory = {
+        let _quiet = QuietTurn::begin(agent_id, false);
+        let prompt = super::tidy::memory_prompt(&claude_md, way == Way::Fresh);
+        run_on_accounts(app, agent_id, &prompt, false).await
+    };
+    clear_mark(agent_id);
+    if !matches!(memory, Ok(Ended::Finished)) {
+        tracing::warn!(
+            "[Agents] {agent_id}'s memory update before a tidy didn't finish; left as it was"
+        );
+        return;
+    }
+    // What arrived meanwhile goes first; the next turn's end tries again.
+    if has_queue(agent_id) || QUITTING.load(Ordering::SeqCst) {
+        return;
+    }
+    let mut fresh = way == Way::Fresh;
+    if !fresh {
+        set_status(app, agent_id, working(super::tidy::ACTIVITY));
+        let quiet = QuietTurn::begin(agent_id, true);
+        let prompt = match agent.engine {
+            Engine::Claude => super::tidy::claude_compact_prompt(),
+            // Codex is asked with `thread/compact/start`, not a prompt.
+            Engine::Codex => String::new(),
+        };
+        let result = run_on_accounts(app, agent_id, &prompt, false).await;
+        let compacted = quiet.compacted();
+        drop(quiet);
+        clear_mark(agent_id);
+        if matches!(result, Ok(Ended::Stopped(_) | Ended::Interrupted)) {
+            return;
+        }
+        if !compacted {
+            tracing::warn!(
+                "[Agents] {agent_id}'s engine didn't compact ({result:?}); starting fresh instead"
+            );
+            fresh = true;
+        }
+    }
+    if fresh {
+        match begin_fresh_as(agent_id, super::tidy::LINE, true) {
+            Ok((_, line)) => {
+                let _ = announce(app, line, false);
+            }
+            Err(e) => tracing::info!("[Agents] {agent_id} not started fresh after its tidy: {e}"),
+        }
+        return;
+    }
+    // The reading was the conversation before it was summarised.
+    let _ = store::update(agent_id, |a| a.context = None);
+    let _ = app.emit(EVENT_REGISTRY, ());
+    let _ = record(
+        app,
+        new_message(agent_id, MessageKind::Note, super::tidy::LINE),
+    );
 }
 
 /// The room's line for a member's turn there that was cut off for a message
@@ -3285,6 +3431,8 @@ async fn run_turn(
     let began = std::time::Instant::now();
     let mut agent = store::get(agent_id)?;
     let engine = agent.engine;
+    // The app's own turn (`tidy`): its words never reach the chat.
+    let quiet = super::tidy::is_quiet(agent_id);
     let home = store::agent_home(agent_id)?;
     std::fs::create_dir_all(&home).map_err(super::err_io)?;
     let binary = super::engine::binary(engine).await.ok_or_else(|| {
@@ -3432,6 +3580,7 @@ async fn run_turn(
         writable: &layout.add_dirs,
         protected: protected.as_deref(),
         access: Some(&access),
+        window: agent.context.as_ref().map(|c| c.window),
     }));
     // A "When…" routine's items came from outside: this turn can't write its
     // own instructions or memory (Claude Code refuses the edit; for Codex,
@@ -3441,6 +3590,13 @@ async fn run_turn(
     }
     let _memory_seal = outside.then(|| MemorySeal::hold(app, agent_id, &home));
     strip_session_env(&mut cmd);
+    if engine == Engine::Claude {
+        // Compaction on and tuned, whatever this app's environment says (`tidy`).
+        for key in super::tidy::CLAUDE_ENV_OFF {
+            cmd.env_remove(key);
+        }
+        cmd.envs(super::tidy::claude_env());
+    }
     if engine == Engine::Codex {
         // Read by `bearer_token_env_var`. Codex's default shell environment
         // policy leaves any `*TOKEN*` variable out of the commands it runs.
@@ -3496,6 +3652,11 @@ async fn run_turn(
             &prompt,
             profiles,
         );
+        let conversation = if super::tidy::is_compacting(agent_id) {
+            conversation.compacting()
+        } else {
+            conversation
+        };
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Option<String>>();
         let mut stdin = child.stdin.take();
         tokio::spawn(async move {
@@ -3704,7 +3865,7 @@ async fn run_turn(
                         Step::Reply(text) => {
                             // Recorded under the draft's id, so it takes the draft's place.
                             let draft_id = drafts.finish(&text);
-                            if !text.is_empty() {
+                            if !text.is_empty() && !quiet {
                                 said_anything = true;
                                 let mut message = new_message(agent_id, MessageKind::Agent, text);
                                 if let Some(id) = draft_id {
@@ -3794,6 +3955,7 @@ async fn run_turn(
                             }
                         }
                         Step::Context(_) => {}
+                        Step::Compacted => super::tidy::note_compacted(agent_id),
                         Step::Failed(text) => result_error = Some(text),
                         Step::Detail(text) => last_detail = Some(text),
                         Step::Done => {
@@ -3809,7 +3971,9 @@ async fn run_turn(
             _ = draft_tick.tick(), if drafts.dirty() => {
                 if let Some((id, text)) = drafts.flush() {
                     timing.mark_first_word();
-                    emit_draft(app, agent_id, id, text);
+                    if !quiet {
+                        emit_draft(app, agent_id, id, text);
+                    }
                 }
             }
             status = child.wait(), if exited.is_none() => {
@@ -3874,7 +4038,7 @@ async fn run_turn(
                         match out {
                             Out::DraftDelta(text) => drafts.grow(&text),
                             // Completed under the interrupt: kept whole, not cut off.
-                            Out::Step(Step::Reply(text)) if !text.is_empty() => {
+                            Out::Step(Step::Reply(text)) if !text.is_empty() && !quiet => {
                                 let id = drafts.finish(&text).unwrap_or_else(store::new_id);
                                 let mut message = new_message(agent_id, MessageKind::Agent, text);
                                 message.id = id;
@@ -3914,7 +4078,7 @@ async fn run_turn(
         .unwrap_or_default();
 
     // A reply cut off mid-sentence keeps what it had said, marked as stopped.
-    let cut_off = drafts.take().map(|(id, text)| {
+    let cut_off = drafts.take().filter(|_| !quiet).map(|(id, text)| {
         let mut message = new_message(agent_id, MessageKind::Agent, text);
         message.id = id;
         message.stopped = true;
@@ -3924,6 +4088,11 @@ async fn run_turn(
 
     if let Some(note) = stopped {
         if note.is_none() && take_interrupt(agent_id) {
+            // The app's own turn gave way: nothing was cut off for the next to hear.
+            if quiet {
+                clear_interrupted(agent_id);
+                return Ok(Ended::Interrupted);
+            }
             // Cut off in a room for a message in its own chat: the room hears
             // it won't get an answer, and nothing said there goes with it.
             let line = match turn_room(agent_id) {
@@ -3953,7 +4122,7 @@ async fn run_turn(
 
     let missing_session =
         is_missing_session(&stderr_text) || result_error.as_deref().is_some_and(is_missing_session);
-    if retry_fresh && resuming && missing_session {
+    if retry_fresh && resuming && missing_session && !quiet {
         tracing::warn!("[Agents] Session {session_id} for {agent_id} is gone; starting a new one");
         // The reading was the lost session's; the retry takes its own.
         reading.armed = false;
@@ -4350,6 +4519,8 @@ mod tests {
             "--verbose",
             "--include-partial-messages",
             "--chrome",
+            "--settings",
+            r#"{"autoCompactEnabled":true}"#,
             "--resume",
             "sid",
             "--permission-mode",
@@ -4587,6 +4758,58 @@ mod tests {
             RUNTIMES.lock().unwrap().remove(&a.id);
             assert_eq!(store::get(&a.id).unwrap().session_id.as_deref(), Some("s1"));
             assert_eq!(dividers(&a.id), 0);
+        });
+    }
+
+    /// A tidy that can't compact starts fresh from the agent's own worker,
+    /// which is the turn "running": it goes ahead with nothing queued, says
+    /// so in the tidy's own words, and gives way to anything that is.
+    #[test]
+    fn a_tidy_that_cant_compact_falls_back_to_a_fresh_start_from_the_worker() {
+        in_scratch_store(|| {
+            let a = conversing("Finance");
+            RUNTIMES
+                .lock()
+                .unwrap()
+                .entry(a.id.clone())
+                .or_default()
+                .running = true;
+            // A user's Start fresh is still refused while the worker runs.
+            assert!(begin_fresh(&a.id).is_err());
+            RUNTIMES
+                .lock()
+                .unwrap()
+                .get_mut(&a.id)
+                .unwrap()
+                .queue
+                .push_back(Inbound {
+                    id: "m1".into(),
+                    text: "next".into(),
+                    from: From::User,
+                    reply: false,
+                    routine: false,
+                    ticket: None,
+                    room: None,
+                    outside: false,
+                });
+            let err = begin_fresh_as(&a.id, super::super::tidy::LINE, true)
+                .unwrap_err()
+                .to_string();
+            assert!(err.contains("is working"), "{err}");
+            RUNTIMES
+                .lock()
+                .unwrap()
+                .get_mut(&a.id)
+                .unwrap()
+                .queue
+                .clear();
+            let (after, line) = begin_fresh_as(&a.id, super::super::tidy::LINE, true).unwrap();
+            assert_eq!((after.session_id, after.context), (None, None));
+            assert!(line.fresh && line.kind == MessageKind::Note);
+            assert_eq!(line.text, super::super::tidy::LINE);
+            // Memory and instructions are the agent's files, untouched.
+            assert_eq!(store::get(&a.id).unwrap().name, "Finance");
+            RUNTIMES.lock().unwrap().remove(&a.id);
         });
     }
 
@@ -4859,3 +5082,7 @@ mod review_runner_tests;
 #[cfg(test)]
 #[path = "rooms_runner_tests.rs"]
 mod rooms_runner_tests;
+
+#[cfg(test)]
+#[path = "prompt_budget_tests.rs"]
+mod prompt_budget_tests;

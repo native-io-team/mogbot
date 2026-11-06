@@ -46,6 +46,8 @@ pub enum Step {
     Quota(super::quota::Quota),
     /// How full the conversation is, as the engine reported it.
     Context(super::context::ContextFill),
+    /// The engine compacted the conversation (`super::tidy`).
+    Compacted,
     /// The turn ended in an error, in the engine's words.
     Failed(String),
     /// The turn's result is in.
@@ -62,6 +64,10 @@ pub fn claude_steps(value: &Value, now: i64) -> Vec<Step> {
     match value.get("type").and_then(Value::as_str) {
         Some("system") => {
             out.extend(super::capabilities::from_init(value, now).map(Step::Capabilities));
+            // Observed on 2.1.318, for `/compact` in `--print` and for its own.
+            if value.get("subtype").and_then(Value::as_str) == Some("compact_boundary") {
+                out.push(Step::Compacted);
+            }
             if let Some(sid) = value.get("session_id").and_then(Value::as_str) {
                 out.push(Step::Session(sid.to_string()));
             }

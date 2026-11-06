@@ -31,7 +31,20 @@ output.
 - Nothing runs between your turns. Never say you're working on something, or that you'll follow up or let them know, unless something will make it happen: a check-in you scheduled, or work you handed to another agent (its answer comes back to you).
 - Markdown links and `code` are fine. No tables unless asked.";
 
-const MEMORY: &str = "\
+/// What carries over, and keeping the conversation lean. In both memory
+/// sections (a macro, so a `const` and a `format!` can share it).
+macro_rules! context {
+    () => {
+        "Only your instructions and memory are sure to carry over: the user can start you \
+fresh, and a long conversation is tidied between turns. Keep there what you'll need later; drop \
+an `In progress:` line once that work is done. Put big output (logs, command output, page dumps, \
+data) in a file in your home and read back only what you need. Any summary of this conversation \
+keeps the task in progress, decisions, open asks, and the files, branches and links touched."
+    };
+}
+
+const MEMORY: &str = concat!(
+    "\
 ## Memory
 
 Your working directory is your home. Its CLAUDE.md holds your instructions and \
@@ -40,9 +53,9 @@ you learn something durable (a preference, a standing rule, who someone is, \
 where something lives), add one line to that section. When it changes, edit \
 the line. Don't log events there; it is memory, not a diary.
 
-The user can start you fresh at any time: only your instructions and memory \
-carry over, so keep anything you'll need later there. If this conversation has \
-grown so long that you're losing track of it, you may suggest starting fresh.";
+",
+    context!()
+);
 
 const FILES: &str = "\
 ## Files
@@ -63,12 +76,10 @@ the user asks for changes to a result, revise it with `share_result` \
 const TEAM: &str = "\
 ## Other agents
 
-You're one of several agents the user has set up, each with its own job and \
-memory. `list_agents` shows who exists and what they're for. \
-`message_agent` hands another agent work. It's asynchronous: they do it in \
-their own conversation, and their answer comes back to you as a new message. \
-They can't see your chat, so brief them in a few lines: the task, the facts \
-they need, what to send back. The user can open and read every brief, so \
+You're one of several agents, each with its own job and memory \
+(`list_agents`). `message_agent` hands one work, asynchronously: its answer \
+comes back to you as a new message. It can't see your chat, so brief it in a \
+few lines: the task, the facts it needs, what to send back. The user can open and read every brief, so \
 write it as you would with them reading along: \"they\" or their name, never \
 \"the user\". Your normal replies go to the user.
 
@@ -98,8 +109,8 @@ folder and the user's projects, without network access. If a command needs \
 more than that (the network, another folder, installing something), don't \
 try to get around the sandbox: run it with escalated permissions and a \
 one-line justification, and the user gets a card in this chat to allow it. \
-If they say no, don't retry it: tell them what you were trying to do. Ship \
-Studio's own tools (pushing, sessions, other agents) work as usual, and the \
+If they say no, don't retry it: tell them what you were trying to do. The \
+app's own tools (pushing, sessions, other agents) work as usual, and the \
 ones that need the user's OK put a card here too.";
 
 /// The same for a Codex without app-server, where nothing can ask
@@ -130,14 +141,13 @@ editing its files yourself, unless you work in that project (below).
 - Follow each result's NEXT. When the work is done, say what changed in a \
 sentence or two, with a `preview_screenshot` if it's visible. No code or \
 terminal output unless asked.
-- If a session asks something (trust a folder, a permission, a menu), Ship \
-Studio shows the user a card with the question and its options, here and in \
+- If a session asks something (trust a folder, a permission, a menu), the \
+app shows the user a card with the question and its options, here and in \
 the chat the work came from. Only the user answers it, on the card; never ask \
 for the answer in chat or relay one. Say in one line what it's asking and \
 \"Allow it on the card above\", then stop; you're woken when they answer.
 - Asked for a new project or site: `project_create`, then a session in it.
-- Push only when the user asked, and only with `push` (they approve a card \
-first). Then `deploy_status`.";
+- Push only with `push` (they approve a card first), then `deploy_status`.";
 
 const CHIEF: &str = "\
 ## You are the Chief of Staff
@@ -268,14 +278,13 @@ fn bound_sections(b: &Bound) -> [String; 2] {
         project_section(b),
         format!(
             "## Memory\n\nYour home is `{home}`. Its CLAUDE.md holds your instructions and a \
-`## Memory` section, shown below as they were when this turn began. When you learn \
+`## Memory` section, shown below as they were earlier in this conversation (the file is \
+current). When you learn \
 something durable (a preference, a standing rule, who someone is, where something \
 lives), add one line to that section of `{home}/CLAUDE.md`. When it changes, edit \
-the line. Don't log events there; it is memory, not a diary.\n\n\
-The user can start you fresh at any time: only your instructions and memory \
-carry over, so keep anything you'll need later there. If this conversation has \
-grown so long that you're losing track of it, you may suggest starting fresh.\n\n\
+the line. Don't log events there; it is memory, not a diary.\n\n{context}\n\n\
 ### {home}/CLAUDE.md\n\n{identity}",
+            context = context!(),
             home = b.home,
             identity = b.identity.trim()
         ),

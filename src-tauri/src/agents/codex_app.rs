@@ -209,6 +209,8 @@ pub struct Conversation {
     /// The model the thread runs on, as `thread/start` / `thread/resume` said.
     model: Option<String>,
     over: bool,
+    /// Compact the thread (`thread/compact/start`) instead of a turn (`tidy`).
+    compact: bool,
 }
 
 fn request(id: u64, method: &str, params: Value) -> Value {
@@ -272,8 +274,18 @@ impl Conversation {
             usage: UsageTotals::default(),
             model: None,
             over: false,
+            compact: false,
         };
         (conversation, first)
+    }
+
+    /// This conversation compacts its thread rather than taking a turn: it
+    /// ends when Codex reports the compaction (`tidy`). Schema of 0.166:
+    /// `thread/compact/start {threadId}`, then a `contextCompaction` item
+    /// (and the older `thread/compacted` notification).
+    pub fn compacting(mut self) -> Self {
+        self.compact = true;
+        self
     }
 
     /// The turn in progress, to interrupt.
@@ -299,6 +311,17 @@ impl Conversation {
             .map(Out::Step)
             .chain([Out::Step(Step::Done), Out::Close])
             .collect()
+    }
+
+    /// Codex compacted the thread: the end of a compaction, or its own mid-turn.
+    fn compacted(&mut self) -> Vec<Out> {
+        if self.over {
+            return Vec::new();
+        }
+        if self.compact {
+            return self.end([Step::Compacted]);
+        }
+        vec![Out::Step(Step::Compacted)]
     }
 
     pub fn on_message(&mut self, msg: &Value) -> Vec<Out> {
@@ -352,6 +375,16 @@ impl Conversation {
                 };
                 self.thread = Some(thread.to_string());
                 self.model = str_at(msg, "/result/model").map(str::to_string);
+                if self.compact {
+                    return vec![
+                        Out::Step(Step::Session(thread.to_string())),
+                        Out::Send(request(
+                            TURN,
+                            "thread/compact/start",
+                            json!({ "threadId": thread }),
+                        )),
+                    ];
+                }
                 vec![
                     Out::Step(Step::Session(thread.to_string())),
                     Out::Send(request(
@@ -455,6 +488,7 @@ impl Conversation {
                         let text = str_at(item, "/text").unwrap_or("").trim().to_string();
                         vec![Out::Step(Step::Reply(text))]
                     }
+                    Some("contextCompaction") => self.compacted(),
                     Some("mcpToolCall") => {
                         let server = str_at(item, "/server");
                         let tool = str_at(item, "/tool");
@@ -468,6 +502,7 @@ impl Conversation {
                     _ => result_of(item),
                 }
             }
+            "thread/compacted" => self.compacted(),
             "thread/tokenUsage/updated" => {
                 let last = &params["tokenUsage"]["last"];
                 let n = |k: &str| last.get(k).and_then(Value::as_u64).unwrap_or(0);
@@ -865,6 +900,51 @@ mod tests {
         assert!(args
             .windows(2)
             .any(|w| w == ["-c", "sandbox_workspace_write.network_access=false"]));
+    }
+
+    #[test]
+    fn a_compaction_resumes_the_thread_compacts_it_and_ends_when_codex_says_so() {
+        let (c, _) = Conversation::new(Some("t1"), Path::new("/h/a"), None, "x", "", true);
+        let mut c = c.compacting();
+        c.on_message(&json!({ "id": 1, "result": {} }));
+        assert_eq!(c.start["method"], "thread/resume");
+        let out = c.on_message(&json!({ "id": 2, "result": { "thread": { "id": "t1" } } }));
+        let Out::Send(compact) = &out[1] else {
+            panic!()
+        };
+        assert_eq!(compact["method"], "thread/compact/start");
+        assert_eq!(compact["params"], json!({ "threadId": "t1" }));
+        // Another thread's compaction is not ours.
+        let other = json!({ "method": "item/completed", "params": { "threadId": "sub",
+            "item": { "type": "contextCompaction", "id": "i0" } } });
+        assert!(c.on_message(&other).is_empty());
+        let done = json!({ "method": "item/completed", "params": { "threadId": "t1",
+            "item": { "type": "contextCompaction", "id": "i1" } } });
+        let out = c.on_message(&done);
+        assert_eq!(
+            out,
+            vec![
+                Out::Step(Step::Compacted),
+                Out::Step(Step::Done),
+                Out::Close
+            ]
+        );
+        assert!(c.over());
+        // The older notification after it changes nothing.
+        let late =
+            json!({ "method": "thread/compacted", "params": { "threadId": "t1", "turnId": "u" } });
+        assert!(c.on_message(&late).is_empty());
+    }
+
+    #[test]
+    fn codexs_own_compaction_mid_turn_does_not_end_the_turn() {
+        let (mut c, _) = conversation(None);
+        c.on_message(&json!({ "id": 1, "result": {} }));
+        c.on_message(&json!({ "id": 2, "result": { "thread": { "id": "t1" } } }));
+        let out = c.on_message(&json!({ "method": "thread/compacted",
+            "params": { "threadId": "t1", "turnId": "u1" } }));
+        assert_eq!(out, vec![Out::Step(Step::Compacted)]);
+        assert!(!c.over());
     }
 
     #[test]
