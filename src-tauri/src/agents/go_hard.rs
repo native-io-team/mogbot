@@ -25,10 +25,23 @@
 //!   homes and temporary folders (and always of the home, `~/Library`, `/`)
 //! - writes to `~/.ssh`, shell profiles, launch agents, credential stores, the
 //!   app's own data (another agent's home); `crontab`, `security`, `launchctl`,
-//!   disk and system tools; `defaults write` to a system domain
+//!   disk and system tools; `defaults write` / `delete` / `import`
 //! - reading the app's own data, except that an admin (the Chief) reads the
 //!   agents folder (every agent's home) and an agent its own home
 //! - connector tools whose name writes (send, create, delete…); file uploads
+//! - a network request with a secret in its address, query or headers
+//!   (`egress`): `curl`, `wget`, `http`, `gh api`, `git` remotes, WebFetch,
+//!   WebSearch; requests to this Mac are exempt
+//!
+//! Wrappers are judged by what they run: `env`, `xargs`, `timeout`, `eval`,
+//! `find -exec` / `-execdir` / `-ok` (and `find -delete` like `rm -r`), and
+//! the quoted text of `bash -c` and the like.
+//!
+//! **After outside content** (`exposure`: the turn fetched a page, searched,
+//! read issue comments, mail or chat): the same, plus moving data to another
+//! host ([`sends_off_mac`]: `ssh`, `scp`, `rsync host:`, `nc`…) and packages
+//! new to the project (`autoallow::after_outside_asks`). Network reads,
+//! builds, project installs and here-document scripts still run.
 //!
 //! **Outside text** (a turn answering a routine's items): the same, plus any
 //! network write (even to localhost) and running a package fetched by name
@@ -63,6 +76,9 @@ pub fn asks(tool: &str, input: &Value, ctx: &Ctx, outside: bool) -> bool {
             };
             !raw.is_empty() && resolve(raw, ctx).is_some_and(|p| secret_to_read(&p, ctx))
         }
+        // A page or a search that would carry a secret off this Mac.
+        "WebFetch" => super::egress::carries_secret(field("url"), &ctx.secrets),
+        "WebSearch" | "web_search" => super::egress::holds_secret(field("query"), &ctx.secrets),
         t if t.starts_with(super::browser_gate::SERVER) => false,
         t if t.starts_with("mcp__") => connector_asks(t, outside),
         // Claude Code's and Codex's own tools (web search, todo lists, tasks).
@@ -324,7 +340,7 @@ const RUNS_ITS_INPUT: &[&str] = &[
 /// `osascript`) is kept and checked like the rest, and so
 /// is everything when a body has no closing line (nothing is dropped on a
 /// guess). `<<` inside quotes is text, and `<<<` is a here-string.
-fn without_heredoc_data(src: &str) -> String {
+pub(super) fn without_heredoc_data(src: &str) -> String {
     if !src.contains("<<") {
         return src.to_string();
     }
@@ -590,6 +606,7 @@ const KEYWORDS: &[&str] = &[
 
 const WRAPPERS: &[&str] = &[
     "env",
+    "eval",
     "nohup",
     "time",
     "command",
@@ -646,7 +663,232 @@ fn simple_asks(words: &[String], ctx: &Ctx, outside: bool, known: bool) -> bool 
         return true;
     }
     // Leading assignments and wrappers.
-    let mut rest: &[&str] = &words;
+    let rest = unwrapped(&words);
+    let Some((&prog, args)) = rest.split_first() else {
+        return false;
+    };
+    // Any program reading or writing a credential store asks.
+    if args
+        .iter()
+        .filter(|a| !a.starts_with('-'))
+        .any(|a| resolve_known(a, ctx, known).is_some_and(|p| secret_to_read(&p, ctx)))
+    {
+        return true;
+    }
+    // A request that would carry a secret off this Mac (`egress`).
+    if leaks_secret(base(prog), args, ctx) {
+        return true;
+    }
+    if base(prog) == "find" {
+        return find_asks(args, ctx, outside, known);
+    }
+    program(base(prog), args, ctx, outside, known)
+}
+
+/// `find`: each `-exec` / `-execdir` / `-ok` / `-okdir` command is judged as
+/// the command it is (`{}` stands for what it finds, under the roots), and
+/// `-delete` like `rm -r` of each root.
+fn find_asks(args: &[&str], ctx: &Ctx, outside: bool, known: bool) -> bool {
+    let roots: Vec<&str> = args
+        .iter()
+        .copied()
+        .take_while(|a| !a.starts_with('-') && !matches!(*a, "!" | "(" | ")"))
+        .collect();
+    let roots = if roots.is_empty() { vec!["."] } else { roots };
+    if args.contains(&"-delete") {
+        let rm: Vec<&str> = std::iter::once("-r").chain(roots.iter().copied()).collect();
+        if program("rm", &rm, ctx, outside, known) {
+            return true;
+        }
+    }
+    let mut i = 0;
+    while i < args.len() {
+        if matches!(args[i], "-exec" | "-execdir" | "-ok" | "-okdir") {
+            let inner: Vec<&str> = args[i + 1..]
+                .iter()
+                .copied()
+                .take_while(|w| !matches!(*w, ";" | "\\;" | "+"))
+                .collect();
+            if inner.is_empty() {
+                return true;
+            }
+            for root in &roots {
+                let found = format!("{}/x", root.trim_end_matches('/'));
+                let mut words: Vec<String> = inner
+                    .iter()
+                    .map(|w| if *w == "{}" { found.clone() } else { w.to_string() })
+                    .collect();
+                // What it finds is an argument even where the line lost `{}`.
+                if !inner.contains(&"{}") {
+                    words.push(found);
+                }
+                if simple_asks(&words, ctx, outside, known || is_abs(root)) {
+                    return true;
+                }
+            }
+            i += inner.len() + 2;
+        } else {
+            i += 1;
+        }
+    }
+    false
+}
+
+/// Programs that make network requests, whose addresses and headers
+/// `egress` reads.
+fn leaks_secret(prog: &str, args: &[&str], ctx: &Ctx) -> bool {
+    use super::egress::{carries_secret, header_carries_secret, holds_secret, secret_name};
+    let secrets = &ctx.secrets;
+    let urls = || args.iter().copied().filter(|a| a.contains("://"));
+    // A secret sent to this Mac doesn't leave it (`localhost:3000/api`).
+    let off_mac = || {
+        let named: Vec<&str> = args
+            .iter()
+            .copied()
+            .filter(|a| !a.starts_with('-') && (a.contains("://") || local_host(a)))
+            .collect();
+        named.is_empty() || !named.iter().all(|a| local_host(a))
+    };
+    let url_leaks = || urls().any(|u| carries_secret(u, secrets));
+    match prog {
+        "curl" => {
+            if !off_mac() {
+                return false;
+            }
+            let mut it = args.iter().copied();
+            while let Some(a) = it.next() {
+                let (flag, inline) = match a.split_once('=') {
+                    Some((f, v)) if a.starts_with("--") => (f, Some(v)),
+                    _ if a.starts_with("-H") && a.len() > 2 && !a.starts_with("--") => {
+                        ("-H", Some(&a[2..]))
+                    }
+                    _ => (a, None),
+                };
+                match flag {
+                    "-H" | "--header" | "--proxy-header" => {
+                        let v = inline.or_else(|| it.next()).unwrap_or("");
+                        if header_carries_secret(v, secrets) {
+                            return true;
+                        }
+                    }
+                    // Credentials sent with the request.
+                    "-u" | "--user" | "--oauth2-bearer" | "-b" | "--cookie" | "--proxy-user" => {
+                        return true
+                    }
+                    "-e" | "--referer" | "-A" | "--user-agent" | "--url" | "--url-query" => {
+                        let v = inline.or_else(|| it.next()).unwrap_or("");
+                        if holds_secret(v, secrets) || carries_secret(v, secrets) {
+                            return true;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            url_leaks()
+        }
+        "wget" => {
+            off_mac()
+                && (url_leaks()
+                    || args.iter().any(|a| {
+                        a.strip_prefix("--header=")
+                            .is_some_and(|h| header_carries_secret(h, secrets))
+                            || a.starts_with("--password=")
+                            || a.starts_with("--http-password=")
+                    }))
+        }
+        "http" | "https" | "xh" | "xhs" => {
+            off_mac()
+                && (url_leaks()
+                    || args.iter().any(|a| {
+                        // `Name:value` is a header; `name==value` a query.
+                        let header = a.contains(':') && !a.contains("://") && !a.contains(":=");
+                        (header && header_carries_secret(a, secrets))
+                            || a.split_once("==").is_some_and(|(n, v)| {
+                                secret_name(n) && !v.is_empty() || holds_secret(v, secrets)
+                            })
+                            || a.starts_with("--auth") || *a == "-a"
+                    }))
+        }
+        "gh" if args.first() == Some(&"api") => {
+            let mut it = args[1..].iter().copied();
+            while let Some(a) = it.next() {
+                let (flag, inline) = match a.split_once('=') {
+                    Some((f, v)) if a.starts_with("--") => (f, Some(v)),
+                    _ => (a, None),
+                };
+                match flag {
+                    "-H" | "--header" => {
+                        let v = inline.or_else(|| it.next()).unwrap_or("");
+                        if header_carries_secret(v, secrets) {
+                            return true;
+                        }
+                    }
+                    "-f" | "-F" | "--field" | "--raw-field" => {
+                        let v = inline.or_else(|| it.next()).unwrap_or("");
+                        let (name, value) = v.split_once('=').unwrap_or((v, ""));
+                        if (secret_name(name) && !value.is_empty()) || holds_secret(value, secrets)
+                        {
+                            return true;
+                        }
+                    }
+                    f if f.starts_with('-') => {}
+                    endpoint => {
+                        let url = if endpoint.contains("://") {
+                            endpoint.to_string()
+                        } else {
+                            format!("https://api.invalid/{}", endpoint.trim_start_matches('/'))
+                        };
+                        if carries_secret(&url, secrets) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            false
+        }
+        // A token in a remote's address (`git clone https://x:tok@…`).
+        "git" => off_mac() && url_leaks(),
+        _ => false,
+    }
+}
+
+/// Whether a command line writes to the network somewhere other than this
+/// Mac: a `curl` / `wget` / `http` write, a `gh` write, `git push`, or a
+/// tool that exists to move data (`ssh`, `scp`, `rsync host:…`, `nc`…).
+/// Asked for after outside content (`exposure`); here-document bodies stay
+/// data, and requests to this Mac don't count.
+pub fn sends_off_mac(command: &str, ctx: &Ctx) -> bool {
+    commands(command).iter().any(|words| {
+        let words: Vec<&str> = words.iter().map(String::as_str).collect();
+        let rest = unwrapped(&words);
+        let Some((&prog, args)) = rest.split_first() else {
+            return false;
+        };
+        let pos = positional(args);
+        let remote = |a: &&str| !local_host(a);
+        match base(prog) {
+            p @ ("curl" | "wget" | "http" | "https" | "xh" | "xhs") => {
+                program(p, args, ctx, false, false)
+            }
+            "git" => git(args),
+            "gh" => gh(args),
+            "ssh" | "sftp" | "telnet" | "ftp" | "nc" | "ncat" | "netcat" | "socat" => {
+                pos.first().is_some_and(remote)
+            }
+            "scp" | "rsync" => pos.iter().any(|a| {
+                a.starts_with("rsync://")
+                    || a.split_once(':').is_some_and(|(host, _)| {
+                        !host.is_empty() && !host.contains('/') && !local_host(host)
+                    })
+            }),
+            _ => false,
+        }
+    })
+}
+
+/// The command a line of words runs, past leading assignments, shell
+/// keywords and wrappers (`env`, `eval`, `xargs`, `timeout`…).
+fn unwrapped<'a, 'b>(mut rest: &'a [&'b str]) -> &'a [&'b str] {
     loop {
         match rest.first() {
             Some(w) if is_assignment(w) || KEYWORDS.contains(w) => rest = &rest[1..],
@@ -679,18 +921,7 @@ fn simple_asks(words: &[String], ctx: &Ctx, outside: bool, known: bool) -> bool 
             _ => break,
         }
     }
-    let Some((&prog, args)) = rest.split_first() else {
-        return false;
-    };
-    // Any program reading or writing a credential store asks.
-    if args
-        .iter()
-        .filter(|a| !a.starts_with('-'))
-        .any(|a| resolve_known(a, ctx, known).is_some_and(|p| secret_to_read(&p, ctx)))
-    {
-        return true;
-    }
-    program(base(prog), args, ctx, outside, known)
+    rest
 }
 
 /// Chat and messaging CLIs: each sends as the user.
@@ -948,16 +1179,11 @@ fn program(prog: &str, args: &[&str], ctx: &Ctx, outside: bool, known: bool) -> 
         }
         "defaults" => {
             let pos = positional(args);
+            // Any app's settings, not only the system's: always a card.
             matches!(
                 pos.first(),
-                Some(&"write") | Some(&"delete") | Some(&"import")
-            ) && (args
-                .iter()
-                .any(|a| matches!(*a, "-g" | "-globalDomain" | "-currentHost"))
-                || pos.get(1).is_some_and(|d| {
-                    d.starts_with('/') && !d.starts_with(&*ctx.home.to_string_lossy())
-                        || *d == "NSGlobalDomain"
-                }))
+                Some(&"write") | Some(&"delete") | Some(&"import") | Some(&"rename")
+            )
         }
         "bash" | "sh" | "zsh" | "eval" | "ssh" => false, // their quoted text is split above
         _ => false,
@@ -1337,3 +1563,7 @@ fn connector_writes(words: &[String]) -> bool {
 #[cfg(test)]
 #[path = "go_hard_tests.rs"]
 mod tests;
+
+#[cfg(test)]
+#[path = "go_hard_hardening_tests.rs"]
+mod hardening_tests;

@@ -208,7 +208,7 @@ fn with_its_context_local_work_is_exactly_what_go_hard_answers() {
         cwd: own.clone(),
         scratch: vec![own.clone()],
         app_data: vec![home.join("Library/Application Support/Dashbot")],
-        team_reader: false,
+        ..Default::default()
     };
     let local = |c: &Approval| classify_in(c, false, Some(&ctx)).0;
     assert_eq!(local(&bash("ls -la ~/Downloads/KiteExport")), Kind::Local);

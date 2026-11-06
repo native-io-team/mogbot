@@ -687,17 +687,28 @@ fn quoted(message: &str) -> Option<String> {
 /// An app-server item as the `exec` item it corresponds to, labelled the
 /// same way on the activity line and in the timeline.
 fn activity(item: &Value) -> Option<super::work::Action> {
-    let kind = match item.get("type")?.as_str()? {
-        "commandExecution" => "command_execution",
-        "fileChange" => "file_change",
-        "mcpToolCall" => "mcp_tool_call",
-        "webSearch" => "web_search",
-        "plan" => "todo_list",
-        _ => return None,
+    match item.get("type")?.as_str()? {
+        "commandExecution" | "fileChange" | "mcpToolCall" | "webSearch" | "plan" => {
+            super::codex::action(&as_exec(item))
+        }
+        _ => None,
+    }
+}
+
+/// An app-server item in `exec`'s shape (`commandExecution` →
+/// `command_execution`); an `exec` item as it is.
+pub(super) fn as_exec(item: &Value) -> Value {
+    let kind = match item.get("type").and_then(Value::as_str) {
+        Some("commandExecution") => "command_execution",
+        Some("fileChange") => "file_change",
+        Some("mcpToolCall") => "mcp_tool_call",
+        Some("webSearch") => "web_search",
+        Some("plan") => "todo_list",
+        _ => return item.clone(),
     };
     let mut item = item.clone();
     item["type"] = json!(kind);
-    super::codex::action(&item)
+    item
 }
 
 /// What became of a completed item, for its timeline step.
@@ -1057,7 +1068,7 @@ mod tests {
             cwd: own.into(),
             scratch: vec![own.into()],
             app_data: vec!["/Users/fictional/Library/Application Support/App".into()],
-            team_reader: false,
+            ..Default::default()
         };
         let (mut c, _) = conversation(None);
         started(&mut c);

@@ -829,9 +829,24 @@ below; it asks only for:
   folder (every agent's `CLAUDE.md`, chat log, timeline) without a card;
   other agents read only their own home; `crontab` (except `-l`),
   `security`, `launchctl`, `diskutil`, `dd`, `csrutil`, `pmset`, `nvram` and
-  other system tools; `defaults write` to `-g` or a `/Library` domain
+  other system tools; `defaults write` / `delete` / `import` (any domain)
 - connector tools whose name writes (send, create, update, delete, pay…);
   uploads in the browser
+- a network request with a secret in its address, query or headers
+  (`agents/egress.rs`, below): `curl` (and its `-u` / `-b` /
+  `--oauth2-bearer`), `wget`, `http`, `gh api`, a `git` remote with a
+  password, WebFetch, WebSearch. Requests to this Mac are exempt
+- after outside content in the turn (`agents/exposure.rs`, below): network
+  writes off this Mac (`go_hard::sends_off_mac`: `curl`/`wget`/`http`
+  writes, `gh` writes, `git push`, `ssh`, `scp`/`rsync` to a host, `nc`…)
+  and packages new to the project (`agents/installs.rs`)
+
+Wrappers are judged by what they run: `env`, `xargs`, `timeout`, `eval`,
+`find -exec` / `-execdir` / `-ok` (with `{}` as what it finds) and `find
+-delete` (like `rm -r` of its roots). Here-document bodies stay data.
+`go_hard_hardening_tests.rs` holds the owner's everyday work (git, builds,
+project installs, dev servers, local scripts, network reads, here-document
+scripts) card-free, after outside content too.
 
 Everything else runs: local git (commit, checkout, branch, worktree, merge,
 rebase, stash), builds, installs, dev servers, backgrounding, `pkill` /
@@ -853,7 +868,8 @@ sh`).
 The two lower levels use the allow-list classifier (`agents/autoallow.rs`):
 
 - **Reads**: read-only commands and file reads anywhere the user's account
-  can read (`ls`, `cat`, `grep -r`, `rg`, `find` without `-delete`/`-exec`,
+  can read (`ls`, `cat`, `grep -r`, `rg`, `find` (its `-exec` judged as the
+  command it runs),
   `git status/log/diff/show…`, `gh pr/issue/repo … view/list/status`, `gh api`
   GETs, `jq`, `defaults read`…), except credentials and private stores:
   `~/Library/Keychains`, `~/.ssh`, `~/.gnupg`, `~/.aws`, `~/.config/gh`,
@@ -866,7 +882,7 @@ The two lower levels use the allow-list classifier (`agents/autoallow.rs`):
   `chmod` (no setuid) and unpacking inside the home, never into a shell
   profile, `~/Library/LaunchAgents`, `~/Library/Preferences`, a PATH folder,
   a protected place above, the agent's own log files, or any `.git` /
-  `.shipstudio` folder; deleting only folders the tools rebuild
+  `.shipstudio` folder (git's hooks live there); deleting only folders the tools rebuild
   (`node_modules`, `dist`, `build`, `.next`, `target`, `.cache`, and what is
   inside them) in the agent's own home or its copy of a project — every other
   delete asks, even there; the project's build, check and test
@@ -879,14 +895,39 @@ The two lower levels use the allow-list classifier (`agents/autoallow.rs`):
   Also local work: `git fetch` / `git pull` (no helper programs or `ext::`
   remotes), `curl` / `wget` GETs to http(s) with no body, form, upload or
   config file; writing inside `/tmp`, `/private/tmp` and macOS's `$TMPDIR`;
-  installing *named* packages (`npm/pnpm/yarn/bun install|add|ci`, `pnpm
-  dlx`, `npx`/`uvx` of a named package, `pip`/`uv`/`pipx install`, `cargo
-  add|install`, `go get|install`, `brew install|upgrade`) — never global
+  installing packages (`npm/pnpm/yarn/bun install|add|ci`, `npx` / `pnpm
+  dlx` / `uvx` / `pipx run`, `pip`/`uv`/`pipx install`, `cargo add|install`,
+  `go get|install`, `brew install|upgrade`). Each package is checked against
+  what the project already has (`agents/installs.rs`): declared in its
+  manifest or lockfile (`package.json`, `requirements*.txt`,
+  `pyproject.toml`, `Cargo.toml` / `Cargo.lock`, `go.mod`, `Brewfile`) or
+  already in its `node_modules`, in the folder the command runs in or one
+  above it up to the home; a short list of well-known tools (`typescript`,
+  `prettier`, `eslint`, `vitest`, `pytest`, `ruff`, `jq`, `gh`…); or one the
+  user already allowed on a card for this project. A package that is none of
+  those still goes through at Go hard, but **in a turn that read outside
+  content it asks, once per project**: allowing its card remembers it
+  (`installs.json`; a bound agent's copies count as its project, an unbound
+  agent's home is its own). An install naming no package (`pnpm install`,
+  `npm ci`, `pip install -r requirements.txt`, `cargo build`) always counts as
+  the project's. Never global
   (`-g`, `--prefix`, `--target`, `--break-system-packages`), never from a raw
-  address (`https://…`, `git+…`, `github:…`, a tarball); and anything on a
+  address (`https://…`, `git+…`, `github:…`, `npm:`, a tarball) or another
+  registry or index; and anything on a
   top-level folder this Mac doesn't have and this account can't make
   (`/workspace/…`, Grok-era paths: it fails at once). Web searches and page
   fetches (`WebSearch`, `WebFetch`, Codex's web search) are reads.
+- **Secrets never leave in an address** (`agents/egress.rs`). Before a
+  network request goes through on its own (`curl` / `wget` GETs, `gh api`,
+  `git fetch <url>`, WebFetch, WebSearch, the browser opening a page) its
+  address, query and headers are checked; a card if any carries a value the
+  app keeps in the Keychain (agents' secrets, connections' tokens) or one in
+  the environment under a secret-looking name, as written or percent-encoded,
+  anything shaped like a credential (`ghp_…`, `github_pat_…`, `sk-…`,
+  `xoxb-…`, `AKIA…`, a JWT, a PEM block), a password in the address, a query
+  parameter named like one (`token=`, `api_key=`, `sig=`…), or a credential
+  header written out (`Authorization`, `Cookie`, `X-Api-Key`…). `curl -u`,
+  `-b`, `--oauth2-bearer` and client certificates always ask.
 - **Always a card, at every level** (`autoallow::ALWAYS_ASK` plus everything
   unrecognised): `git push`, `commit`, `reset` and every other git write,
   `gh` writes (`pr create|comment|review|merge|close|edit`, `release create`,
@@ -895,8 +936,17 @@ The two lower levels use the allow-list classifier (`agents/autoallow.rs`):
   other network tools, mail/Slack/hosting/cloud CLIs, `npm publish`,
   installs from raw addresses or global ones, `curl … | sh`, `rm` / `trash`
   of the user's files, `sudo`, `chown`, `chmod` on system paths, launch
-  agents and shell profiles, `security`, `osascript`, `open`, `kill`,
+  agents and shell profiles, `~/.ssh`, the app's data and other agents'
+  homes, `security` (Keychain reads included), `osascript`, `launchctl`
+  (except `list` / `print`), `defaults write`, `crontab`, `open`, `kill`,
   connector tools, payments, and Codex's "Allow more access" cards.
+- **Wrappers are judged by what they run**: `bash -c` / `sh -c` / `zsh -lc`,
+  `eval` of words written out, `env [NAME=value…] command` (harmless names
+  only; `env` alone prints the environment and asks), `time` / `nice` /
+  `timeout`, `find … -exec cmd {} ;` / `-delete` (the command on anything
+  under the roots), and `python -c` / `node -e` (their code read the way a
+  script is). `xargs` runs only listing commands; whatever can't be parsed
+  asks.
 - **Loops and variables**: `for NAME in …; do …; done`, `while`/`until`/`if`
   and a line that only sets a variable (`RID=$(gh run list …)`) take the
   class of the commands inside; a variable that changes how programs run
@@ -904,8 +954,9 @@ The two lower levels use the allow-list classifier (`agents/autoallow.rs`):
 - **Compound commands** are split into every command they run (`&&`, `||`,
   `;`, `|`, `&`, line breaks, `$(…)`, backticks, `bash -c '…'`) and take the
   class of the most dangerous part. Variables other than `$HOME`,
-  here-documents, subshells, `eval`, unknown programs and anything that
-  doesn't parse ask. Paths are judged as written and where they really are
+  here-documents, subshells, `eval` of anything known only when it runs,
+  unknown programs and anything that doesn't parse ask. Paths are judged as
+  written and where they really are
   (a symlink out of the home asks). When in doubt, a card.
 
 Each one answered this way leaves a step in the turn's "What it did"
@@ -914,6 +965,30 @@ outside text (a "When…" routine's items, or anything carrying their taint
 through `message_agent` or a room) at Use good judgement stays there; at Go
 hard it keeps Go hard with the extra outside-text asks above (network
 writes, packages fetched by name).
+
+**After outside content, sending and new code ask** (`agents/exposure.rs`).
+The first time a turn reads something from outside this Mac — a web page or
+search result (WebFetch, WebSearch, Codex's web search, `curl` / `wget` to
+anything but `localhost`), issue or pull request comments (`gh issue view`,
+`gh pr view --comments` or `--json …comments…`, `gh api
+…/comments|reviews|issues…`), a cloned repository, mail, chat or documents
+through a connection, or a page in the browser that isn't this Mac's own —
+the turn is marked, and for the rest of it two things ask on a card even at
+Go hard (`autoallow::after_outside_asks`): **sending to the network** beyond
+a read, to anywhere but this Mac (a `curl` body, form or upload, a non-GET,
+`wget --post-*`, a `gh` write, `git push`, `ssh` / `scp` / `rsync` / `nc`,
+mail), and **running a package new to the project** (above). Nothing else
+changes: reading and clicking in the browser, local work, builds, project
+installs and network reads go on as before. Its timeline says so once:
+"Asking before it sends anything or runs a new package, because it read
+outside content" (at Go hard, in a turn not already capped). Cards from such
+a turn record `fromOutside`, so a later sweep judges them at Use good
+judgement. Marks come from every call `mcp::decide` lets through, every call
+through the connection relay, and every tool call in the engine's stream
+(calls it runs without asking); the next turn starts clean. Imported
+conversations never reach a turn directly: they go through the sealed
+interview and one review card (docs/remote-access.md, "Importing agents as a
+conversation").
 
 **Cards already open.** On launch and whenever the level changes,
 `mcp::sweep_auto_allowed` answers open permission cards the level now covers,

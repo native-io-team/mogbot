@@ -347,6 +347,22 @@ pub(super) fn unwrap_shell(command: &str) -> &str {
 /// What a Codex item is doing, as a timeline step: the item as the Claude
 /// Code tool call it corresponds to, labelled the same way.
 pub(super) fn action(item: &Value) -> Option<super::work::Action> {
+    let (name, input) = call(item)?;
+    let mut action = super::work::describe_tool(&name, Some(&input))?;
+    action.id = item.get("id").and_then(Value::as_str).map(String::from);
+    // One change can touch several files; every one of them counts.
+    if let Some(changes) = item.get("changes").and_then(Value::as_array) {
+        action.files = changes
+            .iter()
+            .filter_map(|c| c.get("path")?.as_str().map(String::from))
+            .collect();
+    }
+    Some(action)
+}
+
+/// A Codex item as the Claude Code tool call it corresponds to: its name
+/// and input.
+pub(super) fn call(item: &Value) -> Option<(String, Value)> {
     let field = |k: &str| item.get(k).cloned().unwrap_or(Value::Null);
     let (name, input) = match item.get("type")?.as_str()? {
         "command_execution" => (
@@ -372,16 +388,7 @@ pub(super) fn action(item: &Value) -> Option<super::work::Action> {
         "todo_list" => ("TodoWrite".to_string(), Value::Null),
         _ => return None,
     };
-    let mut action = super::work::describe_tool(&name, Some(&input))?;
-    action.id = item.get("id").and_then(Value::as_str).map(String::from);
-    // One change can touch several files; every one of them counts.
-    if let Some(changes) = item.get("changes").and_then(Value::as_array) {
-        action.files = changes
-            .iter()
-            .filter_map(|c| c.get("path")?.as_str().map(String::from))
-            .collect();
-    }
-    Some(action)
+    Some((name, input))
 }
 
 /// What became of a completed Codex item, by its id. `exec` says

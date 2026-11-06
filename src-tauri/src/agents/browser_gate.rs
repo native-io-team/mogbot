@@ -372,6 +372,11 @@ fn own_site(url: &str, sites: &[String]) -> bool {
 }
 
 /// Whether going to `url` needs a card at `level`.
+/// An address that would carry a secret off this Mac (`egress`).
+fn leaks(url: &str) -> bool {
+    super::egress::carries_secret(url, &super::egress::known())
+}
+
 fn may_open(level: Level, url: &str, agent: &Agent) -> bool {
     if matches!(url.trim(), "back" | "forward") {
         return true;
@@ -417,6 +422,11 @@ pub fn sends(label: &str) -> Option<&'static str> {
 }
 
 /// The page a call acts on.
+/// The page a browser call of `agent_id` acts on, when known.
+pub fn url_of(agent_id: &str, input: &Value) -> Option<String> {
+    url_for(&page_of(agent_id), input)
+}
+
 fn url_for(page: &Page, input: &Value) -> Option<String> {
     tab_of(input)
         .and_then(|t| page.tabs.get(&t).cloned())
@@ -567,10 +577,10 @@ fn decide(level: Level, agent: &Agent, name: &str, input: &Value, page: &Page) -
     match name {
         "navigate" => {
             let url = input.get("url").and_then(Value::as_str).unwrap_or("");
-            free(may_open(level, url, agent))
+            free(may_open(level, url, agent) && !leaks(url))
         }
         "tabs_create_mcp" => match input.get("url").and_then(Value::as_str) {
-            Some(url) if !url.trim().is_empty() => free(may_open(level, url, agent)),
+            Some(url) if !url.trim().is_empty() => free(may_open(level, url, agent) && !leaks(url)),
             _ => Gate::Allow,
         },
         // Recording is a look; exporting can drop the file onto a page.

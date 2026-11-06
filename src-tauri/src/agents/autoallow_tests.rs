@@ -17,7 +17,7 @@ fn ctx() -> Ctx {
             format!("{HOME}/Projects/.worktrees/site-task").into(),
         ],
         app_data: vec![app.into()],
-        team_reader: false,
+        ..Default::default()
     }
 }
 
@@ -211,7 +211,10 @@ const TABLE: &[(&str, Class)] = &[
     ("cat <<EOF > ~/x.txt", Ask),
     ("(cd ~ && ls)", Ask),
     ("awk '{print}' f", Ask),
-    ("eval ls", Ask),
+    // `eval` of words written out is the line they make.
+    ("eval ls", Read),
+    ("eval rm -rf ~", Ask),
+    ("eval \"$CMD\"", Ask),
     ("PATH=/tmp/evil:$PATH ls", Ask),
     ("cat 'unterminated", Ask),
     ("some-unknown-tool --flag", Ask),
@@ -441,7 +444,7 @@ fn scripts_are_read_before_they_run() {
         cwd: home.join("site"),
         scratch: vec![own.clone()],
         app_data: vec![home.join("Library/Application Support/FictionalApp")],
-        team_reader: false,
+        ..Default::default()
     };
     std::fs::create_dir_all(home.join("site")).unwrap();
     let write =

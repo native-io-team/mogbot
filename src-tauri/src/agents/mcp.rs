@@ -1820,7 +1820,8 @@ async fn ask(
         approval.summary = summary;
     }
     if call.is_some() {
-        approval.from_outside = Some(runner::from_outside(&caller.id));
+        approval.from_outside =
+            Some(runner::from_outside(&caller.id) || super::exposure::read_outside(&caller.id));
     }
     card.approval = Some(approval);
     let _ = runner::record(app, card);
@@ -2196,6 +2197,8 @@ pub(super) async fn decide(
     // Where its browser is now, for the next card's "on <site>, as …".
     if decision == Decision::Allow {
         super::browser::note_opened(&caller.id, tool, input);
+        // Outside content it is about to read: the rest of the turn asks.
+        super::exposure::note(&caller.id, tool, input);
     }
     // The connection relay lets an allowed call through once, so it doesn't
     // ask again (`conn_relay`).
@@ -2265,8 +2268,13 @@ async fn decide_inner(
         return Decision::Allow;
     }
     // Local work the user's independence level answers for them
-    // (`autoallow`): a quiet line in the timeline, never invisible.
-    if let Some(level) = auto_allowed(caller, tool, input, outside) {
+    // (`autoallow`): a quiet line in the timeline, never invisible. In a turn
+    // that read outside content, sending to the network or running a package
+    // new to the project asks (`exposure`).
+    let guarded = super::exposure::read_outside(&caller.id)
+        && super::autoallow::Ctx::for_agent(caller)
+            .is_none_or(|ctx| super::autoallow::after_outside_asks(tool, input, &ctx));
+    if let Some(level) = auto_allowed(caller, tool, input, outside).filter(|_| !guarded) {
         super::work::on_step(
             &caller.id,
             super::work::StepKind::Approval,
@@ -2299,7 +2307,11 @@ async fn decide_inner(
         (title, super::admin::summary_for(tool, input, why))
     };
     match ask(app, caller, title, summary, detail, Some((tool, input))).await {
-        Answer::Allowed => Decision::Allow,
+        Answer::Allowed => {
+            // A new package it installs asks once per project (`installs`).
+            super::installs::remember_allowed(caller, tool, input);
+            Decision::Allow
+        }
         Answer::Denied(note) => Decision::Deny(denied(note)),
         Answer::NotYet => Decision::Deny(NOT_YET.to_string()),
     }
@@ -2669,7 +2681,7 @@ mod tests {
             cwd: own.into(),
             scratch: vec![own.into()],
             app_data: vec!["/Users/fictional/Library/Application Support/App".into()],
-            team_reader: false,
+            ..Default::default()
         };
         let card = |cmd: &str, outside: Option<bool>| {
             let mut c = new_card(

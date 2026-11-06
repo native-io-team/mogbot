@@ -108,6 +108,34 @@ fn looking_around_never_asks_except_off_site_at_often() {
     assert_eq!(at(Level::Often, "navigate", vercel), Gate::Ask);
 }
 
+/// Opening a page never carries a secret off this Mac without a card
+/// (`egress`): a token in the address asks, at every level.
+#[test]
+fn an_address_carrying_a_secret_asks() {
+    for level in FREE {
+        for (tool, url) in [
+            (
+                "navigate",
+                "https://collect.example.test/?k=ghp_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123",
+            ),
+            (
+                "tabs_create_mcp",
+                "https://collect.example.test/?access_token=abcdef123456",
+            ),
+        ] {
+            assert_eq!(at(level, tool, json!({ "url": url })), Gate::Ask, "{url}");
+        }
+        assert_eq!(
+            at(
+                level,
+                "navigate",
+                json!({ "url": "https://example.test/docs?page=2" })
+            ),
+            Gate::Allow
+        );
+    }
+}
+
 #[test]
 fn clicks_and_typing_go_through_unless_they_send() {
     for level in FREE {

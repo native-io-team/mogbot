@@ -31,11 +31,19 @@
 //! judgement" answers reads (at most that for a turn answering outside text,
 //! `independence::for_turn`). "Go hard" doesn't use this classifier at all:
 //! it allows by default and asks only for its short list (`go_hard`).
+//!
+//! **Hardening at "Go hard"** (on top of `go_hard`'s list): no network
+//! request goes through on its own with a secret in its address, query or
+//! headers (`egress`); in a turn that read outside content (`exposure`),
+//! network writes to another host and packages new to the project ask
+//! ([`after_outside_asks`], `installs`).
 
 use serde_json::Value;
 use std::path::{Component, Path, PathBuf};
 
+use super::egress;
 use super::independence::{self, Level};
+use super::installs::{self, Eco};
 
 /// What a call does, from harmless to "ask".
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -78,7 +86,7 @@ pub fn auto(chosen: Level, outside: bool, tool: &str, input: &Value, ctx: &Ctx) 
 }
 
 /// Where the agent is, for resolving what a call touches.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 pub struct Ctx {
     /// The user's home.
     pub home: PathBuf,
@@ -90,6 +98,11 @@ pub struct Ctx {
     pub scratch: Vec<PathBuf>,
     /// The app's own data (every agent's home, bridge config, tokens).
     pub app_data: Vec<PathBuf>,
+    /// Secret values that must never leave in an address (`egress::known`).
+    pub secrets: Vec<String>,
+    /// Packages the user already allowed for this project on a card
+    /// (`installs::remembered`), as `npm:zod`.
+    pub packages: Vec<String>,
     /// Reads every agent's home without a card at "Go hard": the Chief and
     /// the admins (`admin`). Others read only their own.
     pub team_reader: bool,
@@ -109,12 +122,15 @@ impl Ctx {
         if let Ok(root) = super::store::agents_root() {
             app_data.push(root);
         }
+        let key = super::installs::key_for(layout.project.as_deref(), &own_home);
         Some(Ctx {
             home,
             own_home,
             cwd: layout.cwd,
             scratch,
             app_data,
+            secrets: super::egress::known(),
+            packages: super::installs::remembered(&key),
             team_reader: super::admin::is_admin(agent),
         })
     }
@@ -181,9 +197,9 @@ impl Ctx {
                     && !self.bookkeeping(p)
                     && !self.is_secret(p)
                     && !self.write_protected().iter().any(|d| p.starts_with(d))
-                    && !p.components().any(
-                        |c| matches!(c, Component::Normal(n) if n == ".git" || n == ".shipstudio"),
-                    )
+                    && !p.components().any(|c| {
+                        matches!(c, Component::Normal(n) if PROTECTED_FOLDERS.iter().any(|f| n == *f))
+                    })
             })
     }
 
@@ -238,6 +254,10 @@ fn root_writable() -> bool {
         true
     }
 }
+
+/// Folders no write goes into without a card, wherever they are: git's own
+/// (its hooks run on every commit) and the project's metadata.
+const PROTECTED_FOLDERS: &[&str] = &[".git", ".shipstudio"];
 
 /// Build output and caches the project's own tools make again.
 const REGENERABLE: &[&str] = &["node_modules", "dist", "build", ".next", "target", ".cache"];
@@ -422,6 +442,11 @@ pub fn classify(tool: &str, input: &Value, ctx: &Ctx) -> Class {
         // Searching the web and fetching a page are reads (Claude Code's
         // tools, and Codex's own web search). A turn reading outside text
         // keeps its outside-text cap (`independence::for_turn`).
+        // Never when the address or the query carries a secret (`egress`).
+        "WebFetch" if egress::carries_secret(field("url"), &ctx.secrets) => Class::Ask,
+        "WebSearch" | "web_search" if egress::holds_secret(field("query"), &ctx.secrets) => {
+            Class::Ask
+        }
         "WebSearch" | "WebFetch" | "web_search" => Class::Read,
         // Connectors, payments, anything else.
         _ => Class::Ask,
@@ -773,14 +798,17 @@ const MAX_DEPTH: u8 = 4;
 
 /// The class of a whole command line: its most dangerous part.
 pub fn classify_command(command: &str, ctx: &Ctx) -> Class {
-    let mut eval = Eval {
-        ctx,
-        cwd: Some(ctx.cwd.clone()),
-        worst: Class::Read,
-        depth: 0,
-    };
+    let mut eval = Eval::new(ctx);
     eval.line(command);
     eval.worst
+}
+
+/// The packages `command` installs or runs that aren't the project's yet
+/// (`installs`), as `npm:zod`: what an Allow on its card remembers.
+pub fn new_packages(command: &str, ctx: &Ctx) -> Vec<String> {
+    let mut eval = Eval::new(ctx);
+    eval.line(command);
+    eval.unknown
 }
 
 struct Eval<'a> {
@@ -789,6 +817,8 @@ struct Eval<'a> {
     cwd: Option<PathBuf>,
     worst: Class,
     depth: u8,
+    /// Packages it would fetch that the project doesn't have yet.
+    unknown: Vec<String>,
 }
 
 /// What a command does with one of its words.
@@ -804,13 +834,67 @@ enum Use {
     Delete,
 }
 
-impl Eval<'_> {
+impl<'a> Eval<'a> {
+    fn new(ctx: &'a Ctx) -> Eval<'a> {
+        Eval {
+            ctx,
+            cwd: Some(ctx.cwd.clone()),
+            worst: Class::Read,
+            depth: 0,
+            unknown: Vec::new(),
+        }
+    }
+
     fn bump(&mut self, class: Class) {
         self.worst = self.worst.max(class);
     }
 
     fn ask(&mut self) {
         self.bump(Class::Ask);
+    }
+
+    /// An address (absolute, or a path with a query) that would carry a
+    /// secret off this Mac (`egress`).
+    fn leaks(&self, t: &str) -> bool {
+        let secrets = &self.ctx.secrets;
+        egress::carries_secret(t, secrets)
+            || (!web_url(t) && egress::carries_secret(&format!("https://x.invalid/{t}"), secrets))
+    }
+
+    /// `gh api`: the endpoint, its headers and the fields a GET sends as a
+    /// query, checked for secrets.
+    fn gh_api_leaks(&self, rest: &[&str]) -> bool {
+        let mut it = rest.iter().copied();
+        while let Some(t) = it.next() {
+            let (flag, inline) = match t.split_once('=') {
+                Some((f, v)) if t.starts_with("--") => (f, Some(v)),
+                _ => (t, None),
+            };
+            match flag {
+                "-H" | "--header" => {
+                    let v = inline.or_else(|| it.next()).unwrap_or("");
+                    if egress::header_carries_secret(v, &self.ctx.secrets) {
+                        return true;
+                    }
+                }
+                "-f" | "-F" | "--field" | "--raw-field" => {
+                    let v = inline.or_else(|| it.next()).unwrap_or("");
+                    let (name, value) = v.split_once('=').unwrap_or((v, ""));
+                    if (egress::secret_name(name) && !value.is_empty())
+                        || egress::holds_secret(value, &self.ctx.secrets)
+                    {
+                        return true;
+                    }
+                }
+                f if f.starts_with('-') => {}
+                endpoint => {
+                    if self.leaks(endpoint) {
+                        return true;
+                    }
+                }
+            }
+        }
+        false
     }
 
     fn line(&mut self, command: &str) {
@@ -1186,14 +1270,14 @@ impl Eval<'_> {
                 Some(&"-p") | Some(&"-lint") => self.touch_all(&positional, Use::Content),
                 _ => self.ask(),
             },
+            "launchctl" => match texts.first() {
+                Some(&"list") | Some(&"print") => self.bump(Class::Read),
+                _ => self.ask(),
+            },
             "defaults" => match texts.first() {
                 Some(&"read") | Some(&"read-type") | Some(&"domains") | Some(&"find") => {
                     self.bump(Class::Read)
                 }
-                _ => self.ask(),
-            },
-            "launchctl" => match texts.first() {
-                Some(&"list") | Some(&"print") => self.bump(Class::Read),
                 _ => self.ask(),
             },
             "pmset" if texts.first() == Some(&"-g") => self.bump(Class::Read),
@@ -1215,6 +1299,19 @@ impl Eval<'_> {
             }
             // Wrappers that run what follows.
             "time" | "nice" | "caffeinate" => self.wrapped(args, 0),
+            "env" => self.env(args),
+            // `eval` of words written out: the line they make, judged as one.
+            "eval" => {
+                if args.is_empty() || args.iter().any(|w| w.dynamic) {
+                    return self.ask();
+                }
+                let line = texts.join(" ");
+                self.depth += 1;
+                let saved = self.cwd.clone();
+                self.line(&line);
+                self.cwd = saved;
+                self.depth -= 1;
+            }
             "timeout" | "gtimeout" => self.wrapped(args, 1),
             // Local work.
             "mkdir" | "touch" | "tee" => {
@@ -1289,12 +1386,20 @@ impl Eval<'_> {
                     self.bump(Class::Change)
                 }
                 Some(&("tree" | "metadata")) => self.bump(Class::Read),
-                Some(&("add" | "install" | "fetch" | "update")) => self.install(&texts[1..]),
+                Some(&("add" | "install" | "fetch" | "update")) => {
+                    self.install(Eco::Cargo, &texts[1..])
+                }
                 _ => self.ask(),
             },
             "go" => match texts.first() {
                 Some(&("build" | "test" | "vet" | "fmt")) => self.bump(Class::Change),
-                Some(&("get" | "install" | "mod")) => self.install(&texts[1..]),
+                Some(&("get" | "install")) => self.install(Eco::Go, &texts[1..]),
+                Some(&"mod") => match texts.get(1) {
+                    Some(&("tidy" | "download" | "verify" | "graph" | "why" | "vendor")) => {
+                        self.bump(Class::Change)
+                    }
+                    _ => self.ask(),
+                },
                 Some(&("env" | "list")) => self.bump(Class::Read),
                 _ => self.ask(),
             },
@@ -1321,29 +1426,33 @@ impl Eval<'_> {
                     self.bump(Class::Read)
                 }
                 // Homebrew installs into its own prefix, as this account.
-                Some(&("install" | "upgrade" | "reinstall")) => self.install(&texts[1..]),
+                Some(&("install" | "upgrade" | "reinstall")) => {
+                    self.install(Eco::Brew, &texts[1..])
+                }
                 _ => self.ask(),
             },
             "pip" | "pip3" => match texts.first() {
                 Some(&("list" | "show" | "freeze")) => self.bump(Class::Read),
-                Some(&"install") => self.install(&texts[1..]),
+                Some(&"install") => self.install(Eco::Pip, &texts[1..]),
                 _ => self.ask(),
             },
-            "pipx" => match texts.first() {
-                Some(&("install" | "upgrade")) => self.install(&texts[1..]),
-                Some(&"list") => self.bump(Class::Read),
+            "pipx" => match texts.as_slice() {
+                ["install" | "upgrade", rest @ ..] => self.install(Eco::Pip, rest),
+                ["run", rest @ ..] => self.run_package(Eco::Pip, rest),
+                ["list", ..] => self.bump(Class::Read),
                 _ => self.ask(),
             },
             "uv" => match texts.as_slice() {
                 ["pip", "install", rest @ ..] | ["tool", "install", rest @ ..] => {
-                    self.install(rest)
+                    self.install(Eco::Pip, rest)
                 }
-                ["add", rest @ ..] => self.install(rest),
+                ["tool", "run", rest @ ..] => self.run_package(Eco::Pip, rest),
+                ["add", rest @ ..] => self.install(Eco::Pip, rest),
                 ["sync" | "lock" | "venv", ..] => self.bump(Class::Change),
                 ["pip", "list" | "show" | "freeze", ..] | ["tree", ..] => self.bump(Class::Read),
                 _ => self.ask(),
             },
-            "uvx" => self.install(&texts),
+            "uvx" => self.run_package(Eco::Pip, &texts),
             "sh" | "bash" | "zsh" | "dash" => self.shell(args),
             "python" | "python3" | "node" | "ruby" | "perl" | "deno" | "tsx" | "ts-node" => {
                 self.interpreter(name, args)
@@ -1368,6 +1477,38 @@ impl Eval<'_> {
         }
     }
 
+    /// `env [-i] [NAME=value]… command`: the command, given only harmless
+    /// names. `env` alone prints the environment (secrets): it asks.
+    fn env(&mut self, args: &[&Word]) {
+        let mut rest: Vec<Word> = Vec::new();
+        let mut it = args.iter().copied();
+        while let Some(w) = it.next() {
+            if w.dynamic {
+                return self.ask();
+            }
+            match w.text.as_str() {
+                "-i" | "-" | "--ignore-environment" if rest.is_empty() => {}
+                "-u" | "--unset" if rest.is_empty() => {
+                    if it.next().is_none() {
+                        return self.ask();
+                    }
+                }
+                t if rest.is_empty() && t.starts_with('-') => return self.ask(),
+                _ if rest.is_empty() && is_assignment(w) => {
+                    let name = w.text.split('=').next().unwrap_or("");
+                    if !SAFE_ENV.contains(&name) {
+                        return self.ask();
+                    }
+                }
+                _ => rest.push(w.clone()),
+            }
+        }
+        if rest.is_empty() {
+            return self.ask();
+        }
+        self.simple(rest, Vec::new());
+    }
+
     fn wrapped(&mut self, args: &[&Word], skip: usize) {
         let rest: Vec<Word> = args.iter().skip(skip).map(|w| (*w).clone()).collect();
         if rest.is_empty() {
@@ -1377,10 +1518,7 @@ impl Eval<'_> {
     }
 
     fn find(&mut self, texts: &[&str], args: &[&Word]) {
-        const ACTS: &[&str] = &[
-            "-delete", "-exec", "-execdir", "-ok", "-okdir", "-fprint", "-fprint0", "-fprintf",
-            "-fls",
-        ];
+        const ACTS: &[&str] = &["-ok", "-okdir", "-fprint", "-fprint0", "-fprintf", "-fls"];
         if texts.iter().any(|t| ACTS.contains(t)) {
             return self.ask();
         }
@@ -1394,6 +1532,49 @@ impl Eval<'_> {
             self.touch_cwd(Use::Names);
         }
         self.touch_all(&roots, Use::Names);
+        // What it finds: anything under each root.
+        let found: Vec<Word> = if roots.is_empty() {
+            vec![plain_glob(".")]
+        } else {
+            roots.iter().map(|r| plain_glob(&r.text)).collect()
+        };
+        if texts.contains(&"-delete") {
+            for f in &found {
+                self.touch(f, Use::Delete);
+            }
+        }
+        // `-exec cmd {} ;` / `+`: the command, on what it finds.
+        let mut i = 0;
+        while i < args.len() {
+            if matches!(args[i].text.as_str(), "-exec" | "-execdir") && !args[i].dynamic {
+                let Some(len) = args[i + 1..]
+                    .iter()
+                    .position(|w| matches!(w.text.as_str(), ";" | "+") && !w.dynamic)
+                else {
+                    return self.ask();
+                };
+                let inner = &args[i + 1..i + 1 + len];
+                if inner.is_empty() {
+                    return self.ask();
+                }
+                for f in &found {
+                    let words: Vec<Word> = inner
+                        .iter()
+                        .map(|w| {
+                            if w.text == "{}" {
+                                f.clone()
+                            } else {
+                                (*w).clone()
+                            }
+                        })
+                        .collect();
+                    self.simple(words, Vec::new());
+                }
+                i += len + 2;
+            } else {
+                i += 1;
+            }
+        }
     }
 
     fn sed(&mut self, flags: &[&Word], positional: &[&Word]) {
@@ -1504,7 +1685,9 @@ impl Eval<'_> {
                         && !t.starts_with("--exec")
                         && !t.starts_with("--recurse-submodules")
                         && !matches!(*t, "-u")
-                }) && words.iter().all(|w| !w.dynamic);
+                }) && words.iter().all(|w| !w.dynamic)
+                    // A token in a remote's address never leaves on its own.
+                    && !more.iter().any(|t| web_url(t) && self.leaks(t));
                 self.cwd = saved;
                 return if safe {
                     self.bump(Class::Change)
@@ -1557,6 +1740,9 @@ impl Eval<'_> {
     }
 
     fn gh(&mut self, texts: &[&str], args: &[&Word]) {
+        if texts.first() == Some(&"api") && self.gh_api_leaks(&texts[1..]) {
+            return self.ask();
+        }
         let read = match texts {
             ["auth", "status", ..] => true,
             // A GET: no method but GET, and fields only when the method is
@@ -1659,12 +1845,26 @@ impl Eval<'_> {
                     {
                         return self.ask()
                     }
-                    "header" | "user-agent" | "referer" | "cookie" | "user" | "proxy"
-                    | "write-out" | "max-time" | "connect-timeout" | "retry" | "range"
-                    | "url-query" | "cacert" | "resolve" | "max-filesize" | "retry-delay"
-                    | "retry-max-time" | "limit-rate" | "oauth2-bearer" | "url" => {
-                        let v = value(&mut it);
-                        if name == "url" && !v.as_deref().is_some_and(web_url) {
+                    // Credentials sent with the request: always a card.
+                    "cookie" | "user" | "oauth2-bearer" | "cert" | "key" | "pass"
+                    | "proxy-user" | "aws-sigv4" | "netrc" | "netrc-file" => return self.ask(),
+                    "header" | "proxy-header" => {
+                        let v = value(&mut it).unwrap_or_default();
+                        if egress::header_carries_secret(&v, &self.ctx.secrets) {
+                            return self.ask();
+                        }
+                    }
+                    "user-agent" | "referer" | "proxy" | "write-out" | "max-time"
+                    | "connect-timeout" | "retry" | "range" | "url-query" | "cacert"
+                    | "resolve" | "max-filesize" | "retry-delay" | "retry-max-time"
+                    | "limit-rate" | "url" => {
+                        let v = value(&mut it).unwrap_or_default();
+                        if name == "url" && !web_url(&v) {
+                            return self.ask();
+                        }
+                        if matches!(name, "url" | "referer" | "url-query" | "user-agent")
+                            && self.leaks(&v)
+                        {
                             return self.ask();
                         }
                         fetched |= name == "url";
@@ -1688,7 +1888,18 @@ impl Eval<'_> {
                                 return self.ask();
                             }
                         }
-                        'd' | 'F' | 'T' | 'K' => return self.ask(),
+                        'd' | 'F' | 'T' | 'K' | 'u' | 'b' | 'E' | 'U' => return self.ask(),
+                        'H' => {
+                            let v = value.unwrap_or_default();
+                            if egress::header_carries_secret(&v, &self.ctx.secrets) {
+                                return self.ask();
+                            }
+                        }
+                        'e' | 'A' => {
+                            if self.leaks(&value.unwrap_or_default()) {
+                                return self.ask();
+                            }
+                        }
                         'o' | 'c' | 'D' => {
                             let Some(target) = value else {
                                 return self.ask();
@@ -1703,6 +1914,9 @@ impl Eval<'_> {
                     self.touch_cwd(Use::Write);
                 }
             } else if web_url(t) {
+                if self.leaks(t) {
+                    return self.ask();
+                }
                 fetched = true;
             } else {
                 return self.ask();
@@ -1749,12 +1963,22 @@ impl Eval<'_> {
                 }
                 "-q" | "--quiet" | "-nv" | "--no-verbose" | "-c" | "--continue" | "-S"
                 | "--server-response" | "--spider" | "-N" | "--timestamping" => {}
-                n if n.starts_with("--header")
-                    || n.starts_with("--user-agent")
+                "--header" => {
+                    let v = value().unwrap_or_default();
+                    if egress::header_carries_secret(&v, &self.ctx.secrets) {
+                        return self.ask();
+                    }
+                }
+                n if n.starts_with("--user-agent")
                     || n.starts_with("--timeout")
                     || n.starts_with("--tries") => {}
                 n if n.starts_with('-') => return self.ask(),
-                n if web_url(n) => fetched = true,
+                n if web_url(n) => {
+                    if self.leaks(n) {
+                        return self.ask();
+                    }
+                    fetched = true
+                }
                 _ => return self.ask(),
             }
         }
@@ -1888,10 +2112,13 @@ impl Eval<'_> {
         }
     }
 
-    /// Installing named packages for the agent's work: local work ("Go
-    /// hard"). Never from a raw address (`https://…`, `git+…`), never global
-    /// (`-g`), and `sudo` already asks before this is reached.
-    fn install(&mut self, rest: &[&str]) {
+    /// Installing packages: local work ("Go hard") when it fetches only
+    /// what the project already has (`installs`): no package named, or each
+    /// one declared, well known, or allowed before for this project. A new
+    /// package asks (and is remembered once allowed). Never from a raw
+    /// address (`https://…`, `git+…`), another registry or index, or global
+    /// (`-g`); `sudo` already asks before this is reached.
+    fn install(&mut self, eco: Eco, rest: &[&str]) {
         let raw = |t: &str| {
             let l = t.to_ascii_lowercase();
             l.contains("://")
@@ -1900,6 +2127,8 @@ impl Eval<'_> {
                 || l.starts_with("github:")
                 || l.starts_with("gitlab:")
                 || l.starts_with("bitbucket:")
+                || l.starts_with("npm:")
+                || l.starts_with("file:")
                 || l.ends_with(".tgz")
                 || l.ends_with(".whl") && l.contains('/')
         };
@@ -1913,23 +2142,117 @@ impl Eval<'_> {
                     | "--root"
                     | "--prefix"
                     | "--target"
+                    | "--index-url"
+                    | "--extra-index-url"
+                    | "--registry"
+                    | "--git"
+                    | "--path"
             ) || t.starts_with("--prefix=")
                 || t.starts_with("--root=")
                 || t.starts_with("--target=")
+                || t.starts_with("--index-url=")
+                || t.starts_with("--extra-index-url=")
+                || t.starts_with("--registry=")
         };
         if rest.iter().any(|t| t.is_empty() || raw(t) || global(t)) {
             return self.ask();
         }
+        let mut it = rest.iter().copied();
+        while let Some(t) = it.next() {
+            match t {
+                // pip's own requirements file: what the project declares.
+                "-r" | "--requirement" | "-c" | "--constraint" if eco == Eco::Pip => {
+                    let Some(file) = it.next() else {
+                        return self.ask();
+                    };
+                    self.touch(&plain_word(file.to_string()), Use::Content);
+                }
+                // pip's other index: another registry.
+                "-i" if eco == Eco::Pip => return self.ask(),
+                // The project itself, from its own folder.
+                "-e" | "--editable" if eco == Eco::Pip => match it.next() {
+                    Some(p) if p.starts_with('.') || p.starts_with('/') => {}
+                    _ => return self.ask(),
+                },
+                // A workspace filter names a package of the project's own.
+                "--filter" | "-F" | "--workspace" if eco == Eco::Npm => {
+                    it.next();
+                }
+                "." if eco == Eco::Pip => {}
+                t if t.starts_with('-') => {}
+                spec => self.package(eco, spec),
+            }
+        }
+        self.bump(Class::Change)
+    }
+
+    /// One package an install names: the project's already, or it asks.
+    fn package(&mut self, eco: Eco, spec: &str) {
+        let Some(name) = installs::package_name(eco, spec) else {
+            return self.ask();
+        };
+        let entry = installs::entry(eco, &name);
+        let known = installs::well_known(eco, &name)
+            || self.ctx.packages.contains(&entry)
+            || self
+                .cwd
+                .as_ref()
+                .is_some_and(|cwd| installs::declared(eco, &name, cwd, &self.ctx.home));
+        // Not the project's yet: still local work at "Go hard", but noted. In
+        // a turn that read outside content it asks (`after_outside_asks`).
+        if !known && !self.unknown.contains(&entry) {
+            self.unknown.push(entry);
+        }
+    }
+
+    /// `npx x`, `pnpm dlx x`, `uvx x`, `pipx run x`: fetching and running a
+    /// package. Local work only when it is the project's (or well known).
+    fn run_package(&mut self, eco: Eco, texts: &[&str]) {
+        let mut named: Option<&str> = None;
+        let mut it = texts.iter().copied();
+        while let Some(t) = it.next() {
+            match t {
+                "-p" | "--package" | "--from" | "--spec" => named = it.next(),
+                t if t.starts_with("--package=") || t.starts_with("--from=") => {
+                    named = t.split_once('=').map(|(_, v)| v)
+                }
+                // `npx -c "…"` runs a shell line.
+                "-c" | "--call" => return self.ask(),
+                t if t.starts_with('-') => {}
+                t => {
+                    named = named.or(Some(t));
+                    break;
+                }
+            }
+        }
+        let Some(spec) = named else {
+            return self.ask();
+        };
+        if spec.contains("://") || spec.starts_with("git+") || spec.contains(':') {
+            return self.ask();
+        }
+        if eco == Eco::Npm && SAFE_NPX.contains(&spec) {
+            return self.bump(Class::Change);
+        }
+        self.package(eco, spec);
         self.bump(Class::Change)
     }
 
     fn package_manager(&mut self, name: &str, texts: &[&str]) {
         match texts {
-            ["install" | "i" | "add" | "ci" | "update" | "up" | "upgrade" | "remove" | "rm"
-            | "uninstall", rest @ ..] => return self.install(rest),
-            [] if name != "npm" => return self.install(&[]),
-            ["dlx" | "x", rest @ ..] if name != "npm" => return self.install(rest),
-            ["exec", rest @ ..] if name == "npm" => return self.install(rest),
+            ["install" | "i" | "add" | "ci" | "update" | "up" | "upgrade", rest @ ..] => {
+                return self.install(Eco::Npm, rest)
+            }
+            // Removing fetches nothing.
+            ["remove" | "rm" | "uninstall" | "un", rest @ ..] => {
+                if rest.iter().any(|t| matches!(*t, "-g" | "--global")) {
+                    return self.ask();
+                }
+                return self.bump(Class::Change);
+            }
+            [] if name != "npm" => return self.install(Eco::Npm, &[]),
+            ["dlx" | "x", rest @ ..] if name != "npm" => return self.run_package(Eco::Npm, rest),
+            ["exec", rest @ ..] if name == "npm" => return self.run_package(Eco::Npm, rest),
             _ => {}
         }
         let script = match texts {
@@ -1956,15 +2279,10 @@ impl Eval<'_> {
         }
     }
 
-    /// `npx <named package>`: fetching and running a published package is
-    /// local work at "Go hard", like installing it. A raw address asks.
+    /// `npx <package>`: fetching and running a published package. Local
+    /// work at "Go hard" only when it's the project's (`run_package`).
     fn npx(&mut self, texts: &[&str]) {
-        let tool = texts.iter().find(|t| !t.starts_with('-')).copied();
-        match tool {
-            Some(t) if SAFE_NPX.contains(&t) => self.bump(Class::Change),
-            Some(_) => self.install(texts),
-            None => self.ask(),
-        }
+        self.run_package(Eco::Npm, texts)
     }
 
     fn shell(&mut self, args: &[&Word]) {
@@ -2216,6 +2534,16 @@ fn plain_sed(script: &str) -> bool {
             _ => false,
         }
     })
+}
+
+/// Anything under `root`, as a pattern (`root/*`).
+fn plain_glob(root: &str) -> Word {
+    Word {
+        text: format!("{}/*", root.trim_end_matches('/')),
+        glob: true,
+        tilde: root.starts_with('~'),
+        ..Word::default()
+    }
 }
 
 /// A word as the shell would read it unquoted (`~/x` is the home).
@@ -2504,11 +2832,9 @@ pub const ALWAYS_ASK: &[&str] = &[
     "sudo",
     "doas",
     "su",
-    "eval",
     "exec",
     "source",
     ".",
-    "env",
     "nohup",
     "disown",
     "export",
@@ -2614,6 +2940,172 @@ pub const ALWAYS_ASK: &[&str] = &[
     "rustup",
 ];
 
+// ============================================================================
+// Reading outside content (`exposure`)
+// ============================================================================
+
+/// Whether a command line reads text from outside this Mac: a web page or
+/// API answer (`curl` / `wget` to anything but this Mac), issue or pull
+/// request comments (`gh issue view`, `gh pr view --comments`, `gh api …
+/// /comments`), or a cloned repository. Plain `gh pr view`, `gh pr checks`,
+/// `gh run view` and `git fetch` don't count. `exposure` marks the turn.
+pub fn command_reads_outside(command: &str) -> bool {
+    outside_line(command, 0)
+}
+
+fn outside_line(command: &str, depth: u8) -> bool {
+    if depth > MAX_DEPTH {
+        return false;
+    }
+    let Some(lexed) = lex(command, "") else {
+        // Unparseable (it asked): judge the text itself.
+        let lower = command.to_ascii_lowercase();
+        return [
+            "curl ",
+            "wget ",
+            "gh issue",
+            "gh api",
+            "--comments",
+            "git clone",
+        ]
+        .iter()
+        .any(|m| lower.contains(m));
+    };
+    if lexed.subs.iter().any(|s| outside_line(s, depth + 1)) {
+        return true;
+    }
+    let mut words: Vec<Word> = Vec::new();
+    let mut toks = lexed.toks.into_iter();
+    while let Some(tok) = toks.next() {
+        match tok {
+            Tok::Word(w) => words.push(w),
+            Tok::Sep => {
+                if outside_simple(std::mem::take(&mut words), depth) {
+                    return true;
+                }
+            }
+            // A redirect's target isn't an argument.
+            Tok::Out | Tok::In | Tok::Text => {
+                toks.next();
+            }
+        }
+    }
+    outside_simple(words, depth)
+}
+
+fn outside_simple(words: Vec<Word>, depth: u8) -> bool {
+    let words = strip_wrappers(words);
+    let texts: Vec<&str> = words.iter().map(|w| w.text.as_str()).collect();
+    let Some(name) = texts.first().and_then(|p| program_name(p)) else {
+        return false;
+    };
+    let args = &texts[1..];
+    match name {
+        "curl" | "wget" => args.iter().any(|a| {
+            a.find("://").is_some_and(|i| {
+                let start = a[..i]
+                    .rfind(|c: char| !c.is_ascii_alphabetic())
+                    .map_or(0, |j| j + 1);
+                remote_url(&a[start..])
+            })
+        }),
+        "git" => args.contains(&"clone") && args.iter().any(|a| remote_url(a) || a.contains('@')),
+        "gh" => match args {
+            ["issue", "view", ..] => true,
+            ["pr", "view", rest @ ..] => rest.iter().any(|a| {
+                matches!(*a, "--comments" | "-c")
+                    || ((a.contains("comments") || a.contains("reviews") || a.contains("Reviews"))
+                        && !a.starts_with('-'))
+            }),
+            ["api", rest @ ..] => rest.iter().any(|a| {
+                !a.starts_with('-')
+                    && [
+                        "comments",
+                        "reviews",
+                        "issues",
+                        "discussions",
+                        "notifications",
+                        "timeline",
+                        "events",
+                        "graphql",
+                    ]
+                    .iter()
+                    .any(|m| a.contains(m))
+            }),
+            _ => false,
+        },
+        "sh" | "bash" | "zsh" | "dash" => texts
+            .iter()
+            .position(|t| t.starts_with('-') && t.ends_with('c'))
+            .and_then(|i| texts.get(i + 1))
+            .is_some_and(|code| outside_line(code, depth + 1)),
+        "eval" => outside_line(&args.join(" "), depth + 1),
+        _ => false,
+    }
+}
+
+/// Loop words, assignments and wrappers in front of the program.
+fn strip_wrappers(mut words: Vec<Word>) -> Vec<Word> {
+    loop {
+        let Some(first) = words.first() else {
+            return words;
+        };
+        let skip = match first.text.as_str() {
+            "do" | "then" | "else" | "if" | "elif" | "while" | "until" | "!" | "time" | "nice"
+            | "caffeinate" | "nohup" | "command" => 1,
+            "timeout" | "gtimeout" => 2,
+            "env" | "xargs" => {
+                1 + words[1..]
+                    .iter()
+                    .take_while(|w| w.text.starts_with('-') || is_assignment(w))
+                    .count()
+            }
+            _ if is_assignment(first) => 1,
+            _ => 0,
+        };
+        if skip == 0 {
+            return words;
+        }
+        words.drain(..skip.min(words.len()));
+    }
+}
+
+/// In a turn that read outside content (`exposure`), whether this call asks
+/// even at "Go hard": it writes to the network somewhere other than this Mac
+/// (`go_hard::sends_off_mac`), or fetches a package the project doesn't have
+/// yet (`installs`). Everything else (local work, builds, project installs,
+/// network reads, dev servers, here-document scripts) is unaffected.
+pub fn after_outside_asks(tool: &str, input: &Value, ctx: &Ctx) -> bool {
+    if tool != "Bash" {
+        return false;
+    }
+    let command = input.get("command").and_then(Value::as_str).unwrap_or("");
+    let line = super::go_hard::without_heredoc_data(command);
+    super::go_hard::sends_off_mac(command, ctx) || !new_packages(&line, ctx).is_empty()
+}
+
+/// A web address somewhere other than this Mac.
+pub fn remote_url(t: &str) -> bool {
+    if !web_url(t) {
+        return false;
+    }
+    let Ok(u) = url::Url::parse(t) else {
+        return true;
+    };
+    !u.host_str().is_some_and(local_host)
+}
+
+/// This Mac: `localhost`, a loopback address, `*.localhost`.
+pub fn local_host(host: &str) -> bool {
+    let h = host
+        .trim_start_matches('[')
+        .trim_end_matches(']')
+        .to_ascii_lowercase();
+    matches!(h.as_str(), "localhost" | "127.0.0.1" | "::1" | "0.0.0.0")
+        || h.ends_with(".localhost")
+        || h.starts_with("127.")
+}
+
 #[cfg(test)]
 #[path = "autoallow_tests.rs"]
 mod tests;
@@ -2621,3 +3113,7 @@ mod tests;
 #[cfg(test)]
 #[path = "autoallow_gaps_tests.rs"]
 mod gaps_tests;
+
+#[cfg(test)]
+#[path = "autoallow_hardening_tests.rs"]
+mod hardening_tests;

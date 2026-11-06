@@ -2869,6 +2869,7 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         // A bound agent works in its project (its copy is the project's).
         let bound = store::get(&agent_id).ok().and_then(|a| a.project);
         super::workplace::begin(&agent_id, bound.as_deref().map(std::path::Path::new));
+        super::exposure::begin(&agent_id);
         super::results::discard(&agent_id);
         super::dev_servers::begin(&agent_id);
         if let Some(copy) = &made {
@@ -4138,11 +4139,16 @@ async fn run_turn(
                         if matches!(kind, Some("assistant" | "user")) {
                             super::browser_gate::observe(agent_id, &value);
                         }
+                        // Outside content it reads: the rest of the turn asks.
+                        super::exposure::observe_claude(agent_id, &value);
                         let mut steps = stream::claude_steps(&value, store::now_ms());
                         steps.extend(claude_context.observe(&value, store::now_ms()).map(Step::Context));
                         steps
                     }
-                    Driver::CodexExec => super::codex::steps(&value),
+                    Driver::CodexExec => {
+                        super::exposure::observe_codex(agent_id, &value);
+                        super::codex::steps(&value)
+                    }
                     Driver::CodexApp => match conversation.as_mut() {
                         Some(conversation) => {
                             let mut steps = Vec::new();
@@ -4168,6 +4174,9 @@ async fn run_turn(
                         None => super::codex::steps(&value),
                     },
                 };
+                if driver == Driver::CodexApp {
+                    super::exposure::observe_codex(agent_id, &value);
+                }
                 progress_dirty |= !steps.is_empty();
                 for step in steps {
                     match step {
