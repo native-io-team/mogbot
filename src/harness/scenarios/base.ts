@@ -10,6 +10,7 @@
  * the wrong thing.
  */
 
+import { PHONE_QR } from '../fixtures/phoneQr';
 import { remoteBrief, remoteStatus } from './remote';
 import { phoneStatus } from './phone';
 import type { CommandMap } from '../types';
@@ -345,6 +346,7 @@ export const baseCommands: CommandMap = {
   // How much agents do on their own (`agents::independence`): never chosen.
   agents_independence: 'judgement',
   agents_set_independence: (args: Record<string, unknown>) => args.level,
+  agents_set_import_choice: (args: Record<string, unknown>) => args.choice,
   // Admins (`agents::admin`): nothing done yet, nobody deleted.
   agents_set_admin: (args: Record<string, unknown>) => ({ id: args.agentId, admin: args.admin }),
   agents_admin_activity: [],
@@ -432,6 +434,10 @@ export const baseCommands: CommandMap = {
   get_remote_audit: [],
   // Phone access off, nothing paired: the first-run state.
   companion_status: phoneStatus(),
+  // Onboarding's phone checks: no phone on the tailnet yet; a store link's
+  // QR code drawn from a fixed module matrix (the pairing fixture's).
+  companion_tailnet_phones: [],
+  companion_link_qr: PHONE_QR,
   // "Keep this Mac awake" (Agents): supported, not held — remote access is off.
   get_stay_on: {
     supported: true,

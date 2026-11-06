@@ -348,7 +348,7 @@ pub fn stop(app: &AppHandle) -> bool {
         app,
         &talk.chief_id,
         format!(
-            "You stopped the import from {}. Nothing was created. To try again, open Import agents and press Start.",
+            "You stopped the import from {}. Nothing was created. To try again, press ⌘K → Import agents and press Start.",
             talk.source
         ),
     );
@@ -573,7 +573,7 @@ pub(crate) fn admit(
         }
         if !state.armed {
             return Err(
-                "STATUS: not_started\n\nThe user hasn't started an import. Imports only begin from the app.\n\nNEXT: Tell the user to open Agents → Import agents on their computer, choose From another assistant, and press Start, then ask you again. Don't call import_conversation until they say they have.".into(),
+                "STATUS: not_started\n\nThe user hasn't started an import. Imports only begin from the app.\n\nNEXT: Tell the user to press ⌘K → Import agents on their computer (or Settings → Agents → Import), choose From another assistant, and press Start, then ask you again. Don't call import_conversation until they say they have.".into(),
             );
         }
         if message.is_empty() {
@@ -1873,7 +1873,7 @@ pub(crate) fn stage_one_shot_state(
         );
     }
     if !state.armed {
-        return Err("STATUS: not_started\n\nImports only begin from the app.\n\nNEXT: Tell the user to open Agents → Import agents, choose From another assistant and press Start, then ask you again.".into());
+        return Err("STATUS: not_started\n\nImports only begin from the app.\n\nNEXT: Tell the user to press ⌘K → Import agents (or Settings → Agents → Import), choose From another assistant and press Start, then ask you again.".into());
     }
     let mut draft = Review::default();
     let mut errors = Vec::new();

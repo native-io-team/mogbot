@@ -570,65 +570,6 @@
   flex-shrink: 0;
 }
 
-/* ============ Celebration Screen ============ */
-
-.celebration-screen {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  min-height: 100vh;
-  padding: 40px 24px;
-  opacity: 0;
-  transform: scale(0.95);
-  transition:
-    opacity 0.4s ease,
-    transform 0.4s ease;
-}
-
-.celebration-screen.visible {
-  opacity: 1;
-  transform: scale(1);
-}
-
-.celebration-content {
-  text-align: center;
-}
-
-.celebration-icon {
-  margin-bottom: 24px;
-  animation: pop 0.5s ease;
-}
-
-@keyframes pop {
-  0% {
-    transform: scale(0);
-  }
-  50% {
-    transform: scale(1.1);
-  }
-  100% {
-    transform: scale(1);
-  }
-}
-
-.celebration-title {
-  font-size: 32px;
-  font-weight: 600;
-  margin-bottom: 8px;
-}
-
-.celebration-subtitle {
-  color: var(--text-secondary);
-  font-size: var(--font-size-h4);
-  margin-bottom: 32px;
-}
-
-.celebration-btn {
-  padding: 12px 32px;
-  font-size: 15px;
-}
-
 /* ============ Legacy Setup Screen (kept for reference) ============ */
 
 .setup-screen {

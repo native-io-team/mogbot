@@ -223,7 +223,8 @@ export interface ContextFill {
 }
 
 export interface Failure {
-  kind: 'usage_limit' | 'signed_out' | 'other';
+  /** `interrupted`: cut off part-way and not picked up by itself; Continue carries on. */
+  kind: 'usage_limit' | 'signed_out' | 'interrupted' | 'other';
   resetsAt?: number;
 }
 
@@ -383,7 +384,15 @@ export interface AgentsOverview {
   defaults?: NewAgentDefaults;
   /** How much agents do on their own. Optional: a Mac from before it sends none. */
   independence?: AgentIndependence;
+  /**
+   * Whether "bring your agents, or start fresh?" was answered. Optional: a
+   * Mac from before it sends none, and then the phone never asks.
+   */
+  importChoice?: ImportChoice;
 }
+
+/** Mirrors `agents::import_choice::Choice`. */
+export type ImportChoice = 'undecided' | 'imported' | 'declined';
 
 /**
  * Mirrors `agents::independence::Level`: how much the user's agents do on

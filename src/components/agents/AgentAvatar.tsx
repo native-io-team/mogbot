@@ -2,16 +2,16 @@
  * An agent's avatar: one soft shape in a tone of its colour, with a minimal
  * face in an ink of the same hue (docs/internal/avatars.md). Drawn from the
  * spec the phone draws from (`packages/companion-protocol/src/avatar.ts`),
- * so the geometry, the stroke weights per size and the motion are one thing.
+ * so the geometry, the one stroke weight and the motion are one thing.
  *
  * The one SVG here is the design system's marked dynamic exception
  * (`data-dynamic-svg="agent-avatar"`): it's assembled from data at runtime,
  * not static artwork, which is what `src/assets/graphics/` holds.
  *
- * Motion is small and only means something: while it works, a blink now and
- * then (never a ring around it: the owner ruled that out; the row's live
- * step text says the rest); when a turn ends, one bob. Nothing at rest;
- * nothing at all with Reduce Motion.
+ * Motion is small and only means something: when a turn ends, one bob.
+ * The eyes never close (no blink) and nothing rings it while it works (the
+ * owner ruled both out); the row's live step text says it's working.
+ * Nothing at all with Reduce Motion.
  *
  * @module components/agents/AgentAvatar
  */
@@ -21,9 +21,8 @@ import {
   BOB_MS,
   FACE_SPECS,
   SHAPE_SPECS,
-  blinkPhase,
+  faceStrokeWidth,
   faceTransform,
-  faceWeights,
   lookFor,
   type AgentLook,
 } from '../../../packages/companion-protocol/src/avatar';
@@ -97,7 +96,7 @@ function lookFromTeam(team: string, id: string): AgentLook | null {
   return null;
 }
 
-/** Each size step's width, for the stroke weights (the CSS owns the box). */
+/** Each size step's width, for the stroke weight (the CSS owns the box). */
 const SIZE_PX = { xs: 16, mini: 18, row: 24, field: 24, md: 40, hero: 46, xl: 96 } as const;
 export type AgentAvatarSize = keyof typeof SIZE_PX;
 
@@ -118,7 +117,7 @@ interface AgentAvatarProps {
   size?: AgentAvatarSize;
   /** Solid, for the agent you're looking at (like the current project's badge). */
   selected?: boolean;
-  /** Mid-turn: blinks now and then (no ring around it). */
+  /** Mid-turn: bobs once when the turn ends (nothing moves meanwhile). */
   working?: boolean;
   className?: string;
 }
@@ -140,10 +139,7 @@ export function AgentAvatar({
   );
   const bob = useBobOnFinish(working);
   const shape = SHAPE_SPECS[look.shape];
-  const weights = faceWeights(SIZE_PX[size]);
-  const strokes = FACE_SPECS[look.face];
-  const width = (role: 'eye' | 'line') => (role === 'eye' ? weights.eye : weights.line);
-  const blinks = (s: (typeof strokes)[number]) => s.role === 'eye' || Boolean(s.blinks);
+  const strokeWidth = faceStrokeWidth(SIZE_PX[size], look.shape);
   return (
     <span
       className={`agent-avatar agent-avatar--${size}${selected ? ' agent-avatar--selected' : ''}${
@@ -152,7 +148,6 @@ export function AgentAvatar({
       data-color={color}
       data-shape={look.shape}
       data-face={look.face}
-      data-blink={blinkPhase(id ?? name)}
       aria-hidden
     >
       <svg
@@ -162,17 +157,14 @@ export function AgentAvatar({
         focusable="false"
       >
         <path className="agent-avatar__shape" d={shape.d} />
-        <g className="agent-avatar__face" transform={faceTransform(look.shape) || undefined}>
-          <g className="agent-avatar__eyes">
-            {strokes.filter(blinks).map((s) => (
-              <path key={s.d} d={s.d} strokeWidth={width(s.role)} />
-            ))}
-          </g>
-          {strokes
-            .filter((s) => !blinks(s))
-            .map((s) => (
-              <path key={s.d} d={s.d} strokeWidth={width(s.role)} />
-            ))}
+        <g
+          className="agent-avatar__face"
+          transform={faceTransform(look.shape) || undefined}
+          strokeWidth={strokeWidth}
+        >
+          {FACE_SPECS[look.face].map((s) => (
+            <path key={s.d} d={s.d} />
+          ))}
         </g>
       </svg>
     </span>

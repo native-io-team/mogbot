@@ -263,7 +263,7 @@ assistant (Grok, ChatGPT, Claude…) to move its agents here, *it* drives
 can itself be prompt-injected, never reaches anything that matters:
 
 1. **Armed, then asked.** Nothing answers until the user presses **Start** in
-   Agents → Import agents, which allows one import, until it ends or the app
+   ⌘K → Import agents (or onboarding’s last step, or Settings → Agents), which allows one import, until it ends or the app
    quits (`agents_import_talk_arm`; in memory, so a restart disarms). Before
    that the tool says `STATUS: not_started` and tells the assistant to ask the
    user. The first message then puts an Allow / Deny card in the Chief's chat

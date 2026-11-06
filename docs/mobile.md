@@ -579,9 +579,8 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   · 42 passed, 3 failed", and a long or failed command keeps "Show output".
   On the list a working agent's avatar (a shape and a face, drawn with
   react-native-svg from the spec the desk uses: docs/internal/avatars.md;
-  the agent sheet changes it on a Mac listing `agents.looks`) blinks every
-  few seconds (still under Reduce Motion; never a ring around it) in place
-  of the spinner, and
+  the agent sheet changes it on a Mac listing `agents.looks`) holds still
+  in place of the spinner (no blink, never a ring around it), and
   its line says the step and how long ("Running the Cypress tests · 5m");
   the overview carries no steps, so until a live status arrives it is the
   status's words and the turn's time. The words come from
@@ -650,9 +649,12 @@ before is drawn.
 The phone can start work as well as answer it. Each piece is gated by
 `welcome.methods`, so an older Mac shows less instead of failing.
 
-- **Import agents** (the download mark beside New agent on Agents;
+- **Import agents** (the ⋯ menu beside New agent on Agents, or the home's
+  one-time "Bring your agents from another assistant?" card while the Mac
+  says it's undecided and serves `agents.setImportChoice`;
   `app/import.tsx`, on a Mac that serves `agents.import.status`). Three
-  steps, polled every 3 s while open: (1) Remote access on and the
+  steps, one screen at a time (`lib/importChoice.ts`, "Step n of 3"),
+  polled every 3 s while open: (1) Remote access on and the
   assistant connected, ticked from what the Mac reports
   (`remoteAccess.enabled|funnelOn|everConnected`); when it isn't, the screen
   says exactly what to do **at the Mac**, once: turn on Remote access (this

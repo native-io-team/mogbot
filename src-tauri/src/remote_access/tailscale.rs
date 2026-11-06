@@ -174,6 +174,85 @@ pub async fn status() -> TailscaleState {
     }
 }
 
+/// A phone on this Mac's tailnet, signed in as the same person: what
+/// onboarding's "Get Tailscale on your phone" step waits for.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct TailnetPhone {
+    /// The phone's name as Tailscale shows it ("Sam’s iPhone").
+    pub name: String,
+    /// `ios` or `android`.
+    pub os: String,
+    /// Tailscale is switched on on it right now.
+    pub online: bool,
+}
+
+/// The phones in `tailscale status --json`'s `Peer` map that belong to the
+/// account this Mac is signed in as (`UserID` equal to `Self.UserID`). A
+/// tagged Mac has no person to match, so it reports none: never guessed.
+pub fn parse_phones(json: &Value) -> Vec<TailnetPhone> {
+    let id = |v: Option<&Value>| match v {
+        Some(Value::Number(n)) => Some(n.to_string()),
+        Some(Value::String(s)) => Some(s.clone()),
+        _ => None,
+    };
+    let Some(me) = id(json.pointer("/Self/UserID")) else {
+        return Vec::new();
+    };
+    let tagged = json
+        .pointer("/Self/Tags")
+        .and_then(Value::as_array)
+        .is_some_and(|t| !t.is_empty());
+    if tagged {
+        return Vec::new();
+    }
+    let Some(peers) = json.get("Peer").and_then(Value::as_object) else {
+        return Vec::new();
+    };
+    let mut phones: Vec<TailnetPhone> = peers
+        .values()
+        .filter(|p| id(p.get("UserID")).as_deref() == Some(me.as_str()))
+        .filter_map(|p| {
+            let os = match p
+                .get("OS")
+                .and_then(Value::as_str)?
+                .to_ascii_lowercase()
+                .as_str()
+            {
+                "ios" => "ios",
+                "android" => "android",
+                _ => return None,
+            };
+            let name = p
+                .get("HostName")
+                .and_then(Value::as_str)
+                .map(str::trim)
+                .filter(|n| !n.is_empty())?;
+            Some(TailnetPhone {
+                name: name.to_string(),
+                os: os.to_string(),
+                online: p.get("Online").and_then(Value::as_bool).unwrap_or(false),
+            })
+        })
+        .collect();
+    // Online first, then by name, so the line that names one is stable.
+    phones.sort_by(|a, b| b.online.cmp(&a.online).then_with(|| a.name.cmp(&b.name)));
+    phones
+}
+
+/// This account's phones on the tailnet; empty when Tailscale can't say.
+pub async fn phones() -> Vec<TailnetPhone> {
+    if find_binary().is_none() {
+        return Vec::new();
+    }
+    match run_cli(&["status", "--json"], 8).await {
+        Ok(output) => serde_json::from_slice::<Value>(&output.stdout)
+            .map(|json| parse_phones(&json))
+            .unwrap_or_default(),
+        Err(_) => Vec::new(),
+    }
+}
+
 /// Is our mount funnelled to `port` on `dns_name`, per `tailscale funnel
 /// status --json`? The serve config shape is:
 ///
@@ -579,6 +658,41 @@ mod tests {
         assert!(parse_doh_answer(&json!({ "Status": 3 })).is_empty());
     }
     use serde_json::json;
+
+    #[test]
+    fn phones_are_this_accounts_ios_and_android_peers() {
+        let status = json!({
+            "Self": { "UserID": 7, "DNSName": "mac.t.ts.net." },
+            "Peer": {
+                "a": { "HostName": "Sam’s iPhone", "OS": "iOS", "Online": false, "UserID": 7 },
+                "b": { "HostName": "pixel", "OS": "android", "Online": true, "UserID": 7 },
+                "c": { "HostName": "work-laptop", "OS": "macOS", "Online": true, "UserID": 7 },
+                "d": { "HostName": "someone-elses", "OS": "iOS", "Online": true, "UserID": 9 },
+                "e": { "HostName": "", "OS": "iOS", "Online": true, "UserID": 7 }
+            }
+        });
+        assert_eq!(
+            parse_phones(&status),
+            vec![
+                TailnetPhone {
+                    name: "pixel".into(),
+                    os: "android".into(),
+                    online: true
+                },
+                TailnetPhone {
+                    name: "Sam’s iPhone".into(),
+                    os: "ios".into(),
+                    online: false
+                },
+            ]
+        );
+        // No peers, no person (a tagged Mac), or no Self: nothing, never a guess.
+        assert!(parse_phones(&json!({ "Self": { "UserID": 7 } })).is_empty());
+        let mut tagged = status.clone();
+        tagged["Self"]["Tags"] = json!(["tag:server"]);
+        assert!(parse_phones(&tagged).is_empty());
+        assert!(parse_phones(&json!({ "Peer": status["Peer"] })).is_empty());
+    }
 
     #[test]
     fn running_with_a_name_is_connected() {

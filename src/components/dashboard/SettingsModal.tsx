@@ -16,6 +16,7 @@
  * @module components/SettingsModal
  */
 
+import { getSnapshot } from '../../commands/registry';
 import { useState, useEffect, useCallback } from 'react';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { AgentsSettings } from '../agents/AgentsSettings';
@@ -463,6 +464,13 @@ export function SettingsModal({
               onOpenRemote={() => {
                 onClose();
                 openModal('remoteAccess');
+              }}
+              onImport={() => {
+                onClose();
+                // The palette's own command: it opens Agents, then the import.
+                void getSnapshot()
+                  .find((c) => c.id === 'agents.import')
+                  ?.run();
               }}
             />
           </TabsPanel>

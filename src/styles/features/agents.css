@@ -253,13 +253,12 @@
   color: var(--status-running);
 }
 
-/* New agent / Import agents start on the rows' column, not centred in space:
+/* New agent / New room start on the rows' column, not centred in space:
    the icon sits in a badge-wide box so its label lines up with the names.
    Actions, not rows: shorter than an agent, one after the other with no gap,
    and in the secondary text colour so they read as available. */
 .workspace-sidebar:not(.is-hidden) .agents-list__new,
-.workspace-sidebar:not(.is-hidden) .agents-list__new-room,
-.workspace-sidebar:not(.is-hidden) .agents-list__import {
+.workspace-sidebar:not(.is-hidden) .agents-list__new-room {
   justify-content: flex-start;
   gap: var(--spacing-sm);
   height: var(--control-height-standard);
@@ -269,8 +268,7 @@
 }
 
 .workspace-sidebar:not(.is-hidden) .agents-list__new:hover:not(:disabled),
-.workspace-sidebar:not(.is-hidden) .agents-list__new-room:hover:not(:disabled),
-.workspace-sidebar:not(.is-hidden) .agents-list__import:hover:not(:disabled) {
+.workspace-sidebar:not(.is-hidden) .agents-list__new-room:hover:not(:disabled) {
   color: var(--text-primary);
 }
 
@@ -339,8 +337,7 @@
 }
 
 .workspace-sidebar:not(.is-hidden) .agents-list__new > svg,
-.workspace-sidebar:not(.is-hidden) .agents-list__new-room > svg,
-.workspace-sidebar:not(.is-hidden) .agents-list__import > svg {
+.workspace-sidebar:not(.is-hidden) .agents-list__new-room > svg {
   box-sizing: content-box;
   padding: 0 calc((var(--size-sidebar-project-shortcut) - 16px) / 2); /* css-ok: centre a 16px icon in the badge width */
 }

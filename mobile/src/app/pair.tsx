@@ -18,7 +18,6 @@ import { Image, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Spinner } from '../components/agent';
-import { Card } from '../components/surfaces';
 import { Button, Icon, T } from '../components/ui';
 import { ALERTS_WHILE_OPEN } from '../lib/push';
 import {
@@ -64,6 +63,8 @@ export default function Pair() {
   const insets = useSafeAreaInsets();
   const params = useLocalSearchParams<{ d?: string; link?: string }>();
   const [phase, setPhase] = useState<Phase>({ kind: 'start' });
+  // Before a scan, one question per screen: is Tailscale on here? Then scan.
+  const [startStep, setStartStep] = useState<'tailscale' | 'scan'>('tailscale');
   const abort = useRef<AbortController | null>(null);
   const current = useApp((s) => s.credentials);
 
@@ -161,7 +162,7 @@ export default function Pair() {
       </View>
 
       {phase.kind === 'start' && (
-        <Animated.View entering={FadeIn.duration(200)} style={styles.block}>
+        <Animated.View entering={FadeIn.duration(200)} style={styles.block} key={startStep}>
           {(phase.error ?? (incoming && !incomingLink ? linkProblem(incoming) : null)) && (
             <Animated.View entering={FadeInDown.duration(200)}>
               <T variant="small" color={colors.accentErrorLight}>
@@ -169,27 +170,36 @@ export default function Pair() {
               </T>
             </Animated.View>
           )}
-          <BeforeYouScan />
-          <Button
-            title="Scan the code on your Mac"
-            variant="primary"
-            size="large"
-            icon="qrcode.viewfinder"
-            onPress={() => router.push('/scan')}
-          />
-          <Button
-            title="Paste a pairing link"
-            variant="ghost"
-            icon="doc.on.clipboard"
-            onPress={() => void paste()}
-          />
-          <View style={styles.steps}>
-            <Step n={1} text="On your Mac: Settings → Phone → Pair a phone." />
-            <Step n={2} text="Scan, then click Allow on the Mac." />
-          </View>
-          <T variant="small" color={colors.textMuted}>
-            Your Mac has to stay on, with the app open, for this phone to reach it.
+          <T variant="caption" color={colors.textMuted} testID="pair-progress">
+            Step {startStep === 'tailscale' ? 1 : 2} of 2
           </T>
+          {startStep === 'tailscale' ? (
+            <BeforeYouScan onNext={() => setStartStep('scan')} />
+          ) : (
+            <>
+              <T variant="title" color={colors.textStrong} accessibilityRole="header">
+                Scan the code on your Mac
+              </T>
+              <T color={colors.textSecondary}>
+                It’s on the Mac’s last onboarding screen for your phone, or in Settings → Phone →
+                Pair a phone. Then click Allow on the Mac.
+              </T>
+              <Button
+                title="Scan the code"
+                variant="primary"
+                size="large"
+                icon="qrcode.viewfinder"
+                onPress={() => router.push('/scan')}
+              />
+              <Button
+                title="Paste a pairing link instead"
+                variant="ghost"
+                icon="doc.on.clipboard"
+                onPress={() => void paste()}
+              />
+              <Button title="Back" variant="ghost" onPress={() => setStartStep('tailscale')} />
+            </>
+          )}
         </Animated.View>
       )}
 
@@ -399,29 +409,13 @@ function Confirm({
   );
 }
 
-function Step({ n, text }: { n: number; text: string }) {
-  const colors = useColors();
-  const styles = useStyles();
-  return (
-    <View style={styles.step}>
-      <View style={styles.stepN}>
-        <T variant="caption" color={colors.textPrimary}>
-          {n}
-        </T>
-      </View>
-      <T color={colors.textPrimary} style={{ flex: 1 }}>
-        {text}
-      </T>
-    </View>
-  );
-}
-
 /**
- * What has to be true before a scan can work, said before the scan rather
- * than after a spinner that never ends: the phone reaches the Mac only over
- * Tailscale, on the same account.
+ * The first screen: what has to be true before a scan can work, said
+ * before the scan rather than after a spinner that never ends. The phone
+ * reaches the Mac only over Tailscale, on the same account, switched on.
+ * One thing to do (open or get Tailscale), then "It's on".
  */
-function BeforeYouScan() {
+function BeforeYouScan({ onNext }: { onNext: () => void }) {
   const colors = useColors();
   const styles = useStyles();
   // "Open" only when the OS says the app is there; otherwise "Get".
@@ -434,26 +428,19 @@ function BeforeYouScan() {
     };
   }, []);
   return (
-    <Card
-      icon="network"
-      title="Before you scan"
-      testID="pair-before-scan"
-      note="This phone reaches your Mac only through Tailscale. Without it, the Mac never sees the request."
-      actions={
-        <Button
-          title={installed === true ? 'Open Tailscale' : installed === false ? 'Get Tailscale' : 'Tailscale'}
-          variant="outline"
-          icon="network"
-          onPress={() => void openTailscale()}
-          style={{ flexGrow: 1 }}
-        />
-      }
-    >
+    <View style={styles.block} testID="pair-before-scan">
+      <T variant="title" color={colors.textStrong} accessibilityRole="header">
+        Turn on Tailscale on this phone
+      </T>
+      <T color={colors.textSecondary}>
+        This phone reaches your Mac only through Tailscale. Without it, the Mac never sees the
+        request.
+      </T>
       <View style={styles.checks}>
         {[
           'Tailscale installed on this phone',
-          'Connected: the switch is on in the Tailscale app',
           'Signed in to the same account as your Mac',
+          'The switch is on in the Tailscale app',
         ].map((line) => (
           <View key={line} style={styles.checkLine}>
             <Icon name="checkmark" size={iconSize.inline} color={colors.textMuted} />
@@ -463,7 +450,14 @@ function BeforeYouScan() {
           </View>
         ))}
       </View>
-    </Card>
+      <Button
+        title={installed === false ? 'Get Tailscale' : 'Open Tailscale'}
+        variant="outline"
+        icon="network"
+        onPress={() => void openTailscale()}
+      />
+      <Button title="It’s on — next" variant="primary" size="large" onPress={onNext} />
+    </View>
   );
 }
 
@@ -531,24 +525,12 @@ function FailureCopy({ failure, mac, host }: { failure: PairFailure; mac: string
 }
 
 const LOGO = 56;
-/** A step's number: a 24pt disc, centred on the step's first 22pt line. */
-const STEP = 24;
 
 const useStyles = makeStyles((colors) => ({
   page: { paddingHorizontal: space.xl, gap: space['2xl'], flexGrow: 1 },
   hero: { gap: space.md },
   logo: { width: LOGO, height: LOGO, borderRadius: squircle(LOGO), marginBottom: space.sm },
   block: { gap: space.md },
-  steps: { gap: space.md, marginBottom: space.xs },
-  step: { flexDirection: 'row', gap: space.md, alignItems: 'flex-start' },
-  stepN: {
-    width: STEP,
-    height: STEP,
-    borderRadius: STEP / 2,
-    backgroundColor: colors.surfaceControl,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
   card: {
     padding: space.lg,
     borderRadius: radius.card,

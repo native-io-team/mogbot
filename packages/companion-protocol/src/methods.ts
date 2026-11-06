@@ -48,6 +48,7 @@ import type {
   NewAgentInput,
   NewAgentDefaults,
   AgentIndependence,
+  ImportChoice,
   NewAgentDefaultsChange,
   RoleTemplateSummary,
   UpdateAgentInput,
@@ -316,6 +317,16 @@ export interface Methods {
   'agents.setIndependence': {
     params: { level: AgentIndependence };
     result: { level: AgentIndependence };
+  };
+  /**
+   * `agents_set_import_choice`: "bring your agents from another assistant,
+   * or start fresh?" answered (the phone home's one-time card), read back
+   * from `agents.overview`'s `importChoice`. An import that brings anything
+   * across sets `imported` by itself. Audited. Newer Macs only.
+   */
+  'agents.setImportChoice': {
+    params: { choice: ImportChoice };
+    result: { choice: ImportChoice };
   };
   /**
    * `agents_set_admin`: the user's own "Admin — can manage and approve for

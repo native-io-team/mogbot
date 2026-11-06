@@ -14,6 +14,8 @@ import {
   isQueued,
   lastUserMessage,
   failureLine,
+  continuesFrom,
+  retrySourceFor,
   approvalSeries,
   plainActivity,
   retryNote,
@@ -1033,5 +1035,23 @@ describe('"When…" routines in words', () => {
       '$0.17 at API prices · 10k tokens · 2 turns · 40 checks'
     );
     expect(fullyPriced({ ...t, turns: 1, pricedTurns: 0 })).toBe(false);
+  });
+});
+
+describe('a turn cut off part-way', () => {
+  it('offers Continue, never Retry, and says so in a line', () => {
+    const asked = { ...msg('u', 'user', 1), text: 'Migrate the blog' };
+    const cut = {
+      ...msg('e', 'error', 2),
+      text: 'Interrupted: the app closed while this agent was working.',
+      failure: { kind: 'interrupted' as const },
+    };
+    expect(continuesFrom([asked, cut])).toBe(true);
+    // Retry would send the request again, and could do the work twice.
+    expect(retrySourceFor([asked, cut])).toBeNull();
+    expect(failureLine(cut.failure, cut.text)).toBe('Interrupted · Continue to pick it up');
+    const failed = { ...cut, failure: { kind: 'other' as const } };
+    expect(continuesFrom([asked, failed])).toBe(false);
+    expect(retrySourceFor([asked, failed])?.id).toBe('u');
   });
 });

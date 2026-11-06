@@ -1,0 +1,255 @@
+/* Onboarding as one line of one-question screens — src/components/setup/flow/ */
+
+:root {
+  --flow-body-width: 520px;
+  --flow-body-width-wide: 720px;
+  --flow-top-height: 64px;
+  --flow-qr-size: 184px;
+}
+
+.flow-screen {
+  justify-content: flex-start;
+  padding-top: calc(var(--flow-top-height) + var(--spacing-2xl));
+}
+
+/* Back on the left, the progress bar in the middle; it stays put as screens change. */
+.flow-top {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: var(--flow-top-height);
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 360px) 1fr;
+  align-items: center;
+  gap: var(--spacing-lg);
+  padding: 0 var(--spacing-xl);
+  background: var(--surface-app);
+  z-index: var(--z-dropdown);
+}
+
+.flow-top__back {
+  display: flex;
+}
+
+.flow-progress {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: var(--spacing-xs);
+  align-items: center;
+}
+
+.flow-progress__segment {
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-control);
+}
+
+.flow-progress__segment[data-state='done'] {
+  background: var(--text-secondary);
+}
+
+.flow-progress__segment[data-state='current'] {
+  background: var(--text-primary);
+}
+
+.flow-progress__label {
+  grid-column: 1 / -1;
+  text-align: center;
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+}
+
+.flow-body {
+  width: 100%;
+  max-width: var(--flow-body-width);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--spacing-lg);
+  margin: auto 0;
+}
+
+.flow-body--wide {
+  max-width: var(--flow-body-width-wide);
+}
+
+.flow-title {
+  margin: 0;
+  font-size: var(--font-size-h2);
+  font-weight: var(--font-weight-heading);
+  color: var(--text-primary);
+  text-align: center;
+}
+
+.flow-lede {
+  margin: 0;
+  font-size: var(--font-size-subhead-lg);
+  line-height: 1.5;
+  color: var(--text-secondary);
+  text-align: center;
+}
+
+.flow-content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.flow-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+.flow-actions > .button--large {
+  min-width: 240px;
+}
+
+.flow-choice {
+  display: flex;
+  gap: var(--spacing-md);
+  justify-content: center;
+}
+
+.flow-choice > .button {
+  min-width: 160px;
+}
+
+.flow-note,
+.flow-eyebrow {
+  margin: 0;
+  text-align: center;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+/* The check: Done, Checking…, or Not done yet with the one fix. */
+.flow-check {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: var(--radius-card);
+  border: var(--border-width-default) solid var(--border-subtle);
+  background: var(--surface-panel);
+  font-size: var(--font-size-body-md);
+  line-height: 1.5;
+  color: var(--text-primary);
+}
+
+.flow-check[data-state='checking'] {
+  align-items: center;
+  color: var(--text-secondary);
+}
+
+.flow-check[data-state='pass'] .flow-check__mark {
+  color: var(--accent-success);
+}
+
+.flow-check[data-state='fail'] {
+  border-color: var(--border-strong);
+}
+
+.flow-check[data-state='fail'] .flow-check__mark {
+  color: var(--accent-warning);
+}
+
+.flow-check__mark {
+  display: inline-flex;
+  padding-top: var(--spacing-3xs);
+}
+
+.flow-check__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  min-width: 0;
+}
+
+.flow-check__line {
+  overflow-wrap: anywhere;
+}
+
+.flow-check__fix {
+  color: var(--text-secondary);
+}
+
+.flow-check__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
+}
+
+.flow-check__when {
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+}
+
+/* A QR code beside what it's for. */
+.flow-split {
+  display: flex;
+  gap: var(--spacing-xl);
+  align-items: center;
+}
+
+.flow-split__side {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-md);
+  min-width: 0;
+}
+
+.flow-split__side > .flow-check {
+  align-self: stretch;
+}
+
+.flow-qr {
+  display: flex;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.flow-qr .phone-qr {
+  border-radius: var(--radius-card);
+}
+
+.flow-qr__placeholder {
+  width: var(--flow-qr-size);
+  height: var(--flow-qr-size);
+  border-radius: var(--radius-card);
+  background: var(--surface-control);
+}
+
+.flow-ready-avatar {
+  display: flex;
+  justify-content: center;
+}
+
+/* The guided phone build, embedded as it is in the Phone panel. */
+.flow-embed {
+  width: 100%;
+  padding: var(--spacing-lg);
+  border-radius: var(--radius-card);
+  border: var(--border-width-default) solid var(--border-subtle);
+  background: var(--surface-panel);
+}
+
+.flow-error {
+  position: fixed;
+  left: 50%;
+  bottom: var(--spacing-xl);
+  transform: translateX(-50%);
+  z-index: var(--z-dropdown);
+}
+
+@media (max-width: 640px) {
+  .flow-split {
+    flex-direction: column;
+  }
+}

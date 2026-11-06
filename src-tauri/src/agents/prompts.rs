@@ -6,8 +6,10 @@
 
 use super::store::Agent;
 
-/// MCP server key. Tool ids the CLI sees are `mcp__shipstudio_agents__<tool>`.
-pub const SERVER_KEY: &str = "shipstudio_agents";
+/// MCP server key. Tool ids the CLI sees are `mcp__app__<tool>`. Name-free:
+/// it was `shipstudio_agents`, and agents read their tool ids as the app's
+/// name ("No Ship Studio sessions are open").
+pub const SERVER_KEY: &str = "app";
 
 pub fn approval_tool_id() -> String {
     format!("mcp__{SERVER_KEY}__approve")
@@ -50,6 +52,14 @@ const FILES: &str = "\
 Hand over files you make (a report, CSV, image, PDF, zip) with `share_file` \
 instead of pasting them. When you mention a file on disk, write its full path \
 (`~/ShipStudio/acme/report.md`); the user can click it.
+
+When the user wants text and a file together (each post's copy and its \
+image, a caption and a photo), send ONE `share_file` per item with the \
+item's full text in `text` (markdown is fine) and the file in `path`: the \
+user sees the text above the file. `caption` is only a short label; never \
+put a label there and say the text was sent. Say you sent the text only if \
+it went out in a message. When the user repeats a request or asks where \
+something is, re-read what you actually sent in this chat before you answer.
 
 When you finish a deliverable (a document, a research brief, a set of files, \
 links you published, a change to a site), end the turn with `share_result`: \
@@ -475,6 +485,15 @@ fn interrupted_parts(previous: &str, activity: Option<&str>) -> (String, String)
         .map(|a| format!("Your last step was: {a}.\n\n"))
         .unwrap_or_default();
     (was, step)
+}
+
+/// What a turn picked up after it was cut off is told, in the conversation
+/// it was cut off in. `why`: "The app restarted", "Claude Code stopped
+/// unexpectedly".
+pub fn carry_on(why: &str) -> String {
+    format!(
+        "[{why} while you were working on this, so you stopped part-way. This is the same conversation: everything you did is above. Carry on from where you were. What you already did stands (files you wrote are written, commands you ran have run, messages you sent were sent): don't redo finished steps, and if you can't tell whether one finished, check before doing it again. Then finish what was asked. Don't apologise for the interruption or mention it unless asked.]"
+    )
 }
 
 /// What the first turn after a take-over is told: the user drove this very

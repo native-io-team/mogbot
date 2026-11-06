@@ -60,6 +60,7 @@ pub const METHODS: &[&str] = &[
     "agents.update",
     "agents.setDefaults",
     "agents.setIndependence",
+    "agents.setImportChoice",
     "agents.setAdmin",
     "agents.revokePermission",
     "agents.instructions",
@@ -500,6 +501,12 @@ pub trait Backend: Send + Sync + 'static {
     async fn set_independence(
         &self,
         level: crate::agents::independence::Level,
+    ) -> Result<Value, CommandError>;
+    /// `agents_set_import_choice`: "bring your agents, or start fresh?"
+    /// answered from the phone (its home card). Additive: newer Macs only.
+    async fn set_import_choice(
+        &self,
+        choice: crate::agents::import_choice::Choice,
     ) -> Result<Value, CommandError>;
     /// `agents_set_admin`: the user's own switch, "Admin — can manage and
     /// approve for other agents". Answers `{ agentId, admin }`.
@@ -1344,6 +1351,7 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             format!("new agents: {}", said.join(", "))
         }
         "agents.setIndependence" => format!("independence: {}", preview(field("level"))),
+        "agents.setImportChoice" => format!("import: {}", preview(field("choice"))),
         "agents.setAdmin" => format!(
             "{} admin {}",
             field("agentId"),
@@ -1768,6 +1776,16 @@ async fn run(
                     )
                 })?;
             Ok(b.set_independence(level).await?)
+        }
+        "agents.setImportChoice" => {
+            let choice = params
+                .get("choice")
+                .and_then(Value::as_str)
+                .and_then(|c| crate::agents::import_choice::Choice::parse(c).ok())
+                .ok_or_else(|| {
+                    bad_params("The import choice is imported, declined or undecided.")
+                })?;
+            Ok(b.set_import_choice(choice).await?)
         }
         "agents.setAdmin" => {
             let agent_id = params.get("agentId").and_then(Value::as_str).unwrap_or("");

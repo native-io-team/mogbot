@@ -204,9 +204,9 @@ was busy becomes **one** next turn. A turn is one process:
 claude --print --output-format stream-json --verbose --include-partial-messages
        --session-id <uuid> | --resume <uuid>
        --permission-mode acceptEdits
-       --permission-prompt-tool mcp__shipstudio_agents__approve
+       --permission-prompt-tool mcp__app__approve
        --mcp-config <app support>/agent-bridge/mcp-<random>.json   (0600; see below)
-       --allowedTools mcp__shipstudio_agents
+       --allowedTools mcp__app
        --append-system-prompt <voice + role + team rules>
        --add-dir <projects root> --add-dir <each external project>
        --disallowedTools 'Edit(**/.git/**)' 'Edit(**/.shipstudio/**)'
@@ -328,10 +328,10 @@ quit, `RunEvent::Exit` calls `runner::shutdown_sync`, which stops every
 turn's process tree and leaves the marks in place. A crash or force quit runs
 no cleanup at all, so at launch `runner::recover_after_restart` also stops a
 leftover process (if its command line still names the session), removes the
-mark, records the turn's change card if it changed the project, and ends on
-an error line (tagged `failure: other`) saying the turn didn't finish. The
+mark, records the turn's change card if it changed the project, and picks
+the turn up (see "Durable turns" below). The
 messages queued behind it (`inbox.json`) are then sent once, after a note
-naming them; the interrupted turn itself is not re-run. What the last run
+naming them. What the last run
 left is noted synchronously at launch (`runner::prepare_recovery`, before
 anything can start a turn): those messages go back on the queue (and stay on
 disk), and those agents' turns wait until recovery has dealt with them, so a
@@ -339,6 +339,36 @@ turn started in this run is never mistaken for a leftover and nothing is
 sent twice. The mark is written *before* a batch leaves the queue, so there
 is no moment a quit leaves neither. An update's restart waits for working
 agents ("After agents finish"; click again to restart now).
+
+**Durable turns.** A restart, a crash or the engine dying never wipes out a
+turn. The mark (written by rename, redacted, under one lock) holds what a
+pick-up needs: the messages the turn took (`took`, so the same people are
+answered and a sealed "When…" turn stays sealed), the engine conversation
+(`session_id`: Claude Code's id from spawn, a new Codex thread's once it
+says), how many pick-ups it had (`resumes`), whether the user pressed Stop
+(`stopped`), and its progress, saved at most once a second while it changes
+(`progress`: the reply streaming now and the timeline so far; finished
+replies are already in the log). At launch `runner::plan_recovery` keeps the
+streamed reply under its draft's id (cut off), and then either:
+- **picks it up**: a quiet "Picked up after the app restarted" line (the
+  timeline hangs under it) and a turn queued first that resumes the same
+  session, told only to carry on and not redo finished steps
+  (`prompts::carry_on`); or
+- **leaves it for you**: an error line tagged `failure: interrupted` with
+  **Continue** (desk and phone), which sends "Continue" in the same
+  conversation. Never Retry: sending the request again could do it twice.
+
+It is left for you when the user was driving it by hand (take-over), when it
+answered in a room, when it already had its one pick-up (`MAX_RESUMES`), or
+when its conversation isn't on disk in any of the engine's account folders
+(`wallet::session_on_disk`) or the agent has moved to another since: a pick-up
+never starts blank. A turn the user stopped as the app went ends on
+"Stopped". The same holds while the app runs: an engine whose process ends
+mid-turn, in a session it confirmed, for no reason that needs the user
+(`runner::died_mid_turn`), is picked up once in place ("Picked up after
+Claude Code stopped unexpectedly", same timeline, no fresh-session retry);
+dying again ends on the interrupted line. A pick-up that finds its session
+gone ends there too, rather than retrying fresh.
 
 **Nothing goes silent.** A worker that panics mid-turn resets the agent
 (idle, slot freed, an error line saying the turn didn't finish) instead of
@@ -471,8 +501,8 @@ steps has no line.
   ends the turn with a line saying so (`HUNG_NOTE`).
 - **In the lists**: a working agent's row (sidebar, What's in flight)
   says the step and how long ("Running the Cypress tests · 5m") or "No
-  progress for 5 min", never "Working…", and its avatar blinks every few
-  seconds (still under Reduce Motion). No ring around it.
+  progress for 5 min", never "Working…". The avatar holds still (no blink,
+  no ring around it) and bobs once when the turn ends.
 - **Stored** beside the log, never in it: `turns/<message-id>.json`, sent
   again on `agents://message` when the turn ends, and applied only to the
   paged chat reads (desktop and phone), after the log's lock is released,
@@ -1934,7 +1964,7 @@ the agent has a conversation on its engine (`sessionId`, not `newEngine`).
     `--print`, `--output-format`, `--verbose`, `--include-partial-messages`,
     `--permission-prompt-tool` (it asks in the terminal, to you): `--chrome
     --resume <session> --permission-mode acceptEdits --mcp-config …
-    --allowedTools mcp__shipstudio_agents --append-system-prompt … --add-dir …`.
+    --allowedTools mcp__app --append-system-prompt … --add-dir …`.
     Its secret is granted with no turn (and revoked at hand-back), so anything
     that reaches `approve` is refused; the agent's other tools (message an
     agent, share a file) work.
@@ -2054,6 +2084,19 @@ agent by itself: before anything is created the Chief **plays the plan back**
 to the user and asks what's missing, then every connector import ends on one
 review card in the Chief's chat, and the user imports what they keep
 (`agents/harvest.rs`, `agents/review.rs`).
+
+**Asked once, then in the background.** Onboarding's last step asks
+everyone new "Bring your agents from Grok, ChatGPT or another assistant, or
+start fresh?" (its import path is three screens: Remote access on, the link
+in the assistant, the message). An install from before that question gets
+one card at the top of the Chief's chat (`ImportChoiceCard`) and on the
+phone's home, asking once. The answer is the Mac's
+(`agents::import_choice`, `import-choice.json` beside the agents; carried on
+the overview as `importChoice`, set by `agents_set_import_choice` /
+`agents.setImportChoice`); any import that brings something across sets it
+to `imported`. Afterwards there is no Import row in the sidebar: import is
+⌘K "Import agents…", the Chief, Settings → Agents → Import, and the phone's
+⋯ menu.
 
 **Import agents** lists **From another assistant** first, and opens there;
 **From Ship Studio** is the second segment, opened when asked for (⌘K
@@ -2928,9 +2971,9 @@ check-in tick is a loop inside the app. So:
   closed.
 - **It reopens.** Every conversation is on disk and the next message resumes
   the same Claude Code session, so the agent still has its context. The
-  interrupted turn itself is not re-run (it may have done half its work):
-  its chat ends on "The app closed while this agent was working…", with
-  Retry. The app's own confirmation cards left
+  interrupted turn is picked up once in its own session ("Picked up after
+  the app restarted"), or ends on "Interrupted… Continue" (see "Durable
+  turns"). The app's own confirmation cards left
   pending are marked expired (`store::expire_stale_approvals`); permission
   cards stay answerable, and a late Allow wakes the agent again. Missed
   check-ins follow the rules above: a one-time one fires once, late; a routine
@@ -3119,7 +3162,7 @@ codex app-server
        workspace_roots={<home or project dirs>=true},
        filesystem={<each existing .git / .shipstudio in them>="read"}}
   -c default_permissions="shipstudio_agent"
-  -c mcp_servers.shipstudio_agents={url=…/mcp/agent,bearer_token_env_var="SHIPSTUDIO_AGENTS_BRIDGE_TOKEN",
+  -c mcp_servers.app={url=…/mcp/agent,bearer_token_env_var="SHIPSTUDIO_AGENTS_BRIDGE_TOKEN",
        tool_timeout_sec=300,default_tools_approval_mode="approve"}
   -c project_doc_fallback_filenames=["CLAUDE.md"]
 → initialize, initialized
@@ -3581,7 +3624,7 @@ of their own is open.
 
 ## Files back from agents (`src-tauri/src/agents/files.rs`)
 
-- `share_file {path, caption?}` takes `~/…`, an absolute path, or one relative
+- `share_file {path, text?, caption?}` takes `~/…`, an absolute path, or one relative
   to the agent's home. The path is canonicalised and must land inside the
   agent's home or a registered project, so `..` and symlinks are judged by
   where they really lead; folders are refused (zip first). The file is
@@ -3592,6 +3635,20 @@ of their own is open.
   history all treat it like a reply. Images show inline; files are the same
   chips as yours, on the left. Click opens; Show in Finder sits on hover and in
   the image view. The prompt tells agents to share rather than paste.
+- **Text with a file** (`agents/share_text.rs`). `text` is the message shown
+  above the file, full markdown, as any reply on desk and phone; `caption` is
+  a short label put first (`share_text::message_text`). The tool's answer says
+  when only a label went out. Why: asked "full text then image, post by post",
+  an agent sent six images labelled "1 of 6 · Fri 10am" and said the posts had
+  gone out as written, because `caption` was described as one short line. The
+  prompt (`FILES`) now says one `share_file` per item with its full text, and
+  to re-read what was sent when a request is repeated. A guard backs it: when
+  the user's messages ask for text ("text", "copy", "caption", "full",
+  "wording", "words") and a finished turn in the agent's own chat shared files
+  whose text is all under 40 characters, with no message of 160 or more, the
+  next turn there opens with a quiet note from the app
+  (`share_text::LABELS_ONLY_NOTE`). It is in memory only (a restart drops it),
+  read once, dropped by Start fresh, and never shown to the user.
 - **Files** (header … menu, or ⌘K "Files shared with <agent>") lists every
   attachment in the conversation, both ways, newest first
   (`agents_files`, a scan of the whole log), filterable All / From you /
@@ -3951,9 +4008,10 @@ Watch live on a server the turn left (outside a preview proxy).
   server running for you to look at.
 - Check-ins and routines only fire while the app is open.
 - Notification click-through is unverified in a signed build.
-- After a restart, the interrupted turn is not re-run (it may have done half
-  its work); messages queued behind it are, once. Retry then belongs to
-  whatever failed last.
+- After a restart, the interrupted turn is picked up once in its own session
+  (never from scratch); messages queued behind it are sent once. Not
+  verified against a real crash of a running Claude Code or Codex turn: the
+  detection, the one pick-up and the saved progress are unit-tested only.
 - Debug builds: `research/design-canvas` (not on main) disables the agent
   bridge under `debug_assertions`. Agents depends on it, so that branch needs
   an exception for the `/agents/` route before both land.

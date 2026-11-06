@@ -188,6 +188,14 @@ impl Drafts {
         self.dirty
     }
 
+    /// The reply streaming now (id, text so far), changed or not: what is
+    /// saved so a cut-off turn keeps it.
+    pub fn current(&self) -> Option<(&str, &str)> {
+        self.current
+            .as_ref()
+            .map(|d| (d.id.as_str(), d.text.as_str()))
+    }
+
     /// The draft to show (id, text so far), if it changed since last time.
     pub fn flush(&mut self) -> Option<(&str, &str)> {
         if !std::mem::take(&mut self.dirty) {

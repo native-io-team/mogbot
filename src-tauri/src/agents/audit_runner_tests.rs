@@ -35,6 +35,7 @@ fn user(text: &str) -> Inbound {
         ticket: None,
         room: None,
         outside: false,
+        resume: 0,
     }
 }
 
@@ -54,6 +55,7 @@ fn from_chief(text: &str, reply: bool) -> Inbound {
         ticket: None,
         room: None,
         outside: false,
+        resume: 0,
     }
 }
 
@@ -93,6 +95,7 @@ fn recovery_only_touches_what_the_last_run_left() {
                 project: None,
                 tree: None,
                 batch: Vec::new(),
+                ..TurnMark::default()
             },
         );
         // A second prepare (recover_after_restart's own) changes nothing.

@@ -668,80 +668,12 @@
   color: var(--text-primary);
 }
 
-/* ------------------------------------------------------------- nudge */
+/* ------------------------------------------------------- import choice */
 
-/* "Coming from another assistant?" at the foot of the agent list. It sits on
-   the rows' grid: its icon in the badge column, its text on the names' edge,
-   a hairline under it like a row's. A note, not a banner. */
-.agents-import-nudge {
-  position: relative;
-  display: flex;
-  align-items: flex-start;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md) var(--spacing-md) var(--spacing-md) var(--spacing-sm);
-  border-bottom: var(--border-width-default) solid var(--border-subtle);
-  animation: agents-motion-fade-in var(--agents-motion-enter) backwards;
-}
-
-.agents-import-nudge__icon {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  justify-content: center;
-  width: var(--size-sidebar-project-shortcut);
-  height: var(--size-sidebar-project-shortcut);
-  color: var(--text-secondary);
-  background: var(--surface-control);
-  border-radius: var(--radius-control);
-}
-
-.agents-import-nudge__text {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--spacing-2xs);
-  min-width: 0;
-  padding-right: var(--spacing-lg);
-}
-
-.agents-import-nudge__title,
-.agents-import-nudge__body {
-  margin: 0;
-  font-size: var(--font-size-body-sm);
-  line-height: var(--line-height-compact);
-}
-
-.agents-import-nudge__title {
-  font-weight: var(--font-weight-label);
-  color: var(--text-primary);
-}
-
-.agents-import-nudge__body {
-  color: var(--text-muted);
-}
-
-.agents-import-nudge__action {
-  margin-top: var(--spacing-xs);
-  font-size: var(--font-size-body-sm);
-}
-
-.agents-import-nudge__close {
-  position: absolute;
-  top: var(--spacing-tight);
-  right: var(--spacing-tight);
-  opacity: 0.6;
-  transition: opacity var(--transition-interaction-fast);
-}
-
-.agents-import-nudge:hover .agents-import-nudge__close,
-.agents-import-nudge__close:focus-visible {
-  opacity: 1;
-}
-
-/* The collapsed rail is badges only: no room for a note. */
-.workspace-sidebar.is-hidden .agents-import-nudge {
-  display: none;
+/* "Bring your agents from another assistant?", once, at the top of the
+   Chief's chat: a card like any other decision, with room under it. */
+.agent-import-choice {
+  margin-bottom: var(--spacing-lg);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -752,8 +684,7 @@
   .agents-import-problems,
   .agents-import-done__mark,
   .agents-import-done__title,
-  .agents-import-done__team,
-  .agents-import-nudge {
+  .agents-import-done__team {
     animation: none;
   }
 

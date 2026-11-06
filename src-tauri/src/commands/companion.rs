@@ -141,6 +141,28 @@ pub async fn companion_retry_tailscale(app: AppHandle) -> Result<PhoneStatus, Co
     Ok(read_status(&app).await)
 }
 
+/// The phones signed in to this Mac's Tailscale account: onboarding's live
+/// check that Tailscale is on the phone, on the same account.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn companion_tailnet_phones() -> Result<Vec<tailscale::TailnetPhone>, CommandError> {
+    Ok(tailscale::phones().await)
+}
+
+/// A QR code for a store or download page, so a phone can open it by
+/// pointing its camera at the screen (Tailscale on the App Store, the
+/// phone app's TestFlight). Web pages only.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn companion_link_qr(url: String) -> Result<QrMatrix, CommandError> {
+    if !url.starts_with("https://") || url.len() > 512 || url.chars().any(char::is_whitespace) {
+        return Err(CommandError::expected(
+            "Only a web page's address can be shown as a code.",
+        ));
+    }
+    qr_matrix(&url)
+}
+
 /// A QR code's modules, row by row, `1` for dark.
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]

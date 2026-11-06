@@ -24,6 +24,8 @@ import Animated, { FadeIn, FadeInDown, FadeOut, LinearTransition } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
 import { AgentRow } from '../../../components/AgentRow';
+import { ImportChoiceCard } from '../../../components/ImportChoiceCard';
+import { choose } from '../../../components/menu';
 import { RoomRow } from '../../../components/RoomRow';
 import { pendingHere, roomKey, roomsOffered, sortRooms } from '../../../lib/rooms';
 import { ChatView } from '../../../components/ChatView';
@@ -275,12 +277,15 @@ export default function Agents() {
                 onPress={() => router.push('/new-agent')}
               />
             )}
+            {/* Import lives here once the home's one-time question is answered. */}
             {hasList && canImport && (
               <IconButton
-                name="square.and.arrow.down"
-                label="Import agents"
-                fallback="↓"
-                onPress={() => router.push('/import')}
+                name="ellipsis"
+                label="More"
+                fallback="⋯"
+                onPress={() =>
+                  choose(undefined, [{ label: 'Import agents', run: () => router.push('/import') }])
+                }
               />
             )}
             <IconButton
@@ -318,6 +323,7 @@ export default function Agents() {
         <>
           <ConnectionNotice />
           <Refused />
+          <ImportChoiceCard />
           {!removed && <QuotaLines lines={quota} style={styles.quota} />}
         </>
       }

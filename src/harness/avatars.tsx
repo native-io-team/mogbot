@@ -130,6 +130,51 @@ function Faces() {
   );
 }
 
+/**
+ * The contact sheet: every face on every shape at the sidebar's sizes
+ * (16 / 18 / 24px), then each face large (96px), one row per face, so the
+ * drawing language can be judged across the whole set at once.
+ */
+function Sheet() {
+  const small: AgentAvatarSize[] = ['xs', 'mini', 'row'];
+  return (
+    <section className="avatar-gallery__section" data-section="sheet">
+      <div className="avatar-gallery__sheet">
+        <span />
+        {AVATAR_SHAPES.map((s) => (
+          <span key={s} className="avatar-gallery__caption">
+            {SHAPE_NAMES[s]}
+          </span>
+        ))}
+        <span className="avatar-gallery__caption">96px</span>
+        {AVATAR_FACES.map((face, fi) => (
+          <Row key={face} label={FACE_NAMES[face]}>
+            {AVATAR_SHAPES.map((shape, si) => (
+              <span key={shape} className="avatar-gallery__sheet-cell">
+                {small.map((size) => (
+                  <AgentAvatar
+                    key={size}
+                    name={face}
+                    color={PALETTE[(fi + si) % PALETTE.length]}
+                    look={{ shape, face }}
+                    size={size}
+                  />
+                ))}
+              </span>
+            ))}
+            <AgentAvatar
+              name={face}
+              color={PALETTE[fi % PALETTE.length]}
+              look={{ shape: AVATAR_SHAPES[fi % AVATAR_SHAPES.length], face }}
+              size="xl"
+            />
+          </Row>
+        ))}
+      </div>
+    </section>
+  );
+}
+
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <>
@@ -172,6 +217,7 @@ function Gallery() {
       {(section === 'all' || section === 'sizes') && <Sizes />}
       {(section === 'all' || section === 'faces') && <Faces />}
       {(section === 'all' || section === 'colors') && <Colors />}
+      {section === 'sheet' && <Sheet />}
     </main>
   );
 }

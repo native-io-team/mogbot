@@ -238,7 +238,9 @@ export interface ContextFill {
 
 /** Mirrors `failure::Failure`: what kind of failure a turn ended in. */
 export interface Failure {
-  kind: 'usage_limit' | 'signed_out' | 'other';
+  /** `interrupted`: cut off part-way (a restart, its engine dying) and not
+   * picked up by itself; Continue carries on in the same conversation. */
+  kind: 'usage_limit' | 'signed_out' | 'interrupted' | 'other';
   /** When the usage limit resets (epoch ms), only when Claude Code said so. */
   resetsAt?: number;
 }
@@ -367,7 +369,16 @@ export interface AgentsOverview {
   defaults?: NewAgentDefaults;
   /** How much agents do on their own (`agents::independence`). */
   independence?: AgentIndependence;
+  /** "Bring your agents from another assistant, or start fresh?" (`agents::import_choice`). */
+  importChoice?: ImportChoice;
 }
+
+/** Mirrors `agents::import_choice::Choice`. */
+export type ImportChoice = 'undecided' | 'imported' | 'declined';
+
+/** Answer "bring your agents, or start fresh?" (an import sets `imported` itself). */
+export const setImportChoice = (choice: ImportChoice) =>
+  invoke<ImportChoice>('agents_set_import_choice', { choice });
 
 /** Mirrors `agents::independence::Level`; worded in `lib/agentIndependence`. */
 export type AgentIndependence = 'often' | 'judgement' | 'go_hard';
@@ -1976,6 +1987,7 @@ export function failureLine(failure: Failure, preview: string | null): string {
       : 'Usage limit reached';
   }
   if (failure.kind === 'signed_out') return 'Claude Code is signed out';
+  if (failure.kind === 'interrupted') return 'Interrupted · Continue to pick it up';
   // The reason first: two lines in the sidebar, and the reason is what matters.
   const clause = (preview ?? '').split(/(?<=[.!?:])\s/)[0].replace(/[.:]$/, '');
   return clause ? `${clause} · didn’t finish` : 'Didn’t finish';
@@ -2377,11 +2389,25 @@ export function lastUserMessage(messages: AgentMessage[], index: number): AgentM
 }
 
 /**
+ * The newest line is a turn cut off part-way and not picked up by itself:
+ * it offers Continue, which says "Continue" in the same conversation,
+ * never Retry (sending the request again could do the work twice).
+ */
+export function continuesFrom(messages: AgentMessage[]): boolean {
+  const last = messages[messages.length - 1];
+  return last?.kind === 'error' && last.failure?.kind === 'interrupted';
+}
+
+/** What Continue says. */
+export const CONTINUE_TEXT = 'Continue';
+
+/**
  * What Retry sends again: the user's message before the newest line, when
  * that line is a turn's error. A take-over's terminal that closed by itself
  * isn't a turn, so it offers none.
  */
 export function retrySourceFor(messages: AgentMessage[]): AgentMessage | null {
+  if (continuesFrom(messages)) return null;
   const last = messages[messages.length - 1];
   if (last?.kind !== 'error' || last.takeover) return null;
   return lastUserMessage(messages, messages.length - 1);

@@ -1299,6 +1299,9 @@ pub fn import_from(
             ));
         }
     }
+    if !summary.base.created.is_empty() || !summary.base.updated.is_empty() {
+        super::import_choice::record_import(super::store::now_ms());
+    }
     Ok(summary)
 }
 

@@ -4,13 +4,11 @@
  * A soft shape in a tone of the agent's colour, a face in an ink of the same
  * hue: the tint and ink the initials badge used, which kept every hue above
  * 4.5:1 in both themes. Solid with the canvas colour as ink when it's the
- * agent you're looking at, as a project badge turns solid. The face's stroke
- * weights come from the spec per size; colour, size and motion are here.
+ * agent you're looking at, as a project badge turns solid. The face's one
+ * stroke weight comes from the spec per size; colour, size and motion are here.
  */
 
 :root {
-  /* While working, a blink every few seconds (BLINK_EVERY_MS in avatar.ts). */
-  --agents-avatar-blink-every: calc(var(--duration-loader-standard) * 4);
   /* When a turn ends, one bob (BOB_MS). */
   --agents-avatar-bob: calc(var(--duration-sortable-settle) * 2);
   /* The picker's preview. */
@@ -123,40 +121,8 @@
 
 /* --------------------------------------------------------------- motion */
 
-/* Working: a blink now and then, each agent in its own quarter of the
-   cycle so a sidebar of busy agents never blinks in unison. */
-.agent-avatar--working .agent-avatar__eyes {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: agents-avatar-blink var(--agents-avatar-blink-every) ease-in-out infinite;
-}
-
-.agent-avatar--working[data-blink='1'] .agent-avatar__eyes {
-  animation-delay: calc(var(--agents-avatar-blink-every) * -0.25);
-}
-
-.agent-avatar--working[data-blink='2'] .agent-avatar__eyes {
-  animation-delay: calc(var(--agents-avatar-blink-every) * -0.5);
-}
-
-.agent-avatar--working[data-blink='3'] .agent-avatar__eyes {
-  animation-delay: calc(var(--agents-avatar-blink-every) * -0.75);
-}
-
-@keyframes agents-avatar-blink {
-  0%,
-  94%,
-  97.5%,
-  100% {
-    transform: scaleY(1);
-  }
-
-  95.75% {
-    transform: scaleY(0.12);
-  }
-}
-
-/* A turn ended: one small lift and settle. */
+/* A turn ended: one small lift and settle. The eyes never close and nothing
+   rings a working avatar (the owner ruled both out). */
 .agent-avatar--bob {
   animation: agents-avatar-bob var(--agents-avatar-bob) ease-out;
 }
@@ -173,7 +139,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-avatar--working .agent-avatar__eyes,
   .agent-avatar--bob {
     animation: none;
   }

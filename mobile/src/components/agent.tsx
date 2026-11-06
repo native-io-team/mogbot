@@ -6,21 +6,17 @@
  */
 
 import {
-  BLINK_EVERY_MS,
-  BLINK_MS,
   BOB_LIFT,
   BOB_MS,
-  EYE_LINE,
   FACE_SPECS,
   SHAPE_SPECS,
-  blinkPhase,
+  faceStrokeWidth,
   faceTransform,
-  faceWeights,
   lookFor,
   type Agent,
   type AgentLook,
 } from '@shipstudio/companion-protocol';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import Svg, { G, Path } from 'react-native-svg';
 import { View } from 'react-native';
 import Animated, {
@@ -76,9 +72,9 @@ function useLook(id: string | undefined, name: string, given: AgentLook | undefi
 /**
  * An agent's avatar: a soft shape in a tone of its colour with a minimal face
  * in an ink of the same hue, drawn from the spec the desk draws from
- * (`avatar.ts` in the protocol package; docs/internal/avatars.md). While it
- * works it blinks now and then; when a turn ends it bobs once. Nothing at
- * rest; nothing with Reduce Motion.
+ * (`avatar.ts` in the protocol package; docs/internal/avatars.md). When a
+ * turn ends it bobs once. The eyes never close (no blink) and nothing rings
+ * it while it works; the row's line says that. Nothing with Reduce Motion.
  */
 export function AgentAvatar({
   name,
@@ -109,24 +105,9 @@ export function AgentAvatar({
   const fill = selected ? tint : mix(tint, colors.surfaceControl, 0.24);
   const ink = selected ? colors.surfaceApp : mix(tint, colors.textPrimary, 0.7);
   const edge = alpha(tint, selected ? 0 : 0.22);
-  const blink = useBlink(working && !still, id ?? name);
   const bob = useBob(working, still, size);
   const shape = SHAPE_SPECS[look.shape];
-  const weights = faceWeights(size);
-  const strokes = FACE_SPECS[look.face];
-  const blinks = (s: (typeof strokes)[number]) => s.role === 'eye' || Boolean(s.blinks);
-  const stroke = (s: (typeof strokes)[number]) => (
-    <Path
-      key={s.d}
-      d={s.d}
-      stroke={ink}
-      strokeWidth={s.role === 'eye' ? weights.eye : weights.line}
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      fill="none"
-    />
-  );
-  const squash = 0.12;
+  const strokeWidth = faceStrokeWidth(size, look.shape);
   return (
     <Animated.View
       style={[{ width: size, height: size }, bob]}
@@ -137,46 +118,21 @@ export function AgentAvatar({
       <Svg width={size} height={size} viewBox="0 0 32 32">
         <Path d={shape.d} fill={fill} stroke={edge} strokeWidth={32 / size} />
         <G transform={faceTransform(look.shape) || undefined}>
-          <G
-            transform={
-              blink ? `translate(0 ${EYE_LINE * (1 - squash)}) scale(1 ${squash})` : undefined
-            }
-          >
-            {strokes.filter(blinks).map(stroke)}
-          </G>
-          {strokes.filter((s) => !blinks(s)).map(stroke)}
+          {FACE_SPECS[look.face].map((s) => (
+            <Path
+              key={s.d}
+              d={s.d}
+              stroke={ink}
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              fill="none"
+            />
+          ))}
         </G>
       </Svg>
     </Animated.View>
   );
-}
-
-/** True for a blink's length every few seconds while `on`, each agent at its own moment. */
-function useBlink(on: boolean, seed: string): boolean {
-  const [shut, setShut] = useState(false);
-  useEffect(() => {
-    if (!on) return;
-    let close: ReturnType<typeof setTimeout> | undefined;
-    const open = () => {
-      setShut(true);
-      close = setTimeout(() => setShut(false), BLINK_MS);
-    };
-    const first = setTimeout(
-      () => {
-        open();
-        timer = setInterval(open, BLINK_EVERY_MS);
-      },
-      (blinkPhase(seed) * BLINK_EVERY_MS) / 4 + BLINK_EVERY_MS / 2
-    );
-    let timer: ReturnType<typeof setInterval> | undefined;
-    return () => {
-      clearTimeout(first);
-      clearTimeout(close);
-      clearInterval(timer);
-      setShut(false);
-    };
-  }, [on, seed]);
-  return shut;
 }
 
 /** One small lift and settle when `working` goes from true to false: the reply landed. */

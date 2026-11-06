@@ -25,6 +25,11 @@ describe('postSetupViewFor', () => {
   it('lands someone without an Agents engine on their projects', () => {
     expect(postSetupViewFor(null, false)).toBe('projects');
   });
+
+  it('opens onboarding again while it was left unfinished, but never a project window', () => {
+    expect(postSetupViewFor(null, true, true)).toBe('onboarding');
+    expect(postSetupViewFor('/p', true, true)).toBe('projects');
+  });
 });
 
 describe('hasAgentsEngine', () => {

@@ -87,6 +87,7 @@ pub mod go_hard;
 pub mod harvest;
 pub mod identity;
 pub mod import;
+pub mod import_choice;
 pub mod independence;
 pub mod installs;
 pub mod interview;
@@ -122,6 +123,7 @@ pub mod schedule;
 pub mod search;
 pub mod secrets;
 pub mod sessions;
+pub mod share_text;
 pub mod store;
 pub mod stream;
 pub mod takeover;
@@ -401,3 +403,5 @@ mod tests {
 mod audit_tests;
 #[cfg(test)]
 mod avatar_tests;
+#[cfg(test)]
+mod brand_copy_tests;

@@ -218,13 +218,14 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "share_file",
-        description: "Hand the user a file you made (a report, CSV, image, PDF, zip): it appears in this chat as a file card they can open, and images show inline. Use it instead of pasting a file's contents. The file must be in your own folder or one of the user's projects; folders aren't accepted, so zip one first. Up to 25 MB.",
+        description: "Hand the user a file you made (a report, CSV, image, PDF, zip): it appears in this chat as one message, your `text` above a file card they can open (images show inline). Use it instead of pasting a file's contents. When the user wants text and a file together (a post's copy and its image), call it once per item with that item's full text in `text`; a short `caption` alone is only a label, not the text. The file must be in your own folder or one of the user's projects; folders aren't accepted, so zip one first. Up to 25 MB.",
         main_only: false,
         schema: || json!({
             "type": "object",
             "properties": {
                 "path": { "type": "string", "description": "Absolute, ~/…, or relative to your folder." },
-                "caption": { "type": "string", "description": "Optional: one short line about what it is, shown with the file." }
+                "text": { "type": "string", "description": "The message to show with the file, above it: can be the full text the user asked for (e.g. a post's whole copy), several lines, markdown allowed." },
+                "caption": { "type": "string", "description": "Optional: a short label (\"1 of 6 · Fri 10am\"), shown first. Not a place for the text itself: use `text`." }
             },
             "required": ["path"]
         }),
@@ -408,7 +409,7 @@ pub fn initialize_result(params: Option<&Value>) -> Value {
         "protocolVersion": requested,
         "capabilities": { "tools": {} },
         "serverInfo": { "name": crate::brand::scoped("agents"), "version": env!("CARGO_PKG_VERSION") },
-        "instructions": format!("{}: the user's projects, which you work on through their sessions (project_* and session_* tools), other agents you can message, and (for the Chief of Staff) creating and managing agents.", crate::brand::NAME)
+        "instructions": "The app you live in, on the user's Mac: the user's projects, which you work on through their sessions (project_* and session_* tools), other agents you can message, and (for the Chief of Staff) creating and managing agents. Call it \"the app\"."
     })
 }
 
@@ -431,6 +432,12 @@ fn serves(tool: &Tool, caller: &store::Agent) -> bool {
         "read_agent" => caller.is_main || super::admin::admin_now(caller),
         _ => !tool.main_only || caller.is_main,
     }
+}
+
+/// `tools/list` as `caller` is served it, for the copy scan (`brand_copy_tests`).
+#[cfg(test)]
+pub(super) fn tools_list_for_tests(caller: &store::Agent) -> Value {
+    tools_list(caller)
 }
 
 fn tools_list(caller: &store::Agent) -> Value {
@@ -1121,11 +1128,19 @@ async fn share_file(app: &AppHandle, caller: &store::Agent, args: &Value) -> Val
         Ok(source) => source,
         Err(e) => return error(e),
     };
-    let mut message = runner::new_message(
-        &caller.id,
-        MessageKind::Agent,
-        arg(args, "caption").unwrap_or(""),
-    );
+    let caption = arg(args, "caption").unwrap_or("");
+    let body = arg(args, "text").unwrap_or("");
+    let shown = super::share_text::message_text(caption, body);
+    // Tell the agent what the user actually got, so a bare label is never
+    // mistaken for the text it was asked for.
+    let with = if !body.trim().is_empty() {
+        "with your text above it".to_string()
+    } else if shown.is_empty() {
+        "with no text".to_string()
+    } else {
+        format!("with only the label \"{shown}\" (no other text; if the user asked for the text, send it in `text`)")
+    };
+    let mut message = runner::new_message(&caller.id, MessageKind::Agent, shown);
     let id = message.id.clone();
     let saved = tokio::task::spawn_blocking(move || files::share(&home, &id, &source)).await;
     match saved {
@@ -1136,7 +1151,7 @@ async fn share_file(app: &AppHandle, caller: &store::Agent, args: &Value) -> Val
                 return error(e.to_string());
             }
             text(format!(
-                "Shared {name}. The user sees it in the chat as a file they can open; don't paste its contents as well."
+                "Shared {name}, {with}. The user sees it in the chat as a file they can open; don't paste its contents as well."
             ))
         }
         Ok(Err(e)) => error(e.to_string()),
