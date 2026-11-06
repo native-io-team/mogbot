@@ -156,6 +156,8 @@ import {
   useTeamSetupReveal,
 } from '../../lib/teamSetup';
 import { useOptionalToast } from '../../contexts/ToastContext';
+import { keepDraft, unsentDraft } from '../../lib/chatRestore';
+import { useChatReadTo } from './useChatReadTo';
 import { useAccentScope } from '../../lib/accent';
 import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
 
@@ -369,9 +371,6 @@ interface AgentChatProps extends AgentActions {
   onMoreIdeas?: () => void;
 }
 
-/** Unsent composer text per agent, for the life of the window. */
-const unsentText = new Map<string, string>();
-
 /**
  * The reply being written, as far as the history needs to know: which one and
  * when it started. Its words are read by its own bubble (`DraftProse`), so a
@@ -448,12 +447,10 @@ export const AgentChat = memo(function AgentChat({
   );
   const { showToast } = useOptionalToast();
   // Kept outside the component: an agent opening a project switches this
-  // window away from Agents and back, and what you were typing survives it.
-  const [draft, setDraft] = useState(() => unsentText.get(agent.id) ?? '');
-  useEffect(() => {
-    if (draft) unsentText.set(agent.id, draft);
-    else unsentText.delete(agent.id);
-  }, [agent.id, draft]);
+  // window away from Agents and back, and a restart reopens the chat, and
+  // what you were typing survives both (`chatRestore`).
+  const [draft, setDraft] = useState(() => unsentDraft(agent.id));
+  useEffect(() => keepDraft(agent.id, draft), [agent.id, draft]);
   const [pending, setPending] = useState<Pending[]>([]);
   const [atBottom, setAtBottom] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -949,6 +946,22 @@ export const AgentChat = memo(function AgentChat({
     el.style.overflowAnchor = '';
   }, [startIndex]);
 
+  // After a restart the chat opens where you had read to (once).
+  const indexOf = useCallback((id: string) => itemIndexOf(items, id), [items]);
+  const { onScrolled } = useChatReadTo({
+    chatKey: agent.id,
+    ready: messages !== undefined,
+    scrollRef,
+    messagesRef,
+    atBottomRef,
+    setAtBottom,
+    indexOf,
+    startIndex,
+    mountFrom: setMountFrom,
+    skip: !!jumpTo,
+    lastKey,
+  });
+
   const onScroll = useCallback(() => {
     const el = scrollRef.current;
     if (!el || isGliding()) return;
@@ -961,10 +974,20 @@ export const AgentChat = memo(function AgentChat({
     }
     atBottomRef.current = bottom;
     setAtBottom(bottom);
+    onScrolled();
     if (el.scrollTop >= el.clientHeight * LOAD_AHEAD_SCREENS) return;
     if (startIndex > 0) revealEarlier();
     else if (hasOlder) loadEarlier();
-  }, [isGliding, readerScrolled, follow, hasOlder, loadEarlier, startIndex, revealEarlier]);
+  }, [
+    isGliding,
+    readerScrolled,
+    follow,
+    hasOlder,
+    loadEarlier,
+    startIndex,
+    revealEarlier,
+    onScrolled,
+  ]);
 
   // A search hit: bring its line to the middle and flash it. A line older
   // than what's loaded loads back to it first (once); one that's gone just stops.
