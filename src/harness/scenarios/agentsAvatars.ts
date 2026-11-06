@@ -1,8 +1,8 @@
 /**
- * Agent avatars (docs/internal/avatars.md): a sidebar of twelve agents in
- * their defaults and a few chosen looks, the Chief's chat header, the look
- * picker in the editor, and a look changed from chat (at once, no card).
- * Add `&avatarDirection=solid|outline` to see a direction that wasn't chosen.
+ * Agent avatars, key caps (docs/internal/avatars.md): a sidebar of twelve
+ * agents in their defaults and a few chosen looks (one saved under the old
+ * system, migrated), the Chief's chat header, the look picker in the editor,
+ * and a look changed from chat (at once, no card).
  * Fictional team.
  */
 
@@ -13,9 +13,20 @@ import { AGENTS_TAB, TEAM, agent, messagesFor, msg, overview, status } from './a
 const TWELVE = [
   ...TEAM.map((a) => {
     if (a.id === 'clients') return { ...a, hidden: false };
-    // Two chose their own; the rest wear what their id gives them.
-    if (a.id === 'hiring') return { ...a, avatar: { shape: 'hexagon', face: 'curious' } };
-    if (a.id === 'social') return { ...a, avatar: { shape: 'drop', face: 'wink' } };
+    // Four chose their own; the rest wear what their id gives them.
+    if (a.id === 'hiring') return { ...a, avatar: { shape: 'hexagon', face: 'smile' } };
+    // Saved under the previous system: a drop with a wink reads as a circle with a mouth.
+    if (a.id === 'social') return { ...a, avatar: { shape: 'drop', face: 'wink' } as never };
+    if (a.id === 'finance') {
+      return { ...a, avatar: { shape: 'diamond', face: 'monogram', finish: 'embossed' } };
+    }
+    if (a.id === 'native') {
+      return {
+        ...a,
+        failure: { kind: 'interrupted' as const },
+        avatar: { shape: 'squircle', face: 'debossed' },
+      };
+    }
     return a;
   }),
   agent('travel', 'Travel', {
@@ -49,8 +60,8 @@ const TWELVE = [
 const lookChat = (args: Record<string, unknown>) =>
   args.agentId === 'chief'
     ? [
-        msg('user', 'Give Hiring a hexagon with a curious face.', 2),
-        msg('agent', 'Done: Hiring is now a hexagon with a curious face.', 1),
+        msg('user', 'Give Hiring a hexagon with eyes and a mouth.', 2),
+        msg('agent', 'Done: Hiring is now a hexagon with eyes and a mouth.', 1),
       ]
     : messagesFor(args);
 
@@ -59,7 +70,7 @@ export const agentsAvatarsScenarios: Scenario[] = [
     id: 'agents-avatars',
     title: 'Agents — avatars: a sidebar of twelve, the Chief’s chat open',
     looksRightWhen:
-      'Twelve sidebar rows, each a soft shape in a tone of the agent’s colour with a small two-dot face in an ink of the same hue: no two neighbours alike, nothing neon, the Chief a squircle with a calm face, solid as the open agent. Acme Site and Research are working: no ring or border around their avatars, only their row’s live step text. Hiring is a hexagon with a curious face (glancing right). The chat header shows the Chief’s avatar at the same weight as the row’s.',
+      'Twelve sidebar rows, each a key cap in its agent’s colour (a darker side, a lit top, a soft shadow) with dot eyes by default: circles, diamonds and hexagons, nothing neon, every hue the same lightness. The Chief is the only default squircle, solid as the open agent. Acme Site and Research are working (their faces look around; frozen here): no ring or border, only their row’s live step text. Hiring is a hexagon with eyes and a mouth; Social, saved under the old system as a drop with a wink, is a circle with eyes and a mouth; Finance is an embossed diamond with an F; Native App, whose last turn was cut off, is a debossed squircle. The chat header shows the Chief’s key at the row’s weight.',
     openSelector: AGENTS_TAB,
     requires: '.agents-list__row .agent-avatar[data-shape="hexagon"]',
     commands: {
@@ -71,7 +82,7 @@ export const agentsAvatarsScenarios: Scenario[] = [
     id: 'agents-avatars-picker',
     title: 'Agents — a new agent’s look: shape, face and colour',
     looksRightWhen:
-      'New agent. The avatar beside Name has been clicked: under it, the avatar at 96px on a quiet band, then Shape (eight small avatars, the current one ringed in a neutral grey), Face (ten), Color (eleven swatches). The new agent starts on a shape nobody else wears; the Chief’s squircle isn’t offered as a default. Nothing in accent.',
+      'New agent. The avatar beside Name has been clicked: under it, the key at 96px on a quiet band, then Shape (four), Face (four: dot eyes, eyes and mouth, debossed, monogram), Finish (key cap, embossed), Color (eleven swatches). The new agent starts on a shape nobody else wears; the Chief’s squircle isn’t offered as a default. Nothing in accent; nothing in the picker moves.',
     requires: '.agent-look__preview .agent-avatar--xl',
     steps: [{ click: '.agents-list__new' }, { click: '.agent-editor__look-toggle' }],
     commands: {
@@ -81,9 +92,9 @@ export const agentsAvatarsScenarios: Scenario[] = [
   },
   {
     id: 'agents-avatars-chat',
-    title: 'Agents — “Give Hiring a hexagon with a curious face” from chat',
+    title: 'Agents — “Give Hiring a hexagon with eyes and a mouth” from chat',
     looksRightWhen:
-      'The Chief’s chat: the request, then a one-line reply saying it’s done. No card: a look isn’t a setting. In the sidebar Hiring is already a pink hexagon with a curious face.',
+      'The Chief’s chat: the request, then a one-line reply saying it’s done. No card: a look isn’t a setting. In the sidebar Hiring is already a hexagon with eyes and a mouth.',
     openSelector: AGENTS_TAB,
     requires: '.agents-list__row .agent-avatar[data-shape="hexagon"]',
     commands: {

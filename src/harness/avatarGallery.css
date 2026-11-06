@@ -76,3 +76,25 @@ body {
   align-items: center;
   gap: var(--spacing-xs);
 }
+
+.avatar-gallery__sheet[data-cols='5'] {
+  grid-template-columns: repeat(5, max-content);
+  margin-bottom: var(--spacing-xl);
+}
+
+.avatar-gallery__strip {
+  margin-bottom: var(--spacing-lg);
+}
+
+.avatar-gallery__frames {
+  display: flex;
+  gap: var(--spacing-lg);
+}
+
+.avatar-gallery__frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm);
+}

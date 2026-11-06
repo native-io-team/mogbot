@@ -53,6 +53,7 @@ import {
   type Agent,
   type AgentEngine,
   type AgentMessage,
+  avatarMood,
 } from '../../lib/agents';
 import { refreshAgents, upsertMessage, useAgentsSelector } from '../../lib/agentsStore';
 import { getRoomMessages, roomKey, type Room } from '../../lib/agentRooms';
@@ -198,7 +199,7 @@ interface RowProps {
   line: ReactNode;
   meta?: ReactNode;
   state?: 'working' | 'waiting' | 'failed' | 'limited';
-  /** Mid-turn: its avatar bobs once when the turn ends. */
+  /** Mid-turn: its avatar looks around, and presses once when the turn ends. */
   working?: boolean;
   onOpen: () => void;
   /** A row that folds what's under it: its chevron, and whether it's open. */
@@ -219,7 +220,12 @@ function Row({ agent, place, line, meta, state, working, onOpen, fold }: RowProp
       aria-expanded={fold?.expanded}
       aria-controls={fold?.expanded ? fold.controls : undefined}
     >
-      <AgentAvatar id={agent.id} name={agent.name} color={agent.color} working={working} />
+      <AgentAvatar
+        id={agent.id}
+        name={agent.name}
+        color={agent.color}
+        mood={avatarMood(agent, Boolean(working))}
+      />
       <span className="agents-team__text">
         <span className="agents-team__name">
           <span className="agents-team__name-text">{agent.name}</span>

@@ -49,7 +49,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { askingLine, isQueued, needsYouHere, pendingApproval } from '../lib/agents';
+import { agentMood, askingLine, isQueued, needsYouHere, pendingApproval } from '../lib/agents';
 import { messageActions, plainText, type MessageAction } from '../lib/actions';
 import { announce } from '../lib/a11y';
 import { addQuote } from '../lib/drafts';
@@ -890,14 +890,21 @@ function Glow() {
 /**
  * Identity only: who this is (name and role). What it's doing is said once in
  * its row on the list and once in the conversation (a bar, the working line,
- * a card), never a third time up here.
+ * a card), never a third time up here in words; the avatar only shows it, by
+ * how it looks around (`agentMood`).
  */
 function Header({ agent }: { agent: Agent }) {
   const colors = useColors();
   const styles = useStyles();
   return (
     <View style={styles.header}>
-      <AgentAvatar id={agent.id} name={agent.name} color={agent.color} size={avatarSize.header} />
+      <AgentAvatar
+        id={agent.id}
+        name={agent.name}
+        color={agent.color}
+        size={avatarSize.header}
+        mood={agentMood(agent)}
+      />
       <View style={{ flexShrink: 1 }}>
         <T
           variant="headline"

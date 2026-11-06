@@ -9,6 +9,7 @@ import type {
   Agent,
   AgentMessage,
   Approval,
+  AvatarMood,
   EngineInfo,
   Failure,
   PermissionScope,
@@ -17,6 +18,7 @@ import type {
 } from '@shipstudio/companion-protocol';
 import {
   apiPrice,
+  moodOf,
   needsYouCount,
   resetPhrase,
   secretTitle,
@@ -45,6 +47,22 @@ export const failedTurn = (agent: Agent): Failure | null =>
   agent.failure && agent.status.state === 'idle' ? agent.failure : null;
 
 export const needsAttention = (agent: Agent) => needsYou(agent) || failedTurn(agent) !== null;
+
+/**
+ * What its avatar shows (`moodOf` in avatar.ts), from what a row knows. A
+ * usage limit heals by itself: not a failure the avatar mourns.
+ */
+export function agentMood(
+  agent: Agent,
+  working = agent.status.state === 'working'
+): Exclude<AvatarMood, 'done'> {
+  const failure = failedTurn(agent);
+  return moodOf({
+    needsYou: needsYou(agent),
+    working,
+    failed: failure !== null && failure.kind !== 'usage_limit',
+  });
+}
 
 /**
  * A failed turn in a line. `engine`: what the agent runs on ("Codex"), so a

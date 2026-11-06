@@ -1,92 +1,96 @@
 /* An agent's avatar (AgentAvatar.tsx; the spec is
  * packages/companion-protocol/src/avatar.ts, the design docs/internal/avatars.md).
  *
- * A soft shape in a tone of the agent's colour, a face in an ink of the same
- * hue: the tint and ink the initials badge used, which kept every hue above
- * 4.5:1 in both themes. Solid with the canvas colour as ink when it's the
- * agent you're looking at, as a project badge turns solid. The face's one
- * stroke weight comes from the spec per size; colour, size and motion are here.
+ * A key cap: the drawing and its colours come from the spec (equal OKLCH per
+ * theme, painted as SVG attributes), so this file holds only the box, the
+ * sizes and the motion. The keyframes below are the spec's AVATAR_MOTION,
+ * value for value; agentAvatarMotion.test.ts reads this file and checks.
+ *
+ * Motion is a small state language and nothing else: the face moves within
+ * the key's top (in grid units: a CSS transform on an SVG group is in its
+ * user units, so it scales with the avatar), the top presses, and while it
+ * works a faint extra rim light breathes. Never a ring, never a blink.
  */
 
 :root {
-  /* When a turn ends, one bob (BOB_MS). */
-  --agents-avatar-bob: calc(var(--duration-sortable-settle) * 2);
+  --agents-avatar-idle: calc(var(--duration-loader-standard) * 40 / 3); /* 16s */
+  --agents-avatar-look: calc(var(--duration-loader-standard) * 4); /* 4.8s */
+  --agents-avatar-needs: calc(var(--duration-loader-fast) * 7 / 15); /* 420ms */
+  --agents-avatar-done: calc(var(--duration-loader-fast) * 28 / 45); /* 560ms */
+  --agents-avatar-failed: calc(var(--duration-loader-fast) * 7 / 9); /* 700ms */
   /* The picker's preview. */
   --agents-avatar-xl: calc(var(--spacing-lg) * 6);
 }
 
 .agent-avatar {
-  /* Tone and ink. 16% tint alone was under 4.5:1 for the darker hues. */
-  --agent-avatar-fill: color-mix(
-    in srgb,
-    var(--agents-tint, var(--text-muted)) 24%,
-    var(--surface-control)
+  /* How far the face moves: all the way on a lit key, a little on a flat
+     one (SMALL_MOTION). */
+  --agent-avatar-reach: 1;
+  /* The key's top is drawn at 0.9 (KEY.top.scale), and the face with it. */
+  --agent-avatar-top: 1;
+  /* One grid unit, for the press; one of the top's units, for the face. */
+  --agent-avatar-pu: calc(var(--agent-avatar-size) / 32);
+  --agent-avatar-fu: calc(
+    var(--agent-avatar-size) / 32 * var(--agent-avatar-top) * var(--agent-avatar-reach)
   );
-  --agent-avatar-ink: color-mix(
-    in srgb,
-    var(--agents-tint, var(--text-secondary)) 70%,
-    var(--text-primary)
-  );
-  /* A hairline of the hue on the shape's edge, so a pale tone on a pale
-     panel (light theme) still has a silhouette. */
-  --agent-avatar-edge: color-mix(in srgb, var(--agents-tint, var(--text-muted)) 22%, transparent);
 
   position: relative;
   display: inline-flex;
   flex: 0 0 auto;
   width: var(--agent-avatar-size);
   height: var(--agent-avatar-size);
-  color: var(--agent-avatar-ink);
   user-select: none;
 }
 
-.agent-avatar__art {
+.agent-avatar[data-cap] {
+  --agent-avatar-top: 0.9;
+}
+
+.agent-avatar:not([data-lit]) {
+  --agent-avatar-reach: 0.4;
+}
+
+/* The layers: the key's shadow and side, then its top (pressed as one with
+   the light and the face over it). Each moving part is its own box, so its
+   motion is a composited transform or opacity, never a repaint. */
+.agent-avatar__art,
+.agent-avatar__key,
+.agent-avatar__face {
+  position: absolute;
+  inset: 0;
   display: block;
   width: 100%;
   height: 100%;
-  /* The bob lifts it a little out of its box. */
+}
+
+.agent-avatar__art {
+  /* The shadow and a press reach a little past the box. */
   overflow: visible;
 }
 
-.agent-avatar__shape {
-  fill: var(--agent-avatar-fill);
-  stroke: var(--agent-avatar-edge);
-  stroke-width: 1px;
-  vector-effect: non-scaling-stroke;
-  transition: fill var(--transition-interaction-fast);
+.agent-avatar__letter {
+  font-family: var(--font-ui);
 }
 
-.agent-avatar__face path {
-  fill: none;
-  stroke: currentColor;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.agent-avatar--selected {
-  --agent-avatar-fill: var(--agents-tint, var(--accent-active));
-  --agent-avatar-ink: var(--surface-app);
-  --agent-avatar-edge: transparent;
+.agent-avatar__glow {
+  opacity: 0;
 }
 
 /* Not an agent: an icon on a neutral tile in an avatar's footprint (the
    team's badge, a mention menu's group). A tile, never a face, so it can't
    pass for an agent. */
 .agent-avatar--tile {
-  --agent-avatar-fill: var(--surface-control);
-  --agent-avatar-ink: var(--text-secondary);
-
   align-items: center;
   justify-content: center;
-  color: var(--agent-avatar-ink);
-  background: var(--agent-avatar-fill);
+  color: var(--text-secondary);
+  background: var(--surface-control);
   border-radius: var(--radius-control);
   box-shadow: var(--shadow-button);
 }
 
 .agent-avatar--tile.agent-avatar--selected {
-  --agent-avatar-fill: var(--text-primary);
-  --agent-avatar-ink: var(--surface-app);
+  color: var(--surface-app);
+  background: var(--text-primary);
 }
 
 /* ---------------------------------------------------------------- sizes */
@@ -111,6 +115,10 @@
   --agent-avatar-size: calc(var(--spacing-lg) * 2.5);
 }
 
+.agent-avatar--lg {
+  --agent-avatar-size: calc(var(--spacing-lg) * 3);
+}
+
 .agent-avatar--hero {
   --agent-avatar-size: calc(var(--control-height-standard) + var(--spacing-lg));
 }
@@ -121,25 +129,181 @@
 
 /* --------------------------------------------------------------- motion */
 
-/* A turn ended: one small lift and settle. The eyes never close and nothing
-   rings a working avatar (the owner ruled both out). */
-.agent-avatar--bob {
-  animation: agents-avatar-bob var(--agents-avatar-bob) ease-out;
+/* Idle: a slow drift and, now and then, a glance aside. Each agent starts at
+   its own point in the loop (the phase), so a sidebar never moves in step. */
+.agent-avatar[data-mood='idle'] .agent-avatar__face {
+  animation: agents-avatar-idle var(--agents-avatar-idle) ease-in-out var(--agent-avatar-phase, 0s)
+    infinite;
 }
 
-@keyframes agents-avatar-bob {
-  0%,
+/* Working: looking around, left, up and back, with the top's light breathing. */
+.agent-avatar[data-mood='working'] .agent-avatar__face {
+  animation: agents-avatar-look var(--agents-avatar-look) ease-in-out infinite;
+}
+
+.agent-avatar[data-mood='working'][data-lit] .agent-avatar__glow {
+  animation: agents-avatar-glow var(--agents-avatar-look) ease-in-out infinite;
+}
+
+/* Needs you: one press, then it looks out at you and holds. */
+.agent-avatar[data-mood='needs'] .agent-avatar__face {
+  animation: agents-avatar-attend var(--agents-avatar-needs) ease-in-out forwards;
+}
+
+.agent-avatar[data-mood='needs'][data-lit] .agent-avatar__key {
+  animation: agents-avatar-press-once var(--agents-avatar-needs) ease-in-out;
+}
+
+/* Done: one press and a small bounce, then rest. */
+.agent-avatar[data-mood='done'][data-lit] .agent-avatar__key {
+  animation: agents-avatar-press-bounce var(--agents-avatar-done) ease-in-out;
+}
+
+/* Failed: one look down to the side, held. */
+.agent-avatar[data-mood='failed'] .agent-avatar__face {
+  animation: agents-avatar-fail var(--agents-avatar-failed) ease-out forwards;
+}
+
+/* Off-screen, or the window hidden: hold still where it is. */
+.agent-avatar[data-offscreen] *,
+:root[data-avatars-hidden] .agent-avatar * {
+  animation-play-state: paused;
+}
+
+/* Values in grid units: `fu` is one of the top's (the face moves inside it),
+   `pu` one of the avatar's (the press). */
+@keyframes agents-avatar-idle {
+  0% {
+    transform: translate(0, 0);
+  }
+
+  22% {
+    transform: translate(calc(0.5 * var(--agent-avatar-fu)), calc(-0.3 * var(--agent-avatar-fu)));
+  }
+
+  45% {
+    transform: translate(calc(-0.4 * var(--agent-avatar-fu)), calc(0.25 * var(--agent-avatar-fu)));
+  }
+
+  62% {
+    transform: translate(0, 0);
+  }
+
+  68% {
+    transform: translate(calc(1.3 * var(--agent-avatar-fu)), calc(-0.2 * var(--agent-avatar-fu)));
+  }
+
+  80% {
+    transform: translate(calc(1.3 * var(--agent-avatar-fu)), calc(-0.2 * var(--agent-avatar-fu)));
+  }
+
+  86% {
+    transform: translate(0, 0);
+  }
+
   100% {
-    transform: translateY(0);
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes agents-avatar-look {
+  0% {
+    transform: translate(0, 0);
+  }
+
+  12% {
+    transform: translate(calc(-1.4 * var(--agent-avatar-fu)), 0);
+  }
+
+  34% {
+    transform: translate(calc(-1.4 * var(--agent-avatar-fu)), 0);
+  }
+
+  46% {
+    transform: translate(0, calc(-1.2 * var(--agent-avatar-fu)));
+  }
+
+  66% {
+    transform: translate(0, calc(-1.2 * var(--agent-avatar-fu)));
+  }
+
+  78% {
+    transform: translate(0, 0);
+  }
+
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes agents-avatar-glow {
+  0% {
+    opacity: 0;
+  }
+
+  50% {
+    opacity: 0.6;
+  }
+
+  100% {
+    opacity: 0;
+  }
+}
+
+@keyframes agents-avatar-attend {
+  0% {
+    transform: translate(0, 0);
+  }
+
+  100% {
+    transform: translate(0, calc(-0.35 * var(--agent-avatar-fu)));
+  }
+}
+
+@keyframes agents-avatar-press-once {
+  0% {
+    transform: translate(0, 0);
   }
 
   40% {
-    transform: translateY(-8%);
+    transform: translate(0, calc(0.7 * var(--agent-avatar-pu)));
+  }
+
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes agents-avatar-press-bounce {
+  0% {
+    transform: translate(0, 0);
+  }
+
+  35% {
+    transform: translate(0, calc(0.8 * var(--agent-avatar-pu)));
+  }
+
+  70% {
+    transform: translate(0, calc(-0.25 * var(--agent-avatar-pu)));
+  }
+
+  100% {
+    transform: translate(0, 0);
+  }
+}
+
+@keyframes agents-avatar-fail {
+  0% {
+    transform: translate(0, 0);
+  }
+
+  100% {
+    transform: translate(calc(-1.1 * var(--agent-avatar-fu)), calc(1 * var(--agent-avatar-fu)));
   }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-avatar--bob {
-    animation: none;
+  .agent-avatar * {
+    animation: none !important;
   }
 }

@@ -36,24 +36,62 @@ pub const COLORS: &[&str] = &[
 /// face. Still written, so an older build reads the registry; nothing draws it.
 pub const SHAPE_COUNT: u8 = 14;
 
-/// The avatar's shapes and faces, as keys: the drawings live in the shared
-/// spec (`packages/companion-protocol/src/avatar.ts`, checked against these
-/// in a test). Append only.
-pub const AVATAR_SHAPES: &[&str] = &[
-    "circle", "rounded", "squircle", "hexagon", "pill", "drop", "cookie", "arch",
+/// The avatar's shapes, faces and finishes, as keys: the drawings live in the
+/// shared spec (`packages/companion-protocol/src/avatar.ts`, checked against
+/// these in a test). A key cap: four even shapes, a face on its top.
+pub const AVATAR_SHAPES: &[&str] = &["circle", "squircle", "diamond", "hexagon"];
+pub const AVATAR_FACES: &[&str] = &["dots", "smile", "debossed", "monogram"];
+pub const AVATAR_FINISHES: &[&str] = &["keycap", "embossed"];
+/// The face every default wears (`DEFAULT_FACE` in avatar.ts).
+pub const DEFAULT_FACE: &str = "dots";
+
+/// The previous system's keys, each to its nearest now (`LEGACY_SHAPES` /
+/// `LEGACY_FACES` in avatar.ts; a test parses those and compares). A look
+/// saved under it reads as its nearest, the same on every client; nothing is
+/// rewritten on disk, so an older build still reads what it wrote.
+pub const LEGACY_SHAPES: &[(&str, &str)] = &[
+    ("rounded", "squircle"),
+    ("pill", "circle"),
+    ("drop", "circle"),
+    ("cookie", "circle"),
+    ("arch", "squircle"),
 ];
-pub const AVATAR_FACES: &[&str] = &[
-    "calm",
-    "cheerful",
-    "curious",
-    "focused",
-    "sleepy",
-    "wink",
-    "determined",
-    "quiet",
-    "content",
-    "bright",
+pub const LEGACY_FACES: &[(&str, &str)] = &[
+    ("calm", "smile"),
+    ("cheerful", "smile"),
+    ("curious", "smile"),
+    ("focused", "smile"),
+    ("sleepy", "smile"),
+    ("wink", "smile"),
+    ("determined", "smile"),
+    ("bright", "smile"),
+    ("quiet", "dots"),
+    ("content", "dots"),
 ];
+
+fn key_in(
+    key: &str,
+    keys: &'static [&'static str],
+    legacy: &'static [(&'static str, &'static str)],
+) -> Option<&'static str> {
+    keys.iter().copied().find(|k| *k == key).or_else(|| {
+        legacy
+            .iter()
+            .find(|(old, _)| *old == key)
+            .map(|(_, now)| *now)
+    })
+}
+
+/// A stored shape key, migrated: this system's, the nearest for an old one.
+pub fn shape_key(key: &str) -> Option<&'static str> {
+    key_in(key, AVATAR_SHAPES, LEGACY_SHAPES)
+}
+pub fn face_key(key: &str) -> Option<&'static str> {
+    key_in(key, AVATAR_FACES, LEGACY_FACES)
+}
+fn finish_key(key: &str) -> Option<&'static str> {
+    key_in(key, AVATAR_FINISHES, &[])
+}
 
 /// What an agent chose to look like. `None` on the agent: the clients derive
 /// one from its id, so an agent made before avatars never changes.
@@ -61,43 +99,79 @@ pub const AVATAR_FACES: &[&str] = &[
 pub struct AgentLook {
     pub shape: String,
     pub face: String,
+    /// `keycap` or `embossed`. Absent: a key cap (and what older builds wrote).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub finish: Option<String>,
 }
 
 impl AgentLook {
-    /// A look with keys this build draws, or why not.
+    /// A look with keys this build draws (an old key becomes its nearest), or why not.
     pub fn checked(shape: &str, face: &str) -> Result<AgentLook, String> {
+        Self::checked_with(shape, face, None)
+    }
+
+    pub fn checked_with(
+        shape: &str,
+        face: &str,
+        finish: Option<&str>,
+    ) -> Result<AgentLook, String> {
         let shape = shape.trim().to_ascii_lowercase();
         let face = face.trim().to_ascii_lowercase();
-        if !AVATAR_SHAPES.contains(&shape.as_str()) {
+        let Some(shape_now) = shape_key(&shape) else {
             return Err(format!(
                 "There's no shape called \"{shape}\": {}.",
                 AVATAR_SHAPES.join(", ")
             ));
-        }
-        if !AVATAR_FACES.contains(&face.as_str()) {
+        };
+        let Some(face_now) = face_key(&face) else {
             return Err(format!(
                 "There's no face called \"{face}\": {}.",
                 AVATAR_FACES.join(", ")
             ));
-        }
-        Ok(AgentLook { shape, face })
+        };
+        let finish = match finish.map(|f| f.trim().to_ascii_lowercase()) {
+            None => None,
+            Some(f) => match finish_key(&f) {
+                // A key cap is the default: stored as nothing, as before.
+                Some("keycap") => None,
+                Some(k) => Some(k.to_string()),
+                None => {
+                    return Err(format!(
+                        "There's no finish called \"{f}\": {}.",
+                        AVATAR_FINISHES.join(", ")
+                    ))
+                }
+            },
+        };
+        Ok(AgentLook {
+            shape: shape_now.into(),
+            face: face_now.into(),
+            finish,
+        })
+    }
+
+    /// The same look in this system's keys, or `None` for one it can't draw.
+    pub fn normalized(self) -> Option<AgentLook> {
+        Self::checked_with(&self.shape, &self.face, self.finish.as_deref()).ok()
     }
 
     pub fn is_valid(&self) -> bool {
-        AVATAR_SHAPES.contains(&self.shape.as_str()) && AVATAR_FACES.contains(&self.face.as_str())
+        self.clone().normalized().is_some()
     }
 
     /// The Chief's default (`CHIEF_LOOK` in avatar.ts).
     pub const CHIEF_SHAPE: &'static str = "squircle";
-    pub const CHIEF_FACE: &'static str = "calm";
+    pub const CHIEF_FACE: &'static str = DEFAULT_FACE;
 
     /// What the clients derive for an agent with no choice saved
-    /// (`defaultLook` in avatar.ts: FNV-1a of the id, the Chief's own).
+    /// (`defaultLook` in avatar.ts: FNV-1a of the id picks a shape, never
+    /// the Chief's; every default has dot eyes).
     pub fn default_for(id: &str, is_main: bool) -> AgentLook {
         if is_main {
             return AgentLook {
                 shape: Self::CHIEF_SHAPE.into(),
                 face: Self::CHIEF_FACE.into(),
+                finish: None,
             };
         }
         let mut h: u32 = 0x811c9dc5;
@@ -111,40 +185,49 @@ impl AgentLook {
             .copied()
             .filter(|s| *s != Self::CHIEF_SHAPE)
             .collect();
-        // `DEFAULT_FACES`: a wink or a sleepy face is picked, never handed out.
-        let faces: Vec<&str> = AVATAR_FACES
-            .iter()
-            .copied()
-            .filter(|f| *f != "wink" && *f != "sleepy")
-            .collect();
         AgentLook {
             shape: shapes[(h as usize) % shapes.len()].into(),
-            face: faces[((h >> 8) as usize) % faces.len()].into(),
+            face: DEFAULT_FACE.into(),
+            finish: None,
         }
     }
 
-    /// The look an agent wears: its own choice, field by field, else its default.
+    /// The look an agent wears: its own choice (migrated), field by field, else its default.
     pub fn of(agent: &Agent) -> AgentLook {
         let fallback = Self::default_for(&agent.id, agent.is_main);
         let chosen = agent.avatar.as_ref();
         AgentLook {
             shape: chosen
-                .map(|l| l.shape.clone())
-                .filter(|s| AVATAR_SHAPES.contains(&s.as_str()))
-                .unwrap_or(fallback.shape),
+                .and_then(|l| shape_key(&l.shape))
+                .map_or(fallback.shape, str::to_string),
             face: chosen
-                .map(|l| l.face.clone())
-                .filter(|f| AVATAR_FACES.contains(&f.as_str()))
-                .unwrap_or(fallback.face),
+                .and_then(|l| face_key(&l.face))
+                .map_or(fallback.face, str::to_string),
+            finish: chosen
+                .and_then(|l| l.finish.as_deref())
+                .and_then(finish_key)
+                .filter(|f| *f != "keycap")
+                .map(str::to_string),
         }
     }
 
-    /// "a hexagon with a curious face", as `describeLook` in avatar.ts says it.
-    pub fn describe(shape: Option<&str>, face: Option<&str>) -> String {
-        let shape = shape.map(|s| match s {
-            "rounded" => "rounded square",
+    /// "a hexagon with dot eyes", "an embossed circle", as `describeLook` in
+    /// avatar.ts says it.
+    pub fn describe(shape: Option<&str>, face: Option<&str>, finish: Option<&str>) -> String {
+        let embossed = finish == Some("embossed");
+        let face = face.map(|f| match f {
+            "dots" => "dot eyes",
+            "smile" => "eyes and a mouth",
+            "debossed" => "a debossed face",
+            "monogram" => "a monogram",
             other => other,
         });
+        let thing = match (shape, embossed) {
+            (Some(s), true) => format!("embossed {s}"),
+            (Some(s), false) => s.to_string(),
+            (None, true) => "embossed key".to_string(),
+            (None, false) => String::new(),
+        };
         let article = |w: &str| {
             if w.starts_with(['a', 'e', 'i', 'o', 'u']) {
                 "an"
@@ -152,11 +235,11 @@ impl AgentLook {
                 "a"
             }
         };
-        match (shape, face) {
-            (Some(s), Some(f)) => format!("{} {s} with a {f} face", article(s)),
-            (Some(s), None) => format!("{} {s}", article(s)),
-            (None, Some(f)) => format!("a {f} face"),
-            (None, None) => String::new(),
+        match (thing.is_empty(), face) {
+            (false, Some(f)) => format!("{} {thing} with {f}", article(&thing)),
+            (false, None) => format!("{} {thing}", article(&thing)),
+            (true, Some(f)) => f.to_string(),
+            (true, None) => String::new(),
         }
     }
 }
@@ -979,7 +1062,7 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         name,
         role: new.role.trim().to_string(),
         shape,
-        avatar: new.avatar.filter(AgentLook::is_valid),
+        avatar: new.avatar.and_then(AgentLook::normalized),
         color,
         is_main: new.is_main,
         // The one agent you're told to talk to stays put at the top; unpinnable.

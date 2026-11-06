@@ -46,6 +46,7 @@ import { useFlipReorder } from './useAgentMotion';
 import { useAttentionOrder } from './useAttentionOrder';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import {
+  avatarMood,
   failedTurn,
   failureLine,
   needsYou,
@@ -366,7 +367,7 @@ const AgentRow = memo(function AgentRow({
             name={agent.name}
             color={agent.color}
             selected={current}
-            working={agent.status.state === 'working' && !agent.takeover}
+            mood={avatarMood(agent)}
           />
           <span className="agents-list__text">
             <span className="agents-list__name">

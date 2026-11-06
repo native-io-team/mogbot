@@ -188,7 +188,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "update_agent",
-        description: "Change an agent's name, role, instructions, project, engine or look. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude` or `codex`) switches what it runs on from its next turn: a new session, handed the recent conversation. `shape`, `face` and `color` change how it looks (\"give Hiring a hexagon with a curious face\"); give only what changes. A look applies at once, with no card: it isn't a setting.",
+        description: "Change an agent's name, role, instructions, project, engine or look. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude` or `codex`) switches what it runs on from its next turn: a new session, handed the recent conversation. `shape`, `face`, `finish` (`keycap`, the default, or `embossed`) and `color` change how it looks (\"give Hiring a hexagon with dot eyes\"); give only what changes. A look applies at once, with no card: it isn't a setting.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -201,6 +201,7 @@ const TOOLS: &[Tool] = &[
                 "engine": { "type": "string", "enum": ["claude", "codex"] },
                 "shape": { "type": "string", "enum": store::AVATAR_SHAPES },
                 "face": { "type": "string", "enum": store::AVATAR_FACES },
+                "finish": { "type": "string", "enum": store::AVATAR_FINISHES },
                 "color": { "type": "string", "enum": store::COLORS }
             },
             "required": ["agent"]
@@ -1590,27 +1591,38 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     }
 }
 
-/// What `update_agent`'s `shape` / `face` / `color` change for this agent:
-/// only what differs from what it wears now; the rest of its look stays.
-/// Looks aren't settings, so this applies without a card.
+/// What `update_agent`'s `shape` / `face` / `finish` / `color` change for
+/// this agent: only what differs from what it wears now; the rest of its
+/// look stays. Looks aren't settings, so this applies without a card.
 #[derive(Debug, Default, PartialEq)]
 pub(super) struct LookUpdate {
-    /// Its whole new look, when the shape or face changes.
+    /// Its whole new look, when the shape, face or finish changes.
     pub avatar: Option<store::AgentLook>,
     pub color: Option<String>,
     shape_changed: bool,
     face_changed: bool,
+    finish_changed: bool,
 }
 
 impl LookUpdate {
-    /// "now a hexagon with a curious face, in blue", for the tool's reply.
+    /// "now a hexagon with dot eyes, in blue", for the tool's reply.
     pub fn line(&self) -> Option<String> {
         let a = self.avatar.as_ref();
-        let desc = store::AgentLook::describe(
-            a.filter(|_| self.shape_changed).map(|l| l.shape.as_str()),
-            a.filter(|_| self.face_changed).map(|l| l.face.as_str()),
-        );
-        let what = match (self.shape_changed, desc.is_empty()) {
+        // Back to a key cap: said in words, since a key cap is otherwise unsaid.
+        let to_keycap = self.finish_changed && a.is_some_and(|l| l.finish.is_none());
+        let desc = if to_keycap && !self.shape_changed && !self.face_changed {
+            "a key cap".to_string()
+        } else {
+            store::AgentLook::describe(
+                a.filter(|_| self.shape_changed || self.finish_changed)
+                    .map(|l| l.shape.as_str()),
+                a.filter(|_| self.face_changed).map(|l| l.face.as_str()),
+                a.filter(|_| self.finish_changed)
+                    .and_then(|l| l.finish.as_deref()),
+            )
+        };
+        let whole = self.shape_changed || self.finish_changed;
+        let what = match (whole, desc.is_empty()) {
             (_, true) => String::new(),
             (false, false) => format!("now has {desc}"),
             (true, false) => format!("now {desc}"),
@@ -1631,17 +1643,19 @@ pub(super) fn look_args(agent: &store::Agent, args: &Value) -> Result<LookUpdate
             .map(|s| s.trim().to_ascii_lowercase())
             .filter(|s| !s.is_empty())
     };
-    let (shape, face, color) = (key("shape"), key("face"), key("color"));
+    let (shape, face, finish, color) = (key("shape"), key("face"), key("finish"), key("color"));
     let now = store::AgentLook::of(agent);
     let mut out = LookUpdate::default();
-    if shape.is_some() || face.is_some() {
-        let next = store::AgentLook::checked(
+    if shape.is_some() || face.is_some() || finish.is_some() {
+        let next = store::AgentLook::checked_with(
             shape.as_deref().unwrap_or(&now.shape),
             face.as_deref().unwrap_or(&now.face),
+            finish.as_deref().or(now.finish.as_deref()),
         )?;
         out.shape_changed = next.shape != now.shape;
         out.face_changed = next.face != now.face;
-        if out.shape_changed || out.face_changed {
+        out.finish_changed = next.finish != now.finish;
+        if out.shape_changed || out.face_changed || out.finish_changed {
             out.avatar = Some(next);
         }
     }

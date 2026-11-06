@@ -1,9 +1,10 @@
 /**
- * How an agent looks: its shape, its face and its colour, with the avatar
- * itself, large, changing as you pick. Each row is one radio group with one
- * Tab stop; the arrows move focus and the choice together, as radios do.
- * The choices are drawn with the current pick's other two parts, so what a
- * button shows is what you'd get.
+ * How an agent looks: its shape, its face, its finish (a key cap or
+ * embossed) and its colour, with the avatar itself, large, changing as you
+ * pick. Each row is one radio group with one Tab stop; the arrows move focus
+ * and the choice together, as radios do. The choices are drawn with the
+ * current pick's other parts, so what a button shows is what you'd get, and
+ * they hold still.
  *
  * @module components/agents/AgentLookPicker
  */
@@ -11,8 +12,10 @@
 import type { KeyboardEvent, ReactNode } from 'react';
 import {
   AVATAR_FACES,
+  AVATAR_FINISHES,
   AVATAR_SHAPES,
   FACE_NAMES,
+  FINISH_NAMES,
   SHAPE_NAMES,
   type AgentLook,
 } from '../../../packages/companion-protocol/src/avatar';
@@ -61,7 +64,7 @@ export function AgentLookPicker({
           onChange={(shape) => onLookChange({ ...look, shape })}
           name={(s) => SHAPE_NAMES[s]}
           render={(shape) => (
-            <AgentAvatar name={name} color={color} look={{ ...look, shape }} size="field" />
+            <AgentAvatar name={name} color={color} look={{ ...look, shape }} size="field" still />
           )}
         />
         <RadioRow
@@ -71,7 +74,17 @@ export function AgentLookPicker({
           onChange={(face) => onLookChange({ ...look, face })}
           name={(f) => FACE_NAMES[f]}
           render={(face) => (
-            <AgentAvatar name={name} color={color} look={{ ...look, face }} size="field" />
+            <AgentAvatar name={name} color={color} look={{ ...look, face }} size="field" still />
+          )}
+        />
+        <RadioRow
+          label="Finish"
+          values={AVATAR_FINISHES}
+          value={look.finish ?? 'keycap'}
+          onChange={(finish) => onLookChange({ ...look, finish })}
+          name={(f) => FINISH_NAMES[f]}
+          render={(finish) => (
+            <AgentAvatar name={name} color={color} look={{ ...look, finish }} size="field" still />
           )}
         />
         <RadioRow

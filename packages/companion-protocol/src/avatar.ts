@@ -1,85 +1,114 @@
 /**
- * An agent's avatar: one soft shape, a minimal face, its colour. The one
- * spec both clients draw from — the desk's `AgentAvatar` (an SVG in the
- * webview) and the phone's (react-native-svg) — so the same agent is the
- * same little character everywhere. Design and the directions considered:
- * docs/internal/avatars.md.
+ * An agent's avatar: a key cap. One of four even shapes (one construction,
+ * one area, so none reads bigger), raised like a key on a keyboard: a darker
+ * side, a lit top set up off it, and a soft shadow under the lot. A face sits
+ * on the top: dot eyes, eyes and a mouth, a debossed face, or a monogram.
+ * Below 24px the key goes flat. The one spec both clients draw from: the
+ * desk's `AgentAvatar` (an SVG in the webview) and the phone's
+ * (react-native-svg), so the same agent is the same key everywhere. The
+ * design, why it won and the motion rules: docs/internal/avatars.md.
  *
- * Geometry lives on a 32-unit grid. Shapes fill it (optically balanced, so
- * a circle and a square read the same size); a face is two open eyes and at
- * most one mouth, every one of them a round-capped stroke at one weight in
- * one ink, set on a shared grid and moved to each shape's optical centre.
- * The weight is a fixed fraction of the avatar with a device-pixel floor
- * (`faceWeight`), so 24px and 96px are the same drawing and 16px still reads.
- *
- * What the registry stores is keys (`AgentLook`), never paths, so a drawing
- * can be refined without touching anyone's saved choice. Keys are append-only.
+ * Geometry lives on a 32-unit grid. Colour is equal OKLCH per theme: every
+ * hue at one lightness and one chroma per role, so no agent pops and none
+ * sinks. What the registry stores is keys (`AgentLook`), never paths or
+ * colours, so a drawing can be refined without touching anyone's choice.
+ * Keys from the previous system migrate to the nearest one here
+ * (`LEGACY_SHAPES`, `LEGACY_FACES`), the same way on the Mac.
  */
 
-export const AVATAR_SHAPES = [
-  'circle',
-  'rounded',
-  'squircle',
-  'hexagon',
-  'pill',
-  'drop',
-  'cookie',
-  'arch',
-] as const;
+export const AVATAR_SHAPES = ['circle', 'squircle', 'diamond', 'hexagon'] as const;
 export type AvatarShape = (typeof AVATAR_SHAPES)[number];
 
-export const AVATAR_FACES = [
-  'calm',
-  'cheerful',
-  'curious',
-  'focused',
-  'sleepy',
-  'wink',
-  'determined',
-  'quiet',
-  'content',
-  'bright',
-] as const;
+export const AVATAR_FACES = ['dots', 'smile', 'debossed', 'monogram'] as const;
 export type AvatarFace = (typeof AVATAR_FACES)[number];
+
+/** How the key is made: raised (the default) or pressed soft into the surface. */
+export const AVATAR_FINISHES = ['keycap', 'embossed'] as const;
+export type AvatarFinish = (typeof AVATAR_FINISHES)[number];
 
 /** What an agent chose (the registry's `avatar`). Absent: `lookFor` derives one from its id. */
 export interface AgentLook {
   shape: AvatarShape;
   face: AvatarFace;
+  /** Absent: a key cap. */
+  finish?: AvatarFinish;
 }
 
 /** The words the picker and the settings card use. */
 export const SHAPE_NAMES: Record<AvatarShape, string> = {
   circle: 'Circle',
-  rounded: 'Rounded square',
   squircle: 'Squircle',
+  diamond: 'Diamond',
   hexagon: 'Hexagon',
-  pill: 'Pill',
-  drop: 'Drop',
-  cookie: 'Cookie',
-  arch: 'Arch',
 };
 
 export const FACE_NAMES: Record<AvatarFace, string> = {
-  calm: 'Calm',
-  cheerful: 'Cheerful',
-  curious: 'Curious',
-  focused: 'Focused',
-  sleepy: 'Sleepy',
-  wink: 'Wink',
-  determined: 'Determined',
-  quiet: 'Quiet',
-  content: 'Content',
-  bright: 'Bright',
+  dots: 'Dot eyes',
+  smile: 'Eyes and mouth',
+  debossed: 'Debossed',
+  monogram: 'Monogram',
 };
 
+export const FINISH_NAMES: Record<AvatarFinish, string> = {
+  keycap: 'Key cap',
+  embossed: 'Embossed',
+};
+
+/**
+ * The face every default wears: dot eyes. Two dots read at 16px (nothing is
+ * dropped, unlike a mouth), they move the most legibly when the face looks
+ * around, and they stay out of the way in a list of twelve.
+ */
+export const DEFAULT_FACE: AvatarFace = 'dots';
+
 /** The Chief of Staff's own default: the only squircle nobody chose. */
-export const CHIEF_LOOK: AgentLook = { shape: 'squircle', face: 'calm' };
+export const CHIEF_LOOK: AgentLook = { shape: 'squircle', face: DEFAULT_FACE };
+
+/**
+ * The previous system's keys, each to its nearest here. A shape goes to the
+ * silhouette it most resembles; a face with a mouth keeps a mouth, one
+ * without keeps just its eyes. Parsed by `avatar_tests.rs`: one `key: 'value',`
+ * per line.
+ */
+export const LEGACY_SHAPES: Record<string, AvatarShape> = {
+  rounded: 'squircle',
+  pill: 'circle',
+  drop: 'circle',
+  cookie: 'circle',
+  arch: 'squircle',
+};
+export const LEGACY_FACES: Record<string, AvatarFace> = {
+  calm: 'smile',
+  cheerful: 'smile',
+  curious: 'smile',
+  focused: 'smile',
+  sleepy: 'smile',
+  wink: 'smile',
+  determined: 'smile',
+  bright: 'smile',
+  quiet: 'dots',
+  content: 'dots',
+};
 
 export const isAvatarShape = (v: unknown): v is AvatarShape =>
   typeof v === 'string' && (AVATAR_SHAPES as readonly string[]).includes(v);
 export const isAvatarFace = (v: unknown): v is AvatarFace =>
   typeof v === 'string' && (AVATAR_FACES as readonly string[]).includes(v);
+export const isAvatarFinish = (v: unknown): v is AvatarFinish =>
+  typeof v === 'string' && (AVATAR_FINISHES as readonly string[]).includes(v);
+
+const own = (map: Record<string, string>, key: string) =>
+  Object.prototype.hasOwnProperty.call(map, key) ? map[key] : undefined;
+
+/** A stored shape key, migrated: this system's, the nearest for an old one, else nothing. */
+export function shapeKey(v: unknown): AvatarShape | undefined {
+  if (isAvatarShape(v)) return v;
+  return typeof v === 'string' ? (own(LEGACY_SHAPES, v) as AvatarShape | undefined) : undefined;
+}
+export function faceKey(v: unknown): AvatarFace | undefined {
+  if (isAvatarFace(v)) return v;
+  return typeof v === 'string' ? (own(LEGACY_FACES, v) as AvatarFace | undefined) : undefined;
+}
 
 /** FNV-1a: a stable 32-bit hash of the id, the same on every client. */
 function hash(text: string): number {
@@ -92,64 +121,63 @@ function hash(text: string): number {
 }
 
 /**
- * The look an agent wears: its own choice, else one derived from its id
- * (so an agent made before avatars never changes from one launch to the
- * next). The Chief's default is its own; nobody else's default is a
- * squircle, so its silhouette stays its until someone picks one.
+ * The look an agent wears: its own choice (migrated if it was made under the
+ * previous system), else one derived from its id, field by field. Always
+ * says its finish.
  */
 export function lookFor(agent: {
   id: string;
   isMain?: boolean;
-  avatar?: Partial<AgentLook> | null;
-}): AgentLook {
+  avatar?: { shape?: unknown; face?: unknown; finish?: unknown } | null;
+}): Required<AgentLook> {
   const chosen = agent.avatar;
   const fallback = defaultLook(agent.id, Boolean(agent.isMain));
   return {
-    shape: isAvatarShape(chosen?.shape) ? chosen.shape : fallback.shape,
-    face: isAvatarFace(chosen?.face) ? chosen.face : fallback.face,
+    shape: shapeKey(chosen?.shape) ?? fallback.shape,
+    face: faceKey(chosen?.face) ?? fallback.face,
+    finish: isAvatarFinish(chosen?.finish) ? chosen.finish : 'keycap',
   };
 }
 
-/**
- * Faces a default may land on. A wink and a sleepy face are a personality
- * someone picks, not one handed out: three winks in a sidebar read as a gag.
- */
-export const DEFAULT_FACES = AVATAR_FACES.filter((f) => f !== 'wink' && f !== 'sleepy');
+/** Shapes a default may land on: every one but the Chief's. */
+const DEFAULT_SHAPES = AVATAR_SHAPES.filter((s) => s !== CHIEF_LOOK.shape);
 
 export function defaultLook(id: string, isMain = false): AgentLook {
   if (isMain) return CHIEF_LOOK;
-  const h = hash(id);
-  const shapes = AVATAR_SHAPES.filter((s) => s !== CHIEF_LOOK.shape);
-  return {
-    shape: shapes[h % shapes.length],
-    face: DEFAULT_FACES[(h >>> 8) % DEFAULT_FACES.length],
-  };
+  return { shape: DEFAULT_SHAPES[hash(id) % DEFAULT_SHAPES.length], face: DEFAULT_FACE };
 }
 
 /**
  * A look for a new agent: a shape nobody wears yet if there is one (the
- * Chief's left alone), then a face nobody wears with it. `seed` picks among
- * the free ones, so two new agents in a row don't come out alike.
+ * Chief's left alone), the default face. `seed` picks among the free shapes,
+ * so two new agents in a row don't come out alike.
  */
 export function freeLook(taken: AgentLook[], seed = ''): AgentLook {
   const h = hash(seed || String(taken.length));
-  const shapes = AVATAR_SHAPES.filter((s) => s !== CHIEF_LOOK.shape);
-  const freeShapes = shapes.filter((s) => !taken.some((t) => t.shape === s));
-  const shapePool = freeShapes.length ? freeShapes : shapes;
-  const shape = shapePool[h % shapePool.length];
-  const usedFaces = taken.filter((t) => t.shape === shape).map((t) => t.face);
-  const freeFaces = DEFAULT_FACES.filter((f) => !usedFaces.includes(f));
-  const facePool = freeFaces.length ? freeFaces : DEFAULT_FACES;
-  return { shape, face: facePool[(h >>> 8) % facePool.length] };
+  const free = DEFAULT_SHAPES.filter((s) => !taken.some((t) => t.shape === s));
+  const pool = free.length ? free : DEFAULT_SHAPES;
+  return { shape: pool[h % pool.length], face: DEFAULT_FACE };
 }
 
-/** "a hexagon with a curious face", for a settings card and the agent's own note. */
+const FACE_PHRASES: Record<AvatarFace, string> = {
+  dots: 'dot eyes',
+  smile: 'eyes and a mouth',
+  debossed: 'a debossed face',
+  monogram: 'a monogram',
+};
+
+/**
+ * "a hexagon with dot eyes", "an embossed circle", for a settings card and
+ * the agent's own note (`AgentLook::describe` on the Mac says it the same).
+ */
 export function describeLook(look: Partial<AgentLook>): string {
+  const finish = look.finish === 'embossed' ? 'embossed ' : '';
   const shape = look.shape && SHAPE_NAMES[look.shape].toLowerCase();
-  const face = look.face && FACE_NAMES[look.face].toLowerCase();
-  if (shape && face) return `${article(shape)} ${shape} with a ${face} face`;
-  if (shape) return `${article(shape)} ${shape}`;
-  if (face) return `a ${face} face`;
+  const face = look.face && FACE_PHRASES[look.face];
+  const thing = shape ? `${finish}${shape}` : finish ? 'embossed key' : '';
+  if (thing && face) return `${article(thing)} ${thing} with ${face}`;
+  if (thing) return `${article(thing)} ${thing}`;
+  if (face) return face;
   return '';
 }
 
@@ -162,192 +190,449 @@ export const AVATAR_GRID = 32;
 const C = AVATAR_GRID / 2;
 const r2 = (n: number) => Math.round(n * 100) / 100;
 
-/** A regular polygon with soft corners: each corner a quadratic through the vertex. */
-function softPolygon(sides: number, radius: number, rotate: number, soften: number): string {
-  const pts = Array.from({ length: sides }, (_, i) => {
-    const a = rotate + (i * 2 * Math.PI) / sides;
-    return [C + radius * Math.cos(a), C + radius * Math.sin(a)] as const;
-  });
-  const lerp = (a: readonly [number, number], b: readonly [number, number], t: number) =>
-    [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t] as const;
-  let d = '';
-  pts.forEach((p, i) => {
-    const prev = pts[(i - 1 + sides) % sides];
-    const next = pts[(i + 1) % sides];
-    const a = lerp(p, prev, soften);
-    const b = lerp(p, next, soften);
-    d += `${i === 0 ? 'M' : 'L'}${r2(a[0])} ${r2(a[1])}Q${r2(p[0])} ${r2(p[1])} ${r2(b[0])} ${r2(b[1])}`;
-  });
-  return `${d}Z`;
-}
+type Pt = [number, number];
 
-/** A circle with gentle scallops (`lobes` of them), sampled finely enough to stay smooth at 96px. */
-function scalloped(lobes: number, radius: number, depth: number): string {
-  const steps = 144;
-  let d = '';
-  for (let i = 0; i < steps; i++) {
-    const a = (i / steps) * 2 * Math.PI - Math.PI / 2;
-    const r = radius + depth * Math.cos(lobes * a);
-    d += `${i === 0 ? 'M' : 'L'}${r2(C + r * Math.cos(a))} ${r2(C + r * Math.sin(a))}`;
+/** A superellipse of exponent `n`, unit size, turned by `rot`. */
+function superPts(n: number, rot: number): Pt[] {
+  const out: Pt[] = [];
+  for (let i = 0; i < 160; i++) {
+    const a = (i / 160) * Math.PI * 2;
+    const c = Math.cos(a);
+    const s = Math.sin(a);
+    const x = Math.sign(c) * Math.abs(c) ** (2 / n);
+    const y = Math.sign(s) * Math.abs(s) ** (2 / n);
+    out.push([x * Math.cos(rot) - y * Math.sin(rot), x * Math.sin(rot) + y * Math.cos(rot)]);
   }
-  return `${d}Z`;
+  return out;
 }
 
-/** A rectangle with each corner its own radius (tl, tr, br, bl). */
-function roundedRect(x: number, y: number, w: number, h: number, r: number[]): string {
-  // Indexed, not destructured: the phone's Babel would need a runtime helper for it.
-  const tl = r[0];
-  const tr = r[1];
-  const br = r[2];
-  const bl = r[3];
-  return [
-    `M${x + tl} ${y}`,
-    `H${x + w - tr}`,
-    `A${tr} ${tr} 0 0 1 ${x + w} ${y + tr}`,
-    `V${y + h - br}`,
-    `A${br} ${br} 0 0 1 ${x + w - br} ${y + h}`,
-    `H${x + bl}`,
-    `A${bl} ${bl} 0 0 1 ${x} ${y + h - bl}`,
-    `V${y + tl}`,
-    `A${tl} ${tl} 0 0 1 ${x + tl} ${y}`,
-    'Z',
-  ].join('');
+/** A hexagon, point up, each corner a quadratic through the vertex. */
+function softHexPts(soften: number): Pt[] {
+  const v: Pt[] = Array.from({ length: 6 }, (_, i) => {
+    const a = -Math.PI / 2 + (i * Math.PI) / 3;
+    return [Math.cos(a), Math.sin(a)];
+  });
+  const lerp = (a: Pt, b: Pt, t: number): Pt => [
+    a[0] + (b[0] - a[0]) * t,
+    a[1] + (b[1] - a[1]) * t,
+  ];
+  const out: Pt[] = [];
+  v.forEach((p, i) => {
+    const a = lerp(p, v[(i + 5) % 6], soften);
+    const b = lerp(p, v[(i + 1) % 6], soften);
+    for (let j = 0; j <= 20; j++) {
+      const t = j / 20;
+      out.push([
+        (1 - t) ** 2 * a[0] + 2 * (1 - t) * t * p[0] + t * t * b[0],
+        (1 - t) ** 2 * a[1] + 2 * (1 - t) * t * p[1] + t * t * b[1],
+      ]);
+    }
+  });
+  return out;
 }
 
-interface ShapeSpec {
-  /** The silhouette, filled. */
-  d: string;
+function area(pts: Pt[]): number {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const p = pts[i];
+    const q = pts[(i + 1) % pts.length];
+    a += p[0] * q[1] - q[0] * p[1];
+  }
+  return Math.abs(a / 2);
+}
+
+/** One area for every shape: a 13.9-unit circle's. */
+export const SHAPE_AREA = Math.PI * 13.9 * 13.9;
+function even(pts: Pt[]): Pt[] {
+  const k = Math.sqrt(SHAPE_AREA / area(pts));
+  return pts.map((p) => [r2(C + p[0] * k), r2(C + p[1] * k)] as Pt);
+}
+const toPath = (pts: Pt[]) => pts.map((p, i) => `${i ? 'L' : 'M'}${p[0]} ${p[1]}`).join('') + 'Z';
+
+/** Each shape's outline, as points (for tests) and as a path. */
+export const SHAPE_POINTS: Record<AvatarShape, Pt[]> = {
+  circle: even(superPts(2, 0)),
+  squircle: even(superPts(4.4, 0)),
+  diamond: even(superPts(3, Math.PI / 4)),
+  hexagon: even(softHexPts(0.32)),
+};
+export const SHAPE_PATHS: Record<AvatarShape, string> = {
+  circle: toPath(SHAPE_POINTS.circle),
+  squircle: toPath(SHAPE_POINTS.squircle),
+  diamond: toPath(SHAPE_POINTS.diamond),
+  hexagon: toPath(SHAPE_POINTS.hexagon),
+};
+
+/**
+ * The key's construction. At `LIT_MIN_PX` and up: a shadow (the shape,
+ * dropped and blurred), the side (the shape, darker) and the top (the shape
+ * scaled to `top.scale` about `top`, a little above centre, so the side
+ * shows along the bottom), lit by `capRim`. Below it, flat: one shape, no
+ * light. An embossed finish has no side and no shadow; its whole shape is
+ * the top, lit by a deeper rim.
+ */
+export const LIT_MIN_PX = 24;
+export const KEY = {
+  top: { x: 16, y: 15.1, scale: 0.9 },
+  shadow: { dy: 1.1, blur: 0.9 },
+  /** The rim light's offset on a key cap's top. */
+  capRim: 0.7,
+  /** An embossed shape's, by size: deeper when small, so it still reads. */
+  embossRim: (px: number) => (px >= 40 ? 0.9 : 1.2),
+  /** The top's gradient: this much lighter at the top, darker at the bottom. */
+  gradient: 0.035,
+} as const;
+
+/** The top's transform, for an SVG `transform` attribute. */
+export const TOP_TRANSFORM = `translate(${KEY.top.x} ${KEY.top.y}) scale(${KEY.top.scale}) translate(${-C} ${-C})`;
+
+/** The rim light's blur for a rim of `depth`: light spreads wider than shade. */
+export const rimBlur = (depth: number) => ({ light: r2(depth * 0.8), shade: r2(depth * 0.9) });
+
+// ---------------------------------------------------------------------- faces
+
+/** An eye: a filled oval. */
+export interface Eye {
+  cx: number;
+  cy: number;
+  rx: number;
+  ry: number;
+}
+
+export interface FaceSpec {
+  eyes: [Eye, Eye];
+  /** A round-capped stroke, dropped at `MOUTH_MIN_PX` and below. */
+  mouth?: string;
   /**
-   * Where the face sits, relative to the grid's centre, and how big: the
-   * shape's optical centre (an arch's weight is low, a drop's leans away
-   * from its point) and how much room it leaves (a pill is narrow).
+   * Pressed into the top when the key is lit (and not selected): each feature
+   * a well in a darker tone with a light lip `DEBOSS_DEPTH` under it, rather
+   * than ink laid on top.
    */
-  face: { dx: number; dy: number; scale: number };
+  pressed?: boolean;
+  /** The agent's initial instead of eyes (`MONOGRAM`). */
+  monogram?: boolean;
 }
 
-export const SHAPE_SPECS: Record<AvatarShape, ShapeSpec> = {
-  circle: { d: `M16 1A15 15 0 1 1 15.99 1Z`, face: { dx: 0, dy: 0, scale: 1 } },
-  rounded: {
-    d: roundedRect(2.25, 2.25, 27.5, 27.5, [8, 8, 8, 8]),
-    face: { dx: 0, dy: 0, scale: 1 },
-  },
-  squircle: {
-    d: 'M16 1.5C27.6 1.5 30.5 4.4 30.5 16S27.6 30.5 16 30.5 1.5 27.6 1.5 16 4.4 1.5 16 1.5Z',
-    face: { dx: 0, dy: 0, scale: 1 },
-  },
-  hexagon: { d: softPolygon(6, 15.6, -Math.PI / 2, 0.24), face: { dx: 0, dy: 0.2, scale: 0.94 } },
-  pill: {
-    d: roundedRect(4.75, 1, 22.5, 30, [11.25, 11.25, 11.25, 11.25]),
-    face: { dx: 0, dy: 0, scale: 0.9 },
-  },
-  drop: {
-    d: roundedRect(2.25, 2.25, 27.5, 27.5, [13.75, 3.5, 13.75, 13.75]),
-    face: { dx: -0.5, dy: 0.5, scale: 1 },
-  },
-  cookie: { d: scalloped(8, 14.3, 0.7), face: { dx: 0, dy: 0, scale: 0.96 } },
-  arch: { d: roundedRect(3, 1.5, 26, 29, [13, 13, 4.5, 4.5]), face: { dx: 0, dy: 1, scale: 0.96 } },
+const EX = 12.3;
+const EX2 = 19.7;
+const EY = 14.6;
+const pair = (y: number, rx: number, ry: number): [Eye, Eye] => [
+  { cx: EX, cy: y, rx, ry },
+  { cx: EX2, cy: y, rx, ry },
+];
+
+export const FACE_SPECS: Record<AvatarFace, FaceSpec> = {
+  dots: { eyes: pair(EY + 0.6, 1.6, 2.1) },
+  smile: { eyes: pair(EY, 1.5, 2), mouth: 'M14 19.7Q16 21.2 18 19.7' },
+  debossed: { eyes: pair(EY, 1.65, 2.15), mouth: 'M13.8 19.7Q16 21.3 18.2 19.7', pressed: true },
+  monogram: { eyes: pair(EY, 1.65, 2.15), monogram: true, pressed: true },
 };
 
-/**
- * A face's strokes. Every feature, eyes and mouth alike, is one round-capped
- * line at the one face weight (`faceWeight`): a dot eye is a very short
- * vertical stroke (so it reads as a soft, slightly tall dot), a tall eye a
- * longer one, a mouth a line or a shallow curve. Eyes are always open: no
- * lids, no winks, no blink (the owner's call: a closed-eye face looks
- * horrible at this size).
- */
-export interface FaceStroke {
-  d: string;
-  role: 'eye' | 'mouth';
-}
+export const MOUTH_MIN_PX = 18;
+export const DEBOSS_DEPTH = 0.7;
+/** The monogram's letter: one capital, centred on the top. */
+export const MONOGRAM = { x: 16, y: 21.4, size: 15, weight: '600' } as const;
 
-// The face grid, before a shape moves and sizes it (`SHAPE_SPECS[].face`).
-// Eyes 8.5 apart on a line a touch below the middle, the mouth 4.75 under them:
-// low-set features read friendlier, and the face's own centre (between the
-// eye line and the mouth) lands on the shape's optical centre plus a little.
-const EL = 11.75;
-const ER = 20.25;
-const EY = 15;
-const MY = 19.75;
-/** A glance moves both eyes this far (grid units). */
-const GLANCE = 0.9;
+export const monogramLetter = (name: string) => (name.trim()[0] ?? 'A').toUpperCase();
 
-/** A round eye: a 1-unit stroke, so it's a soft oval a little taller than wide. */
-const dot = (x: number, y = EY): FaceStroke => ({
-  d: `M${r2(x)} ${r2(y - 0.5)}v1`,
-  role: 'eye',
-});
-/** A tall eye: the same weight, 2.4 units long. */
-const tall = (x: number, y = EY): FaceStroke => ({
-  d: `M${r2(x)} ${r2(y - 1.2)}v2.4`,
-  role: 'eye',
-});
-/** A smile `w` wide whose curve dips `dip` below its ends. */
-const smile = (w: number, dip: number, x = 16, y = MY): FaceStroke => ({
-  d: `M${r2(x - w / 2)} ${r2(y - dip / 2)}q${r2(w / 2)} ${r2(dip * 2)} ${w} 0`,
-  role: 'mouth',
-});
-const flat = (w: number, x = 16, y = MY): FaceStroke => ({
-  d: `M${r2(x - w / 2)} ${r2(y)}h${w}`,
-  role: 'mouth',
-});
-/** A smile lifted at one end only. */
-const smirk = (w: number, x = 16, y = MY): FaceStroke => ({
-  d: `M${r2(x - w / 2)} ${r2(y + w * 0.04)}q${r2(w * 0.5)} ${r2(w * 0.26)} ${w} ${r2(-w * 0.16)}`,
-  role: 'mouth',
-});
+/** Grid units for `devicePx` device pixels at an avatar `px` wide. */
+const units = (px: number, devicePx: number) => (devicePx * AVATAR_GRID) / px;
 
-export const FACE_SPECS: Record<AvatarFace, FaceStroke[]> = {
-  calm: [dot(EL), dot(ER), smile(4, 0.9)],
-  cheerful: [dot(EL), dot(ER), smile(5.6, 1.5)],
-  curious: [
-    dot(EL + GLANCE, EY - GLANCE * 0.6),
-    dot(ER + GLANCE, EY - GLANCE * 0.6),
-    flat(2.4, 16 + GLANCE),
-  ],
-  focused: [dot(EL), dot(ER), flat(3.4)],
-  // Gaze down and features low: unhurried, not asleep.
-  sleepy: [dot(EL, EY + 0.9), dot(ER, EY + 0.9), flat(2.2, 16, MY + 0.5)],
-  // The cheek of a wink without closing an eye: a sideways glance and a smirk.
-  wink: [dot(EL - GLANCE, EY), dot(ER - GLANCE, EY), smirk(4.2, 16 - 0.3)],
-  determined: [tall(EL), tall(ER), flat(4.4)],
-  quiet: [tall(EL, EY + 0.75), tall(ER, EY + 0.75)],
-  content: [dot(EL, EY + 0.75), dot(ER, EY + 0.75)],
-  bright: [tall(EL), tall(ER), smile(4.8, 1.3)],
-};
-
-/**
- * The one stroke weight, in grid units, for an avatar `px` wide: the same
- * fraction of the avatar at every size (so 24px and 96px are the same
- * drawing), with a floor of `MIN_FACE_PX` device pixels below about 23px,
- * where a proportional stroke would go faint. Eyes and mouth share it.
- */
-export const FACE_WEIGHT = 2.1;
-export const MIN_FACE_PX = 1.6;
+/** The mouth's weight: 6.25% of the avatar, never under 1.5 device pixels. */
 export function faceWeight(px: number): number {
-  return r2(Math.max(FACE_WEIGHT, (MIN_FACE_PX * AVATAR_GRID) / px));
+  return r2(Math.max(2, units(px, 1.5)));
+}
+
+/** An eye drawn at `px`: never smaller than 2.2 device pixels across. */
+export function eyeAt(eye: Eye, px: number): Eye {
+  const k = Math.max(1, units(px, 2.2) / (eye.rx * 2));
+  return { cx: eye.cx, cy: eye.cy, rx: r2(eye.rx * k), ry: r2(eye.ry * k) };
+}
+
+/** True when the face is pressed in rather than drawn on. */
+export const isPressed = (face: AvatarFace, px: number, selected: boolean) =>
+  Boolean(FACE_SPECS[face].pressed) && px >= LIT_MIN_PX && !selected;
+
+// --------------------------------------------------------------------- colour
+
+export type AvatarTheme = 'dark' | 'light';
+
+/**
+ * Each colour key's hue (OKLCH degrees). Lightness and chroma are the role's,
+ * the same for every hue. The neutrals take the role's lightness with little
+ * or no chroma; white sits a step lighter than the rest so it stays apart
+ * from gray, with a dark ink where it gets pale.
+ */
+interface Tone {
+  hue: number;
+  /** A ceiling on chroma (the neutrals). */
+  maxChroma?: number;
+  /** A shift on every lightness but the ink's, per theme. */
+  lift?: Record<AvatarTheme, number>;
+  /** Selected (solid): a shift on its lightness, per theme. */
+  solidLift?: Record<AvatarTheme, number>;
+  /** The ink is the light theme's (dark) in the dark theme too. */
+  darkInk?: boolean;
+}
+
+export const AVATAR_TONES: Record<string, Tone> = {
+  red: { hue: 25 },
+  orange: { hue: 55 },
+  amber: { hue: 84 },
+  green: { hue: 150 },
+  teal: { hue: 190 },
+  blue: { hue: 262 },
+  purple: { hue: 300 },
+  pink: { hue: 350 },
+  brown: { hue: 60, maxChroma: 0.045 },
+  gray: { hue: 260, maxChroma: 0.018 },
+  white: {
+    hue: 0,
+    maxChroma: 0,
+    lift: { dark: 0.2, light: 0.11 },
+    // On light, white is the theme's strongest neutral: near black, as the accent is.
+    solidLift: { dark: 0.2, light: -0.45 },
+    darkInk: true,
+  },
+};
+
+/** The roles, per theme: [lightness, chroma]. */
+export const AVATAR_ROLES = {
+  /** The key's top, mid-gradient (and a flat key's whole fill). */
+  clay: { dark: [0.53, 0.09], light: [0.86, 0.07] },
+  /** The side: the clay, darker. */
+  side: { dark: [0.4, 0.09], light: [0.74, 0.07] },
+  /** The face. */
+  ink: { dark: [0.95, 0.04], light: [0.36, 0.1] },
+  /** A pressed feature's well. */
+  well: { dark: [0.27, 0.06], light: [0.58, 0.09] },
+  /** Selected: the colour itself. */
+  solid: { dark: [0.74, 0.12], light: [0.7, 0.13] },
+  solidSide: { dark: [0.6, 0.12], light: [0.56, 0.12] },
+} as const satisfies Record<string, Record<AvatarTheme, readonly [number, number]>>;
+
+/** Light and shade, as white and black at these opacities. */
+export const AVATAR_LIGHT = {
+  /** The rim light on the top edge, and the shade on the bottom one. */
+  rimLight: { dark: 0.32, light: 0.75 },
+  rimShade: { dark: 0.4, light: 0.16 },
+  shadow: { dark: 0.55, light: 0.2 },
+  /** A pressed feature's lip. */
+  lip: { dark: 0.22, light: 0.95 },
+} as const;
+
+/** What to paint one key with. Colours are sRGB hex; light and shade are opacities. */
+export interface AvatarPaint {
+  /** A flat key's fill; the top's mid tone. */
+  fill: string;
+  topHigh: string;
+  topLow: string;
+  side: string;
+  /** The face's ink. Selected: none, so the client uses its canvas colour. */
+  ink: string | null;
+  well: string;
+  rimLight: number;
+  rimShade: number;
+  shadow: number;
+  lip: number;
+}
+
+export function avatarPaint(color: string, theme: AvatarTheme, selected = false): AvatarPaint {
+  const tone = AVATAR_TONES[color] ?? AVATAR_TONES.gray;
+  const lift = tone.lift?.[theme] ?? 0;
+  const at = (role: keyof typeof AVATAR_ROLES, dl = lift, inkTheme = theme) => {
+    const lc = AVATAR_ROLES[role][inkTheme];
+    const l = lc[0];
+    const c = lc[1];
+    return oklchHex(l + dl, Math.min(c, tone.maxChroma ?? c), tone.hue);
+  };
+  const solidLift = tone.solidLift?.[theme] ?? lift;
+  const solid = at('solid', solidLift);
+  return {
+    fill: selected ? solid : at('clay'),
+    topHigh: selected ? solid : at('clay', lift + KEY.gradient),
+    topLow: selected ? solid : at('clay', lift - KEY.gradient),
+    side: selected ? at('solidSide', solidLift) : at('side'),
+    ink: selected ? null : at('ink', 0, tone.darkInk ? 'light' : theme),
+    well: at('well'),
+    rimLight: AVATAR_LIGHT.rimLight[theme],
+    rimShade: AVATAR_LIGHT.rimShade[theme],
+    shadow: AVATAR_LIGHT.shadow[theme],
+    lip: AVATAR_LIGHT.lip[theme],
+  };
+}
+
+/** OKLab → linear sRGB, then gamma. */
+function oklchToRgb(l: number, c: number, h: number): [number, number, number] {
+  const a = c * Math.cos((h * Math.PI) / 180);
+  const b = c * Math.sin((h * Math.PI) / 180);
+  const l_ = (l + 0.3963377774 * a + 0.2158037573 * b) ** 3;
+  const m_ = (l - 0.1055613458 * a - 0.0638541728 * b) ** 3;
+  const s_ = (l - 0.0894841775 * a - 1.291485548 * b) ** 3;
+  return [
+    4.0767416621 * l_ - 3.3077115913 * m_ + 0.2309699292 * s_,
+    -1.2684380046 * l_ + 2.6097574011 * m_ - 0.3413193965 * s_,
+    -0.0041960863 * l_ - 0.7034186147 * m_ + 1.707614701 * s_,
+  ];
+}
+
+const inGamut = (rgb: number[]) => rgb.every((v) => v >= -1e-4 && v <= 1 + 1e-4);
+
+/**
+ * An OKLCH colour as sRGB hex. Out of gamut, chroma comes down until it fits:
+ * lightness and hue are what "equal OKLCH" promises, so they never move.
+ */
+export function oklchHex(l: number, c: number, h: number): string {
+  let rgb = oklchToRgb(l, c, h);
+  if (!inGamut(rgb)) {
+    let lo = 0;
+    let hi = c;
+    for (let i = 0; i < 24; i++) {
+      const mid = (lo + hi) / 2;
+      if (inGamut(oklchToRgb(l, mid, h))) lo = mid;
+      else hi = mid;
+    }
+    rgb = oklchToRgb(l, lo, h);
+  }
+  const gamma = (v: number) => {
+    const x = Math.min(1, Math.max(0, v));
+    return x <= 0.0031308 ? 12.92 * x : 1.055 * x ** (1 / 2.4) - 0.055;
+  };
+  return `#${rgb
+    .map((v) =>
+      Math.round(gamma(v) * 255)
+        .toString(16)
+        .padStart(2, '0')
+    )
+    .join('')}`;
+}
+
+// --------------------------------------------------------------------- motion
+
+/**
+ * What the avatar shows about its agent. Idle: the face drifts a little and
+ * now and then glances aside. Working: it looks around (left, up, back) and
+ * the top's rim light breathes faintly. Needs you: it looks out at you and
+ * holds, after one press of the key. Done: one press and bounce, then idle.
+ * Failed: one look down to the side, held. The eyes never close; nothing
+ * rings it. Below `LIT_MIN_PX`, only the face moves, by `SMALL_MOTION`.
+ */
+export const AVATAR_MOODS = ['idle', 'working', 'needs', 'done', 'failed'] as const;
+export type AvatarMood = (typeof AVATAR_MOODS)[number];
+
+/** A keyframe: [time 0–1, x, y] in the top's grid units. */
+export type FaceKey = readonly [number, number, number];
+/** A keyframe: [time 0–1, value]. */
+export type ValueKey = readonly [number, number];
+
+export interface MoodMotion {
+  ms: number;
+  /** Loops for as long as the mood lasts; otherwise plays once and holds its end. */
+  loop: boolean;
+  face?: readonly FaceKey[];
+  /** The top pressed down (grid units). */
+  press?: readonly ValueKey[];
+  /** An extra rim light on the top, as an opacity. */
+  glow?: readonly ValueKey[];
 }
 
 /**
- * The stroke width to draw a face with on `shape`, compensating the face
- * group's scale so a pill's narrower face keeps exactly the same line as a
- * circle's.
+ * The motion, the same on both clients (agents-avatar.css holds these as
+ * keyframes; a test checks them against this). Segments ease in and out.
  */
-export function faceStrokeWidth(px: number, shape: AvatarShape): number {
-  return r2(faceWeight(px) / SHAPE_SPECS[shape].face.scale);
-}
+export const AVATAR_MOTION: Record<AvatarMood, MoodMotion> = {
+  idle: {
+    ms: 16000,
+    loop: true,
+    face: [
+      [0, 0, 0],
+      [0.22, 0.5, -0.3],
+      [0.45, -0.4, 0.25],
+      [0.62, 0, 0],
+      [0.68, 1.3, -0.2],
+      [0.8, 1.3, -0.2],
+      [0.86, 0, 0],
+      [1, 0, 0],
+    ],
+  },
+  working: {
+    ms: 4800,
+    loop: true,
+    face: [
+      [0, 0, 0],
+      [0.12, -1.4, 0],
+      [0.34, -1.4, 0],
+      [0.46, 0, -1.2],
+      [0.66, 0, -1.2],
+      [0.78, 0, 0],
+      [1, 0, 0],
+    ],
+    glow: [
+      [0, 0],
+      [0.5, 0.6],
+      [1, 0],
+    ],
+  },
+  needs: {
+    ms: 420,
+    loop: false,
+    face: [
+      [0, 0, 0],
+      [1, 0, -0.35],
+    ],
+    press: [
+      [0, 0],
+      [0.4, 0.7],
+      [1, 0],
+    ],
+  },
+  done: {
+    ms: 560,
+    loop: false,
+    press: [
+      [0, 0],
+      [0.35, 0.8],
+      [0.7, -0.25],
+      [1, 0],
+    ],
+  },
+  failed: {
+    ms: 700,
+    loop: false,
+    face: [
+      [0, 0, 0],
+      [1, -1.1, 1],
+    ],
+  },
+};
 
-/** The face group's transform for a shape: its optical centre and room. */
-export function faceTransform(shape: AvatarShape): string {
-  const { dx, dy, scale } = SHAPE_SPECS[shape].face;
-  if (dx === 0 && dy === 0 && scale === 1) return '';
-  return `translate(${r2(C + dx)} ${r2(C + dy)}) scale(${scale}) translate(${-C} ${-C})`;
+/** Below `LIT_MIN_PX`, the face moves this fraction as far, and nothing else moves. */
+export const SMALL_MOTION = 0.4;
+
+/** The furthest any mood moves the face, for the edge-clearance test. */
+// Indexed and reduced, not destructured or spread: the phone's Babel would need a runtime helper.
+export const FACE_REACH = Object.values(AVATAR_MOTION).reduce(
+  (far, m) => (m.face ?? []).reduce((f, k) => Math.max(f, Math.hypot(k[1], k[2])), far),
+  0
+);
+
+/**
+ * A mood from what a row already knows. Needs you outranks working (a turn
+ * waiting on a card is both); a failure shows only once nothing else does.
+ */
+export function moodOf(state: {
+  needsYou: boolean;
+  working: boolean;
+  failed: boolean;
+}): Exclude<AvatarMood, 'done'> {
+  if (state.needsYou) return 'needs';
+  if (state.working) return 'working';
+  if (state.failed) return 'failed';
+  return 'idle';
 }
 
 /**
- * The look's motion, same on both clients: when a turn ends, one bob.
- * Nothing else ever moves, and never the eyes; nothing with Reduce Motion.
+ * Where an avatar starts in its idle loop (ms into it), so a sidebar of
+ * twelve never drifts in step.
  */
-export const BOB_MS = 520;
-/** How far a bob lifts, as a fraction of the avatar's size. */
-export const BOB_LIFT = 0.08;
+export const idlePhase = (id: string) => hash(id) % AVATAR_MOTION.idle.ms;

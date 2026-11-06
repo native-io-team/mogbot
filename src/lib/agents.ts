@@ -10,7 +10,11 @@ import type { FileDiff } from './git';
 import type { AgentSecret, SecretRequest } from './agentSecrets';
 import type { LocalLink, Watch, WatchSource } from '../../packages/companion-protocol/src/model';
 import type { SettingsProposal } from '../../packages/companion-protocol/src/policy';
-import type { AgentLook } from '../../packages/companion-protocol/src/avatar';
+import {
+  moodOf,
+  type AgentLook,
+  type AvatarMood,
+} from '../../packages/companion-protocol/src/avatar';
 
 export type { Watch, WatchEvent, WatchSource } from '../../packages/companion-protocol/src/model';
 
@@ -1961,6 +1965,22 @@ export function needsYou(agent: Agent): boolean {
 /** Its last turn failed, and nothing has been said since. Not while it works again. */
 export function failedTurn(agent: Agent): Failure | null {
   return agent.failure && agent.status.state === 'idle' ? agent.failure : null;
+}
+
+/**
+ * What its avatar shows (`moodOf` in avatar.ts), from what its row knows. A
+ * usage limit heals by itself, so it isn't a failure the avatar mourns.
+ */
+export function avatarMood(
+  agent: Agent,
+  working = agent.status.state === 'working' && !agent.takeover
+): Exclude<AvatarMood, 'done'> {
+  const failure = failedTurn(agent);
+  return moodOf({
+    needsYou: needsYou(agent),
+    working,
+    failed: failure !== null && failure.kind !== 'usage_limit',
+  });
 }
 
 /** Needs you, or its last turn didn't finish: what the "next needing you" key visits. */
