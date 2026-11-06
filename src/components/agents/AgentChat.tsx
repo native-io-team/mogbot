@@ -26,6 +26,7 @@ import {
   type ReactNode,
 } from 'react';
 import {
+  ActivityIcon,
   ArrowDownIcon,
   ArrowUpIcon,
   HistoryIcon,
@@ -56,6 +57,7 @@ import {
 } from '../../lib/agentTemplates';
 import { CHIEF_CHIPS, type ChiefIdea } from '../../lib/chiefIdeas';
 import { AgentSchedulePopover } from './AgentSchedulePopover';
+import { AgentUsageRing } from './AgentUsageRing';
 import { AgentFilesModal } from './AgentFilesModal';
 import { RememberModal } from './AgentRemember';
 import { useArrivals, useFollowBottom, usePresence } from './useAgentMotion';
@@ -496,6 +498,7 @@ export const AgentChat = memo(function AgentChat({
     if (!open) setScheduleWhen(false);
   }, []);
   const [filesOpen, setFilesOpen] = useState(false);
+  const [usageOpen, setUsageOpen] = useState(false);
   // While you drive an agent with no project to open, its session is shown
   // here in place of the conversation, until you ask for the chat.
   const takeover = agent.takeover;
@@ -555,6 +558,25 @@ export const AgentChat = memo(function AgentChat({
           setScheduleWhen(true);
           setScheduleOpen(true);
         },
+      },
+      {
+        id: 'agents.showUsage',
+        title: 'Show usage',
+        icon: <ActivityIcon size={14} />,
+        category: 'navigation',
+        keywords: [
+          'usage',
+          'limit',
+          '5-hour',
+          'weekly',
+          'context',
+          'quota',
+          'pace',
+          'accounts',
+          'reset',
+        ],
+        when: () => engineReady,
+        run: () => setUsageOpen(true),
       },
       {
         id: 'agents.files',
@@ -1563,6 +1585,7 @@ export const AgentChat = memo(function AgentChat({
               {/* Nothing to schedule or pick a model for until Claude Code is here. */}
               {engineReady && (
                 <>
+                  <AgentUsageRing agent={agent} open={usageOpen} onOpenChange={setUsageOpen} />
                   <AgentSchedulePopover
                     agent={agent}
                     open={scheduleOpen}

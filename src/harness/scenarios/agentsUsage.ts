@@ -5,7 +5,7 @@
  */
 
 import type { Scenario } from '../types';
-import { messagesFor, now, overview } from './agents';
+import { AGENTS_TAB, TEAM, messagesFor, now, overview } from './agents';
 
 const H = 3_600_000;
 
@@ -69,6 +69,18 @@ export const FULL_INVENTORY = {
         },
       ],
       learned: ['five_hour'],
+      // The Mac's estimate (`forecast::pace`): the weekly window runs out in
+      // two days at the recent rate, a day before its reset.
+      pace: [
+        {
+          estimate: true,
+          kind: 'seven_day',
+          resetsAt: now + 3 * 86_400_000,
+          reachesAt: now + 2 * 86_400_000,
+          readings: 14,
+          spanMinutes: 1380,
+        },
+      ],
     },
     {
       engine: 'claude',
@@ -214,12 +226,59 @@ const DESKTOP_SETTINGS = {
   shortcutLabel: '⌥Space',
 };
 
+/** The plan as `agents_quota` returns it: This Mac's windows, as in FULL_INVENTORY. */
+const CHAT_QUOTA = [
+  {
+    engine: 'claude',
+    windows: FULL_INVENTORY.accounts[0].windows,
+  },
+];
+
+/** Finance with its context as Claude Code reported it. */
+const TEAM_WITH_CONTEXT = TEAM.map((a) =>
+  a.id === 'finance'
+    ? { ...a, context: { used: 128_400, window: 200_000, at: now - 3 * 60_000 } }
+    : a
+);
+
 export const agentsUsageScenarios: Scenario[] = [
+  {
+    id: 'agents-chat-usage',
+    title: 'Agents — the chat header’s usage ring and its popover',
+    looksRightWhen:
+      'Finance’s chat. In the header, left of the clock, a small ring about a third filled (38% of the 5-hour window), in the muted ink, not the accent. Its popover: “Usage”; Context — “Finance’s conversation” 64% used with a bar and “128.4K of 200K tokens”; Plan usage · Claude Code — “5-hour limit” 38%, “Resets at <time>”; Weekly limits — “All models” 61%, “Resets <weekday> …”, then an amber line “At this pace you’ll hit the limit <weekday> <part of day>, before it resets <weekday> <time>” and a muted “Estimate from 14 readings over 23 hours”; Accounts — Claude · This Mac (Next turns run here) with both bars and the same pace line, Claude · Work “Out of usage until …”, Claude · Personal “No reading yet”, Codex · ChatGPT Plus with its Primary bar in amber. A muted footnote that use elsewhere counts too. Readable in both themes.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-usage .agent-usage__pace',
+    clipSelector: '.agent-usage',
+    steps: [{ click: '[data-agent-id="finance"]' }, { click: '.agent-usage-ring' }],
+    commands: {
+      agents_overview: overview(TEAM_WITH_CONTEXT),
+      agents_messages: messagesFor,
+      agents_quota: CHAT_QUOTA,
+      agents_usage_overview: FULL_INVENTORY,
+    },
+  },
+  {
+    id: 'agents-chat-usage-ring',
+    title: 'Agents — the usage ring in the chat header',
+    looksRightWhen:
+      'Finance’s chat header: the ring sits with the other header controls (left of the schedule clock and the ⋯ menu), the same size as their icons, about a third filled. Nothing else in the header moved.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-chat__actions .agent-usage-ring',
+    clipSelector: '.agent-chat__header',
+    steps: [{ click: '[data-agent-id="finance"]' }],
+    commands: {
+      agents_overview: overview(TEAM_WITH_CONTEXT),
+      agents_messages: messagesFor,
+      agents_quota: CHAT_QUOTA,
+      agents_usage_overview: FULL_INVENTORY,
+    },
+  },
   {
     id: 'settings-agents-usage',
     title: 'Settings — Agents → Usage: modes, what you have, spare capacity',
     looksRightWhen:
-      'A “Usage” group. “How agents use your limits” with a three-way control (Normal | Save my limits | Use it all before reset), the last pressed, neutral not accent, and one muted line under it saying Allow cards still apply. “What you have”: Claude Code’s list — This Mac “5-hour 38% · resets <time> · Weekly 61% · resets <weekday>” and “Next turns run here”; Work in amber “Out of usage until …”; Personal “No reading yet”; then a muted “About 48k tokens a turn · estimate from 212 past runs”. Codex’s list: ChatGPT Plus “Primary 92% …” in amber, tagged “Plus plan · Next turns run here”, and no estimate line. A muted line “Claude 5-hour limit resets <time> · 62% unused”. “Other compute on this Mac”: Opencode installed; Ollama running with two models. “Spare-capacity list”: two lines (one “Added by you · for Research”, one “Added by Finance · Started”), each with a remove ×, and a field with a secondary Add. Readable in both themes; nothing is accent-coloured.',
+      'A “Usage” group. “How agents use your limits” with a three-way control (Normal | Save my limits | Use it all before reset), the last pressed, neutral not accent, and one muted line under it saying Allow cards still apply. “What you have”: Claude Code’s list — This Mac “5-hour 38% · resets <time> · Weekly 61% · resets <weekday>”, an amber “Weekly: At this pace you’ll hit the limit <weekday> <part of day>, before it resets … · Estimate from 14 readings over 23 hours”, and “Next turns run here”; Work in amber “Out of usage until …”; Personal “No reading yet”; then a muted “About 48k tokens a turn · estimate from 212 past runs”. Codex’s list: ChatGPT Plus “Primary 92% …” in amber, tagged “Plus plan · Next turns run here”, and no estimate line. A muted line “Claude 5-hour limit resets <time> · 62% unused”. “Other compute on this Mac”: Opencode installed; Ollama running with two models. “Spare-capacity list”: two lines (one “Added by you · for Research”, one “Added by Finance · Started”), each with a remove ×, and a field with a secondary Add. Readable in both themes; nothing is accent-coloured.',
     command: 'agents.usage',
     requires: '.agents-usage .agents-usage__line',
     clipSelector: '.agents-usage',

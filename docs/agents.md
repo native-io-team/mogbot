@@ -3291,6 +3291,20 @@ never a default.
   forecast share is an upper-side estimate. This history starts with this
   build: until it exists, forecasts give tokens and say the share "isn't known
   yet".
+- **Pace** (`forecast::pace`, `AccountLine.pace`, the phone's `UsagePace`):
+  when a window would reach 100% at the recent rate. From the same samples:
+  this account's readings of *this instance* of the window (resets within 30
+  minutes of each other) inside the lookback (half the window, 1 hour to 1
+  day), a least-squares line extended from the latest reading. Served only
+  with at least 3 readings over at least 30 minutes, a rise of at least 1
+  point, and a crossing after now and before the reset; an account that's out
+  has none. Said as "At this pace you'll hit the limit this afternoon, before
+  it resets at 4:00 PM" with "Estimate from 6 readings over 2 hours" under it
+  (a part of a day, never a minute it can't know), in the chat header's usage
+  popover on the desk (`AgentUsageRing`, ⌘K "Show usage"), Settings → Usage,
+  the phone's Usage sheet and `usage_overview`'s ESTIMATES. The words live
+  once in `packages/companion-protocol/src/usageSheet.ts`, shared by the desk
+  ring and the phone sheet.
 
 **Modes** (`usage_plan::Mode`, `usage-plan.json`; Settings → Agents → Usage,
 or the Chief's `set_usage_mode`, which always asks on a card first):

@@ -19,6 +19,7 @@ export * from './quota';
 export * from './results';
 export * from './accounts';
 export * from './usage';
+export * from './usageSheet';
 export * from './independence';
 export * from './links';
 export * from './policy';

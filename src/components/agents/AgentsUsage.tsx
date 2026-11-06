@@ -6,6 +6,9 @@
  * - **What you have**: each account with what its engine last reported (a
  *   reading, with its age) or "No reading yet"; each engine's average turn
  *   here as an *estimate* from past runs, absent with too little history;
+ *   under an account, the Mac's pace estimate for a window that would run
+ *   out before its reset ("5-hour: At this pace you'll hit the limit…"),
+ *   with what it rests on;
  *   other compute detected on this Mac.
  * - **Spare-capacity list**: work to do when capacity would otherwise
  *   expire. Users add here; agents add with `add_spare_work`.
@@ -39,12 +42,22 @@ import {
   getUsageInventory,
   localLine,
   onUsagePlanChanged,
+  paceLine,
   removeSpareItem,
   setUsageMode,
   spareLine,
+  windowName,
+  type UsageAccountLine,
   type UsageInventory,
   type UsageMode,
 } from '../../lib/agentsUsage';
+
+/** "5-hour", "Weekly": which of the account's windows a pace line is for. */
+const windowLabel = (a: UsageAccountLine, kind: string) => {
+  const w = a.windows.find((x) => x.kind === kind);
+  const name = windowName(w ?? { kind });
+  return name.charAt(0).toUpperCase() + name.slice(1);
+};
 
 const say = (e: unknown) => formatCommandError(asCommandError(e));
 
@@ -254,6 +267,20 @@ export function AgentUsageSettings() {
                             {ENGINE_LABEL[engine.id]} · {a.name}
                           </span>
                           <span className="agents-usage__state">{state.text}</span>
+                          {(a.out ? [] : (a.pace ?? [])).map((p) => {
+                            const pace = paceLine(p, now);
+                            return (
+                              pace && (
+                                <span
+                                  className="agents-usage__pace"
+                                  key={p.kind}
+                                  title={pace.basis}
+                                >
+                                  {windowLabel(a, p.kind)}: {pace.text} · {pace.basis}
+                                </span>
+                              )
+                            );
+                          })}
                           {tags.length > 0 && (
                             <span className="agents-usage__muted">{tags.join(' · ')}</span>
                           )}

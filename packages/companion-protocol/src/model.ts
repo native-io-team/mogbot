@@ -1443,6 +1443,32 @@ export interface UsageAccountLine {
   windows: QuotaWindow[];
   /** Window kinds whose share per token this Mac has learned. */
   learned: string[];
+  /**
+   * Windows that would reach 100% at the recent rate before they reset: an
+   * ESTIMATE from this account's own readings (`agents::forecast::Pace`).
+   * Absent when there's none to say (too few readings, flat use, a crossing
+   * after the reset), and from Macs that predate it.
+   */
+  pace?: UsagePace[];
+}
+
+/**
+ * When a window runs out at the recent rate, by estimate: the straight line
+ * through at least 3 of the account's readings of this instance of the
+ * window, over at least 30 minutes, extended from the latest. Only ever sent
+ * when it lands after now and before the reset. Never a reading.
+ */
+export interface UsagePace {
+  estimate: true;
+  /** The window it is for (`five_hour`, `seven_day`, `primary`, …). */
+  kind: string;
+  /** That window's reported reset, epoch ms. */
+  resetsAt: number;
+  /** When it would reach 100%, epoch ms. */
+  reachesAt: number;
+  /** How many readings, over how many minutes, it rests on. */
+  readings: number;
+  spanMinutes: number;
 }
 
 /** Other compute detected on this Mac; agents here don't run on it. */

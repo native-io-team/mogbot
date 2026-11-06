@@ -644,7 +644,8 @@ const LIVE = [
     route: '/usage?id=site',
     ready: 'Usage',
     act: () => sleep(1500),
-    check: 'Usage: context 90%, 5-hour, weekly (All models, Opus), every account; no pace line',
+    check:
+      'Usage: context 90%, 5-hour with its pace line ("At this pace you’ll hit the limit in about an hour, before it resets at …" + "Estimate from 6 readings…"), weekly (All models, Opus), every account',
   },
   {
     name: 'catchup-done',

@@ -29,6 +29,7 @@
 use chrono::NaiveDate;
 use serde::{Deserialize, Serialize};
 
+use super::quota::QuotaWindow;
 use super::usage::{DayUsage, UsageTotals};
 
 /// Fewer past runs than this: no forecast.
@@ -225,6 +226,114 @@ pub fn share(tokens: u64, rate: f64, kind: &str, used: f64) -> WindowShare {
     }
 }
 
+/* ------------------------------------------------------------- pace */
+
+/// Fewer readings of one window instance than this: no pace.
+pub const PACE_MIN_READINGS: usize = 3;
+/// The readings must span at least this long.
+pub const PACE_MIN_SPAN_MS: i64 = 30 * 60 * 1000;
+/// The window's reported use must have risen at least this many points
+/// across them; less is flat, and flat use never runs out.
+pub const PACE_MIN_RISE: f64 = 1.0;
+/// Two readings of one window whose resets are this close are the same
+/// instance of it (Claude Code's reported reset can move a little).
+const SAME_RESET_MS: i64 = 30 * 60 * 1000;
+const PACE_HOUR_MS: i64 = 60 * 60 * 1000;
+
+/// How far back "the recent rate" looks: half the window, at least an hour
+/// and at most a day (a weekly window's last day, not its last hour, so a
+/// burst of work isn't read as the whole week's pace). A window we can't
+/// size looks back two hours.
+fn pace_lookback_ms(w: &QuotaWindow) -> i64 {
+    super::usage_plan::window_ms(w)
+        .map(|len| (len / 2).clamp(PACE_HOUR_MS, 24 * PACE_HOUR_MS))
+        .unwrap_or(2 * PACE_HOUR_MS)
+}
+
+/// When a window reaches 100% at the recent rate. **An estimate, never a
+/// reading**: the straight line through this account's own readings of
+/// this window instance, extended from the latest one. Served only when it
+/// says something (see [`pace`]).
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Pace {
+    /// Always true: extrapolated from readings, not a reading.
+    pub estimate: bool,
+    /// The window it is for (`five_hour`, `seven_day`, `primary`, …).
+    pub kind: String,
+    /// That window's reset, as reported, epoch ms.
+    pub resets_at: i64,
+    /// When it would reach 100% at the recent rate, epoch ms.
+    pub reaches_at: i64,
+    /// How many readings, over how many minutes, it rests on.
+    pub readings: u32,
+    pub span_minutes: u32,
+}
+
+/// The pace of `window` (its current reading) from `samples` (the
+/// account's, every window kind), at `now`. `None` unless there are at
+/// least [`PACE_MIN_READINGS`] readings of this instance of the window
+/// within the lookback, spanning [`PACE_MIN_SPAN_MS`], risen by
+/// [`PACE_MIN_RISE`] points, and the line crosses 100% after now and
+/// before the reset.
+pub fn pace(samples: &[Sample], window: &QuotaWindow, now: i64) -> Option<Pace> {
+    let reset = window.resets_at.filter(|&r| r > now)?;
+    let used_now = window.used_percent?;
+    if window.limited || used_now >= 100.0 {
+        // Used up already: the meter says so; there is nothing to forecast.
+        return None;
+    }
+    let since = now - pace_lookback_ms(window);
+    let mut points: Vec<(i64, f64)> = samples
+        .iter()
+        .filter(|s| s.kind == window.kind && s.at >= since && s.at <= now)
+        .filter(|s| {
+            s.resets_at
+                .is_some_and(|r| (r - reset).abs() <= SAME_RESET_MS)
+        })
+        .map(|s| (s.at, s.used))
+        .collect();
+    points.sort_by_key(|p| p.0);
+    // The current reading is the last point when it's newer than every
+    // sample (a repeat isn't kept as a sample, but time has still passed).
+    let newer = points.last().map_or(true, |p| window.observed_at > p.0);
+    if newer && window.observed_at >= since && window.observed_at <= now {
+        points.push((window.observed_at, used_now));
+    }
+    if points.len() < PACE_MIN_READINGS {
+        return None;
+    }
+    let (first, last) = (points[0], points[points.len() - 1]);
+    let span = last.0 - first.0;
+    if span < PACE_MIN_SPAN_MS || last.1 - first.1 < PACE_MIN_RISE {
+        return None;
+    }
+    // Least squares: points per ms, time measured from the first reading.
+    let n = points.len() as f64;
+    let t = |p: &(i64, f64)| (p.0 - first.0) as f64;
+    let mean_t = points.iter().map(t).sum::<f64>() / n;
+    let mean_u = points.iter().map(|p| p.1).sum::<f64>() / n;
+    let (mut num, mut den) = (0.0f64, 0.0f64);
+    for p in &points {
+        let dt = t(p) - mean_t;
+        num += dt * (p.1 - mean_u);
+        den += dt * dt;
+    }
+    let slope = if den > 0.0 { num / den } else { 0.0 };
+    if slope <= 0.0 || !slope.is_finite() {
+        return None;
+    }
+    let reaches_at = last.0 + ((100.0 - last.1).max(0.0) / slope).round() as i64;
+    (reaches_at > now && reaches_at < reset).then(|| Pace {
+        estimate: true,
+        kind: window.kind.clone(),
+        resets_at: reset,
+        reaches_at,
+        readings: points.len() as u32,
+        span_minutes: (span / 60_000) as u32,
+    })
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -360,6 +469,119 @@ mod tests {
         );
         assert_eq!(v.len(), 1);
         assert_eq!(v[0].used, 12.0);
+    }
+
+    const MIN: i64 = 60_000;
+    const T0: i64 = 1_793_867_800_000;
+
+    /// The five-hour window's current reading: `used` at `at`, resetting at `reset`.
+    fn win(used: f64, at: i64, reset: i64) -> QuotaWindow {
+        QuotaWindow {
+            kind: "five_hour".into(),
+            used_percent: Some(used),
+            resets_at: Some(reset),
+            window_minutes: None,
+            limited: false,
+            observed_at: at,
+        }
+    }
+
+    /// Readings of the five-hour window every `every` minutes from T0, one per figure.
+    fn climb(figures: &[f64], every: i64, reset: i64) -> Vec<Sample> {
+        figures
+            .iter()
+            .enumerate()
+            .map(|(i, &u)| {
+                s(
+                    "five_hour",
+                    reset,
+                    u,
+                    i as u64 * 1000,
+                    T0 + i as i64 * every * MIN,
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn pace_extends_a_steady_climb_to_100_before_the_reset() {
+        // 10 → 20 → 30 over an hour: 20 points an hour, 70 left from the
+        // last reading → 3.5 hours later. The reset is 4 hours after that reading.
+        let reset = T0 + 60 * MIN + 240 * MIN;
+        let samples = climb(&[10.0, 20.0, 30.0], 30, reset);
+        let now = T0 + 61 * MIN;
+        let p = pace(&samples, &win(30.0, T0 + 60 * MIN, reset), now).unwrap();
+        assert!(p.estimate);
+        assert_eq!(p.kind, "five_hour");
+        assert_eq!(p.resets_at, reset);
+        assert_eq!(p.reaches_at, T0 + 60 * MIN + 210 * MIN);
+        assert_eq!((p.readings, p.span_minutes), (3, 60));
+    }
+
+    #[test]
+    fn too_few_readings_or_too_short_a_span_is_no_pace() {
+        let reset = T0 + 600 * MIN;
+        let now = T0 + 61 * MIN;
+        // Two readings: one short.
+        let two = climb(&[10.0, 30.0], 60, reset);
+        assert_eq!(pace(&two, &win(30.0, T0 + 60 * MIN, reset), now), None);
+        // Three readings, but over 20 minutes.
+        let quick = climb(&[10.0, 20.0, 30.0], 10, reset);
+        assert_eq!(pace(&quick, &win(30.0, T0 + 20 * MIN, reset), now), None);
+        // No readings at all.
+        assert_eq!(pace(&[], &win(30.0, T0, reset), now), None);
+    }
+
+    #[test]
+    fn flat_or_falling_use_is_no_pace() {
+        let reset = T0 + 600 * MIN;
+        let now = T0 + 121 * MIN;
+        let flat = climb(&[40.0, 40.0, 40.0, 40.0, 40.0], 30, reset);
+        assert_eq!(pace(&flat, &win(40.0, T0 + 120 * MIN, reset), now), None);
+        // Under a point of rise is flat too.
+        let creep = climb(&[40.0, 40.2, 40.5, 40.8], 30, reset);
+        assert_eq!(pace(&creep, &win(40.8, T0 + 90 * MIN, reset), now), None);
+    }
+
+    #[test]
+    fn a_crossing_after_the_reset_is_no_pace() {
+        // 2 points an hour from 30%: 35 hours to go, the reset is in 3.
+        let reset = T0 + 90 * MIN + 180 * MIN;
+        let samples = climb(&[27.0, 28.0, 29.0, 30.0], 30, reset);
+        let now = T0 + 91 * MIN;
+        assert_eq!(pace(&samples, &win(30.0, T0 + 90 * MIN, reset), now), None);
+    }
+
+    #[test]
+    fn only_this_instance_and_recent_readings_count() {
+        let reset = T0 + 60 * MIN + 240 * MIN;
+        // The previous instance's readings (an earlier reset) are not this one's.
+        let mut samples = climb(&[50.0, 70.0, 90.0], 30, reset - 300 * MIN);
+        samples.push(s("five_hour", reset, 10.0, 1, T0 + 30 * MIN));
+        samples.push(s("five_hour", reset, 30.0, 2, T0 + 60 * MIN));
+        let now = T0 + 61 * MIN;
+        assert_eq!(pace(&samples, &win(30.0, T0 + 60 * MIN, reset), now), None);
+        // Readings older than the lookback (half of five hours) don't count:
+        // the same climb, asked about 2.5 hours on, is too old to be "recent".
+        let climb_then = climb(&[10.0, 20.0, 30.0], 30, reset);
+        let later = T0 + 60 * MIN + 151 * MIN;
+        assert_eq!(
+            pace(&climb_then, &win(30.0, T0 + 60 * MIN, reset), later),
+            None
+        );
+    }
+
+    #[test]
+    fn a_used_up_window_or_one_without_a_reset_has_no_pace() {
+        let reset = T0 + 600 * MIN;
+        let samples = climb(&[60.0, 80.0, 99.0], 30, reset);
+        let now = T0 + 61 * MIN;
+        let mut used_up = win(99.0, T0 + 60 * MIN, reset);
+        used_up.limited = true;
+        assert_eq!(pace(&samples, &used_up, now), None);
+        let mut undated = win(99.0, T0 + 60 * MIN, reset);
+        undated.resets_at = None;
+        assert_eq!(pace(&samples, &undated, now), None);
     }
 
     #[test]
