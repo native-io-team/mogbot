@@ -1,8 +1,9 @@
 /**
  * What an agent is doing, live, on the phone: the list row's words and
  * time, which call the working row is saying, and the working row itself
- * (its timer, the slow-tool hint, "Show output", "Stop this step", and the
- * quiet state with "Check on it").
+ * (one line that opens into the steps, the slow-tool hint, "Show output"
+ * inside the step it's on, "Stop this step", and the quiet state with
+ * "Check on it").
  */
 
 import type { LiveCall, TurnWork, WelcomeFrame } from '@shipstudio/companion-protocol';
@@ -25,6 +26,13 @@ jest.mock('../src/components/TypingDots', () => {
   return { TypingDots: () => <View testID="typing-dots" /> };
 });
 jest.mock('../src/components/attachments', () => ({ Attachments: () => null }));
+jest.mock('../src/components/Shimmer', () => ({
+  Shimmer: ({ children }: { children: React.ReactNode }) => children,
+}));
+jest.mock('../src/components/agent', () => {
+  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
+  return { AgentAvatar: () => <View testID="key-cap" /> };
+});
 jest.mock('expo-haptics', () => ({}));
 jest.mock('../src/lib/haptics', () => ({
   haptic: { light: jest.fn(), select: jest.fn(), success: jest.fn(), error: jest.fn() },
@@ -114,24 +122,29 @@ describe('the live step', () => {
     serve(['agents.stopStep', 'agents.checkOn']);
   });
 
-  it('times the step and hints once it has taken a minute', async () => {
+  it('is one line: its words, its steps so far and the turn’s time, then a hint', async () => {
     const w = work();
     const { rerender } = await render(
       <LiveStep agentId="qa" work={w} call={w.current} label="" now={30_000} />
     );
-    expect(screen.getByText('0:30')).toBeTruthy();
+    expect(screen.getByText('Running the Cypress tests')).toBeTruthy();
+    expect(screen.getByText('· 3 steps · 0:30')).toBeTruthy();
     expect(screen.queryByText('Test runs usually take a few minutes')).toBeNull();
+    // Output lives in its step, not under the line.
+    expect(screen.queryByText('Show output')).toBeNull();
     await rerender(<LiveStep agentId="qa" work={w} call={w.current} label="" now={5.5 * MIN} />);
-    expect(screen.getByText('5:30')).toBeTruthy();
+    expect(screen.getByText('· 3 steps · 5:30')).toBeTruthy();
     expect(screen.getByText('Test runs usually take a few minutes')).toBeTruthy();
     expect(screen.queryByText('Stop this step')).toBeNull();
   });
 
-  it('shows what it printed, or why it can’t yet', async () => {
+  it('opens into the steps, ending on the one it’s on with its output', async () => {
     const w = work();
     const { rerender } = await render(
       <LiveStep agentId="qa" work={w} call={w.current} label="" now={MIN} />
     );
+    await fireEvent.press(screen.getByTestId('live-step'));
+    expect(screen.getByTestId('work-step-current')).toBeTruthy();
     await fireEvent.press(screen.getByText('Show output'));
     expect(screen.getByText('1) links each plan to checkout')).toBeTruthy();
     const quiet = work({ current: cypress({ streams: false, output: undefined }) });
@@ -139,7 +152,7 @@ describe('the live step', () => {
     expect(screen.getByText('Output appears when it finishes')).toBeTruthy();
   });
 
-  it('says when it last showed life only when asked', async () => {
+  it('says when it last showed life inside the step, once opened', async () => {
     const w = work({ current: cypress({ busy: true }) });
     await render(<LiveStep agentId="qa" work={w} call={w.current} label="" now={5.5 * MIN} />);
     expect(screen.queryByTestId('life-line')).toBeNull();
@@ -171,12 +184,22 @@ describe('the live step', () => {
       'Still going: running the Cypress tests is using the CPU right now.'
     );
     const w = work({ quietSince: 0 });
-    await render(<LiveStep agentId="qa" work={w} call={w.current} label="" now={5 * MIN} />);
-    expect(screen.getByText('No progress for 5 min')).toBeTruthy();
-    // No timer, no output toggle, no dots claiming it's busy.
+    await render(
+      <LiveStep
+        agentId="qa"
+        agent={{ name: 'QA', color: 'green' }}
+        work={w}
+        call={w.current}
+        label=""
+        now={5 * MIN}
+      />
+    );
+    expect(screen.getByText('No progress for 5 min · Running the Cypress tests')).toBeTruthy();
+    // No step timer, no output toggle, no dots claiming it's busy: its key cap leads.
     expect(screen.queryByText('5:00')).toBeNull();
     expect(screen.queryByText('Show output')).toBeNull();
     expect(screen.queryByTestId('typing-dots')).toBeNull();
+    expect(screen.getByTestId('key-cap')).toBeTruthy();
     await fireEvent.press(screen.getByText('Check on it'));
     expect(
       await screen.findByText('Still going: running the Cypress tests is using the CPU right now.')

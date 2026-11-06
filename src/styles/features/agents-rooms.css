@@ -372,13 +372,14 @@
   color: var(--accent-error);
 }
 
-/* Each working member's line is short: never cut what it's doing. */
-.agent-room__working .agent-working {
-  max-width: none;
+/* Under its name, a member's working line starts on the prose's edge: the
+   name's key cap is the one that moves, so the line doesn't repeat it. */
+.agent-room__working .agent-working__lead {
+  display: none;
 }
 
-.agent-room__working .agent-working__activity {
-  flex: 0 0 auto;
+.agent-room__working .agent-working__under {
+  padding-left: 0;
 }
 
 /* The first working row keeps the thread's rhythm: a speaker's gap, no more. */

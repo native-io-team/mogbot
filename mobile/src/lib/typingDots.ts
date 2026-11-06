@@ -42,3 +42,11 @@ export function dotOpacity(level: number): number {
   'worklet';
   return TYPING_REST_OPACITY + (1 - TYPING_REST_OPACITY) * level;
 }
+
+/**
+ * The working line's words breathe while it's live (`components/Shimmer.tsx`),
+ * the phone's take on the desk's passing light (`agents-work-shimmer`, 2.7 s):
+ * full strength down to this and back, once a period. Gentle on purpose.
+ */
+export const SHIMMER_PERIOD_MS = 2700;
+export const SHIMMER_LOW_OPACITY = 0.7;

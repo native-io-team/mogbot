@@ -37,7 +37,6 @@ import {
 import { Button } from '../primitives/Button';
 import { Dropdown, DropdownItem } from '../primitives/Dropdown';
 import { IconButton } from '../primitives/IconButton';
-import { TypingDots } from '../primitives/TypingDots';
 import { TextButton } from '../primitives/TextButton';
 import { TextField } from '../primitives/TextField';
 import { Tooltip } from '../primitives/Tooltip';
@@ -53,16 +52,14 @@ import { AgentPlanList } from './AgentPlanList';
 import { AgentCard } from './AgentCard';
 import { ImportReviewCard } from './ImportReviewCard';
 import { ImportPlaybackCard } from './ImportPlaybackCard';
-import { useLiveWork, WorkTimeline } from './AgentWork';
+import { WorkTimeline } from './AgentWork';
+export { WorkingIndicator } from './AgentWorkingIndicator';
 import { RevisesBar } from './AgentResult';
-import { WorkMenu } from './AgentTakeover';
-import { useLiveStep } from './AgentLiveStep';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useHeightReveal } from './useAgentMotion';
 import { useCardGuard } from './useCardGuard';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
-import { useSteadyLine } from '../../hooks/useSteadyLine';
 import {
   connectorTextParts,
   CONTEXT_SUGGEST_AT,
@@ -86,7 +83,6 @@ import {
   type AgentEngine,
   type AgentMessage,
   type AgentRef,
-  type TurnWork,
   type Approval,
   type SessionPrompt,
 } from '../../lib/agents';
@@ -1399,79 +1395,6 @@ function SessionPromptCard({
             <pre className="agent-approval__detail">{approval.detail}</pre>
           ))}
       </AgentCard>
-    </div>
-  );
-}
-
-interface WorkingIndicatorProps {
-  activity: string | null;
-  /** The turn's steps so far (`status.work`), and whose they are. */
-  work?: TurnWork;
-  agent?: Agent;
-  /** It appeared after the chat opened: open its height rather than pop in. */
-  entering?: boolean;
-  /** The turn ended: collapse, then `onExited` unmounts it. */
-  leaving?: boolean;
-  onExited?: () => void;
-  /** Where the turn answers, when it isn't this chat (a room). */
-  place?: ReactNode;
-}
-
-/** Three dots and what it's doing, under the last message while it works. */
-export function WorkingIndicator({
-  activity,
-  work,
-  agent,
-  entering,
-  leaving,
-  onExited,
-  place,
-}: WorkingIndicatorProps) {
-  // Each step holds a moment and a blink of "Thinking" between two never
-  // shows (the sidebar's rule), so the line doesn't flicker step to step.
-  const steady = useSteadyLine(activity ?? '') || null;
-  // Keep the last thing it said while it collapses, rather than blanking it.
-  const [shown, setShown] = useState(steady);
-  if (!leaving && steady !== shown) setShown(steady);
-  // Only a change of activity crossfades; the first one is just there.
-  const [first] = useState(shown);
-  const live = useLiveWork({ work, agent, activity, leaving });
-  const step = useLiveStep({ agent, work, activity, leaving });
-  return (
-    <div
-      className="agent-chat__row agent-chat__row--agent agent-chat__row--working"
-      data-work={live.toggle || step.details || step.browser ? true : undefined}
-      data-open={live.open || undefined}
-      data-entering={entering || undefined}
-      data-leaving={leaving || undefined}
-      onAnimationEnd={(e) => {
-        if (leaving && e.target === e.currentTarget) onExited?.();
-      }}
-      aria-live="polite"
-    >
-      {live.list}
-      <div className="agent-working__line">
-        <div className="agent-working">
-          <TypingDots />
-
-          {place && <span className="agent-working__place">{place}</span>}
-          {step.line ??
-            (shown && (
-              <span
-                key={shown}
-                className="agent-working__activity"
-                data-changed={shown !== first || undefined}
-              >
-                {shown}
-              </span>
-            ))}
-        </div>
-        {live.toggle}
-        {/* Its project and its session, one ⋯ away: not a row under every turn. */}
-        {!leaving && agent && <WorkMenu agent={agent} />}
-      </div>
-      {step.details}
-      {step.browser}
     </div>
   );
 }

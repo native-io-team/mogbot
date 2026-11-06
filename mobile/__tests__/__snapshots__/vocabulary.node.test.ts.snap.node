@@ -20,6 +20,7 @@ exports[`the words a person reads use the agreed words the way the snapshot hold
   "Answer it on your Mac.",
   "Answer it once your Mac is back. It stays open until then.",
   "App open on your Mac",
+  "Asks the Mac what it’s doing, without stopping it",
   "At, Mac time",
   "Available once your Mac is connected",
   "Cancel routine",
