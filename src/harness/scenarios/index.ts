@@ -7,6 +7,7 @@ import { agentsProjectScenarios } from './agentsProject';
 import { agentsWorkScenarios } from './agentsWork';
 import { agentsLiveScenarios } from './agentsLive';
 import { agentsResultsScenarios } from './agentsResults';
+import { agentsShowWorkScenarios } from './agentsShowWork';
 import { agentsPreviewScenarios } from './agentsPreview';
 import { agentsRoomsScenarios } from './agentsRooms';
 import { agentsTakeoverScenarios } from './agentsTakeover';
@@ -21,6 +22,7 @@ import { agentsPolicyScenarios } from './agentsPolicy';
 import { agentsHeavyScenarios } from './agentsHeavy';
 import { agentsTeamSetupScenarios } from './agentsTeamSetup';
 import { agentsHeaderScenarios } from './agentsHeader';
+import { agentsAvatarsScenarios } from './agentsAvatars';
 import { appScenarios } from './app';
 import { featureScenarios } from './features';
 import { hostingScenarios } from './hosting';
@@ -37,11 +39,13 @@ import { projectsAtWorkScenarios } from './projectsAtWork';
 
 export const scenarios: Scenario[] = [
   ...agentsScenarios,
+  ...agentsAvatarsScenarios,
   ...agentsDesktopScenarios,
   ...agentsProjectScenarios,
   ...agentsWorkScenarios,
   ...agentsLiveScenarios,
   ...agentsResultsScenarios,
+  ...agentsShowWorkScenarios,
   ...agentsPreviewScenarios,
   ...agentsRoomsScenarios,
   ...agentsTakeoverScenarios,

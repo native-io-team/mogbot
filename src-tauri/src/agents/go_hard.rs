@@ -26,6 +26,8 @@
 //! - writes to `~/.ssh`, shell profiles, launch agents, credential stores, the
 //!   app's own data (another agent's home); `crontab`, `security`, `launchctl`,
 //!   disk and system tools; `defaults write` to a system domain
+//! - reading the app's own data, except that an admin (the Chief) reads the
+//!   agents folder (every agent's home) and an agent its own home
 //! - connector tools whose name writes (send, create, delete…); file uploads
 //!
 //! **Outside text** (a turn answering a routine's items): the same, plus any
@@ -59,7 +61,7 @@ pub fn asks(tool: &str, input: &Value, ctx: &Ctx, outside: bool) -> bool {
             } else {
                 field("file_path")
             };
-            !raw.is_empty() && resolve(raw, ctx).is_some_and(|p| credential_store(&p, ctx))
+            !raw.is_empty() && resolve(raw, ctx).is_some_and(|p| secret_to_read(&p, ctx))
         }
         t if t.starts_with(super::browser_gate::SERVER) => false,
         t if t.starts_with("mcp__") => connector_writes(t),
@@ -122,6 +124,35 @@ fn credential_store(p: &Path, ctx: &Ctx) -> bool {
     STORES.iter().any(|s| p.starts_with(ctx.home.join(s)))
         || ctx.app_data.iter().any(|d| p.starts_with(d))
         || p.starts_with("/Library/Keychains")
+}
+
+/// Files in the agents folder that name accounts and connections: read
+/// only with a card, whoever asks.
+const TEAM_PRIVATE: &[&str] = &["wallet.json", "connections.json"];
+
+/// The team's own files that an admin (the Chief, by default) reads without
+/// a card: every agent's home (`CLAUDE.md`, its chat log, what it did) and
+/// the team's registry. No secret lives there (they are in the Keychain; the
+/// bridge and Remote Access tokens sit beside it in the app's data, and
+/// still ask), and searching what the team knows is the job. Writing another
+/// agent's files still asks ([`protected`]); an agent that isn't an admin
+/// reads only its own home.
+fn team_file(p: &Path, ctx: &Ctx) -> bool {
+    ctx.team_reader
+        && ctx.app_data.iter().any(|d| {
+            let root = d.join("agents");
+            p.starts_with(&root)
+                && !p
+                    .strip_prefix(&root)
+                    .ok()
+                    .and_then(|r| r.to_str())
+                    .is_some_and(|r| TEAM_PRIVATE.contains(&r))
+        })
+}
+
+/// Reading here asks: a credential store, but not the team's own files.
+fn secret_to_read(p: &Path, ctx: &Ctx) -> bool {
+    credential_store(p, ctx) && !team_file(p, ctx)
 }
 
 /// Writing here changes what runs next, or who can get in.
@@ -655,7 +686,7 @@ fn simple_asks(words: &[String], ctx: &Ctx, outside: bool, known: bool) -> bool 
     if args
         .iter()
         .filter(|a| !a.starts_with('-'))
-        .any(|a| resolve_known(a, ctx, known).is_some_and(|p| credential_store(&p, ctx)))
+        .any(|a| resolve_known(a, ctx, known).is_some_and(|p| secret_to_read(&p, ctx)))
     {
         return true;
     }

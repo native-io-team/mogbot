@@ -373,9 +373,9 @@ describe('result rules shared with the phone', () => {
       { kind: 'file' as const, file: BEFORE, role: 'before' as const },
       { kind: 'file' as const, file: PDF },
     ];
-    // One side alone isn't a comparison: it's listed.
+    // One side alone isn't a pair, but it is its page's picture in the compare.
     expect(beforeAfter(items)).toBeNull();
-    expect(listedItems(items)).toHaveLength(2);
+    expect(listedItems(items)).toEqual([{ kind: 'file', file: PDF }]);
     const both = [...items, { kind: 'file' as const, file: AFTER, role: 'after' as const }];
     expect(beforeAfter(both)?.after).toBe(AFTER);
     expect(listedItems(both)).toEqual([{ kind: 'file', file: PDF }]);

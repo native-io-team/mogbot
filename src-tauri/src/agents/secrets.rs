@@ -627,6 +627,7 @@ mod tests {
             role: String::new(),
             instructions: String::new(),
             shape: None,
+            avatar: None,
             color: None,
             is_main: false,
         })
@@ -661,6 +662,7 @@ mod tests {
             takeover: false,
             room: None,
             decide: Vec::new(),
+            local_links: Vec::new(),
         };
         let request_id = store::new_id();
         card.approval = Some(Approval {

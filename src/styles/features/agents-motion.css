@@ -294,9 +294,7 @@
 }
 
 .agent-avatar {
-  transition:
-    color var(--transition-interaction-fast),
-    background var(--transition-interaction-fast);
+  transition: color var(--transition-interaction-fast);
 }
 
 /* Working → needs you → unread: each status swaps in instead of cutting. */

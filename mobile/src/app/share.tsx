@@ -236,7 +236,7 @@ function AgentChoice({
         pressed && { backgroundColor: colors.surfaceGroupPressed },
       ]}
     >
-      <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.header} />
+      <AgentAvatar id={agent.id} name={agent.name} color={agent.color} size={avatarSize.header} />
       <View style={styles.rowText}>
         <T variant="headline" color={colors.textStrong} numberOfLines={1}>
           {agent.name}

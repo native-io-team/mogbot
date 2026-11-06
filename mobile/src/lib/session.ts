@@ -13,6 +13,7 @@ import type {
   ResultRef,
   TeamSetupStepId,
   TeamSetupStepState,
+  AgentLook,
 } from '@shipstudio/companion-protocol';
 import NetInfo from '@react-native-community/netinfo';
 import { AccessibilityInfo, AppState, Platform } from 'react-native';
@@ -565,7 +566,11 @@ export const deviceSelf = () => call('devices.self', {});
 /** Pin, mute or hide: shown at once, put back if the Mac says no. */
 export async function setAgentToggles(
   agentId: string,
-  input: Partial<Record<'pinned' | 'muted' | 'hidden', boolean>>
+  input: Partial<Record<'pinned' | 'muted' | 'hidden', boolean>> & {
+    /** How it looks, from a Mac listing `MAC_FEATURES.looks`. */
+    avatar?: AgentLook;
+    color?: string;
+  }
 ) {
   const before = getApp().overview;
   const patch = (on: typeof before) =>
@@ -676,9 +681,13 @@ export const keepCopy = (agentId: string, copyId: string, into?: string) =>
   call('agents.keepCopy', into ? { agentId, copyId, into } : { agentId, copyId });
 export const discardCopy = (agentId: string, copyId: string) =>
   call('agents.discardCopy', { agentId, copyId });
-/** "Watch live": a one-time link to the card's running site, on this Mac's tailnet only. */
-export const watchLive = (agentId: string, messageId: string) =>
-  call('agents.watchLive', { agentId, messageId });
+/**
+ * "Watch live": a one-time link to the card's running site, on this Mac's
+ * tailnet only. `link`: one of the message's `localLinks` instead (Macs
+ * with `watch.links`).
+ */
+export const watchLive = (agentId: string, messageId: string, link?: number) =>
+  call('agents.watchLive', link == null ? { agentId, messageId } : { agentId, messageId, link });
 
 /** A path written in an agent's reply, fetched from the Mac and saved here. */
 export async function fetchPath(agentId: string, path: string) {

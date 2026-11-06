@@ -17,6 +17,7 @@ fn agent() -> store::Agent {
         role: "Looks things up".into(),
         instructions: "Be brief.".into(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: false,
     })
@@ -190,6 +191,32 @@ fn verdicts() {
         verdict(&card, 0, true, Moment::TurnEnded),
         Some(Expiry::MovedOn)
     );
+}
+
+/// The two shapes of the pending "Run a command" cards in a real chat from
+/// before "Go hard" (values fictional): a plain one, and one raised while
+/// answering outside text. Both close at launch as "moved on".
+#[test]
+fn run_a_command_cards_from_before_go_hard_expire_at_launch() {
+    for raw in [
+        json!({
+            "requestId": "r-old-1", "status": "pending", "title": "Run a command",
+            "detail": "npm run dev", "tool": "Bash",
+            "input": { "command": "npm run dev", "description": "to preview the site" }
+        }),
+        json!({
+            "requestId": "r-old-2", "status": "pending", "title": "Run a command",
+            "detail": "ls ~/Downloads", "tool": "Bash", "fromOutside": true,
+            "summary": "List the downloads folder",
+            "input": { "command": "ls ~/Downloads" }
+        }),
+    ] {
+        let a: Approval = serde_json::from_value(raw).unwrap();
+        assert_eq!(
+            verdict(&a, 10 * 24 * 3_600_000, false, Moment::Launch),
+            Some(Expiry::MovedOn)
+        );
+    }
 }
 
 /// What an import left in a real team (names fictional): old-style secure

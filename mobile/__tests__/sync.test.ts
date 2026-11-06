@@ -78,6 +78,16 @@ describe('drafts', () => {
     expect(s.drafts.a.text).toBe('Hello, w');
   });
 
+  it('is withdrawn by an empty restart: a progress line went to the timeline', () => {
+    let s = draft(emptySync(), 0, 'Starting the previews');
+    s = draft(s, 0, '', 'other'); // someone else's id: this draft stays
+    expect(s.drafts.a.text).toBe('Starting the previews');
+    s = draft(s, 0, '');
+    expect(s.drafts.a).toBeUndefined();
+    // Nothing held: an empty restart never makes an empty bubble.
+    expect(draft(emptySync(), 0, '').drafts.a).toBeUndefined();
+  });
+
   it('gives way to the finished message with the same id', () => {
     let s = draft(emptySync(), 0, 'Hi');
     s = at(s, 1, msg('d', 10, { text: 'Hi there' }));

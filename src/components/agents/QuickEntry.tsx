@@ -229,7 +229,7 @@ export function QuickEntry() {
           <span className="quick-entry__to-label">To</span>
           {to ? (
             <>
-              <AgentAvatar name={to.name} color={to.color} size="mini" />
+              <AgentAvatar id={to.id} name={to.name} color={to.color} size="mini" />
               <span className="quick-entry__to-name">{to.name}</span>
             </>
           ) : (

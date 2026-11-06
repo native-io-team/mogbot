@@ -319,7 +319,7 @@ function StepItems({
             const word = helloWord(a);
             return (
               <View key={a.agentId} style={styles.item} testID={`hello-${a.state}`}>
-                <AgentAvatar name={a.agentName} color={a.color} />
+                <AgentAvatar id={a.agentId} name={a.agentName} color={a.color} />
                 <T variant="small" color={colors.textStrong} style={{ flex: 1 }}>
                   {a.agentName}
                 </T>

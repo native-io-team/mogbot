@@ -39,7 +39,7 @@ import {
   type Palette,
 } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
-import { AgentAvatar, StatusMark, WorkingRing } from './agent';
+import { AgentAvatar, StatusMark } from './agent';
 import { showActions } from './menu';
 import { Icon, useRipple, T } from './ui';
 
@@ -284,7 +284,7 @@ function RowBody({
     )
   );
   const state = onMac || quiet ? undefined : lineState(agent);
-  // Running (not queued for a slot): the avatar's ring says so, and the line
+  // Running (not queued for a slot): the avatar blinks, and the line
   // says what and how long, on a clock that ticks only while it works.
   const running = live && !quiet && agent.status.state === 'working' && !waitingForSlot(agent);
   const now = useClock(running);
@@ -337,10 +337,15 @@ function RowBody({
         if (id) onAction(id);
       }}
     >
-      {/* Working: a ring in its colour breathes around the tile, in place of the list's spinner. */}
+      {/* Working: the eyes blink now and then, and the line says what (never a ring around it). */}
       <View style={styles.avatar}>
-        <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.list} />
-        {running && <WorkingRing color={agent.color} size={avatarSize.list} />}
+        <AgentAvatar
+          id={agent.id}
+          name={agent.name}
+          color={agent.color}
+          size={avatarSize.list}
+          working={running}
+        />
       </View>
       <View style={styles.text}>
         <View style={styles.nameLine}>

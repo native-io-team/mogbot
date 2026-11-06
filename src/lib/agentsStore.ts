@@ -409,6 +409,15 @@ function noteFinished(id: string) {
 export function updateDraft(agentId: string, id: string, text: string) {
   const previous = state.drafts[agentId];
   if (finished.has(id) || state.messages[agentId]?.some((m) => m.id === id)) return;
+  // Empty text withdraws the draft: it was progress narration, which the Mac
+  // keeps in the turn's timeline (a `note` step) instead of the chat.
+  if (text === '') {
+    if (previous?.id !== id) return;
+    const drafts = { ...state.drafts };
+    delete drafts[agentId];
+    emit({ ...state, drafts });
+    return;
+  }
   // A repeated event changes nothing; don't re-render the chat for it.
   if (previous?.id === id && previous.text === text) return;
   const ts = previous?.id === id ? previous.ts : Date.now();

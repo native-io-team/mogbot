@@ -397,6 +397,7 @@ const AgentRow = memo(function AgentRow({
           onClick={() => onSelect(agent.id)}
         >
           <AgentAvatar
+            id={agent.id}
             name={agent.name}
             color={agent.color}
             selected={current}

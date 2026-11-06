@@ -184,7 +184,7 @@ and Inbox against a live Gmail connector.
 
 | Piece | Where | Notes |
 | --- | --- | --- |
-| Identity | `<projects root>/.shipstudio/agents/agents.json` | name, role, avatar (shape + colour key), pinned/hidden, unread, Claude session id |
+| Identity | `<projects root>/.shipstudio/agents/agents.json` | name, role, colour key, `avatar` (a shape and a face; absent, derived from the id: see docs/internal/avatars.md), pinned/hidden, unread, Claude session id |
 | Home | `<projects root>/.shipstudio/agents/<id>/` | the agent's working directory |
 | Instructions + memory | `<home>/CLAUDE.md` | Claude Code loads it every turn. Instructions on top, `## Memory` below, which the agent maintains itself. Editing instructions never touches memory. |
 | Conversation | `<home>/messages.jsonl` | what *you* were shown: your messages, its replies, agent-to-agent lines, approval cards, errors. Append-only |
@@ -352,14 +352,16 @@ steps, and Stop stops it. Its tokens are the agent's, never a routine's.
 sure to carry over, drop `In progress:` when done, put big output (logs,
 command output, page dumps, data) in a file and read back only what's
 needed, and what any summary keeps. It is held to a budget
-(`runner/prompt_budget_tests.rs`): a plain agent's app-owned prompt is 10,192
-characters, a Codex agent's 10,757, the Chief's 14,141 before its team list.
-Measured with Claude Code (Haiku 5.5, `--append-system-prompt-file`, input
-tokens over a bare run): 3,347 tokens before this work and **3,269** after for a
-plain agent, 4,583 and **4,505** for the Chief, while gaining the paragraph
-above. Trimmed: the logins rules' repeat of the secrets rules, the Chrome
-profiles sentence, the team brief, and a duplicate push rule; "Ship Studio"
-in two engine lines became "the app".
+(`runner/prompt_budget_tests.rs`): a plain agent's app-owned prompt is 12,054
+characters, a Codex agent's 12,619, the Chief's 16,003 before its team list
+(budgets 12,500 / 13,100 / 16,600). Measured with Claude Code (Haiku 5.5,
+`--append-system-prompt-file`, input tokens over a bare run): on the base
+this work started from, 3,347 tokens before and 3,269 after for a plain agent
+(4,583 → 4,505 for the Chief), while gaining the paragraph above; with
+"Showing your work" and "Plumbing stays out of the chat", added on the
+foundation meanwhile, 3,827 (Chief 5,063). Trimmed: the logins rules' repeat
+of the secrets rules, the Chrome profiles sentence, the team brief, and a
+duplicate push rule; "Ship Studio" in two engine lines became "the app".
 
 **Observed vs assumed** (docs fetched 2026-11-05; Claude Code 2.1.318 and
 Codex 0.166 on this Mac):
@@ -576,8 +578,8 @@ steps has no line.
   ends the turn with a line saying so (`HUNG_NOTE`).
 - **In the lists**: a working agent's row (sidebar, What's in flight)
   says the step and how long ("Running the Cypress tests · 5m") or "No
-  progress for 5 min", never "Working…", and its badge's ring breathes
-  slowly in its colour (still under Reduce Motion).
+  progress for 5 min", never "Working…", and its avatar blinks every few
+  seconds (still under Reduce Motion). No ring around it.
 - **Stored** beside the log, never in it: `turns/<message-id>.json`, sent
   again on `agents://message` when the turn ends, and applied only to the
   paged chat reads (desktop and phone), after the log's lock is released,
@@ -898,7 +900,11 @@ below; it asks only for:
 - writes to `~/.ssh`, Keychains, shell profiles, `~/Library/LaunchAgents`,
   the app's own data (another agent's home, this agent's log and
   instructions), or outside the home and temporary folders; reading a
-  credential store (`~/.ssh`, Keychains, `~/.gnupg`); `crontab` (except `-l`),
+  credential store (`~/.ssh`, Keychains, `~/.gnupg`) or the app's own data:
+  its tokens, and the agents folder's account files (`wallet.json`,
+  `connections.json`). The Chief and admins read the rest of the agents
+  folder (every agent's `CLAUDE.md`, chat log, timeline) without a card;
+  other agents read only their own home; `crontab` (except `-l`),
   `security`, `launchctl`, `diskutil`, `dd`, `csrutil`, `pmset`, `nvram` and
   other system tools; `defaults write` to `-g` or a `/Library` domain
 - connector tools whose name writes (send, create, update, delete, pay…);
@@ -2646,7 +2652,12 @@ Accounts; ⌘K "Usage accounts…", "Add a Claude Code account…", "Add a Codex
 account…"). The first is always **This Mac**: the `claude` / `codex` login
 already on the machine (`id: "default"`), which every turn used before
 wallets and still uses while it is the only one. It can be renamed and moved
-down, not removed. Each added account is signed in into a folder of its own,
+down, not removed (its row's menu says why). Every row, This Mac included,
+says who it is signed in as and its plan only as the engine's own files
+record them (`agents/identity.rs`: Claude Code's `.claude.json`
+`oauthAccount.emailAddress` / `planDisplayName`; Codex's `auth.json`
+`id_token` `email` / `chatgpt_plan_type`), re-read on every listing and when
+the window regains focus; nothing there, nothing shown. Each added account is signed in into a folder of its own,
 reusing the isolation `commands/accounts.rs` already had for workspaces (an
 added account's id is a fresh one, never a workspace's):
 
@@ -3896,6 +3907,49 @@ and asks the agent (`test_prompt`) to click through the site while you watch.
   harness against a fictional site); a report staged in the same turn as a
   `share_result` replaces it.
 
+## Showing the work (`agents/narration.rs`, `agents/local_links.rs`, `agents/dev_servers.rs`)
+
+Visual work is shown, early and on one card, without being asked. The rules
+live in the app-owned `SHOW_WORK` section of every agent's system prompt
+(`prompts.rs`), built each turn, so agents created before it get it with
+nothing in their own `CLAUDE.md` touched.
+
+- **One card for visual work.** `share_result` file items take a `page` next
+  to `role` (before/after). The card shows one compare per page (side by
+  side or a slider, a page switcher, the agent's captions) with Preview,
+  Watch live and Test it (`comparePages` in `companion-protocol/results.ts`).
+- **Checkpoints.** `checkpoint: true` records the card at once, marked
+  "Partway through"; the same turn's next `share_result` becomes its next
+  version (`results::continue_checkpoint`), so a turn still ends on one card.
+- **Narration folds into the timeline.** A short reply (no question, link,
+  list, code or blocker; ≤240 chars) is held. If the turn writes again or
+  calls a tool, it becomes a `note` step and its streamed draft is withdrawn
+  (an empty draft event). If the turn ends on it, it is the reply; a turn
+  that only narrated still ends on its last line. Nothing goes silent.
+- **Local links.** `http://localhost:…` (and 127.0.0.1, 0.0.0.0, [::1]) in a
+  reply is taken out of the text into `localLinks`. A port the app knows
+  serves a project (a preview proxy, a server the turn left in a project or
+  its copy, a listener whose folder is a project) offers Preview
+  (`agents_preview_target` with `link`) and, on Macs with `watch.links`,
+  Watch live; any other is a "running on this Mac" chip, never a dead link.
+  Code spans are left alone.
+- **Dev servers are cleaned up.** What the turn's engine started is noted by
+  ancestry (its process tree while it ran, its process group). At the turn's
+  end, listeners nobody is looking at are stopped; one a pane shows, a phone
+  watches, or the turn just showed (a link, a card naming its project) is
+  kept, and stopped after 10 minutes unwatched. Before any stop the pid must
+  still run the command recorded.
+- **No plumbing talk.** The prompt forbids tool, server, port and
+  "offline" talk; the preview bridge's "nothing is showing" error tells the
+  agent what to do instead and not to relay it.
+- **Unlisted projects.** A card naming a repository folder that isn't a
+  project yet lists it first (`project::ensure_listed` → `workplace`'s
+  registration), so Preview works without the user opening anything.
+
+Not verified: a live turn end-to-end (narration folding and dev-server
+cleanup are covered by unit tests of the rules, not a real Claude Code run);
+Watch live on a server the turn left (outside a preview proxy).
+
 ## The Chief's audit trail and live hand-offs
 
 - `create_agent`, `update_agent` and `delete_agent` leave a quiet note in the
@@ -4004,3 +4058,33 @@ and asks the agent (`test_prompt`) to click through the site while you watch.
   `AGENTS_E2E_OUT=<file.json>`.
 - `node scripts/harness-capture.mjs agents-`: memory (`agents-memory`, `agents-memory-edit`, `agents-remember`), a routine's past runs and a pending retry (`agents-schedule-history`), project binding (`agents-project-*`), Chief audit (`agents-chief-audit`), brief in progress, team, What's in flight (`agents-team-overview`, via ⌘K), @mention menu, approval, secure input (`agents-secret-*`, `agents-secrets-editor`), first run (keep-awake off and on), new
   agent, import, Claude Code missing, the engine picker (`agents-engine-picker`), Codex not signed in (`agents-engine-unavailable`), one engine installed (`agents-engine-one`), a Codex that can't ask (`agents-codex-cant-ask`) and a Codex agent's chat (`agents-codex-chat`).
+
+### Real end-to-end tests
+
+The core jobs, on real `claude --print` turns (Haiku), at the independence
+levels people pick: `scripts/agents-e2e.sh core` (all seven, about $0.06 and
+under two minutes) or one `core-…` scenario
+(`src-tauri/examples/agents_e2e/core_jobs.rs`). Opt-in, never part of the
+default run. Like the rest of the suite it runs in a throwaway HOME (app
+data, agents, projects root and Claude Code's session files under it; set
+`AGENTS_E2E_HOME` to choose where), signs in through the login keychain
+(linked, read only, never copied) and is silent: `SHIPSTUDIO_AGENTS_SILENT`
+(debug builds only) stops every banner and sound, even for an agent the
+Chief makes mid-run.
+
+| Scenario | Checks |
+|---|---|
+| `core-delegate` | Go hard: the Chief creates Filer (on the saved default model), delegates a file write in its home, hears back; no cards anywhere |
+| `core-chain` | Go hard: `mkdir`, writes, `ls`, a `for` loop and a log in `$TMPDIR` in one Bash call; no card, its "Allowed automatically — Go hard" receipt in What it did |
+| `core-often` | The same chain at Check with me often: a card (allowed, so it finishes) |
+| `core-push` | Go hard: `git push` to a local bare remote raises a card; denied, nothing reaches the remote |
+| `core-result` | `share_result` with a file: one v1 result card naming it, no card for the write |
+| `core-kill` | The engine SIGKILLed mid-reply: the partial kept as stopped, a plain error line, and the next message answered |
+| `core-search` | WebSearch at Go hard: no card, a search step and its receipt |
+
+What the first run found and fixed: an agent asked to `git push` a repository
+in its home refused outright ("the push card can't be created"), because the
+prompt said to push "only with `push`", the tool that serves projects only.
+A push outside the projects now goes through git and its card
+(`prompts::PROJECTS`). Not covered: Codex, a project-bound agent's push,
+and resuming a killed turn (it ends honestly instead).

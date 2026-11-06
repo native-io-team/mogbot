@@ -8,8 +8,9 @@ import type { AgentReachSettings, LoginRequest } from './agentLogins';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import type { FileDiff } from './git';
 import type { AgentSecret, SecretRequest } from './agentSecrets';
-import type { Watch, WatchSource } from '../../packages/companion-protocol/src/model';
+import type { LocalLink, Watch, WatchSource } from '../../packages/companion-protocol/src/model';
 import type { SettingsProposal } from '../../packages/companion-protocol/src/policy';
+import type { AgentLook } from '../../packages/companion-protocol/src/avatar';
 
 export type { Watch, WatchEvent, WatchSource } from '../../packages/companion-protocol/src/model';
 
@@ -58,6 +59,8 @@ export type WorkStepKind =
   | 'plan'
   | 'delegate'
   | 'project'
+  /** A short progress line the agent wrote mid-turn, kept here rather than in the chat. */
+  | 'note'
   | 'tool';
 
 /** One thing a turn did, in plain words ("Read Hero.tsx", "Ran npm test"). */
@@ -150,6 +153,8 @@ export interface Agent {
   name: string;
   role: string;
   shape: number;
+  /** Its chosen shape and face. Absent: derived from its id (`lookFor` in avatar.ts). */
+  avatar?: AgentLook;
   /** One of AGENT_COLORS; typed loosely because the registry is a file. */
   color: string;
   isMain: boolean;
@@ -590,6 +595,11 @@ export interface AgentMessage {
   room?: string;
   /** On an admin's message: other agents' requests only you can decide, answered in place. */
   decide?: DecideItem[];
+  /**
+   * Links in the reply to a server on this Mac, taken out of its text by the
+   * Mac: one it knows serves a project offers Preview; any other is a chip.
+   */
+  localLinks?: LocalLink[];
 }
 
 /** Mirrors `admin::DecideItem`: another agent's card, brought to you by an admin. */
@@ -762,6 +772,7 @@ export const attachmentUrl = (home: string, attachment: Attachment) =>
 export interface NewAgentInput {
   name: string;
   shape?: number;
+  avatar?: AgentLook;
   color?: string;
   role?: string;
   instructions?: string;
@@ -776,6 +787,7 @@ export interface NewAgentInput {
 export interface UpdateAgentInput {
   name?: string;
   shape?: number;
+  avatar?: AgentLook;
   color?: string;
   role?: string;
   instructions?: string;
@@ -2299,14 +2311,27 @@ export {
 
 import type { ResultCard, ResultRef } from '../../packages/companion-protocol/src/results';
 export type {
+  ComparePage,
   ResultCard,
   ResultItem,
   ResultRef,
   ShotRole,
 } from '../../packages/companion-protocol/src/results';
+export type { LocalLink } from '../../packages/companion-protocol/src/model';
+export type { GalleryImage } from '../../packages/companion-protocol/src/gallery';
+export {
+  galleryCounter,
+  galleryOf,
+  galleryStart,
+  galleryStep,
+  messageImages,
+} from '../../packages/companion-protocol/src/gallery';
 export {
   beforeAfter,
   CHECKED_HEADING,
+  CHECKPOINT_LABEL,
+  comparePageName,
+  comparePages,
   changesLine,
   itemName,
   listedItems,

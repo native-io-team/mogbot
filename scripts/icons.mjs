@@ -213,14 +213,28 @@ function validateDeclarations(
   return { errors: allErrors, declarations, names, sources, unreferencedPrimary };
 }
 
-function validateDynamicSvg({ sourceDirectory = sourceRoot, branchFile = path.join(sourceRoot, 'components', 'branches', 'BranchGraph.tsx') } = {}) {
+/**
+ * The marked dynamic SVG exceptions: SVG assembled from data at runtime, one
+ * root each, carrying its marker. The branch graph draws a repository's
+ * history; the agent avatar draws a shape and face from the spec it shares
+ * with the phone (packages/companion-protocol/src/avatar.ts).
+ */
+function validateDynamicSvg({
+  sourceDirectory = sourceRoot,
+  branchFile = path.join(sourceRoot, 'components', 'branches', 'BranchGraph.tsx'),
+  avatarFile = path.join(sourceRoot, 'components', 'agents', 'AgentAvatar.tsx'),
+} = {}) {
   const errors = [];
+  const marked = new Map([
+    [branchFile, 'branch-graph'],
+    [avatarFile, 'agent-avatar'],
+  ]);
   const tsxFiles = walkFiles(sourceDirectory).filter((file) => file.endsWith('.tsx'));
   for (const file of tsxFiles) {
     const source = fs.readFileSync(file, 'utf8');
     const count = [...source.matchAll(/<svg\b/g)].length;
-    if (file === branchFile) {
-      if (count !== 1 || !source.includes('data-dynamic-svg="branch-graph"')) {
+    if (marked.has(file)) {
+      if (count !== 1 || !source.includes(`data-dynamic-svg="${marked.get(file)}"`)) {
         errors.push(`${relative(file)}: the marked dynamic SVG exception must contain exactly one SVG and its marker`);
       }
     } else if (count > 0) {

@@ -160,7 +160,7 @@ describe('RoomChat', () => {
     const names = [...document.querySelectorAll('.agent-room__speaker-name')].map(
       (n) => n.textContent
     );
-    expect(names).toEqual(['FIFinance', 'OPOps']);
+    expect(names).toEqual(['Finance', 'Ops']);
     expect(document.querySelector('.agent-room__speaker-name[data-color="orange"]')).toBeTruthy();
     expect(screen.getByText('To Finance')).toBeTruthy();
   });

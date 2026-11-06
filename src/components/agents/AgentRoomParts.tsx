@@ -36,7 +36,7 @@ export function RoomAvatars({ members }: { members: Pick<Agent, 'id' | 'name' | 
   return (
     <span className="agent-room-avatars" aria-hidden>
       {shown.map((m) => (
-        <AgentAvatar key={m.id} name={m.name} color={m.color} size="mini" />
+        <AgentAvatar key={m.id} id={m.id} name={m.name} color={m.color} size="mini" />
       ))}
       {more > 0 && <span className="agent-room-avatars__more">+{more}</span>}
     </span>

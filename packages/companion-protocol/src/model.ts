@@ -16,6 +16,7 @@
 
 import type { ResultCard, ResultRef } from './results';
 import type { SettingsProposal } from './policy';
+import type { AgentLook } from './avatar';
 
 export interface AgentStatus {
   state: 'idle' | 'working' | 'waiting';
@@ -43,6 +44,8 @@ export type WorkStepKind =
   | 'plan'
   | 'delegate'
   | 'project'
+  /** A short progress line the agent wrote mid-turn ("Starting the previews"), kept here, not in the chat. */
+  | 'note'
   | 'tool';
 
 /** One thing a turn did, in plain words ("Read Hero.tsx", "Ran npm test"). */
@@ -135,6 +138,8 @@ export interface Agent {
   name: string;
   role: string;
   shape: number;
+  /** Its chosen shape and face. Absent: derived from its id (`lookFor` in avatar.ts). */
+  avatar?: AgentLook;
   color: string;
   isMain: boolean;
   /**
@@ -1043,6 +1048,31 @@ export interface AgentMessage {
    * decide, each answered in place (the answer goes to that agent's card).
    */
   decide?: DecideItem[];
+  /**
+   * Links in the reply to a server on this Mac (`http://localhost:3400`),
+   * taken out of the text by the Mac (`agents/local_links.rs`). One the Mac
+   * knows serves a project offers Preview (desk) and Watch live (phone);
+   * any other is a plain "running on this Mac" chip, never a dead link.
+   */
+  localLinks?: LocalLink[];
+}
+
+/** A link an agent wrote to a server on this Mac (`AgentMessage.localLinks`). */
+export interface LocalLink {
+  /** As the agent wrote it. Only ever opened on the Mac itself. */
+  url: string;
+  /** The link's own text, else the host and port ("localhost:3400"). */
+  label: string;
+  port: number;
+  /**
+   * The folder whose dev server answers on that port, when the app knows one
+   * does: a project, or an agent's copy of one. Absent: nothing the app knows.
+   */
+  path?: string;
+  /** The user's project that folder is (or is a copy of). */
+  project?: string;
+  /** `path` is an agent's copy of `project`. */
+  copy?: boolean;
 }
 
 /** One of another agent's cards, brought to the user by an admin. */
@@ -1179,6 +1209,7 @@ export interface SharedFile extends Attachment {
 export interface NewAgentInput {
   name: string;
   shape?: number;
+  avatar?: AgentLook;
   color?: string;
   role?: string;
   instructions?: string;
@@ -1204,6 +1235,7 @@ export interface RoleTemplateSummary {
 export interface UpdateAgentInput {
   name?: string;
   shape?: number;
+  avatar?: AgentLook;
   color?: string;
   role?: string;
   instructions?: string;
@@ -1307,7 +1339,10 @@ export interface UsageAccount {
   name: string;
   thisMac: boolean;
   signedIn: boolean;
+  /** Who it is signed in as, as the engine recorded it; absent when unknown. */
   email?: string;
+  /** The plan's name, only when the engine's own file names it ("Max", "plus"). */
+  plan?: string;
   limit?: UsageLimitHit;
   /** Out of usage right now. */
   out: boolean;

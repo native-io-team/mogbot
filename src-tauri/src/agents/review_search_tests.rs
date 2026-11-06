@@ -18,6 +18,7 @@ fn agent(name: &str) -> store::Agent {
         role: String::new(),
         instructions: String::new(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: false,
     })
@@ -48,6 +49,7 @@ fn msg(agent: &store::Agent, ts: i64, text: &str) -> AgentMessage {
         result: None,
         revises: None,
         decide: Vec::new(),
+        local_links: Vec::new(),
     }
 }
 

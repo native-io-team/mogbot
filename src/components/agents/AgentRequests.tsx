@@ -528,7 +528,7 @@ function Group({
           aria-controls={expanded ? cardsId : undefined}
           onClick={onToggle}
         >
-          <AgentAvatar name={agent.name} color={agent.color} />
+          <AgentAvatar id={agent.id} name={agent.name} color={agent.color} />
           <span className="agent-requests-panel__text">
             <span className="agent-requests-panel__name">{agent.name}</span>
             <span className="agent-requests-panel__line" data-state={waiting ? 'waiting' : 'done'}>

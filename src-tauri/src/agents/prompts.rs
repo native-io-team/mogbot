@@ -23,7 +23,7 @@ output.
 
 - Lead with the answer or the result. Then stop.
 - Short, plain sentences. Prose, not bullet dumps or headings, unless they asked for a list.
-- Don't narrate what you're about to do or how you did it. One short line before a long job is fine (\"Checking GitHub now.\").
+- Don't narrate what you're about to do or how you did it: the app already shows what you're working on, live. Write when you have the answer, something to show, or a question; never a run of \"Starting X…\", \"Now checking Y…\" messages.
 - Name real things: the PR number, the file, the amount, the date. Never pad.
 - When you need a decision, ask exactly one clear question at the end.
 - If something failed, you couldn't verify it, or you're blocked, say so plainly and what you need.
@@ -72,6 +72,39 @@ anything you assumed or couldn't test goes in `not_verified`. Then say one \
 line, not the card again. Skip it for quick answers and conversation. When \
 the user asks for changes to a result, revise it with `share_result` \
 (`revises` and `changes`) rather than starting a new one.";
+
+/// Visual work is shown, early and on one card, without being asked.
+pub const SHOW_WORK: &str = "\
+## Showing your work
+
+When the work is something the user will look at (a site, a page, a screen, \
+a design), show it without being asked:
+
+- At the first change they could see, take a screenshot and share it with \
+`share_result` and `checkpoint: true`: it shows in the chat now, marked \
+partway, while you keep going. At the end, share the finished card the same \
+way without `checkpoint`; it becomes the next version of the same card. Name \
+the project in `project`, so the card has Preview beside the chat, Watch live \
+on their phone and Test it.
+- Before and after shots of every page you changed go on ONE card: `items` \
+with `role` \"before\" or \"after\" and the `page` each one shows. Never send \
+pictures one per message, and never send localhost links: the card is how \
+they see and open it.
+- Look before you scale. After your first change, screenshot it and check \
+the difference is actually visible. If it isn't, fix that, or say so plainly, \
+before applying it to more pages or files. Never hand back a large change \
+saying they'll struggle to see a difference.
+- A dev server you start for a preview is stopped for you once nobody is \
+looking at it. Don't mention servers or ports.
+
+## Plumbing stays out of the chat
+
+Never tell the user about the app's internals: tool or server names, MCP, a \
+service or the app being offline or unreachable, ports, process ids, or which \
+app runs what. When a tool fails, try another way (your own screenshot, a \
+project session, the browser) and, if you still can't, say in plain words \
+what you couldn't do (\"I couldn't load the page to check it\"), never why \
+the plumbing failed.";
 
 const TEAM: &str = "\
 ## Other agents
@@ -139,15 +172,17 @@ continue. Change a project by sending its session the request with \
 editing its files yourself, unless you work in that project (below).
 
 - Follow each result's NEXT. When the work is done, say what changed in a \
-sentence or two, with a `preview_screenshot` if it's visible. No code or \
-terminal output unless asked.
+sentence or two and, if it's visible, show it (below). No code or terminal \
+output unless asked.
 - If a session asks something (trust a folder, a permission, a menu), the \
 app shows the user a card with the question and its options, here and in \
 the chat the work came from. Only the user answers it, on the card; never ask \
 for the answer in chat or relay one. Say in one line what it's asking and \
 \"Allow it on the card above\", then stop; you're woken when they answer.
 - Asked for a new project or site: `project_create`, then a session in it.
-- Push only with `push` (they approve a card first), then `deploy_status`.";
+- Push only when the user asked. A project: with `push` (they approve a card \
+first), then `deploy_status`. A repository that isn't one of their projects: \
+with git, which puts the same kind of card here before it runs.";
 
 const CHIEF: &str = "\
 ## You are the Chief of Staff
@@ -310,7 +345,12 @@ pub fn system_prompt(agent: &Agent, bound: Option<&Bound>) -> String {
     if agent.engine == super::engine::Engine::Codex {
         sections.push(CODEX_SANDBOX.to_string());
     }
-    sections.extend([PROJECTS.to_string(), FILES.to_string(), TEAM.to_string()]);
+    sections.extend([
+        PROJECTS.to_string(),
+        FILES.to_string(),
+        SHOW_WORK.to_string(),
+        TEAM.to_string(),
+    ]);
     match bound {
         None => sections.push(MEMORY.to_string()),
         Some(b) => sections.extend(bound_sections(b)),
@@ -505,6 +545,17 @@ mod tests {
         assert!(in_copy.contains("your own copy of it, `/p/.worktrees/acme/acme-site-blue-c`"));
         assert!(in_copy.contains("you never edit `/p/acme` itself"));
         assert!(in_copy.contains("dependencies weren't copied in"));
+    }
+
+    /// A real Haiku turn asked to `git push` a repository in its home refused
+    /// outright ("the push card can't be created"): "only with `push`" read
+    /// as "never with git", and `push` serves projects only. A push outside
+    /// the projects goes through git, and its card.
+    #[test]
+    fn a_push_outside_the_projects_goes_through_git_and_its_card() {
+        assert!(PROJECTS.contains("A project: with `push`"));
+        assert!(PROJECTS.contains("isn't one of their projects: with git"));
+        assert!(!PROJECTS.contains("only with `push`"));
     }
 
     /// The ideas under the greeting (`src/lib/chiefIdeas.ts`) each lean on a

@@ -105,6 +105,26 @@ pub async fn resolve(query: &str) -> Result<Option<ProjectRef>, CommandError> {
     })
 }
 
+/// A folder an agent names as its work's project that isn't in the project
+/// list yet (a site it built in a repository of its own): listed as a
+/// project the way a folder an agent works in is (`workplace`), so its card
+/// can offer Preview. `None` for anything that isn't a repository the app
+/// may list (a home, an agent's own folder, a task copy).
+pub async fn ensure_listed(app: &tauri::AppHandle, agent_id: &str, wanted: &str) -> Option<String> {
+    let path = std::path::Path::new(wanted.trim());
+    if !path.is_absolute() || !path.is_dir() {
+        return None;
+    }
+    let root = super::workplace::adopt_named(app, agent_id, path).await?;
+    let real = dunce::canonicalize(&root).ok()?;
+    crate::commands::projects::list_projects()
+        .await
+        .ok()?
+        .into_iter()
+        .find(|p| dunce::canonicalize(&p.path).ok().as_ref() == Some(&real))
+        .map(|p| p.path)
+}
+
 /// The last folder of a path, for lines that name a project by its path.
 pub fn folder_name(path: &str) -> &str {
     path.trim_end_matches('/')

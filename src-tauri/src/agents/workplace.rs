@@ -292,6 +292,18 @@ fn first_pin(path: &str) -> bool {
     }
 }
 
+/// A folder an agent names as its work's project (`share_result`): the
+/// repository it is in, registered and pinned as any found project is, by
+/// the same rules (never a home, an agent's own folder or a task copy).
+/// Returns the repository's path once the app lists it.
+pub async fn adopt_named(app: &AppHandle, agent_id: &str, folder: &Path) -> Option<String> {
+    let ex = Exclusions::current()?;
+    let root = repo_root(folder, &ex, &git_entry)?;
+    let path = root.to_string_lossy().into_owned();
+    adopt(app, agent_id, &path).await;
+    Some(path)
+}
+
 /// Make the project one the app lists (registered when it's outside the
 /// projects folder) and, the first time, pin it to the top of the sidebar.
 async fn adopt(app: &AppHandle, agent_id: &str, path: &str) {

@@ -76,7 +76,7 @@ export function AgentSwitcher({
         .map((a) => (
           <DropdownItem
             key={a.id}
-            icon={<AgentAvatar name={a.name} color={a.color} size="mini" />}
+            icon={<AgentAvatar id={a.id} name={a.name} color={a.color} size="mini" />}
             onSelect={() => onOpenAgent(a.id)}
           >
             <span className="agent-model-menu__label">{a.name}</span>

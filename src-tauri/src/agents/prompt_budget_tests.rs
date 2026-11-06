@@ -5,13 +5,13 @@
 //! context healthy".
 use super::*;
 
-/// A plain agent on Claude Code: 10,192 characters when this was set
-/// (3,269 tokens as Claude Code counted it; 3,347 before the context work).
-const PLAIN_BUDGET: usize = 10_600;
+/// A plain agent on Claude Code: 12,054 characters when this was set
+/// (3,827 tokens as Claude Code counted it).
+const PLAIN_BUDGET: usize = 12_500;
 /// The same agent on Codex (its sandbox section).
-const CODEX_BUDGET: usize = 11_200;
+const CODEX_BUDGET: usize = 13_100;
 /// The Chief of Staff, with no team yet.
-const CHIEF_BUDGET: usize = 14_600;
+const CHIEF_BUDGET: usize = 16_600;
 
 fn agent(id: &str, name: &str, main: bool, engine: Engine) -> store::Agent {
     let mut a: store::Agent = serde_json::from_value(serde_json::json!({

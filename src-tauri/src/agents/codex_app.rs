@@ -1137,6 +1137,7 @@ mod tests {
             cwd: own.into(),
             scratch: vec![own.into()],
             app_data: vec!["/Users/fictional/Library/Application Support/App".into()],
+            team_reader: false,
         };
         let (mut c, _) = conversation(None);
         started(&mut c);

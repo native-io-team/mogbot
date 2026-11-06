@@ -101,6 +101,25 @@ pub fn target_path(
     Some((project.clone(), project, false))
 }
 
+/// Which folder one of a reply's local links previews (`local_links`): the
+/// folder the app knew served it when the reply was written. A copy that has
+/// since been kept or discarded previews its project instead.
+pub fn link_target_path(
+    message: &AgentMessage,
+    link: usize,
+    open_copy: Option<&TaskCopy>,
+) -> Option<(String, String, bool)> {
+    let link = message.local_links.get(link)?;
+    let (path, project) = (link.path.clone()?, link.project.clone()?);
+    if link.copy {
+        return match open_copy {
+            Some(open) if open.path == path => Some((path, project, true)),
+            _ => Some((project.clone(), project, false)),
+        };
+    }
+    Some((path, project, false))
+}
+
 /// The port to preview on: a server already up in this app wins over the one
 /// saved for the folder, so the pane shows what the workspace shows.
 pub fn pick_port(live: Option<u16>, saved: Option<u16>) -> Option<u16> {
@@ -124,8 +143,24 @@ pub fn resolve(
     live_port: impl Fn(&str) -> Option<u16>,
     saved_port: impl Fn(&str) -> Option<u16>,
 ) -> Result<PreviewTarget, String> {
-    let (path, project, copy) = target_path(message, agent.copy.as_ref())
-        .ok_or_else(|| "This card has no project to preview.".to_string())?;
+    resolve_at(agent, message, None, projects, live_port, saved_port)
+}
+
+/// [`resolve`], or for one of the message's local links (`link`).
+pub fn resolve_at(
+    agent: &store::Agent,
+    message: &AgentMessage,
+    link: Option<usize>,
+    projects: &[String],
+    live_port: impl Fn(&str) -> Option<u16>,
+    saved_port: impl Fn(&str) -> Option<u16>,
+) -> Result<PreviewTarget, String> {
+    let (path, project, copy) = match link {
+        Some(i) => link_target_path(message, i, agent.copy.as_ref())
+            .ok_or_else(|| "That link isn't to a site the app knows.".to_string())?,
+        None => target_path(message, agent.copy.as_ref())
+            .ok_or_else(|| "This card has no project to preview.".to_string())?,
+    };
     if !copy && !projects.iter().any(|p| same_place(p, &project)) {
         return Err(format!(
             "{} isn't one of your projects any more, so there's nothing to preview.",
@@ -142,7 +177,13 @@ pub fn resolve(
             )
         });
     }
-    let live = live_port(&path);
+    // A link's own server, while it's still up, is what the reply meant.
+    let link_port = link
+        .and_then(|i| message.local_links.get(i))
+        .filter(|l| l.path.as_deref() == Some(path.as_str()))
+        .map(|l| l.port)
+        .filter(|p| super::dev_servers::serves(&path, *p));
+    let live = live_port(&path).or(link_port);
     Ok(PreviewTarget {
         agent_id: agent.id.clone(),
         message_id: message.id.clone(),
@@ -179,6 +220,16 @@ pub fn attach_pane(path: &str, window: &str, attached: bool) {
     } else if panes.get(&key).map(String::as_str) == Some(window) {
         panes.remove(&key);
     }
+}
+
+/// Every folder a pane shows right now.
+pub fn pane_paths() -> Vec<String> {
+    PANES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .keys()
+        .cloned()
+        .collect()
 }
 
 /// The window whose pane shows `path`, if one does.
@@ -624,6 +675,7 @@ pub fn report_card(
             card.version = before.version + 1;
             card.changes = Some(changes_line(&report));
             card.test = Some(report);
+            card.checkpoint = false;
             card
         }
         None => ResultCard {
@@ -637,6 +689,7 @@ pub fn report_card(
             changes: None,
             project: Some(project.to_string()),
             test: Some(report),
+            checkpoint: false,
         },
     }
 }

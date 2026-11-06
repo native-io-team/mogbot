@@ -174,10 +174,20 @@ export const MAC_FEATURES = {
    */
   loginsPhone: 'logins.phone',
   /**
+   * Agents carry `avatar` (a shape and a face; `lookFor` in avatar.ts), and
+   * `agents.create` / `agents.update` take `avatar` (and `agents.update` `color`).
+   */
+  looks: 'agents.looks',
+  /**
    * Signing in to a site in the Mac's own Chrome from the phone: the
    * `agents.signin*` methods, one tab shown live here and driven from here.
    */
   signinPhone: 'signin.phone',
+  /**
+   * `agents.watchLive` takes `link`: Watch live on a dev server an agent's
+   * reply linked to (`localLinks` on the message), not only on a card.
+   */
+  watchLinks: 'watch.links',
 } as const;
 export type MacFeature = (typeof MAC_FEATURES)[keyof typeof MAC_FEATURES];
 

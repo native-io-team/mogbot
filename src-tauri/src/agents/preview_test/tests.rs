@@ -62,6 +62,7 @@ fn card(id: &str, version: u32, project: Option<&str>) -> ResultCard {
         changes: None,
         project: project.map(str::to_string),
         test: None,
+        checkpoint: false,
     }
 }
 

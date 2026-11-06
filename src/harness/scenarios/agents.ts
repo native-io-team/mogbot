@@ -2502,7 +2502,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-new',
     title: 'Agents — creating an agent',
     looksRightWhen:
-      'Name first (with its badge), then “What should it do?” and “What should it know?”, a muted line saying you can just ask your Chief of Staff, and a collapsed “Advanced” link. No colours, models or projects until Advanced is opened.',
+      'Name first (with its avatar, which opens its look), then “What should it do?” and “What should it know?”, a muted line saying you can just ask your Chief of Staff, and a collapsed “Advanced” link. No colours, models or projects until Advanced is opened.',
     command: 'agents.new',
     requires: '.agent-editor__advanced',
     commands: {},
@@ -2511,10 +2511,10 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-new-advanced',
     title: 'Agents — creating an agent, Advanced open',
     looksRightWhen:
-      'Advanced open under the brief: Color (eleven swatches), Runs on, Model (Default / Opus / Sonnet / Haiku), Works in, Apps.',
+      'Advanced open under the brief: Runs on, Model (Default / Opus / Sonnet / Haiku), Works in, Apps. (Colour is with the shape and face, behind the avatar beside Name.)',
     // Steps run before a scenario's command, so the dialog is opened by its button.
     steps: [{ click: '.agents-list__new' }, { click: '.agent-editor__more' }],
-    requires: '.agent-editor__colors',
+    requires: '.agent-editor__advanced-body',
     commands: {},
   },
   {

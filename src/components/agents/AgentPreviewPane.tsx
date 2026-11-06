@@ -135,7 +135,7 @@ export function AgentPreviewPane({
     let live = true;
     void (async () => {
       try {
-        const t = await previewTarget(request.agentId, request.messageId);
+        const t = await previewTarget(request.agentId, request.messageId, request.link);
         if (!live) return;
         setTarget(t);
         const owner = serverRef.current;
@@ -167,7 +167,7 @@ export function AgentPreviewPane({
     return () => {
       live = false;
     };
-  }, [request.agentId, request.messageId, request.n]);
+  }, [request.agentId, request.messageId, request.link, request.n]);
 
   const consent = usePendingDevServerConsent(target?.path ?? null);
   const state = paneState({
@@ -650,7 +650,12 @@ export function RunSteps({ agent, run }: { agent: Agent; run: PreviewRun }) {
           </li>
         ))}
       </ol>
-      <AttachmentLightbox agent={agent} viewing={viewing} onClose={() => setViewing(null)} />
+      <AttachmentLightbox
+        agent={agent}
+        viewing={viewing}
+        images={run.steps.flatMap((s) => (s.shot ? [s.shot] : []))}
+        onClose={() => setViewing(null)}
+      />
     </section>
   );
 }

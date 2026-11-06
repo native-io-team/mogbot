@@ -309,7 +309,7 @@ function StepBody({
               const key = `hello:${a.agentId}`;
               return (
                 <li key={a.agentId} className="team-setup__item" data-hello={a.state}>
-                  <AgentAvatar name={a.agentName} color={a.color} size="mini" />
+                  <AgentAvatar id={a.agentId} name={a.agentName} color={a.color} size="mini" />
                   <span className="team-setup__item-title">{a.agentName}</span>
                   {a.state === 'quiet' ? (
                     <Button

@@ -188,7 +188,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "update_agent",
-        description: "Change an agent's name, role, instructions, project or engine. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude` or `codex`) switches what it runs on from its next turn: a new session, handed the recent conversation.",
+        description: "Change an agent's name, role, instructions, project, engine or look. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude` or `codex`) switches what it runs on from its next turn: a new session, handed the recent conversation. `shape`, `face` and `color` change how it looks (\"give Hiring a hexagon with a curious face\"); give only what changes. A look applies at once, with no card: it isn't a setting.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -198,7 +198,10 @@ const TOOLS: &[Tool] = &[
                 "role": { "type": "string" },
                 "instructions": { "type": "string" },
                 "project": { "type": "string" },
-                "engine": { "type": "string", "enum": ["claude", "codex"] }
+                "engine": { "type": "string", "enum": ["claude", "codex"] },
+                "shape": { "type": "string", "enum": store::AVATAR_SHAPES },
+                "face": { "type": "string", "enum": store::AVATAR_FACES },
+                "color": { "type": "string", "enum": store::COLORS }
             },
             "required": ["agent"]
         }),
@@ -228,7 +231,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "share_result",
-        description: "Hand back a finished piece of work as ONE result card at the end of your reply: a title, a short summary, the files you made (documents, CSVs, screenshots), the links you produced or relied on, what you checked, and what you did NOT verify. Call it once, when the work is done, instead of listing deliverables in prose. Be honest: list only checks you actually ran in `checked`, and put anything you assumed, couldn't test or couldn't reach in `not_verified` (the user sees it prominently). Files must exist in your own folder or one of the user's projects; they're copied into the chat. When the user asks for changes to a result, revise it: call this again with `revises` (the result's id) and `changes` (one line on what changed), and the same card becomes the next version. A second call in the same turn replaces the first.",
+        description: "Hand back a finished piece of work as ONE result card at the end of your reply: a title, a short summary, the files you made (documents, CSVs, screenshots), the links you produced or relied on, what you checked, and what you did NOT verify. Call it when the work is done, instead of listing deliverables in prose (for visual work, also once at the first visible milestone with `checkpoint: true`). Be honest: list only checks you actually ran in `checked`, and put anything you assumed, couldn't test or couldn't reach in `not_verified` (the user sees it prominently). Files must exist in your own folder or one of the user's projects; they're copied into the chat. When the user asks for changes to a result, revise it: call this again with `revises` (the result's id) and `changes` (one line on what changed), and the same card becomes the next version. A second call in the same turn replaces the first.",
         main_only: false,
         schema: || json!({
             "type": "object",
@@ -237,14 +240,15 @@ const TOOLS: &[Tool] = &[
                 "summary": { "type": "string", "description": "Two or three sentences: what it is and what it's for." },
                 "items": {
                     "type": "array",
-                    "description": "What the result is made of, most important first. Each has a `path` (a file: absolute, ~/…, or relative to your folder) or a `url` (http/https), an optional short `label`, and for screenshots an optional `role` of \"before\" or \"after\".",
+                    "description": "What the result is made of, most important first. Each has a `path` (a file: absolute, ~/…, or relative to your folder) or a `url` (http/https), an optional short `label` (the caption), and for screenshots a `role` of \"before\" or \"after\" and the `page` it shows (\"Home\", \"Pricing\"). Before/after shots of several pages make ONE card with a compare per page: never send them as separate messages or files.",
                     "items": {
                         "type": "object",
                         "properties": {
                             "path": { "type": "string" },
                             "url": { "type": "string" },
                             "label": { "type": "string" },
-                            "role": { "type": "string", "enum": ["before", "after"] }
+                            "role": { "type": "string", "enum": ["before", "after"] },
+                            "page": { "type": "string", "description": "With `role`: the page or screen the shot is of." }
                         }
                     }
                 },
@@ -252,7 +256,8 @@ const TOOLS: &[Tool] = &[
                 "not_verified": { "type": "array", "items": { "type": "string" }, "description": "What you didn't or couldn't verify, one short line each. Leave nothing out to look better." },
                 "revises": { "type": "string", "description": "The id of a result you're revising (given when the user asks for changes)." },
                 "changes": { "type": "string", "description": "When revising: one line on what changed since the last version." },
-                "project": { "type": "string", "description": "When the work is a site or app in one of the user's projects: its name (from project_list). The card gets a Preview button that opens it when the user chooses, so don't call project_open yourself." }
+                "project": { "type": "string", "description": "When the work is a site or app in one of the user's projects: its name (from project_list). The card gets Preview (beside the chat), Watch live (phone) and Test it, so don't call project_open yourself." },
+                "checkpoint": { "type": "boolean", "description": "true at a milestone partway through visual work (the first change you can see): the card shows in the chat NOW, marked partway, while you keep working. Your final share_result in the same turn becomes its next version." }
             },
             "required": ["title", "summary"]
         }),
@@ -1165,15 +1170,32 @@ async fn share_result(
             .iter()
             .map(|p| p.to_string_lossy().to_string())
             .collect();
-        match crate::remote_access::tools::resolve_project(&projects, Some(&wanted)) {
-            Ok(path) => draft.project = Some(path),
-            Err(_) => {
+        let found = match crate::remote_access::tools::resolve_project(&projects, Some(&wanted)) {
+            Ok(path) => Some(path),
+            // A site the agent built in a folder of its own: the app lists
+            // it as a project, where it can, rather than refusing the card.
+            Err(_) => super::project::ensure_listed(app, &caller.id, &wanted).await,
+        };
+        match found {
+            Some(path) => {
+                super::dev_servers::note_shown_path(&caller.id, &path);
+                if let Some(copy) = caller.copy.as_ref().filter(|c| c.project == path) {
+                    super::dev_servers::note_shown_path(&caller.id, &copy.path);
+                }
+                draft.project = Some(path);
+            }
+            None => {
                 return error(format!(
                     "There's no project called \"{wanted}\" (project_list has their names). Nothing was shared."
                 ))
             }
         }
     }
+    let live = super::broker::is_live(&caller.id, turn);
+    if live {
+        results::continue_checkpoint(&mut draft, results::checkpoint_of(&caller.id));
+    }
+    let delivery = results::delivery(live, draft.checkpoint);
     let agent_id = caller.id.clone();
     let built =
         tokio::task::spawn_blocking(move || results::prepare(&agent_id, &home, &roots, draft))
@@ -1186,14 +1208,23 @@ async fn share_result(
     let Some(card) = message.result.clone() else {
         return error("Nothing was shared.");
     };
-    match results::delivery(super::broker::is_live(&caller.id, turn)) {
+    match delivery {
         results::Delivery::AtTurnEnd => {
             let replaced = results::stage(message);
             text(results::staged_reply(&card, replaced))
         }
-        results::Delivery::Now => {
+        results::Delivery::Now | results::Delivery::Checkpoint => {
             let copies = message.clone();
-            match super::runner::record(app, message) {
+            let recorded = if delivery == results::Delivery::Checkpoint {
+                super::runner::record_in_turn(app, message)
+            } else {
+                super::runner::record(app, message)
+            };
+            match recorded {
+                Ok(_) if delivery == results::Delivery::Checkpoint => {
+                    results::note_checkpoint(&caller.id, &card.id);
+                    text(results::checkpoint_reply(&card))
+                }
                 Ok(_) => text(results::recorded_reply(&card)),
                 Err(e) => {
                     results::remove_files(&copies);
@@ -1383,6 +1414,7 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         role,
         instructions,
         shape: None,
+        avatar: None,
         color,
         is_main: false,
     });
@@ -1475,6 +1507,10 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         Some(Err(e)) => return error(e.to_string()),
         _ => None,
     };
+    let look = match look_args(&agent, args) {
+        Ok(l) => l,
+        Err(e) => return error(e),
+    };
     let role = arg(args, "role").map(str::to_string);
     let mut fields = Vec::new();
     if role.as_deref().is_some_and(|r| r != agent.role) {
@@ -1509,6 +1545,12 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         if let Some(engine) = engine {
             a.switch_engine(engine);
         }
+        if let Some(avatar) = look.avatar.clone() {
+            a.avatar = Some(avatar);
+        }
+        if let Some(c) = look.color.clone() {
+            a.color = c;
+        }
     });
     let updated = match updated {
         Ok(a) => a,
@@ -1527,7 +1569,79 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     for note in update_notes(caller, &agent, &updated, &fields) {
         let _ = runner::record(app, note);
     }
-    text(format!("Updated {}.", updated.name))
+    match look.line() {
+        Some(line) => text(format!("Updated {}: {line}.", updated.name)),
+        None => text(format!("Updated {}.", updated.name)),
+    }
+}
+
+/// What `update_agent`'s `shape` / `face` / `color` change for this agent:
+/// only what differs from what it wears now; the rest of its look stays.
+/// Looks aren't settings, so this applies without a card.
+#[derive(Debug, Default, PartialEq)]
+pub(super) struct LookUpdate {
+    /// Its whole new look, when the shape or face changes.
+    pub avatar: Option<store::AgentLook>,
+    pub color: Option<String>,
+    shape_changed: bool,
+    face_changed: bool,
+}
+
+impl LookUpdate {
+    /// "now a hexagon with a curious face, in blue", for the tool's reply.
+    pub fn line(&self) -> Option<String> {
+        let a = self.avatar.as_ref();
+        let desc = store::AgentLook::describe(
+            a.filter(|_| self.shape_changed).map(|l| l.shape.as_str()),
+            a.filter(|_| self.face_changed).map(|l| l.face.as_str()),
+        );
+        let what = match (self.shape_changed, desc.is_empty()) {
+            (_, true) => String::new(),
+            (false, false) => format!("now has {desc}"),
+            (true, false) => format!("now {desc}"),
+        };
+        match (what.is_empty(), &self.color) {
+            (false, Some(c)) => Some(format!("{what}, in {c}")),
+            (false, None) => Some(what),
+            (true, Some(c)) => Some(format!("now {c}")),
+            (true, None) => None,
+        }
+    }
+}
+
+pub(super) fn look_args(agent: &store::Agent, args: &Value) -> Result<LookUpdate, String> {
+    let key = |k: &str| {
+        args.get(k)
+            .and_then(Value::as_str)
+            .map(|s| s.trim().to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+    };
+    let (shape, face, color) = (key("shape"), key("face"), key("color"));
+    let now = store::AgentLook::of(agent);
+    let mut out = LookUpdate::default();
+    if shape.is_some() || face.is_some() {
+        let next = store::AgentLook::checked(
+            shape.as_deref().unwrap_or(&now.shape),
+            face.as_deref().unwrap_or(&now.face),
+        )?;
+        out.shape_changed = next.shape != now.shape;
+        out.face_changed = next.face != now.face;
+        if out.shape_changed || out.face_changed {
+            out.avatar = Some(next);
+        }
+    }
+    if let Some(c) = color {
+        if !store::COLORS.contains(&c.as_str()) {
+            return Err(format!(
+                "There's no colour called \"{c}\": {}.",
+                store::COLORS.join(", ")
+            ));
+        }
+        if c != agent.color {
+            out.color = Some(c);
+        }
+    }
+    Ok(out)
 }
 
 /// An admin's delete is a soft one: the agent leaves the team and waits in
@@ -2540,6 +2654,7 @@ mod tests {
             cwd: own.into(),
             scratch: vec![own.into()],
             app_data: vec!["/Users/fictional/Library/Application Support/App".into()],
+            team_reader: false,
         };
         let card = |cmd: &str, outside: Option<bool>| {
             let mut c = new_card(
@@ -2742,6 +2857,7 @@ mod tests {
             name: "Finance".into(),
             role: String::new(),
             shape: 0,
+            avatar: None,
             color: "red".into(),
             is_main: false,
             pinned: false,

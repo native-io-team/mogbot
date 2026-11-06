@@ -91,7 +91,9 @@ function StepRow({
   const colors = useColors();
   const styles = useStyles();
   // Declined or failed: the label says so in words, and it reads quieter.
-  const quiet = step.outcome != null;
+  // A note is the agent's own progress line, kept here rather than in the chat: quiet too.
+  const note = step.kind === 'note';
+  const quiet = step.outcome != null || note;
   // "Ran the Cypress tests · 6m 12s · 42 passed, 3 failed": how long, and what it came to.
   const line = stepLine(step);
   const [showOutput, setShowOutput] = useState(false);
@@ -110,7 +112,7 @@ function StepRow({
           variant="caption"
           color={quiet ? colors.textMuted : colors.textSecondary}
           numberOfLines={2}
-          style={styles.label}
+          style={[styles.label, note && styles.note]}
         >
           {line}
         </T>
@@ -444,6 +446,7 @@ const useStyles = makeStyles((colors) => ({
   step: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   icon: { width: iconSize.body, alignItems: 'center' },
   label: { flex: 1 },
+  note: { fontStyle: 'italic' as const },
   count: { fontVariant: ['tabular-nums'] },
   indent: { paddingLeft: iconSize.body + space.sm },
   output: {

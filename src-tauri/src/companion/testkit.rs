@@ -1658,6 +1658,7 @@ impl Backend for Stub {
         &self,
         agent_id: &str,
         message_id: &str,
+        _link: Option<usize>,
     ) -> Result<(String, u16), CommandError> {
         if agent_id == AGENT && message_id == "m-result" {
             Ok(("/Users/test/ShipStudio/site".into(), 4123))

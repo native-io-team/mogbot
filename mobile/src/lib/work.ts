@@ -98,6 +98,7 @@ export const STEP_SYMBOL = {
   plan: 'list.bullet',
   delegate: 'person.2',
   project: 'folder.fill',
+  note: 'text.quote',
   tool: 'puzzlepiece',
 } as const;
 

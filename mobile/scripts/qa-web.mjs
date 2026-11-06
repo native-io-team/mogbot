@@ -662,6 +662,68 @@ const LIVE = [
     act: scrollToText('Ask for changes'),
     check: 'A result card with Ask for changes (needs welcome.features)',
   },
+  // Showing the work: the Designer's café refresh (dev/mock-server.ts, "Moss & Co.").
+  {
+    name: 'show-compare',
+    route: '/chat/design',
+    ready: 'Designer',
+    act: async (page) => {
+      await scrollToText('Side by side')(page);
+      await sleep(2000);
+    },
+    check:
+      'One card for a three-page visual result: Home / Menu / Visit switcher, a slider with Before and After tags and a grip, the caption, Side by side, Watch live and Ask for changes',
+  },
+  {
+    name: 'show-side',
+    route: '/chat/design',
+    ready: 'Designer',
+    act: async (page) => {
+      await scrollToText('Side by side')(page);
+      await page.clickText('Menu');
+      await sleep(300);
+      await page.clickText('Side by side');
+      await sleep(800);
+    },
+    check:
+      'Menu page side by side: two pictures, each with its caption (Before; Menu, prices set larger), Slider to go back',
+  },
+  {
+    name: 'show-checkpoint',
+    route: '/chat/design',
+    ready: 'Designer',
+    act: scrollToText('Moss & Co. refresh · v1 · earlier version'),
+    check:
+      'The checkpoint (v1, “Partway through”) folds to a line under v2; the reply’s links are chips: After with Watch live, localhost:5173 a plain “Running on your Mac” chip',
+  },
+  {
+    name: 'show-links',
+    route: '/chat/design',
+    ready: 'Designer',
+    act: scrollToText('Running on your Mac · localhost:5173'),
+    check:
+      'Under the reply: “After · Running on your Mac · localhost:3401” with Watch live, then a plain chip for localhost:5173, no link, no arrow',
+  },
+  {
+    name: 'show-gallery',
+    route: '/chat/design',
+    ready: 'Designer',
+    act: async (page) => {
+      await scrollToText('Side by side')(page);
+      await page.clickText('Menu');
+      await sleep(300);
+      await page.clickText('Side by side');
+      await sleep(500);
+      await page.clickLabel('Menu, prices set larger, image');
+      await sleep(1800);
+    },
+    check:
+      'The viewer on the Menu after-shot: Done, “n of N” counter, Share, the caption “Menu, prices set larger” over black; swiping pages to the other pictures in the chat',
+    after: async (page) => {
+      await page.clickText('Done').catch(() => {});
+      await sleep(500);
+    },
+  },
   // Dictation against the scripted recognizer (dev/web/expo-speech-recognition.ts).
   {
     name: 'dictation-listening',
@@ -776,6 +838,17 @@ const LIVE = [
     ready: 'Acme Site',
     pages: 3,
     check: 'Allowed without asking: Revoke aligned with the other row values',
+  },
+  {
+    name: 'agent-sheet-look',
+    route: '/agent/site',
+    ready: 'Acme Site',
+    act: async (page) => {
+      await page.clickLabel('Change how it looks');
+      await sleep(500);
+    },
+    check:
+      'The avatar tapped: a row of eight shapes and a row of ten faces, each a small avatar in its colour, the current one ringed in a neutral grey; the colour swatches under them',
   },
   {
     name: 'agent-sheet-chief',
