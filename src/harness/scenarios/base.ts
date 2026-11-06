@@ -227,6 +227,20 @@ export const baseCommands: CommandMap = {
     blockedApps: [],
   },
   agents_logins_team: { needs: [], done: 0, total: 0 },
+  agents_logins_declined: [],
+  agents_logins_recheck: null,
+  agents_login_reopen: null,
+  agents_logins_undecline: 0,
+  agents_login_not_needed: {
+    keys: ['gmail'],
+    line: 'Not connecting Gmail. No agent will ask for it again.',
+    closed: 1,
+  },
+  agents_logins_not_needed: {
+    keys: ['linkedin'],
+    line: 'Not connecting LinkedIn. No agent will ask for it again.',
+    closed: 1,
+  },
   // Edit agent's "What it can do", and Settings → Agents → What agents can
   // do (`agents/policy.rs`): a Balanced team, as `fixtures.gen.ts` has it.
   agents_policy: (args: Record<string, unknown>) => ({

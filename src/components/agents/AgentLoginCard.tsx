@@ -20,12 +20,14 @@ import { TextField } from '../primitives/TextField';
 import { Spinner } from '../primitives/Spinner';
 import { AgentCard } from './AgentCard';
 import { useCardGuard } from './useCardGuard';
+import { SignInHelp, useNotNeeded } from './SignInHelp';
 import { ErrorIcon, LockedIcon, MobileIcon } from '@/components/icons';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import {
   cancelLogin,
   declineLogin,
   loginCardView,
+  loginNotNeeded,
   saveLoginKey,
   startLogin,
   type LoginOption,
@@ -48,6 +50,7 @@ export const LoginCard = memo(function LoginCard({ message, agentName, arrived }
   const [keyValue, setKeyValue] = useState('');
   const [openedPending] = useState(approval?.status === 'pending');
   const { guard, keyProps } = useCardGuard(approval?.status === 'pending');
+  const notNeeded = useNotNeeded();
   if (!approval || !login) return null;
   const view = loginCardView(approval, agentName);
   const pending = approval.status === 'pending';
@@ -112,6 +115,18 @@ export const LoginCard = memo(function LoginCard({ message, agentName, arrived }
       >
         Not now
       </Button>
+      <Button
+        tabIndex={0}
+        variant="secondary"
+        data-not-needed
+        disabled={busy}
+        title={`No agent asks for ${login.title} again. Turn it back on from “What it can reach”.`}
+        onClick={() =>
+          void run(() => notNeeded(() => loginNotNeeded(message.agentId, approval.requestId)))
+        }
+      >
+        Not needed
+      </Button>
       {view.primary && (
         <Button
           tabIndex={0}
@@ -174,6 +189,13 @@ export const LoginCard = memo(function LoginCard({ message, agentName, arrived }
                 <Spinner size="sm" />
                 <span>{view.flowLine}</span>
               </p>
+            )}
+            {signingIn && (
+              <SignInHelp
+                agentId={message.agentId}
+                requestId={approval.requestId}
+                flow={login.flow}
+              />
             )}
             {signingIn && login.flow?.userCode && (
               <DeviceCode code={login.flow.userCode} uri={login.flow.verificationUri} />

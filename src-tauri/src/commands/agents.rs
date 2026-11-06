@@ -928,6 +928,71 @@ pub async fn agents_login_dismiss(
     blocking(move || agents::logins::dismiss(&app, &agent_id, &request_id)).await
 }
 
+/// "Not needed" on a login card: the service it asks for, declined for the
+/// whole team and remembered (`agents/declined.rs`).
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_login_not_needed(
+    app: AppHandle,
+    agent_id: String,
+    request_id: String,
+) -> Result<agents::declined::Receipt, CommandError> {
+    blocking(move || agents::declined::decline_card(&app, &agent_id, &request_id)).await
+}
+
+/// "Not needed" on rows of "What your team needs" (`keys`), or "Skip the
+/// rest" (`keys` absent: every row still waiting).
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_logins_not_needed(
+    app: AppHandle,
+    keys: Option<Vec<String>>,
+) -> Result<agents::declined::Receipt, CommandError> {
+    blocking(move || {
+        let services = agents::declined::rows(keys.as_deref());
+        agents::declined::decline(&app, &services)
+    })
+    .await
+}
+
+/// Undo a decline, or "Turn back on" from Settings: returns how many cards
+/// came back (only right after the decline).
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_logins_undecline(
+    app: AppHandle,
+    keys: Vec<String>,
+) -> Result<usize, CommandError> {
+    blocking(move || agents::declined::undo(&app, &keys)).await
+}
+
+/// Every app the user chose not to connect (Settings → Agents).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_logins_declined() -> Result<Vec<agents::logins::ReachDeclined>, CommandError> {
+    blocking(|| Ok(agents::logins::reach_declined())).await
+}
+
+/// "Open again": the sign-in page a waiting card opened, on this Mac.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_login_reopen(
+    app: AppHandle,
+    agent_id: String,
+    request_id: String,
+) -> Result<(), CommandError> {
+    agents::logins::reopen(&app, &agent_id, &request_id)
+}
+
+/// The user is back in the app: claude.ai connectors waiting on a card
+/// are checked now rather than at their next 20-second tick.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_logins_recheck() -> Result<(), CommandError> {
+    agents::logins::recheck();
+    Ok(())
+}
+
 /// What one agent can reach: its connections, browser and secrets.
 #[tauri::command]
 #[tracing::instrument]

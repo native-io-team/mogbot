@@ -510,6 +510,10 @@ export interface LoginFlow {
   /** A device sign-in's one-time code (GitHub), typed at `verificationUri` on either device. */
   userCode?: string;
   verificationUri?: string;
+  /** The page the Mac's browser was asked to open, for "Open again" and "Copy link". */
+  url?: string;
+  /** When the Mac last asked its browser to open `url` (unix ms). */
+  openedAt?: number;
 }
 
 export interface LoginRequest {
@@ -680,6 +684,24 @@ export interface AgentReach {
   }[];
   /** Claude Code apps kept from this agent. */
   blockedApps: string[];
+  /** Apps the user chose not to connect, team-wide; each can be turned back on. Absent from older Macs. */
+  declined?: DeclinedApp[];
+}
+
+/** An app the user chose not to connect ("Not needed"); no agent asks for it again. */
+export interface DeclinedApp {
+  /** The catalogue id, or `other:<title>` for an app it doesn't know. */
+  key: string;
+  title: string;
+  declinedAt: number;
+}
+
+/** What a "Not needed" did: its one-line receipt, and the keys an Undo turns back on. */
+export interface DeclineReceipt {
+  keys: string[];
+  line: string;
+  /** Waiting cards it put away. */
+  closed: number;
 }
 
 /**

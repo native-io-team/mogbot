@@ -3004,6 +3004,11 @@ pub(super) fn system_prompt_for(
         prompt.push_str("\n\n");
         prompt.push_str(super::admin::PROMPT_SECTION);
     }
+    // Apps the user chose not to connect: don't ask, work around them.
+    if let Some(declined) = super::declined::prompt_section() {
+        prompt.push_str("\n\n");
+        prompt.push_str(&declined);
+    }
     if agent.is_main {
         if let Some(team) = store::list()
             .ok()
