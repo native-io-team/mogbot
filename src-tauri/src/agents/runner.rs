@@ -633,6 +633,47 @@ const RESTART_LINE: &str =
 const SESSION_GONE_LINE: &str = "Interrupted: the app couldn't find this agent's conversation to carry on in, so it didn't start the turn again from scratch (that could do the same work twice). Check what was done, then Continue or send what's left.";
 /// The quiet line a turn picked up after a restart starts with.
 const PICKED_UP_LINE: &str = "Picked up after the app restarted";
+/// The line a turn that panicked ends on when it isn't picked up by itself
+/// (it panicked again, or it can't be: driven by hand, in a room).
+const PANIC_INTERRUPTED_LINE: &str =
+    "Interrupted: something went wrong in the app while this agent was working, so the turn stopped part-way. Continue picks it up where it was.";
+/// The quiet line a turn picked up after a panic starts with.
+const PANIC_PICKED_UP_LINE: &str = "Picked up after something went wrong in the app";
+
+/// What cut a turn off: the app going (a quit, a crash, an update), found at
+/// the next launch; or a panic in this run, caught by its worker. Both are
+/// recovered the same way ([`plan_recovery_for`]); only the words differ.
+#[derive(Debug, Clone, Copy, PartialEq)]
+enum Cause {
+    Restart,
+    Panic,
+}
+
+impl Cause {
+    /// The chat line for a turn that isn't picked up by itself.
+    fn interrupted_line(self) -> &'static str {
+        match self {
+            Cause::Restart => RESTART_LINE,
+            Cause::Panic => PANIC_INTERRUPTED_LINE,
+        }
+    }
+
+    /// The quiet line a picked-up turn starts with.
+    fn picked_up_line(self) -> &'static str {
+        match self {
+            Cause::Restart => PICKED_UP_LINE,
+            Cause::Panic => PANIC_PICKED_UP_LINE,
+        }
+    }
+
+    /// What the agent is told cut it off ([`prompts::carry_on`]).
+    fn why(self) -> &'static str {
+        match self {
+            Cause::Restart => "The app restarted",
+            Cause::Panic => "Something went wrong in the app",
+        }
+    }
+}
 
 /// What is queued behind the turn in progress, on disk (`<home>/inbox.json`)
 /// so a quit, crash or update doesn't lose it. Written whenever the queue
@@ -899,20 +940,7 @@ async fn recover_one(app: &AppHandle, agent_id: &str, found: &[Inbound]) {
     if let Some((project, tree)) = plan.changes {
         record_changes(app, agent_id, project.into(), tree, None).await;
     }
-    let line = match plan.pickup {
-        // Carries on by itself: a quiet line, and the turn is queued first.
-        Some(Pickup::Resume) => Some(new_message(agent_id, MessageKind::Note, PICKED_UP_LINE)),
-        // The user stopped it as the app went: it ended, as they asked.
-        Some(Pickup::Stopped) => Some(new_message(agent_id, MessageKind::Note, "Stopped")),
-        // Not picked up by itself: Continue (never Retry: it may have done
-        // half its work, and sending the request again could redo it).
-        Some(Pickup::Continue(text)) => {
-            let mut line = new_message(agent_id, MessageKind::Error, text);
-            line.failure = Some(super::failure::Failure::INTERRUPTED);
-            Some(line)
-        }
-        None => None,
-    };
+    let line = recovery_line(agent_id, plan.pickup.as_ref(), Cause::Restart);
     if let Some(Ok(line)) = line.map(|l| record(app, l)) {
         if let Some(work) = plan.work {
             super::work::keep_under(app, &line, work, store::now_ms());
@@ -930,6 +958,27 @@ async fn recover_one(app: &AppHandle, agent_id: &str, found: &[Inbound]) {
             app,
             new_message(agent_id, MessageKind::Note, resent_note(&resent)),
         );
+    }
+}
+
+/// The line that says what became of a cut-off turn.
+fn recovery_line(agent_id: &str, pickup: Option<&Pickup>, cause: Cause) -> Option<AgentMessage> {
+    match pickup? {
+        // Carries on by itself: a quiet line, and the turn is queued first.
+        Pickup::Resume => Some(new_message(
+            agent_id,
+            MessageKind::Note,
+            cause.picked_up_line(),
+        )),
+        // The user stopped it as the app went: it ended, as they asked.
+        Pickup::Stopped => Some(new_message(agent_id, MessageKind::Note, "Stopped")),
+        // Not picked up by itself: Continue (never Retry: it may have done
+        // half its work, and sending the request again could redo it).
+        Pickup::Continue(text) => {
+            let mut line = new_message(agent_id, MessageKind::Error, *text);
+            line.failure = Some(super::failure::Failure::INTERRUPTED);
+            Some(line)
+        }
     }
 }
 
@@ -963,13 +1012,13 @@ struct Recovery {
 /// stopped it or was driving it by hand, never in a room (its asks are
 /// quoted fresh each turn), never twice, and never without its conversation
 /// on disk: a blank session would see only the chat and could redo the work.
-fn pickup_for(mark: &TurnMark, driven: bool, session_found: bool) -> Pickup {
+fn pickup_after(mark: &TurnMark, driven: bool, session_found: bool, cause: Cause) -> Pickup {
     if mark.stopped {
         Pickup::Stopped
     } else if driven || mark.took.iter().any(|m| m.room.is_some()) {
-        Pickup::Continue(RESTART_LINE)
+        Pickup::Continue(cause.interrupted_line())
     } else if next_pickup(mark.resumes).is_none() {
-        Pickup::Continue(RESTART_LINE)
+        Pickup::Continue(cause.interrupted_line())
     } else if !session_found {
         Pickup::Continue(SESSION_GONE_LINE)
     } else {
@@ -982,6 +1031,16 @@ fn plan_recovery(
     found: &[Inbound],
     driven: bool,
     session_on_disk: impl Fn(Engine, &str) -> bool,
+) -> Recovery {
+    plan_recovery_for(agent_id, found, driven, session_on_disk, Cause::Restart)
+}
+
+fn plan_recovery_for(
+    agent_id: &str,
+    found: &[Inbound],
+    driven: bool,
+    session_on_disk: impl Fn(Engine, &str) -> bool,
+    cause: Cause,
 ) -> Recovery {
     let Some(path) = mark_path(agent_id).filter(|p| p.exists()) else {
         return Recovery::default();
@@ -1010,7 +1069,7 @@ fn plan_recovery(
             .is_some_and(|a| a.session_id.as_deref().is_none_or(|own| own == *sid))
             && session_on_disk(engine, sid)
     });
-    let pickup = pickup_for(&mark, driven, session.is_some());
+    let pickup = pickup_after(&mark, driven, session.is_some(), cause);
     if let (Pickup::Resume, Some(sid)) = (&pickup, session) {
         // Claude Code's first turn may have gone before it said its session.
         let sid = sid.to_string();
@@ -1023,7 +1082,7 @@ fn plan_recovery(
         let resume = next_pickup(mark.resumes).unwrap_or(MAX_RESUMES);
         requeue_first(
             agent_id,
-            resume_inbounds(&mark.took, resume, prompts::carry_on("The app restarted")),
+            resume_inbounds(&mark.took, resume, prompts::carry_on(cause.why())),
         );
     }
     plan.pickup = Some(pickup);
@@ -2745,18 +2804,168 @@ fn reset_after_panic(agent_id: &str, progressed: bool) -> PanicReset {
     }
 }
 
-/// A turn panicked: handled like any failed turn, after unwinding is over.
-/// The chat says it didn't finish, delegators and scheduled runs hear so,
-/// and what is still queued gets a new worker.
+/// A turn panicked: handled like a turn a crash cut off, after unwinding is
+/// over. Its mark is still there, so what it had done is kept (the reply it
+/// was writing, its changes, its timeline) and it is picked up once in the
+/// same conversation, exactly as a launch picks up a turn the app quit
+/// during ([`plan_recovery_for`]). Panicking again (or one that can't be
+/// picked up) ends on an Interrupted line with Continue. A worker with no
+/// turn in flight (it died before taking its messages, or after its turn
+/// ended) gets the plain failed-turn line, and what is still queued a new
+/// worker.
 fn after_panic(app: &AppHandle, agent_id: &str, reset: PanicReset) {
-    {
+    let driven = {
         let runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
         let empty = VecDeque::new();
         let queue = runtimes.get(agent_id).map_or(&empty, |r| &r.queue);
         save_inbox(agent_id, queue);
-    }
-    clear_mark(agent_id);
+        runtimes.get(agent_id).is_some_and(|r| r.driven)
+    };
     set_status(app, agent_id, Status::idle());
+    // Working out the pick-up reads files; should that panic too, the turn
+    // just gets the plain line.
+    let planned = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        plan_after_panic(agent_id, driven, super::wallet::session_on_disk)
+    }))
+    .unwrap_or_else(|_| {
+        tracing::error!("[Agents] picking up {agent_id}'s panicked turn panicked too");
+        None
+    });
+    let Some(planned) = planned else {
+        clear_mark(agent_id);
+        return failed_after_panic(app, agent_id, reset);
+    };
+    // Nothing else starts a turn in that conversation while the leftover
+    // process is stopped and the lines are written: the worker is claimed
+    // now, and started once that is done.
+    let claimed = reset.restart || claim_idle_worker(agent_id);
+    let app = app.clone();
+    let agent_id = agent_id.to_string();
+    tauri::async_runtime::spawn(async move {
+        use futures_util::FutureExt;
+        let done =
+            std::panic::AssertUnwindSafe(pick_up_after_panic(&app, &agent_id, planned, reset))
+                .catch_unwind()
+                .await;
+        if done.is_err() {
+            tracing::error!("[Agents] picking up {agent_id}'s panicked turn panicked too");
+        }
+        if claimed {
+            start_worker(&app, &agent_id);
+        } else {
+            kick(&app, &agent_id);
+        }
+    });
+}
+
+/// A panicked turn's recovery, worked out: [`plan_recovery_for`] on its
+/// mark (read and removed; a pick-up queued first), and its engine process
+/// if it is still this run's. `None` without a mark.
+fn plan_after_panic(
+    agent_id: &str,
+    driven: bool,
+    session_on_disk: impl Fn(Engine, &str) -> bool,
+) -> Option<(Recovery, Option<u32>)> {
+    let mark = read_mark(agent_id)?;
+    // Only a process this run spawned for this agent (pids get reused).
+    let pid = mark.pid.filter(|pid| procs::pid_of(agent_id) == Some(*pid));
+    let plan = plan_recovery_for(agent_id, &[], driven, session_on_disk, Cause::Panic);
+    plan.pickup.is_some().then_some((plan, pid))
+}
+
+/// Claim a worker for an agent with messages queued and none running
+/// (what [`kick`] does, without starting it yet).
+fn claim_idle_worker(agent_id: &str) -> bool {
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    runtimes.get_mut(agent_id).is_some_and(|r| {
+        let idle_with_work = !r.running && !r.driven && !r.queue.is_empty();
+        if idle_with_work {
+            r.running = true;
+        }
+        idle_with_work
+    })
+}
+
+/// Lines and debts of a panicked turn that had a mark, in the order a turn
+/// that ends leaves them: what it had said, its changes, the line saying
+/// what became of it (its timeline under that). Picked up, its delegators
+/// and scheduled runs carry over to the turn that carries it on; otherwise
+/// they hear it didn't finish.
+async fn pick_up_after_panic(
+    app: &AppHandle,
+    agent_id: &str,
+    (plan, pid): (Recovery, Option<u32>),
+    reset: PanicReset,
+) {
+    // Its process group may outlive it (the engine's own children): stopped
+    // before anything carries on in its conversation.
+    if let Some(pid) = pid {
+        let _ = tokio::task::spawn_blocking(move || procs::kill_tree_sync(pid)).await;
+        procs::unregister(agent_id);
+    }
+    if let Some(reply) = plan.partial {
+        // The reply it was writing may be what panicked: kept if it can be.
+        let kept = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| record(app, reply)));
+        if kept.is_err() {
+            tracing::error!("[Agents] {agent_id}'s cut-off reply couldn't be kept");
+        }
+    }
+    if let Some((project, tree)) = plan.changes {
+        record_changes(app, agent_id, project.into(), tree, None).await;
+    }
+    if let Some(line) = recovery_line(agent_id, plan.pickup.as_ref(), Cause::Panic) {
+        let _ = record(app, line);
+    }
+    super::work::finish(app, agent_id, store::now_ms());
+    settle_after_panic(app, agent_id, plan.pickup.as_ref(), reset);
+}
+
+/// Who a panicked turn owed, and the scheduled runs it answered: carried
+/// over to the turn that picks it up (its messages name the same askers),
+/// or told it didn't finish.
+fn settle_after_panic(app: &AppHandle, agent_id: &str, pickup: Option<&Pickup>, reset: PanicReset) {
+    if pickup == Some(&Pickup::Resume) {
+        carry_over(agent_id, reset.owed, reset.tickets);
+        tell_dropped(app, agent_id, reset.dropped, Dropped::Failed);
+        return;
+    }
+    let (why, settle_as) = match pickup {
+        Some(Pickup::Stopped) => ("it was stopped before it finished.", Some("Stopped")),
+        _ => ("something went wrong running it.", None),
+    };
+    if let Some(room) = &reset.room {
+        super::rooms::say(app, room, panicked_in_room_line(agent_id));
+    }
+    for to in &reset.owed {
+        tell_couldnt_finish(app, agent_id, to, why, reset.hop);
+    }
+    if !reset.tickets.is_empty() {
+        super::runs::turn_ended(app, agent_id, &reset.tickets, settle_as, None);
+    }
+    tell_dropped(app, agent_id, reset.dropped, Dropped::Failed);
+}
+
+/// Put a cut-off turn's debts and scheduled runs back on its agent, for the
+/// turn that picks it up to settle.
+fn carry_over(agent_id: &str, owed: Vec<AgentRef>, tickets: Vec<String>) {
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    let runtime = runtimes.entry(agent_id.to_string()).or_default();
+    for to in owed {
+        if !runtime.owed.iter().any(|a| a.id == to.id) {
+            runtime.owed.push(to);
+        }
+    }
+    for ticket in tickets {
+        if !runtime.tickets.contains(&ticket) {
+            runtime.tickets.push(ticket);
+        }
+    }
+}
+
+/// A worker that panicked with no turn in flight: handled like any failed
+/// turn. The chat says it didn't finish, delegators and scheduled runs hear
+/// so, and what is still queued gets a new worker.
+fn failed_after_panic(app: &AppHandle, agent_id: &str, reset: PanicReset) {
     let mut line = new_message(agent_id, MessageKind::Error, PANIC_LINE);
     line.failure = Some(super::failure::Failure::OTHER);
     let _ = record(app, line);

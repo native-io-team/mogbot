@@ -404,9 +404,8 @@ pub fn keep_sessions(engine: Engine, from: &Path, into: &Path) -> usize {
                     if path.is_dir() && depth < 4 {
                         dirs.push((path, depth + 1));
                     } else if let Some(stem) = name.strip_suffix(".jsonl") {
-                        // rollout-<time>-<uuid>: the uuid is its last 36 characters.
-                        if stem.starts_with("rollout-") && stem.len() > 36 {
-                            ids.push(stem[stem.len() - 36..].to_string());
+                        if let Some(id) = rollout_session(stem) {
+                            ids.push(id.to_string());
                         }
                     }
                 }
@@ -425,6 +424,16 @@ pub fn keep_sessions(engine: Engine, from: &Path, into: &Path) -> usize {
             .unwrap_or(false)
         })
         .count()
+}
+
+/// The session in a Codex file name's stem, `rollout-<time>-<uuid>`: its
+/// last 36 bytes. Any file can sit in that folder, so a name where that cut
+/// lands inside a character (`rollout-日本…`) is no session, never a panic.
+pub(super) fn rollout_session(stem: &str) -> Option<&str> {
+    if !stem.starts_with("rollout-") || stem.len() <= 36 {
+        return None;
+    }
+    stem.get(stem.len() - 36..)
 }
 
 fn not_found() -> CommandError {
@@ -1073,6 +1082,27 @@ pub async fn views() -> Vec<AccountView> {
 mod tests {
     use super::*;
     use chrono::{TimeZone, Utc};
+
+    /// Any file can be in Codex's sessions folder: a name where the last 36
+    /// bytes start inside a character is skipped, never a panic.
+    #[test]
+    fn rollout_names_with_multibyte_text_never_panic() {
+        let id = "0b5e2c1a-7d3f-4e8a-9c21-5f6a7b8c9d0e";
+        assert_eq!(
+            rollout_session(&format!("rollout-2026-11-05T10-00-00-{id}")),
+            Some(id)
+        );
+        // 36 bytes back from the end lands inside "日" / "⌘" / the emoji.
+        for name in [
+            "rollout-日本語のメモ日本語のメモ日本語のメモa",
+            "rollout-⌘⌘⌘⌘⌘⌘⌘⌘⌘⌘⌘⌘⌘⌘a",
+            "rollout-🙂🙂🙂🙂🙂🙂🙂🙂🙂🙂a",
+        ] {
+            assert_eq!(rollout_session(name), None, "{name}");
+        }
+        assert_eq!(rollout_session("rollout-short"), None);
+        assert_eq!(rollout_session(&format!("other-{id}")), None);
+    }
 
     /// Thu 5 Nov 2026, 08:00 UTC.
     fn now() -> i64 {

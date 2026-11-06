@@ -649,17 +649,19 @@ pub async fn left_out(copy: &TaskCopy) -> Vec<LeftOut> {
     )
     .await
     .unwrap_or_default();
-    for entry in status.split('\0').filter(|e| e.len() > 3) {
-        let path = entry[3..].to_string();
+    for entry in status.split('\0') {
+        let Some(path) = porcelain_path(entry) else {
+            continue;
+        };
         if path == ".shipstudio" || path.starts_with(".shipstudio/") {
             continue;
         }
-        let why = if is_dependency(&path) {
+        let why = if is_dependency(path) {
             // A tracked file under `node_modules`, edited: never staged either.
             LeftOutWhy::Dependencies
-        } else if is_env_file(&path) {
+        } else if is_env_file(path) {
             LeftOutWhy::Secrets
-        } else if std::fs::metadata(dir.join(&path)).is_ok_and(|m| m.len() > MAX_COMMIT_BYTES) {
+        } else if std::fs::metadata(dir.join(path)).is_ok_and(|m| m.len() > MAX_COMMIT_BYTES) {
             LeftOutWhy::TooLarge
         } else {
             LeftOutWhy::Secrets
@@ -699,6 +701,12 @@ pub async fn left_out(copy: &TaskCopy) -> Vec<LeftOut> {
 async fn markers_since(dir: &Path, target: &str, branch: &str) -> Vec<String> {
     let range = format!("{target}...{branch}");
     files_where(&added_diff(dir, &[&range]).await, is_marker)
+}
+
+/// The path in one `git status --porcelain -z` entry ("XY path"). Never cut
+/// inside a character: an entry that isn't that shape is skipped.
+fn porcelain_path(entry: &str) -> Option<&str> {
+    entry.get(3..).filter(|p| !p.is_empty())
 }
 
 /* -------------------------------------------------------------- names */
@@ -1720,6 +1728,18 @@ fn same_path(a: &str, b: &str) -> bool {
 mod tests {
     use super::*;
     use std::process::Command;
+
+    #[test]
+    fn porcelain_paths_with_multibyte_names_never_panic() {
+        assert_eq!(porcelain_path("?? 日本語.md"), Some("日本語.md"));
+        assert_eq!(porcelain_path(" M ⌘ notes 🙂.txt"), Some("⌘ notes 🙂.txt"));
+        // Not "XY path": a bare name (a rename's source) cut at byte 3.
+        assert_eq!(porcelain_path("a日本語.md"), None);
+        assert_eq!(porcelain_path("a⌘b"), None);
+        assert_eq!(porcelain_path("a🙂"), None);
+        assert_eq!(porcelain_path("?? "), None);
+        assert_eq!(porcelain_path(""), None);
+    }
 
     fn sh(dir: &Path, args: &[&str]) -> String {
         let out = Command::new("git")

@@ -97,6 +97,7 @@ import {
 import { loadOlderRoomMessages, upsertMessage, useAgentsSelector } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
+import { keepDraft, unsentDraft } from '../../lib/chatRestore';
 import { accentScopeProps, useAccentScope } from '../../lib/accent';
 import { blockedCopy, dictationVocabulary, openPrivacySettings } from '../../lib/dictation';
 import { listProjects } from '../../lib/project';
@@ -123,9 +124,6 @@ interface RoomChatProps extends RoomActions {
   compact?: { agents: Agent[]; onGoHome: () => void; onGoProjects: () => void };
 }
 
-/** What you were typing in each room, kept across a trip to a project. */
-const unsentText = new Map<string, string>();
-
 export function RoomChat({
   room,
   agentsById,
@@ -150,11 +148,8 @@ export function RoomChat({
     (a, b) => a.length === b.length && a.every((d, i) => d === b[i])
   );
   const { showToast } = useOptionalToast();
-  const [draft, setDraft] = useState(() => unsentText.get(room.id) ?? '');
-  useEffect(() => {
-    if (draft) unsentText.set(room.id, draft);
-    else unsentText.delete(room.id);
-  }, [room.id, draft]);
+  const [draft, setDraft] = useState(() => unsentDraft(`room:${room.id}`));
+  useEffect(() => keepDraft(`room:${room.id}`, draft), [room.id, draft]);
   const [pending, setPending] = useState<Pending[]>([]);
   /** Nobody named and no lead: who should answer, asked above the composer. */
   const [asking, setAsking] = useState(false);
