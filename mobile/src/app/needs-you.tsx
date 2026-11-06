@@ -1,5 +1,5 @@
 /**
- * "N agents need you", from Home's bar: everyone waiting on you, one row
+ * "N agents need your OK", from Home's bar: everyone waiting on you, one row
  * each, saying what for. Tap opens that chat at the card. Setting up your
  * team, when it's open, is one row at the top (the Chief's chat holds it);
  * the agents being set up aren't listed one by one (lib/home).
@@ -53,7 +53,7 @@ export default function NeedsYou() {
   return (
     <SheetPage>
       <ScrollView contentContainerStyle={styles.page}>
-        <SheetTitle>Needs you</SheetTitle>
+        <SheetTitle>Needs your OK</SheetTitle>
         {setupOpen && chief && (
           <Row
             agent={chief}

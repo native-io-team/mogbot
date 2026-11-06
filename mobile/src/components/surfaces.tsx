@@ -109,7 +109,7 @@ export function Card({
         <View onLayout={onHeadLayout} style={styles.head} testID="card-head">
           <View style={styles.titleRow}>
             <View style={styles.icon}>
-              <Icon name={icon} size={iconSize.inline} color={tint} />
+              <Icon name={icon} size={iconSize.body} color={tint} />
             </View>
             <T
               variant="headline"
@@ -568,7 +568,8 @@ export const useCardStyles = makeStyles((colors) => ({
   },
   head: { gap: space['2xs'] },
   titleRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.tight },
-  // The 12pt glyph centred on the headline's first line.
+  // The glyph at the title's own size, as on the desk (16 beside 15-16),
+  // centred on the headline's first line.
   icon: { height: lineHeight(type.subhead, 1.375), justifyContent: 'center' },
   // Quiet text, not a chip: a bordered box on a card reads as a control.
   meta: { fontVariant: ['tabular-nums'], lineHeight: lineHeight(type.subhead, 1.375) },

@@ -351,7 +351,7 @@ export default function Agents() {
               color={colors.textMuted}
             />
             <T variant="small" color={colors.textSecondary}>
-              Hidden ({item.count})
+              Hidden · {item.count}
             </T>
           </Pressable>
         ) : item.kind === 'room' ? (
@@ -461,7 +461,7 @@ function SectionHeader({
 /**
  * One calm row for everything waiting on you, under the Chief: "A few things
  * to finish setting up your team" (opens the Chief's chat, where the
- * checklist is) or "N agents need you" (opens them grouped in a sheet).
+ * checklist is) or "N agents need your OK" (opens them grouped in a sheet).
  * Never a section listing every agent.
  */
 function AttentionBar({ bar, onOpenChief }: { bar: HomeBar; onOpenChief: (id: string) => void }) {
