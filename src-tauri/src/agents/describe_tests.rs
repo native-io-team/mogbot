@@ -121,6 +121,11 @@ fn commands_read_as_plain_words() {
         ("for f in src/*.ts; do wc -l \"$f\"; done", "Counting lines, repeatedly"),
         ("for i in {1..5}; do curl -s http://localhost:3000; sleep 1; done", "Fetching localhost:3000, 5 times"),
         ("while true; do curl -s http://localhost:3000/health; sleep 5; done", "Fetching localhost:3000, repeatedly"),
+        // A loop printing what a search found is searching, not printing.
+        ("cd /x && for p in 'shadow-\\[' 'box-shadow' 'border-(gray|slate)-' ; do printf \"%-40s %s\\n\" \"$p\" \"$(grep -rEo --include=*.tsx \"$p\" app components | wc -l)\"; done", "Searching the files, 3 times"),
+        (r#"cd /x/site && for p in 'shadow-\[' 'boxShadow' 'box-shadow' 'rounded-\[' 'border-\[#' 'border-(gray|slate|zinc|neutral)-' 'shadow-(sm|md|lg|xl|2xl)\b' 'border-border' 'border-skin' 'divide-' 'ring-\[#|ring-(gray|slate)' ; do printf "%-40s %s\n" "$p" "$(grep -rEo --include=*.tsx --include=*.ts --include=*.css "$p" app components | wc -l)"; done"#, "Searching the files, 11 times"),
+        ("echo \"total: $(wc -l < src/App.tsx)\"", "Counting lines"),
+        ("echo $((1 + 2))", "Printing a message"),
         // shells, wrappers, setup and redirections
         ("cd /Users/sam/acme-site && npm install && npm test", "Running the tests"),
         ("/bin/zsh -lc 'npm run build'", "Building the project"),

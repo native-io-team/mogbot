@@ -1026,7 +1026,12 @@ fn known(program: &str, args: &[String], depth: u8) -> Option<Phrase> {
                 p(PACK, "files")
             }
         }
-        "echo" | "printf" => p(PRINT, "a message"),
+        // `printf "%s\n" "$(grep -c x app)"`: what it prints is what it ran.
+        "echo" | "printf" => args
+            .iter()
+            .filter_map(|a| substituted(a))
+            .find_map(|inner| (depth < 3).then(|| describe(&inner, depth + 1)).flatten())
+            .unwrap_or_else(|| p(PRINT, "a message")),
         "sleep" => {
             let secs: Option<f64> = pos
                 .first()
@@ -1071,6 +1076,29 @@ fn known(program: &str, args: &[String], depth: u8) -> Option<Phrase> {
 }
 
 /// `head -n 20 a.ts`: the 20 isn't a file.
+/// The command inside a word's first `$(…)` (not `$((…))` arithmetic).
+fn substituted(word: &str) -> Option<String> {
+    let start = word.find("$(")?;
+    let rest = &word[start + 2..];
+    if rest.starts_with('(') {
+        return None;
+    }
+    let mut depth = 1;
+    for (i, c) in rest.char_indices() {
+        match c {
+            '(' => depth += 1,
+            ')' => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(rest[..i].to_string()).filter(|s| !s.trim().is_empty());
+                }
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 fn pos_skipping_counts(args: &[String]) -> Vec<&str> {
     positional(args, &["-n", "-c", "-s", "-m", "--lines", "--bytes"])
 }

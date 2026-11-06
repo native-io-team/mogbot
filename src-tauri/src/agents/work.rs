@@ -840,6 +840,103 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
             format!("Checking {p}'s deploy"),
             format!("check {p}'s deploy"),
         ),
+        // Usage and spare capacity (`usage_tools`).
+        "usage_overview" => act(
+            StepKind::Plan,
+            "Checked the team's usage",
+            "Checking the team's usage",
+            "check the team's usage",
+        ),
+        "forecast_usage" => act(
+            StepKind::Plan,
+            "Estimated what the work will use",
+            "Estimating what the work will use",
+            "estimate what the work will use",
+        ),
+        "set_usage_mode" => act(
+            StepKind::Plan,
+            "Changed how your limits are used",
+            "Changing how your limits are used",
+            "change how your limits are used",
+        ),
+        "add_spare_work" => act(
+            StepKind::Plan,
+            "Added to the spare-time list",
+            "Adding to the spare-time list",
+            "add to the spare-time list",
+        ),
+        "finish_spare_work" => act(
+            StepKind::Plan,
+            "Updated the spare-time list",
+            "Updating the spare-time list",
+            "update the spare-time list",
+        ),
+        "run_routine_now" => act(
+            StepKind::Plan,
+            "Ran a routine now",
+            "Running a routine now",
+            "run a routine now",
+        ),
+        // Testing a site in the preview (`preview_test`).
+        "test_open" => {
+            let path = named("path", "a page");
+            act(
+                StepKind::Web,
+                format!("Opened {path} in the preview"),
+                format!("Opening {path} in the preview"),
+                format!("open {path} in the preview"),
+            )
+        }
+        "test_click" | "test_type" | "test_scroll" => {
+            let (done, doing, to) = match tool {
+                "test_click" => ("Clicked", "Clicking", "click"),
+                "test_type" => ("Filled in", "Filling in", "fill in"),
+                _ => ("Scrolled", "Scrolling", "scroll"),
+            };
+            act(
+                StepKind::Web,
+                format!("{done} in the preview"),
+                format!("{doing} in the preview"),
+                format!("{to} in the preview"),
+            )
+        }
+        "test_viewport" => act(
+            StepKind::Web,
+            "Tried another width",
+            "Trying another width",
+            "try another width",
+        ),
+        "test_page" | "test_console" | "test_network" => {
+            let what = match tool {
+                "test_page" => "the page",
+                "test_console" => "the console",
+                _ => "the network requests",
+            };
+            act(
+                StepKind::Read,
+                format!("Read {what}"),
+                format!("Reading {what}"),
+                format!("read {what}"),
+            )
+        }
+        "test_screenshot" => act(
+            StepKind::Screenshot,
+            "Took a screenshot of the preview",
+            "Looking at the preview",
+            "take a screenshot of the preview",
+        ),
+        "test_note" => act(
+            StepKind::Message,
+            "Noted what it saw",
+            "Noting what it sees",
+            "note what it saw",
+        ),
+        "test_report" => act(
+            StepKind::Message,
+            "Finished the test",
+            "Finishing the test",
+            "finish the test",
+        ),
         _ => act(StepKind::Tool, "Used a tool", "Using a tool", "use a tool"),
     };
     a.project = project;

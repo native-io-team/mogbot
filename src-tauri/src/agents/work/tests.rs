@@ -19,6 +19,27 @@ fn ours(tool: &str) -> String {
     format!("mcp__{}__{tool}", super::super::prompts::SERVER_KEY)
 }
 
+/// The timeline of a usage check or a preview test was a row of "Used a
+/// tool": every tool of ours says what it did.
+#[test]
+fn every_tool_of_ours_has_its_own_words() {
+    let names = super::super::usage_tools::TOOLS
+        .iter()
+        .map(|t| t.name)
+        .chain(super::super::preview_test::TOOLS.iter().map(|t| t.name))
+        .chain(super::super::admin::TOOLS.iter().map(|t| t.name))
+        .chain(super::super::room_tools::TOOLS.iter().map(|t| t.name))
+        .chain(super::super::sessions::TOOLS.iter().map(|t| t.name));
+    for name in names {
+        let label = describe_tool(&ours(name), Some(&json!({})))
+            .map(|a| a.label)
+            .unwrap_or_default();
+        assert_ne!(label, "Used a tool", "{name}");
+    }
+    let open = describe_tool(&ours("test_open"), Some(&json!({"path": "/pricing"}))).unwrap();
+    assert_eq!(open.label, "Opened /pricing in the preview");
+}
+
 fn call(name: &str, id: &str, input: Value) -> Action {
     let mut a = describe_tool(name, Some(&input)).unwrap();
     a.id = Some(id.into());
