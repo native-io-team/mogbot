@@ -1,13 +1,21 @@
 //! Sign in on your Mac, from your phone (`agents.signin*`).
 //!
-//! An agent that opened a site in the user's Chrome and found a sign-in page
-//! raises a login card. Away from the Mac, the user taps **Sign in from
-//! here**: this Mac opens that site's sign-in page in a tab of its own in the
-//! user's Chrome (Claude in Chrome's own MCP server, the same one the app
-//! already uses for its checks, `browser::ChromeMcp`), and the phone gets a
-//! live picture of that one tab and sends back taps, typing, keys and
-//! scrolls. **Done** checks the page here; signed in, the card answers itself
-//! "Using your browser" and the agent carries on.
+//! An agent that found a sign-in page raises a login card. Away from the
+//! Mac, the user taps **Sign in from here**, and the phone gets a live
+//! picture of one window on this Mac and sends back taps, typing, keys and
+//! scrolls. Two drivers ([`Via`]):
+//!
+//! - **The agents' browser** (`agent_browser`, the card's `agent_browser`
+//!   way in, the default): a window of the agents' own Chrome, frames from
+//!   its screencast, input as CDP events. No extension, so no per-site
+//!   Allow waiting at the Mac. A site that refuses a driven browser (Google)
+//!   moves to a plain window of the same profile (`agents.signinFallback`,
+//!   `agent_browser::plain`), seen and driven through macOS.
+//! - **The user's own Chrome** (a card without the agents' browser): a tab of
+//!   its own through Claude in Chrome's MCP server (`browser::ChromeMcp`).
+//!
+//! **Done** checks the page here; signed in, the card answers itself and the
+//! agent carries on.
 //!
 //! The mechanism, and why: docs/agents.md, "Signing in on your Mac from the phone".
 //!
@@ -512,6 +520,20 @@ fn is_expired<T>(l: &Live<T>, now: Instant) -> bool {
 
 /* ----------------------------------------------------------- wire views */
 
+/// How the phone sees and drives the sign-in.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum Via {
+    /// A window of the agents' own Chrome (`agent_browser`): screencast
+    /// frames out, CDP input in. No Mac permission, no extension Allow.
+    AgentsBrowser,
+    /// A tab of the user's own Chrome, through Claude in Chrome.
+    Chrome,
+    /// The agents' profile in a plain Chrome window, through macOS capture
+    /// and input (a site that refuses a driven browser).
+    MacWindow,
+}
+
 /// `agents.signinBegin`'s answer.
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -521,6 +543,9 @@ pub struct Begun {
     pub domain: String,
     pub title: String,
     pub idle_seconds: u64,
+    pub via: Via,
+    /// How long the phone waits between pictures.
+    pub frame_gap_ms: u64,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -530,6 +555,13 @@ pub enum FrameState {
     Live,
     /// The tab went somewhere outside the sign-in: not shown; Back only.
     Outside,
+    /// The site refuses this window (`blocked` says why): the phone offers
+    /// "Sign in another way" (`agents.signinFallback`).
+    Blocked,
+}
+
+fn is_false(b: &bool) -> bool {
+    !*b
 }
 
 /// `agents.signinFrame`'s answer: one picture of the tab, or why not.
@@ -545,6 +577,32 @@ pub struct Frame {
     pub image: Option<String>,
     pub width: u32,
     pub height: u32,
+    /// The picture's number: the next `agents.signinFrame` asks for one
+    /// after it (and the Mac waits for one).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub seq: Option<u64>,
+    /// The focused field takes a password or a code: the phone hides what's
+    /// typed.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub secure: bool,
+    /// Why the site refuses this window (`Blocked`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub blocked: Option<String>,
+}
+
+impl Frame {
+    fn empty(state: FrameState, host: Option<String>) -> Frame {
+        Frame {
+            state,
+            host,
+            image: None,
+            width: 0,
+            height: 0,
+            seq: None,
+            secure: false,
+            blocked: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -565,6 +623,7 @@ pub struct Banner {
     pub domain: String,
     pub device_name: String,
     pub started_at: i64,
+    pub via: Via,
 }
 
 /// One request from the phone, as the router hands it over. `Debug` is
@@ -577,6 +636,8 @@ pub enum Op {
     },
     Frame {
         session_id: String,
+        /// The last picture the phone has: wait for a newer one.
+        after: Option<u64>,
     },
     Input {
         session_id: String,
@@ -589,12 +650,19 @@ pub enum Op {
     Stop {
         session_id: String,
     },
+    /// The site refused the agents' browser: the same profile in a plain
+    /// window, shown through macOS (needs Screen Recording and
+    /// Accessibility), or a plain answer that it happens at the Mac.
+    Fallback {
+        session_id: String,
+    },
 }
 
 /* --------------------------------------------------------------- runtime */
 
-/// The app's own Chrome connection for the session, and its one tab.
-pub struct Browser {
+/// The user's own Chrome, through Claude in Chrome: the connection, and
+/// the session's one tab.
+pub struct ChromeTab {
     mcp: ChromeMcp,
     tab: u64,
     /// Where the tab was last seen.
@@ -602,7 +670,32 @@ pub struct Browser {
     geom: Option<FrameGeom>,
 }
 
-type Shared = Arc<tokio::sync::Mutex<Browser>>;
+/// A window of the agents' browser, and the last picture's size.
+pub struct AgentsTab {
+    win: Arc<crate::agent_browser::signin::SigninWindow>,
+    geom: Option<FrameGeom>,
+}
+
+pub enum Driver {
+    Chrome(Box<ChromeTab>),
+    Agents(AgentsTab),
+}
+
+/// What a session holds: how it's driven, and the driver.
+#[derive(Clone)]
+pub struct Shared {
+    via: Via,
+    driver: Arc<tokio::sync::Mutex<Driver>>,
+}
+
+impl Shared {
+    fn new(via: Via, d: Driver) -> Shared {
+        Shared {
+            via,
+            driver: Arc::new(tokio::sync::Mutex::new(d)),
+        }
+    }
+}
 
 static TABLE: Mutex<Option<Table<Shared>>> = Mutex::new(None);
 
@@ -611,9 +704,11 @@ fn with_table<R>(f: impl FnOnce(&mut Table<Shared>) -> R) -> R {
     f(guard.get_or_insert_with(Table::default))
 }
 
-/// A phone is driving this Mac's Chrome now: agents keep out of it.
+/// A phone is driving this Mac's own Chrome now (through Claude in
+/// Chrome): agents keep out of it. A sign-in in the agents' browser keeps
+/// only that agent out (`agent_browser::signin::refusal_for`).
 pub fn live() -> bool {
-    with_table(|t| t.current().is_some())
+    with_table(|t| t.current().is_some_and(|l| l.extra.via == Via::Chrome))
 }
 
 /// What the desk's bar shows.
@@ -623,8 +718,17 @@ pub fn banner() -> Option<Banner> {
             domain: l.scope.domain.clone(),
             device_name: l.device_name.clone(),
             started_at: l.started_ms,
+            via: l.extra.via,
         })
     })
+}
+
+fn set_via(id: &str, via: Via) {
+    with_table(|t| {
+        if let Some(l) = t.live.as_mut().filter(|l| l.id == id) {
+            l.extra.via = via;
+        }
+    });
 }
 
 fn refused(r: Refusal) -> CommandError {
@@ -657,13 +761,38 @@ fn mac_prompt(domain: &str) -> CommandError {
 }
 
 /// The tab's URL now, from `tabs_context_mcp`.
-async fn where_is(b: &mut Browser) -> Option<String> {
+async fn where_is(b: &mut ChromeTab) -> Option<String> {
     let text = b.mcp.call("tabs_context_mcp", json!({})).await.ok()?;
     super::browser::landed_in(&text, Some(b.tab)).map(|l| l.url)
 }
 
-/// Start a session for a login card: its site's sign-in page in a tab of
-/// the app's own in this Mac's Chrome.
+/// How long the phone waits between pictures, by how they're made.
+pub fn frame_gap(via: Via) -> Duration {
+    match via {
+        // The Mac waits for the next screencast frame; the phone asks again
+        // as soon as one arrives (about 15 a second at most).
+        Via::AgentsBrowser => Duration::from_millis(30),
+        // A screenshot per picture.
+        Via::Chrome => Duration::from_millis(300),
+        Via::MacWindow => Duration::from_millis(150),
+    }
+}
+
+/// Which way a card signs in from the phone: the agents' browser when the
+/// card offers it and it's here, else the user's own Chrome. Pure.
+pub fn choose(agents_offered: bool, agents_available: bool, chrome_offered: bool) -> Option<Via> {
+    if agents_offered && agents_available {
+        Some(Via::AgentsBrowser)
+    } else if chrome_offered {
+        Some(Via::Chrome)
+    } else {
+        None
+    }
+}
+
+/// Start a session for a login card: its site's sign-in page in a window
+/// of the agents' browser (or, for a card without that, a tab of the
+/// user's own Chrome).
 pub async fn begin(
     app: &AppHandle,
     device_id: &str,
@@ -672,20 +801,18 @@ pub async fn begin(
     request_id: &str,
 ) -> Result<Begun, CommandError> {
     let r = super::logins::pending_login(agent_id, request_id)?;
-    if !r
-        .options
-        .iter()
-        .any(|o| o.method == super::logins::Method::Browser)
-    {
-        return Err(CommandError::expected(
-            "This card isn't one your Mac's Chrome can sign in to.",
-        ));
-    }
+    let has = |m: super::logins::Method| r.options.iter().any(|o| o.method == m);
+    let via = choose(
+        has(super::logins::Method::AgentBrowser),
+        crate::agent_browser::available(),
+        has(super::logins::Method::Browser),
+    )
+    .ok_or_else(|| CommandError::expected("This card isn't one you can sign in to from here."))?;
     let site = super::logins::service(&r.service)
         .and_then(|s| s.site)
         .ok_or_else(|| CommandError::expected("This card has no site to open."))?;
     let scope = Scope::for_site(site);
-    // Busy elsewhere: refused before Chrome is touched.
+    // Busy elsewhere: refused before any browser is touched.
     if let Some(other) = with_table(|t| {
         t.expire(Instant::now());
         t.current()
@@ -694,6 +821,72 @@ pub async fn begin(
     }) {
         return Err(refused(other));
     }
+    let url = start_url(&r.service, site);
+    let shared = match via {
+        Via::AgentsBrowser => {
+            let (key, agent, u) = (request_id.to_string(), agent_id.to_string(), url.clone());
+            let win = tokio::task::spawn_blocking(move || {
+                crate::agent_browser::signin::SigninWindow::open(&key, &agent, &u, false)
+            })
+            .await
+            .map_err(super::err_other)?
+            .map_err(|e| {
+                audit(
+                    device_name,
+                    &scope.domain,
+                    "the agents' browser didn't open",
+                    false,
+                );
+                CommandError::expected(e)
+            })?;
+            Shared::new(via, Driver::Agents(AgentsTab { win, geom: None }))
+        }
+        _ => Shared::new(
+            via,
+            Driver::Chrome(Box::new(
+                open_chrome(device_name, site, &scope, &url).await?,
+            )),
+        ),
+    };
+    let open = Opening {
+        device_id: device_id.to_string(),
+        device_name: device_name.to_string(),
+        agent_id: agent_id.to_string(),
+        request_id: request_id.to_string(),
+        scope: scope.clone(),
+    };
+    let begun = with_table(|t| t.begin(open, shared, Instant::now(), super::store::now_ms()));
+    let (id, replaced) = match begun {
+        Ok(v) => v,
+        Err((why, b)) => {
+            close(b).await;
+            return Err(refused(why));
+        }
+    };
+    if let Some(old) = replaced {
+        close(old.extra).await;
+    }
+    audit(device_name, &scope.domain, "started", true);
+    emit(app);
+    spawn_reaper(app.clone(), id.clone());
+    tracing::info!(domain = %scope.domain, ?via, "[Agents] phone sign-in started");
+    Ok(Begun {
+        session_id: id,
+        domain: scope.domain,
+        title: r.title,
+        idle_seconds: IDLE.as_secs(),
+        via,
+        frame_gap_ms: frame_gap(via).as_millis() as u64,
+    })
+}
+
+/// A tab of the app's own in the user's Chrome, at `url` (Claude in Chrome).
+async fn open_chrome(
+    device_name: &str,
+    site: &str,
+    scope: &Scope,
+    url: &str,
+) -> Result<ChromeTab, CommandError> {
     let claude = super::engine::binary(super::engine::Engine::Claude)
         .await
         .ok_or_else(|| {
@@ -731,7 +924,6 @@ pub async fn begin(
                 .ok_or_else(|| CommandError::expected("Chrome on your Mac didn't open a tab."))?
         }
     };
-    let url = start_url(&r.service, site);
     let nav = mcp
         .call_checked("navigate", json!({ "url": url, "tabId": tab }))
         .await;
@@ -747,47 +939,27 @@ pub async fn begin(
             ))
         });
     }
-    let browser = Arc::new(tokio::sync::Mutex::new(Browser {
+    Ok(ChromeTab {
         mcp,
         tab,
-        url,
+        url: url.to_string(),
         geom: None,
-    }));
-    let open = Opening {
-        device_id: device_id.to_string(),
-        device_name: device_name.to_string(),
-        agent_id: agent_id.to_string(),
-        request_id: request_id.to_string(),
-        scope: scope.clone(),
-    };
-    let begun = with_table(|t| t.begin(open, browser, Instant::now(), super::store::now_ms()));
-    let (id, replaced) = match begun {
-        Ok(v) => v,
-        Err((why, b)) => {
-            close(b).await;
-            return Err(refused(why));
-        }
-    };
-    if let Some(old) = replaced {
-        close(old.extra).await;
-    }
-    audit(device_name, &scope.domain, "started", true);
-    emit(app);
-    spawn_reaper(app.clone(), id.clone());
-    tracing::info!(domain = %scope.domain, "[Agents] phone sign-in started");
-    Ok(Begun {
-        session_id: id,
-        domain: scope.domain,
-        title: r.title,
-        idle_seconds: IDLE.as_secs(),
     })
 }
 
-/// Close the tab and let the Chrome connection go.
+/// Close the tab or window and let the browser go.
 async fn close(b: Shared) {
-    let mut b = b.lock().await;
-    let tab = b.tab;
-    let _ = b.mcp.call("tabs_close_mcp", json!({ "tabId": tab })).await;
+    let mut d = b.driver.lock().await;
+    match &mut *d {
+        Driver::Chrome(c) => {
+            let tab = c.tab;
+            let _ = c.mcp.call("tabs_close_mcp", json!({ "tabId": tab })).await;
+        }
+        Driver::Agents(a) => {
+            let w = a.win.clone();
+            let _ = tokio::task::spawn_blocking(move || w.close()).await;
+        }
+    }
 }
 
 /// End it: the tab closes, the bar goes, one audit line.
@@ -826,21 +998,65 @@ fn session(device_id: &str, id: &str) -> Result<(Shared, Scope), CommandError> {
     r.map_err(refused)
 }
 
-/// One picture of the tab, scaled for the phone. Doesn't count as activity.
-pub async fn frame(device_id: &str, id: &str) -> Result<Frame, CommandError> {
+/// One picture of the window, scaled for the phone. Doesn't count as
+/// activity. `after`: the agents' browser waits up to a second and a half
+/// for a newer one.
+pub async fn frame(device_id: &str, id: &str, after: Option<u64>) -> Result<Frame, CommandError> {
     let (shared, scope) = session(device_id, id)?;
-    let mut b = shared.lock().await;
-    let url = where_is(&mut b).await.unwrap_or_else(|| b.url.clone());
+    let mut d = shared.driver.lock().await;
+    match &mut *d {
+        Driver::Chrome(b) => chrome_frame(b, &scope).await,
+        Driver::Agents(a) => {
+            let w = a.win.clone();
+            let shot = tokio::task::spawn_blocking(move || {
+                w.frame(after.unwrap_or(0), Duration::from_millis(1500))
+            })
+            .await
+            .map_err(super::err_other)?;
+            let shot = match shot {
+                Ok(s) => s,
+                // Nothing drawn yet: the phone keeps its spinner.
+                Err(e) if e.contains("hasn't drawn") => {
+                    return Ok(Frame::empty(FrameState::Live, None))
+                }
+                Err(e) => return Err(CommandError::expected(e)),
+            };
+            let host = shot.url.as_deref().and_then(https_host);
+            if let Some(u) = shot.url.as_deref() {
+                if !scope.allows(u) {
+                    return Ok(Frame::empty(FrameState::Outside, host));
+                }
+            }
+            a.geom = Some(FrameGeom {
+                width: shot.width,
+                height: shot.height,
+                scale: 1.0,
+            });
+            use base64::Engine as _;
+            Ok(Frame {
+                state: if shot.refused.is_some() {
+                    FrameState::Blocked
+                } else {
+                    FrameState::Live
+                },
+                host,
+                image: Some(base64::engine::general_purpose::STANDARD.encode(&shot.jpeg)),
+                width: shot.width,
+                height: shot.height,
+                seq: Some(shot.seq),
+                secure: shot.secret,
+                blocked: shot.refused.map(|r| r.reason().to_string()),
+            })
+        }
+    }
+}
+
+async fn chrome_frame(b: &mut ChromeTab, scope: &Scope) -> Result<Frame, CommandError> {
+    let url = where_is(b).await.unwrap_or_else(|| b.url.clone());
     b.url = url.clone();
     let host = https_host(&url);
     if !scope.allows(&url) {
-        return Ok(Frame {
-            state: FrameState::Outside,
-            host,
-            image: None,
-            width: 0,
-            height: 0,
-        });
+        return Ok(Frame::empty(FrameState::Outside, host));
     }
     let tab = b.tab;
     let shot = b
@@ -864,6 +1080,9 @@ pub async fn frame(device_id: &str, id: &str) -> Result<Frame, CommandError> {
         image: Some(base64::engine::general_purpose::STANDARD.encode(jpeg)),
         width: geom.width,
         height: geom.height,
+        seq: None,
+        secure: false,
+        blocked: None,
     })
 }
 
@@ -907,16 +1126,93 @@ pub fn scale_frame(result: &Value) -> Result<(Vec<u8>, FrameGeom), CommandError>
     ))
 }
 
-/// A tap, typing, a key, a scroll, Back or Reload, on the session's tab.
+/// The agents' browser's key for one the phone pressed.
+pub fn agents_key(k: Key) -> crate::agent_browser::keys::Key {
+    use crate::agent_browser::keys::Key as A;
+    match k {
+        Key::Enter => A::Enter,
+        Key::Tab => A::Tab,
+        Key::Backspace => A::Backspace,
+        Key::Delete => A::Delete,
+        Key::Escape => A::Escape,
+        Key::Space => A::Space,
+        Key::ArrowUp => A::ArrowUp,
+        Key::ArrowDown => A::ArrowDown,
+        Key::ArrowLeft => A::ArrowLeft,
+        Key::ArrowRight => A::ArrowRight,
+    }
+}
+
+/// One input on a window of the agents' browser. Blocking. What's typed
+/// goes into one input event and nowhere else.
+fn agents_input(
+    w: &crate::agent_browser::signin::SigninWindow,
+    input: &Input,
+) -> Result<(), String> {
+    match input {
+        Input::Tap { x, y } => w.tap(*x, *y),
+        Input::Type { text, .. } => w.type_text(text),
+        Input::Key { key } => w.key(agents_key(*key)),
+        Input::Scroll {
+            x,
+            y,
+            direction,
+            amount,
+        } => {
+            let n = *amount as i32;
+            let (dx, dy) = match direction {
+                Direction::Up => (0, -n),
+                Direction::Down => (0, n),
+                Direction::Left => (-n, 0),
+                Direction::Right => (n, 0),
+            };
+            w.scroll(*x, *y, dx, dy)
+        }
+        Input::Back => w.back(),
+        Input::Reload => w.reload(),
+    }
+}
+
+/// A tap, typing, a key, a scroll, Back or Reload, on the session's window.
 pub async fn input(device_id: &str, id: &str, input: Input) -> Result<(), CommandError> {
     let (shared, scope) = session(device_id, id)?;
-    let mut b = shared.lock().await;
+    let mut d = shared.driver.lock().await;
+    let geom = match &*d {
+        Driver::Chrome(b) => b.geom,
+        Driver::Agents(a) => a.geom,
+    };
     input
-        .check(b.geom)
+        .check(geom)
         .map_err(|reason| super::err_invalid("input", reason))?;
     with_table(|t| t.touch(device_id, id, Instant::now())).map_err(refused)?;
+    match &mut *d {
+        Driver::Chrome(b) => chrome_input(b, &scope, input).await,
+        Driver::Agents(a) => {
+            let w = a.win.clone();
+            let (scope, i) = (scope.clone(), input);
+            let r = tokio::task::spawn_blocking(move || {
+                // Only on the sign-in itself; Back is how you get back to it.
+                if i != Input::Back {
+                    if let Some(l) = w.location() {
+                        if !scope.allows(&l.url) {
+                            return Err("That page is outside the sign-in. Go back to carry on."
+                                .to_string());
+                        }
+                    }
+                }
+                agents_input(&w, &i)
+                    .map_err(|_| "That didn't reach the page on your Mac.".to_string())
+            })
+            .await
+            .map_err(super::err_other)?;
+            r.map_err(CommandError::expected)
+        }
+    }
+}
+
+async fn chrome_input(b: &mut ChromeTab, scope: &Scope, input: Input) -> Result<(), CommandError> {
     // Only on the sign-in itself; Back is how you get back to it.
-    let url = where_is(&mut b).await.unwrap_or_else(|| b.url.clone());
+    let url = where_is(b).await.unwrap_or_else(|| b.url.clone());
     b.url = url.clone();
     if input != Input::Back && !scope.allows(&url) {
         return Err(CommandError::expected(
@@ -934,8 +1230,8 @@ pub async fn input(device_id: &str, id: &str, input: Input) -> Result<(), Comman
     }
 }
 
-/// Done: is it signed in? If so the card answers itself (the browser way
-/// in) and the session ends. `anyway`: hand it over without being sure.
+/// Done: is it signed in? If so the card answers itself and the session
+/// ends. `anyway`: hand it over without being sure.
 pub async fn done(
     app: &AppHandle,
     device_id: &str,
@@ -957,24 +1253,41 @@ pub async fn done(
     let outcome = if anyway {
         Outcome::SignedIn
     } else {
-        let mut b = shared.lock().await;
-        // The account page tells: it stays put signed in, and goes to a
-        // sign-in page signed out.
-        if let Some(probe) = super::browser::probe_url(&service) {
-            let tab = b.tab;
-            let _ = b
-                .mcp
-                .call_checked("navigate", json!({ "url": probe, "tabId": tab }))
-                .await;
-        }
-        let text = b
-            .mcp
-            .call("tabs_context_mcp", json!({}))
-            .await
-            .unwrap_or_default();
-        match super::browser::landed_in(&text, Some(b.tab))
-            .and_then(|l| super::browser::signed_in(&scope.site, &l))
-        {
+        let mut d = shared.driver.lock().await;
+        let landed = match &mut *d {
+            Driver::Chrome(b) => {
+                // The account page tells: it stays put signed in, and goes
+                // to a sign-in page signed out.
+                if let Some(probe) = super::browser::probe_url(&service) {
+                    let tab = b.tab;
+                    let _ = b
+                        .mcp
+                        .call_checked("navigate", json!({ "url": probe, "tabId": tab }))
+                        .await;
+                }
+                let text = b
+                    .mcp
+                    .call("tabs_context_mcp", json!({}))
+                    .await
+                    .unwrap_or_default();
+                super::browser::landed_in(&text, Some(b.tab))
+            }
+            Driver::Agents(a) => {
+                let w = a.win.clone();
+                let probe = start_url(&service, &scope.site);
+                let landed = tokio::task::spawn_blocking(move || w.check(&probe))
+                    .await
+                    .ok()
+                    .flatten();
+                // A plain window was closed for the check: the agents'
+                // browser shows it again.
+                if shared.via == Via::MacWindow {
+                    set_via(id, Via::AgentsBrowser);
+                }
+                landed
+            }
+        };
+        match landed.and_then(|l| super::browser::signed_in(&scope.site, &l)) {
             Some(true) => Outcome::SignedIn,
             Some(false) => Outcome::SignedOut,
             None => Outcome::Unknown,
@@ -986,6 +1299,7 @@ pub async fn done(
     let Some(live) = with_table(|t| t.take(id)) else {
         return Err(refused(Refusal::Gone));
     };
+    let via = live.extra.via;
     end(
         app,
         live,
@@ -993,15 +1307,74 @@ pub async fn done(
         true,
     )
     .await;
-    super::logins::start(
-        app,
-        &agent_id,
-        &request_id,
-        "browser",
-        super::logins::Origin::phone(false),
-    )
-    .await?;
+    match via {
+        Via::Chrome => {
+            super::logins::start(
+                app,
+                &agent_id,
+                &request_id,
+                "browser",
+                super::logins::Origin::phone(false),
+            )
+            .await?
+        }
+        Via::AgentsBrowser | Via::MacWindow => {
+            super::logins::complete_agents_browser(app, &agent_id, &request_id)?
+        }
+    }
     Ok(Outcome::SignedIn)
+}
+
+/// The site refused the agents' browser: the same profile in a plain
+/// window the phone sees through macOS, if the Mac allows it; else the
+/// plain answer that this one sign-in happens at the Mac.
+pub async fn fallback(app: &AppHandle, device_id: &str, id: &str) -> Result<Begun, CommandError> {
+    let (shared, scope) = session(device_id, id)?;
+    let (title, started) = with_table(|t| {
+        t.current().map(|l| {
+            let title = super::logins::pending_login(&l.agent_id, &l.request_id)
+                .map(|r| r.title)
+                .unwrap_or_default();
+            (title, l.device_name.clone())
+        })
+    })
+    .ok_or_else(|| refused(Refusal::Gone))?;
+    let d = shared.driver.lock().await;
+    let Driver::Agents(a) = &*d else {
+        return Err(CommandError::expected(
+            "This sign-in is in your own Chrome; there's no other way from here.",
+        ));
+    };
+    let w = a.win.clone();
+    let start = start_url("", &scope.site);
+    let r = tokio::task::spawn_blocking(move || {
+        let at = w
+            .location()
+            .map(|l| l.url)
+            .filter(|u| u.starts_with("https://"))
+            .unwrap_or(start);
+        w.go_plain(&at, true)
+    })
+    .await
+    .map_err(super::err_other)?;
+    drop(d);
+    if let Err(e) = r {
+        audit(&started, &scope.domain, "needs the Mac", false);
+        return Err(CommandError::expected(e));
+    }
+    set_via(id, Via::MacWindow);
+    emit(app);
+    with_table(|t| {
+        let _ = t.touch(device_id, id, Instant::now());
+    });
+    Ok(Begun {
+        session_id: id.to_string(),
+        domain: scope.domain,
+        title,
+        idle_seconds: IDLE.as_secs(),
+        via: Via::MacWindow,
+        frame_gap_ms: frame_gap(Via::MacWindow).as_millis() as u64,
+    })
 }
 
 /// Stop from the phone that started it.
@@ -1040,7 +1413,7 @@ pub async fn run(
             agent_id,
             request_id,
         } => v(begin(app, device_id, device_name, &agent_id, &request_id).await),
-        Op::Frame { session_id } => v(frame(device_id, &session_id).await),
+        Op::Frame { session_id, after } => v(frame(device_id, &session_id, after).await),
         Op::Input {
             session_id,
             input: i,
@@ -1056,6 +1429,7 @@ pub async fn run(
             stop(app, device_id, &session_id).await?;
             Ok(Value::Null)
         }
+        Op::Fallback { session_id } => v(fallback(app, device_id, &session_id).await),
     }
 }
 

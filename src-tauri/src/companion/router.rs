@@ -48,6 +48,7 @@ pub const METHODS: &[&str] = &[
     "agents.signinInput",
     "agents.signinDone",
     "agents.signinStop",
+    "agents.signinFallback",
     "agents.focus",
     "agents.markUnread",
     "agents.startFresh",
@@ -141,6 +142,7 @@ pub const SELF_AUDITED_METHODS: &[&str] = &[
     "agents.signinInput",
     "agents.signinDone",
     "agents.signinStop",
+    "agents.signinFallback",
 ];
 
 /// How long a `clientId` is remembered.
@@ -931,6 +933,9 @@ struct SigninParams {
     session_id: String,
     #[serde(default)]
     anyway: bool,
+    /// `agents.signinFrame`: the picture the phone has.
+    #[serde(default)]
+    after: Option<u64>,
 }
 
 /// `Debug` is `Input`'s: never what was typed.
@@ -1329,6 +1334,10 @@ fn signin_op(method: &str, params: Value) -> Result<crate::agents::phone_signin:
             id(&p.session_id)?;
             match method {
                 "agents.signinFrame" => Op::Frame {
+                    session_id: p.session_id,
+                    after: p.after,
+                },
+                "agents.signinFallback" => Op::Fallback {
                     session_id: p.session_id,
                 },
                 "agents.signinDone" => Op::Done {

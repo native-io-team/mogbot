@@ -608,6 +608,10 @@ pub async fn delete_agent(app: &AppHandle, agent_id: &str) -> Result<store::Agen
     };
     abandon(app, agent_id).await;
     runner::forget(agent_id);
+    // Its windows in the agents' browser close with it.
+    let id = agent_id.to_string();
+    let _ =
+        tokio::task::spawn_blocking(move || crate::agent_browser::tools::close_agent(&id)).await;
     super::wallet::forget_agent(agent_id);
     Ok(removed)
 }

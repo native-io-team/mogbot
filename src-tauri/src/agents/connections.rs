@@ -597,8 +597,14 @@ impl TurnAccess {
         self.servers
             .iter()
             .map(|s| {
+                // The agents' browser may wait on a card before it answers.
+                let wait = if s.key == crate::agent_browser::tools::SERVER_KEY {
+                    format!(",tool_timeout_sec={}", super::mcp::APPROVAL_WAIT_SECS + 60)
+                } else {
+                    String::new()
+                };
                 format!(
-                    "mcp_servers.{}={{url={},bearer_token_env_var={}}}",
+                    "mcp_servers.{}={{url={},bearer_token_env_var={}{wait}}}",
                     s.key,
                     toml(&s.url),
                     toml(super::reach::TOKEN_ENV)
@@ -628,6 +634,30 @@ impl TurnAccess {
 
 fn toml(s: &str) -> String {
     serde_json::to_string(s).unwrap_or_default()
+}
+
+/// Whether a turn of `agent` gets the agents' browser (`agent_browser`):
+/// switched on and Chrome is here, the agent's browser isn't off (in "What
+/// it can reach" or its settings), and the turn doesn't answer outside text.
+pub fn agents_browser_for_turn(agent: &store::Agent, outside: bool) -> bool {
+    let available = crate::agent_browser::available();
+    available
+        && agents_browser_allowed(
+            available,
+            super::policy::effective(agent).browser,
+            agent,
+            outside,
+        )
+}
+
+/// [`agents_browser_for_turn`], pure. `policy`: its settings' browser rule.
+pub fn agents_browser_allowed(
+    available: bool,
+    policy: bool,
+    agent: &store::Agent,
+    outside: bool,
+) -> bool {
+    available && policy && !outside && !agent.reach.browser_off
 }
 
 /// Everything a turn of `agent` gets, its servers on the bridge at `port`.
@@ -693,6 +723,14 @@ pub async fn for_turn(agent: &store::Agent, port: u16, outside: bool) -> TurnAcc
         if !access.blocked.contains(&entry) {
             access.blocked.push(entry);
         }
+    }
+    // The agents' browser, for either engine: the Settings switch, the
+    // agent's own, its settings' browser rule, and never for outside text.
+    if agents_browser_for_turn(agent, outside) {
+        access.servers.push(TurnServer {
+            key: crate::agent_browser::tools::SERVER_KEY.to_string(),
+            url: crate::agent_browser::tools::url(port),
+        });
     }
     if !lines.is_empty() {
         access.prompt = format!(
@@ -1097,8 +1135,14 @@ mod tests {
                 .build()
                 .unwrap();
             let h = rt.block_on(for_turn(&recruiter, 4321, false));
-            assert_eq!(h.servers.len(), 1);
+            // Its one granted connection, and the agents' browser.
+            assert_eq!(h.servers.len(), 2);
             assert_eq!(h.servers[0].url, "http://127.0.0.1:4321/mcp/conn/linear");
+            assert_eq!(h.servers[1].key, "browser");
+            assert_eq!(h.servers[1].url, "http://127.0.0.1:4321/mcp/browser");
+            // Never for outside text.
+            let outside = rt.block_on(for_turn(&recruiter, 4321, true));
+            assert!(outside.servers.iter().all(|s| s.key != "browser"));
             assert!(
                 h.blocked.contains(&"mcp__claude_ai_Gmail".to_string()),
                 "{:?}",
@@ -1118,7 +1162,17 @@ mod tests {
             assert!(!format!("{h:?}").contains("lin_turn_token"));
             assert!(given.contains("Bearer turn-secret"));
             let config = h.codex_config();
-            assert_eq!(config, vec![r#"mcp_servers.linear={url="http://127.0.0.1:4321/mcp/conn/linear",bearer_token_env_var="SHIPSTUDIO_AGENTS_BRIDGE_TOKEN"}"#.to_string()]);
+            assert_eq!(
+                config[0],
+                r#"mcp_servers.linear={url="http://127.0.0.1:4321/mcp/conn/linear",bearer_token_env_var="SHIPSTUDIO_AGENTS_BRIDGE_TOKEN"}"#
+            );
+            assert_eq!(
+                config[1],
+                format!(
+                    r#"mcp_servers.browser={{url="http://127.0.0.1:4321/mcp/browser",bearer_token_env_var="SHIPSTUDIO_AGENTS_BRIDGE_TOKEN",tool_timeout_sec={}}}"#,
+                    super::super::mcp::APPROVAL_WAIT_SECS + 60
+                )
+            );
             // The relay gets it, for a granted agent only.
             let t = rt.block_on(relay_target(&recruiter.id, "linear")).unwrap();
             assert_eq!(t.token, "lin_turn_token_998877");
@@ -1128,7 +1182,11 @@ mod tests {
             assert!(rt.block_on(relay_target(&recruiter.id, "nope")).is_err());
 
             let s = rt.block_on(for_turn(&social, 4321, false));
-            assert!(s.servers.is_empty());
+            // No connection of its own: only the agents' browser.
+            assert_eq!(
+                s.servers.iter().map(|x| x.key.as_str()).collect::<Vec<_>>(),
+                vec!["browser"]
+            );
             assert!(!s.blocked.contains(&"mcp__claude_ai_Gmail".to_string()));
             assert!(s.prompt.contains("mcp__claude_ai_Gmail__*"));
         });

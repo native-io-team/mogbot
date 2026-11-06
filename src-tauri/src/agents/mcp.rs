@@ -1961,6 +1961,23 @@ const TOOL_VERBS: [&str; 44] = [
 /// nouns ("computer", "javascript_tool", "tabs_context_mcp"), which the verb
 /// rule turned into "Javascript a tool" and "Tabs a context".
 fn browser_tool_title(server: &str, name: &str) -> Option<&'static str> {
+    // The agents' browser (`agent_browser::tools`).
+    if server == crate::agent_browser::tools::SERVER_KEY {
+        return Some(match name {
+            "open" => "Open a page in the agents' browser",
+            "navigate" => "Go to a page in the agents' browser",
+            "read_page" | "find" | "get_text" => "Read the page",
+            "screenshot" => "Look at the page",
+            "click" => "Click on the page",
+            "type" => "Type on the page",
+            "press" => "Press a key on the page",
+            "scroll" => "Scroll the page",
+            "wait_for" => "Wait for the page",
+            "tabs" => "See its browser tabs",
+            "close_tab" => "Close a tab",
+            _ => return None,
+        });
+    }
     if !matches!(
         server.to_ascii_lowercase().as_str(),
         "claude-in-chrome" | "claude_in_chrome" | "chrome"
@@ -2067,7 +2084,58 @@ pub(super) async fn decide(
     if decision == Decision::Allow && super::connections::is_connection_tool(tool) {
         super::connections::note_cleared(&caller.id, tool);
     }
+    // The same for the agents' browser server.
+    if decision == Decision::Allow && tool.starts_with(super::browser_gate::AGENTS_SERVER) {
+        crate::agent_browser::tools::note_cleared(&caller.id, tool);
+    }
     decision
+}
+
+/// A step in the agents' browser the browser gate said asks: a standing
+/// "Always allow" rule answers it, else a card in the agents' browser's
+/// words. Never the independence level: the gate already applied it.
+async fn agents_browser_card(
+    app: &AppHandle,
+    caller: &store::Agent,
+    tool: &str,
+    input: &Value,
+) -> Decision {
+    if always_allowed(caller, tool, input) {
+        let line = format!("{} · always allowed", one_line(tool, input));
+        let _ = runner::record_in_turn(
+            app,
+            runner::new_message(&caller.id, MessageKind::Note, line),
+        );
+        return Decision::Allow;
+    }
+    let page = super::browser_gate::page_of(&super::browser_gate::agents_key(&caller.id));
+    let (title, said) = super::browser_gate::describe_agents(tool, input, &page);
+    let (_, detail) = describe_request(tool, input);
+    let summary = Some(said).filter(|s| !s.trim().is_empty());
+    match ask(app, caller, title, summary, detail, Some((tool, input))).await {
+        Answer::Allowed => Decision::Allow,
+        Answer::Denied(note) => Decision::Deny(denied(note)),
+        Answer::NotYet => Decision::Deny(NOT_YET.to_string()),
+    }
+}
+
+/// A call to the agents' browser server the engine didn't ask about (its
+/// tools pre-approved, or an engine with no approval channel): decided
+/// here, the same way. `Err` is what the agent is told.
+pub(crate) async fn decide_agents_browser(
+    app: &AppHandle,
+    agent_id: &str,
+    tool: &str,
+    input: &Value,
+) -> Result<(), String> {
+    let caller = store::get(agent_id).map_err(|e| e.to_string())?;
+    if take_grant(&caller.id, tool, input) {
+        return Ok(());
+    }
+    match agents_browser_card(app, &caller, tool, input).await {
+        Decision::Allow => Ok(()),
+        Decision::Deny(why) => Err(why),
+    }
 }
 
 /// A connection call the engine didn't ask about (`conn_relay`): the same
@@ -2115,10 +2183,15 @@ async fn decide_inner(
     }
     // The user's browser: reads on the sites it was given go through; any
     // other site, and every click, keystroke or form, asks (`browser::gate`).
-    match super::browser::gate(caller, tool, input, outside) {
+    let browser_asks = match super::browser::gate(caller, tool, input, outside) {
         super::browser::Gate::Allow => return Decision::Allow,
         super::browser::Gate::Refuse(why) => return Decision::Deny(why),
-        super::browser::Gate::Ask | super::browser::Gate::NotBrowser => {}
+        super::browser::Gate::Ask => true,
+        super::browser::Gate::NotBrowser => false,
+    };
+    // The agents' browser has its own card words ("in the agents' browser").
+    if tool.starts_with(super::browser_gate::AGENTS_SERVER) {
+        return agents_browser_card(app, caller, tool, input).await;
     }
     if always_allowed(caller, tool, input) {
         // Nothing happens invisibly: each one leaves a quiet line in the chat.
@@ -2130,8 +2203,10 @@ async fn decide_inner(
         return Decision::Allow;
     }
     // Local work the user's independence level answers for them
-    // (`autoallow`): a quiet line in the timeline, never invisible.
-    if let Some(level) = auto_allowed(caller, tool, input, outside) {
+    // (`autoallow`): a quiet line in the timeline, never invisible. Not a
+    // browser step the browser gate said asks (a send, a payment, a script
+    // that posts): "Go hard" still asks for those.
+    if let Some(level) = auto_allowed(caller, tool, input, outside).filter(|_| !browser_asks) {
         super::work::on_step(
             &caller.id,
             super::work::StepKind::Approval,
@@ -2180,15 +2255,13 @@ fn auto_allowed(
     // Its own level when its settings give it one (`policy`).
     let chosen = super::policy::chosen_level(caller);
     let ctx = super::autoallow::Ctx::for_agent(caller)?;
-    super::autoallow::auto(chosen, outside, tool, input, &ctx).map(|_| receipt_level(chosen, outside))
+    super::autoallow::auto(chosen, outside, tool, input, &ctx)
+        .map(|_| receipt_level(chosen, outside))
 }
 
 /// The level a receipt names: "Go hard" answers at its own level even for a
 /// turn answering outside text (`go_hard`); the others as the turn runs.
-fn receipt_level(
-    chosen: super::independence::Level,
-    outside: bool,
-) -> super::independence::Level {
+fn receipt_level(chosen: super::independence::Level, outside: bool) -> super::independence::Level {
     if chosen == super::independence::Level::GoHard {
         chosen
     } else {
@@ -2506,10 +2579,7 @@ mod tests {
         );
         // Outside text keeps Go hard for reading and local work (`go_hard`);
         // only network writes and fetched packages ask there.
-        assert_eq!(
-            auto_allowed(&agent, "Bash", &ls, true),
-            Some(Level::GoHard)
-        );
+        assert_eq!(auto_allowed(&agent, "Bash", &ls, true), Some(Level::GoHard));
         let mkdir = json!({ "command": "mkdir -p ~/FictionalProjects/new-site" });
         assert_eq!(
             auto_allowed(&agent, "Bash", &mkdir, false),

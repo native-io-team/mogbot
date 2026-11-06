@@ -10,11 +10,14 @@
 //!    counted here: the browser comes first.
 //! 3. **This Mac is signed in already**: GitHub through `gh`. The agent works
 //!    through `gh`, whose commands still ask through the approval broker.
-//! 4. **The user's browser**: for a site, when this turn has Claude in Chrome
-//!    (`browser::for_turn`: the team's switch, the agent's own, never for
-//!    outside text), the site is given to the agent and it's told to open it
-//!    and say which account it's in. Only when the page shows a sign-in does
-//!    it come back with `signed_out`.
+//! 4. **A browser**: for a site, the agents' own browser first
+//!    (`agent_browser`, either engine), unless the site was last found
+//!    signed in only in the user's personal Chrome and this turn has Claude
+//!    in Chrome (`browser::for_turn`); then that. Never for outside text.
+//!    The site is given to the agent and it's told to open it and say which
+//!    account it's in. Only when the page shows a sign-in does it come back
+//!    with `signed_out`, and the card it then gets offers "Sign in from
+//!    here" first.
 //! 5. **Someone already asked** for it and the card is waiting: this agent is
 //!    added to that card instead of raising its own ([`Waiters`]), and woken
 //!    with the same answer when the user gives it. One ask per service,
@@ -67,6 +70,8 @@ pub enum Step {
     Gh(String),
     /// Use the browser for this site.
     Browser { site: String, title: String },
+    /// Use the agents' own browser for this site.
+    AgentsBrowser { site: String, title: String },
     /// Join the card already waiting for it.
     Join {
         agent_id: String,
@@ -119,6 +124,11 @@ pub struct Here {
     pub gh: Option<String>,
     /// This turn has the user's browser.
     pub browser: bool,
+    /// This turn has the agents' own browser.
+    pub agents_browser: bool,
+    /// The site was last found signed in in one of the user's own Chrome
+    /// profiles (not the agents' browser).
+    pub personal_site: bool,
     /// Services the user marked "Not needed" on the setup checklist
     /// (`access_check::key_of` keys).
     pub not_needed: Vec<String>,
@@ -189,14 +199,24 @@ pub fn decide(agent: &Agent, r: &LoginRequest, tried: &Tried, here: &Here, team:
             return Step::Gh(login.clone());
         }
     }
-    // 4. The user's browser, unless it showed a sign-in page (never for
-    // outside text: such a turn has no browser).
-    if here.browser && !here.outside && !tried.signed_out {
+    // 4. A browser, unless it showed a sign-in page (never for outside
+    // text: such a turn has no browser). The agents' own first; the user's
+    // personal Chrome when the site is known to be signed in only there.
+    if !here.outside && !tried.signed_out {
         if let Some(site) = logins::service(&r.service).and_then(|s| s.site) {
-            return Step::Browser {
-                site: site.to_string(),
-                title: r.title.clone(),
-            };
+            let personal = here.browser && here.personal_site;
+            if here.agents_browser && !personal {
+                return Step::AgentsBrowser {
+                    site: site.to_string(),
+                    title: r.title.clone(),
+                };
+            }
+            if here.browser {
+                return Step::Browser {
+                    site: site.to_string(),
+                    title: r.title.clone(),
+                };
+            }
         }
     }
     // 5. Someone's card for it is waiting: join it. Outside text doesn't
@@ -238,6 +258,9 @@ pub fn reply(step: &Step) -> String {
         Step::Browser { site, title } => format!(
             "Use {title} in the user's own Chrome, where they're already signed in: the Claude in Chrome tools (mcp__claude-in-chrome__*), on {site}. First open it in a new tab and tell the user in one line which account you're in, from what the page shows (\"I'm in {title} as …\"); never guess one. Reading there needs no card. Before any send, post, publish, payment, delete or share, say in chat exactly what will go and from which account; the click or keystroke that does it asks the user on a card, which shows it too. Never type a password. If the page asks you to sign in, call request_login again for it with signed_out: true."
         ),
+        Step::AgentsBrowser { site, title } => format!(
+            "Use {title} in the agents' browser (the mcp__browser__* tools), a Chrome of the team's own on this Mac: open {site} and tell the user in one line which account you're in, from what the page shows (\"I'm in {title} as …\"); never guess one. Reading there needs no card. Before any send, post, publish, payment, delete or share, say in chat exactly what will go and from which account; the click or keystroke that does it asks the user on a card. Never type a password. If the page asks you to sign in, call request_login again for it with signed_out: true: the user signs in from their phone."
+        ),
         Step::Join { agent_name, title, .. } => format!(
             "The user is already being asked about {title} (for {agent_name}). You're on that same card: you'll be woken when they answer. Don't ask again; stop here or carry on with what doesn't need it."
         ),
@@ -264,6 +287,14 @@ pub async fn request(
             None
         },
         browser: super::browser::for_turn(agent, outside),
+        agents_browser: super::connections::agents_browser_for_turn(agent, outside),
+        personal_site: logins::service(&r.service)
+            .and_then(|s| s.site)
+            .is_some_and(|site| {
+                super::browser_profiles::in_personal_chrome(
+                    super::browser_profiles::remembered(site).as_ref(),
+                )
+            }),
         not_needed: not_needed_keys(),
         outside,
     };
@@ -273,7 +304,9 @@ pub async fn request(
         Step::Gh(login) => {
             connections::add_and_grant("github", "GitHub", login, Kind::Gh, &agent.id, r.access())?;
         }
-        Step::Browser { site, .. } => super::browser::give_site(&agent.id, site)?,
+        Step::Browser { site, .. } | Step::AgentsBrowser { site, .. } => {
+            super::browser::give_site(&agent.id, site)?
+        }
         Step::Join {
             agent_id,
             request_id,
@@ -413,6 +446,8 @@ pub enum Answered<'a> {
     Connection(&'a connections::Connection),
     /// The browser, for this site.
     Browser(&'a str),
+    /// The agents' browser, signed in to this site.
+    AgentsBrowser(&'a str),
     Declined(Option<&'a str>),
 }
 
@@ -438,6 +473,12 @@ pub fn answer_waiters(app: &AppHandle, request_id: &str, r: &LoginRequest, how: 
                     r,
                     &format!("use {site} in the user's own Chrome (mcp__claude-in-chrome__*)"),
                 )
+            }
+            Answered::AgentsBrowser(site) => {
+                if super::browser::give_site(&w.agent_id, site).is_err() {
+                    continue;
+                }
+                logins::connected_prompt(r, &logins::agents_browser_told(site))
             }
             Answered::Declined(note) => logins::declined_prompt(r, *note),
         };

@@ -13,8 +13,7 @@
 
 pub mod agent;
 pub mod agent_bridge;
-// Prototype only: docs/internal/agent-browser.md.
-#[cfg(all(feature = "agent-browser", unix))]
+// The agents' browser: docs/internal/agent-browser.md.
 pub mod agent_browser;
 pub mod agents;
 pub mod brand;
@@ -740,6 +739,9 @@ pub fn run() {
             commands::agents::agents_browser_disable,
             commands::agents::agents_phone_signin_status,
             commands::agents::agents_phone_signin_stop,
+            commands::agents::agents_agent_browser_status,
+            commands::agents::agents_agent_browser_set_enabled,
+            commands::agents::agents_agent_browser_permission,
             commands::agents::agents_browser_open_install,
             commands::agents::agents_access_check,
             commands::agents::agents_team_setup_later,
@@ -1323,6 +1325,9 @@ pub fn run() {
                 // must never keep editing a project after the app is gone.
                 // Each leaves its turn mark, so the next launch says so.
                 let agent_turns = agents::runner::shutdown_sync();
+                // The agents' Chrome quits with the app (it saves its
+                // profile on Browser.close).
+                agent_browser::service::shutdown();
                 tracing::info!(
                     ptys,
                     sessions,

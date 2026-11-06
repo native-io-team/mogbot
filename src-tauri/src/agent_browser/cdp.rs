@@ -11,12 +11,17 @@
 
 use serde_json::{json, Value};
 use std::collections::HashMap;
+#[cfg(unix)]
 use std::fs::File;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
+#[cfg(unix)]
 use std::os::fd::{FromRawFd, RawFd};
+#[cfg(unix)]
 use std::os::unix::process::CommandExt;
 use std::path::Path;
-use std::process::{Child, Command, Stdio};
+use std::process::Child;
+#[cfg(unix)]
+use std::process::{Command, Stdio};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
@@ -35,13 +40,16 @@ type Waiters = Arc<Mutex<HashMap<u64, Sender<Result<Value, String>>>>>;
 
 /// A running Chrome and its pipe.
 pub struct Browser {
-    child: Child,
-    writer: Mutex<File>,
+    /// `None` for a connection made over given streams (tests).
+    child: Mutex<Option<Child>>,
+    pid: u32,
+    writer: Mutex<Box<dyn Write + Send>>,
     next_id: AtomicU64,
     waiters: Waiters,
     events: Mutex<Option<Receiver<Event>>>,
 }
 
+#[cfg(unix)]
 fn pipe() -> std::io::Result<(RawFd, RawFd)> {
     let mut fds = [0 as libc::c_int; 2];
     // SAFETY: fds is a valid two-int buffer.
@@ -58,8 +66,18 @@ fn pipe() -> std::io::Result<(RawFd, RawFd)> {
 }
 
 impl Browser {
+    /// The pipe is unix only (fds 3 and 4).
+    #[cfg(not(unix))]
+    pub fn launch(_chrome: &Path, _args: &[String]) -> std::io::Result<Browser> {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "the agents' browser runs on macOS",
+        ))
+    }
+
     /// Start `chrome` with `args` (which must include
     /// `--remote-debugging-pipe`) and connect to it.
+    #[cfg(unix)]
     pub fn launch(chrome: &Path, args: &[String]) -> std::io::Result<Browser> {
         let (to_chrome_r, to_chrome_w) = pipe()?;
         let (from_chrome_r, from_chrome_w) = pipe()?;
@@ -102,17 +120,27 @@ impl Browser {
         let writer = unsafe { File::from_raw_fd(to_chrome_w) };
         let reader = unsafe { File::from_raw_fd(from_chrome_r) };
 
+        Ok(Self::connect(reader, writer, Some(child)))
+    }
+
+    /// Speak CDP over any pair of streams: what [`launch`](Self::launch)
+    /// does with Chrome's pipe, and what tests do with a fake Chrome.
+    pub fn connect(
+        reader: impl Read + Send + 'static,
+        writer: impl Write + Send + 'static,
+        child: Option<Child>,
+    ) -> Browser {
         let waiters: Waiters = Arc::new(Mutex::new(HashMap::new()));
         let (ev_tx, ev_rx) = mpsc::channel();
         spawn_reader(reader, waiters.clone(), ev_tx);
-
-        Ok(Browser {
-            child,
-            writer: Mutex::new(writer),
+        Browser {
+            pid: child.as_ref().map(Child::id).unwrap_or(0),
+            child: Mutex::new(child),
+            writer: Mutex::new(Box::new(writer)),
             next_id: AtomicU64::new(1),
             waiters,
             events: Mutex::new(Some(ev_rx)),
-        })
+        }
     }
 
     /// The event stream. Taken once.
@@ -157,33 +185,53 @@ impl Browser {
     }
 
     /// Ask Chrome to close, then make sure it's gone.
-    pub fn close(mut self) {
+    pub fn close(self) {
+        self.shutdown();
+    }
+
+    /// [`close`](Self::close) through a shared handle: `Browser.close`, up
+    /// to five seconds for Chrome to save its profile and exit, then a kill.
+    pub fn shutdown(&self) {
         let _ = self.call("Browser.close", json!({}), None, Duration::from_secs(5));
+        let mut child = self.child.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(c) = child.as_mut() else { return };
         for _ in 0..50 {
-            if matches!(self.child.try_wait(), Ok(Some(_))) {
+            if matches!(c.try_wait(), Ok(Some(_))) {
                 return;
             }
             std::thread::sleep(Duration::from_millis(100));
         }
-        let _ = self.child.kill();
-        let _ = self.child.wait();
+        let _ = c.kill();
+        let _ = c.wait();
+    }
+
+    /// Chrome's process has exited (or there never was one).
+    pub fn exited(&self) -> bool {
+        let mut child = self.child.lock().unwrap_or_else(|e| e.into_inner());
+        match child.as_mut() {
+            Some(c) => !matches!(c.try_wait(), Ok(None)),
+            None => false,
+        }
     }
 
     pub fn pid(&self) -> u32 {
-        self.child.id()
+        self.pid
     }
 }
 
 impl Drop for Browser {
     fn drop(&mut self) {
-        if matches!(self.child.try_wait(), Ok(None)) {
-            let _ = self.child.kill();
-            let _ = self.child.wait();
+        let child = self.child.get_mut().unwrap_or_else(|e| e.into_inner());
+        if let Some(c) = child.as_mut() {
+            if matches!(c.try_wait(), Ok(None)) {
+                let _ = c.kill();
+                let _ = c.wait();
+            }
         }
     }
 }
 
-fn spawn_reader(reader: File, waiters: Waiters, events: Sender<Event>) {
+fn spawn_reader(reader: impl Read + Send + 'static, waiters: Waiters, events: Sender<Event>) {
     std::thread::spawn(move || {
         let mut r = BufReader::with_capacity(1 << 20, reader);
         let mut buf = Vec::new();

@@ -1942,16 +1942,20 @@ export const agentsLoginPhoneBegin = {
 } satisfies Result<'agents.loginPhoneBegin'>;
 export const agentsSigninBegin = {
   "domain": "figma.com",
+  "frameGapMs": 30,
   "idleSeconds": 300,
   "sessionId": "signin_0123",
-  "title": "Figma"
+  "title": "Figma",
+  "via": "agents_browser"
 } satisfies Result<'agents.signinBegin'>;
 export const agentsSigninFrame = {
-  "height": 640,
+  "height": 540,
   "host": "www.figma.com",
   "image": "/9j/2w==",
+  "secure": true,
+  "seq": 12,
   "state": "live",
-  "width": 1000
+  "width": 780
 } satisfies Result<'agents.signinFrame'>;
 export const agentsSigninFrameOutside = {
   "height": 0,
@@ -1959,6 +1963,23 @@ export const agentsSigninFrameOutside = {
   "state": "outside",
   "width": 0
 } satisfies Result<'agents.signinFrame'>;
+export const agentsSigninFrameBlocked = {
+  "blocked": "Google won't sign in to a browser the app is driving, so this one sign-in happens in a plain Chrome window.",
+  "height": 540,
+  "host": "accounts.google.com",
+  "image": "/9j/2w==",
+  "seq": 3,
+  "state": "blocked",
+  "width": 780
+} satisfies Result<'agents.signinFrame'>;
+export const agentsSigninFallback = {
+  "domain": "google.com",
+  "frameGapMs": 150,
+  "idleSeconds": 300,
+  "sessionId": "signin_0123",
+  "title": "Gmail",
+  "via": "mac_window"
+} satisfies Result<'agents.signinFallback'>;
 export const agentsSigninDone = {
   "outcome": "signed_out"
 } satisfies Result<'agents.signinDone'>;
@@ -2802,6 +2823,7 @@ export const frames = [
       "agents.signinInput",
       "agents.signinDone",
       "agents.signinStop",
+      "agents.signinFallback",
       "agents.focus",
       "agents.markUnread",
       "agents.startFresh",

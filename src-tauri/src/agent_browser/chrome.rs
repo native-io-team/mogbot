@@ -39,9 +39,18 @@ pub enum Window {
     OnScreen { width: u32, height: u32 },
     /// A real, headed window placed far off every display, so nothing
     /// appears on the user's screen while agents work. Still a normal
-    /// Chrome window as far as any page can tell.
+    /// Chrome window as far as any page can tell. macOS keeps 40 px of a
+    /// window on a display, so in practice this is a corner showing.
     OffScreen { width: u32, height: u32 },
+    /// Parked in the bottom-right corner of the main display: macOS keeps
+    /// its top-left corner showing, it's in the Dock, and it keeps painting
+    /// (docs/internal/agent-browser.md, "Hiding the window").
+    Parked { width: u32, height: u32 },
 }
+
+/// Where a parked window is asked to go. macOS moves it back until a
+/// corner of it is on a display; asked for this, that's the bottom right.
+pub const PARK_AT: (i64, i64) = (20_000, 20_000);
 
 /// What a launch needs.
 #[derive(Debug, Clone)]
@@ -77,10 +86,32 @@ pub fn args(spec: &LaunchSpec) -> Vec<String> {
         Window::OnScreen { width, height } => (80, 80, width, height),
         // Far beyond any display arrangement macOS allows.
         Window::OffScreen { width, height } => (-32000, -32000, width, height),
+        Window::Parked { width, height } => (PARK_AT.0, PARK_AT.1, width, height),
     };
     a.push(format!("--window-position={x},{y}"));
     a.push(format!("--window-size={w},{h}"));
     a.push("about:blank".to_string());
+    a
+}
+
+/// The command line for a sign-in the person does by hand, when a site
+/// refuses the automated window: the same profile, **no debugging switch at
+/// all** (so nothing automates it and the page sees an ordinary Chrome), on
+/// screen, at `url`. Held by `plain_args_have_no_automation`.
+pub fn plain_args(user_data_dir: &Path, url: &str, mute: bool) -> Vec<String> {
+    let mut a = vec![
+        format!("--user-data-dir={}", user_data_dir.display()),
+        "--no-first-run".to_string(),
+        "--no-default-browser-check".to_string(),
+        // Its own window, not a tab in some other one.
+        "--new-window".to_string(),
+        "--window-position=80,60".to_string(),
+        "--window-size=1100,820".to_string(),
+    ];
+    if mute {
+        a.push("--mute-audio".to_string());
+    }
+    a.push(url.to_string());
     a
 }
 
@@ -130,6 +161,38 @@ mod tests {
         assert!(a.contains(&"--remote-debugging-pipe".to_string()));
         assert_eq!(a[0], "--user-data-dir=/tmp/x/profile");
         assert!(a.contains(&"--window-position=-32000,-32000".to_string()));
+    }
+
+    #[test]
+    fn plain_args_have_no_automation() {
+        let a = plain_args(
+            Path::new("/tmp/x/Agents"),
+            "https://accounts.google.com/",
+            true,
+        );
+        for banned in [
+            "--remote-debugging",
+            "--enable-automation",
+            "--headless",
+            "--disable-blink-features",
+            "--user-agent",
+            "--no-sandbox",
+        ] {
+            assert!(!a.iter().any(|s| s.starts_with(banned)), "{banned}");
+        }
+        assert_eq!(a[0], "--user-data-dir=/tmp/x/Agents");
+        assert_eq!(a.last().unwrap(), "https://accounts.google.com/");
+        assert!(a.contains(&"--mute-audio".to_string()));
+    }
+
+    #[test]
+    fn parked_goes_to_the_corner() {
+        let a = args(&spec(Window::Parked {
+            width: 1200,
+            height: 860,
+        }));
+        assert!(a.contains(&"--window-position=20000,20000".to_string()));
+        assert!(a.contains(&"--mute-audio".to_string()));
     }
 
     #[test]

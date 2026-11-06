@@ -459,6 +459,15 @@ async fn handle_http(
             };
             return handle_agents_http(app, caller.agent_id, caller.turn, req).await;
         }
+        Some(SecretRoute::Browser) => {
+            // The agents' browser: the same secret names the agent, whose
+            // own tabs are all it sees (`agent_browser::tools`).
+            let caller = bearer_of(&req).and_then(|s| crate::agents::broker::caller(&s));
+            let Some(caller) = caller else {
+                return Ok(plain_response(StatusCode::NOT_FOUND, "Not found"));
+            };
+            return handle_browser_http(app, caller.agent_id, caller.turn, req).await;
+        }
         Some(SecretRoute::Connection(key)) => {
             // A connection the turn was granted: the relay adds the app's
             // token, which the turn never holds (`agents::conn_relay`).
@@ -567,6 +576,8 @@ async fn handle_http(
 enum SecretRoute {
     Agent,
     Import,
+    /// `/mcp/browser`: the agents' browser.
+    Browser,
     /// `/mcp/conn/<serverKey>`: the connection relay.
     Connection(String),
 }
@@ -576,6 +587,7 @@ fn route_secret_path(path: &str) -> Option<SecretRoute> {
     match path.trim_end_matches('/') {
         crate::agents::reach::AGENT_PATH => Some(SecretRoute::Agent),
         crate::agents::reach::IMPORT_PATH => Some(SecretRoute::Import),
+        crate::agent_browser::tools::PATH => Some(SecretRoute::Browser),
         p => p
             .strip_prefix(crate::agents::reach::CONN_PATH)
             .filter(|k| {
@@ -628,6 +640,49 @@ async fn handle_import_http(
             }
             Ok(json_response(
                 crate::agents::connector::handle_rpc(&app, &secret, &message).await,
+            ))
+        }
+        Method::DELETE => Ok(plain_response(StatusCode::OK, "")),
+        _ => Ok(plain_response(
+            StatusCode::METHOD_NOT_ALLOWED,
+            "Method not allowed",
+        )),
+    }
+}
+
+async fn handle_browser_http(
+    app: tauri::AppHandle,
+    agent_id: String,
+    turn: Option<u64>,
+    req: Request<Incoming>,
+) -> Result<Response<ServerBody>, hyper::Error> {
+    match *req.method() {
+        Method::POST => {
+            let body = req.into_body().collect().await?.to_bytes();
+            if body.len() > MAX_BODY_BYTES {
+                return Ok(plain_response(
+                    StatusCode::PAYLOAD_TOO_LARGE,
+                    "Payload too large",
+                ));
+            }
+            let message: Value = match serde_json::from_slice::<Value>(&body) {
+                Ok(v) if v.is_object() => v,
+                _ => {
+                    return Ok(json_response(error_response(
+                        Value::Null,
+                        -32700,
+                        "Parse error",
+                    )))
+                }
+            };
+            if message.get("id").is_none_or(Value::is_null) {
+                return Ok(Response::builder()
+                    .status(StatusCode::ACCEPTED)
+                    .body(full_body(Bytes::new()))
+                    .unwrap());
+            }
+            Ok(json_response(
+                crate::agent_browser::tools::handle_rpc(&app, &agent_id, turn, &message).await,
             ))
         }
         Method::DELETE => Ok(plain_response(StatusCode::OK, "")),
@@ -1183,6 +1238,11 @@ mod tests {
         assert_eq!(route_secret_path("/mcp/agent"), Some(SecretRoute::Agent));
         assert_eq!(route_secret_path("/mcp/agent/"), Some(SecretRoute::Agent));
         assert_eq!(route_secret_path("/mcp/import"), Some(SecretRoute::Import));
+        assert_eq!(
+            route_secret_path("/mcp/browser"),
+            Some(SecretRoute::Browser)
+        );
+        assert_eq!(route_secret_path("/mcp/browser/x"), None);
         assert_eq!(
             route_secret_path("/mcp/conn/linear_work"),
             Some(SecretRoute::Connection("linear_work".into()))

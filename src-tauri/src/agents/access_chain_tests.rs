@@ -307,3 +307,56 @@ fn the_browser_comes_before_a_claude_ai_connector_and_after_our_own() {
         assert!(told.contains("exactly what will go and from which account"));
     });
 }
+
+#[test]
+fn the_agents_browser_comes_before_the_users_own_chrome() {
+    with_root(|| {
+        let social = agent("Social");
+        let r = logins::build(&social, &ask("linkedin")).unwrap();
+        let none = Tried::default();
+        let both = Here {
+            browser: true,
+            agents_browser: true,
+            ..Default::default()
+        };
+        assert!(matches!(
+            decide(&social, &r, &none, &both, &[]),
+            Step::AgentsBrowser { ref site, .. } if site == "www.linkedin.com"
+        ));
+        // Only the agents' browser (a Codex agent, or Claude in Chrome off).
+        let agents_only = Here {
+            agents_browser: true,
+            ..Default::default()
+        };
+        assert!(matches!(
+            decide(&social, &r, &none, &agents_only, &[]),
+            Step::AgentsBrowser { .. }
+        ));
+        // The site was last found signed in only in the user's own Chrome:
+        // that's where the task's session is.
+        let personal = Here {
+            personal_site: true,
+            ..both.clone()
+        };
+        assert!(matches!(
+            decide(&social, &r, &none, &personal, &[]),
+            Step::Browser { .. }
+        ));
+        // A sign-in page: a card (whose first way in is "Sign in from here").
+        let out = Tried { signed_out: true };
+        assert_eq!(decide(&social, &r, &out, &both, &[]), Step::Ask);
+        assert_eq!(r.options[0].method, logins::Method::AgentBrowser);
+        // Never for outside text.
+        let outside = Here {
+            outside: true,
+            ..both
+        };
+        assert_eq!(decide(&social, &r, &none, &outside, &[]), Step::Ask);
+        let told = reply(&Step::AgentsBrowser {
+            site: "www.linkedin.com".into(),
+            title: "LinkedIn".into(),
+        });
+        assert!(told.contains("mcp__browser__*") && told.contains("signed_out: true"));
+        assert!(told.contains("from their phone"));
+    });
+}
