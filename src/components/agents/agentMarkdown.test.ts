@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createStreamingSegments, toSegments } from './agentMarkdown';
+import { createStreamingSegments, toSegments, type Segment } from './agentMarkdown';
 
 const MD = (i: number) =>
   [
@@ -41,6 +41,10 @@ const DOCS: Record<string, string> = {
     'Hi\n\n[click](javascript:alert(1))\n\nand `<img src=x onerror=alert(1)>` too\n\nEnd',
 };
 
+/** Segments without the streaming parser's per-block parts, to compare with a whole parse. */
+const plain = (segments: Segment[]) =>
+  segments.map((s) => (s.type === 'html' ? { type: 'html', html: s.html } : s));
+
 /** Feed a text the way drafts arrive: growing a few words at a time. */
 function streamed(full: string, step: number) {
   const segmentsFor = createStreamingSegments();
@@ -59,7 +63,9 @@ describe('createStreamingSegments', () => {
     it(`matches a whole parse at every step: ${name}`, { timeout: 60_000 }, () => {
       for (const step of [1, 3]) {
         for (const { text, got } of streamed(doc, step)) {
-          expect(got).toEqual(toSegments(text));
+          expect(plain(got)).toEqual(toSegments(text));
+          for (const s of got)
+            if (s.type === 'html' && s.parts) expect(s.parts.join('')).toBe(s.html);
         }
       }
     });
@@ -68,7 +74,9 @@ describe('createStreamingSegments', () => {
   it('starts over when the text is not a continuation', () => {
     const segmentsFor = createStreamingSegments();
     segmentsFor('First reply.\n\nSecond paragraph.');
-    expect(segmentsFor('Another reply entirely')).toEqual(toSegments('Another reply entirely'));
+    expect(plain(segmentsFor('Another reply entirely'))).toEqual(
+      toSegments('Another reply entirely')
+    );
   });
 
   it('still sanitizes what it keeps', () => {
@@ -106,6 +114,6 @@ describe('tables', () => {
   it('aligns the same while streaming', () => {
     const stream = createStreamingSegments();
     stream(table.slice(0, 40));
-    expect(stream(`${table}\n\nDone.`)).toEqual(toSegments(`${table}\n\nDone.`));
+    expect(plain(stream(`${table}\n\nDone.`))).toEqual(toSegments(`${table}\n\nDone.`));
   });
 });

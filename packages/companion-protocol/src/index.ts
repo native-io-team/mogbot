@@ -30,3 +30,4 @@ export * from './attention';
 export * from './tables';
 export * from './gallery';
 export * from './preview';
+export * from './steady';

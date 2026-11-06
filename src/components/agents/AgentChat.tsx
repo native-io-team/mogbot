@@ -60,7 +60,7 @@ import { AgentSchedulePopover } from './AgentSchedulePopover';
 import { AgentUsageRing } from './AgentUsageRing';
 import { AgentFilesModal } from './AgentFilesModal';
 import { RememberModal } from './AgentRemember';
-import { useArrivals, useFollowBottom, usePresence } from './useAgentMotion';
+import { useArrivals, useFollowBottom, usePresence, useRecently } from './useAgentMotion';
 import { useRowAnchoring } from './useRowAnchoring';
 import { useDictation } from './useDictation';
 import { blockedCopy, dictationVocabulary, openPrivacySettings } from '../../lib/dictation';
@@ -259,6 +259,9 @@ const STICK_THRESHOLD = 80;
 
 /** Older lines start loading while this many screens of history are still above. */
 const LOAD_AHEAD_SCREENS = 1.5;
+
+/** After a block of a reply ends, how long before the working line may come back. */
+const WORKING_AFTER_REPLY_MS = 700;
 
 /**
  * A chat opens with this many of its newest lines in the DOM, and mounts more
@@ -843,8 +846,11 @@ export const AgentChat = memo(function AgentChat({
   // A card left open after the turn ended is not "working": no dots, no Stop.
   const working = agent.status.state === 'working';
   // While words are arriving they are the sign of life; the dots and what
-  // it's doing come back between text blocks, while tools run.
-  const indicator = usePresence(working && !streaming);
+  // it's doing come back between text blocks, while tools run, once the gap
+  // has lasted a moment: a blink of the working line between two blocks was
+  // the flash that made streaming read as janky.
+  const wroteJustNow = useRecently(!!streaming, WORKING_AFTER_REPLY_MS);
+  const indicator = usePresence(working && !wroteJustNow);
   const jump = usePresence(!atBottom);
   // What it's doing now goes above what's waiting: the indicator sits before
   // the run of queued messages at the end, not under them.
