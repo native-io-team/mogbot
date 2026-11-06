@@ -377,3 +377,110 @@ fn a_session_is_found_only_where_the_engine_keeps_it() {
         SESSION
     ));
 }
+
+/// A turn that panics mid-way is picked up like one a crash cut off: its
+/// mark (still on disk) gives the same pick-up, once, in the same session,
+/// told what happened. Panicking again ends on Interrupted with Continue.
+#[test]
+fn a_panicked_turn_is_picked_up_once_then_interrupted() {
+    scratch(|| {
+        let a = agent("Ada");
+        start_turn(&a.id, vec![user("Write the ⌘K docs 🙂")]);
+        save_progress(&a.id, Some(("draft-p", "Here is 日本語 so far")));
+        // The worker panics: its runtime is reset (in memory), then handled.
+        let reset = reset_after_panic(&a.id, true);
+        assert!(!reset.restart, "nothing else was queued");
+
+        let (plan, pid) = plan_after_panic(&a.id, false, on_disk).expect("a pick-up");
+        assert_eq!(pid, None, "424242 isn't a process this run spawned");
+        assert_eq!(plan.pickup, Some(Pickup::Resume));
+        assert!(read_mark(&a.id).is_none(), "the mark is dealt with");
+        let partial = plan.partial.expect("the reply it was writing is kept");
+        assert_eq!(partial.text, "Here is 日本語 so far");
+        assert!(partial.stopped);
+        let line = recovery_line(&a.id, plan.pickup.as_ref(), Cause::Panic).unwrap();
+        assert_eq!(line.text, PANIC_PICKED_UP_LINE);
+        assert_eq!(line.kind, MessageKind::Note);
+
+        let queued = queue_of(&a.id);
+        assert_eq!(queued.len(), 1);
+        assert_eq!(queued[0].resume, 1);
+        assert_eq!(
+            queued[0].text,
+            prompts::carry_on("Something went wrong in the app")
+        );
+        assert!(
+            claim_idle_worker(&a.id),
+            "a worker is claimed for the pick-up"
+        );
+        assert!(!claim_idle_worker(&a.id), "only one");
+
+        // The pick-up runs, and panics again: not picked up a second time.
+        take_batch(&a.id).unwrap();
+        update_mark(&a.id, |m| m.session_id = Some(SESSION.into()));
+        reset_after_panic(&a.id, true);
+        let (plan, _) = plan_after_panic(&a.id, false, on_disk).unwrap();
+        assert_eq!(plan.pickup, Some(Pickup::Continue(PANIC_INTERRUPTED_LINE)));
+        assert!(queue_of(&a.id).is_empty(), "nothing queued by itself");
+        let line = recovery_line(&a.id, plan.pickup.as_ref(), Cause::Panic).unwrap();
+        assert_eq!(line.kind, MessageKind::Error);
+        assert_eq!(
+            line.failure,
+            Some(super::super::failure::Failure::INTERRUPTED)
+        );
+        forget(&a.id);
+    });
+}
+
+/// Without a turn in flight (it panicked before taking anything, or after
+/// its turn ended) there is nothing to pick up: the plain failed line.
+#[test]
+fn a_panic_with_no_turn_in_flight_has_nothing_to_pick_up() {
+    scratch(|| {
+        let a = agent("Ada");
+        assert!(plan_after_panic(&a.id, false, on_disk).is_none());
+        forget(&a.id);
+    });
+}
+
+/// Driven by hand: never picked up by itself.
+#[test]
+fn a_panicked_turn_under_a_takeover_is_left_for_continue() {
+    scratch(|| {
+        let a = agent("Ada");
+        start_turn(&a.id, vec![user("go")]);
+        reset_after_panic(&a.id, true);
+        let (plan, _) = plan_after_panic(&a.id, true, on_disk).unwrap();
+        assert_eq!(plan.pickup, Some(Pickup::Continue(PANIC_INTERRUPTED_LINE)));
+        assert!(queue_of(&a.id).is_empty());
+        forget(&a.id);
+    });
+}
+
+/// Picked up, its delegators and scheduled runs carry over (once each) to
+/// the turn that carries it on, rather than being told it failed.
+#[test]
+fn a_picked_up_panic_carries_its_debts_over() {
+    scratch(|| {
+        let id = "carry";
+        let chief = AgentRef {
+            id: "chief".into(),
+            name: "Chief".into(),
+        };
+        RUNTIMES
+            .lock()
+            .unwrap()
+            .entry(id.into())
+            .or_default()
+            .owed
+            .push(chief.clone());
+        carry_over(id, vec![chief.clone()], vec!["t-1".into()]);
+        carry_over(id, vec![chief], vec!["t-1".into()]);
+        let rt = RUNTIMES.lock().unwrap();
+        let r = rt.get(id).unwrap();
+        assert_eq!(r.owed.len(), 1);
+        assert_eq!(r.tickets, vec!["t-1".to_string()]);
+        drop(rt);
+        RUNTIMES.lock().unwrap().remove(id);
+    });
+}
