@@ -152,6 +152,7 @@
 @import './features/agents-policy.css';
 @import './features/agents-project.css';
 @import './features/agents-work.css';
+@import './features/agents-browser.css';
 @import './features/agents-results.css';
 @import './features/agents-preview.css';
 @import './features/agents-rooms.css';

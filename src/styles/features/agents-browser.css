@@ -1,0 +1,264 @@
+/* Watching an agent in its own browser (components/agents/AgentBrowserLive.tsx):
+   the live card under the working line, the still a finished turn keeps in
+   "What it did", and the larger view in the preview pane. Neutral surfaces;
+   the only colour is the running dot. */
+
+:root {
+  --agents-browser-card-width: 288px; /* css-ok: a 16:10 page you can read the shape of */
+  --agents-browser-still-width: 208px; /* css-ok: a step-list thumbnail, smaller than live */
+  --agents-browser-dot: 6px; /* css-ok: the running dot */
+}
+
+/* ------------------------------------------------------------- the card */
+
+.agent-browser-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: var(--agents-browser-card-width);
+  max-width: 100%;
+  margin: var(--spacing-sm) 0 0;
+  padding: 0;
+  overflow: hidden;
+  font: inherit;
+  color: var(--text-muted);
+  text-align: left;
+  cursor: pointer;
+  background: var(--surface-panel);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  transition:
+    border-color var(--transition-interaction),
+    box-shadow var(--transition-interaction);
+}
+
+.agent-browser-card:hover:not(:disabled) {
+  border-color: var(--border-default);
+  box-shadow: var(--shadow-md);
+}
+
+.agent-browser-card:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.agent-browser-card:disabled {
+  cursor: default;
+}
+
+.agent-browser-card__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-compact);
+}
+
+.agent-browser-card__bar > svg {
+  flex: 0 0 auto;
+}
+
+.agent-browser-card__site {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The picture: the top of the page, at 16:10, under a hairline. */
+.agent-browser-card__screen {
+  display: block;
+  aspect-ratio: 16 / 10;
+  overflow: hidden;
+  background: var(--surface-recessed);
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-browser-card__screen img,
+.agent-browser-pane__screen img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: top center;
+  user-select: none;
+}
+
+.agent-browser__placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  color: var(--text-faint);
+}
+
+.agent-browser-card__screen[data-empty] {
+  animation: skeleton-pulse 1.6s ease-in-out infinite; /* css-ok: matches the app's skeletons */
+}
+
+/* "Watch" appears over the picture's corner on hover, so the card says what
+   pressing it does without a permanent label. */
+.agent-browser-card__hint {
+  position: absolute;
+  right: var(--spacing-sm);
+  bottom: var(--spacing-sm);
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-2xs);
+  padding: var(--spacing-2xs) var(--spacing-sm);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-label);
+  color: var(--text-on-inverse);
+  background: var(--surface-inverse);
+  border-radius: var(--radius-pill);
+  opacity: 0;
+  transform: translateY(var(--spacing-2xs));
+  transition:
+    opacity var(--transition-interaction),
+    transform var(--transition-interaction);
+  pointer-events: none;
+}
+
+.agent-browser-card:hover:not(:disabled) .agent-browser-card__hint,
+.agent-browser-card:focus-visible .agent-browser-card__hint {
+  opacity: 1;
+  transform: none;
+}
+
+/* The pane shows it larger: this one rests, dimmed, on its last picture. */
+.agent-browser-card[data-beside] .agent-browser-card__screen img {
+  opacity: 0.55;
+}
+
+/* The finished turn's still: smaller, in the step list's column. */
+.agent-browser-card--still {
+  width: var(--agents-browser-still-width);
+  margin: var(--spacing-sm) 0 0 calc(var(--agents-work-icon) + var(--spacing-sm));
+}
+
+/* ---------------------------------------------------------- live mark */
+
+.agent-browser__mark {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--spacing-2xs);
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.agent-browser__mark[data-state='live'] {
+  color: var(--text-secondary);
+}
+
+.agent-browser__dot {
+  width: var(--agents-browser-dot);
+  height: var(--agents-browser-dot);
+  background: var(--status-running);
+  border-radius: var(--radius-pill);
+  animation: agent-browser-live 2s ease-in-out infinite; /* css-ok: a slow breath */
+}
+
+@keyframes agent-browser-live {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.35;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-browser__dot,
+  .agent-browser-card__screen[data-empty] {
+    animation: none;
+  }
+
+  .agent-browser-card,
+  .agent-browser-card__hint {
+    transition: none;
+  }
+}
+
+/* -------------------------------------------------------------- the pane */
+
+.agent-browser-pane__toolbar {
+  justify-content: space-between;
+}
+
+/* Read-only: the address as text in the address field's shape. */
+.agent-browser-pane__address {
+  display: flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  height: var(--agents-preview-control);
+  padding: 0 var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+  background: var(--surface-recessed);
+  border-radius: var(--radius-control);
+}
+
+.agent-browser-pane__address > svg {
+  flex: 0 0 auto;
+}
+
+.agent-browser-pane__url {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+.agent-browser-pane__toolbar > .agent-browser__mark {
+  padding-inline: var(--spacing-xs);
+}
+
+.agent-browser-pane__stage {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-md);
+  min-height: 0;
+  padding: var(--spacing-lg);
+  background: var(--surface-app);
+}
+
+.agent-browser-pane__screen {
+  display: block;
+  width: 100%;
+  max-height: calc(100% - var(--spacing-2xl));
+  aspect-ratio: 1280 / 860; /* css-ok: the agents' Chrome window (service::WINDOW) */
+  overflow: hidden;
+  background: var(--surface-recessed);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-md);
+}
+
+.agent-browser-pane__screen img {
+  object-fit: contain;
+}
+
+.agent-browser-pane__note {
+  margin: 0;
+  font-size: var(--font-size-caption);
+  color: var(--text-muted);
+  text-align: center;
+}

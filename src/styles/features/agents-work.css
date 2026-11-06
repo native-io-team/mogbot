@@ -169,6 +169,12 @@
   max-width: var(--agents-bubble-max);
 }
 
+/* "7 steps" beside the bubble never breaks over two lines in a narrow chat. */
+.agent-working__line > .agent-work__toggle {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .agent-work--live {
   flex: 0 0 auto;
   width: 100%;
@@ -222,14 +228,26 @@
   font-size: var(--font-size-body-sm);
 }
 
+/* "Check on it" and "Stop" in the bubble: set off from the words they act
+   on by a hairline, rather than running on as more of the sentence. */
+.agent-live__quiet > .text-button.button.agent-live__action:first-of-type {
+  padding-left: var(--spacing-sm);
+  border-left: var(--border-width-default) solid var(--border-default);
+  border-radius: 0;
+}
+
 .agent-live {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-2xs);
   width: 100%;
   max-width: min(var(--agents-bubble-max), 100%);
-  /* Past the typing dots, under the words. */
-  padding-left: calc(var(--spacing-lg) + var(--spacing-sm));
+  /* Under the bubble's words: its inset, the three dots and their gap.
+     (spacing-lg + spacing-sm landed between the bubble's edge and its text,
+     under neither.) */
+  padding-left: calc(
+    var(--spacing-md) + var(--typing-dots-size) * 3 + var(--typing-dots-gap) * 2 + var(--spacing-sm)
+  );
   font-size: var(--font-size-body-sm);
   line-height: var(--line-height-compact);
   color: var(--text-muted);

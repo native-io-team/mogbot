@@ -9,6 +9,8 @@
 import type { Scenario } from '../types';
 import { HARNESS_ROOT } from './base';
 import { AGENTS_TAB, MIN, TEAM, messagesFor, msg, now, overview } from './agents';
+import { browserFrame } from '../fixtures/browserFrame';
+import { rememberLastFrame } from '../../lib/agentsOwnBrowser';
 
 const SEC = 1000;
 const ACME_PATH = `${HARNESS_ROOT}/acme-marketing`;
@@ -137,6 +139,75 @@ const ACME_CHAT = [
   msg('user', 'I pushed a fix. Run them again.', 6, { agentId: 'acme' }),
 ];
 
+/** Lead Gen, on a supplier directory in its own browser. */
+const BROWSER_CALL = {
+  kind: 'web',
+  label: 'Using its own browser · northwind-supply.com',
+  startedAt: now - 14 * SEC,
+  streams: false,
+  busy: false,
+  canStop: false,
+};
+
+const BROWSER_TURN = {
+  startedAt: now - 3 * MIN,
+  stepCount: 7,
+  fileCount: 0,
+  doing: BROWSER_CALL.label,
+  current: BROWSER_CALL,
+  lastSignAt: now - 2 * SEC,
+  ownBrowser: true,
+  steps: [
+    { at: now - 3 * MIN + 3 * SEC, kind: 'read', label: 'Read leads.csv' },
+    {
+      at: now - 3 * MIN + 9 * SEC,
+      kind: 'web',
+      label: 'Used its own browser · northwind-supply.com',
+    },
+    { at: now - 2 * MIN, kind: 'web', label: 'Used its own browser · northwind-supply.com' },
+    {
+      at: now - 2 * MIN + 20 * SEC,
+      kind: 'screenshot',
+      label: 'Took a screenshot of its own browser',
+    },
+    { at: now - 90 * SEC, kind: 'web', label: 'Used its own browser · northwind-supply.com' },
+    { at: now - 60 * SEC, kind: 'web', label: 'Used its own browser · northwind-supply.com' },
+    { at: now - 30 * SEC, kind: 'web', label: 'Used its own browser · northwind-supply.com' },
+  ],
+};
+
+const LEADGEN_CHAT = [
+  msg(
+    'user',
+    'Find ten packaging suppliers on Northwind’s directory that ship to Canada, with a contact for each.',
+    3,
+    { agentId: 'leadgen' }
+  ),
+];
+
+/** The same job, finished: its reply keeps the last picture of the page. */
+const BROWSER_DONE = {
+  ...BROWSER_TURN,
+  endedAt: now - 1 * MIN,
+  current: undefined,
+  doing: undefined,
+  ownBrowser: undefined,
+};
+
+const LEADGEN_DONE_CHAT = [
+  ...LEADGEN_CHAT,
+  {
+    ...msg(
+      'agent',
+      'Found ten that ship to Canada. Boreal Box Co. and Harbour Mailers have the lowest minimum orders; the full list with a contact for each is in suppliers.csv.',
+      1,
+      { agentId: 'leadgen' }
+    ),
+    id: 'browser-finished',
+    work: BROWSER_DONE,
+  },
+];
+
 const FINANCE_CHAT = [
   msg('user', 'Rebuild the invoice dashboard with the new totals.', 9, { agentId: 'finance' }),
 ];
@@ -154,6 +225,17 @@ const team = () =>
             activity: CYPRESS.label,
             since: LIVE_TURN.startedAt,
             work: LIVE_TURN,
+          },
+        };
+      }
+      if (a.id === 'leadgen') {
+        return {
+          ...a,
+          status: {
+            state: 'working',
+            activity: BROWSER_CALL.label,
+            since: BROWSER_TURN.startedAt,
+            work: BROWSER_TURN,
           },
         };
       }
@@ -177,17 +259,35 @@ const commands = {
   agents_messages: (args: Record<string, unknown>) =>
     args.agentId === 'acme'
       ? ACME_CHAT
-      : args.agentId === 'finance'
-        ? FINANCE_CHAT
-        : messagesFor(args),
+      : args.agentId === 'leadgen'
+        ? LEADGEN_CHAT
+        : args.agentId === 'finance'
+          ? FINANCE_CHAT
+          : messagesFor(args),
   agents_check_on: () =>
     'Its command is still running but isn’t using the CPU, and its last progress was 5 min ago. It may be waiting on something, like a server or the network.',
   agents_stop_step: () => 'Stopped that step. It carries on from there.',
   agents_show_agent_browser: () => null,
+  // The first ask gets a picture; later ones nothing new (the hook then waits).
+  agents_browser_live_frame: (args: Record<string, unknown>) =>
+    args.after ? null : browserFrame(),
+  agents_browser_live_stop: () => null,
+};
+
+const doneCommands = {
+  ...commands,
+  agents_overview: overview(TEAM),
+  agents_messages: (args: Record<string, unknown>) => {
+    if (args.agentId !== 'leadgen') return messagesFor(args);
+    // What this session saw while it worked (kept in memory, as the live card does).
+    rememberLastFrame('leadgen', BROWSER_TURN.startedAt, browserFrame());
+    return LEADGEN_DONE_CHAT;
+  },
 };
 
 const openAcme = { click: '[data-agent-id="acme"]' };
 const openFinance = { click: '[data-agent-id="finance"]' };
+const openLeadgen = { click: '[data-agent-id="leadgen"]' };
 
 export const agentsLiveScenarios: Scenario[] = [
   {
@@ -209,6 +309,36 @@ export const agentsLiveScenarios: Scenario[] = [
     openSelector: AGENTS_TAB,
     steps: [openAcme, { click: '.agent-live__step' }, { click: '.agent-live__toggle' }],
     commands,
+  },
+  {
+    id: 'agents-live-browser',
+    title: 'Agents — an agent working in its own browser',
+    looksRightWhen:
+      'Lead Gen’s chat. Under the working bubble (“Using its own browser · northwind-supply.com · 0:14”, “7 steps”), a rounded card the bubble’s left edge: a header with a globe, “northwind-supply.com” and a breathing blue dot “Live”, then a 16:10 picture of the supplier directory’s top. No orphaned text button. Hovering shows a “Watch” pill in the corner.',
+    requires: '.agent-browser-card .agent-browser-card__screen img',
+    openSelector: AGENTS_TAB,
+    steps: [openLeadgen],
+    commands,
+  },
+  {
+    id: 'agents-live-browser-pane',
+    title: 'Agents — its browser, live, beside the chat',
+    looksRightWhen:
+      'The pane beside the chat: header “Packaging suppliers · Northwind Supply” over “Lead Gen’s browser”, “Open in Chrome” (quiet, with an arrow) and ×. A read-only address row with a lock and the full URL, “● Live” at its end. The page picture large, rounded, on the app surface, and under it “View only: Lead Gen won’t see clicks here.” In the chat, the card dims and says “Open beside”.',
+    requires: '.agent-browser-pane .agent-browser-pane__screen img',
+    openSelector: AGENTS_TAB,
+    steps: [openLeadgen, { click: '.agent-browser-card' }],
+    commands,
+  },
+  {
+    id: 'agents-live-browser-still',
+    title: 'Agents — a finished turn keeps the last picture of its page',
+    looksRightWhen:
+      'Lead Gen’s reply with “What it did” open: above the steps, a smaller still of the directory page with “northwind-supply.com” and “Last seen” (no dot), in the steps’ column.',
+    requires: '.agent-browser-card--still img',
+    openSelector: AGENTS_TAB,
+    steps: [openLeadgen, { click: '[data-message-ids="browser-finished"] .agent-work__toggle' }],
+    commands: doneCommands,
   },
   {
     id: 'agents-live-stalled',

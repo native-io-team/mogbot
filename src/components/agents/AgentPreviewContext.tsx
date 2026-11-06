@@ -22,6 +22,12 @@ export interface PreviewRequest {
   link?: number;
   /** Bumps on every press, so pressing Preview again re-runs the open. */
   n: number;
+  /**
+   * Not a site: the agent's page in its own browser, live
+   * (`AgentBrowserPane`). The turn it belongs to, so a finished one shows
+   * its last picture.
+   */
+  browser?: { turnStartedAt: number };
 }
 
 export interface PreviewOpenOptions {
@@ -31,6 +37,8 @@ export interface PreviewOpenOptions {
 
 interface AgentPreviewActions {
   open: (agentId: string, messageId: string, opts?: PreviewOpenOptions) => void;
+  /** The agent's own browser, live, in the pane. */
+  openBrowser: (agentId: string, turnStartedAt: number) => void;
   close: () => void;
   /** True while the pane is open (read at call time; doesn't re-render cards). */
   isOpen: () => boolean;
@@ -49,12 +57,19 @@ export function AgentPreviewProvider({ children }: { children: ReactNode }) {
     openRef.current = true;
     setCurrent({ agentId, messageId, test: opts?.test, link: opts?.link, n: Date.now() });
   }, []);
+  const openBrowser = useCallback((agentId: string, turnStartedAt: number) => {
+    openRef.current = true;
+    setCurrent({ agentId, messageId: '', browser: { turnStartedAt }, n: Date.now() });
+  }, []);
   const close = useCallback(() => {
     openRef.current = false;
     setCurrent(null);
   }, []);
   const isOpen = useCallback(() => openRef.current, []);
-  const actions = useMemo(() => ({ open, close, isOpen }), [open, close, isOpen]);
+  const actions = useMemo(
+    () => ({ open, openBrowser, close, isOpen }),
+    [open, openBrowser, close, isOpen]
+  );
   return (
     <ActionsContext.Provider value={actions}>
       <CurrentContext.Provider value={current}>{children}</CurrentContext.Provider>

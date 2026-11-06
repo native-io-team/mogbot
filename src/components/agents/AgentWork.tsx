@@ -42,6 +42,7 @@ import {
 } from '../../lib/agentWork';
 import { MessageAttachments } from './AgentAttachments';
 import { StepOutput } from './AgentLiveStep';
+import { BrowserStill } from './AgentBrowserLive';
 import { stepLine } from '../../../packages/companion-protocol/src/work';
 
 type IconComponent = ComponentType<{ size?: number }>;
@@ -193,7 +194,12 @@ export const WorkTimeline = memo(function WorkTimeline({ work, agent }: WorkTime
       </div>
       <div className="agent-work__body" id={id} aria-hidden={!open}>
         <div className="agent-work__inner">
-          {(open || ever) && <StepList work={work} agent={agent} />}
+          {(open || ever) && (
+            <>
+              <BrowserStill agent={agent} work={work} />
+              <StepList work={work} agent={agent} />
+            </>
+          )}
         </div>
       </div>
     </div>

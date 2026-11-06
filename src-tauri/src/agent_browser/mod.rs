@@ -15,6 +15,7 @@
 //! - [`tools`]: the `browser` MCP server on the agent bridge.
 //! - [`signin`]: a sign-in window (phone or desk); [`refusal`] spots a site
 //!   refusing it; [`plain`] and [`macos`]: the plain-window fallback.
+//! - [`live`]: the chat's live preview of an agent's page (slow, small, leased).
 //! - [`settings`]: the Settings → Agents switch (on by default).
 //! - [`viewer`]: the prototype's loopback stand-in for the phone (the demo).
 //!
@@ -24,6 +25,7 @@ pub mod axtree;
 pub mod cdp;
 pub mod chrome;
 pub mod keys;
+pub mod live;
 pub mod macos;
 pub mod plain;
 pub mod refusal;
