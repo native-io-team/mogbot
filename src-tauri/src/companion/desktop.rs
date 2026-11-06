@@ -514,6 +514,36 @@ impl Backend for DesktopBackend {
         }))
     }
 
+    async fn set_agent_independence(
+        &self,
+        agent_id: &str,
+        level: Option<crate::agents::independence::Level>,
+    ) -> Result<Value, CommandError> {
+        let word = match level {
+            Some(l) => serde_json::to_value(l)
+                .map_err(crate::agents::err_other)?
+                .as_str()
+                .unwrap_or_default()
+                .to_string(),
+            None => "team".to_string(),
+        };
+        // The agent must exist: `policy::set` would keep a stranger's id.
+        crate::agents::store::get(agent_id)?;
+        cmd::agents_policy_set(
+            self.app.clone(),
+            crate::agents::policy::Target::Agent {
+                agent_id: agent_id.to_string(),
+            },
+            crate::agents::policy::Change {
+                independence: Some(word),
+                ..Default::default()
+            },
+        )
+        .await?;
+        let own = crate::agents::policy::own_independence(&crate::agents::policy::load(), agent_id);
+        Ok(serde_json::json!({ "agentId": agent_id, "level": own }))
+    }
+
     async fn accounts(&self) -> Result<Value, CommandError> {
         json(cmd::agents_accounts().await?)
     }

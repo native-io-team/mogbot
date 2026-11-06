@@ -12,6 +12,8 @@ import { useAgentsSelector, refreshAgents } from '../../lib/agentsStore';
 import {
   INDEPENDENCE_QUESTION,
   independenceOf,
+  ownIndependenceCount,
+  ownIndependenceLine,
   setIndependence,
   type AgentIndependence,
 } from '../../lib/agentIndependence';
@@ -23,6 +25,8 @@ export function AgentIndependenceSettings() {
   const { showToast } = useOptionalToast();
   const saved = useAgentsSelector((s) => s.independence);
   const loaded = useAgentsSelector((s) => s.loaded);
+  // Agents with a level of their own (their editor, the phone, the Chief).
+  const own = useAgentsSelector((s) => ownIndependenceCount(s.agents ?? []));
   // Shown at once on a click; the overview confirms it.
   const [picked, setPicked] = useState<AgentIndependence | null>(null);
   const [saving, setSaving] = useState(false);
@@ -63,6 +67,7 @@ export function AgentIndependenceSettings() {
       <div className="settings-section agent-independence-settings__body">
         <span className="agent-independence-settings__question">{INDEPENDENCE_QUESTION}</span>
         <IndependenceChoice value={value} onChange={(l) => void choose(l)} />
+        {own > 0 && <p className="agent-independence-settings__own">{ownIndependenceLine(own)}</p>}
       </div>
     </section>
   );

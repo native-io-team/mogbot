@@ -98,7 +98,7 @@ pub fn schema() -> Value {
                         }
                     },
                     "browser": { "type": "boolean", "description": "May use the user's signed-in browser." },
-                    "independence": { "type": "string", "enum": ["often", "judgement", "go_hard", "full_send", "team"], "description": "full_send (\"Full send — let it rip\"): when the user says \"go full send\", \"let it rip\" or \"stop asking me\"." },
+                    "independence": { "type": "string", "enum": ["often", "judgement", "go_hard", "full_send", "team"], "description": "How much it does on its own, for the agents named (each may have its own; \"team\" puts one back on the team's level). Name the agent for one (\"put Social Posts on Full send\": agents [\"Social Posts\"]), \"team\" for everyone's default. full_send (\"Full send — let it rip\"): when the user says \"go full send\", \"let it rip\" or \"stop asking me\". Raising needs the user's card; lowering (\"make Finance check with me often\": often) applies at once." },
                     "admin": { "type": "boolean", "description": "Admins may propose changes for other agents." },
                     "rules": {
                         "type": "object",
@@ -476,6 +476,35 @@ pub async fn propose(app: &AppHandle, caller: &Agent, turn: Option<u64>, args: &
         Ok(p) => p,
         Err(e) => return error(e),
     };
+    // Only stricter: applied now, with a line in the chat. A card is for
+    // giving an agent more room, never for taking it away.
+    if lowers_proposal(
+        &proposal,
+        &policy::load(),
+        &agents,
+        super::independence::level(),
+    ) {
+        return match apply_proposal(&proposal) {
+            Ok(()) => {
+                let lines = summary(&proposal.groups);
+                let _ = runner::record(
+                    app,
+                    runner::new_message(
+                        &caller.id,
+                        MessageKind::Note,
+                        format!("Settings changed: {}", lines.replace('\n', " ")),
+                    ),
+                );
+                note_targets(app, &caller.id, &proposal);
+                let _ = app.emit(runner::EVENT_REGISTRY, ());
+                let _ = app.emit(EVENT, ());
+                text(format!(
+                    "Done, without a card: it only makes them check with the user more.\n{lines}\nIt applies from each agent's next turn. Say in one line what changed."
+                ))
+            }
+            Err(e) => error(e),
+        };
+    }
     let mut approval = super::mcp::new_card(
         store::new_id(),
         title(&proposal.targets, &agents),
@@ -496,6 +525,47 @@ pub async fn propose(app: &AppHandle, caller: &Agent, turn: Option<u64>, args: &
     text(format!(
         "A card is in this chat for the user to allow:\n{lines}\nNothing has changed yet. Say in one line what you proposed and stop; you'll be told when they answer."
     ))
+}
+
+/// Whether `p` only lowers independence: every agent it changes differs in
+/// its level alone, and that level goes down; the team's other defaults stay
+/// and its level doesn't go up. Anything else (raising one agent, putting one
+/// back on a higher team level, any other setting) waits for the card.
+pub fn lowers_proposal(p: &Proposal, saved: &Saved, agents: &[Agent], level: Level) -> bool {
+    let Ok((after, new_level)) = simulate(saved, &p.targets, &p.change, level) else {
+        return false;
+    };
+    lowers_only(saved, &after, agents, level, new_level)
+}
+
+pub fn lowers_only(
+    before: &Saved,
+    after: &Saved,
+    agents: &[Agent],
+    level: Level,
+    new_level: Level,
+) -> bool {
+    if before.team != after.team || new_level.rank() > level.rank() {
+        return false;
+    }
+    let mut lowered = new_level.rank() < level.rank();
+    for a in agents {
+        let b = policy::resolve(before, a, level);
+        let mut x = policy::resolve(after, a, new_level);
+        if b == x {
+            continue;
+        }
+        if x.independence.rank() > b.independence.rank() {
+            return false;
+        }
+        lowered |= x.independence.rank() < b.independence.rank();
+        x.independence = b.independence;
+        x.own = b.own.clone();
+        if b != x {
+            return false;
+        }
+    }
+    lowered
 }
 
 fn detail(p: &Proposal) -> String {
@@ -549,6 +619,10 @@ pub fn answer_card(
                 store::set_approval_status(agent_id, request_id, ApprovalStatus::Allowed)?;
             finish(app, agent_id, updated);
             note_targets(app, agent_id, p);
+            // A level raised: open cards it now answers are answered.
+            if p.change.independence.is_some() || p.change.preset.is_some() {
+                super::mcp::sweep_auto_allowed(app);
+            }
             runner::enqueue(
                 app,
                 agent_id,
@@ -638,3 +712,7 @@ fn note_targets(app: &AppHandle, proposer: &str, p: &Proposal) {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "agent_level_tests.rs"]
+mod agent_level_tests;

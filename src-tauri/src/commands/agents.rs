@@ -21,6 +21,9 @@ pub struct AgentView {
     /// The user is driving its session in a terminal; omitted otherwise.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub takeover: Option<takeover::View>,
+    /// Its own independence level (`policy`); omitted when it's the team's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub independence: Option<agents::independence::Level>,
 }
 
 #[derive(Serialize)]
@@ -68,10 +71,12 @@ pub async fn agents_overview(app: AppHandle) -> Result<AgentsOverview, CommandEr
     if let Err(e) = put_chief_on_a_ready_engine(&engines) {
         tracing::warn!(error = %e, "couldn't move the Chief of Staff onto a ready engine");
     }
+    let policy = agents::policy::load();
     let agents = store::list()?
         .into_iter()
         .map(|agent| {
             Ok(AgentView {
+                independence: agents::policy::own_independence(&policy, &agent.id),
                 takeover: takeover::view(&agent.id),
                 status: runner::status_with_work(&agent.id),
                 home: store::agent_home(&agent.id)?.display().to_string(),
@@ -119,6 +124,7 @@ fn put_chief_on_a_ready_engine(engines: &[engine::EngineInfo]) -> Result<(), Com
 #[tracing::instrument]
 pub async fn agents_with_projects() -> Result<Vec<AgentView>, CommandError> {
     blocking(|| {
+        let policy = agents::policy::load();
         store::list()?
             .into_iter()
             // Bound to a project, or with a turn working in one now
@@ -128,6 +134,7 @@ pub async fn agents_with_projects() -> Result<Vec<AgentView>, CommandError> {
             })
             .map(|agent| {
                 Ok(AgentView {
+                    independence: agents::policy::own_independence(&policy, &agent.id),
                     takeover: takeover::view(&agent.id),
                     status: runner::status_with_work(&agent.id),
                     home: store::agent_home(&agent.id)?.display().to_string(),
@@ -307,6 +314,11 @@ pub(crate) async fn send_as(
                 }
             }
         }
+    }
+    // Fed up with being asked, or with not being asked: a note for the
+    // Chief's next turn (`level_hint`), at most once a day per agent.
+    if typed {
+        agents::level_hint::on_user_message(&recipient, &said, store::now_ms());
     }
     let typed = typed.then_some(said);
     runner::enqueue_user(&app, &agent_id, &message.id, prompt, typed);
@@ -1132,6 +1144,10 @@ pub async fn agents_policy_set(
     if change.is_empty() {
         return Ok(());
     }
+    let level_changed = change.independence.is_some()
+        || change.preset.is_some()
+        || change.like.is_some()
+        || change.same_as_team;
     let app2 = app.clone();
     blocking(move || {
         let agents = store::list()?;
@@ -1152,6 +1168,11 @@ pub async fn agents_policy_set(
         Ok(())
     })
     .await?;
+    // A level raised: open cards it now answers are answered, with a receipt.
+    if level_changed {
+        let app = app.clone();
+        let _ = blocking(move || Ok(agents::mcp::sweep_auto_allowed(&app))).await;
+    }
     emit_registry(&app);
     let _ = app.emit(agents::policy_card::EVENT, ());
     Ok(())

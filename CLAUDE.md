@@ -138,7 +138,8 @@ these without updating that doc.
   approval broker (`agents/broker.rs`), which trusts only a live turn's `?turn=` id and stops a turn
   that reports `bypassPermissions` ([docs/agents.md](docs/agents.md), "Approvals"). The only
   cards answered for the user are ones their independence level covers (`mcp::decide`, for
-  Claude Code and Codex alike): reads at "Use good judgement" (`agents/autoallow.rs`, an
+  Claude Code and Codex alike; each agent's own level, else the team's, `policy::chosen_level`;
+  raising one from chat is a card, lowering applies with a line; outside text stays capped): reads at "Use good judgement" (`agents/autoallow.rs`, an
   allow-list), and at "Go hard" everything except a short ask list (`agents/go_hard.rs`): pushing,
   `gh` writes, publishing, production deploys, sending mail/messages, live payments, network writes
   off this Mac, `sudo`, `rm -r` outside projects/agent homes/temp, credentials, shell profiles,

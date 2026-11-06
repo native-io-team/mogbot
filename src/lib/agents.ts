@@ -164,6 +164,8 @@ export interface Agent {
   isMain: boolean;
   /** "Admin — can manage and approve for other agents". Absent: on for the Chief only (`isAdmin`). */
   admin?: boolean;
+  /** Its own independence level (`agents/policy.rs`). Absent: the team's (the overview's `independence`). */
+  independence?: AgentIndependence;
   pinned: boolean;
   hidden: boolean;
   sessionId: string | null;

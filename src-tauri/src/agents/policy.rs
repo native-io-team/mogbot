@@ -605,6 +605,11 @@ pub fn chosen_level(agent: &Agent) -> Level {
         .unwrap_or_else(super::independence::level)
 }
 
+/// Its own level, when its settings give it one (`None`: the team's).
+pub fn own_independence(saved: &Saved, agent_id: &str) -> Option<Level> {
+    saved.agents.get(agent_id).and_then(|o| o.independence)
+}
+
 /// The level its turns run at: its own, or the team's; never Go hard when
 /// the turn answers outside text (`independence::for_turn`).
 pub fn independence_for(agent: &Agent, outside: bool) -> Level {

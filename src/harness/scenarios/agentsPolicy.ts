@@ -96,7 +96,49 @@ const HIRING_VIEW = {
   },
 };
 
+/** The team at Go hard; Social Posts on Full send and Finance on "Check with me often", on their own. */
+const LEVELS_TEAM = TEAM.map((a) =>
+  a.id === 'social'
+    ? { ...a, independence: 'full_send' }
+    : a.id === 'finance'
+      ? { ...a, independence: 'often' }
+      : a
+);
+const LEVELS_OVERVIEW = { ...overview(LEVELS_TEAM), independence: 'go_hard' };
+
 export const agentsPolicyScenarios: Scenario[] = [
+  {
+    id: 'agents-level-picker',
+    title: 'Agents — one agent’s own level, in Edit agent',
+    looksRightWhen:
+      'Editing Hiring, which follows the team: “How much it does on its own” with a menu open under its button “Same as team (Go hard)”: “Same as team (Go hard)” checked first, a divider, then Check with me often, Use good judgement, Go hard — get it done, Full send — let it rip. Under the row a muted line for Go hard and what still asks. In the sidebar, Social Posts shows a tiny “Full send” label and Finance “Checks often”; nobody else has one.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-level-picker',
+    steps: [
+      { click: '[data-agent-id="hiring"]' },
+      { click: '.agent-chat__menu [aria-label^="Actions for"]' },
+      { click: '[role="menuitem"]', text: 'Edit agent' },
+      { click: '.agent-level-picker button' },
+    ],
+    commands: {
+      agents_overview: LEVELS_OVERVIEW,
+      agents_messages: messagesFor,
+      agents_instructions: 'Screens applications and books interviews.',
+      agents_policy: HIRING_VIEW,
+    },
+  },
+  {
+    id: 'settings-agents-independence-own',
+    title: 'Settings — Independence, with agents set on their own',
+    looksRightWhen:
+      'The team’s four choices with Go hard selected (a neutral stronger border), the line on what still asks, and under it a muted “Agents set on their own: 2”.',
+    command: 'agents.independence',
+    requires: '.agent-independence-settings__own',
+    clipSelector: 'section[aria-labelledby="agents-settings-independence"]',
+    commands: {
+      agents_overview: { ...LEVELS_OVERVIEW, engines: ENGINES, defaults: DEFAULTS },
+    },
+  },
   {
     id: 'agents-settings-card',
     title: 'Agents — “Change Hiring’s settings?”, proposed from chat',

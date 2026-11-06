@@ -23,7 +23,7 @@ import { AgentIndependenceSettings } from './AgentIndependenceSettings';
 
 describe('AgentIndependenceSettings', () => {
   beforeEach(() => {
-    setIndependence.mockReset().mockImplementation(async (l: string) => l);
+    setIndependence.mockReset().mockImplementation((l: string) => Promise.resolve(l));
     refreshAgents.mockClear();
     showToast.mockClear();
     store.value = { loaded: true, independence: null };
@@ -48,6 +48,7 @@ describe('AgentIndependenceSettings', () => {
     expect(screen.getByRole('radio', { checked: true })).toHaveTextContent('Check with me often');
     await act(async () => {
       fireEvent.click(screen.getByRole('radio', { name: /Go hard/ }));
+      await Promise.resolve();
     });
     expect(setIndependence).toHaveBeenCalledWith('go_hard');
     expect(refreshAgents).toHaveBeenCalled();
@@ -55,11 +56,12 @@ describe('AgentIndependenceSettings', () => {
     setIndependence.mockClear();
     await act(async () => {
       fireEvent.click(screen.getByRole('radio', { name: /Check with me often/ }));
+      await Promise.resolve();
     });
     expect(setIndependence).not.toHaveBeenCalled();
   });
 
-  it('offers Full send, with what still asks there', async () => {
+  it('offers Full send, with what still asks there', () => {
     store.value = { loaded: true, independence: 'full_send' };
     render(<AgentIndependenceSettings />);
     expect(screen.getAllByRole('radio')).toHaveLength(4);
@@ -76,8 +78,21 @@ describe('AgentIndependenceSettings', () => {
     render(<AgentIndependenceSettings />);
     await act(async () => {
       fireEvent.click(screen.getByRole('radio', { name: /Go hard/ }));
+      await Promise.resolve();
     });
     expect(showToast).toHaveBeenCalledWith(expect.stringContaining('Disk full'), 'error');
     expect(screen.getByRole('radio', { checked: true })).toHaveTextContent('Use good judgement');
+  });
+
+  it('says how many agents are set on their own, only when any are', () => {
+    render(<AgentIndependenceSettings />);
+    expect(screen.queryByText(/Agents set on their own/)).not.toBeInTheDocument();
+    store.value = {
+      loaded: true,
+      independence: 'go_hard',
+      agents: [{ independence: 'full_send' }, {}, { independence: 'often' }],
+    } as typeof store.value;
+    render(<AgentIndependenceSettings />);
+    expect(screen.getByText('Agents set on their own: 2')).toBeInTheDocument();
   });
 });

@@ -63,6 +63,7 @@ pub const METHODS: &[&str] = &[
     "agents.setIndependence",
     "agents.setImportChoice",
     "agents.setAdmin",
+    "agents.setAgentIndependence",
     "agents.revokePermission",
     "agents.instructions",
     "agents.memory",
@@ -515,6 +516,14 @@ pub trait Backend: Send + Sync + 'static {
     /// `agents_set_admin`: the user's own switch, "Admin — can manage and
     /// approve for other agents". Answers `{ agentId, admin }`.
     async fn set_admin(&self, agent_id: &str, admin: bool) -> Result<Value, CommandError>;
+    /// `agents_policy_set` for one agent's level: its own, or `None` for
+    /// the team's. The user choosing it, so it applies at once (a raise from
+    /// chat needs a card; this isn't chat). Answers `{ agentId, level }`.
+    async fn set_agent_independence(
+        &self,
+        agent_id: &str,
+        level: Option<crate::agents::independence::Level>,
+    ) -> Result<Value, CommandError>;
     /// `agents_quota`: each engine's plan, as it last reported it.
     async fn quota(&self) -> Result<Value, CommandError>;
     /// `agents_accounts`: each engine's usage accounts, read-only.
@@ -1362,6 +1371,11 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
         }
         "agents.setIndependence" => format!("independence: {}", preview(field("level"))),
         "agents.setImportChoice" => format!("import: {}", preview(field("choice"))),
+        "agents.setAgentIndependence" => format!(
+            "{} independence: {}",
+            field("agentId"),
+            preview(field("level"))
+        ),
         "agents.setAdmin" => format!(
             "{} admin {}",
             field("agentId"),
@@ -1811,6 +1825,20 @@ async fn run(
                 ));
             };
             Ok(b.set_admin(agent_id, admin).await?)
+        }
+        "agents.setAgentIndependence" => {
+            let agent_id = params.get("agentId").and_then(Value::as_str).unwrap_or("");
+            let level = match params.get("level").and_then(Value::as_str) {
+                Some("team") => Some(None),
+                Some(l) => crate::agents::independence::Level::parse(l).ok().map(Some),
+                None => None,
+            };
+            let Some(level) = level.filter(|_| !agent_id.is_empty()) else {
+                return Err(bad_params(
+                    "An agent's independence takes an agentId and a level: team, often, judgement, go_hard or full_send.",
+                ));
+            };
+            Ok(b.set_agent_independence(agent_id, level).await?)
         }
         "agents.accounts" => Ok(b.accounts().await?),
         "agents.usagePlan" => Ok(b.usage_plan().await?),
@@ -2833,6 +2861,50 @@ mod tests {
             .any(|(_, m, detail, ok)| m == "agents.setIndependence"
                 && *ok
                 && detail == "independence: often"));
+    }
+
+    #[tokio::test]
+    async fn a_phone_sets_one_agents_level_audited() {
+        use crate::agents::independence::Level;
+        use crate::companion::testkit::Stub;
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        // The overview says which agents have their own level.
+        let overview = dispatch(&c, &me, "agents.overview", json!({}))
+            .await
+            .unwrap();
+        assert_eq!(overview["agents"][0]["independence"], "full_send");
+        let set = |params: Value| dispatch(&c, &me, "agents.setAgentIndependence", params);
+        assert!(set(json!({})).await.is_err());
+        assert!(set(json!({ "level": "often" })).await.is_err());
+        assert!(set(json!({ "agentId": "a1", "level": "yolo" }))
+            .await
+            .is_err());
+        assert!(stub.agent_levels.lock().unwrap().is_empty());
+        let answer = set(json!({ "agentId": "a1", "level": "often" }))
+            .await
+            .unwrap();
+        assert_eq!(answer["level"], "often");
+        let answer = set(json!({ "agentId": "a1", "level": "team" }))
+            .await
+            .unwrap();
+        assert!(answer["level"].is_null());
+        assert_eq!(
+            *stub.agent_levels.lock().unwrap(),
+            vec![
+                ("a1".to_string(), Some(Level::Often)),
+                ("a1".to_string(), None)
+            ]
+        );
+        // Not the team's: that's `agents.setIndependence`.
+        assert!(stub.independence.lock().unwrap().is_empty());
+        assert!(!READ_ONLY_METHODS.contains(&"agents.setAgentIndependence"));
+        assert!(stub
+            .audited()
+            .iter()
+            .any(|(_, m, detail, ok)| m == "agents.setAgentIndependence"
+                && *ok
+                && detail == "a1 independence: often"));
     }
 
     #[tokio::test]

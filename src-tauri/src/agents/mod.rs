@@ -95,6 +95,7 @@ pub mod independence;
 pub mod installs;
 pub mod interview;
 pub mod inventory;
+pub mod level_hint;
 pub mod local_links;
 pub mod login_relay;
 pub mod logins;

@@ -7,15 +7,24 @@
  */
 
 import {
+  AGENT_INDEPENDENCE_TITLE,
   INDEPENDENCE_DETAIL,
   INDEPENDENCE_LABEL,
   INDEPENDENCE_LEVELS,
   INDEPENDENCE_QUESTION,
+  INDEPENDENCE_SHORT,
   INDEPENDENCE_STILL_ASKS,
+  effectiveIndependence,
+  independenceRowLabel,
+  ownIndependenceCount,
+  ownIndependenceLine,
+  sameAsTeamLabel,
+  type Agent,
   type AgentIndependence,
 } from '@shipstudio/companion-protocol';
 import { useState } from 'react';
 import { Alert, StyleSheet, View } from 'react-native';
+import { choose } from './menu';
 import { Icon, Row, Section, tap } from './ui';
 import { useAccent } from '../lib/accent';
 import { haptic } from '../lib/haptics';
@@ -27,6 +36,8 @@ export function IndependenceSetting() {
   const accent = useAccent();
   const level = useApp((s) => s.overview?.independence ?? null);
   const canSet = useServed('agents.setIndependence');
+  // Agents with a level of their own (their sheet, the desk, the Chief).
+  const own = useApp((s) => ownIndependenceCount(s.overview?.agents ?? []));
   const [busy, setBusy] = useState(false);
   if (!level) return null;
 
@@ -46,7 +57,14 @@ export function IndependenceSetting() {
   };
 
   return (
-    <Section title={INDEPENDENCE_QUESTION} footer={INDEPENDENCE_STILL_ASKS[level]}>
+    <Section
+      title={INDEPENDENCE_QUESTION}
+      footer={
+        own > 0
+          ? `${INDEPENDENCE_STILL_ASKS[level]} ${ownIndependenceLine(own)}.`
+          : INDEPENDENCE_STILL_ASKS[level]
+      }
+    >
       {INDEPENDENCE_LEVELS.map((l, i) => {
         const on = l === level;
         return (
@@ -69,6 +87,61 @@ export function IndependenceSetting() {
       })}
     </Section>
   );
+}
+
+/**
+ * The agent sheet's "How much it does on its own": "Same as team (Go hard)"
+ * first, then the four levels, in one sheet. Written with
+ * `agents.setAgentIndependence` (audited on the Mac); a Mac that doesn't
+ * serve it shows nothing. The user choosing it here applies at once.
+ */
+export function AgentLevelRow({
+  agent,
+  enabled,
+  onError,
+  last,
+}: {
+  agent: Pick<Agent, 'id' | 'name' | 'independence'>;
+  enabled: boolean;
+  onError: (text: string | null) => void;
+  last?: boolean;
+}) {
+  const team = useApp((s) => s.overview?.independence ?? null);
+  const canSet = useServed('agents.setAgentIndependence');
+  if (!canSet) return null;
+  const own = agent.independence ?? null;
+  const effective = effectiveIndependence(agent, team);
+
+  const pick = (level: AgentIndependence | 'team') => {
+    if ((level === 'team' && !own) || level === own) return;
+    haptic.select();
+    onError(null);
+    call('agents.setAgentIndependence', { agentId: agent.id, level }).catch((e: unknown) =>
+      onError(describeError(e))
+    );
+  };
+
+  return (
+    <Row
+      label={AGENT_INDEPENDENCE_TITLE}
+      value={own ? INDEPENDENCE_SHORT[own] : sameAsTeamLabel(team)}
+      detail={INDEPENDENCE_DETAIL[effective]}
+      disabled={!enabled}
+      last={last}
+      onPress={() =>
+        choose(AGENT_INDEPENDENCE_TITLE, [
+          { label: sameAsTeamLabel(team), run: () => pick('team') },
+          ...INDEPENDENCE_LEVELS.map((l) => ({ label: INDEPENDENCE_LABEL[l], run: () => pick(l) })),
+        ], `What ${agent.name} does without asking you.`)
+      }
+    />
+  );
+}
+
+/** The tiny label on an agent's row, only when it differs from the team's. */
+export function useAgentLevelLabel(agent: Pick<Agent, 'independence'>): string | null {
+  const team = useApp((s) => s.overview?.independence ?? null);
+  return independenceRowLabel(agent, team);
 }
 
 const styles = StyleSheet.create({
