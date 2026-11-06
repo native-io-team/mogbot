@@ -666,9 +666,13 @@ fn interaction_may_go(level: Level, page: &Page, name: &str, input: &Value) -> b
     let url = url.as_deref();
     let hard = level.goes_hard();
     let full = level == Level::FullSend;
-    // Where an unknown target can't be told safe.
+    // Where an unknown target can't be told safe. At Go hard and above a
+    // click is judged by what it clicks (label and role), never by the
+    // page's address: a scheduled-posts list lives under ".../compose/...",
+    // and asking for every unlabelled click there was the owner's report.
+    // Only a page that spends money stays unsure.
     let unsure = |url: Option<&str>| {
-        if full {
+        if hard {
             money_page(url)
         } else {
             sensitive_page(url)

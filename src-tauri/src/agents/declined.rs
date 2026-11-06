@@ -163,7 +163,7 @@ pub fn prompt_section() -> Option<String> {
         return None;
     }
     Some(format!(
-        "## Apps the user chose not to connect\n\nThe user chose not to connect {}. Don't ask for them: no `request_login`, no `request_secret`, no asking in chat. Do the work another way, or say plainly what you can't do without them. Only the user turns one back on.",
+        "## Apps the user chose not to connect\n\nThe user chose not to connect {}. Don't ask for them: no `request_login`, no `request_secret`, no asking in chat. Do the work another way, or say plainly what you can't do without them. If the user's own message asks for one again, `request_login` works for that request.",
         logins::list_names(&titles)
     ))
 }

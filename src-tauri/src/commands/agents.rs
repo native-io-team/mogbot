@@ -194,7 +194,7 @@ pub async fn agents_send(
 
 /// [`agents_send`]. `typed`: the user typed it in this chat (the desk's or
 /// the phone's composer), so the turn carries their words
-/// (`runner::enqueue_typed`); a message the app writes for them from a
+/// (`runner::enqueue_user`); a message the app writes for them from a
 /// button ("Say hi", "what the agents are missing") doesn't.
 #[allow(clippy::too_many_arguments)]
 pub(crate) async fn send_as(
@@ -308,11 +308,8 @@ pub(crate) async fn send_as(
             }
         }
     }
-    if typed {
-        runner::enqueue_typed(&app, &agent_id, prompt, said);
-    } else {
-        runner::enqueue(&app, &agent_id, prompt, runner::From::User);
-    }
+    let typed = typed.then_some(said);
+    runner::enqueue_user(&app, &agent_id, &message.id, prompt, typed);
     agents::tray::mark_used(&app);
     Ok(message)
 }

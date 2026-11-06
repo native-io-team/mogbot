@@ -1770,7 +1770,18 @@ pub fn list_names(names: &[String]) -> String {
 
 /// A login card in `agent`'s chat. One per service at a time.
 pub fn raise(app: &AppHandle, agent: &Agent, ask: &Ask) -> Result<String, CommandError> {
-    if let Some(reply) = declined_reply(agent, ask) {
+    raise_as(app, agent, ask, false)
+}
+
+/// [`raise`]; `lifted`: the user's own message asked for this service again,
+/// so a team-wide "Not needed" doesn't answer for them (`access_chain`).
+pub fn raise_as(
+    app: &AppHandle,
+    agent: &Agent,
+    ask: &Ask,
+    lifted: bool,
+) -> Result<String, CommandError> {
+    if let Some(reply) = declined_reply(agent, ask).filter(|_| !lifted) {
         return Ok(reply);
     }
     let r = build(agent, ask)?;

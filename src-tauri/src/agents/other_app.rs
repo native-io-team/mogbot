@@ -1033,6 +1033,13 @@ fn import_agent(
             return Err(e);
         }
     };
+    // Its instructions name the other app's tools: ours, before it's ours.
+    let md = staging.join(CLAUDE_MD);
+    if let Ok(raw) = std::fs::read_to_string(&md) {
+        if names_other_app(&raw) {
+            let _ = std::fs::write(&md, to_ours(&raw));
+        }
+    }
     std::fs::rename(&staging, &dest).map_err(|e| {
         let _ = std::fs::remove_dir_all(&staging);
         super::err_io(e)
@@ -1061,6 +1068,114 @@ fn import_agent(
     Ok(())
 }
 
+/* ------------------------------------------------ its names, in ours */
+
+/// The other app's tool servers, as its agents' instructions name them
+/// ("via the shipstudio-local MCP", `mcp__shipstudio_agents__message_agent`),
+/// and ours. Longest first, so a tool id is rewritten whole.
+fn tool_renames() -> Vec<(String, String)> {
+    let app = super::prompts::SERVER_KEY.to_string();
+    let preview = crate::brand::preview_mcp_name();
+    vec![
+        ("mcp__shipstudio_agents__".into(), format!("mcp__{app}__")),
+        ("mcp__shipstudio-local__".into(), format!("mcp__{app}__")),
+        ("mcp__shipstudio_local__".into(), format!("mcp__{app}__")),
+        (
+            format!("mcp__{}__", crate::preview_isolation::SHIP_STUDIO_PREVIEW_MCP),
+            format!("mcp__{preview}__"),
+        ),
+        ("shipstudio_agents".into(), app.clone()),
+        ("shipstudio-local".into(), app.clone()),
+        ("shipstudio_local".into(), app),
+        (
+            crate::preview_isolation::SHIP_STUDIO_PREVIEW_MCP.to_string(),
+            preview,
+        ),
+    ]
+}
+
+/// Text written for the other app, in ours: its tool and server names
+/// become ours, and its name "this app". Headings are left alone (ours say
+/// "### From <other app>" on purpose), and so are the folders both apps
+/// share (`~/ShipStudio`, `.shipstudio/`), which aren't its name. Rewriting
+/// what it already rewrote changes nothing.
+pub fn to_ours(text: &str) -> String {
+    let renames = tool_renames();
+    let mut out: Vec<String> = Vec::new();
+    for line in text.split('\n') {
+        let mut l = line.to_string();
+        for (from, to) in &renames {
+            l = l.replace(from.as_str(), to.as_str());
+        }
+        if !l.trim_start().starts_with('#') {
+            l = l
+                .replace(&format!("{OTHER_APP_NAME}'s"), "this app's")
+                .replace(OTHER_APP_NAME, "this app");
+        }
+        out.push(l);
+    }
+    out.join("\n")
+}
+
+/// Whether [`to_ours`] would change `text`.
+pub fn names_other_app(text: &str) -> bool {
+    to_ours(text) != text
+}
+
+/// The line left in an agent's chat when its instructions were rewritten.
+pub fn renamed_line() -> String {
+    format!("Updated its instructions to this app's tool names (they named {OTHER_APP_NAME}'s)")
+}
+
+/// Marks the launch rewrite done (in the agents folder), so it runs once.
+const RENAMED_MARK: &str = ".other-app-names-v1";
+
+/// Once, at launch: every agent's CLAUDE.md that still names the other
+/// app's tools (or the app) is rewritten in ours ([`to_ours`]), with a line
+/// in that agent's chat. An agent mid-turn or taken over is left for the
+/// next launch, and the mark isn't written until none was. Returns how many
+/// changed.
+pub fn migrate_names() -> usize {
+    let Ok(root) = store::agents_root() else {
+        return 0;
+    };
+    let mark = root.join(RENAMED_MARK);
+    if mark.exists() {
+        return 0;
+    }
+    let Ok(agents) = store::list() else {
+        return 0;
+    };
+    let mut changed = 0;
+    let mut deferred = false;
+    for a in agents {
+        if super::runner::is_working(&a.id) || super::takeover::view(&a.id).is_some() {
+            deferred = true;
+            continue;
+        }
+        let Ok(home) = store::agent_home(&a.id) else { continue };
+        let path = home.join(CLAUDE_MD);
+        let Ok(raw) = std::fs::read_to_string(&path) else { continue };
+        if !names_other_app(&raw) {
+            continue;
+        }
+        if std::fs::write(&path, to_ours(&raw)).is_err() {
+            deferred = true;
+            continue;
+        }
+        let line = super::runner::new_message(&a.id, store::MessageKind::Note, renamed_line());
+        let _ = store::append_message(&line);
+        changed += 1;
+    }
+    if !deferred {
+        let _ = std::fs::write(&mark, b"");
+    }
+    if changed > 0 {
+        tracing::info!("[Agents] Rewrote {changed} agents' instructions in this app's tool names");
+    }
+    changed
+}
+
 fn merge_chief(
     ctx: &mut Ctx<'_>,
     source: Agent,
@@ -1079,7 +1194,7 @@ fn merge_chief(
 
     // Instructions: only what the user wrote. The Chief's own defaults are
     // ours already, and something already merged isn't merged twice.
-    let theirs = store::instructions_of(&raw);
+    let theirs = to_ours(&store::instructions_of(&raw));
     let base = store::read_instructions(&chief.id).unwrap_or_default();
     if !theirs.is_empty() && !super::is_chief_default(&theirs) && !base.contains(theirs.trim()) {
         let merged = format!("{base}\n\n### From {OTHER_APP_NAME}\n\n{}", theirs.trim());
@@ -1484,6 +1599,72 @@ mod tests {
     }
 
     const FINANCE: &str = "f1a4ce00000000000000000000000002";
+
+    /// Imported instructions said "via the shipstudio-local MCP": the other
+    /// app's tools, which don't exist here. They're written in ours.
+    #[test]
+    fn the_other_apps_tool_names_and_name_become_ours() {
+        let preview = crate::brand::preview_mcp_name();
+        let theirs = format!(
+            "## Instructions\n\nPost drafts via the shipstudio-local MCP, then call mcp__shipstudio_agents__message_agent.\nScreenshot with mcp__shipstudio-preview__screenshot.\nAsk {OTHER_APP_NAME}'s Chief first; projects are in ~/ShipStudio/site/.shipstudio.\n\n### From {OTHER_APP_NAME}\n"
+        );
+        let ours = to_ours(&theirs);
+        assert!(ours.contains("via the app MCP, then call mcp__app__message_agent."));
+        assert!(ours.contains(&format!("mcp__{preview}__screenshot")));
+        assert!(ours.contains("Ask this app's Chief first"));
+        // Shared folders and our own headings stay as they are.
+        assert!(ours.contains("~/ShipStudio/site/.shipstudio"));
+        assert!(ours.contains(&format!("### From {OTHER_APP_NAME}")));
+        // Once is enough.
+        assert_eq!(to_ours(&ours), ours);
+        assert!(names_other_app(&theirs) && !names_other_app(&ours));
+    }
+
+    /// The launch rewrite: once, idempotent, with a line in each changed
+    /// agent's chat and none in the others'.
+    #[test]
+    fn existing_agents_are_rewritten_once_at_launch() {
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(dir.path().to_path_buf()));
+        let make = |name: &str, instructions: &str| {
+            store::create(store::NewAgent {
+                name: name.into(),
+                role: String::new(),
+                instructions: instructions.into(),
+                shape: None,
+                avatar: None,
+                color: None,
+                is_main: false,
+            })
+            .unwrap()
+        };
+        let old = make("Poster", "Schedule posts via the shipstudio-local MCP.");
+        let fine = make("Reader", "Read the inbox.");
+        assert_eq!(migrate_names(), 1);
+        let now = store::read_instructions(&old.id).unwrap();
+        assert_eq!(now, "Schedule posts via the app MCP.");
+        let said = |id: &str| {
+            store::messages(id, 10)
+                .unwrap()
+                .iter()
+                .filter(|m| m.text == renamed_line())
+                .count()
+        };
+        assert_eq!(said(&old.id), 1);
+        assert_eq!(said(&fine.id), 0);
+        assert_eq!(store::read_instructions(&fine.id).unwrap(), "Read the inbox.");
+        // A second launch does nothing.
+        store::write_instructions(
+            &store::agent_home(&old.id).unwrap(),
+            &store::get(&old.id).unwrap(),
+            "Mentions shipstudio-local again",
+        )
+        .unwrap();
+        assert_eq!(migrate_names(), 0);
+        assert_eq!(said(&old.id), 1);
+        store::set_root_for_tests(None);
+    }
 
     #[test]
     fn imports_a_team_without_touching_the_source_and_only_once() {

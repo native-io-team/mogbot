@@ -2101,20 +2101,51 @@ fn connector_asks(tool: &str, outside: bool) -> bool {
     let words = tool_words(tool);
     let has = |list: &[&str]| words.iter().any(|w| list.contains(&w.as_str()));
     const SENDS_SPENDS_DELETES: &[&str] = &[
-        "send", "reply", "forward", "post", "publish", "share", "invite", "submit", "tweet",
-        "comment", "react", "charge", "refund", "pay", "payment",
-        "transfer", "purchase", "buy", "order", "book", "subscribe", "cancel", "delete",
-        "remove", "trash", "destroy", "purge", "deploy", "merge", "approve",
-        "push", "upload",
+        "send",
+        "reply",
+        "forward",
+        "post",
+        "publish",
+        "share",
+        "invite",
+        "submit",
+        "tweet",
+        "comment",
+        "react",
+        "charge",
+        "refund",
+        "pay",
+        "payment",
+        "transfer",
+        "purchase",
+        "buy",
+        "order",
+        "book",
+        "subscribe",
+        "cancel",
+        "delete",
+        "remove",
+        "trash",
+        "destroy",
+        "purge",
+        "deploy",
+        "merge",
+        "approve",
+        "push",
+        "upload",
     ];
     // A read named after what it reads ("get_post", "list_comments") is a read.
     const READS: &[&str] = &[
         "get", "list", "search", "fetch", "read", "find", "query", "view", "count",
     ];
-    if words.first().is_some_and(|w| READS.contains(&w.as_str())) {
+    let verbs = verb_position(tool, &words, SENDS_SPENDS_DELETES);
+    if verbs.first().is_some_and(|w| READS.contains(&w.as_str())) {
         return false;
     }
-    if has(SENDS_SPENDS_DELETES) {
+    // A send word counts only as the verb: `post_message`, `createPost`,
+    // `publishPost` send; `capturePost`, `upsertSocialPosts` and `listPosts`
+    // name posts without sending one.
+    if verbs.iter().any(|w| SENDS_SPENDS_DELETES.contains(&w.as_str())) {
         return true;
     }
     // A code host or a database: any write there is a push, a pull request,
@@ -2124,6 +2155,37 @@ fn connector_asks(tool: &str, outside: bool) -> bool {
         return true;
     }
     outside && connector_writes(&words)
+}
+
+/// Words that lead into the verb rather than being it: in `create_post`,
+/// `schedule_post` or `do_send` the next word is what the call does.
+const VERB_PREFIXES: &[&str] = &[
+    "create", "do", "try", "bulk", "batch", "auto", "quick", "new", "make", "add", "schedule",
+    "place", "mass", "instant", "issue", "initiate", "execute", "perform", "trigger", "start",
+];
+
+/// The words of a tool's name that are in verb position: the first, and
+/// each one after a [`VERB_PREFIXES`] word. A leading word that only repeats
+/// the server's own name (`slack_post_message` on a Slack server) isn't
+/// the verb; the one after it is. A word in `sends` is never skipped so.
+fn verb_position(tool: &str, words: &[String], sends: &[&str]) -> Vec<String> {
+    let server = tool.split("__").nth(1).unwrap_or("").to_ascii_lowercase();
+    let mut rest = words;
+    while let [first, tail @ ..] = rest {
+        let named = first.len() >= 3 && server.contains(first.as_str());
+        if tail.is_empty() || !named || sends.contains(&first.as_str()) {
+            break;
+        }
+        rest = tail;
+    }
+    let mut out = Vec::new();
+    for w in rest {
+        out.push(w.clone());
+        if !VERB_PREFIXES.contains(&w.as_str()) {
+            break;
+        }
+    }
+    out
 }
 
 /// Connector servers whose writes always ask at Go hard: code hosts and

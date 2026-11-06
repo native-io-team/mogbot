@@ -13,7 +13,11 @@ fn scratch(f: impl FnOnce()) {
 }
 
 fn typed(said: &str) -> Inbound {
-    typed_inbound(format!("{said}\n\n[app context]"), said.to_string())
+    user_inbound(
+        "",
+        format!("{said}\n\n[app context]"),
+        Some(said.to_string()),
+    )
 }
 
 /// What the app queues "from the user" that the user never typed.
@@ -157,6 +161,31 @@ fn nothing_carries_over_once_the_turn_is_over() {
         assert!(typed_input(id).is_some());
         RUNTIMES.lock().unwrap().get_mut(id).unwrap().running = false;
         assert_eq!(typed_input(id), None);
+        RUNTIMES.lock().unwrap().remove(id);
+    });
+}
+
+/// A typed message is queued under its chat message's id (a resend is
+/// dropped, the turn knows its log line) and still carries the user's words.
+#[test]
+fn a_typed_message_keeps_its_id_and_its_words() {
+    scratch(|| {
+        let id = "rp-id";
+        let first = user_inbound("m-1", "go\n\n[app context]".into(), Some("go".into()));
+        let again = user_inbound("m-1", "go\n\n[app context]".into(), Some("go".into()));
+        {
+            let mut runtimes = RUNTIMES.lock().unwrap();
+            let r = runtimes.entry(id.to_string()).or_default();
+            r.running = true;
+            r.outside = false;
+            assert!(!r.admit(first).unwrap());
+            assert!(!r.admit(again).unwrap());
+            assert_eq!(r.queue.len(), 1);
+        }
+        take_batch(id).expect("a batch");
+        assert_eq!(typed_input(id).as_deref(), Some("go"));
+        let ids = RUNTIMES.lock().unwrap().get(id).unwrap().batch_ids.clone();
+        assert_eq!(ids, vec!["m-1".to_string()]);
         RUNTIMES.lock().unwrap().remove(id);
     });
 }

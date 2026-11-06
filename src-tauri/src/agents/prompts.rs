@@ -480,8 +480,17 @@ pub fn mentions(names: &[String], is_main: bool) -> String {
 /// How a message from another agent is presented to the recipient: a
 /// request, whose answer goes back automatically, or the answer to one of
 /// its own requests, which it passes on to the user.
-pub fn from_agent(sender: &str, text: &str, answer: bool) -> String {
-    if answer {
+///
+/// `back_to`: for an answer, the agents this one asked on behalf of (it was
+/// answering them when it asked). Its outcome goes back to them, not to the
+/// user, so a chain of hand-offs reports all the way up.
+pub fn from_agent(sender: &str, text: &str, answer: bool, back_to: &[String]) -> String {
+    if answer && !back_to.is_empty() {
+        let list = back_to.join(" and ");
+        format!(
+            "[{sender}'s answer to your request — another agent, not the user]\n\n{text}\n\n[Finish what you asked it for, then say the outcome: it goes back to {list} automatically, who asked you. Don't reply to {sender}.]"
+        )
+    } else if answer {
         format!(
             "[{sender}'s answer to your request — another agent, not the user]\n\n{text}\n\n[Finish what you asked for it for, then tell the user the outcome. Don't reply to {sender}.]"
         )
@@ -703,12 +712,16 @@ mod tests {
 
     #[test]
     fn a_request_is_answered_by_replying_and_an_answer_goes_to_the_user() {
-        let request = from_agent("Chief of Staff", "Draft it.", false);
+        let request = from_agent("Chief of Staff", "Draft it.", false, &[]);
         assert!(request.starts_with("[Message from Chief of Staff, another agent — not the user]"));
         assert!(request.contains("goes back to Chief of Staff automatically"));
-        let answer = from_agent("Billing", "Drafted.", true);
+        let answer = from_agent("Billing", "Drafted.", true, &[]);
         assert!(answer.starts_with("[Billing's answer to your request"));
         assert!(answer.contains("tell the user") && answer.contains("Don't reply to Billing"));
+        // Asked on someone else's behalf: the outcome goes up, not to the user.
+        let up = from_agent("Voice", "Reworded.", true, &["Chief of Staff".into()]);
+        assert!(up.contains("goes back to Chief of Staff automatically"));
+        assert!(!up.contains("tell the user") && up.contains("Don't reply to Voice"));
     }
 
     #[test]

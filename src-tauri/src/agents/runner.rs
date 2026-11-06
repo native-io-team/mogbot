@@ -139,7 +139,7 @@ struct Inbound {
     #[serde(default, skip_serializing_if = "is_zero")]
     resume: u8,
     /// What the user typed themselves, in this agent's own chat (desk or
-    /// phone): only [`enqueue_typed`] sets it. A notice the app queues "from
+    /// phone): only [`enqueue_user`] sets it. A notice the app queues "from
     /// the user" (a late Allow, a declined login) never has it. What
     /// `remember_permission` checks the user's words against (`remember`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -252,6 +252,17 @@ struct Runtime {
     /// The turn in progress answers, last, what the user typed in this chat
     /// ([`typed_of`]): their words. `None` for anything else.
     typed: Option<String>,
+    /// The user's own message (in the agent's chat: not a routine, a
+    /// check-in, a room or outside text) is among what the turn in progress
+    /// answers, or the one it replaced. What it hands on is the user's ask.
+    user_asked: bool,
+    /// The queue ids of the messages the turn in progress answers. A user's
+    /// message is queued under its chat message's id (`enqueue_user`), so a
+    /// recap never hands the turn what it is also being sent.
+    batch_ids: Vec<String>,
+    /// The user's own words in the turn in progress (see `user_asked`), and
+    /// any the Chief or an admin passed on with its request (`RELAYED`).
+    user_text: String,
 }
 
 /// Why a take-over can't start now.
@@ -270,6 +281,10 @@ impl Runtime {
     fn admit(&mut self, inbound: Inbound) -> Result<bool, Box<Inbound>> {
         if self.deleting {
             return Err(Box::new(inbound));
+        }
+        // The same message twice (one id, queued again): once is enough.
+        if !inbound.id.is_empty() && self.queue.iter().any(|m| m.id == inbound.id) {
+            return Ok(false);
         }
         self.queue.push_back(inbound);
         if self.running || self.driven {
@@ -328,6 +343,168 @@ impl Runtime {
 
 static RUNTIMES: LazyLock<Mutex<HashMap<String, Runtime>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// The turn in progress answers only scheduled runs (check-ins, routines,
+/// "When…" firings): no user words, no agent's request, no room.
+fn quiet_check_in(agent_id: &str) -> bool {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .is_some_and(|r| {
+            r.running
+                && !r.tickets.is_empty()
+                && !r.user_asked
+                && r.origin.is_none()
+                && r.owed.is_empty()
+                && r.room.is_none()
+        })
+}
+
+/// A check-in answered [`super::schedule::NOTHING_NEW`]: no reply, no
+/// notification, and the unread its firing line added taken back. One quiet
+/// line says it ran.
+fn nothing_new(app: &AppHandle, agent_id: &str) {
+    notify::replace_held(agent_id, None);
+    // Off screen, the firing line counted as unread (`announce`).
+    if !notify::on_screen(app, agent_id) {
+        let _ = store::update(agent_id, |a| a.unread = a.unread.saturating_sub(1));
+    }
+    let _ = record_in_turn(
+        app,
+        new_message(agent_id, MessageKind::Note, NOTHING_NEW_LINE),
+    );
+    let _ = app.emit(EVENT_REGISTRY, ());
+}
+
+/// The quiet line a check-in with nothing new leaves.
+pub const NOTHING_NEW_LINE: &str = "Checked · nothing new";
+
+/// Whether the turn in progress answers the user's own message (and no
+/// outside text): what it hands on is the user asking.
+pub fn answering_user(agent_id: &str) -> bool {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .is_some_and(|r| r.running && r.user_asked && !r.outside)
+}
+
+/// The Chief (or an admin) passing on the user's own request, "try again":
+/// as good as the user writing to `target` themselves, so a card that
+/// expired there may be raised again (`expiry::new_task`). Returns whether
+/// it was lifted.
+pub fn relay_lifts_expired(caller: &store::Agent, target_id: &str) -> bool {
+    let relays = (caller.is_main || super::admin::is_admin(caller)) && answering_user(&caller.id);
+    if relays {
+        super::expiry::new_task(target_id);
+        // What the user said goes with it: "post it to Slack" said to the
+        // Chief is the user asking for Slack (`access_chain::names_service`).
+        let words = users_words(&caller.id);
+        if !words.is_empty() {
+            RELAYED
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(target_id.to_string(), words);
+        }
+    }
+    relays
+}
+
+/// The user's words the Chief (or an admin) passed on to an agent with its
+/// request, taken by that agent's next turn that answers an agent.
+static RELAYED: LazyLock<Mutex<HashMap<String, String>>> = LazyLock::new(Default::default);
+
+/// The user's own words in the turn in progress (and any relayed to it),
+/// empty when there are none or the turn answers outside text.
+pub fn users_words(agent_id: &str) -> String {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .filter(|r| r.running && !r.outside)
+        .map(|r| r.user_text.clone())
+        .unwrap_or_default()
+}
+
+/// The line in the Chief's chat when an agent working on someone else's
+/// request raises a card: the user is talking to the Chief, so the card in
+/// that agent's own chat would otherwise go unseen. Its name is a link there.
+pub fn card_pointer(name: &str, title: &str) -> String {
+    let title = title.trim().trim_end_matches(['.', '?']);
+    format!("{name} is waiting on your OK in its chat: {title}")
+}
+
+/// Leave [`card_pointer`] in the Chief's chat when `agent` is working on a
+/// request from another agent (not the user's own words in its chat).
+pub fn point_to_card(app: &AppHandle, agent: &store::Agent, title: &str) {
+    if agent.is_main || !delegated(&agent.id) {
+        return;
+    }
+    let Some(chief) = store::list()
+        .ok()
+        .and_then(|all| all.into_iter().find(|a| a.is_main))
+    else {
+        return;
+    };
+    let mut line = new_message(
+        &chief.id,
+        MessageKind::Note,
+        card_pointer(&agent.name, title),
+    );
+    line.peer = Some(AgentRef {
+        id: agent.id.clone(),
+        name: agent.name.clone(),
+    });
+    let _ = record(app, line);
+}
+
+/// The turn in progress was started by another agent's message, with none
+/// of the user's own in it.
+fn delegated(agent_id: &str) -> bool {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .is_some_and(|r| r.running && r.origin.is_some() && !r.user_asked)
+}
+
+/// Who a request was really for, per (asker, helper). Chief → Social Posts →
+/// Voice: Social Posts asked Voice while answering the Chief, so Voice's
+/// answer reaches a Social Posts turn that owes the Chief, and what that turn
+/// says goes back up, however deep the chain (each level noted as it asks).
+/// Written when the request is sent, replaced by the next one between the
+/// same two; in memory only, like `owed`.
+static ONWARD: LazyLock<Mutex<HashMap<(String, String), Vec<AgentRef>>>> =
+    LazyLock::new(Default::default);
+
+/// `asker`'s turn is sending `helper` a request: whoever that turn owes an
+/// answer is owed the one `helper`'s reply makes possible too.
+pub fn note_onward(asker: &str, helper: &str) {
+    let owed = RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(asker)
+        .map(|r| r.owed.clone())
+        .unwrap_or_default();
+    let key = (asker.to_string(), helper.to_string());
+    let mut onward = ONWARD.lock().unwrap_or_else(|e| e.into_inner());
+    if owed.is_empty() {
+        onward.remove(&key);
+    } else {
+        onward.insert(key, owed);
+    }
+}
+
+/// Who `asker` asked `helper` on behalf of (see [`ONWARD`]).
+fn onward_for(asker: &str, helper: &str) -> Vec<AgentRef> {
+    ONWARD
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(&(asker.to_string(), helper.to_string()))
+        .cloned()
+        .unwrap_or_default()
+}
 
 /// The agent's status, without its timeline (checked all through a turn,
 /// so it never copies one). [`status_with_work`] is the one shown.
@@ -1568,16 +1745,25 @@ pub fn enqueue(app: &AppHandle, agent_id: &str, text: String, from: From) {
     );
 }
 
-/// [`enqueue`] for a message the user typed in this agent's own chat, on
-/// the desk or the phone (`agents_send`): `said` is their words as typed,
-/// without what the app adds to the prompt.
-pub fn enqueue_typed(app: &AppHandle, agent_id: &str, text: String, said: String) {
-    push(app, agent_id, typed_inbound(text, said));
+/// Queue the user's own message, under its chat message's id: the turn that
+/// answers it knows which line in the log it is (see [`with_recap`]), and the
+/// same message is never queued twice. `typed`: the user's words as typed in
+/// this agent's own chat, on the desk or the phone (`agents_send`), without
+/// what the app adds to the prompt; `None` for a message the app writes for
+/// them from a button.
+pub fn enqueue_user(
+    app: &AppHandle,
+    agent_id: &str,
+    message_id: &str,
+    text: String,
+    typed: Option<String>,
+) {
+    push(app, agent_id, user_inbound(message_id, text, typed));
 }
 
-fn typed_inbound(text: String, said: String) -> Inbound {
+fn user_inbound(message_id: &str, text: String, typed: Option<String>) -> Inbound {
     Inbound {
-        id: String::new(),
+        id: message_id.to_string(),
         text,
         from: From::User,
         reply: false,
@@ -1586,7 +1772,7 @@ fn typed_inbound(text: String, said: String) -> Inbound {
         room: None,
         outside: false,
         resume: 0,
-        typed: Some(said),
+        typed,
     }
 }
 
@@ -2595,6 +2781,7 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     );
     let batch: Vec<Inbound> = runtime.queue.drain(..take).collect();
     save_inbox(agent_id, &runtime.queue);
+    runtime.batch_ids = batch.iter().map(|m| m.id.clone()).collect();
     runtime.room = batch.first().and_then(|m| m.room.clone()).map(|mut room| {
         // The deepest hop the turn answers, like an agent's request.
         room.hop = batch
@@ -2609,6 +2796,41 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     // Its cost is a routine's only if nothing else was in it, nor in the
     // interrupted turn it replaces (whose cost carries over in `turn_usage`).
     runtime.turn_mixed |= !routine;
+    // The user's own words in it: carried over from an interrupted turn.
+    let users = batch.iter().any(|m| {
+        matches!(m.from, From::User)
+            && m.room.is_none()
+            && m.ticket.is_none()
+            && !m.routine
+            && !m.outside
+            && m.resume == 0
+    });
+    runtime.user_asked = users || (runtime.interrupted.is_some() && runtime.user_asked);
+    let mut words: Vec<String> = batch
+        .iter()
+        .filter(|m| {
+            matches!(m.from, From::User)
+                && m.room.is_none()
+                && m.ticket.is_none()
+                && !m.routine
+                && !m.outside
+                && m.resume == 0
+        })
+        .map(|m| m.text.clone())
+        .collect();
+    if batch
+        .iter()
+        .any(|m| matches!(m.from, From::Agent { .. }) && !m.outside)
+    {
+        if let Some(relayed) = RELAYED
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(agent_id)
+        {
+            words.push(relayed);
+        }
+    }
+    runtime.user_text = words.join("\n");
     // Outside text taints the turn, and the turn that replaces it.
     runtime.outside |= batch.iter().any(|m| m.outside);
     runtime.typed = typed_of(&batch, runtime.outside);
@@ -2648,10 +2870,23 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
         runtime.hop = runtime.hop.max(room.hop);
     }
     // An interrupted turn's debts carry over to the turn that replaces it.
+    // An answer to a request this agent made on someone else's behalf owes
+    // them the outcome (see [`ONWARD`]), so it goes back up the chain.
+    let mut onward: HashMap<String, Vec<AgentRef>> = HashMap::new();
     for m in &batch {
-        if let (From::Agent { sender, .. }, false) = (&m.from, m.reply) {
-            if !runtime.owed.iter().any(|a| a.id == sender.id) {
-                runtime.owed.push(sender.clone());
+        let From::Agent { sender, .. } = &m.from else {
+            continue;
+        };
+        let to = if m.reply {
+            let up = onward_for(agent_id, &sender.id);
+            onward.insert(sender.id.clone(), up.clone());
+            up
+        } else {
+            vec![sender.clone()]
+        };
+        for to in to {
+            if to.id != agent_id && !runtime.owed.iter().any(|a| a.id == to.id) {
+                runtime.owed.push(to);
             }
         }
     }
@@ -2671,7 +2906,7 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     // the turn was asked is kept quoted, under who asked it.
     let prompt = match runtime.room {
         Some(_) => super::rooms::asks(&asked),
-        None => compose(&batch),
+        None => compose(&batch, &onward),
     };
     runtime.prompt = Some(prompt.clone());
     // What an interrupted turn left is told only to a turn in the same place;
@@ -2748,6 +2983,8 @@ fn finish_if_idle(agent_id: &str) -> Option<Idle> {
     runtime.turn_mixed = false;
     runtime.outside = false;
     runtime.typed = None;
+    runtime.user_asked = false;
+    runtime.user_text.clear();
     Some(Idle {
         owed: std::mem::take(&mut runtime.owed),
         tickets: std::mem::take(&mut runtime.tickets),
@@ -2870,6 +3107,8 @@ fn reset_after_panic(agent_id: &str, progressed: bool) -> PanicReset {
     runtime.turn_mixed = false;
     runtime.outside = false;
     runtime.typed = None;
+    runtime.user_asked = false;
+    runtime.user_text.clear();
     // What is recorded from now on is the agent's own, not the dead turn's room's.
     let room = runtime.room.take().map(|r| r.room_id);
     runtime.status = Some(Status::idle());
@@ -3650,7 +3889,9 @@ async fn record_changes(
     None
 }
 
-fn compose(batch: &[Inbound]) -> String {
+/// `onward`: for an answer, who the request was asked on behalf of, by the
+/// helper's id (see [`ONWARD`]); the turn's outcome goes to them.
+fn compose(batch: &[Inbound], onward: &HashMap<String, Vec<AgentRef>>) -> String {
     batch
         .iter()
         // A pick-up's note is said once, in the app's words, to whoever
@@ -3659,7 +3900,16 @@ fn compose(batch: &[Inbound]) -> String {
         .map(|m| match &m.from {
             _ if m.resume > 0 => m.text.clone(),
             From::User => m.text.clone(),
-            From::Agent { sender, .. } => prompts::from_agent(&sender.name, &m.text, m.reply),
+            From::Agent { sender, .. } => {
+                let back_to: Vec<String> = match m.reply {
+                    true => onward
+                        .get(&sender.id)
+                        .map(|up| up.iter().map(|a| a.name.clone()).collect())
+                        .unwrap_or_default(),
+                    false => Vec::new(),
+                };
+                prompts::from_agent(&sender.name, &m.text, m.reply, &back_to)
+            }
         })
         .collect::<Vec<_>>()
         .join("\n\n")
@@ -3718,7 +3968,10 @@ fn with_recap(agent_id: &str, prompt: &str) -> String {
     let Ok(log) = store::messages(agent_id, 24) else {
         return prompt.to_string();
     };
-    let lines = recap_lines(&log);
+    // What this turn is sent, and what waits behind it, are already on their
+    // way as messages: in the recap too, the agent read them twice ("your
+    // message came through twice").
+    let lines = recap_lines_except(&log, &on_the_way(agent_id));
     if lines.is_empty() {
         return prompt.to_string();
     }
@@ -3732,6 +3985,31 @@ fn with_recap(agent_id: &str, prompt: &str) -> String {
 /// What came before it the user chose to leave behind, so a new session
 /// (an engine switch, a session that vanished) is never handed it again.
 fn recap_lines(log: &[store::AgentMessage]) -> Vec<String> {
+    recap_lines_except(log, &std::collections::HashSet::new())
+}
+
+/// The ids of what the turn in progress answers and what is queued behind it.
+fn on_the_way(agent_id: &str) -> std::collections::HashSet<String> {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .map(|r| {
+            r.batch_ids
+                .iter()
+                .chain(r.queue.iter().map(|m| &m.id))
+                .filter(|id| !id.is_empty())
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// [`recap_lines`], leaving out the messages in `skip` (by id).
+fn recap_lines_except(
+    log: &[store::AgentMessage],
+    skip: &std::collections::HashSet<String>,
+) -> Vec<String> {
     let since = log
         .iter()
         .rposition(|m| m.fresh && m.kind == MessageKind::Note)
@@ -3741,6 +4019,7 @@ fn recap_lines(log: &[store::AgentMessage]) -> Vec<String> {
         // An import conversation was the sealed interview's, never this
         // agent's: it isn't handed to its session.
         .filter(|m| !super::connector::is_connector_line(m))
+        .filter(|m| !skip.contains(&m.id))
         .filter_map(|m| {
             let who = match m.kind {
                 MessageKind::User => "User".to_string(),
@@ -4676,6 +4955,15 @@ async fn run_turn(
                         Step::Reply(text) => {
                             // Recorded under the draft's id, so it takes the draft's place.
                             let draft_id = drafts.finish(&text);
+                            // A check-in with nothing new posts nothing.
+                            if !quiet && super::schedule::is_nothing_new(&text) && quiet_check_in(agent_id) {
+                                if let Some(id) = &draft_id {
+                                    emit_draft(app, agent_id, id, "");
+                                }
+                                said_anything = true;
+                                nothing_new(app, agent_id);
+                                continue;
+                            }
                             if !text.is_empty() && !quiet {
                                 let (before, held) = narration.reply(draft_id.clone(), &text);
                                 settle_narration(app, agent_id, before, &mut said_anything).await;
@@ -5259,7 +5547,7 @@ mod tests {
                 typed: None,
             },
         ];
-        let prompt = compose(&batch);
+        let prompt = compose(&batch, &HashMap::new());
         assert!(prompt.starts_with("Do X"));
         assert!(prompt.contains("[Message from Finance, another agent — not the user]"));
     }
@@ -5939,6 +6227,47 @@ mod tests {
         assert_eq!(recap_lines(&log[..2]).len(), 2, "no divider: all of it");
     }
 
+    /// A message sent while a turn ran is in the log *and* on the queue; a
+    /// recap (a lost session, an engine switch) used to hand it over as
+    /// conversation and then again as the new message: "your message came
+    /// through twice". The same message queued twice is also taken once.
+    #[test]
+    fn a_message_sent_mid_turn_reaches_the_agent_once() {
+        let id = "dup-agent";
+        let first = new_message(id, MessageKind::User, "Draft the newsletter");
+        let reply = new_message(id, MessageKind::Agent, "On it");
+        let later = new_message(id, MessageKind::User, "Also add the event dates");
+        let inbound = |m: &AgentMessage| Inbound {
+            id: m.id.clone(),
+            text: m.text.clone(),
+            from: From::User,
+            reply: false,
+            routine: false,
+            ticket: None,
+            room: None,
+            outside: false,
+            resume: 0,
+            typed: Some(m.text.clone()),
+        };
+        {
+            let mut rt = RUNTIMES.lock().unwrap();
+            let r = rt.entry(id.into()).or_default();
+            // The turn in progress answers `first`; `later` arrived meanwhile,
+            // and a resend of it (one id) doesn't queue it again.
+            r.batch_ids = vec![first.id.clone()];
+            assert!(matches!(r.admit(inbound(&later)), Ok(true)));
+            assert!(matches!(r.admit(inbound(&later)), Ok(false)));
+            assert_eq!(r.queue.len(), 1);
+        }
+        let log = vec![first.clone(), reply, later.clone()];
+        assert_eq!(
+            recap_lines_except(&log, &on_the_way(id)),
+            vec!["You: On it"]
+        );
+        assert_eq!(recap_lines(&log).len(), 3, "nothing on the way: all of it");
+        RUNTIMES.lock().unwrap().remove(id);
+    }
+
     #[test]
     fn an_import_conversation_never_reaches_the_chiefs_own_session() {
         let line = |kind, text: &str| {
@@ -5985,3 +6314,7 @@ mod prompt_budget_tests;
 #[cfg(test)]
 #[path = "remember_runner_tests.rs"]
 mod remember_runner_tests;
+
+#[cfg(test)]
+#[path = "handoff_runner_tests.rs"]
+mod handoff_runner_tests;

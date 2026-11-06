@@ -652,8 +652,64 @@ pub fn plan<Tz: TimeZone>(tz: &Tz, agents: &[store::Agent], now: i64) -> Plan {
     plan
 }
 
+/// What a check-in replies, alone, when nothing changed and nothing needs
+/// the user: the app posts nothing for it (`runner`), rather than a line an
+/// hour that buries what the agent is actually waiting on.
+pub const NOTHING_NEW: &str = "[nothing new]";
+
+/// Whether a reply is [`NOTHING_NEW`] (any case, a stray period or quotes).
+pub fn is_nothing_new(text: &str) -> bool {
+    let t = text
+        .trim()
+        .trim_matches(|c: char| c == '.' || c == '`' || c == '"' || c.is_whitespace())
+        .to_ascii_lowercase();
+    t == NOTHING_NEW || t == "nothing new"
+}
+
+/// The questions the agent put to the user that are still unanswered: its
+/// lines asking something (ending in "?") since the user last wrote, newest
+/// last, at most three. A check-in is told them, so a routine that has
+/// nothing new doesn't bury them under a fresh post, and one that has
+/// something new keeps them in view.
+pub fn open_questions(log: &[store::AgentMessage]) -> Vec<String> {
+    let since = log
+        .iter()
+        .rposition(|m| m.kind == MessageKind::User)
+        .map_or(0, |i| i + 1);
+    let mut out: Vec<String> = log[since..]
+        .iter()
+        .filter(|m| m.kind == MessageKind::Agent && m.room.is_none())
+        .flat_map(|m| {
+            m.text
+                .lines()
+                .map(str::trim)
+                .filter(|l| l.ends_with('?'))
+                .map(|l| l.trim_start_matches(['-', '*', ' ']).chars().take(200).collect::<String>())
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    out.dedup();
+    let skip = out.len().saturating_sub(3);
+    out.drain(..skip);
+    out
+}
+
 /// What the agent is woken with.
 pub fn wake_prompt<Tz: TimeZone>(tz: &Tz, firing: &Firing, now: i64) -> String
+where
+    Tz::Offset: std::fmt::Display,
+{
+    wake_prompt_with(tz, firing, now, &[])
+}
+
+/// [`wake_prompt`], with the questions still waiting on the user
+/// ([`open_questions`]).
+pub fn wake_prompt_with<Tz: TimeZone>(
+    tz: &Tz,
+    firing: &Firing,
+    now: i64,
+    open: &[String],
+) -> String
 where
     Tz::Offset: std::fmt::Display,
 {
@@ -694,8 +750,15 @@ where
             )
         })
         .collect();
+    let waiting = match open {
+        [] => String::new(),
+        qs => format!(
+            "\n\n[Still waiting on the user, asked earlier: {}. Don't bury it: if what you find bears on it, say so; if it still stands, keep it in view.]",
+            qs.iter().map(|q| format!("“{q}”")).collect::<Vec<_>>().join(", ")
+        ),
+    };
     format!(
-        "[Scheduled check-in you set: {}]{also}\n\n[It's now {}.{late}{repeats} Do what the note says, then tell the user what you found in a few lines. If there's nothing worth their attention, say so in one line.]",
+        "[Scheduled check-in you set: {}]{also}{waiting}\n\n[It's now {}.{late}{repeats} Do what the note says, then tell the user what you found in a few lines. If nothing changed since your last check-in and nothing needs them, reply with exactly {NOTHING_NEW} and nothing else: no post goes in their chat.]",
         c.note,
         format_time(tz, now)
     )
@@ -1223,7 +1286,10 @@ where
     // through `runner::record` like a reply (a `wants_user` kind), so the
     // notifications slice posts one banner for the check-in and its
     // answer when the turn ends, rather than one for each.
-    let prompt = wake_prompt(tz, firing, now);
+    let open = store::messages(&firing.agent_id, 40)
+        .map(|log| open_questions(&log))
+        .unwrap_or_default();
+    let prompt = wake_prompt_with(tz, firing, now, &open);
     // Before the wake, so even the quickest turn finds its ticket.
     let ticket = store::new_id();
     runs::issue(runs::Ticket {
@@ -1737,6 +1803,46 @@ mod tests {
         assert!(prompt.contains("Mon 2 Nov 2026, 09:00 (UTC-05:00)"));
         assert!(prompt.contains("late"));
         assert!(prompt.contains("[Also missed, due Mon 2 Nov 2026, 10:00 (UTC-05:00): note x2]"));
+    }
+
+    /// The hourly sweep: nothing new may end with no post, and a question
+    /// the agent asked earlier rides along instead of being buried.
+    #[test]
+    fn a_check_in_may_end_silently_and_keeps_open_questions_in_view() {
+        assert!(is_nothing_new("[nothing new]"));
+        assert!(is_nothing_new(" [Nothing new]. "));
+        assert!(is_nothing_new("Nothing new"));
+        assert!(!is_nothing_new("Nothing new in the inbox, but the invoice bounced."));
+
+        let said = |kind, text: &str| crate::agents::runner::new_message("a", kind, text);
+        let log = vec![
+            said(MessageKind::Agent, "Should I archive last month's leads?"),
+            said(MessageKind::User, "Yes"),
+            said(MessageKind::Agent, "Done.\n\nWhich list should the new leads go to?"),
+            said(MessageKind::CheckIn, "Sweep the inbox"),
+            said(MessageKind::Agent, "Nothing urgent."),
+        ];
+        assert_eq!(
+            open_questions(&log),
+            vec!["Which list should the new leads go to?".to_string()]
+        );
+        // Answered since: nothing open.
+        assert!(open_questions(&log[..2]).is_empty());
+
+        let due_at = at(2026, 11, 2, 9, 0);
+        let firing = Firing {
+            agent_id: "a".into(),
+            check_in: check_in("x1", due_at, None),
+            late: false,
+            next: None,
+            also: vec![],
+            manual: false,
+            retry: None,
+        };
+        let p = wake_prompt_with(&Eastern, &firing, due_at, &open_questions(&log));
+        assert!(p.contains("Still waiting on the user, asked earlier: “Which list should the new leads go to?”"));
+        assert!(p.contains(NOTHING_NEW));
+        assert!(!wake_prompt(&Eastern, &firing, due_at).contains("Still waiting"));
     }
 
     #[test]

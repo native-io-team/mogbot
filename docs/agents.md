@@ -680,6 +680,17 @@ request … tell the user the outcome; don't reply"), and handling it owes
 nobody anything, so answers can't ping-pong. Stop drops the debt; an
 interrupted turn passes it to the turn that replaces it.
 
+**Nested hand-offs report all the way up.** Chief → Social Posts → Voice: when
+Social Posts asks Voice while answering the Chief, the app notes who it asked
+on behalf of (`runner::note_onward`, per asker and helper, replaced by the next
+request between the two, in memory). Voice's answer then reaches a Social Posts
+turn that owes the Chief, is framed "say the outcome: it goes back to Chief of
+Staff automatically" instead of "tell the user", and what it says is the
+Chief's answer. Each level is noted as it asks, so any depth climbs back. A
+request sent with nobody waiting on it carries nothing up. (A review of real
+chats found the Chief waiting 42 minutes for an answer that had been posted in
+Social Posts' own chat.)
+
 **Loops.** Agents messaging agents can ping-pong. A user message starts a chain
 at hop 0; each `message_agent` from a turn at hop *n* delivers at *n+1*, and
 `message_agent` refuses past hop 6. The prompts also tell agents not to send
@@ -1022,8 +1033,14 @@ below; it asks only for:
   other agents read only their own home; `crontab` (except `-l`),
   `security`, `launchctl`, `diskutil`, `dd`, `csrutil`, `pmset`, `nvram` and
   other system tools; `defaults write` / `delete` / `import` (any domain)
-- connector tools whose name writes (send, create, update, delete, pay…);
-  uploads in the browser
+- connector tools whose name sends, spends, deletes or deploys (send, post,
+  publish, pay, delete…), judged **as a verb only**
+  (`go_hard::verb_position`): the first word, or the word after a lead-in
+  like `create_` / `do_` / `schedule_` / `add_`, past a first word that only
+  repeats the server's name (`slack_post_message`). So `post_message`,
+  `createPost`, `send_email` and `publishPost` ask, while `capturePost`,
+  `upsertSocialPosts` and `listPosts` run ("post" there names posts). Code
+  hosts' and databases' writes ask too; uploads in the browser
 - a network request with a secret in its address, query or headers
   (`agents/egress.rs`, below): `curl` (and its `-u` / `-b` /
   `--oauth2-bearer`), `wget`, `http`, `gh api`, a `git` remote with a
@@ -1177,7 +1194,23 @@ outside content" (at Go hard, in a turn not already capped). Cards from such
 a turn record `fromOutside`, so a later sweep judges them at Use good
 judgement. Marks come from every call `mcp::decide` lets through, every call
 through the connection relay, and every tool call in the engine's stream
-(calls it runs without asking); the next turn starts clean. Imported
+(calls it runs without asking). The mark lasts **the conversation**, not the
+turn (`outside.json` in the agent's home, tied to the engine session; cleared
+by Start fresh or a new conversation), since the outside text stays in it.
+
+**The rule for the owner's own requests.** The mark never raises cards for
+the owner's own direct request at Go hard or Full send: in a turn answering
+the user's own message in this agent's chat (not a routine, a check-in, a room,
+another agent's request or outside text; `runner::answering_user`), the mark
+narrows to what Full send keeps after outside content
+(`autoallow::outside_mark_asks`): **raw data leaving for another host**
+(`go_hard::moves_data_off_mac`: a `curl` body or upload, `ssh`, `scp`,
+`rsync`, `nc`…) and **packages new to the project**. Pushes and `gh` writes
+still follow the level itself (Go hard asks for them anyway). Every other
+turn in the conversation (a routine, a delegated request) keeps the full
+guard above. Before, the Chief reading x.com once made every later network
+write in the conversation ask, including what the owner asked for directly.
+Imported
 conversations never reach a turn directly: they go through the sealed
 interview and one review card (docs/remote-access.md, "Importing agents as a
 conversation").
@@ -1258,7 +1291,17 @@ on without it or say what's left in one line. Sign-ins and secure input close
 after 10 min as "Maybe later". Each becomes a one-line receipt (desk and
 phone), counts in no badge, and the same ask (kind + target) is refused
 without a card for the rest of that task, until the user next writes to the
-agent. A sweep runs at launch and every minute.
+agent, **or the Chief (or an admin) passes on the user's own request to it**
+(`runner::relay_lifts_expired`: a turn answering the user's message in its own
+chat, not a routine, check-in, room or outside text), since a user who talks
+only to the Chief says "try again" there. A sweep runs at launch and every
+minute.
+
+**A delegated agent's card is pointed to where the user is talking.** When an
+agent working on another agent's request (no user words in its turn) raises an
+Allow / Deny card, the Chief's chat gets one line, "Planner is waiting on your
+OK in its chat: …", whose name links to that chat (`runner::point_to_card`).
+The card itself stays in the agent's chat (and the bell, and the phone).
 
 So approvals are asynchronous. `approve` waits 240s. If you haven't answered,
 it tells the agent "the user may be away: stop, say what you need, you'll be
@@ -1593,7 +1636,14 @@ signed-in browser and say which account it's in, and ask only if both fail.
    on a card or on the setup checklist, kept after the checklist is put
    away): never asked again; the agent carries on without it. A service the
    catalogue doesn't know matches however it's spelled ("Acme CRM",
-   "acme-crm").
+   "acme-crm"). **Unless the user asks for it again**: when the user's own
+   message in this turn names the service (its title, id or site name, whole
+   words; `access_chain::names_service`), or the Chief or an admin passes on
+   such a message (`runner::RELAYED`), the no is set aside for that request
+   and the chat says so in one line ("You asked for Slack in this request, so
+   the earlier no is set aside for it"). The no itself stays; outside text
+   never lifts it. Before, one No to Slack blocked it until Undo, even after
+   the owner asked for Slack again.
 2. **Granted already**: one of our own working connections (OAuth, `gh`).
    A claude.ai connector doesn't count (it isn't always recognised in a
    turn): it's an optional extra after the browser, never the default.
@@ -1687,7 +1737,13 @@ place the independence level changes an approval, and only for the browser:
   ("Post", "Send now", "Schedule", "Delete post"), or a short one holding one
   that doesn't start by describing; "Will send on Fri…", "Post text" (a text
   box), "Discard changes", "Close" and "Edit post" run. Password boxes ask at
-  Go hard and above. **At Full send** only money, closing an account or a
+  Go hard and above. At Go hard and above a click is judged by what it clicks
+  (label and role), never by the page's address: an X-like scheduled-posts
+  list lives under `/compose/…`, and every unlabelled click there asked. So a
+  click that can't be named (by coordinate, or a `ref` nothing labelled) asks
+  at Go hard only on a payment host or checkout / cart / billing page: **an
+  accepted gap**, the same one "Use good judgement" accepts for ordinary
+  pages; a "Post" clicked by coordinate goes through. **At Full send** only money, closing an account or a
   repository / project, password boxes and checkout pages ask; uploads run
   unless the file looks like a key.
 - **At Go hard everything runs**, `javascript_tool`, shortcuts and unknown
@@ -2718,6 +2774,19 @@ gains a second segment, "From another assistant" | "From Ship Studio" (and
 under its projects folder (`<its projects root>/.shipstudio/agents`, the root
 read from its own `app_state.json`), else `~/ShipStudio/.shipstudio/agents`.
 
+**Its tool names become ours** (`other_app::to_ours`). Instructions written
+there say "via the shipstudio-local MCP" or `mcp__shipstudio_agents__…`,
+which don't exist here, so a copied CLAUDE.md, the Chief's merged
+instructions and anything imported over the connector (`arrival::annotate`)
+are rewritten: `shipstudio_agents` / `shipstudio-local` → `app` (our agent
+tools, `prompts::SERVER_KEY`), `shipstudio-preview` → our preview server, and
+its name → "this app". Headings (our own "### From Ship Studio") and the
+shared folders (`~/ShipStudio`, `.shipstudio/`) are left alone. Agents
+imported before this get the same rewrite **once at launch**
+(`other_app::migrate_names`, marked done by `.other-app-names-v1` in the
+agents folder, deferred while an agent is mid-turn), with "Updated its
+instructions to this app's tool names" in each changed agent's chat.
+
 Both apps use the same layout, so it's a copy, not a translation. The tab
 previews every agent (new, merges into the Chief, already here, or stays
 behind and why), with its instructions, memory, message and file counts,
@@ -2784,6 +2853,16 @@ words back in the composer (`scheduleWhenPhrase`, which the grammar reads back
 as the same schedule; a Rust test holds `describe` to that) and Return saves
 it in place: same id, paused stays paused, `when` re-read from now. It can't be
 edited into a copy of another row. Esc leaves the edit, not the popover.
+
+**Nothing new posts nothing.** A check-in whose turn answers only scheduled
+runs may reply with exactly `[nothing new]` (`schedule::NOTHING_NEW`): the
+reply isn't posted, the notification is dropped, the unread its firing line
+added is taken back, and one quiet line says it ran ("Checked · nothing new",
+`runner::nothing_new`). An hourly sweep used to post a line every hour, which
+pinged the user and buried the question the agent was waiting on. The wake
+also carries **the questions still open**: the agent's lines ending in "?"
+since the user last wrote, at most three (`schedule::open_questions`), so a
+sweep keeps them in view instead of covering them.
 
 **When a run fails** (`agents/runs.rs`). A firing leaves a ticket with the
 exact prompt it queued; the turn that carried that prompt settles it by how it
@@ -3094,6 +3173,14 @@ starts a new session with the recent visible conversation (`with_recap`),
 would see only the chat, not what its tools did, and could do it all again
 (send a message twice, redo writes). That turn stops on a plain line instead
 (`runner::not_carried_line`). Carried copies are written 0600.
+
+**A recap never repeats what is on its way.** The user's message is queued
+under its chat message's id (`runner::enqueue_user`), and a recap leaves out
+the messages the turn answers and those queued behind it
+(`runner::on_the_way`): a message sent while a turn ran was in the log *and*
+on the queue, so a new session read it in the recap and then again as the new
+message ("your message came through twice"). The queue also refuses the same
+id twice.
 Claude Code itself handles thinking written under another organization: it
 says so and regenerates it (string in its binary), rather than failing.
 
@@ -4007,8 +4094,8 @@ of their own is open.
   to re-read what was sent when a request is repeated. A guard backs it: when
   the user's messages ask for text ("text", "copy", "caption", "full",
   "wording", "words") and a finished turn in the agent's own chat shared files
-  whose text is all under 40 characters, with no message of 160 or more, the
-  next turn there opens with a quiet note from the app
+  whose text is all under 40 characters (only the messages carrying files are
+  judged: a long wrap-up used to switch it off), the next turn there opens with a quiet note from the app
   (`share_text::LABELS_ONLY_NOTE`). It is in memory only (a restart drops it),
   read once, dropped by Start fresh, and never shown to the user.
 - **Files** (header … menu, or ⌘K "Files shared with <agent>") lists every

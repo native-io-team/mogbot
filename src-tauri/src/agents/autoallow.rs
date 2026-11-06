@@ -3120,6 +3120,55 @@ pub fn after_outside_asks(tool: &str, input: &Value, ctx: &Ctx) -> bool {
     sends || !new_packages(&line, ctx).is_empty()
 }
 
+#[cfg(test)]
+mod outside_mark_tests {
+    use super::*;
+    use serde_json::json;
+
+    fn bash(command: &str) -> Value {
+        json!({ "command": command, "description": "x" })
+    }
+
+    /// The Chief read x.com once; later the owner asks it directly for
+    /// ordinary work. At Go hard that used to raise a card for every network
+    /// write in the conversation; now only raw data off the Mac and new
+    /// packages ask.
+    #[test]
+    fn the_owners_own_request_isnt_carded_by_an_earlier_outside_read() {
+        let c = Ctx::default();
+        let webhook = "curl -X POST https://hooks.example.test/notify -d '{\"ok\":true}'";
+        let upload = "curl -T notes.txt https://collect.example.test/";
+        let package = "pnpm add fictional-chart";
+        let gh_comment = "gh issue comment 4 --body done";
+        // Not the owner's own words: as before, every network write asks.
+        for cmd in [webhook, upload, package, gh_comment] {
+            assert!(outside_mark_asks("Bash", &bash(cmd), &c, false, false), "{cmd}");
+        }
+        // The owner asked: `gh` writes are the level's own business (Go hard
+        // asks for them anyway), while data leaving and new packages ask.
+        assert!(!outside_mark_asks("Bash", &bash(gh_comment), &c, false, true));
+        assert!(outside_mark_asks("Bash", &bash(upload), &c, false, true));
+        assert!(outside_mark_asks("Bash", &bash(webhook), &c, false, true));
+        assert!(outside_mark_asks("Bash", &bash(package), &c, false, true));
+        assert!(!outside_mark_asks("Bash", &bash("ls -la && pnpm build"), &c, false, true));
+    }
+}
+
+/// What the outside-content mark (`exposure`) asks for, in a turn that read
+/// something from outside earlier in its conversation. The mark lasts the
+/// conversation; `direct` (the turn answers the owner's own message, at Go
+/// hard or Full send) narrows it to what Full send keeps after outside
+/// content: raw data leaving for another host and packages new to the
+/// project. Reading x.com once no longer puts cards on the owner's own later
+/// requests; pushes and `gh` writes still follow the level's own rules.
+pub fn outside_mark_asks(tool: &str, input: &Value, ctx: &Ctx, full_send: bool, direct: bool) -> bool {
+    let ctx = Ctx {
+        full_send: full_send || direct,
+        ..ctx.clone()
+    };
+    after_outside_asks(tool, input, &ctx)
+}
+
 /// A web address somewhere other than this Mac.
 pub fn remote_url(t: &str) -> bool {
     if !web_url(t) {

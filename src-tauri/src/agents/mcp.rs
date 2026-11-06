@@ -1083,6 +1083,9 @@ fn message_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value 
     }
     // Answering a request the target sent: settles it (see runner::settle).
     let answer = runner::settle(&caller.id, &target.id);
+    // The Chief passing on the user's "try again": the target may ask again
+    // for what expired unanswered.
+    runner::relay_lifts_expired(caller, &target.id);
     let mut sent = runner::new_message(&caller.id, MessageKind::SentToAgent, body);
     sent.peer = Some(peer(&target));
     let _ = runner::record(app, sent);
@@ -1103,6 +1106,8 @@ fn message_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value 
         );
         return text(format!("Delivered to {}.", target.name));
     }
+    // Asked while answering someone: they're owed what this makes possible.
+    runner::note_onward(&caller.id, &target.id);
     runner::enqueue_request(
         app,
         &target.id,
@@ -1849,10 +1854,13 @@ async fn ask(
         approval.from_outside =
             Some(runner::from_outside(&caller.id) || super::exposure::read_outside(&caller.id));
     }
+    let pointer = approval.title.clone();
     card.approval = Some(approval);
     let _ = runner::record(app, card);
     store::refresh_pending(&caller.id);
     super::notify::refresh_badge(app);
+    // Working for another agent: a line where the user is talking says so.
+    runner::point_to_card(app, caller, &pointer);
     // "Waiting for your OK" until this card and any other open one are answered.
     let wait = runner::begin_wait(app, &caller.id);
 
@@ -2398,13 +2406,15 @@ async fn decide_inner(
     // the project asks (`exposure`).
     // At "Full send" (never for outside text) only raw data moved off this
     // Mac asks after outside content; pushes and `gh` follow its floor.
-    let full_send = super::independence::for_turn(super::policy::chosen_level(caller), outside)
-        == super::independence::Level::FullSend;
+    let level = super::independence::for_turn(super::policy::chosen_level(caller), outside);
+    let full_send = level == super::independence::Level::FullSend;
+    // The owner's own request at Go hard or above: the conversation's mark
+    // stays, but asks only for data leaving and new packages.
+    let direct = level.goes_hard() && !outside && runner::answering_user(&caller.id);
     let guarded = browser_asks
         || super::exposure::read_outside(&caller.id)
-            && super::autoallow::Ctx::for_agent(caller).is_none_or(|mut ctx| {
-                ctx.full_send = full_send;
-                super::autoallow::after_outside_asks(tool, input, &ctx)
+            && super::autoallow::Ctx::for_agent(caller).is_none_or(|ctx| {
+                super::autoallow::outside_mark_asks(tool, input, &ctx, full_send, direct)
             });
     if let Some(level) = auto_allowed(caller, tool, input, outside).filter(|_| !guarded) {
         // What "Go hard" would have asked for says so, and goes in the

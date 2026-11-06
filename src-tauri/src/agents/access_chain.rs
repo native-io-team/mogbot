@@ -146,6 +146,45 @@ pub struct Here {
     /// Services the user turned back on after saying no (`declined`), and
     /// when: a no on a card older than that no longer counts.
     pub turned_on: Vec<(String, i64)>,
+    /// The user's own words in this turn name the service ([`names_service`]):
+    /// an earlier no (a Deny, "Not needed") is set aside for this request.
+    pub user_named: bool,
+}
+
+/// Whether `words` (the user's own message) name the service `r` asks for:
+/// its title, its catalogue id or its site's name, as whole words in any
+/// case ("post this to Slack", "check my gmail").
+pub fn names_service(words: &str, r: &LoginRequest) -> bool {
+    let said: Vec<String> = words
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(str::to_lowercase)
+        .collect();
+    if said.is_empty() {
+        return false;
+    }
+    let has_phrase = |phrase: &str| {
+        let want: Vec<String> = phrase
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|w| !w.is_empty())
+            .map(str::to_lowercase)
+            .collect();
+        !want.is_empty() && said.windows(want.len()).any(|w| w == want.as_slice())
+    };
+    let site_name = logins::service(&r.service)
+        .and_then(|s| s.site)
+        .and_then(|site| {
+            let labels: Vec<&str> = site.split('.').collect();
+            labels.len().checked_sub(2).map(|i| labels[i].to_string())
+        });
+    has_phrase(&r.title)
+        || (r.service != "other" && has_phrase(&r.service))
+        || site_name.is_some_and(|n| n.len() >= 3 && has_phrase(&n))
+}
+
+/// The line in the chat when the user's own request lifts an earlier no.
+pub fn lifted_line(title: &str) -> String {
+    format!("You asked for {title} in this request, so the earlier no is set aside for it")
 }
 
 /// One spelling for an unknown service's name: "Acme CRM", "acme-crm" and
@@ -166,9 +205,10 @@ pub fn decide(agent: &Agent, r: &LoginRequest, tried: &Tried, here: &Here, team:
         s.login.service == r.service
             && (r.service != "other" || same_title(&s.login.title, &r.title))
     };
-    // 1a. "Not needed" on the setup checklist counts as a no.
+    // 1a. "Not needed" on the setup checklist counts as a no. Unless the
+    // user's own message in this turn asks for it again.
     let key = super::access_check::key_of(&r.service, &r.title);
-    if here.not_needed.iter().any(|k| {
+    if !here.user_named && here.not_needed.iter().any(|k| {
         k == &key
             || (r.service == "other"
                 && k.strip_prefix("other:")
@@ -189,6 +229,7 @@ pub fn decide(agent: &Agent, r: &LoginRequest, tried: &Tried, here: &Here, team:
         .max();
     if let Some(no) = team
         .iter()
+        .filter(|_| !here.user_named)
         .filter(|s| same(s) && s.status == ApprovalStatus::Denied)
         .filter(|s| turned_on.is_none_or(|on| s.at > on))
         .last()
@@ -317,10 +358,26 @@ pub async fn request(
         not_needed: not_needed_keys(),
         outside,
         turned_on: super::declined::turned_on(),
+        user_named: !outside && names_service(&super::runner::users_words(&agent.id), &r),
     };
-    let step = decide(agent, &r, tried, &here, &seen());
+    let team = seen();
+    let step = decide(agent, &r, tried, &here, &team);
+    // The user asked for it again: say so, once, where they are.
+    let lifted = here.user_named
+        && matches!(
+            decide(agent, &r, tried, &Here { user_named: false, ..here.clone() }, &team),
+            Step::AlreadyDeclined { .. }
+        );
+    if lifted {
+        let line = super::runner::new_message(
+            &agent.id,
+            super::store::MessageKind::Note,
+            lifted_line(&r.title),
+        );
+        let _ = super::runner::record(app, line);
+    }
     match &step {
-        Step::Ask => return logins::raise(app, agent, ask),
+        Step::Ask => return logins::raise_as(app, agent, ask, lifted),
         Step::Gh(login) => {
             connections::add_and_grant("github", "GitHub", login, Kind::Gh, &agent.id, r.access())?;
         }

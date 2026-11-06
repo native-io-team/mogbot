@@ -192,7 +192,8 @@ fn annotate_with(text: &str, source: &str, exists: &dyn Fn(&str) -> bool) -> (St
 }
 
 pub fn annotate(text: &str, source: &str) -> (String, Vec<String>) {
-    annotate_with(text, source, &on_disk)
+    // Written for the other app's tools: in ours (`other_app::to_ours`).
+    annotate_with(&super::other_app::to_ours(text), source, &on_disk)
 }
 
 /* ---------------------------------------------------------------- tools */
@@ -242,6 +243,8 @@ fn annotate_proposal_with(
     let mut paths: Vec<String> = Vec::new();
     let mut words = String::new();
     let mut fix = |field: &mut String| {
+        // Written for the other app's tools: in ours (`other_app::to_ours`).
+        *field = super::other_app::to_ours(field);
         let (out, found) = annotate_with(field, source, exists);
         *field = out;
         for f in found {
