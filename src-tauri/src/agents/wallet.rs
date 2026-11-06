@@ -770,11 +770,11 @@ pub fn session_in(roots: &[PathBuf], engine: Engine, session: &str) -> bool {
 }
 
 /// Session and thread ids are uuids: nothing else is looked for on disk.
-fn valid_session(id: &str) -> bool {
+pub(super) fn valid_session(id: &str) -> bool {
     !id.is_empty() && id.len() <= 64 && id.bytes().all(|b| b.is_ascii_hexdigit() || b == b'-')
 }
 
-fn modified(path: &Path) -> Option<std::time::SystemTime> {
+pub(super) fn modified(path: &Path) -> Option<std::time::SystemTime> {
     std::fs::metadata(path).and_then(|m| m.modified()).ok()
 }
 
@@ -857,7 +857,7 @@ pub fn carry_codex(roots: &[PathBuf], target: &Path, thread: &str) -> std::io::R
 }
 
 /// Copy keeping the source's modified time, so "newest" stays comparable.
-fn copy_replacing(from: &Path, to: &Path) -> std::io::Result<()> {
+pub(super) fn copy_replacing(from: &Path, to: &Path) -> std::io::Result<()> {
     let mut tmp = to.as_os_str().to_owned();
     tmp.push(".carry");
     let tmp = PathBuf::from(tmp);
@@ -877,7 +877,7 @@ fn copy_replacing(from: &Path, to: &Path) -> std::io::Result<()> {
     std::fs::rename(&tmp, to)
 }
 
-fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
+pub(super) fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
     super::store::ensure_private_dir(to)?;
     for entry in std::fs::read_dir(from)?.flatten() {
         let path = entry.path();

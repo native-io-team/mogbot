@@ -156,6 +156,20 @@ const TOOLS: &[Tool] = &[
         }),
     },
     Tool {
+        name: "search_my_chat",
+        description: "Search your own chat with the user (and your messages with other agents), whole messages, newest first: what you reported, an error you hit, what the user decided. Use it before asking the user anything they or you may already have said. With `agent`, a teammate's chat instead (the Chief, admins, and at Go hard).",
+        main_only: false,
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "query": { "type": "string", "description": "Words that must all appear, e.g. \"slack error\"." },
+                "agent": { "type": "string", "description": "A teammate's name, to search their chat instead of yours." },
+                "limit": { "type": "integer", "description": "Most messages back (default 10, at most 30)." }
+            },
+            "required": ["query"]
+        }),
+    },
+    Tool {
         name: "read_agent",
         description: "Read another agent without waking it: its role, instructions and memory, routines, logins and the requests waiting on the user. Use it to find out what an agent does or needs instead of messaging it to ask.",
         main_only: true,
@@ -646,6 +660,7 @@ async fn call(
         "list_agents" => list_agents(caller),
         "message_agent" => message_agent(app, caller, args),
         "read_agent" => read_agent(args),
+        "search_my_chat" => search_my_chat(caller, args),
         "share_file" => share_file(app, caller, args).await,
         "share_result" => share_result(app, caller, turn, args).await,
         "create_agent" => create_agent(app, caller, args).await,
@@ -1030,6 +1045,87 @@ fn list_agents(caller: &store::Agent) -> Value {
 }
 
 /// `read_agent`: what an agent knows and waits on, without starting a turn.
+/// Whether `caller` may search `whose` chat: its own always; a teammate's
+/// for the Chief, an admin, or at Go hard, never in a turn answering outside text.
+fn may_search_chat_of(caller: &store::Agent, whose: &store::Agent, outside: bool) -> bool {
+    whose.id == caller.id
+        || (!outside
+            && (caller.is_main
+                || super::admin::admin_now(caller)
+                || super::independence::level().goes_hard()))
+}
+
+fn search_my_chat(caller: &store::Agent, args: &Value) -> Value {
+    let Some(query) = arg(args, "query") else {
+        return error("`query` is required: the words to look for.");
+    };
+    let whose = match arg(args, "agent") {
+        None => caller.clone(),
+        Some(name) => match store::find(name) {
+            Ok(Some(agent)) => agent,
+            _ => {
+                return error(format!(
+                    "There's no agent called {name}. list_agents shows who exists."
+                ))
+            }
+        },
+    };
+    if !may_search_chat_of(caller, &whose, runner::from_outside(&caller.id)) {
+        return error("Only the Chief, an admin, or any agent at Go hard can search a teammate's chat. Ask them with message_agent.");
+    }
+    let limit = args
+        .get("limit")
+        .and_then(Value::as_u64)
+        .map_or(10, |n| n.clamp(1, 30) as usize);
+    match super::search::own_messages(&whose.id, query, limit) {
+        Ok(found) if found.is_empty() => text(format!(
+            "Nothing in {} chat has every word of \"{query}\". Try fewer or other words.",
+            if whose.id == caller.id {
+                "your".to_string()
+            } else {
+                format!("{}'s", whose.name)
+            }
+        )),
+        Ok(found) => text(chat_hits(&found, whose.id == caller.id)),
+        Err(e) => error(format!("Couldn't read the chat: {e}")),
+    }
+}
+
+/// Found messages, oldest first, each with when and who.
+fn chat_hits(found: &[store::AgentMessage], own: bool) -> String {
+    found
+        .iter()
+        .rev()
+        .map(|m| {
+            let when = chrono::DateTime::from_timestamp_millis(m.ts)
+                .map(|t| {
+                    t.with_timezone(&chrono::Local)
+                        .format("%Y-%m-%d %H:%M")
+                        .to_string()
+                })
+                .unwrap_or_default();
+            let peer = m
+                .peer
+                .as_ref()
+                .map(|p| p.name.as_str())
+                .unwrap_or("another agent");
+            let who = match (m.kind, own) {
+                (MessageKind::User, _) => "User".to_string(),
+                (MessageKind::Agent, true) => "You".to_string(),
+                (MessageKind::Agent, false) => "Them".to_string(),
+                (MessageKind::SentToAgent, _) => format!("→ {peer}"),
+                (MessageKind::FromAgent, _) => format!("{peer} →"),
+                (MessageKind::Error, _) => "Error shown to the user".to_string(),
+                (MessageKind::CheckIn, _) => "Check-in".to_string(),
+                _ => "Note".to_string(),
+            };
+            let body: String = m.text.chars().take(3_000).collect();
+            format!("[{when}] {who}: {body}")
+        })
+        .collect::<Vec<_>>()
+        .join("\n\n")
+}
+
 fn read_agent(args: &Value) -> Value {
     let Some(name) = arg(args, "agent") else {
         return error("`agent` is required.");

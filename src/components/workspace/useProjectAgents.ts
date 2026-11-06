@@ -45,6 +45,7 @@ export interface ProjectAgentRow {
 export interface AtWorkLine {
   agentId: string;
   name: string;
+  color: string;
   text: string;
   waiting: boolean;
 }
@@ -53,6 +54,7 @@ export function atWorkLines(agents: Agent[], projectPath: string, now: number): 
   return agentsAtWork(agents, projectPath).map((a) => ({
     agentId: a.id,
     name: a.name,
+    color: a.color,
     text: atWorkText(a, plainActivity(a.status.activity), now),
     waiting: needsYou(a),
   }));
@@ -73,25 +75,14 @@ export function projectAgentRows(
       sameFolder(a.project, projectPath) &&
       !atWork.some((w) => w.agentId === a.id)
   );
-  const working = atWork.map((w) => agents.find((a) => a.id === w.agentId)!);
-  return [...working, ...bound].map((a) => {
-    const line = atWork.find((w) => w.agentId === a.id);
-    return {
-      key: `agent-${a.id}`,
-      label: a.name,
-      dotState: needsYou(a) ? 'waiting' : a.status.state === 'working' ? 'thinking' : 'idle',
-      // What it's doing here, in the words its chat uses; an idle row says
-      // nothing (it's a link).
-      meta: line
-        ? line.text
-        : needsYou(a)
-          ? 'needs you'
-          : a.status.state === 'working'
-            ? 'working'
-            : undefined,
-      onSelect: () => openAgent(a.id),
-    };
-  });
+  // Agents at work here are rows among the Sessions, not here (`agentWorkItems`).
+  return bound.map((a) => ({
+    key: `agent-${a.id}`,
+    label: a.name,
+    dotState: needsYou(a) ? 'waiting' : a.status.state === 'working' ? 'thinking' : 'idle',
+    meta: needsYou(a) ? 'needs you' : a.status.state === 'working' ? 'working' : undefined,
+    onSelect: () => openAgent(a.id),
+  }));
 }
 
 /**

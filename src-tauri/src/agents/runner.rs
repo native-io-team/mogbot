@@ -1130,7 +1130,9 @@ async fn recover_one(app: &AppHandle, agent_id: &str, found: &[Inbound]) {
             stop_orphan(pid, &mark.session).await;
         }
     }
-    let plan = plan_recovery(agent_id, found, driven, super::wallet::session_on_disk);
+    let plan = plan_recovery(agent_id, found, driven, |e, s| {
+        super::transcript::resumable(agent_id, e, s)
+    });
     // Same order as a turn that ends: what it had said, its changes, then
     // the line that says what became of it (under which its timeline hangs).
     if let Some(reply) = plan.partial {
@@ -3156,7 +3158,9 @@ fn after_panic(app: &AppHandle, agent_id: &str, reset: PanicReset) {
     // Working out the pick-up reads files; should that panic too, the turn
     // just gets the plain line.
     let planned = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-        plan_after_panic(agent_id, driven, super::wallet::session_on_disk)
+        plan_after_panic(agent_id, driven, |e, s| {
+            super::transcript::resumable(agent_id, e, s)
+        })
     }))
     .unwrap_or_else(|_| {
         tracing::error!("[Agents] picking up {agent_id}'s panicked turn panicked too");
@@ -3763,10 +3767,10 @@ fn tell_couldnt_finish(app: &AppHandle, agent_id: &str, to: &AgentRef, why: &str
 /// The user asked for text and the turn that just finished sent only files
 /// with short labels: its next turn in this chat is told so, quietly
 /// (`share_text`). Nothing is shown to the user.
+/// The same for a reply that gave up instead of doing ("I have no Slack
+/// tool", "they'd need to say yes", plumbing in the user's words): its next
+/// turn is told what to do instead (`agency`).
 fn leave_labels_only_note(agent_id: &str, user_said: &str, since: i64) {
-    if user_said.trim().is_empty() {
-        return;
-    }
     let replies: Vec<AgentMessage> = store::messages(agent_id, 40)
         .unwrap_or_default()
         .into_iter()
@@ -3776,9 +3780,14 @@ fn leave_labels_only_note(agent_id: &str, user_said: &str, since: i64) {
 }
 
 fn set_labels_only_note(agent_id: &str, user_said: &str, replies: &[AgentMessage]) {
-    let Some(note) = super::share_text::labels_only_note(user_said, replies) else {
+    let labels = (!user_said.trim().is_empty())
+        .then(|| super::share_text::labels_only_note(user_said, replies))
+        .flatten();
+    let lazy = super::agency::lazy_reply_note(replies);
+    let note: String = labels.into_iter().chain(lazy).collect();
+    if note.is_empty() {
         return;
-    };
+    }
     let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
     runtimes.entry(agent_id.to_string()).or_default().nudge = Some(note);
 }
@@ -3961,24 +3970,61 @@ fn unfinished_turn(engine: Engine, exited_cleanly: bool, stderr: String) -> Stri
     format!("{who} {what}. Send your message again; if it keeps happening, check that {who} works in a terminal.")
 }
 
+/// The recap's window: about 30 exchanges (a line each way)...
+const RECAP_LINES: usize = 60;
+/// ...or about 6k tokens, whichever is less. Paid for in full (nothing
+/// cached) on the one turn that needs it.
+const RECAP_CHARS: usize = 24_000;
+/// One message's most, so one long report doesn't crowd out the rest.
+const RECAP_LINE_CHARS: usize = 2_000;
+/// Messages read to find them (notes and cards in between don't count).
+const RECAP_SCAN: usize = 400;
+
 /// A prompt for a fresh session, prefixed with the visible conversation.
 fn with_recap(agent_id: &str, prompt: &str) -> String {
-    // Enough to pick the thread back up, not the whole history: this is
-    // paid for in full (nothing cached) on the turn that needs it.
-    let Ok(log) = store::messages(agent_id, 24) else {
+    let Ok(log) = store::messages(agent_id, RECAP_SCAN) else {
         return prompt.to_string();
     };
     // What this turn is sent, and what waits behind it, are already on their
     // way as messages: in the recap too, the agent read them twice ("your
     // message came through twice").
     let lines = recap_lines_except(&log, &on_the_way(agent_id));
-    if lines.is_empty() {
+    recap_prompt(&lines, &recap_open(&log), prompt)
+}
+
+/// The recap around `prompt`: the conversation, then what is still open.
+fn recap_prompt(lines: &[String], open: &[String], prompt: &str) -> String {
+    if lines.is_empty() && open.is_empty() {
         return prompt.to_string();
     }
-    format!(
-        "[Your previous working session was lost, so here is the recent conversation for context. Don't mention this unless asked.]\n\n{}\n\n[New message]\n\n{prompt}",
-        lines.join("\n")
-    )
+    let mut out = String::from(
+        "[Your previous working session was lost. This is the recent conversation from your own chat, newest last: what \"You\" said, you said, and you know it. Pick up from here without mentioning the loss unless asked; never ask the user to repeat or paste anything in it. search_my_chat finds anything older.]\n\n",
+    );
+    out.push_str(&lines.join("\n"));
+    if !open.is_empty() {
+        out.push_str("\n\n[Still open]\n");
+        out.push_str(&open.join("\n"));
+    }
+    out.push_str("\n\n[New message]\n\n");
+    out.push_str(prompt);
+    out
+}
+
+/// What is still open in the recap's window: requests waiting on the user,
+/// and the questions put to them they haven't answered.
+fn recap_open(log: &[store::AgentMessage]) -> Vec<String> {
+    let mut open: Vec<String> = log
+        .iter()
+        .filter_map(|m| m.approval.as_ref())
+        .filter(|a| a.status == store::ApprovalStatus::Pending)
+        .map(|a| format!("- Waiting on the user's answer: {}", a.title))
+        .collect();
+    open.extend(
+        super::schedule::open_questions(log)
+            .into_iter()
+            .map(|q| format!("- You asked the user, unanswered: {q}")),
+    );
+    open
 }
 
 /// The recap's lines: the visible conversation since the last fresh start.
@@ -4005,7 +4051,50 @@ fn on_the_way(agent_id: &str) -> std::collections::HashSet<String> {
         .unwrap_or_default()
 }
 
-/// [`recap_lines`], leaving out the messages in `skip` (by id).
+/// One message as a recap line, or `None` for what isn't conversation.
+fn recap_line(m: &store::AgentMessage) -> Option<String> {
+    let who = match m.kind {
+        MessageKind::User => "User".to_string(),
+        MessageKind::Agent => "You".to_string(),
+        MessageKind::SentToAgent => format!("You → {}", m.peer.as_ref()?.name),
+        MessageKind::FromAgent => format!("{} → you", m.peer.as_ref()?.name),
+        MessageKind::CheckIn => "Your scheduled check-in".to_string(),
+        // What went wrong was shown to the user: the agent knows it too.
+        MessageKind::Error => "Error shown to the user".to_string(),
+        MessageKind::Approval => {
+            let a = m.approval.as_ref()?;
+            let status = match a.status {
+                store::ApprovalStatus::Pending => "waiting",
+                store::ApprovalStatus::Allowed => "allowed",
+                store::ApprovalStatus::Denied => "denied",
+                store::ApprovalStatus::Expired => "expired",
+            };
+            return Some(format!(
+                "You asked the user to approve: {} ({status})",
+                a.title
+            ));
+        }
+        _ => return None,
+    };
+    let mut text = m.text.trim().to_string();
+    if let Some(card) = &m.result {
+        text = format!(
+            "{text} [shared a result: {} — {}]",
+            card.title, card.summary
+        );
+    }
+    if text.trim().is_empty() {
+        return None;
+    }
+    let mut cut: String = text.chars().take(RECAP_LINE_CHARS).collect();
+    if text.chars().count() > RECAP_LINE_CHARS {
+        cut.push('…');
+    }
+    Some(format!("{who}: {cut}"))
+}
+
+/// [`recap_lines`], leaving out the messages in `skip` (by id): the newest
+/// lines that fit the window, oldest first.
 fn recap_lines_except(
     log: &[store::AgentMessage],
     skip: &std::collections::HashSet<String>,
@@ -4014,25 +4103,25 @@ fn recap_lines_except(
         .iter()
         .rposition(|m| m.fresh && m.kind == MessageKind::Note)
         .map_or(0, |i| i + 1);
-    log[since..]
+    let mut out = Vec::new();
+    let mut used = 0;
+    for line in log[since..]
         .iter()
+        .rev()
         // An import conversation was the sealed interview's, never this
         // agent's: it isn't handed to its session.
         .filter(|m| !super::connector::is_connector_line(m))
         .filter(|m| !skip.contains(&m.id))
-        .filter_map(|m| {
-            let who = match m.kind {
-                MessageKind::User => "User".to_string(),
-                MessageKind::Agent => "You".to_string(),
-                MessageKind::SentToAgent => format!("You → {}", m.peer.as_ref()?.name),
-                MessageKind::FromAgent => format!("{} → you", m.peer.as_ref()?.name),
-                MessageKind::CheckIn => "Your scheduled check-in".to_string(),
-                _ => return None,
-            };
-            let text: String = m.text.chars().take(400).collect();
-            Some(format!("{who}: {text}"))
-        })
-        .collect()
+        .filter_map(recap_line)
+    {
+        if out.len() >= RECAP_LINES || (used + line.len() > RECAP_CHARS && !out.is_empty()) {
+            break;
+        }
+        used += line.len() + 1;
+        out.push(line);
+    }
+    out.reverse();
+    out
 }
 
 /// `--resume` / `exec resume` refusing a session it has no file for (the
@@ -4536,10 +4625,6 @@ async fn run_turn(
         Some(id) => (id.clone(), true),
         None => (driver.new_session(), false),
     };
-    // Its conversation may have been on another account: brought here first.
-    if resuming && super::wallet::carry_session(account, &session_id) {
-        tracing::info!("[Agents] carried {agent_id}'s session to the account it runs on now");
-    }
     // First turn on a new engine: it starts blank, so it gets the conversation.
     let prompt = if agent.new_engine && !resuming {
         with_recap(agent_id, prompt)
@@ -4575,6 +4660,12 @@ async fn run_turn(
                 project.display()
             )));
         }
+    }
+    // Its conversation, where this turn's engine looks for it: another
+    // account's folder, another working folder (a bound agent's copy), or
+    // the app's own copy when the engine's was deleted (`transcript`).
+    if resuming && super::transcript::ensure(account, &layout.cwd, &home, &session_id) {
+        tracing::info!("[Agents] put {agent_id}'s conversation back where its engine looks for it");
     }
     if let Some(caps) = driver
         .capabilities_before(&agent, &binary, store::now_ms())
@@ -5196,6 +5287,18 @@ async fn run_turn(
     }
     procs::unregister(agent_id);
     timing.log(agent_id);
+    // The app's own copy of the conversation, so a deleted transcript never
+    // costs the agent its memory of this chat (`transcript`).
+    let kept = this_session
+        .clone()
+        .or_else(|| (!session_id.is_empty()).then(|| session_id.clone()));
+    if let Some(sid) = kept {
+        let (account, home) = (account.clone(), home.clone());
+        let _ = tokio::task::spawn_blocking(move || {
+            super::transcript::back_up(&account, &home, &sid);
+        })
+        .await;
+    }
     let status = status.map_err(super::err_io)?;
     let stderr_text = tokio::time::timeout(EXIT_BOUND, stderr_task)
         .await
@@ -5248,7 +5351,9 @@ async fn run_turn(
 
     let missing_session =
         is_missing_session(&stderr_text) || result_error.as_deref().is_some_and(is_missing_session);
-    if retry_fresh && resuming && missing_session && !quiet {
+    // A conversation the engine started is there, whatever its errors say
+    // (an MCP server's "session not found" is about that server).
+    if retry_fresh && resuming && missing_session && !session_confirmed && !quiet {
         tracing::warn!("[Agents] Session {session_id} for {agent_id} is gone; starting a new one");
         // The reading was the lost session's; the retry takes its own.
         reading.armed = false;
@@ -6226,6 +6331,65 @@ mod tests {
         ];
         assert_eq!(recap_lines(&log), vec!["User: New topic", "You: Sure"]);
         assert_eq!(recap_lines(&log[..2]).len(), 2, "no divider: all of it");
+    }
+
+    /// The owner's complaint: the Chief reported a Slack error, its session
+    /// was lost, and it then asked the owner to paste "the original error".
+    /// The recap carries the agent's own reports and errors, whole, past the
+    /// notes and check-ins in between, and what is still open.
+    #[test]
+    fn a_lost_session_keeps_the_agents_own_reports() {
+        let said = |kind, text: &str| new_message("a", kind, text);
+        let report = format!(
+            "Slack refused the post: missing_scope (chat:write). {}",
+            "Details. ".repeat(80)
+        );
+        let mut log = vec![
+            said(MessageKind::User, "Post the launch note to #general"),
+            said(MessageKind::Agent, &report),
+            said(MessageKind::Error, "Slack: not_authed"),
+        ];
+        for i in 0..40 {
+            log.push(said(
+                MessageKind::Note,
+                &format!("npm test · always allowed {i}"),
+            ));
+        }
+        let mut card = said(MessageKind::Approval, "");
+        card.approval = Some(
+            serde_json::from_value(serde_json::json!({
+                "requestId": "r1", "title": "Connect Slack", "detail": "", "status": "pending"
+            }))
+            .unwrap(),
+        );
+        log.push(card);
+        log.push(said(
+            MessageKind::Agent,
+            "Want me to retry once you've connected it?",
+        ));
+        let lines = recap_lines(&log);
+        assert!(lines[1].starts_with("You: Slack refused the post: missing_scope"));
+        assert!(lines[1].len() > 400, "a report isn't cut to a teaser");
+        assert_eq!(lines[2], "Error shown to the user: Slack: not_authed");
+        assert!(lines[3].contains("Connect Slack (waiting)"));
+        let prompt = recap_prompt(&lines, &recap_open(&log), "what was the error?");
+        assert!(prompt.contains("missing_scope"));
+        assert!(prompt.contains("Waiting on the user's answer: Connect Slack"));
+        assert!(prompt.contains("unanswered: Want me to retry"));
+        assert!(prompt.ends_with("[New message]\n\nwhat was the error?"));
+
+        // The window: the newest lines that fit, oldest first.
+        let long: Vec<AgentMessage> = (0..200)
+            .map(|i| said(MessageKind::User, &format!("{i} {}", "x".repeat(1_000))))
+            .collect();
+        let lines = recap_lines(&long);
+        let total: usize = lines.iter().map(String::len).sum();
+        assert!(total <= RECAP_CHARS + RECAP_LINE_CHARS, "{total}");
+        assert!(lines.last().unwrap().starts_with("User: 199 "));
+        let short: Vec<AgentMessage> = (0..200)
+            .map(|i| said(MessageKind::User, &format!("{i}")))
+            .collect();
+        assert_eq!(recap_lines(&short).len(), RECAP_LINES);
     }
 
     /// A message sent while a turn ran is in the log *and* on the queue; a
