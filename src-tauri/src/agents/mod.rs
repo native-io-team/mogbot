@@ -77,6 +77,7 @@ pub mod defaults;
 pub mod describe;
 pub mod dev_servers;
 pub mod driver;
+pub mod e2e_alias;
 pub mod egress;
 pub mod engine;
 pub mod expiry;
