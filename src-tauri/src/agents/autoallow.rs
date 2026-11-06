@@ -90,6 +90,9 @@ pub struct Ctx {
     pub scratch: Vec<PathBuf>,
     /// The app's own data (every agent's home, bridge config, tokens).
     pub app_data: Vec<PathBuf>,
+    /// Reads every agent's home without a card at "Go hard": the Chief and
+    /// the admins (`admin`). Others read only their own.
+    pub team_reader: bool,
 }
 
 impl Ctx {
@@ -112,6 +115,7 @@ impl Ctx {
             cwd: layout.cwd,
             scratch,
             app_data,
+            team_reader: super::admin::is_admin(agent),
         })
     }
 

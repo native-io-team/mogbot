@@ -17,6 +17,7 @@ fn ctx() -> Ctx {
             format!("{HOME}/Projects/.worktrees/site-task").into(),
         ],
         app_data: vec![app.into()],
+        team_reader: false,
     }
 }
 
@@ -440,6 +441,7 @@ fn scripts_are_read_before_they_run() {
         cwd: home.join("site"),
         scratch: vec![own.clone()],
         app_data: vec![home.join("Library/Application Support/FictionalApp")],
+        team_reader: false,
     };
     std::fs::create_dir_all(home.join("site")).unwrap();
     let write =
