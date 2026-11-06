@@ -909,7 +909,7 @@ pub fn verdict(
                         chosen_level(agent),
                         super::runner::from_outside(&agent.id),
                     )
-                    == Level::GoHard =>
+                    .goes_hard() =>
             {
                 None
             }

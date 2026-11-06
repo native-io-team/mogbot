@@ -142,8 +142,10 @@ these without updating that doc.
   allow-list), and at "Go hard" everything except a short ask list (`agents/go_hard.rs`): pushing,
   `gh` writes, publishing, production deploys, sending mail/messages, live payments, network writes
   off this Mac, `sudo`, `rm -r` outside projects/agent homes/temp, credentials, shell profiles,
-  launch agents and system tools; in the browser, send-like clicks, uploads and scripts that submit
-  or post. A turn answering outside text at "Go hard" also asks for any network write and for
+  launch agents and system tools; in the browser, the final send click, uploads and scripts that
+  submit or post. At "Full send" (`go_hard::full_send_program`, never for outside text) sending and
+  posting what the user asked for runs too, and only money, credentials, deleting for good, pushing
+  to production or a protected branch, and system persistence ask. A turn answering outside text at "Go hard" also asks for any network write and for
   packages fetched by name. Each
   auto-answer leaves a line in "What it did" ("How much agents do on their own"). Secrets go
   into the Keychain through a masked card, never the chat ("Secrets")

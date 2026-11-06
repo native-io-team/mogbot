@@ -80,7 +80,13 @@ pub fn asks(tool: &str, input: &Value, ctx: &Ctx, outside: bool) -> bool {
         "WebFetch" => super::egress::carries_secret(field("url"), &ctx.secrets),
         "WebSearch" | "web_search" => super::egress::holds_secret(field("query"), &ctx.secrets),
         t if t.starts_with(super::browser_gate::SERVER) => false,
-        t if t.starts_with("mcp__") => connector_asks(t, outside),
+        t if t.starts_with("mcp__") => {
+            if ctx.full_send {
+                connector_floor(t)
+            } else {
+                connector_asks(t, outside)
+            }
+        }
         // Claude Code's and Codex's own tools (web search, todo lists, tasks).
         _ => false,
     }
@@ -146,24 +152,26 @@ fn credential_store(p: &Path, ctx: &Ctx) -> bool {
 /// only with a card, whoever asks.
 const TEAM_PRIVATE: &[&str] = &["wallet.json", "connections.json"];
 
-/// The team's own files that an admin (the Chief, by default) reads without
-/// a card: every agent's home (`CLAUDE.md`, its chat log, what it did) and
-/// the team's registry. No secret lives there (they are in the Keychain; the
-/// bridge and Remote Access tokens sit beside it in the app's data, and
-/// still ask), and searching what the team knows is the job. Writing another
-/// agent's files still asks ([`protected`]); an agent that isn't an admin
-/// reads only its own home.
+/// The team's own files, which every agent reads without a card at "Go
+/// hard" and "Full send": every agent's home (`CLAUDE.md`, its chat log,
+/// what it did, the files it made) and the team's registry. No secret lives
+/// there (they are in the Keychain; the bridge and Remote Access tokens sit
+/// beside it in the app's data, and still ask), and using what the team made
+/// is the job. The account files ([`TEAM_PRIVATE`]) and anything named like
+/// a secret (`.env`, a key, "token", "password"…) still ask. Writing another
+/// agent's files still asks ([`protected`]); copying out of them into its own
+/// home or a project doesn't.
 fn team_file(p: &Path, ctx: &Ctx) -> bool {
-    ctx.team_reader
-        && ctx.app_data.iter().any(|d| {
-            let root = d.join("agents");
-            p.starts_with(&root)
-                && !p
-                    .strip_prefix(&root)
-                    .ok()
-                    .and_then(|r| r.to_str())
-                    .is_some_and(|r| TEAM_PRIVATE.contains(&r))
-        })
+    ctx.app_data.iter().any(|d| {
+        let root = d.join("agents");
+        p.starts_with(&root)
+            && !super::autoallow::sensitive_name(p)
+            && !p
+                .strip_prefix(&root)
+                .ok()
+                .and_then(|r| r.to_str())
+                .is_some_and(|r| TEAM_PRIVATE.contains(&r))
+    })
 }
 
 /// Reading here asks: a credential store, but not the team's own files.
@@ -589,7 +597,10 @@ fn command_asks(command: &str, ctx: &Ctx, outside: bool) -> bool {
     let lower = command.to_ascii_lowercase();
     // `osascript` reading its script from a here-document or a pipe: the
     // script is not its arguments, so look at the whole line.
-    if lower.contains("osascript") && OSASCRIPT_SENDS.iter().any(|w| lower.contains(w)) {
+    if !ctx.full_send
+        && lower.contains("osascript")
+        && OSASCRIPT_SENDS.iter().any(|w| lower.contains(w))
+    {
         return true;
     }
     // Fetched code piped into a shell: a new package by another name.
@@ -745,7 +756,13 @@ fn find_asks(args: &[&str], ctx: &Ctx, outside: bool, known: bool) -> bool {
                 let found = format!("{}/x", root.trim_end_matches('/'));
                 let mut words: Vec<String> = inner
                     .iter()
-                    .map(|w| if *w == "{}" { found.clone() } else { w.to_string() })
+                    .map(|w| {
+                        if *w == "{}" {
+                            found.clone()
+                        } else {
+                            w.to_string()
+                        }
+                    })
                     .collect();
                 // What it finds is an argument even where the line lost `{}`.
                 if !inner.contains(&"{}") {
@@ -835,7 +852,8 @@ fn leaks_secret(prog: &str, args: &[&str], ctx: &Ctx) -> bool {
                             || a.split_once("==").is_some_and(|(n, v)| {
                                 secret_name(n) && !v.is_empty() || holds_secret(v, secrets)
                             })
-                            || a.starts_with("--auth") || *a == "-a"
+                            || a.starts_with("--auth")
+                            || *a == "-a"
                     }))
         }
         "gh" if args.first() == Some(&"api") => {
@@ -915,6 +933,26 @@ pub fn sends_off_mac(command: &str, ctx: &Ctx) -> bool {
     })
 }
 
+/// [`sends_off_mac`] at "Full send": only the tools that move raw data to
+/// another host (`curl` and friends with a body, `ssh`, `scp`, `rsync`,
+/// `nc`…). Pushing a branch and `gh` writes follow the "Full send" floor
+/// instead, so reading a search result doesn't put a card back on every
+/// pull request.
+pub fn moves_data_off_mac(command: &str, ctx: &Ctx) -> bool {
+    // Judged as a write, not by "Full send"'s own rule for the program.
+    let ctx = &Ctx {
+        full_send: false,
+        ..ctx.clone()
+    };
+    commands(command).iter().any(|words| {
+        let words: Vec<&str> = words.iter().map(String::as_str).collect();
+        let rest = unwrapped(&words);
+        rest.first()
+            .is_some_and(|p| !matches!(base(p), "git" | "gh"))
+            && sends_off_mac(&words.join(" "), ctx)
+    })
+}
+
 /// The command a line of words runs, past leading assignments, shell
 /// keywords and wrappers (`env`, `eval`, `xargs`, `timeout`…).
 fn unwrapped<'a, 'b>(mut rest: &'a [&'b str]) -> &'a [&'b str] {
@@ -975,6 +1013,11 @@ const MESSENGERS: &[&str] = &[
     "imessage",
     "wacli",
 ];
+
+/// A chat or messaging CLI ([`MESSENGERS`]).
+pub fn is_messenger(prog: &str) -> bool {
+    MESSENGERS.contains(&prog)
+}
 
 /// Disk and system tools: each changes the Mac itself.
 const SYSTEM_TOOLS: &[&str] = &[
@@ -1060,8 +1103,7 @@ fn edit_targets<'a>(prog: &str, args: &[&'a str]) -> Vec<&'a str> {
         }
         if a.starts_with("--expression=") || a.starts_with("--file=") {
             script = true;
-        } else if prog == "perl" && a.starts_with('-') && !a.starts_with("--") && a.ends_with('e')
-        {
+        } else if prog == "perl" && a.starts_with('-') && !a.starts_with("--") && a.ends_with('e') {
             // `-pie 's/a/b/'`, `-pi -e`: the code follows.
             script = true;
             i += 2;
@@ -1105,8 +1147,9 @@ fn program(prog: &str, args: &[&str], ctx: &Ctx, outside: bool, known: bool) -> 
         // `crontab -l` only lists.
         return !(prog == "crontab" && args == ["-l"]);
     }
+    // Sending as the user is what "Full send" lets through.
     if MESSENGERS.contains(&prog) {
-        return true;
+        return !ctx.full_send;
     }
     let edits_in_place = !matches!(prog, "sed" | "perl")
         || args
@@ -1125,7 +1168,7 @@ fn program(prog: &str, args: &[&str], ctx: &Ctx, outside: bool, known: bool) -> 
         // protected destination or a credential source asks.
         let dest_or_secret = targets.iter().enumerate().any(|(n, a)| {
             resolve_known(a, ctx, known).is_some_and(|p| {
-                credential_store(&p, ctx)
+                secret_to_read(&p, ctx)
                     || (protected(&p, ctx)
                         && (n + 1 == targets.len()
                             || !matches!(prog, "cp" | "rsync" | "ditto" | "ln" | "install")))
@@ -1133,6 +1176,11 @@ fn program(prog: &str, args: &[&str], ctx: &Ctx, outside: bool, known: bool) -> 
         });
         if dest_or_secret {
             return true;
+        }
+    }
+    if ctx.full_send {
+        if let Some(asks) = full_send_program(prog, args, ctx) {
+            return asks;
         }
     }
     match prog {
@@ -1204,7 +1252,7 @@ fn program(prog: &str, args: &[&str], ctx: &Ctx, outside: bool, known: bool) -> 
         }
         "osascript" => {
             let text = args.join(" ").to_ascii_lowercase();
-            OSASCRIPT_SENDS.iter().any(|w| text.contains(w))
+            !ctx.full_send && OSASCRIPT_SENDS.iter().any(|w| text.contains(w))
         }
         "curl" => curl(args, outside),
         "wget" => {
@@ -1340,6 +1388,8 @@ fn gh(args: &[&str]) -> bool {
                 | "deploy-key"
         ),
         "gist" => matches!(action, "create" | "edit" | "delete"),
+        // Prints the user's GitHub token.
+        "auth" => action == "token",
         "workflow" => matches!(action, "run" | "enable" | "disable"),
         "run" => matches!(action, "rerun" | "cancel" | "delete"),
         "secret" | "variable" | "label" | "ruleset" | "cache" => {
@@ -1483,6 +1533,336 @@ fn curl(args: &[&str], outside: bool) -> bool {
     write && (outside || !all_local(args))
 }
 
+/* ------------------------------------------------------------ Full send */
+
+/// Branches a push to which still asks at "Full send": the default branch
+/// and the ones that usually deploy.
+const PROTECTED_BRANCHES: &[&str] = &[
+    "main",
+    "master",
+    "production",
+    "prod",
+    "live",
+    "release",
+    "stable",
+    "trunk",
+    "gh-pages",
+];
+
+/// Payment APIs: a write to one spends (or moves) the user's money.
+const PAY_API_HOSTS: &[&str] = &[
+    "api.stripe.com",
+    "api.paypal.com",
+    "api-m.paypal.com",
+    "connect.squareup.com",
+    "api.squareup.com",
+    "api.braintreegateway.com",
+    "api.adyen.com",
+    "api.checkout.com",
+    "api.coinbase.com",
+    "api.wise.com",
+    "api.transferwise.com",
+    "api.mollie.com",
+    "api.razorpay.com",
+    "api.lemonsqueezy.com",
+    "api.paddle.com",
+];
+
+/// The "Full send" answer for the programs whose rule it changes: `None`
+/// means "Go hard"'s rule (the floor's own items: system tools, `sudo`,
+/// credential stores, `rm -r` outside the deletable folders, deploys to
+/// production, Stripe live and package publishing are checked as at "Go
+/// hard"). Sending as the user runs: mail and chat CLIs, `git send-email`,
+/// `gh` comments, issues and pull requests, network writes, preview deploys.
+fn full_send_program(prog: &str, args: &[&str], ctx: &Ctx) -> Option<bool> {
+    Some(match prog {
+        "git" => git_full_send(args, ctx),
+        "gh" => gh_full_send(args),
+        "curl" | "wget" | "http" | "https" | "xh" | "xhs" => {
+            // A write to a payment API spends; any other write sends.
+            let go_hard = Ctx {
+                full_send: false,
+                ..ctx.clone()
+            };
+            program(prog, args, &go_hard, false, true) && args.iter().any(|a| pay_api(a))
+        }
+        "vercel" => {
+            let pos = positional(args);
+            const ASKS: &[&str] = &[
+                "promote", "alias", "rollback", "remove", "rm", "redeploy", "secrets", "secret",
+            ];
+            has(args, &["--prod", "--production", "--target=production"])
+                || args
+                    .windows(2)
+                    .any(|w| w[0] == "--target" && w[1] == "production")
+                || pos.first().is_some_and(|s| ASKS.contains(s))
+                || (pos
+                    .first()
+                    .is_some_and(|s| matches!(*s, "env" | "domains" | "dns" | "certs"))
+                    && has(&pos, &["add", "rm", "remove"]))
+        }
+        _ => return None,
+    })
+}
+
+/// A web address (or bare host) on a payment API.
+fn pay_api(arg: &str) -> bool {
+    let rest = arg.split_once("://").map(|(_, r)| r).unwrap_or(arg);
+    let host = rest
+        .split(['/', ':', '?', '#'])
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    PAY_API_HOSTS
+        .iter()
+        .any(|h| host == *h || host.ends_with(&format!(".{h}")))
+}
+
+/// `git` at "Full send": a push asks only when it goes to a protected
+/// branch (or one it can't tell), forces, deletes a remote branch, mirrors
+/// or pushes tags. Everything else in `git` runs, `send-email` included.
+fn git_full_send(args: &[&str], ctx: &Ctx) -> bool {
+    let mut i = 0;
+    let mut dir: Option<PathBuf> = None;
+    while i < args.len() {
+        let a = args[i];
+        if a == "-C" {
+            dir = args.get(i + 1).and_then(|d| resolve(d, ctx));
+            i += 2;
+        } else if matches!(a, "-c" | "--git-dir" | "--work-tree" | "--namespace") {
+            i += 2;
+        } else if a.starts_with('-') {
+            i += 1;
+        } else {
+            break;
+        }
+    }
+    if args.get(i) != Some(&"push") {
+        return false;
+    }
+    let rest = &args[i + 1..];
+    let cwd = dir.unwrap_or_else(|| ctx.cwd.clone());
+    // Forcing, deleting, mirroring or tagging can't be taken back.
+    const ASKS: &[&str] = &[
+        "-f",
+        "-d",
+        "--mirror",
+        "--all",
+        "--branches",
+        "--prune",
+        "--tags",
+        "--follow-tags",
+    ];
+    if rest.iter().any(|a| {
+        ASKS.contains(a)
+            || a.starts_with("--force")
+            || a.starts_with("--delete")
+            || (a.starts_with('-') && !a.starts_with("--") && (a.contains('f') || a.contains('d')))
+    }) {
+        return true;
+    }
+    // Flags that take a value: their value isn't a refspec.
+    const TAKES: &[&str] = &["-o", "--push-option", "--repo", "--receive-pack", "--exec"];
+    let mut pos = Vec::new();
+    let mut j = 0;
+    while j < rest.len() {
+        let a = rest[j];
+        if TAKES.contains(&a) {
+            j += 2;
+            continue;
+        }
+        if !a.starts_with('-') {
+            pos.push(a);
+        }
+        j += 1;
+    }
+    let on_protected = || current_branch(&cwd).is_none_or(|b| protected_branch(&b));
+    let refspecs: Vec<&str> = pos.iter().skip(1).copied().collect();
+    if refspecs.is_empty() {
+        // `git push` / `git push origin`: the branch it's on, read from the
+        // working copy; unknown asks.
+        return on_protected();
+    }
+    refspecs.iter().any(|r| {
+        if r.starts_with('+') || r.starts_with(':') {
+            return true;
+        }
+        let dest = r.rsplit_once(':').map(|(_, d)| d).unwrap_or(r);
+        if dest == "HEAD" || dest == "@" {
+            return on_protected();
+        }
+        // A tag releases; a pattern or a variable can't be told.
+        dest.contains('*')
+            || dest.contains('$')
+            || dest.starts_with("refs/tags/")
+            || protected_branch(dest)
+    })
+}
+
+/// `refs/heads/main` or `main`: a protected branch.
+fn protected_branch(name: &str) -> bool {
+    let name = name.trim();
+    let name = name.strip_prefix("refs/heads/").unwrap_or(name);
+    PROTECTED_BRANCHES.contains(&name)
+}
+
+/// The branch the working copy at `cwd` is on (`.git/HEAD`, following a
+/// worktree's `gitdir:`), when it's on one. The remote's default branch
+/// (`refs/remotes/origin/HEAD`) reads as `main`, whatever it's called.
+fn current_branch(cwd: &Path) -> Option<String> {
+    let repo = repo_of(cwd)?;
+    let dot = repo.join(".git");
+    let gitdir = if dot.is_file() {
+        let text = std::fs::read_to_string(&dot).ok()?;
+        let p = PathBuf::from(text.trim().strip_prefix("gitdir:")?.trim());
+        if p.is_absolute() {
+            p
+        } else {
+            repo.join(p)
+        }
+    } else {
+        dot
+    };
+    let head = std::fs::read_to_string(gitdir.join("HEAD")).ok()?;
+    let branch = head.trim().strip_prefix("ref: refs/heads/")?.to_string();
+    // A worktree's common folder holds the remotes.
+    let common = std::fs::read_to_string(gitdir.join("commondir"))
+        .ok()
+        .map(|c| {
+            let p = PathBuf::from(c.trim());
+            if p.is_absolute() {
+                p
+            } else {
+                gitdir.join(p)
+            }
+        })
+        .unwrap_or_else(|| gitdir.clone());
+    if let Ok(default) = std::fs::read_to_string(common.join("refs/remotes/origin/HEAD")) {
+        if default.trim().strip_prefix("ref: refs/remotes/origin/") == Some(branch.as_str()) {
+            return Some("main".into());
+        }
+    }
+    Some(branch)
+}
+
+/// `gh` at "Full send": issues, pull requests, comments, reviews, gists
+/// and repos it makes run. Merging, releases, deleting or transferring,
+/// secrets and branch rules, starting workflows (they deploy) and the
+/// user's keys and sign-in ask.
+fn gh_full_send(args: &[&str]) -> bool {
+    let pos = positional(args);
+    let (Some(group), action) = (pos.first().copied(), pos.get(1).copied()) else {
+        return false;
+    };
+    let action = action.unwrap_or("");
+    match group {
+        "pr" => action == "merge",
+        "issue" => matches!(action, "delete" | "transfer"),
+        "repo" => matches!(
+            action,
+            "delete" | "archive" | "rename" | "deploy-key" | "transfer"
+        ),
+        "gist" | "run" | "label" | "cache" => action == "delete",
+        "release" | "workflow" | "secret" | "variable" | "ruleset" => gh(args),
+        "auth" | "ssh-key" | "gpg-key" => action != "status",
+        "api" => {
+            if !gh(args) {
+                return false;
+            }
+            let delete = args.windows(2).any(|w| {
+                (w[0] == "-X" || w[0] == "--method") && w[1].eq_ignore_ascii_case("DELETE")
+            }) || args.iter().any(|a| {
+                a.eq_ignore_ascii_case("-XDELETE") || a.eq_ignore_ascii_case("--method=DELETE")
+            });
+            let path = pos.get(1).copied().unwrap_or("").to_ascii_lowercase();
+            const ASKS: &[&str] = &[
+                "/merge",
+                "/merges",
+                "secrets",
+                "keys",
+                "/releases",
+                "/git/refs",
+                "protection",
+                "rulesets",
+                "/collaborators",
+                "/transfer",
+                "/dispatches",
+                "/deployments",
+            ];
+            delete || ASKS.iter().any(|w| path.contains(w))
+        }
+        _ => false,
+    }
+}
+
+/// A connector at "Full send": sending, posting, publishing, scheduling and
+/// changing records run; spending money, deleting, deploying, merging and
+/// anything about keys or the account ask.
+fn connector_floor(tool: &str) -> bool {
+    let words = tool_words(tool);
+    // Credentials ask even to read ("get_password", "reveal_secret").
+    const SECRETS: &[&str] = &[
+        "password",
+        "passwords",
+        "credential",
+        "credentials",
+        "secret",
+        "secrets",
+        "token",
+        "tokens",
+        "keychain",
+        "vault",
+    ];
+    if words.iter().any(|w| SECRETS.contains(&w.as_str())) {
+        return true;
+    }
+    const READS: &[&str] = &[
+        "get", "list", "search", "fetch", "read", "find", "query", "view", "count",
+    ];
+    if words.first().is_some_and(|w| READS.contains(&w.as_str())) {
+        return false;
+    }
+    const FLOOR: &[&str] = &[
+        "charge",
+        "refund",
+        "pay",
+        "payment",
+        "payout",
+        "transfer",
+        "purchase",
+        "buy",
+        "order",
+        "checkout",
+        "subscribe",
+        "subscription",
+        "invoice",
+        "book",
+        "donate",
+        "withdraw",
+        "delete",
+        "remove",
+        "trash",
+        "destroy",
+        "purge",
+        "erase",
+        "wipe",
+        "deploy",
+        "merge",
+        "password",
+        "credential",
+        "credentials",
+        "secret",
+        "token",
+        "key",
+        "keys",
+        "account",
+        "billing",
+        "cancel",
+        "revoke",
+    ];
+    words.iter().any(|w| FLOOR.contains(&w.as_str()))
+}
+
 /* ------------------------------------------------------------ browser scripts */
 
 /// A `javascript_tool` script that would submit, post or send: a form
@@ -1490,7 +1870,26 @@ fn curl(args: &[&str], outside: bool) -> bool {
 /// changed, or a click (or Enter) where a string in the script names a
 /// control that sends (`browser_gate::sends`, `type=submit`). Anything else
 /// reads or clicks around, and runs at "Go hard".
-pub fn script_sends(input: &Value) -> bool {
+pub fn script_sends(input: &Value, level: super::independence::Level) -> bool {
+    use super::independence::Level;
+    // "Full send": a script that posts or submits is the job; one that names
+    // a control that spends money or closes the account still asks.
+    if level == Level::FullSend {
+        let code: String = ["text", "code", "script", "expression"]
+            .iter()
+            .filter_map(|k| input.get(*k).and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("\n");
+        return string_literals(&code).iter().any(|l| {
+            let spaced: String = l
+                .to_ascii_lowercase()
+                .chars()
+                .map(|c| if c.is_ascii_alphanumeric() { c } else { ' ' })
+                .collect();
+            super::browser_gate::floor_control(&spaced).is_some()
+                || super::browser_gate::password_field(&spaced)
+        });
+    }
     let code: String = ["text", "code", "script", "expression"]
         .iter()
         .filter_map(|k| input.get(*k).and_then(Value::as_str))
@@ -1544,7 +1943,8 @@ pub fn script_sends(input: &Value) -> bool {
             .chars()
             .map(|c| if c.is_ascii_alphanumeric() { c } else { ' ' })
             .collect();
-        super::browser_gate::sends(&spaced).is_some()
+        // Throwing away an unsaved edit is a step on the way (`browser_gate`).
+        super::browser_gate::sends(&spaced.replace("discard", " ")).is_some()
             || spaced
                 .split_whitespace()
                 .collect::<Vec<_>>()
@@ -1608,13 +2008,41 @@ fn connector_asks(tool: &str, outside: bool) -> bool {
     let words = tool_words(tool);
     let has = |list: &[&str]| words.iter().any(|w| list.contains(&w.as_str()));
     const SENDS_SPENDS_DELETES: &[&str] = &[
-        "send", "reply", "forward", "post", "publish", "share", "invite", "submit", "tweet",
-        "comment", "react", "charge", "refund", "pay", "payment",
-        "transfer", "purchase", "buy", "order", "book", "subscribe", "cancel", "delete",
-        "remove", "trash", "destroy", "purge", "deploy", "merge", "approve",
+        "send",
+        "reply",
+        "forward",
+        "post",
+        "publish",
+        "share",
+        "invite",
+        "submit",
+        "tweet",
+        "comment",
+        "react",
+        "charge",
+        "refund",
+        "pay",
+        "payment",
+        "transfer",
+        "purchase",
+        "buy",
+        "order",
+        "book",
+        "subscribe",
+        "cancel",
+        "delete",
+        "remove",
+        "trash",
+        "destroy",
+        "purge",
+        "deploy",
+        "merge",
+        "approve",
     ];
     // A read named after what it reads ("get_post", "list_comments") is a read.
-    const READS: &[&str] = &["get", "list", "search", "fetch", "read", "find", "query", "view", "count"];
+    const READS: &[&str] = &[
+        "get", "list", "search", "fetch", "read", "find", "query", "view", "count",
+    ];
     if words.first().is_some_and(|w| READS.contains(&w.as_str())) {
         return false;
     }
@@ -1627,9 +2055,9 @@ fn connector_asks(tool: &str, outside: bool) -> bool {
 /// A connector tool whose name says it writes anything at all.
 fn connector_writes(words: &[String]) -> bool {
     const WRITES: &[&str] = &[
-        "create", "update", "edit", "write", "archive", "move", "add", "set", "insert",
-        "upload", "draft", "schedule", "assign", "close", "upsert", "patch", "put", "modify",
-        "rename", "import", "execute", "run", "mutate", "complete",
+        "create", "update", "edit", "write", "archive", "move", "add", "set", "insert", "upload",
+        "draft", "schedule", "assign", "close", "upsert", "patch", "put", "modify", "rename",
+        "import", "execute", "run", "mutate", "complete",
     ];
     words.iter().any(|w| WRITES.contains(&w.as_str()))
 }
@@ -1641,3 +2069,7 @@ mod tests;
 #[cfg(test)]
 #[path = "go_hard_hardening_tests.rs"]
 mod hardening_tests;
+
+#[cfg(test)]
+#[path = "full_send_tests.rs"]
+mod full_send_tests;

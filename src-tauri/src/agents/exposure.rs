@@ -36,6 +36,11 @@ use super::independence::Level;
 pub const LINE: &str =
     "Asking before it sends anything or runs a new package, because it read outside content";
 
+/// The same at "Full send", where only raw data moved off this Mac and new
+/// packages ask after outside content.
+pub const LINE_FULL_SEND: &str =
+    "Asking before it moves data to another server or runs a new package, because it read outside content";
+
 /// Agents whose turn in progress read outside content.
 static MARKED: Mutex<Option<HashMap<String, ()>>> = Mutex::new(None);
 
@@ -143,11 +148,15 @@ pub fn mark_read(agent_id: &str, what: &str) {
     let level = super::store::get(agent_id)
         .map(|a| super::policy::chosen_level(&a))
         .unwrap_or_default();
-    if level == Level::GoHard && !super::runner::from_outside(agent_id) {
+    if level.goes_hard() && !super::runner::from_outside(agent_id) {
         super::work::on_step(
             agent_id,
             super::work::StepKind::Approval,
-            LINE,
+            if level == Level::FullSend {
+                LINE_FULL_SEND
+            } else {
+                LINE
+            },
             super::store::now_ms(),
         );
     }

@@ -3107,6 +3107,7 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         let bound = store::get(&agent_id).ok().and_then(|a| a.project);
         super::workplace::begin(&agent_id, bound.as_deref().map(std::path::Path::new));
         super::exposure::begin(&agent_id);
+        super::full_send::begin(&agent_id);
         super::results::discard(&agent_id);
         super::dev_servers::begin(&agent_id);
         if let Some(copy) = &made {
@@ -3144,6 +3145,10 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         if let Some(mut card) = shared {
             card.ts = store::now_ms();
             let _ = record(&app, card);
+        }
+        // What "Full send" sent without asking, in one plain line.
+        if let Some(line) = super::full_send::take_summary(&agent_id) {
+            let _ = record_in_turn(&app, new_message(&agent_id, MessageKind::Note, line));
         }
         // A "Test it" run closes with its turn (a line if it never reported).
         super::preview_test::turn_ended(&app, &agent_id, since);

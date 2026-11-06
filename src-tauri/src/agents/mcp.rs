@@ -2322,7 +2322,22 @@ async fn decide_inner(
     // The user's browser: reads on the sites it was given go through; any
     // other site, and every click, keystroke or form, asks (`browser::gate`).
     let browser_asks = match super::browser::gate(caller, tool, input, outside) {
-        super::browser::Gate::Allow => return Decision::Allow,
+        super::browser::Gate::Allow => {
+            // "Full send" let through what "Go hard" would have asked for:
+            // a line in "What it did", and the turn's summary (`full_send`).
+            if let Some((verb, place)) =
+                super::browser_gate::sent_at_full_send(caller, tool, input, outside)
+            {
+                super::work::on_step(
+                    &caller.id,
+                    super::work::StepKind::Approval,
+                    &format!("{SENT_LINE} · {}", one_line(tool, input)),
+                    store::now_ms(),
+                );
+                super::full_send::note(&caller.id, verb, &place);
+            }
+            return Decision::Allow;
+        }
         super::browser::Gate::Refuse(why) => return Decision::Deny(why),
         super::browser::Gate::Ask => true,
         super::browser::Gate::NotBrowser => false,
@@ -2346,15 +2361,35 @@ async fn decide_inner(
     // that posts): "Go hard" still asks for those. In a turn that read
     // outside content, sending to the network or running a package new to
     // the project asks (`exposure`).
+    // At "Full send" (never for outside text) only raw data moved off this
+    // Mac asks after outside content; pushes and `gh` follow its floor.
+    let full_send = super::independence::for_turn(super::policy::chosen_level(caller), outside)
+        == super::independence::Level::FullSend;
     let guarded = browser_asks
         || super::exposure::read_outside(&caller.id)
-            && super::autoallow::Ctx::for_agent(caller)
-                .is_none_or(|ctx| super::autoallow::after_outside_asks(tool, input, &ctx));
+            && super::autoallow::Ctx::for_agent(caller).is_none_or(|mut ctx| {
+                ctx.full_send = full_send;
+                super::autoallow::after_outside_asks(tool, input, &ctx)
+            });
     if let Some(level) = auto_allowed(caller, tool, input, outside).filter(|_| !guarded) {
+        // What "Go hard" would have asked for says so, and goes in the
+        // turn's one summary line (`full_send`).
+        let sent = level == super::independence::Level::FullSend
+            && super::autoallow::Ctx::for_agent(caller).is_some_and(|ctx| {
+                super::autoallow::auto(super::independence::Level::GoHard, false, tool, input, &ctx)
+                    .is_none()
+            });
+        let line = if sent {
+            let (verb, place) = super::full_send::describe(tool, input);
+            super::full_send::note(&caller.id, verb, &place);
+            format!("{SENT_LINE} · {}", one_line(tool, input))
+        } else {
+            auto_line(level, tool, input)
+        };
         super::work::on_step(
             &caller.id,
             super::work::StepKind::Approval,
-            &auto_line(level, tool, input),
+            &line,
             store::now_ms(),
         );
         return Decision::Allow;
@@ -2410,12 +2445,19 @@ fn auto_allowed(
 /// The level a receipt names: "Go hard" answers at its own level even for a
 /// turn answering outside text (`go_hard`); the others as the turn runs.
 fn receipt_level(chosen: super::independence::Level, outside: bool) -> super::independence::Level {
-    if chosen == super::independence::Level::GoHard {
+    use super::independence::Level;
+    // "Full send" answers outside text by "Go hard"'s rules (`autoallow`).
+    if chosen == Level::FullSend && outside {
+        Level::GoHard
+    } else if chosen.goes_hard() {
         chosen
     } else {
         super::independence::for_turn(chosen, outside)
     }
 }
+
+/// The timeline's line for a send "Full send" let through.
+pub(super) const SENT_LINE: &str = "Sent without asking — Full send";
 
 /// "Allowed automatically — Go hard · ls -la ~/Notes".
 fn auto_line(level: super::independence::Level, tool: &str, input: &Value) -> String {

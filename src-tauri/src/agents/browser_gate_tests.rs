@@ -524,3 +524,262 @@ fn cards_are_in_plain_words() {
         );
     }
 }
+
+/* ------------------------------------------- Go hard editors, Full send */
+
+/// The owner's scheduled-post editors (labels from real cards, hosts
+/// fictional): an X-like editor, open on a task the user asked for.
+fn editor() -> Page {
+    let mut p = Page::default();
+    on_answer(
+        &mut p,
+        "button \"Will send on Fri, Nov 7 at 10:00 AM\" [ref_1]\ntextbox \"Post text\" [ref_2]\nbutton \"Discard changes\" [ref_3]\nbutton \"Close\" [ref_4]\nbutton \"Schedule\" [ref_5]\nbutton \"Post\" [ref_6]\nbutton \"Edit post\" [ref_7]\nbutton \"Buy credits\" [ref_8]\ntextbox \"Password\" [ref_9]\nbutton \"Delete account\" [ref_10]\nbutton \"Send now\" [ref_11]\ntab \"Scheduled posts\" [ref_12]",
+    );
+    p.tabs
+        .insert(3, "https://x.example/compose/post/unsent/scheduled".into());
+    p.tabs.insert(4, "https://shop.example/checkout".into());
+    p
+}
+
+fn in_editor(level: Level, tool: &str, input: serde_json::Value) -> Gate {
+    gate_with(true, level, &agent(), &t(tool), &input, false, &editor())
+}
+
+fn click(r: &str) -> serde_json::Value {
+    json!({"action": "left_click", "ref": r, "tabId": 3})
+}
+
+#[test]
+fn at_go_hard_only_the_final_send_in_an_editor_asks() {
+    // Opening a scheduled post, the text box, discarding, closing, editing.
+    for r in ["ref_1", "ref_2", "ref_3", "ref_4", "ref_7", "ref_12"] {
+        assert_eq!(
+            in_editor(Level::GoHard, "computer", click(r)),
+            Gate::Allow,
+            "{r}"
+        );
+    }
+    assert_eq!(
+        in_editor(
+            Level::GoHard,
+            "form_input",
+            json!({"ref": "ref_2", "value": "New copy", "tabId": 3})
+        ),
+        Gate::Allow
+    );
+    assert_eq!(
+        in_editor(
+            Level::GoHard,
+            "computer",
+            json!({"action": "type", "text": "Fixed typo", "tabId": 3})
+        ),
+        Gate::Allow
+    );
+    // The owner's seven cards, as one batch: now none.
+    let batch = json!({"actions": [
+        {"tool": "computer", "input": click("ref_1")},
+        {"tool": "computer", "input": click("ref_2")},
+        {"tool": "form_input", "input": {"ref": "ref_2", "value": "x", "tabId": 3}},
+        {"tool": "computer", "input": click("ref_3")},
+    ]});
+    assert_eq!(
+        in_editor(Level::GoHard, "browser_batch", batch),
+        Gate::Allow
+    );
+    // The final step still asks at Go hard.
+    for r in ["ref_5", "ref_6", "ref_11", "ref_8", "ref_10"] {
+        assert_eq!(
+            in_editor(Level::GoHard, "computer", click(r)),
+            Gate::Ask,
+            "{r}"
+        );
+    }
+    let posting = json!({"actions": [
+        {"tool": "computer", "input": click("ref_2")},
+        {"tool": "computer", "input": click("ref_6")},
+    ]});
+    assert_eq!(
+        in_editor(Level::GoHard, "browser_batch", posting.clone()),
+        Gate::Ask
+    );
+    // A password box asks at Go hard and above.
+    let pw = json!({"ref": "ref_9", "value": "x", "tabId": 3});
+    assert_eq!(
+        in_editor(Level::GoHard, "form_input", pw.clone()),
+        Gate::Ask
+    );
+    assert_eq!(in_editor(Level::FullSend, "form_input", pw), Gate::Ask);
+    // "Use good judgement" is as before: a send word asks.
+    assert_eq!(
+        in_editor(Level::Judgement, "computer", click("ref_1")),
+        Gate::Ask
+    );
+    // At Full send the final send runs too.
+    for r in ["ref_5", "ref_6", "ref_11", "ref_1", "ref_3"] {
+        assert_eq!(
+            in_editor(Level::FullSend, "computer", click(r)),
+            Gate::Allow,
+            "{r}"
+        );
+    }
+    assert_eq!(
+        in_editor(Level::FullSend, "browser_batch", posting),
+        Gate::Allow
+    );
+}
+
+#[test]
+fn full_send_still_asks_for_money_accounts_and_secrets_in_the_browser() {
+    for r in ["ref_8", "ref_10"] {
+        assert_eq!(
+            in_editor(Level::FullSend, "computer", click(r)),
+            Gate::Ask,
+            "{r}"
+        );
+    }
+    // Any click on a checkout page, or a pay host.
+    let checkout = json!({"action": "left_click", "coordinate": [10, 10], "tabId": 4});
+    assert_eq!(in_editor(Level::FullSend, "computer", checkout), Gate::Ask);
+    assert_eq!(
+        at(
+            Level::FullSend,
+            "computer",
+            json!({"action": "left_click", "coordinate": [1, 1], "tabId": 8})
+        ),
+        Gate::Ask
+    );
+    assert_eq!(
+        at(
+            Level::FullSend,
+            "computer",
+            json!({"action": "left_click", "ref": "ref_7", "tabId": 7})
+        ),
+        Gate::Ask,
+        "Place order"
+    );
+    assert_eq!(
+        at(
+            Level::FullSend,
+            "computer",
+            json!({"action": "left_click", "ref": "ref_8", "tabId": 7})
+        ),
+        Gate::Ask,
+        "Delete project"
+    );
+    // Uploads: what it posts runs; a key file asks.
+    assert_eq!(
+        in_editor(
+            Level::FullSend,
+            "file_upload",
+            json!({"paths": ["/Users/fictional/Desktop/post1.png"], "ref": "ref_2"})
+        ),
+        Gate::Allow
+    );
+    assert_eq!(
+        in_editor(
+            Level::FullSend,
+            "file_upload",
+            json!({"paths": ["/Users/fictional/.ssh/id_ed25519"], "ref": "ref_2"})
+        ),
+        Gate::Ask
+    );
+    assert_eq!(
+        in_editor(
+            Level::GoHard,
+            "file_upload",
+            json!({"paths": ["/Users/fictional/Desktop/post1.png"]})
+        ),
+        Gate::Ask
+    );
+}
+
+#[test]
+fn scripts_that_read_or_click_run_and_ones_that_post_follow_the_level() {
+    let js = |code: &str| json!({"action": "javascript_exec", "text": code, "tabId": 3});
+    let reads = js("document.querySelectorAll('[data-testid=tweetText]').length");
+    let edits = js("document.querySelector('button[aria-label=\"Discard changes\"]').click()");
+    let posts = js("document.querySelector('button[aria-label=\"Post\"]').click()");
+    let pays = js("document.querySelector('button[aria-label=\"Buy credits\"]').click()");
+    for level in [Level::GoHard, Level::FullSend] {
+        assert_eq!(
+            in_editor(level, "javascript_tool", reads.clone()),
+            Gate::Allow
+        );
+        assert_eq!(
+            in_editor(level, "javascript_tool", edits.clone()),
+            Gate::Allow
+        );
+        assert_eq!(in_editor(level, "javascript_tool", pays.clone()), Gate::Ask);
+    }
+    assert_eq!(
+        in_editor(Level::GoHard, "javascript_tool", posts.clone()),
+        Gate::Ask
+    );
+    assert_eq!(
+        in_editor(Level::FullSend, "javascript_tool", posts),
+        Gate::Allow
+    );
+    // Below Go hard a script always asks.
+    assert_eq!(
+        in_editor(Level::Judgement, "javascript_tool", reads),
+        Gate::Ask
+    );
+}
+
+#[test]
+fn outside_text_never_gets_the_browser_at_full_send() {
+    let g = gate_with(
+        true,
+        Level::FullSend,
+        &agent(),
+        &t("computer"),
+        &click("ref_6"),
+        true,
+        &editor(),
+    );
+    assert!(matches!(g, Gate::Refuse(_)));
+}
+
+#[test]
+fn final_submit_tells_the_last_step_from_the_ones_before_it() {
+    for l in [
+        "button \"Post\"",
+        "button \"Send now\"",
+        "button \"Schedule post\"",
+        "button \"Publish\"",
+        "button \"Pay $12\"",
+        "button \"Delete account\"",
+        "button \"Reply\"",
+    ] {
+        assert!(final_submit(l, Level::GoHard).is_some(), "{l}");
+    }
+    for l in [
+        "button \"Will send on Fri, Nov 7\"",
+        "textbox \"Post text\"",
+        "button \"Discard changes\"",
+        "button \"Close\"",
+        "button \"Edit post\"",
+        "tab \"Scheduled posts\"",
+        "button \"New post\"",
+        "link \"Drafts\"",
+    ] {
+        assert!(final_submit(l, Level::GoHard).is_none(), "{l}");
+    }
+    for l in [
+        "button \"Post\"",
+        "button \"Send\"",
+        "button \"Schedule\"",
+        "button \"Delete post\"",
+    ] {
+        assert!(final_submit(l, Level::FullSend).is_none(), "{l}");
+    }
+    for l in [
+        "button \"Buy now\"",
+        "button \"Place order\"",
+        "button \"Delete account\"",
+        "button \"Delete repository\"",
+        "button \"Subscribe\"",
+    ] {
+        assert!(final_submit(l, Level::FullSend).is_some(), "{l}");
+    }
+}

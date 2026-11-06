@@ -7,7 +7,10 @@
 //! decide or do. `GoHard` ("Go hard — get it done"): finish what you're
 //! asked, and before asking the user to do anything, check that they haven't
 //! already asked for it and that every way you have of doing it yourself has
-//! been tried.
+//! been tried. `FullSend` ("Full send — let it rip"): Go hard, and sending,
+//! posting and publishing what the user asked for run without a card; only
+//! the floor asks (`go_hard::full_send_program`, `browser_gate::final_submit`).
+//! Never for outside text ([`for_turn`]).
 //!
 //! **What it changes.** The level is one short, app-owned section of every
 //! agent's system prompt ([`prompt_section`]), built from code each turn, so
@@ -46,6 +49,10 @@ pub enum Level {
     #[default]
     Judgement,
     GoHard,
+    /// "Full send — let it rip": Go hard, and sending, posting and
+    /// publishing what the user asked for run without a card too. Only the
+    /// floor asks (`go_hard`, "Full send"). Never for outside text.
+    FullSend,
 }
 
 impl Level {
@@ -58,10 +65,12 @@ impl Level {
         {
             "often" | "check_with_me_often" => Ok(Level::Often),
             "judgement" | "judgment" | "use_good_judgement" => Ok(Level::Judgement),
-            "go_hard" => Ok(Level::GoHard),
+            "go_hard" | "go_hard_get_it_done" => Ok(Level::GoHard),
+            "full_send" | "go_full_send" | "full_send_let_it_rip" | "let_it_rip" | "just_rip"
+            | "rip" => Ok(Level::FullSend),
             _ => Err(super::err_invalid(
                 "level",
-                "Pick often (Check with me often), judgement (Use good judgement) or go_hard (Go hard).",
+                "Pick often (Check with me often), judgement (Use good judgement), go_hard (Go hard) or full_send (Full send).",
             )),
         }
     }
@@ -71,7 +80,14 @@ impl Level {
             Level::Often => "Check with me often",
             Level::Judgement => "Use good judgement",
             Level::GoHard => "Go hard — get it done",
+            Level::FullSend => "Full send — let it rip",
         }
+    }
+
+    /// "Go hard" or "Full send": allow by default with a short list that
+    /// asks (`go_hard`).
+    pub fn goes_hard(self) -> bool {
+        matches!(self, Level::GoHard | Level::FullSend)
     }
 
     /// The level in a receipt line ("Allowed automatically — Go hard").
@@ -80,6 +96,7 @@ impl Level {
             Level::Often => "Check with me often",
             Level::Judgement => "Use good judgement",
             Level::GoHard => "Go hard",
+            Level::FullSend => "Full send",
         }
     }
 }
@@ -104,7 +121,13 @@ each step; did they already ask you to do it? Then do it. Only stop for their mo
 sending or publishing as them, pushing, deleting their data, or credentials: ask once, clearly, then \
 carry on with everything else.";
 
-/// Said at "Use good judgement" and "Go hard": do whatever it takes.
+const FULL_SEND: &str = "The user chose \"Full send — let it rip\". Do what you're asked, start to \
+finish, without asking: sending, posting, scheduling, commenting and publishing what they asked for \
+in this chat just happen, and you say plainly what you sent where. Only stop for spending their money, \
+credentials, deleting things that can't come back, pushing to production or the main branch, and \
+changes to how their Mac starts up: those still ask, once.";
+
+/// Said at "Use good judgement", "Go hard" and "Full send": do whatever it takes.
 const RELENTLESS: &str = "Be relentless and resourceful: do whatever it takes to get the job done. \
 When something blocks you, try every route you have before asking: your tools, the user's files and \
 CLIs on this Mac, their connected apps, their signed-in Chrome if you have it, search, a small script \
@@ -119,15 +142,16 @@ pub fn prompt_section(level: Level) -> String {
         Level::Often => format!("{HEADING}\n\n{OFTEN} {WALL}"),
         Level::Judgement => format!("{HEADING}\n\n{JUDGEMENT} {RELENTLESS} {WALL}"),
         Level::GoHard => format!("{HEADING}\n\n{GO_HARD} {RELENTLESS} {WALL}"),
+        Level::FullSend => format!("{HEADING}\n\n{FULL_SEND} {RELENTLESS} {WALL}"),
     }
 }
 
-/// The level a turn runs at: the user's, but never "Go hard" when it answers
-/// outside text. Unattended routines still do their work at "Use good
+/// The level a turn runs at: the user's, but never "Go hard" or "Full send"
+/// when it answers outside text. Unattended routines still do their work at "Use good
 /// judgement" (a plan-and-wait level would leave them unfinished); the
 /// approval wall and the outside-text taint gate everything consequential.
 pub fn for_turn(chosen: Level, outside: bool) -> Level {
-    if outside && chosen == Level::GoHard {
+    if outside && chosen.goes_hard() {
         Level::Judgement
     } else {
         chosen
@@ -183,10 +207,15 @@ mod tests {
 
     #[test]
     fn each_level_has_its_own_short_fixed_section() {
-        let sections: Vec<String> = [Level::Often, Level::Judgement, Level::GoHard]
-            .into_iter()
-            .map(prompt_section)
-            .collect();
+        let sections: Vec<String> = [
+            Level::Often,
+            Level::Judgement,
+            Level::GoHard,
+            Level::FullSend,
+        ]
+        .into_iter()
+        .map(prompt_section)
+        .collect();
         for s in &sections {
             assert!(s.starts_with(HEADING));
             assert!(s.ends_with(WALL), "every level says approvals don't change");
@@ -195,7 +224,13 @@ mod tests {
             // Nothing that changes per turn: the cache holds.
             assert!(!s.chars().any(|c| c.is_ascii_digit()));
         }
-        assert_eq!(sections.len(), 3);
+        assert_eq!(sections.len(), 4);
+        assert_ne!(sections[2], sections[3]);
+        let full = &sections[3];
+        assert!(full.contains("sending, posting, scheduling, commenting and publishing"));
+        assert!(full.contains("spending their money"));
+        assert!(full.contains("credentials"));
+        assert!(full.contains(RELENTLESS));
         assert_ne!(sections[0], sections[1]);
         assert_ne!(sections[1], sections[2]);
         assert_eq!(prompt_section(Level::GoHard), prompt_section(Level::GoHard));
@@ -226,9 +261,15 @@ mod tests {
     #[test]
     fn outside_text_never_goes_hard() {
         assert_eq!(for_turn(Level::GoHard, true), Level::Judgement);
+        assert_eq!(for_turn(Level::FullSend, true), Level::Judgement);
         assert_eq!(for_turn(Level::Judgement, true), Level::Judgement);
         assert_eq!(for_turn(Level::Often, true), Level::Often);
-        for chosen in [Level::Often, Level::Judgement, Level::GoHard] {
+        for chosen in [
+            Level::Often,
+            Level::Judgement,
+            Level::GoHard,
+            Level::FullSend,
+        ] {
             assert_eq!(for_turn(chosen, false), chosen);
         }
     }
@@ -239,6 +280,10 @@ mod tests {
         assert_eq!(Level::parse("Go hard").unwrap(), Level::GoHard);
         assert_eq!(Level::parse("judgment").unwrap(), Level::Judgement);
         assert_eq!(Level::parse("often").unwrap(), Level::Often);
+        assert_eq!(serde_json::to_value(Level::FullSend).unwrap(), "full_send");
+        assert_eq!(Level::parse("go full send").unwrap(), Level::FullSend);
+        assert_eq!(Level::parse("Full send").unwrap(), Level::FullSend);
+        assert_eq!(Level::parse("let it rip").unwrap(), Level::FullSend);
         assert!(Level::parse("yolo").is_err());
         let saved: Saved = serde_json::from_str(r#"{"level":"reckless"}"#).unwrap();
         assert_eq!(saved.level, Level::Judgement);

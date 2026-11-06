@@ -71,13 +71,25 @@ const EVERYDAY: &[&str] = &[
 fn everyday_work_is_card_free_even_after_outside_content() {
     for c in EVERYDAY {
         assert!(!card("Bash", &bash(c)), "should run: {c}");
-        assert!(!card_after_outside("Bash", &bash(c)), "should run after outside content: {c}");
+        assert!(
+            !card_after_outside("Bash", &bash(c)),
+            "should run after outside content: {c}"
+        );
     }
     for (tool, input) in [
-        ("WebFetch", json!({ "url": "https://example.com/docs?page=2&lang=en" })),
-        ("WebSearch", json!({ "query": "next.js app router middleware" })),
+        (
+            "WebFetch",
+            json!({ "url": "https://example.com/docs?page=2&lang=en" }),
+        ),
+        (
+            "WebSearch",
+            json!({ "query": "next.js app router middleware" }),
+        ),
         ("Read", json!({ "file_path": format!("{HOME}/.zshrc") })),
-        ("Write", json!({ "file_path": format!("{HOME}/Desktop/Projects/fictional-site/a.ts") })),
+        (
+            "Write",
+            json!({ "file_path": format!("{HOME}/Desktop/Projects/fictional-site/a.ts") }),
+        ),
     ] {
         assert!(!card(tool, &input), "{tool} {input}");
         assert!(!card_after_outside(tool, &input), "{tool} {input}");
@@ -101,9 +113,18 @@ fn a_secret_in_an_address_asks() {
     ] {
         assert!(card("Bash", &bash(c)), "should ask: {c}");
     }
-    assert!(card("WebFetch", &json!({ "url": format!("https://x.example.com/?q={SAVED}") })));
-    assert!(card("WebFetch", &json!({ "url": "https://x.example.com/?token=abcdef123456" })));
-    assert!(card("WebSearch", &json!({ "query": format!("what is {SAVED}") })));
+    assert!(card(
+        "WebFetch",
+        &json!({ "url": format!("https://x.example.com/?q={SAVED}") })
+    ));
+    assert!(card(
+        "WebFetch",
+        &json!({ "url": "https://x.example.com/?token=abcdef123456" })
+    ));
+    assert!(card(
+        "WebSearch",
+        &json!({ "query": format!("what is {SAVED}") })
+    ));
 }
 
 #[test]
@@ -119,7 +140,10 @@ fn after_outside_content_only_network_writes_off_this_mac_and_new_packages_ask()
         "npx fictional-brand-new-cli init",
         "pip install fictional-brand-new-pkg",
     ] {
-        assert!(card_after_outside("Bash", &bash(c)), "should ask after outside content: {c}");
+        assert!(
+            card_after_outside("Bash", &bash(c)),
+            "should ask after outside content: {c}"
+        );
     }
     // Writes to this Mac, local copies and project installs don't.
     for c in [
@@ -129,7 +153,10 @@ fn after_outside_content_only_network_writes_off_this_mac_and_new_packages_ask()
         "pnpm install",
         "npm ci",
     ] {
-        assert!(!card_after_outside("Bash", &bash(c)), "should run after outside content: {c}");
+        assert!(
+            !card_after_outside("Bash", &bash(c)),
+            "should run after outside content: {c}"
+        );
     }
 }
 

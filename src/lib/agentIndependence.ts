@@ -4,8 +4,8 @@
  * on the phone. Worded once for the desk and the phone by the companion
  * protocol's `independence.ts`.
  *
- * It changes what agents are told on their next turn, never what asks for an
- * Allow.
+ * It changes what agents are told on their next turn and which cards are
+ * answered for the user; at "Full send" only a short floor still asks.
  *
  * @module lib/agentIndependence
  */
@@ -21,6 +21,7 @@ export {
   INDEPENDENCE_LABEL,
   INDEPENDENCE_LEVELS,
   INDEPENDENCE_QUESTION,
+  INDEPENDENCE_STILL_ASKS,
   independenceOf,
 } from '../../packages/companion-protocol/src/independence';
 

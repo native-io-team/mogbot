@@ -381,7 +381,7 @@ export const setImportChoice = (choice: ImportChoice) =>
   invoke<ImportChoice>('agents_set_import_choice', { choice });
 
 /** Mirrors `agents::independence::Level`; worded in `lib/agentIndependence`. */
-export type AgentIndependence = 'often' | 'judgement' | 'go_hard';
+export type AgentIndependence = 'often' | 'judgement' | 'go_hard' | 'full_send';
 
 export type MessageKind =
   | 'user'

@@ -59,7 +59,7 @@ pub fn allows(level: Level, class: Class) -> bool {
         (_, Class::Ask) | (Level::Often, _) => false,
         (Level::Judgement, Class::Read) => true,
         (Level::Judgement, Class::Change) => false,
-        (Level::GoHard, _) => true,
+        (Level::GoHard | Level::FullSend, _) => true,
     }
 }
 
@@ -67,9 +67,19 @@ pub fn allows(level: Level, class: Class) -> bool {
 /// it: `None` means a card. `outside`: the turn answers outside text.
 pub fn auto(chosen: Level, outside: bool, tool: &str, input: &Value, ctx: &Ctx) -> Option<Class> {
     // "Go hard" is allow-by-default with a short list that asks
-    // (`go_hard`), outside text or not: reading a page is the job.
-    if chosen == Level::GoHard {
-        if super::go_hard::asks(tool, input, ctx, outside) {
+    // (`go_hard`), outside text or not: reading a page is the job. "Full
+    // send" asks only the floor of that list, and never for outside text:
+    // a turn answering it runs at "Go hard"'s rules.
+    if chosen.goes_hard() {
+        let full = chosen == Level::FullSend && !outside;
+        let asks = if full != ctx.full_send {
+            let mut c = ctx.clone();
+            c.full_send = full;
+            super::go_hard::asks(tool, input, &c, outside)
+        } else {
+            super::go_hard::asks(tool, input, ctx, outside)
+        };
+        if asks {
             return None;
         }
         return Some(match classify(tool, input, ctx) {
@@ -103,9 +113,13 @@ pub struct Ctx {
     /// Packages the user already allowed for this project on a card
     /// (`installs::remembered`), as `npm:zod`.
     pub packages: Vec<String>,
-    /// Reads every agent's home without a card at "Go hard": the Chief and
-    /// the admins (`admin`). Others read only their own.
+    /// An admin (`admin`): the Chief and the agents the user made admins.
+    /// At "Go hard" and "Full send" every agent reads the team's homes
+    /// without a card (`go_hard::team_file`), so this no longer decides that.
     pub team_reader: bool,
+    /// The turn runs at "Full send" (never for outside text): `go_hard`
+    /// asks only its floor. Set by [`auto`], never by `for_agent`.
+    pub full_send: bool,
 }
 
 impl Ctx {
@@ -132,6 +146,7 @@ impl Ctx {
             secrets: super::egress::known(),
             packages: super::installs::remembered(&key),
             team_reader: super::admin::is_admin(agent),
+            full_send: false,
         })
     }
 
@@ -371,7 +386,7 @@ const PROFILE_PATHS: &[&str] = &[
 ];
 
 /// A file whose name says it holds a secret.
-fn sensitive_name(p: &Path) -> bool {
+pub(super) fn sensitive_name(p: &Path) -> bool {
     let Some(name) = p.file_name().and_then(|n| n.to_str()) else {
         return false;
     };
@@ -3081,7 +3096,12 @@ pub fn after_outside_asks(tool: &str, input: &Value, ctx: &Ctx) -> bool {
     }
     let command = input.get("command").and_then(Value::as_str).unwrap_or("");
     let line = super::go_hard::without_heredoc_data(command);
-    super::go_hard::sends_off_mac(command, ctx) || !new_packages(&line, ctx).is_empty()
+    let sends = if ctx.full_send {
+        super::go_hard::moves_data_off_mac(command, ctx)
+    } else {
+        super::go_hard::sends_off_mac(command, ctx)
+    };
+    sends || !new_packages(&line, ctx).is_empty()
 }
 
 /// A web address somewhere other than this Mac.

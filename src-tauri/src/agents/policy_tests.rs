@@ -1166,7 +1166,13 @@ fn working_in_a_copy_never_stops_an_edit_at_go_hard() {
     };
     let e = eff_of(&team, &locked, &ms);
     assert!(matches!(
-        verdict(&e, &ms, &places(), "Edit", &json!({ "file_path": in_place })),
+        verdict(
+            &e,
+            &ms,
+            &places(),
+            "Edit",
+            &json!({ "file_path": in_place })
+        ),
         Some(Verdict::Deny(_))
     ));
     super::super::store::set_root_for_tests(None);

@@ -59,6 +59,17 @@ describe('AgentIndependenceSettings', () => {
     expect(setIndependence).not.toHaveBeenCalled();
   });
 
+  it('offers Full send, with what still asks there', async () => {
+    store.value = { loaded: true, independence: 'full_send' };
+    render(<AgentIndependenceSettings />);
+    expect(screen.getAllByRole('radio')).toHaveLength(4);
+    expect(screen.getByRole('radio', { checked: true })).toHaveTextContent(
+      'Full send — let it rip'
+    );
+    expect(screen.getByText(/Still asks before spending money/)).toBeInTheDocument();
+    expect(screen.queryByText(/sends as you, or deletes/)).not.toBeInTheDocument();
+  });
+
   it('a failed save says why and goes back to what is saved', async () => {
     store.value = { loaded: true, independence: 'judgement' };
     setIndependence.mockRejectedValue({ type: 'Other', message: 'Disk full' });

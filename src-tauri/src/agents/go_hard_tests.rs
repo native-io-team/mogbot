@@ -224,7 +224,12 @@ fn files_and_connectors_at_go_hard() {
 
 #[test]
 fn browser_scripts_that_read_or_click_run_and_ones_that_send_ask() {
-    let js = |code: &str| script_sends(&json!({ "action": "javascript_exec", "text": code }));
+    let js = |code: &str| {
+        script_sends(
+            &json!({ "action": "javascript_exec", "text": code }),
+            crate::agents::independence::Level::GoHard,
+        )
+    };
     for code in [
         "document.title",
         "[...document.querySelectorAll('.feed-shared-update-v2')].map(e => e.innerText).slice(0, 10)",
@@ -309,9 +314,9 @@ cd /Users/fictional-tester/Desktop/Projects/fx && node /tmp/fx/h2.mjs $PWD && se
     }
 }
 
-/// The Chief (an admin) reads the team's files without a card; writes there,
-/// the app's tokens and the account files still ask; other agents read only
-/// their own home. (Real cards at "Go hard", paths fictional.)
+/// The Chief (an admin), and every other agent, reads the team's files
+/// without a card; writes there, the app's tokens and the account files
+/// still ask. (Real cards at "Go hard", paths fictional.)
 #[test]
 fn an_admin_reads_the_team_folder_without_a_card() {
     let app = format!("{HOME}/Library/Application Support/FictionalApp");
@@ -326,9 +331,10 @@ fn an_admin_reads_the_team_folder_without_a_card() {
         "cat ~/.claude/skills/voice/SKILL.md; echo ---; ls -la ~/Library/Application\\ Support/FictionalApp/agents/*/messages.jsonl; wc -l ~/Library/Application\\ Support/FictionalApp/agents/*/messages.jsonl".to_string(),
         format!("cat \"{app}/agents/b2/CLAUDE.md\""),
     ];
+    // Every agent reads the team's folder at "Go hard", not only admins.
     for c in &reads {
         assert!(!asks_as(&chief, c), "an admin should read: {c}");
-        assert!(asks_as(&ctx(), c), "another agent should ask: {c}");
+        assert!(!asks_as(&ctx(), c), "any agent should read: {c}");
     }
     assert!(!asks(
         "Read",

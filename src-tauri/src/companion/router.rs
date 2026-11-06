@@ -1781,7 +1781,7 @@ async fn run(
                 .and_then(|l| crate::agents::independence::Level::parse(l).ok())
                 .ok_or_else(|| {
                     bad_params(
-                        "How independent agents are takes a level: often, judgement or go_hard.",
+                        "How independent agents are takes a level: often, judgement, go_hard or full_send.",
                     )
                 })?;
             Ok(b.set_independence(level).await?)

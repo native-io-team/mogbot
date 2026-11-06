@@ -98,7 +98,7 @@ pub fn schema() -> Value {
                         }
                     },
                     "browser": { "type": "boolean", "description": "May use the user's signed-in browser." },
-                    "independence": { "type": "string", "enum": ["often", "judgement", "go_hard", "team"] },
+                    "independence": { "type": "string", "enum": ["often", "judgement", "go_hard", "full_send", "team"], "description": "full_send (\"Full send — let it rip\"): when the user says \"go full send\", \"let it rip\" or \"stop asking me\"." },
                     "admin": { "type": "boolean", "description": "Admins may propose changes for other agents." },
                     "rules": {
                         "type": "object",

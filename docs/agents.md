@@ -873,7 +873,9 @@ numbers, "via connector" or "(import)" in anything a person reads.
 ## How much agents do on their own
 
 One choice for the whole team (`agents/independence.rs`): **Check with me
-often**, **Use good judgement** (the default) or **Go hard — get it done**.
+often**, **Use good judgement** (the default), **Go hard — get it done** or
+**Full send — let it rip**. "Go full send" to the Chief raises one settings
+card (`propose_settings_change`, `independence: full_send`).
 Asked once in onboarding, after the engine is ready and before the hand-off
 (Skip keeps the default); kept in Settings → Agents → Independence, ⌘K "How
 independent your agents are…", and the phone's Settings
@@ -907,6 +909,37 @@ calls):
 | Check with me often | nothing (as before) |
 | Use good judgement | reads |
 | Go hard | everything except its short ask list (`agents/go_hard.rs`) |
+| Full send | everything except the floor below (`go_hard::full_send_program`, `connector_floor`) |
+
+**Full send** (the owner: "I want to be able to make it just rip"). Sending,
+posting, scheduling, commenting, emailing and publishing as the user run
+without a card: mail and chat CLIs, `git send-email`, `gh` issues, pull
+requests, comments and reviews, network writes, preview deploys, connector
+sends and posts, and every browser click but the floor's. What still asks, in
+Rust: **money** (Stripe live, writes to payment APIs, connectors that pay,
+buy, order or subscribe, clicks on pay/buy/checkout controls or pages),
+**credentials** (secret stores, the Keychain, `security`, `sudo`, `gh auth
+token`, secrets and env vars, password boxes, connectors named after secrets),
+**destruction for good** (`rm -r` outside projects, agent homes and temp;
+`gh repo delete`; deleting, forcing or mirroring a remote branch; "Delete
+account / repository / project"), **production and protected branches**
+(pushing `main`, `master`, `production`, `release`… or the remote's default
+branch, a bare `git push` on one or where it can't tell, tags, `gh pr merge`,
+releases, workflow runs, `vercel --prod` / promote, other production deploys,
+package publishing) and **system persistence** (launch agents, shell
+profiles, `crontab`, `launchctl`, `defaults write`). Each send leaves "Sent
+without asking — Full send · …" in "What it did", and the turn ends on one
+chat line ("Without asking (Full send): posted 3 times on x.com",
+`agents/full_send.rs`); there are no Undo or Open links yet. After outside
+content only raw data leaving this Mac and new packages ask
+(`go_hard::moves_data_off_mac`). **Outside text never gets Full send**: such a
+turn's prompt and browser run at "Use good judgement" and its approvals by Go
+hard's outside-text rules.
+
+At Go hard and Full send **every agent reads the team folder** (each agent's
+home: its files, chat log, CLAUDE.md) and copies out of it into its own home or
+a project without a card; `wallet.json`, `connections.json`, anything named
+like a secret, and writes into another agent's home still ask.
 
 **Go hard is allow-by-default** (after the owner's report that it still asked
 for nearly every step: worktrees, `npm ci`, dev servers in the background,
@@ -1159,6 +1192,13 @@ Two timeouts shape the design, both observed:
 - **300s**: Claude Code abandons a *permission prompt* at five minutes
   regardless of `MCP_TOOL_TIMEOUT` (two unanswered cards were both given up at
   exactly 300s, while their buttons still looked live).
+
+**A settings card never expires**: nothing blocks on it, and Allow checks the
+settings didn't change since. **A typed yes answers the card**
+(`agents/typed_answer.rs`): when the user's own message is a plain "approve
+it" / "yes do it" / "allow" and the chat has exactly one open card (not a
+sign-in, secret, session question or import card), it is allowed as their
+answer, with "Allowed from your message". Only the user's send gets there.
 
 **Cards expire** (`agents/expiry.rs`; this supersedes the "stays live" and
 late-Allow behaviour below, which now only reaches a card from before it). A
@@ -1545,6 +1585,14 @@ place the independence level changes an approval, and only for the browser:
 - **Always a card** below Go hard: `javascript_tool`, `file_upload`,
   `upload_image`, `shortcuts_execute`, a GIF export and any tool this build
   doesn't know.
+- **In an editor at Go hard only the final step asks**
+  (`browser_gate::final_submit`): a control whose name starts with a send word
+  ("Post", "Send now", "Schedule", "Delete post"), or a short one holding one
+  that doesn't start by describing; "Will send on Fri…", "Post text" (a text
+  box), "Discard changes", "Close" and "Edit post" run. Password boxes ask at
+  Go hard and above. **At Full send** only money, closing an account or a
+  repository / project, password boxes and checkout pages ask; uploads run
+  unless the file looks like a key.
 - **At Go hard everything runs**, `javascript_tool`, shortcuts and unknown
   tools included, except send-like clicks and keys (above), `file_upload` /
   `upload_image`, a GIF export, and a script that submits or sends

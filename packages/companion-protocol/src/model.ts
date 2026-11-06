@@ -398,7 +398,7 @@ export type ImportChoice = 'undecided' | 'imported' | 'declined';
  * Mirrors `agents::independence::Level`: how much the user's agents do on
  * their own. It changes what they're told, never what asks for an Allow.
  */
-export type AgentIndependence = 'often' | 'judgement' | 'go_hard';
+export type AgentIndependence = 'often' | 'judgement' | 'go_hard' | 'full_send';
 
 export type MessageKind =
   | 'user'

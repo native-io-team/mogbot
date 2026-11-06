@@ -1,6 +1,6 @@
 /**
- * How much agents do on their own: three choices, one line each, and the
- * line that stays true at every level. The same control in onboarding and
+ * How much agents do on their own: four choices, one line each, and one
+ * honest line about what still asks at the chosen level. The same control in onboarding and
  * Settings → Agents (`AgentIndependenceSettings`); the phone words it from
  * the same strings.
  *
@@ -12,11 +12,11 @@
 
 import { useRef, type KeyboardEvent } from 'react';
 import {
-  INDEPENDENCE_ALWAYS_ASKS,
   INDEPENDENCE_DETAIL,
   INDEPENDENCE_LABEL,
   INDEPENDENCE_LEVELS,
   INDEPENDENCE_QUESTION,
+  INDEPENDENCE_STILL_ASKS,
   type AgentIndependence,
 } from '../../lib/agentIndependence';
 
@@ -76,7 +76,7 @@ export function IndependenceChoice({
           </button>
         ))}
       </div>
-      <p className="independence-choice__always">{INDEPENDENCE_ALWAYS_ASKS}</p>
+      <p className="independence-choice__always">{INDEPENDENCE_STILL_ASKS[value]}</p>
     </div>
   );
 }

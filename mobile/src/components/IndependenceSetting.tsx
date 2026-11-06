@@ -1,5 +1,5 @@
 /**
- * Settings → How much agents do on their own: the same three choices as the
+ * Settings → How much agents do on their own: the same four choices as the
  * desk's Settings → Agents, worded by the protocol's `independence.ts`. Read
  * from the overview (`independence`), written with `agents.setIndependence`,
  * which the Mac audits. A Mac that doesn't send it shows nothing; one that
@@ -7,11 +7,11 @@
  */
 
 import {
-  INDEPENDENCE_ALWAYS_ASKS,
   INDEPENDENCE_DETAIL,
   INDEPENDENCE_LABEL,
   INDEPENDENCE_LEVELS,
   INDEPENDENCE_QUESTION,
+  INDEPENDENCE_STILL_ASKS,
   type AgentIndependence,
 } from '@shipstudio/companion-protocol';
 import { useState } from 'react';
@@ -46,7 +46,7 @@ export function IndependenceSetting() {
   };
 
   return (
-    <Section title={INDEPENDENCE_QUESTION} footer={INDEPENDENCE_ALWAYS_ASKS}>
+    <Section title={INDEPENDENCE_QUESTION} footer={INDEPENDENCE_STILL_ASKS[level]}>
       {INDEPENDENCE_LEVELS.map((l, i) => {
         const on = l === level;
         return (

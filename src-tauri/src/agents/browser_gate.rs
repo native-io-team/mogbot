@@ -123,6 +123,7 @@ pub const SENDS: &[(&str, &str)] = &[
     ("transfer", "move your money"),
     ("withdraw", "move your money"),
     ("book", "book it as you"),
+    ("schedule", "schedule it to go out as you"),
     ("delete", "delete something"),
     ("remove", "delete something"),
     ("discard", "delete something"),
@@ -155,6 +156,7 @@ const PAY_HOSTS: &[&str] = &[
 /// Words in a page's path or fragment that make a click there unsure.
 const SENSITIVE_PAGES: &[&str] = &[
     "compose",
+    "send",
     "checkout",
     "payment",
     "payments",
@@ -163,12 +165,75 @@ const SENSITIVE_PAGES: &[&str] = &[
     "basket",
     "billing",
     "transfer",
-    "send",
     "purchase",
     "donate",
     "subscribe",
     "upgrade",
 ];
+
+/// [`SENSITIVE_PAGES`] that spend money: still unsure at "Full send".
+const MONEY_PAGES: &[&str] = &[
+    "checkout",
+    "payment",
+    "payments",
+    "pay",
+    "cart",
+    "basket",
+    "billing",
+    "transfer",
+    "purchase",
+    "donate",
+    "subscribe",
+    "upgrade",
+];
+
+/// [`SENDS`] that spend or move money: they ask at every level.
+const MONEY_WORDS: &[&str] = &[
+    "pay",
+    "buy",
+    "purchase",
+    "checkout",
+    "order",
+    "subscribe",
+    "upgrade",
+    "donate",
+    "transfer",
+    "withdraw",
+];
+
+/// The first word of a label that describes rather than acts ("Will send
+/// on Fri", "Edit post", "New post"): not the final step at "Go hard".
+const NOT_ACTIONS: &[&str] = &[
+    "will",
+    "scheduled",
+    "sent",
+    "posted",
+    "published",
+    "edit",
+    "view",
+    "open",
+    "show",
+    "see",
+    "draft",
+    "drafts",
+    "unsent",
+    "close",
+    "back",
+    "more",
+    "new",
+    "preview",
+    "cancel",
+    "undo",
+    "your",
+    "my",
+    "all",
+    "copy",
+    "save",
+];
+
+/// [`SENDS`] that, at "Go hard", are steps on the way rather than the final
+/// send: throwing away an unsaved edit is the editor's business.
+const INTERMEDIATE: &[&str] = &["discard"];
 
 /// Labels of boxes where Enter only searches.
 const SEARCH_BOXES: &[&str] = &[
@@ -383,7 +448,7 @@ fn may_open(level: Level, url: &str, agent: &Agent) -> bool {
     }
     match level {
         Level::Often => own_site(url, &agent.reach.browser_sites),
-        Level::Judgement | Level::GoHard => host_of(url).is_some(),
+        Level::Judgement | Level::GoHard | Level::FullSend => host_of(url).is_some(),
     }
 }
 
@@ -421,6 +486,101 @@ pub fn sends(label: &str) -> Option<&'static str> {
         .map(|(_, what)| *what)
 }
 
+/// The final step of a send at "Go hard" or above, when a control's label
+/// says it is one, and what it would do. At "Go hard": a control whose name
+/// starts with a send word ("Post", "Send now", "Schedule post", "Delete
+/// post"), or a short one (three words or fewer) that holds one and doesn't
+/// start by describing ("Will send on Fri", "Edit post"); text boxes and
+/// "Discard" are steps on the way. At "Full send": only the floor, spending
+/// money and closing an account.
+pub fn final_submit(label: &str, level: Level) -> Option<&'static str> {
+    if level == Level::FullSend {
+        return floor_control(label);
+    }
+    if is_field(label) {
+        return None;
+    }
+    let name = name_in(label).to_ascii_lowercase();
+    let ws = words(&name);
+    let joined = ws.join(" ");
+    if let Some((_, what)) = SENDS_PHRASES.iter().find(|(p, _)| joined.contains(p)) {
+        return Some(what);
+    }
+    let send = |w: &str| {
+        SENDS
+            .iter()
+            .find(|(s, _)| *s == w && !INTERMEDIATE.contains(s))
+            .map(|(_, what)| *what)
+    };
+    let first = ws.first()?;
+    if let Some(what) = send(first) {
+        return Some(what);
+    }
+    if ws.len() <= 3 && !NOT_ACTIONS.contains(&first.as_str()) {
+        return ws.iter().find_map(|w| send(w));
+    }
+    None
+}
+
+/// What a delete or close button can take with it for good.
+const ACCOUNT_THINGS: &[&str] = &[
+    "account",
+    "repository",
+    "repo",
+    "project",
+    "workspace",
+    "organization",
+    "organisation",
+    "team",
+    "database",
+    "site",
+    "domain",
+    "server",
+    "bucket",
+    "app",
+    "store",
+    "channel",
+    "profile",
+];
+
+/// A control that spends money or deletes something that doesn't come back
+/// (an account, a repository, a project): it asks at every level, "Full
+/// send" included.
+pub fn floor_control(label: &str) -> Option<&'static str> {
+    let name = name_in(label).to_ascii_lowercase();
+    let ws = words(&name);
+    let joined = ws.join(" ");
+    if joined.contains("check out") || joined.contains("place order") {
+        return Some("spend your money");
+    }
+    if ws.iter().any(|w| MONEY_WORDS.contains(&w.as_str())) && !is_field(label) {
+        return Some("spend your money");
+    }
+    // Things that don't come back: the account, a repository, a project.
+    let account = ws.iter().any(|w| ACCOUNT_THINGS.contains(&w.as_str()));
+    let ends = ws.iter().any(|w| {
+        matches!(
+            w.as_str(),
+            "delete" | "close" | "deactivate" | "terminate" | "erase" | "remove" | "destroy"
+        )
+    });
+    (account && ends && !is_field(label)).then_some("delete something for good")
+}
+
+/// A box for a password or a card's security code: typing there is the
+/// user's credentials, so it asks at "Go hard" and "Full send".
+pub fn password_field(label: &str) -> bool {
+    let ws = words(label);
+    ws.iter().any(|w| {
+        matches!(
+            w.as_str(),
+            "password" | "passcode" | "passphrase" | "cvv" | "cvc" | "pin"
+        )
+    }) || ws
+        .windows(2)
+        .any(|w| w == ["security", "code"] || w == ["card", "number"])
+}
+
 /// The page a call acts on.
 /// The page a browser call of `agent_id` acts on, when known.
 pub fn url_of(agent_id: &str, input: &Value) -> Option<String> {
@@ -454,6 +614,27 @@ fn sensitive_page(url: Option<&str>) -> bool {
         .any(|w| SENSITIVE_PAGES.contains(&w.as_str()))
 }
 
+/// A page where a click may spend money: still unsure at "Full send".
+fn money_page(url: Option<&str>) -> bool {
+    let Some(url) = url else { return false };
+    let Ok(u) = url::Url::parse(url) else {
+        return false;
+    };
+    let host = u.host_str().unwrap_or("");
+    if PAY_HOSTS.iter().any(|h| host_matches(host, h)) {
+        return true;
+    }
+    let tail = format!(
+        "{} {} {}",
+        u.path(),
+        u.query().unwrap_or(""),
+        u.fragment().unwrap_or("")
+    );
+    words(&tail)
+        .iter()
+        .any(|w| MONEY_PAGES.contains(&w.as_str()))
+}
+
 /// The control a call names by `ref`, as `read_page` / `find` labelled it.
 fn target_of(page: &Page, input: &Value) -> Option<String> {
     let r = input.get("ref").and_then(Value::as_str)?;
@@ -475,43 +656,91 @@ fn search_box(label: &str) -> bool {
         .any(|w| SEARCH_BOXES.contains(&w.as_str()))
 }
 
-/// An interaction at "Use good judgement" or "Go hard": through, unless it
-/// would send (or it can't be told).
-fn interaction_may_go(page: &Page, name: &str, input: &Value) -> bool {
+/// An interaction at "Use good judgement" or above: through, unless it
+/// would send (or it can't be told). At "Go hard" only the final step of a
+/// send asks ([`final_submit`]): opening, focusing, typing, discarding and
+/// closing inside an editor run. At "Full send" only the floor asks:
+/// spending money, closing the account, a password.
+fn interaction_may_go(level: Level, page: &Page, name: &str, input: &Value) -> bool {
     let url = url_for(page, input);
+    let url = url.as_deref();
+    let hard = level.goes_hard();
+    let full = level == Level::FullSend;
+    // Where an unknown target can't be told safe.
+    let unsure = |url: Option<&str>| {
+        if full {
+            money_page(url)
+        } else {
+            sensitive_page(url)
+        }
+    };
+    let ok_target = |label: &str| {
+        if hard {
+            final_submit(label, level).is_none() && !money_page(url)
+        } else {
+            sends(label).is_none() && !sensitive_page(url)
+        }
+    };
     match name {
         "form_input" => match target_of(page, input) {
+            Some(label) if hard && password_field(&label) => false,
             // Filling in a field doesn't send; pressing its button does.
+            Some(label) if hard => final_submit(&label, level).is_none() || is_field(&label),
             Some(label) => sends(&label).is_none() || is_field(&label),
-            None => !sensitive_page(url.as_deref()),
+            None => !unsure(url),
         },
         "computer" => {
             let action = input.get("action").and_then(Value::as_str).unwrap_or("");
             if CLICKS.contains(&action) {
                 return match target_of(page, input) {
-                    Some(label) => sends(&label).is_none() && !sensitive_page(url.as_deref()),
-                    None => !sensitive_page(url.as_deref()),
+                    Some(label) => ok_target(&label),
+                    None => !unsure(url),
                 };
             }
+            let in_password = || hard && page.last_target.as_deref().is_some_and(password_field);
             match action {
-                "type" => true,
+                "type" => !in_password(),
                 "key" => {
                     let key = input
                         .get("text")
                         .or_else(|| input.get("key"))
                         .and_then(Value::as_str)
                         .unwrap_or("");
+                    if full {
+                        return !(is_enter(key) && (money_page(url) || in_password()));
+                    }
                     !is_enter(key)
                         || page
                             .last_target
                             .as_deref()
-                            .is_some_and(|t| search_box(t) && !sensitive_page(url.as_deref()))
+                            .is_some_and(|t| search_box(t) && !sensitive_page(url))
                 }
                 _ => false,
             }
         }
         _ => false,
     }
+}
+
+/// An upload at "Full send": asks only when what it would upload looks like
+/// a key or a credential store.
+fn uploads_secret(input: &Value) -> bool {
+    fn strings(v: &Value, out: &mut Vec<String>) {
+        match v {
+            Value::String(s) => out.push(s.clone()),
+            Value::Array(a) => a.iter().for_each(|x| strings(x, out)),
+            Value::Object(o) => o.values().for_each(|x| strings(x, out)),
+            _ => {}
+        }
+    }
+    let mut all = Vec::new();
+    strings(input, &mut all);
+    all.iter().any(|s| {
+        s.contains("/.ssh/")
+            || s.contains("Keychains")
+            || s.contains("/.gnupg/")
+            || (s.contains('/') && super::autoallow::sensitive_name(std::path::Path::new(s)))
+    })
 }
 
 /// A text box or option, not a button: `textbox "Message"`, `combobox …`.
@@ -563,10 +792,17 @@ fn decide(level: Level, agent: &Agent, name: &str, input: &Value, page: &Page) -
     let free = |ok: bool| if ok { Gate::Allow } else { Gate::Ask };
     // "Go hard": everything runs, scripts and shortcuts included, except
     // uploads and what sends (a script that submits or posts, a send click).
-    if level == Level::GoHard {
+    if level.goes_hard() {
         match name {
-            "file_upload" | "upload_image" => return Gate::Ask,
-            "javascript_tool" => return free(!super::go_hard::script_sends(input)),
+            "file_upload" | "upload_image" => {
+                return free(level == Level::FullSend && !uploads_secret(input))
+            }
+            "javascript_tool" => {
+                let url = url_for(page, input);
+                let asks = super::go_hard::script_sends(input, level)
+                    || level == Level::FullSend && money_page(url.as_deref());
+                return free(!asks);
+            }
             "shortcuts_execute" => return Gate::Allow,
             _ => {}
         }
@@ -598,14 +834,14 @@ fn decide(level: Level, agent: &Agent, name: &str, input: &Value, page: &Page) -
             } else if level == Level::Often {
                 Gate::Ask
             } else {
-                free(interaction_may_go(page, name, input))
+                free(interaction_may_go(level, page, name, input))
             }
         }
         "form_input" => {
             if level == Level::Often {
                 Gate::Ask
             } else {
-                free(interaction_may_go(page, name, input))
+                free(interaction_may_go(level, page, name, input))
             }
         }
         "browser_batch" => match batch_steps(input) {
@@ -624,7 +860,7 @@ fn decide(level: Level, agent: &Agent, name: &str, input: &Value, page: &Page) -
             _ => Gate::Ask,
         },
         n if LOOKS.contains(&n) => Gate::Allow,
-        _ => free(level == Level::GoHard),
+        _ => free(level.goes_hard()),
     }
 }
 
@@ -694,6 +930,46 @@ pub fn gate(agent: &Agent, tool: &str, input: &Value, outside: bool) -> Gate {
         outside,
         &page_of(&agent.id),
     )
+}
+
+/// A browser step "Full send" let through that "Go hard" would have asked
+/// for (a post, a send, a schedule), as (what it did, where) for the
+/// turn's summary (`full_send`). `None` for everything else.
+pub fn sent_at_full_send(
+    agent: &Agent,
+    tool: &str,
+    input: &Value,
+    outside: bool,
+) -> Option<(&'static str, String)> {
+    let level = super::independence::for_turn(super::policy::chosen_level(agent), outside);
+    if level != Level::FullSend {
+        return None;
+    }
+    let (page, name, input) = if let Some(name) = tool.strip_prefix(AGENTS_SERVER) {
+        let (n, i) = agents_equivalent(name, input);
+        (page_of(&agents_key(&agent.id)), n, i)
+    } else {
+        let name = tool.strip_prefix(SERVER)?;
+        (page_of(&agent.id), name.to_string(), input.clone())
+    };
+    if decide(Level::FullSend, agent, &name, &input, &page) != Gate::Allow
+        || decide(Level::GoHard, agent, &name, &input, &page) == Gate::Allow
+    {
+        return None;
+    }
+    let label = target_of(&page, &input).unwrap_or_default();
+    let verb = if name == "javascript_tool" {
+        "ran a script that submits"
+    } else if matches!(name.as_str(), "file_upload" | "upload_image") {
+        "uploaded"
+    } else {
+        super::full_send::browser_verb(&label)
+    };
+    let place = url_for(&page, &input)
+        .and_then(|u| host_of(&u))
+        .map(|h| format!("on {h}"))
+        .unwrap_or_default();
+    Some((verb, place))
 }
 
 /* --------------------------------------------- the agents' browser */
