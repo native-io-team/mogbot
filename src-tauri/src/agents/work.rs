@@ -75,6 +75,9 @@ pub enum StepKind {
     Plan,
     Delegate,
     Project,
+    /// A short line the agent wrote mid-turn ("Starting the previews"),
+    /// kept here instead of the chat (`narration`). Its own words.
+    Note,
     #[serde(other)]
     Tool,
 }

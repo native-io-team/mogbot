@@ -75,7 +75,8 @@ fn an_item_is_a_file_or_a_link_never_both() {
             DraftItem::File {
                 path: "report.pdf".into(),
                 label: Some("Report".into()),
-                role: None
+                role: None,
+                page: None
             },
             DraftItem::Link {
                 url: "https://acme.com/pricing".into(),
@@ -84,7 +85,8 @@ fn an_item_is_a_file_or_a_link_never_both() {
             DraftItem::File {
                 path: "after.png".into(),
                 label: None,
-                role: Some(ShotRole::After)
+                role: Some(ShotRole::After),
+                page: None
             },
         ]
     );
@@ -143,6 +145,7 @@ fn result_message(id: &str, card_id: &str, version: u32) -> AgentMessage {
         changes: None,
         project: None,
         test: None,
+        checkpoint: false,
     });
     m
 }
@@ -513,8 +516,11 @@ fn a_second_result_in_a_turn_replaces_the_first() {
 
 #[test]
 fn without_a_live_turn_the_card_goes_in_now() {
-    assert_eq!(delivery(true), Delivery::AtTurnEnd);
-    assert_eq!(delivery(false), Delivery::Now);
+    assert_eq!(delivery(true, false), Delivery::AtTurnEnd);
+    assert_eq!(delivery(false, false), Delivery::Now);
+    // A checkpoint in a live turn goes in now; outside one, as any card does.
+    assert_eq!(delivery(true, true), Delivery::Checkpoint);
+    assert_eq!(delivery(false, true), Delivery::Now);
     let card = build(parse(&args(json!({}))).unwrap(), None, Vec::new(), || {
         "r".into()
     });
@@ -537,4 +543,98 @@ fn the_reply_to_the_agent_says_where_it_shows() {
         staged_reply(&v2, true).contains("version 2")
             && staged_reply(&v2, true).contains("replaces")
     );
+}
+
+// ------------------------------------------------------------ visual work
+
+/// Before/after shots of several pages are ONE card, grouped by page, with
+/// the captions as the agent wrote them.
+#[test]
+fn a_visual_set_is_one_card_with_a_page_on_each_shot() {
+    let draft = parse(&args(json!({
+        "title": "New hero",
+        "summary": "Bigger headline on three pages.",
+        "project": "bakery",
+        "items": [
+            { "path": "home-before.png", "role": "before", "page": "Home" },
+            { "path": "home-after.png", "role": "after", "page": "Home", "label": "Headline at 64px" },
+            { "path": "menu-before.png", "role": "before", "page": "Menu" },
+            { "path": "menu-after.png", "role": "after", "page": "Menu" }
+        ]
+    })))
+    .unwrap();
+    let pic = |name: &str| Attachment {
+        name: name.into(),
+        path: format!("attachments/m/{name}"),
+        mime: "image/png".into(),
+        size: 1,
+    };
+    let saved = [
+        "home-before.png",
+        "home-after.png",
+        "menu-before.png",
+        "menu-after.png",
+    ]
+    .map(pic)
+    .to_vec();
+    let card = build(draft, None, saved, || "r".into());
+    assert_eq!(card.items.len(), 4);
+    let pages: Vec<_> = card
+        .items
+        .iter()
+        .map(|i| match i {
+            ResultItem::File { page, role, .. } => (page.clone(), *role),
+            ResultItem::Link { .. } => (None, None),
+        })
+        .collect();
+    assert_eq!(pages[0], (Some("Home".into()), Some(ShotRole::Before)));
+    assert_eq!(pages[3], (Some("Menu".into()), Some(ShotRole::After)));
+    let wire = serde_json::to_value(&card).unwrap();
+    assert_eq!(wire["items"][1]["page"], "Home");
+    assert_eq!(wire["items"][1]["label"], "Headline at 64px");
+    assert!(wire.get("checkpoint").is_none(), "false stays off the wire");
+}
+
+#[test]
+fn a_page_needs_a_role_and_a_short_name() {
+    assert!(err(args(
+        json!({ "items": [{ "path": "a.png", "page": "Home" }] })
+    ))
+    .contains("give it a `role`"));
+    let long = "x".repeat(MAX_PAGE + 1);
+    assert!(err(args(
+        json!({ "items": [{ "path": "a.png", "role": "after", "page": long }] })
+    ))
+    .contains("`page`"));
+    assert!(err(args(json!({ "checkpoint": "yes" }))).contains("true or false"));
+}
+
+#[test]
+fn a_checkpoint_is_marked_and_the_turns_next_card_continues_it() {
+    let draft = parse(&args(json!({ "checkpoint": true }))).unwrap();
+    assert!(draft.checkpoint);
+    let card = build(draft, None, Vec::new(), || "r-check".into());
+    assert!(card.checkpoint);
+    assert_eq!(serde_json::to_value(&card).unwrap()["checkpoint"], true);
+
+    // Later in the same turn: the next version of it, not a second card.
+    let mut later = parse(&args(json!({ "changes": "All three pages done" }))).unwrap();
+    continue_checkpoint(&mut later, Some("r-check".into()));
+    assert_eq!(later.revises.as_deref(), Some("r-check"));
+    let v2 = build(later, Some(&card), Vec::new(), || unreachable!());
+    assert_eq!((v2.id.as_str(), v2.version), ("r-check", 2));
+    assert!(!v2.checkpoint, "the finished card isn't partway");
+
+    // A card naming its own target keeps it.
+    let mut other = parse(&args(json!({ "revises": "r-old" }))).unwrap();
+    continue_checkpoint(&mut other, Some("r-check".into()));
+    assert_eq!(other.revises.as_deref(), Some("r-old"));
+}
+
+#[test]
+fn a_checkpoint_is_forgotten_when_the_next_turn_starts() {
+    note_checkpoint("a-cp", "r-cp");
+    assert_eq!(checkpoint_of("a-cp").as_deref(), Some("r-cp"));
+    discard("a-cp");
+    assert_eq!(checkpoint_of("a-cp"), None);
 }

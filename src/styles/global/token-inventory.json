@@ -5231,7 +5231,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 41
+      "consumerCount": 46
     },
     {
       "name": "--tracking-micro",
@@ -5258,7 +5258,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 267
+      "consumerCount": 268
     },
     {
       "name": "--surface-control",
@@ -5267,7 +5267,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 356
+      "consumerCount": 357
     },
     {
       "name": "--surface-control-hover",
@@ -5294,7 +5294,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 70
+      "consumerCount": 72
     },
     {
       "name": "--surface-terminal-input",
@@ -5357,7 +5357,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 589
+      "consumerCount": 592
     },
     {
       "name": "--text-secondary",
@@ -5366,7 +5366,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 560
+      "consumerCount": 562
     },
     {
       "name": "--text-muted",
@@ -5375,7 +5375,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 903
+      "consumerCount": 907
     },
     {
       "name": "--text-faint",
@@ -5474,7 +5474,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 175
+      "consumerCount": 177
     },
     {
       "name": "--border-strong",
@@ -5510,7 +5510,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 274
+      "consumerCount": 276
     },
     {
       "name": "--border-width-emphasis",
@@ -5519,7 +5519,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 36
+      "consumerCount": 37
     },
     {
       "name": "--accent-selected",
@@ -5555,7 +5555,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 64
+      "consumerCount": 65
     },
     {
       "name": "--focus-ring-width",
@@ -6140,7 +6140,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 282
+      "consumerCount": 283
     },
     {
       "name": "--spacing-xs",
@@ -6149,7 +6149,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 665
+      "consumerCount": 672
     },
     {
       "name": "--spacing-sm",
@@ -6158,7 +6158,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 843
+      "consumerCount": 849
     },
     {
       "name": "--spacing-md",
@@ -6167,7 +6167,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 560
+      "consumerCount": 562
     },
     {
       "name": "--spacing-lg",
@@ -6221,7 +6221,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 206
+      "consumerCount": 207
     },
     {
       "name": "--radius-sm",
@@ -6230,7 +6230,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 221
+      "consumerCount": 223
     },
     {
       "name": "--radius-lg",
@@ -6239,7 +6239,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 42
+      "consumerCount": 43
     },
     {
       "name": "--radius-pill",
@@ -6572,7 +6572,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 16
+      "consumerCount": 18
     },
     {
       "name": "--shadow-md",
@@ -6617,7 +6617,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 267
+      "consumerCount": 268
     },
     {
       "name": "--surface-control",
@@ -6626,7 +6626,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 356
+      "consumerCount": 357
     },
     {
       "name": "--surface-control-hover",
@@ -6671,7 +6671,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 70
+      "consumerCount": 72
     },
     {
       "name": "--surface-terminal-input",
@@ -6716,7 +6716,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 589
+      "consumerCount": 592
     },
     {
       "name": "--text-secondary",
@@ -6725,7 +6725,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 560
+      "consumerCount": 562
     },
     {
       "name": "--text-quiet",
@@ -6743,7 +6743,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 903
+      "consumerCount": 907
     },
     {
       "name": "--text-faint",
@@ -6833,7 +6833,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 175
+      "consumerCount": 177
     },
     {
       "name": "--border-strong",
@@ -7112,7 +7112,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 16
+      "consumerCount": 18
     },
     {
       "name": "--shadow-md",

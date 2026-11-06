@@ -826,7 +826,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
   const previewAgent = previewRequest ? agentsById.get(previewRequest.agentId) : undefined;
   const preview = previewRequest && previewAgent && previewCtx && (
     <AgentPreviewPane
-      key={`${previewRequest.agentId}:${previewRequest.messageId}`}
+      key={`${previewRequest.agentId}:${previewRequest.messageId}:${previewRequest.link ?? ''}`}
       agent={previewAgent}
       request={previewRequest}
       server={previewServer}

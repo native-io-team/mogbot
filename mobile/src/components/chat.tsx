@@ -34,6 +34,7 @@ import {
 } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { Attachments } from './attachments';
+import { LocalLinks } from './localLinks';
 import { useReveal } from '../lib/reveal';
 import { Markdown } from './Markdown';
 import { Card, Line, TextAction } from './surfaces';
@@ -182,6 +183,14 @@ export const MessageRow = memo(function MessageRow({
           style={({ pressed }) => [styles.agentRow, pressed && styles.heldProse]}
         >
           <Prose id={message.id} text={message.text} />
+          {!!message.localLinks?.length && (
+            <LocalLinks
+              agentId={message.agentId}
+              messageId={message.id}
+              links={message.localLinks}
+              onError={onError}
+            />
+          )}
           {!!message.decide?.length && <DecideCards message={message} onError={onError} />}
           {!!message.attachments?.length && (
             <Attachments

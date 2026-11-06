@@ -13,7 +13,18 @@ import type { Attachment } from './model';
 export type ShotRole = 'before' | 'after';
 
 export type ResultItem =
-  | { kind: 'file'; file: Attachment; label?: string; role?: ShotRole }
+  | {
+      kind: 'file';
+      file: Attachment;
+      /** The caption, in the agent's words. */
+      label?: string;
+      role?: ShotRole;
+      /**
+       * Which page (or screen) a before/after shot is of ("Home", "Pricing"):
+       * the card shows one compare per page, with a switcher between them.
+       */
+      page?: string;
+    }
   | { kind: 'link'; url: string; label?: string };
 
 export interface ResultCard {
@@ -38,6 +49,11 @@ export interface ResultCard {
    * the app's observations; outcome, summary and `broken` are the agent's.
    */
   test?: TestReport;
+  /**
+   * Shared partway through the work, at a milestone, rather than at its
+   * end: the turn carries on, and its final card is the next version.
+   */
+  checkpoint?: boolean;
 }
 
 export type TestStepKind =
@@ -119,16 +135,72 @@ export function beforeAfter(
   return before && after ? { before, after } : null;
 }
 
+/** One page of a visual result: its before and after, either of which may be missing. */
+export interface ComparePage {
+  /** The page's name as the agent gave it; empty for a card that named none. */
+  page: string;
+  before?: Attachment;
+  after?: Attachment;
+  /** The agent's captions for each picture, when it gave them. */
+  beforeLabel?: string;
+  afterLabel?: string;
+}
+
+type FileItem = Extract<ResultItem, { kind: 'file' }>;
+
 /**
- * The card's files and links in order, without the before/after pair when
- * that is shown side by side.
+ * The card's before/after pictures, one entry per page, in the order the
+ * agent first named each page. A page needs at least one picture with a
+ * role; the first `before` and the first `after` for a page win, and any
+ * further ones stay in the item list.
+ */
+export function comparePages(items: readonly ResultItem[] = []): ComparePage[] {
+  const pages: ComparePage[] = [];
+  for (const item of items) {
+    if (item.kind !== 'file' || !item.role) continue;
+    const name = item.page?.trim() ?? '';
+    let page = pages.find((p) => p.page === name);
+    if (!page) {
+      page = { page: name };
+      pages.push(page);
+    }
+    if (item.role === 'before' && !page.before) {
+      page.before = item.file;
+      page.beforeLabel = item.label?.trim() || undefined;
+    } else if (item.role === 'after' && !page.after) {
+      page.after = item.file;
+      page.afterLabel = item.label?.trim() || undefined;
+    }
+  }
+  return pages;
+}
+
+/** The pictures `comparePages` placed, so the item list doesn't show them twice. */
+function compared(items: readonly ResultItem[]): Set<Attachment> {
+  const out = new Set<Attachment>();
+  comparePages(items).forEach((p) => {
+    if (p.before) out.add(p.before);
+    if (p.after) out.add(p.after);
+  });
+  return out;
+}
+
+/** What a page is called on the switcher: its name, else "Page n". */
+export function comparePageName(page: ComparePage, index: number): string {
+  return page.page || `Page ${index + 1}`;
+}
+
+/**
+ * The card's files and links in order, without the pictures shown in the
+ * before/after compare.
  */
 export function listedItems(items: readonly ResultItem[] = []): ResultItem[] {
-  const paired = beforeAfter(items);
-  return items.filter(
-    (i) => !(paired && i.kind === 'file' && (i.file === paired.before || i.file === paired.after))
-  );
+  const shown = compared(items);
+  return items.filter((i) => !(i.kind === 'file' && shown.has((i as FileItem).file)));
 }
+
+/** "Partway: …" over a checkpoint card, so it never reads as the finished work. */
+export const CHECKPOINT_LABEL = 'Partway through';
 
 /**
  * The heading over the agent's "checked" lines. Attributed, never a bare

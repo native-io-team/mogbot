@@ -886,11 +886,20 @@ impl Backend for DesktopBackend {
         &self,
         agent_id: &str,
         message_id: &str,
+        link: Option<usize>,
     ) -> Result<(String, u16), CommandError> {
-        let target = crate::commands::agents_preview::target_for(agent_id, message_id).await?;
-        let port = crate::proxy::dev_server_port_for(&target.path).ok_or_else(|| {
-            CommandError::expected("Open Preview on the Mac first — the site isn't running there.")
-        })?;
+        let target =
+            crate::commands::agents_preview::target_for(agent_id, message_id, link).await?;
+        // A preview's own server, or one an agent's turn left running there.
+        let port = crate::proxy::dev_server_port_for(&target.path)
+            .or(target
+                .port
+                .filter(|p| crate::agents::dev_servers::serves(&target.path, *p)))
+            .ok_or_else(|| {
+                CommandError::expected(
+                    "Open Preview on the Mac first — the site isn't running there.",
+                )
+            })?;
         Ok((target.path, port))
     }
 

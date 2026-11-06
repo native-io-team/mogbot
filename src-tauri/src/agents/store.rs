@@ -415,6 +415,10 @@ pub struct AgentMessage {
     /// builds show the text alone; the cards are still in each agent's chat.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub decide: Vec<super::admin::DecideItem>,
+    /// On an `agent` reply: its links to servers on this Mac, taken out of
+    /// the text (`agents/local_links.rs`). Older builds show the text alone.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub local_links: Vec<super::local_links::LocalLink>,
 }
 
 /// `agents.json`. Read and written losslessly: an entry this build can't
@@ -2099,6 +2103,7 @@ mod tests {
                     takeover: false,
                     room: None,
                     decide: Vec::new(),
+                    local_links: Vec::new(),
                 })
                 .unwrap();
             }
@@ -2388,6 +2393,7 @@ mod tests {
                 takeover: false,
                 room: None,
                 decide: Vec::new(),
+                local_links: Vec::new(),
             };
             append_message(&pending("r1")).unwrap();
             append_message(&pending("r2")).unwrap();
@@ -2435,6 +2441,7 @@ mod tests {
             takeover: false,
             room: None,
             decide: Vec::new(),
+            local_links: Vec::new(),
         }
     }
 

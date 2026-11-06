@@ -116,6 +116,13 @@
   color: var(--text-muted);
 }
 
+/* A progress line the agent wrote mid-turn ("Starting the previews"): its
+   own words, kept here instead of the chat, so set apart from the steps. */
+.agent-work__step[data-kind='note'] .agent-work__label {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
 .agent-work__shot {
   grid-column: 2 / -1;
   margin-top: var(--spacing-xs);

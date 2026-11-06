@@ -105,6 +105,29 @@ pub async fn resolve(query: &str) -> Result<Option<ProjectRef>, CommandError> {
     })
 }
 
+/// A folder an agent names as its work's project that isn't in the project
+/// list yet (a site it built in its own folder): the project's path once
+/// it is listed, so its card can offer Preview.
+///
+/// Seam: listing a folder as a project (so it shows in the Projects tab) is
+/// being built separately. Until that lands, only a folder that is already
+/// listed under another name resolves here, and anything else is `None`
+/// (the agent is told the project doesn't exist, as before).
+pub async fn ensure_listed(wanted: &str, _home: &std::path::Path) -> Option<String> {
+    let wanted = wanted.trim();
+    let path = std::path::Path::new(wanted);
+    if !path.is_absolute() || !path.is_dir() {
+        return None;
+    }
+    let real = dunce::canonicalize(path).ok()?;
+    crate::commands::projects::list_projects()
+        .await
+        .ok()?
+        .into_iter()
+        .find(|p| dunce::canonicalize(&p.path).ok().as_ref() == Some(&real))
+        .map(|p| p.path)
+}
+
 /// The last folder of a path, for lines that name a project by its path.
 pub fn folder_name(path: &str) -> &str {
     path.trim_end_matches('/')

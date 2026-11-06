@@ -11,8 +11,8 @@
 import { useState } from 'react';
 import { ChevronRightIcon, ErrorIcon, SuccessIcon, WarningIcon } from '@/components/icons';
 import { TextButton } from '../primitives/TextButton';
-import { AttachmentLightbox } from './AgentAttachments';
-import { attachmentUrl, type Agent, type Attachment } from '../../lib/agents';
+import { imagesOf, useImageViewer } from './AgentGallery';
+import { attachmentUrl, type Agent } from '../../lib/agents';
 import {
   consoleLine,
   testShots,
@@ -20,12 +20,18 @@ import {
 } from '../../../packages/companion-protocol/src/results';
 
 export function TestReportView({ agent, report }: { agent: Agent; report: TestReport }) {
-  const [viewing, setViewing] = useState<Attachment | null>(null);
   const [stepsOpen, setStepsOpen] = useState(false);
   const broken = report.broken ?? [];
   const errors = report.consoleErrors ?? [];
   const steps = report.steps ?? [];
   const shots = testShots(report);
+  const { view, viewer } = useImageViewer(agent, () =>
+    imagesOf(
+      agent.id,
+      shots.map((s) => s.shot),
+      shots.map((s) => s.label)
+    )
+  );
   const passed = report.outcome === 'passed';
   const consoleSummary = consoleLine(report);
   return (
@@ -69,7 +75,7 @@ export function TestReportView({ agent, report }: { agent: Agent; report: TestRe
               key={shot.path}
               type="button"
               className="agent-test-report__shot"
-              onClick={() => setViewing(shot)}
+              onClick={() => view(shot)}
               aria-label={`View screenshot: ${label}`}
               title={label}
             >
@@ -104,7 +110,7 @@ export function TestReportView({ agent, report }: { agent: Agent; report: TestRe
           )}
         </>
       )}
-      <AttachmentLightbox agent={agent} viewing={viewing} onClose={() => setViewing(null)} />
+      {viewer}
     </section>
   );
 }

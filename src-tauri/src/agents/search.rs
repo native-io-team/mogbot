@@ -467,6 +467,7 @@ mod tests {
             takeover: false,
             room: None,
             decide: Vec::new(),
+            local_links: Vec::new(),
         })
         .unwrap();
         id
@@ -544,6 +545,7 @@ mod tests {
                 takeover: false,
                 room: None,
                 decide: Vec::new(),
+                local_links: Vec::new(),
             })
             .unwrap();
             let found = search_in(&store::list().unwrap(), "deploy", 50).unwrap();
@@ -664,6 +666,7 @@ mod tests {
             takeover: false,
             room: None,
             decide: Vec::new(),
+            local_links: Vec::new(),
         };
         assert!(match_message(&message, &terms("müller")).is_some());
         assert!(match_message(&message, &terms("müller schmidt")).is_none());

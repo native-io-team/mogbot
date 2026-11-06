@@ -338,8 +338,10 @@ pub async fn handle(c: Arc<Companion>, peer: SocketAddr, req: Request<Incoming>)
         // The port alone isn't the card's site: once the app stops serving
         // that folder there, whatever binds the port next isn't shown.
         Verdict::Forward { port, path }
-            if crate::proxy::dev_server_port_for(&path) == Some(port) =>
+            if crate::proxy::dev_server_port_for(&path) == Some(port)
+                || crate::agents::dev_servers::serves(&path, port) =>
         {
+            crate::agents::dev_servers::note_watched(port);
             forward(req, port).await
         }
         Verdict::Forward { .. } => plain(

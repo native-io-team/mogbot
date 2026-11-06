@@ -40,6 +40,8 @@ pub const MAX_LINES: usize = 12;
 /// Files and links together. Files are also held to `attachments::MAX_FILES`.
 pub const MAX_ITEMS: usize = 12;
 pub const MAX_URL: usize = 2_048;
+/// A page's name on a visual result ("Pricing").
+pub const MAX_PAGE: usize = 60;
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
@@ -62,6 +64,10 @@ pub enum ResultItem {
         /// A screenshot from before or after the change.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         role: Option<ShotRole>,
+        /// Which page or screen a before/after shot is of ("Home"): the card
+        /// shows one compare per page, with a switcher between them.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        page: Option<String>,
     },
     /// A link the agent produced or used (a page it published, a source).
     Link {
@@ -102,6 +108,10 @@ pub struct ResultCard {
     /// broken are the agent's words. A later revision starts without one.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub test: Option<super::preview_test::TestReport>,
+    /// Shared at a milestone partway through the work (`checkpoint: true`),
+    /// into the chat at once; the same turn's later card is its next version.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub checkpoint: bool,
 }
 
 /// On a user message: the result it asks to change, as it stood when asked.
@@ -123,6 +133,7 @@ pub enum DraftItem {
         path: String,
         label: Option<String>,
         role: Option<ShotRole>,
+        page: Option<String>,
     },
     Link {
         url: String,
@@ -142,6 +153,8 @@ pub struct Draft {
     pub changes: Option<String>,
     /// As the agent named it; the caller resolves it to a path before `prepare`.
     pub project: Option<String>,
+    /// A milestone partway through, shown now; the turn's last card revises it.
+    pub checkpoint: bool,
 }
 
 fn chars(s: &str) -> usize {
@@ -242,8 +255,19 @@ fn item(entry: &Value) -> Result<DraftItem, String> {
             ))
         }
     };
+    let page = capped(string(entry, "page")?, "page", MAX_PAGE)?;
+    if page.is_some() && role.is_none() {
+        return Err(
+            "`page` names the page a before/after screenshot is of: give it a `role` too.".into(),
+        );
+    }
     match (string(entry, "path")?, string(entry, "url")?) {
-        (Some(path), None) => Ok(DraftItem::File { path, label, role }),
+        (Some(path), None) => Ok(DraftItem::File {
+            path,
+            label,
+            role,
+            page,
+        }),
         (None, Some(url)) => {
             if role.is_some() {
                 return Err("`role` is for screenshot files, not links.".into());
@@ -294,6 +318,11 @@ pub fn parse(args: &Value) -> Result<Draft, String> {
         revises: capped(string(args, "revises")?, "revises", 64)?,
         changes: capped(string(args, "changes")?, "changes", MAX_LINE)?,
         project: capped(string(args, "project")?, "project", 1_024)?,
+        checkpoint: match args.get("checkpoint") {
+            None | Some(Value::Null) => false,
+            Some(Value::Bool(b)) => *b,
+            Some(_) => return Err("`checkpoint` is true or false.".into()),
+        },
     })
 }
 
@@ -363,10 +392,18 @@ pub fn build(
         .items
         .into_iter()
         .filter_map(|item| match item {
-            DraftItem::File { label, role, .. } => saved.next().map(|file| {
+            DraftItem::File {
+                label, role, page, ..
+            } => saved.next().map(|file| {
                 // A before/after only means something on a picture.
                 let role = role.filter(|_| file.mime.starts_with("image/"));
-                ResultItem::File { file, label, role }
+                let page = page.filter(|_| role.is_some());
+                ResultItem::File {
+                    file,
+                    label,
+                    role,
+                    page,
+                }
             }),
             DraftItem::Link { url, label } => Some(ResultItem::Link { url, label }),
         })
@@ -390,6 +427,7 @@ pub fn build(
         changes,
         project,
         test: None,
+        checkpoint: draft.checkpoint,
     }
 }
 
@@ -476,13 +514,16 @@ pub enum Delivery {
     /// No live turn (a take-over's terminal): recorded at once, since
     /// nothing would ever take a staged card and the next turn discards it.
     Now,
+    /// A checkpoint in a live turn: into the chat now, so the user sees the
+    /// work while it is still going; the turn's last card revises it.
+    Checkpoint,
 }
 
-pub fn delivery(in_live_turn: bool) -> Delivery {
-    if in_live_turn {
-        Delivery::AtTurnEnd
-    } else {
-        Delivery::Now
+pub fn delivery(in_live_turn: bool, checkpoint: bool) -> Delivery {
+    match (in_live_turn, checkpoint) {
+        (true, true) => Delivery::Checkpoint,
+        (true, false) => Delivery::AtTurnEnd,
+        (false, _) => Delivery::Now,
     }
 }
 
@@ -507,10 +548,45 @@ pub fn take(agent_id: &str) -> Option<AgentMessage> {
 }
 
 /// A new turn starts clean: anything left from one that never reached its
-/// end (it can't happen today, but a leftover must never land on the next).
+/// end (it can't happen today, but a leftover must never land on the next),
+/// and no checkpoint from an earlier turn to continue.
 pub fn discard(agent_id: &str) {
     if let Some(old) = take(agent_id) {
         remove_files(&old);
+    }
+    CHECKPOINTS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(agent_id);
+}
+
+/// The checkpoint card this turn has shown so far, per agent: a later card in
+/// the same turn is its next version, not a second card.
+static CHECKPOINTS: LazyLock<Mutex<HashMap<String, String>>> =
+    LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// A checkpoint card went into the chat in this turn.
+pub fn note_checkpoint(agent_id: &str, card_id: &str) {
+    CHECKPOINTS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(agent_id.to_string(), card_id.to_string());
+}
+
+/// The card this turn's checkpoint showed, if it showed one.
+pub fn checkpoint_of(agent_id: &str) -> Option<String> {
+    CHECKPOINTS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .cloned()
+}
+
+/// A card shared after this turn's checkpoint continues it: same card, next
+/// version, unless the agent named another to revise.
+pub fn continue_checkpoint(draft: &mut Draft, checkpoint: Option<String>) {
+    if draft.revises.is_none() {
+        draft.revises = checkpoint;
     }
 }
 
@@ -538,6 +614,14 @@ pub fn staged_reply(card: &ResultCard, replaced: bool) -> String {
     };
     format!(
         "Saved \"{}\"{version}. It appears as one card at the end of your reply, with Open and Ask for changes; don't repeat its contents, just say a line about it.{replaced}",
+        card.title
+    )
+}
+
+/// What the agent is told when a checkpoint went into the chat.
+pub fn checkpoint_reply(card: &ResultCard) -> String {
+    format!(
+        "Shown \"{}\" in the chat now, as a card marked partway through, with Preview where it has a project. Keep going; don't post a message about it. When you're done, call share_result again (with `changes`: what's new since this) and the same card becomes the finished version.",
         card.title
     )
 }

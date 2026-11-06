@@ -352,7 +352,11 @@ export interface Methods {
    * on the Mac (its Preview starts it).
    */
   'agents.watchLive': {
-    params: { agentId: string; messageId: string };
+    /**
+     * `link`: the index of one of the message's `localLinks` to watch
+     * instead of the card's own server (Macs with `watch.links`).
+     */
+    params: { agentId: string; messageId: string; link?: number };
     result: { url: string; expiresAt: number };
   };
   /**

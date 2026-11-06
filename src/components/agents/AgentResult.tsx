@@ -17,7 +17,7 @@
  * @module components/agents/AgentResult
  */
 
-import { memo, useState, type ReactNode } from 'react';
+import { memo, useEffect, useState, type ReactNode } from 'react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   ChevronRightIcon,
@@ -35,18 +35,16 @@ import { IconButton } from '../primitives/IconButton';
 import { AgentCard } from './AgentCard';
 import { WorkTimeline } from './AgentWork';
 import { TextButton } from '../primitives/TextButton';
-import {
-  AttachmentImage,
-  AttachmentLightbox,
-  FileGlyph,
-  kindLabel,
-  useAttachmentOpener,
-} from './AgentAttachments';
+import { FileGlyph, kindLabel, useAttachmentOpener } from './AgentAttachments';
+import { CompareShot, ResultCompare } from './AgentCompare';
+import { useImageViewer } from './AgentGallery';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import {
-  beforeAfter,
   CHECKED_HEADING,
+  CHECKPOINT_LABEL,
+  comparePages,
+  messageImages,
   changesLine,
   formatBytes,
   isImageMime,
@@ -57,11 +55,23 @@ import {
   type Agent,
   type TurnWork,
   type AgentMessage,
-  type Attachment,
   type ResultCard,
   type ResultItem,
   type ResultRef,
 } from '../../lib/agents';
+
+type ResultFile = Extract<ResultItem, { kind: 'file' }>['file'];
+
+/**
+ * Cards that already opened the preview by themselves: once per result,
+ * however many versions follow, and never again after the user closed it.
+ */
+const autoOpened = new Set<string>();
+
+/** For tests: forget which cards opened the preview. */
+export function resetAutoOpened() {
+  autoOpened.clear();
+}
 
 /** What "Ask for changes" hands the composer. */
 export const refOf = (card: ResultCard): ResultRef => ({
@@ -86,33 +96,6 @@ function useLinkOpener() {
       .catch((error: unknown) => showToast(formatCommandError(asCommandError(error)), 'error'));
 }
 
-function Shot({
-  agent,
-  file,
-  caption,
-  onView,
-}: {
-  agent: Agent;
-  file: Attachment;
-  caption: string;
-  onView: (file: Attachment) => void;
-}) {
-  return (
-    <figure className="agent-result__shot">
-      <button
-        type="button"
-        className="agent-result__shot-image"
-        onClick={() => onView(file)}
-        aria-label={`View ${caption}: ${file.name}`}
-        title={file.name}
-      >
-        <AttachmentImage agent={agent} attachment={file} />
-      </button>
-      <figcaption>{caption}</figcaption>
-    </figure>
-  );
-}
-
 function ItemRow({
   agent,
   item,
@@ -120,7 +103,7 @@ function ItemRow({
 }: {
   agent: Agent;
   item: ResultItem;
-  onView: (file: Attachment) => void;
+  onView: (file: ResultFile) => void;
 }) {
   const openFile = useAttachmentOpener(agent.id);
   const openLink = useLinkOpener();
@@ -128,7 +111,7 @@ function ItemRow({
   if (item.kind === 'file' && isImageMime(item.file.mime)) {
     return (
       <li className="agent-result__item" data-kind="image">
-        <Shot agent={agent} file={item.file} caption={name} onView={onView} />
+        <CompareShot agent={agent} file={item.file} caption={name} onView={onView} />
       </li>
     );
   }
@@ -167,8 +150,10 @@ interface ResultBodyProps {
 
 /** Everything but the actions: shared by the live card and an older version opened up. */
 function ResultBody({ agent, card }: ResultBodyProps) {
-  const [viewing, setViewing] = useState<Attachment | null>(null);
-  const pair = beforeAfter(card.items);
+  const { view: setViewing, viewer } = useImageViewer(agent, () =>
+    messageImages({ id: '', agentId: agent.id, result: card })
+  );
+  const pages = comparePages(card.items);
   const items = listedItems(card.items);
   const changes = changesLine(card);
   const notVerified = card.notVerified ?? [];
@@ -190,12 +175,7 @@ function ResultBody({ agent, card }: ResultBodyProps) {
           </ul>
         </section>
       )}
-      {pair && (
-        <div className="agent-result__pair" aria-label="Before and after">
-          <Shot agent={agent} file={pair.before} caption="Before" onView={setViewing} />
-          <Shot agent={agent} file={pair.after} caption="After" onView={setViewing} />
-        </div>
-      )}
+      <ResultCompare agent={agent} pages={pages} onView={setViewing} />
       {items.length > 0 && (
         <ul className="agent-result__items" aria-label="What it made">
           {items.map((item, i) => (
@@ -221,7 +201,7 @@ function ResultBody({ agent, card }: ResultBodyProps) {
           </ul>
         </section>
       )}
-      <AttachmentLightbox agent={agent} viewing={viewing} onClose={() => setViewing(null)} />
+      {viewer}
     </>
   );
 }
@@ -273,6 +253,14 @@ export const ResultCardView = memo(function ResultCardView({
   const [opened, setOpened] = useState(false);
   // Agents mode's pane beside the chat; elsewhere Preview opens the project.
   const preview = useAgentPreview();
+  // Visual work that just came in shows itself: the pane opens beside the
+  // chat, once per result, and only when nothing is open there already.
+  const visual = Boolean(card.project) && comparePages(card.items).length > 0;
+  useEffect(() => {
+    if (!arrived || !newest || !visual || !preview || autoOpened.has(card.id)) return;
+    autoOpened.add(card.id);
+    if (!preview.isOpen()) preview.open(message.agentId, message.id);
+  }, [arrived, newest, visual, preview, card.id, message.agentId, message.id]);
   if (!newest && !opened) {
     return (
       <div
@@ -307,8 +295,11 @@ export const ResultCardView = memo(function ResultCardView({
         icon={<FileTextIcon size={14} />}
         title={card.title}
         meta={
-          (card.version > 1 || !newest) && (
+          (card.version > 1 || !newest || card.checkpoint) && (
             <span className="agent-result__meta">
+              {card.checkpoint && (
+                <span className="agent-result__checkpoint">{CHECKPOINT_LABEL}</span>
+              )}
               {card.version > 1 && <span className="agent-result__version">v{card.version}</span>}
               {!newest && (
                 <TextButton tabIndex={0} onClick={() => setOpened(false)}>

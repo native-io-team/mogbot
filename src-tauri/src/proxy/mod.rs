@@ -489,6 +489,17 @@ pub fn dev_server_port_for(project_path: &str) -> Option<u16> {
         .map(|(_, instance)| instance._target_port)
 }
 
+/// Every dev server behind a preview, as (project path, its port).
+pub fn dev_servers() -> Vec<(String, u16)> {
+    let Ok(instances) = PROXY_INSTANCES.lock() else {
+        return Vec::new();
+    };
+    instances
+        .iter()
+        .map(|((_, path), instance)| (path.clone(), instance._target_port))
+        .collect()
+}
+
 /// Start a reverse proxy for the given window, forwarding to `target_port`.
 /// Returns the proxy's listening port.
 pub async fn start_preview_proxy(
