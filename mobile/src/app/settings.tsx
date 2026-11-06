@@ -15,7 +15,7 @@ import { useUsageRows } from '../lib/usagePlan';
 import { appInfo } from '../lib/pairing';
 import { setPref } from '../lib/prefs';
 import { ALERTS_WHILE_OPEN, isOfficialBuild, pushLine } from '../lib/push';
-import { enableAlerts, unpair } from '../lib/session';
+import { canCall, enableAlerts, unpair } from '../lib/session';
 import { MAC_FEATURES } from '@shipstudio/companion-protocol';
 import { useApp, useServed, type AppearancePref } from '../lib/store';
 import { useAccent, useSwitchColors } from '../lib/accent';
@@ -66,6 +66,7 @@ export default function Settings() {
   const colors = useColors();
   const router = useRouter();
   const servesTeam = useServed('agents.loginsTeam', MAC_FEATURES.logins);
+  const canImport = useApp((s) => canCall('agents.import.status', s.welcome));
   const credentials = useApp((s) => s.credentials);
   const connected = useApp((s) => s.link.kind === 'connected');
   // The route in use now, never assumed: nothing while it isn't connected.
@@ -202,6 +203,11 @@ export default function Settings() {
           footer="The apps your agents asked for, one row each. Sign in from here, or on your Mac."
         >
           <Row label="What your team needs" onPress={() => router.push('/logins')} last />
+        </Section>
+      )}
+      {canImport && (
+        <Section title="Bring agents in" footer="From Grok Bot, ChatGPT or any other assistant.">
+          <Row label="Import agents" onPress={() => router.push('/import')} last />
         </Section>
       )}
       {accounts.length > 0 && (

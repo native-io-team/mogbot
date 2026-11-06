@@ -25,7 +25,6 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
 import { AgentRow } from '../../../components/AgentRow';
 import { ImportChoiceCard } from '../../../components/ImportChoiceCard';
-import { choose } from '../../../components/menu';
 import { RoomRow } from '../../../components/RoomRow';
 import { pendingHere, roomKey, roomsOffered, sortRooms } from '../../../lib/rooms';
 import { ChatView } from '../../../components/ChatView';
@@ -105,7 +104,6 @@ export default function Agents() {
   const overview = useApp((s) => s.overview);
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
   const live = useApp((s) => s.link.kind === 'connected');
-  const canImport = useApp((s) => canCall('agents.import.status', s.welcome));
   const removed = useApp(
     (s) =>
       s.link.kind === 'refused' && (s.link.reason === 'revoked' || s.link.reason === 'unauthorized')
@@ -273,21 +271,10 @@ export default function Agents() {
             {/* Always offered: an older Mac's sheet hands the request to the Chief instead. */}
             {hasList && (
               <IconButton
-                name="square.and.pencil"
+                name="plus"
                 label="New agent"
                 fallback="+"
                 onPress={() => router.push('/new-agent')}
-              />
-            )}
-            {/* Import lives here once the home's one-time question is answered. */}
-            {hasList && canImport && (
-              <IconButton
-                name="ellipsis"
-                label="More"
-                fallback="⋯"
-                onPress={() =>
-                  choose(undefined, [{ label: 'Import agents', run: () => router.push('/import') }])
-                }
               />
             )}
             <IconButton
@@ -299,7 +286,7 @@ export default function Agents() {
           </View>
         ),
       }),
-    [colors, styles, hasList, canImport, router]
+    [colors, styles, hasList, router]
   );
   const list = (
     <Animated.FlatList
