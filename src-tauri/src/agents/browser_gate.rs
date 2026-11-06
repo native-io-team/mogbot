@@ -873,6 +873,10 @@ fn decide(level: Level, agent: &Agent, name: &str, input: &Value, page: &Page) -
                 free(interaction_may_go(level, page, name, input))
             }
         }
+        // Steps without a tool name: Chrome refuses the batch without doing
+        // anything, so a card for it is a question about nothing. Checked
+        // before reading the steps (which would guess a tool from `action`).
+        "browser_batch" if batch_unnamed(input) => Gate::Refuse(BATCH_SHAPE.into()),
         "browser_batch" => match batch_steps(input) {
             Some(steps) if !steps.is_empty() => {
                 // Steps after a navigation in the batch land on a page whose

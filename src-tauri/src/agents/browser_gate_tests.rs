@@ -401,9 +401,12 @@ fn a_batch_goes_through_only_when_every_step_would() {
     assert_eq!(at(Level::Often, "browser_batch", calm), Gate::Ask);
 }
 
-/// Steps written flat read as the same tools: looking goes, sending asks.
+/// Steps written flat (`{"action": …}` with no tool name): Claude in Chrome
+/// refuses the whole batch without doing anything (observed on Gmail: the
+/// card was allowed, then the call failed). So they're refused here at every
+/// level with the right shape, never put on a card.
 #[test]
-fn a_flat_batch_is_judged_step_by_step() {
+fn a_flat_batch_is_refused_with_the_shape_not_a_card() {
     let look = json!({"actions": [
         {"action": "navigate", "tabId": 7, "url": "https://mail.google.com/mail/u/0/#sent"},
         {"action": "wait", "duration": 3},
@@ -413,15 +416,15 @@ fn a_flat_batch_is_judged_step_by_step() {
         {"action": "type", "text": "Hi", "tabId": 7},
         {"action": "left_click", "ref": "ref_4", "tabId": 7}
     ]});
-    for level in [Level::GoHard, Level::FullSend] {
-        assert_eq!(
-            at(level, "browser_batch", look.clone()),
-            Gate::Allow,
-            "{level:?}"
-        );
+    for level in [Level::Often, Level::GoHard, Level::FullSend] {
+        for batch in [&look, &sends] {
+            assert_eq!(
+                at(level, "browser_batch", batch.clone()),
+                Gate::Refuse(super::BATCH_SHAPE.into()),
+                "{level:?}"
+            );
+        }
     }
-    assert_eq!(at(Level::GoHard, "browser_batch", sends), Gate::Ask);
-    assert_eq!(at(Level::Often, "browser_batch", look), Gate::Ask);
 }
 
 #[test]
