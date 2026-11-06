@@ -8,7 +8,10 @@
   position: relative;
   z-index: var(--z-dropdown);
   flex-shrink: 0;
-  padding: var(--space-08);
+  /* No top inset: the list's clip line is the footer's top edge, so rows
+   * fade right up to the first footer row. An inset here left a dead strip
+   * between where the list was cut and where the footer began. */
+  padding: 0 var(--spacing-sm) var(--spacing-sm);
   border-top: 0;
   overflow: visible;
 }
