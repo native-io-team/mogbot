@@ -41,6 +41,7 @@ jest.mock('../src/lib/store', () => ({
 
 import { WhatItCanDo, policyDetail } from '../src/components/policy';
 import { SettingsChange } from '../src/components/settingsChange';
+import { PlanList } from '../src/components/planList';
 
 const settingsCard = real.frames
   .flatMap((f) => (f.t === 'evt' && f.event.type === 'agents.message' ? [f.event.message] : []))
@@ -58,6 +59,21 @@ describe('a settings card', () => {
     expect(settingsLines(proposal)).toEqual([
       'Hiring: Can now work in client-site (its own copy). Can no longer use your browser.',
     ]);
+  });
+});
+
+describe('a plan card', () => {
+  it('lists every action as the Mac wrote it, numbered, with where and why', async () => {
+    const planCard = real.frames
+      .flatMap((f) => (f.t === 'evt' && f.event.type === 'agents.message' ? [f.event.message] : []))
+      .find((m) => m.approval?.plan) as AgentMessage;
+    expect(planCard.approval!.title).toBe('Do these under your name?');
+    await render(<PlanList plan={planCard.approval!.plan!} />);
+    expect(screen.getByText("1. Redeploy shippy's production on Vercel")).toBeTruthy();
+    expect(screen.getByText('2. Open an issue about the failed build')).toBeTruthy();
+    expect(screen.getByText('3. Comment on #12 with the fix')).toBeTruthy();
+    expect(screen.getAllByText('julian/shippy')).toHaveLength(2);
+    expect(screen.getByText(/^Why: /)).toBeTruthy();
   });
 });
 

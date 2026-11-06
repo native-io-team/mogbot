@@ -123,7 +123,7 @@ pub fn floor(tool: &str, input: &Value, ctx: &Ctx) -> bool {
 
 /* ------------------------------------------------------------ paths */
 
-fn resolve(raw: &str, ctx: &Ctx) -> Option<PathBuf> {
+pub(super) fn resolve(raw: &str, ctx: &Ctx) -> Option<PathBuf> {
     let home = ctx.home.to_string_lossy().to_string();
     let raw = raw.replace("${HOME}", &home).replace("$HOME", &home);
     if raw.contains('$') {
@@ -622,11 +622,46 @@ fn lex_into(src: &str, out: &mut Vec<Vec<String>>, depth: u8) {
 
 /* ------------------------------------------------------------ commands */
 
+/* --------------------------------------------- one yes for the plan */
+
+thread_local! {
+    /// The commands a plan the user allowed covers (`plan_grant`), for the
+    /// one evaluation in progress on this thread: each runs as if it were
+    /// local work, while everything else on the line is judged as usual.
+    static COVERED: std::cell::RefCell<Vec<Vec<String>>> =
+        const { std::cell::RefCell::new(Vec::new()) };
+}
+
+/// `f`, with `covered` (commands as [`commands`] splits them) treated as
+/// allowed by the user's plan. Nothing else on the line changes: a secret in
+/// an address, a protected file or another command still asks.
+pub(super) fn with_covered<T>(covered: Vec<Vec<String>>, f: impl FnOnce() -> T) -> T {
+    struct Reset;
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            COVERED.with(|c| c.borrow_mut().clear());
+        }
+    }
+    COVERED.with(|c| *c.borrow_mut() = covered);
+    let _reset = Reset;
+    f()
+}
+
+fn plan_covers(words: &[String]) -> bool {
+    COVERED.with(|c| c.borrow().iter().any(|w| w.as_slice() == words))
+}
+
 fn command_asks(command: &str, ctx: &Ctx, outside: bool) -> bool {
     let lower = command.to_ascii_lowercase();
     // `osascript` reading its script from a here-document or a pipe: the
     // script is not its arguments, so look at the whole line.
+    let plan_osascript = COVERED.with(|c| {
+        c.borrow()
+            .iter()
+            .any(|w| w.iter().any(|x| base(x) == "osascript"))
+    });
     if !ctx.full_send
+        && !plan_osascript
         && lower.contains("osascript")
         && OSASCRIPT_SENDS.iter().any(|w| lower.contains(w))
     {
@@ -686,7 +721,7 @@ const WRAPPERS: &[&str] = &[
     "stdbuf",
 ];
 
-fn base(w: &str) -> &str {
+pub(super) fn base(w: &str) -> &str {
     w.rsplit('/').next().unwrap_or(w)
 }
 
@@ -709,6 +744,7 @@ fn resolve_known(raw: &str, ctx: &Ctx, known: bool) -> Option<PathBuf> {
 }
 
 fn simple_asks(words: &[String], ctx: &Ctx, outside: bool, known: bool) -> bool {
+    let planned = plan_covers(words);
     let mut words: Vec<&str> = words.iter().map(String::as_str).collect();
     // Redirect targets: writing into a protected file asks.
     let mut targets = Vec::new();
@@ -750,6 +786,10 @@ fn simple_asks(words: &[String], ctx: &Ctx, outside: bool, known: bool) -> bool 
     }
     if base(prog) == "find" {
         return find_asks(args, ctx, outside, known);
+    }
+    // In the plan the user allowed (`plan_grant` never covers the floor).
+    if planned {
+        return false;
     }
     program(base(prog), args, ctx, outside, known)
 }
@@ -984,7 +1024,7 @@ pub fn moves_data_off_mac(command: &str, ctx: &Ctx) -> bool {
 
 /// The command a line of words runs, past leading assignments, shell
 /// keywords and wrappers (`env`, `eval`, `xargs`, `timeout`…).
-fn unwrapped<'a, 'b>(mut rest: &'a [&'b str]) -> &'a [&'b str] {
+pub(super) fn unwrapped<'a, 'b>(mut rest: &'a [&'b str]) -> &'a [&'b str] {
     loop {
         match rest.first() {
             Some(w) if is_assignment(w) || KEYWORDS.contains(w) => rest = &rest[1..],
@@ -1164,7 +1204,7 @@ fn has(args: &[&str], any: &[&str]) -> bool {
 }
 
 /// Positional arguments (not flags).
-fn positional<'a>(args: &[&'a str]) -> Vec<&'a str> {
+pub(super) fn positional<'a>(args: &[&'a str]) -> Vec<&'a str> {
     args.iter()
         .copied()
         .filter(|a| !a.starts_with('-'))
@@ -1635,7 +1675,7 @@ fn full_send_program(prog: &str, args: &[&str], ctx: &Ctx) -> Option<bool> {
 }
 
 /// A web address (or bare host) on a payment API.
-fn pay_api(arg: &str) -> bool {
+pub(super) fn pay_api(arg: &str) -> bool {
     let rest = arg.split_once("://").map(|(_, r)| r).unwrap_or(arg);
     let host = rest
         .split(['/', ':', '?', '#'])
@@ -2145,7 +2185,10 @@ fn connector_asks(tool: &str, outside: bool) -> bool {
     // A send word counts only as the verb: `post_message`, `createPost`,
     // `publishPost` send; `capturePost`, `upsertSocialPosts` and `listPosts`
     // name posts without sending one.
-    if verbs.iter().any(|w| SENDS_SPENDS_DELETES.contains(&w.as_str())) {
+    if verbs
+        .iter()
+        .any(|w| SENDS_SPENDS_DELETES.contains(&w.as_str()))
+    {
         return true;
     }
     // A code host or a database: any write there is a push, a pull request,

@@ -6159,6 +6159,7 @@ mod tests {
                 from_outside: None,
                 front: None,
                 settings: None,
+                plan: None,
             });
             store::append_message(&card).unwrap();
             let err = begin_fresh(&a.id).unwrap_err().to_string();

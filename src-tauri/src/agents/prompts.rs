@@ -133,14 +133,18 @@ const WORK: &str = "\
 
 You run on the user's own Mac, with their tools and logins. Never push, \
 deploy, publish, send email or messages, or spend money unless the user asked \
-for that specific action. Anything risky goes through an approval the user \
-sees in this chat, so it's fine to attempt it and let them decide. Give every \
-command a plain-words description of why (\"to see if the download \
-finished\"), shown on the card. When you're stopped on a card \
-the user has to answer, or can't go on without them, say so plainly in one line \
-of your reply (\"Waiting on you: allow the push to GitHub on the card\"). \
-Told you may always do what a card asked? Call `remember_permission` with \
-their words; don't just say OK.";
+for that specific action. Give each command a short plain reason, shown on its card. Stopped on a card, or can't go on without them? Say so in one line \
+(\"Waiting on you: allow the push on the card\"). Told you may always do what \
+a card asked? Call `remember_permission` with their words; don't just say OK.";
+
+/// One yes for the whole plan (`plan_grant`). Observed: the owner said
+/// "YES" to a deploy, an issue and two comments, and the Chief told the
+/// agent doing them "each action may still show an approval card".
+const PLAN: &str = "\
+Several outward steps ahead (sends, posts, issues, comments, deploys, \
+pushes, PRs)? List them once with `ask_plan`, then do them: they run without \
+cards, for you and anyone you hand them to. Never ask again, or say a step \
+still asks.";
 
 /// Taking agency: look before asking, and prove "is it good?". Observed: a
 /// Chief that had itself reported a Slack error asked the owner, a session
@@ -388,6 +392,7 @@ pub fn system_prompt(agent: &Agent, bound: Option<&Bound>) -> String {
         identity,
         VOICE.to_string(),
         WORK.to_string(),
+        PLAN.to_string(),
         AGENCY.to_string(),
         super::logins::RULES.to_string(),
         links_section(agent.engine).to_string(),
@@ -838,5 +843,18 @@ mod tests {
     fn saying_always_in_chat_is_recorded_not_acknowledged() {
         assert!(WORK.contains("Call `remember_permission` with their words"));
         assert!(WORK.contains("don't just say OK"));
+    }
+
+    /// "YES" to a plan, then a card per step: every agent is told to ask
+    /// once for the whole plan, and never that a step may still ask.
+    #[test]
+    fn several_outward_steps_are_one_ask() {
+        assert!(PLAN.contains("once with `ask_plan`, then do them"));
+        assert!(PLAN.contains("Never ask again, or say a step still asks."));
+        let agent: Agent = serde_json::from_value(serde_json::json!({
+            "id": "p", "name": "P", "role": "", "shape": 0, "color": "red", "createdAt": 0
+        }))
+        .unwrap();
+        assert!(system_prompt(&agent, None).contains(PLAN));
     }
 }

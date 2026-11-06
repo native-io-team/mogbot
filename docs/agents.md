@@ -1308,6 +1308,40 @@ it" / "yes do it" / "allow" and the chat has exactly one open card (not a
 sign-in, secret, session question or import card), it is allowed as their
 answer, with "Allowed from your message". Only the user's send gets there.
 
+**One yes for the whole plan** (`ask_plan`, `agents/plan_grant.rs`). Observed:
+the owner, at Go hard, typed "YES" to the Chief's plan (redeploy production on
+Vercel, one GitHub issue, two comments); the Chief told the agent doing it
+"each action may still show an approval card", and each did. Now an agent
+with several outward steps ahead lists them once: `ask_plan {actions: [{kind,
+target, summary}], why}` raises one card, "Do these under your name?", a
+numbered list with Allow / Deny (desk, phone, Catch up, or a typed yes, as
+above). When the user's own typed yes had no card to answer
+(`commands::agents::send_as`), the agent's reply just before it is kept for
+15 minutes, and an `ask_plan` from the turn answering that yes is granted
+without a card if every action's target is named in that reply ("Your yes
+covers, for an hour: …"). Allow makes a **plan grant** (in memory; a restart
+forgets it): each action matched on its kind (push, pull request, merge, issue,
+comment, release, deploy, publish, post, send, request, github) **and** its
+target (`owner/repo` from the checkout's remotes or `-R`, the folder or
+`.vercel/project.json` name, a deployment host named after the project, a
+connector's `owner`/`repo`/`channel`/`project`, a browser page's host), for 60
+minutes, each listed action once (the same call again, a retry, still
+passes). `message_agent` carries the grant to the agent it hands work to, and
+on down the chain (never from a turn answering outside text). Each covered
+call runs without a card and leaves "Under your OK · <summary>" in "What it
+did" and the chat. Production deploys, pushes to main, posting, sending and
+GitHub writes can be on a plan. **Never covered**: `sudo` and system tools,
+the Keychain and credentials (`gh secret`, `vercel env`, connector tools
+naming keys, tokens, passwords), payments (Stripe, payment APIs, connector
+tools that pay, charge or refund), anything that deletes (`rm -r` outside the
+work folders, `gh … delete`, `vercel rm`, a connector `delete_…`), force
+pushes, branch deletes, mirrors and tag pushes, launch agents and shell
+profiles, a turn answering outside text, and anything on the line the plan
+doesn't name: at "Check with me often" and "Use good judgement" (and after
+outside content) a covered command must be only listed steps and `cd`; at Go
+hard and Full send the rest of the line is judged by that level as usual
+(`go_hard::with_covered`).
+
 **Cards expire** (`agents/expiry.rs`; this supersedes the "stays live" and
 late-Allow behaviour below, which now only reaches a card from before it). A
 card whose turn ended, or that a restart left behind, closes at once as

@@ -289,6 +289,18 @@ pub(crate) async fn send_as(
     // own send, gets here.
     if typed_yes {
         let open = store::pending_approvals(&agent_id).unwrap_or_default();
+        // No card to answer: the yes may be to a plan the agent's last reply
+        // listed, which `ask_plan` then grants without a card (`plan_grant`).
+        if open.is_empty() {
+            let log_of = agent_id.clone();
+            if let Ok(Ok(log)) =
+                tokio::task::spawn_blocking(move || store::messages(&log_of, 40)).await
+            {
+                if let Some(reply) = agents::plan_grant::last_reply(&log) {
+                    agents::plan_grant::note_chat_yes(&agent_id, &reply, store::now_ms());
+                }
+            }
+        }
         if let Some(card) = agents::typed_answer::the_card(&open) {
             let request_id = card.request_id.clone();
             match answer_card(&app, &agent_id, &request_id, true, None, None, None) {
@@ -1222,6 +1234,11 @@ pub(crate) fn answer_card(
     // "Change this agent's settings?": Allow applies it, here and only here.
     if approval.settings.is_some() {
         return agents::policy_card::answer_card(app, agent_id, &approval, allow, note);
+    }
+    // "Do these under your name?": Allow is the user's OK for each listed
+    // action, here and only here (`plan_grant`).
+    if let (true, Some(plan)) = (allow, &approval.plan) {
+        agents::plan_grant::grant(agent_id, plan, store::now_ms());
     }
     if let Some(request) = &approval.secret {
         if allow {

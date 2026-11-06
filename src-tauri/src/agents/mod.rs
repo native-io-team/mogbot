@@ -107,6 +107,7 @@ pub mod other_app;
 pub mod paste;
 pub mod permissions;
 pub mod phone_signin;
+pub mod plan_grant;
 pub mod policy;
 pub mod policy_card;
 pub mod preview_test;
