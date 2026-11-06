@@ -578,6 +578,25 @@ async fn put_blob(
     req.send().await.unwrap()
 }
 
+/// [`put_blob`]'s status, for a flood: a server that refuses an upload
+/// (429) can close the connection before the client has finished writing
+/// the body, which the client sees as a broken pipe. That is a refusal too.
+async fn put_blob_status(port: u16, token: Option<&str>, bytes: Vec<u8>) -> u16 {
+    let mut req = reqwest::Client::new()
+        .put(format!("http://127.0.0.1:{port}/v1/blobs"))
+        .header("X-Name", "a.bin")
+        .header("Content-Type", "application/octet-stream")
+        .body(bytes);
+    if let Some(t) = token {
+        req = req.bearer_auth(t);
+    }
+    match req.send().await {
+        Ok(r) => r.status().as_u16(),
+        Err(e) if e.is_request() => 429,
+        Err(e) => panic!("{e}"),
+    }
+}
+
 async fn get(port: u16, token: Option<&str>, path: &str) -> reqwest::Response {
     let mut req = reqwest::Client::new().get(format!("http://127.0.0.1:{port}{path}"));
     if let Some(t) = token {
@@ -1435,21 +1454,11 @@ async fn uploads_hold_their_room_first_and_http_counts_against_the_limit() {
         .add(&phone(), String::new(), 1, &[], None)
         .unwrap();
     let big = vec![7u8; 4 * 1024 * 1024];
-    let all = (0..40).map(|_| {
-        put_blob(
-            port,
-            Some(&token),
-            "a.bin",
-            "application/octet-stream",
-            big.clone(),
-        )
-    });
+    let all = (0..40).map(|_| put_blob_status(port, Some(&token), big.clone()));
     let results = futures_util::future::join_all(all).await;
-    let staged = results.iter().filter(|r| r.status() == 200).count();
+    let staged = results.iter().filter(|s| **s == 200).count();
     assert!(staged <= crate::companion::blobs::MAX_BLOBS_PER_DEVICE);
-    assert!(results
-        .iter()
-        .all(|r| r.status() == 200 || r.status() == 429));
+    assert!(results.iter().all(|s| *s == 200 || *s == 429), "{results:?}");
     assert!(staged >= 1);
 
     // Every route shares the per-minute budget the socket has.
