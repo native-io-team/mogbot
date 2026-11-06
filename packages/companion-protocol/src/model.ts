@@ -223,7 +223,8 @@ export interface ContextFill {
 }
 
 export interface Failure {
-  kind: 'usage_limit' | 'signed_out' | 'other';
+  /** `interrupted`: cut off part-way and not picked up by itself; Continue carries on. */
+  kind: 'usage_limit' | 'signed_out' | 'interrupted' | 'other';
   resetsAt?: number;
 }
 

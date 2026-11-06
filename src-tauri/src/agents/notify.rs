@@ -589,6 +589,7 @@ mod tests {
                         kind: match k {
                             "usage_limit" => FailureKind::UsageLimit,
                             "signed_out" => FailureKind::SignedOut,
+                            "interrupted" => FailureKind::Interrupted,
                             _ => FailureKind::Other,
                         },
                         resets_at: None,

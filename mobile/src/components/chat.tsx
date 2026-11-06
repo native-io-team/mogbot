@@ -20,7 +20,7 @@ import { useRouter } from 'expo-router';
 import { engineName, failureLine, folderName, formatClock } from '../lib/agents';
 import { drivenWait } from '../lib/bars';
 import { haptic } from '../lib/haptics';
-import { canCall, discardPending, editPending, resend } from '../lib/session';
+import { canCall, discardPending, editPending, resend, send } from '../lib/session';
 import type { PendingSend } from '../lib/sync';
 import {
   avatarSize,
@@ -552,6 +552,9 @@ function FailureCard({
   const colors = useColors();
   const router = useRouter();
   const signedOut = message.failure?.kind === 'signed_out';
+  // Cut off part-way and not picked up by itself: Continue carries on in
+  // the same conversation (never the request again, which could redo it).
+  const interrupted = message.failure?.kind === 'interrupted';
   const engine = engineName(agent);
   const project = agent.project ? folderName(agent.project) : null;
   // The Mac's words, when they say more than the title already does.
@@ -571,7 +574,9 @@ function FailureCard({
           ? undefined
           : signedOut
             ? `Sign in to ${engine} on your Mac, then send it again.`
-            : 'Send a message to try again.'
+            : interrupted
+              ? undefined
+              : 'Send a message to try again.'
       }
       actions={
         signedOut ? (
@@ -579,6 +584,12 @@ function FailureCard({
             title="Connection details"
             variant="outline"
             onPress={() => router.push('/connection')}
+          />
+        ) : interrupted && latest ? (
+          <Button
+            title="Continue"
+            variant="outline"
+            onPress={() => void send(agent.id, 'Continue').catch(() => {})}
           />
         ) : undefined
       }

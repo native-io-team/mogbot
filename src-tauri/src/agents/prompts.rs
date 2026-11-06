@@ -6,8 +6,10 @@
 
 use super::store::Agent;
 
-/// MCP server key. Tool ids the CLI sees are `mcp__shipstudio_agents__<tool>`.
-pub const SERVER_KEY: &str = "shipstudio_agents";
+/// MCP server key. Tool ids the CLI sees are `mcp__app__<tool>`. Name-free:
+/// it was `shipstudio_agents`, and agents read their tool ids as the app's
+/// name ("No Ship Studio sessions are open").
+pub const SERVER_KEY: &str = "app";
 
 pub fn approval_tool_id() -> String {
     format!("mcp__{SERVER_KEY}__approve")
@@ -475,6 +477,15 @@ fn interrupted_parts(previous: &str, activity: Option<&str>) -> (String, String)
         .map(|a| format!("Your last step was: {a}.\n\n"))
         .unwrap_or_default();
     (was, step)
+}
+
+/// What a turn picked up after it was cut off is told, in the conversation
+/// it was cut off in. `why`: "The app restarted", "Claude Code stopped
+/// unexpectedly".
+pub fn carry_on(why: &str) -> String {
+    format!(
+        "[{why} while you were working on this, so you stopped part-way. This is the same conversation: everything you did is above. Carry on from where you were. What you already did stands (files you wrote are written, commands you ran have run, messages you sent were sent): don't redo finished steps, and if you can't tell whether one finished, check before doing it again. Then finish what was asked. Don't apologise for the interruption or mention it unless asked.]"
+    )
 }
 
 /// What the first turn after a take-over is told: the user drove this very

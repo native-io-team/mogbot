@@ -44,12 +44,12 @@ pub struct BundledSkill {
 pub const BUNDLED_SKILLS: &[BundledSkill] = &[
     BundledSkill {
         name: "workflows",
-        version: "1",
+        version: "2",
         body: super::super::workflows::skill::skill_markdown,
     },
     BundledSkill {
         name: "team",
-        version: "4",
+        version: "5",
         body: super::super::team::skill::skill_markdown,
     },
     BundledSkill {

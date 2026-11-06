@@ -645,7 +645,7 @@ mod tests {
             .contains(&r#"sandbox_workspace_write.writable_roots=["/h/a","/u/Ship \"Studio\""]"#));
         // Commands get no network whatever the user's config.toml says.
         assert!(config.contains(&"sandbox_workspace_write.network_access=false"));
-        assert!(config.contains(&r#"mcp_servers.shipstudio_agents={url="http://127.0.0.1:9/mcp/agent",bearer_token_env_var="SHIPSTUDIO_AGENTS_BRIDGE_TOKEN",tool_timeout_sec=300,default_tools_approval_mode="approve"}"#));
+        assert!(config.contains(&r#"mcp_servers.app={url="http://127.0.0.1:9/mcp/agent",bearer_token_env_var="SHIPSTUDIO_AGENTS_BRIDGE_TOKEN",tool_timeout_sec=300,default_tools_approval_mode="approve"}"#));
         assert!(config.contains(&r#"developer_instructions="Be \"brief\".\nOk""#));
         assert!(fresh.windows(2).any(|w| w[0] == "-m" && w[1] == "gpt-5.5"));
         assert_eq!(fresh.last().unwrap(), "-");

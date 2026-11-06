@@ -21,6 +21,7 @@ fn direct(text: &str) -> Inbound {
         ticket: None,
         room: None,
         outside: false,
+        resume: 0,
     }
 }
 

@@ -398,3 +398,5 @@ mod tests {
 mod audit_tests;
 #[cfg(test)]
 mod avatar_tests;
+#[cfg(test)]
+mod brand_copy_tests;

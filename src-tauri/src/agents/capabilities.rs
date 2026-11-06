@@ -213,14 +213,14 @@ mod tests {
             "type": "system", "subtype": "init",
             "tools": [
                 "Bash", "Edit", "Read", "WebFetch",
-                "mcp__shipstudio_agents__message_agent",
-                "mcp__shipstudio_agents__session_start",
-                "mcp__shipstudio_agents__share_file",
+                "mcp__app__message_agent",
+                "mcp__app__session_start",
+                "mcp__app__share_file",
                 "mcp__claude-in-chrome__navigate",
                 "mcp__claude_ai_Gmail__send_email"
             ],
             "mcp_servers": [
-                { "name": "shipstudio_agents", "status": "connected" },
+                { "name": "app", "status": "connected" },
                 { "name": "claude-in-chrome", "status": "connected", "source": "dynamic" },
                 { "name": "claude.ai Gmail", "status": "connected" },
                 { "name": "Sanity", "status": "connected" },

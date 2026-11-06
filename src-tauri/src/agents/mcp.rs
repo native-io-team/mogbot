@@ -408,7 +408,7 @@ pub fn initialize_result(params: Option<&Value>) -> Value {
         "protocolVersion": requested,
         "capabilities": { "tools": {} },
         "serverInfo": { "name": crate::brand::scoped("agents"), "version": env!("CARGO_PKG_VERSION") },
-        "instructions": format!("{}: the user's projects, which you work on through their sessions (project_* and session_* tools), other agents you can message, and (for the Chief of Staff) creating and managing agents.", crate::brand::NAME)
+        "instructions": "The app you live in, on the user's Mac: the user's projects, which you work on through their sessions (project_* and session_* tools), other agents you can message, and (for the Chief of Staff) creating and managing agents. Call it \"the app\"."
     })
 }
 
@@ -431,6 +431,12 @@ fn serves(tool: &Tool, caller: &store::Agent) -> bool {
         "read_agent" => caller.is_main || super::admin::admin_now(caller),
         _ => !tool.main_only || caller.is_main,
     }
+}
+
+/// `tools/list` as `caller` is served it, for the copy scan (`brand_copy_tests`).
+#[cfg(test)]
+pub(super) fn tools_list_for_tests(caller: &store::Agent) -> Value {
+    tools_list(caller)
 }
 
 fn tools_list(caller: &store::Agent) -> Value {

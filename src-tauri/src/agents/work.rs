@@ -1865,6 +1865,41 @@ pub fn live(agent_id: &str) -> Option<TurnWork> {
     })
 }
 
+/// The whole timeline so far, as it would be kept if the turn ended now
+/// (what each step printed left out): saved into the turn's mark as it
+/// goes, so a turn the app or its engine cut off still keeps what it did.
+pub fn snapshot(agent_id: &str) -> Option<TurnWork> {
+    with_live(agent_id, |live| {
+        let mut work = live.work.clone();
+        for step in &mut work.steps {
+            step.output = Vec::new();
+        }
+        work.doing = None;
+        work.current = None;
+        work.last_sign_at = None;
+        work.quiet_since = None;
+        work
+    })
+    .filter(|w| w.step_count > 0)
+}
+
+/// A cut-off turn's saved timeline, kept under the line that says what
+/// became of it (and sent again carrying it), as [`finish`] would have.
+pub fn keep_under(app: &AppHandle, message: &AgentMessage, mut work: TurnWork, now: i64) {
+    if work.step_count == 0 {
+        return;
+    }
+    work.ended_at = Some(work.ended_at.unwrap_or(now).max(work.started_at));
+    if let Err(e) = save(&message.agent_id, &message.id, &work) {
+        tracing::warn!("[Agents] couldn't keep a cut-off turn's timeline: {e}");
+        return;
+    }
+    prune(&message.agent_id);
+    let mut message = message.clone();
+    message.work = Some(work);
+    let _ = app.emit(super::runner::EVENT_MESSAGE, &message);
+}
+
 /// The agent is gone: so is any timeline it was keeping.
 pub fn forget_agent(agent_id: &str) {
     super::workplace::forget_agent(agent_id);
