@@ -15,9 +15,10 @@
 //! - **A missed one-time check-in fires once, late, when the app reopens**,
 //!   and says it's late. The user asked for it; late beats never. An agent
 //!   that missed several is woken once, with all of their notes.
-//! - **A missed routine doesn't backfill.** A week away is not seven briefs.
-//!   A run missed by a few minutes (the Mac was asleep at 9:00 and woke at
-//!   9:10) still runs, marked late; anything older waits for its next time.
+//! - **A missed routine runs once, late, and doesn't backfill.** A week away
+//!   is one brief when the app reopens, marked late, not seven, and never
+//!   none: a routine is never skipped silently. If its next time is only
+//!   minutes off, the late run stands in for it.
 //! - **At most one check-in fires per tick**, most overdue first, so a
 //!   backlog at launch can't start every agent at once.
 //!
@@ -50,7 +51,8 @@ const MAX_NOTE_CHARS: usize = 600;
 /// Fired more than this after it was due: the app wasn't running (or the Mac
 /// was asleep), so it's marked late. A tick is a minute; three is slack.
 pub const LATE_AFTER_MS: i64 = 3 * 60_000;
-/// A routine missed by more than this is skipped, not run late.
+/// A routine missed by more than this runs once, late, and a next time
+/// closer than this is the one that late run stands in for.
 pub const ROUTINE_GRACE_MS: i64 = 30 * 60_000;
 
 const TICK: Duration = Duration::from_secs(60);
@@ -264,7 +266,9 @@ pub fn advance<Tz: TimeZone>(tz: &Tz, repeat: &Repeat, due: i64, now: i64) -> Op
         Repeat::Every { minutes } => {
             // Anchored on the schedule, not on when the tick happened to run,
             // so "every 2 hours" doesn't drift a minute a day.
-            let step = *minutes as i64 * MINUTE_MS;
+            // Never under the floor, whatever a file on disk says: a
+            // `minutes: 0` would divide by zero here, every tick.
+            let step = (*minutes).max(MIN_EVERY_MINUTES) as i64 * MINUTE_MS;
             let behind = (now - due).max(0) / step + 1;
             Some(due + behind * step)
         }
@@ -522,8 +526,6 @@ pub enum Due {
     /// Run it now. `next` is when a routine fires after this; `None` for a
     /// one-time check-in, which is then removed.
     Fire { late: bool, next: Option<i64> },
-    /// A routine whose time passed long ago: move on without running it.
-    Skip { next: i64 },
     /// A failed run's retry is due (`agents::runs`); a routine's own next
     /// time doesn't move.
     Retry,
@@ -549,22 +551,23 @@ pub fn due<Tz: TimeZone>(tz: &Tz, check_in: &CheckIn, now: i64) -> Option<Due> {
     let Some(repeat) = &check_in.repeat else {
         return Some(Due::Fire { late, next: None });
     };
-    let next = advance(tz, repeat, check_in.next_at, now)?;
-    if overdue > ROUTINE_GRACE_MS {
-        Some(Due::Skip { next })
-    } else {
-        Some(Due::Fire {
-            late,
-            next: Some(next),
-        })
+    let mut next = advance(tz, repeat, check_in.next_at, now)?;
+    // Missed for longer (the app was closed, the Mac asleep): it runs once
+    // now, marked late, never once per time it missed. Should its next time
+    // be only minutes off, that one is what this run stands in for.
+    if overdue > ROUTINE_GRACE_MS && next - now < ROUTINE_GRACE_MS {
+        next = advance(tz, repeat, next, next)?;
     }
+    Some(Due::Fire {
+        late,
+        next: Some(next),
+    })
 }
 
 #[derive(Debug, Default, PartialEq)]
 pub struct Plan {
-    /// (agent id, check-in id, new next time) for routines skipped this tick.
-    pub skips: Vec<(String, String, i64)>,
-    /// The one check-in that fires this tick, most overdue first.
+    /// The one check-in that fires this tick, most overdue first. Anything
+    /// else due waits for a later tick: nothing due is ever skipped.
     pub fire: Option<Firing>,
 }
 
@@ -597,10 +600,6 @@ pub fn plan<Tz: TimeZone>(tz: &Tz, agents: &[store::Agent], now: i64) -> Plan {
         for check_in in &agent.check_ins {
             match due(tz, check_in, now) {
                 None => {}
-                Some(Due::Skip { next }) => {
-                    plan.skips
-                        .push((agent.id.clone(), check_in.id.clone(), next))
-                }
                 Some(Due::Retry) => {
                     let retry = check_in.retry.clone();
                     let at = retry.as_ref().map_or(check_in.next_at, |r| r.at);
@@ -852,7 +851,7 @@ where
             check_in.id
         ),
         Some(r) => format!(
-            "Routine set: {}, your user's local time. First run {when_text} (id {}). It runs only while the app is open on this Mac; a run missed while it's closed is skipped, not made up. Tell the user exactly this.",
+            "Routine set: {}, your user's local time. First run {when_text} (id {}). It runs only while the app is open on this Mac; if it's closed then, the routine runs once when it reopens, marked late (never once for each time it missed). Tell the user exactly this.",
             describe(r),
             check_in.id
         ),
@@ -1101,16 +1100,7 @@ fn tick(app: &AppHandle) -> Result<(), CommandError> {
     let now = store::now_ms();
     let agents = store::list()?;
     let plan = plan(&tz, &agents, now);
-    let changed = !plan.skips.is_empty() || plan.fire.is_some();
-
-    for (agent_id, id, next) in &plan.skips {
-        tracing::info!(agent = %agent_id, check_in = %id, "routine missed while closed; skipped to its next time");
-        let _ = store::update(agent_id, |a| {
-            if let Some(c) = a.check_ins.iter_mut().find(|c| &c.id == id) {
-                c.next_at = *next;
-            }
-        });
-    }
+    let changed = plan.fire.is_some();
 
     if let Some(firing) = plan.fire.filter(|f| !skip_while_driven(app, f)) {
         // Move it on before waking anyone, so a crash mid-turn can't fire it twice.
@@ -1262,6 +1252,15 @@ where
 mod tests {
     use super::*;
     use chrono::{FixedOffset, NaiveDate, Offset};
+
+    /// A routine file saying `every 0 minutes` (hand-edited, or an old or
+    /// foreign writer) used to divide by zero on every tick.
+    #[test]
+    fn a_zero_interval_on_disk_never_panics() {
+        let utc = FixedOffset::east_opt(0).unwrap();
+        let next = advance(&utc, &Repeat::Every { minutes: 0 }, 0, 10 * MINUTE_MS).unwrap();
+        assert_eq!(next, MIN_EVERY_MINUTES as i64 * MINUTE_MS);
+    }
 
     #[test]
     fn a_routine_skipped_while_driven_says_which_and_why() {
@@ -1607,7 +1606,7 @@ mod tests {
     }
 
     #[test]
-    fn a_routine_missed_by_minutes_runs_late_but_one_missed_for_days_is_skipped() {
+    fn a_missed_routine_runs_once_late_and_never_backfills() {
         let due_at = at(2026, 11, 3, 9, 0);
         // The Mac woke at 9:10: today's brief still comes, marked late.
         assert_eq!(
@@ -1621,8 +1620,8 @@ mod tests {
                 next: Some(at(2026, 11, 4, 9, 0))
             })
         );
-        // Closed since last Monday's 9:00, reopened this Saturday: no backfill,
-        // just the next weekday at 9:00.
+        // Closed since last Monday's 9:00, reopened this Saturday: one run
+        // now, marked late (not five), then the next weekday at 9:00.
         let last_monday = at(2026, 10, 26, 9, 0);
         let saturday = at(2026, 10, 31, 11, 0);
         assert_eq!(
@@ -1631,8 +1630,23 @@ mod tests {
                 &check_in("r", last_monday, weekdays_at_nine()),
                 saturday
             ),
-            Some(Due::Skip {
-                next: at(2026, 11, 2, 9, 0)
+            Some(Due::Fire {
+                late: true,
+                next: Some(at(2026, 11, 2, 9, 0))
+            })
+        );
+        // Every 2 hours, closed since 9:00 and reopened at 14:50: one late
+        // run, which stands in for 15:00 (ten minutes off); next is 17:00.
+        let every_two = Some(Repeat::Every { minutes: 120 });
+        assert_eq!(
+            due(
+                &Eastern,
+                &check_in("r", due_at, every_two),
+                at(2026, 11, 3, 14, 50)
+            ),
+            Some(Due::Fire {
+                late: true,
+                next: Some(at(2026, 11, 3, 17, 0))
             })
         );
     }
@@ -1676,7 +1690,7 @@ mod tests {
     }
 
     #[test]
-    fn one_check_in_fires_per_tick_most_overdue_first_and_skips_are_all_applied() {
+    fn one_check_in_fires_per_tick_most_overdue_first_and_nothing_is_skipped() {
         let now = at(2026, 11, 3, 15, 0);
         let agents = vec![
             agent_with("a", vec![check_in("recent", now - 60_000, None)]),
@@ -1688,15 +1702,21 @@ mod tests {
                 ],
             ),
         ];
-        let plan = plan(&Eastern, &agents, now);
-        let fire = plan.fire.unwrap();
+        let fire = plan(&Eastern, &agents, now).fire.unwrap();
+        // The routine missed for days is the most overdue: it runs (once,
+        // late), and the others wait for the next ticks rather than go.
+        assert_eq!(
+            (fire.agent_id.as_str(), fire.check_in.id.as_str(), fire.late),
+            ("b", "stale-routine", true)
+        );
+        assert_eq!(fire.next, Some(at(2026, 11, 4, 9, 0)));
+        // Next tick, with that routine moved on: the oldest check-in.
+        let mut agents = agents;
+        agents[1].check_ins[1].next_at = at(2026, 11, 4, 9, 0);
+        let fire = plan(&Eastern, &agents, now).fire.unwrap();
         assert_eq!(
             (fire.agent_id.as_str(), fire.check_in.id.as_str(), fire.late),
             ("b", "oldest", true)
-        );
-        assert_eq!(
-            plan.skips,
-            vec![("b".into(), "stale-routine".into(), at(2026, 11, 4, 9, 0))]
         );
     }
 
@@ -1790,7 +1810,9 @@ mod tests {
         );
         let routine = create_in(&Eastern, &agent.id, "every weekday at 9", "Brief", now()).unwrap();
         assert!(routine.summary.contains("every weekday at 09:00"));
-        assert!(routine.summary.contains("skipped, not made up"));
+        assert!(routine
+            .summary
+            .contains("runs once when it reopens, marked late"));
         assert!(create_in(&Eastern, &agent.id, "every weekday at 10", "Brief", now()).is_ok());
         assert!(create_in(&Eastern, &agent.id, "every weekday at 10", "Brief", now()).is_err());
         assert!(create_in(&Eastern, &agent.id, "tomorrow at 9", "  ", now()).is_err());

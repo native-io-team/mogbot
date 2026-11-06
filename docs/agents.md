@@ -2362,8 +2362,11 @@ recorded too, but never retried or announced.
 
 A one-minute tick fires them, with the workflow scheduler's rules: nothing
 fires while the app is closed, at most one firing per tick, and a routine never
-catches up a backlog. A one-time check-in missed while closed fires once, marked
-late; an agent that missed several is woken once with all of their notes. A
+catches up a backlog. A routine missed while closed runs once when the app
+reopens, marked late (never once per time it missed, and never skipped); if its
+next time is under half an hour off, that late run stands in for it. A one-time
+check-in missed while closed fires once, marked late; an agent that missed
+several is woken once with all of their notes. A
 firing records a `check_in` line in the chat, then wakes the agent with the
 note.
 
@@ -2889,7 +2892,11 @@ check-in tick is a loop inside the app. So:
   pending are marked expired (`store::expire_stale_approvals`); permission
   cards stay answerable, and a late Allow wakes the agent again. Missed
   check-ins follow the rules above: a one-time one fires once, late; a routine
-  doesn't backfill.
+  runs once, late, and doesn't backfill. A turn that panics is handled the
+  same way as one the app quit during: what it had done is kept and it is
+  picked up once in the same conversation; panicking again ends on an
+  Interrupted line with Continue. What you were typing in a chat, and where
+  you had read to, come back as they were (`src/lib/chatRestore.ts`).
 - **The Mac sleeps.** Everything, the agent's process included, is frozen
   with it, and carries on when it wakes. If its connection dropped meanwhile
   the turn can end in an error, shown with Retry like any other. A turn that
