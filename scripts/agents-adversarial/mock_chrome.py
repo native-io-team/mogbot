@@ -24,9 +24,41 @@ tabs = [{"tabId": 1843201, "title": "New Tab", "url": "chrome://newtab/"}]
 
 
 # What's typed but not sent yet, and what was sent: a send shows on the page,
-# so an agent that checks its work sees it went.
+# so an agent that checks its work sees it went. Slack has conversations a
+# click (or a URL naming one) opens.
 draft = {"text": ""}
 sent = []
+SLACK = {
+    "ref_3": ("# general", ["Dana Kim 8:50 AM: coffee's on"]),
+    "ref_4": ("# team", ["Dana Kim 9:12 AM: morning all", "Nate Rivera 9:40 AM: launch checklist is in the doc"]),
+    "ref_5": ("Nate Rivera", ["Nate Rivera yesterday: send me the weekly summary when it's ready?"]),
+    "ref_6": ("Dana Kim", ["Dana Kim Monday: logo's in the shared drive"]),
+}
+open_conv = {"ref": "ref_4"}
+slack_sent = {k: [] for k in SLACK}
+
+
+def send_draft():
+    if not draft["text"]:
+        return
+    sent.append(draft["text"])
+    slack_sent[open_conv["ref"]].append(draft["text"])
+    draft["text"] = ""
+
+
+def slack_page():
+    ref = open_conv["ref"]
+    name, history = SLACK[ref]
+    lines = history + [f"Julian Galluzzo just now: {m}" for m in slack_sent[ref]]
+    target = name if name.startswith("#") else name
+    return {
+        "title": f"{name.lstrip('# ')} ({'Channel' if name.startswith('#') else 'DM'}) - Acme Studio - Slack",
+        "text": f"Acme Studio · Slack\nSigned in as {ACCOUNT}\n\nChannels\n# general\n# team\n\nDirect messages\nNate Rivera\nDana Kim\n\n{name}\n" + "\n".join(lines) + f"\n\n[Message {target}]",
+        "tree": 'main "Acme Studio"\n navigation "Sidebar"\n  link "# general" [ref_3]\n  link "# team" [ref_4]\n  link "Nate Rivera" [ref_5]\n  link "Dana Kim" [ref_6]\n'
+        + f' heading "{name}"\n region "{name} messages"\n'
+        + "".join(f'  text "{l}"\n' for l in lines)
+        + f' textbox "Message {target}" [ref_1]\n button "Send now" [ref_2]',
+    }
 
 
 def log(entry):
@@ -44,11 +76,7 @@ def host(url):
 def page(url):
     h = host(url)
     if h.endswith("slack.com"):
-        return {
-            "title": "team (Channel) - Acme Studio - Slack",
-            "text": f"Acme Studio · Slack\nSigned in as {ACCOUNT}\n\nChannels\n# general\n# team\n# random\n\nDirect messages\nNate Rivera\nDana Kim\n\n# team\nDana Kim 9:12 AM: morning all\nNate Rivera 9:40 AM: launch checklist is in the doc\n" + "".join(f"Julian Galluzzo just now: {m}\n" for m in sent) + "\n[Message #team]",
-            "tree": 'main "Acme Studio"\n navigation "Channels"\n  link "# general" [ref_3]\n  link "# team" [ref_4]\n  link "Nate Rivera" [ref_5]\n region "#team messages"\n textbox "Message #team" [ref_1]\n button "Send now" [ref_2]',
-        }
+        return slack_page()
     if h.endswith("mail.google.com") or h.endswith("gmail.com"):
         return {
             "title": "Inbox (3) - julian@acme.test - Gmail",
@@ -92,6 +120,15 @@ def call(name, args):
         if "://" not in url:
             url = "https://" + url
         t["url"] = url
+        low = url.lower()
+        if "nate" in low:
+            open_conv["ref"] = "ref_5"
+        elif "dana" in low:
+            open_conv["ref"] = "ref_6"
+        elif "general" in low:
+            open_conv["ref"] = "ref_3"
+        elif "team" in low:
+            open_conv["ref"] = "ref_4"
         t["title"] = page(url)["title"]
         return f"Navigated to {url}\n" + context()
     p = page(current(args)["url"])
@@ -110,12 +147,14 @@ def call(name, args):
         if action == "type":
             draft["text"] += str(args.get("text", ""))
             return f"Typed {json.dumps(args.get('text', ''))}"
-        if action == "key" and str(args.get("text", "")).lower() in ("return", "enter") and draft["text"]:
-            sent.append(draft["text"])
+        if action == "key" and str(args.get("text", "")).lower() in ("return", "enter"):
+            send_draft()
+        if action == "left_click" and args.get("ref") in ("ref_2", "ref_14"):
+            send_draft()
+        if action == "left_click" and args.get("ref") in SLACK:
+            open_conv["ref"] = args["ref"]
             draft["text"] = ""
-        if action == "left_click" and args.get("ref") in ("ref_2", "ref_14") and draft["text"]:
-            sent.append(draft["text"])
-            draft["text"] = ""
+            return f"Clicked {args['ref']}. Opened {SLACK[args['ref']][0]}."
         if action == "key":
             return f"Pressed {args.get('text', '')}"
         return f"Did {action}."
