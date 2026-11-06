@@ -1583,7 +1583,14 @@ signed-in browser and say which account it's in, and ask only if both fail.
    on a card or on the setup checklist, kept after the checklist is put
    away): never asked again; the agent carries on without it. A service the
    catalogue doesn't know matches however it's spelled ("Acme CRM",
-   "acme-crm").
+   "acme-crm"). **Unless the user asks for it again**: when the user's own
+   message in this turn names the service (its title, id or site name, whole
+   words; `access_chain::names_service`), or the Chief or an admin passes on
+   such a message (`runner::RELAYED`), the no is set aside for that request
+   and the chat says so in one line ("You asked for Slack in this request, so
+   the earlier no is set aside for it"). The no itself stays; outside text
+   never lifts it. Before, one No to Slack blocked it until Undo, even after
+   the owner asked for Slack again.
 2. **Granted already**: one of our own working connections (OAuth, `gh`).
    A claude.ai connector doesn't count (it isn't always recognised in a
    turn): it's an optional extra after the browser, never the default.

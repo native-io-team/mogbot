@@ -389,3 +389,42 @@ fn the_agents_browser_comes_before_the_users_own_chrome() {
         assert!(told.contains("from their phone"));
     });
 }
+
+/// One "No" to Slack used to block it for good, even after the owner asked
+/// for it again. The user's own words naming the service set an earlier no
+/// aside for that request; anything else still honours it.
+#[test]
+fn the_users_own_request_for_a_declined_app_lifts_the_no() {
+    with_root(|| {
+        let social = agent("Social");
+        let other = agent("Other");
+        let none = Tried::default();
+        let r = logins::build(&social, &ask("slack")).unwrap();
+        assert!(names_service("Can you post the recap to Slack?", &r));
+        assert!(names_service("check SLACK for replies", &r));
+        assert!(!names_service("post the recap to the team", &r));
+        assert!(!names_service("slackline photos", &r), "whole words only");
+
+        let no = seen(&other, "slack", ApprovalStatus::Denied, None);
+        assert!(matches!(
+            decide(&social, &r, &none, &Here::default(), std::slice::from_ref(&no)),
+            Step::AlreadyDeclined { .. }
+        ));
+        let asked = Here {
+            user_named: true,
+            ..Default::default()
+        };
+        assert_eq!(decide(&social, &r, &none, &asked, &[no]), Step::Ask);
+        // "Not needed" too.
+        let skipped = Here {
+            not_needed: vec!["slack".into()],
+            user_named: true,
+            ..Default::default()
+        };
+        assert_eq!(decide(&social, &r, &none, &skipped, &[]), Step::Ask);
+        assert_eq!(
+            lifted_line("Slack"),
+            "You asked for Slack in this request, so the earlier no is set aside for it"
+        );
+    });
+}

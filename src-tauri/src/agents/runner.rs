@@ -251,6 +251,9 @@ struct Runtime {
     /// message is queued under its chat message's id (`enqueue_user`), so a
     /// recap never hands the turn what it is also being sent.
     batch_ids: Vec<String>,
+    /// The user's own words in the turn in progress (see `user_asked`), and
+    /// any the Chief or an admin passed on with its request (`RELAYED`).
+    user_text: String,
 }
 
 /// Why a take-over can't start now.
@@ -383,8 +386,33 @@ pub fn relay_lifts_expired(caller: &store::Agent, target_id: &str) -> bool {
     let relays = (caller.is_main || super::admin::is_admin(caller)) && answering_user(&caller.id);
     if relays {
         super::expiry::new_task(target_id);
+        // What the user said goes with it: "post it to Slack" said to the
+        // Chief is the user asking for Slack (`access_chain::names_service`).
+        let words = users_words(&caller.id);
+        if !words.is_empty() {
+            RELAYED
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(target_id.to_string(), words);
+        }
     }
     relays
+}
+
+/// The user's words the Chief (or an admin) passed on to an agent with its
+/// request, taken by that agent's next turn that answers an agent.
+static RELAYED: LazyLock<Mutex<HashMap<String, String>>> = LazyLock::new(Default::default);
+
+/// The user's own words in the turn in progress (and any relayed to it),
+/// empty when there are none or the turn answers outside text.
+pub fn users_words(agent_id: &str) -> String {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .filter(|r| r.running && !r.outside)
+        .map(|r| r.user_text.clone())
+        .unwrap_or_default()
 }
 
 /// The line in the Chief's chat when an agent working on someone else's
@@ -2713,6 +2741,28 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
             && m.resume == 0
     });
     runtime.user_asked = users || (runtime.interrupted.is_some() && runtime.user_asked);
+    let mut words: Vec<String> = batch
+        .iter()
+        .filter(|m| {
+            matches!(m.from, From::User)
+                && m.room.is_none()
+                && m.ticket.is_none()
+                && !m.routine
+                && !m.outside
+                && m.resume == 0
+        })
+        .map(|m| m.text.clone())
+        .collect();
+    if batch.iter().any(|m| matches!(m.from, From::Agent { .. }) && !m.outside) {
+        if let Some(relayed) = RELAYED
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(agent_id)
+        {
+            words.push(relayed);
+        }
+    }
+    runtime.user_text = words.join("\n");
     // Outside text taints the turn, and the turn that replaces it.
     runtime.outside |= batch.iter().any(|m| m.outside);
     let request = batch.first().map(|m| m.text.clone()).unwrap_or_default();
@@ -2864,6 +2914,7 @@ fn finish_if_idle(agent_id: &str) -> Option<Idle> {
     runtime.turn_mixed = false;
     runtime.outside = false;
     runtime.user_asked = false;
+    runtime.user_text.clear();
     Some(Idle {
         owed: std::mem::take(&mut runtime.owed),
         tickets: std::mem::take(&mut runtime.tickets),
@@ -2986,6 +3037,7 @@ fn reset_after_panic(agent_id: &str, progressed: bool) -> PanicReset {
     runtime.turn_mixed = false;
     runtime.outside = false;
     runtime.user_asked = false;
+    runtime.user_text.clear();
     // What is recorded from now on is the agent's own, not the dead turn's room's.
     let room = runtime.room.take().map(|r| r.room_id);
     runtime.status = Some(Status::idle());
