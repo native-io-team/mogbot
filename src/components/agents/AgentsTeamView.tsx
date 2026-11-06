@@ -64,6 +64,7 @@ import { AgentsSpareNote } from './AgentsUsage';
 import { kbd } from '../../lib/shortcuts';
 import { cardsGroup, groupLine, newestCardAt } from '../../lib/agentRequests';
 import { formatAgo } from '../../lib/workflows';
+import { previewText } from '../../../packages/companion-protocol/src/preview';
 import {
   progressLine,
   resumeTeamSetup,
@@ -525,7 +526,7 @@ export function AgentsTeamView({
                     : needsYou(agent)
                       ? 'Needs your OK'
                       : 'Answered'
-                  : failureLine(kind, agent.preview);
+                  : failureLine(kind, previewText(agent.preview));
               const at = newestCardAt(approvals) ?? (kind ? failure?.ts : undefined);
               // Something to open under the row: its cards, or the failure's next step.
               const foldable = approvals.length > 0 || Boolean(failure && kind && !pending);
@@ -614,7 +615,7 @@ export function AgentsTeamView({
                   <div key={agent.id} className="agents-team__group">
                     <Row
                       agent={agent}
-                      line={kind ? failureLine(kind, agent.preview) : 'Paused'}
+                      line={kind ? failureLine(kind, previewText(agent.preview)) : 'Paused'}
                       state="limited"
                       onOpen={() => onOpenAgent(agent.id)}
                     />

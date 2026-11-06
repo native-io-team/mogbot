@@ -325,9 +325,13 @@
   max-width: 100%;
   overflow-y: auto;
   overflow-x: hidden;
-  /* The footer overlaps this area by its fade (sidebar-footer.css, 48px).
-   * The list ends above it, and keyboard focus and scrollIntoView keep rows
-   * clear of it, so nothing comes to rest half-hidden under the fade. */
+  /* The list fades out into the footer instead of being cut by a hard edge:
+   * the bottom band of the scroll box is masked to transparent. The same
+   * band is bottom padding, so the last row scrolls fully clear of the fade,
+   * and keyboard focus and scrollIntoView keep rows out of it too. The mask
+   * belongs to the box, not the content, so it stays put while rows scroll.
+   * It is on only while rows are hidden below (`data-more-below`, set by
+   * useMoreBelow): a list that fits keeps its last rows at full strength. */
   padding: 0 0 var(--size-sidebar-footer-fade);
   scroll-padding-bottom: var(--size-sidebar-footer-fade);
   /* Plain block layout. Every child takes a full line. */
@@ -359,14 +363,23 @@
   display: block;
 }
 
+.workspace-sidebar-scroll[data-more-below] {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    var(--mask-opaque) calc(100% - var(--size-sidebar-footer-fade)),
+    transparent
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    var(--mask-opaque) calc(100% - var(--size-sidebar-footer-fade)),
+    transparent
+  );
+}
+
 .workspace-sidebar-scroll::-webkit-scrollbar {
   display: none;
   width: 0;
   height: 0;
-}
-
-.workspace-sidebar.is-hidden .workspace-sidebar-scroll {
-  padding-bottom: 0;
 }
 
 .workspace-sidebar.is-hidden .sidebar-project {

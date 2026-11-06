@@ -23,6 +23,7 @@ import {
   tokenCount,
   workingRowLine,
 } from '@shipstudio/companion-protocol';
+import { previewText } from '@shipstudio/companion-protocol';
 import { drivenLine } from './bars';
 import { diffLineKind } from './diff';
 import { ENGINE_DEFAULT } from './newAgentDefaults';
@@ -141,8 +142,8 @@ export function subtitle(agent: Agent, now = Date.now()): string {
     return row.elapsed ? `${row.text} · ${row.elapsed}` : row.text;
   }
   const failure = failedTurn(agent);
-  if (failure) return failureLine(failure, agent.preview, engineName(agent));
-  return agent.preview ?? agent.role ?? '';
+  if (failure) return failureLine(failure, previewText(agent.preview), engineName(agent));
+  return previewText(agent.preview) ?? agent.role ?? '';
 }
 
 /**

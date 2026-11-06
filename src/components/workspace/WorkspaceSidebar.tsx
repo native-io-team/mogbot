@@ -53,6 +53,7 @@ import {
 } from './useProjectAgents';
 import { ProjectAtWork } from './ProjectAtWork';
 import { useNow } from '../../hooks/useNow';
+import { useMoreBelow } from '../../hooks/useMoreBelow';
 import { UpdateBanner } from '../UpdateBanner';
 import { NewAccountModal } from '../accounts/NewAccountModal';
 import { RenameProjectModal } from '../dashboard/RenameProjectModal';
@@ -470,6 +471,8 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
   onAddWorktree,
   onSwitchAccount,
 }: Props) {
+  // The list fades into the footer only while rows are hidden below it.
+  const scrollFadeRef = useMoreBelow<HTMLDivElement>();
   const appSettingsModal = useModal('settings');
   const bugReportModal = useModal('bugReport');
   const featureRequestModal = useModal('featureRequest');
@@ -1852,7 +1855,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
 
         <SpotifyWidget isSidebarHidden={isSidebarHidden} />
 
-        <div className="workspace-sidebar-scroll">
+        <div className="workspace-sidebar-scroll" ref={scrollFadeRef}>
           {listContent ? (
             listContent
           ) : hasSortableProjectGroups ? (

@@ -51,6 +51,7 @@ import {
 } from '../../../lib/session';
 import { setApp, useApp } from '../../../lib/store';
 import { useRefresh } from '../../../lib/refresh';
+import { RefreshStatus } from '../../../components/RefreshStatus';
 import { largeTitle } from '../../../lib/navigation';
 import { chromeScale, iconSize, PRESSED, radius, space } from '../../../lib/theme';
 import { makeStyles, useColors } from '../../../lib/appearance';
@@ -239,13 +240,14 @@ export default function Agents() {
 
   // Offline, a pull just lets go: the control stays mounted either way, since
   // unmounting one mid-refresh leaves the list held down (lib/refresh).
-  const { refreshing, onRefresh } = useRefresh(async () => {
-    if (useApp.getState().link.kind !== 'connected') return;
+  const { refreshing, onRefresh, outcome, dismiss } = useRefresh(async () => {
+    if (useApp.getState().link.kind !== 'connected') throw new Error('offline');
     try {
       setApp({ overview: await call('agents.overview', {}) });
       if (roomsOffered(useApp.getState().welcome)) await refreshRooms();
     } catch (e) {
       setError(describeError(e));
+      throw e;
     }
   });
 
@@ -321,6 +323,7 @@ export default function Agents() {
       }
       ListHeaderComponent={
         <>
+          <RefreshStatus outcome={outcome} onRetry={onRefresh} onDismiss={dismiss} />
           <ConnectionNotice />
           <Refused />
           <ImportChoiceCard />
@@ -357,7 +360,7 @@ export default function Agents() {
               color={colors.textMuted}
             />
             <T variant="small" color={colors.textSecondary}>
-              Hidden ({item.count})
+              Hidden · {item.count}
             </T>
           </Pressable>
         ) : item.kind === 'room' ? (
@@ -467,7 +470,7 @@ function SectionHeader({
 /**
  * One calm row for everything waiting on you, under the Chief: "A few things
  * to finish setting up your team" (opens the Chief's chat, where the
- * checklist is) or "N agents need you" (opens them grouped in a sheet).
+ * checklist is) or "N agents need your OK" (opens them grouped in a sheet).
  * Never a section listing every agent.
  */
 function AttentionBar({ bar, onOpenChief }: { bar: HomeBar; onOpenChief: (id: string) => void }) {

@@ -10,19 +10,14 @@
 }
 
 /* The first line of the sidebar's footer group (usage, Phone, Remote,
-   Settings): a full-width hairline separates the group from the list, and a
-   solid fill keeps a scrolled list from showing through. Its text starts
-   where the rows' icons below it do (footer inset + button padding + the
-   icon's own inset). */
+   Settings). No hairline and no solid block: the list above fades out into
+   the footer (.workspace-sidebar-scroll's mask), which is calmer than an edge
+   that cuts a row in half. Its text starts on the footer rows' label column
+   (footer inset + a badge-wide icon column + the gap). */
 .agents-quota--sidebar {
-  /* Above the sidebar footer's fade, like the phone row beside it. */
-  position: relative;
-  z-index: var(--z-workspace-header);
-  margin: 0 calc(-1 * var(--spacing-sm)) var(--spacing-xs);
-  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-xs)
-    calc(var(--spacing-sm) + var(--spacing-md));
-  border-top: 1px solid var(--border-subtle);
-  background: var(--surface-panel);
+  margin: 0 0 var(--spacing-xs);
+  padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs)
+    calc(var(--size-sidebar-project-shortcut) + var(--spacing-sm));
 }
 
 .agents-team__column > .agents-quota--team {

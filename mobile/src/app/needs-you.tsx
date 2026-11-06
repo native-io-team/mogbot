@@ -1,22 +1,25 @@
 /**
- * "N agents need you", from Home's bar: everyone waiting on you, one row
+ * "N agents need your OK", from Home's bar: everyone waiting on you, one row
  * each, saying what for. Tap opens that chat at the card. Setting up your
  * team, when it's open, is one row at the top (the Chief's chat holds it);
  * the agents being set up aren't listed one by one (lib/home).
  */
 
-import type { Agent } from '@shipstudio/companion-protocol';
+import { previewText, type Agent } from '@shipstudio/companion-protocol';
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { AgentAvatar } from '../components/agent';
+import { RefreshStatus } from '../components/RefreshStatus';
 import { SheetTitle } from '../components/SheetTitle';
 import { Icon, SheetPage, T, useRipple } from '../components/ui';
 import { failedTurn, failureLine, needsLine, pendingApproval } from '../lib/agents';
 import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
 import { barWords, buildHome } from '../lib/home';
-import { useApp } from '../lib/store';
+import { useRefresh } from '../lib/refresh';
+import { call } from '../lib/session';
+import { setApp, useApp } from '../lib/store';
 import { progress } from '../lib/teamSetup';
 import { avatarSize, iconSize, PRESSED, space } from '../lib/theme';
 
@@ -39,6 +42,10 @@ export default function NeedsYou() {
     ...waiting.filter((a) => a !== chief),
   ];
   const setupOpen = !!home?.bar && (home.bar.kind === 'setup' || home.bar.setup);
+  const { refreshing, onRefresh, outcome, dismiss } = useRefresh(async () => {
+    if (useApp.getState().link.kind !== 'connected') throw new Error('offline');
+    setApp({ overview: await call('agents.overview', {}) });
+  });
 
   const open = (agent: Agent) => {
     haptic.select();
@@ -52,8 +59,18 @@ export default function NeedsYou() {
 
   return (
     <SheetPage>
-      <ScrollView contentContainerStyle={styles.page}>
-        <SheetTitle>Needs you</SheetTitle>
+      <ScrollView
+        contentContainerStyle={styles.page}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.textSecondary}
+          />
+        }
+      >
+        <RefreshStatus outcome={outcome} onRetry={onRefresh} onDismiss={dismiss} />
+        <SheetTitle>Needs your OK</SheetTitle>
         {setupOpen && chief && (
           <Row
             agent={chief}
@@ -81,7 +98,7 @@ function WaitingRow({ agent, onPress }: { agent: Agent; onPress: () => void }) {
   const line = useApp((s) => {
     const failure = failedTurn(agent);
     return failure && !(agent.pendingApprovals ?? 0)
-      ? failureLine(failure, agent.preview, agent.engine)
+      ? failureLine(failure, previewText(agent.preview), agent.engine)
       : needsLine(agent, s.chats[agent.id]?.messages);
   });
   return <Row agent={agent} title={agent.name} line={line} onPress={onPress} />;

@@ -13,7 +13,7 @@ import { shows } from './teamSetup';
 export type HomeBar =
   /** Only setup is waiting: "A few things to finish setting up your team" → the Chief's chat. */
   | { kind: 'setup' }
-  /** "N agents need you" → the grouped sheet (which also points at setup when it's open). */
+  /** "N agents need your OK" → the grouped sheet (which also points at setup when it's open). */
   | { kind: 'needs'; agents: Agent[]; setup: boolean };
 
 export interface Home {
@@ -74,7 +74,7 @@ export function barWords(bar: HomeBar, chiefName: string, progress?: string): [s
     ];
   }
   const n = bar.agents.length;
-  const title = n === 1 ? `${bar.agents[0].name} needs you` : `${n} agents need you`;
+  const title = n === 1 ? `${bar.agents[0].name} needs your OK` : `${n} agents need your OK`;
   const more = n > 2 ? ` and ${n - 2} more` : '';
   const who =
     n === 1

@@ -23,7 +23,7 @@ import {
   type SessionSummary,
 } from '@shipstudio/companion-protocol';
 import { Stack, useRouter } from 'expo-router';
-import { useCallback, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { Spinner } from '../../../components/agent';
@@ -38,6 +38,7 @@ import { canCall, describeError, previewScreenshot, refreshProjects } from '../.
 import { useApp } from '../../../lib/store';
 import { largeTitle } from '../../../lib/navigation';
 import { useRefresh } from '../../../lib/refresh';
+import { RefreshStatus } from '../../../components/RefreshStatus';
 import { avatarSize, iconSize, radius, space } from '../../../lib/theme';
 import { makeStyles, useColors } from '../../../lib/appearance';
 
@@ -64,17 +65,18 @@ export default function Projects() {
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(
-    () =>
-      refreshProjects().then(
-        () => setError(null),
-        (e: unknown) => setError(describeError(e))
-      ),
-    []
-  );
   const agents = useApp((s) => s.overview?.agents);
   const sorted = useMemo(() => order(projects ?? [], agents ?? []), [projects, agents]);
-  const { refreshing, onRefresh } = useRefresh(load);
+  // A pull says whether it reached the Mac, so a failure is rethrown after it's shown.
+  const { refreshing, onRefresh, outcome, dismiss } = useRefresh(() =>
+    refreshProjects().then(
+      () => setError(null),
+      (e: unknown) => {
+        setError(describeError(e));
+        throw e;
+      }
+    )
+  );
   const screenOptions = useMemo(() => largeTitle(colors, 'Projects'), [colors]);
 
   return (
@@ -91,6 +93,7 @@ export default function Projects() {
           />
         }
       >
+        <RefreshStatus outcome={outcome} onRetry={onRefresh} onDismiss={dismiss} />
         <ConnectionNotice />
         {/* The link first: a Mac that's away isn't one that needs updating. */}
         {!live ? (

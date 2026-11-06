@@ -25,7 +25,7 @@ function items(): QuickActions.Action[] {
       ? [
           {
             id: 'next',
-            title: 'Needs you',
+            title: 'Needs your OK',
             subtitle: `${needYou} waiting`,
             icon: 'symbol:exclamationmark.bubble',
           },

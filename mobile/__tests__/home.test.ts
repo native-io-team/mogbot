@@ -60,7 +60,7 @@ describe('Home: the Chief first, one calm bar', () => {
     expect(nextNeedsYou([chief, ...team], {}, home.quiet)).toBeNull();
   });
 
-  it('others waiting: "N agents need you", which also points at setup', () => {
+  it('others waiting: "N agents need your OK", which also points at setup', () => {
     const { team, setup } = imported();
     const designer = a('Designer', { lastActivityAt: 50, ...waiting });
     const writer = a('Writer', {
@@ -70,7 +70,7 @@ describe('Home: the Chief first, one calm bar', () => {
     const home = buildHome([chief, designer, writer, ...team], setup);
     expect(home.bar?.kind).toBe('needs');
     expect(barWords(home.bar!, 'Chief of Staff')).toEqual([
-      '2 agents need you',
+      '2 agents need your OK',
       'Writer, Designer · and setting up your team',
     ]);
   });
@@ -85,7 +85,7 @@ describe('Home: the Chief first, one calm bar', () => {
     expect(home.pinned.map((x) => x.id)).toEqual(['Pinned']);
     expect(home.rest.map((x) => x.id)).toEqual(['Asking', 'Fresh', 'Old']);
     expect(home.hidden.map((x) => x.id)).toEqual(['Hidden']);
-    expect(barWords(home.bar!, 'Chief of Staff')[0]).toBe('Asking needs you');
+    expect(barWords(home.bar!, 'Chief of Staff')[0]).toBe('Asking needs your OK');
   });
 
   it('nothing waiting and no setup: no bar', () => {
@@ -108,13 +108,13 @@ describe('one count everywhere', () => {
     );
     const home = buildHome([chief, ...team], null);
     expect(home.bar?.kind === 'needs' && home.bar.agents.length).toBe(14);
-    expect(barWords(home.bar!, 'Chief of Staff')[0]).toBe('14 agents need you');
+    expect(barWords(home.bar!, 'Chief of Staff')[0]).toBe('14 agents need your OK');
     expect(attentionCounts([chief, ...team]).needYou).toBe(14);
   });
 
   it('the Chief alone waiting still gets the bar', () => {
     const chief = a('chief', { isMain: true, ...waiting });
     const home = buildHome([chief, a('x')], null);
-    expect(barWords(home.bar!, 'Chief of Staff')[0]).toBe('chief needs you');
+    expect(barWords(home.bar!, 'Chief of Staff')[0]).toBe('chief needs your OK');
   });
 });

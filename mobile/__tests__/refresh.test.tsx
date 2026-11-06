@@ -1,5 +1,5 @@
 import { act, renderHook } from '@testing-library/react-native';
-import { REFRESH_TIMEOUT_MS, useRefresh } from '../src/lib/refresh';
+import { REFRESH_DONE_MS, REFRESH_TIMEOUT_MS, useRefresh } from '../src/lib/refresh';
 
 const MIN_REFRESH_MS = 0; // there is no minimum any more
 
@@ -109,5 +109,48 @@ describe('useRefresh: the spinner always lets go', () => {
       expect(seen).toEqual([false, true, false]);
       expect(run).toHaveBeenCalledTimes(1);
     }
+  });
+});
+
+describe('useRefresh: it says how it went', () => {
+  it('a refresh that worked is "done" for a moment, then idle again', async () => {
+    const run = jest.fn().mockResolvedValue(undefined);
+    const { result } = await renderHook(() => useRefresh(run));
+    expect(result.current.outcome).toBe('idle');
+    await act(() => {
+      void result.current.onRefresh();
+    });
+    await advance(0);
+    expect(result.current.outcome).toBe('done');
+    await advance(REFRESH_DONE_MS);
+    expect(result.current.outcome).toBe('idle');
+  });
+
+  it('a failed refresh stays "failed" until it is dismissed', async () => {
+    const run = jest.fn().mockRejectedValue(new Error('offline'));
+    const { result } = await renderHook(() => useRefresh(run));
+    await act(() => {
+      void result.current.onRefresh();
+    });
+    await advance(REFRESH_DONE_MS * 4);
+    expect(result.current.outcome).toBe('failed');
+    await act(() => result.current.dismiss());
+    expect(result.current.outcome).toBe('idle');
+  });
+
+  it('a refresh that never answers is a failure, and trying again clears it', async () => {
+    let calls = 0;
+    const run = jest.fn(() => (++calls === 1 ? new Promise<void>(() => {}) : Promise.resolve()));
+    const { result } = await renderHook(() => useRefresh(run));
+    await act(() => {
+      void result.current.onRefresh();
+    });
+    await advance(REFRESH_TIMEOUT_MS);
+    expect(result.current.outcome).toBe('failed');
+    await act(() => {
+      void result.current.onRefresh();
+    });
+    await advance(0);
+    expect(result.current.outcome).toBe('done');
   });
 });

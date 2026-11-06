@@ -19,7 +19,15 @@ jest.mock('react-native-reanimated', () => {
   const RN = jest.requireActual<typeof import('react-native')>('react-native');
   const preset: Record<string, unknown> = {};
   for (const k of ['duration', 'delay', 'springify', 'damping', 'mass']) preset[k] = () => preset;
-  return { __esModule: true, default: { View: RN.View }, FadeIn: preset, LinearTransition: preset };
+  return {
+    __esModule: true,
+    default: { View: RN.View },
+    FadeIn: preset,
+    LinearTransition: preset,
+    useAnimatedStyle: () => ({}),
+    useSharedValue: (v: number) => ({ value: v }),
+    withTiming: (v: number) => v,
+  };
 });
 jest.mock('expo-haptics', () => ({}));
 jest.mock('../src/lib/haptics', () => ({
