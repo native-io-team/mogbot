@@ -179,10 +179,75 @@ describe('LoginCard', () => {
     ]);
   });
 
-  it('a card nothing here can answer says why and offers only Not now', () => {
+  it('a card nothing here can answer says why and offers Not now and Not needed', () => {
     renderCard(card({ ...GMAIL, options: [], noConnector: 'Recruiter runs on Codex.' }));
     expect(screen.getByText('Recruiter runs on Codex.')).toBeInTheDocument();
-    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual(['Not now']);
+    expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Not now',
+      'Not needed',
+    ]);
+  });
+
+  it('Not needed declines the app for the team, right beside the main action', async () => {
+    const calls: [string, unknown][] = [];
+    mockIPC((cmd, args) => {
+      calls.push([cmd, args]);
+      if (cmd === 'agents_login_not_needed')
+        return {
+          keys: ['gmail'],
+          line: 'Not connecting Gmail. No agent will ask for it again.',
+          closed: 1,
+        };
+      return null;
+    });
+    renderCard(card(GMAIL));
+    const labels = screen.getAllByRole('button').map((b) => b.textContent);
+    expect(labels.indexOf('Not needed') + 1).toBe(labels.indexOf('Connect Gmail'));
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Not needed' }));
+      await Promise.resolve();
+    });
+    expect(calls).toEqual([['agents_login_not_needed', { agentId: 'recruiter', requestId: 'r1' }]]);
+  });
+
+  it('a sign-in opened in the browser offers Open again and Copy link, and says so after 20 s', async () => {
+    vi.useFakeTimers();
+    const calls: string[] = [];
+    mockIPC((cmd) => {
+      calls.push(cmd);
+      return null;
+    });
+    const openedAt = Date.now();
+    renderCard(
+      card({
+        ...GMAIL,
+        flow: {
+          state: 'waiting',
+          option: 'claude_ai',
+          startedAt: openedAt,
+          openedAt,
+          url: 'https://claude.ai/customize/connectors',
+          message: 'Claude’s connectors page opened in your browser.',
+        },
+      })
+    );
+    expect(screen.getByText('Opened in your browser — didn’t see it?')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Copy link' })).toBeInTheDocument();
+    act(() => {
+      vi.advanceTimersByTime(20_001);
+    });
+    expect(screen.getByText(/Still not connected/)).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Open again' }));
+      await Promise.resolve();
+    });
+    expect(calls).toContain('agents_login_reopen');
+    // Coming back to the window checks claude.ai at once.
+    await act(async () => {
+      window.dispatchEvent(new Event('focus'));
+      await Promise.resolve();
+    });
+    expect(calls).toContain('agents_logins_recheck');
   });
 
   it('an answered card shows its outcome', () => {

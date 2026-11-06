@@ -1,0 +1,48 @@
+/* Agents at work in a project, under its sidebar row (ProjectAtWork.tsx):
+ * one quiet line each, indented to the project's name. */
+
+.sidebar-project-at-work {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+  margin: 0;
+  padding: 0 var(--spacing-md) var(--spacing-xs) calc(var(--spacing-md) + var(--spacing-sm));
+  list-style: none;
+}
+
+.sidebar-project-at-work__line {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: 0;
+}
+
+.sidebar-project-at-work__link {
+  display: block;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-caption);
+  color: var(--text-secondary);
+  text-align: left;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.sidebar-project-at-work__words {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sidebar-project-at-work__name {
+  color: var(--text-primary);
+}
+
+.sidebar-project-at-work__text {
+  color: var(--text-muted);
+}
+
+.workspace-sidebar.is-hidden .sidebar-project-at-work {
+  display: none;
+}

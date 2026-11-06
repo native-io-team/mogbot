@@ -223,6 +223,25 @@ export function AgentReach({ agent }: { agent: Agent }) {
           </ul>
         </section>
       )}
+      {reach && (reach.declined?.length ?? 0) > 0 && (
+        <section className="agent-reach__section" aria-label="Not connecting">
+          <span className="agent-reach__heading">You chose not to connect (every agent)</span>
+          <ul className="agent-permissions">
+            {reach.declined!.map((d) => (
+              <li key={d.key} className="agent-permissions__rule">
+                <span className="agent-permissions__what">{d.title}</span>
+                <TextButton
+                  tabIndex={0}
+                  className="agent-permissions__revoke"
+                  onClick={() => void remove({ kind: 'undecline', key: d.key })}
+                >
+                  Turn back on
+                </TextButton>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
       {error && (
         <p className="agent-editor__error" role="alert">
           <ErrorIcon size={12} className="inline-error-icon" />

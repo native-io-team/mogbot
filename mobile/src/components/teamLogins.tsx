@@ -33,6 +33,7 @@ import {
   connectNeed,
   hasSignInSheet,
   loginDismiss,
+  loginsNotNeeded,
   openHere,
   phoneDetail,
   phoneWay,
@@ -47,6 +48,7 @@ import { describeError } from '../lib/session';
 import { useApp, useServed } from '../lib/store';
 import { CARD_TITLE_SCALE, fonts, lineHeight, radius, space, type } from '../lib/theme';
 import { ACTION_ROW, CardActions, Line, TextAction } from './surfaces';
+import { DeclineReceiptLine, useDeclineReceipt, useRecheckWhenBack } from './loginExtras';
 import { Button, T } from './ui';
 
 /** How often the list is read again while a sign-in runs on the Mac. */
@@ -97,6 +99,15 @@ export function TeamLoginsList({
     if (live) load();
   }, [live, load, stamp]);
   const signingIn = !!team?.needs.some((n) => n.cards.some(onMac));
+  const canDecline = useServed('agents.loginsNotNeeded');
+  const [receipt, setReceipt] = useDeclineReceipt();
+  useRecheckWhenBack(
+    !!team?.needs.some((n) =>
+      n.cards.some(
+        (c) => c.flow?.state === 'waiting' && c.flow.onPhone && c.flow.option === 'claude_ai'
+      )
+    )
+  );
   useEffect(() => {
     if (!signingIn || !live) return;
     const timer = setInterval(load, LIVE_MS);
@@ -118,6 +129,7 @@ export function TeamLoginsList({
     }
   };
 
+  const waitingKeys = (team?.needs ?? []).filter((n) => !n.done).map((n) => n.key);
   if (!team) {
     return (
       <View style={styles.loading}>
@@ -133,9 +145,32 @@ export function TeamLoginsList({
   }
   return (
     <View style={styles.root} testID="team-logins">
-      <T variant="small" color={colors.textSecondary} testID="team-progress">
-        {teamProgress(team)}
-      </T>
+      <View style={styles.header}>
+        <T variant="small" color={colors.textSecondary} testID="team-progress" style={{ flex: 1 }}>
+          {teamProgress(team)}
+        </T>
+        {canDecline && waitingKeys.length > 1 && (
+          <TextAction
+            label="Skip the rest"
+            hint="No agent will ask for these again"
+            muted
+            disabled={!live || !!busy}
+            onPress={() =>
+              void act('skip-rest', async () => setReceipt(await loginsNotNeeded(waitingKeys)))
+            }
+          />
+        )}
+      </View>
+      {receipt && (
+        <DeclineReceiptLine
+          receipt={receipt}
+          onDone={() => {
+            setReceipt(null);
+            load();
+          }}
+          onError={setError}
+        />
+      )}
       {team.total === 0 && !embedded && (
         <Line text="Nothing waiting. When an agent needs an app, it shows here and in its chat." />
       )}
@@ -167,6 +202,14 @@ export function TeamLoginsList({
                 })
               }
               onDismiss={(c) => void act(c.requestId, () => loginDismiss(c.agentId, c.requestId))}
+              onNotNeeded={
+                canDecline
+                  ? () =>
+                      void act(`${n.key}:not-needed`, async () =>
+                        setReceipt(await loginsNotNeeded([n.key]))
+                      )
+                  : undefined
+              }
             />
           ))}
         </View>
@@ -188,6 +231,7 @@ function Need({
   way,
   onConnect,
   onDismiss,
+  onNotNeeded,
 }: {
   need: TeamNeed;
   last: boolean;
@@ -196,6 +240,8 @@ function Need({
   way: (o: LoginOption) => ReturnType<typeof phoneWay>;
   onConnect: (option: LoginOption) => void;
   onDismiss: (card: TeamCard) => void;
+  /** The app, declined for the whole team (a Mac that serves it). */
+  onNotNeeded?: () => void;
 }) {
   const colors = useColors();
   const styles = useStyles();
@@ -214,13 +260,27 @@ function Need({
   // One agent on the row: its "Not needed" sits beside the answer. Several:
   // each agent's line carries its own, so one can be put away and not the rest.
   const single = need.cards.length === 1 && waiting.length === 1 ? waiting[0] : null;
+  // With "Not needed" for the team on the row, one agent's own is "Skip".
   const dismiss = (c: TeamCard): RowWord => ({
-    label: 'Not needed',
+    label: onNotNeeded ? 'Skip' : 'Not needed',
     muted: true,
-    hint: `Puts ${c.agentName}’s ask away without waking it`,
+    hint: onNotNeeded
+      ? `Puts away ${c.agentName}’s card`
+      : `Puts ${c.agentName}’s ask away without waking it`,
     disabled: !live || !!busy,
     onPress: () => onDismiss(c),
   });
+  const notNeeded: RowWord[] = onNotNeeded
+    ? [
+        {
+          label: 'Not needed',
+          muted: true,
+          hint: 'No agent will ask for it again',
+          disabled: !live || !!busy,
+          onPress: onNotNeeded,
+        },
+      ]
+    : [];
   return (
     <NeedRow
       last={last}
@@ -280,7 +340,7 @@ function Need({
                 disabled: off,
                 onPress: () => onConnect(o),
               })),
-              ...(single && !onMac(single) ? [dismiss(single)] : []),
+              ...(onNotNeeded ? notNeeded : single && !onMac(single) ? [dismiss(single)] : []),
             ]
       }
     />
@@ -417,7 +477,7 @@ function RunningLine({ card }: { card?: TeamCard }) {
         )}
         {flow.option === 'claude_ai' && (
           <Button
-            title="Open claude.ai"
+            title="Open Claude’s connectors"
             variant="answer"
             onPress={() => void openHere(CLAUDE_AI_CONNECTORS)}
             style={ACTION_ROW}
@@ -432,6 +492,7 @@ const useStyles = makeStyles((colors) => ({
   running: { gap: space.sm },
   code: { fontFamily: fonts.mono, fontSize: type.title },
   root: { gap: space.md },
+  header: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   // On a sheet the rows are one grouped surface, divided, as Settings is.
   group: {
     backgroundColor: colors.surfaceGroup,

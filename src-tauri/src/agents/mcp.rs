@@ -1600,6 +1600,12 @@ fn request_secret_as(app: &AppHandle, caller: &store::Agent, args: &Value, quiet
     if super::expiry::already_expired(&caller.id, &super::expiry::secret_key(&request.name)) {
         return text(super::expiry::told_maybe_later(&request.name));
     }
+    // An app the user chose not to connect isn't asked for by another door.
+    if let Some(refused) =
+        super::declined::refusal_for_text(&format!("{} {}", request.name, request.purpose))
+    {
+        return text(refused);
+    }
     let open = store::pending_approvals(&caller.id).unwrap_or_default();
     if open
         .iter()

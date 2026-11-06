@@ -90,6 +90,8 @@ pub struct Seen {
     pub login: LoginRequest,
     /// "Not needed", or what the user said.
     pub said: Option<String>,
+    /// When the card was posted.
+    pub at: i64,
 }
 
 /// Every login card on the team.
@@ -105,6 +107,7 @@ pub fn seen() -> Vec<Seen> {
                 request_id: a.request_id,
                 status: a.status,
                 said: a.note.or(a.choice),
+                at: m.ts,
                 login,
             });
         }
@@ -125,6 +128,9 @@ pub struct Here {
     /// The turn answers text from outside: nothing is granted or joined
     /// without the user seeing a card.
     pub outside: bool,
+    /// Services the user turned back on after saying no (`declined`), and
+    /// when: a no on a card older than that no longer counts.
+    pub turned_on: Vec<(String, i64)>,
 }
 
 /// One spelling for an unknown service's name: "Acme CRM", "acme-crm" and
@@ -158,10 +164,18 @@ pub fn decide(agent: &Agent, r: &LoginRequest, tried: &Tried, here: &Here, team:
             said: "Not needed".into(),
         };
     }
-    // 1. Said no, for anyone: not asked again.
+    // 1. Said no, for anyone: not asked again. Unless the user turned it
+    // back on since (Undo, or "Turn back on").
+    let turned_on = here
+        .turned_on
+        .iter()
+        .filter(|(k, _)| k == &key)
+        .map(|(_, at)| *at)
+        .max();
     if let Some(no) = team
         .iter()
         .filter(|s| same(s) && s.status == ApprovalStatus::Denied)
+        .filter(|s| turned_on.is_none_or(|on| s.at > on))
         .last()
     {
         return Step::AlreadyDeclined {
@@ -266,6 +280,7 @@ pub async fn request(
         browser: super::browser::for_turn(agent, outside),
         not_needed: not_needed_keys(),
         outside,
+        turned_on: super::declined::turned_on(),
     };
     let step = decide(agent, &r, tried, &here, &seen());
     match &step {
@@ -299,18 +314,21 @@ pub async fn request(
 }
 
 /// Rows the user marked "Not needed" on the setup checklist, kept even
-/// after the checklist is put away.
+/// after the checklist is put away, and apps declined for the whole team
+/// (`declined`: "Not needed" on a card or a row, "Skip the rest").
 fn not_needed_keys() -> Vec<String> {
-    super::team_setup::load()
+    let team = super::declined::list().into_iter().map(|d| d.key);
+    let checklist = super::team_setup::load()
         .map(|s| {
             s.later
                 .states
                 .into_iter()
                 .filter(|(_, st)| *st == super::access_check::LaterState::NotNeeded)
                 .map(|(k, _)| k)
-                .collect()
+                .collect::<Vec<String>>()
         })
-        .unwrap_or_default()
+        .unwrap_or_default();
+    team.chain(checklist).collect()
 }
 
 async fn gh_login() -> Option<String> {

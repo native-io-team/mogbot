@@ -41,6 +41,7 @@ import {
   signInWithSheet,
   loginCancel,
   loginDecline,
+  loginNotNeeded,
   loginOutcome,
   loginPhase,
   loginStart,
@@ -56,6 +57,7 @@ import { useApp, useServed } from '../lib/store';
 import { CARD_TITLE_SCALE, fonts, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { Receipt, useArmed, useCardStyles } from './ApprovalCard';
+import { DeclineReceiptLine, useDeclineReceipt, useRecheckWhenBack } from './loginExtras';
 import { ACTION, Card, CardActions, OFFLINE_NOTE, useActionShare } from './surfaces';
 import { Button, T } from './ui';
 
@@ -90,6 +92,11 @@ export function LoginCard({
   const title = loginTitle(approval, login, agent.name);
   const phoneSignIn = useServed('agents.loginPhoneBegin', MAC_FEATURES.loginsPhone);
   const way = (o: LoginOption) => phoneWay(o, phoneSignIn, hasSignInSheet());
+  const canDecline = useServed('agents.loginNotNeeded');
+  const [receipt, setReceipt] = useDeclineReceipt();
+  useRecheckWhenBack(
+    login.flow?.state === 'waiting' && login.flow.onPhone === true && login.flow.option === 'claude_ai'
+  );
   // The Mac's Chrome, driven from here, for a card whose way in is the browser.
   const signinServed = useServed('agents.signinBegin', MAC_FEATURES.signinPhone);
   const router = useRouter();
@@ -154,6 +161,11 @@ export function LoginCard({
       }
     );
   const cancel = () => run('cancel', () => loginCancel(message.agentId, approval.requestId));
+  const notNeeded = () =>
+    run('notNeeded', async () => setReceipt(await loginNotNeeded(message.agentId, approval.requestId)), () => {
+      wipe();
+      haptic.select();
+    });
   const saveKey = () =>
     run(
       'key',
@@ -172,12 +184,13 @@ export function LoginCard({
   const onMacShare = useActionShare([
     ...(signingIn?.userCode ? ['Copy code'] : []),
     ...(signingIn?.onPhone && signingIn.verificationUri ? ['Open GitHub'] : []),
-    ...(signingIn?.onPhone && signingInOption?.method === 'claude_ai' ? ['Open claude.ai'] : []),
+    ...(signingIn?.onPhone && signingInOption?.method === 'claude_ai' ? ['Open Claude’s connectors'] : []),
     'Cancel',
   ]);
   const firstOption = primaryOption(login);
   const answerShare = useActionShare([
     'Not now',
+    ...(canDecline ? ['Not needed'] : []),
     ...(firstOption && firstOption.method !== 'key'
       ? [
           phase === 'failed' && login.flow?.option === firstOption.id
@@ -197,6 +210,9 @@ export function LoginCard({
         <T variant="small" color={colors.textSecondary}>
           {login.why}
         </T>
+        {receipt && (
+          <DeclineReceiptLine receipt={receipt} onDone={() => setReceipt(null)} onError={onError} />
+        )}
       </Receipt>
     );
   }
@@ -281,7 +297,7 @@ export function LoginCard({
           )}
           {!!flow?.onPhone && flowOption?.method === 'claude_ai' && (
             <Button
-              title="Open claude.ai"
+              title="Open Claude’s connectors"
               variant="answer"
               onPress={() =>
                 void openHere(CLAUDE_AI_CONNECTORS).catch((e) => setError(describeError(e)))
@@ -349,6 +365,17 @@ export function LoginCard({
           onPress={() => void decline()}
           style={answerShare}
         />
+        {canDecline && (
+          <Button
+            title="Not needed"
+            variant="outline"
+            busy={busy === 'notNeeded'}
+            disabled={off}
+            onPress={() => void notNeeded()}
+            style={answerShare}
+            testID="login-not-needed"
+          />
+        )}
         {first && first.method !== 'key' && (
           <Button
             title={failed && login.flow?.option === first.id ? 'Try again' : first.label}

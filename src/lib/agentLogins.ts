@@ -48,6 +48,27 @@ export interface LoginFlow {
   /** A device sign-in's one-time code (GitHub), typed at `verificationUri` on either device. */
   userCode?: string;
   verificationUri?: string;
+  /** The page this Mac's browser was asked to open: "Open again" and "Copy link". */
+  url?: string;
+  /** When the browser was last asked to open `url` (unix ms). */
+  openedAt?: number;
+}
+
+/** After this long with no sign-in back, the card says so instead of spinning (`NO_CALLBACK_MS`). */
+export const NO_CALLBACK_MS = 20_000;
+
+/** An app the user chose not to connect; no agent asks for it again until it's turned back on. */
+export interface DeclinedApp {
+  key: string;
+  title: string;
+  declinedAt: number;
+}
+
+/** What "Not needed" did: the receipt line, and what an Undo turns back on. */
+export interface DeclineReceipt {
+  keys: string[];
+  line: string;
+  closed: number;
 }
 
 /** What a login card carries (`approval.login`). */
@@ -141,6 +162,8 @@ export interface Reach {
     lastUsedAt?: number;
   }[];
   blockedApps: string[];
+  /** Apps the user chose not to connect, for the whole team. */
+  declined?: DeclinedApp[];
 }
 
 /** On the agent itself (`Agent.reach`): browser and blocked apps. */
@@ -161,7 +184,8 @@ export type Removal =
   | { kind: 'browser_account'; site: string }
   | { kind: 'secret'; secretId: string }
   | { kind: 'block_app'; name: string }
-  | { kind: 'unblock_app'; name: string };
+  | { kind: 'unblock_app'; name: string }
+  | { kind: 'undecline'; key: string };
 
 export interface Connection {
   id: string;
@@ -191,6 +215,21 @@ export const saveLoginKey = (agentId: string, requestId: string, value: string) 
   invoke<AgentSecret>('agents_login_save_key', { agentId, requestId, value });
 export const dismissLogin = (agentId: string, requestId: string) =>
   invoke<void>('agents_login_dismiss', { agentId, requestId });
+/** "Not needed" on a card: its app, declined for the whole team and remembered. */
+export const loginNotNeeded = (agentId: string, requestId: string) =>
+  invoke<DeclineReceipt>('agents_login_not_needed', { agentId, requestId });
+/** "Not needed" on rows (`keys`), or "Skip the rest" (no keys: every row still waiting). */
+export const loginsNotNeeded = (keys?: string[]) =>
+  invoke<DeclineReceipt>('agents_logins_not_needed', { keys: keys ?? null });
+/** Undo, or "Turn back on": how many cards came back. */
+export const undeclineLogins = (keys: string[]) =>
+  invoke<number>('agents_logins_undecline', { keys });
+export const declinedApps = () => invoke<DeclinedApp[]>('agents_logins_declined');
+/** "Open again": the page a waiting card opened, in this Mac's browser. */
+export const reopenLogin = (agentId: string, requestId: string) =>
+  invoke<void>('agents_login_reopen', { agentId, requestId });
+/** Back in the app: check claude.ai connectors now. */
+export const recheckLogins = () => invoke<void>('agents_logins_recheck');
 export const teamLogins = (since?: number) =>
   invoke<TeamLogins>('agents_logins_team', { since: since ?? null });
 export const connectTeamNeed = (key: string, optionId: string, skip: string[] = []) =>
@@ -277,6 +316,31 @@ export function loginCardView(approval: ApprovalLike, agentName: string): LoginC
   }
   return { ...base, phase: 'choose' };
 }
+
+/**
+ * A sign-in opened in this Mac's browser that nothing has come back from
+ * for `NO_CALLBACK_MS`: the card says so plainly, with Open again · Copy link.
+ */
+export function quietSignIn(flow: LoginFlow | undefined, now: number): boolean {
+  return (
+    flow?.state === 'waiting' &&
+    !!flow.url &&
+    !flow.onPhone &&
+    flow.openedAt !== undefined &&
+    now - flow.openedAt >= NO_CALLBACK_MS
+  );
+}
+
+/** "Didn't see it? …" once it's been quiet: what the card says instead of spinning. */
+export function quietLine(flow: LoginFlow): string {
+  return flow.option === 'claude_ai'
+    ? 'Still not connected. If Claude’s connectors page didn’t open, open it again or copy the link.'
+    : 'Nothing has come back yet. If no sign-in page opened, open it again or copy the link.';
+}
+
+/** Any card on screen waiting on claude.ai: re-check when the window comes back. */
+export const waitsOnClaudeAi = (flow: LoginFlow | undefined) =>
+  flow?.state === 'waiting' && flow.option === 'claude_ai' && !flow.onPhone;
 
 /** "Gmail's sign-in is open in this Mac's browser." */
 export function flowLine(flow: LoginFlow, title: string): string {

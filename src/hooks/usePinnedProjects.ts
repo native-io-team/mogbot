@@ -33,6 +33,8 @@ import {
   type AgentActivityStatus,
 } from '../lib/sessionRegistry';
 import { logger } from '../lib/logger';
+import { listen } from '@tauri-apps/api/event';
+import { AGENT_EVENTS } from '../lib/agents';
 import { trackEvent } from '../lib/analytics';
 import { getProjectId } from '../lib/projectIdentity';
 import { basename } from '../lib/paths';
@@ -177,6 +179,24 @@ export function usePinnedProjects(currentProjectPath: string | null): UsePinnedP
     })();
     return () => {
       cancelled = true;
+    };
+  }, [refresh]);
+
+  // An agent found a codebase it works in and pinned it (the backend's only
+  // pins.json write): read the list again so it shows straight away.
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    let alive = true;
+    try {
+      void listen(AGENT_EVENTS.projectFound, () => void refresh())
+        .then((u) => (alive ? (off = u) : u()))
+        .catch(() => undefined);
+    } catch {
+      // No Tauri event bridge (tests, the harness): nothing to listen to.
+    }
+    return () => {
+      alive = false;
+      off?.();
     };
   }, [refresh]);
 
