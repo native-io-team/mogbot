@@ -12,7 +12,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '../../primitives/Button';
 import { Spinner } from '../../primitives/Spinner';
-import { OnboardingTerminal } from '../OnboardingTerminal';
+import { OnboardingTerminal } from '../../terminal/lazyTerminals';
 import { AgentPickGrid, type AgentCardKey } from '../agent-led/AgentPickGrid';
 import { useAgentSetupActions } from '../agent-led/useAgentSetupActions';
 import { CheckLine, FlowShell, ADVANCE_MS } from './FlowParts';

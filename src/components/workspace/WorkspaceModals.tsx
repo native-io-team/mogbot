@@ -27,7 +27,7 @@ import { GitErrorHandler } from '../branches/GitErrorHandler';
 import { SubmitReviewModal } from '../branches/SubmitReviewModal';
 import { WorktreeCreateModal } from '../branches/WorktreeCreateModal';
 import { ConflictResolutionModal } from '../branches/ConflictResolutionModal';
-import { OnboardingTerminal } from '../setup';
+import { OnboardingTerminal } from '../terminal/lazyTerminals';
 import { ZapIcon } from '@/components/icons';
 import { ToastList } from '../primitives/ToastList';
 import type { Toast } from '../../hooks/useToasts';

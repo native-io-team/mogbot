@@ -12,7 +12,7 @@
 
 import { useState } from 'react';
 import { ModalFrame } from '../primitives/ModalFrame';
-import { OnboardingTerminal } from '../setup/OnboardingTerminal';
+import { OnboardingTerminal } from '../terminal/lazyTerminals';
 import { TERMINAL_COMMANDS } from '../../lib/setup';
 import { refreshAgents } from '../../lib/agentsStore';
 import { ENGINE_LABEL, type AgentEngine } from '../../lib/agents';
