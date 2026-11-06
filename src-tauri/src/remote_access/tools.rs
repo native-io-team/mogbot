@@ -784,6 +784,11 @@ async fn import_conversation(app: &tauri::AppHandle, args: &Value) -> Value {
     // Audited once, by the server, like every call (refusals included).
     match connector::converse(app, field("source"), field("message"), wait).await {
         Ok(answer) => text(answer),
+        // No import started: rather than send the user to ⌘K, talk to the
+        // Chief directly (the handover still happens, in conversation).
+        Err(e) if e.starts_with("STATUS: not_started") && !field("message").trim().is_empty() => {
+            ask_chief(app, args).await
+        }
         Err(e) => error(e),
     }
 }
