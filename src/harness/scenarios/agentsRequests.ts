@@ -405,6 +405,30 @@ export const agentsRequestsScenarios: Scenario[] = [
     },
   },
   {
+    id: 'agents-team-many',
+    title: 'Agents — What’s in flight with sixteen agents waiting',
+    looksRightWhen:
+      'Headed Needs you, one line per agent, never a wall of cards: its badge, the name, “· 4 logins: Slack bot token, Slack user token…” in quiet grey (not amber), the time at the right (“2h ago”) and a chevron, with a muted “Open chat” beside it. Every row folded; then Working and Done recently, one line each too.',
+    command: 'agents.team',
+    requires: '.agents-team__row[aria-expanded="false"]',
+    commands: {
+      agents_overview: importedTeam(true),
+      agents_messages: importedMessages,
+    },
+  },
+  {
+    id: 'agents-team-two',
+    title: 'Agents — What’s in flight with two agents waiting',
+    looksRightWhen:
+      'Needs you holds two one-line rows (Finance, Lead Gen), each open (chevron turned) with its card under it, answerable in place: the action is right there. Open chat beside each.',
+    command: 'agents.team',
+    requires: '.agents-team .agent-approval',
+    commands: {
+      agents_overview: smallTeam(),
+      agents_messages: (args: Record<string, unknown>) => SMALL_CHATS[String(args.agentId)] ?? [],
+    },
+  },
+  {
     id: 'agents-requests-two',
     title: 'Agents — two agents waiting, from the Chief’s chat',
     looksRightWhen:

@@ -9,7 +9,7 @@
  * it is left out, never guessed.
  */
 
-import type { LiveCall, TurnWork, WorkSlow, WorkStep } from './model';
+import type { AgentStatus, LiveCall, TurnWork, WorkSlow, WorkStep } from './model';
 
 /** A known slow tool's hint shows after this long. */
 export const SLOW_HINT_AFTER_MS = 60_000;
@@ -128,4 +128,58 @@ export function workingRowLine(
     text: text || 'Thinking',
     elapsed: from != null && now - from >= 1_000 ? formatRowElapsed(now - from) : null,
   };
+}
+
+/** The same folder, trailing slashes aside. Never a guess beyond that. */
+export function sameFolder(a: string, b: string): boolean {
+  return a.replace(/\/+$/, '') === b.replace(/\/+$/, '');
+}
+
+/** What `agentsAtWork` needs of an agent, on the desk or the phone. */
+export interface AtWorkAgent {
+  id: string;
+  hidden?: boolean;
+  pendingApprovals?: number;
+  status: AgentStatus;
+}
+
+/** Waiting on the user: an approval card, or a turn stopped on one. */
+function asking(agent: AtWorkAgent): boolean {
+  return agent.status.state === 'waiting' || (agent.pendingApprovals ?? 0) > 0;
+}
+
+/**
+ * The agents at work in a project right now: a turn in progress whose
+ * project (as the Mac reported it, `TurnWork.project`) is that folder. Those
+ * waiting on the user first, then by when they started. Idle agents, even
+ * bound ones, aren't "at work": nothing is inferred from a binding alone.
+ */
+export function agentsAtWork<A extends AtWorkAgent>(
+  agents: readonly A[],
+  projectPath: string
+): A[] {
+  return agents
+    .filter((a) => {
+      const project = a.status.work?.project;
+      return (
+        !a.hidden && a.status.state !== 'idle' && !!project && sameFolder(project, projectPath)
+      );
+    })
+    .sort(
+      (a, b) =>
+        Number(asking(b)) - Number(asking(a)) || (a.status.since ?? 0) - (b.status.since ?? 0)
+    );
+}
+
+/**
+ * What an agent at work in a project is doing, as the project's row says it:
+ * "needs you", or the step it's on ("Running the build").
+ */
+export function atWorkText(
+  agent: AtWorkAgent,
+  activity: string | null | undefined,
+  now: number
+): string {
+  if (asking(agent)) return 'needs you';
+  return workingRowLine(activity, agent.status.work, agent.status.since, now).text;
 }

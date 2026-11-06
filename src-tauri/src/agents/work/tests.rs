@@ -19,6 +19,27 @@ fn ours(tool: &str) -> String {
     format!("mcp__{}__{tool}", super::super::prompts::SERVER_KEY)
 }
 
+/// The timeline of a usage check or a preview test was a row of "Used a
+/// tool": every tool of ours says what it did.
+#[test]
+fn every_tool_of_ours_has_its_own_words() {
+    let names = super::super::usage_tools::TOOLS
+        .iter()
+        .map(|t| t.name)
+        .chain(super::super::preview_test::TOOLS.iter().map(|t| t.name))
+        .chain(super::super::admin::TOOLS.iter().map(|t| t.name))
+        .chain(super::super::room_tools::TOOLS.iter().map(|t| t.name))
+        .chain(super::super::sessions::TOOLS.iter().map(|t| t.name));
+    for name in names {
+        let label = describe_tool(&ours(name), Some(&json!({})))
+            .map(|a| a.label)
+            .unwrap_or_default();
+        assert_ne!(label, "Used a tool", "{name}");
+    }
+    let open = describe_tool(&ours("test_open"), Some(&json!({"path": "/pricing"}))).unwrap();
+    assert_eq!(open.label, "Opened /pricing in the preview");
+}
+
 fn call(name: &str, id: &str, input: Value) -> Action {
     let mut a = describe_tool(name, Some(&input)).unwrap();
     a.id = Some(id.into());
@@ -229,6 +250,16 @@ fn tool_calls_read_as_plain_past_tense_words() {
     assert_eq!(
         d("Bash", json!({"command": "/usr/bin/curl -s https://x.io"})),
         "Fetched x.io"
+    );
+    // The Chief reading the team was a row of "Used a tool".
+    assert_eq!(
+        d(&ours("read_agent"), json!({"agent": "Finance"})),
+        "Caught up on Finance's chat"
+    );
+    assert_eq!(d(&ours("request_login"), json!({})), "Asked you to sign in");
+    assert_eq!(
+        d(&ours("pause_agent"), json!({"agent": "Finance"})),
+        "Paused Finance"
     );
     assert_eq!(
         d(&ours("message_agent"), json!({"agent": "Acme Site"})),
@@ -465,6 +496,15 @@ fn a_declined_call_says_so_and_a_failed_one_says_it_tried() {
     live.action(call("Edit", "e2", json!({"file_path": "/p/Hero.tsx"})), 3);
     live.action(call("Write", "w1", json!({"file_path": "/p/New.tsx"})), 4);
     // Declined on the card, then its error comes back: still declined.
+    let mut card = message(MessageKind::Approval, "card-rm");
+    card.approval = Some(super::super::mcp::new_card(
+        "card-rm".into(),
+        "Run a command".into(),
+        "rm -rf build".into(),
+        None,
+    ));
+    live.message(&card);
+    live.answer("card-rm", ApprovalStatus::Denied);
     live.result(done("rm", Outcome::Declined));
     live.result(done("rm", Outcome::Failed));
     live.result(done("e1", Outcome::Failed));
@@ -485,6 +525,7 @@ fn a_declined_call_says_so_and_a_failed_one_says_it_tried() {
             ("Tried to edit App.tsx", Some(StepOutcome::Failed)),
             ("Edited Hero.tsx", None),
             ("Wrote New.tsx", None),
+            ("You declined: Run a command", Some(StepOutcome::Declined)),
         ]
     );
     // Only the edit that came back counts; the write hasn't come back yet.
@@ -650,6 +691,7 @@ fn a_result_card_is_where_the_turn_ends() {
         not_verified: Vec::new(),
         changes: None,
         project: None,
+        test: None,
     });
     let merged = super::super::results::ride_on(message(MessageKind::Changes, "c"), card);
     assert_eq!(
@@ -788,4 +830,26 @@ fn an_older_build_reads_a_message_carrying_work() {
     let work: TurnWork = serde_json::from_str(raw).unwrap();
     assert_eq!(work.steps[0].kind, StepKind::Tool);
     assert_eq!(work.steps[0].outcome, None);
+}
+
+#[test]
+fn a_call_refused_without_your_answer_never_says_you_declined() {
+    // Real timelines: "Asked for your OK: Run a command" (never answered;
+    // the card was set aside) beside "Asked to run ls — you declined".
+    let mut live = Live::default();
+    let mut card = message(MessageKind::Approval, "c1");
+    card.approval = Some(super::super::mcp::new_card(
+        "c1".into(),
+        "Run a command".into(),
+        "ls".into(),
+        None,
+    ));
+    live.action(call("Bash", "ls", json!({"command": "ls /tmp/plan"})), 1);
+    live.message(&card);
+    live.result(done("ls", Outcome::Declined));
+    let labels: Vec<&str> = live.work.steps.iter().map(|s| s.label.as_str()).collect();
+    assert_eq!(labels.len(), 2);
+    assert!(labels[0].ends_with("— it wasn't allowed"), "{labels:?}");
+    assert!(!labels[0].contains("you declined"), "{labels:?}");
+    assert_eq!(labels[1], "Asked for your OK: Run a command");
 }

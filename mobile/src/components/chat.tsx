@@ -609,7 +609,7 @@ function PeerRow({ message }: { message: AgentMessage }) {
       style={({ pressed }) => [styles.peer, pressed && PRESSED]}
       testID="peer-row"
     >
-      <AgentAvatar name={peer.name} color={color} size={avatarSize.group} />
+      <AgentAvatar id={peer.id} name={peer.name} color={color} size={avatarSize.group} />
       <View style={styles.peerBody}>
         <View style={styles.peerHead}>
           <Icon

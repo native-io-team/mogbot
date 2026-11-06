@@ -193,6 +193,10 @@ pub struct TurnWork {
     /// when the last sign of progress was. "No progress for 5 min".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quiet_since: Option<i64>,
+    /// Live only: the project folder the turn is working in
+    /// (`agents::workplace`), so the Projects sidebar can show it there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
 }
 
 /// A tool call, as the parsers describe it.
@@ -211,6 +215,9 @@ pub struct Action {
     pub ask: String,
     /// Full paths it edits, counted once the edit comes back successful.
     pub files: Vec<String>,
+    /// Other paths it reads or searches (`Read`, `Grep`, `Glob`), for
+    /// finding the codebase it works in (`agents::workplace`). Memory only.
+    pub paths: Vec<String>,
     /// The project a project-scoped call names, so its screenshot finds it.
     pub project: Option<String>,
     /// A tool known to take a while ([`super::describe`]).
@@ -375,6 +382,21 @@ pub fn describe_tool(name: &str, input: Option<&Value>) -> Option<Action> {
         let (server, tool) = rest.split_once("__").unwrap_or(("", rest));
         return Some(other_mcp(server, tool, &field));
     }
+    let looked_at: Vec<String> = ["file_path", "notebook_path", "path"]
+        .iter()
+        .filter_map(|k| field(k))
+        .collect();
+    let mut a = describe_builtin(name, &field)?;
+    if a.paths.is_empty()
+        && a.files.is_empty()
+        && matches!(name, "Read" | "NotebookRead" | "Grep" | "Glob" | "LS")
+    {
+        a.paths = looked_at;
+    }
+    Some(a)
+}
+
+fn describe_builtin(name: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Action> {
     Some(match name {
         "Read" | "NotebookRead" => match field("file_path").or_else(|| field("notebook_path")) {
             Some(path) => {
@@ -528,6 +550,7 @@ fn act(
         doing: doing.into(),
         ask: ask.into(),
         files: Vec::new(),
+        paths: Vec::new(),
         project: None,
         slow: None,
         command: None,
@@ -642,6 +665,70 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
             "Checking on the team",
             "check on the team",
         ),
+        // Real chats showed a run of "Used a tool" after "Checked on the
+        // team": the Chief reading each agent's chat in turn.
+        "read_agent" => {
+            let n = named("agent", "an agent");
+            act(
+                StepKind::Read,
+                format!("Caught up on {n}'s chat"),
+                format!("Catching up on {n}'s chat"),
+                format!("catch up on {n}'s chat"),
+            )
+        }
+        "team_requests" => act(
+            StepKind::Message,
+            "Looked at what the team is asking for",
+            "Looking at what the team is asking for",
+            "look at what the team is asking for",
+        ),
+        "answer_request" => {
+            let n = named("agent", "an agent");
+            act(
+                StepKind::Message,
+                format!("Answered a request from {n}"),
+                format!("Answering a request from {n}"),
+                format!("answer a request from {n}"),
+            )
+        }
+        "bring_to_user" => act(
+            StepKind::Message,
+            "Brought a request to you",
+            "Bringing a request to you",
+            "bring a request to you",
+        ),
+        "pause_agent" | "resume_agent" => {
+            let n = named("agent", "an agent");
+            let (done, doing, to) = if tool == "pause_agent" {
+                ("Paused", "Pausing", "pause")
+            } else {
+                ("Resumed", "Resuming", "resume")
+            };
+            act(
+                StepKind::Delegate,
+                format!("{done} {n}"),
+                format!("{doing} {n}"),
+                format!("{to} {n}"),
+            )
+        }
+        "request_login" => act(
+            StepKind::Message,
+            "Asked you to sign in",
+            "Asking you to sign in",
+            "ask you to sign in",
+        ),
+        "remember_browser_account" => act(
+            StepKind::Web,
+            "Noted which account the browser uses",
+            "Noting which account the browser uses",
+            "note which account the browser uses",
+        ),
+        "ask_bring_browser_to_front" => act(
+            StepKind::Web,
+            "Asked to bring the browser to the front",
+            "Asking to bring the browser to the front",
+            "bring the browser to the front",
+        ),
         "share_file" => act(
             StepKind::Message,
             "Shared a file",
@@ -753,6 +840,103 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
             format!("Checking {p}'s deploy"),
             format!("check {p}'s deploy"),
         ),
+        // Usage and spare capacity (`usage_tools`).
+        "usage_overview" => act(
+            StepKind::Plan,
+            "Checked the team's usage",
+            "Checking the team's usage",
+            "check the team's usage",
+        ),
+        "forecast_usage" => act(
+            StepKind::Plan,
+            "Estimated what the work will use",
+            "Estimating what the work will use",
+            "estimate what the work will use",
+        ),
+        "set_usage_mode" => act(
+            StepKind::Plan,
+            "Changed how your limits are used",
+            "Changing how your limits are used",
+            "change how your limits are used",
+        ),
+        "add_spare_work" => act(
+            StepKind::Plan,
+            "Added to the spare-time list",
+            "Adding to the spare-time list",
+            "add to the spare-time list",
+        ),
+        "finish_spare_work" => act(
+            StepKind::Plan,
+            "Updated the spare-time list",
+            "Updating the spare-time list",
+            "update the spare-time list",
+        ),
+        "run_routine_now" => act(
+            StepKind::Plan,
+            "Ran a routine now",
+            "Running a routine now",
+            "run a routine now",
+        ),
+        // Testing a site in the preview (`preview_test`).
+        "test_open" => {
+            let path = named("path", "a page");
+            act(
+                StepKind::Web,
+                format!("Opened {path} in the preview"),
+                format!("Opening {path} in the preview"),
+                format!("open {path} in the preview"),
+            )
+        }
+        "test_click" | "test_type" | "test_scroll" => {
+            let (done, doing, to) = match tool {
+                "test_click" => ("Clicked", "Clicking", "click"),
+                "test_type" => ("Filled in", "Filling in", "fill in"),
+                _ => ("Scrolled", "Scrolling", "scroll"),
+            };
+            act(
+                StepKind::Web,
+                format!("{done} in the preview"),
+                format!("{doing} in the preview"),
+                format!("{to} in the preview"),
+            )
+        }
+        "test_viewport" => act(
+            StepKind::Web,
+            "Tried another width",
+            "Trying another width",
+            "try another width",
+        ),
+        "test_page" | "test_console" | "test_network" => {
+            let what = match tool {
+                "test_page" => "the page",
+                "test_console" => "the console",
+                _ => "the network requests",
+            };
+            act(
+                StepKind::Read,
+                format!("Read {what}"),
+                format!("Reading {what}"),
+                format!("read {what}"),
+            )
+        }
+        "test_screenshot" => act(
+            StepKind::Screenshot,
+            "Took a screenshot of the preview",
+            "Looking at the preview",
+            "take a screenshot of the preview",
+        ),
+        "test_note" => act(
+            StepKind::Message,
+            "Noted what it saw",
+            "Noting what it sees",
+            "note what it saw",
+        ),
+        "test_report" => act(
+            StepKind::Message,
+            "Finished the test",
+            "Finishing the test",
+            "finish the test",
+        ),
         _ => act(StepKind::Tool, "Used a tool", "Using a tool", "use a tool"),
     };
     a.project = project;
@@ -844,6 +1028,12 @@ const WRAPPERS: [&str; 8] = [
 const SETUP: [&str; 9] = [
     "cd", "export", "set", "source", ".", "pushd", "popd", "true", "unset",
 ];
+/// Shell words that lead into the command that runs: `do gh pr view`.
+const SHELL_LEADS: [&str; 4] = ["do", "then", "else", "!"];
+/// Shell words that start or end a block rather than run anything.
+const SHELL_CONTROL: [&str; 11] = [
+    "for", "while", "until", "if", "elif", "case", "select", "done", "fi", "esac", "[",
+];
 /// Programs whose first argument says what they do ("git push", "npm test").
 const WITH_SUBCOMMANDS: [&str; 34] = [
     "git",
@@ -888,24 +1078,32 @@ const WITH_SUBCOMMANDS: [&str; 34] = [
 /// the timeline doesn't need them. `None` when no program is plain enough
 /// to show.
 pub fn command_words(command: &str) -> Option<String> {
-    let line = command
+    // Every line: a loop's body is often on the lines after its header.
+    let segments = command
         .lines()
         .map(str::trim)
-        .find(|l| !l.is_empty() && !l.starts_with('#'))?;
-    for segment in line
-        .split(['&', '|', ';'])
+        .filter(|l| !l.is_empty() && !l.starts_with('#'))
+        .flat_map(|l| l.split(['&', '|', ';']))
         .map(str::trim)
-        .filter(|s| !s.is_empty())
-    {
+        .filter(|s| !s.is_empty());
+    for segment in segments {
         let mut words = segment
             .split_whitespace()
             .map(|w| w.trim_matches(|c: char| "'\"()`{}".contains(c)))
             .filter(|w| !w.is_empty());
-        let program = words
-            .by_ref()
-            .find(|w| !WRAPPERS.contains(w) && !w.starts_with('-') && !is_assignment(w))?;
+        let Some(program) = words.by_ref().find(|w| {
+            !WRAPPERS.contains(w)
+                && !SHELL_LEADS.contains(w)
+                && !w.starts_with('-')
+                && !is_assignment(w)
+                && !redirect_leftover(w)
+        }) else {
+            continue;
+        };
         let program = file_name(program);
-        if SETUP.contains(&program) {
+        // A loop or test header ("for f in …", "if [ … ]") or its closing
+        // word is not what ran: real timelines read "Ran for".
+        if SETUP.contains(&program) || SHELL_CONTROL.contains(&program) {
             continue;
         }
         let plain = program.chars().count() <= 32
@@ -938,6 +1136,11 @@ pub fn command_words(command: &str) -> Option<String> {
         return Some(out);
     }
     None
+}
+
+/// What splitting on `&` leaves of a redirect: the `2>` and `1` of `2>&1`.
+fn redirect_leftover(word: &str) -> bool {
+    word.chars().all(|c| c.is_ascii_digit() || "<>".contains(c))
 }
 
 fn is_assignment(word: &str) -> bool {
@@ -1230,6 +1433,10 @@ struct Live {
     /// The newest step's call, while it's still running.
     running: Option<String>,
     doing: Option<String>,
+    /// Cards this turn the user answered Deny on, not yet matched to the
+    /// refused call they explain. A call refused with none (the card went
+    /// unanswered, or a rule said no) never says "you declined".
+    declined_by_you: u32,
     /// That call in full, for the working line ([`LiveCall`]).
     current: Option<Running>,
     /// The engine streams command output as it runs (Codex's app server).
@@ -1390,9 +1597,18 @@ impl Live {
                 return;
             }
             Outcome::Failed => (StepOutcome::Failed, format!("Tried to {ask}")),
+            Outcome::Declined if self.declined_by_you > 0 => {
+                self.declined_by_you -= 1;
+                (
+                    StepOutcome::Declined,
+                    format!("Asked to {ask} — you declined"),
+                )
+            }
+            // Real timelines said "you declined" beside a card nobody had
+            // answered ("Asked for your OK", then set aside or timed out).
             Outcome::Declined => (
                 StepOutcome::Declined,
-                format!("Asked to {ask} — you declined"),
+                format!("Asked to {ask} — it wasn't allowed"),
             ),
         };
         let label = clean(&label);
@@ -1409,10 +1625,13 @@ impl Live {
         };
         let (label, outcome) = match status {
             ApprovalStatus::Allowed => (format!("You allowed: {title}"), None),
-            ApprovalStatus::Denied => (
-                format!("You declined: {title}"),
-                Some(StepOutcome::Declined),
-            ),
+            ApprovalStatus::Denied => {
+                self.declined_by_you = self.declined_by_you.saturating_add(1);
+                (
+                    format!("You declined: {title}"),
+                    Some(StepOutcome::Declined),
+                )
+            }
             ApprovalStatus::Pending | ApprovalStatus::Expired => return,
         };
         let label = clean(&label);
@@ -1633,13 +1852,19 @@ pub fn live(agent_id: &str) -> Option<TurnWork> {
             }),
             last_sign_at: Some(live.last_sign),
             quiet_since: live.quiet_since,
+            project: None,
         }
     })
     .filter(|w| w.step_count > 0 || w.current.is_some() || w.quiet_since.is_some())
+    .map(|mut w| {
+        w.project = super::workplace::working_in(agent_id);
+        w
+    })
 }
 
 /// The agent is gone: so is any timeline it was keeping.
 pub fn forget_agent(agent_id: &str) {
+    super::workplace::forget_agent(agent_id);
     LIVE.lock()
         .unwrap_or_else(|e| e.into_inner())
         .remove(agent_id);

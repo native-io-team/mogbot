@@ -84,6 +84,8 @@ import { installAppLifecycleTracking } from './lib/appLifecycle';
 import { useQuitGuard } from './hooks/useQuitGuard';
 import { useStayOn } from './hooks/useStayOn';
 import type { AppView } from './lib/types';
+import type { AgentPreviewServer } from './lib/agentPreview';
+import { getWindowLabel } from './lib/window';
 import './styles/index.css';
 
 // Boot-path guard: a throw at module scope would leave a black window (#173),
@@ -264,6 +266,8 @@ function AppContents({ initialProjectPath }: AppProps) {
     isServerRunning,
     isServerStarting,
     getProjectDevServerSnapshot,
+    getProjectType,
+    getProjectNeedsInstall,
     saveCustomDevCommand,
     needsInstall,
     devServerUnexpectedExit,
@@ -1171,6 +1175,25 @@ function AppContents({ initialProjectPath }: AppProps) {
   );
 
   // ⌘Q, the menu bar's Quit, the palette: guarded while agents work (useQuitGuard).
+  // The Agents preview pane starts and reads servers through the window's own
+  // dev-server owner, so a folder it opens is the same server a workspace reuses.
+  const agentPreviewServer = useMemo<AgentPreviewServer>(
+    () => ({
+      status: getProjectDevServerSnapshot,
+      start: (path, name, port) => startServerForProject(path, name, port, getWindowLabel()),
+      needsInstall: getProjectNeedsInstall,
+      projectType: getProjectType,
+      version: serverLifecycleVersion,
+    }),
+    [
+      getProjectDevServerSnapshot,
+      startServerForProject,
+      getProjectNeedsInstall,
+      getProjectType,
+      serverLifecycleVersion,
+    ]
+  );
+
   const quitConfirmModal = quitGuard.asking && (
     <QuitConfirmModal
       check={quitGuard.asking.check}
@@ -1284,6 +1307,7 @@ function AppContents({ initialProjectPath }: AppProps) {
         toasts={toasts}
         onDismissToast={dismissToast}
         quitConfirmModal={quitConfirmModal}
+        agentPreviewServer={agentPreviewServer}
       />
     </>
   );

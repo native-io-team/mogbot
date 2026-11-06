@@ -142,6 +142,7 @@ fn result_message(id: &str, card_id: &str, version: u32) -> AgentMessage {
         not_verified: Vec::new(),
         changes: None,
         project: None,
+        test: None,
     });
     m
 }
@@ -407,6 +408,7 @@ fn with_store<T>(f: impl FnOnce(&str, &Path) -> T) -> T {
         role: String::new(),
         instructions: String::new(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: false,
     })

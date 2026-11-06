@@ -32,8 +32,134 @@ use crate::errors::CommandError;
 pub const COLORS: &[&str] = &[
     "white", "brown", "red", "orange", "amber", "green", "teal", "blue", "purple", "pink", "gray",
 ];
-/// Number of avatar shapes the frontend draws (indices `0..SHAPE_COUNT`).
+/// The legacy face index (`shape`), from before avatars were a shape and a
+/// face. Still written, so an older build reads the registry; nothing draws it.
 pub const SHAPE_COUNT: u8 = 14;
+
+/// The avatar's shapes and faces, as keys: the drawings live in the shared
+/// spec (`packages/companion-protocol/src/avatar.ts`, checked against these
+/// in a test). Append only.
+pub const AVATAR_SHAPES: &[&str] = &[
+    "circle", "rounded", "squircle", "hexagon", "pill", "drop", "cookie", "arch",
+];
+pub const AVATAR_FACES: &[&str] = &[
+    "calm",
+    "cheerful",
+    "curious",
+    "focused",
+    "sleepy",
+    "wink",
+    "determined",
+    "quiet",
+    "content",
+    "bright",
+];
+
+/// What an agent chose to look like. `None` on the agent: the clients derive
+/// one from its id, so an agent made before avatars never changes.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AgentLook {
+    pub shape: String,
+    pub face: String,
+}
+
+impl AgentLook {
+    /// A look with keys this build draws, or why not.
+    pub fn checked(shape: &str, face: &str) -> Result<AgentLook, String> {
+        let shape = shape.trim().to_ascii_lowercase();
+        let face = face.trim().to_ascii_lowercase();
+        if !AVATAR_SHAPES.contains(&shape.as_str()) {
+            return Err(format!(
+                "There's no shape called \"{shape}\": {}.",
+                AVATAR_SHAPES.join(", ")
+            ));
+        }
+        if !AVATAR_FACES.contains(&face.as_str()) {
+            return Err(format!(
+                "There's no face called \"{face}\": {}.",
+                AVATAR_FACES.join(", ")
+            ));
+        }
+        Ok(AgentLook { shape, face })
+    }
+
+    pub fn is_valid(&self) -> bool {
+        AVATAR_SHAPES.contains(&self.shape.as_str()) && AVATAR_FACES.contains(&self.face.as_str())
+    }
+
+    /// The Chief's default (`CHIEF_LOOK` in avatar.ts).
+    pub const CHIEF_SHAPE: &'static str = "squircle";
+    pub const CHIEF_FACE: &'static str = "calm";
+
+    /// What the clients derive for an agent with no choice saved
+    /// (`defaultLook` in avatar.ts: FNV-1a of the id, the Chief's own).
+    pub fn default_for(id: &str, is_main: bool) -> AgentLook {
+        if is_main {
+            return AgentLook {
+                shape: Self::CHIEF_SHAPE.into(),
+                face: Self::CHIEF_FACE.into(),
+            };
+        }
+        let mut h: u32 = 0x811c9dc5;
+        // UTF-16 code units, as JavaScript's `charCodeAt` sees the id.
+        for unit in id.encode_utf16() {
+            h ^= u32::from(unit);
+            h = h.wrapping_mul(0x01000193);
+        }
+        let shapes: Vec<&str> = AVATAR_SHAPES
+            .iter()
+            .copied()
+            .filter(|s| *s != Self::CHIEF_SHAPE)
+            .collect();
+        // `DEFAULT_FACES`: a wink or a sleepy face is picked, never handed out.
+        let faces: Vec<&str> = AVATAR_FACES
+            .iter()
+            .copied()
+            .filter(|f| *f != "wink" && *f != "sleepy")
+            .collect();
+        AgentLook {
+            shape: shapes[(h as usize) % shapes.len()].into(),
+            face: faces[((h >> 8) as usize) % faces.len()].into(),
+        }
+    }
+
+    /// The look an agent wears: its own choice, field by field, else its default.
+    pub fn of(agent: &Agent) -> AgentLook {
+        let fallback = Self::default_for(&agent.id, agent.is_main);
+        let chosen = agent.avatar.as_ref();
+        AgentLook {
+            shape: chosen
+                .map(|l| l.shape.clone())
+                .filter(|s| AVATAR_SHAPES.contains(&s.as_str()))
+                .unwrap_or(fallback.shape),
+            face: chosen
+                .map(|l| l.face.clone())
+                .filter(|f| AVATAR_FACES.contains(&f.as_str()))
+                .unwrap_or(fallback.face),
+        }
+    }
+
+    /// "a hexagon with a curious face", as `describeLook` in avatar.ts says it.
+    pub fn describe(shape: Option<&str>, face: Option<&str>) -> String {
+        let shape = shape.map(|s| match s {
+            "rounded" => "rounded square",
+            other => other,
+        });
+        let article = |w: &str| {
+            if w.starts_with(['a', 'e', 'i', 'o', 'u']) {
+                "an"
+            } else {
+                "a"
+            }
+        };
+        match (shape, face) {
+            (Some(s), Some(f)) => format!("{} {s} with a {f} face", article(s)),
+            (Some(s), None) => format!("{} {s}", article(s)),
+            (None, Some(f)) => format!("a {f} face"),
+            (None, None) => String::new(),
+        }
+    }
+}
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -45,6 +171,9 @@ pub struct Agent {
     #[serde(default)]
     pub role: String,
     pub shape: u8,
+    /// Its avatar's shape and face (`AgentLook`). Absent: derived from its id.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub avatar: Option<AgentLook>,
     pub color: String,
     /// The Chief of Staff: exactly one, created on first open, can't be deleted.
     #[serde(default)]
@@ -727,6 +856,7 @@ pub struct NewAgent {
     pub role: String,
     pub instructions: String,
     pub shape: Option<u8>,
+    pub avatar: Option<AgentLook>,
     pub color: Option<String>,
     pub is_main: bool,
 }
@@ -845,6 +975,7 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         name,
         role: new.role.trim().to_string(),
         shape,
+        avatar: new.avatar.filter(AgentLook::is_valid),
         color,
         is_main: new.is_main,
         // The one agent you're told to talk to stays put at the top; unpinnable.
@@ -2055,6 +2186,7 @@ mod tests {
             role: "Does things".into(),
             instructions: "Be brief.".into(),
             shape: None,
+            avatar: None,
             color: None,
             is_main: false,
         }

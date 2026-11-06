@@ -373,19 +373,32 @@ impl ChromeMcp {
 
     /// Call a tool; its text content, joined.
     pub async fn call(&mut self, tool: &str, args: Value) -> Result<String, CommandError> {
+        Ok(text_of(&self.call_result(tool, args).await?))
+    }
+
+    /// Call a tool; its whole result (an image's data included).
+    pub async fn call_result(&mut self, tool: &str, args: Value) -> Result<Value, CommandError> {
         let wait = if tool == "navigate" {
             PAGE_TIMEOUT
         } else {
             MCP_TIMEOUT
         };
-        let result = self
-            .request(
-                "tools/call",
-                json!({ "name": tool, "arguments": args }),
-                wait,
-            )
-            .await?;
-        Ok(text_of(&result))
+        self.request(
+            "tools/call",
+            json!({ "name": tool, "arguments": args }),
+            wait,
+        )
+        .await
+    }
+
+    /// Call a tool; its text, or its text as the error when the tool said
+    /// it failed (`isError`), or the reason it couldn't be asked.
+    pub async fn call_checked(&mut self, tool: &str, args: Value) -> Result<String, String> {
+        match self.call_result(tool, args).await {
+            Ok(r) if r.get("isError").and_then(Value::as_bool) == Some(true) => Err(text_of(&r)),
+            Ok(r) => Ok(text_of(&r)),
+            Err(e) => Err(e.to_string()),
+        }
     }
 }
 
@@ -395,7 +408,7 @@ impl Drop for ChromeMcp {
     }
 }
 
-fn text_of(result: &Value) -> String {
+pub(crate) fn text_of(result: &Value) -> String {
     result
         .get("content")
         .and_then(Value::as_array)
@@ -699,7 +712,7 @@ pub fn signed_in(site: &str, landed: &Landed) -> Option<bool> {
 }
 
 /// The first `http(s)` URL in a tool's text, and the tab id it names.
-fn find_tab(text: &str) -> Option<u64> {
+pub(crate) fn find_tab(text: &str) -> Option<u64> {
     // `tabs_create_mcp` / `tabs_context_mcp` answer with JSON or prose that
     // names "tabId": 123 / "Tab ID: 123". Unverified against a connected
     // browser: both shapes are read.
@@ -729,7 +742,7 @@ fn find_tab(text: &str) -> Option<u64> {
 }
 
 /// The URL and title a tab shows, from `tabs_context_mcp`'s answer.
-fn landed_in(text: &str, tab: Option<u64>) -> Option<Landed> {
+pub(crate) fn landed_in(text: &str, tab: Option<u64>) -> Option<Landed> {
     let v: Value = serde_json::from_str(text.trim()).ok()?;
     let tabs = v
         .get("availableTabs")
@@ -755,6 +768,21 @@ fn landed_in(text: &str, tab: Option<u64>) -> Option<Landed> {
             .unwrap_or("")
             .to_string(),
     })
+}
+
+/// The group's one tab, when it's an empty new tab (what
+/// `tabs_context_mcp {createIfEmpty}` makes along with a new group): used
+/// rather than opening a second, so closing it leaves nothing behind.
+/// Verified 2.1.318: `{"availableTabs":[{"tabId":…,"title":"New Tab","url":"chrome://newtab/"}],…}`.
+pub(crate) fn only_blank_tab(text: &str) -> Option<u64> {
+    let v: Value = serde_json::from_str(text.trim()).ok()?;
+    let tabs = v.get("availableTabs").and_then(Value::as_array)?;
+    match tabs.as_slice() {
+        [t] if t.get("url").and_then(Value::as_str) == Some("chrome://newtab/") => {
+            t.get("tabId").and_then(Value::as_u64)
+        }
+        _ => None,
+    }
 }
 
 /// Open `service`'s account page in a new tab of the user's Chrome, see

@@ -118,7 +118,11 @@ pub async fn agents_with_projects() -> Result<Vec<AgentView>, CommandError> {
     blocking(|| {
         store::list()?
             .into_iter()
-            .filter(|a| a.project.is_some())
+            // Bound to a project, or with a turn working in one now
+            // (`agents::workplace`): the sidebar shows it there.
+            .filter(|a| {
+                a.project.is_some() || crate::agents::workplace::working_in(&a.id).is_some()
+            })
             .map(|agent| {
                 Ok(AgentView {
                     takeover: takeover::view(&agent.id),
@@ -331,6 +335,9 @@ pub async fn agents_open_path(
 pub struct CreateAgentInput {
     pub name: String,
     pub shape: Option<u8>,
+    /// Its shape and face; omitted, the clients derive one from its id.
+    #[serde(default)]
+    pub avatar: Option<store::AgentLook>,
     pub color: Option<String>,
     #[serde(default)]
     pub role: String,
@@ -397,6 +404,7 @@ pub async fn agents_create(
         role: input.role,
         instructions: input.instructions,
         shape: input.shape,
+        avatar: input.avatar,
         color: input.color,
         is_main: false,
     })?;
@@ -423,6 +431,9 @@ pub async fn agents_create(
 pub struct UpdateAgentInput {
     pub name: Option<String>,
     pub shape: Option<u8>,
+    /// Its shape and face; keys this build doesn't draw are ignored.
+    #[serde(default)]
+    pub avatar: Option<store::AgentLook>,
     pub color: Option<String>,
     pub role: Option<String>,
     pub instructions: Option<String>,
@@ -468,6 +479,7 @@ pub async fn agents_update(
     }
     let color = input.color.filter(|c| store::COLORS.contains(&c.as_str()));
     let shape = input.shape.filter(|s| *s < store::SHAPE_COUNT);
+    let avatar = input.avatar.filter(store::AgentLook::is_valid);
     let role = input.role.clone();
     let current = store::get(&agent_id)?;
     let engine = match input.engine.as_deref().map(Engine::parse).transpose()? {
@@ -520,6 +532,9 @@ pub async fn agents_update(
         }
         if let Some(s) = shape {
             a.shape = s;
+        }
+        if let Some(look) = avatar {
+            a.avatar = Some(look);
         }
         if let Some(r) = role {
             a.role = r.trim().to_string();
@@ -922,6 +937,71 @@ pub async fn agents_login_dismiss(
     request_id: String,
 ) -> Result<(), CommandError> {
     blocking(move || agents::logins::dismiss(&app, &agent_id, &request_id)).await
+}
+
+/// "Not needed" on a login card: the service it asks for, declined for the
+/// whole team and remembered (`agents/declined.rs`).
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_login_not_needed(
+    app: AppHandle,
+    agent_id: String,
+    request_id: String,
+) -> Result<agents::declined::Receipt, CommandError> {
+    blocking(move || agents::declined::decline_card(&app, &agent_id, &request_id)).await
+}
+
+/// "Not needed" on rows of "What your team needs" (`keys`), or "Skip the
+/// rest" (`keys` absent: every row still waiting).
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_logins_not_needed(
+    app: AppHandle,
+    keys: Option<Vec<String>>,
+) -> Result<agents::declined::Receipt, CommandError> {
+    blocking(move || {
+        let services = agents::declined::rows(keys.as_deref());
+        agents::declined::decline(&app, &services)
+    })
+    .await
+}
+
+/// Undo a decline, or "Turn back on" from Settings: returns how many cards
+/// came back (only right after the decline).
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_logins_undecline(
+    app: AppHandle,
+    keys: Vec<String>,
+) -> Result<usize, CommandError> {
+    blocking(move || agents::declined::undo(&app, &keys)).await
+}
+
+/// Every app the user chose not to connect (Settings → Agents).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_logins_declined() -> Result<Vec<agents::logins::ReachDeclined>, CommandError> {
+    blocking(|| Ok(agents::logins::reach_declined())).await
+}
+
+/// "Open again": the sign-in page a waiting card opened, on this Mac.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_login_reopen(
+    app: AppHandle,
+    agent_id: String,
+    request_id: String,
+) -> Result<(), CommandError> {
+    agents::logins::reopen(&app, &agent_id, &request_id)
+}
+
+/// The user is back in the app: claude.ai connectors waiting on a card
+/// are checked now rather than at their next 20-second tick.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_logins_recheck() -> Result<(), CommandError> {
+    agents::logins::recheck();
+    Ok(())
 }
 
 /// What one agent can reach: its connections, browser and secrets.
@@ -2180,6 +2260,23 @@ pub async fn agents_browser_enable(
 #[tracing::instrument(skip(app))]
 pub async fn agents_browser_disable(app: AppHandle) -> Result<(), CommandError> {
     blocking(move || agents::browser::disable(&app)).await
+}
+
+/// The phone signing in through this Mac's Chrome right now, for the desk's
+/// bar (`agents/phone_signin.rs`). `None`: nothing is.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_phone_signin_status(
+) -> Result<Option<agents::phone_signin::Banner>, CommandError> {
+    Ok(agents::phone_signin::banner())
+}
+
+/// The desk's Stop: the phone's sign-in ends and its tab closes.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_phone_signin_stop(app: AppHandle) -> Result<(), CommandError> {
+    agents::phone_signin::stop_from_desk(&app).await;
+    Ok(())
 }
 
 /// Open the extension's install page in this Mac's browser. Only the

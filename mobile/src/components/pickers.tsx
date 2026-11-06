@@ -12,6 +12,14 @@ import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { AGENT_COLORS } from '../lib/newAgent';
 import { agentColorNames, chromeScale, fonts, iconSize, radius, space } from '../lib/theme';
 import { Icon, T, tap, useRipple } from './ui';
+import { AgentAvatar } from './agent';
+import {
+  AVATAR_FACES,
+  AVATAR_SHAPES,
+  FACE_NAMES,
+  SHAPE_NAMES,
+  type AgentLook,
+} from '@shipstudio/companion-protocol';
 
 /** Chips fit 36pt; their slop makes the target 44. */
 const CHIP = 36;
@@ -142,6 +150,83 @@ export function ColorSwatches({
   );
 }
 
+/**
+ * How an agent looks: a row of shapes and a row of faces, each drawn with
+ * the current pick's other part and colour, so what a button shows is what
+ * you'd get. The same choices as the desk's editor (`AgentLookPicker`).
+ */
+export function LookChoices({
+  name,
+  color,
+  look,
+  onChange,
+}: {
+  name: string;
+  color: string;
+  look: AgentLook;
+  onChange: (look: AgentLook) => void;
+}) {
+  const styles = useStyles();
+  return (
+    <View style={styles.look}>
+      <View style={styles.swatches} accessibilityRole="radiogroup" accessibilityLabel="Shape">
+        {AVATAR_SHAPES.map((shape) => (
+          <LookChoice
+            key={shape}
+            label={SHAPE_NAMES[shape]}
+            on={shape === look.shape}
+            onPress={() => onChange({ ...look, shape })}
+          >
+            <AgentAvatar name={name} color={color} look={{ ...look, shape }} size={SWATCH} />
+          </LookChoice>
+        ))}
+      </View>
+      <View style={styles.swatches} accessibilityRole="radiogroup" accessibilityLabel="Face">
+        {AVATAR_FACES.map((face) => (
+          <LookChoice
+            key={face}
+            label={FACE_NAMES[face]}
+            on={face === look.face}
+            onPress={() => onChange({ ...look, face })}
+          >
+            <AgentAvatar name={name} color={color} look={{ ...look, face }} size={SWATCH} />
+          </LookChoice>
+        ))}
+      </View>
+    </View>
+  );
+}
+
+function LookChoice({
+  label,
+  on,
+  onPress,
+  children,
+}: {
+  label: string;
+  on: boolean;
+  onPress: () => void;
+  children: ReactNode;
+}) {
+  const colors = useColors();
+  const styles = useStyles();
+  return (
+    <Pressable
+      accessibilityRole="radio"
+      accessibilityLabel={label}
+      accessibilityState={{ selected: on }}
+      onPress={() => {
+        if (!on) tap();
+        onPress();
+      }}
+      style={styles.swatchTarget}
+    >
+      {/* The pick: a neutral ring, as the colour swatches have. */}
+      <View style={[styles.lookRing, on && { borderColor: colors.textStrong }]}>{children}</View>
+    </Pressable>
+  );
+}
+
 const SWATCH = 28;
 const RING = SWATCH + 8;
 
@@ -161,6 +246,16 @@ const useStyles = makeStyles((colors) => ({
   chipPressed: { backgroundColor: colors.surfaceControlHover },
   swatches: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -space['2xs'] },
   swatchTarget: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  look: { gap: space.xs },
+  lookRing: {
+    width: RING,
+    height: RING,
+    borderRadius: radius.control,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
   ring: {
     width: RING,
     height: RING,

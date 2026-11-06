@@ -16,6 +16,7 @@ fn agent(name: &str) -> Agent {
         role: String::new(),
         instructions: String::new(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: false,
     })
@@ -40,6 +41,7 @@ fn seen(a: &Agent, service: &str, status: ApprovalStatus, said: Option<&str>) ->
         status,
         login: logins::build(a, &ask(service)).unwrap(),
         said: said.map(str::to_string),
+        at: 0,
     }
 }
 
@@ -305,5 +307,32 @@ fn the_browser_comes_before_a_claude_ai_connector_and_after_our_own() {
         });
         assert!(told.contains("I'm in Gmail as"));
         assert!(told.contains("exactly what will go and from which account"));
+    });
+}
+
+#[test]
+fn a_no_from_before_the_user_turned_it_back_on_no_longer_counts() {
+    with_root(|| {
+        let designer = agent("Designer");
+        let writer = agent("Writer");
+        let none = Tried::default();
+        let r = logins::build(&writer, &ask("figma")).unwrap();
+        let mut no = seen(
+            &designer,
+            "figma",
+            ApprovalStatus::Denied,
+            Some("Not needed"),
+        );
+        no.at = 10;
+        let team = [no];
+        assert!(matches!(
+            decide(&writer, &r, &none, &Here::default(), &team),
+            Step::AlreadyDeclined { .. }
+        ));
+        let on = Here {
+            turned_on: vec![("figma".into(), 20)],
+            ..Default::default()
+        };
+        assert_eq!(decide(&writer, &r, &none, &on, &team), Step::Ask);
     });
 }

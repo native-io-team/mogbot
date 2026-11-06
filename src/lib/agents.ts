@@ -10,6 +10,7 @@ import type { FileDiff } from './git';
 import type { AgentSecret, SecretRequest } from './agentSecrets';
 import type { Watch, WatchSource } from '../../packages/companion-protocol/src/model';
 import type { SettingsProposal } from '../../packages/companion-protocol/src/policy';
+import type { AgentLook } from '../../packages/companion-protocol/src/avatar';
 
 export type { Watch, WatchEvent, WatchSource } from '../../packages/companion-protocol/src/model';
 
@@ -137,6 +138,12 @@ export interface TurnWork {
   lastSignAt?: number;
   /** While it runs, once it has made no progress for too long: when it last did. */
   quietSince?: number;
+  /**
+   * While it runs: the project folder it is working in (by its own commands,
+   * a session or its binding), so the Projects list shows it there. Older
+   * Macs omit it.
+   */
+  project?: string;
 }
 
 export interface Agent {
@@ -144,6 +151,8 @@ export interface Agent {
   name: string;
   role: string;
   shape: number;
+  /** Its chosen shape and face. Absent: derived from its id (`lookFor` in avatar.ts). */
+  avatar?: AgentLook;
   /** One of AGENT_COLORS; typed loosely because the registry is a file. */
   color: string;
   isMain: boolean;
@@ -756,6 +765,7 @@ export const attachmentUrl = (home: string, attachment: Attachment) =>
 export interface NewAgentInput {
   name: string;
   shape?: number;
+  avatar?: AgentLook;
   color?: string;
   role?: string;
   instructions?: string;
@@ -770,6 +780,7 @@ export interface NewAgentInput {
 export interface UpdateAgentInput {
   name?: string;
   shape?: number;
+  avatar?: AgentLook;
   color?: string;
   role?: string;
   instructions?: string;
@@ -1050,6 +1061,11 @@ export const AGENT_EVENTS = {
   importTalk: 'agents://import-talk',
   /** How far a copy from the other app has got: `OtherAppProgress`. */
   importProgress: 'agents://import-progress',
+  /**
+   * An agent's turn is working in a codebase the app just registered or
+   * pinned (`agents::workplace`): `{ path, agentId }`. Re-read the projects.
+   */
+  projectFound: 'agents://project-found',
 } as const;
 
 export const getAgentsOverview = () => invoke<AgentsOverview>('agents_overview');

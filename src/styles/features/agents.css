@@ -10,8 +10,6 @@
  */
 
 :root {
-  /* A working agent's badge breathes: slow enough to read as calm. */
-  --agents-avatar-breathe: calc(var(--duration-loader-isolated) * 1.5);
   /* The agent palette. Feature-local: these are agents' identities, not
      product semantics, and the registry stores the key, never the colour. */
   --agents-tint-white: #e6e6e6;
@@ -35,8 +33,10 @@
   );
   --agents-chat-width: 720px;
   --agents-bubble-max: 80%;
-  /* Agent prose sits on the canvas at a reading measure, not in a bubble. */
-  --agents-prose-measure: 38em; /* ≈70 characters of body text */
+  /* Agent prose sits on the canvas, not in a bubble, across the same column
+     as the composer under it: one edge on both sides at every window size.
+     (A 38em measure left the replies narrower than the composer at 1100px.) */
+  --agents-prose-measure: var(--agents-chat-width);
   /* A card (approval, result, copy): one step forward of the canvas. Dark
      gets that from the control fill; light from a white panel ringed by a
      hairline shadow, or the Allow card reads as a faint smudge. */
@@ -88,55 +88,7 @@
 
 /* ---------------------------------------------------------------- badge */
 
-/* Same tile as a project's badge, tinted. Solid when it's the agent you're
-   looking at, the way the current project's badge turns solid. Sizes are
-   fixed steps on the type and radius scales, never computed. */
-.agent-avatar {
-  display: inline-flex;
-  flex: 0 0 auto;
-  align-items: center;
-  justify-content: center;
-  width: var(--agent-avatar-size);
-  height: var(--agent-avatar-size);
-  font-weight: var(--font-weight-heading);
-  line-height: 1;
-  letter-spacing: 0;
-  /* At rest the initials sit at a readable mix of the tint and the text
-     colour; 16% tint alone was under 4.5:1 for the darker hues. */
-  color: color-mix(in srgb, var(--agents-tint, var(--text-secondary)) 70%, var(--text-primary));
-  background: color-mix(in srgb, var(--agents-tint, var(--text-muted)) 24%, var(--surface-control));
-  box-shadow: var(--shadow-button);
-  user-select: none;
-}
-
-.agent-avatar--row {
-  --agent-avatar-size: var(--size-sidebar-project-shortcut);
-  font-size: var(--font-size-body-sm);
-  border-radius: var(--radius-control);
-}
-
-.agent-avatar--field {
-  --agent-avatar-size: var(--control-height-standard);
-  font-size: var(--font-size-body-lg);
-  border-radius: var(--radius-control);
-}
-
-.agent-avatar--mini {
-  --agent-avatar-size: calc(var(--spacing-lg) + var(--spacing-2xs));
-  font-size: var(--font-size-caption);
-  border-radius: var(--radius-sm);
-}
-
-.agent-avatar--hero {
-  --agent-avatar-size: calc(var(--control-height-standard) + var(--spacing-lg));
-  font-size: var(--font-size-h4);
-  border-radius: var(--radius-lg);
-}
-
-.agent-avatar--selected {
-  color: var(--surface-app);
-  background: var(--agents-tint, var(--accent-active));
-}
+/* The avatar itself (shape, face, sizes, motion) is agents-avatar.css. */
 
 /* A colour where letters would be too small to read (the peer line, menus). */
 .agent-dot {
@@ -503,40 +455,6 @@
   display: flex;
   gap: var(--spacing-sm);
   margin-top: var(--spacing-xs);
-}
-
-/* A working agent's badge: a ring in its own colour that breathes, slowly.
-   Never a flash; with Reduce Motion it simply stays. */
-.agent-avatar--working {
-  position: relative;
-}
-
-.agent-avatar--working::after {
-  position: absolute;
-  inset: calc(var(--focus-ring-offset) * -1);
-  pointer-events: none;
-  content: '';
-  border: var(--focus-ring-width) solid var(--agents-tint, var(--text-muted));
-  border-radius: inherit;
-  opacity: 0.6;
-  animation: agents-avatar-breathe var(--agents-avatar-breathe) ease-in-out infinite;
-}
-
-@keyframes agents-avatar-breathe {
-  0%,
-  100% {
-    opacity: 0.25;
-  }
-
-  50% {
-    opacity: 0.8;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .agent-avatar--working::after {
-    animation: none;
-  }
 }
 
 /* "· 5m" stays with itself when a working row's line wraps. */

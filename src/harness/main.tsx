@@ -13,6 +13,8 @@
 // module scope. See the module docblock.
 import './resetStorage';
 import './freeze.css';
+// `?avatarDirection=solid|outline`: an avatar direction that wasn't chosen (docs/internal/avatars.md).
+import './avatarDirections.css';
 // Before any React root: keeps infinite CSS animations on the compositor.
 import '../lib/noAnimationIterationListeners';
 
@@ -45,6 +47,9 @@ const commandId = params.get('command');
  */
 if (params.get('freeze') !== 'off') {
   document.documentElement.setAttribute('data-harness-freeze', '');
+}
+if (params.get('avatarDirection')) {
+  document.documentElement.dataset.avatarDirection = params.get('avatarDirection') ?? '';
 }
 
 // The IPC bridge must exist before any app module runs an effect.

@@ -71,6 +71,7 @@ pub mod connections;
 pub mod connector;
 pub mod context;
 pub mod decisions;
+pub mod declined;
 pub mod defaults;
 pub mod describe;
 pub mod driver;
@@ -81,6 +82,7 @@ pub mod exposure;
 pub mod failure;
 pub mod files;
 pub mod forecast;
+pub mod go_hard;
 pub mod harvest;
 pub mod import;
 pub mod independence;
@@ -96,8 +98,10 @@ pub mod oauth;
 pub mod other_app;
 pub mod paste;
 pub mod permissions;
+pub mod phone_signin;
 pub mod policy;
 pub mod policy_card;
+pub mod preview_test;
 pub mod procs;
 pub mod project;
 pub mod prompts;
@@ -128,6 +132,7 @@ pub mod wallet;
 pub mod watch;
 pub mod watch_seal;
 pub mod work;
+pub mod workplace;
 
 use crate::errors::CommandError;
 
@@ -196,6 +201,7 @@ pub fn ensure_main() -> Result<store::Agent, CommandError> {
         role: prompts::CHIEF_ROLE.to_string(),
         instructions: prompts::CHIEF_INSTRUCTIONS.to_string(),
         shape: Some(5),
+        avatar: None,
         color: Some("white".to_string()),
         is_main: true,
     });
@@ -388,3 +394,5 @@ mod tests {
 
 #[cfg(test)]
 mod audit_tests;
+#[cfg(test)]
+mod avatar_tests;

@@ -13,6 +13,7 @@ import {
   describeWatchStatus,
   describeWatchTitle,
   isAdmin,
+  lookFor,
   MAC_FEATURES,
   onClaudePlan,
   routineWeekLine,
@@ -35,6 +36,7 @@ import { choose } from '../../components/menu';
 import { TextAction } from '../../components/surfaces';
 import { WhatItCanReach } from '../../components/reach';
 import { WhatItCanDo } from '../../components/policy';
+import { ColorSwatches, LookChoices } from '../../components/pickers';
 import { Button, Icon, InsetDivider, Row, SectionTitle, SheetPage, T } from '../../components/ui';
 import { SheetTitle } from '../../components/SheetTitle';
 import {
@@ -67,8 +69,8 @@ import { withAgentAccent } from '../../lib/accentScreen';
 import { avatarSize, iconSize, radius, space } from '../../lib/theme';
 import { makeStyles, useColors } from '../../lib/appearance';
 
-// Its colour, which is also its chat's accent, is set at the desk: the Mac
-// doesn't take a colour change from a phone (`AgentToggles` in companion/router.rs).
+// Its look (shape, face and colour, which is also its chat's accent) changes here
+// only on a Mac that takes it (MAC_FEATURES.looks; AgentToggles in companion/router.rs).
 export default withAgentAccent(AgentSheet);
 
 function AgentSheet() {
@@ -88,6 +90,8 @@ function AgentSheet() {
     if (text) announce(text, true);
   }, []);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
+  const looks = !!welcome?.features?.includes(MAC_FEATURES.looks);
+  const [showLook, setShowLook] = useState(false);
   const servesUsage = canCall('agents.usage', welcome);
   useEffect(() => {
     if (!servesUsage || !live) return;
@@ -118,7 +122,21 @@ function AgentSheet() {
     <SheetPage>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.who}>
-          <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.sheet} />
+          {/* A Mac that keeps looks: the avatar opens its shape, face and colour. */}
+          <Pressable
+            disabled={!looks}
+            onPress={() => setShowLook((open) => !open)}
+            accessibilityRole={looks ? 'button' : undefined}
+            accessibilityLabel={looks ? 'Change how it looks' : undefined}
+            accessibilityState={looks ? { expanded: showLook } : undefined}
+          >
+            <AgentAvatar
+              id={agent.id}
+              name={agent.name}
+              color={agent.color}
+              size={avatarSize.sheet}
+            />
+          </Pressable>
           <View style={{ flex: 1, gap: space['2xs'] }}>
             <SheetTitle numberOfLines={2}>{agent.name}</SheetTitle>
             {!!agent.role && (
@@ -133,6 +151,29 @@ function AgentSheet() {
             )}
           </View>
         </View>
+
+        {looks && showLook && (
+          <Animated.View entering={FadeIn.duration(150)} style={styles.look}>
+            <LookChoices
+              name={agent.name}
+              color={agent.color}
+              look={lookFor(agent)}
+              onChange={(avatar) =>
+                setAgentToggles(agent.id, { avatar }).catch((e: unknown) =>
+                  setError(describeError(e))
+                )
+              }
+            />
+            <ColorSwatches
+              value={agent.color}
+              onChange={(color) =>
+                setAgentToggles(agent.id, { color }).catch((e: unknown) =>
+                  setError(describeError(e))
+                )
+              }
+            />
+          </Animated.View>
+        )}
 
         {error && (
           <Animated.View entering={FadeIn.duration(150)} style={styles.error}>
@@ -730,6 +771,7 @@ const useStyles = makeStyles((colors) => ({
     gap: space.sm,
     paddingHorizontal: space.lg,
   },
+  look: { gap: space.sm },
   list: { backgroundColor: colors.surfaceGroup, borderRadius: radius.card, overflow: 'hidden' },
   none: { padding: space.lg },
   note: { marginHorizontal: space.lg },

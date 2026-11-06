@@ -4,6 +4,13 @@
 > step has a command, a check and what to tell the human. Don't improvise the setup.
 
 > **Start with [docs/MISSION.md](docs/MISSION.md), then [docs/ROADMAP.md](docs/ROADMAP.md).**
+> **North star: extremely complex tasks, made extremely easy.** Agents do whatever it takes:
+> they find access wherever it exists (connected app / Claude connector → CLIs and files on the
+> Mac → the built-in agent browser → the user's Chrome via Claude in Chrome → search, scripts,
+> other agents) and ask the user only when every route is exhausted, or before spending, sending
+> or publishing as them, pushing, deleting their data, or touching credentials. When they go
+> somewhere it is clear where and as whom. Every setting is changeable from chat. Judge every
+> change by: does this make a hard task easier, with less of the user's attention?
 > Dashbot is the working name (it lives only in `brand.json`; see "Brand and identity"). It is
 > the evolution of Ship Studio: an open-source app for running your own team of AI agents, on
 > desktop and phone. Grok Bot's experience, on Claude Code and Codex on your own machine, with
@@ -130,24 +137,23 @@ these without updating that doc.
 - **Approvals are the wall.** An admin agent can answer only another agent's *local* requests (`admin::classify`, tested), never its own, never in a turn answering outside text. Agents run in `acceptEdits`; everything else goes through the
   approval broker (`agents/broker.rs`), which trusts only a live turn's `?turn=` id and stops a turn
   that reports `bypassPermissions` ([docs/agents.md](docs/agents.md), "Approvals"). The only
-  cards answered for the user are local ones their independence level covers
-  (`agents/autoallow.rs`, an allow-list in `mcp::decide` for Claude Code and Codex alike): reads
-  at "Use good judgement", reads plus local work, network reads and installs at "Go
-  hard", and no more than reads for a turn answering outside text. Sending, pushing, publishing,
-  uploads, `sudo`, deleting the user's files and anything touching credentials always get a card,
-  and each auto-answer leaves a line in "What it did" ("How much agents do on their own"). Secrets
-  go into the Keychain through a masked card, never the chat ("Secrets")
-- **"Go hard" is for the user's own work, not outside text's.** After a turn reads outside content
-  (web pages and search results, issue/PR comments, mail and chat through connections, other sites
-  in the browser), sending to the network beyond a read and running a package new to the project
-  ask for the rest of that turn, with one quiet line in its timeline (`agents/exposure.rs`;
-  browsing, local work, builds and project installs carry on). No request goes through on its own
-  with a secret in its address, query or headers (`agents/egress.rs`). A new package is remembered
-  once allowed for its project (`agents/installs.rs`). Shell profiles, `~/.ssh`, launch agents,
-  crontab, `.git`, the app's data and other agents' homes, Keychain reads (`security`),
-  `osascript` and `defaults write` always ask; wrappers (`bash -c`, `eval`, `env`, `find -exec`,
-  `python -c`, `node -e`) are judged by what they run, or ask ([docs/agents.md](docs/agents.md),
-  "How much agents do on their own")
+  cards answered for the user are ones their independence level covers (`mcp::decide`, for
+  Claude Code and Codex alike): reads at "Use good judgement" (`agents/autoallow.rs`, an
+  allow-list), and at "Go hard" everything except a short ask list (`agents/go_hard.rs`): pushing,
+  `gh` writes, publishing, production deploys, sending mail/messages, live payments, network writes
+  off this Mac, `sudo`, `rm -r` outside projects/agent homes/temp, credentials, shell profiles,
+  launch agents and system tools; in the browser, send-like clicks, uploads and scripts that submit
+  or post. A turn answering outside text at "Go hard" also asks for any network write and for
+  packages fetched by name. Each
+  auto-answer leaves a line in "What it did" ("How much agents do on their own"). Secrets go
+  into the Keychain through a masked card, never the chat ("Secrets")
+- **"Go hard" hardening.** No request goes through on its own with a secret in its address, query
+  or headers (`agents/egress.rs`). After a turn reads outside content (web pages and search
+  results, issue/PR comments, mail and chat through connections, other sites in the browser),
+  network writes to another host and packages new to the project ask for the rest of that turn
+  (`agents/exposure.rs`, `agents/installs.rs`; a new package is remembered once allowed). Network
+  reads, local work, builds, project installs, dev servers and here-document scripts carry on
+  without a card (`go_hard_hardening_tests.rs`)
 - **Agents never hold an app's token.** A connection made on a login card is reached through the
   bridge's relay (`agents/conn_relay.rs`), which adds the Keychain token and enforces the grant
   for every engine ([docs/agents.md](docs/agents.md), "Grants, read vs send, and turns")
@@ -272,8 +278,8 @@ Single-file domains:
 
 Shared icons are imported from `@/components/icons`, never from an internal icon module or a raw
 SVG asset. Static inline SVG is prohibited in feature components; use the shared icon modules or
-`src/assets/graphics/` for feature artwork. The marked dynamic `BranchGraph.tsx` exception is the
-only inline SVG. See [Icons and SVG graphics](docs/design-system.md#icons-and-svg-graphics).
+`src/assets/graphics/` for feature artwork. The marked dynamic exceptions, `BranchGraph.tsx` and
+`AgentAvatar.tsx` (drawn from the avatar spec shared with the phone), are the only inline SVG. See [Icons and SVG graphics](docs/design-system.md#icons-and-svg-graphics).
 
 When a request adds an icon to a feature, always follow
 [Importing a new icon](docs/design-system.md#importing-a-new-icon): process files from the temporary

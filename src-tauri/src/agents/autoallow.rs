@@ -28,16 +28,15 @@
 //! can't parse ask.
 //!
 //! **Levels** ([`allows`]): "Check with me often" answers nothing; "Use good
-//! judgement" answers reads; "Go hard" answers reads and local work. A turn
-//! answering outside text runs at most at "Use good judgement"
-//! (`independence::for_turn`), so outside text never gets a write without a
-//! card.
+//! judgement" answers reads (at most that for a turn answering outside text,
+//! `independence::for_turn`). "Go hard" doesn't use this classifier at all:
+//! it allows by default and asks only for its short list (`go_hard`).
 //!
-//! **Hardening at "Go hard"**: no network request goes through on its own
-//! with a secret in its address, query or headers (`egress`); after outside
-//! content, sending and packages new to the project ask (`exposure`, `installs`);
-//! wrappers (`bash -c`, `eval`, `env`, `find -exec`) are judged by what they
-//! run.
+//! **Hardening at "Go hard"** (on top of `go_hard`'s list): no network
+//! request goes through on its own with a secret in its address, query or
+//! headers (`egress`); in a turn that read outside content (`exposure`),
+//! network writes to another host and packages new to the project ask
+//! ([`after_outside_asks`], `installs`).
 
 use serde_json::Value;
 use std::path::{Component, Path, PathBuf};
@@ -67,6 +66,17 @@ pub fn allows(level: Level, class: Class) -> bool {
 /// The class a call is answered as, when the user's `chosen` level answers
 /// it: `None` means a card. `outside`: the turn answers outside text.
 pub fn auto(chosen: Level, outside: bool, tool: &str, input: &Value, ctx: &Ctx) -> Option<Class> {
+    // "Go hard" is allow-by-default with a short list that asks
+    // (`go_hard`), outside text or not: reading a page is the job.
+    if chosen == Level::GoHard {
+        if super::go_hard::asks(tool, input, ctx, outside) {
+            return None;
+        }
+        return Some(match classify(tool, input, ctx) {
+            Class::Read => Class::Read,
+            _ => Class::Change,
+        });
+    }
     let level = independence::for_turn(chosen, outside);
     if level == Level::Often {
         return None;
@@ -93,6 +103,9 @@ pub struct Ctx {
     /// Packages the user already allowed for this project on a card
     /// (`installs::remembered`), as `npm:zod`.
     pub packages: Vec<String>,
+    /// Reads every agent's home without a card at "Go hard": the Chief and
+    /// the admins (`admin`). Others read only their own.
+    pub team_reader: bool,
 }
 
 impl Ctx {
@@ -118,6 +131,7 @@ impl Ctx {
             app_data,
             secrets: super::egress::known(),
             packages: super::installs::remembered(&key),
+            team_reader: super::admin::is_admin(agent),
         })
     }
 
@@ -3030,117 +3044,6 @@ fn outside_simple(words: Vec<Word>, depth: u8) -> bool {
     }
 }
 
-/// Whether a command line sends something to the network beyond a read: a
-/// `curl` / `wget` with a body, upload or non-GET method to anywhere but this
-/// Mac, a `gh` write, `git push`, or a tool that only exists to move data
-/// (`ssh`, `scp`, `rsync`, `nc`, mail…). Wrappers and `$(…)` are looked into;
-/// what can't be parsed counts as sending.
-pub fn command_sends(command: &str) -> bool {
-    sends_line(command, 0)
-}
-
-fn sends_line(command: &str, depth: u8) -> bool {
-    if depth > MAX_DEPTH {
-        return true;
-    }
-    let Some(lexed) = lex(command, "") else {
-        return true;
-    };
-    if lexed.subs.iter().any(|s| sends_line(s, depth + 1)) {
-        return true;
-    }
-    let mut words: Vec<Word> = Vec::new();
-    let mut toks = lexed.toks.into_iter();
-    while let Some(tok) = toks.next() {
-        match tok {
-            Tok::Word(w) => words.push(w),
-            Tok::Sep => {
-                if sends_simple(std::mem::take(&mut words), depth) {
-                    return true;
-                }
-            }
-            Tok::Out | Tok::In | Tok::Text => {
-                toks.next();
-            }
-        }
-    }
-    sends_simple(words, depth)
-}
-
-fn sends_simple(words: Vec<Word>, depth: u8) -> bool {
-    let words = strip_wrappers(words);
-    let texts: Vec<&str> = words.iter().map(|w| w.text.as_str()).collect();
-    let Some(name) = texts.first().and_then(|p| program_name(p)) else {
-        return false;
-    };
-    let args = &texts[1..];
-    let remote = || {
-        args.iter().any(|a| {
-            a.find("://").is_some_and(|i| {
-                let start = a[..i]
-                    .rfind(|c: char| !c.is_ascii_alphabetic())
-                    .map_or(0, |j| j + 1);
-                remote_url(&a[start..])
-            })
-        })
-    };
-    match name {
-        "curl" => {
-            let mut it = args.iter();
-            let mut sends = false;
-            while let Some(a) = it.next() {
-                let method = |m: Option<&&str>| !m.is_some_and(|m| matches!(*m, "GET" | "HEAD"));
-                sends |= match *a {
-                    "-X" | "--request" => method(it.next()),
-                    a if a.starts_with("--request=") => {
-                        method(a.split_once('=').map(|(_, v)| v).as_ref())
-                    }
-                    a if a.starts_with("-X") && a.len() > 2 => method(Some(&&a[2..])),
-                    a if a.starts_with("--data")
-                        || a.starts_with("--form")
-                        || a.starts_with("--upload")
-                        || a.starts_with("--json")
-                        || a.starts_with("--mail") =>
-                    {
-                        true
-                    }
-                    a if a.starts_with('-') && !a.starts_with("--") => {
-                        a[1..].contains(['d', 'F', 'T'])
-                    }
-                    _ => false,
-                };
-            }
-            sends && remote()
-        }
-        "wget" => {
-            args.iter().any(|a| {
-                a.starts_with("--post") || a.starts_with("--body") || a.starts_with("--method")
-            }) && remote()
-        }
-        "git" => args.contains(&"push"),
-        "gh" => {
-            let mut ctx_free = Eval::new(&EMPTY_CTX);
-            let refs: Vec<&Word> = words.iter().skip(1).collect();
-            ctx_free.gh(args, &refs);
-            ctx_free.worst == Class::Ask
-                && !matches!(args, ["auth", ..] | ["browse", ..] | ["help", ..])
-        }
-        "ssh" | "scp" | "sftp" | "rsync" | "nc" | "ncat" | "netcat" | "telnet" | "socat"
-        | "ftp" | "http" | "https" | "xh" | "httpie" | "mail" | "mailx" | "sendmail" | "msmtp"
-        | "mutt" => true,
-        "sh" | "bash" | "zsh" | "dash" => texts
-            .iter()
-            .position(|t| t.starts_with('-') && t.ends_with('c'))
-            .and_then(|i| texts.get(i + 1))
-            .is_some_and(|code| sends_line(code, depth + 1)),
-        "eval" => sends_line(&args.join(" "), depth + 1),
-        _ => false,
-    }
-}
-
-/// A context with nothing in it, for judging `gh` alone.
-static EMPTY_CTX: std::sync::LazyLock<Ctx> = std::sync::LazyLock::new(Ctx::default);
-
 /// Loop words, assignments and wrappers in front of the program.
 fn strip_wrappers(mut words: Vec<Word>) -> Vec<Word> {
     loop {
@@ -3168,15 +3071,17 @@ fn strip_wrappers(mut words: Vec<Word>) -> Vec<Word> {
 }
 
 /// In a turn that read outside content (`exposure`), whether this call asks
-/// even at "Go hard": it sends something to the network beyond a read, or
-/// fetches and runs a package the project doesn't have yet. Everything else
-/// (local work, builds, project installs, network reads) is unaffected.
+/// even at "Go hard": it writes to the network somewhere other than this Mac
+/// (`go_hard::sends_off_mac`), or fetches a package the project doesn't have
+/// yet (`installs`). Everything else (local work, builds, project installs,
+/// network reads, dev servers, here-document scripts) is unaffected.
 pub fn after_outside_asks(tool: &str, input: &Value, ctx: &Ctx) -> bool {
     if tool != "Bash" {
         return false;
     }
     let command = input.get("command").and_then(Value::as_str).unwrap_or("");
-    command_sends(command) || !new_packages(command, ctx).is_empty()
+    let line = super::go_hard::without_heredoc_data(command);
+    super::go_hard::sends_off_mac(command, ctx) || !new_packages(&line, ctx).is_empty()
 }
 
 /// A web address somewhere other than this Mac.

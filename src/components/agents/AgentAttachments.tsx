@@ -12,6 +12,7 @@ import {
   FileTextIcon,
   FolderOpenIcon,
   ExternalLinkIcon,
+  ImageIcon,
 } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { IconButton } from '../primitives/IconButton';
@@ -122,6 +123,50 @@ export function ComposerQuotes({ quotes, onRemove }: ComposerQuotesProps) {
   );
 }
 
+/** What an image that can't be shown says, above its file name. */
+export const IMAGE_UNAVAILABLE = 'Image not available';
+
+/**
+ * A file the agent (or you) shared, as a picture. Never an empty box: if the
+ * file can't be loaded (gone from the agent's folder, or refused) it says so,
+ * with the file's name. Not lazy: chat rows already skip off-screen work
+ * (`content-visibility`), and a lazy image inside one could stay unloaded.
+ */
+export function AttachmentImage({
+  agent,
+  attachment,
+  className,
+}: {
+  agent: Pick<Agent, 'home'>;
+  attachment: Attachment;
+  className?: string;
+}) {
+  const src = attachmentUrl(agent.home, attachment);
+  const [failedSrc, setFailedSrc] = useState<string | null>(null);
+  if (failedSrc === src) {
+    return (
+      <span
+        className={['agent-attachments__missing', className].filter(Boolean).join(' ')}
+        role="img"
+        aria-label={`${attachment.name}: ${IMAGE_UNAVAILABLE.toLowerCase()}`}
+      >
+        <ImageIcon size={16} />
+        <span className="agent-attachments__missing-label">{IMAGE_UNAVAILABLE}</span>
+        <span className="agent-attachments__missing-name">{attachment.name}</span>
+      </span>
+    );
+  }
+  return (
+    <img
+      className={className}
+      src={src}
+      alt={attachment.name}
+      decoding="async"
+      onError={() => setFailedSrc(src)}
+    />
+  );
+}
+
 /** Open or reveal an attachment, with failures as a toast. */
 export function useAttachmentOpener(agentId: string) {
   const { showToast } = useOptionalToast();
@@ -179,7 +224,7 @@ export function MessageAttachments({ agent, attachments, side = 'user' }: Messag
                 aria-label={`View ${image.name}`}
                 title={image.name}
               >
-                <img src={attachmentUrl(agent.home, image)} alt={image.name} loading="lazy" />
+                <AttachmentImage agent={agent} attachment={image} />
               </button>
               <RevealButton name={image.name} onReveal={() => void open(image, true)} />
             </span>
@@ -257,11 +302,7 @@ export function AttachmentLightbox({
       }
     >
       {viewing && (
-        <img
-          className="agent-lightbox__image"
-          src={attachmentUrl(agent.home, viewing)}
-          alt={viewing.name}
-        />
+        <AttachmentImage agent={agent} attachment={viewing} className="agent-lightbox__image" />
       )}
     </ModalFrame>
   );

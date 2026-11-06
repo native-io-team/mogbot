@@ -56,7 +56,7 @@ describe('Home: the Chief first, one calm bar', () => {
       'A few things to finish setting up your team'
     );
     // The tab badge and "Open next" leave them to the checklist too.
-    expect(attentionCounts([chief, ...team], {}, home.quiet).needYou).toBe(0);
+    expect(attentionCounts([chief, ...team], setup).needYou).toBe(0);
     expect(nextNeedsYou([chief, ...team], {}, home.quiet)).toBeNull();
   });
 
@@ -97,5 +97,24 @@ describe('Home: the Chief first, one calm bar', () => {
     expect(quietAgentIds({ ...setup, complete: true }).size).toBe(0);
     expect(quietAgentIds({ ...setup, dismissed: true }).size).toBe(0);
     expect(buildHome([chief, ...team], { ...setup, complete: true }).bar?.kind).toBe('needs');
+  });
+});
+
+describe('one count everywhere', () => {
+  it('Home’s bar and the tab badge say the same number, the Chief included', () => {
+    const chief = a('chief', { isMain: true, pinned: true, ...waiting });
+    const team = Array.from({ length: 13 }, (_, i) =>
+      a(`t${i}`, { lastActivityAt: i, ...waiting })
+    );
+    const home = buildHome([chief, ...team], null);
+    expect(home.bar?.kind === 'needs' && home.bar.agents.length).toBe(14);
+    expect(barWords(home.bar!, 'Chief of Staff')[0]).toBe('14 agents need you');
+    expect(attentionCounts([chief, ...team]).needYou).toBe(14);
+  });
+
+  it('the Chief alone waiting still gets the bar', () => {
+    const chief = a('chief', { isMain: true, ...waiting });
+    const home = buildHome([chief, a('x')], null);
+    expect(barWords(home.bar!, 'Chief of Staff')[0]).toBe('chief needs you');
   });
 });

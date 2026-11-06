@@ -28,6 +28,7 @@ import { Checkbox } from '../primitives/Checkbox';
 import { DiffModal } from '../branches/DiffModal';
 import { CopyActions, copyLine } from './AgentCopy';
 import { ResultCardView } from './AgentResult';
+import { useAgentPreview } from './AgentPreviewContext';
 import { WorkTimeline } from './AgentWork';
 import { AgentCard } from './AgentCard';
 import { listProjects } from '../../lib/project';
@@ -252,6 +253,8 @@ export const ChangeCard = memo(function ChangeCard({
   onAskForChanges?: (ref: ResultRef) => void;
 }) {
   const ctx = useAgentProjects();
+  // Agents mode's pane beside the chat; elsewhere Preview opens the project.
+  const preview = useAgentPreview();
   const changes = message.changes;
   const [expanded, setExpanded] = useState(false);
   const [viewing, setViewing] = useState<ChangedFile | null>(null);
@@ -311,11 +314,15 @@ export const ChangeCard = memo(function ChangeCard({
           <span className="agent-changes__record-actions">
             {/* What it looks like now. A past copy's card is a record: the
                 copy it describes may be gone, so no preview. */}
-            {ctx && !copy && (
+            {(preview || ctx) && !copy && (
               <TextButton
                 tabIndex={0}
                 leftIcon={<GlobeIcon size={12} />}
-                onClick={() => ctx.openProject(changes.project)}
+                onClick={() =>
+                  preview
+                    ? preview.open(message.agentId, message.id)
+                    : ctx?.openProject(changes.project)
+                }
               >
                 Preview
               </TextButton>
@@ -377,7 +384,7 @@ export const ChangeCard = memo(function ChangeCard({
           copy={copy}
           project={project}
           onReview={changes.files.length > 0 ? () => setViewing(changes.files[0]) : undefined}
-          onPreview={ctx?.openProject}
+          onPreview={preview ? () => preview.open(message.agentId, message.id) : ctx?.openProject}
           onAskForChanges={
             result && newestResult && onAskForChanges
               ? () =>

@@ -2213,6 +2213,7 @@ mod tests {
             role: "Mine".into(),
             instructions: "My own rules.".into(),
             shape: None,
+            avatar: None,
             color: None,
             is_main: false,
         })
@@ -2553,6 +2554,7 @@ mod tests {
             role: String::new(),
             instructions: String::new(),
             shape: None,
+            avatar: None,
             color: None,
             is_main: false,
         })

@@ -334,7 +334,7 @@ fn send_words_are_whole_words_on_the_control_name() {
 }
 
 #[test]
-fn scripts_uploads_and_shortcuts_always_ask() {
+fn scripts_uploads_and_shortcuts_ask_below_go_hard() {
     for level in ALL {
         for tool in [
             "javascript_tool",
@@ -343,12 +343,21 @@ fn scripts_uploads_and_shortcuts_always_ask() {
             "shortcuts_execute",
             "brand_new_tool",
         ] {
+            // Go hard runs scripts, shortcuts and unknown tools; uploads ask.
+            let expected =
+                if level == Level::GoHard && !matches!(tool, "file_upload" | "upload_image") {
+                    Gate::Allow
+                } else {
+                    Gate::Ask
+                };
             assert_eq!(
                 at(level, tool, json!({"tabId": 7})),
-                Gate::Ask,
+                expected,
                 "{tool} at {level:?}"
             );
         }
+        let send = json!({"text": "document.querySelector('form').submit()"});
+        assert_eq!(at(level, "javascript_tool", send), Gate::Ask, "{level:?}");
         assert_eq!(
             at(level, "gif_creator", json!({"action": "export"})),
             Gate::Ask
@@ -371,7 +380,12 @@ fn a_batch_goes_through_only_when_every_step_would() {
     for level in FREE {
         assert_eq!(at(level, "browser_batch", calm.clone()), Gate::Allow);
         assert_eq!(at(level, "browser_batch", sends_mail.clone()), Gate::Ask);
-        assert_eq!(at(level, "browser_batch", script.clone()), Gate::Ask);
+        let script_gate = if level == Level::GoHard {
+            Gate::Allow
+        } else {
+            Gate::Ask
+        };
+        assert_eq!(at(level, "browser_batch", script.clone()), script_gate);
         assert_eq!(at(level, "browser_batch", json!({"weird": 1})), Gate::Ask);
     }
     assert_eq!(at(Level::Often, "browser_batch", calm), Gate::Ask);

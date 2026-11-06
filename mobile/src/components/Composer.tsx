@@ -10,8 +10,10 @@
  * - waiting on your OK: Send queues, and no Stop: the card above is the control;
  * - offline: **Send** waits for the Mac (outbox.ts), and says so;
  * - dictating: the field listens (lib/dictation.ts). The words stream into
- *   it, the last few lighter while the recognizer decides; the mic's place
- *   holds the waveform and the time, × takes the +'s place, and two
+ *   it, the last few lighter while the recognizer decides, at the field's
+ *   full width and wrapping as typing does; the waveform and the time ride
+ *   in a slim row over the field (never beside the words), × takes the +'s
+ *   place, and two
  *   controls sit in the field, as Grok's dictation has them: **Stop** puts
  *   the words in the field to read and edit (as a few seconds of silence
  *   does), **Send** stops and sends what's on screen at once. × puts the
@@ -93,6 +95,7 @@ import {
   radius,
   space,
   type,
+  waveform,
   PRESSED,
 } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
@@ -430,7 +433,7 @@ export function Composer({
                 onPress={() => pickMention(a)}
                 style={({ pressed }) => [styles.suggestion, pressed && styles.pressed]}
               >
-                <AgentAvatar name={a.name} color={a.color} size={avatarSize.group} />
+                <AgentAvatar id={a.id} name={a.name} color={a.color} size={avatarSize.group} />
                 <T variant="small" color={colors.textPrimary} maxFontSizeMultiplier={chromeScale}>
                   {a.name}
                 </T>
@@ -439,13 +442,22 @@ export function Composer({
           </ScrollView>
         </Animated.View>
       )}
-      {(hint || chipNow || fixLabel) && (
+      {(listening || hint || chipNow || fixLabel) && (
         <Animated.View
           entering={FadeIn.duration(150)}
           exiting={FadeOut.duration(100)}
           layout={LinearTransition.duration(150)}
-          style={[styles.hintRow, !canAttach && { marginLeft: composer.padLeft }]}
+          style={[styles.hintRow, !canAttach && !listening && { marginLeft: composer.padLeft }]}
         >
+          {/* Listening: the waveform and the time ride in this slim row over the
+              field, never beside the words, so they keep the field's whole width
+              and wrap exactly as typing does. */}
+          {listening && (
+            <View style={styles.listening} testID="dictation-meter">
+              <Waveform level={level} height={waveform.max} />
+              <Elapsed since={dictation.startedAt} />
+            </View>
+          )}
           <T variant="caption" color={colors.textSecondary} style={styles.hint}>
             {hint}
           </T>
@@ -631,16 +643,6 @@ export function Composer({
           inputRef={input}
           dictation={listening ? { ...dictation.display, onPress: editDictation } : undefined}
         >
-          {listening && (
-            <Animated.View
-              key="wave"
-              entering={FadeIn.duration(160)}
-              style={[styles.listening, { height: size.send }]}
-            >
-              <Waveform level={level} height={size.send} />
-              <Elapsed since={dictation.startedAt} />
-            </Animated.View>
-          )}
           {listening && (
             <RoundButton
               key="dictation-stop"
@@ -992,12 +994,12 @@ const useStyles = makeStyles((colors) => ({
     marginRight: space.xs,
   },
   hint: { flex: 1 },
+  // Over the field while it listens: as tall as the waveform at full voice.
   listening: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    marginRight: space.sm,
-    marginBottom: composer.inset,
+    minHeight: waveform.max,
   },
   nowChip: {
     paddingHorizontal: space.md,

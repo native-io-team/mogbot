@@ -47,6 +47,7 @@ import { AgentAvatar } from './AgentAvatar';
 import { AgentActionItems, type AgentActions } from './AgentActions';
 import { TakeoverBanner, TakeoverTerminal } from './AgentTakeover';
 import { AgentLine, ConversationBar, ConversationBars } from './AgentCard';
+import { PhoneSigninBar } from './PhoneSigninBar';
 import {
   needsLine,
   templateOf,
@@ -1252,7 +1253,7 @@ export const AgentChat = memo(function AgentChat({
   const role = agent.role ? roleWithoutPath(agent.role) : '';
   const title = (
     <>
-      <AgentAvatar name={agent.name} color={agent.color} selected />
+      <AgentAvatar id={agent.id} name={agent.name} color={agent.color} selected />
       <h2 className="agent-chat__name">{agent.name}</h2>
       {role && (
         <span className="agent-chat__status" title={role}>
@@ -1588,7 +1589,13 @@ export const AgentChat = memo(function AgentChat({
           >
             {items.length === 0 ? (
               <div className="agent-chat__empty">
-                <AgentAvatar name={agent.name} color={agent.color} size="hero" selected />
+                <AgentAvatar
+                  id={agent.id}
+                  name={agent.name}
+                  color={agent.color}
+                  size="hero"
+                  selected
+                />
                 <p className="agent-chat__empty-name">{agent.name}</p>
                 {agent.isMain ? (
                   <>
@@ -1671,6 +1678,8 @@ export const AgentChat = memo(function AgentChat({
               draft, dictation blocked. Two at most; the rest fold. */}
           <ConversationBars
             bars={[
+              // The phone is driving a tab in this Mac's Chrome: said in every conversation.
+              { id: 'phoneSignin', node: <PhoneSigninBar /> },
               {
                 id: 'waiting',
                 node: <WaitingForYouBar agent={agent} messages={messages} />,

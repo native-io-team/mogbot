@@ -10,6 +10,7 @@
  *   pnpm mock --team-setup         # 16 agents just imported: "Setting up your team" in the Chief's chat
  *   pnpm mock --importing          # the Chief mid-import, the Designer working: live bar + typing dots
  *   pnpm mock --heavy              # 17 agents, ~40 cards waiting, long chats
+ *   pnpm mock --torture            # the chat torture set; /dev/torture?do=… drives events
  *   pnpm mock --live-work          # QA 2 running Cypress for 5 min (output, timer), Finance gone quiet
  *   pnpm mock --impostor           # signs with a stranger's key: "This isn't your Mac"
  *   pnpm mock --http --cors        # for the web build (`pnpm qa:web` passes both)
@@ -81,6 +82,7 @@ function selfSigned(dir: string) {
     cors: args.includes('--cors'),
     solo: args.includes('--solo'),
     heavy: args.includes('--heavy'),
+    torture: args.includes('--torture'),
     liveWork: args.includes('--live-work'),
     identityFile: path.join(state, 'identity.pem'),
     // The same server id and paired phones, a different key: what a phone

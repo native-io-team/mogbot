@@ -392,6 +392,7 @@ pub fn live_work() -> crate::agents::work::TurnWork {
         }),
         last_sign_at: Some(1_762_290_500_000),
         quiet_since: Some(1_762_290_420_000),
+        project: None,
     }
 }
 
@@ -1331,6 +1332,50 @@ impl Backend for Stub {
         Ok(())
     }
 
+    async fn phone_signin(
+        &self,
+        device_id: &str,
+        _device_name: &str,
+        op: crate::agents::phone_signin::Op,
+    ) -> Result<Value, CommandError> {
+        use crate::agents::phone_signin::Op;
+        // As the router handed it over, through `Op`'s own `Debug`.
+        self.logins
+            .lock()
+            .unwrap()
+            .push(format!("signin {op:?} by {device_id}"));
+        use crate::agents::phone_signin::{Begun, Frame, FrameState, Outcome};
+        Ok(match op {
+            Op::Begin { .. } => serde_json::to_value(Begun {
+                session_id: "signin_0123".into(),
+                domain: "figma.com".into(),
+                title: "Figma".into(),
+                idle_seconds: 300,
+            })
+            .unwrap(),
+            Op::Frame { session_id } if session_id == "outside" => serde_json::to_value(Frame {
+                state: FrameState::Outside,
+                host: Some("example.com".into()),
+                image: None,
+                width: 0,
+                height: 0,
+            })
+            .unwrap(),
+            Op::Frame { .. } => serde_json::to_value(Frame {
+                state: FrameState::Live,
+                host: Some("www.figma.com".into()),
+                image: Some("/9j/2w==".into()),
+                width: 1000,
+                height: 640,
+            })
+            .unwrap(),
+            Op::Done { anyway, .. } => serde_json::json!({
+                "outcome": if anyway { Outcome::SignedIn } else { Outcome::SignedOut }
+            }),
+            Op::Input { .. } | Op::Stop { .. } => Value::Null,
+        })
+    }
+
     async fn login_cancel(&self, _agent_id: &str, request_id: &str) -> Result<(), CommandError> {
         self.logins
             .lock()
@@ -1400,6 +1445,43 @@ impl Backend for Stub {
             .lock()
             .unwrap()
             .push(format!("dismiss {request_id}"));
+        Ok(())
+    }
+
+    async fn login_not_needed(
+        &self,
+        _agent_id: &str,
+        request_id: &str,
+    ) -> Result<Value, CommandError> {
+        self.logins
+            .lock()
+            .unwrap()
+            .push(format!("not needed {request_id}"));
+        Ok(
+            json!({ "keys": ["other:acme bank"], "line": "Not connecting Acme Bank. No agent will ask for it again.", "closed": 1 }),
+        )
+    }
+
+    async fn logins_not_needed(&self, keys: Option<Vec<String>>) -> Result<Value, CommandError> {
+        let keys = keys.unwrap_or_else(|| vec!["linkedin".into()]);
+        self.logins
+            .lock()
+            .unwrap()
+            .push(format!("not needed rows {}", keys.join(",")));
+        Ok(
+            json!({ "keys": keys, "line": "Not connecting LinkedIn. No agent will ask for it again.", "closed": 1 }),
+        )
+    }
+
+    async fn logins_undecline(&self, keys: Vec<String>) -> Result<Value, CommandError> {
+        self.logins
+            .lock()
+            .unwrap()
+            .push(format!("undecline {}", keys.join(",")));
+        Ok(json!(1))
+    }
+
+    async fn logins_recheck(&self) -> Result<(), CommandError> {
         Ok(())
     }
 
@@ -1570,6 +1652,27 @@ impl Backend for Stub {
         };
         self.copies.lock().unwrap().push(line);
         Ok(json!({ "outcome": "kept", "files": 2, "branch": into.unwrap_or("main") }))
+    }
+
+    async fn watch_port(
+        &self,
+        agent_id: &str,
+        message_id: &str,
+    ) -> Result<(String, u16), CommandError> {
+        if agent_id == AGENT && message_id == "m-result" {
+            Ok(("/Users/test/ShipStudio/site".into(), 4123))
+        } else {
+            Err(CommandError::expected(
+                "Open Preview on the Mac first — the site isn't running there.",
+            ))
+        }
+    }
+
+    async fn watch_publish(&self) -> Result<String, CommandError> {
+        Ok(format!(
+            "https://mac.example.ts.net:{}",
+            super::watch::WATCH_TAILNET_PORT
+        ))
     }
 
     async fn discard_copy(&self, agent_id: &str, copy_id: &str) -> Result<(), CommandError> {
@@ -1977,6 +2080,8 @@ pub fn login_card() -> crate::agents::store::AgentMessage {
                 on_phone: true,
                 user_code: Some("9985-8448".into()),
                 verification_uri: Some("https://github.com/login/device".into()),
+                url: None,
+                opened_at: None,
             }),
             also_for: vec!["Ops".into()],
         }),

@@ -237,7 +237,11 @@ fn the_table_holds_at_every_level() {
             *expected == Read,
             "Judgement: {command:?}"
         );
-        assert_eq!(at(Level::GoHard), *expected != Ask, "Go hard: {command:?}");
+        // Go hard allows by default (`go_hard`): everything this table
+        // vouches for still runs there.
+        if *expected != Ask {
+            assert!(at(Level::GoHard), "Go hard: {command:?}");
+        }
     }
 }
 
@@ -276,10 +280,15 @@ fn outside_text_never_gets_a_write_without_a_card() {
     let c = ctx();
     for (command, expected) in TABLE {
         let input = bash(command);
-        let auto_outside = auto(Level::GoHard, true, "Bash", &input, &c);
+        let auto_outside = auto(Level::Judgement, true, "Bash", &input, &c);
         match expected {
             Read => assert_eq!(auto_outside, Some(Read), "{command:?}"),
             _ => assert_eq!(auto_outside, None, "{command:?}"),
+        }
+        // Go hard keeps reading for outside text (`go_hard`).
+        if *expected == Read {
+            let hard = auto(Level::GoHard, true, "Bash", &input, &c);
+            assert_eq!(hard, Some(Read), "{command:?}");
         }
     }
     // File tools too.
@@ -288,7 +297,8 @@ fn outside_text_never_gets_a_write_without_a_card() {
         auto(Level::GoHard, false, "Write", &write, &c),
         Some(Change)
     );
-    assert_eq!(auto(Level::GoHard, true, "Write", &write, &c), None);
+    assert_eq!(auto(Level::GoHard, true, "Write", &write, &c), Some(Change));
+    assert_eq!(auto(Level::Judgement, true, "Write", &write, &c), None);
     assert_eq!(auto(Level::Judgement, false, "Write", &write, &c), None);
 }
 
@@ -302,8 +312,9 @@ fn the_always_ask_list_holds_at_go_hard() {
             format!("{program} --version"),
             format!("ls && {program} x"),
         ] {
+            // Go hard has its own short list (`go_hard_tests`).
             assert_eq!(
-                auto(Level::GoHard, false, "Bash", &bash(&command), &c),
+                auto(Level::Judgement, false, "Bash", &bash(&command), &c),
                 None,
                 "{command:?}"
             );
@@ -317,8 +328,6 @@ fn the_always_ask_list_holds_at_go_hard() {
             json!({ "to": "sam@example.test" }),
         ),
         ("mcp__stripe__create_payment", json!({ "amount": 4900 })),
-        ("mcp__github__list_pull_requests", json!({})),
-        ("Task", json!({})),
     ] {
         assert_eq!(auto(Level::GoHard, false, tool, &input, &c), None, "{tool}");
     }

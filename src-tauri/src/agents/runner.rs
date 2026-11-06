@@ -2529,6 +2529,9 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         }
         let since = store::now_ms();
         super::work::begin(&agent_id, since);
+        // A bound agent works in its project (its copy is the project's).
+        let bound = store::get(&agent_id).ok().and_then(|a| a.project);
+        super::workplace::begin(&agent_id, bound.as_deref().map(std::path::Path::new));
         super::exposure::begin(&agent_id);
         super::results::discard(&agent_id);
         if let Some(copy) = &made {
@@ -2561,6 +2564,8 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
             card.ts = store::now_ms();
             let _ = record(&app, card);
         }
+        // A "Test it" run closes with its turn (a line if it never reported).
+        super::preview_test::turn_ended(&app, &agent_id, since);
         // A copy made for a turn that changed nothing (a question) goes again.
         if let Some(copy) = &made {
             super::task::drop_if_unused(&app, &agent_id, copy).await;
@@ -2999,6 +3004,11 @@ pub(super) fn system_prompt_for(
     if super::admin::admin_now(agent) {
         prompt.push_str("\n\n");
         prompt.push_str(super::admin::PROMPT_SECTION);
+    }
+    // Apps the user chose not to connect: don't ask, work around them.
+    if let Some(declined) = super::declined::prompt_section() {
+        prompt.push_str("\n\n");
+        prompt.push_str(&declined);
     }
     if agent.is_main {
         if let Some(team) = store::list()
@@ -3719,6 +3729,7 @@ async fn run_turn(
                         }
                         Step::Action(action) => {
                             note_acted(agent_id);
+                            super::workplace::note(app, agent_id, &layout.cwd, &action);
                             let doing = super::work::on_action(agent_id, action, store::now_ms());
                             if status_of(agent_id).state != "waiting" {
                                 set_status(app, agent_id, Status { state: "working", activity: Some(doing), since: Some(started), work: None, room: None });
@@ -4505,6 +4516,7 @@ mod tests {
             role: "Does things".into(),
             instructions: "Be brief.".into(),
             shape: None,
+            avatar: None,
             color: None,
             is_main: false,
         })
@@ -4549,6 +4561,7 @@ mod tests {
                 role: String::new(),
                 instructions: String::new(),
                 shape: None,
+                avatar: None,
                 color: None,
                 is_main: false,
             })

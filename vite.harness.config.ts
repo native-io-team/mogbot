@@ -10,6 +10,7 @@
 import { defineConfig, mergeConfig, type Plugin, type UserConfig } from 'vite';
 import { execSync } from 'child_process';
 import fs from 'fs';
+import http from 'http';
 import path from 'path';
 import base from './vite.config';
 
@@ -99,6 +100,59 @@ function agentsDemoPreviewPlugin(): Plugin {
 }
 
 /**
+ * A fictional site for the Agents preview pane's shots, on the harness port
+ * + 1: the pane loads a dev server by port at `/`, so it can't be a path on
+ * the harness itself (that would load the app inside its own preview). Only
+ * the files in `harness/preview-site/`; loopback only; a busy port just
+ * leaves the pane showing "Loading the site…".
+ */
+function previewSitePlugin(port: number): Plugin {
+  const dir = path.resolve(__dirname, './harness/preview-site');
+  return {
+    name: 'shipstudio-harness-preview-site',
+    configureServer(server) {
+      const handle: http.RequestListener = (req, res) => {
+        let raw: string | null = null;
+        try {
+          raw = decodeURIComponent((req.url ?? '/').split('?')[0]);
+        } catch {
+          // A malformed escape is a missing page, not a crashed harness.
+        }
+        const rel =
+          raw === null ? '' : raw === '/' ? '/index.html' : path.extname(raw) ? raw : `${raw}.html`;
+        const file = path.join(dir, rel);
+        if (
+          !rel ||
+          !file.startsWith(dir + path.sep) ||
+          !fs.existsSync(file) ||
+          fs.statSync(file).isDirectory()
+        ) {
+          res.statusCode = 404;
+          res.setHeader('Content-Type', 'text/html; charset=utf-8');
+          res.end('<!doctype html><title>Not found</title><p>This page doesn’t exist yet.</p>');
+          return;
+        }
+        res.setHeader(
+          'Content-Type',
+          file.endsWith('.css') ? 'text/css' : 'text/html; charset=utf-8'
+        );
+        res.end(fs.readFileSync(file));
+      };
+      // `localhost` may resolve to either loopback: serve both, nothing else.
+      const sites = ['127.0.0.1', '::1'].map((host) => {
+        const site = http.createServer(handle);
+        site.on('error', (e) =>
+          console.warn(`[harness] preview site not on ${host}: ${e.message}`)
+        );
+        site.listen(port, host);
+        return site;
+      });
+      server.httpServer?.on('close', () => sites.forEach((site) => site.close()));
+    },
+  };
+}
+
+/**
  * Worktrees would otherwise serialise on one port — `strictPort` means the
  * second harness fails to start, and with four sessions live that is a real
  * cost. Overriding the port lets them run side by side.
@@ -111,7 +165,12 @@ export default defineConfig(async (env) => {
   )) as UserConfig;
 
   return mergeConfig(resolved, {
-    plugins: [identityPlugin(), migrationFixturesPlugin(), agentsDemoPreviewPlugin()],
+    plugins: [
+      identityPlugin(),
+      migrationFixturesPlugin(),
+      agentsDemoPreviewPlugin(),
+      previewSitePlugin(PORT + 1),
+    ],
     resolve: {
       alias: {
         'tauri-pty': path.resolve(__dirname, './src/harness/stubs/tauri-pty.ts'),

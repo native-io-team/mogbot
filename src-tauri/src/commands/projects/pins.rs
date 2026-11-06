@@ -103,6 +103,19 @@ where
     Ok(result)
 }
 
+/// Pin a project at the top of the rail, for a project an agent was found
+/// working in (`agents::workplace`). `Ok(false)` when it was already pinned
+/// (it stays where the user put it).
+pub fn pin_to_top(project_path: &str) -> Result<bool, CommandError> {
+    with_pins_locked(|pins| {
+        if pins.pinned_paths.iter().any(|p| p == project_path) {
+            return false;
+        }
+        pins.pinned_paths.insert(0, project_path.to_string());
+        true
+    })
+}
+
 // ============ Tauri Commands ============
 
 /// Add a project to the pinned list. Idempotent — repeated calls are no-ops.

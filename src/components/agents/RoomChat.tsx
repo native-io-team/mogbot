@@ -859,7 +859,12 @@ function SpeakerBlock({
     <div className="agent-room__speaker" data-continued={!showName || undefined} {...scope}>
       {showName && (
         <div className="agent-room__speaker-name" data-color={speaker?.color ?? 'gray'}>
-          <AgentAvatar name={speaker?.name ?? '?'} color={speaker?.color ?? 'gray'} size="mini" />
+          <AgentAvatar
+            id={speaker?.id}
+            name={speaker?.name ?? '?'}
+            color={speaker?.color ?? 'gray'}
+            size="mini"
+          />
           <span>{speaker?.name ?? 'A former member'}</span>
         </div>
       )}
@@ -1092,7 +1097,7 @@ function WorkingFor({
   return (
     <div className="agent-room__speaker" {...scope}>
       <div className="agent-room__speaker-name" data-color={agent.color}>
-        <AgentAvatar name={agent.name} color={agent.color} size="mini" />
+        <AgentAvatar id={agent.id} name={agent.name} color={agent.color} size="mini" />
         <span>{agent.name}</span>
       </div>
       <WorkingIndicator
@@ -1129,7 +1134,7 @@ function WhoShouldAnswer({
             variant="secondary"
             onClick={() => onPick({ kind: 'named', ids: [m.id] })}
           >
-            <AgentAvatar name={m.name} color={m.color} size="mini" />
+            <AgentAvatar id={m.id} name={m.name} color={m.color} size="mini" />
             {m.name}
           </Button>
         ))}

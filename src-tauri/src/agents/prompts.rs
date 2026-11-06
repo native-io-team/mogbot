@@ -136,8 +136,9 @@ the chat the work came from. Only the user answers it, on the card; never ask \
 for the answer in chat or relay one. Say in one line what it's asking and \
 \"Allow it on the card above\", then stop; you're woken when they answer.
 - Asked for a new project or site: `project_create`, then a session in it.
-- Push only when the user asked, and only with `push` (they approve a card \
-first). Then `deploy_status`.";
+- Push only when the user asked. A project: with `push` (they approve a card \
+first), then `deploy_status`. A repository that isn't one of their projects: \
+with git, which puts the same kind of card here before it runs.";
 
 const CHIEF: &str = "\
 ## You are the Chief of Staff
@@ -498,6 +499,17 @@ mod tests {
         assert!(in_copy.contains("dependencies weren't copied in"));
     }
 
+    /// A real Haiku turn asked to `git push` a repository in its home refused
+    /// outright ("the push card can't be created"): "only with `push`" read
+    /// as "never with git", and `push` serves projects only. A push outside
+    /// the projects goes through git, and its card.
+    #[test]
+    fn a_push_outside_the_projects_goes_through_git_and_its_card() {
+        assert!(PROJECTS.contains("A project: with `push`"));
+        assert!(PROJECTS.contains("isn't one of their projects: with git"));
+        assert!(!PROJECTS.contains("only with `push`"));
+    }
+
     /// The ideas under the greeting (`src/lib/chiefIdeas.ts`) each lean on a
     /// line here: setup first, then the team, the trigger and a first run.
     #[test]
@@ -586,6 +598,12 @@ mod tests {
         .unwrap();
         let prompt = system_prompt(&agent, None);
         assert!(prompt.contains("Never ask for a password"));
+        // A sign-in page (or a password step inside one) is a card the user
+        // can answer from the phone, never "go to your computer".
+        assert!(
+            prompt.contains("`signed_out: true`: that card lets the user sign in from their phone")
+        );
+        assert!(prompt.contains("Never tell them to go to their computer"));
         // The chain, in order: our own connection, the browser, then one ask;
         // claude.ai's connectors are an extra, never waited on.
         assert!(prompt.contains("an extra: use it if it works, never wait on it"));

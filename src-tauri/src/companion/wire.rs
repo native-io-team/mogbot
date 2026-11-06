@@ -343,6 +343,15 @@ pub const MAC_FEATURE_LOGINS: &str = "logins";
 /// (`agents.loginPhoneBegin|loginPhoneFinish`, `onPhone`; `agents/login_relay.rs`).
 pub const MAC_FEATURE_LOGINS_PHONE: &str = "logins.phone";
 
+/// `welcome.features`: agents carry `avatar` (a shape and a face), and
+/// `agents.create` / `agents.update` take `avatar` (and `agents.update`
+/// `color`) from the phone (`agents::store::AgentLook`).
+pub const MAC_FEATURE_LOOKS: &str = "agents.looks";
+
+/// `welcome.features`: signing in to a site in this Mac's Chrome from the
+/// phone, the tab shown live there (`agents.signin*`; `agents/phone_signin.rs`).
+pub const MAC_FEATURE_SIGNIN_PHONE: &str = "signin.phone";
+
 /// Everything `welcome.features` lists.
 pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_REVISE_RESULTS,
@@ -350,6 +359,8 @@ pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_ROOMS,
     MAC_FEATURE_LOGINS,
     MAC_FEATURE_LOGINS_PHONE,
+    MAC_FEATURE_LOOKS,
+    MAC_FEATURE_SIGNIN_PHONE,
 ];
 
 /// What one connected app said it shows (`hello.features`).

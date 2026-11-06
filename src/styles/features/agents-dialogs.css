@@ -24,35 +24,24 @@
   flex: 1;
 }
 
-/* The badge is exactly the field's height, so the two share a baseline. */
+/* The avatar is exactly the field's height, so the two share a baseline; it
+   opens the look picker below. */
+.agent-editor__look-toggle {
+  display: inline-flex;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.agent-editor__look-toggle:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
 .agent-editor__identity .agent-avatar--field {
   --agent-avatar-size: var(--text-field-height);
-  font-size: var(--font-size-body-md);
-}
-
-.agent-editor__colors {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--spacing-sm);
-}
-
-.agent-editor__swatch {
-  width: var(--spacing-xl);
-  height: var(--spacing-xl);
-  padding: 0;
-  background: var(--agents-tint);
-  border: none;
-  border-radius: var(--radius-pill);
-  cursor: pointer;
-  transition: box-shadow var(--transition-interaction-fast);
-}
-
-.agent-editor__swatch:focus-visible,
-.agent-editor__swatch[data-selected] {
-  outline: none;
-  box-shadow:
-    0 0 0 2px var(--surface-panel),
-    0 0 0 4px var(--agents-tint); /* css-ok: selection ring geometry */
 }
 
 .agent-editor__more {

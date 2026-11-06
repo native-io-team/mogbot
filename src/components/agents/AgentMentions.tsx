@@ -127,11 +127,14 @@ function MentionMenu({ candidates, active, onHover, onPick }: MentionMenuProps) 
           {agent.id === EVERYONE_ID ? (
             // A room's @everyone is the whole room, not an agent: a group
             // glyph on a neutral tile, never someone's initials.
-            <span className="agent-avatar agent-avatar--mini agent-mention-menu__group" aria-hidden>
+            <span
+              className="agent-avatar agent-avatar--mini agent-avatar--tile agent-mention-menu__group"
+              aria-hidden
+            >
               <CollaboratorsIcon size={10} />
             </span>
           ) : (
-            <AgentAvatar name={agent.name} color={agent.color} size="mini" />
+            <AgentAvatar id={agent.id} name={agent.name} color={agent.color} size="mini" />
           )}
           <span className="agent-mention-menu__name">
             {agent.id === EVERYONE_ID ? 'Everyone' : agent.name}

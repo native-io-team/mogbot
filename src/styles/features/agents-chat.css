@@ -387,6 +387,10 @@
    the same left edge as the column. Only what you said is a bubble. */
 .agent-bubble--agent {
   max-width: min(var(--agents-prose-measure), 100%);
+  /* May shrink below its widest line (a code block, a table: both scroll in
+     their own frame), so Copy and the time beside it stay inside the column
+     in a narrow window instead of being pushed off its edge. */
+  min-width: 0;
   padding: 0;
   border-radius: 0;
 }
@@ -404,6 +408,21 @@
 .agent-chat__row--agent {
   align-items: flex-end;
   gap: var(--spacing-xs);
+}
+
+/* A reply's Copy and time show under it, in the gap before the next line,
+   not beside it: beside, they took a column of their own and the prose ended
+   short of the composer's right edge. Out of flow, so nothing moves on hover. */
+.agent-chat__row--agent:not(.agent-chat__row--card) {
+  position: relative;
+}
+
+.agent-chat__messages:not([data-greeting])
+  > .agent-chat__row--agent:not(.agent-chat__row--card)
+  > .agent-message__actions {
+  position: absolute;
+  top: 100%;
+  left: calc(var(--spacing-2xs) * -1);
 }
 
 .agent-chat__line {
@@ -607,6 +626,16 @@
   border-bottom: var(--border-width-default) solid var(--border-subtle);
 }
 
+/* A cell never breaks inside a word or a number. The bubble's `anywhere`
+   counts toward a table's narrowest size, so a wide table in a narrow window
+   squeezed every column to a letter or two ("Northwi|nd", "€3.|10") instead
+   of scrolling in its own frame. `break-word` still wraps a long URL in a
+   cell, but only once the table has stopped shrinking. */
+.agent-markdown th,
+.agent-markdown td {
+  overflow-wrap: break-word;
+}
+
 .agent-markdown th {
   font-weight: var(--font-weight-heading);
   color: var(--text-secondary);
@@ -616,6 +645,21 @@
 .agent-markdown th:first-child,
 .agent-markdown td:first-child {
   padding-left: 0;
+}
+
+/* A column of figures (agentMarkdown's alignFigures) or one the author
+   aligned: its digits line up, as a spreadsheet's do. */
+.agent-markdown :is(th, td)[align='right'] {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-markdown :is(th, td)[align='center'] {
+  text-align: center;
+}
+
+.agent-markdown :is(th, td)[align='right']:last-child {
+  padding-right: 0;
 }
 
 .agent-markdown tr:last-child td {

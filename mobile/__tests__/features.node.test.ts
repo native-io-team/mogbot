@@ -152,7 +152,13 @@ describe('files, search, schedules and projects against the mock Mac', () => {
       (await t.request('agents.files', { agentId: 'qa' })).map((f) => [f.name, f.from])
     ).toEqual([['notes.md', 'user']]);
     const site = await t.request('agents.files', { agentId: 'site' });
-    expect(site.map((f) => [f.name, f.from])).toEqual([['Lighthouse report.pdf', 'agent']]);
+    // A test's screenshots are the tested card's attachments, so Files lists them too.
+    expect(site.map((f) => [f.name, f.from])).toEqual([
+      ['step-1.png', 'agent'],
+      ['step-2.png', 'agent'],
+      ['step-3.png', 'agent'],
+      ['Lighthouse report.pdf', 'agent'],
+    ]);
     // A preview screenshot rides on its session card, not in Files.
     const shot = await t.download({ agentId: 'site', path: 'attachments/site_p2_4/Phone.png' });
     expect(readFileSync(shot).subarray(1, 4).toString()).toBe('PNG');
@@ -256,13 +262,18 @@ describe('files, search, schedules and projects against the mock Mac', () => {
     expect(events.some((e) => e.type === 'projects.changed')).toBe(true);
   });
 
-  it('pins, mutes, hides and edits instructions, and nothing else', async () => {
+  it('pins, mutes, hides, edits instructions and its look, and nothing else', async () => {
     const qa = () => state.overview?.agents.find((a) => a.id === 'qa');
     await t.request('agents.update', { agentId: 'qa', input: { muted: true } });
     await until(() => qa()?.muted === true);
     await expect(
       t.request('agents.update', { agentId: 'qa', input: { name: 'Renamed' } })
-    ).rejects.toThrow(/pin, mute, hide and the instructions/);
+    ).rejects.toThrow(/pin, mute, hide, the instructions and how it looks/);
+    await t.request('agents.update', {
+      agentId: 'qa',
+      input: { avatar: { shape: 'hexagon', face: 'curious' }, color: 'teal' },
+    });
+    await until(() => qa()?.avatar?.shape === 'hexagon' && qa()?.color === 'teal');
     await t.request('agents.update', { agentId: 'qa', input: { muted: false } });
     await until(() => qa()?.muted === false);
   });

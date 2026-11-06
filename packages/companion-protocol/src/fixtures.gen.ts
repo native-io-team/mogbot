@@ -1940,6 +1940,28 @@ export const agentsLoginPhoneBegin = {
   "requestId": "q12",
   "url": "https://auth.linear.app/authorize?client_id=c&code_challenge=x&state=s"
 } satisfies Result<'agents.loginPhoneBegin'>;
+export const agentsSigninBegin = {
+  "domain": "figma.com",
+  "idleSeconds": 300,
+  "sessionId": "signin_0123",
+  "title": "Figma"
+} satisfies Result<'agents.signinBegin'>;
+export const agentsSigninFrame = {
+  "height": 640,
+  "host": "www.figma.com",
+  "image": "/9j/2w==",
+  "state": "live",
+  "width": 1000
+} satisfies Result<'agents.signinFrame'>;
+export const agentsSigninFrameOutside = {
+  "height": 0,
+  "host": "example.com",
+  "state": "outside",
+  "width": 0
+} satisfies Result<'agents.signinFrame'>;
+export const agentsSigninDone = {
+  "outcome": "signed_out"
+} satisfies Result<'agents.signinDone'>;
 export const agentsLoginSaveKey = {
   "createdAt": 0,
   "fields": [
@@ -2773,8 +2795,17 @@ export const frames = [
       "agents.loginsTeam",
       "agents.loginsConnect",
       "agents.loginDismiss",
+      "agents.loginNotNeeded",
+      "agents.loginsNotNeeded",
+      "agents.loginsUndecline",
+      "agents.loginsRecheck",
       "agents.loginPhoneBegin",
       "agents.loginPhoneFinish",
+      "agents.signinBegin",
+      "agents.signinFrame",
+      "agents.signinInput",
+      "agents.signinDone",
+      "agents.signinStop",
       "agents.focus",
       "agents.markUnread",
       "agents.startFresh",
@@ -2796,6 +2827,7 @@ export const frames = [
       "agents.changeDiff",
       "agents.keepCopy",
       "agents.discardCopy",
+      "agents.watchLive",
       "agents.files",
       "agents.fetchPath",
       "agents.search",
@@ -2834,7 +2866,9 @@ export const frames = [
       "routines.when",
       "rooms",
       "logins",
-      "logins.phone"
+      "logins.phone",
+      "agents.looks",
+      "signin.phone"
     ]
   },
   {

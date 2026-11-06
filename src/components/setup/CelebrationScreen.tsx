@@ -14,13 +14,17 @@ import { Spinner } from '../primitives/Spinner';
 import { AgentAvatar } from '../agents/AgentAvatar';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import type { Agent } from '../../lib/agents';
+import { CHIEF_LOOK } from '../../../packages/companion-protocol/src/avatar';
 
 /**
  * Shown for the beat before the store has loaded. The avatar takes the real
  * Chief's name and colour the moment it arrives (the user may have renamed or
  * recoloured it, and its default colour is the brand's to change).
  */
-const CHIEF_FALLBACK = { name: 'Chief of Staff', color: 'white' };
+const CHIEF_FALLBACK: Pick<Agent, 'name' | 'color'> & { id?: string } = {
+  name: 'Chief of Staff',
+  color: 'white',
+};
 const selectChief = (s: { agents: Agent[] }) => s.agents.find((a) => a.isMain) ?? null;
 
 interface CelebrationScreenProps {
@@ -58,7 +62,14 @@ export function CelebrationScreen({ onContinue, engineName }: CelebrationScreenP
     <div className={`celebration-screen ${showContent ? 'visible' : ''}`}>
       <div className="celebration-content">
         <div className="celebration-icon">
-          <AgentAvatar name={chief.name} color={chief.color} size="hero" selected />
+          <AgentAvatar
+            id={chief.id}
+            look={chief.id ? undefined : CHIEF_LOOK}
+            name={chief.name}
+            color={chief.color}
+            size="hero"
+            selected
+          />
         </div>
         <h1 className="celebration-title">You're all set</h1>
         <p className="celebration-subtitle">

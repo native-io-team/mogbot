@@ -98,6 +98,15 @@ ring = "0.17"
 # floating composer over any app (src/agents/quick_entry.rs).
 tauri-plugin-global-shortcut = "2"
 
+[features]
+# Prototype of the agent browser (docs/internal/agent-browser.md): off in
+# every build; nothing in the app uses it yet.
+agent-browser = []
+
+[[example]]
+name = "agent_browser_demo"
+required-features = ["agent-browser"]
+
 [dev-dependencies]
 
 # Unix: signals for a process group (agents::procs stops a turn's whole tree).
