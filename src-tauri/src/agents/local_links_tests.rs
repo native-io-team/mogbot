@@ -118,3 +118,14 @@ fn a_message_from_an_older_build_reads_without_links() {
     let out = serde_json::to_value(&m).unwrap();
     assert!(out.get("localLinks").is_none());
 }
+
+#[test]
+fn code_ranges_survive_multibyte_characters() {
+    // A reply with "⌘K `…`" once panicked mid-turn (slicing inside '⌘').
+    let text = "The fastest fix is ⌘K → `Settings` then ```\ncode ⌘\n``` done ⌘";
+    let ranges = code_ranges(text);
+    assert_eq!(ranges.len(), 2);
+    for (s, e) in ranges {
+        assert!(text.is_char_boundary(s) && text.is_char_boundary(e));
+    }
+}
