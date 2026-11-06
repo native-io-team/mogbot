@@ -14,6 +14,10 @@ import {
   frameGap,
   FRAME_GAP_MS,
   viaLabel,
+  BEGIN_TIMEOUT_MESSAGE,
+  BEGIN_TIMEOUT_MS,
+  retryWays,
+  withTimeout,
   endsIt,
   initialView,
   reduce,
@@ -108,7 +112,51 @@ describe('the sign-in screen', () => {
       reason: 'failed',
       message: 'Chrome on your Mac isn’t answering.',
       domain: undefined,
+      retry: true,
     });
+  });
+
+  it('a failed start offers Try again and the agents’ browser, and starts over', () => {
+    const failed = reduce(initialView, {
+      t: 'end',
+      reason: 'failed',
+      message: "Chrome on your Mac isn't answering. It needs to be open there with Claude in Chrome on.",
+    });
+    expect(retryWays(failed)).toEqual([
+      { label: 'Try again' },
+      { label: 'Try the agents’ browser', way: 'agents_browser' },
+    ]);
+    expect(reduce(failed, { t: 'retry' })).toBe(initialView);
+    // The Mac said the agents' browser isn't there: only Try again.
+    const off = reduce(initialView, {
+      t: 'end',
+      reason: 'failed',
+      message: "The agents' browser isn't on on this Mac (Settings → Agents), or Google Chrome isn't installed there.",
+    });
+    expect(retryWays(off)).toEqual([{ label: 'Try again' }]);
+    // A session that ended after it was live isn't restarted from here.
+    const ended = run({ t: 'begun', begun }, { t: 'end', reason: 'ended', message: 'x' });
+    expect(retryWays(ended)).toEqual([]);
+    expect(reduce(ended, { t: 'retry' })).toBe(ended);
+    // A retry while live does nothing.
+    const live = run({ t: 'begun', begun });
+    expect(reduce(live, { t: 'retry' })).toBe(live);
+  });
+
+  it('starting never outlasts the phone’s own limit', async () => {
+    jest.useFakeTimers();
+    try {
+      const never = new Promise<never>(() => {});
+      const p = withTimeout(never, BEGIN_TIMEOUT_MS, BEGIN_TIMEOUT_MESSAGE);
+      jest.advanceTimersByTime(BEGIN_TIMEOUT_MS);
+      await expect(p).rejects.toThrow(BEGIN_TIMEOUT_MESSAGE);
+      // Inside the socket's 30s, after the Mac's own 20s.
+      expect(BEGIN_TIMEOUT_MS).toBeGreaterThan(20_000);
+      expect(BEGIN_TIMEOUT_MS).toBeLessThan(30_000);
+      await expect(withTimeout(Promise.resolve(1), 10, 'x')).resolves.toBe(1);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 
@@ -165,7 +213,9 @@ describe('the agents’ browser', () => {
     const v = run({ t: 'begun', begun: agents });
     expect(v).toMatchObject({ phase: 'live', via: 'agents_browser' });
     expect(viaLabel('agents_browser')).toBe('The agents’ browser on your Mac');
-    expect(viaLabel(undefined)).toBe('Chrome on your Mac');
+    expect(viaLabel('chrome')).toBe('Chrome on your Mac');
+    // Still opening, the Mac hasn't named a browser: none is claimed.
+    expect(viaLabel(undefined)).toBe('Your Mac');
     expect(run({ t: 'begun', begun })).toMatchObject({ via: 'chrome' });
   });
 

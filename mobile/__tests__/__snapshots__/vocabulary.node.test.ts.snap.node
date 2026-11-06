@@ -186,6 +186,7 @@ exports[`the words a person reads use the agreed words the way the snapshot hold
   "Your Mac couldn’t tell whether you’re signed in. If you are, hand it over anyway.",
   "Your Mac didn’t accept this phone. Pair again.",
   "Your Mac didn’t answer in time.",
+  "Your Mac didn’t open the sign-in in time.",
   "Your Mac is away. Usage shows once it’s back.",
   "Your Mac isn’t connected right now. Try again when it is.",
   "Your Mac keeps the sign-in; this phone keeps nothing. This card updates when it’s done.",

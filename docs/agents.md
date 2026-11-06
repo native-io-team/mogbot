@@ -2015,9 +2015,22 @@ profile. What was run: see docs/internal/agent-browser.md, "v1".
 
 ### Signing in on your Mac from the phone (`agents/phone_signin.rs`)
 
-*Since the agents' browser (above), this is the way for a card without
-it (`Via::Chrome`): its switch off, or no Chrome. The same screen,
-methods and rules.*
+*Since the agents' browser (above), this is the way only when the agents'
+browser isn't here (`Via::Chrome`): its switch off, or no Chrome. The same
+screen, methods and rules.*
+
+**The way is decided at "Sign in from here", not when the card was raised**
+(`phone_signin::choose`): the agents' browser whenever it's available and
+the card names a site, even for a card raised by an older build or while the
+switch was off (such cards carry only `oauth` + `browser`; one for Vercel
+went to the user's Chrome and sat on "Opening it on your Mac…"). The phone
+may ask for a way (`agents.signinBegin {way}`). Opening is bounded: the Mac
+answers within 20s (`BEGIN_TIMEOUT`) with which browser was slow ("Chrome on
+your Mac isn't answering…"), the phone gives up at 25s on its own, and a
+failed start offers **Try again** and **Try the agents' browser**. Every step
+is logged at info (begin, the way and why, first picture, each failure),
+never a URL or anything typed. Until the Mac answers, the screen names no
+browser ("Your Mac").
 
 Owner requirement: when an agent can't get into a site because the Mac's
 Chrome isn't signed in, the user can do that sign-in **from the phone**,

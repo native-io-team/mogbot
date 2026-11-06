@@ -15,6 +15,7 @@ import type {
   LoginPhoneBegin,
   DeclineReceipt,
   SigninBegun,
+  SigninVia,
   SigninFrame,
   SigninInput,
   SigninOutcome,
@@ -187,7 +188,14 @@ export interface Methods {
    * have a `browser` way in). One at a time on a Mac; five idle minutes
    * end it. Never audited beyond the domain and how it ended.
    */
-  'agents.signinBegin': { params: { agentId: string; requestId: string }; result: SigninBegun };
+  'agents.signinBegin': {
+    /**
+     * `way`: the phone asked for one ("Try the agents' browser"); none, the
+     * Mac picks at this moment (the agents' browser when it's on there).
+     */
+    params: { agentId: string; requestId: string; way?: SigninVia };
+    result: SigninBegun;
+  };
   /**
    * One picture of the tab. Polling it doesn't keep the session alive.
    * `after`: the picture the phone has; the agents' browser waits (up to a

@@ -36,6 +36,10 @@ import {
   initialView,
   KEYS,
   reduce,
+  retryWays,
+  BEGIN_TIMEOUT_MESSAGE,
+  BEGIN_TIMEOUT_MS,
+  withTimeout,
   shownHeight,
   statusLine,
   toFramePoint,
@@ -53,7 +57,7 @@ import {
 import { describeError } from '../lib/session';
 import { iconSize, radius, space } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
-import type { SigninInput } from '@shipstudio/companion-protocol';
+import type { SigninInput, SigninVia } from '@shipstudio/companion-protocol';
 
 export default function SignInFromPhone() {
   const colors = useColors();
@@ -66,6 +70,8 @@ export default function SignInFromPhone() {
   const [view, dispatch] = useReducer(reduce, initialView);
   const [filled, setFilled] = useState(false);
   const [busy, setBusy] = useState<string | null>(null);
+  // Each start (a retry is another), and the way it asked for.
+  const [attempt, setAttempt] = useState<{ n: number; way?: SigninVia }>({ n: 0 });
   const text = useRef('');
   const field = useRef<ComponentRef<typeof TextInput> | null>(null);
   const session = view.phase === 'live' ? view.begun.sessionId : null;
@@ -81,19 +87,36 @@ export default function SignInFromPhone() {
     setFilled(false);
   };
 
-  // Open it on the Mac, once.
+  // Open it on the Mac, once per attempt. It never stays "Opening…": a Mac
+  // that doesn't answer in time ends it with a retry, and a late answer is
+  // stopped there.
   useEffect(() => {
     let gone = false;
-    signinBegin(agentId, requestId)
-      .then((begun) => {
+    const begin = signinBegin(agentId, requestId, attempt.way);
+    begin.then(
+      (begun) => {
         if (gone) void signinStop(begun.sessionId).catch(() => {});
-        else dispatch({ t: 'begun', begun });
+      },
+      () => {}
+    );
+    withTimeout(begin, BEGIN_TIMEOUT_MS, BEGIN_TIMEOUT_MESSAGE)
+      .then((begun) => {
+        if (!gone) dispatch({ t: 'begun', begun });
       })
-      .catch((e) => dispatch({ t: 'end', reason: 'failed', message: describeError(e) }));
+      .catch((e) => {
+        if (gone) return;
+        if ((e as Error)?.message === BEGIN_TIMEOUT_MESSAGE) gone = true;
+        dispatch({ t: 'end', reason: 'failed', message: describeError(e) });
+      });
     return () => {
       gone = true;
     };
-  }, [agentId, requestId]);
+  }, [agentId, requestId, attempt]);
+  const retry = (way?: SigninVia) => {
+    haptic.select();
+    dispatch({ t: 'retry' });
+    setAttempt((a) => ({ n: a.n + 1, way }));
+  };
 
   // Leaving the screen stops it on the Mac; the field is wiped either way.
   useEffect(
@@ -296,6 +319,16 @@ export default function SignInFromPhone() {
               testID="signin-fallback"
             />
           )}
+          {retryWays(view).map((r) => (
+            <Button
+              key={r.label}
+              title={r.label}
+              variant="outline"
+              size="compact"
+              onPress={() => retry(r.way)}
+              testID={r.way ? 'signin-retry-agents' : 'signin-retry'}
+            />
+          ))}
           {view.phase === 'live' && view.check === 'unknown' && (
             <Button
               title="Hand it over anyway"
