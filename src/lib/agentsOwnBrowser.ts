@@ -40,6 +40,75 @@ export const setAgentsBrowserEnabled = (on: boolean) =>
  */
 export const showAgentBrowser = (agentId: string, show: boolean) =>
   invoke<void>('agents_show_agent_browser', { agentId, show });
+/** One frame of an agent's page in its own browser (`agent_browser::live`). */
+export interface LiveBrowserFrame {
+  /** Ask again with this as `after` for the next. */
+  seq: number;
+  /** A `data:image/jpeg` URL: the app's own picture, never the page's. */
+  src: string;
+  width: number;
+  height: number;
+  url: string;
+  title: string;
+}
+
+/**
+ * The next frame of the agent's current page after `after`; the Mac waits a
+ * moment for one. `null` when it has no page open or nothing new came.
+ * `large` is the pane beside the chat (bigger, a little quicker); the chat's
+ * thumbnail is about two a second. Each ask keeps the screencast going for a
+ * few seconds, so stopping asking stops it.
+ */
+export const liveBrowserFrame = (agentId: string, after: number, large: boolean) =>
+  invoke<LiveBrowserFrame | null>('agents_browser_live_frame', { agentId, after, large });
+/** Nobody is looking at this size any more: stop its screencast now. */
+export const stopLiveBrowser = (agentId: string, large: boolean) =>
+  invoke<void>('agents_browser_live_stop', { agentId, large });
+
+/** A page's address without its scheme and `www.`, for a header: "northwind-supply.com". */
+export function siteOf(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+    return u.hostname.replace(/^www\./, '') || null;
+  } catch {
+    return null;
+  }
+}
+
+/** The site an own-browser step names ("Using its own browser · example.com"). */
+export function siteOfStep(label: string | null | undefined): string | null {
+  const m = label?.match(/its own browser · (\S+)$/);
+  return m ? m[1] : null;
+}
+
+/* The last frame each turn showed, so the reply it ended on keeps a still of
+   it. In memory only: a picture of a page is not something to write down. */
+const lastFrames = new Map<string, LiveBrowserFrame>();
+const MAX_KEPT = 12;
+const turnKey = (agentId: string, turnStartedAt: number) => `${agentId}:${turnStartedAt}`;
+
+export function rememberLastFrame(agentId: string, turnStartedAt: number, f: LiveBrowserFrame) {
+  const key = turnKey(agentId, turnStartedAt);
+  lastFrames.delete(key);
+  lastFrames.set(key, f);
+  while (lastFrames.size > MAX_KEPT) {
+    const oldest = lastFrames.keys().next().value;
+    if (oldest === undefined) break;
+    lastFrames.delete(oldest);
+  }
+}
+
+export function lastFrameOf(agentId: string, turnStartedAt: number): LiveBrowserFrame | null {
+  return lastFrames.get(turnKey(agentId, turnStartedAt)) ?? null;
+}
+
+/** Tests only. */
+export function forgetLastFrames() {
+  lastFrames.clear();
+}
+
 /** Asks macOS (Screen Recording prompts once) and opens that pane of System Settings. */
 export const openAgentsBrowserPermission = (which: AgentsBrowserPermission) =>
   invoke<AgentsBrowserStatus>('agents_agent_browser_permission', { which });

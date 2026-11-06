@@ -2064,10 +2064,19 @@ their own, and the person signs in to it from the phone.
 - **Seeing it work.** Every step in "What it did" reads "Used its own
   browser · example.com" ("Using its own browser · …" while it runs), the
   site from the call or the page it's on, never the path; the user's Chrome
-  still reads "Browsed …". While the agent has a tab open, the live step
-  under its working line offers **Watch its browser**, which brings that
-  window on screen and in front (`agents_show_agent_browser`), and **Put it
-  away**, which parks it again.
+  still reads "Browsed …". While the agent has a tab open, a **live card**
+  sits under its working line (`AgentBrowserLive.tsx`): its site, a "Live"
+  dot and a 16:10 picture of the page at about two frames a second
+  (`agent_browser::live`, `agents_browser_live_frame`). Pressing it opens the
+  page larger in the preview pane beside the chat, with its address, view
+  only; **Open in Chrome** there brings the real window forward
+  (`agents_show_agent_browser`). Frames are pulled, never pushed: each ask
+  renews a 4-second lease, the desk stops asking while the window is hidden
+  or the card is scrolled away, and the screencast stops with it
+  (`agents_browser_live_stop` stops it at once). When the turn ends, its
+  reply's "What it did" keeps a still of the last picture, in memory for
+  this session only. Not on the phone yet; no input from the pane yet (no
+  "Take control").
 - **Checked end to end** with `cargo run --example agent_browser_turn --
   <scratch>`: whether a turn gets the server, its `--mcp-config` / Codex
   entry, then `initialize`, `tools/list`, `open` example.com and

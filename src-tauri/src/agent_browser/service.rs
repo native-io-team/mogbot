@@ -129,9 +129,44 @@ pub struct FrameSlot {
     latest: Mutex<Option<Frame>>,
     cv: Condvar,
     seq: AtomicU64,
+    /// The gap between frames, in ms; 0 is [`FPS`]'s (a sign-in's rate).
+    gap_ms: AtomicU64,
+}
+
+/// How a watcher wants a tab's frames: a sign-in drives the page and wants
+/// them quick and big enough to tap; the chat's live preview only watches.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Screencast {
+    pub fps: u64,
+    pub max_width: u32,
+    pub max_height: u32,
+    pub quality: u8,
+}
+
+impl Screencast {
+    /// A sign-in on the phone.
+    pub const SIGNIN: Screencast = Screencast {
+        fps: FPS,
+        max_width: FRAME_MAX_WIDTH,
+        max_height: FRAME_MAX_HEIGHT,
+        quality: 60,
+    };
+
+    /// The gap Chrome is held to between two frames (the ack's delay).
+    pub fn gap(&self) -> Duration {
+        Duration::from_millis(1000 / self.fps.clamp(1, 60))
+    }
 }
 
 impl FrameSlot {
+    /// The gap this slot's frames are acked after.
+    pub fn gap(&self) -> Duration {
+        match self.gap_ms.load(Ordering::Relaxed) {
+            0 => Screencast::SIGNIN.gap(),
+            ms => Duration::from_millis(ms),
+        }
+    }
+
     pub fn push(&self, jpeg: Vec<u8>, width: u32, height: u32, css: (f64, f64)) {
         let seq = self.seq.fetch_add(1, Ordering::Relaxed) + 1;
         if let Ok(mut l) = self.latest.lock() {
@@ -249,6 +284,15 @@ impl Service {
             .collect();
         v.sort_by_key(|t| t.id);
         v
+    }
+
+    /// The tab a CDP session belongs to.
+    pub fn tab_by_session(&self, session_id: &str) -> Option<Tab> {
+        self.inner()
+            .tabs
+            .values()
+            .find(|t| t.session_id == session_id)
+            .cloned()
     }
 
     /// Every sign-in tab, for "is anything signing in".
@@ -667,8 +711,13 @@ impl Service {
 
     /* -------------------------------------------------------- frames */
 
-    /// Start sending `tab`'s frames to its slot.
+    /// Start sending `tab`'s frames to its slot, at a sign-in's rate.
     pub fn watch(&self, tab: &Tab) -> Result<Arc<FrameSlot>, String> {
+        self.watch_with(tab, Screencast::SIGNIN)
+    }
+
+    /// Start (or restart, at a new size or rate) `tab`'s frames.
+    pub fn watch_with(&self, tab: &Tab, cast: Screencast) -> Result<Arc<FrameSlot>, String> {
         let slot = self
             .frames
             .lock()
@@ -676,14 +725,16 @@ impl Service {
             .entry(tab.session_id.clone())
             .or_default()
             .clone();
+        slot.gap_ms
+            .store(cast.gap().as_millis() as u64, Ordering::Relaxed);
         self.call(
             tab,
             "Page.startScreencast",
             json!({
                 "format": "jpeg",
-                "quality": 60,
-                "maxWidth": FRAME_MAX_WIDTH,
-                "maxHeight": FRAME_MAX_HEIGHT,
+                "quality": cast.quality,
+                "maxWidth": cast.max_width,
+                "maxHeight": cast.max_height,
                 "everyNthFrame": 1,
             }),
         )?;
@@ -698,7 +749,7 @@ impl Service {
             .remove(&tab.session_id);
     }
 
-    fn slot(&self, session_id: &str) -> Option<Arc<FrameSlot>> {
+    pub(crate) fn slot(&self, session_id: &str) -> Option<Arc<FrameSlot>> {
         self.frames
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -713,11 +764,15 @@ impl Service {
                     return;
                 };
                 let frame_id = ev.params["sessionId"].as_i64().unwrap_or(0);
+                let slot = self.slot(session);
                 // Acked after the frame gap: Chrome sends the next one only
                 // then, which is what caps the rate.
-                let due = Instant::now() + Duration::from_millis(1000 / FPS);
-                let _ = acks.send((session.to_string(), frame_id, due));
-                let Some(slot) = self.slot(session) else {
+                let gap = slot
+                    .as_ref()
+                    .map(|s| s.gap())
+                    .unwrap_or(Screencast::SIGNIN.gap());
+                let _ = acks.send((session.to_string(), frame_id, Instant::now() + gap));
+                let Some(slot) = slot else {
                     return;
                 };
                 use base64::Engine as _;
@@ -765,23 +820,75 @@ pub fn jpeg_size(jpeg: &[u8]) -> Option<(u32, u32)> {
         .ok()
 }
 
+/// Frame acks waiting for their moment, soonest first.
+#[derive(Default)]
+pub(crate) struct AckQueue(std::collections::BinaryHeap<std::cmp::Reverse<(Instant, String, i64)>>);
+
+impl AckQueue {
+    pub(crate) fn push(&mut self, session: String, frame_id: i64, at: Instant) {
+        self.0.push(std::cmp::Reverse((at, session, frame_id)));
+    }
+
+    pub(crate) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    /// How long until the soonest is due (zero if one is); `None` when empty.
+    pub(crate) fn wait(&self, now: Instant) -> Option<Duration> {
+        self.0
+            .peek()
+            .map(|std::cmp::Reverse((at, _, _))| at.saturating_duration_since(now))
+    }
+
+    /// Every ack due by `now`, soonest first.
+    pub(crate) fn take_due(&mut self, now: Instant) -> Vec<(String, i64)> {
+        let mut out = Vec::new();
+        while self
+            .0
+            .peek()
+            .is_some_and(|std::cmp::Reverse((at, _, _))| *at <= now)
+        {
+            if let Some(std::cmp::Reverse((_, s, id))) = self.0.pop() {
+                out.push((s, id));
+            }
+        }
+        out
+    }
+}
+
 fn spawn_pump(svc: std::sync::Weak<Service>, events: Receiver<Event>, dead: Arc<AtomicBool>) {
     let (ack_tx, ack_rx) = std::sync::mpsc::channel::<(String, i64, Instant)>();
     let browser = svc.upgrade().map(|s| Arc::downgrade(&s.browser));
     std::thread::spawn(move || {
-        for (session, frame_id, due) in ack_rx {
-            if let Some(wait) = due.checked_duration_since(Instant::now()) {
-                std::thread::sleep(wait);
-            }
-            let Some(b) = browser.as_ref().and_then(std::sync::Weak::upgrade) else {
-                return;
+        // Soonest first: a sign-in's quick acks never wait behind the chat
+        // preview's slow ones.
+        let mut due = AckQueue::default();
+        loop {
+            let got = match due.wait(Instant::now()) {
+                None => ack_rx.recv().map_err(|_| ()),
+                Some(w) if w.is_zero() => Err(()),
+                Some(w) => match ack_rx.recv_timeout(w) {
+                    Ok(a) => Ok(a),
+                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(()),
+                    Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => return,
+                },
             };
-            let _ = b.call(
-                "Page.screencastFrameAck",
-                json!({ "sessionId": frame_id }),
-                Some(&session),
-                T,
-            );
+            match got {
+                Ok((session, frame_id, at)) => due.push(session, frame_id, at),
+                Err(()) if due.is_empty() => return,
+                Err(()) => {}
+            }
+            for (session, frame_id) in due.take_due(Instant::now()) {
+                let Some(b) = browser.as_ref().and_then(std::sync::Weak::upgrade) else {
+                    return;
+                };
+                let _ = b.call(
+                    "Page.screencastFrameAck",
+                    json!({ "sessionId": frame_id }),
+                    Some(&session),
+                    T,
+                );
+            }
         }
     });
     std::thread::spawn(move || {

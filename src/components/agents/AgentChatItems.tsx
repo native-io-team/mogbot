@@ -1440,7 +1440,7 @@ export function WorkingIndicator({
   return (
     <div
       className="agent-chat__row agent-chat__row--agent agent-chat__row--working"
-      data-work={live.toggle || step.details ? true : undefined}
+      data-work={live.toggle || step.details || step.browser ? true : undefined}
       data-open={live.open || undefined}
       data-entering={entering || undefined}
       data-leaving={leaving || undefined}
@@ -1471,6 +1471,7 @@ export function WorkingIndicator({
         {!leaving && agent && <WorkMenu agent={agent} />}
       </div>
       {step.details}
+      {step.browser}
     </div>
   );
 }

@@ -195,15 +195,7 @@ describe('the step it is on right now', () => {
     expect(calls).toContain('agents_stop');
   });
 
-  it('offers to watch its own browser while it has a page open there', async () => {
-    const calls: { cmd: string; args: unknown }[] = [];
-    mockIPC(
-      (cmd, args) => {
-        calls.push({ cmd, args });
-        return null;
-      },
-      { shouldMockEvents: true }
-    );
+  it('shows its own browser as a live card while it has a page open there', () => {
     at(1_000);
     const browsing = call({
       kind: 'web',
@@ -221,7 +213,7 @@ describe('the step it is on right now', () => {
       />
     );
     expect(screen.getByText('Using its own browser · example.com')).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: 'Watch its browser' })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^Watch Acme Site/ })).toBeNull();
     rerender(
       <WorkingIndicator
         activity="Using its own browser · example.com"
@@ -229,22 +221,12 @@ describe('the step it is on right now', () => {
         agent={agent}
       />
     );
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Watch its browser' }));
-      await Promise.resolve();
-    });
-    expect(calls).toContainEqual({
-      cmd: 'agents_show_agent_browser',
-      args: { agentId: 'acme', show: true },
-    });
-    await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Hide its browser' }));
-      await Promise.resolve();
-    });
-    expect(calls).toContainEqual({
-      cmd: 'agents_show_agent_browser',
-      args: { agentId: 'acme', show: false },
-    });
+    // The old text button is gone; the card names the site from the step.
+    expect(screen.queryByRole('button', { name: 'Watch its browser' })).toBeNull();
+    expect(
+      screen.getByRole('button', { name: 'Watch Acme Site on example.com' })
+    ).toBeInTheDocument();
+    expect(screen.getByText('Live')).toBeInTheDocument();
   });
 
   it('is the plain working line between calls', () => {

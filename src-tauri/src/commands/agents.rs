@@ -2432,6 +2432,42 @@ pub async fn agents_show_agent_browser(agent_id: String, show: bool) -> Result<(
     .map_err(agents::err_other)?
 }
 
+/// The live preview under a working agent (`agent_browser::live`): the next
+/// frame of its current page after `after`, waiting up to a moment for one.
+/// `large` is the pane beside the chat. `None` when it has no page open or
+/// nothing new came. Each ask renews the watch; asking stops when the chat
+/// isn't on screen, and the screencast stops with it.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_browser_live_frame(
+    agent_id: String,
+    after: u64,
+    large: bool,
+) -> Result<Option<crate::agent_browser::live::LiveFrame>, CommandError> {
+    use crate::agent_browser::live;
+    tokio::task::spawn_blocking(move || {
+        live::frame(
+            &agent_id,
+            after,
+            if large { live::LARGE } else { live::THUMB },
+        )
+    })
+    .await
+    .map_err(agents::err_other)
+}
+
+/// The preview went off screen: stop its screencast now, not at the lease's end.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_browser_live_stop(agent_id: String, large: bool) -> Result<(), CommandError> {
+    use crate::agent_browser::live;
+    tokio::task::spawn_blocking(move || {
+        live::stop(&agent_id, if large { live::LARGE } else { live::THUMB })
+    })
+    .await
+    .map_err(agents::err_other)
+}
+
 /// The guided permission card: ask macOS for Screen Recording (its own
 /// prompt, once) and open System Settings at the pane for `which`
 /// ("screen_recording" or "accessibility"). Only those two panes open.

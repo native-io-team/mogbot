@@ -751,6 +751,8 @@ pub fn run() {
             commands::agents::agents_phone_signin_stop,
             commands::agents::agents_agent_browser_status,
             commands::agents::agents_show_agent_browser,
+            commands::agents::agents_browser_live_frame,
+            commands::agents::agents_browser_live_stop,
             commands::agents::agents_agent_browser_set_enabled,
             commands::agents::agents_agent_browser_permission,
             commands::agents::agents_browser_open_install,

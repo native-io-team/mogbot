@@ -7,8 +7,8 @@
  * (the line itself: "Last activity 4s ago · using the CPU"). Once the Mac
  * says there's been no progress for too long, the line says so instead and
  * offers "Check on it" and "Stop". While it has a page open in its own
- * browser (the agents' Chrome, parked in a corner of the screen), "Watch
- * its browser" brings that window on screen, and "Put it away" parks it.
+ * browser (the agents' Chrome), a small live picture of that page sits under
+ * the line (`AgentBrowserLive`); pressing it opens it larger beside the chat.
  *
  * The words come from the Mac (`agents::work`, `agents::describe`); the
  * timings and hints from the protocol's shared helpers, so the desk and the
@@ -18,7 +18,7 @@
  */
 
 import { useId, useState, type ReactNode } from 'react';
-import { ChevronRightIcon, EyeOffIcon, GlobeIcon } from '@/components/icons';
+import { ChevronRightIcon } from '@/components/icons';
 import { TextButton } from '../primitives/TextButton';
 import { useNow } from '../../hooks/useNow';
 import { useOptionalToast } from '../../contexts/ToastContext';
@@ -31,7 +31,7 @@ import {
   type TurnWork,
   type WorkStep,
 } from '../../lib/agents';
-import { showAgentBrowser } from '../../lib/agentsOwnBrowser';
+import { BrowserLiveCard } from './AgentBrowserLive';
 import {
   formatElapsed,
   lifeLine,
@@ -101,6 +101,8 @@ export function useLiveStep({ agent, work, activity, leaving }: LiveStepProps): 
   line: ReactNode | null;
   /** Under the working line: hint, output, Stop this step, what a check found. */
   details: ReactNode | null;
+  /** Under those: its page in its own browser, live. */
+  browser: ReactNode | null;
 } {
   const call = work?.current;
   const quiet = work?.quietSince != null;
@@ -109,8 +111,7 @@ export function useLiveStep({ agent, work, activity, leaving }: LiveStepProps): 
   const [lifeOpen, setLifeOpen] = useState(false);
   const [said, setSaid] = useState<{ at: number; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
-  const [watching, setWatching] = useState(false);
-  if (!agent || !work || leaving) return { line: null, details: null };
+  if (!agent || !work || leaving) return { line: null, details: null, browser: null };
 
   const run = async (what: () => Promise<string | boolean>) => {
     setBusy(true);
@@ -176,31 +177,12 @@ export function useLiveStep({ agent, work, activity, leaving }: LiveStepProps): 
   const stopStep = isCall && offersStopStep(call, now);
   const saidHere = said && said.at === work.startedAt ? said.text : null;
   const showLife = (lifeOpen || quiet) && life;
-  const browser = Boolean(work.ownBrowser);
-  const watch = async () => {
-    const show = !watching;
-    await showAgentBrowser(agent.id, show);
-    setWatching(show);
-    return true;
-  };
+  const browser = work.ownBrowser ? <BrowserLiveCard agent={agent} work={work} /> : null;
   const details =
-    hint || command || stopStep || saidHere || showLife || browser ? (
+    hint || command || stopStep || saidHere || showLife ? (
       <div className="agent-live">
         {showLife && <p className="agent-live__life">{life}</p>}
         {hint && <p className="agent-live__hint">{hint}</p>}
-        {browser && (
-          <div className="agent-live__row">
-            <TextButton
-              tabIndex={0}
-              className="agent-work__toggle agent-live__toggle agent-live__watch"
-              leftIcon={watching ? <EyeOffIcon size={12} /> : <GlobeIcon size={12} />}
-              disabled={busy}
-              onClick={() => void run(watch)}
-            >
-              {watching ? 'Hide its browser' : 'Watch its browser'}
-            </TextButton>
-          </div>
-        )}
         {(command || stopStep) && (
           <div className="agent-live__row">
             {command && call && <OutputPeek lines={call.output ?? []} note={outputNote(call)} />}
@@ -224,7 +206,7 @@ export function useLiveStep({ agent, work, activity, leaving }: LiveStepProps): 
         )}
       </div>
     ) : null;
-  return { line, details };
+  return { line, details, browser };
 }
 
 /** A finished step's last lines, when it kept any. */

@@ -99,6 +99,7 @@ import { AgentsQuota } from './AgentsQuota';
 import { RoomChat } from './RoomChat';
 import { RoomEditorModal } from './RoomEditorModal';
 import { AgentPreviewPane } from './AgentPreviewPane';
+import { AgentBrowserPane } from './AgentBrowserLive';
 import {
   AgentPreviewProvider,
   useAgentPreview,
@@ -824,16 +825,28 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
   const previewCtx = useAgentPreview();
   const previewRequest = useAgentPreviewRequest();
   const previewAgent = previewRequest ? agentsById.get(previewRequest.agentId) : undefined;
-  const preview = previewRequest && previewAgent && previewCtx && (
-    <AgentPreviewPane
-      key={`${previewRequest.agentId}:${previewRequest.messageId}:${previewRequest.link ?? ''}`}
-      agent={previewAgent}
-      request={previewRequest}
-      server={previewServer}
-      onClose={previewCtx.close}
-      onOpenInWorkspace={sidebarProps.onSelectProject}
-    />
-  );
+  const preview = previewRequest?.browser
+    ? previewAgent &&
+      previewCtx && (
+        <AgentBrowserPane
+          key={`${previewRequest.agentId}:browser`}
+          agent={previewAgent}
+          turnStartedAt={previewRequest.browser.turnStartedAt}
+          onClose={previewCtx.close}
+        />
+      )
+    : previewRequest &&
+      previewAgent &&
+      previewCtx && (
+        <AgentPreviewPane
+          key={`${previewRequest.agentId}:${previewRequest.messageId}:${previewRequest.link ?? ''}`}
+          agent={previewAgent}
+          request={previewRequest}
+          server={previewServer}
+          onClose={previewCtx.close}
+          onOpenInWorkspace={sidebarProps.onSelectProject}
+        />
+      );
 
   const chatCompact = useMemo(
     () => (isCompact ? { onGoHome, onGoProjects } : undefined),
