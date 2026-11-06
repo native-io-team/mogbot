@@ -19,6 +19,32 @@ export function sendMode(agent: Agent, hasContent: boolean): SendMode {
   return 'none';
 }
 
+/**
+ * Whether the field is a card (files, words across its width, a row of buttons
+ * under them) rather than the one-line capsule. Empty is always the capsule,
+ * at any width: the measuring line has no words to measure, and `room` (the
+ * field less the + and the buttons) is not settled while they lay out, so a
+ * measure against it could flip a fresh, empty field into a card for a frame.
+ * A line that no longer fits, or an explicit new line, makes the card; a
+ * `room` not above zero means nothing has been laid out to compare against.
+ */
+export function fieldIsCard(f: {
+  listening: boolean;
+  hasTop: boolean;
+  value: string;
+  /** The field's width, 0 until laid out. */
+  width: number;
+  /** The words on one unwrapped line, as measured. */
+  oneLine: number;
+  /** The capsule's room for the words. */
+  room: number;
+}): boolean {
+  if (f.listening || f.hasTop) return true;
+  if (f.value.length === 0) return false;
+  if (f.value.includes('\n')) return true;
+  return f.width > 0 && f.room > 0 && f.oneLine > f.room;
+}
+
 /** The buttons at the field's right, in order (the + and the engine chip are at its left). */
 export type ComposerControl = 'mic' | 'stop' | 'send';
 

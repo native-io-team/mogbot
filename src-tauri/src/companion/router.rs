@@ -246,6 +246,15 @@ pub struct AgentToggles {
     pub avatar: Option<crate::agents::store::AgentLook>,
     #[serde(default)]
     pub color: Option<String>,
+    /// `claude` or `codex`, from a Mac that lists
+    /// [`MAC_FEATURE_ENGINE`](super::wire::MAC_FEATURE_ENGINE). The desk's own
+    /// `agents_update` checks it is ready and starts a new session that
+    /// carries the conversation over as a recap.
+    #[serde(default)]
+    pub engine: Option<String>,
+    /// One of that engine's models; empty is the engine's own default.
+    #[serde(default)]
+    pub model: Option<String>,
 }
 
 /// Instructions are a brief, not a document: the phone's editor stops here.
@@ -1216,6 +1225,14 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
                     .get("instructions")
                     .and_then(Value::as_str)
                     .map(|i| format!("edit instructions ({} chars)", i.chars().count())),
+                input
+                    .get("engine")
+                    .and_then(Value::as_str)
+                    .map(|e| format!("engine {e}")),
+                input
+                    .get("model")
+                    .and_then(Value::as_str)
+                    .map(|m| format!("model {}", if m.is_empty() { "default" } else { m })),
             ]
             .into_iter()
             .flatten()
@@ -1738,7 +1755,7 @@ async fn run(
         "agents.update" => {
             let p: UpdateParams = parse(params).map_err(|_| {
                 bad_params(
-                    "Only pin, mute, hide, the instructions and how it looks can be changed from the phone.",
+                    "Only pin, mute, hide, the instructions, how it looks, and its engine and model can be changed from the phone.",
                 )
             })?;
             if p.input == AgentToggles::default() {
@@ -3412,7 +3429,7 @@ mod tests {
         assert_eq!(done["pinned"], false);
         for refused in [
             json!({ "agentId": AGENT, "input": { "name": "Evil" } }),
-            json!({ "agentId": AGENT, "input": { "model": "opus" } }),
+            json!({ "agentId": AGENT, "input": { "project": "/Users/you/ShipStudio/site" } }),
             json!({ "agentId": AGENT, "input": { "instructions": "x".repeat(MAX_INSTRUCTIONS + 1) } }),
             json!({ "agentId": AGENT, "input": {} }),
         ] {
@@ -3433,6 +3450,30 @@ mod tests {
         assert_eq!(
             audit.last().unwrap().2,
             format!("edit instructions (18 chars) {AGENT}")
+        );
+    }
+
+    #[tokio::test]
+    async fn the_phone_can_switch_an_agents_engine_and_model() {
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        dispatch(
+            &c,
+            &me,
+            "agents.update",
+            json!({ "agentId": AGENT, "input": { "engine": "codex", "model": "gpt-5-codex" } }),
+        )
+        .await
+        .unwrap();
+        let sent = stub.toggles.lock().unwrap();
+        assert_eq!(sent.len(), 1);
+        assert_eq!(sent[0].1.engine.as_deref(), Some("codex"));
+        assert_eq!(sent[0].1.model.as_deref(), Some("gpt-5-codex"));
+        drop(sent);
+        assert_eq!(
+            stub.audited().last().unwrap().2,
+            format!("engine codex model gpt-5-codex {AGENT}")
         );
     }
 

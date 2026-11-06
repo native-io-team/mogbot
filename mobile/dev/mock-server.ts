@@ -103,6 +103,8 @@ export interface MockOptions {
    * on Codex. Connection should show a green Codex row and no red Claude Code.
    */
   codexOnly?: boolean;
+  /** A Mac with Claude Code and Codex both installed and signed in (engine switching). */
+  bothEngines?: boolean;
   /**
    * Designer is being driven in a terminal on the Mac (take-over): its
    * `takeover` is set exactly as the Mac's overview carries it.
@@ -710,6 +712,7 @@ export function createMockServer(opts: MockOptions = {}) {
     const list = structuredClone(real.agentsOverview.engines).map((e) =>
       opts.bars && e.id === 'claude' ? { ...e, asks: false } : e
     );
+    if (opts.bothEngines) return list.map((e) => ({ ...e, installed: true, signedIn: true }));
     if (!opts.codexOnly) return list;
     return list.map((e) =>
       e.id === 'claude'
@@ -2723,13 +2726,22 @@ export function createMockServer(opts: MockOptions = {}) {
       const a = agent(String(p.agentId));
       if (!a) return fail({ type: 'Validation', field: 'agentId', reason: 'No such agent' });
       const input = (p.input ?? {}) as Record<string, unknown>;
-      const allowed = ['pinned', 'muted', 'hidden', 'instructions', 'avatar', 'color'];
+      const allowed = [
+        'pinned',
+        'muted',
+        'hidden',
+        'instructions',
+        'avatar',
+        'color',
+        'engine',
+        'model',
+      ];
       if (!Object.keys(input).length || Object.keys(input).some((k) => !allowed.includes(k))) {
         return fail({
           type: 'Protocol',
           code: 'bad_params',
           message:
-            'Only pin, mute, hide, the instructions and how it looks can be changed from the phone.',
+            'Only pin, mute, hide, the instructions, how it looks, and its engine and model can be changed from the phone.',
         });
       }
       if (typeof input.instructions === 'string') instructions.set(a.id, input.instructions);
@@ -2738,6 +2750,20 @@ export function createMockServer(opts: MockOptions = {}) {
       if (typeof input.hidden === 'boolean') a.hidden = input.hidden;
       if (input.avatar) a.avatar = input.avatar as Agent['avatar'];
       if (typeof input.color === 'string') a.color = input.color;
+      if (input.engine === 'claude' || input.engine === 'codex') {
+        const info = engines().find((e) => e.id === input.engine);
+        if (!info?.installed || !info.signedIn) {
+          return fail({
+            type: 'Other',
+            message: `${info?.label ?? 'That engine'} isn’t ready on this Mac.`,
+          });
+        }
+        if (input.engine !== a.engine) {
+          a.engine = input.engine;
+          a.model = null;
+        }
+      }
+      if (typeof input.model === 'string') a.model = input.model || null;
       emit({ type: 'agents.registry', overview: overview() });
       const { status: _status, home: _home, ...stored } = a;
       return stored;

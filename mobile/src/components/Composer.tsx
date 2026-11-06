@@ -35,7 +35,12 @@
  * as the Mac keeps them.
  */
 
-import { MAX_ATTACHMENTS, type Agent, type AgentRef } from '@shipstudio/companion-protocol';
+import {
+  MAC_FEATURES,
+  MAX_ATTACHMENTS,
+  type Agent,
+  type AgentRef,
+} from '@shipstudio/companion-protocol';
 import {
   Children,
   useCallback,
@@ -87,6 +92,7 @@ import { drivenWait } from '../lib/bars';
 import { ConversationBars } from './ConversationBars';
 import {
   composerControls,
+  fieldIsCard,
   followsEnd,
   mentionQuery,
   sendMode,
@@ -105,9 +111,17 @@ import {
 } from '../lib/drafts';
 import { admit, pickDocuments, pickPhotos, takePhoto, type PickedFile } from '../lib/files';
 import { haptic } from '../lib/haptics';
-import { engineChip } from '../lib/newAgentDefaults';
+import {
+  canSwitch,
+  currentModels,
+  engineLocked,
+  modelRowLabel,
+  otherEngines,
+  switchedLine,
+} from '../lib/agentEngine';
+import { engineChip, modelOptions } from '../lib/newAgentDefaults';
 import { OUTBOX_WAIT_MS } from '../lib/outbox';
-import { describeError, send, stop, upload } from '../lib/session';
+import { describeError, send, setAgentEngine, stop, upload } from '../lib/session';
 import { getApp, useApp, useServed } from '../lib/store';
 import {
   avatarSize,
@@ -172,6 +186,10 @@ export function Composer({
   const engines = useApp((s) => s.overview?.engines);
   // Only from a Mac that lists its engines: never a name guessed here.
   const chip = useMemo(() => (engines ? engineChip(agent, engines) : null), [agent, engines]);
+  // Switching from the card, only on a Mac that takes `engine` on agents.update.
+  const switchable = useServed('agents.update', MAC_FEATURES.engine);
+  const canPick = switchable && !!engines && canSwitch(agent, engines);
+  const lock = engineLocked(agent);
   const seq = useRef(0);
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   const [micHint, setMicHint] = useState<string | null>(null);
@@ -223,6 +241,52 @@ export function Composer({
     const t = setTimeout(() => input.current?.focus(), 0);
     return () => clearTimeout(t);
   }, [listening]);
+  // Moving to a model or engine: the Mac says yes before the line is shown.
+  const switchTo = (input: { engine?: Agent['engine']; model?: string }) => {
+    if (!engines) return;
+    const engine = input.engine ?? agent.engine;
+    const moved = engine !== agent.engine;
+    const label = modelOptions(engine, engines).find((m) => m.value === (input.model ?? ''));
+    const info = engineChip({ engine, model: input.model || null }, engines);
+    setAgentEngine(agent.id, input)
+      .then(() => {
+        haptic.success();
+        setMicHint(switchedLine(info.engine, input.model ? (label?.label ?? info.model) : null, moved));
+      })
+      .catch((error: unknown) => {
+        haptic.error();
+        onError(describeError(error));
+      });
+  };
+  const pickEngine = () => {
+    if (!engines) return;
+    if (lock) {
+      setMicHint(lock);
+      return;
+    }
+    const here = chip?.engine ?? '';
+    choose(
+      `Runs on ${here}`,
+      [
+        ...currentModels(agent, engines)
+          .filter((m) => !m.current)
+          .map((m) => ({ label: modelRowLabel(m), run: () => switchTo({ model: m.value }) })),
+        ...otherEngines(agent, engines).map((e) => ({
+          label: `Switch to ${e.label}…`,
+          run: () =>
+            choose(
+              `${e.label}: which model?`,
+              modelOptions(e.id, engines).map((m) => ({
+                label: modelRowLabel(m),
+                run: () => switchTo({ engine: e.id, model: m.value }),
+              })),
+              `${agent.name} keeps the conversation so far.`
+            ),
+        })),
+      ],
+      'Pick another model, or another engine for the next message.'
+    );
+  };
   const mic = () => {
     const hint = dictationHint(dictation.support);
     if (hint) {
@@ -627,7 +691,11 @@ export function Composer({
               </RoundButton>
             ) : undefined
           }
-          chip={!listening && chip ? <EngineChip {...chip} /> : undefined}
+          chip={
+            !listening && chip ? (
+              <EngineChip {...chip} onPress={canPick ? pickEngine : undefined} locked={lock} />
+            ) : undefined
+          }
         >
           {/* Listening, the card's row: ×, the waveform filling the middle, Stop, Send. */}
           {listening && (
@@ -742,26 +810,81 @@ export function Composer({
  * What the agent runs on, in the card's row beside the +: the engine, and
  * its model lighter, as Claude's own model chip. Only what the Mac said.
  */
-function EngineChip({ engine, model }: { engine: string; model: string | null }) {
-  const colors = useColors();
+function EngineChip({
+  engine,
+  model,
+  onPress,
+  locked,
+}: {
+  engine: string;
+  model: string | null;
+  /** Opens the picker; absent on a Mac too old to switch, where this is a label. */
+  onPress?: () => void;
+  /** Why it can't be used now (a turn is running); a tap says so. */
+  locked?: string | null;
+}) {
   const field = useFieldStyles();
   const { send } = useComposerSize();
+  const says = model ? `Runs on ${engine}, ${model}` : `Runs on ${engine}`;
+  const shape = [field.chip, { height: send, borderRadius: send / 2 }];
+  if (!onPress) {
+    return (
+      <View accessible accessibilityRole="text" accessibilityLabel={says} style={shape}>
+        <EngineWords engine={engine} model={model} />
+      </View>
+    );
+  }
   return (
-    <View
-      accessible
-      accessibilityRole="text"
-      accessibilityLabel={model ? `Runs on ${engine}, ${model}` : `Runs on ${engine}`}
-      style={[field.chip, { height: send, borderRadius: send / 2 }]}
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={says}
+      accessibilityHint={locked ?? 'Double-tap to change the engine or model'}
+      accessibilityState={{ disabled: !!locked }}
+      onPress={() => {
+        haptic.light();
+        onPress();
+      }}
+      style={({ pressed }) => [
+        shape,
+        locked ? field.off : null,
+        pressed && !locked ? PRESSED : null,
+      ]}
     >
+      <EngineWords engine={engine} model={model} caret />
+    </Pressable>
+  );
+}
+
+function EngineWords({
+  engine,
+  model,
+  caret,
+}: {
+  engine: string;
+  model: string | null;
+  caret?: boolean;
+}) {
+  const colors = useColors();
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
       <T
         variant="small"
         color={colors.textPrimary}
         numberOfLines={1}
+        style={{ flexShrink: 1 }}
         maxFontSizeMultiplier={chromeScale}
       >
         {engine}
         {model ? <T variant="small" color={colors.textSecondary}>{` ${model}`}</T> : null}
       </T>
+      {caret ? (
+        <Icon
+          name="chevron.down"
+          size={iconSize.inline}
+          color={colors.textMuted}
+          fallback={<T variant="small">▾</T>}
+        />
+      ) : null}
     </View>
   );
 }
@@ -898,8 +1021,7 @@ export function ComposerField({
     (leading ? composer.inset + slot + composer.afterLead : composer.padLeft) -
     composer.padRight -
     buttons * slot;
-  const wraps = value.includes('\n') || (width > 0 && oneLine > room);
-  const card = listening || Boolean(top) || wraps;
+  const card = fieldIsCard({ listening, hasTop: Boolean(top), value, width, oneLine, room });
   // The words keep their place in the tree whichever shape it is, so the
   // input (and the keyboard) stays as the pill becomes a card and back.
   return (
@@ -974,6 +1096,7 @@ export function ComposerField({
                 </Text>
               </Pressable>
             ) : (
+              <View>
               <TextInput
                 key={generation}
                 ref={own}
@@ -986,8 +1109,6 @@ export function ComposerField({
                   setCaret({ at: e.nativeEvent.selection, length: value.length, listening })
                 }
                 onLayout={fitWeb}
-                placeholder={placeholder}
-                placeholderTextColor={colors.textMuted}
                 multiline
                 // The field scrolls around it: the input is always as tall as its words.
                 scrollEnabled={false}
@@ -996,6 +1117,28 @@ export function ComposerField({
                 keyboardAppearance={appearance}
                 accessibilityLabel={label}
               />
+              {value.length === 0 ? (
+                // Drawn here, not by the input: a multiline input wraps its
+                // placeholder while the field is still laying out, so the empty
+                // capsule showed it on two lines for a moment. One line, clipped.
+                <Text
+                  pointerEvents="none"
+                  accessibilityElementsHidden
+                  importantForAccessibility="no"
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  maxFontSizeMultiplier={chromeScale}
+                  style={[
+                    field.input,
+                    card && field.cardInput,
+                    field.placeholder,
+                    { color: colors.textMuted },
+                  ]}
+                >
+                  {placeholder}
+                </Text>
+              ) : null}
+              </View>
             )}
           </ScrollView>
           {scrolled && <FieldFade />}
@@ -1215,6 +1358,7 @@ const useFieldStyles = makeStyles((colors) => ({
     flexDirection: 'row',
     overflow: 'hidden',
   },
+  placeholder: { position: 'absolute', top: 0, left: 0, right: 0 },
   measureText: { paddingTop: 0, paddingBottom: 0, paddingRight: 0 },
   // Between × and Stop, centred on them (their slots sit `inset` off the bottom).
   wave: { marginHorizontal: space.sm, marginBottom: composer.inset },

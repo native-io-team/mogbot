@@ -362,6 +362,9 @@ pub const MAC_FEATURE_SIGNIN_PHONE: &str = "signin.phone";
 /// `localLinks` (`agents/local_links.rs`).
 pub const MAC_FEATURE_WATCH_LINKS: &str = "watch.links";
 
+/// `welcome.features`: `agents.update` takes `engine` and `model`.
+pub const MAC_FEATURE_ENGINE: &str = "agents.engine";
+
 /// Everything `welcome.features` lists.
 pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_REVISE_RESULTS,
@@ -373,6 +376,7 @@ pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_KEYCAPS,
     MAC_FEATURE_SIGNIN_PHONE,
     MAC_FEATURE_WATCH_LINKS,
+    MAC_FEATURE_ENGINE,
 ];
 
 /// What one connected app said it shows (`hello.features`).

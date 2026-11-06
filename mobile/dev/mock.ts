@@ -75,6 +75,7 @@ function selfSigned(dir: string) {
     devicesFile: path.join(state, 'devices.json'),
     ...(tls ? { tls: { key: tls.key, cert: tls.cert } } : {}),
     codexOnly: args.includes('--codex-only'),
+    bothEngines: args.includes('--both-engines'),
     takeover: args.includes('--takeover'),
     bars: args.includes('--bars'),
     importing: args.includes('--importing'),

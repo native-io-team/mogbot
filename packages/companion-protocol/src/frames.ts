@@ -194,6 +194,12 @@ export const MAC_FEATURES = {
    * reply linked to (`localLinks` on the message), not only on a card.
    */
   watchLinks: 'watch.links',
+  /**
+   * `agents.update` takes `engine` and `model`: switch an agent between Claude
+   * Code and Codex, or change its model, from the phone. A new engine starts a
+   * new session that carries the conversation over as a recap.
+   */
+  engine: 'agents.engine',
 } as const;
 export type MacFeature = (typeof MAC_FEATURES)[keyof typeof MAC_FEATURES];
 

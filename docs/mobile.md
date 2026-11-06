@@ -157,7 +157,9 @@ inside it.
   `agents.loginNotNeeded|loginsNotNeeded|loginsUndecline` (shown only when the Mac lists them),
   `agents.reach`'s `declined` (each with "Turn back on"), and `agents.loginsRecheck` when the app
   comes back while claude.ai is being connected here
-- `agents.update` (`pinned`, `muted`, `hidden`, `instructions`),
+- `agents.update` (`pinned`, `muted`, `hidden`, `instructions`, and from a Mac listing the
+  `agents.engine` feature, `engine` and `model`: the desk's own `agents_update` checks the engine is
+  ready and starts a new session that carries the conversation over as a recap),
   `agents.instructions|usage|revokePermission|changeDiff`
 - `agents.files|fetchPath|search`, `agents.schedule.preview|create|update|pause|cancel|runNow`
 - `agents.create` (`name`, `role`, `color` only; idempotent by an optional
@@ -819,7 +821,17 @@ The phone can start work as well as answer it. Each piece is gated by
   becomes a card: the files as thumbnails at its top, each with its ×, the
   words across its whole width, and a row under them with the + and the
   agent's engine chip (only what the Mac's overview names) at the left and
-  the buttons at the right. The queued line ("… reads it when this turn
+  the buttons at the right. An empty field is always the capsule, at any
+  width (`fieldIsCard`), and its placeholder is drawn by the app on one
+  line, clipped with an ellipsis, never by the input (a multiline input
+  wraps it while the field lays out). On a Mac listing `agents.engine` the
+  chip is a button: it opens the choose sheet with the agent's engine's other
+  models and "Switch to …" for each other engine that is installed and signed
+  in, then that engine's models (`lib/agentEngine.ts`). The line over the
+  field says "Now on Codex · GPT-5 Codex. It has the conversation so far."
+  once the Mac has said yes. While a turn runs, or the Mac is being driven,
+  the chip is dimmed and a tap says to switch when it ends. On an older Mac
+  it stays a label. The queued line ("… reads it when this turn
   ends") runs full width over it with Send now at its right. On iOS
   before 26, Android and the web build it's `composerFill` with its
   hairline. The chat header's ⓘ is a native bar button (`Stack.Toolbar`) on
