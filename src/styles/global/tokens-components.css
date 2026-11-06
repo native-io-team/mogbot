@@ -20,6 +20,9 @@
   --size-sidebar-project-shortcut: 24px;
   --size-sidebar-project: 214px;
   --size-sidebar-project-row: 46px;
+  /* An agent row: its name and one line under it. Fixed, so a step's words,
+     a wrap or a state change never moves the rows below. */
+  --size-agents-list-row: 48px;
   /* The band at the bottom of the sidebar list that fades into the footer. */
   --size-sidebar-footer-fade: calc(var(--space-32) + var(--space-16));
   --size-sidebar-section-row: 22px;

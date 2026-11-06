@@ -116,8 +116,9 @@
   align-items: center;
   gap: var(--spacing-sm);
   width: 100%;
-  /* Grows for a two-line preview; a one-line row is the project row's height. */
-  min-height: var(--size-sidebar-project-row);
+  /* One height for every row in every state: a step's words changing, a
+     waiting label or a failure never moves the rows below. */
+  height: var(--size-agents-list-row);
   padding: var(--spacing-sm) var(--spacing-md) var(--spacing-sm) var(--spacing-sm);
   text-align: left;
   font: inherit;
@@ -206,17 +207,31 @@
   white-space: nowrap;
 }
 
-/* Two lines before it's cut: a third of a sentence (or of a failure's reason)
-   says nothing. */
+/* One line, cut with an ellipsis (as on the phone): a second line that came
+   and went as a step's words changed length was what made the list jump. */
 .agents-list__preview {
-  display: -webkit-box;
+  display: block;
   overflow: hidden;
   font-size: var(--font-size-body-sm);
   line-height: var(--line-height-compact);
   color: var(--text-muted);
-  overflow-wrap: anywhere;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* A working row: the step, cut short, then its time in a column of its own,
+   so "9s" → "10s" and a long step after a short one move nothing. (What's in
+   flight keeps them inline, in its own one-line cut.) */
+.agents-list__preview .agents-list__working {
+  display: flex;
+  min-width: 0;
+}
+
+.agents-list__preview .agents-list__step {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .agents-list__row.is-current .agents-list__preview {
@@ -294,6 +309,11 @@
   border: none;
   border-bottom: var(--border-width-default) solid var(--border-subtle);
   cursor: pointer;
+}
+
+/* Everything was answered a moment ago: said quietly until the row goes. */
+.agents-list__needs-you[data-answered] {
+  color: var(--text-muted);
 }
 
 .agents-list__needs-you:hover {
@@ -459,7 +479,11 @@
   margin-top: var(--spacing-xs);
 }
 
-/* "· 5m" stays with itself when a working row's line wraps. */
-.agents-list__elapsed {
+/* The time column: tabular figures, right-aligned, wide enough for "· 59m". */
+.agents-list__preview .agents-list__elapsed {
+  flex: 0 0 auto;
+  min-width: 5ch;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
   white-space: nowrap;
 }

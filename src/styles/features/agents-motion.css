@@ -329,7 +329,9 @@
   animation: agents-motion-swap-in var(--agents-motion-enter) backwards;
 }
 
-/* Results replace the list; they, and hidden rows when shown, fade in. */
+/* Results replace the list; they, hidden rows when shown and the
+   Needs-your-OK row (the rows under it slide down: useFlipReorder) fade in. */
+.agents-list > .agents-list__needs-you,
 .agents-list > .agents-search,
 .agents-list > .agents-search__note,
 .agents-list > .agents-list__row[data-hidden] {

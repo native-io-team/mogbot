@@ -421,11 +421,6 @@
   text-overflow: ellipsis;
 }
 
-/* A room's row: one line of preview at most (two made each row a block). */
-.agents-list__row--room .agents-list__preview {
-  -webkit-line-clamp: 1;
-}
-
 /* The working rows' first speaker carries the thread's gap; the group adds none. */
 .agent-chat__messages > .agent-room__working {
   margin-top: 0;

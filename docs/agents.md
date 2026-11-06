@@ -246,8 +246,15 @@ From the stream:
   finished message takes over the same bubble (`agents/stream.rs`, tested on a
   captured real stream). Sub-agent text, streamed or not, is internal and is
   dropped. Stop mid-reply keeps what streamed, as a message marked `stopped`;
+- on the desk the store applies draft and status events once per frame (the
+  newest per agent), the reply is revealed at the display's pace as on the
+  phone (`useReveal`: whatever is queued over ~260ms, never under 45
+  characters a second; the finished message carries on from where its draft
+  had got to), and only the block being written is re-parsed and redrawn
+  (`createStreamingSegments`, `ProseRun` in `AgentProse.tsx`);
 - while words are arriving the typing dots are hidden; they and the activity
-  line come back between text blocks, while tools run;
+  line come back between text blocks, while tools run, once the gap has
+  lasted 0.7s (a blink of them between two blocks read as a flash);
 - every **tool call** only updates the line under the agent's name ("Editing
   PricingTable.tsx", "Messaging Finance"); it never becomes a message;
 - `system/init` confirms the session id, which is stored for the next `--resume`,
@@ -3943,7 +3950,14 @@ cards.
   It holds still while the list is in use (pointer over it, or scrolled,
   clicked or keyed through in the last 2s): only new agents are added at the
   end and deleted ones dropped. It re-sorts once left alone for 2s, when the
-  window comes back to the front, and at once on a pin or unpin. Other lists
+  window comes back to the front, and at once on a pin or unpin; otherwise at
+  most once every 4s (`RESORT_MS`), the rows sliding to their places (FLIP).
+  The "Needs your OK" row comes and goes at those same moments ("All
+  answered" while it waits to go). Every row is one fixed height: the line
+  under the name is one line, cut with an ellipsis; a working row's step is
+  steadied (`useSteadyLine`, the phone's rule shared in the protocol package:
+  1.8s per step, "Thinking" only after 2.5s) and its time sits in a fixed
+  column of tabular figures. Other lists
   (switcher, Quick Entry) still use `sortAgents` (pinned, then recency).
 - **Sections** (user-made groups in the list) are not built: they need a
   persisted field, a naming flow, collapse state, and a story for how they

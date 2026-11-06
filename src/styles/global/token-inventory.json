@@ -515,7 +515,15 @@
       "layer": "components",
       "owner": "WorkspaceSidebar",
       "status": "canonical",
-      "consumerCount": 10
+      "consumerCount": 9
+    },
+    {
+      "name": "--size-agents-list-row",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "global/component",
+      "status": "canonical",
+      "consumerCount": 1
     },
     {
       "name": "--size-sidebar-footer-fade",
@@ -4523,7 +4531,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 899
+      "consumerCount": 900
     },
     {
       "name": "--text-faint",
@@ -5739,7 +5747,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 899
+      "consumerCount": 900
     },
     {
       "name": "--text-faint",
