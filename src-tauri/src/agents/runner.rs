@@ -502,6 +502,11 @@ struct TurnMark {
     /// What the turn had done so far, saved as it goes ([`save_progress`]).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     progress: Option<Progress>,
+    /// The app's own turn (a tidy, `tidy::QuietTurn`): cut off, its process
+    /// is stopped and nothing else happens. No line, no pick-up: the user
+    /// never asked for it, and the next turn's end tidies again.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    quiet: bool,
 }
 
 /// A running turn's progress, saved at most once a second while it changes:
@@ -1055,6 +1060,10 @@ fn plan_recovery_for(
     };
     let mark = read_mark(agent_id).unwrap_or_default();
     let _ = std::fs::remove_file(&path);
+    // A tidy the app was running: dropped (its process was already stopped).
+    if mark.quiet {
+        return Recovery::default();
+    }
     let mut plan = Recovery {
         changes: mark.project.clone().zip(mark.tree.clone()),
         ..Recovery::default()
@@ -4033,7 +4042,9 @@ async fn run_on_accounts(
         .await;
         if let Ok(Ended::Died(detail)) = &result {
             // The app is going: the mark stays as it is, for the next launch.
-            if QUITTING.load(Ordering::SeqCst) {
+            // The app's own tidy isn't carried on either: it says it didn't
+            // finish, and tries again at the next turn's end.
+            if QUITTING.load(Ordering::SeqCst) || super::tidy::is_quiet(agent_id) {
                 return result;
             }
             let Some(next) = next_pickup(resumes) else {
@@ -4333,6 +4344,7 @@ async fn run_turn(
     let mut mark = read_mark(agent_id).unwrap_or_default();
     mark.pid = pid;
     mark.session = driver.process_mark(&session_id, &home);
+    mark.quiet = super::tidy::is_quiet(agent_id);
     // The conversation to pick up, should the turn be cut off: Claude Code's
     // is known now; a new Codex thread's once it says (`Step::Session`).
     if !session_id.is_empty() {
