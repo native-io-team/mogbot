@@ -149,7 +149,8 @@ function Screens() {
               />
               {/* Every sheet and grouped screen: panel behind, groups on surfaceGroup. */}
               <Stack.Screen name="connection" options={sheet(colors, [0.75, 1])} />
-              <Stack.Screen name="needs-you" options={sheet(colors, [0.6, 1])} />
+              <Stack.Screen name="catch-up" options={{ headerShown: false }} />
+              <Stack.Screen name="usage" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen
                 name="settings"
                 options={{

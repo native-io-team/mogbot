@@ -590,6 +590,10 @@ const scrollToText = (text) => async (page) => {
   throw new Error(`never found "${text}"`);
 };
 
+/** Whether Catch up's bottom bar has a button labelled `label`. */
+const CATCHUP_HAS = (label) =>
+  `!![...document.querySelectorAll('[aria-label]')].find((e) => e.getAttribute('aria-label') === ${JSON.stringify(label)})`;
+
 /** Connected, everything the mock seeds. */
 const LIVE = [
   {
@@ -605,6 +609,58 @@ const LIVE = [
     check: 'Project list, sessions per project',
   },
   { name: 'search', route: '/search', check: 'Empty search' },
+  {
+    name: 'catchup-first',
+    route: '/catch-up',
+    ready: 'Catch up',
+    act: () => sleep(1200),
+    check: 'Catch up: "1 of N", the bar, one card; Allow · Deny (neutral) over Chat · Next',
+  },
+  {
+    name: 'catchup-approval',
+    route: '/catch-up',
+    ready: 'Catch up',
+    act: async (page) => {
+      await sleep(1000);
+      // On to the first request answered right here: Allow · Deny under the thumb.
+      for (let i = 0; i < 30; i++) {
+        if (await page.eval(CATCHUP_HAS('Allow'))) break;
+        await page.clickLabel('Next');
+        await sleep(700);
+      }
+      await sleep(900);
+    },
+    check: 'A request: what it said, the capped card, Allow (neutral) · Deny over Chat · Next',
+  },
+  {
+    name: 'usage-ring',
+    route: '/chat/site',
+    ready: 'Acme Site',
+    act: () => sleep(1200),
+    check: 'Header: the usage ring left of ⓘ, 38% of the 5-hour window',
+  },
+  {
+    name: 'usage-sheet',
+    route: '/usage?id=site',
+    ready: 'Usage',
+    act: () => sleep(1500),
+    check: 'Usage: context 90%, 5-hour, weekly (All models, Opus), every account; no pace line',
+  },
+  {
+    name: 'catchup-done',
+    route: '/catch-up',
+    ready: 'Catch up',
+    act: async (page) => {
+      await sleep(1000);
+      for (let i = 0; i < 40; i++) {
+        if ((await page.text()).includes('All caught up')) break;
+        await page.clickLabel('Next');
+        await sleep(600);
+      }
+      await sleep(600);
+    },
+    check: 'All caught up: a calm check and Back to agents',
+  },
   {
     name: 'chat-chief',
     route: '/chat/chief',
@@ -848,8 +904,18 @@ const LIVE = [
       if (stop) {
         // Clear the kept words rather than send them, so the Designer stays idle for later shots.
         await page.eval(`document.querySelector('textarea')?.select()`);
-        await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 });
-        await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 });
+        await page.send('Input.dispatchKeyEvent', {
+          type: 'keyDown',
+          key: 'Backspace',
+          code: 'Backspace',
+          windowsVirtualKeyCode: 8,
+        });
+        await page.send('Input.dispatchKeyEvent', {
+          type: 'keyUp',
+          key: 'Backspace',
+          code: 'Backspace',
+          windowsVirtualKeyCode: 8,
+        });
       }
       await sleep(800);
       await page.goto(`${WEB}/settings`);

@@ -188,6 +188,7 @@ export function ApprovalCard({
   agent,
   onError,
   onAnswered,
+  answers = true,
 }: {
   message: AgentMessage;
   approval: Approval;
@@ -195,6 +196,12 @@ export function ApprovalCard({
   onError: (text: string) => void;
   /** The Mac took the answer (a card shown outside its own chat resolves here). */
   onAnswered?: (allow: boolean) => void;
+  /**
+   * False where the screen answers it with its own buttons (Catch up's
+   * Allow · Deny under the thumb): the card shows what it asks, never a
+   * second pair of answers.
+   */
+  answers?: boolean;
 }) {
   const cardStyles = useCardStyles();
   const colors = useColors();
@@ -349,7 +356,7 @@ export function ApprovalCard({
             ? 'It paused here for you. Allow it and it picks up where it left off.'
             : undefined
       }
-      actions={actions}
+      actions={answers ? actions : undefined}
     >
       {!!approval.detail && (
         <FittedDetail fit={fit}>

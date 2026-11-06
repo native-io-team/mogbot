@@ -21,6 +21,7 @@ import {
   MAX_ATTACHMENT_BYTES,
   SUPPORTED,
   type Agent,
+  type Quota,
   type AgentMessage,
   type AgentSecret,
   type AgentReach,
@@ -2398,6 +2399,28 @@ export function createMockServer(opts: MockOptions = {}) {
       for (const s of plan.spare)
         Object.assign(s, { resetsAt: now + 40 * 60_000, observedAt: now - 10 * 60_000 });
       return { ...plan, now };
+    },
+    // The plan as Claude Code reports it, in the shape of the real reading,
+    // with resets from now so every window is current (the header's ring, Usage).
+    'agents.quota': () => {
+      const now = Date.now();
+      const hour = 3_600_000;
+      const at = (over: Partial<Quota['windows'][number]> & { kind: string }) => ({
+        limited: false,
+        observedAt: now - 5 * 60_000,
+        ...over,
+      });
+      return [
+        {
+          engine: 'claude',
+          windows: [
+            at({ kind: 'five_hour', usedPercent: 38, resetsAt: now + 2 * hour }),
+            at({ kind: 'seven_day', usedPercent: 41, resetsAt: now + 74 * hour }),
+            at({ kind: 'seven_day_opus', usedPercent: 12, resetsAt: now + 74 * hour }),
+          ],
+        },
+        ...real.agentsQuota.filter((q) => q.engine === 'codex'),
+      ] satisfies Quota[];
     },
     // As `agents::defaults::check` does: a ready engine, a model it offers.
     'agents.setDefaults': (p) => {
