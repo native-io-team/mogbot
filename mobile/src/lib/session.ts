@@ -14,6 +14,7 @@ import type {
   ResultRef,
   TeamSetupStepId,
   TeamSetupStepState,
+  AgentEffort,
   AgentEngine,
   AgentLook,
 } from '@shipstudio/companion-protocol';
@@ -611,7 +612,7 @@ export async function setAgentToggles(
  */
 export async function setAgentEngine(
   agentId: string,
-  input: { engine?: AgentEngine; model?: string }
+  input: { engine?: AgentEngine; model?: string; effort?: AgentEffort | '' }
 ) {
   const stored = await call('agents.update', { agentId, input });
   setApp((s) =>
@@ -621,7 +622,13 @@ export async function setAgentEngine(
             ...s.overview,
             agents: s.overview.agents.map((a) =>
               a.id === agentId
-                ? { ...a, engine: stored.engine ?? a.engine, model: stored.model ?? null }
+                ? {
+                    ...a,
+                    engine: stored.engine ?? a.engine,
+                    model: stored.model ?? null,
+                    // Omitted by the Mac when it is the engine's default.
+                    effort: stored.effort,
+                  }
                 : a
             ),
           },

@@ -457,6 +457,7 @@ impl Backend for DesktopBackend {
             engine: toggles.engine,
             model: toggles.model,
             routine_model: None,
+            effort: toggles.effort,
             project: None,
             work_directly: None,
         };

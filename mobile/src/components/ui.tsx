@@ -486,7 +486,7 @@ export function Row({
         pressed && { backgroundColor: colors.surfaceGroupPressed },
       ]}
     >
-      {disabled ? <View style={{ opacity: 0.4 }}>{leading}</View> : leading}
+      {disabled && leading ? <View style={{ opacity: 0.4 }}>{leading}</View> : leading}
       {detail || long ? (
         <View style={styles.rowText}>
           <T color={labelColor}>{label}</T>

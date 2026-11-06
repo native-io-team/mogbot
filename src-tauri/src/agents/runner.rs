@@ -4719,6 +4719,13 @@ async fn run_turn(
     } else {
         agent.model.as_deref()
     };
+    // Its effort is for its conversation: a routine mostly checks, on a
+    // cheaper model that may not offer the same levels.
+    let effort = if routine {
+        None
+    } else {
+        agent.effort.as_deref()
+    };
     // Codex with permission profiles keeps every `.git` / `.shipstudio`
     // folder it can reach read-only; Claude Code gets the same as deny rules.
     let profiles =
@@ -4753,6 +4760,7 @@ async fn run_turn(
     let mut cmd = crate::utils::create_command(&binary);
     cmd.args(driver.args(&TurnSpec {
         model,
+        effort,
         session: &session_id,
         resuming,
         url: &url,
@@ -4841,6 +4849,7 @@ async fn run_turn(
             &prompt,
             profiles,
         );
+        let conversation = conversation.with_effort(effort);
         let conversation = if super::tidy::is_compacting(agent_id) {
             conversation.compacting()
         } else {

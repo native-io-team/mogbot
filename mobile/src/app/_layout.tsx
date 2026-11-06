@@ -151,6 +151,7 @@ function Screens() {
               <Stack.Screen name="connection" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen name="catch-up" options={{ headerShown: false }} />
               <Stack.Screen name="usage" options={sheet(colors, [0.75, 1])} />
+              <Stack.Screen name="controls" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen
                 name="settings"
                 options={{

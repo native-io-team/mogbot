@@ -7,13 +7,7 @@
 
 import type { Agent, EngineInfo } from '@shipstudio/companion-protocol';
 import { fieldIsCard } from '../src/lib/composer';
-import {
-  canSwitch,
-  currentModels,
-  engineLocked,
-  otherEngines,
-  switchedLine,
-} from '../src/lib/agentEngine';
+import { currentModels, otherEngines } from '../src/lib/agentEngine';
 
 const base = { listening: false, hasTop: false, value: '', width: 0, oneLine: 0, room: 0 };
 
@@ -91,24 +85,5 @@ describe('the engine chip', () => {
     expect(otherEngines(agent(), out)).toEqual([]);
     const gone = ENGINES.map((e) => (e.id === 'codex' ? { ...e, installed: false } : e));
     expect(otherEngines(agent(), gone)).toEqual([]);
-  });
-
-  it('opens when there is another model or another ready engine', () => {
-    expect(canSwitch(agent(), ENGINES)).toBe(true);
-    expect(canSwitch(agent(), [{ ...ENGINES[0], models: [] }])).toBe(false);
-  });
-
-  it('is locked while a turn runs or the Mac is being driven', () => {
-    expect(engineLocked(agent())).toBeNull();
-    expect(engineLocked(agent({ status: { state: 'working' } }))).toMatch(/turn ends/);
-    expect(engineLocked(agent({ takeover: {} }))).toMatch(/hand it back/);
-  });
-
-  it('says one line after a switch', () => {
-    expect(switchedLine('Codex', 'GPT-5 Codex', true)).toBe(
-      'Now on Codex · GPT-5 Codex. It has the conversation so far.'
-    );
-    expect(switchedLine('Codex', null, true)).toBe('Now on Codex. It has the conversation so far.');
-    expect(switchedLine('Claude Code', 'Sonnet', false)).toBe('Now on Claude Code · Sonnet.');
   });
 });

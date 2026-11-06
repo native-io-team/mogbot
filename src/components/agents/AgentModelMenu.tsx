@@ -7,7 +7,8 @@
  * heading. Below, when the agent has a routine, what its routines run on: on
  * Claude Code, automatically the fastest while the agent is on the default
  * model, since a routine mostly checks and fires again and again; on Codex,
- * its own model unless the user picks another of Codex's.
+ * its own model unless the user picks another of Codex's. Between them, how
+ * hard it thinks (effort), from its next message too.
  *
  * @module components/agents/AgentModelMenu
  */
@@ -15,6 +16,7 @@
 import { CheckIcon } from '@/components/icons';
 import { DropdownDivider, DropdownItem } from '../primitives/Dropdown';
 import {
+  EFFORT_CHOICES,
   ENGINE_LABEL,
   modelChoices,
   modelLabel,
@@ -36,6 +38,7 @@ export function AgentModelItems({ agent }: { agent: Agent }) {
   const engineName =
     engines.find((e) => e.id === agent.engine)?.label ?? ENGINE_LABEL[agent.engine];
   const routine = agent.routineModel ?? '';
+  const effort = agent.effort ?? '';
   const hasRoutine = (agent.checkIns ?? []).some((c) => c.repeat);
   const save = async (change: UpdateAgentInput) => {
     try {
@@ -60,6 +63,19 @@ export function AgentModelItems({ agent }: { agent: Agent }) {
           </span>
           <span className="agent-model-menu__check" aria-hidden="true">
             {m.value === current && <CheckIcon size={12} />}
+          </span>
+        </DropdownItem>
+      ))}
+      <DropdownDivider />
+      <p className="agent-model-menu__heading">Effort · how hard it thinks</p>
+      {EFFORT_CHOICES.map((e) => (
+        <DropdownItem
+          key={e.value || 'default'}
+          onSelect={() => e.value !== effort && void save({ effort: e.value })}
+        >
+          <span className="agent-model-menu__label">{e.label}</span>
+          <span className="agent-model-menu__check" aria-hidden="true">
+            {e.value === effort && <CheckIcon size={12} />}
           </span>
         </DropdownItem>
       ))}

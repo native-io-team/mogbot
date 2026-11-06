@@ -197,6 +197,8 @@ pub struct Ask {
 pub struct Conversation {
     start: Value,
     prompt: String,
+    /// The reasoning effort for `turn/start` ([`Conversation::with_effort`]).
+    effort: Option<String>,
     thread: Option<String>,
     turn: Option<String>,
     /// The agent message that's streaming.
@@ -266,6 +268,7 @@ impl Conversation {
         let conversation = Self {
             start,
             prompt: prompt.to_string(),
+            effort: None,
             thread: None,
             turn: None,
             reply: None,
@@ -285,6 +288,17 @@ impl Conversation {
     /// (and the older `thread/compacted` notification).
     pub fn compacting(mut self) -> Self {
         self.compact = true;
+        self
+    }
+
+    /// The agent's effort level (`store::EFFORTS`), on `turn/start`'s
+    /// `effort`. Schema of 0.166: "Override the reasoning effort for this
+    /// turn and subsequent turns", a level the model advertises; none sent
+    /// leaves the thread's own. Anything but the three levels is dropped.
+    pub fn with_effort(mut self, effort: Option<&str>) -> Self {
+        self.effort = effort
+            .filter(|e| super::store::EFFORTS.contains(e))
+            .map(str::to_string);
         self
     }
 
@@ -385,16 +399,16 @@ impl Conversation {
                         )),
                     ];
                 }
+                let mut turn = json!({
+                    "threadId": thread,
+                    "input": [{ "type": "text", "text": self.prompt }],
+                });
+                if let Some(effort) = &self.effort {
+                    turn["effort"] = json!(effort);
+                }
                 vec![
                     Out::Step(Step::Session(thread.to_string())),
-                    Out::Send(request(
-                        TURN,
-                        "turn/start",
-                        json!({
-                            "threadId": thread,
-                            "input": [{ "type": "text", "text": self.prompt }],
-                        }),
-                    )),
+                    Out::Send(request(TURN, "turn/start", turn)),
                 ]
             }
             TURN => {
@@ -956,6 +970,25 @@ mod tests {
             "params": { "threadId": "t1", "turnId": "u1" } }));
         assert_eq!(out, vec![Out::Step(Step::Compacted)]);
         assert!(!c.over());
+    }
+
+    #[test]
+    fn the_agents_effort_rides_on_turn_start() {
+        let turn_of = |c: Conversation| {
+            let mut c = c;
+            c.on_message(&json!({ "id": 1, "result": {} }));
+            let out = c.on_message(&json!({ "id": 2, "result": { "thread": { "id": "t1" } } }));
+            let Out::Send(turn) = &out[1] else { panic!() };
+            turn.clone()
+        };
+        let (c, _) = conversation(None);
+        assert!(turn_of(c).pointer("/params/effort").is_none());
+        let (c, _) = conversation(None);
+        assert_eq!(turn_of(c.with_effort(Some("high")))["params"]["effort"], "high");
+        let (c, _) = conversation(None);
+        assert!(turn_of(c.with_effort(Some("--x")))
+            .pointer("/params/effort")
+            .is_none());
     }
 
     #[test]

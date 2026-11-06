@@ -1,6 +1,6 @@
 /**
- * Switching what an agent runs on from its message card's engine chip: pure,
- * so it is tested. The choices are the desk's (Settings → Agents): only
+ * Switching what an agent runs on from Agent controls (the composer's chip):
+ * pure, so it is tested. The choices are the desk's (Settings → Agents): only
  * engines the Mac reports as installed and signed in, only the models the
  * engine itself lists, "Engine's default" always (`lib/newAgentDefaults.ts`).
  * The Mac does the switch with `agents.update` (`MAC_FEATURES.engine`): a new
@@ -19,13 +19,6 @@ export interface ModelRow extends ModelOption {
 export interface OtherEngine {
   id: AgentEngine;
   label: string;
-}
-
-/** Why the picker can't be used right now, or null when it can. */
-export function engineLocked(agent: Pick<Agent, 'status' | 'takeover'>): string | null {
-  if (agent.takeover) return 'Switch engines after you hand it back';
-  if (agent.status.state !== 'idle') return 'Switch engines when this turn ends';
-  return null;
 }
 
 /** The agent's own engine's models, the one it runs on marked. */
@@ -47,19 +40,5 @@ export function otherEngines(
     .map(({ id, label }) => ({ id, label }));
 }
 
-/** Whether the chip opens anything: another model of its engine, or another ready engine. */
-export const canSwitch = (agent: Pick<Agent, 'engine'>, engines: EngineInfo[]) =>
-  otherEngines(agent, engines).length > 0 ||
-  modelOptions(agent.engine, engines).length > 1;
-
 /** What a model row says, "Balanced · Sonnet" as the desk's list does. */
 export const modelRowLabel = (m: ModelOption) => (m.detail ? `${m.label} · ${m.detail}` : m.label);
-
-/**
- * The one line after a switch. A new engine carries the conversation over
- * (the Mac gives it a recap); a model change on the same engine continues it.
- */
-export function switchedLine(engine: string, model: string | null, newEngine: boolean): string {
-  const on = model ? `${engine} · ${model}` : engine;
-  return newEngine ? `Now on ${on}. It has the conversation so far.` : `Now on ${on}.`;
-}

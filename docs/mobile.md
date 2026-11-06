@@ -820,18 +820,35 @@ The phone can start work as well as answer it. Each piece is gated by
   the words would wrap, or files are attached, or it listens, the capsule
   becomes a card: the files as thumbnails at its top, each with its ×, the
   words across its whole width, and a row under them with the + and the
-  agent's engine chip (only what the Mac's overview names) at the left and
-  the buttons at the right. An empty field is always the capsule, at any
-  width (`fieldIsCard`), and its placeholder is drawn by the app on one
-  line, clipped with an ellipsis, never by the input (a multiline input
-  wraps it while the field lays out). On a Mac listing `agents.engine` the
-  chip is a button: it opens the choose sheet with the agent's engine's other
-  models and "Switch to …" for each other engine that is installed and signed
-  in, then that engine's models (`lib/agentEngine.ts`). The line over the
-  field says "Now on Codex · GPT-5 Codex. It has the conversation so far."
-  once the Mac has said yes. While a turn runs, or the Mac is being driven,
-  the chip is dimmed and a tap says to switch when it ends. On an older Mac
-  it stays a label. The queued line ("… reads it when this turn
+  model chip at the left and the buttons at the right. An empty field is
+  always the capsule, at any width (`fieldIsCard`), and its placeholder is
+  drawn by the app on one line, clipped with an ellipsis, never by the input
+  (a multiline input wraps it while the field lays out).
+- **The model chip and Agent controls** (`lib/agentControls.ts`,
+  `components/AgentControls.tsx`, the `controls` sheet). The chip says what
+  the next message runs on as Claude's own does: the model ("Opus 5.5"),
+  and its effort lighter after a dot ("· High") when one is set. The
+  version is only ever the engine's: `context.model`, its own id for the
+  model of the last request (`claude-opus-5-5`), named by `claudeModelName`;
+  without a reading it is the name the engine lists the model under
+  ("Opus"), and on the engine's default with nothing reported, the engine
+  ("Claude Code"). A reading from another family than the one chosen (from
+  before a switch reached a turn) never wins. A tap opens Agent controls, a
+  sheet with only what exists and can change mid-conversation: **Model**
+  (the engine's models by name, what each is for under it, "Engine's
+  default" saying which model that is now; then "Switch to …" for each other
+  ready engine, which keeps the conversation), on a Mac listing
+  `agents.engine`; **Effort** (Engine's default, Low, Medium, High) on one
+  listing `agents.effort`; **How much it does on its own** ("Same as team"
+  and the four levels, `agents.setAgentIndependence`; going past the team's
+  level asks first, with what it then does and what still asks); **Usage**,
+  the team's mode read-only (there is no per-agent budget; `agents.usagePlan`)
+  and a tap to the usage sheet; and **More about** the agent. Model and
+  effort apply from its next message and the Mac writes one quiet line in
+  the chat ("Now on Opus · High from its next message"). While a turn runs,
+  or the Mac is being driven, they're dimmed with why; the level stays open,
+  since it applies at the turn's next step. On a Mac with none of these the
+  chip is a label. The queued line ("… reads it when this turn
   ends") runs full width over it with Send now at its right. On iOS
   before 26, Android and the web build it's `composerFill` with its
   hairline. The chat header's ⓘ is a native bar button (`Stack.Toolbar`) on
