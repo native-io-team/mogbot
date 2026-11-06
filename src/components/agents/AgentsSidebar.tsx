@@ -61,6 +61,7 @@ import {
 import { groupLine, groupRequests } from '../../lib/agentRequests';
 import { secretTitle } from '../../lib/agentSecrets';
 import { kbd } from '../../lib/shortcuts';
+import { previewText } from '../../../packages/companion-protocol/src/preview';
 
 interface AgentsSidebarProps {
   agents: Agent[];
@@ -105,8 +106,8 @@ function subtitle(agent: Agent): ReactNode {
   // The step it's on and how long it's been at it, not "Working…".
   if (agent.status.state === 'working') return <AgentWorkingLine agent={agent} />;
   const failure = failedTurn(agent);
-  if (failure) return failureLine(failure, agent.preview);
-  return agent.preview ?? agent.role ?? '';
+  if (failure) return failureLine(failure, previewText(agent.preview));
+  return previewText(agent.preview) ?? agent.role ?? '';
 }
 
 /**

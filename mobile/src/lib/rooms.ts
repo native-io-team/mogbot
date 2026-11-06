@@ -19,6 +19,7 @@ import {
   type RoomView,
   type WelcomeFrame,
 } from '@shipstudio/companion-protocol';
+import { previewText } from '@shipstudio/companion-protocol';
 import { formatClock, workingLine } from './agents';
 import type { PendingSend } from './sync';
 import { timeLabel, type Item } from './timeline';
@@ -200,7 +201,7 @@ export function roomLine(room: RoomView, members: Agent[], messages?: AgentMessa
   const working = workingHere(members, room.id);
   if (working.length === 1) return `${working[0].name} is replying`;
   if (working.length > 1) return `${working.length} replying`;
-  return room.preview ?? memberNames(members);
+  return previewText(room.preview) ?? memberNames(members);
 }
 
 /** Rooms in the list's order: most recently active first. */

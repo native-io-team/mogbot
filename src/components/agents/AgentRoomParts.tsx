@@ -6,6 +6,7 @@
  * @module components/agents/AgentRoomParts
  */
 
+import { previewText } from '../../../packages/companion-protocol/src/preview';
 import { memo } from 'react';
 import { BellIcon, BellOffIcon, EditIcon, TrashIcon, CommentIcon } from '@/components/icons';
 import {
@@ -70,7 +71,7 @@ function roomSubtitle(room: Room, members: Agent[]): { text: string; state?: str
   if (working.length === 1) return { text: `${working[0].name} is replying…`, state: 'working' };
   if (working.length > 1) return { text: `${working.length} are replying…`, state: 'working' };
   if (waiting.length > 0) return { text: `${waiting[0].name} will reply next`, state: 'working' };
-  return { text: room.preview?.trim() || listNames(members.map((m) => m.name)) };
+  return { text: previewText(room.preview) || listNames(members.map((m) => m.name)) };
 }
 
 export const RoomRow = memo(function RoomRow({

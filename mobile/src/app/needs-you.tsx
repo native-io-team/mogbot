@@ -5,7 +5,7 @@
  * the agents being set up aren't listed one by one (lib/home).
  */
 
-import type { Agent } from '@shipstudio/companion-protocol';
+import { previewText, type Agent } from '@shipstudio/companion-protocol';
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
@@ -98,7 +98,7 @@ function WaitingRow({ agent, onPress }: { agent: Agent; onPress: () => void }) {
   const line = useApp((s) => {
     const failure = failedTurn(agent);
     return failure && !(agent.pendingApprovals ?? 0)
-      ? failureLine(failure, agent.preview, agent.engine)
+      ? failureLine(failure, previewText(agent.preview), agent.engine)
       : needsLine(agent, s.chats[agent.id]?.messages);
   });
   return <Row agent={agent} title={agent.name} line={line} onPress={onPress} />;
