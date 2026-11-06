@@ -8,6 +8,7 @@ import { ScrollView, View } from 'react-native';
 import { makeStyles, useColors } from '../lib/appearance';
 import { diffLineKind, type DiffLineKind } from '../lib/diff';
 import { radius, space, type Palette } from '../lib/theme';
+import { ShowAll } from './ShowAll';
 import { T } from './ui';
 
 /** A line's ink and band, from the palette's own diff roles (tuned per appearance). */
@@ -18,13 +19,25 @@ const tintOf = (colors: Palette): Record<DiffLineKind, { fg: string; bg?: string
   context: { fg: colors.textPrimary },
 });
 
-export function DiffLines({ lines, label }: { lines: string[]; label?: string }) {
+export function DiffLines({
+  lines: all,
+  label,
+  cap,
+}: {
+  lines: string[];
+  label?: string;
+  /** In a card that asks: show this many lines, the rest behind "Show all". */
+  cap?: number;
+}) {
   const colors = useColors();
   const styles = useStyles();
   const tint = tintOf(colors);
   // The bands span the box, not just the longest line: the scroll content is
   // as wide as its lines, so the box's own width (in points) is the floor.
   const [width, setWidth] = useState(0);
+  const [open, setOpen] = useState(false);
+  const long = cap !== undefined && all.length > cap;
+  const lines = long && !open ? all.slice(0, cap) : all;
   return (
     <View
       style={styles.box}
@@ -51,6 +64,13 @@ export function DiffLines({ lines, label }: { lines: string[]; label?: string })
           })}
         </View>
       </ScrollView>
+      {long && (
+        <ShowAll
+          open={open}
+          onPress={() => setOpen((v) => !v)}
+          label={`Show all ${all.length} lines`}
+        />
+      )}
     </View>
   );
 }

@@ -11,7 +11,7 @@
 import type { Agent, AgentMessage, Approval, SessionPrompt } from '@shipstudio/companion-protocol';
 import { useState } from 'react';
 import Animated, { FadeIn, FadeOut } from 'react-native-reanimated';
-import { cardOutcome, folderName } from '../lib/agents';
+import { cardOutcome, DETAIL_LINES, folderName } from '../lib/agents';
 import { diffLineKind } from '../lib/diff';
 import { haptic } from '../lib/haptics';
 import { useInFlight } from '../lib/once';
@@ -104,9 +104,9 @@ export function PromptCard({
         {approval.detail}
       </T>
     ) : isDiff ? (
-      <DiffLines lines={lines} label="The change it’s asking about" />
+      <DiffLines lines={lines} label="The change it’s asking about" cap={DETAIL_LINES} />
     ) : (
-      <Command text={approval.detail} lines={12} />
+      <Command text={approval.detail} lines={DETAIL_LINES} />
     ));
 
   if (!pending) {

@@ -88,6 +88,7 @@ import {
   holdFor,
   newestSignature,
   pillFor,
+  revealsCard,
   scrolled,
   toEnd,
   type Follow,
@@ -356,6 +357,31 @@ export function ChatView({
     };
   }, [at, id, connected, showError]);
 
+  // A new card that asks, landing while you're at or near the newest line:
+  // its answers come into view (inverted list: viewPosition 0 puts the card's
+  // bottom edge, Deny · Allow, at the bottom of the pane).
+  const distance = useRef(0);
+  const itemsRef = useRef(items);
+  useLayoutEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+  const seenCard = useRef<string | null | undefined>(undefined);
+  const cardId = card?.id ?? null;
+  const loaded = !!chat?.loaded;
+  useEffect(() => {
+    if (!loaded) return;
+    const before = seenCard.current;
+    seenCard.current = cardId;
+    if (at || !revealsCard(before, cardId, distance.current)) return;
+    const index = itemsRef.current.findIndex((i) => i.key === cardId);
+    if (index < 0) return;
+    const timer = setTimeout(
+      () => list.current?.scrollToIndex({ index, viewPosition: 0, animated: true }),
+      80
+    );
+    return () => clearTimeout(timer);
+  }, [cardId, loaded, at]);
+
   const targetIndex = target ? items.findIndex((i) => i.key === target) : -1;
   useEffect(() => {
     if (targetIndex < 0) return;
@@ -615,11 +641,12 @@ export function ChatView({
                   flinging.current = false;
                 }}
                 onScroll={(e) => {
-                  const distance = fromEnd(e.nativeEvent.contentOffset.y, insetTop.current);
+                  const d = fromEnd(e.nativeEvent.contentOffset.y, insetTop.current);
+                  distance.current = d;
                   const byUser = dragging.current || flinging.current;
                   // Bail-outs keep these from re-rendering on every event.
-                  setFollow((now) => scrolled(now, distance, newestRef.current, byUser));
-                  setFar(distance > FAR);
+                  setFollow((now) => scrolled(now, d, newestRef.current, byUser));
+                  setFar(d > FAR);
                 }}
                 scrollEventThrottle={32}
                 initialNumToRender={16}

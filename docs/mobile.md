@@ -502,7 +502,12 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   than re-wrapped; ⋯ · Deny · Allow, with Always allow (with
   `describeScope`'s sentence) and Deny with note behind ⋯. The answers are
   inert for 400 ms after the card lands, the desk's anti-misclick; Allow is
-  the one tap the app must never take by accident.
+  the one tap the app must never take by accident. A pending card's detail
+  (a command, a connector's fields, a task's diff) shows `DETAIL_LINES` (8;
+  6 at large text) with "Show all", so the question and the answers fit
+  together without scrolling (`__tests__/detailCap.test.tsx`); a new card
+  landing while you're at or near the newest line scrolls its answers into
+  view (`revealsCard`, never when you'd scrolled back to read).
 - **A task's questions** (`PromptCard`): the question, whose task it is and
   where, the diff (tinted) or text it shows, and every option it offers,
   answered with `agents.answerApproval`'s `choice`; the same 400 ms guard.
