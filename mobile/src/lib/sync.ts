@@ -10,6 +10,7 @@
  * - the cursor advances only after the event is applied.
  */
 
+import { shareStructure } from './structure';
 import type {
   AgentMessage,
   AgentsOverview,
@@ -170,7 +171,7 @@ function reduce(s: SyncState, event: CompanionEvent, cursor?: Cursor): SyncState
       return { ...s, overview: { ...s.overview, agents } };
     }
     case 'agents.registry':
-      return { ...s, overview: event.overview };
+      return { ...s, overview: shareStructure(s.overview, event.overview) };
     case 'rooms.changed':
       return { ...s, rooms: event.rooms };
     case 'system.status':
@@ -186,9 +187,9 @@ function reduce(s: SyncState, event: CompanionEvent, cursor?: Cursor): SyncState
       // them so the re-fetch overwrites. Drafts restart from 0 anyway.
       return {
         ...s,
-        overview: event.overview,
+        overview: shareStructure(s.overview, event.overview),
         mac: event.status,
-        projects: event.projects,
+        projects: shareStructure(s.projects, event.projects),
         cursor: event.cursor,
         seqs: {},
         drafts: {},
