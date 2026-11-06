@@ -178,6 +178,13 @@ const LOGIN_OPTIONS: Record<string, LoginOption> = {
     detail:
       'Optional. Uses claude.ai’s Gmail connector, which keeps the sign-in with your Claude account. If it isn’t added yet, claude.ai opens in your Mac’s browser to add it. Never a password.',
   },
+  agentBrowser: {
+    id: 'agents_browser',
+    method: 'agent_browser',
+    label: 'Sign in here',
+    detail:
+      'Opens the site’s sign-in in the agents’ own Chrome on this Mac (a profile of its own, not your personal Chrome). You sign in yourself, from your phone or here; it never sees your password, and anything that sends, posts or pays asks you first.',
+  },
   browser: {
     id: 'browser',
     method: 'browser',
@@ -232,7 +239,7 @@ export function loginCard(
         { id: 'read', label: 'Read your feed, profile and messages' },
         { id: 'write', label: 'Post and send messages — it asks you on a card each time' },
       ],
-      options: [LOGIN_OPTIONS.browser],
+      options: [LOGIN_OPTIONS.agentBrowser, LOGIN_OPTIONS.browser],
       noConnector: 'LinkedIn has no connector agents can sign in to.',
     },
     linear: {
@@ -857,10 +864,32 @@ export function createMockServer(opts: MockOptions = {}) {
               { kind: 'open', label: 'Opened /', ok: true, ts: at - 3 * 60_000 },
               { kind: 'shot', label: 'Home page', ok: true, shot: tested[0], ts: at - 3 * 60_000 },
               { kind: 'click', label: 'Clicked “Pricing”', ok: true, ts: at - 3 * 60_000 + 4000 },
-              { kind: 'shot', label: 'Pricing page', ok: true, shot: tested[1], ts: at - 3 * 60_000 + 6000 },
-              { kind: 'type', label: 'Filled in “Email” and sent it', ok: true, ts: at - 3 * 60_000 + 9000 },
-              { kind: 'note', label: 'The form showed an error', ok: false, ts: at - 3 * 60_000 + 11000 },
-              { kind: 'shot', label: 'Sign-up error', ok: true, shot: tested[2], ts: at - 3 * 60_000 + 12000 },
+              {
+                kind: 'shot',
+                label: 'Pricing page',
+                ok: true,
+                shot: tested[1],
+                ts: at - 3 * 60_000 + 6000,
+              },
+              {
+                kind: 'type',
+                label: 'Filled in “Email” and sent it',
+                ok: true,
+                ts: at - 3 * 60_000 + 9000,
+              },
+              {
+                kind: 'note',
+                label: 'The form showed an error',
+                ok: false,
+                ts: at - 3 * 60_000 + 11000,
+              },
+              {
+                kind: 'shot',
+                label: 'Sign-up error',
+                ok: true,
+                shot: tested[2],
+                ts: at - 3 * 60_000 + 12000,
+              },
             ],
           },
         },
@@ -1403,7 +1432,10 @@ export function createMockServer(opts: MockOptions = {}) {
   const loginTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const phoneFlows = new Map<string, { agentId: string; requestId: string; state: string }>();
   /** Signing in on the Mac's Chrome from the phone: one at a time. Nothing typed is kept. */
-  const signins = new Map<string, { agentId: string; requestId: string; inputs: number }>();
+  const signins = new Map<
+    string,
+    { agentId: string; requestId: string; inputs: number; seq: number; via: string }
+  >();
   const signinShot = signinPage().toString('base64');
   const loginCardOf = (agentId: string, requestId: string) =>
     (messages.get(agentId) ?? []).find(
@@ -1414,10 +1446,13 @@ export function createMockServer(opts: MockOptions = {}) {
     const card = loginCardOf(agentId, requestId);
     const login = card?.approval?.login;
     if (!card?.approval || !login || card.approval.status !== 'pending') return;
+    const site = login.service === 'linkedin' ? 'www.linkedin.com' : 'mail.google.com';
     const choice =
       option.method === 'browser'
-        ? `Using your browser · ${login.service === 'linkedin' ? 'www.linkedin.com' : 'mail.google.com'}`
-        : `Connected · ${login.title} (work@acme.com)`;
+        ? `Using your browser · ${site}`
+        : option.method === 'agent_browser'
+          ? `Signed in · ${site}, in the agents' browser`
+          : `Connected · ${login.title} (work@acme.com)`;
     putMessage({
       ...card,
       approval: {
@@ -1898,25 +1933,54 @@ export function createMockServer(opts: MockOptions = {}) {
       const login = card?.approval?.login;
       if (!card?.approval || !login || card.approval.status !== 'pending')
         return fail({ type: 'Other', message: 'That card was already answered.' });
-      if (!login.options.some((o) => o.method === 'browser'))
+      const agents = login.options.some((o) => o.method === 'agent_browser');
+      if (!agents && !login.options.some((o) => o.method === 'browser'))
         return fail({
           type: 'Other',
-          message: 'This card isn’t one your Mac’s Chrome can sign in to.',
+          message: 'This card isn’t one you can sign in to from here.',
         });
       signins.clear();
       const sessionId = `signin_${randomUUID().slice(0, 8)}`;
-      signins.set(sessionId, { agentId, requestId, inputs: 0 });
+      const via = agents ? 'agents_browser' : 'chrome';
+      signins.set(sessionId, { agentId, requestId, inputs: 0, seq: 0, via });
       return {
         sessionId,
         domain: login.service === 'linkedin' ? 'linkedin.com' : `${login.service}.com`,
         title: login.title,
         idleSeconds: 300,
+        via,
+        // The real Mac waits for a newer frame; this one answers at once.
+        frameGapMs: 250,
       };
     },
     'agents.signinFrame': (p) => {
-      if (!signins.has(String(p.sessionId)))
-        return fail({ type: 'Other', message: 'That sign-in has ended.' });
-      return { state: 'live', host: 'www.example.com', image: signinShot, width: 800, height: 560 };
+      const s = signins.get(String(p.sessionId));
+      if (!s) return fail({ type: 'Other', message: 'That sign-in has ended.' });
+      // After the first input the focused field is a password.
+      s.seq++;
+      return {
+        state: 'live',
+        host: 'www.example.com',
+        image: signinShot,
+        width: 800,
+        height: 560,
+        ...(s.via !== 'chrome' ? { seq: s.seq } : {}),
+        ...(s.via === 'agents_browser' && s.inputs > 0 ? { secure: true } : {}),
+      };
+    },
+    'agents.signinFallback': (p) => {
+      const s = signins.get(String(p.sessionId));
+      if (!s) return fail({ type: 'Other', message: 'That sign-in has ended.' });
+      s.via = 'mac_window';
+      const login = loginCardOf(s.agentId, s.requestId)?.approval?.login;
+      return {
+        sessionId: String(p.sessionId),
+        domain: 'google.com',
+        title: login?.title ?? 'Google',
+        idleSeconds: 300,
+        via: 'mac_window',
+        frameGapMs: 150,
+      };
     },
     'agents.signinInput': (p) => {
       const s = signins.get(String(p.sessionId));
@@ -1931,7 +1995,7 @@ export function createMockServer(opts: MockOptions = {}) {
       if (!s.inputs && !p.anyway) return { outcome: 'signed_out' };
       signins.delete(String(p.sessionId));
       const option = loginCardOf(s.agentId, s.requestId)?.approval?.login?.options.find(
-        (o) => o.method === 'browser'
+        (o) => o.method === (s.via === 'chrome' ? 'browser' : 'agent_browser')
       );
       if (option) completeLogin(s.agentId, s.requestId, option);
       return { outcome: 'signed_in' };
