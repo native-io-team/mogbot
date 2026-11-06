@@ -218,6 +218,43 @@ fn codex_says_what_became_of_an_item() {
 }
 
 #[test]
+fn the_agents_own_browser_is_told_apart_from_the_users_chrome() {
+    let d = |name: &str, input: Value| describe_tool(name, Some(&input)).unwrap();
+    let open = d(
+        "mcp__browser__open",
+        json!({"url": "https://www.example.com/a?token=x"}),
+    );
+    assert_eq!(open.label, "Used its own browser · example.com");
+    assert_eq!(open.doing, "Using its own browser · example.com");
+    assert_eq!(open.kind, StepKind::Web);
+    let shot = d("mcp__browser__screenshot", json!({}));
+    assert_eq!(shot.kind, StepKind::Screenshot);
+    assert_eq!(shot.label, "Used its own browser");
+    // The user's Chrome still reads as before, never as its own browser.
+    let chrome = d(
+        "mcp__claude-in-chrome__navigate",
+        json!({"url": "https://example.com/"}),
+    );
+    assert!(
+        !chrome.label.contains("its own browser"),
+        "{}",
+        chrome.label
+    );
+
+    // A step that names no site: the page that agent's browser is on.
+    let agent = "own_browser_site";
+    super::super::browser_gate::note_agents_page(agent, |p| {
+        p.url = Some("https://news.example.org/today".into());
+    });
+    begin(agent, 0);
+    let doing = on_action(agent, d("mcp__browser__read_page", json!({})), 1);
+    assert_eq!(doing, "Using its own browser · news.example.org");
+    let steps = live(agent).unwrap().steps;
+    assert_eq!(steps[0].label, "Used its own browser · news.example.org");
+    forget_agent(agent);
+}
+
+#[test]
 fn tool_calls_read_as_plain_past_tense_words() {
     let d = |name: &str, input: Value| describe_tool(name, Some(&input)).unwrap().label;
     assert_eq!(

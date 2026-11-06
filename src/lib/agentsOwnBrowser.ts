@@ -34,6 +34,12 @@ export const getAgentsBrowserStatus = () =>
   invoke<AgentsBrowserStatus>('agents_agent_browser_status');
 export const setAgentsBrowserEnabled = (on: boolean) =>
   invoke<AgentsBrowserStatus>('agents_agent_browser_set_enabled', { on });
+/**
+ * Bring an agent's page in its own browser on screen to watch it work
+ * (`show`), or put the window back in its corner.
+ */
+export const showAgentBrowser = (agentId: string, show: boolean) =>
+  invoke<void>('agents_show_agent_browser', { agentId, show });
 /** Asks macOS (Screen Recording prompts once) and opens that pane of System Settings. */
 export const openAgentsBrowserPermission = (which: AgentsBrowserPermission) =>
   invoke<AgentsBrowserStatus>('agents_agent_browser_permission', { which });

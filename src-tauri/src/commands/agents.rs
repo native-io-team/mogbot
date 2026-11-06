@@ -2398,6 +2398,19 @@ pub async fn agents_agent_browser_set_enabled(
         .map_err(agents::err_other)?
 }
 
+/// "Watch its browser" under a working agent: its current page in the
+/// agents' browser comes on screen and in front (`show`), or goes back to
+/// its corner. Only that agent's own tab; nothing is started.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_show_agent_browser(agent_id: String, show: bool) -> Result<(), CommandError> {
+    tokio::task::spawn_blocking(move || {
+        crate::agent_browser::service::show_agent(&agent_id, show).map_err(CommandError::expected)
+    })
+    .await
+    .map_err(agents::err_other)?
+}
+
 /// The guided permission card: ask macOS for Screen Recording (its own
 /// prompt, once) and open System Settings at the pane for `which`
 /// ("screen_recording" or "accessibility"). Only those two panes open.

@@ -195,6 +195,58 @@ describe('the step it is on right now', () => {
     expect(calls).toContain('agents_stop');
   });
 
+  it('offers to watch its own browser while it has a page open there', async () => {
+    const calls: { cmd: string; args: unknown }[] = [];
+    mockIPC(
+      (cmd, args) => {
+        calls.push({ cmd, args });
+        return null;
+      },
+      { shouldMockEvents: true }
+    );
+    at(1_000);
+    const browsing = call({
+      kind: 'web',
+      label: 'Using its own browser · example.com',
+      slow: undefined,
+      streams: false,
+      canStop: false,
+      output: [],
+    });
+    const { rerender } = render(
+      <WorkingIndicator
+        activity="Using its own browser · example.com"
+        work={live({ current: browsing, doing: browsing.label })}
+        agent={agent}
+      />
+    );
+    expect(screen.getByText('Using its own browser · example.com')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Watch its browser' })).toBeNull();
+    rerender(
+      <WorkingIndicator
+        activity="Using its own browser · example.com"
+        work={live({ current: browsing, doing: browsing.label, ownBrowser: true })}
+        agent={agent}
+      />
+    );
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Watch its browser' }));
+      await Promise.resolve();
+    });
+    expect(calls).toContainEqual({
+      cmd: 'agents_show_agent_browser',
+      args: { agentId: 'acme', show: true },
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Put it away' }));
+      await Promise.resolve();
+    });
+    expect(calls).toContainEqual({
+      cmd: 'agents_show_agent_browser',
+      args: { agentId: 'acme', show: false },
+    });
+  });
+
   it('is the plain working line between calls', () => {
     at(1_000);
     render(

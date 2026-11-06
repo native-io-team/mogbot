@@ -122,6 +122,12 @@ pub fn run() {
     }
 
     tracing::info!("{} starting up", brand::NAME);
+    // Whether agents get a browser of their own, and if not why: a build
+    // without it once sent every agent to the user's Chrome unnoticed.
+    match agent_browser::unavailable_reason() {
+        None => tracing::info!("[AgentBrowser] available to agents"),
+        Some(why) => tracing::info!(why, "[AgentBrowser] not available to agents"),
+    }
 
     // Clean up any orphaned agent processes from previous crashed sessions
     cleanup_agent_processes();
@@ -741,6 +747,7 @@ pub fn run() {
             commands::agents::agents_phone_signin_status,
             commands::agents::agents_phone_signin_stop,
             commands::agents::agents_agent_browser_status,
+            commands::agents::agents_show_agent_browser,
             commands::agents::agents_agent_browser_set_enabled,
             commands::agents::agents_agent_browser_permission,
             commands::agents::agents_browser_open_install,

@@ -1,8 +1,14 @@
 # The agent browser
 
 Research and a working prototype, November 2026 (Chrome 156.0.8078.80, macOS
-26, this Mac), then **v1, shipped behind the `agent-browser` cargo feature,
-on by default** and a Settings → Agents switch, on by default. What v1 is and
+26, this Mac), then **v1, shipped in every build** (opt out with the
+`no-agent-browser` cargo feature) and a Settings → Agents switch, on by
+default. It was first a default cargo feature, `agent-browser`, and the
+owner's app ran without it for a day: `tauri dev` builds with
+`--no-default-features` plus the defaults it read when it started, so the
+feature, added while it was running, never reached the build, and every
+agent went to Claude in Chrome instead (see "v1", "Why agents never used
+it"). What v1 is and
 what was verified: "v1" at the end. The user-facing design is
 docs/agents.md, "The agents' browser".
 
@@ -437,6 +443,17 @@ public sites, nothing typed into a sign-in page, nothing submitted):
 | `macos::window_of` on the parked window | 1280×860 at the bottom right (x 1472, y 941) |
 | `macos::capture` of that one window | 780×524, 55 KB, ~1.5 s in a debug build |
 | `Browser.close` | Chrome exited, 0.4–3.2 s |
+
+**Why agents never used it (2026-11-06).** The owner's log for the day
+had no `mcp__browser__` call and 19 `mcp__claude-in-chrome__` ones, and a
+live turn's `--mcp-config` held only `app`. The running app's build
+fingerprint showed `features: []`: `tauri dev` passes
+`--no-default-features` and re-adds the default features it read from
+Cargo.toml when it started, which was before `agent-browser` existed, so
+`COMPILED` was false and `available()` said no on every turn, silently.
+Fixed by making it an opt-out (`no-agent-browser`), logging why it isn't
+offered, and `examples/agent_browser_turn.rs`, which checks the turn path
+end to end on this Mac.
 
 **Not run:** a real sign-in anywhere; Google's refusal page (detected from
 its published words and URL; the identifier page loaded normally in the

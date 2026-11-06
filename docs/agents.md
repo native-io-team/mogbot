@@ -2005,6 +2005,11 @@ their own, and the person signs in to it from the phone.
   sign-in, and when the app quits.
 - **Settings → Agents → Agents' browser**, on by default
   (`agent-browser.json`). Off: no turn gets it and cards don't offer it.
+  In every build unless built with the `no-agent-browser` cargo feature
+  (an opt-out: as a default feature it was dropped by `tauri dev`, and the
+  owner's agents all went to Claude in Chrome for a day). Launch logs
+  `[AgentBrowser] available to agents` or why not, and a turn that goes
+  without it logs why at info (`[AgentBrowser] not offered to this turn`).
 - **The `browser` MCP server** on the agent bridge (`/mcp/browser`, the
   turn's bearer secret, `agent_browser::tools`), added to every turn of
   either engine (`connections::for_turn`) unless the switch is off, the
@@ -2014,6 +2019,18 @@ their own, and the person signs in to it from the phone.
   `click`, `type`, `press`, `scroll`, `wait_for`, `close_tab`. No script,
   upload or download tool; `type` refuses password and one-time-code
   fields; an agent sees its own tabs only.
+- **Seeing it work.** Every step in "What it did" reads "Used its own
+  browser · example.com" ("Using its own browser · …" while it runs), the
+  site from the call or the page it's on, never the path; the user's Chrome
+  still reads "Browsed …". While the agent has a tab open, the live step
+  under its working line offers **Watch its browser**, which brings that
+  window on screen and in front (`agents_show_agent_browser`), and **Put it
+  away**, which parks it again.
+- **Checked end to end** with `cargo run --example agent_browser_turn --
+  <scratch>`: whether a turn gets the server, its `--mcp-config` / Codex
+  entry, then `initialize`, `tools/list`, `open` example.com and
+  `read_page` through the bridge's own dispatch (`tools::dispatch`), and the
+  timeline's words, on a scratch profile, never the app's or the user's.
 - **What asks** is `browser_gate`, the same rules as Claude in Chrome
   (`gate_agents_with` maps each tool to its Claude in Chrome equivalent):
   looking is free; a click on a control whose accessible name sends, posts,

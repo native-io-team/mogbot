@@ -35,9 +35,10 @@ pub mod tools;
 #[cfg(any(test, feature = "browser-demo"))]
 pub mod viewer;
 
-/// This build has the agents' browser (the `agent-browser` feature, on by
-/// default) on a system it runs on.
-pub const COMPILED: bool = cfg!(feature = "agent-browser") && cfg!(target_os = "macos");
+/// This build has the agents' browser on a system it runs on. An opt-out
+/// (`no-agent-browser`), not a default feature: `tauri dev` drops cargo's
+/// default features, which built the owner's app without it (Cargo.toml).
+pub const COMPILED: bool = !cfg!(feature = "no-agent-browser") && cfg!(target_os = "macos");
 
 /// Every agent's browser call while the profile is open in a plain window.
 pub const BUSY_PLAIN: &str = "The user is signing in to a site in a plain Chrome window on this Mac, so the agents' browser is closed for a few minutes. Carry on with what doesn't need it, or try again shortly.";
@@ -50,7 +51,50 @@ pub fn available() -> bool {
     }
     #[cfg(not(test))]
     {
-        settings::enabled() && chrome::find_chrome().is_some()
+        unavailable_reason().is_none()
+    }
+}
+
+/// Why the agents' browser can't be offered on this Mac right now, in a
+/// line for the log; `None` when it can.
+pub fn unavailable_reason() -> Option<&'static str> {
+    reason_for(
+        COMPILED,
+        settings::load().enabled,
+        chrome::find_chrome().is_some(),
+    )
+}
+
+/// [`unavailable_reason`], pure.
+pub fn reason_for(compiled: bool, switched_on: bool, chrome: bool) -> Option<&'static str> {
+    if !compiled {
+        return Some(
+            "this build has no agents' browser (built with `no-agent-browser`, or not macOS)",
+        );
+    }
+    if !switched_on {
+        return Some("switched off in Settings → Agents → Agents' browser");
+    }
+    if !chrome {
+        return Some("Google Chrome isn't in /Applications or ~/Applications");
+    }
+    None
+}
+
+/// Log why a turn goes without the agents' browser, at info, once per
+/// change of reason (every turn asks).
+pub fn log_unavailable(agent_id: &str, why: &str) {
+    use std::sync::Mutex;
+    static LAST: Mutex<Option<(String, String)>> = Mutex::new(None);
+    let mut last = LAST.lock().unwrap_or_else(|e| e.into_inner());
+    let now = (agent_id.to_string(), why.to_string());
+    if last.as_ref() != Some(&now) {
+        tracing::info!(
+            agent = agent_id,
+            why,
+            "[AgentBrowser] not offered to this turn"
+        );
+        *last = Some(now);
     }
 }
 
@@ -83,4 +127,27 @@ pub fn set_enabled(on: bool) -> Result<Status, crate::errors::CommandError> {
         service::shutdown();
     }
     Ok(status())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Built without cargo's default features (as `tauri dev` builds), the
+    /// agents' browser is still in: only `no-agent-browser` takes it out.
+    #[test]
+    #[cfg(all(target_os = "macos", not(feature = "no-agent-browser")))]
+    fn every_build_has_it_unless_opted_out() {
+        assert!(COMPILED);
+    }
+
+    #[test]
+    fn says_why_it_cant_be_offered() {
+        assert_eq!(reason_for(true, true, true), None);
+        assert!(reason_for(false, true, true)
+            .unwrap()
+            .contains("this build"));
+        assert!(reason_for(true, false, true).unwrap().contains("Settings"));
+        assert!(reason_for(true, true, false).unwrap().contains("Chrome"));
+    }
 }

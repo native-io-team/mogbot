@@ -160,6 +160,8 @@ export interface TurnWork {
    * Macs omit it.
    */
   project?: string;
+  /** While it runs: it has a tab open in its own browser (the agents' Chrome) right now. */
+  ownBrowser?: boolean;
 }
 
 export interface Agent {
