@@ -1269,7 +1269,17 @@ on without it or say what's left in one line. Sign-ins and secure input close
 after 10 min as "Maybe later". Each becomes a one-line receipt (desk and
 phone), counts in no badge, and the same ask (kind + target) is refused
 without a card for the rest of that task, until the user next writes to the
-agent. A sweep runs at launch and every minute.
+agent, **or the Chief (or an admin) passes on the user's own request to it**
+(`runner::relay_lifts_expired`: a turn answering the user's message in its own
+chat, not a routine, check-in, room or outside text), since a user who talks
+only to the Chief says "try again" there. A sweep runs at launch and every
+minute.
+
+**A delegated agent's card is pointed to where the user is talking.** When an
+agent working on another agent's request (no user words in its turn) raises an
+Allow / Deny card, the Chief's chat gets one line, "Planner is waiting on your
+OK in its chat: …", whose name links to that chat (`runner::point_to_card`).
+The card itself stays in the agent's chat (and the bell, and the phone).
 
 So approvals are asynchronous. `approve` waits 240s. If you haven't answered,
 it tells the agent "the user may be away: stop, say what you need, you'll be

@@ -87,6 +87,109 @@ fn an_answer_to_a_request_made_for_someone_else_goes_back_up() {
     });
 }
 
+fn chief() -> store::Agent {
+    store::create(store::NewAgent {
+        name: "Chief".into(),
+        role: String::new(),
+        instructions: String::new(),
+        shape: None,
+        avatar: None,
+        color: None,
+        is_main: true,
+    })
+    .unwrap()
+}
+
+fn user(text: &str) -> Inbound {
+    Inbound {
+        id: String::new(),
+        text: text.into(),
+        from: From::User,
+        reply: false,
+        routine: false,
+        ticket: None,
+        room: None,
+        outside: false,
+        resume: 0,
+    }
+}
+
+/// The worker going idle, as after a turn.
+fn finish(agent_id: &str) {
+    assert!(finish_if_idle(agent_id).is_some());
+}
+
+/// A card that expired in Planner can be raised again when the user asks
+/// through the Chief ("try again"): the Chief relaying the user's own words
+/// is as good as the user writing to Planner.
+#[test]
+fn the_chief_relaying_the_users_try_again_lets_an_expired_card_ask_again() {
+    scratch(|| {
+        let chief = chief();
+        let planner = agent("Planner");
+        let key = super::super::expiry::ask_key("Post to the feed?", "Fri 10am");
+        super::super::expiry::remember(&planner.id, key.clone());
+
+        // The Chief working on its own (another agent's message): no lift.
+        queue(&chief.id, says("Status?", &planner, false));
+        take_batch(&chief.id).unwrap();
+        assert!(!relay_lifts_expired(&chief, &planner.id));
+        assert!(super::super::expiry::already_expired(&planner.id, &key));
+        finish(&chief.id);
+
+        // A routine of the Chief's isn't the user either.
+        let mut routine = user("Morning brief");
+        routine.routine = true;
+        routine.ticket = Some("t1".into());
+        queue(&chief.id, routine);
+        take_batch(&chief.id).unwrap();
+        assert!(!relay_lifts_expired(&chief, &planner.id));
+        finish(&chief.id);
+
+        // A plain agent passing on its user's words has no such say.
+        let helper = agent("Helper");
+        queue(&helper.id, user("try again"));
+        take_batch(&helper.id).unwrap();
+        assert!(!relay_lifts_expired(&helper, &planner.id));
+        assert!(super::super::expiry::already_expired(&planner.id, &key));
+
+        // The user's own "try again", passed on by the Chief: lifted.
+        queue(&chief.id, user("try again"));
+        take_batch(&chief.id).unwrap();
+        assert!(relay_lifts_expired(&chief, &planner.id));
+        assert!(!super::super::expiry::already_expired(&planner.id, &key));
+
+        for a in [&chief, &planner, &helper] {
+            RUNTIMES.lock().unwrap().remove(&a.id);
+        }
+    });
+}
+
+/// An agent working for another one raises a card: the Chief's chat, where
+/// the user is talking, gets a line naming it (the name links to its chat).
+#[test]
+fn a_delegated_agents_card_is_pointed_to_where_the_user_is_talking() {
+    scratch(|| {
+        let chief = chief();
+        let planner = agent("Planner");
+        queue(&planner.id, says("Schedule the post", &chief, false));
+        take_batch(&planner.id).unwrap();
+        assert!(delegated(&planner.id));
+        assert_eq!(
+            card_pointer("Planner", "Post to the feed?"),
+            "Planner is waiting on your OK in its chat: Post to the feed"
+        );
+        finish(&planner.id);
+        // Asked by the user in its own chat: the card is where they are.
+        queue(&planner.id, user("Schedule it"));
+        take_batch(&planner.id).unwrap();
+        assert!(!delegated(&planner.id));
+        for a in [&chief, &planner] {
+            RUNTIMES.lock().unwrap().remove(&a.id);
+        }
+    });
+}
+
 /// Three deep: each level is noted as it asks, so the outcome climbs.
 #[test]
 fn a_three_level_chain_reports_all_the_way_up() {

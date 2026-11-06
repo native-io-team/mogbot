@@ -243,6 +243,10 @@ struct Runtime {
     /// (`share_text::labels_only_note`). Unlike `interrupted` it outlasts the
     /// worker going idle: the user's next message is when it is read.
     nudge: Option<String>,
+    /// The user's own message (in the agent's chat: not a routine, a
+    /// check-in, a room or outside text) is among what the turn in progress
+    /// answers, or the one it replaced. What it hands on is the user's ask.
+    user_asked: bool,
 }
 
 /// Why a take-over can't start now.
@@ -319,6 +323,66 @@ impl Runtime {
 
 static RUNTIMES: LazyLock<Mutex<HashMap<String, Runtime>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
+
+/// Whether the turn in progress answers the user's own message (and no
+/// outside text): what it hands on is the user asking.
+pub fn answering_user(agent_id: &str) -> bool {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .is_some_and(|r| r.running && r.user_asked && !r.outside)
+}
+
+/// The Chief (or an admin) passing on the user's own request, "try again":
+/// as good as the user writing to `target` themselves, so a card that
+/// expired there may be raised again (`expiry::new_task`). Returns whether
+/// it was lifted.
+pub fn relay_lifts_expired(caller: &store::Agent, target_id: &str) -> bool {
+    let relays = (caller.is_main || super::admin::is_admin(caller)) && answering_user(&caller.id);
+    if relays {
+        super::expiry::new_task(target_id);
+    }
+    relays
+}
+
+/// The line in the Chief's chat when an agent working on someone else's
+/// request raises a card: the user is talking to the Chief, so the card in
+/// that agent's own chat would otherwise go unseen. Its name is a link there.
+pub fn card_pointer(name: &str, title: &str) -> String {
+    let title = title.trim().trim_end_matches(['.', '?']);
+    format!("{name} is waiting on your OK in its chat: {title}")
+}
+
+/// Leave [`card_pointer`] in the Chief's chat when `agent` is working on a
+/// request from another agent (not the user's own words in its chat).
+pub fn point_to_card(app: &AppHandle, agent: &store::Agent, title: &str) {
+    if agent.is_main || !delegated(&agent.id) {
+        return;
+    }
+    let Some(chief) = store::list()
+        .ok()
+        .and_then(|all| all.into_iter().find(|a| a.is_main))
+    else {
+        return;
+    };
+    let mut line = new_message(&chief.id, MessageKind::Note, card_pointer(&agent.name, title));
+    line.peer = Some(AgentRef {
+        id: agent.id.clone(),
+        name: agent.name.clone(),
+    });
+    let _ = record(app, line);
+}
+
+/// The turn in progress was started by another agent's message, with none
+/// of the user's own in it.
+fn delegated(agent_id: &str) -> bool {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .is_some_and(|r| r.running && r.origin.is_some() && !r.user_asked)
+}
 
 /// Who a request was really for, per (asker, helper). Chief → Social Posts →
 /// Voice: Social Posts asked Voice while answering the Chief, so Voice's
@@ -2576,6 +2640,16 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     // Its cost is a routine's only if nothing else was in it, nor in the
     // interrupted turn it replaces (whose cost carries over in `turn_usage`).
     runtime.turn_mixed |= !routine;
+    // The user's own words in it: carried over from an interrupted turn.
+    let users = batch.iter().any(|m| {
+        matches!(m.from, From::User)
+            && m.room.is_none()
+            && m.ticket.is_none()
+            && !m.routine
+            && !m.outside
+            && m.resume == 0
+    });
+    runtime.user_asked = users || (runtime.interrupted.is_some() && runtime.user_asked);
     // Outside text taints the turn, and the turn that replaces it.
     runtime.outside |= batch.iter().any(|m| m.outside);
     let request = batch.first().map(|m| m.text.clone()).unwrap_or_default();
@@ -2726,6 +2800,7 @@ fn finish_if_idle(agent_id: &str) -> Option<Idle> {
     runtime.turn_usage = super::usage::UsageTotals::default();
     runtime.turn_mixed = false;
     runtime.outside = false;
+    runtime.user_asked = false;
     Some(Idle {
         owed: std::mem::take(&mut runtime.owed),
         tickets: std::mem::take(&mut runtime.tickets),
@@ -2847,6 +2922,7 @@ fn reset_after_panic(agent_id: &str, progressed: bool) -> PanicReset {
     runtime.turn_usage = super::usage::UsageTotals::default();
     runtime.turn_mixed = false;
     runtime.outside = false;
+    runtime.user_asked = false;
     // What is recorded from now on is the agent's own, not the dead turn's room's.
     let room = runtime.room.take().map(|r| r.room_id);
     runtime.status = Some(Status::idle());

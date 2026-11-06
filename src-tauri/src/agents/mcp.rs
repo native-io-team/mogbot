@@ -1076,6 +1076,9 @@ fn message_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value 
     }
     // Answering a request the target sent: settles it (see runner::settle).
     let answer = runner::settle(&caller.id, &target.id);
+    // The Chief passing on the user's "try again": the target may ask again
+    // for what expired unanswered.
+    runner::relay_lifts_expired(caller, &target.id);
     let mut sent = runner::new_message(&caller.id, MessageKind::SentToAgent, body);
     sent.peer = Some(peer(&target));
     let _ = runner::record(app, sent);
@@ -1844,10 +1847,13 @@ async fn ask(
         approval.from_outside =
             Some(runner::from_outside(&caller.id) || super::exposure::read_outside(&caller.id));
     }
+    let pointer = approval.title.clone();
     card.approval = Some(approval);
     let _ = runner::record(app, card);
     store::refresh_pending(&caller.id);
     super::notify::refresh_badge(app);
+    // Working for another agent: a line where the user is talking says so.
+    runner::point_to_card(app, caller, &pointer);
     // "Waiting for your OK" until this card and any other open one are answered.
     let wait = runner::begin_wait(app, &caller.id);
 
