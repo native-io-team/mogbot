@@ -222,6 +222,39 @@ fn files_and_connectors_at_go_hard() {
     }
 }
 
+/// "post" in a tool's name used to read as a send wherever it stood, so a
+/// tool that captures or lists posts asked at Go hard. A send word counts
+/// only as the verb: first, or after a lead-in like `create_` or `do_`.
+#[test]
+fn send_words_count_only_as_the_verb_of_a_tools_name() {
+    let c = ctx();
+    for tool in [
+        "mcp__fictional-os__capturePost",
+        "mcp__fictional-os__upsertSocialPosts",
+        "mcp__fictional-os__listPosts",
+        "mcp__fictional-os__get_post",
+        "mcp__fictional-os__summarizeComments",
+        "mcp__fictional-os__savePostDraft",
+    ] {
+        assert!(!asks(tool, &json!({}), &c, false), "{tool}");
+    }
+    for tool in [
+        "mcp__fictional-os__post_message",
+        "mcp__fictional-os__createPost",
+        "mcp__fictional-os__send_email",
+        "mcp__fictional-os__publishPost",
+        "mcp__fictional-os__do_send",
+        "mcp__fictional-os__schedule_post",
+        "mcp__fictional-os__add_comment",
+        "mcp__fictional-os__place_order",
+        // The server's own name first: the verb is the word after it.
+        "mcp__slack__slack_post_message",
+        "mcp__claude_ai_Slack__slack_reply_to_thread",
+    ] {
+        assert!(asks(tool, &json!({}), &c, false), "{tool}");
+    }
+}
+
 #[test]
 fn browser_scripts_that_read_or_click_run_and_ones_that_send_ask() {
     let js = |code: &str| {

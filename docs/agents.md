@@ -1033,8 +1033,14 @@ below; it asks only for:
   other agents read only their own home; `crontab` (except `-l`),
   `security`, `launchctl`, `diskutil`, `dd`, `csrutil`, `pmset`, `nvram` and
   other system tools; `defaults write` / `delete` / `import` (any domain)
-- connector tools whose name writes (send, create, update, delete, pay…);
-  uploads in the browser
+- connector tools whose name sends, spends, deletes or deploys (send, post,
+  publish, pay, delete…), judged **as a verb only**
+  (`go_hard::verb_position`): the first word, or the word after a lead-in
+  like `create_` / `do_` / `schedule_` / `add_`, past a first word that only
+  repeats the server's name (`slack_post_message`). So `post_message`,
+  `createPost`, `send_email` and `publishPost` ask, while `capturePost`,
+  `upsertSocialPosts` and `listPosts` run ("post" there names posts). Code
+  hosts' and databases' writes ask too; uploads in the browser
 - a network request with a secret in its address, query or headers
   (`agents/egress.rs`, below): `curl` (and its `-u` / `-b` /
   `--oauth2-bearer`), `wget`, `http`, `gh api`, a `git` remote with a
