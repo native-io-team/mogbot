@@ -37,7 +37,7 @@ use app_lib::agents::independence::{self, Level};
 use serde_json::json;
 use std::collections::BTreeMap;
 
-pub const SCENARIOS: [&str; 7] = [
+pub const SCENARIOS: [&str; 8] = [
     "slack-browser",
     "gmail-read",
     "lost-session",
