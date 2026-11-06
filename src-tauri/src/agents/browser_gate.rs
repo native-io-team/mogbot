@@ -659,6 +659,23 @@ pub fn while_phone_signs_in(live: bool) -> Option<Gate> {
 }
 
 pub fn gate(agent: &Agent, tool: &str, input: &Value, outside: bool) -> Gate {
+    if let Some(name) = tool.strip_prefix(AGENTS_SERVER) {
+        // A sign-in in the agents' browser for this agent is under way (or
+        // its profile is open in a plain window): it waits.
+        if let Some(why) = crate::agent_browser::signin::refusal_for(&agent.id) {
+            return Gate::Refuse(why);
+        }
+        let level = super::independence::for_turn(super::policy::chosen_level(agent), outside);
+        return gate_agents_with(
+            crate::agent_browser::settings::enabled(),
+            level,
+            agent,
+            name,
+            input,
+            outside,
+            &page_of(&agents_key(&agent.id)),
+        );
+    }
     if !tool.starts_with(SERVER) {
         return Gate::NotBrowser;
     }
@@ -677,6 +694,152 @@ pub fn gate(agent: &Agent, tool: &str, input: &Value, outside: bool) -> Gate {
         outside,
         &page_of(&agent.id),
     )
+}
+
+/* --------------------------------------------- the agents' browser */
+
+/// The agents' own browser's MCP server (`agent_browser::tools`), as its
+/// tools are named in a turn.
+pub const AGENTS_SERVER: &str = "mcp__browser__";
+
+/// Where an agent's page memory for the agents' browser is kept (its
+/// Claude in Chrome memory is under its bare id).
+pub fn agents_key(agent_id: &str) -> String {
+    format!("agents:{agent_id}")
+}
+
+/// Change an agent's page memory for the agents' browser: the server knows
+/// exactly what each ref is, so it writes it here itself.
+pub fn note_agents_page(agent_id: &str, f: impl FnOnce(&mut Page)) {
+    with_pages(|p| f(p.entry(agents_key(agent_id)).or_default()));
+}
+
+/// An agents' browser tool as the Claude in Chrome call it amounts to, so
+/// the same rules decide it: `click {ref}` is `computer {left_click, ref}`,
+/// `type {ref, text}` is `form_input`, `press {key}` is `computer {key}`.
+pub fn agents_equivalent(name: &str, input: &Value) -> (String, Value) {
+    use serde_json::json;
+    let mut i = input.clone();
+    let tab = input.get("tab").cloned();
+    if let (Some(t), Some(obj)) = (tab, i.as_object_mut()) {
+        obj.insert("tabId".into(), t);
+    }
+    let with = |mut v: Value, extra: &[(&str, Value)]| {
+        if let (Some(o), Some(src)) = (v.as_object_mut(), i.as_object()) {
+            for (k, val) in src {
+                o.entry(k.clone()).or_insert(val.clone());
+            }
+            for (k, val) in extra {
+                o.insert((*k).to_string(), val.clone());
+            }
+        }
+        v
+    };
+    match name {
+        "tabs" => ("tabs_context_mcp".into(), i),
+        "open" => ("tabs_create_mcp".into(), i),
+        "navigate" => ("navigate".into(), i),
+        "read_page" => ("read_page".into(), i),
+        "find" => ("find".into(), i),
+        "get_text" => ("get_page_text".into(), i),
+        "close_tab" => ("tabs_close_mcp".into(), i),
+        "screenshot" => (
+            "computer".into(),
+            with(json!({}), &[("action", json!("screenshot"))]),
+        ),
+        "scroll" => (
+            "computer".into(),
+            with(json!({}), &[("action", json!("scroll"))]),
+        ),
+        "wait_for" => (
+            "computer".into(),
+            with(json!({}), &[("action", json!("wait"))]),
+        ),
+        "click" => {
+            let mut extra = vec![("action", json!("left_click"))];
+            if let (Some(x), Some(y)) = (input.get("x"), input.get("y")) {
+                extra.push(("coordinate", json!([x, y])));
+            }
+            ("computer".into(), with(json!({}), &extra))
+        }
+        "type" => match input.get("ref") {
+            Some(r) => (
+                "form_input".into(),
+                with(
+                    json!({}),
+                    &[
+                        ("ref", r.clone()),
+                        ("value", input.get("text").cloned().unwrap_or(Value::Null)),
+                    ],
+                ),
+            ),
+            None => (
+                "computer".into(),
+                with(json!({}), &[("action", json!("type"))]),
+            ),
+        },
+        "press" => (
+            "computer".into(),
+            with(
+                json!({}),
+                &[
+                    ("action", json!("key")),
+                    ("text", input.get("key").cloned().unwrap_or(Value::Null)),
+                ],
+            ),
+        ),
+        // Anything this build doesn't know asks.
+        other => (format!("unknown_{other}"), i),
+    }
+}
+
+/// While the user signs in for this agent from the phone (or at the Mac),
+/// its browser waits.
+pub const AGENTS_SIGNIN_REFUSAL: &str = "The user is signing in to a site in the agents' browser right now. Don't use the browser until they're done: carry on with what doesn't need it, or wait a few minutes and try again.";
+
+/// Decide an agents' browser call. `enabled`: the Settings switch; the
+/// agent's own "browser" setting and outside text apply as for Claude in
+/// Chrome, but any engine may use it. Pure but for `page`.
+pub fn gate_agents_with(
+    enabled: bool,
+    level: Level,
+    agent: &Agent,
+    name: &str,
+    input: &Value,
+    outside: bool,
+    page: &Page,
+) -> Gate {
+    if !enabled {
+        return Gate::Refuse(
+            "The agents' browser is off (Settings → Agents). If the task needs a signed-in site, ask with request_login for it.".into(),
+        );
+    }
+    if outside {
+        return Gate::Refuse("The browser isn't available while you answer text from outside (a routine's items, or a message that carried them). Do this from the user's own request.".into());
+    }
+    if agent.reach.browser_off {
+        return Gate::Refuse(
+            "The browser isn't on for you. If the task needs a signed-in site, ask with request_login for it.".into(),
+        );
+    }
+    let (n, i) = agents_equivalent(name, input);
+    decide(level, agent, &n, &i, page)
+}
+
+/// [`describe`] for the agents' browser: the same plain words, about the
+/// agents' browser rather than the user's own Chrome.
+pub fn describe_agents(tool: &str, input: &Value, page: &Page) -> (String, String) {
+    let name = tool.strip_prefix(AGENTS_SERVER).unwrap_or(tool);
+    let (n, i) = agents_equivalent(name, input);
+    let (title, said) = describe(&format!("{SERVER}{n}"), &i, page);
+    let said = said
+        .replace("in your signed-in Chrome", "in the agents' browser")
+        .replace("in your Chrome", "in the agents' browser")
+        .replace(
+            "A new tab in your Chrome.",
+            "A new window in the agents' browser.",
+        );
+    (title, said)
 }
 
 /* ------------------------------------------------------- card words */

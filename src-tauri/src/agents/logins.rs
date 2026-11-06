@@ -265,6 +265,9 @@ pub enum Method {
     Oauth,
     ClaudeAi,
     Gh,
+    /// The agents' own browser (`agent_browser`): the person signs in once,
+    /// from the phone or at the Mac, and agents on either engine use it.
+    AgentBrowser,
     Browser,
     Key,
 }
@@ -492,7 +495,7 @@ fn option_rank(o: &LoginOption, all: &[connections::Connection]) -> u8 {
             }
         }
         Method::Oauth | Method::Gh => 0,
-        Method::Browser => 1,
+        Method::AgentBrowser | Method::Browser => 1,
         Method::ClaudeAi => 2,
         Method::Key => 3,
     }
@@ -599,6 +602,20 @@ pub fn build(agent: &Agent, ask: &Ask) -> Result<LoginRequest, CommandError> {
                     .then(|| format!("There's no connector for {title} here."))
             });
     }
+    // The agents' own browser first: either engine, and the person signs in
+    // from the phone or here, never with a per-site Allow at the Mac.
+    let agents_browser = known.and_then(|s| s.site).is_some()
+        && crate::agent_browser::available()
+        && !agent.reach.browser_off;
+    if let Some(site) = known.and_then(|s| s.site).filter(|_| agents_browser) {
+        options.push(LoginOption {
+            id: AGENTS_BROWSER_OPTION.into(),
+            method: Method::AgentBrowser,
+            label: "Sign in here".into(),
+            detail: format!("Opens {site}'s sign-in in the agents' own Chrome on this Mac (a profile of its own, not your personal Chrome). You sign in yourself, from your phone or here; {name} then works there signed in. It never sees your password, and anything that sends, posts or pays asks you first."),
+            connection_id: None,
+        });
+    }
     if let Some(site) = known.and_then(|s| s.site) {
         if claude {
             let helper = if browser_helper_installed() {
@@ -613,7 +630,7 @@ pub fn build(agent: &Agent, ask: &Ask) -> Result<LoginRequest, CommandError> {
                 detail: format!("{name} works in your own Chrome on this Mac, where you're already signed in to {site}, through Claude in Chrome. It asks you here before every click, post, send or payment; it never sees your password.{helper}"),
                 connection_id: None,
             });
-        } else if no_connector.is_some() {
+        } else if no_connector.is_some() && !agents_browser {
             no_connector = no_connector.map(|n| {
                 format!("{n} Using your browser needs Claude Code, and {name} runs on Codex.")
             });
@@ -729,21 +746,26 @@ this order:
 Linear, Notion, Figma, Stripe, Vercel), or its command on this Mac (`gh` for \
 GitHub). Use it.
 2. Otherwise, for most things (Gmail, Calendar, Drive, Slack, LinkedIn, X, \
-a bank, an internal tool), the user's own browser, where they're already \
-signed in: the Claude in Chrome tools (`mcp__claude-in-chrome__*`), when you \
-have them. Open the site in a new tab, and tell the user in one line which \
-account you're in, from what the page shows (\"I'm in Gmail as …\"); never \
-guess one. Reading there is free. Before any send, post, publish, payment, \
-delete or share, say exactly what will go and from which account; the action \
-itself asks the user on a card. A claude.ai connector (`mcp__claude_ai_*`) is \
-an extra: use it if it works, never wait on it. Never type a password. If a page asks you to sign in, \
-or for a password or code partway through one (a Google step inside another site's sign-in, say), stop \
-using it and go to step 3 with `signed_out: true`: that card lets the user sign in from their phone \
-(\"Sign in from here\") as well as at their Mac. Never tell them to go to their computer, or to finish \
-in a tab you left open. Wrong account (Chrome can have several \
-profiles)? `switch_browser` to another connected one \
-(`list_connected_browsers`), else `ask_bring_browser_to_front` once, never \
-`request_login`; once right, `remember_browser_account`.
+a bank, an internal tool), a browser. First the agents' browser \
+(`mcp__browser__*`, when you have it): the team's own Chrome on this Mac, \
+where sites the user signed in to for the team stay signed in. \
+Open the site, and tell the user in one line which account you're in, from \
+what the page shows (\"I'm in Gmail as …\"); never guess one. Use the \
+user's own browser, the Claude in Chrome tools (`mcp__claude-in-chrome__*`), \
+only for a site signed in only there (`remember_browser_account` knows \
+which), or when they say so. Reading is free in either. Before any send, post, publish, \
+payment, delete or share, say exactly what will go and from which account; \
+the action itself asks the user on a card. A claude.ai connector \
+(`mcp__claude_ai_*`) is an extra: use it if it works, never wait on it. Never \
+type a password. If a page asks you to sign in, or for a password or code \
+partway through one (a Google step inside another site's sign-in, say), stop \
+using it and go to step 3 with `signed_out: true`: that card lets the user \
+sign in from their phone (\"Sign in from here\") or at their Mac. Never tell them to go \
+to their computer, or to finish in a tab you left open. Wrong account in \
+their Chrome? `select_browser` / \
+`switch_browser` to another connected one (`list_connected_browsers`), else \
+`ask_bring_browser_to_front` once, never `request_login`; once right, \
+`remember_browser_account`.
 3. Only if neither works: `request_login`, once, for that one app (with \
 `signed_out: true` if the browser showed a sign-in page). It may answer \
 that you can reach it already, or that someone already asked: do what it \
@@ -881,6 +903,20 @@ fn complete(
     said: String,
     told: String,
 ) -> Result<(), CommandError> {
+    complete_via(app, agent_id, request_id, r, said, told, false)
+}
+
+/// [`complete`]; `agents_browser`: answered by a sign-in in the agents'
+/// browser, which is what the card's waiters are told to use too.
+fn complete_via(
+    app: &AppHandle,
+    agent_id: &str,
+    request_id: &str,
+    r: &LoginRequest,
+    said: String,
+    told: String,
+    agents_browser: bool,
+) -> Result<(), CommandError> {
     clear_flow(request_id);
     let card = store::answer_prompt(agent_id, request_id, ApprovalStatus::Allowed, &said)?;
     if let Some(m) = card {
@@ -903,6 +939,12 @@ fn complete(
             request_id,
             r,
             super::access_chain::Answered::Connection(c),
+        ),
+        (None, Some(site)) if agents_browser => super::access_chain::answer_waiters(
+            app,
+            request_id,
+            r,
+            super::access_chain::Answered::AgentsBrowser(site),
         ),
         (None, Some(site)) => super::access_chain::answer_waiters(
             app,
@@ -1037,6 +1079,196 @@ impl Run {
     }
 }
 
+/* ------------------------------------------------- the agents' browser */
+
+/// The card's id for the agents' browser way in.
+pub const AGENTS_BROWSER_OPTION: &str = "agents_browser";
+
+/// What the agent is told to use once a site is signed in there.
+pub fn agents_browser_told(site: &str) -> String {
+    format!("use {site} in the agents' browser (the mcp__browser__* tools), where the user just signed in. Every send, post or payment asks them on a card; never type a password, and if a page asks you to sign in again, call request_login for it with signed_out: true")
+}
+
+/// Signed in to `r`'s site in the agents' browser (from the phone or at the
+/// desk): the card answers itself, the agent gets the browser for that site
+/// and is woken, and every other card waiting on the same service that the
+/// agents' browser could answer is answered too (one profile, one sign-in).
+pub(crate) fn complete_agents_browser(
+    app: &AppHandle,
+    agent_id: &str,
+    request_id: &str,
+) -> Result<(), CommandError> {
+    let r = pending_login(agent_id, request_id)?;
+    let site = service(&r.service)
+        .and_then(|s| s.site)
+        .ok_or_else(|| CommandError::expected("This card has no site."))?;
+    let give = |id: &str| -> Result<(), CommandError> {
+        store::update(id, |a| {
+            a.reach.browser_off = false;
+            if !a.reach.browser_sites.iter().any(|s| s == site) {
+                a.reach.browser_sites.push(site.to_string());
+            }
+        })?;
+        super::policy::set_browser(id, true)
+    };
+    give(agent_id)?;
+    super::browser_profiles::remember_agents_browser(site);
+    let said = format!("Signed in · {site}, in the agents' browser");
+    complete_via(
+        app,
+        agent_id,
+        request_id,
+        &r,
+        said.clone(),
+        agents_browser_told(site),
+        true,
+    )?;
+    for other in super::access_chain::seen() {
+        if other.request_id == request_id
+            || other.status != ApprovalStatus::Pending
+            || other.login.service != r.service
+            || other.login.option(AGENTS_BROWSER_OPTION).is_none()
+        {
+            continue;
+        }
+        if give(&other.agent_id).is_ok() {
+            let _ = complete_via(
+                app,
+                &other.agent_id,
+                &other.request_id,
+                &other.login,
+                said.clone(),
+                agents_browser_told(site),
+                true,
+            );
+        }
+    }
+    Ok(())
+}
+
+/// What the desk's watcher reads each pass.
+struct DeskLook {
+    gone: bool,
+    landed: Option<super::browser::Landed>,
+    refused: Option<crate::agent_browser::refusal::Refused>,
+    plain: bool,
+    plain_quit: bool,
+}
+
+/// "Sign in here" at the desk: the agents' browser brings a window with the
+/// site's sign-in to the front, and the card finishes by itself once the
+/// page shows the person is in (read twice, a couple of seconds apart, so a
+/// page about to send them to its sign-in isn't taken for one). A site that
+/// refuses the driven window (Google) reopens in a plain Chrome window for
+/// that one sign-in; quitting it is when the card checks.
+async fn agents_browser_at_desk(run: Run, r: LoginRequest, site: &'static str, url: String) {
+    use crate::agent_browser::signin::{SigninWindow, Via};
+    let (key, agent) = (run.request_id.clone(), run.agent_id.clone());
+    let open =
+        tokio::task::spawn_blocking(move || SigninWindow::open(&key, &agent, &url, true)).await;
+    let window = match open {
+        Ok(Ok(w)) => w,
+        Ok(Err(e)) => return run.fail(e),
+        Err(_) => return run.fail("The agents' browser didn't open.".into()),
+    };
+    run.set(
+        FlowState::Waiting,
+        Some(format!("Sign in to {site} in the window that opened on this Mac (the agents' own Chrome). This card finishes on its own once you're in.")),
+    );
+    let probe = super::browser::probe_url(&r.service)
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("https://{site}/"));
+    let started = std::time::Instant::now();
+    let mut seen_in = 0u8;
+    let finish = |run: &Run, landed: Option<super::browser::Landed>| match landed
+        .and_then(|l| super::browser::signed_in(site, &l))
+    {
+        Some(true) => {
+            if let Err(e) = complete_agents_browser(&run.app, &run.agent_id, &run.request_id) {
+                run.fail(e.to_string());
+            }
+        }
+        _ => run.fail(format!(
+            "It still isn't signed in to {site}. Try Sign in here again."
+        )),
+    };
+    while started.elapsed() < super::phone_signin::MAX_AGE {
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+        let w = window.clone();
+        let look = tokio::task::spawn_blocking(move || {
+            let plain = w.via() == Via::MacWindow;
+            DeskLook {
+                gone: w.gone(),
+                landed: w.location(),
+                refused: if plain { None } else { w.refused_now() },
+                plain,
+                plain_quit: w.plain_exited(),
+            }
+        })
+        .await;
+        let Ok(look) = look else {
+            window.close();
+            return run.fail("The agents' browser stopped answering.".into());
+        };
+        if look.plain {
+            if !look.plain_quit {
+                continue;
+            }
+            let (w, p) = (window.clone(), probe.clone());
+            let landed = tokio::task::spawn_blocking(move || w.check(&p))
+                .await
+                .ok()
+                .flatten();
+            window.close();
+            return finish(&run, landed);
+        }
+        if look.gone {
+            window.close();
+            return run.fail("The sign-in window was closed before you were in.".into());
+        }
+        if let Some(why) = look.refused.filter(|r| r.needs_plain_window()) {
+            let at = look
+                .landed
+                .as_ref()
+                .map(|l| l.url.clone())
+                .unwrap_or_else(|| probe.clone());
+            let w = window.clone();
+            match tokio::task::spawn_blocking(move || w.go_plain(&at, false)).await {
+                Ok(Ok(())) => run.set(
+                    FlowState::Waiting,
+                    Some(format!(
+                        "{} Sign in there, then quit that window (⌘Q) and this card checks.",
+                        why.reason()
+                    )),
+                ),
+                Ok(Err(e)) => {
+                    window.close();
+                    return run.fail(e);
+                }
+                Err(_) => {
+                    window.close();
+                    return run.fail("The plain window didn't open.".into());
+                }
+            }
+            continue;
+        }
+        match look
+            .landed
+            .as_ref()
+            .and_then(|l| super::browser::signed_in(site, l))
+        {
+            Some(true) => seen_in += 1,
+            _ => seen_in = 0,
+        }
+        if seen_in >= 2 {
+            window.close();
+            return finish(&run, look.landed);
+        }
+    }
+    window.close();
+    run.fail("That sign-in sat open for twenty minutes, so it was closed.".into());
+}
+
 /// A sign-in under way already (starting or waiting) on this card.
 pub(crate) fn busy(request_id: &str) -> bool {
     matches!(
@@ -1117,6 +1349,30 @@ pub async fn start(
                 connected_line(&c),
                 tools_line(&c, access),
             )
+        }
+        Method::AgentBrowser => {
+            // From the phone it's the phone's own sign-in screen
+            // (`agents.signinBegin`), never a window on an empty desk.
+            if origin.from_phone {
+                return Err(CommandError::expected(
+                    "Use Sign in from here on this card: the sign-in opens on your phone.",
+                ));
+            }
+            let site = service(&r.service)
+                .and_then(|s| s.site)
+                .ok_or_else(|| CommandError::expected("This card has no site to open."))?;
+            let url = super::phone_signin::start_url(&r.service, site);
+            let (run2, r2) = (run.clone(), r.clone());
+            let task =
+                tokio::spawn(async move { agents_browser_at_desk(run2, r2, site, url).await });
+            run.set_flow(
+                run.flow(
+                    FlowState::Starting,
+                    Some("Opening the sign-in on this Mac…".into()),
+                ),
+                Some(task.abort_handle()),
+            );
+            Ok(())
         }
         Method::Browser => {
             let site = service(&r.service)
@@ -1952,7 +2208,7 @@ pub fn team(since: Option<i64>) -> TeamLogins {
     // Our own connections, then the browser, then claude.ai (an extra).
     let rank = |m: Method| match m {
         Method::Oauth | Method::Gh => 0,
-        Method::Browser => 1,
+        Method::AgentBrowser | Method::Browser => 1,
         Method::ClaudeAi => 2,
         Method::Key => 3,
         Method::Existing => 4,
@@ -2008,6 +2264,25 @@ pub async fn connect_need(
         .into_iter()
         .filter(|c| c.state == CardState::Waiting && !skip.contains(&c.agent_id))
         .collect();
+    // One profile: one sign-in answers every card on the row that can use it
+    // (`complete_agents_browser`).
+    if option.method == Method::AgentBrowser {
+        let first = waiting
+            .iter()
+            .find(|c| {
+                pending_login(&c.agent_id, &c.request_id)
+                    .is_ok_and(|r| r.option(AGENTS_BROWSER_OPTION).is_some())
+            })
+            .ok_or_else(|| CommandError::expected("Nothing on this row can use it."))?;
+        return start(
+            app,
+            &first.agent_id,
+            &first.request_id,
+            AGENTS_BROWSER_OPTION,
+            origin,
+        )
+        .await;
+    }
     if option.method == Method::Browser {
         for card in &waiting {
             // A card that can't use the browser (Codex) is left for its own chat.
@@ -2461,10 +2736,17 @@ mod tests {
         with_root(|| {
             let recruiter = agent("Recruiter", Engine::Claude);
             let gmail = build(&recruiter, &ask("gmail", &["read", "send"])).unwrap();
-            // Browser first; claude.ai's connector is the secondary way in.
-            assert_eq!(gmail.options[0].method, Method::Browser);
-            assert_eq!(gmail.options[1].method, Method::ClaudeAi);
-            assert_eq!(gmail.options[1].label, "Connect in Claude instead");
+            // The agents' own browser first (signed in from the phone), then
+            // the user's own; claude.ai's connector is the extra, last.
+            assert_eq!(gmail.options[0].method, Method::AgentBrowser);
+            assert_eq!(gmail.options[0].id, AGENTS_BROWSER_OPTION);
+            assert_eq!(gmail.options[0].label, "Sign in here");
+            assert!(gmail.options[0].detail.contains("from your phone"));
+            assert!(gmail.options[0].detail.contains("not your personal Chrome"));
+            assert_eq!(gmail.options[1].method, Method::Browser);
+            assert_eq!(gmail.options[1].label, "Use my browser");
+            assert_eq!(gmail.options[2].method, Method::ClaudeAi);
+            assert_eq!(gmail.options[2].label, "Connect in Claude instead");
             assert!(gmail.key.is_none(), "no password field for Gmail");
             assert_eq!(gmail.access(), Access::Full);
             assert!(gmail.abilities[1].label.contains("asks you"));
@@ -2474,7 +2756,8 @@ mod tests {
             assert_eq!(linear.access(), Access::Read);
 
             let linkedin = build(&recruiter, &ask("LinkedIn", &["post"])).unwrap();
-            assert_eq!(linkedin.options[0].method, Method::Browser);
+            assert_eq!(linkedin.options[0].method, Method::AgentBrowser);
+            assert_eq!(linkedin.options[1].method, Method::Browser);
             assert!(linkedin
                 .no_connector
                 .as_deref()
@@ -2484,7 +2767,7 @@ mod tests {
             let x = build(&recruiter, &ask("x", &["post"])).unwrap();
             assert_eq!(
                 x.options.iter().map(|o| o.method).collect::<Vec<_>>(),
-                vec![Method::Browser, Method::Key]
+                vec![Method::AgentBrowser, Method::Browser, Method::Key]
             );
             assert_eq!(x.key.as_ref().unwrap().kind, secrets::Kind::ApiKey);
 
@@ -2512,9 +2795,24 @@ mod tests {
         with_root(|| {
             let codex = agent("Posts", Engine::Codex);
             let gmail = build(&codex, &ask("gmail", &[])).unwrap();
-            assert!(gmail.options.is_empty());
+            // The agents' browser works on either engine: a Codex agent
+            // signs in to Gmail there. Claude Code's ways in aren't offered.
+            assert_eq!(
+                gmail.options.iter().map(|o| o.method).collect::<Vec<_>>(),
+                vec![Method::AgentBrowser]
+            );
             assert!(gmail.no_connector.as_deref().unwrap().contains("Codex"));
-            assert!(asked_reply(&gmail).contains("don't ask for a password"));
+            assert!(!gmail
+                .no_connector
+                .as_deref()
+                .unwrap()
+                .contains("Using your browser needs Claude Code"));
+            // Its browser taken away: nothing here can sign it in.
+            let mut off = agent("Quiet", Engine::Codex);
+            off.reach.browser_off = true;
+            let none = build(&off, &ask("gmail", &[])).unwrap();
+            assert!(none.options.is_empty());
+            assert!(asked_reply(&none).contains("don't ask for a password"));
             let linear = build(&codex, &ask("linear", &[])).unwrap();
             assert_eq!(
                 linear.options[0].method,
@@ -2541,10 +2839,11 @@ mod tests {
             )
             .unwrap();
             let card = build(&social, &ask("gmail", &[])).unwrap();
-            // A claude.ai connection made already is offered, after the browser.
-            assert_eq!(card.options[0].method, Method::Browser);
-            assert_eq!(card.options[1].method, Method::Existing);
-            assert_eq!(card.options[1].label, "Use work@acme.com");
+            // A claude.ai connection made already is offered, after the browsers.
+            assert_eq!(card.options[0].method, Method::AgentBrowser);
+            assert_eq!(card.options[1].method, Method::Browser);
+            assert_eq!(card.options[2].method, Method::Existing);
+            assert_eq!(card.options[2].label, "Use work@acme.com");
             // The agent it's already granted to isn't offered it again.
             let again = build(&recruiter, &ask("gmail", &[])).unwrap();
             assert!(again.options.iter().all(|o| o.method != Method::Existing));
@@ -2861,7 +3160,9 @@ mod tests {
                     .collect::<Vec<_>>(),
                 vec!["Recruiter", "Mailroom", "Calendar"]
             );
-            assert_eq!(google.options[0].method, Method::Browser);
+            // One sign-in in the agents' browser answers the whole row.
+            assert_eq!(google.options[0].method, Method::AgentBrowser);
+            assert_eq!(google.options[1].method, Method::Browser);
             let gh = t.needs.iter().find(|n| n.key == "github").unwrap();
             assert_eq!(
                 gh.cards.len(),

@@ -150,9 +150,10 @@ inside it.
   `agents.reach` (read-only); Mac feature `logins.phone`: `agents.loginPhoneBegin|loginPhoneFinish`
   (the sign-in sheet; the finish goes only to an identity-verified Mac) and `onPhone` on
   `agents.loginStart|loginsConnect`; Mac feature `signin.phone`:
-  `agents.signinBegin|signinFrame|signinInput|signinDone|signinStop` (signing in to a site in
-  the Mac's own Chrome from the phone; never audited by the router, see docs/agents.md,
-  "Signing in on your Mac from the phone"); "Not needed" for the team (docs/agents.md, "Not needed"):
+  `agents.signinBegin|signinFrame|signinInput|signinDone|signinStop|signinFallback` (signing
+  in to a site from the phone, in a window of the agents' own Chrome on the Mac, streamed with
+  `after: seq`; never audited by the router, see docs/agents.md, "The agents' browser"); "Not
+  needed" for the team (docs/agents.md, "Not needed"):
   `agents.loginNotNeeded|loginsNotNeeded|loginsUndecline` (shown only when the Mac lists them),
   `agents.reach`'s `declined` (each with "Turn back on"), and `agents.loginsRecheck` when the app
   comes back while claude.ai is being connected here

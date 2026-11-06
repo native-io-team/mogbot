@@ -1355,29 +1355,65 @@ impl Backend for Stub {
             .lock()
             .unwrap()
             .push(format!("signin {op:?} by {device_id}"));
-        use crate::agents::phone_signin::{Begun, Frame, FrameState, Outcome};
+        use crate::agents::phone_signin::{Begun, Frame, FrameState, Outcome, Via};
         Ok(match op {
             Op::Begin { .. } => serde_json::to_value(Begun {
                 session_id: "signin_0123".into(),
                 domain: "figma.com".into(),
                 title: "Figma".into(),
                 idle_seconds: 300,
+                via: Via::AgentsBrowser,
+                frame_gap_ms: 30,
             })
             .unwrap(),
-            Op::Frame { session_id } if session_id == "outside" => serde_json::to_value(Frame {
-                state: FrameState::Outside,
-                host: Some("example.com".into()),
-                image: None,
-                width: 0,
-                height: 0,
+            Op::Fallback { .. } => serde_json::to_value(Begun {
+                session_id: "signin_0123".into(),
+                domain: "google.com".into(),
+                title: "Gmail".into(),
+                idle_seconds: 300,
+                via: Via::MacWindow,
+                frame_gap_ms: 150,
             })
             .unwrap(),
+            Op::Frame { session_id, .. } if session_id == "outside" => {
+                serde_json::to_value(Frame {
+                    state: FrameState::Outside,
+                    host: Some("example.com".into()),
+                    image: None,
+                    width: 0,
+                    height: 0,
+                    seq: None,
+                    secure: false,
+                    blocked: None,
+                })
+                .unwrap()
+            }
+            Op::Frame { session_id, .. } if session_id == "blocked" => {
+                serde_json::to_value(Frame {
+                    state: FrameState::Blocked,
+                    host: Some("accounts.google.com".into()),
+                    image: Some("/9j/2w==".into()),
+                    width: 780,
+                    height: 540,
+                    seq: Some(3),
+                    secure: false,
+                    blocked: Some(
+                        crate::agent_browser::refusal::Refused::GoogleSignin
+                            .reason()
+                            .into(),
+                    ),
+                })
+                .unwrap()
+            }
             Op::Frame { .. } => serde_json::to_value(Frame {
                 state: FrameState::Live,
                 host: Some("www.figma.com".into()),
                 image: Some("/9j/2w==".into()),
-                width: 1000,
-                height: 640,
+                width: 780,
+                height: 540,
+                seq: Some(12),
+                secure: true,
+                blocked: None,
             })
             .unwrap(),
             Op::Done { anyway, .. } => serde_json::json!({

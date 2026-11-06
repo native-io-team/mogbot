@@ -99,8 +99,11 @@ ring = "0.17"
 tauri-plugin-global-shortcut = "2"
 
 [features]
-# Prototype of the agent browser (docs/internal/agent-browser.md): off in
-# every build; nothing in the app uses it yet.
+# The agent browser (docs/internal/agent-browser.md): the user's installed
+# Chrome on a profile of the app's own, driven over a CDP pipe. On by
+# default; a build without it has no agents' browser and the login cards
+# fall back to Claude in Chrome.
+default = ["agent-browser"]
 agent-browser = []
 
 [[example]]

@@ -16,7 +16,9 @@ import {
 } from '@shipstudio/companion-protocol';
 
 /** The Mac says it serves login cards (`welcome.features`), and the methods to answer them. */
-export const servesLogins = (welcome: Pick<WelcomeFrame, 'methods' | 'features'> | null | undefined) =>
+export const servesLogins = (
+  welcome: Pick<WelcomeFrame, 'methods' | 'features'> | null | undefined
+) =>
   !!welcome?.features?.includes(MAC_FEATURES.logins) &&
   (welcome.methods as string[]).includes('agents.loginStart');
 
@@ -78,18 +80,23 @@ export const servesPhoneSignIn = (
  *   anywhere; the Mac's `gh` keeps the sign-in (GitHub)
  * - `web`: claude.ai opened here to add the connector to the same Claude
  *   account; claude.ai holds that sign-in (Gmail, Calendar, Drive, Slack)
+ * - `here`: the site's sign-in in the agents' own Chrome on the Mac, shown
+ *   and driven from this phone (`/signin`); the Mac keeps the sign-in
  * - `tap`: nothing to sign in to (an account already connected, the browser)
  * - `key`: the masked field
  * - `mac`: only on the Mac (an older Mac, or no sign-in sheet in this build)
  */
-export type PhoneWay = 'sheet' | 'device' | 'web' | 'tap' | 'key' | 'mac';
+export type PhoneWay = 'sheet' | 'device' | 'web' | 'here' | 'tap' | 'key' | 'mac';
 
 export function phoneWay(
   option: Pick<LoginOption, 'method'>,
   macLetsPhoneSignIn: boolean,
-  hasSheet: boolean
+  hasSheet: boolean,
+  macLetsSigninHere = false
 ): PhoneWay {
   switch (option.method) {
+    case 'agent_browser':
+      return macLetsSigninHere ? 'here' : 'mac';
     case 'existing':
     case 'browser':
       return 'tap';
@@ -113,6 +120,8 @@ export function phoneDetail(option: LoginOption, way: PhoneWay, title: string): 
       return 'Shows a one-time code to type at github.com/login/device, here or anywhere. GitHub’s sign-in stays on your Mac.';
     case 'web':
       return `Opens claude.ai here to add ${title} to your Claude account (the one your Mac uses). claude.ai holds that sign-in, not your Mac.`;
+    case 'here':
+      return `${title}’s sign-in opens in the agents’ own Chrome on your Mac and shows here: you sign in by touch, and nothing you type is kept. Your agents then use it signed in.`;
     case 'mac':
       return `${option.detail} Finish on your Mac.`;
     default:
@@ -128,9 +137,7 @@ export function loginOutcome(approval: Approval, login: LoginRequest, agentName:
       return approval.choice || `Connected · ${login.title}`;
     case 'denied':
       if (approval.note === 'Not needed') return 'Not needed · Put away; nothing connected';
-      return approval.note
-        ? `Declined · “${approval.note}”`
-        : `Declined · ${agentName} was told`;
+      return approval.note ? `Declined · “${approval.note}”` : `Declined · ${agentName} was told`;
     case 'expired':
       return approval.note ? `Closed · ${approval.note}` : 'Closed';
     default:
@@ -150,7 +157,6 @@ export function agentList(names: string[]): string {
   if (names.length <= 1) return names[0] ?? '';
   return `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
-
 
 /** Each line of "What it can reach", as it reads. */
 export function reachRows(
@@ -206,7 +212,8 @@ export function teamCardLine(c: TeamCard): string {
     default:
       if (signingIn(c))
         return `${c.agentName} · ${c.flow?.onPhone ? 'Signing in on your phone…' : 'Signing in on your Mac…'}`;
-      if (c.flow?.state === 'failed') return `${c.agentName} · ${c.flow.message ?? 'Didn’t finish'}`;
+      if (c.flow?.state === 'failed')
+        return `${c.agentName} · ${c.flow.message ?? 'Didn’t finish'}`;
       return `${c.agentName} · to ${wants} ${c.title}`;
   }
 }

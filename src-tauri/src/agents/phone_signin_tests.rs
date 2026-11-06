@@ -307,17 +307,36 @@ fn chromes_own_permission_prompt_is_recognised() {
 
 #[test]
 fn the_wire_shapes() {
-    let f = Frame {
-        state: FrameState::Outside,
-        host: Some("example.com".into()),
-        image: None,
-        width: 0,
-        height: 0,
-    };
+    let f = Frame::empty(FrameState::Outside, Some("example.com".into()));
     assert_eq!(
         serde_json::to_value(&f).unwrap(),
         json!({ "state": "outside", "host": "example.com", "width": 0, "height": 0 })
     );
+    let f = Frame {
+        state: FrameState::Blocked,
+        host: Some("accounts.google.com".into()),
+        image: Some("x".into()),
+        width: 780,
+        height: 540,
+        seq: Some(4),
+        secure: true,
+        blocked: Some("Google won't.".into()),
+    };
+    assert_eq!(
+        serde_json::to_value(&f).unwrap(),
+        json!({ "state": "blocked", "host": "accounts.google.com", "image": "x", "width": 780,
+                "height": 540, "seq": 4, "secure": true, "blocked": "Google won't." })
+    );
+    let b = Begun {
+        session_id: "s".into(),
+        domain: "figma.com".into(),
+        title: "Figma".into(),
+        idle_seconds: 300,
+        via: Via::AgentsBrowser,
+        frame_gap_ms: 30,
+    };
+    assert_eq!(serde_json::to_value(&b).unwrap()["via"], "agents_browser");
+    assert_eq!(serde_json::to_value(Via::MacWindow).unwrap(), "mac_window");
     assert_eq!(
         serde_json::to_value(Outcome::SignedOut).unwrap(),
         json!("signed_out")
@@ -351,8 +370,67 @@ fn agents_are_kept_out_of_the_browser_while_it_runs() {
     // `gate` asks it first, before any level or rule.
     let src = include_str!("browser_gate.rs");
     let gate = &src[src.find("pub fn gate(").unwrap()..];
+    // (The agents' own browser is decided first, on its own prefix.)
+    let gate = &gate[gate.find("if !tool.starts_with(SERVER)").unwrap()..];
     let check = gate
         .find("while_phone_signs_in(super::phone_signin::live())")
         .unwrap();
     assert!(check < gate.find("independence::for_turn").unwrap());
+}
+
+/* -------------------------------------------- the agents' browser way */
+
+#[test]
+fn the_agents_browser_comes_first_when_the_card_offers_it() {
+    assert_eq!(choose(true, true, true), Some(Via::AgentsBrowser));
+    assert_eq!(choose(true, true, false), Some(Via::AgentsBrowser));
+    // Switched off or no Chrome: the user's own Chrome, when the card has it.
+    assert_eq!(choose(true, false, true), Some(Via::Chrome));
+    assert_eq!(choose(false, true, true), Some(Via::Chrome));
+    assert_eq!(choose(true, false, false), None);
+    // Pictures come as fast as the screencast draws them there.
+    assert!(frame_gap(Via::AgentsBrowser) < frame_gap(Via::Chrome));
+}
+
+#[test]
+fn the_phones_keys_are_the_agents_browsers_keys() {
+    use crate::agent_browser::keys::Key as A;
+    assert_eq!(agents_key(Key::Enter), A::Enter);
+    assert_eq!(agents_key(Key::Space), A::Space);
+    assert_eq!(agents_key(Key::ArrowLeft), A::ArrowLeft);
+}
+
+#[test]
+fn a_frame_request_and_a_fallback_never_carry_typed_text() {
+    let op = Op::Frame {
+        session_id: "signin_1".into(),
+        after: Some(3),
+    };
+    assert_eq!(
+        format!("{op:?}"),
+        "Frame { session_id: \"signin_1\", after: Some(3) }"
+    );
+    let op = Op::Input {
+        session_id: "s".into(),
+        input: Input::Type {
+            text: "correct horse".into(),
+            secure: true,
+        },
+    };
+    let shown = format!("{op:?}");
+    assert!(
+        !shown.contains("correct") && !shown.contains("horse"),
+        "{shown}"
+    );
+}
+
+#[test]
+fn the_desk_bar_only_keeps_claude_in_chrome_out_for_its_own_sessions() {
+    // `live()` (which refuses every Claude in Chrome call) is for a phone
+    // driving the user's own Chrome; the agents' browser keeps out only the
+    // agent the card is for (`agent_browser::signin::refusal_for`).
+    let src = include_str!("phone_signin.rs");
+    let live = &src[src.find("pub fn live()").unwrap()..];
+    let live = &live[..live.find('}').unwrap()];
+    assert!(live.contains("Via::Chrome"), "{live}");
 }

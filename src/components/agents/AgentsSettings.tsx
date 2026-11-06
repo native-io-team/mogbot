@@ -5,6 +5,9 @@
  *   (`AgentsDesktopSettings`), and what keeps agents going (keep awake, keep
  *   running when closed, open at login — `useStayOn`, read back from the
  *   thing itself).
+ * - **Agents' browser**: the team's own Chrome on this Mac (on by default),
+ *   and the two permissions a phone sign-in to Google needs
+ *   (`AgentsBrowserSettings`, `agent_browser/`).
  * - **Independence**: how much agents do on their own (Check with me often,
  *   Use good judgement, Go hard), and what always asks at every level
  *   (`AgentIndependenceSettings`, `agents/independence.rs`).
@@ -38,6 +41,7 @@ import { DeclinedAppsSettings } from './DeclinedAppsSettings';
 import { AgentAdminSettings } from './AgentAdmin';
 import { Row, Toggle } from './AgentSettingsRows';
 import { AgentTeamPolicySettings } from './AgentTeamPolicySettings';
+import { AgentsBrowserSettings } from './AgentsBrowserSettings';
 import { useStayOn } from '../../hooks/useStayOn';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import type { EngineInfo } from '../../lib/agents';
@@ -96,6 +100,8 @@ export function AgentsSettings({
           </div>
         )}
       </section>
+
+      <AgentsBrowserSettings />
 
       <AgentIndependenceSettings />
 

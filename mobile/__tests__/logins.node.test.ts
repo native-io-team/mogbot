@@ -51,8 +51,10 @@ describe('a login card, in words', () => {
   it('leads with the browser for a claude.ai app, and offers Claude second', () => {
     expect(primaryOption(gmail)?.method).toBe('browser');
     expect(otherOptions(gmail).map((o) => o.method)).toEqual(['claude_ai']);
-    // No connector: the browser leads, and the card says why there's no connector.
-    expect(primaryOption(linkedin)?.method).toBe('browser');
+    // No connector: the agents' browser leads (signed in from here), then
+    // the user's own; the card says why there's no connector.
+    expect(primaryOption(linkedin)?.method).toBe('agent_browser');
+    expect(otherOptions(linkedin).map((o) => o.method)).toEqual(['browser']);
     expect(linkedin.noConnector).toMatch(/no connector/);
   });
 
@@ -68,22 +70,37 @@ describe('a login card, in words', () => {
     // Cancelled is back to choosing: nothing happened.
     expect(loginPhase(approval(), flow('cancelled'))).toBe('choose');
     expect(loginPhase(approval({ status: 'allowed' }), flow('waiting'))).toBe('answered');
-    expect(onMacLine({ ...gmail, flow: { state: 'waiting', option: 'x', startedAt: 0, message: 'Open on claude.ai.' } })).toBe(
-      'Finish signing in on your Mac — it’s open there. Open on claude.ai.'
-    );
+    expect(
+      onMacLine({
+        ...gmail,
+        flow: { state: 'waiting', option: 'x', startedAt: 0, message: 'Open on claude.ai.' },
+      })
+    ).toBe('Finish signing in on your Mac — it’s open there. Open on claude.ai.');
   });
 
   it('says how it was answered', () => {
-    expect(loginOutcome(approval({ status: 'allowed', choice: 'Connected · Gmail (work@acme.com)' }), gmail, 'Finance')).toBe(
-      'Connected · Gmail (work@acme.com)'
+    expect(
+      loginOutcome(
+        approval({ status: 'allowed', choice: 'Connected · Gmail (work@acme.com)' }),
+        gmail,
+        'Finance'
+      )
+    ).toBe('Connected · Gmail (work@acme.com)');
+    expect(loginOutcome(approval({ status: 'denied' }), gmail, 'Finance')).toBe(
+      'Declined · Finance was told'
     );
-    expect(loginOutcome(approval({ status: 'denied' }), gmail, 'Finance')).toBe('Declined · Finance was told');
-    expect(loginOutcome(approval({ status: 'denied', note: 'Not needed' }), gmail, 'Finance')).toMatch(/^Not needed · /);
-    expect(loginOutcome(approval({ status: 'expired', note: 'Moved' }), gmail, 'Finance')).toBe('Closed · Moved');
+    expect(
+      loginOutcome(approval({ status: 'denied', note: 'Not needed' }), gmail, 'Finance')
+    ).toMatch(/^Not needed · /);
+    expect(loginOutcome(approval({ status: 'expired', note: 'Moved' }), gmail, 'Finance')).toBe(
+      'Closed · Moved'
+    );
   });
 
   it('uses the login methods only on a Mac that says it serves them', () => {
-    expect(servesLogins({ methods: ['agents.loginStart'], features: ['logins'] } as never)).toBe(true);
+    expect(servesLogins({ methods: ['agents.loginStart'], features: ['logins'] } as never)).toBe(
+      true
+    );
     expect(servesLogins({ methods: ['agents.loginStart'], features: [] } as never)).toBe(false);
     expect(servesLogins({ methods: [], features: ['logins'] } as never)).toBe(false);
     expect(servesLogins(null)).toBe(false);
@@ -99,18 +116,28 @@ describe('a login card, in words', () => {
       requestId: 'r',
       service: 'gmail',
       title: 'Gmail',
-      abilities: [{ id: 'read', label: 'Read' }, { id: 'write', label: 'Send' }],
+      abilities: [
+        { id: 'read', label: 'Read' },
+        { id: 'write', label: 'Send' },
+      ],
       state: 'waiting',
     };
     expect(teamCardLine(card)).toBe('Recruiter · to read and send Gmail');
     expect(teamCardLine({ ...card, flow: { state: 'waiting', option: 'x', startedAt: 0 } })).toBe(
       'Recruiter · Signing in on your Mac…'
     );
-    expect(teamCardLine({ ...card, state: 'skipped', outcome: 'Not needed' })).toBe('Recruiter · Not needed');
+    expect(teamCardLine({ ...card, state: 'skipped', outcome: 'Not needed' })).toBe(
+      'Recruiter · Not needed'
+    );
   });
 
   it('signs in here when the Mac lets it, and says where the sign-in is kept', () => {
-    const o = (method: LoginRequest['options'][number]['method']) => ({ id: method, method, label: 'x', detail: 'On the Mac.' });
+    const o = (method: LoginRequest['options'][number]['method']) => ({
+      id: method,
+      method,
+      label: 'x',
+      detail: 'On the Mac.',
+    });
     // A Mac with logins.phone and a build with the sign-in sheet.
     expect(phoneWay(o('oauth'), true, true)).toBe('sheet');
     expect(phoneWay(o('gh'), true, true)).toBe('device');
@@ -122,19 +149,45 @@ describe('a login card, in words', () => {
     expect(phoneWay(o('oauth'), true, false)).toBe('mac');
     expect(phoneWay(o('gh'), true, false)).toBe('device');
     // An older Mac: everything that signs in finishes there, as before.
-    for (const m of ['oauth', 'gh', 'claude_ai'] as const) expect(phoneWay(o(m), false, true)).toBe('mac');
-    expect(phoneDetail(o('oauth'), 'sheet', 'Linear')).toMatch(/Keychain; this phone keeps nothing/);
-    expect(phoneDetail(o('claude_ai'), 'web', 'Gmail')).toMatch(/claude\.ai holds that sign-in, not your Mac/);
+    for (const m of ['oauth', 'gh', 'claude_ai'] as const)
+      expect(phoneWay(o(m), false, true)).toBe('mac');
+    expect(phoneDetail(o('oauth'), 'sheet', 'Linear')).toMatch(
+      /Keychain; this phone keeps nothing/
+    );
+    expect(phoneDetail(o('claude_ai'), 'web', 'Gmail')).toMatch(
+      /claude\.ai holds that sign-in, not your Mac/
+    );
     expect(phoneDetail(o('oauth'), 'mac', 'Linear')).toBe('On the Mac. Finish on your Mac.');
-    expect(servesPhoneSignIn({ methods: ['agents.loginPhoneBegin'], features: ['logins.phone'] } as never)).toBe(true);
-    expect(servesPhoneSignIn({ methods: ['agents.loginPhoneBegin'], features: ['logins'] } as never)).toBe(false);
+    expect(
+      servesPhoneSignIn({
+        methods: ['agents.loginPhoneBegin'],
+        features: ['logins.phone'],
+      } as never)
+    ).toBe(true);
+    expect(
+      servesPhoneSignIn({ methods: ['agents.loginPhoneBegin'], features: ['logins'] } as never)
+    ).toBe(false);
     // A sign-in on this phone says so, not "on your Mac".
     expect(
-      onMacLine({ ...gmail, flow: { state: 'waiting', option: 'gh', startedAt: 0, onPhone: true, userCode: 'AB12-CD34' } })
+      onMacLine({
+        ...gmail,
+        flow: {
+          state: 'waiting',
+          option: 'gh',
+          startedAt: 0,
+          onPhone: true,
+          userCode: 'AB12-CD34',
+        },
+      })
     ).toBe('Signing in to Gmail here.');
     const card: TeamCard = {
-      agentId: 'a', agentName: 'Design', requestId: 'r', service: 'github', title: 'GitHub',
-      abilities: [{ id: 'read', label: 'Read' }], state: 'waiting',
+      agentId: 'a',
+      agentName: 'Design',
+      requestId: 'r',
+      service: 'github',
+      title: 'GitHub',
+      abilities: [{ id: 'read', label: 'Read' }],
+      state: 'waiting',
       flow: { state: 'waiting', option: 'gh', startedAt: 0, onPhone: true },
     };
     expect(teamCardLine(card)).toBe('Design · Signing in on your phone…');
@@ -143,21 +196,54 @@ describe('a login card, in words', () => {
   it('lists what an agent can reach, never a token', () => {
     const rows = reachRows({
       connections: [
-        { connectionId: 'c1', service: 'gmail', title: 'Gmail', account: 'work@acme.com', access: 'read', kept: 'Held on claude.ai', needsSignIn: false },
-        { connectionId: 'c2', service: 'linear', title: 'Linear', account: 'Linear', access: 'full', kept: 'In your Mac’s Keychain', needsSignIn: true },
+        {
+          connectionId: 'c1',
+          service: 'gmail',
+          title: 'Gmail',
+          account: 'work@acme.com',
+          access: 'read',
+          kept: 'Held on claude.ai',
+          needsSignIn: false,
+        },
+        {
+          connectionId: 'c2',
+          service: 'linear',
+          title: 'Linear',
+          account: 'Linear',
+          access: 'full',
+          kept: 'In your Mac’s Keychain',
+          needsSignIn: true,
+        },
       ],
-      browser: { on: true, teamOn: true, ownOff: false, sites: ['www.linkedin.com'], helperInstalled: false },
+      browser: {
+        on: true,
+        teamOn: true,
+        ownOff: false,
+        sites: ['www.linkedin.com'],
+        helperInstalled: false,
+      },
       secrets: [{ secretId: 's1', name: 'x_key', purpose: 'Post', variables: ['$X_KEY'] }],
       blockedApps: ['figma'],
     });
-    expect(rows.map((r) => r.label)).toEqual(['Gmail · work@acme.com', 'Linear', 'Your browser', 'x_key', 'figma']);
+    expect(rows.map((r) => r.label)).toEqual([
+      'Gmail · work@acme.com',
+      'Linear',
+      'Your browser',
+      'x_key',
+      'figma',
+    ]);
     expect(rows[1]).toMatchObject({ warning: true, detail: 'Needs signing in again on your Mac' });
     expect(rows[2].detail).toMatch(/www\.linkedin\.com.*isn’t set up/);
   });
 });
 
 describe('login cards against the mock Mac', () => {
-  const mock = createMockServer({ quiet: true, allowAfterMs: 0, draftEveryMs: 10, loginAfterMs: 150 });
+  const mock = createMockServer({
+    quiet: true,
+    allowAfterMs: 0,
+    draftEveryMs: 10,
+    loginAfterMs: 150,
+  });
   let t: DirectTransport;
   let state = emptySync();
 
@@ -198,15 +284,26 @@ describe('login cards against the mock Mac', () => {
     const google = team.needs.find((n) => n.key === 'google')!;
     expect(google.cards.map((c) => c.agentName).sort()).toEqual(['Finance', 'QA 2']);
     expect(google.options[0].method).toBe('browser');
-    expect(team.needs.find((n) => n.key === 'linkedin')!.options.map((o) => o.method)).toEqual(['browser']);
+    expect(team.needs.find((n) => n.key === 'linkedin')!.options.map((o) => o.method)).toEqual([
+      'agent_browser',
+      'browser',
+    ]);
   });
 
   it('starts on the Mac, says so here, and turns connected', async () => {
-    await t.request('agents.loginStart', { agentId: 'fin', requestId: 'req_login_gmail', optionId: 'claude_ai' });
+    await t.request('agents.loginStart', {
+      agentId: 'fin',
+      requestId: 'req_login_gmail',
+      optionId: 'claude_ai',
+    });
     const waiting = await card('fin', 'req_login_gmail');
     expect(loginPhase(waiting.approval!, waiting.approval!.login!)).toBe('onMac');
     expect(waiting.approval!.login!.flow).toMatchObject({ state: 'waiting', fromPhone: true });
-    for (let i = 0; i < 100 && (await card('fin', 'req_login_gmail')).approval!.status !== 'allowed'; i++) {
+    for (
+      let i = 0;
+      i < 100 && (await card('fin', 'req_login_gmail')).approval!.status !== 'allowed';
+      i++
+    ) {
       await new Promise((r) => setTimeout(r, 30));
     }
     const done = await card('fin', 'req_login_gmail');
@@ -225,22 +322,47 @@ describe('login cards against the mock Mac', () => {
       optionId: 'oauth',
     });
     expect(begun.redirectUri).toBe('dashbot-companion://oauth');
-    expect((await card('design', 'req_login_linear')).approval!.login!.flow).toMatchObject({ onPhone: true });
+    expect((await card('design', 'req_login_linear')).approval!.login!.flow).toMatchObject({
+      onPhone: true,
+    });
     const state = new URL(begun.url).searchParams.get('state');
     // The wrong redirect is refused, and the sign-in is spent.
     await expect(
-      t.request('agents.loginPhoneFinish', { flowId: begun.flowId, callbackUrl: `https://evil.test/oauth?code=c&state=${state}` })
+      t.request('agents.loginPhoneFinish', {
+        flowId: begun.flowId,
+        callbackUrl: `https://evil.test/oauth?code=c&state=${state}`,
+      })
     ).rejects.toBeTruthy();
     await expect(
-      t.request('agents.loginPhoneFinish', { flowId: begun.flowId, callbackUrl: `dashbot-companion://oauth?code=c&state=${state}` })
+      t.request('agents.loginPhoneFinish', {
+        flowId: begun.flowId,
+        callbackUrl: `dashbot-companion://oauth?code=c&state=${state}`,
+      })
     ).rejects.toBeTruthy();
-    const again = await t.request('agents.loginPhoneBegin', { agentId: 'design', requestId: 'req_login_linear', optionId: 'oauth' });
+    const again = await t.request('agents.loginPhoneBegin', {
+      agentId: 'design',
+      requestId: 'req_login_linear',
+      optionId: 'oauth',
+    });
     const s2 = new URL(again.url).searchParams.get('state');
-    await t.request('agents.loginPhoneFinish', { flowId: again.flowId, callbackUrl: `dashbot-companion://oauth?code=c&state=${s2}` });
-    expect((await card('design', 'req_login_linear')).approval!.choice).toMatch(/^Connected · Linear/);
+    await t.request('agents.loginPhoneFinish', {
+      flowId: again.flowId,
+      callbackUrl: `dashbot-companion://oauth?code=c&state=${s2}`,
+    });
+    expect((await card('design', 'req_login_linear')).approval!.choice).toMatch(
+      /^Connected · Linear/
+    );
     // claude.ai on the phone: the Mac watches for it, its browser left shut.
-    await t.request('agents.loginStart', { agentId: 'qa', requestId: 'req_login_gmail_qa', optionId: 'claude_ai', onPhone: true });
-    expect((await card('qa', 'req_login_gmail_qa')).approval!.login!.flow).toMatchObject({ onPhone: true, state: 'waiting' });
+    await t.request('agents.loginStart', {
+      agentId: 'qa',
+      requestId: 'req_login_gmail_qa',
+      optionId: 'claude_ai',
+      onPhone: true,
+    });
+    expect((await card('qa', 'req_login_gmail_qa')).approval!.login!.flow).toMatchObject({
+      onPhone: true,
+      state: 'waiting',
+    });
     await t.request('agents.loginCancel', { agentId: 'qa', requestId: 'req_login_gmail_qa' });
   });
 
@@ -252,7 +374,11 @@ describe('login cards against the mock Mac', () => {
     const put = await card('qa', 'req_login_linkedin');
     expect(put.approval).toMatchObject({ status: 'denied', note: 'Not needed' });
     await expect(
-      t.request('agents.loginStart', { agentId: 'qa', requestId: 'req_login_linkedin', optionId: 'browser' })
+      t.request('agents.loginStart', {
+        agentId: 'qa',
+        requestId: 'req_login_linkedin',
+        optionId: 'browser',
+      })
     ).rejects.toBeTruthy();
   });
 });

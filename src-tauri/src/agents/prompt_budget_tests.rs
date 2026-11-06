@@ -6,12 +6,13 @@
 use super::*;
 
 /// A plain agent on Claude Code: 12,054 characters when this was set
-/// (3,827 tokens as Claude Code counted it).
-const PLAIN_BUDGET: usize = 12_500;
-/// The same agent on Codex (its sandbox section).
-const CODEX_BUDGET: usize = 13_100;
-/// The Chief of Staff, with no team yet.
-const CHIEF_BUDGET: usize = 16_600;
+/// (3,827 tokens as Claude Code counted it); 12,697 with the agents' browser
+/// in "Getting access", after trimming elsewhere.
+const PLAIN_BUDGET: usize = 12_800;
+/// The same agent on Codex (its sandbox section): 13,262.
+const CODEX_BUDGET: usize = 13_400;
+/// The Chief of Staff, with no team yet: 16,646.
+const CHIEF_BUDGET: usize = 16_800;
 
 fn agent(id: &str, name: &str, main: bool, engine: Engine) -> store::Agent {
     let mut a: store::Agent = serde_json::from_value(serde_json::json!({

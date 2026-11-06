@@ -9,7 +9,11 @@ import { join } from 'node:path';
 import type { SigninBegun, SigninFrame } from '@shipstudio/companion-protocol';
 import {
   canAct,
+  canFallBack,
   ENDED_WORDS,
+  frameGap,
+  FRAME_GAP_MS,
+  viaLabel,
   endsIt,
   initialView,
   reduce,
@@ -39,7 +43,7 @@ const run = (...events: SigninEvent[]) => events.reduce(reduce, initialView);
 
 describe('the sign-in screen', () => {
   it('starts, goes live on the first picture, and only then takes input', () => {
-    expect(statusLine(initialView)).toMatch(/Opening it in Chrome on your Mac/);
+    expect(statusLine(initialView)).toMatch(/Opening it on your Mac/);
     const opened = run({ t: 'begun', begun });
     expect(opened.phase).toBe('live');
     expect(canAct(opened)).toBe(false);
@@ -151,5 +155,75 @@ describe('the connection', () => {
     expect(signinRouteProblem('x', null)).toMatch(/isn’t connected/);
     expect(signinRouteProblem('x', { kind: 'lan' })).toMatch(/only works over Tailscale/);
     expect(signinRouteProblem('x', { kind: 'tailscale' })).toMatch(/hasn’t proved/);
+  });
+});
+
+describe('the agents’ browser', () => {
+  const agents: SigninBegun = { ...begun, via: 'agents_browser', frameGapMs: 30 };
+
+  it('names where the picture comes from, an older Mac being its Chrome', () => {
+    const v = run({ t: 'begun', begun: agents });
+    expect(v).toMatchObject({ phase: 'live', via: 'agents_browser' });
+    expect(viaLabel('agents_browser')).toBe('The agents’ browser on your Mac');
+    expect(viaLabel(undefined)).toBe('Chrome on your Mac');
+    expect(run({ t: 'begun', begun })).toMatchObject({ via: 'chrome' });
+  });
+
+  it('asks for pictures as fast as the Mac says, else about three a second', () => {
+    expect(frameGap(run({ t: 'begun', begun: agents }))).toBe(30);
+    expect(frameGap(run({ t: 'begun', begun }))).toBe(FRAME_GAP_MS);
+    expect(frameGap(initialView)).toBe(FRAME_GAP_MS);
+  });
+
+  it('hides what’s typed while the page’s focused field is a password', () => {
+    let v = run({ t: 'begun', begun: agents }, { t: 'frame', frame: { ...page, seq: 1 } });
+    expect(v).toMatchObject({ secure: false });
+    v = reduce(v, { t: 'frame', frame: { ...page, seq: 2, secure: true } });
+    expect(v).toMatchObject({ secure: true });
+    // Turning it off can't show a password field's text.
+    v = reduce(v, { t: 'secure', on: false });
+    expect(v).toMatchObject({ secure: true });
+    // Off the field: back to what the person chose.
+    v = reduce(v, { t: 'frame', frame: { ...page, seq: 3 } });
+    expect(v).toMatchObject({ secure: false });
+    v = reduce(v, { t: 'secure', on: true });
+    v = reduce(v, { t: 'frame', frame: { ...page, seq: 4 } });
+    expect(v).toMatchObject({ secure: true });
+  });
+
+  it('a site that refuses the window offers another way, and the way changes', () => {
+    const blocked: SigninFrame = {
+      ...page,
+      state: 'blocked',
+      seq: 5,
+      blocked: 'Google won’t sign in to a browser the app is driving.',
+    };
+    const v = run({ t: 'begun', begun: agents }, { t: 'frame', frame: blocked });
+    expect(canAct(v)).toBe(false);
+    expect(canFallBack(v)).toBe(true);
+    expect(statusLine(v)).toMatch(/Google won’t.*Sign in another way below/);
+    const switching = reduce(v, { t: 'switching' });
+    expect(canFallBack(switching)).toBe(false);
+    expect(statusLine(switching)).toMatch(/plain Chrome window/);
+    const plain = reduce(switching, {
+      t: 'switched',
+      begun: { ...agents, via: 'mac_window', frameGapMs: 150 },
+    });
+    expect(plain).toMatchObject({ via: 'mac_window', frame: null, switching: false });
+    expect(frameGap(plain)).toBe(150);
+    // Shown again in the plain window: input works there.
+    expect(canAct(reduce(plain, { t: 'frame', frame: { ...page, seq: 1 } }))).toBe(true);
+    // The Mac said it can't: its words, and the screen stays.
+    const refused = reduce(switching, {
+      t: 'note',
+      message: 'Google needs one sign-in at the Mac.',
+    });
+    expect(refused).toMatchObject({ phase: 'live', switching: false });
+    expect(statusLine(refused)).toMatch(/Google won’t/);
+  });
+
+  it('Chrome’s own card never offers a fallback', () => {
+    const v = run({ t: 'begun', begun }, { t: 'frame', frame: { ...page, state: 'blocked' } });
+    expect(canFallBack(v)).toBe(false);
   });
 });

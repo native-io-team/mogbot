@@ -349,6 +349,27 @@ export function useAppCommands({
         },
       },
       {
+        id: 'agents.ownBrowser',
+        title: 'Agents’ browser and signing in from your phone…',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: [
+          'agents',
+          'browser',
+          'chrome',
+          'sign in',
+          'phone',
+          'google',
+          'screen recording',
+          'accessibility',
+          'permission',
+        ],
+        run: () => {
+          requestSettingsTabOnOpen('agents');
+          openModal('settings');
+        },
+      },
+      {
         id: 'agents.independence',
         title: 'How independent your agents are…',
         icon: <SettingsIcon size={14} />,

@@ -169,6 +169,35 @@ pub fn remembered(site: &str) -> Option<Remembered> {
     load().sites.get(&site_key(site)).cloned()
 }
 
+/// The name a site is remembered under when it was signed in in the
+/// agents' own browser rather than one of the user's Chrome profiles.
+pub const AGENTS_BROWSER: &str = "Agents";
+
+/// The user signed in to `site` in the agents' browser: the access chain
+/// sends agents there first from now on.
+pub fn remember_agents_browser(site: &str) {
+    let _ = change(|b| {
+        b.sites.insert(
+            site_key(site),
+            Remembered {
+                browser: AGENTS_BROWSER.to_string(),
+                account: None,
+                at: store::now_ms(),
+            },
+        );
+    });
+}
+
+/// `site` was last found signed in in the agents' browser.
+pub fn in_agents_browser(r: Option<&Remembered>) -> bool {
+    r.is_some_and(|r| r.browser == AGENTS_BROWSER)
+}
+
+/// `site` was last found signed in in one of the user's own Chrome profiles.
+pub fn in_personal_chrome(r: Option<&Remembered>) -> bool {
+    r.is_some_and(|r| r.browser != AGENTS_BROWSER)
+}
+
 pub fn forget(site: &str) -> Result<(), CommandError> {
     change(|b| {
         b.sites.remove(&site_key(site));

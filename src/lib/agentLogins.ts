@@ -15,7 +15,15 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { AgentSecret, SecretRequest } from './agentSecrets';
 
-export type LoginMethod = 'existing' | 'oauth' | 'claude_ai' | 'gh' | 'browser' | 'key';
+/** `agent_browser`: the agents' own Chrome on this Mac, signed in by the person (here or from the phone). */
+export type LoginMethod =
+  | 'existing'
+  | 'oauth'
+  | 'claude_ai'
+  | 'gh'
+  | 'agent_browser'
+  | 'browser'
+  | 'key';
 
 export interface LoginAbility {
   /** `read`, or `write` (send, post, change). */

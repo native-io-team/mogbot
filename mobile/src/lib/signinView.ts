@@ -1,12 +1,14 @@
 /**
- * Signing in on the Mac's Chrome from here (`agents.signin*`, desktop
+ * Signing in on the Mac from here (`agents.signin*`, desktop
  * `agents/phone_signin.rs`): the screen's states as one pure reducer, and
- * the tap maths. The requests are `phoneSignin.ts`. The Mac opens the card's site in a tab of
- * its own; this phone shows that tab and drives it.
+ * the tap maths. The requests are `phoneSignin.ts`. The Mac opens the
+ * card's site in a window of the agents' own Chrome (or, for an older card,
+ * a tab of the user's Chrome); this phone shows it live and drives it.
  *
  * What's typed never enters this state: the screen keeps the field's text
  * in a ref, sends it once (`typeInput`), and wipes it. Secure entry hides
- * it as it's typed, and it's wiped when the app leaves the screen.
+ * it as it's typed (on by itself when the page's focused field is a
+ * password), and it's wiped when the app leaves the screen.
  */
 
 import type {
@@ -15,12 +17,28 @@ import type {
   SigninInput,
   SigninKey,
   SigninOutcome,
+  SigninVia,
 } from '@shipstudio/companion-protocol';
 
 /** The login card's line under "Sign in from here". */
 export function signinHereLine(title: string): string {
   return `When ${title} isn’t signed in on your Mac’s Chrome: its sign-in opens there and shows here, and you sign in by touch. Nothing you type is kept.`;
 }
+
+/** Where the picture comes from, under the screen's title. */
+export function viaLabel(via: SigninVia | undefined): string {
+  switch (via) {
+    case 'agents_browser':
+      return 'The agents’ browser on your Mac';
+    case 'mac_window':
+      return 'A Chrome window on your Mac';
+    default:
+      return 'Chrome on your Mac';
+  }
+}
+
+/** The Mac's way for this sign-in: an older Mac names none (its Chrome). */
+export const viaOf = (begun: SigninBegun): SigninVia => begun.via ?? 'chrome';
 
 /**
  * Why this connection can't carry a sign-in, in this screen's words, from
@@ -50,8 +68,14 @@ export type SigninView =
       frame: SigninFrame | null;
       /** Done said it's still on a sign-in page, or couldn't tell. */
       check: 'idle' | 'checking' | 'signed_out' | 'unknown';
-      /** The field hides what's typed. */
+      /** The field hides what's typed (the page asked, or the person did). */
       secure: boolean;
+      /** The person turned hiding on themselves. */
+      hide: boolean;
+      /** How it's shown and driven now (a fallback changes it). */
+      via: SigninVia;
+      /** Asking the Mac for another way in. */
+      switching: boolean;
       /** The Mac's last refusal or failure, in its words. */
       note: string | null;
     }
@@ -62,6 +86,8 @@ export type SigninEvent =
   | { t: 'frame'; frame: SigninFrame }
   | { t: 'note'; message: string | null }
   | { t: 'secure'; on: boolean }
+  | { t: 'switching' }
+  | { t: 'switched'; begun: SigninBegun }
   | { t: 'checking' }
   | { t: 'outcome'; outcome: SigninOutcome }
   | { t: 'end'; reason: EndReason; message: string };
@@ -80,18 +106,33 @@ export function reduce(view: SigninView, e: SigninEvent): SigninView {
   }
   if (view.phase === 'starting') {
     return e.t === 'begun'
-      ? { phase: 'live', begun: e.begun, frame: null, check: 'idle', secure: false, note: null }
+      ? {
+          phase: 'live',
+          begun: e.begun,
+          frame: null,
+          check: 'idle',
+          secure: false,
+          hide: false,
+          via: viaOf(e.begun),
+          switching: false,
+          note: null,
+        }
       : view;
   }
   switch (e.t) {
     case 'begun':
       return view;
     case 'frame':
-      return { ...view, frame: e.frame };
+      // A password field focused on the page hides what's typed here too.
+      return { ...view, frame: e.frame, secure: view.hide || !!e.frame.secure };
     case 'note':
-      return { ...view, note: e.message };
+      return { ...view, note: e.message, switching: false };
     case 'secure':
-      return { ...view, secure: e.on };
+      return { ...view, hide: e.on, secure: e.on || !!view.frame?.secure };
+    case 'switching':
+      return { ...view, switching: true, note: null };
+    case 'switched':
+      return { ...view, via: viaOf(e.begun), frame: null, switching: false, note: null };
     case 'checking':
       return { ...view, check: 'checking', note: null };
     case 'outcome':
@@ -109,9 +150,12 @@ export function reduce(view: SigninView, e: SigninEvent): SigninView {
 
 /** The line under the picture, or null. */
 export function statusLine(view: SigninView): string | null {
-  if (view.phase === 'starting') return 'Opening it in Chrome on your Mac…';
+  if (view.phase === 'starting') return 'Opening it on your Mac…';
   if (view.phase === 'ended') return view.message;
   if (view.check === 'checking') return 'Checking on your Mac…';
+  if (view.switching) return 'Opening it in a plain Chrome window on your Mac…';
+  if (view.frame?.state === 'blocked')
+    return `${view.frame.blocked ?? 'This site won’t sign in to this window.'} Sign in another way below.`;
   if (view.check === 'signed_out')
     return 'It’s still asking you to sign in. Finish here, then Done.';
   if (view.check === 'unknown')
@@ -123,7 +167,29 @@ export function statusLine(view: SigninView): string | null {
 
 /** Input is possible: the page is showing, and Done isn't being checked. */
 export function canAct(view: SigninView): boolean {
-  return view.phase === 'live' && view.frame?.state === 'live' && view.check !== 'checking';
+  return (
+    view.phase === 'live' &&
+    view.frame?.state === 'live' &&
+    view.check !== 'checking' &&
+    !view.switching
+  );
+}
+
+/** The site refused the window and the Mac may offer another way. */
+export function canFallBack(view: SigninView): boolean {
+  return (
+    view.phase === 'live' &&
+    view.via === 'agents_browser' &&
+    view.frame?.state === 'blocked' &&
+    !view.switching
+  );
+}
+
+/** How long between pictures: what the Mac said, else about three a second. */
+export function frameGap(view: SigninView): number {
+  if (view.phase !== 'live') return FRAME_GAP_MS;
+  if (view.via === 'mac_window') return 150;
+  return view.begun.frameGapMs ?? FRAME_GAP_MS;
 }
 
 /**

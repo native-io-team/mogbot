@@ -188,8 +188,12 @@ export interface Methods {
    * end it. Never audited beyond the domain and how it ended.
    */
   'agents.signinBegin': { params: { agentId: string; requestId: string }; result: SigninBegun };
-  /** One picture of the tab. Polling it doesn't keep the session alive. */
-  'agents.signinFrame': { params: { sessionId: string }; result: SigninFrame };
+  /**
+   * One picture of the tab. Polling it doesn't keep the session alive.
+   * `after`: the picture the phone has; the agents' browser waits (up to a
+   * second and a half) for a newer one.
+   */
+  'agents.signinFrame': { params: { sessionId: string; after?: number }; result: SigninFrame };
   /** A tap, typing, a key, a scroll, Back or Reload. Only from the phone that began it. */
   'agents.signinInput': { params: { sessionId: string; input: SigninInput }; result: null };
   /**
@@ -202,6 +206,13 @@ export interface Methods {
   };
   /** The tab closes; nothing is kept. */
   'agents.signinStop': { params: { sessionId: string }; result: null };
+  /**
+   * The site refused the agents' browser (a `blocked` frame): the same
+   * profile in a plain Chrome window, shown here through macOS window
+   * capture. Refused, in words to show, when the Mac hasn't given the app
+   * Screen Recording and Accessibility.
+   */
+  'agents.signinFallback': { params: { sessionId: string }; result: SigninBegun };
   'agents.loginCancel': { params: { agentId: string; requestId: string }; result: null };
   'agents.loginDecline': {
     params: { agentId: string; requestId: string; note?: string };

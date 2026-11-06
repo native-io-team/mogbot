@@ -1,7 +1,10 @@
 /**
- * Sign in on your Mac, from here: a login card's site, open in a tab of the
- * Mac's own Chrome, shown live and driven by touch (`lib/phoneSignin.ts`,
- * desktop `agents/phone_signin.rs`).
+ * Sign in on your Mac, from here: a login card's site, open in a window of
+ * the agents' own Chrome on the Mac (or a tab of the user's Chrome for an
+ * older card), shown live and driven by touch (`lib/phoneSignin.ts`,
+ * desktop `agents/phone_signin.rs`). A site that refuses that window offers
+ * "Sign in another way": the same profile in a plain Chrome window, shown
+ * through macOS, or the plain answer that it happens at the Mac.
  *
  * Tap the picture to click there; pinch to look closer; the field types at
  * whatever is focused, hidden when Password is on. What's typed lives only
@@ -27,8 +30,9 @@ import { Button, T } from '../components/ui';
 import { haptic } from '../lib/haptics';
 import {
   canAct,
+  canFallBack,
   endsIt,
-  FRAME_GAP_MS,
+  frameGap,
   initialView,
   KEYS,
   reduce,
@@ -36,8 +40,16 @@ import {
   statusLine,
   toFramePoint,
   typeInput,
+  viaLabel,
 } from '../lib/signinView';
-import { signinBegin, signinDone, signinFrame, signinInput, signinStop } from '../lib/phoneSignin';
+import {
+  signinBegin,
+  signinDone,
+  signinFallback,
+  signinFrame,
+  signinInput,
+  signinStop,
+} from '../lib/phoneSignin';
 import { describeError } from '../lib/session';
 import { iconSize, radius, space } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
@@ -59,6 +71,9 @@ export default function SignInFromPhone() {
   const session = view.phase === 'live' ? view.begun.sessionId : null;
   const sessionRef = useRef<string | null>(null);
   sessionRef.current = session;
+  // Read by the picture loop on each pass (the way can change mid-session).
+  const viewRef = useRef(view);
+  viewRef.current = view;
 
   const wipe = () => {
     text.current = '';
@@ -94,18 +109,21 @@ export default function SignInFromPhone() {
     return () => sub.remove();
   }, []);
 
-  // Pictures, about three a second, one at a time; paused in the background.
+  // Pictures, one at a time, each asked for after the last (the agents'
+  // browser answers as soon as a newer one is drawn); paused in the background.
   useEffect(() => {
     if (!session) return;
     let stop = false;
     let failures = 0;
+    let seq = 0;
     const loop = async () => {
       while (!stop) {
         if (AppState.currentState !== 'background') {
           try {
-            const frame = await signinFrame(session);
+            const frame = await signinFrame(session, seq || undefined);
             if (stop) return;
             failures = 0;
+            seq = frame.seq ?? 0;
             dispatch({ t: 'frame', frame });
           } catch (e) {
             if (stop) return;
@@ -117,7 +135,7 @@ export default function SignInFromPhone() {
             dispatch({ t: 'note', message });
           }
         }
-        await new Promise((r) => setTimeout(r, FRAME_GAP_MS));
+        await new Promise((r) => setTimeout(r, frameGap(viewRef.current)));
       }
     };
     void loop();
@@ -191,6 +209,17 @@ export default function SignInFromPhone() {
       }
     }
   };
+  const fallBack = async () => {
+    if (!session) return;
+    dispatch({ t: 'switching' });
+    try {
+      const begun = await signinFallback(session);
+      dispatch({ t: 'switched', begun });
+    } catch (e) {
+      haptic.error();
+      dispatch({ t: 'note', message: describeError(e) });
+    }
+  };
   const stop = async () => {
     if (session) await signinStop(session).catch(() => {});
     dispatch({ t: 'end', reason: 'stopped', message: 'Stopped. The tab on your Mac is closed.' });
@@ -215,7 +244,7 @@ export default function SignInFromPhone() {
             {title}
           </T>
           <T variant="caption" color={colors.textMuted} numberOfLines={1}>
-            Chrome on your Mac
+            {viaLabel(view.phase === 'live' ? view.via : undefined)}
           </T>
         </View>
         <Button
@@ -230,17 +259,17 @@ export default function SignInFromPhone() {
       </View>
 
       <View style={styles.page}>
-        {shown && frame?.image ? (
+        {frame && frame.state !== 'outside' && frame.image ? (
           <ScrollView
             maximumZoomScale={3}
             minimumZoomScale={1}
             bouncesZoom
-            contentContainerStyle={{ minHeight: shown.height }}
+            contentContainerStyle={{ minHeight: shownHeight(width, frame) }}
           >
             <Pressable onPress={onTap} disabled={!live} accessibilityLabel="The page on your Mac">
               <Image
                 source={{ uri: `data:image/jpeg;base64,${frame.image}` }}
-                style={shown}
+                style={{ width, height: shownHeight(width, frame) }}
                 contentFit="fill"
                 transition={0}
               />
@@ -258,6 +287,15 @@ export default function SignInFromPhone() {
           <T variant="small" color={colors.textSecondary}>
             {line}
           </T>
+          {canFallBack(view) && (
+            <Button
+              title="Sign in another way"
+              variant="outline"
+              size="compact"
+              onPress={() => void fallBack()}
+              testID="signin-fallback"
+            />
+          )}
           {view.phase === 'live' && view.check === 'unknown' && (
             <Button
               title="Hand it over anyway"

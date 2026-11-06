@@ -91,15 +91,22 @@ export function LoginCard({
   const input = useRef<ComponentRef<typeof TextInput> | null>(null);
   const title = loginTitle(approval, login, agent.name);
   const phoneSignIn = useServed('agents.loginPhoneBegin', MAC_FEATURES.loginsPhone);
-  const way = (o: LoginOption) => phoneWay(o, phoneSignIn, hasSignInSheet());
   const canDecline = useServed('agents.loginNotNeeded');
   const [receipt, setReceipt] = useDeclineReceipt();
   useRecheckWhenBack(
     login.flow?.state === 'waiting' && login.flow.onPhone === true && login.flow.option === 'claude_ai'
   );
-  // The Mac's Chrome, driven from here, for a card whose way in is the browser.
+  // The Mac's browser, driven from here: the agents' own (the card's
+  // `agent_browser` way in), or the user's Chrome for an older card.
   const signinServed = useServed('agents.signinBegin', MAC_FEATURES.signinPhone);
+  const way = (o: LoginOption) => phoneWay(o, phoneSignIn, hasSignInSheet(), signinServed);
+  const label = (o: LoginOption) => (way(o) === 'here' ? 'Sign in from here' : o.label);
   const router = useRouter();
+  const signinHere = () =>
+    router.push({
+      pathname: '/signin',
+      params: { agentId: message.agentId, requestId: approval.requestId },
+    });
 
   const wipe = () => {
     value.current = '';
@@ -134,6 +141,9 @@ export function LoginCard({
   const start = (o: LoginOption) => {
     const ids = { agentId: message.agentId, requestId: approval.requestId };
     switch (way(o)) {
+      case 'here':
+        haptic.select();
+        return signinHere();
       case 'sheet':
         return run(o.id, () => signInWithSheet(ids, o.id), haptic.select);
       case 'web':
@@ -195,7 +205,7 @@ export function LoginCard({
       ? [
           phase === 'failed' && login.flow?.option === firstOption.id
             ? 'Try again'
-            : firstOption.label,
+            : label(firstOption),
         ]
       : []),
   ]);
@@ -378,7 +388,7 @@ export function LoginCard({
         )}
         {first && first.method !== 'key' && (
           <Button
-            title={failed && login.flow?.option === first.id ? 'Try again' : first.label}
+            title={failed && login.flow?.option === first.id ? 'Try again' : label(first)}
             // The affirmative answer is the neutral filled one, never the accent.
             variant="answer"
             busy={busy === first.id}
@@ -391,7 +401,7 @@ export function LoginCard({
       {others.map((o) => (
         <View key={o.id} style={styles.other}>
           <Button
-            title={failed && login.flow?.option === o.id ? `Try again: ${o.label}` : o.label}
+            title={failed && login.flow?.option === o.id ? `Try again: ${label(o)}` : label(o)}
             variant="outline"
             busy={busy === o.id}
             disabled={off}
@@ -402,25 +412,22 @@ export function LoginCard({
           </T>
         </View>
       ))}
-      {signinServed && login.options.some((o) => o.method === 'browser') && (
-        <View style={styles.other}>
-          <Button
-            title="Sign in from here"
-            variant="outline"
-            disabled={off}
-            onPress={() =>
-              router.push({
-                pathname: '/signin',
-                params: { agentId: message.agentId, requestId: approval.requestId },
-              })
-            }
-            testID="login-signin-here"
-          />
-          <T variant="caption" color={colors.textMuted}>
-            {signinHereLine(login.title)}
-          </T>
-        </View>
-      )}
+      {signinServed &&
+        login.options.some((o) => o.method === 'browser') &&
+        !login.options.some((o) => o.method === 'agent_browser') && (
+          <View style={styles.other}>
+            <Button
+              title="Sign in from here"
+              variant="outline"
+              disabled={off}
+              onPress={signinHere}
+              testID="login-signin-here"
+            />
+            <T variant="caption" color={colors.textMuted}>
+              {signinHereLine(login.title)}
+            </T>
+          </View>
+        )}
       {key && login.key && (
         <View style={styles.other}>
           {!typing ? (

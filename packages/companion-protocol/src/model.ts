@@ -491,7 +491,15 @@ export interface Approval {
 // Logins: identical to src/lib/agentLogins.ts (desktop `agents/logins.rs`).
 // Never a credential: names, abilities and the ways in only.
 
-export type LoginMethod = 'existing' | 'oauth' | 'claude_ai' | 'gh' | 'browser' | 'key';
+/** `agent_browser`: the agents' own Chrome on the Mac; the phone signs in to it from here. */
+export type LoginMethod =
+  | 'existing'
+  | 'oauth'
+  | 'claude_ai'
+  | 'gh'
+  | 'agent_browser'
+  | 'browser'
+  | 'key';
 
 export interface LoginAbility {
   /** `read`, or `write` (send, post, change). */
@@ -553,8 +561,17 @@ export interface LoginRequest {
 }
 
 /**
- * `agents.signinBegin`: a tab of the Mac's own in its Chrome, open on the
- * card's site, for this phone alone (`agents/phone_signin.rs`).
+ * How the phone sees and drives a sign-in: a window of the agents' own
+ * Chrome (screencast out, input in; no Mac permission), a tab of the
+ * user's own Chrome (Claude in Chrome), or the agents' profile in a plain
+ * window shown through macOS (a site that refuses a driven browser).
+ */
+export type SigninVia = 'agents_browser' | 'chrome' | 'mac_window';
+
+/**
+ * `agents.signinBegin`: a window of the agents' browser (or, for a card
+ * without that way in, a tab of the Mac's Chrome), open on the card's site,
+ * for this phone alone (`agents/phone_signin.rs`).
  */
 export interface SigninBegun {
   sessionId: string;
@@ -563,14 +580,26 @@ export interface SigninBegun {
   title: string;
   /** No input for this long and the Mac closes it. */
   idleSeconds: number;
+  /** Older Macs send nothing: the user's Chrome. */
+  via?: SigninVia;
+  /** How long to wait between pictures. */
+  frameGapMs?: number;
 }
 
 /**
  * `agents.signinFrame`: one picture of that tab. `outside`: it went
  * somewhere that isn't the sign-in, which isn't shown; only Back works.
+ * `blocked`: the site refuses a browser the app drives (`blocked` says
+ * why); `agents.signinFallback` offers another way.
  */
 export interface SigninFrame {
-  state: 'live' | 'outside';
+  state: 'live' | 'outside' | 'blocked';
+  /** The picture's number: ask for one after it. */
+  seq?: number;
+  /** The focused field takes a password or code: hide what's typed. */
+  secure?: boolean;
+  /** Why the site refuses this window. */
+  blocked?: string;
   /** Where the tab is, host only. */
   host?: string;
   /** A JPEG, base64. Only when `live`. */

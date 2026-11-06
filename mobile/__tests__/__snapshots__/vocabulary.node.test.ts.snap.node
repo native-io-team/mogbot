@@ -8,6 +8,7 @@ exports[`the words a person reads use the agreed words the way the snapshot hold
   ", like one made there. You can edit its instructions from its agent sheet here; its model and project are set on the Mac.",
   ", then click Allow. This waits up to two minutes.",
   ". Only go on if you just made this code on your own Mac.",
+  "A Chrome window on your Mac",
   "A code works once and for five minutes. Make a new one on your Mac: Settings → Phone → Pair a phone.",
   "A command on your Mac failed.",
   "Add logins",
@@ -89,7 +90,8 @@ exports[`the words a person reads use the agreed words the way the snapshot hold
   "On your Mac",
   "Open in …",
   "Opening a file’s diff needs your Mac.",
-  "Opening it in Chrome on your Mac…",
+  "Opening it in a plain Chrome window on your Mac…",
+  "Opening it on your Mac…",
   "Opens claude.ai here to add … to your Claude account (the one your Mac uses). claude.ai holds that sign-in, not your Mac.",
   "Opens the file from your Mac",
   "Opens the site running on your Mac, read-only",
@@ -142,6 +144,7 @@ exports[`the words a person reads use the agreed words the way the snapshot hold
   "The Mac at this address has a different identity from the one this phone paired with, so this phone sent it nothing private. That happens when the app on your Mac lost its key and started over, which removes every paired phone. Pair again from your Mac.",
   "The Mac had the request, but nothing came back within two minutes. If you clicked Allow, check Settings → Phone on the Mac; otherwise make a new code there and scan it.",
   "The Mac’s answer couldn’t be read.",
+  "The agents’ browser on your Mac",
   "The app on your Mac has no push service. Alerts arrive while this app is open.",
   "The app on your Mac is too old for this phone. Update it on the Mac, then try again.",
   "The apps your agents asked for, one row each. Sign in from here, or on your Mac.",
@@ -205,5 +208,6 @@ exports[`the words a person reads use the agreed words the way the snapshot hold
   "… · in your Mac’s Keychain. …",
   "…: hand it back first.",
   "…running on your Mac at …",
+  "…’s sign-in opens in the agents’ own Chrome on your Mac and shows here: you sign in by touch, and nothing you type is kept. Your agents then use it signed in.",
 ]
 `;

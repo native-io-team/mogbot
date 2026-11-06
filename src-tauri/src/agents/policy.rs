@@ -844,7 +844,8 @@ pub fn verdict(
         if server == super::prompts::SERVER_KEY {
             return None;
         }
-        if server.contains("chrome") {
+        // The agents' browser is "the browser" in its settings too.
+        if server.contains("chrome") || server == crate::agent_browser::tools::SERVER_KEY {
             return (!eff.browser).then(|| {
                 Verdict::Deny(format!(
                     "Your settings don't let you use the user's browser. {ASK_LINE}"

@@ -2297,6 +2297,54 @@ pub async fn agents_phone_signin_stop(app: AppHandle) -> Result<(), CommandError
     Ok(())
 }
 
+/// Settings → Agents → "Agents' browser": the switch, whether Chrome is
+/// here and running, and the two permissions the plain-window sign-in from
+/// the phone needs (`agent_browser`).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_agent_browser_status() -> Result<crate::agent_browser::Status, CommandError> {
+    tokio::task::spawn_blocking(crate::agent_browser::status)
+        .await
+        .map_err(agents::err_other)
+}
+
+/// The switch. Off closes the agents' Chrome.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_agent_browser_set_enabled(
+    on: bool,
+) -> Result<crate::agent_browser::Status, CommandError> {
+    tokio::task::spawn_blocking(move || crate::agent_browser::set_enabled(on))
+        .await
+        .map_err(agents::err_other)?
+}
+
+/// The guided permission card: ask macOS for Screen Recording (its own
+/// prompt, once) and open System Settings at the pane for `which`
+/// ("screen_recording" or "accessibility"). Only those two panes open.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_agent_browser_permission(
+    which: String,
+) -> Result<crate::agent_browser::Status, CommandError> {
+    use crate::agent_browser::macos;
+    let pane = match which.as_str() {
+        "screen_recording" => {
+            let _ = tokio::task::spawn_blocking(macos::request_screen_recording).await;
+            macos::SCREEN_RECORDING_PANE
+        }
+        "accessibility" => macos::ACCESSIBILITY_PANE,
+        _ => {
+            return Err(CommandError::expected(
+                "That isn't one of the two permissions.",
+            ))
+        }
+    };
+    tauri_plugin_opener::open_url(pane, None::<&str>)
+        .map_err(|_| CommandError::expected("Couldn't open System Settings."))?;
+    Ok(crate::agent_browser::status())
+}
+
 /// Open the extension's install page in this Mac's browser. Only the
 /// setup's own URL: nothing from the webview is opened.
 #[tauri::command]
