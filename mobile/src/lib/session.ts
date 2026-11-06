@@ -567,7 +567,7 @@ export const deviceSelf = () => call('devices.self', {});
 export async function setAgentToggles(
   agentId: string,
   input: Partial<Record<'pinned' | 'muted' | 'hidden', boolean>> & {
-    /** How it looks, from a Mac listing `MAC_FEATURES.looks`. */
+    /** How it looks, from a Mac listing `MAC_FEATURES.keycaps` (key-cap keys). */
     avatar?: AgentLook;
     color?: string;
   }

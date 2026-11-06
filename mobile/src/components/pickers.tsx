@@ -15,8 +15,10 @@ import { Icon, T, tap, useRipple } from './ui';
 import { AgentAvatar } from './agent';
 import {
   AVATAR_FACES,
+  AVATAR_FINISHES,
   AVATAR_SHAPES,
   FACE_NAMES,
+  FINISH_NAMES,
   SHAPE_NAMES,
   type AgentLook,
 } from '@shipstudio/companion-protocol';
@@ -151,9 +153,10 @@ export function ColorSwatches({
 }
 
 /**
- * How an agent looks: a row of shapes and a row of faces, each drawn with
- * the current pick's other part and colour, so what a button shows is what
- * you'd get. The same choices as the desk's editor (`AgentLookPicker`).
+ * How an agent looks: a row of shapes, a row of faces and a row of finishes
+ * (a key cap or embossed), each drawn with the current pick's other parts
+ * and colour, so what a button shows is what you'd get. The same choices as
+ * the desk's editor (`AgentLookPicker`). The choices hold still.
  */
 export function LookChoices({
   name,
@@ -177,7 +180,7 @@ export function LookChoices({
             on={shape === look.shape}
             onPress={() => onChange({ ...look, shape })}
           >
-            <AgentAvatar name={name} color={color} look={{ ...look, shape }} size={SWATCH} />
+            <AgentAvatar name={name} color={color} look={{ ...look, shape }} size={SWATCH} still />
           </LookChoice>
         ))}
       </View>
@@ -189,7 +192,19 @@ export function LookChoices({
             on={face === look.face}
             onPress={() => onChange({ ...look, face })}
           >
-            <AgentAvatar name={name} color={color} look={{ ...look, face }} size={SWATCH} />
+            <AgentAvatar name={name} color={color} look={{ ...look, face }} size={SWATCH} still />
+          </LookChoice>
+        ))}
+      </View>
+      <View style={styles.swatches} accessibilityRole="radiogroup" accessibilityLabel="Finish">
+        {AVATAR_FINISHES.map((finish) => (
+          <LookChoice
+            key={finish}
+            label={FINISH_NAMES[finish]}
+            on={finish === (look.finish ?? 'keycap')}
+            onPress={() => onChange({ ...look, finish })}
+          >
+            <AgentAvatar name={name} color={color} look={{ ...look, finish }} size={SWATCH} still />
           </LookChoice>
         ))}
       </View>

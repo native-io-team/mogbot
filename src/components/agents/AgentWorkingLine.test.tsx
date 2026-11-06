@@ -51,8 +51,8 @@ describe('a working agent in a list', () => {
     expect(screen.getByText(/Thinking/).textContent).toBe('Thinking · 12s');
   });
 
-  it('marks a working badge, which holds still under Reduce Motion (CSS)', () => {
+  it('marks a working avatar, which holds still under Reduce Motion (CSS)', () => {
     const { container } = render(<AgentAvatar name="Acme Site" color="green" working />);
-    expect(container.querySelector('.agent-avatar--working')).not.toBeNull();
+    expect(container.querySelector('.agent-avatar[data-mood="working"]')).not.toBeNull();
   });
 });

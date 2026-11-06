@@ -508,7 +508,7 @@ pub async fn agents_update(
     }
     let color = input.color.filter(|c| store::COLORS.contains(&c.as_str()));
     let shape = input.shape.filter(|s| *s < store::SHAPE_COUNT);
-    let avatar = input.avatar.filter(store::AgentLook::is_valid);
+    let avatar = input.avatar.and_then(store::AgentLook::normalized);
     let role = input.role.clone();
     let current = store::get(&agent_id)?;
     let engine = match input.engine.as_deref().map(Engine::parse).transpose()? {

@@ -18,6 +18,7 @@ import ReanimatedSwipeable, {
 import Animated, { interpolate, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import { agentActions, type Action, type AgentAction, type AgentCaps } from '../lib/actions';
 import {
+  agentMood,
   formatAgo,
   lineState,
   needsLine,
@@ -340,14 +341,15 @@ function RowBody({
         if (id) onAction(id);
       }}
     >
-      {/* Working: the line says what (never a ring around the avatar, never closed eyes). */}
+      {/* The avatar says what it's doing by how it looks around (never a ring,
+          never closed eyes); the line says what. Last known: it holds still. */}
       <View style={styles.avatar}>
         <AgentAvatar
           id={agent.id}
           name={agent.name}
           color={agent.color}
           size={avatarSize.list}
-          working={running}
+          mood={live ? agentMood(agent, running) : 'idle'}
         />
       </View>
       <View style={styles.text}>

@@ -80,7 +80,7 @@ export default function NewAgent() {
   const takenColors = useMemo(() => (agents ?? []).map((a) => a.color), [agents]);
   const [color, setColor] = useState(() => freeColor(takenColors));
   // A Mac that keeps looks: a shape nobody wears yet, shown as it'll be.
-  const looks = useApp((s) => !!s.welcome?.features?.includes(MAC_FEATURES.looks));
+  const looks = useApp((s) => !!s.welcome?.features?.includes(MAC_FEATURES.keycaps));
   const [look, setLook] = useState<AgentLook>(() =>
     freeLook(
       (agents ?? []).map((a) => lookFor(a)),

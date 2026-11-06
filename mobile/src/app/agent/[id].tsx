@@ -51,6 +51,7 @@ import {
   folderName,
   modelName,
   usageLine,
+  agentMood,
 } from '../../lib/agents';
 import { haptic } from '../../lib/haptics';
 import {
@@ -70,7 +71,7 @@ import { avatarSize, iconSize, radius, space } from '../../lib/theme';
 import { makeStyles, useColors } from '../../lib/appearance';
 
 // Its look (shape, face and colour, which is also its chat's accent) changes here
-// only on a Mac that takes it (MAC_FEATURES.looks; AgentToggles in companion/router.rs).
+// only on a Mac that draws key caps (MAC_FEATURES.keycaps; AgentToggles in companion/router.rs).
 export default withAgentAccent(AgentSheet);
 
 function AgentSheet() {
@@ -90,7 +91,7 @@ function AgentSheet() {
     if (text) announce(text, true);
   }, []);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
-  const looks = !!welcome?.features?.includes(MAC_FEATURES.looks);
+  const looks = !!welcome?.features?.includes(MAC_FEATURES.keycaps);
   const [showLook, setShowLook] = useState(false);
   const servesUsage = canCall('agents.usage', welcome);
   useEffect(() => {
@@ -135,6 +136,7 @@ function AgentSheet() {
               name={agent.name}
               color={agent.color}
               size={avatarSize.sheet}
+              mood={agentMood(agent)}
             />
           </Pressable>
           <View style={{ flex: 1, gap: space['2xs'] }}>

@@ -367,9 +367,11 @@ fn check_new_agent(input: PhoneNewAgent) -> Result<PhoneNewAgent, WireError> {
 fn check_look(
     look: Option<crate::agents::store::AgentLook>,
 ) -> Result<Option<crate::agents::store::AgentLook>, WireError> {
-    look.map(|l| crate::agents::store::AgentLook::checked(&l.shape, &l.face))
-        .transpose()
-        .map_err(bad_params)
+    look.map(|l| {
+        crate::agents::store::AgentLook::checked_with(&l.shape, &l.face, l.finish.as_deref())
+    })
+    .transpose()
+    .map_err(bad_params)
 }
 
 /// "Setting up your team" from the phone (`agents::team_setup`): the same

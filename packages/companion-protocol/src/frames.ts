@@ -179,6 +179,12 @@ export const MAC_FEATURES = {
    */
   looks: 'agents.looks',
   /**
+   * Looks are key caps: four shapes (circle, squircle, diamond, hexagon), four
+   * faces and a `finish`. The phone offers its look picker only to a Mac that
+   * lists this; an older one would refuse the new keys.
+   */
+  keycaps: 'agents.keycaps',
+  /**
    * Signing in to a site in the Mac's own Chrome from the phone: the
    * `agents.signin*` methods, one tab shown live here and driven from here.
    */

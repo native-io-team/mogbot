@@ -1,9 +1,14 @@
 /**
  * Standalone harness surface for agent avatars (docs/internal/avatars.md):
- * every shape and face at 16 / 24 / 40 / 96px, the colours, and the motion
- * states, in either theme and any of the three directions considered.
+ * the key caps, every shape × face in both finishes, the sizes, the colours,
+ * and the motion states as frame strips, in either theme.
  *
- *   harness-avatars.html?theme=light&avatarDirection=solid&section=sizes
+ *   harness-avatars.html?theme=light&section=sheet
+ *   harness-avatars.html?section=states&px=96&freeze=off
+ *
+ * `section=states` lays each mood out as a strip of frames: the capture
+ * script (scripts/avatar-strips.mjs) pauses every animation and sets each
+ * frame's own time, so a strip is the motion sampled, not a guess at it.
  *
  * Served only by `vite.harness.config.ts`. The real component and the real
  * stylesheet; nothing here is a mock-up.
@@ -14,63 +19,124 @@ import { createRoot } from 'react-dom/client';
 import { AgentAvatar, type AgentAvatarSize } from '../components/agents/AgentAvatar';
 import {
   AVATAR_FACES,
+  AVATAR_FINISHES,
+  AVATAR_MOODS,
+  AVATAR_MOTION,
   AVATAR_SHAPES,
   FACE_NAMES,
+  FINISH_NAMES,
   SHAPE_NAMES,
   type AgentLook,
+  type AvatarMood,
 } from '../../packages/companion-protocol/src/avatar';
 import { AGENT_COLORS } from '../lib/agents';
 import '../styles/index.css';
 import './freeze.css';
-import './avatarDirections.css';
 import './avatarGallery.css';
 
 const params = new URLSearchParams(window.location.search);
 const theme = params.get('theme') === 'light' ? 'light' : 'dark';
-const direction = params.get('avatarDirection') ?? 'tonal';
 const section = params.get('section') ?? 'all';
 document.documentElement.dataset.theme = theme;
-document.documentElement.dataset.avatarDirection = direction;
 if (params.get('freeze') !== 'off') {
   document.documentElement.setAttribute('data-harness-freeze', '');
 }
 document.title = 'Avatars harness';
 
+const NAMES = ['Hiring', 'Finance', 'Sales', 'Research'];
+const HUES = ['green', 'amber', 'red', 'purple', 'blue', 'teal', 'pink', 'orange'];
+
+function Sheet() {
+  return (
+    <section className="avatar-gallery__section" data-section="sheet">
+      {AVATAR_FINISHES.map((finish) => (
+        <div key={finish}>
+          <h2>{FINISH_NAMES[finish]}: every shape × face at 48px</h2>
+          <div className="avatar-gallery__sheet" data-cols={AVATAR_SHAPES.length + 1}>
+            <span />
+            {AVATAR_SHAPES.map((s) => (
+              <span key={s} className="avatar-gallery__caption">
+                {SHAPE_NAMES[s]}
+              </span>
+            ))}
+            {AVATAR_FACES.map((face, fi) => (
+              <Row key={face} label={FACE_NAMES[face]}>
+                {AVATAR_SHAPES.map((shape, si) => (
+                  <AgentAvatar
+                    key={shape}
+                    name={NAMES[(fi + si) % NAMES.length]}
+                    color={HUES[(fi * 4 + si) % HUES.length]}
+                    look={{ shape, face, finish }}
+                    size="lg"
+                    still
+                  />
+                ))}
+              </Row>
+            ))}
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 const SIZES: [AgentAvatarSize, string][] = [
   ['xs', '16'],
+  ['mini', '18'],
   ['row', '24'],
   ['md', '40'],
+  ['lg', '48'],
   ['xl', '96'],
-];
-const PALETTE = [
-  'green',
-  'orange',
-  'teal',
-  'amber',
-  'pink',
-  'red',
-  'blue',
-  'purple',
-  'white',
-  'brown',
 ];
 
 function Sizes() {
+  const looks: AgentLook[] = [
+    { shape: 'squircle', face: 'dots' },
+    { shape: 'hexagon', face: 'smile' },
+    { shape: 'diamond', face: 'debossed', finish: 'embossed' },
+  ];
   return (
     <section className="avatar-gallery__section" data-section="sizes">
-      <h2>Every shape at 16, 24, 40 and 96px</h2>
+      <h2>16 · 18 · 24 · 40 · 48 · 96px (flat below 24)</h2>
       <div className="avatar-gallery__sizes">
-        {AVATAR_SHAPES.map((shape, i) => {
-          const look: AgentLook = { shape, face: AVATAR_FACES[i % AVATAR_FACES.length] };
-          const color = PALETTE[i % PALETTE.length];
+        {looks.map((look, i) => (
+          <div key={i} className="avatar-gallery__size-row">
+            {SIZES.map(([size]) => (
+              <AgentAvatar
+                key={size}
+                name="Finance"
+                color={HUES[i * 2]}
+                look={look}
+                size={size}
+                still
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Colors() {
+  return (
+    <section className="avatar-gallery__section" data-section="colors">
+      <h2>Every colour at 40px: at rest, selected, embossed</h2>
+      <div className="avatar-gallery__colors">
+        {AGENT_COLORS.map((color, i) => {
+          const look: AgentLook = { shape: AVATAR_SHAPES[i % AVATAR_SHAPES.length], face: 'dots' };
           return (
-            <div key={shape} className="avatar-gallery__size-row">
-              {SIZES.map(([size]) => (
-                <AgentAvatar key={size} name={shape} color={color} look={look} size={size} />
-              ))}
-              <span className="avatar-gallery__caption">
-                {SHAPE_NAMES[shape]} · {FACE_NAMES[look.face]}
-              </span>
+            <div key={color} className="avatar-gallery__color">
+              <AgentAvatar name={color} color={color} look={look} size="md" still />
+              <AgentAvatar name={color} color={color} look={look} size="md" selected still />
+              <AgentAvatar
+                name={color}
+                color={color}
+                look={{ ...look, finish: 'embossed' }}
+                size="md"
+                still
+              />
+              <span className="avatar-gallery__caption">{color}</span>
             </div>
           );
         })}
@@ -79,98 +145,43 @@ function Sizes() {
   );
 }
 
-function Faces() {
-  return (
-    <section className="avatar-gallery__section" data-section="faces">
-      <h2>Every face on every shape (40px), and at 24px</h2>
-      <div className="avatar-gallery__grid">
-        <span />
-        {AVATAR_FACES.map((f) => (
-          <span key={f} className="avatar-gallery__caption">
-            {FACE_NAMES[f]}
-          </span>
-        ))}
-        {AVATAR_SHAPES.map((shape, i) => (
-          <Row key={shape} label={SHAPE_NAMES[shape]}>
-            {AVATAR_FACES.map((face) => (
-              <AgentAvatar
-                key={face}
-                name={face}
-                color={PALETTE[i % PALETTE.length]}
-                look={{ shape, face }}
-                size="md"
-              />
-            ))}
-          </Row>
-        ))}
-        <Row label="24px">
-          {AVATAR_FACES.map((face, i) => (
-            <AgentAvatar
-              key={face}
-              name={face}
-              color={PALETTE[i % PALETTE.length]}
-              look={{ shape: AVATAR_SHAPES[i % AVATAR_SHAPES.length], face }}
-              size="row"
-            />
-          ))}
-        </Row>
-        <Row label="16px">
-          {AVATAR_FACES.map((face, i) => (
-            <AgentAvatar
-              key={face}
-              name={face}
-              color={PALETTE[i % PALETTE.length]}
-              look={{ shape: AVATAR_SHAPES[i % AVATAR_SHAPES.length], face }}
-              size="xs"
-            />
-          ))}
-        </Row>
-      </div>
-    </section>
-  );
+/** Where each strip samples its mood: a loop across one period, a one-off across its length. */
+const STRIP_FRAMES = 8;
+function frameTimes(mood: AvatarMood): number[] {
+  const { ms, loop } = AVATAR_MOTION[mood];
+  const n = STRIP_FRAMES;
+  return Array.from({ length: n }, (_, i) => Math.round((ms * i) / (loop ? n : n - 1)));
 }
 
-/**
- * The contact sheet: every face on every shape at the sidebar's sizes
- * (16 / 18 / 24px), then each face large (96px), one row per face, so the
- * drawing language can be judged across the whole set at once.
- */
-function Sheet() {
-  const small: AgentAvatarSize[] = ['xs', 'mini', 'row'];
+const STATE_LABELS: Record<AvatarMood, string> = {
+  idle: 'Idle: a slow drift, an occasional glance',
+  working: 'Working: looks left, up, back; the top’s light breathes',
+  needs: 'Needs you: one press, then it looks out at you and holds',
+  done: 'Done: one press and bounce, then rest',
+  failed: 'Failed: one look down to the side, held',
+};
+
+function States() {
+  const size: AgentAvatarSize = params.get('px') === '96' ? 'xl' : 'lg';
+  const look: AgentLook = {
+    shape: (params.get('shape') as AgentLook['shape']) ?? 'squircle',
+    face: (params.get('face') as AgentLook['face']) ?? 'dots',
+  };
   return (
-    <section className="avatar-gallery__section" data-section="sheet">
-      <div className="avatar-gallery__sheet">
-        <span />
-        {AVATAR_SHAPES.map((s) => (
-          <span key={s} className="avatar-gallery__caption">
-            {SHAPE_NAMES[s]}
-          </span>
-        ))}
-        <span className="avatar-gallery__caption">96px</span>
-        {AVATAR_FACES.map((face, fi) => (
-          <Row key={face} label={FACE_NAMES[face]}>
-            {AVATAR_SHAPES.map((shape, si) => (
-              <span key={shape} className="avatar-gallery__sheet-cell">
-                {small.map((size) => (
-                  <AgentAvatar
-                    key={size}
-                    name={face}
-                    color={PALETTE[(fi + si) % PALETTE.length]}
-                    look={{ shape, face }}
-                    size={size}
-                  />
-                ))}
-              </span>
+    <section className="avatar-gallery__section" data-section="states">
+      {AVATAR_MOODS.map((mood) => (
+        <div key={mood} className="avatar-gallery__strip" data-mood-strip={mood}>
+          <h2>{STATE_LABELS[mood]}</h2>
+          <div className="avatar-gallery__frames">
+            {frameTimes(mood).map((t) => (
+              <div key={t} className="avatar-gallery__frame" data-frame-ms={t}>
+                <AgentAvatar name="Chief" color="blue" look={look} size={size} mood={mood} />
+                <span className="avatar-gallery__caption">{(t / 1000).toFixed(2)}s</span>
+              </div>
             ))}
-            <AgentAvatar
-              name={face}
-              color={PALETTE[fi % PALETTE.length]}
-              look={{ shape: AVATAR_SHAPES[fi % AVATAR_SHAPES.length], face }}
-              size="xl"
-            />
-          </Row>
-        ))}
-      </div>
+          </div>
+        </div>
+      ))}
     </section>
   );
 }
@@ -184,40 +195,14 @@ function Row({ label, children }: { label: string; children: React.ReactNode }) 
   );
 }
 
-function Colors() {
-  return (
-    <section className="avatar-gallery__section" data-section="colors">
-      <h2>Every colour, at rest and selected (40px), and working (24px, frozen)</h2>
-      <div className="avatar-gallery__colors">
-        {AGENT_COLORS.map((color, i) => {
-          const look: AgentLook = {
-            shape: AVATAR_SHAPES[i % AVATAR_SHAPES.length],
-            face: AVATAR_FACES[(i * 3) % AVATAR_FACES.length],
-          };
-          return (
-            <div key={color} className="avatar-gallery__color">
-              <AgentAvatar name={color} color={color} look={look} size="md" />
-              <AgentAvatar name={color} color={color} look={look} size="md" selected />
-              <AgentAvatar name={color} color={color} look={look} size="row" working />
-              <span className="avatar-gallery__caption">{color}</span>
-            </div>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
 function Gallery() {
   return (
-    <main className="avatar-gallery" data-direction={direction}>
-      <header className="avatar-gallery__head">
-        Direction: <strong>{direction}</strong> · {theme}
-      </header>
+    <main className="avatar-gallery">
+      <header className="avatar-gallery__head">Key caps · {theme}</header>
+      {(section === 'all' || section === 'sheet') && <Sheet />}
       {(section === 'all' || section === 'sizes') && <Sizes />}
-      {(section === 'all' || section === 'faces') && <Faces />}
       {(section === 'all' || section === 'colors') && <Colors />}
-      {section === 'sheet' && <Sheet />}
+      {section === 'states' && <States />}
     </main>
   );
 }

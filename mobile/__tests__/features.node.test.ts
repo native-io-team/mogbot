@@ -271,7 +271,7 @@ describe('files, search, schedules and projects against the mock Mac', () => {
     ).rejects.toThrow(/pin, mute, hide, the instructions and how it looks/);
     await t.request('agents.update', {
       agentId: 'qa',
-      input: { avatar: { shape: 'hexagon', face: 'curious' }, color: 'teal' },
+      input: { avatar: { shape: 'hexagon', face: 'smile' }, color: 'teal' },
     });
     await until(() => qa()?.avatar?.shape === 'hexagon' && qa()?.color === 'teal');
     await t.request('agents.update', { agentId: 'qa', input: { muted: false } });

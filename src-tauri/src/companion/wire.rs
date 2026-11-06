@@ -348,6 +348,12 @@ pub const MAC_FEATURE_LOGINS_PHONE: &str = "logins.phone";
 /// `color`) from the phone (`agents::store::AgentLook`).
 pub const MAC_FEATURE_LOOKS: &str = "agents.looks";
 
+/// `welcome.features`: looks are key caps (`agents::store::AVATAR_SHAPES`:
+/// circle, squircle, diamond, hexagon; four faces; `finish`). A phone shows
+/// its look picker only to a Mac that lists this, so it never offers an
+/// older Mac a key it would refuse.
+pub const MAC_FEATURE_KEYCAPS: &str = "agents.keycaps";
+
 /// `welcome.features`: signing in to a site in this Mac's Chrome from the
 /// phone, the tab shown live there (`agents.signin*`; `agents/phone_signin.rs`).
 pub const MAC_FEATURE_SIGNIN_PHONE: &str = "signin.phone";
@@ -364,6 +370,7 @@ pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_LOGINS,
     MAC_FEATURE_LOGINS_PHONE,
     MAC_FEATURE_LOOKS,
+    MAC_FEATURE_KEYCAPS,
     MAC_FEATURE_SIGNIN_PHONE,
     MAC_FEATURE_WATCH_LINKS,
 ];

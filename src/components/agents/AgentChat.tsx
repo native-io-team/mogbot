@@ -129,6 +129,7 @@ import {
   engineCantAsk,
   engineIsReady,
   roleWithoutPath,
+  avatarMood,
 } from '../../lib/agents';
 import {
   agentIn,
@@ -1279,7 +1280,13 @@ export const AgentChat = memo(function AgentChat({
   const role = agent.role ? roleWithoutPath(agent.role) : '';
   const title = (
     <>
-      <AgentAvatar id={agent.id} name={agent.name} color={agent.color} selected />
+      <AgentAvatar
+        id={agent.id}
+        name={agent.name}
+        color={agent.color}
+        selected
+        mood={avatarMood(agent)}
+      />
       <h2 className="agent-chat__name">{agent.name}</h2>
       {role && (
         <span className="agent-chat__status" title={role}>

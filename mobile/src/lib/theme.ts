@@ -401,6 +401,13 @@ export const waveform = {
 export const avatarSize = { group: 24, header: 28, list: 48, sheet: 56 } as const;
 
 /**
+ * A key cap's light and shade (avatar.ts `AVATAR_LIGHT`): white and black at
+ * the spec's opacities, in either appearance. The key's own colours come
+ * from the spec (`avatarPaint`), equal OKLCH per theme.
+ */
+export const keyLight = { light: '#ffffff', shade: '#000000' } as const;
+
+/**
  * The desktop's type scale (`--font-size-*`), one step up where the desk
  * reads at arm's length and a phone at hand's: body 16 (T3 and most chat
  * apps sit at 16-17), subtitles 14, captions 12 for metadata only. `read` is

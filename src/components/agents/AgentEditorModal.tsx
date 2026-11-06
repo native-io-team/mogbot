@@ -257,7 +257,10 @@ export function AgentEditorModal({
         )
   );
   const [look, setLook] = useState<AgentLook>(initialLook);
-  const lookChanged = look.shape !== initialLook.shape || look.face !== initialLook.face;
+  const lookChanged =
+    look.shape !== initialLook.shape ||
+    look.face !== initialLook.face ||
+    (look.finish ?? 'keycap') !== (initialLook.finish ?? 'keycap');
   const [showLook, setShowLook] = useState(false);
   const [role, setRole] = useState(agent?.role ?? first?.role ?? '');
   const [instructions, setInstructions] = useState(first ? templateInstructions(first) : '');

@@ -45,7 +45,7 @@ jest.mock('react-native-reanimated', () => {
     ZoomIn: preset,
     ZoomOut: preset,
     LinearTransition: preset,
-    // What an agent's avatar uses (its bob): still, in a test.
+    // What an agent's avatar uses (its motion): still, in a test.
     useReducedMotion: () => true,
     useSharedValue: (v: unknown) => ({ value: v, set: () => {} }),
     useAnimatedStyle: () => ({}),

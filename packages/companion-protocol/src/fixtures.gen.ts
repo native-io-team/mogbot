@@ -2895,6 +2895,7 @@ export const frames = [
       "logins",
       "logins.phone",
       "agents.looks",
+      "agents.keycaps",
       "signin.phone",
       "watch.links"
     ]
