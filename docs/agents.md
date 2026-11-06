@@ -1194,7 +1194,23 @@ outside content" (at Go hard, in a turn not already capped). Cards from such
 a turn record `fromOutside`, so a later sweep judges them at Use good
 judgement. Marks come from every call `mcp::decide` lets through, every call
 through the connection relay, and every tool call in the engine's stream
-(calls it runs without asking); the next turn starts clean. Imported
+(calls it runs without asking). The mark lasts **the conversation**, not the
+turn (`outside.json` in the agent's home, tied to the engine session; cleared
+by Start fresh or a new conversation), since the outside text stays in it.
+
+**The rule for the owner's own requests.** The mark never raises cards for
+the owner's own direct request at Go hard or Full send: in a turn answering
+the user's own message in this agent's chat (not a routine, a check-in, a room,
+another agent's request or outside text; `runner::answering_user`), the mark
+narrows to what Full send keeps after outside content
+(`autoallow::outside_mark_asks`): **raw data leaving for another host**
+(`go_hard::moves_data_off_mac`: a `curl` body or upload, `ssh`, `scp`,
+`rsync`, `nc`…) and **packages new to the project**. Pushes and `gh` writes
+still follow the level itself (Go hard asks for them anyway). Every other
+turn in the conversation (a routine, a delegated request) keeps the full
+guard above. Before, the Chief reading x.com once made every later network
+write in the conversation ask, including what the owner asked for directly.
+Imported
 conversations never reach a turn directly: they go through the sealed
 interview and one review card (docs/remote-access.md, "Importing agents as a
 conversation").

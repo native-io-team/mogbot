@@ -2391,13 +2391,15 @@ async fn decide_inner(
     // the project asks (`exposure`).
     // At "Full send" (never for outside text) only raw data moved off this
     // Mac asks after outside content; pushes and `gh` follow its floor.
-    let full_send = super::independence::for_turn(super::policy::chosen_level(caller), outside)
-        == super::independence::Level::FullSend;
+    let level = super::independence::for_turn(super::policy::chosen_level(caller), outside);
+    let full_send = level == super::independence::Level::FullSend;
+    // The owner's own request at Go hard or above: the conversation's mark
+    // stays, but asks only for data leaving and new packages.
+    let direct = level.goes_hard() && !outside && runner::answering_user(&caller.id);
     let guarded = browser_asks
         || super::exposure::read_outside(&caller.id)
-            && super::autoallow::Ctx::for_agent(caller).is_none_or(|mut ctx| {
-                ctx.full_send = full_send;
-                super::autoallow::after_outside_asks(tool, input, &ctx)
+            && super::autoallow::Ctx::for_agent(caller).is_none_or(|ctx| {
+                super::autoallow::outside_mark_asks(tool, input, &ctx, full_send, direct)
             });
     if let Some(level) = auto_allowed(caller, tool, input, outside).filter(|_| !guarded) {
         // What "Go hard" would have asked for says so, and goes in the
