@@ -569,6 +569,14 @@ fn save_progress(agent_id: &str, draft: Option<(&str, &str)>) {
     update_mark(agent_id, |m| m.progress = Some(Progress { draft, work }));
 }
 
+/// The engine's conversation the running turn is in, when known: its mark's,
+/// else the agent's.
+pub(super) fn turn_session(agent_id: &str) -> Option<String> {
+    read_mark(agent_id)
+        .and_then(|m| m.session_id)
+        .or_else(|| store::get(agent_id).ok().and_then(|a| a.session_id))
+}
+
 fn mark_path(agent_id: &str) -> Option<std::path::PathBuf> {
     store::agent_home(agent_id)
         .ok()
@@ -2196,6 +2204,8 @@ fn begin_fresh_as(
         r.interrupted_in = None;
         r.nudge = None;
     }
+    // Nor does what it read outside.
+    super::exposure::forget(agent_id);
     let mut line = new_message(agent_id, MessageKind::Note, text);
     line.fresh = true;
     store::append_message(&line)?;
@@ -3104,9 +3114,12 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         let since = store::now_ms();
         super::work::begin(&agent_id, since);
         // A bound agent works in its project (its copy is the project's).
-        let bound = store::get(&agent_id).ok().and_then(|a| a.project);
+        let current = store::get(&agent_id).ok();
+        let bound = current.as_ref().and_then(|a| a.project.clone());
         super::workplace::begin(&agent_id, bound.as_deref().map(std::path::Path::new));
-        super::exposure::begin(&agent_id);
+        // What its conversation read outside stays with that conversation.
+        let resumes = current.as_ref().and_then(|a| a.session_id.as_deref());
+        super::exposure::begin(&agent_id, resumes);
         super::results::discard(&agent_id);
         super::dev_servers::begin(&agent_id);
         if let Some(copy) = &made {
