@@ -116,11 +116,25 @@ impl Plain {
         Ok((jpeg, fw, fh))
     }
 
+    /// A tap on the phone's picture, at that point in the window. Posted to
+    /// the whole screen, so refused unless it's inside the picture and the
+    /// window is what's on top there (`macos::lands_in`).
     pub fn tap(&mut self, x: f64, y: f64) -> Result<(), String> {
-        let w = self.window().ok_or("The sign-in window isn't on screen.")?;
+        let (w, sx, sy) = self.on_screen(x, y)?;
+        macos::click(self.pid(), &w, sx, sy)
+    }
+
+    /// The window and the point on screen for a point in the last picture.
+    fn on_screen(&mut self, x: f64, y: f64) -> Result<(WindowInfo, f64, f64), String> {
+        // Found now, never the last one seen: a window that has gone isn't
+        // tapped where it was.
+        let w = macos::window_of(self.pid()).ok_or("The sign-in window isn't on screen.")?;
+        self.window = Some(w);
+        if !macos::in_frame(self.frame, x, y) {
+            return Err("That point isn't on the sign-in window.".into());
+        }
         let (sx, sy) = macos::frame_to_screen(&w, self.frame, x, y);
-        macos::click(self.pid(), sx, sy);
-        Ok(())
+        Ok((w, sx, sy))
     }
 
     pub fn type_text(&mut self, text: &str) {
@@ -132,10 +146,8 @@ impl Plain {
     }
 
     pub fn scroll(&mut self, x: f64, y: f64, dy: i32) -> Result<(), String> {
-        let w = self.window().ok_or("The sign-in window isn't on screen.")?;
-        let (sx, sy) = macos::frame_to_screen(&w, self.frame, x, y);
-        macos::scroll(self.pid(), sx, sy, dy);
-        Ok(())
+        let (w, sx, sy) = self.on_screen(x, y)?;
+        macos::scroll(self.pid(), &w, sx, sy, dy)
     }
 
     /// Quit it the way a person would, then let the agents' Chrome back.

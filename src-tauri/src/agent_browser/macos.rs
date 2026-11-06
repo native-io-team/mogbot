@@ -9,6 +9,9 @@
 //!   point on screen, after the window's app is brought to the front;
 //!   typing is a keyboard event carrying the text (never a key code per
 //!   letter, so the keyboard layout doesn't matter). Needs Accessibility.
+//!   Mouse events go to the whole screen, so a tap or scroll is posted only
+//!   when its point is inside the picture and, with the app in front, the
+//!   window on top there is the sign-in window ([`lands_in`]).
 //!
 //! Nothing here is used unless both permissions are granted, and nothing is
 //! kept: a capture is read and deleted at once.
@@ -80,6 +83,50 @@ pub fn frame_to_screen(w: &WindowInfo, frame: (u32, u32), x: f64, y: f64) -> (f6
         1.0
     };
     (w.x + x * fx, w.y + y * fy)
+}
+
+/// A point the phone gave is inside the picture it was shown (`frame`
+/// pixels). Anything else is refused, never clamped onto the edge. Pure.
+pub fn in_frame(frame: (u32, u32), x: f64, y: f64) -> bool {
+    x.is_finite()
+        && y.is_finite()
+        && x >= 0.0
+        && y >= 0.0
+        && x < f64::from(frame.0)
+        && y < f64::from(frame.1)
+}
+
+/// A point on screen inside `w`. Pure.
+pub fn inside(w: &WindowInfo, x: f64, y: f64) -> bool {
+    x >= w.x && y >= w.y && x < w.x + w.width && y < w.y + w.height
+}
+
+/// Who owns the window on top at a point on screen, from the windows
+/// front to back (their owner's pid and bounds). Pure.
+pub fn on_top_at(windows: &[(u32, WindowInfo)], x: f64, y: f64) -> Option<u32> {
+    windows
+        .iter()
+        .find(|(_, w)| inside(w, x, y))
+        .map(|(pid, _)| *pid)
+}
+
+/// Why a tap or a scroll wasn't posted: the input goes to the whole screen,
+/// so only when the sign-in window is what's there.
+pub const COVERED: &str = "Something on the Mac is covering the sign-in window, so the tap wasn't sent. Move it out of the way at the Mac, or sign in there.";
+
+/// A mouse event at `(x, y)` on screen lands in `pid`'s `window`: the point
+/// is in that window, and no other app's window is above it there. Pure.
+pub fn lands_in(
+    pid: u32,
+    window: &WindowInfo,
+    front_to_back: &[(u32, WindowInfo)],
+    x: f64,
+    y: f64,
+) -> Result<(), String> {
+    if !inside(window, x, y) || on_top_at(front_to_back, x, y) != Some(pid) {
+        return Err(COVERED.into());
+    }
+    Ok(())
 }
 
 #[cfg(target_os = "macos")]
@@ -169,18 +216,36 @@ mod imp {
 
     /// `pid`'s largest normal window on screen.
     pub fn window_of(pid: u32) -> Option<WindowInfo> {
+        let mut best: Option<WindowInfo> = None;
+        for (owner, layer, w) in on_screen() {
+            if owner != pid || layer != 0 {
+                continue;
+            }
+            if w.width * w.height > best.map(|b| b.width * b.height).unwrap_or(0.0) {
+                best = Some(w);
+            }
+        }
+        best
+    }
+
+    /// Every visible window on screen, front to back: its owner's pid, its
+    /// layer and its bounds. Fully transparent ones are left out.
+    fn on_screen() -> Vec<(u32, i64, WindowInfo)> {
         // SAFETY: a Copy-rule CF object, released by CFArray's drop.
         let raw = unsafe { CGWindowListCopyWindowInfo(ON_SCREEN_ONLY | EXCLUDE_DESKTOP, 0) };
         if raw.is_null() {
-            return None;
+            return Vec::new();
         }
         let list: CFArray<CFDictionary<CFString, CFType>> =
             unsafe { CFArray::wrap_under_create_rule(raw) };
-        let mut best: Option<WindowInfo> = None;
+        let mut out = Vec::new();
         for d in list.iter() {
-            if num(&d, "kCGWindowOwnerPID") != Some(pid as f64)
-                || num(&d, "kCGWindowLayer") != Some(0.0)
-            {
+            let (Some(owner), Some(layer)) =
+                (num(&d, "kCGWindowOwnerPID"), num(&d, "kCGWindowLayer"))
+            else {
+                continue;
+            };
+            if num(&d, "kCGWindowAlpha") == Some(0.0) {
                 continue;
             }
             let Some(id) = num(&d, "kCGWindowNumber") else {
@@ -202,11 +267,17 @@ mod imp {
                 width: num(&b, "Width").unwrap_or(0.0),
                 height: num(&b, "Height").unwrap_or(0.0),
             };
-            if w.width * w.height > best.map(|b| b.width * b.height).unwrap_or(0.0) {
-                best = Some(w);
-            }
+            out.push((owner as u32, layer as i64, w));
         }
-        best
+        out
+    }
+
+    /// A mouse event here goes to the whole screen: posted only when it
+    /// lands in `pid`'s `window`, checked after the app came to the front.
+    fn check_lands(pid: u32, window: &WindowInfo, x: f64, y: f64) -> Result<(), String> {
+        let windows: Vec<(u32, WindowInfo)> =
+            on_screen().into_iter().map(|(p, _, w)| (p, w)).collect();
+        lands_in(pid, window, &windows, x, y)
     }
 
     /// A JPEG of one window, at most `max_width` wide.
@@ -287,9 +358,10 @@ mod imp {
         }
     }
 
-    pub fn click(pid: u32, x: f64, y: f64) {
+    pub fn click(pid: u32, window: &WindowInfo, x: f64, y: f64) -> Result<(), String> {
         activate(pid);
         std::thread::sleep(std::time::Duration::from_millis(60));
+        check_lands(pid, window, x, y)?;
         let at = CGPoint { x, y };
         for kind in [MOVED, LEFT_DOWN, LEFT_UP] {
             // SAFETY: creating a mouse event with no source.
@@ -299,6 +371,7 @@ mod imp {
             );
             std::thread::sleep(std::time::Duration::from_millis(20));
         }
+        Ok(())
     }
 
     pub fn type_text(pid: u32, text: &str) {
@@ -325,8 +398,10 @@ mod imp {
         }
     }
 
-    pub fn scroll(pid: u32, x: f64, y: f64, dy: i32) {
+    pub fn scroll(pid: u32, window: &WindowInfo, x: f64, y: f64, dy: i32) -> Result<(), String> {
         activate(pid);
+        std::thread::sleep(std::time::Duration::from_millis(60));
+        check_lands(pid, window, x, y)?;
         let at = CGPoint { x, y };
         post(
             unsafe { CGEventCreateMouseEvent(std::ptr::null(), MOVED, at, 0) },
@@ -337,6 +412,7 @@ mod imp {
             unsafe { CGEventCreateScrollWheelEvent2(std::ptr::null(), PIXEL_UNITS, 1, -dy, 0, 0) },
             None,
         );
+        Ok(())
     }
 }
 
@@ -358,10 +434,14 @@ mod imp {
     pub fn capture(_w: u32, _d: &Path, _m: u32) -> Result<(Vec<u8>, u32, u32), String> {
         Err("Only on macOS.".into())
     }
-    pub fn click(_pid: u32, _x: f64, _y: f64) {}
+    pub fn click(_pid: u32, _w: &WindowInfo, _x: f64, _y: f64) -> Result<(), String> {
+        Err("Only on macOS.".into())
+    }
     pub fn type_text(_pid: u32, _t: &str) {}
     pub fn key(_pid: u32, _c: u16) {}
-    pub fn scroll(_pid: u32, _x: f64, _y: f64, _dy: i32) {}
+    pub fn scroll(_pid: u32, _w: &WindowInfo, _x: f64, _y: f64, _dy: i32) -> Result<(), String> {
+        Err("Only on macOS.".into())
+    }
 }
 
 pub use imp::*;
@@ -385,6 +465,57 @@ mod tests {
             (630.0, 470.0)
         );
         assert_eq!(frame_to_screen(&w, (550, 410), 0.0, 0.0), (80.0, 60.0));
+    }
+
+    #[test]
+    fn taps_land_only_on_the_sign_in_window() {
+        let ours = WindowInfo {
+            id: 1,
+            x: 100.0,
+            y: 100.0,
+            width: 800.0,
+            height: 600.0,
+        };
+        let cover = WindowInfo {
+            id: 2,
+            x: 500.0,
+            y: 300.0,
+            width: 300.0,
+            height: 200.0,
+        };
+        let pid = 42;
+        // Another app's window above part of it, front to back.
+        let windows = [(7, cover), (pid, ours)];
+        assert!(lands_in(pid, &ours, &windows, 200.0, 200.0).is_ok());
+        assert_eq!(
+            lands_in(pid, &ours, &windows, 600.0, 400.0),
+            Err(COVERED.to_string())
+        );
+        // Outside the window, even where nothing else is.
+        assert!(lands_in(pid, &ours, &windows, 50.0, 50.0).is_err());
+        assert!(lands_in(pid, &ours, &[(pid, ours)], 950.0, 200.0).is_err());
+        // The window isn't on screen at all.
+        assert!(lands_in(pid, &ours, &[], 200.0, 200.0).is_err());
+    }
+
+    #[test]
+    fn points_off_the_picture_are_refused_not_clamped() {
+        let frame = (550, 410);
+        assert!(in_frame(frame, 0.0, 0.0));
+        assert!(in_frame(frame, 549.0, 409.0));
+        for (x, y) in [
+            (-1.0, 10.0),
+            (10.0, -1.0),
+            (550.0, 10.0),
+            (10.0, 410.0),
+            (1e9, 1e9),
+            (f64::NAN, 10.0),
+            (f64::INFINITY, 10.0),
+        ] {
+            assert!(!in_frame(frame, x, y), "{x},{y}");
+        }
+        // No picture yet: nothing is in it.
+        assert!(!in_frame((0, 0), 0.0, 0.0));
     }
 
     #[test]
