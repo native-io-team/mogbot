@@ -23,6 +23,7 @@ import {
   onMacLine,
   otherOptions,
   phoneDetail,
+  phoneLine,
   phoneWay,
   servesPhoneSignIn,
   primaryOption,
@@ -158,6 +159,22 @@ describe('a login card, in words', () => {
       /claude\.ai holds that sign-in, not your Mac/
     );
     expect(phoneDetail(o('oauth'), 'mac', 'Linear')).toBe('On the Mac. Finish on your Mac.');
+    // The card's one line under its main action: short, whatever the way.
+    for (const [m, way] of [
+      ['browser', 'tap'],
+      ['oauth', 'sheet'],
+      ['gh', 'device'],
+      ['claude_ai', 'web'],
+      ['agent_browser', 'here'],
+      ['oauth', 'mac'],
+    ] as const) {
+      const line = phoneLine(o(m), way, 'Gmail');
+      expect(line.length).toBeLessThanOrEqual(70);
+      expect(line).not.toMatch(/password|Claude in Chrome/);
+    }
+    expect(phoneLine(o('browser'), 'tap', 'Gmail')).toBe(
+      'Uses your Chrome on your Mac. It asks before anything it sends.'
+    );
     expect(
       servesPhoneSignIn({
         methods: ['agents.loginPhoneBegin'],
@@ -384,7 +401,12 @@ describe('login cards against the mock Mac', () => {
 });
 
 describe('"Not needed" for the whole team, against the mock Mac', () => {
-  const mock = createMockServer({ quiet: true, allowAfterMs: 0, draftEveryMs: 10, loginAfterMs: 150 });
+  const mock = createMockServer({
+    quiet: true,
+    allowAfterMs: 0,
+    draftEveryMs: 10,
+    loginAfterMs: 150,
+  });
   let t: DirectTransport;
   let state = emptySync();
 
@@ -417,16 +439,27 @@ describe('"Not needed" for the whole team, against the mock Mac', () => {
 
   it('is served, declines a card’s app with a receipt, and is remembered until turned back on', async () => {
     await until(() => !!t.welcome);
-    for (const m of ['agents.loginNotNeeded', 'agents.loginsNotNeeded', 'agents.loginsUndecline', 'agents.loginsRecheck']) {
+    for (const m of [
+      'agents.loginNotNeeded',
+      'agents.loginsNotNeeded',
+      'agents.loginsUndecline',
+      'agents.loginsRecheck',
+    ]) {
       expect(t.welcome!.methods).toContain(m);
     }
-    const receipt = await t.request('agents.loginNotNeeded', { agentId: 'qa', requestId: 'req_login_linkedin' });
+    const receipt = await t.request('agents.loginNotNeeded', {
+      agentId: 'qa',
+      requestId: 'req_login_linkedin',
+    });
     expect(receipt).toEqual({
       keys: ['linkedin'],
       line: 'Not connecting LinkedIn. No agent will ask for it again.',
       closed: 1,
     });
-    expect((await card('qa', 'req_login_linkedin')).approval).toMatchObject({ status: 'denied', note: 'Not needed' });
+    expect((await card('qa', 'req_login_linkedin')).approval).toMatchObject({
+      status: 'denied',
+      note: 'Not needed',
+    });
     const reach = await t.request('agents.reach', { agentId: 'qa' });
     expect(reach.declined?.map((d) => d.title)).toEqual(['LinkedIn']);
     expect(await t.request('agents.loginsUndecline', { keys: ['linkedin'] })).toBe(1);

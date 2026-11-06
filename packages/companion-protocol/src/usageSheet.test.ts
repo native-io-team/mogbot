@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Quota, UsageAccountLine, UsageInventory, UsagePace } from './model';
-import { accountBlocks, paceLine, planUsage, roughWhen } from './usageSheet';
+import { accountBlocks, paceLine, planUsage, roughWhen, usageSheet } from './usageSheet';
 import * as real from './fixtures.gen';
 
 // A Thursday, noon local.
@@ -108,5 +108,65 @@ describe('the pace line', () => {
     const served = real.agentsUsagePlan.accounts.flatMap((a) => a.pace ?? []);
     expect(served.length).toBeGreaterThan(0);
     expect(served.every((p) => p.estimate === true)).toBe(true);
+  });
+});
+
+describe('the Usage sheet shows each reading once', () => {
+  const work = account({
+    id: 'work',
+    name: 'Work',
+    thisMac: false,
+    next: false,
+    windows: [],
+    out: true,
+    outUntil: NOW + 3 * HOUR,
+  });
+  const codex = account({ engine: 'codex', id: 'c1', name: 'Personal', windows: [] });
+
+  it('puts the account turns run on at the top, and never lists it again', () => {
+    const inv = inventory([account({ pace: [pace()] }), work, codex]);
+    const sheet = usageSheet(quotas, 'claude', inv, NOW);
+    expect(sheet.active?.account).toBe('This Mac · Next turns run here');
+    expect(sheet.active?.meters.map((m) => m.label)).toEqual([
+      '5-hour limit',
+      'Weekly · All models',
+    ]);
+    expect(sheet.active?.meters[0].pace?.text).toMatch(/^At this pace/);
+    expect(sheet.others.map((b) => b.title)).toEqual(['Claude · Work', 'Codex · Personal']);
+    // Each window, and the pace line, appears exactly once in the whole sheet.
+    const all = [...sheet.active!.meters, ...sheet.others.flatMap((b) => b.meters)];
+    expect(all.filter((m) => m.label === '5-hour limit')).toHaveLength(1);
+    expect(all.filter((m) => m.pace)).toHaveLength(1);
+  });
+
+  it('follows the account next turns run on, not this Mac’s sign-in', () => {
+    const inv = inventory([
+      account({ next: false }),
+      account({ id: 'work', name: 'Work', thisMac: false, next: true, windows: [] }),
+    ]);
+    const sheet = usageSheet(quotas, 'claude', inv, NOW);
+    expect(sheet.active?.account).toBe('Work · Next turns run here');
+    expect(sheet.active?.meters).toEqual([]);
+    expect(sheet.active?.state).toBe('No reading yet');
+    expect(sheet.others.map((b) => b.title)).toEqual(['Claude · This Mac']);
+  });
+
+  it('draws the plan’s own windows only when no account has the reading, unnamed', () => {
+    const sheet = usageSheet(quotas, 'claude', null, NOW);
+    expect(sheet.active?.account).toBeNull();
+    expect(sheet.active?.meters.map((m) => m.label)).toEqual([
+      '5-hour limit',
+      'Weekly · All models',
+    ]);
+    expect(sheet.others).toEqual([]);
+    // Readings not attributed to an account: the plan on top, the accounts as they are.
+    const unattributed = inventory([account({ windows: [] }), codex]);
+    const top = usageSheet(quotas, 'claude', unattributed, NOW);
+    expect(top.active?.account).toBeNull();
+    expect(top.others.map((b) => b.title)).toEqual(['Claude · This Mac', 'Codex · Personal']);
+  });
+
+  it('is empty with nothing reported', () => {
+    expect(usageSheet(null, 'claude', null, NOW)).toEqual({ active: null, others: [] });
   });
 });

@@ -129,6 +129,32 @@ export function phoneDetail(option: LoginOption, way: PhoneWay, title: string): 
   }
 }
 
+/**
+ * The one short line under a login card's main action: what pressing it
+ * does, in a dozen words. The full account of each way in (`phoneDetail`)
+ * stays with the other ways, behind "Other ways".
+ */
+export function phoneLine(option: LoginOption, way: PhoneWay, title: string): string {
+  switch (way) {
+    case 'sheet':
+      return `Sign in to ${title} here. The token stays on your Mac.`;
+    case 'device':
+      return 'Gives you a one-time code. The sign-in stays on your Mac.';
+    case 'web':
+      return `Adds ${title} to your Claude account on claude.ai.`;
+    case 'here':
+      return `Sign in by touch here. Nothing you type is kept.`;
+    case 'mac':
+      return 'Finish on your Mac.';
+    case 'tap':
+      return option.method === 'browser'
+        ? 'Uses your Chrome on your Mac. It asks before anything it sends.'
+        : `Uses the ${title} you already connected.`;
+    default:
+      return option.detail;
+  }
+}
+
 /** A finished card's receipt line: its first part leads (`Receipt`). */
 export function loginOutcome(approval: Approval, login: LoginRequest, agentName: string): string {
   switch (approval.status) {

@@ -182,30 +182,147 @@ pub enum LoginKind {
     Secret,
 }
 
-/// A key as words: "email_drafts" → "Email drafts", "slackWorkspaces" →
-/// "Slack workspaces". Never shown as the raw key.
+/// Lower-case word → how a person reads it: brands as their makers write
+/// them, acronyms in capitals. The phone and the desk have the same map
+/// (`packages/companion-protocol/src/loginNames.ts`); both are held to
+/// `login-names.json`, which has a case for every name in either.
+const KNOWN_NAMES: &[(&str, &str)] = &[
+    // Apps people sign in to.
+    ("airtable", "Airtable"),
+    ("asana", "Asana"),
+    ("calendly", "Calendly"),
+    ("discord", "Discord"),
+    ("dropbox", "Dropbox"),
+    ("facebook", "Facebook"),
+    ("figma", "Figma"),
+    ("github", "GitHub"),
+    ("gitlab", "GitLab"),
+    ("gmail", "Gmail"),
+    ("google", "Google"),
+    ("hubspot", "HubSpot"),
+    ("instagram", "Instagram"),
+    ("intercom", "Intercom"),
+    ("jira", "Jira"),
+    ("linear", "Linear"),
+    ("linkedin", "LinkedIn"),
+    ("mailchimp", "Mailchimp"),
+    ("netlify", "Netlify"),
+    ("notion", "Notion"),
+    ("openai", "OpenAI"),
+    ("paypal", "PayPal"),
+    ("pipedrive", "Pipedrive"),
+    ("quickbooks", "QuickBooks"),
+    ("salesforce", "Salesforce"),
+    ("sendgrid", "SendGrid"),
+    ("shopify", "Shopify"),
+    ("slack", "Slack"),
+    ("stripe", "Stripe"),
+    ("telegram", "Telegram"),
+    ("tiktok", "TikTok"),
+    ("trello", "Trello"),
+    ("twilio", "Twilio"),
+    ("twitter", "Twitter"),
+    ("vercel", "Vercel"),
+    ("webflow", "Webflow"),
+    ("whatsapp", "WhatsApp"),
+    ("wordpress", "WordPress"),
+    ("x", "X"),
+    ("xero", "Xero"),
+    ("youtube", "YouTube"),
+    ("zendesk", "Zendesk"),
+    ("zoom", "Zoom"),
+    // Acronyms.
+    ("ai", "AI"),
+    ("api", "API"),
+    ("aws", "AWS"),
+    ("cms", "CMS"),
+    ("crm", "CRM"),
+    ("db", "DB"),
+    ("id", "ID"),
+    ("ios", "iOS"),
+    ("oauth", "OAuth"),
+    ("pat", "PAT"),
+    ("seo", "SEO"),
+    ("sms", "SMS"),
+    ("smtp", "SMTP"),
+    ("sql", "SQL"),
+    ("ssh", "SSH"),
+    ("url", "URL"),
+];
+
+fn known_name(word: &str) -> Option<&'static str> {
+    KNOWN_NAMES
+        .iter()
+        .find(|(k, _)| *k == word)
+        .map(|(_, v)| *v)
+}
+
+/// A key as words a person reads: "email_drafts" → "Email drafts",
+/// "crm_api_key" → "CRM API key", "github_workshop" → "GitHub workshop".
+/// Sentence case, with the names people know spelled as their makers spell
+/// them. Never shown as the raw key. The desk and the phone say the same
+/// (`loginNames.ts`, held to the same `login-names.json`).
 pub fn humanise(key: &str) -> String {
-    let mut words = String::new();
-    let mut prev_lower = false;
-    for c in key.trim().chars() {
+    let chars: Vec<char> = key.trim().chars().collect();
+    let mut words: Vec<String> = Vec::new();
+    let mut word = String::new();
+    for (i, &c) in chars.iter().enumerate() {
         if c == '_' || c == '-' || c == '.' || c.is_whitespace() {
-            if !words.ends_with(' ') && !words.is_empty() {
-                words.push(' ');
+            if !word.is_empty() {
+                words.push(std::mem::take(&mut word));
             }
-            prev_lower = false;
             continue;
         }
-        if c.is_ascii_uppercase() && prev_lower {
-            words.push(' ');
+        let prev = i.checked_sub(1).map(|j| chars[j]);
+        let next = chars.get(i + 1).copied();
+        // "emailDrafts" → "email Drafts"; "CRMToken" → "CRM Token".
+        let starts_word = c.is_ascii_uppercase()
+            && match prev {
+                Some(p) if p.is_ascii_lowercase() || p.is_ascii_digit() => true,
+                Some(p) if p.is_ascii_uppercase() => next.is_some_and(|n| n.is_ascii_lowercase()),
+                _ => false,
+            };
+        if starts_word && !word.is_empty() {
+            words.push(std::mem::take(&mut word));
         }
-        prev_lower = c.is_ascii_lowercase() || c.is_ascii_digit();
-        words.push(c.to_ascii_lowercase());
+        word.extend(c.to_lowercase());
     }
-    let words = words.trim().to_string();
-    let mut chars = words.chars();
-    match chars.next() {
-        Some(f) => f.to_uppercase().collect::<String>() + chars.as_str(),
-        None => "A login".into(),
+    if !word.is_empty() {
+        words.push(word);
+    }
+    // Two words that are one known name split apart ("linkedIn", "hubSpot"): one again.
+    let mut joined: Vec<String> = Vec::with_capacity(words.len());
+    let mut i = 0;
+    while i < words.len() {
+        if i + 1 < words.len() && known_name(&words[i]).is_none() {
+            let pair = format!("{}{}", words[i], words[i + 1]);
+            if known_name(&pair).is_some() {
+                joined.push(pair);
+                i += 2;
+                continue;
+            }
+        }
+        joined.push(words[i].clone());
+        i += 1;
+    }
+    let mut out: Vec<String> = Vec::with_capacity(joined.len());
+    for (i, w) in joined.iter().enumerate() {
+        out.push(match known_name(w) {
+            Some(name) => name.to_string(),
+            // Any other word opening the sentence takes a capital.
+            None if i == 0 => {
+                let mut cs = w.chars();
+                cs.next()
+                    .map(|f| f.to_uppercase().collect::<String>() + cs.as_str())
+                    .unwrap_or_default()
+            }
+            None => w.clone(),
+        });
+    }
+    if out.is_empty() {
+        "A login".into()
+    } else {
+        out.join(" ")
     }
 }
 

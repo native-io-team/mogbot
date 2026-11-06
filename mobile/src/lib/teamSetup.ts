@@ -16,6 +16,7 @@ import type {
   TeamSetupStepId,
   TeamSetupView,
 } from '@shipstudio/companion-protocol';
+import { humanise } from '@shipstudio/companion-protocol';
 
 export const SETUP_TITLE = 'Setting up your team';
 
@@ -164,17 +165,8 @@ export function setupBar(
 export const shows = (v: TeamSetupView | null | undefined): v is TeamSetupView =>
   !!v && !v.dismissed && v.steps.length > 0;
 
-/** A key as words: "email_drafts" → "Email drafts" (as the Mac's `team_setup::humanise`). */
-export function humanise(key: string): string {
-  const words = key
-    .trim()
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .split(/[\s_.-]+/)
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-  return words ? words[0].toUpperCase() + words.slice(1) : 'A login';
-}
+/** A key as words, with known names spelled right (`companion-protocol/loginNames`, as the Mac's `team_setup::humanise`). */
+export { humanise };
 
 /** A login's row title: never the raw key. */
 export const loginTitle = (l: TeamSetupLogin) => l.title ?? humanise(l.name);

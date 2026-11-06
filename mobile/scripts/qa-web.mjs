@@ -1124,7 +1124,20 @@ const LIVE = [
     // it), so the card leads with Use my browser, not "Connect Gmail".
     act: scrollToText('Use my browser'),
     check:
-      'Login card: "Finance needs your Gmail", asked-as line, what it can do, the no-connector line, Not now + Not needed (neutral), Use my browser with what it means, then Connect in Claude and Sign in from here; no password field',
+      'Login card: "Finance needs your Gmail", asked-as line, what it can do, ONE short line ("Uses your Chrome on your Mac…"), Not now + Use my browser (neutral filled), then "Other ways" as a text action; nothing else, no password field',
+  },
+  {
+    name: 'login-other-ways',
+    route: '/chat/fin',
+    ready: 'Finance',
+    act: async (page) => {
+      await scrollToText('Other ways')(page);
+      await page.clickText('Other ways');
+      await sleep(600);
+      await scrollToText('Not needed')(page);
+    },
+    check:
+      'Gmail card, Other ways open: why there is no connector, Connect in Claude instead and Sign in from here each with what it means, then Not needed; "Fewer ways" closes it',
   },
   {
     name: 'login-on-mac',

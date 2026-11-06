@@ -149,9 +149,26 @@
   display: none;
 }
 
-/* A real failure: a card, its red mark beside the words. */
+/* A real failure: a card, its red mark beside the words. Its actions sit on
+   the right of the words while both fit on one line, and wrap under them
+   (still right-aligned) once the words need the width: a one-line failure
+   never leaves Retry alone on a row of its own. */
 .agent-card.agent-bubble--error {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  column-gap: var(--spacing-md);
   color: var(--text-primary);
+}
+
+.agent-card.agent-bubble--error > .agent-bubble__error-text {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.agent-card.agent-bubble--error > .agent-card__actions {
+  flex: 0 0 auto;
+  margin-left: auto;
 }
 
 .agent-bubble__error-text {

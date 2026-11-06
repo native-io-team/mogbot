@@ -36,6 +36,18 @@
   display: contents;
 }
 
+/* Section tabs: left-aligned at their natural width, the first label's text
+   on the same edge as the content below (the tab's own inset is taken back
+   out of the body's), the active bar resting on the panel's hairline. */
+.settings-tabs.tabs__list {
+  flex-shrink: 0;
+  align-self: flex-start;
+  align-items: flex-end;
+  /* The band the stretched tabs used to fill, so the modal's rhythm holds. */
+  min-height: calc(var(--spacing-lg) * 2 + var(--font-size-body-lg));
+  margin-inline: calc(var(--settings-body-inset) - var(--tabs-underline-inset));
+}
+
 .settings-tab-panel {
   border-top: var(--border-width-default) solid var(--border-subtle);
 }

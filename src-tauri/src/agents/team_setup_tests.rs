@@ -639,6 +639,48 @@ fn the_logins_step_names_apps_by_service_never_by_raw_key() {
 fn keys_read_as_words() {
     assert_eq!(humanise("slack_workspaces"), "Slack workspaces");
     assert_eq!(humanise("emailDrafts"), "Email drafts");
-    assert_eq!(humanise("x-api.token"), "X api token");
+    assert_eq!(humanise("x-api.token"), "X API token");
+    assert_eq!(humanise("crm"), "CRM");
+    assert_eq!(humanise("github_workshop"), "GitHub workshop");
     assert_eq!(humanise("  "), "A login");
+}
+
+/// The cases the desk and the phone are held to as well
+/// (packages/companion-protocol/src/loginNames.test.ts), so one login is
+/// never titled two ways.
+#[test]
+fn keys_read_as_the_desk_and_phone_read_them() {
+    #[derive(serde::Deserialize)]
+    struct Case {
+        key: String,
+        title: String,
+    }
+    #[derive(serde::Deserialize)]
+    struct File {
+        cases: Vec<Case>,
+    }
+    let file: File = serde_json::from_str(include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../packages/companion-protocol/src/login-names.json"
+    )))
+    .unwrap();
+    assert!(file.cases.len() >= 20);
+    for c in &file.cases {
+        assert_eq!(humanise(&c.key), c.title, "key {:?}", c.key);
+    }
+    // Every known name here has a case there, so the TS map is held to it too.
+    let covered: std::collections::HashSet<String> = file
+        .cases
+        .iter()
+        .flat_map(|c| {
+            c.key
+                .to_lowercase()
+                .split(|ch: char| ch == '_' || ch == '-' || ch == '.' || ch.is_whitespace())
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .collect();
+    for (name, _) in KNOWN_NAMES {
+        assert!(covered.contains(*name), "no shared case for {name}");
+    }
 }

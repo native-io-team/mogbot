@@ -51,6 +51,7 @@ export const MATERIAL: Partial<Record<SFName, string>> = {
   'folder.fill': 'folder',
   gearshape: 'settings',
   'info.circle': 'info',
+  'questionmark.circle': 'help',
   'lock.fill': 'lock',
   magnifyingglass: 'search',
   mic: 'mic',

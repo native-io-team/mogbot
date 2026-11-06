@@ -25,6 +25,7 @@ export * from './links';
 export * from './policy';
 export * from './work';
 export * from './secretName';
+export * from './loginNames';
 export * from './avatar';
 export * from './attention';
 export * from './tables';

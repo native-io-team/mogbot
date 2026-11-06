@@ -280,6 +280,21 @@ const LOGIN_TITLES: Record<string, string> = {
   linkedin: 'LinkedIn',
 };
 
+/** Claude's plan windows as the engine last reported them, current as of `now`. */
+function claudeWindows(now: number): Quota['windows'] {
+  const hour = 3_600_000;
+  const at = (over: Partial<Quota['windows'][number]> & { kind: string }) => ({
+    limited: false,
+    observedAt: now - 5 * 60_000,
+    ...over,
+  });
+  return [
+    at({ kind: 'five_hour', usedPercent: 38, resetsAt: now + 2 * hour }),
+    at({ kind: 'seven_day', usedPercent: 41, resetsAt: now + 74 * hour }),
+    at({ kind: 'seven_day_opus', usedPercent: 12, resetsAt: now + 74 * hour }),
+  ];
+}
+
 /** The key in `file`, or a new one written there. */
 function persistentKey(file: string): KeyObject {
   if (existsSync(file)) return createPrivateKey(readFileSync(file, 'utf8'));
@@ -1615,12 +1630,15 @@ export function createMockServer(opts: MockOptions = {}) {
         ...(x.lastUsedAt ? { lastUsedAt: x.lastUsedAt } : {}),
       })),
       blockedApps: [],
-      ...(declined.length ? { declined: declined.map(({ key, title, declinedAt }) => ({ key, title, declinedAt })) } : {}),
+      ...(declined.length
+        ? { declined: declined.map(({ key, title, declinedAt }) => ({ key, title, declinedAt })) }
+        : {}),
     };
   }
 
   /** Apps the user chose not to connect (the Mac's `declined-services.json`), with the cards each put away. */
-  const declined: { key: string; title: string; declinedAt: number; closed: [string, string][] }[] = [];
+  const declined: { key: string; title: string; declinedAt: number; closed: [string, string][] }[] =
+    [];
   const declineKey = (service: string, title: string) =>
     service === 'other' ? `other:${title.trim().toLowerCase()}` : service;
 
@@ -1642,7 +1660,10 @@ export function createMockServer(opts: MockOptions = {}) {
       declined.push({ ...app, declinedAt: Date.now(), closed });
     }
     const titles = apps.map((x) => x.title);
-    const names = titles.length <= 1 ? titles.join('') : `${titles.slice(0, -1).join(', ')} and ${titles[titles.length - 1]}`;
+    const names =
+      titles.length <= 1
+        ? titles.join('')
+        : `${titles.slice(0, -1).join(', ')} and ${titles[titles.length - 1]}`;
     return {
       keys: apps.map((x) => x.key),
       line: `Not connecting ${names}. No agent will ask for ${titles.length === 1 ? 'it' : 'them'} again.`,
@@ -2192,7 +2213,8 @@ export function createMockServer(opts: MockOptions = {}) {
         if (keys && !keys.includes(n.key)) continue;
         for (const c of n.cards) {
           const k = declineKey(c.service, c.title);
-          if (c.state === 'waiting' && !apps.some((x) => x.key === k)) apps.push({ key: k, title: c.title });
+          if (c.state === 'waiting' && !apps.some((x) => x.key === k))
+            apps.push({ key: k, title: c.title });
         }
       }
       if (!apps.length) return fail({ type: 'Other', message: 'Nothing to skip.' });
@@ -2407,8 +2429,13 @@ export function createMockServer(opts: MockOptions = {}) {
         Object.assign(s, { resetsAt: now + 40 * 60_000, observedAt: now - 10 * 60_000 });
       const reset = now + 2 * 3_600_000;
       for (const a of plan.accounts) {
-        for (const w of a.windows)
-          Object.assign(w, { resetsAt: reset, observedAt: now - 5 * 60_000 });
+        // As `inventory::reading_for` does: the engine's reading (`agents.quota`)
+        // is the account it came from, here this Mac's Claude sign-in, whole.
+        if (a.engine === 'claude' && a.windows.length > 0)
+          Object.assign(a, { windows: claudeWindows(now) });
+        else
+          for (const w of a.windows)
+            Object.assign(w, { resetsAt: reset, observedAt: now - 5 * 60_000 });
         for (const p of a.pace ?? [])
           Object.assign(p, { resetsAt: reset, reachesAt: now + 80 * 60_000 });
       }
@@ -2416,26 +2443,11 @@ export function createMockServer(opts: MockOptions = {}) {
     },
     // The plan as Claude Code reports it, in the shape of the real reading,
     // with resets from now so every window is current (the header's ring, Usage).
-    'agents.quota': () => {
-      const now = Date.now();
-      const hour = 3_600_000;
-      const at = (over: Partial<Quota['windows'][number]> & { kind: string }) => ({
-        limited: false,
-        observedAt: now - 5 * 60_000,
-        ...over,
-      });
-      return [
-        {
-          engine: 'claude',
-          windows: [
-            at({ kind: 'five_hour', usedPercent: 38, resetsAt: now + 2 * hour }),
-            at({ kind: 'seven_day', usedPercent: 41, resetsAt: now + 74 * hour }),
-            at({ kind: 'seven_day_opus', usedPercent: 12, resetsAt: now + 74 * hour }),
-          ],
-        },
+    'agents.quota': () =>
+      [
+        { engine: 'claude', windows: claudeWindows(Date.now()) },
         ...real.agentsQuota.filter((q) => q.engine === 'codex'),
-      ] satisfies Quota[];
-    },
+      ] satisfies Quota[],
     // As `agents::defaults::check` does: a ready engine, a model it offers.
     'agents.setDefaults': (p) => {
       const keys = Object.keys(p);
@@ -2637,7 +2649,9 @@ export function createMockServer(opts: MockOptions = {}) {
     // The router's rules (router.rs `check_new_agent`): a name, a role, a colour and a template only.
     'agents.create': (p, c) => {
       const input = (p.input ?? {}) as Record<string, unknown>;
-      if (Object.keys(input).some((k) => !['name', 'role', 'color', 'template', 'avatar'].includes(k))) {
+      if (
+        Object.keys(input).some((k) => !['name', 'role', 'color', 'template', 'avatar'].includes(k))
+      ) {
         return fail({
           type: 'Protocol',
           code: 'bad_params',
@@ -2714,7 +2728,8 @@ export function createMockServer(opts: MockOptions = {}) {
         return fail({
           type: 'Protocol',
           code: 'bad_params',
-          message: 'Only pin, mute, hide, the instructions and how it looks can be changed from the phone.',
+          message:
+            'Only pin, mute, hide, the instructions and how it looks can be changed from the phone.',
         });
       }
       if (typeof input.instructions === 'string') instructions.set(a.id, input.instructions);

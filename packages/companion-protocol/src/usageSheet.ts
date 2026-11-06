@@ -10,6 +10,12 @@
  * 4:00 PM"), from the Mac's `UsagePace` (agents/forecast.rs `pace`). The Mac
  * sends one only with enough readings and only when it lands before the
  * reset; nothing here computes or fills one in.
+ *
+ * Each reading shows once (`usageSheet`): the account this agent's turns run
+ * on, with its 5-hour and weekly limits, at the top; every other account
+ * below. The plan's own windows (`agents.quota`) are that same account's
+ * reading, so they stand in for it only when the Mac hasn't said which
+ * account they belong to.
  */
 
 import type {
@@ -78,7 +84,8 @@ export function contextMeter(context: ContextFill | undefined): UsageMeter | nul
 const live = (w: QuotaWindow, now: number) => w.resetsAt === undefined || w.resetsAt > now;
 const usedOf = (w: QuotaWindow) =>
   w.limited ? 100 : Math.max(0, Math.min(100, Math.floor(w.usedPercent ?? 0)));
-const isSession = (w: QuotaWindow) => w.kind === 'five_hour' || w.windowMinutes === 300;
+const isSession = (w: Pick<QuotaWindow, 'kind' | 'windowMinutes'>) =>
+  w.kind === 'five_hour' || w.windowMinutes === 300;
 
 /** "Resets at 3:20 PM" today, "Resets tomorrow 3:20 PM", "Resets Mon 4:00 PM". */
 export function resetsLine(at: number | undefined, now = Date.now()): string {
@@ -91,7 +98,7 @@ export function resetsLine(at: number | undefined, now = Date.now()): string {
 const aged = (w: QuotaWindow, now: number) =>
   now - w.observedAt > QUOTA_STALE_MS ? ` · read ${readDay(w.observedAt, now)}` : '';
 
-/** A weekly window's name as the Usage sheet says it: "All models", "Opus", "Sonnet". */
+/** A weekly window's name: "All models", "Opus", "Sonnet". */
 export function weeklyLabel(w: Pick<QuotaWindow, 'kind' | 'windowMinutes'>): string {
   if (w.kind === 'seven_day_opus') return 'Opus';
   if (w.kind === 'seven_day_sonnet') return 'Sonnet';
@@ -99,6 +106,17 @@ export function weeklyLabel(w: Pick<QuotaWindow, 'kind' | 'windowMinutes'>): str
   const name = windowName(w);
   return name.charAt(0).toUpperCase() + name.slice(1);
 }
+
+/**
+ * A meter's name in an account's list, where the 5-hour and the weekly
+ * limits sit together: "5-hour limit", "Weekly · All models", "Weekly · Opus".
+ */
+export function limitLabel(w: Pick<QuotaWindow, 'kind' | 'windowMinutes'>): string {
+  return isSession(w) ? '5-hour limit' : `Weekly · ${weeklyLabel(w)}`;
+}
+
+/** The 5-hour window first, then the all-models week, then each model's. */
+const windowOrder = (w: QuotaWindow) => (isSession(w) ? 0 : w.kind === 'seven_day' ? 1 : 2);
 
 /* --------------------------------------------------------------- pace */
 
@@ -254,8 +272,13 @@ const ENGINE_NAME: Record<AgentEngine, string> = { claude: 'Claude', codex: 'Cod
 
 export interface AccountBlock {
   key: string;
+  engine: AgentEngine;
   /** "Claude · Work". */
   title: string;
+  /** "Work", "This Mac". */
+  name: string;
+  /** Its engine's next turn runs on it. */
+  next: boolean;
   /** "Max plan", "Next turns run here". */
   tags: string[];
   meters: UsageMeter[];
@@ -275,25 +298,85 @@ export function accountBlocks(
   return accounts.map((a: UsageAccountLine) => {
     const meters = a.windows
       .filter((w) => live(w, now))
-      .map((w) =>
-        meterOf(
-          `${a.id}:${w.kind}`,
-          isSession(w) ? '5-hour limit' : weeklyLabel(w),
-          w,
-          now,
-          paceFor(a.pace, w)
-        )
-      )
+      .sort((x, y) => windowOrder(x) - windowOrder(y))
+      .map((w) => meterOf(`${a.id}:${w.kind}`, limitLabel(w), w, now, paceFor(a.pace, w)))
       .filter((m): m is UsageMeter => m !== null);
     const usage = accountUsage(a, now);
     const showState = !a.signedIn || a.out || meters.length === 0;
     return {
       key: `${a.engine}:${a.id}`,
+      engine: a.engine,
       title: `${ENGINE_NAME[a.engine] ?? a.engine} · ${a.name}`,
+      name: a.name,
+      next: a.next,
       tags: accountTags(a),
       meters: a.out ? [] : meters,
       state: showState ? usage.text : null,
       tone: usage.tone,
     };
   });
+}
+
+/** The top of the sheet: the limits this agent's turns run against. */
+export interface ActiveUsage {
+  /** "This Mac · Max plan · Next turns run here"; null when the Mac hasn't said whose. */
+  account: string | null;
+  /** The 5-hour limit, then the weekly ones. */
+  meters: UsageMeter[];
+  /** When there's nothing to draw a bar for: "Not signed in", "Out of usage until …". */
+  state: string | null;
+  tone: UsageTone;
+}
+
+export interface UsageSheet {
+  /** This agent's engine's account; null with no reading at all. */
+  active: ActiveUsage | null;
+  /** Every other account, each with its own limits. Never the active one again. */
+  others: AccountBlock[];
+}
+
+/**
+ * The Usage sheet's limits, each reading once: the account the agent's next
+ * turns run on (its engine's `next`, else this Mac's sign-in) at the top,
+ * every other account under it.
+ *
+ * The plan's windows (`quotas`) are the same reading as that account's, so
+ * they're drawn only when no account of this engine has one of its own (a
+ * Mac that serves no inventory, or one that couldn't say which account a
+ * reading came from); then the top says no account name, rather than guess.
+ */
+export function usageSheet(
+  quotas: Quota[] | null | undefined,
+  engine: AgentEngine,
+  inventory: UsageInventory | null | undefined,
+  now = Date.now()
+): UsageSheet {
+  const blocks = accountBlocks(inventory, now);
+  const mine = blocks.filter((b) => b.engine === engine);
+  const thisMac = new Set(
+    (inventory?.accounts ?? []).filter((a) => a.thisMac).map((a) => `${a.engine}:${a.id}`)
+  );
+  const current =
+    mine.find((b) => b.next) ?? mine.find((b) => thisMac.has(b.key)) ?? mine[0] ?? null;
+  const readByAccount = mine.some((b) => b.meters.length > 0);
+  const plan = readByAccount ? null : planUsage(quotas, engine, now, inventory);
+  if (plan) {
+    const meters = [plan.session, ...plan.weekly]
+      .filter((m): m is UsageMeter => m !== null)
+      .map((m) => (m.key === 'session' ? m : { ...m, label: `Weekly · ${m.label}` }));
+    return {
+      active: { account: null, meters, state: null, tone: 'calm' },
+      others: blocks,
+    };
+  }
+  if (!current) return { active: null, others: blocks };
+  return {
+    active: {
+      account: [current.name, ...current.tags].join(' · '),
+      meters: current.meters,
+      state: current.state,
+      tone: current.tone,
+    },
+    others: blocks.filter((b) => b !== current),
+  };
 }
