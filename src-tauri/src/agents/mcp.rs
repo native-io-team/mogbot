@@ -403,7 +403,7 @@ pub fn initialize_result(params: Option<&Value>) -> Value {
         "protocolVersion": requested,
         "capabilities": { "tools": {} },
         "serverInfo": { "name": crate::brand::scoped("agents"), "version": env!("CARGO_PKG_VERSION") },
-        "instructions": format!("{}: the user's projects, which you work on through their sessions (project_* and session_* tools), other agents you can message, and (for the Chief of Staff) creating and managing agents.", crate::brand::NAME)
+        "instructions": "The app you live in, on the user's Mac: the user's projects, which you work on through their sessions (project_* and session_* tools), other agents you can message, and (for the Chief of Staff) creating and managing agents. Call it \"the app\"."
     })
 }
 
@@ -426,6 +426,12 @@ fn serves(tool: &Tool, caller: &store::Agent) -> bool {
         "read_agent" => caller.is_main || super::admin::admin_now(caller),
         _ => !tool.main_only || caller.is_main,
     }
+}
+
+/// `tools/list` as `caller` is served it, for the copy scan (`brand_copy_tests`).
+#[cfg(test)]
+pub(super) fn tools_list_for_tests(caller: &store::Agent) -> Value {
+    tools_list(caller)
 }
 
 fn tools_list(caller: &store::Agent) -> Value {
@@ -2180,15 +2186,13 @@ fn auto_allowed(
     // Its own level when its settings give it one (`policy`).
     let chosen = super::policy::chosen_level(caller);
     let ctx = super::autoallow::Ctx::for_agent(caller)?;
-    super::autoallow::auto(chosen, outside, tool, input, &ctx).map(|_| receipt_level(chosen, outside))
+    super::autoallow::auto(chosen, outside, tool, input, &ctx)
+        .map(|_| receipt_level(chosen, outside))
 }
 
 /// The level a receipt names: "Go hard" answers at its own level even for a
 /// turn answering outside text (`go_hard`); the others as the turn runs.
-fn receipt_level(
-    chosen: super::independence::Level,
-    outside: bool,
-) -> super::independence::Level {
+fn receipt_level(chosen: super::independence::Level, outside: bool) -> super::independence::Level {
     if chosen == super::independence::Level::GoHard {
         chosen
     } else {
@@ -2506,10 +2510,7 @@ mod tests {
         );
         // Outside text keeps Go hard for reading and local work (`go_hard`);
         // only network writes and fetched packages ask there.
-        assert_eq!(
-            auto_allowed(&agent, "Bash", &ls, true),
-            Some(Level::GoHard)
-        );
+        assert_eq!(auto_allowed(&agent, "Bash", &ls, true), Some(Level::GoHard));
         let mkdir = json!({ "command": "mkdir -p ~/FictionalProjects/new-site" });
         assert_eq!(
             auto_allowed(&agent, "Bash", &mkdir, false),

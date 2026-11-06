@@ -4564,7 +4564,7 @@ mod tests {
 
     #[test]
     fn labels_our_own_tools_in_plain_words() {
-        let line = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"mcp__shipstudio_agents__message_agent","input":{"agent":"Finance","message":"hi"}}]}}"#;
+        let line = r#"{"type":"assistant","message":{"content":[{"type":"tool_use","name":"mcp__app__message_agent","input":{"agent":"Finance","message":"hi"}}]}}"#;
         assert_eq!(
             describe_activity(line).as_deref(),
             Some("Messaging Finance")
@@ -4728,11 +4728,11 @@ mod tests {
             "--permission-mode",
             "acceptEdits",
             "--permission-prompt-tool",
-            "mcp__shipstudio_agents__approve",
+            "mcp__app__approve",
             "--mcp-config",
             "http://x",
             "--allowedTools",
-            "mcp__shipstudio_agents",
+            "mcp__app",
             "--append-system-prompt",
             &prompt,
             "--add-dir",

@@ -380,7 +380,7 @@ mod tests {
             "Edit",
             "Read",
             "NotebookEdit",
-            "mcp__shipstudio_agents__delete_agent",
+            "mcp__app__delete_agent",
         ] {
             assert_eq!(suggest(tool, &json!({ "file_path": "/x" })), None, "{tool}");
         }
