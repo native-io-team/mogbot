@@ -38,6 +38,8 @@ pub struct AgentsOverview {
     pub defaults: agents::defaults::View,
     /// How much agents do on their own (Settings → Agents, onboarding).
     pub independence: agents::independence::Level,
+    /// Whether "bring your agents from another assistant?" was answered.
+    pub import_choice: agents::import_choice::Choice,
 }
 
 /// Store work (file reads and writes) on a blocking thread, off the async
@@ -84,6 +86,7 @@ pub async fn agents_overview(app: AppHandle) -> Result<AgentsOverview, CommandEr
         engines,
         defaults,
         independence: agents::independence::level(),
+        import_choice: agents::import_choice::choice(),
     })
 }
 
@@ -1875,6 +1878,21 @@ pub async fn agents_set_independence(
     // The overview carries it: Settings and the phone pick it up.
     emit_registry(&app);
     Ok(level)
+}
+
+/// The answer to "bring your agents from another assistant, or start
+/// fresh?" (onboarding's last step, the Chief's one-time card, the phone).
+/// The overview carries it, so the desk and the phone agree.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_set_import_choice(
+    app: AppHandle,
+    choice: String,
+) -> Result<agents::import_choice::Choice, CommandError> {
+    let choice = agents::import_choice::Choice::parse(&choice)?;
+    blocking(move || agents::import_choice::set(choice, store::now_ms())).await?;
+    emit_registry(&app);
+    Ok(choice)
 }
 
 #[tauri::command]

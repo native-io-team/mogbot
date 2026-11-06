@@ -74,7 +74,7 @@ const allowlist = [
     reason: 'interactive terminal surface retained for the onboarding-terminal migration',
   },
   {
-    file: 'src/components/setup/agent-led/AgentOnboardingScreen.tsx',
+    file: 'src/components/setup/flow/EngineStep.tsx',
     label: 'onboarding-terminal-overlay class',
     reason: 'interactive terminal surface retained for the onboarding-terminal migration',
   },

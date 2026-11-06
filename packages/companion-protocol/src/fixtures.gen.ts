@@ -344,6 +344,7 @@ export const agentsOverview = {
       "signedIn": false
     }
   ],
+  "importChoice": "undecided",
   "independence": "go_hard"
 } satisfies Result<'agents.overview'>;
 export const agentsUsage = {
@@ -427,6 +428,9 @@ export const agentsSetDefaults = {
 export const agentsSetIndependence = {
   "level": "go_hard"
 } satisfies Result<'agents.setIndependence'>;
+export const agentsSetImportChoice = {
+  "choice": "declined"
+} satisfies Result<'agents.setImportChoice'>;
 export const agentsSetAdmin = {
   "admin": true,
   "agentId": "a1"
@@ -2814,6 +2818,7 @@ export const frames = [
       "agents.update",
       "agents.setDefaults",
       "agents.setIndependence",
+      "agents.setImportChoice",
       "agents.setAdmin",
       "agents.revokePermission",
       "agents.instructions",
@@ -3592,6 +3597,7 @@ export const frames = [
             "signedIn": false
           }
         ],
+        "importChoice": "undecided",
         "independence": "go_hard"
       }
     }
@@ -4008,6 +4014,7 @@ export const frames = [
             "signedIn": false
           }
         ],
+        "importChoice": "undecided",
         "independence": "go_hard"
       },
       "status": {

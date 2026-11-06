@@ -38,22 +38,28 @@ Open this repo in **Claude Code** or **Codex** and say:
 
 > Set this up on my Mac and phone. Follow docs/INSTALL.md.
 
-Your agent works through [INSTALL.md](INSTALL.md) and stops whenever it needs
-you. Roughly:
+Your agent builds the app ([INSTALL.md](INSTALL.md)) and stops whenever it
+needs you. Then the app itself takes over: one screen at a time, one big
+button each, and every check says **Done** or **Not done yet — here's what
+to do**. Quit part-way and it reopens where you stopped.
 
-1. **Check the Mac and install the tools.** 15 GB free (about 25 GB if you
-   build the phone app with Xcode). You type your Mac password a few times.
-2. **Build and open the app**, then sign in to **Claude Code** (Claude Pro or
-   Max) or **Codex** (a paid ChatGPT plan) in your browser. You can add more
-   accounts later; when one runs out, the app moves to the next.
-3. **Tailscale on the Mac and the phone**, signed in to the **same account**,
-   switched on, **before** you scan anything. This is the step people trip on.
-4. **The phone app**: Expo Go (minutes) or built with Xcode (30–60 minutes the
-   first time, the real experience). Your agent asks which. Then scan the code
-   on the Mac to pair.
-5. **Say hello to your Chief of Staff.** Optionally: let agents use your
-   Chrome (the Claude in Chrome extension, same Claude account), and bring
-   your agents over from Grok Bot or another assistant.
+1. **Welcome.** One line on what this is.
+2. **Your AI.** Pick **Claude Code** (Claude Pro or Max) or **Codex** (a paid
+   ChatGPT plan); it installs, then you sign in in your browser. A screen
+   each.
+3. **How independent** your agents should be. Skip keeps the default.
+4. **Your phone** (optional, about ten minutes): Tailscale on this Mac,
+   Tailscale on your phone signed in to the **same account** (the screen
+   shows a code to scan for the App Store and ticks when it sees your
+   phone), the phone app, then scan the code and click Allow. The phone app
+   is Expo Go or built with Xcode for now; your setup agent installs it
+   (INSTALL.md, Step 13).
+5. **You're ready.** Bring your agents from Grok, ChatGPT or another
+   assistant (three short screens: Remote access on, the link in your
+   assistant, one message), or start fresh with your Chief of Staff.
+
+Optionally, later: let agents use your Chrome (the Claude in Chrome
+extension, same Claude account).
 
 Your team can be changed any time by asking the Chief: new agents, different
 instructions, routines, which engine one runs on. How independent your agents

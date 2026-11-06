@@ -143,6 +143,7 @@ import {
 } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { ImportTalkBar } from './ImportTalkBar';
+import { ImportChoiceCard } from './ImportChoiceCard';
 import { WaitingForYouBar } from './WaitingForYouBar';
 import { TeamSetupCard } from './TeamSetupCard';
 import {
@@ -164,18 +165,15 @@ import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
  * (overnight fixes, a team with a standup, briefs that start projects;
  * `lib/chiefIdeas.ts`), and "More ideas…" for the rest. Each types a whole
  * brief into the composer for the user to finish; nothing is sent until they
- * press Send. What one needs (GitHub, a folder) the Chief sets up first. Importing isn't the Chief's job (the other assistant does it), so
- * that one opens the import steps instead.
+ * press Send. What one needs (GitHub, a folder) the Chief sets up first.
+ * Importing is asked once, by the card above (`ImportChoiceCard`).
  */
 function ChiefStarters({
   onIdea,
   onMore,
-  onImport,
 }: {
   onIdea: (idea: ChiefIdea) => void;
   onMore?: () => void;
-  /** With no sidebar to hold the import note, the starters offer it. */
-  onImport?: () => void;
 }) {
   return (
     <div className="agent-chat__starters">
@@ -193,11 +191,6 @@ function ChiefStarters({
       {onMore && (
         <Button tabIndex={0} variant="ghost" data-idea="more" onClick={onMore}>
           More ideas…
-        </Button>
-      )}
-      {onImport && (
-        <Button tabIndex={0} variant="secondary" onClick={onImport}>
-          Import agents…
         </Button>
       )}
     </div>
@@ -1150,13 +1143,7 @@ export const AgentChat = memo(function AgentChat({
 
   /** An idea for the Chief: its brief typed out for the user to finish, nothing sent. */
   const startIdea = (idea: ChiefIdea) => typeStarter(idea.text);
-  const chiefStarters = (
-    <ChiefStarters
-      onIdea={startIdea}
-      onMore={onMoreIdeas}
-      onImport={compact ? onImport : undefined}
-    />
-  );
+  const chiefStarters = <ChiefStarters onIdea={startIdea} onMore={onMoreIdeas} />;
   const template = agent.isMain ? null : templateOf(agent);
   const templateStarters = template && (
     <TemplateStarters
@@ -1608,6 +1595,8 @@ export const AgentChat = memo(function AgentChat({
               ref={messagesRef}
               data-greeting={(greetingOnly && engineReady) || undefined}
             >
+              {/* Asked once, for an install that never answered it. */}
+              {agent.isMain && engineReady && <ImportChoiceCard onImport={onImport} />}
               {items.length === 0 ? (
                 <div className="agent-chat__empty">
                   <AgentAvatar

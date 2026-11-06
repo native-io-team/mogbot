@@ -277,12 +277,21 @@ A build made on this Mac opens without a Gatekeeper warning (only downloaded
 files get checked). If macOS still says it "can't be opened", see
 [Gatekeeper](#the-app-cant-be-opened--apple-could-not-verify).
 
-**HUMAN:** *"The app is open. It will ask you to pick Claude Code or Codex.
-Pick the one you pay for (Claude Pro/Max: Claude Code. ChatGPT Plus/Pro:
-Codex). It installs it and opens a sign-in page in your browser. Sign in
-there. Then it asks one question, how much your agents should do on their
-own: pick what feels right (Use good judgement is the default; you can change
-it later). Come back and tell me what the app shows."*
+**HUMAN:** *"The app is open. It walks you through setup one screen at a
+time, with a progress bar at the top and one big button on each screen.
+Every check it runs says **Done** when it passes, or **Not done yet** with
+the one thing to do when it doesn't. First: pick Claude Code or Codex (the
+one you pay for: Claude Pro/Max is Claude Code, ChatGPT Plus/Pro is Codex).
+It installs it, then opens a sign-in page in your browser: sign in there.
+Then one question, how much your agents should do on their own (Use good
+judgement is the default; Skip keeps it). Stop when it asks **'Use your
+agents from your phone?'** and tell me."*
+
+The app's screens, in order: Welcome → your AI (pick, install, sign in: a
+screen each) → how independent → your phone (optional: Tailscale on the Mac,
+Tailscale on the phone, the phone app, scan and Allow) → "You're ready:
+bring your agents, or start fresh?". Quitting part-way is fine: the app
+reopens on the screen it stopped at.
 
 ### Step 10. The engine is installed and signed in
 
@@ -320,10 +329,11 @@ Codex needs a paid **ChatGPT** plan (Plus, Pro, Business, Edu, Enterprise) or
 an OpenAI API key. The app adds no charge of its own. On a subscription, usage
 counts against the plan's limits; with an API key, it's billed per token.
 
-**Check: the app agrees.** **HUMAN:** *"Do you see a 'You're all set' screen,
-and then a chat with your Chief of Staff greeting you?"* If yes, the desktop
-is done. If it still asks you to sign in, quit the app (⌘Q), open it again
-and tell me what it shows.
+**Check: the app agrees.** **HUMAN:** *"Does the app show 'Use your agents
+from your phone?'"* If yes, the engine is done. If it still says **Not done
+yet** on the sign-in screen, press **Try again**; if it fails twice, quit the
+app (⌘Q), open it again (it reopens on the same screen) and tell me what it
+shows.
 
 ### Step 11. More than one account (optional)
 
@@ -344,6 +354,10 @@ order; when one hits its usage limit the chat shows a quiet note like
 terminal check for this; the list in Settings is the answer.
 
 ### Step 12. Tailscale on the Mac
+
+In the app: **Use your agents from your phone? → Set up my phone**. The
+next screen, **Get Tailscale on this Mac**, checks this for itself and moves
+on when it's done; the checks below are the same ones from the terminal.
 
 The phone reaches the Mac over the human's own Tailscale network. Nothing goes
 through our servers. **Tailscale not being on, or being signed in to a
@@ -375,8 +389,10 @@ personal account is fine. Tell me when the menu bar icon says Connected."*
 **HUMAN** (the tailnet needs HTTPS certificates, once per account): *"In your
 browser, open https://login.tailscale.com/admin/dns. Make sure **MagicDNS** is
 on, then click **Enable HTTPS** under HTTPS Certificates. Tell me when it's
-done."* If you skip this, the app's Phone panel shows a "turn on HTTPS
-certificates" message with a link to the same page.
+done."* If you skip this, the app's pairing screen says **"Not done yet.
+HTTPS certificates are off in your Tailscale account."** with an **Open
+Tailscale admin** button and **Check again**, which answers every time it's
+pressed.
 
 ### Step 13. Choose how to get the phone app
 
@@ -402,8 +418,13 @@ exist yet. Until then you're alerted only while the app is open. Which one?"*
 
 ### Step 14. Tailscale on the phone (before any scanning)
 
+The app's **Get Tailscale on your phone** screen shows a QR code to
+Tailscale on the App Store and ticks **Done** as soon as a phone signed in to
+the Mac's account is on the tailnet with Tailscale switched on. It says which
+one it sees ("signed in, but switched off") when it isn't.
+
 **HUMAN:** *"On your phone, install **Tailscale** from the App Store (or
-Google Play). Open it and sign in with the **same account** as on the Mac:
+Google Play): scan the code on the Mac's screen with the camera. Open it and sign in with the **same account** as on the Mac:
 `<login from Step 12>`. Then switch it on. Tell me when it says Connected."*
 (If Step 15A is next, add: *"Also install **Expo Go**, a free app from the
 same store."*)
@@ -592,12 +613,15 @@ doesn't expire. Not verified on Android hardware.
 Step 12's check says `Running`, and Step 14's check shows the phone, not
 `offline`.
 
-**HUMAN:** *"On the Mac, in the app, click **Phone** at the bottom of the left
-sidebar, then **Pair a phone**. A QR code appears. On your phone, in the app,
-tap **Scan the code on your Mac** and scan it (in Expo Go, use that button,
-not the Camera app). The phone asks 'Pair with …?': tap **Pair**. Then the Mac
-asks 'Allow … to use your agents?': click **Allow**. Tell me what the phone
-shows."*
+**HUMAN:** *"On the Mac, the app's **Get the Dashbot app on your phone**
+screen: press **I already have the app** (we just installed it). The next
+screen, **Scan this code**, turns on phone access by itself and shows a QR
+code. (Skipped the phone earlier? Settings → Agents → Phone → Pair a phone
+shows the same code.) On your phone, in the app: **It's on — next**, then
+**Scan the code** (in Expo Go, use that button, not the Camera app). The
+phone asks 'Pair with …?': tap **Pair**. Then the Mac asks 'Allow … to use
+your agents?': click **Allow**. The Mac says **Done. Paired with …** and
+moves on to the last screen. Tell me what the phone shows."*
 
 **Check:** the phone shows the agents list with the Chief of Staff, and the
 Mac's Phone panel lists the phone as paired. **HUMAN:** *"Send the Chief of
@@ -646,8 +670,7 @@ closed, agents report the browser as not connected.
 
 **HUMAN:** *"Two things worth knowing. **How independent your agents are**:
 the app asked you once (Check with me often, Use good judgement, Go hard). You
-can change it any time in Settings → Agents → Independence, or in Settings on
-the phone. Whatever you pick, anything that spends money, sends as you,
+can change it any time by telling your Chief. Whatever you pick, anything that spends money, sends as you,
 publishes or deletes still asks you first. **Your team**: the Chief of Staff
 creates, changes and removes the other agents for you, and you can change an
 agent's instructions or routines just by asking in the chat. The Chief is also
@@ -661,14 +684,20 @@ There's nothing to check here. Don't change these settings for the human.
 ### Step 19. Bring agents from Grok Bot or another assistant (optional)
 
 Only if the human already has agents in Grok Bot (or another assistant that
-can add an MCP connector).
+can add an MCP connector). Otherwise: **Start fresh** on the app's last
+screen. Either way it's asked once; later, import is in ⌘K → Import agents,
+Settings → Agents → Import, or the phone's ⋯ menu.
 
-**HUMAN:** *"To bring your agents over: in the app, open **Import agents**
-(or ⌘K → 'Import agents from another assistant…'). Step 1 is **Set up Remote
-access…**: follow its steps (it uses the same Tailscale; approve Funnel when
-Tailscale asks) and **Copy link**. In your other assistant, add that link as a
-custom connector. Then back in Import agents press **Start** and send your
-assistant the message it shows. The Chief asks you first: click **Allow**.
+**HUMAN:** *"The app's last screen asks **'You're ready. Bring your agents
+from Grok, ChatGPT or another assistant, or start fresh?'** To bring them:
+**Bring my agents**, then three screens. **Turn on Remote access** turns it on
+by itself and ticks when the internet can reach this Mac (if Tailscale needs
+Funnel approved, it says so, with the page and Check again). **Add the link
+to your assistant**: press **Copy link**, and in your other assistant add a
+custom connector named Dashbot with that link; it ticks when your assistant
+connects. **Send your assistant this message**: copy it, send it in a new
+chat, and press **Open your Chief of Staff**. The Chief asks you first:
+click **Allow**.
 Your assistant describes its agents; the Chief plays the plan back to you,
 asks what's missing, and you pick what to keep on one review card.
 Afterwards the app checks what your new agents can already reach on this Mac
