@@ -101,3 +101,20 @@ export function pillFor(
  */
 export const HOLD = { minIndexForVisible: 1 } as const;
 export const holdFor = (state: Follow) => (state.pinned ? undefined : HOLD);
+
+/**
+ * A new card that asks (an approval, a question) landed: whether to bring
+ * its answers into view. Only when you're at or near the newest line (within
+ * `FAR`), so a card never yanks you away from something you scrolled back to
+ * read; and only for a card that wasn't there before, so it happens once.
+ * `before` is undefined until the chat has loaded: a card already waiting
+ * when you open the chat isn't "new" (opening lands on the newest anyway).
+ */
+export function revealsCard(
+  before: string | null | undefined,
+  now: string | null,
+  distance: number
+): boolean {
+  if (!now || before === undefined || now === before) return false;
+  return distance <= FAR;
+}

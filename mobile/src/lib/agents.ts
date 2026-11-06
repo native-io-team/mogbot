@@ -528,6 +528,50 @@ export function approvalFields(
   return fields.length ? fields : null;
 }
 
+/**
+ * How many lines a pending card's detail shows before "Show all": enough to
+ * read a command or the start of a diff, few enough that the question, the
+ * detail and Deny · Allow fit on a phone together without scrolling.
+ */
+export const DETAIL_LINES = 8;
+/** At large text sizes each line is taller, so fewer of them. */
+export const DETAIL_LINES_LARGE = 6;
+/** A rough wrap width for field values in a phone card (characters per line). */
+const FIELD_CHARS = 36;
+
+/** The rows a value takes once wrapped, roughly: each line, at least one row. */
+const fieldRows = (value: string) =>
+  value.split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / FIELD_CHARS)), 0);
+
+/**
+ * Fields under a line budget: each shown field with the most lines it may
+ * take (`numberOfLines`), in order, until the budget is spent. `clipped` says
+ * something was left out or cut, so the card offers "Show all": the full
+ * text is always one tap away, never silently dropped.
+ */
+export function capFields(
+  fields: [string, string][],
+  budget: number
+): { shown: [string, string, number][]; clipped: boolean } {
+  const shown: [string, string, number][] = [];
+  let left = budget;
+  let clipped = false;
+  for (const [label, value] of fields) {
+    // A label and at least one line of its value, or it waits behind Show all.
+    if (left < 2) {
+      clipped = true;
+      break;
+    }
+    left -= 1;
+    const rows = fieldRows(value);
+    const lines = Math.min(rows, left);
+    if (rows > lines) clipped = true;
+    shown.push([label, value, lines]);
+    left -= lines;
+  }
+  return { shown, clipped };
+}
+
 export function askingLine(
   approval: Pick<Approval, 'title' | 'detail' | 'tool' | 'secret' | 'connector' | 'summary'>
 ): string {

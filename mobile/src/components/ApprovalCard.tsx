@@ -25,7 +25,14 @@ import {
   useWindowDimensions,
 } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
-import { approvalFields, cardOutcome, describeScope } from '../lib/agents';
+import {
+  approvalFields,
+  capFields,
+  cardOutcome,
+  describeScope,
+  DETAIL_LINES,
+  DETAIL_LINES_LARGE,
+} from '../lib/agents';
 import { haptic } from '../lib/haptics';
 import { useInFlight } from '../lib/once';
 import { answerApproval, call, describeError } from '../lib/session';
@@ -34,6 +41,7 @@ import { fonts, iconSize, radius, space, type, PRESSED } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { choose } from './menu';
 import { SettingsChange } from './settingsChange';
+import { ShowAll } from './ShowAll';
 import { Card, Line, OFFLINE_NOTE, useActionShare } from './surfaces';
 import { Button, Icon, T } from './ui';
 
@@ -349,7 +357,7 @@ export function ApprovalCard({
             // Consent asks in sentences, not a command: prose that wraps.
             <T color={colors.textBody}>{approval.detail}</T>
           ) : (
-            <Summarized approval={approval} lines={large ? 6 : 12} />
+            <Summarized approval={approval} lines={large ? DETAIL_LINES_LARGE : DETAIL_LINES} />
           )}
         </FittedDetail>
       )}
@@ -881,23 +889,40 @@ function Summarized({ approval, lines }: { approval: Approval; lines: number }) 
 }
 
 function Detail({ approval, lines }: { approval: Approval; lines: number }) {
-  const cardStyles = useCardStyles();
-  const colors = useColors();
   if (approval.settings) return <SettingsChange proposal={approval.settings} />;
   const fields = approvalFields(approval.tool, approval.input);
   if (!fields) return <Command text={approval.detail} lines={lines} />;
+  return <Fields fields={fields} lines={lines} />;
+}
+
+/**
+ * A connector's input as labelled fields, capped at `lines` with "Show all"
+ * (an email body can be pages): Deny · Allow stay under the thumb, and the
+ * whole of what you're agreeing to is one tap away.
+ */
+export function Fields({ fields, lines }: { fields: [string, string][]; lines: number }) {
+  const cardStyles = useCardStyles();
+  const colors = useColors();
+  const [all, setAll] = useState(false);
+  const capped = capFields(fields, lines);
+  const shown: [string, string, number | undefined][] = all
+    ? fields.map(([l, v]) => [l, v, undefined])
+    : capped.shown;
   return (
-    <View style={[cardStyles.cardDetail, cardStyles.cardDetailInner, cardStyles.fields]}>
-      {fields.map(([label, value], i) => (
-        <View key={i} style={cardStyles.field}>
-          <T variant="caption" color={colors.textSecondary} style={{ fontFamily: fonts.medium }}>
-            {label}
-          </T>
-          <T color={colors.textPrimary} selectable>
-            {value}
-          </T>
-        </View>
-      ))}
+    <View style={cardStyles.cardDetail}>
+      <View style={[cardStyles.cardDetailInner, cardStyles.fields]}>
+        {shown.map(([label, value, max], i) => (
+          <View key={i} style={cardStyles.field}>
+            <T variant="caption" color={colors.textSecondary} style={{ fontFamily: fonts.medium }}>
+              {label}
+            </T>
+            <T color={colors.textPrimary} selectable numberOfLines={max}>
+              {value}
+            </T>
+          </View>
+        ))}
+      </View>
+      {capped.clipped && <ShowAll open={all} onPress={() => setAll((v) => !v)} />}
     </View>
   );
 }
@@ -914,7 +939,8 @@ export function Command({ text, lines }: { text: string; lines: number }) {
   // Long commands are never cut silently: past `lines` they say how many
   // more there are, and a tap shows the rest.
   const rows = text.split('\n');
-  const over = rows.length > lines && !all;
+  const long = rows.length > lines;
+  const over = long && !all;
   return (
     <View style={cardStyles.cardDetail}>
       <ScrollView
@@ -927,17 +953,12 @@ export function Command({ text, lines }: { text: string; lines: number }) {
           {over ? rows.slice(0, lines).join('\n') : text}
         </T>
       </ScrollView>
-      {over && (
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => setAll(true)}
-          hitSlop={{ top: 12, bottom: 12 }}
-          style={({ pressed }) => [cardStyles.showAll, pressed && PRESSED]}
-        >
-          <T variant="caption" color={colors.textSecondary} style={{ fontFamily: fonts.medium }}>
-            Show all {rows.length} lines
-          </T>
-        </Pressable>
+      {long && (
+        <ShowAll
+          open={all}
+          onPress={() => setAll((v) => !v)}
+          label={`Show all ${rows.length} lines`}
+        />
       )}
     </View>
   );
