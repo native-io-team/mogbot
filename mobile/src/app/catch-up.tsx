@@ -63,7 +63,7 @@ import { useInFlight } from '../lib/once';
 import { answerApproval, canCall, describeError, loadLatest, setOpenChat } from '../lib/session';
 import { useApp } from '../lib/store';
 import { progress as setupProgress } from '../lib/teamSetup';
-import { avatarSize, iconSize, radius, space } from '../lib/theme';
+import { avatarSize, iconSize, lineHeight, radius, READ_LINE, space, type } from '../lib/theme';
 
 /** How long a card's chats get to load before the queue starts without them. */
 const LOAD_WAIT_MS = 5000;
@@ -71,6 +71,8 @@ const LOAD_WAIT_MS = 5000;
 const MOVE_ON_MS = 1600;
 /** Past this share of the width, a swipe left is Next. */
 const SWIPE_SHARE = 0.28;
+/** The big answer buttons: taller than a large button, for the thumb. */
+const BIG = space['2xl'] + space.xl;
 
 export default function CatchUp() {
   const styles = useStyles();
@@ -156,7 +158,7 @@ export default function CatchUp() {
           Catch up
         </T>
         <T
-          variant="small"
+          variant="caption"
           color={colors.textSecondary}
           style={styles.count}
           accessibilityLabel={`${n} of ${of}`}
@@ -164,9 +166,7 @@ export default function CatchUp() {
           {`${n} of ${of}`}
         </T>
       </View>
-      <View style={styles.track}>
-        <View style={[styles.fill, { width: `${(n / Math.max(1, of)) * 100}%` }]} />
-      </View>
+      <Progress share={n / Math.max(1, of)} />
       {agent ? (
         <AgentAccent agentId={agent.id}>
           <Shown
@@ -188,6 +188,21 @@ export default function CatchUp() {
         // Deleted while queued: nothing to show, so on to the next.
         <Skip onSkip={next} />
       )}
+    </View>
+  );
+}
+
+/** The thin bar: its fill glides to the new share on the UI thread. */
+function Progress({ share }: { share: number }) {
+  const styles = useStyles();
+  const w = useSharedValue(share);
+  useEffect(() => {
+    w.value = withTiming(share, { duration: 260 });
+  }, [share, w]);
+  const fill = useAnimatedStyle(() => ({ width: `${w.value * 100}%` }));
+  return (
+    <View style={styles.track}>
+      <Animated.View style={[styles.fill, fill]} />
     </View>
   );
 }
@@ -297,6 +312,10 @@ function Shown({
         ? failureLine(failure, previewText(agent.preview), engineName(agent))
         : needsLine(agent, messages)
       : null;
+  // The big slot under the thumb holds the card's one action: Allow / Deny, the
+  // sign-in or key or answer (it opens the chat), Continue, or else Next.
+  const chatIsMain = (pending && action.kind === 'open') || item.kind === 'setup';
+  const nextIsMain = !chatIsMain && !(pending && action.kind === 'answer');
   const movedLine =
     state === 'expired'
       ? 'Not answered in time · moving on'
@@ -307,7 +326,7 @@ function Shown({
   return (
     <>
       <Animated.View
-        entering={FadeInRight.duration(220)}
+        entering={FadeInRight.duration(260)}
         exiting={FadeOutLeft.duration(160)}
         style={[styles.body, slide]}
         {...pan.panHandlers}
@@ -319,16 +338,14 @@ function Shown({
               name={agent.name}
               color={agent.color}
               look={agent.avatar}
-              size={avatarSize.list}
+              size={avatarSize.header}
             />
-            <View style={styles.whoText}>
-              <T variant="headline" color={colors.textStrong} numberOfLines={1}>
-                {agent.name}
-              </T>
-              <T variant="small" color={colors.textSecondary} numberOfLines={1}>
-                {formatAgo(card?.ts ?? agent.lastActivityAt)}
-              </T>
-            </View>
+            <T variant="headline" color={colors.textStrong} numberOfLines={1} style={styles.name}>
+              {agent.name}
+            </T>
+            <T variant="caption" color={colors.textSecondary} numberOfLines={1}>
+              {formatAgo(card?.ts ?? agent.lastActivityAt)}
+            </T>
           </View>
           <GalleryContext.Provider value={gallery}>
             {shown.map((m) => (
@@ -336,7 +353,9 @@ function Shown({
             ))}
           </GalleryContext.Provider>
           {item.kind === 'reply' && shown.length === 0 && !!agent.preview && (
-            <T color={colors.textBody}>{previewText(agent.preview)}</T>
+            <T color={colors.textBody} style={styles.read}>
+              {previewText(agent.preview)}
+            </T>
           )}
           {status && <Line text={status} />}
           {item.kind === 'setup' && (
@@ -380,7 +399,19 @@ function Shown({
             Answer it once your Mac is back. It stays open until then.
           </T>
         )}
-        {pending && action.kind === 'answer' && (
+        <View style={styles.quiet}>
+          {!chatIsMain && (
+            <Button
+              title="Chat"
+              variant="ghost"
+              size="compact"
+              icon="bubble.left"
+              onPress={() => onChat(card?.id)}
+            />
+          )}
+          {!nextIsMain && <Button title="Next" variant="ghost" size="compact" onPress={goNext} />}
+        </View>
+        {pending && action.kind === 'answer' ? (
           <Animated.View
             entering={FadeIn.duration(400)}
             pointerEvents={armed ? 'auto' : 'none'}
@@ -388,12 +419,12 @@ function Shown({
           >
             <Button
               title={action.deny}
-              variant="outline"
+              variant="secondary"
               size="large"
               busy={busy === 'deny'}
               disabled={!!busy || !connected}
               onPress={() => void answer(false)}
-              style={styles.grow}
+              style={styles.big}
             />
             <Button
               title={action.allow}
@@ -403,37 +434,26 @@ function Shown({
               disabled={!!busy || !connected}
               onPress={() => void answer(true)}
               accessibilityHint={card?.approval?.detail || undefined}
-              style={styles.grow}
+              style={styles.big}
             />
           </Animated.View>
-        )}
-        {pending && action.kind === 'open' && (
+        ) : chatIsMain ? (
           <Button
-            title={action.label}
+            title={pending && action.kind === 'open' ? action.label : 'Continue'}
             variant="answer"
             size="large"
             onPress={() => onChat(card?.id)}
+            style={styles.bigSingle}
           />
-        )}
-        <View style={styles.row}>
-          {!(pending && action.kind === 'open') && (
-            <Button
-              title={item.kind === 'setup' ? 'Continue' : 'Chat'}
-              variant="secondary"
-              size="large"
-              icon="bubble.left"
-              onPress={() => onChat(card?.id)}
-              style={styles.grow}
-            />
-          )}
+        ) : (
           <Button
             title="Next"
-            variant={pending || moved ? 'ghost' : 'answer'}
+            variant="answer"
             size="large"
             onPress={goNext}
-            style={styles.grow}
+            style={styles.bigSingle}
           />
-        </View>
+        )}
       </View>
     </>
   );
@@ -483,21 +503,26 @@ const useStyles = makeStyles((colors) => ({
   },
   count: { minWidth: avatarSize.list, textAlign: 'right', paddingRight: space.sm },
   track: {
-    height: space['2xs'],
+    height: space.xs,
     marginHorizontal: space.lg,
+    marginBottom: space.xs,
     borderRadius: radius.pill,
     backgroundColor: colors.borderDefault,
     overflow: 'hidden',
   },
   fill: { height: '100%', borderRadius: radius.pill, backgroundColor: colors.textSecondary },
   body: { flex: 1 },
-  scroll: { padding: space.lg, gap: space.md },
-  who: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  whoText: { flex: 1, gap: space['2xs'] },
+  scroll: { padding: space.lg, gap: space.lg },
+  who: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  name: { flex: 1 },
+  read: { fontSize: type.read, lineHeight: lineHeight(type.read, READ_LINE) },
+  quiet: { flexDirection: 'row', justifyContent: 'center', gap: space.xl },
+  big: { flex: 1, minHeight: BIG },
+  bigSingle: { minHeight: BIG },
   actions: {
     gap: space.sm,
     paddingHorizontal: space.lg,
-    paddingTop: space.md,
+    paddingTop: space.sm,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderTopColor: colors.borderDefault,
     backgroundColor: colors.surfaceApp,

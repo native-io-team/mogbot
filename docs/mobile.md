@@ -460,7 +460,7 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   this phone can answer (oldest first), then each agent with something new
   to read or a turn that needs you. A card is the agent, what it said since
   you last spoke (up to three messages, markdown and pictures as in the
-  chat) and the request, with Allow · Deny under the thumb (the card's own
+  chat) and the request, with Deny · Allow as two big buttons at the bottom (Chat and Next quiet above them; the card's own
   answers hidden, the same 400 ms arming); a login, a key or a task's
   question has one action instead ("Sign in", "Enter key", "Answer") that
   opens it in its chat. **Chat** opens the agent's chat at the card, and back
