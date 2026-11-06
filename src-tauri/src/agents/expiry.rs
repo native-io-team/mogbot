@@ -144,6 +144,12 @@ pub fn verdict(a: &Approval, age_ms: i64, waited_on: bool, moment: Moment) -> Op
     if a.connector.is_some() {
         return None;
     }
+    // "Change these settings?" waits for the user: nothing blocks on it
+    // (`propose_settings_change` returns at once), and Allow checks the
+    // settings didn't change since (`policy_card::apply_proposal`).
+    if a.settings.is_some() {
+        return None;
+    }
     if let Some(s) = &a.secret {
         // An import's old-style secure input (before sign-in cards, which
         // replaced it): nothing raises these any more and nothing waits on

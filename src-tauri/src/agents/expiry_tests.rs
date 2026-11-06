@@ -299,3 +299,30 @@ fn only_old_style_secure_inputs_close_young() {
         assert_eq!(verdict(&card, 0, false, moment), Some(Expiry::MaybeLater));
     }
 }
+
+/// "Change Memberstack's settings?" waits for the user: its turn ending,
+/// a launch or a long wait never close it (the owner typed "Approve it"
+/// after the Chief's turn had ended and found it expired).
+#[test]
+fn a_settings_card_waits_for_the_user() {
+    let mut card = super::super::mcp::new_card(
+        "s1".into(),
+        "Change Memberstack's settings?".into(),
+        "Independence: Go hard".into(),
+        None,
+    );
+    card.settings = Some(super::super::policy_card::Proposal {
+        targets: Vec::new(),
+        change: Default::default(),
+        version: 1,
+        groups: Vec::new(),
+        why: None,
+        has_rules: false,
+    });
+    let over = (CARD_EXPIRY_SECS as i64) * 1000 * 100;
+    for moment in [Moment::TurnEnded, Moment::Launch, Moment::Tick] {
+        for waited_on in [false, true] {
+            assert_eq!(verdict(&card, over, waited_on, moment), None, "{moment:?}");
+        }
+    }
+}

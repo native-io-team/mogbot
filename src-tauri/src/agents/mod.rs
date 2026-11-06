@@ -85,6 +85,7 @@ pub mod failure;
 pub mod files;
 pub mod forecast;
 pub mod go_hard;
+pub mod typed_answer;
 pub mod harvest;
 pub mod identity;
 pub mod import;

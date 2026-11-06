@@ -183,6 +183,7 @@ pub async fn agents_send(
         return Err(agents::err_invalid("text", "Type a message first."));
     }
     let recipient = store::get(&agent_id)?;
+    let says_yes = agents::typed_answer::approves(&text);
     let home = store::agent_home(&agent_id)?;
     let mut message = runner::new_message(&agent_id, store::MessageKind::User, text.clone());
     // "Ask for changes": pinned to the result as the log has it, never as
@@ -249,7 +250,32 @@ pub async fn agents_send(
     .filter(|part| !part.is_empty())
     .collect::<Vec<_>>()
     .join("\n\n");
+    let typed_yes = says_yes && message.attachments.is_empty() && message.revises.is_none();
     let message = runner::record(&app, message)?;
+    // "Approve it", typed by the user into a chat with one open card: that
+    // card is allowed as their answer (`typed_answer`). Only this, the user's
+    // own send, gets here.
+    if typed_yes {
+        let open = store::pending_approvals(&agent_id).unwrap_or_default();
+        if let Some(card) = agents::typed_answer::the_card(&open) {
+            let request_id = card.request_id.clone();
+            match answer_card(&app, &agent_id, &request_id, true, None, None, None) {
+                Ok(()) => {
+                    let _ = runner::record(
+                        &app,
+                        runner::new_message(
+                            &agent_id,
+                            store::MessageKind::Note,
+                            agents::typed_answer::LINE,
+                        ),
+                    );
+                }
+                Err(e) => {
+                    tracing::warn!(agent = %agent_id, %request_id, error = %e, "[Agents] a typed yes couldn't answer the card")
+                }
+            }
+        }
+    }
     runner::enqueue(&app, &agent_id, prompt, runner::From::User);
     agents::tray::mark_used(&app);
     Ok(message)
