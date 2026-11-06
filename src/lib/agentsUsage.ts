@@ -41,6 +41,19 @@ export {
   type SpareLine,
   type UsageTone,
 } from '../../packages/companion-protocol/src/usage';
+export { windowName } from '../../packages/companion-protocol/src/quota';
+// The chat header's ring and its popover say what the phone's do.
+export {
+  accountBlocks,
+  contextMeter,
+  paceLine,
+  planUsage,
+  ringPercent,
+  type AccountBlock,
+  type PaceLine,
+  type PlanUsage,
+  type UsageMeter,
+} from '../../packages/companion-protocol/src/usageSheet';
 
 /** The mode or the list changed (`runner::EVENT_USAGE_PLAN`). */
 export const USAGE_PLAN_EVENT = 'agents://usage-plan';

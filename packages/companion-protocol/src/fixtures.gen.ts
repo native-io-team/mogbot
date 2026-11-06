@@ -690,6 +690,16 @@ export const agentsUsagePlan = {
       "name": "This Mac",
       "next": true,
       "out": false,
+      "pace": [
+        {
+          "estimate": true,
+          "kind": "five_hour",
+          "reachesAt": 1762298000000,
+          "readings": 6,
+          "resetsAt": 1762300000000,
+          "spanMinutes": 95
+        }
+      ],
       "signedIn": true,
       "thisMac": true,
       "windows": [

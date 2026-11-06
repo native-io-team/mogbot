@@ -71,6 +71,11 @@ pub struct AccountLine {
     pub windows: Vec<QuotaWindow>,
     /// Window kinds whose share per token has been learned (`forecast::rate`).
     pub learned: Vec<String>,
+    /// When a window would reach 100% at the recent rate, before its reset:
+    /// an ESTIMATE from this account's own readings (`forecast::pace`), one
+    /// per window that has one. Empty: none to say.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub pace: Vec<forecast::Pace>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -237,6 +242,14 @@ pub fn build(parts: Parts) -> Inventory {
                         .is_some_and(|s| forecast::rate(s, k).is_some())
                 })
                 .collect();
+            let pace = match (&reading, parts.samples.get(&key)) {
+                (Some(q), Some(samples)) => q
+                    .windows
+                    .iter()
+                    .filter_map(|w| forecast::pace(samples, w, now))
+                    .collect(),
+                _ => Vec::new(),
+            };
             let out = c.account.out(now);
             accounts.push(AccountLine {
                 engine: info.id,
@@ -250,6 +263,8 @@ pub fn build(parts: Parts) -> Inventory {
                 plan: reading.as_ref().and_then(|q| q.plan.clone()),
                 windows: reading.map(|q| q.windows).unwrap_or_default(),
                 learned,
+                // An account that's out has nothing left to run out of.
+                pace: if out.is_some() { Vec::new() } else { pace },
             });
         }
     }
@@ -679,6 +694,22 @@ where
     }
     s.push_str("\nESTIMATES (from this user's past runs; not readings):\n");
     let mut any = false;
+    for a in &inv.accounts {
+        for p in &a.pace {
+            any = true;
+            let window = a.windows.iter().find(|w| w.kind == p.kind);
+            s.push_str(&format!(
+                "- {} \"{}\": at the recent pace its {} limit would run out {}, before it resets {} (ESTIMATE from {} readings over {} minutes, not a reading).\n",
+                engine_name(a.engine),
+                a.name,
+                window_name(&p.kind, window.and_then(|w| w.window_minutes)),
+                when(tz, p.reaches_at, now),
+                when(tz, p.resets_at, now),
+                p.readings,
+                p.span_minutes
+            ));
+        }
+    }
     for e in inv.engines.iter().filter(|e| e.installed) {
         if let Some(r) = &e.per_turn {
             any = true;
@@ -933,6 +964,41 @@ mod tests {
         let this_mac = &inv.accounts[0];
         assert_eq!(this_mac.windows.len(), 1);
         assert_eq!(this_mac.windows[0].kind, "seven_day");
+    }
+
+    #[test]
+    fn an_accounts_pace_is_served_from_its_own_readings_and_labelled() {
+        let mut p = parts();
+        // Work's five-hour window: 10 → 25 → 40% over the last hour (30 points
+        // an hour), resetting in 3 hours: the 60 points left go in 2.
+        let reset = NOW + 3 * 60 * 60_000;
+        p.engine_readings[0].windows = vec![QuotaWindow {
+            resets_at: Some(reset),
+            ..window("five_hour", 40.0, 0)
+        }];
+        let sample = |used: f64, ago_min: i64| forecast::Sample {
+            kind: "five_hour".into(),
+            resets_at: Some(reset),
+            used,
+            tokens: 0,
+            at: NOW - ago_min * 60_000,
+        };
+        p.samples.insert(
+            "claude:w1".into(),
+            vec![sample(10.0, 61), sample(25.0, 31), sample(40.0, 1)],
+        );
+        let inv = build(p);
+        let (this_mac, work) = (&inv.accounts[0], &inv.accounts[1]);
+        assert!(this_mac.pace.is_empty(), "no readings of its own");
+        assert_eq!(work.pace.len(), 1);
+        let pace = &work.pace[0];
+        assert!(pace.estimate);
+        assert_eq!(pace.reaches_at, NOW - 60_000 + 2 * 60 * 60_000);
+        let text = overview_text(&inv, &chrono::Utc);
+        assert!(text.contains("at the recent pace its 5-hour limit would run out"));
+        assert!(text.contains("ESTIMATE from 3 readings over 60 minutes"));
+        let json = serde_json::to_value(this_mac).unwrap();
+        assert!(json.get("pace").is_none(), "absent, not empty, with none");
     }
 
     #[test]

@@ -1,6 +1,7 @@
 /**
  * The chat header's usage ring (the current 5-hour window, as the engine
- * reported it) and the bars the Usage sheet draws. Figures from
+ * reported it) and the bars the Usage sheet draws, with the Mac's pace
+ * estimate under a bar when it sent one. Figures from
  * lib/usageSheet.ts; colours from the palette, light and dark.
  */
 
@@ -98,7 +99,9 @@ export function MeterRow({ meter, title }: { meter: UsageMeter; title?: string }
     <View
       style={styles.meter}
       accessible
-      accessibilityLabel={`${title ?? meter.label}: ${meter.percent}%. ${meter.detail}`}
+      accessibilityLabel={`${title ?? meter.label}: ${meter.percent}%. ${meter.detail}${
+        meter.pace ? `. ${meter.pace.text}. ${meter.pace.basis}` : ''
+      }`}
     >
       <View style={styles.meterHead}>
         <T variant="body" color={colors.textStrong} style={styles.grow} numberOfLines={1}>
@@ -115,6 +118,16 @@ export function MeterRow({ meter, title }: { meter: UsageMeter; title?: string }
       <T variant="small" color={colors.textSecondary}>
         {meter.detail}
       </T>
+      {meter.pace && (
+        <View style={styles.pace}>
+          <T variant="small" color={colors.accentWarning}>
+            {meter.pace.text}
+          </T>
+          <T variant="small" color={colors.textMuted}>
+            {meter.pace.basis}
+          </T>
+        </View>
+      )}
     </View>
   );
 }
@@ -129,6 +142,7 @@ const useStyles = makeStyles((colors) => ({
   },
   fill: { height: '100%', borderRadius: radius.pill },
   meter: { gap: space.xs },
+  pace: { gap: space['2xs'] },
   meterHead: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
   grow: { flex: 1 },
 }));

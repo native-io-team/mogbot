@@ -2393,11 +2393,20 @@ export function createMockServer(opts: MockOptions = {}) {
     // The ready-made agents, as the Mac serializes them.
     'agents.templates': () => real.agentsTemplates,
     // Its spare window placed 40 minutes before a reset from now, so the line shows.
+    // This Mac's five-hour window matches `agents.quota`'s (resets in 2 hours),
+    // and its pace estimate lands 80 minutes from now, before that reset.
     'agents.usagePlan': () => {
       const now = Date.now();
       const plan = structuredClone(real.agentsUsagePlan);
       for (const s of plan.spare)
         Object.assign(s, { resetsAt: now + 40 * 60_000, observedAt: now - 10 * 60_000 });
+      const reset = now + 2 * 3_600_000;
+      for (const a of plan.accounts) {
+        for (const w of a.windows)
+          Object.assign(w, { resetsAt: reset, observedAt: now - 5 * 60_000 });
+        for (const p of a.pace ?? [])
+          Object.assign(p, { resetsAt: reset, reachesAt: now + 80 * 60_000 });
+      }
       return { ...plan, now };
     },
     // The plan as Claude Code reports it, in the shape of the real reading,

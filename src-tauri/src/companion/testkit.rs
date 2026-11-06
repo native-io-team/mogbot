@@ -1582,6 +1582,14 @@ impl Backend for Stub {
                     plan: None,
                     windows: vec![window.clone()],
                     learned: vec!["five_hour".into()],
+                    pace: vec![crate::agents::forecast::Pace {
+                        estimate: true,
+                        kind: "five_hour".into(),
+                        resets_at: 1_762_300_000_000,
+                        reaches_at: 1_762_298_000_000,
+                        readings: 6,
+                        span_minutes: 95,
+                    }],
                 },
                 AccountLine {
                     engine: Engine::Codex,
@@ -1595,6 +1603,7 @@ impl Backend for Stub {
                     plan: Some("plus".into()),
                     windows: vec![],
                     learned: vec![],
+                    pace: vec![],
                 },
             ],
             local: vec![

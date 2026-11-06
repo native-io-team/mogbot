@@ -18,7 +18,8 @@ import { useAsyncState } from '../../hooks/useAsyncState';
 import { usePolling } from '../../hooks/usePolling';
 import { AGENT_EVENTS, getQuotas, quotaLines, type Quota } from '../../lib/agents';
 
-export function useQuotaLines() {
+/** The plan readings as stored (`agents_quota`), with the time they're judged at. */
+export function useQuotas(): { quotas: Quota[] | null; now: number } {
   const quotas = useAsyncState<Quota[]>(getQuotas, { immediate: true });
   const [now, setNow] = useState(() => Date.now());
   const { execute } = quotas;
@@ -54,7 +55,12 @@ export function useQuotaLines() {
       if (unlisten) stop(unlisten);
     };
   }, [execute]);
-  return quotas.data ? quotaLines(quotas.data, now) : [];
+  return { quotas: quotas.data ?? null, now };
+}
+
+export function useQuotaLines() {
+  const { quotas, now } = useQuotas();
+  return quotas ? quotaLines(quotas, now) : [];
 }
 
 /** `place`: the sidebar's foot, or What's in flight's. */

@@ -1,0 +1,201 @@
+/* The chat header's usage ring and its popover (AgentUsageRing): the phone's
+   Usage sheet on the desk. Engine-reported figures, plus the Mac's labelled
+   pace estimate. Status colours for near and at a limit, never the accent. */
+
+:root {
+  /* The ring's stroke: thin, like the phone's (an icon's line, doubled). */
+  --agent-usage-ring-stroke: var(--stroke-2);
+  --agent-usage-bar-height: var(--spacing-xs);
+}
+
+/* A conic fill masked to a ring, so no inline SVG is needed for a dynamic dial. */
+.agent-usage-ring__dial {
+  --agent-usage-ring-ink: var(--text-secondary);
+  display: block;
+  width: var(--size-icon-sm);
+  height: var(--size-icon-sm);
+  border-radius: var(--radius-pill);
+  background: conic-gradient(
+    var(--agent-usage-ring-ink) calc(var(--agent-usage-ring-percent) * 1%),
+    var(--border-strong) 0
+  );
+  /* Only the mask's alpha matters: any opaque colour cuts the same hole. */
+  mask: radial-gradient(
+    farthest-side,
+    transparent calc(100% - var(--agent-usage-ring-stroke)),
+    var(--text-primary) calc(100% - var(--agent-usage-ring-stroke))
+  );
+}
+
+.agent-usage-ring__dial[data-tone='warning'] {
+  --agent-usage-ring-ink: var(--accent-warning);
+}
+
+.agent-usage-ring__dial[data-tone='limited'] {
+  --agent-usage-ring-ink: var(--accent-error);
+}
+
+/* No 5-hour reading: an outline, never a 0% that wasn't reported. */
+.agent-usage-ring__dial[data-empty] {
+  background: none;
+  mask: none;
+  border: var(--border-width-default) dashed var(--border-strong);
+}
+
+.ss-dropdown__menu.agent-usage {
+  border-color: var(--border-subtle);
+  box-shadow: var(--shadow-md);
+  width: 340px; /* css-ok: popover width, as the schedule popover's 380px */
+  max-width: calc(100vw - var(--spacing-2xl));
+  max-height: min(
+    600px,
+    calc(100vh - var(--spacing-2xl) * 3)
+  ); /* css-ok: as the schedule popover */
+  overflow-y: auto;
+  padding: var(--spacing-xs);
+}
+
+.agent-usage__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: var(--spacing-sm);
+}
+
+.agent-usage__title {
+  margin: 0;
+  font-size: var(--font-size-body-lg);
+  font-weight: var(--font-weight-title);
+  color: var(--text-primary);
+}
+
+.agent-usage__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+}
+
+.agent-usage__heading {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+  color: var(--text-muted);
+}
+
+.agent-usage__meter {
+  --agent-usage-ink: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+}
+
+.agent-usage__meter[data-tone='warning'] {
+  --agent-usage-ink: var(--accent-warning);
+}
+
+.agent-usage__meter[data-tone='limited'] {
+  --agent-usage-ink: var(--accent-error);
+}
+
+.agent-usage__meter-head {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-sm);
+}
+
+.agent-usage__meter-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  font-size: var(--font-size-body-md);
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-usage__meter-figure {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-usage__meter:is([data-tone='warning'], [data-tone='limited']) .agent-usage__meter-figure {
+  color: var(--agent-usage-ink);
+}
+
+.agent-usage__bar {
+  height: var(--agent-usage-bar-height);
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--surface-control);
+}
+
+.agent-usage__fill {
+  display: block;
+  width: var(--agent-usage-fill);
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--agent-usage-ink);
+}
+
+.agent-usage__muted,
+.agent-usage__state {
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-usage__body > .agent-usage__muted {
+  margin: 0;
+}
+
+.agent-usage__state:is([data-tone='warning'], [data-tone='limited']) {
+  color: var(--accent-warning);
+}
+
+/* An estimate, said as one: amber words, then what it rests on. */
+.agent-usage__pace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+}
+
+.agent-usage__pace-text {
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--accent-warning);
+}
+
+.agent-usage__account {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-usage__account:first-of-type {
+  padding-top: 0;
+  border-top: none;
+}
+
+.agent-usage__account-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+}
+
+.agent-usage__account-name {
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* Settings → Usage: the pace line under an account's state. */
+.agents-usage__pace {
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--accent-warning);
+}

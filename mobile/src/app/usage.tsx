@@ -2,8 +2,9 @@
  * Usage, from the ring in a chat's header: this agent's context, its
  * engine's plan (the 5-hour and weekly limits) and every account the
  * Mac knows, each with its limits. Only what the Mac serves
- * (lib/usageSheet.ts): a section with no reading isn't drawn, and nothing is
- * estimated. ↻ reads it all again.
+ * (lib/usageSheet.ts): a section with no reading isn't drawn. The one
+ * estimate, the pace line under a limit, is the Mac's (`UsagePace`) and says
+ * it is one. ↻ reads it all again.
  */
 
 import type { UsageInventory } from '@shipstudio/companion-protocol';
@@ -63,7 +64,7 @@ export default function Usage() {
   };
 
   const context = contextMeter(agent?.context);
-  const plan = agent ? planUsage(quotas, agent.engine, now) : null;
+  const plan = agent ? planUsage(quotas, agent.engine, now, inventory) : null;
   const accounts = useMemo(() => accountBlocks(inventory, now), [inventory, now]);
   const nothing = !context && !plan && accounts.length === 0;
 

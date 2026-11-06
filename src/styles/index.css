@@ -157,6 +157,7 @@
 @import './features/agents-rooms.css';
 @import './features/agents-takeover.css';
 @import './features/agents-quota.css';
+@import './features/agents-usage-ring.css';
 @import './features/agents-usage.css';
 @import './features/agents-import.css';
 @import './features/agents-ideas.css';
