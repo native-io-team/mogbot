@@ -627,18 +627,6 @@
       "count": 1
     },
     {
-      "path": "src/components/plugins/PluginManager.tsx",
-      "property": "color",
-      "value": "'var(--text-primary)'",
-      "count": 2
-    },
-    {
-      "path": "src/components/plugins/PluginSlot.tsx",
-      "property": "display",
-      "value": "'contents'",
-      "count": 1
-    },
-    {
       "path": "src/components/preview/Preview.tsx",
       "property": "color",
       "value": "'var(--accent-active)'",

@@ -133,7 +133,7 @@
   margin: 0;
   font-size: var(--font-size-label);
   color: var(--text-secondary);
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
 }
 
 /* Names the stand-in stylesheet, so two identical URLs do not read as a bug. */
@@ -171,8 +171,8 @@
 /* ── History ──────────────────────────────────────────────────────────── */
 
 .mig-history {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
   padding: var(--spacing-md);
   background: var(--surface-panel);
 }
@@ -246,7 +246,7 @@
 }
 
 .mig-history__value {
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: var(--font-size-label);
   color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
@@ -282,7 +282,7 @@
   font-weight: 500;
   text-align: center;
   padding: var(--spacing-xs);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .mig-matrix__corner {
@@ -293,7 +293,7 @@
   text-align: left;
   padding: var(--spacing-sm) var(--spacing-xs);
   font-weight: 400;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .mig-matrix__name {
@@ -304,7 +304,7 @@
 
 .mig-matrix__route {
   display: block;
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: var(--font-size-label);
   color: var(--text-muted);
 }
@@ -312,7 +312,7 @@
 .mig-matrix__cell {
   text-align: center;
   padding: var(--spacing-xs);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-default);
 }
 
 /*
@@ -327,7 +327,7 @@
   font-size: var(--font-size-label);
   color: var(--text-muted);
   font-style: italic;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .mig-matrix__none {
@@ -346,14 +346,14 @@
   border-radius: var(--radius-sm);
   background: var(--surface-control);
   color: var(--text-primary);
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-variant-numeric: tabular-nums;
   cursor: pointer;
   transition: border-color var(--transition-interaction);
 }
 
 .mig-score:hover {
-  border-color: var(--border);
+  border-color: var(--border-default);
 }
 
 .mig-score--selected {
@@ -385,8 +385,8 @@
 /* ── Comparison viewer ────────────────────────────────────────────────── */
 
 .mig-comparison {
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-control);
   overflow: hidden;
 }
 
@@ -396,7 +396,7 @@
   justify-content: space-between;
   gap: var(--spacing-md);
   padding: var(--spacing-sm) var(--spacing-md);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-default);
   background: var(--surface-panel);
 }
 
@@ -413,7 +413,7 @@
 
 .mig-comparison__width,
 .mig-comparison__delta {
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: var(--font-size-label);
   color: var(--text-muted);
 }
@@ -428,7 +428,7 @@
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 1px;
-  background: var(--border);
+  background: var(--border-default);
 }
 
 .mig-comparison__pane {
@@ -443,7 +443,7 @@
   padding: var(--spacing-xs) var(--spacing-sm);
   font-size: var(--font-size-label);
   color: var(--text-muted);
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--border-default);
 }
 
 /*
@@ -512,7 +512,7 @@
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-default);
   background: var(--surface-panel);
 }
 
@@ -530,7 +530,7 @@
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-md);
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--border-default);
   background: var(--surface-panel);
   font-size: var(--font-size-label);
   color: var(--text-muted);
@@ -586,7 +586,7 @@
 
 .mig-rail--compact .mig-rail__marker {
   margin-top: 0;
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: var(--font-size-label);
   color: var(--text-muted);
 }
@@ -599,8 +599,8 @@
   display: flex;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm);
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-default);
   background: var(--surface-panel);
   min-width: 0;
 }
@@ -689,13 +689,13 @@
 }
 
 .mig-needs__count {
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   letter-spacing: 0;
 }
 
 .mig-needs__item {
   border: 1px solid var(--mig-band-off);
-  border-radius: var(--radius);
+  border-radius: var(--radius-control);
   padding: var(--spacing-sm) var(--spacing-md);
   background: var(--surface-panel);
 }
@@ -769,7 +769,7 @@
 }
 
 .mig-report__count {
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   color: var(--text-muted);
   letter-spacing: 0;
 }

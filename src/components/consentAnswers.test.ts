@@ -62,10 +62,9 @@ describe('consent answers outside Agents are neutral', () => {
     }
   });
 
-  // The four the r9 audit found, held by name so a relabel can't slip past the
+  // The ones the r9 audit found, held by name so a relabel can't slip past the
   // word list above.
   const known: [string, string][] = [
-    ['./plugins/PluginTrustPrompt.tsx', 'Allow'],
     ['./preview/ThumbnailConsentModal.tsx', 'Allow thumbnails'],
     ['./QuitConfirmModal.tsx', 'Keep running in background'],
     ['./preview/DevServerConsentPrompt.tsx', 'Start dev server'],

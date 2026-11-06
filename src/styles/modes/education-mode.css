@@ -97,10 +97,7 @@
   margin: 0 2px;
 }
 
-/* Previously held `.toolbar-icon-btn.active` rules for an education-mode
-   toggle button that no longer exists. The selector was unscoped so it
-   leaked into other `.toolbar-icon-btn` users (e.g. the Agent Settings
-   dropdown, which used `.active` for its open state and picked up a
-   jarring green background). If education mode re-introduces a toggle
-   button, scope new styles under `.education-mode` and use a more
-   specific class than `.active`. */
+/* If education mode re-introduces a toggle button, scope its styles under
+   `.education-mode` and use a more specific class than `.active` — an
+   unscoped `.active` rule once leaked a green background into the Agent
+   Settings dropdown. */

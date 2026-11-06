@@ -6,12 +6,6 @@ describe('classifyRejection', () => {
     expect(classifyRejection(new Error('read of undefined'))).toBe('report');
   });
 
-  it('suppresses rejections whose stack points at plugin blob code', () => {
-    const err = new Error('boom');
-    err.stack = 'at foo (blob:tauri://localhost/abc-123:1:1)';
-    expect(classifyRejection(err)).toBe('plugin');
-  });
-
   it("suppresses Tauri's post-unmount listener race", () => {
     expect(
       classifyRejection(new Error("undefined is not an object (evaluating 'listeners[eventId]')"))
@@ -43,12 +37,6 @@ describe('classifyRejection', () => {
 
   it('reports rather than suppresses when expected is falsy', () => {
     expect(classifyRejection({ type: 'Other', message: 'nope', expected: false })).toBe('report');
-  });
-
-  it('classifies a plugin rejection before consulting the expected flag', () => {
-    const err = new Error('at blob:tauri://localhost/x');
-    err.stack = 'blob:tauri://localhost/x';
-    expect(classifyRejection(err)).toBe('plugin');
   });
 });
 

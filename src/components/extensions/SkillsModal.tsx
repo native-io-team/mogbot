@@ -35,7 +35,7 @@ import {
   ExtensionSearchField,
   ExtensionState,
   ScopeBadge,
-} from './extension';
+} from './shared';
 
 /** Format install count as compact string (e.g., 98500 → "98.5K") */
 function formatInstalls(n: number): string {

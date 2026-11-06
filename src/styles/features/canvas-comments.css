@@ -77,7 +77,7 @@
   background: var(--surface-control);
   border: var(--border-width-default) solid var(--border-default);
   border-radius: var(--radius-control);
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: var(--font-size-body-sm);
   color: var(--text-muted);
   display: flex;
@@ -199,7 +199,7 @@
 .canvas-comments-prompt {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: var(--font-size-body-sm);
   color: var(--text-secondary);
   background: var(--surface-recessed);

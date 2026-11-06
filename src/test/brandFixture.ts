@@ -1,6 +1,6 @@
 /**
  * Tests for features that brand.json can switch off (issue reporting, the
- * plugin library, community links, updates, the phone install…) run against
+ * template gallery, community links, updates, the phone install…) run against
  * a brand with every link set, so the feature exists to be tested:
  *
  *   vi.mock('../../lib/brand', async (importOriginal) => {
@@ -22,8 +22,6 @@ export const ALL_LINKS: BrandModule.BrandLinks = {
   errorReports: 'https://example.com/report',
   releases: 'https://github.com/example/releases/releases',
   updates: 'https://example.com/latest.json',
-  pluginRegistry:
-    'https://raw.githubusercontent.com/ship-studio/plugin-registry/main/registry.json',
   templateApi: 'https://example.com/api/v1/templates',
   starterRepoBase: 'https://github.com/ship-studio',
   companionSource: 'https://github.com/ship-studio/ship-studio.git',

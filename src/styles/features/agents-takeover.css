@@ -80,7 +80,7 @@
   border-radius: var(--radius-sm);
   background: var(--surface-app);
   color: var(--text-primary);
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: var(--font-size-body-md);
   white-space: pre;
 }

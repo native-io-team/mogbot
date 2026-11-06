@@ -140,12 +140,11 @@ export default tseslint.config(
       'src/components/primitives/**',
       'src/components/**/*.test.{ts,tsx}',
       // Legacy direct-invoke components (not yet migrated). Each is a terminal /
-      // PTY / screenshot / plugin-bridge surface where the useInvoke shape
+      // PTY / screenshot surface where the useInvoke shape
       // (loading/error state) doesn't match the usage pattern; migration
       // tracked as follow-up work. New components must still use useInvoke.
       'src/components/terminal/Terminal.tsx',
       'src/components/setup/OnboardingTerminal.tsx',
-      'src/components/plugins/PluginSlot.tsx',
       'src/components/preview/ScreenshotPreview.tsx',
       'src/components/dashboard/CreateProject.tsx',
     ],

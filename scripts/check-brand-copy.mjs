@@ -13,8 +13,8 @@
  *
  * Not copy, so allowed (the shared compat names, CLAUDE.md "Shared compat"):
  * `.shipstudio/`, `.shipstudio-team/`, `~/ShipStudio` and other `/ShipStudio`
- * paths, the plugin ABI (`__SHIPSTUDIO_*`, `@shipstudio/…`,
- * `os-theme-shipstudio`), `shipstudio-*` skill/scheme names, `shipstudio.` /
+ * paths, `__SHIPSTUDIO_*` env markers, `@shipstudio/…` workspace packages,
+ * the `os-theme-shipstudio` scrollbar theme, `shipstudio-*` skill/scheme names, `shipstudio.` /
  * `shipstudio:` / `ship-studio-` storage keys and events, identifiers such as
  * `ensure_shipstudio_dir`, and an `OTHER_APP_NAME` constant naming the other
  * app for side-by-side copy.

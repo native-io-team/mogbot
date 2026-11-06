@@ -201,9 +201,6 @@
   --button-shadow: var(--shadow-button);
   --button-disabled-opacity: 0.45;
   --button-active-scale: 0.96;
-  --button-success-border: color-mix(in srgb, var(--accent-success) 30%, transparent);
-  --button-success-surface-hover: color-mix(in srgb, var(--accent-success) 10%, transparent);
-  --button-success-text: var(--accent-success);
   --button-surface-busy: var(--surface-busy);
   --button-strong-surface: var(--surface-inverse);
   --button-strong-surface-hover: var(--surface-inverse-hover);

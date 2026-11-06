@@ -33,7 +33,7 @@ echo
 
 echo "-- LOC of largest components: --"
 for f in src/components/workspace/WorkspaceView.tsx src/components/dashboard/ProjectList.tsx \
-         src/components/plugins/PluginManager.tsx src/components/dashboard/ImportProject.tsx \
+         src/components/dashboard/ImportProject.tsx \
          src/App.tsx; do
   if [ -f "$f" ]; then
     printf "  %-50s %5d\n" "$f" "$(wc -l <"$f" | tr -d ' ')"

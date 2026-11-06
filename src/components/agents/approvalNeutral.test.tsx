@@ -6,7 +6,6 @@ import { PairConfirm } from '../phone/PhonePairing';
 import type { Device, PairRequestView } from '../../lib/companion';
 import editorSource from './AgentEditorModal.tsx?raw';
 import chatItemsSource from './AgentChatItems.tsx?raw';
-import pluginGridSource from '../plugins/PluginStatusGrid.tsx?raw';
 import remoteSource from '../remote/RemoteAccessModal.tsx?raw';
 
 /**
@@ -142,10 +141,9 @@ describe('approval and prompt answers are neutral', () => {
 
 describe('an action inside a status is neutral, never the accent', () => {
   // The accent is the Chief's colour and means primary action; a retry in an
-  // alert or "Update available" in a status row is not that.
+  // alert is not that.
   const cases: [string, string, string][] = [
     ['“Try again” in the “Not sent.” alert', chatItemsSource, 'Try again\n'],
-    ['“Update available” on a plugin row', pluginGridSource, 'Update available\n'],
     [
       'the phone link in Remote access’s intro',
       remoteSource,

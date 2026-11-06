@@ -66,7 +66,7 @@ describe('useWorkspaceShortcutControls', () => {
       'Elements',
       'Variables',
       'Assets',
-      'Plugins',
+      'Team',
     ]);
     renderControls();
 

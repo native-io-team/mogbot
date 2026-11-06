@@ -6,7 +6,7 @@ export type CommandCategory =
   | 'navigation'
   | 'project'
   | 'branch'
-  | 'plugin'
+  | 'extension'
   | 'settings';
 
 export interface PaletteCtx {

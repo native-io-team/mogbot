@@ -989,8 +989,8 @@
   align-items: stretch;
 }
 
-/* Make the toolbar-icon-btn span the full row width in the sidebar footer.
-   The base class is sized to its content; in this context we want a full
+/* Make the footer button span the full row width in the sidebar footer.
+   The button is sized to its content; in this context we want a full
    stripe under the agent list. */
 .workspace-sidebar button.sidebar-section-add-footer {
   width: 100%;
@@ -999,8 +999,7 @@
 
 /* When the group includes the caret (rendered to the *right* of the main
    button), the main button gives up its right border + corners so the
-   two segments read as one pill. The left corners pick up the base
-   --radius from .toolbar-icon-btn. */
+   two segments read as one pill. */
 .sidebar-section-add-footer-group.has-caret button.sidebar-section-add-footer {
   flex: 1;
   width: auto;
@@ -1013,7 +1012,7 @@
 
 /* Corners are set explicitly because the sidebar-wide
    `.workspace-sidebar button { border-radius: 0 }` reset (above) zeros
-   the base radius from .toolbar-icon-btn. */
+   the button's own radius. */
 .workspace-sidebar button.sidebar-section-add-footer-caret {
   width: 28px;
   padding: 0;

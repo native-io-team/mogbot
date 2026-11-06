@@ -185,7 +185,7 @@ export async function setAnalyticsEnabled(enabled: boolean): Promise<void> {
  * Track an error event. Fire-and-forget — never throws.
  * Call this in catch blocks to understand what's failing for users.
  *
- * @param action - What the user was trying to do (e.g., "git_push", "plugin_install")
+ * @param action - What the user was trying to do (e.g., "git_push", "pr_create")
  * @param error - The caught error (string, Error, or unknown)
  * @param screenName - Screen where the error occurred (overrides active screen)
  */

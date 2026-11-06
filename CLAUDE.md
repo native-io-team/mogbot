@@ -52,9 +52,9 @@ Chief of Staff (see "Agents Flow", [docs/agents.md](docs/agents.md)):
 - **Hosting Status** - Whether *the pushed commit* deployed on Vercel, Cloudflare Pages or Netlify, with the build error when it didn't (see "Hosting Flow")
 - **Site Migration** - Rebuild a live URL here, measured page by page against the original (see `docs/site-migration.md`)
 - **Workflows & Inbox** - Scheduled read-only agent runs that file findings (see `docs/workflows-inbox.md`)
-- **Assets, Plugins, Skills & MCP, IDE integration** - As in Ship Studio
+- **Assets, Skills & MCP, IDE integration** - As in Ship Studio (the plugin system was removed; a Ship Studio project's `.shipstudio/plugins/` folder is left on disk and ignored)
 
-**Across both:** the Cmd+K palette (every feature registers there), light and dark themes on desktop and phone, multi-window, and **Remote Access** — driving your agents from another MCP-capable assistant (Grok, Claude, ChatGPT…) over your own Tailscale Funnel (see "Remote Access Flow"). For the phone, the answer is the companion app; Remote Access answers a different question. Updates, telemetry, issue reporting and the plugin/template catalogues are off until `brand.json` names an endpoint for them.
+**Across both:** the Cmd+K palette (every feature registers there), light and dark themes on desktop and phone, multi-window, and **Remote Access** — driving your agents from another MCP-capable assistant (Grok, Claude, ChatGPT…) over your own Tailscale Funnel (see "Remote Access Flow"). For the phone, the answer is the companion app; Remote Access answers a different question. Updates, telemetry, issue reporting and the template catalogue are off until `brand.json` names an endpoint for them.
 
 **Compatible with Ship Studio, both directions:** the `~/ShipStudio` projects folder and the in-project `.shipstudio/` format are shared, so either app opens the other's projects; app state is this app's own, so both run side by side.
 
@@ -86,8 +86,8 @@ Chief of Staff (see "Agents Flow", [docs/agents.md](docs/agents.md)):
   generates `src-tauri/src/brand.rs`'s constants (`brand::NAME`, `brand::app_support_dir()`,
   `brand::logs_dir()`, `brand::keychain_prefix()`, `brand::scoped()`, `brand::links::*`). Never
   hardcode the name; never make it prominent in the UI
-- Every link is nullable. Null turns the feature off and the UI hides it (issue reporting, plugin
-  library, template gallery, community CTAs, updates, version rewind, phone install, PR footer,
+- Every link is nullable. Null turns the feature off and the UI hides it (issue reporting,
+  template gallery, community CTAs, updates, version rewind, phone install, PR footer,
   telemetry). Telemetry keys/DSN are compile-time: null means nothing is sent
 - **Ours** (derived from the brand, so this app and Ship Studio run side by side): app-support dir
   (app state, pins, agents, companion build, remote access, bridge token), logs, keychain
@@ -95,11 +95,11 @@ Chief of Staff (see "Agents Flow", [docs/agents.md](docs/agents.md)):
   Funnel mount path, the preview MCP server name, bundled skill folder names, the reopen-at-login
   LaunchAgent label (`<identifier>.reopen-at-login`), the phone self-build ids
   (`<companion.bundleId>.<hex>` / `.self`), temp names
-- **Shared compat** (deliberately unchanged, so the two apps open each other's projects and
-  plugins): `~/ShipStudio`, in-project `.shipstudio/`, `.shipstudio-team/` + the `shipstudio-team`
+- **Shared compat** (deliberately unchanged, so the two apps open each other's projects):
+  `~/ShipStudio`, in-project `.shipstudio/`, `.shipstudio-team/` + the `shipstudio-team`
   branch, the commit-guidance marker, the `Made-With` trailer *key* (its value names only the
-  agent, never the app), and the plugin ABI (`__SHIPSTUDIO_*`, `@shipstudio/plugin-sdk`,
-  `os-theme-shipstudio`)
+  agent, never the app). Ship Studio's plugins are not loaded here: its in-project
+  `.shipstudio/plugins/` folders are ignored, never read or deleted
 - **Shared state files** in `~/ShipStudio/.shipstudio/`, read and written by both apps:
   - `folders.json`, `external-projects.json`, `attached-libraries.json` — one dashboard
     organisation, whichever app you open
@@ -184,8 +184,7 @@ these without updating that doc.
 - **Hardening on foundation:** per-turn bridge secrets never on argv (`agents/reach.rs`), agent
   writes to `.git` / `.shipstudio` denied, consent before installing or running a project's own
   scripts (fingerprinted; installs use `--ignore-scripts` until approved), Keychain items copied to
-  app-owned `#v2` entries and verified before a legacy one is removed, and a plugin trust store
-  (bundle SHA-256 + source)
+  app-owned `#v2` entries and verified before a legacy one is removed
 
 ## Architecture
 
@@ -203,7 +202,6 @@ Command modules in `src-tauri/src/commands/`. Domains with submodules are direct
 - `health/` - Project health checks (dependency audit, diagnostics)
 - `hosting/` - Native hosting status: per-provider adapters (Vercel, Cloudflare Pages, Netlify) over one provider-agnostic model, plus credential discovery, commit lookup and build logs
 - `ide/` - VS Code/Cursor launch, preview screenshots
-- `plugins/` - Plugin lifecycle and storage
 - `projects/` - Project CRUD: detection, metadata, dev-server config, pins, sessions, templates, UI state, window registry
 - `pty/` - Pseudo-terminal spawn/stream for the embedded agent terminals
 - `workflows/` - Workflows & Inbox: workflow markdown files, headless runs, filed findings, and the bundled agent skill (see `docs/workflows-inbox.md`)
@@ -268,7 +266,7 @@ Single-file domains:
 - `branches/` - Git/branch UI: branches/PR tabs, conflict resolution, diff, publish controls, GitHub button
 - `code/` - Code mode: viewer, file tree, code tab, health panel
 - `hosting/` - The Push popover's Hosting section: the fixed-geometry row, the address rows, the connect and link-picker flows, and the Deployments panel
-- `plugins/` - Plugin manager/slots/dropdown, MCP and Skills modals
+- `extensions/` - Agent extensions: the Skills and MCP modals and their shared layout parts
 - `workflows/` - Workflows list, row, editor, template picker, run history
 - `inbox/` - Findings list and the report reader
 - `agents/` - Agents mode: the full-window chat (sidebar, conversation, approval cards, avatar, create/edit and import dialogs)
@@ -311,7 +309,7 @@ Key modules in `src/lib/` (not exhaustive — `ls src/lib` for the full list):
 - `hosting.ts` / `hostingCopy.ts` - Hosting: the TS mirror of the Rust model, the invoke wrappers, the `deriveSectionState` reducer, and every user-facing string in the section (written to fit a 184px column — see the Hosting Flow)
 - `i18n.ts` - Multilingual support: status/config wrappers, full-ISO language search, locale path helpers for the preview switcher, and agent prompt builders (translate, App Router next-intl setup, removal cleanup)
 - `logger.ts` - Structured frontend logging
-- `mcp.ts` / `skills.ts` / `plugins.ts` / `plugin-loader.ts` - Agent extensions and the plugin system
+- `mcp.ts` / `skills.ts` - Agent extensions (MCP servers and skills)
 - `migration.ts` - Site migration: the phase/status model the panel renders, the fidelity types mirroring the capture script's report, and the prompts handed to the agent at creation and on resume
 - `remoteAccess.ts` - Remote access: TS mirror of the status, the stay-on checklist, setup steps, live state and audit wording
 - `mobile.ts` / `androidMirror.ts` - Mobile app preview and device mirror
@@ -456,20 +454,6 @@ VM login is admin/admin; the DMG appears under "My Shared Files → dmg". Locall
 - [ ] A project window (opened from a project) still goes straight to the workspace
 
 Key files: `src/components/setup/agent-led/AgentOnboardingScreen.tsx`, `src/components/setup/ProjectToolsModal.tsx`, `src/lib/agentOnboarding.ts`, `src/lib/projectTools.ts`, `src-tauri/src/commands/setup/` (checks, mock/force modes).
-
-## Shared CSS Classes (Plugin-Stable)
-
-These classes are part of Ship Studio's public API for plugins. Plugins can use them directly without injecting their own styles. **Do not rename or remove these classes without updating the plugin starter repo.**
-
-| Class | Defined In | Description |
-|-------|-----------|-------------|
-| `toolbar-icon-btn` | `base.css` | Legacy plugin-facing toolbar class. Internal React code uses `IconButton`; keep this class only for plugin compatibility. |
-| `button` + `button--*` | `base.css` | Plugin-facing CSS for the semantic action family. Internal React code uses the primitives below rather than applying these classes directly. |
-| `btn-primary` / `btn-secondary` | `classes-compatibility.css` | Pre-primitive names for the primary/secondary button look, kept as shims onto the same component tokens so already-installed plugins keep rendering. Product code uses `<Button variant>`. |
-
-A set of CSS variables is also plugin-stable: `--bg-primary`, `--bg-secondary`, `--bg-tertiary`, `--text-primary`, `--text-secondary`, `--text-muted`, `--border`, `--accent`, `--action`, `--success`, `--warning`, `--error` (plus their `-rgb` companions), `--font-mono`, and `--radius`.
-
-These names predate the layered token system. Product code must use the canonical semantic roles instead (`--surface-app`, `--surface-panel`, `--surface-control`, `--accent-active`, `--accent-error`, …); the plugin names survive as aliases onto those roles in [src/styles/global/tokens-compatibility.css](src/styles/global/tokens-compatibility.css). The authoritative list lives in `pluginStableApi` in [src/styles/global/token-manifest.json](src/styles/global/token-manifest.json), and `pnpm check:patterns` fails if any of them stops resolving. Renaming or dropping one is a breaking change for every installed plugin.
 
 ## Common Patterns
 
@@ -679,8 +663,8 @@ import { Button } from './primitives/Button';
 ```
 
 `Button.tsx` is the component/API source of truth; the `base.css` `.button*` rules are its
-token-driven implementation and the plugin-compatible CSS surface. Do not style an internal action
-by applying `.button` classes to a raw element.
+token-driven implementation. Do not style an internal action by applying `.button` classes to a
+raw element.
 
 Variants: `default | primary | secondary | danger | ghost | warning | variable`. The default is
 the neutral solid Figma button; `secondary` is the neutral outline treatment. Sizes:
@@ -799,7 +783,7 @@ Token import order is defined by [src/styles/global/token-manifest.json](src/sty
 
 /* ✅ Do */
 .thing {
-  color: var(--warning);
+  color: var(--accent-warning);
   padding: var(--spacing-md) var(--spacing-lg);
   border-radius: var(--radius-md);
   z-index: var(--z-modal-overlay);
@@ -808,7 +792,7 @@ Token import order is defined by [src/styles/global/token-manifest.json](src/sty
 }
 ```
 
-Need a value that doesn't exist yet? Add it to the correct layer named by the token manifest: reusable literals in `tokens-core.css`, product intent in `tokens-semantic.css`, owner-specific contracts in `tokens-components.css`, and externally stable legacy aliases only in `tokens-compatibility.css`.
+Need a value that doesn't exist yet? Add it to the correct layer named by the token manifest: reusable literals in `tokens-core.css`, product intent in `tokens-semantic.css`, and owner-specific contracts in `tokens-components.css`. `tokens-compatibility.css` holds only frozen legacy literals awaiting migration; never add to it.
 
 **Raw color literals fail CI** (`pnpm check:patterns`). The rules:
 
@@ -838,7 +822,7 @@ CSS lives under this folder structure:
 ```
 src/styles/
 ├── global/      token layers and manifest, base rules, typography, shared keyframes
-├── features/    branches/, plugins/, dashboard/, publish/, workspace/, …
+├── features/    branches/, dashboard/, publish/, workspace/, …
 ├── modes/       compact-mode, education-mode, code-mode
 └── components/  modal, command-palette
 ```

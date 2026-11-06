@@ -208,9 +208,6 @@ export const workspaceCommands: CommandMap = {
   add_mcp_server: null,
   remove_mcp_server: null,
 
-  // ---- plugins -----------------------------------------------------------
-  list_plugins: [],
-
   // ---- team --------------------------------------------------------------
   // Read on every workspace open, because the header's presence cluster mounts
   // with the workspace. It lives here rather than in the Team scenarios for

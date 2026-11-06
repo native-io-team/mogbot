@@ -367,9 +367,6 @@ pub async fn add_worktree(
 
     let port = seed_worktree(&anchor, &dest, copy_env);
 
-    // Plugins need no copying: all worktrees of one repository resolve to the
-    // main worktree's plugin store (see `plugins_owner_root` in commands::plugins).
-
     GIT_CACHE.invalidate(&project_path);
 
     Ok(AddWorktreeResult {

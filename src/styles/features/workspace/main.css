@@ -77,10 +77,6 @@
   order: 1;
 }
 
-.workspace-panel-group > .workspace-plugins-control {
-  order: 2;
-}
-
 .workspace-titlebar-center {
   display: flex;
   align-items: stretch;
@@ -286,15 +282,10 @@
     margin-inline-start: var(--spacing-sm);
   }
 
-  .workspace-titlebar-tools > .workspace-panel-group > .button,
-  .workspace-titlebar-tools > .workspace-panel-group > .toolbar-dropdown-container > .button {
+  .workspace-titlebar-tools > .workspace-panel-group > .button {
     width: var(--button-height);
     min-width: var(--button-height);
     padding-inline: 0;
-  }
-
-  .workspace-titlebar-tools > .workspace-panel-group > .toolbar-dropdown-container > .button {
-    gap: 0;
   }
 }
 

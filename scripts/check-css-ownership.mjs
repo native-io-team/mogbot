@@ -90,7 +90,7 @@ function selectorPolicy(relative) {
   if (relative === 'src/styles/index.css') return 'Import manifest only';
   if (relative.startsWith('src/styles/global/tokens-')) return 'Token definitions only';
   if (relative === 'src/styles/global/fonts.css') return 'Font-face declarations';
-  if (relative === 'src/styles/global/base.css') return 'Plugin-stable and shared global primitives';
+  if (relative === 'src/styles/global/base.css') return 'Shared global primitives';
   if (relative === 'src/styles/global/typography.css') return 'Shared typography helper selectors';
   if (relative.startsWith('src/styles/components/')) return 'Shared primitive/component selectors';
   if (relative.startsWith('src/styles/modes/')) return 'Mode-scoped selectors';

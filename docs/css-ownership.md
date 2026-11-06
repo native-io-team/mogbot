@@ -10,7 +10,7 @@ duplicate manifest/module ownership, missing local stylesheet imports, or the re
 ## Ownership model
 
 `src/styles/index.css` is the application manifest while the migration is staged. It owns fonts,
-tokens, reset/plugin-stable rules, shared primitives, and feature styles that have not yet moved to
+tokens, reset rules, shared primitives, and feature styles that have not yet moved to
 an importing module. Primitive and feature families are split into named files in the manifest so
 the load order remains explicit. A stylesheet removed from the manifest must be imported by the
 component or feature entry point that owns its rendered markup.
@@ -19,13 +19,13 @@ component or feature entry point that owns its rendered markup.
 | --- | --- | --- | --- |
 | `src/styles/global/fonts.css` | `src/styles/index.css` | Font-face declarations | Load before all rules that consume the families. |
 | `src/styles/global/tokens-*.css` | `src/styles/index.css` | Token definitions only | Preserve the order in `token-manifest.json`; semantic roles may reference primitives. |
-| `src/styles/global/base.css` | `src/styles/index.css` | Reset, shared keyframes, plugin-stable classes, and global app rules | Load after tokens and before component/feature rules. |
+| `src/styles/global/base.css` | `src/styles/index.css` | Reset, shared keyframes, the button recipe, and global app rules | Load after tokens and before component/feature rules. |
 | `src/styles/global/typography.css` | `src/styles/index.css` | Shared typography helper selectors | Load after tokens and `base.css`, before component/feature rules. |
 | `src/styles/components/{modal-frame,property-field,text-field,dropdown,empty-state,spinner,pixel-loader}.css` | `src/styles/index.css` | Named primitive selectors | Load after `base.css`; each file owns the matching primitive contract. |
 | `src/styles/components/*.css` | `src/styles/index.css` during migration | Shared primitive/component selectors | Keep after global rules until each remaining primitive has an explicit owner. |
 | `src/styles/features/visual-editor/{panel,controls,usage,properties}.css` | `src/styles/index.css` | Visual-editor control-family selectors | Preserve this order: panel shell → enum/color controls → usage/source surfaces → property/box-model controls. |
 | `src/styles/features/settings-forms.css` | ProjectSettingsModal, DevCommandModal | Shared settings form recipe; feature classes remain semantic (`project-settings-*`, `dev-command-*`) | Load after the general settings feature styles and before consumers render their modal content. |
-| `src/styles/features/extensions.css` | McpModal, SkillsModal, PluginManager | Shared extension-manager layout, search field, list row, scope badge, and loading/empty/error state contracts | Load before the domain extension styles so feature-specific placement can override the shared shell. |
+| `src/styles/features/extensions.css` | McpModal, SkillsModal | Shared extension-manager layout, search field, list row, scope badge, and loading/empty/error state contracts | Load before the domain extension styles so feature-specific placement can override the shared shell. |
 | `src/styles/features/design-system-lab.css` | `src/components/design-system/DesignSystemLab.tsx` | Development-only primitive lab surface; all selectors are scoped under `.ss-design-system-lab` | Module import controls the load point; the lazy entry is query-gated and never loaded in production. |
 | `src/styles/features/*.css` | `src/styles/index.css` during migration | Domain selectors; review for global leakage | Preserve manifest order until a domain is migrated and its state matrix is checked. |
 | `src/styles/features/update-banner.css` | `src/components/UpdateBanner.tsx` | Update-banner selectors | Module import controls its load point; it is no longer in the global manifest. |

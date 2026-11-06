@@ -32,7 +32,7 @@ const PROJECT_TABS: { id: TabId; label: string }[] = [
   { id: 'project', label: 'Projects' },
   { id: 'action', label: 'Actions' },
   { id: 'branch', label: 'Branches' },
-  { id: 'plugin', label: 'Plugins' },
+  { id: 'extension', label: 'Skills & MCP' },
   { id: 'settings', label: 'Settings' },
 ];
 
@@ -41,7 +41,7 @@ const GROUP_ORDER: CommandCategory[] = [
   'project',
   'action',
   'branch',
-  'plugin',
+  'extension',
   'settings',
 ];
 
@@ -50,7 +50,7 @@ const GROUP_LABEL: Record<CommandCategory, string> = {
   project: 'Projects',
   action: 'Actions',
   branch: 'Branches',
-  plugin: 'Plugins & extensions',
+  extension: 'Skills & MCP',
   settings: 'Settings',
 };
 

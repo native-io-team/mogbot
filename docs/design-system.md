@@ -7,7 +7,7 @@ the right token or component in under a minute. Canonical sources (always trust 
   files it names (`fonts.css`, `tokens-core.css`, `tokens-semantic.css`, `tokens-components.css`,
   and `tokens-compatibility.css`)
 - Global base rules: [src/styles/global/base.css](../src/styles/global/base.css) — reset, loading
-  primitives, and plugin-stable selectors; canonical token definitions live in the ordered token
+  primitives, and the `.button*` recipe; canonical token definitions live in the ordered token
   files
 - CSS ownership: [docs/css-ownership.md](css-ownership.md) and the executable inventory in
   `scripts/check-css-ownership.mjs`
@@ -145,7 +145,7 @@ reattachments are automated; unresolved values remain explicit and are marked fo
 | Figma color, spacing, radius, stroke, and type Variables | Exact | Imported into `--color-*`, `--space-*`, `--radius-*`, `--stroke-*`, and `--font-*` primitives. |
 | Figma `background-*`, `text-*`, `border-*`, and `accent-*` Variables | Obvious semantic | Reattached to category-first `--surface-*`, `--text-*`, `--border-*`, and `--accent-*` roles. |
 | Figma `Body M/Regular`, `Body S/Regular`, `Code S/Regular`, `Button Effects`, `Input inner shadow`, and `Window shadow` styles | Obvious semantic | Exposed through `--font-ui`, `--font-code`, `--shadow-button`, `--shadow-input-inset`, and `--shadow-window`; these are not primitives. |
-| Legacy `--bg-*`, `--accent`, `--action`, `--border`, `--warning`, `--success`, `--error`, and `--font-mono` names | Migrated, but publicly retained | Internal product usages are reattached to canonical semantic roles. The names themselves are the plugin-stable API and stay in `tokens-compatibility.css` as aliases onto those roles — see [Plugin-stable token API](#plugin-stable-token-api). |
+| Legacy `--bg-*`, `--accent`, `--action`, `--border`, `--warning`, `--success`, `--error`, `--font-mono` and `--radius` names | Removed | They were aliases kept for third-party plugins. The plugin system is gone, so they were deleted and their last internal users moved to `--border-default`, `--font-code` and `--radius-control`. |
 | Existing error palette (`#f44747`, `#ef4444`, `#dc2626`) | Ambiguous / review | Retained as explicit `--color-red-error*` values because no corresponding Figma semantic was observed. |
 | Feature-local info, purple, Slack, ANSI, and code-syntax colors | Feature semantic | Preserved where their product meaning is specific; do not use them as general surface or text roles. |
 | Terminal colors and icon/symbol typography | Platform/component input | xterm keeps explicit canvas colors; Geist Mono is used for code, while JetBrains Mono Nerd Font is retained for glyph coverage. |
@@ -169,7 +169,7 @@ value, consume a semantic role or an owner-appropriate component token.
 | Overlay | `--accent-overlay` / `--accent-overlay-ink` | Anything drawn on the user's own page (preview overlays, comment pins). Fixed, never the accent. |
 | Status | `--accent-success`, `--accent-warning`, `--accent-error`, `--accent-error-light`, `--accent-error-deep`, `--modified-yellow` | Semantic states. `--accent-success` means healthy/done/connected only — it is not the brand colour, and never stands in for the accent. Error values are retained as reviewed legacy inputs until their Figma mapping is confirmed. |
 | Info blue | `--info(-hover/-light/-dark)` | Links, info banners, "open" PR state, focus accents. |
-| Purple | `--purple`, `--purple-light`, `--purple-deep-rgb` | AI / agent surfaces only (skills, MCP, plugin marketplace). |
+| Purple | `--purple`, `--purple-light`, `--purple-deep-rgb` | AI / agent surfaces only (skills, MCP). |
 | Slack | `--slack-pink`, `--slack-lavender(-bright)` | Slack community CTA branding only (dashboard, setup, support panel). |
 | RGB triplets | `--accent-success/warning/error*-rgb` and feature `--*-rgb` values | For alpha tints only, e.g. `rgba(var(--accent-error-rgb), 0.1)`. Each must stay in sync with its solid token. The accent has no triplet: tint it with `color-mix(in srgb, var(--accent-active) N%, transparent)` (`check:patterns` fails on the old `--accent-active-rgb`). |
 | Tints | `--tint-subtle` / `--tint` / `--tint-strong` | White hover/selection washes on dark surfaces (5/8/10% white). |
@@ -213,8 +213,8 @@ agent's colour instead.
   `ErrorIcon` (`.inline-error-icon`) as well as its colour.
 - **Computed in JS, written as hex.** `src/lib/accent.ts` writes the colour
   and every shade of it as finished inline values: `--accent-user`, its ink
-  `--accent-on-user` (black or white), `--accent-user-rgb` (only so the
-  plugin-stable `--action-rgb` follows), and `--accent-user-hover`,
+  `--accent-on-user` (black or white), `--accent-user-rgb` (for `rgba()`
+  tints), and `--accent-user-hover`,
   `-strong`, `-start`, `-end`. Each shade is checked against the ink for
   WCAG AA and pulled the other way when the usual direction would fail. The
   primary button uses no `color-mix()`, so a WebView without it (Safari 15)
@@ -316,8 +316,7 @@ follows a change through the cache's `storage` event.
   `?theme=light` on a harness URL). Unforced captures are dark.
 
 Need a value that doesn't exist? Add it to the smallest appropriate layer, update the inventory, and
-run `pnpm check:token-layers`. Do not add a new alias to the compatibility file unless it is a
-plugin contract or a time-bounded migration bridge.
+run `pnpm check:token-layers`. Do not add anything to the compatibility file; it only shrinks.
 
 ### Token workflow
 
@@ -328,45 +327,17 @@ plugin contract or a time-bounded migration bridge.
    so on) rather than styling a selector with a numeric size.
 3. **Need an owner-specific contract?** Add a component token to `tokens-components.css`, document
    its owner, and consume that token only within the owning domain.
-4. **Need to preserve an external name?** Add or retain it in `tokens-compatibility.css`, mark it as
-   `compatibility` or `migration` in the inventory, and record when a migration alias can be removed.
+4. **Legacy values** live in `tokens-compatibility.css` with status `migration` in the inventory.
+   Nothing new goes there; move a consumer to a semantic role and delete the value once unused.
 
 Run `pnpm tokens:inventory` after changing definitions. `pnpm check:token-layers` verifies manifest
 order, duplicate definitions, allowed layer direction, inventory freshness, and the checked-in
 baseline for existing primitive or migration-alias consumers. The baseline prevents new direct
 primitive usage while existing domains are migrated one at a time.
 
-### Plugin-stable token API
-
-`tokens-compatibility.css` opens with a frozen block of names that third-party plugins are
-documented to use (see [docs/plugins.md](plugins.md)). They are thin aliases onto canonical
-semantic roles:
-
-| Plugin-stable name | Canonical role |
-| --- | --- |
-| `--bg-primary` / `--bg-secondary` / `--bg-tertiary` / `--bg-deep` / `--bg-hover` | `--surface-app` / `--surface-panel` / `--surface-control` / `--surface-recessed` / `--surface-control-hover` |
-| `--text-primary` / `--text-secondary` / `--text-muted` | Canonical in `tokens-semantic.css` — no alias needed |
-| `--text-bright` | `--text-white` |
-| `--accent` / `--accent-hover` | `--text-white` / `--text-primary` |
-| `--action` / `--action-hover` / `--action-text` | `--accent-active` / `--accent-active-hover` / `--text-on-accent` |
-| `--border` | `--border-default` |
-| `--success` / `--warning` / `--warning-light` | `--accent-success` / `--accent-warning` / `--accent-warning-light` |
-| `--error` / `--error-light` / `--error-deep` | `--accent-error` / `--accent-error-light` / `--accent-error-deep` |
-| `--font-mono` | `--font-code` |
-| `--radius` | `--radius-control` |
-
-The `-rgb` companions (`--action-rgb`, `--success-rgb`, `--warning-rgb`, `--error-rgb`, …) alias the
-matching `--accent-*-rgb` triplets for `rgba(var(--error-rgb), 0.1)` tints.
-
-Product code must not consume these — use the canonical role. The required set is declared under
-`pluginStableApi` in `token-manifest.json`, and `pnpm check:token-layers` (run by
-`pnpm check:patterns`) emits `plugin-stable-missing` if one stops resolving. Removing or renaming
-one is a breaking change for every installed plugin.
-
 ### Compatibility follow-up
 
-Beyond the plugin-stable block, `tokens-compatibility.css` contains only raw legacy values with no
-exact core or semantic match. Suggested next owners are:
+`tokens-compatibility.css` contains only raw legacy values with no exact core or semantic match. Suggested next owners are:
 
 - Move info blue and modified-yellow into semantic status/feedback roles with paired RGB tokens.
 - Move AI purple into an AI/agent semantic family; keep Slack colors as feature-local brand tokens.
@@ -386,25 +357,10 @@ exact core or semantic match. Suggested next owners are:
 3. **Small local z-index** — within the "content" tier (content-on-content stacking), raw `1`,
    `2`, `5`, `10` are fine. Anything that floats over other UI uses a `--z-*` token.
 
-### Plugin-stable API
-
-`--bg-*`, `--text-*`, `--accent`, `--action`, `--border`, `--warning`, `--success`, `--error`,
-`--font-code`, plus the `toolbar-icon-btn` and `button` / `button--*` classes, are public
-API for plugins. Renaming any of them is a breaking change (see CLAUDE.md "Shared CSS Classes").
-
-| Class | Defined in | Notes |
-| --- | --- | --- |
-| `toolbar-icon-btn` | `global/base.css` | Icon button matching workspace toolbar chrome. |
-| `button`, `button--*` | `global/base.css` | Current recipe, emitted by the `Button` primitive. |
-| `btn-primary`, `btn-secondary` | `global/classes-compatibility.css` | **Legacy shim.** Predates the `Button` primitive; kept because installed plugins style bare `<button>`s with them. Reproduces the `button--primary` / `button--secondary` recipe from the same component tokens. Product code must use `<Button variant>` instead. |
-
-`classes-compatibility.css` is the class-level counterpart to `tokens-compatibility.css`: nothing
-new goes in it, and when the Button recipe changes the shim has to be updated alongside it.
-
 ## Primitives
 
-All in [src/components/primitives/](../src/components/primitives/). Plugin-stable `button` and
-`toolbar-icon-btn` selectors remain in `base.css`; the rest of the shared primitive selectors have
+All in [src/components/primitives/](../src/components/primitives/). The `button` selectors remain
+in `base.css`; the rest of the shared primitive selectors have
 their own component stylesheet so ownership is visible in the import manifest.
 
 The complete registry is generated in [docs/design-system.generated.md](design-system.generated.md).
@@ -652,8 +608,8 @@ Reduced-motion users see a static centre-and-rings hierarchy.
 
 ### Extension manager contracts
 
-MCP, Skills, and Plugins use the shared structural pieces in
-[src/components/plugins/extension/](../src/components/plugins/extension/):
+MCP and Skills use the shared structural pieces in
+[src/components/extensions/shared/](../src/components/extensions/shared/):
 `ExtensionManagerLayout`, `ExtensionSearchField`, `ExtensionListRow`, `ScopeBadge`, and
 `ExtensionState`. These components own only stable layout and state semantics; data loading,
 filtering rules, and row content remain in each domain manager. Their shared styles live in

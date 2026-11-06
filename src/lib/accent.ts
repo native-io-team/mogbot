@@ -12,8 +12,7 @@
  *
  * - `--accent-user`        the colour itself
  * - `--accent-on-user`     ink that reads on it (black or white, by WCAG contrast)
- * - `--accent-user-rgb`    an `r, g, b` triplet, only so the plugin-stable
- *                          `--action-rgb` keeps working for `rgba()` tints
+ * - `--accent-user-rgb`    an `r, g, b` triplet, for `rgba()` tints of the accent
  * - `--accent-user-hover`  hover fill
  * - `--accent-user-strong` pressed / busy fill
  * - `--accent-user-start`  the primary gradient's lower stop

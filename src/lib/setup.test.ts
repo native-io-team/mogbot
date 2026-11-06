@@ -13,7 +13,6 @@ import {
   recheckWithDelays,
   getReadyAgentPairs,
   isAtLeastOneAgentReady,
-  mergePluginSetupItems,
   AGENT_ITEM_IDS,
   OPTIONAL_ITEMS,
   SETUP_ITEM_ORDER,
@@ -580,48 +579,6 @@ describe('PKG_MGR_PACKAGES', () => {
 
   it('matches BREW_PACKAGES', () => {
     expect(PKG_MGR_PACKAGES).toEqual(BREW_PACKAGES);
-  });
-});
-
-// ============ mergePluginSetupItems ============
-
-describe('mergePluginSetupItems', () => {
-  it('merges plugin items with prefixed IDs', () => {
-    const base = { homebrew: [], node: ['homebrew'] };
-    const pluginItems = [
-      { pluginId: 'my-plugin', id: 'tool', depends_on: [] },
-      { pluginId: 'my-plugin', id: 'auth', depends_on: ['tool'] },
-    ];
-
-    const merged = mergePluginSetupItems(base, pluginItems);
-
-    expect(merged['my-plugin:tool']).toEqual([]);
-    expect(merged['my-plugin:auth']).toEqual(['my-plugin:tool']);
-    // Base items untouched
-    expect(merged.homebrew).toEqual([]);
-    expect(merged.node).toEqual(['homebrew']);
-  });
-
-  it('does not modify the base object', () => {
-    const base = { homebrew: [] };
-    const pluginItems = [{ pluginId: 'p', id: 'x', depends_on: [] }];
-
-    mergePluginSetupItems(base, pluginItems);
-    expect(base).toEqual({ homebrew: [] });
-  });
-
-  it('preserves cross-plugin deps that already have colons', () => {
-    const base = {};
-    const pluginItems = [{ pluginId: 'a', id: 'x', depends_on: ['other-plugin:y'] }];
-
-    const merged = mergePluginSetupItems(base, pluginItems);
-    expect(merged['a:x']).toEqual(['other-plugin:y']);
-  });
-
-  it('handles empty plugin items array', () => {
-    const base = { homebrew: [] };
-    const merged = mergePluginSetupItems(base, []);
-    expect(merged).toEqual({ homebrew: [] });
   });
 });
 

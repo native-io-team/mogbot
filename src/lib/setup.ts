@@ -382,28 +382,6 @@ export function getBlockingDependencies(itemId: string, items: SetupItem[]): str
     .map((depId) => SETUP_FRIENDLY_NAMES[depId] || depId);
 }
 
-/**
- * Merge plugin-contributed setup items into the base dependency graph.
- *
- * Plugin items are prefixed with their plugin ID to avoid key collisions.
- * Existing setup items are untouched — this is purely additive.
- */
-export function mergePluginSetupItems(
-  baseDeps: Record<string, string[]>,
-  pluginItems: Array<{ pluginId: string; id: string; depends_on: string[] }>
-): Record<string, string[]> {
-  const merged = { ...baseDeps };
-
-  for (const item of pluginItems) {
-    const key = `${item.pluginId}:${item.id}`;
-    // Prefix dependency IDs with pluginId if they don't already contain ':'
-    const deps = item.depends_on.map((d) => (d.includes(':') ? d : `${item.pluginId}:${d}`));
-    merged[key] = deps;
-  }
-
-  return merged;
-}
-
 // ============ Wizard Step Definitions ============
 
 export type WizardStepId = 'package-manager' | 'git-github' | 'agent' | 'hosting';

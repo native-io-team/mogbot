@@ -34,7 +34,7 @@ import {
   ExtensionSearchField,
   ExtensionState,
   ScopeBadge,
-} from './extension';
+} from './shared';
 
 type Tab = 'connected' | 'add';
 type ScopeFilter = 'all' | 'user' | 'project';

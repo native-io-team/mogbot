@@ -299,8 +299,6 @@ pub fn run() {
 
             // Dev-server approvals: owner-only, whatever an older build left.
             commands::projects::harden_dev_consent_store();
-            // Plugin approvals: owner-only, likewise.
-            commands::plugins::harden_plugin_trust_store();
 
             // Remote access: if the user left it on, bring it back — a Mac that
             // restarted overnight should be reachable again once it's logged in.
@@ -1088,26 +1086,6 @@ pub fn run() {
             commands::mcp::list_mcp_servers,
             commands::mcp::add_mcp_server,
             commands::mcp::remove_mcp_server,
-            // Plugins
-            commands::plugins::list_plugins,
-            commands::plugins::install_plugin,
-            commands::plugins::uninstall_plugin,
-            commands::plugins::update_plugin,
-            commands::plugins::check_plugin_update,
-            commands::plugins::read_plugin_bundle,
-            commands::plugins::approve_plugin,
-            commands::plugins::decline_plugin,
-            commands::plugins::get_plugin_developer_mode,
-            commands::plugins::set_plugin_developer_mode,
-            commands::plugins::read_plugin_manifest,
-            commands::plugins::toggle_plugin,
-            commands::plugins::exec_plugin_shell,
-            commands::plugins::plugin_fs_exists,
-            commands::plugins::plugin_fs_read_text,
-            commands::plugins::read_plugin_storage,
-            commands::plugins::write_plugin_storage,
-            commands::plugins::link_dev_plugin,
-            commands::plugins::unlink_dev_plugin,
             // GitHub integration
             commands::github::check_github_cli_status,
             commands::github::get_github_username,

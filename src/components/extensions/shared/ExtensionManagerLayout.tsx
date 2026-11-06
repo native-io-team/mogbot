@@ -16,7 +16,7 @@ export interface ExtensionManagerLayoutProps {
 /**
  * Structural shell for extension-management modals.
  *
- * It owns only the stable layout slots. MCP, Skills, and Plugins retain their
+ * It owns only the stable layout slots. MCP and Skills retain their
  * own tabs, data loading, filtering, and domain-specific panel content.
  */
 export function ExtensionManagerLayout({

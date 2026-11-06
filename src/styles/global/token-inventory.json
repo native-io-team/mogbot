@@ -3,277 +3,11 @@
   "manifest": "src/styles/global/token-manifest.json",
   "tokens": [
     {
-      "name": "--bg-primary",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--bg-secondary",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--bg-tertiary",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--bg-deep",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--bg-hover",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--text-bright",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--accent",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 3
-    },
-    {
-      "name": "--accent-hover",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--border",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 14
-    },
-    {
-      "name": "--success",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--success-light",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "migration",
-      "status": "migration",
-      "pluginStable": false,
-      "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
-      "consumerCount": 0
-    },
-    {
-      "name": "--warning",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--warning-light",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "migration",
-      "status": "migration",
-      "pluginStable": false,
-      "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
-      "consumerCount": 0
-    },
-    {
-      "name": "--error",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--error-light",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--error-deep",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--success-rgb",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--success-light-rgb",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "migration",
-      "status": "migration",
-      "pluginStable": false,
-      "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
-      "consumerCount": 0
-    },
-    {
-      "name": "--warning-rgb",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--warning-light-rgb",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "migration",
-      "status": "migration",
-      "pluginStable": false,
-      "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
-      "consumerCount": 0
-    },
-    {
-      "name": "--error-rgb",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--error-light-rgb",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--error-deep-rgb",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--font-mono",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 25
-    },
-    {
-      "name": "--radius",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 4
-    },
-    {
-      "name": "--action",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--action-hover",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--action-text",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
-      "name": "--action-rgb",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
-    },
-    {
       "name": "--modified-yellow",
       "definitionFile": "src/styles/global/tokens-compatibility.css",
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 2
     },
@@ -283,7 +17,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 13
     },
@@ -293,7 +26,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 1
     },
@@ -303,7 +35,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 2
     },
@@ -313,7 +44,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 0
     },
@@ -323,7 +53,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 3
     },
@@ -333,7 +62,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 1
     },
@@ -343,7 +71,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 8
     },
@@ -353,7 +80,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 2
     },
@@ -363,7 +89,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 2
     },
@@ -373,7 +98,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 1
     },
@@ -383,7 +107,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 2
     },
@@ -393,7 +116,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 11
     },
@@ -403,7 +125,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 2
     },
@@ -413,7 +134,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 2
     },
@@ -423,17 +143,7 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
-      "consumerCount": 0
-    },
-    {
-      "name": "--border-rgb",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
       "consumerCount": 0
     },
     {
@@ -442,7 +152,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 0
     },
@@ -452,7 +161,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 0
     },
@@ -462,7 +170,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 0
     },
@@ -472,7 +179,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 6
     },
@@ -482,7 +188,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 34
     },
@@ -492,9 +197,8 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
-      "consumerCount": 6
+      "consumerCount": 5
     },
     {
       "name": "--transition-fast",
@@ -502,7 +206,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 38
     },
@@ -512,9 +215,8 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
-      "consumerCount": 348
+      "consumerCount": 338
     },
     {
       "name": "--transition-slow",
@@ -522,18 +224,8 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 16
-    },
-    {
-      "name": "--border-rgb",
-      "definitionFile": "src/styles/global/tokens-compatibility.css",
-      "layer": "compatibility",
-      "owner": "plugin-compatibility",
-      "status": "compatibility",
-      "pluginStable": true,
-      "consumerCount": 0
     },
     {
       "name": "--border-default-rgb",
@@ -541,7 +233,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 0
     },
@@ -551,7 +242,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 6
     },
@@ -561,9 +251,8 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
-      "consumerCount": 6
+      "consumerCount": 5
     },
     {
       "name": "--info",
@@ -571,7 +260,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 13
     },
@@ -581,7 +269,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 1
     },
@@ -591,7 +278,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 2
     },
@@ -601,7 +287,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 0
     },
@@ -611,7 +296,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 11
     },
@@ -621,7 +305,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 2
     },
@@ -631,7 +314,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 3
     },
@@ -641,7 +323,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 1
     },
@@ -651,7 +332,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 2
     },
@@ -661,7 +341,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 0
     },
@@ -671,7 +350,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 2
     },
@@ -681,7 +359,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 2
     },
@@ -691,7 +368,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 2
     },
@@ -701,7 +377,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 2
     },
@@ -711,7 +386,6 @@
       "layer": "compatibility",
       "owner": "migration",
       "status": "migration",
-      "pluginStable": false,
       "removalCondition": "Remove after internal consumers migrate to the canonical semantic role.",
       "consumerCount": 1
     },
@@ -721,7 +395,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 25
     },
     {
@@ -730,7 +403,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -739,7 +411,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 26
     },
     {
@@ -748,7 +419,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 44
     },
     {
@@ -757,7 +427,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -766,7 +435,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -775,7 +443,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -784,7 +451,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -793,7 +459,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -802,7 +467,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -811,7 +475,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -820,7 +483,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -829,7 +491,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -838,7 +499,6 @@
       "layer": "components",
       "owner": "WorkspaceSidebar",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 16
     },
     {
@@ -847,7 +507,6 @@
       "layer": "components",
       "owner": "WorkspaceSidebar",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -856,7 +515,6 @@
       "layer": "components",
       "owner": "WorkspaceSidebar",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 10
     },
     {
@@ -865,7 +523,6 @@
       "layer": "components",
       "owner": "WorkspaceSidebar",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -874,7 +531,6 @@
       "layer": "components",
       "owner": "WorkspaceSidebar",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -883,7 +539,6 @@
       "layer": "components",
       "owner": "WorkspaceSidebar",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -892,7 +547,6 @@
       "layer": "components",
       "owner": "WorkspaceSidebar",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 6
     },
     {
@@ -901,7 +555,6 @@
       "layer": "components",
       "owner": "WorkspaceSidebar",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -910,7 +563,6 @@
       "layer": "components",
       "owner": "WorkspaceSidebar",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -919,7 +571,6 @@
       "layer": "components",
       "owner": "WorkspaceSidebar",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -928,7 +579,6 @@
       "layer": "components",
       "owner": "WorkspaceSidebar",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -937,7 +587,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -946,7 +595,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -955,7 +603,6 @@
       "layer": "components",
       "owner": "IconGallery",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -964,7 +611,6 @@
       "layer": "components",
       "owner": "IconGallery",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -973,7 +619,6 @@
       "layer": "components",
       "owner": "IconGallery",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 40
     },
     {
@@ -982,7 +627,6 @@
       "layer": "components",
       "owner": "IconGallery",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 56
     },
     {
@@ -991,7 +635,6 @@
       "layer": "components",
       "owner": "IconGallery",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 22
     },
     {
@@ -1000,7 +643,6 @@
       "layer": "components",
       "owner": "IconGallery",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 6
     },
     {
@@ -1009,7 +651,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1018,7 +659,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1027,7 +667,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1036,7 +675,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1045,7 +683,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1054,7 +691,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1063,7 +699,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1072,7 +707,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1081,7 +715,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1090,7 +723,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1099,7 +731,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1108,7 +739,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 11
     },
     {
@@ -1117,7 +747,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1126,7 +755,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1135,7 +763,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1144,7 +771,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1153,7 +779,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1162,7 +787,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1171,7 +795,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1180,7 +803,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -1189,7 +811,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1198,7 +819,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1207,7 +827,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1216,7 +835,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 6
     },
     {
@@ -1225,7 +843,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -1234,7 +851,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -1243,7 +859,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1252,7 +867,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1261,7 +875,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 8
     },
     {
@@ -1270,7 +883,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1279,7 +891,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -1288,7 +899,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1297,7 +907,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1306,7 +915,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1315,7 +923,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1324,7 +931,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1333,7 +939,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -1342,7 +947,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1351,7 +955,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -1360,7 +963,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -1369,7 +971,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1378,7 +979,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -1387,7 +987,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1396,7 +995,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -1405,7 +1003,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1414,7 +1011,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -1423,7 +1019,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1432,7 +1027,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1441,7 +1035,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1450,7 +1043,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1459,7 +1051,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1468,7 +1059,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1477,7 +1067,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -1486,7 +1075,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1495,7 +1083,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -1504,7 +1091,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1513,7 +1099,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1522,7 +1107,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1531,7 +1115,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1540,7 +1123,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1549,7 +1131,6 @@
       "layer": "components",
       "owner": "IconGallery",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1558,7 +1139,6 @@
       "layer": "components",
       "owner": "IconGallery",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1567,7 +1147,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -1576,7 +1155,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 5
     },
     {
@@ -1585,7 +1163,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -1594,7 +1171,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 5
     },
     {
@@ -1603,7 +1179,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1612,7 +1187,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 8
     },
     {
@@ -1621,7 +1195,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1630,7 +1203,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -1639,7 +1211,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1648,7 +1219,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -1657,7 +1227,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -1666,7 +1235,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -1675,7 +1243,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -1684,7 +1251,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -1693,7 +1259,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -1702,7 +1267,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -1711,7 +1275,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -1720,7 +1283,6 @@
       "layer": "components",
       "owner": "PropertyField",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 6
     },
     {
@@ -1729,7 +1291,6 @@
       "layer": "components",
       "owner": "PropertyField",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 7
     },
     {
@@ -1738,7 +1299,6 @@
       "layer": "components",
       "owner": "PropertyField",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1747,7 +1307,6 @@
       "layer": "components",
       "owner": "PropertyField",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1756,7 +1315,6 @@
       "layer": "components",
       "owner": "PropertyField",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 12
     },
     {
@@ -1765,7 +1323,6 @@
       "layer": "components",
       "owner": "PropertyField",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1774,7 +1331,6 @@
       "layer": "components",
       "owner": "PropertyField",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1783,7 +1339,6 @@
       "layer": "components",
       "owner": "PropertyField",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1792,7 +1347,6 @@
       "layer": "components",
       "owner": "PropertyField",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1801,7 +1355,6 @@
       "layer": "components",
       "owner": "PropertyField",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -1810,7 +1363,6 @@
       "layer": "components",
       "owner": "PropertyField",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -1819,7 +1371,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 9
     },
     {
@@ -1828,7 +1379,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1837,7 +1387,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1846,7 +1395,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1855,7 +1403,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1864,7 +1411,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1873,7 +1419,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1882,7 +1427,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 12
     },
     {
@@ -1891,7 +1435,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -1900,7 +1443,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -1909,7 +1451,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 6
     },
     {
@@ -1918,7 +1459,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 5
     },
     {
@@ -1927,7 +1467,6 @@
       "layer": "components",
       "owner": "PropertyField",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -1936,7 +1475,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -1945,7 +1483,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -1954,7 +1491,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 5
     },
     {
@@ -1963,7 +1499,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -1972,7 +1507,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -1981,7 +1515,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 7
     },
     {
@@ -1990,7 +1523,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -1999,8 +1531,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 7
+      "consumerCount": 6
     },
     {
       "name": "--button-surface-hover",
@@ -2008,8 +1539,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 13
+      "consumerCount": 12
     },
     {
       "name": "--button-surface-selected",
@@ -2017,7 +1547,6 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -2026,7 +1555,6 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -2035,8 +1563,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 13
+      "consumerCount": 11
     },
     {
       "name": "--button-border",
@@ -2044,8 +1571,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 5
+      "consumerCount": 4
     },
     {
       "name": "--button-border-outline",
@@ -2053,8 +1579,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 6
+      "consumerCount": 5
     },
     {
       "name": "--button-text-default",
@@ -2062,8 +1587,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 14
+      "consumerCount": 12
     },
     {
       "name": "--button-text-hover",
@@ -2071,8 +1595,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 14
+      "consumerCount": 12
     },
     {
       "name": "--button-font-size",
@@ -2080,8 +1603,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 8
+      "consumerCount": 6
     },
     {
       "name": "--button-font-weight",
@@ -2089,8 +1611,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 6
+      "consumerCount": 4
     },
     {
       "name": "--button-height",
@@ -2098,8 +1619,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 34
+      "consumerCount": 30
     },
     {
       "name": "--button-height-compact",
@@ -2107,7 +1627,6 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 16
     },
     {
@@ -2116,8 +1635,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 14
+      "consumerCount": 12
     },
     {
       "name": "--button-gap",
@@ -2125,8 +1643,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 48
+      "consumerCount": 46
     },
     {
       "name": "--button-radius",
@@ -2134,8 +1651,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 23
+      "consumerCount": 21
     },
     {
       "name": "--button-shadow",
@@ -2143,8 +1659,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 12
+      "consumerCount": 10
     },
     {
       "name": "--button-disabled-opacity",
@@ -2152,8 +1667,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 12
+      "consumerCount": 10
     },
     {
       "name": "--button-active-scale",
@@ -2161,35 +1675,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 9
-    },
-    {
-      "name": "--button-success-border",
-      "definitionFile": "src/styles/global/tokens-components.css",
-      "layer": "components",
-      "owner": "Button",
-      "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 1
-    },
-    {
-      "name": "--button-success-surface-hover",
-      "definitionFile": "src/styles/global/tokens-components.css",
-      "layer": "components",
-      "owner": "Button",
-      "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 1
-    },
-    {
-      "name": "--button-success-text",
-      "definitionFile": "src/styles/global/tokens-components.css",
-      "layer": "components",
-      "owner": "Button",
-      "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 1
+      "consumerCount": 7
     },
     {
       "name": "--button-surface-busy",
@@ -2197,7 +1683,6 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2206,7 +1691,6 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2215,7 +1699,6 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2224,7 +1707,6 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -2233,7 +1715,6 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2242,7 +1723,6 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2251,7 +1731,6 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -2260,7 +1739,6 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -2269,7 +1747,6 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2278,7 +1755,6 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -2287,7 +1763,6 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2296,7 +1771,6 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 5
     },
     {
@@ -2305,7 +1779,6 @@
       "layer": "components",
       "owner": "Control",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 94
     },
     {
@@ -2314,7 +1787,6 @@
       "layer": "components",
       "owner": "Control",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 8
     },
     {
@@ -2323,7 +1795,6 @@
       "layer": "components",
       "owner": "Control",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 19
     },
     {
@@ -2332,7 +1803,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -2341,7 +1811,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 2
     },
     {
@@ -2350,7 +1819,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 1
     },
     {
@@ -2359,7 +1827,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 2
     },
     {
@@ -2368,7 +1835,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 2
     },
     {
@@ -2377,7 +1843,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 1
     },
     {
@@ -2386,7 +1851,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 6
     },
     {
@@ -2395,7 +1859,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 2
     },
     {
@@ -2404,7 +1867,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 2
     },
     {
@@ -2413,7 +1875,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 2
     },
     {
@@ -2422,7 +1883,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 2
     },
     {
@@ -2431,7 +1891,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2440,7 +1899,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2449,7 +1907,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -2458,7 +1915,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 7
     },
     {
@@ -2467,7 +1923,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -2476,7 +1931,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2485,7 +1939,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -2494,7 +1947,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 7
     },
     {
@@ -2503,7 +1955,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -2512,7 +1963,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2521,7 +1971,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2530,7 +1979,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2539,7 +1987,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -2548,7 +1995,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -2557,7 +2003,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2566,7 +2011,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2575,7 +2019,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2584,7 +2027,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2593,7 +2035,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2602,7 +2043,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2611,7 +2051,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2620,7 +2059,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2629,7 +2067,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2638,7 +2075,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2647,7 +2083,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2656,7 +2091,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2665,7 +2099,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -2674,7 +2107,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2683,7 +2115,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -2692,7 +2123,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2701,7 +2131,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2710,7 +2139,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2719,7 +2147,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2728,7 +2155,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2737,7 +2163,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2746,7 +2171,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2755,7 +2179,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2764,7 +2187,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2773,7 +2195,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2782,7 +2203,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2791,7 +2211,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2800,7 +2219,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2809,7 +2227,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2818,7 +2235,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2827,7 +2243,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2836,7 +2251,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2845,7 +2259,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2854,7 +2267,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2863,7 +2275,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -2872,7 +2283,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 5
     },
     {
@@ -2881,7 +2291,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2890,7 +2299,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2899,7 +2307,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -2908,7 +2315,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -2917,7 +2323,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2926,7 +2331,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2935,7 +2339,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -2944,7 +2347,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -2953,7 +2355,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 45
     },
     {
@@ -2962,7 +2363,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -2971,7 +2371,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -2980,7 +2379,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 16
     },
     {
@@ -2989,7 +2387,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -2998,7 +2395,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3007,7 +2403,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 9
     },
     {
@@ -3016,7 +2411,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3025,7 +2419,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3034,7 +2427,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3043,7 +2435,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -3052,7 +2443,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -3061,7 +2451,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3070,7 +2459,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -3079,7 +2467,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -3088,7 +2475,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 8
     },
     {
@@ -3097,7 +2483,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3106,7 +2491,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 22
     },
     {
@@ -3115,7 +2499,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3124,7 +2507,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 8
     },
     {
@@ -3133,7 +2515,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -3142,7 +2523,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3151,7 +2531,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -3160,7 +2539,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -3169,7 +2547,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -3178,7 +2555,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3187,7 +2563,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3196,7 +2571,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 13
     },
     {
@@ -3205,7 +2579,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3214,7 +2587,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3223,7 +2595,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -3232,7 +2603,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -3241,7 +2611,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3250,7 +2619,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3259,7 +2627,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 6
     },
     {
@@ -3268,7 +2635,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 6
     },
     {
@@ -3277,7 +2643,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 7
     },
     {
@@ -3286,7 +2651,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -3295,7 +2659,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 13
     },
     {
@@ -3304,7 +2667,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 10
     },
     {
@@ -3313,7 +2675,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -3322,7 +2683,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3331,7 +2691,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3340,7 +2699,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3349,7 +2707,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3358,7 +2715,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -3367,7 +2723,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3376,7 +2731,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3385,7 +2739,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3394,7 +2747,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3403,7 +2755,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3412,7 +2763,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3421,7 +2771,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3430,7 +2779,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3439,7 +2787,6 @@
       "layer": "components",
       "owner": "VisualEditor",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3448,7 +2795,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -3457,7 +2803,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -3466,7 +2811,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -3475,7 +2819,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -3484,7 +2827,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 6
     },
     {
@@ -3493,7 +2835,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -3502,7 +2843,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3511,8 +2851,7 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 20
+      "consumerCount": 17
     },
     {
       "name": "--z-modal",
@@ -3520,7 +2859,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3529,7 +2867,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3538,7 +2875,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 15
     },
     {
@@ -3547,7 +2883,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3556,7 +2891,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3565,7 +2899,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 9
     },
     {
@@ -3574,7 +2907,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -3583,7 +2915,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -3592,7 +2923,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3601,7 +2931,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3610,7 +2939,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3619,7 +2947,6 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3628,7 +2955,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3637,7 +2963,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3646,7 +2971,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3655,7 +2979,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -3664,7 +2987,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3673,7 +2995,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3682,7 +3003,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3691,7 +3011,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3700,7 +3019,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -3709,8 +3027,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 2
+      "consumerCount": 1
     },
     {
       "name": "--button-primary-mid",
@@ -3718,8 +3035,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 4
+      "consumerCount": 2
     },
     {
       "name": "--button-primary-end",
@@ -3727,8 +3043,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 2
+      "consumerCount": 1
     },
     {
       "name": "--button-primary-busy",
@@ -3736,7 +3051,6 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3745,7 +3059,6 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -3754,7 +3067,6 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3763,7 +3075,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -3772,7 +3083,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3781,7 +3091,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3790,7 +3099,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3799,7 +3107,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -3808,7 +3115,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3817,7 +3123,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3826,7 +3131,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3835,7 +3139,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3844,7 +3147,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3853,7 +3155,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3862,7 +3163,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3871,7 +3171,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3880,7 +3179,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3889,7 +3187,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3898,7 +3195,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3907,7 +3203,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3916,7 +3211,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3925,7 +3219,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3934,7 +3227,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3943,7 +3235,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3952,7 +3243,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3961,7 +3251,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3970,7 +3259,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3979,7 +3267,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3988,7 +3275,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -3997,7 +3283,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4006,7 +3291,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4015,7 +3299,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4024,7 +3307,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4033,7 +3315,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4042,7 +3323,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4051,7 +3331,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4060,7 +3339,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4069,7 +3347,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4078,7 +3355,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4087,7 +3363,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4096,7 +3371,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4105,7 +3379,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4114,7 +3387,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4123,7 +3395,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4132,7 +3403,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4141,7 +3411,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4150,7 +3419,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4159,7 +3427,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4168,7 +3435,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4177,7 +3443,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4186,7 +3451,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4195,7 +3459,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4204,7 +3467,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4213,7 +3475,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4222,7 +3483,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4231,7 +3491,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4240,7 +3499,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4249,7 +3507,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4258,7 +3515,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4267,7 +3523,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4276,7 +3531,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4285,7 +3539,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4294,7 +3547,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4303,7 +3555,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4312,7 +3563,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4321,7 +3571,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4330,7 +3579,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4339,7 +3587,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4348,7 +3595,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4357,7 +3603,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4366,7 +3611,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4375,7 +3619,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4384,7 +3627,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4393,7 +3635,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4402,7 +3643,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4411,7 +3651,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4420,7 +3659,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4429,7 +3667,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4438,7 +3675,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4447,7 +3683,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4456,7 +3691,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4465,7 +3699,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4474,7 +3707,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4483,7 +3715,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4492,7 +3723,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4501,7 +3731,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4510,7 +3739,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4519,7 +3747,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4528,7 +3755,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4537,7 +3763,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4546,7 +3771,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4555,7 +3779,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4564,7 +3787,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4573,7 +3795,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4582,7 +3803,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4591,7 +3811,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4600,7 +3819,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4609,7 +3827,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4618,7 +3835,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4627,7 +3843,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4636,7 +3851,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4645,7 +3859,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4654,7 +3867,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4663,7 +3875,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4672,7 +3883,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4681,7 +3891,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4690,7 +3899,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4699,7 +3907,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4708,7 +3915,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4717,7 +3923,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4726,7 +3931,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -4735,7 +3939,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 26
     },
     {
@@ -4744,7 +3947,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 38
     },
     {
@@ -4753,7 +3955,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 27
     },
     {
@@ -4762,7 +3963,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 40
     },
     {
@@ -4771,7 +3971,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -4780,7 +3979,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -4789,7 +3987,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 9
     },
     {
@@ -4798,7 +3995,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 12
     },
     {
@@ -4807,7 +4003,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 5
     },
     {
@@ -4816,7 +4011,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 10
     },
     {
@@ -4825,8 +4019,7 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 82
+      "consumerCount": 81
     },
     {
       "name": "--stroke-1-5",
@@ -4834,7 +4027,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -4843,7 +4035,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 14
     },
     {
@@ -4852,7 +4043,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4861,7 +4051,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 5
     },
     {
@@ -4870,7 +4059,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 9
     },
     {
@@ -4879,7 +4067,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -4888,7 +4075,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -4897,7 +4083,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4906,7 +4091,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -4915,7 +4099,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4924,7 +4107,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4933,7 +4115,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4942,7 +4123,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4951,7 +4131,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -4960,7 +4139,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 12
     },
     {
@@ -4969,7 +4147,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 7
     },
     {
@@ -4978,7 +4155,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -4987,7 +4163,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -4996,7 +4171,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5005,7 +4179,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5014,7 +4187,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5023,7 +4195,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5032,7 +4203,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5041,7 +4211,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 6
     },
     {
@@ -5050,8 +4219,7 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 12
+      "consumerCount": 11
     },
     {
       "name": "--font-weight-semibold",
@@ -5059,7 +4227,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 12
     },
     {
@@ -5068,7 +4235,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -5077,8 +4243,7 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 18
+      "consumerCount": 17
     },
     {
       "name": "--line-height-medium",
@@ -5086,7 +4251,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5095,7 +4259,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5104,7 +4267,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5113,7 +4275,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -5122,7 +4283,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5131,7 +4291,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -5140,7 +4299,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5149,7 +4307,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -5158,7 +4315,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5167,7 +4323,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -5176,7 +4331,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5185,7 +4339,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5194,7 +4347,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5203,7 +4355,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5212,7 +4363,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5221,7 +4371,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -5230,7 +4379,6 @@
       "layer": "core",
       "owner": "global/core",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -5239,7 +4387,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 10
     },
     {
@@ -5248,7 +4395,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 49
     },
     {
@@ -5257,7 +4403,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -5266,8 +4411,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 92
+      "consumerCount": 91
     },
     {
       "name": "--surface-panel",
@@ -5275,8 +4419,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 267
+      "consumerCount": 258
     },
     {
       "name": "--surface-control",
@@ -5284,8 +4427,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 361
+      "consumerCount": 357
     },
     {
       "name": "--surface-control-hover",
@@ -5293,7 +4435,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 48
     },
     {
@@ -5302,8 +4443,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 28
+      "consumerCount": 27
     },
     {
       "name": "--surface-recessed",
@@ -5311,7 +4451,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 73
     },
     {
@@ -5320,7 +4459,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5329,7 +4467,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -5338,7 +4475,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -5347,7 +4483,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5356,7 +4491,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5365,7 +4499,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 20
     },
     {
@@ -5374,8 +4507,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
-      "consumerCount": 595
+      "consumerCount": 585
     },
     {
       "name": "--text-secondary",
@@ -5383,8 +4515,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
-      "consumerCount": 567
+      "consumerCount": 553
     },
     {
       "name": "--text-muted",
@@ -5392,8 +4523,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
-      "consumerCount": 910
+      "consumerCount": 896
     },
     {
       "name": "--text-faint",
@@ -5401,7 +4531,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 44
     },
     {
@@ -5410,7 +4539,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 0
     },
     {
@@ -5419,7 +4547,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 4
     },
     {
@@ -5428,7 +4555,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 1
     },
     {
@@ -5437,7 +4563,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 9
     },
     {
@@ -5446,7 +4571,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5455,7 +4579,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5464,7 +4587,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 0
     },
     {
@@ -5473,7 +4595,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 1
     },
     {
@@ -5482,8 +4603,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 457
+      "consumerCount": 463
     },
     {
       "name": "--border-subtle",
@@ -5491,7 +4611,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 177
     },
     {
@@ -5500,8 +4619,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 52
+      "consumerCount": 51
     },
     {
       "name": "--border-control",
@@ -5509,7 +4627,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -5518,7 +4635,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5527,8 +4643,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 277
+      "consumerCount": 276
     },
     {
       "name": "--border-width-emphasis",
@@ -5536,7 +4651,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 37
     },
     {
@@ -5545,7 +4659,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5554,8 +4667,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 46
+      "consumerCount": 45
     },
     {
       "name": "--focus-ring-strength",
@@ -5563,7 +4675,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5572,8 +4683,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 67
+      "consumerCount": 66
     },
     {
       "name": "--focus-ring-width",
@@ -5581,8 +4691,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 33
+      "consumerCount": 32
     },
     {
       "name": "--focus-ring-offset",
@@ -5590,8 +4699,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 23
+      "consumerCount": 22
     },
     {
       "name": "--accent-success",
@@ -5599,8 +4707,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 91
+      "consumerCount": 90
     },
     {
       "name": "--accent-warning",
@@ -5608,8 +4715,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 122
+      "consumerCount": 118
     },
     {
       "name": "--accent-error",
@@ -5617,8 +4723,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 88
+      "consumerCount": 86
     },
     {
       "name": "--accent-error-light",
@@ -5626,7 +4731,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 38
     },
     {
@@ -5635,7 +4739,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -5644,7 +4747,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -5653,7 +4755,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5662,7 +4763,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -5671,7 +4771,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 23
     },
     {
@@ -5680,7 +4779,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 25
     },
     {
@@ -5689,7 +4787,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5698,7 +4795,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -5707,7 +4803,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -5716,7 +4811,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -5725,7 +4819,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5734,7 +4827,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5743,7 +4835,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5752,8 +4843,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 60
+      "consumerCount": 58
     },
     {
       "name": "--font-code",
@@ -5761,8 +4851,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
-      "consumerCount": 168
+      "consumerCount": 192
     },
     {
       "name": "--font-symbol",
@@ -5770,7 +4859,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -5779,7 +4867,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -5788,7 +4875,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -5797,7 +4883,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 19
     },
     {
@@ -5806,7 +4891,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 28
     },
     {
@@ -5815,7 +4899,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 6
     },
     {
@@ -5824,7 +4907,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 82
     },
     {
@@ -5833,8 +4915,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 186
+      "consumerCount": 182
     },
     {
       "name": "--font-size-body-md",
@@ -5842,8 +4923,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 361
+      "consumerCount": 354
     },
     {
       "name": "--font-size-body-sm",
@@ -5851,8 +4931,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 487
+      "consumerCount": 478
     },
     {
       "name": "--font-size-control",
@@ -5860,7 +4939,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 8
     },
     {
@@ -5869,7 +4947,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 55
     },
     {
@@ -5878,7 +4955,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -5887,7 +4963,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -5896,7 +4971,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 5
     },
     {
@@ -5905,8 +4979,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 112
+      "consumerCount": 107
     },
     {
       "name": "--font-size-3xl",
@@ -5914,7 +4987,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -5923,7 +4995,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -5932,7 +5003,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -5941,7 +5011,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 28
     },
     {
@@ -5950,7 +5019,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 118
     },
     {
@@ -5959,8 +5027,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 41
+      "consumerCount": 40
     },
     {
       "name": "--font-weight-title",
@@ -5968,7 +5035,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 5
     },
     {
@@ -5977,7 +5043,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 12
     },
     {
@@ -5986,7 +5051,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 8
     },
     {
@@ -5995,8 +5059,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 11
+      "consumerCount": 10
     },
     {
       "name": "--line-height-compact",
@@ -6004,7 +5067,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 81
     },
     {
@@ -6013,7 +5075,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 108
     },
     {
@@ -6022,7 +5083,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 13
     },
     {
@@ -6031,7 +5091,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 59
     },
     {
@@ -6040,8 +5099,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 91
+      "consumerCount": 86
     },
     {
       "name": "--transition-interaction-slow",
@@ -6049,7 +5107,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -6058,7 +5115,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 5
     },
     {
@@ -6067,7 +5123,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 18
     },
     {
@@ -6076,7 +5131,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -6085,7 +5139,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 6
     },
     {
@@ -6094,7 +5147,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -6103,7 +5155,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 30
     },
     {
@@ -6112,8 +5163,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 38
+      "consumerCount": 36
     },
     {
       "name": "--accent-error-rgb",
@@ -6121,7 +5171,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 16
     },
     {
@@ -6130,7 +5179,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 18
     },
     {
@@ -6139,7 +5187,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -6148,8 +5195,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 86
+      "consumerCount": 85
     },
     {
       "name": "--spacing-2xs",
@@ -6157,8 +5203,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 284
+      "consumerCount": 282
     },
     {
       "name": "--spacing-xs",
@@ -6166,8 +5211,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 674
+      "consumerCount": 669
     },
     {
       "name": "--spacing-sm",
@@ -6175,8 +5219,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 851
+      "consumerCount": 847
     },
     {
       "name": "--spacing-md",
@@ -6184,8 +5227,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 568
+      "consumerCount": 564
     },
     {
       "name": "--spacing-lg",
@@ -6193,8 +5235,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 222
+      "consumerCount": 218
     },
     {
       "name": "--spacing-xl",
@@ -6202,8 +5243,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 151
+      "consumerCount": 148
     },
     {
       "name": "--spacing-2xl",
@@ -6211,7 +5251,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 59
     },
     {
@@ -6220,7 +5259,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 24
     },
     {
@@ -6229,8 +5267,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 168
+      "consumerCount": 169
     },
     {
       "name": "--radius-card",
@@ -6238,8 +5275,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 211
+      "consumerCount": 209
     },
     {
       "name": "--radius-sm",
@@ -6247,8 +5283,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 222
+      "consumerCount": 215
     },
     {
       "name": "--radius-lg",
@@ -6256,7 +5291,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 43
     },
     {
@@ -6265,7 +5299,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 62
     },
     {
@@ -6274,7 +5307,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -6283,7 +5315,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 32
     },
     {
@@ -6292,7 +5323,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -6301,7 +5331,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -6310,7 +5339,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -6319,7 +5347,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -6328,7 +5355,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -6337,7 +5363,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6346,7 +5371,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6355,7 +5379,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 11
     },
     {
@@ -6364,7 +5387,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6373,7 +5395,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -6382,7 +5403,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -6391,7 +5411,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -6400,7 +5419,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -6409,7 +5427,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6418,7 +5435,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6427,7 +5443,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -6436,7 +5451,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -6445,7 +5459,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6454,7 +5467,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6463,7 +5475,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6472,7 +5483,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6481,7 +5491,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6490,7 +5499,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -6499,7 +5507,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6508,7 +5515,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6517,7 +5523,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -6526,7 +5531,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -6535,7 +5539,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -6544,7 +5547,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -6553,7 +5555,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -6562,7 +5563,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -6571,7 +5571,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 5
     },
     {
@@ -6580,7 +5579,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -6589,7 +5587,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 18
     },
     {
@@ -6598,8 +5595,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 29
+      "consumerCount": 28
     },
     {
       "name": "--shadow-lg",
@@ -6607,7 +5603,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 20
     },
     {
@@ -6616,7 +5611,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6625,8 +5619,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 92
+      "consumerCount": 91
     },
     {
       "name": "--surface-panel",
@@ -6634,8 +5627,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 267
+      "consumerCount": 258
     },
     {
       "name": "--surface-control",
@@ -6643,8 +5635,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 361
+      "consumerCount": 357
     },
     {
       "name": "--surface-control-hover",
@@ -6652,7 +5643,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 48
     },
     {
@@ -6661,8 +5651,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 28
+      "consumerCount": 27
     },
     {
       "name": "--surface-selected-strong",
@@ -6670,7 +5659,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6679,7 +5667,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6688,7 +5675,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 73
     },
     {
@@ -6697,7 +5683,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6706,7 +5691,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -6715,7 +5699,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -6724,7 +5707,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 20
     },
     {
@@ -6733,8 +5715,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
-      "consumerCount": 595
+      "consumerCount": 585
     },
     {
       "name": "--text-secondary",
@@ -6742,8 +5723,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
-      "consumerCount": 567
+      "consumerCount": 553
     },
     {
       "name": "--text-quiet",
@@ -6751,7 +5731,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 0
     },
     {
@@ -6760,8 +5739,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
-      "consumerCount": 910
+      "consumerCount": 896
     },
     {
       "name": "--text-faint",
@@ -6769,7 +5747,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 44
     },
     {
@@ -6778,7 +5755,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 4
     },
     {
@@ -6787,7 +5763,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 1
     },
     {
@@ -6796,7 +5771,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 9
     },
     {
@@ -6805,7 +5779,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6814,7 +5787,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6823,7 +5795,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 0
     },
     {
@@ -6832,7 +5803,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
       "consumerCount": 1
     },
     {
@@ -6841,8 +5811,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 457
+      "consumerCount": 463
     },
     {
       "name": "--border-subtle",
@@ -6850,7 +5819,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 177
     },
     {
@@ -6859,8 +5827,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 52
+      "consumerCount": 51
     },
     {
       "name": "--border-control",
@@ -6868,7 +5835,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -6877,7 +5843,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6886,8 +5851,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 91
+      "consumerCount": 90
     },
     {
       "name": "--accent-warning",
@@ -6895,8 +5859,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 122
+      "consumerCount": 118
     },
     {
       "name": "--accent-error",
@@ -6904,8 +5867,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 88
+      "consumerCount": 86
     },
     {
       "name": "--accent-error-light",
@@ -6913,7 +5875,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 38
     },
     {
@@ -6922,7 +5883,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -6931,7 +5891,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -6940,7 +5899,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -6949,7 +5907,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 30
     },
     {
@@ -6958,8 +5915,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 38
+      "consumerCount": 36
     },
     {
       "name": "--accent-error-rgb",
@@ -6967,7 +5923,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 16
     },
     {
@@ -6976,7 +5931,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 18
     },
     {
@@ -6985,7 +5939,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -6994,7 +5947,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 23
     },
     {
@@ -7003,7 +5955,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 25
     },
     {
@@ -7012,7 +5963,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7021,7 +5971,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7030,7 +5979,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7039,7 +5987,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -7048,7 +5995,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7057,7 +6003,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7066,7 +6011,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -7075,7 +6019,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -7084,7 +6027,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -7093,7 +6035,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -7102,7 +6043,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 18
     },
     {
@@ -7111,7 +6051,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 6
     },
     {
@@ -7120,7 +6059,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -7129,7 +6067,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 18
     },
     {
@@ -7138,8 +6075,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 29
+      "consumerCount": 28
     },
     {
       "name": "--shadow-lg",
@@ -7147,7 +6083,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 20
     },
     {
@@ -7156,7 +6091,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 32
     },
     {
@@ -7165,7 +6099,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -7174,7 +6107,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -7183,7 +6115,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -7192,7 +6123,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -7201,7 +6131,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -7210,7 +6139,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7219,7 +6147,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7228,7 +6155,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 11
     },
     {
@@ -7237,7 +6163,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7246,7 +6171,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -7255,7 +6179,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 2
     },
     {
@@ -7264,7 +6187,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -7273,7 +6195,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -7282,7 +6203,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7291,7 +6211,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7300,7 +6219,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -7309,7 +6227,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -7318,7 +6235,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7327,7 +6243,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7336,7 +6251,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -7345,7 +6259,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -7354,7 +6267,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 5
     },
     {
@@ -7363,7 +6275,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 1
     },
     {
@@ -7372,7 +6283,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7381,7 +6291,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7390,7 +6299,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7399,7 +6307,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7408,7 +6315,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7417,7 +6323,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7426,7 +6331,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7435,7 +6339,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7444,7 +6347,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7453,7 +6355,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7462,7 +6363,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7471,7 +6371,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7480,7 +6379,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7489,7 +6387,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7498,7 +6395,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7507,7 +6403,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7516,8 +6411,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 164
+      "consumerCount": 159
     },
     {
       "name": "--accent-active-hover",
@@ -7525,8 +6419,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 10
+      "consumerCount": 8
     },
     {
       "name": "--accent-active-strong",
@@ -7534,7 +6427,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 0
     },
     {
@@ -7543,7 +6435,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -7552,7 +6443,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     },
     {
@@ -7561,8 +6451,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": true,
-      "consumerCount": 28
+      "consumerCount": 25
     },
     {
       "name": "--accent-focus",
@@ -7570,8 +6459,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
-      "consumerCount": 46
+      "consumerCount": 45
     },
     {
       "name": "--accent-active-soft",
@@ -7579,7 +6467,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 4
     },
     {
@@ -7588,7 +6475,6 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "pluginStable": false,
       "consumerCount": 3
     }
   ]

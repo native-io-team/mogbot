@@ -11,10 +11,6 @@
 @import './global/base.css';
 @import './global/typography.css';
 
-/* Plugin-stable class shims (legacy `.btn-primary` / `.btn-secondary`).
-   Loaded after base.css so it reads as an addendum to the button recipe. */
-@import './global/classes-compatibility.css';
-
 /* Components (primitives) */
 @import './components/modal-frame.css';
 @import './components/property-field.css';
@@ -123,7 +119,6 @@
 @import './features/extensions.css';
 @import './features/skills-modal.css';
 @import './features/mcp-modal.css';
-@import './features/plugins.css';
 @import './features/changelog.css';
 @import './features/settings.css';
 @import './features/settings-forms.css';

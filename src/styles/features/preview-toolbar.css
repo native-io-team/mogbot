@@ -122,18 +122,6 @@
   border-color: var(--button-border-outline);
 }
 
-.preview-toolbar-control-group > .preview-toolbar-plugins {
-  /* PluginSlot's isolation wrappers use `display: contents`. Keep this
-     slot transparent to the parent flex row too; otherwise it becomes a
-     zero-width flex item and inserts a second gap before Open in Browser. */
-  display: contents;
-}
-
-/* Keep an actually empty slot out of the accessibility tree as well. */
-.preview-toolbar-control-group > .preview-toolbar-plugins:empty {
-  display: none;
-}
-
 /* Density tiers for the toolbar itself (see `container-name: preview-toolbar`
    above). Each tier drops the lowest-priority control that still has another
    way in, so the row degrades in a defined order instead of overlapping.
