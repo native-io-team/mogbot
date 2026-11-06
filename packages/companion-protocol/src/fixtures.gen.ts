@@ -182,6 +182,7 @@ export const agentsOverview = {
       "hidden": false,
       "home": "/Users/julian/Library/Application Support/ShipStudio/agents/a1",
       "id": "a1",
+      "independence": "full_send",
       "isMain": false,
       "lastActivityAt": 1762290000000,
       "model": "opus",
@@ -435,6 +436,10 @@ export const agentsSetAdmin = {
   "admin": true,
   "agentId": "a1"
 } satisfies Result<'agents.setAdmin'>;
+export const agentsSetAgentIndependence = {
+  "agentId": "a1",
+  "level": "full_send"
+} satisfies Result<'agents.setAgentIndependence'>;
 export const agentsImportStatus = {
   "armed": false,
   "chiefId": "chief",
@@ -2852,6 +2857,7 @@ export const frames = [
       "agents.setIndependence",
       "agents.setImportChoice",
       "agents.setAdmin",
+      "agents.setAgentIndependence",
       "agents.revokePermission",
       "agents.instructions",
       "agents.memory",
@@ -3509,6 +3515,7 @@ export const frames = [
             "hidden": false,
             "home": "/Users/julian/Library/Application Support/ShipStudio/agents/a1",
             "id": "a1",
+            "independence": "full_send",
             "isMain": false,
             "lastActivityAt": 1762290000000,
             "model": "opus",
@@ -3926,6 +3933,7 @@ export const frames = [
             "hidden": false,
             "home": "/Users/julian/Library/Application Support/ShipStudio/agents/a1",
             "id": "a1",
+            "independence": "full_send",
             "isMain": false,
             "lastActivityAt": 1762290000000,
             "model": "opus",

@@ -37,6 +37,7 @@ import { Button } from '../primitives/Button';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentWorkingLine } from './AgentWorkingLine';
 import { AgentEngineBadge } from './AgentEngine';
+import { AgentLevelBadge } from './AgentLevelPicker';
 import { AgentActionItems, type AgentActions } from './AgentActions';
 import { AgentsSearchResults } from './AgentsSearchResults';
 import { AgentMark } from './AgentSwitcher';
@@ -394,6 +395,7 @@ const AgentRow = memo(function AgentRow({
                 <BellOffIcon size={10} className="agents-list__pin" aria-label="Muted" />
               )}
               <AgentEngineBadge engine={agent.engine} />
+              <AgentLevelBadge agent={agent} />
             </span>
             <span className="agents-list__preview" data-state={lineState(agent)}>
               {asking ? (

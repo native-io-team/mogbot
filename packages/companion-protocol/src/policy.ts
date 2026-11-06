@@ -125,6 +125,8 @@ export interface SettingsProposal {
   why?: string;
   /** Some of it is a rule: words, not something the app stops. */
   hasRules?: boolean;
+  /** A switch for this whole Mac instead of agents' settings ("Fix stopped previews"). */
+  mac?: { fixPreviews?: boolean };
 }
 
 export const PRESET_LABEL: Record<PolicyPreset, string> = {

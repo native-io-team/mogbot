@@ -26,6 +26,7 @@ import { AgentLookPicker } from './AgentLookPicker';
 import { freeLook, lookFor, type AgentLook } from '../../../packages/companion-protocol/src/avatar';
 import { AgentReach } from './AgentReach';
 import { AgentPolicy } from './AgentPolicy';
+import { AgentLevelPicker } from './AgentLevelPicker';
 import { AgentEngineField, AgentEngineMore } from './AgentEngine';
 import { useQuotaLines } from './AgentsQuota';
 import { ChevronRightIcon } from '@/components/icons';
@@ -585,6 +586,7 @@ export function AgentEditorModal({
         <div className="agent-editor__briefing">
           <UsageLines usage={usage} agent={agent} />
           <CanDo agent={agent} />
+          <AgentLevelPicker agent={agent} />
           <AdminSwitch agent={agent} />
           <Permissions agent={agent} />
           <AgentPolicy agent={agent} onAskInChat={onAskInChat} />

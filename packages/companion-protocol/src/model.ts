@@ -179,6 +179,11 @@ export interface Agent {
    * Staff only (`isAdmin`). Older Macs never send it.
    */
   admin?: boolean;
+  /**
+   * Its own independence level (`agents/policy.rs`). Absent: the team's
+   * (`AgentsOverview.independence`). Older Macs never send it.
+   */
+  independence?: AgentIndependence;
   pinned: boolean;
   hidden: boolean;
   sessionId: string | null;

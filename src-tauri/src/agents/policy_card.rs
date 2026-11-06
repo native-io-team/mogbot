@@ -52,6 +52,76 @@ pub struct Proposal {
     /// Some of it is a rule: words the agent is given, not something the app stops.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub has_rules: bool,
+    /// A switch for this whole Mac rather than an agent's settings
+    /// (Settings → Agents → On this Mac). Then `targets` and `change` are
+    /// empty and the policy isn't touched.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mac: Option<MacChange>,
+}
+
+/// This Mac's switches that chat can change through the same card.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct MacChange {
+    /// "Fix stopped previews" (`agents_fix_previews`, `preview_fix`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix_previews: Option<bool>,
+}
+
+/// The switches' plain words on the card.
+const FIX_ON: &str = "Agents fix their own stopped previews without being asked";
+const FIX_OFF: &str = "Agents no longer fix stopped previews on their own: the preview offers to ask them";
+
+/// The card (or the line) for "Fix stopped previews", or why not. Only an
+/// admin proposes it: it is the whole Mac's, not one agent's.
+pub fn mac_proposal(
+    admin: bool,
+    fix_previews: bool,
+    now_on: bool,
+    why: Option<String>,
+    version: u64,
+) -> Result<Proposal, String> {
+    if !admin {
+        return Err("Only an admin (the Chief of Staff) can propose this Mac's settings. Ask it with message_agent.".into());
+    }
+    if fix_previews == now_on {
+        return Err("That's already how it is: nothing would change.".into());
+    }
+    Ok(Proposal {
+        targets: Vec::new(),
+        change: Change::default(),
+        version,
+        groups: vec![Group {
+            who: "This Mac".into(),
+            agent_ids: Vec::new(),
+            changes: vec![if fix_previews { FIX_ON } else { FIX_OFF }.to_string()],
+        }],
+        why: why
+            .map(|w| w.trim().chars().take(200).collect())
+            .filter(|w: &String| !w.is_empty()),
+        has_rules: false,
+        mac: Some(MacChange {
+            fix_previews: Some(fix_previews),
+        }),
+    })
+}
+
+/// A Mac switch that only has agents do less on their own applies without a card.
+pub fn mac_lowers(m: &MacChange) -> bool {
+    m.fix_previews == Some(false)
+}
+
+fn fix_previews_on() -> bool {
+    crate::commands::setup::read_app_state()
+        .agents_fix_previews
+        .unwrap_or(true)
+}
+
+fn apply_mac(m: &MacChange) -> Result<(), String> {
+    if let Some(on) = m.fix_previews {
+        crate::commands::settings::set_agents_fix_previews(on).map_err(|e| e.to_string())?;
+    }
+    Ok(())
 }
 
 pub const TOOL: &str = "propose_settings_change";
@@ -98,8 +168,9 @@ pub fn schema() -> Value {
                         }
                     },
                     "browser": { "type": "boolean", "description": "May use the user's signed-in browser." },
-                    "independence": { "type": "string", "enum": ["often", "judgement", "go_hard", "full_send", "team"], "description": "full_send (\"Full send — let it rip\"): when the user says \"go full send\", \"let it rip\" or \"stop asking me\"." },
+                    "independence": { "type": "string", "enum": ["often", "judgement", "go_hard", "full_send", "team"], "description": "How much it does on its own, for the agents named (each may have its own; \"team\" puts one back on the team's level). Name the agent for one (\"put Social Posts on Full send\": agents [\"Social Posts\"]), \"team\" for everyone's default. full_send (\"Full send — let it rip\"): when the user says \"go full send\", \"let it rip\" or \"stop asking me\". Raising needs the user's card; lowering (\"make Finance check with me often\": often) applies at once." },
                     "admin": { "type": "boolean", "description": "Admins may propose changes for other agents." },
+                    "fix_previews": { "type": "boolean", "description": "This Mac's \"Fix stopped previews\" switch, on its own (no agents): agents fix a preview that stopped by itself. Off applies at once." },
                     "rules": {
                         "type": "object",
                         "properties": {
@@ -115,7 +186,7 @@ pub fn schema() -> Value {
     })
 }
 
-pub const DESCRIPTION: &str = "Propose a change to what an agent may do (projects and how it works in them, folders on this Mac, apps, the user's browser, independence, admin, rules), or to the team's defaults. Use it whenever the user says an agent should or shouldn't be able to do something, or asks to reset settings or make one agent like another. The user gets a card showing the change in plain words and applies it with Allow; nothing changes before. It returns at once: say in one line what you proposed and stop; you're told when they answer. Never tell the user to go to Settings.";
+pub const DESCRIPTION: &str = "Propose a change to what an agent may do (projects and how it works in them, folders on this Mac, apps, the user's browser, independence, admin, rules), to the team's defaults, or to this Mac's “Fix stopped previews” switch. Use it whenever the user says an agent should or shouldn't be able to do something, or asks to reset settings or make one agent like another. The user gets a card showing the change in plain words and applies it with Allow; nothing changes before. It returns at once: say in one line what you proposed and stop; you're told when they answer. Never tell the user to go to Settings.";
 
 fn text(message: impl Into<String>) -> Value {
     json!({ "content": [{ "type": "text", "text": message.into() }] })
@@ -437,6 +508,7 @@ pub fn build(
             .map(|w| w.trim().chars().take(200).collect())
             .filter(|w: &String| !w.is_empty()),
         has_rules,
+        mac: None,
     })
 }
 
@@ -454,6 +526,26 @@ pub async fn propose(app: &AppHandle, caller: &Agent, turn: Option<u64>, args: &
     ) {
         return error(refused);
     }
+    let why = args.get("why").and_then(Value::as_str).map(str::to_string);
+    let changes = args.get("changes").unwrap_or(&Value::Null);
+    if let Some(fix) = changes.get("fix_previews").and_then(Value::as_bool) {
+        let others = changes
+            .as_object()
+            .is_some_and(|o| o.keys().any(|k| k != "fix_previews"));
+        if others || !strings(args.get("agents")).is_empty() {
+            return error("Propose this Mac's \"Fix stopped previews\" on its own, with no agents, then any agent's change.");
+        }
+        return match mac_proposal(
+            policy::is_admin(caller),
+            fix,
+            fix_previews_on(),
+            why,
+            policy::load().version,
+        ) {
+            Ok(p) => offer(app, caller, p, &store::list().unwrap_or_default()),
+            Err(e) => error(e),
+        };
+    }
     let change = match parse_change(args.get("changes").unwrap_or(&Value::Null)).await {
         Ok(c) => c,
         Err(e) => return error(e),
@@ -468,7 +560,7 @@ pub async fn propose(app: &AppHandle, caller: &Agent, turn: Option<u64>, args: &
         policy::is_admin(caller),
         targets,
         change,
-        args.get("why").and_then(Value::as_str).map(str::to_string),
+        why,
         &policy::load(),
         &agents,
         super::independence::level(),
@@ -476,9 +568,50 @@ pub async fn propose(app: &AppHandle, caller: &Agent, turn: Option<u64>, args: &
         Ok(p) => p,
         Err(e) => return error(e),
     };
+    offer(app, caller, proposal, &agents)
+}
+
+/// Only stricter: applied now, with a line in the chat. Anything else: the card.
+fn offer(app: &AppHandle, caller: &Agent, proposal: Proposal, agents: &[Agent]) -> Value {
+    // A card is for giving agents more room, never for taking it away.
+    let lowers = match &proposal.mac {
+        Some(m) => mac_lowers(m),
+        None => lowers_proposal(
+            &proposal,
+            &policy::load(),
+            agents,
+            super::independence::level(),
+        ),
+    };
+    if lowers {
+        return match apply_proposal(&proposal) {
+            Ok(()) => {
+                let lines = summary(&proposal.groups);
+                let _ = runner::record(
+                    app,
+                    runner::new_message(
+                        &caller.id,
+                        MessageKind::Note,
+                        format!("Settings changed: {}", lines.replace('\n', " ")),
+                    ),
+                );
+                note_targets(app, &caller.id, &proposal);
+                let _ = app.emit(runner::EVENT_REGISTRY, ());
+                let _ = app.emit(EVENT, ());
+                text(format!(
+                    "Done, without a card: it only has agents do less on their own.\n{lines}\nIt applies from each agent's next turn. Say in one line what changed."
+                ))
+            }
+            Err(e) => error(e),
+        };
+    }
     let mut approval = super::mcp::new_card(
         store::new_id(),
-        title(&proposal.targets, &agents),
+        if proposal.mac.is_some() {
+            "Change this Mac's settings?".to_string()
+        } else {
+            title(&proposal.targets, agents)
+        },
         detail(&proposal),
         None,
     );
@@ -496,6 +629,47 @@ pub async fn propose(app: &AppHandle, caller: &Agent, turn: Option<u64>, args: &
     text(format!(
         "A card is in this chat for the user to allow:\n{lines}\nNothing has changed yet. Say in one line what you proposed and stop; you'll be told when they answer."
     ))
+}
+
+/// Whether `p` only lowers independence: every agent it changes differs in
+/// its level alone, and that level goes down; the team's other defaults stay
+/// and its level doesn't go up. Anything else (raising one agent, putting one
+/// back on a higher team level, any other setting) waits for the card.
+pub fn lowers_proposal(p: &Proposal, saved: &Saved, agents: &[Agent], level: Level) -> bool {
+    let Ok((after, new_level)) = simulate(saved, &p.targets, &p.change, level) else {
+        return false;
+    };
+    lowers_only(saved, &after, agents, level, new_level)
+}
+
+pub fn lowers_only(
+    before: &Saved,
+    after: &Saved,
+    agents: &[Agent],
+    level: Level,
+    new_level: Level,
+) -> bool {
+    if before.team != after.team || new_level.rank() > level.rank() {
+        return false;
+    }
+    let mut lowered = new_level.rank() < level.rank();
+    for a in agents {
+        let b = policy::resolve(before, a, level);
+        let mut x = policy::resolve(after, a, new_level);
+        if b == x {
+            continue;
+        }
+        if x.independence.rank() > b.independence.rank() {
+            return false;
+        }
+        lowered |= x.independence.rank() < b.independence.rank();
+        x.independence = b.independence;
+        x.own = b.own.clone();
+        if b != x {
+            return false;
+        }
+    }
+    lowered
 }
 
 fn detail(p: &Proposal) -> String {
@@ -549,6 +723,10 @@ pub fn answer_card(
                 store::set_approval_status(agent_id, request_id, ApprovalStatus::Allowed)?;
             finish(app, agent_id, updated);
             note_targets(app, agent_id, p);
+            // A level raised: open cards it now answers are answered.
+            if p.change.independence.is_some() || p.change.preset.is_some() {
+                super::mcp::sweep_auto_allowed(app);
+            }
             runner::enqueue(
                 app,
                 agent_id,
@@ -576,6 +754,9 @@ pub fn answer_card(
 
 /// Apply what a card showed, or say why it can't be any more.
 pub fn apply_proposal(p: &Proposal) -> Result<(), String> {
+    if let Some(m) = &p.mac {
+        return apply_mac(m);
+    }
     let level = super::independence::level();
     let agents = store::list().unwrap_or_default();
     let mut new_level = level;
@@ -638,3 +819,7 @@ fn note_targets(app: &AppHandle, proposer: &str, p: &Proposal) {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "agent_level_tests.rs"]
+mod agent_level_tests;

@@ -975,6 +975,48 @@ independent your agents are…", and the phone's Settings
 (`agents.setIndependence`, audited; read from the overview's `independence`).
 Saved in `agents/independence.json`.
 
+**Each agent may have its own** (the owner: "I want some of my agents to be
+super autonomous, Go hard, Full send, and some of them not to be"). The team's
+level is the default; an agent's own is kept with its settings in
+`access.json` (`Overrides.independence`), and what it runs at is its own, else
+the team's (`policy::chosen_level`). Every decision path reads that: the
+auto-allow in `mcp::decide` and the card sweep, Go hard's and Full send's
+lists, the browser gate, "work in its own copy" at Go hard, who may search a
+teammate's chat, and the prompt's "How much to do on your own"
+(`policy::independence_for`). A turn answering outside text is capped exactly
+as before (`independence::for_turn`), whatever its own level.
+
+- **From chat (primary).** "Make Finance check with me often" or "put Social
+  Posts on Full send" to the Chief: `propose_settings_change` with that agent
+  and `independence`. Raising one (above where it is, including putting it
+  back on a higher team level) is one card. Lowering only, with nothing else
+  changing, applies at once with a "Settings changed: …" line in the chat and
+  each changed agent's (`policy_card::lowers_only`).
+- **On the desk.** The agent editor's "How much it does on its own":
+  "Same as team (Go hard)" first, then the four levels; saved at once
+  (`agents_policy_set`, which also answers open cards a raise now covers).
+  The sidebar row shows a tiny label ("Full send", "Checks often") only when
+  the agent's level differs from the team's; Settings → Agents → Independence
+  says "Agents set on their own: N" when any are.
+- **On the phone.** The same row on the agent sheet
+  (`agents.setAgentIndependence { agentId, level | "team" }`, audited; a Mac
+  that doesn't serve it shows no row), the same row label on Home, and the
+  count under Settings' choice. The overview carries each agent's own level as
+  `independence` (absent: the team's).
+
+**The Chief offers a change when you plainly want one** (`agents/level_hint.rs`).
+A cheap check on the user's own typed messages, in any chat, for whole phrases:
+tired of being asked ("just do it" as its own sentence, "stop asking me", "too
+many cards") or unhappy that something went ahead ("why did you do that without
+asking me?", "should've asked me"). Either leaves a hidden note for the Chief's
+next turn naming the agent, its level and the direction (from another agent's
+chat, a team note). The note itself tells the Chief to
+offer once, in a line ("Want me to put Finance (or the team) on Full send?",
+the card ready; or "Want Finance to check with you before that?", which applies
+at once), and to drop it for the day if the user passes; nothing is added to the
+Chief's system prompt for it. At most one note per agent every 24 hours (`level_hints.json`), and
+none when it would be moot (already Full send, already Check with me often).
+
 The level is one short app-owned section of every agent's system prompt,
 built from code each turn (so existing and imported agents get it on their
 next turn, nothing in their CLAUDE.md is touched) and fixed per level (the
@@ -4516,7 +4558,12 @@ and asks the agent (`test_prompt`) to click through the site while you watch.
   woken or asked, counts; a server that stops again after 2 fixes gets one
   plain error line in the agent's chat instead, then silence until a fix holds
   30 minutes or the user asks again. Settings → Agents → "Fix stopped previews"
-  turns the wake off (the pane then offers to ask).
+  turns the wake off (the pane then offers to ask). From chat too: the Chief's
+  `propose_settings_change` with `changes: { fix_previews }` and no agents
+  (admins only, on its own). Off only has agents do less, so it applies at once
+  with a "Settings changed: This Mac: …" line; on is a "Change this Mac's
+  settings?" card (`policy_card::mac_proposal`, the card's `mac` field). The
+  Settings row reads it again on every policy event.
 - **The pane** shows "<Agent> is fixing it…" while that turn runs (15s grace for
   it to start), the frame back once the server is; otherwise "Ask <Agent> to fix
   it", with "Open in workspace" as a quiet link.

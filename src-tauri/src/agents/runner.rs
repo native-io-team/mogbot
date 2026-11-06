@@ -2922,7 +2922,8 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     };
     // The labels-only note belongs to the agent's own chat, where it was earned.
     let nudge = if place.is_none() {
-        runtime.nudge.take().unwrap_or_default()
+        // And the Chief's notes about a level the user plainly wants changed (`level_hint`).
+        runtime.nudge.take().unwrap_or_default() + &super::level_hint::take(agent_id)
     } else {
         String::new()
     };

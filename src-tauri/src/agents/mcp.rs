@@ -1053,13 +1053,14 @@ fn list_agents(caller: &store::Agent) -> Value {
 
 /// `read_agent`: what an agent knows and waits on, without starting a turn.
 /// Whether `caller` may search `whose` chat: its own always; a teammate's
-/// for the Chief, an admin, or at Go hard, never in a turn answering outside text.
+/// for the Chief, an admin, or one at Go hard (its own level, or the team's),
+/// never in a turn answering outside text.
 fn may_search_chat_of(caller: &store::Agent, whose: &store::Agent, outside: bool) -> bool {
     whose.id == caller.id
         || (!outside
             && (caller.is_main
                 || super::admin::admin_now(caller)
-                || super::independence::level().goes_hard()))
+                || super::policy::chosen_level(caller).goes_hard()))
 }
 
 fn search_my_chat(caller: &store::Agent, args: &Value) -> Value {

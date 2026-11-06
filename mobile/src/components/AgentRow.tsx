@@ -30,6 +30,7 @@ import {
 import { useClock } from '../lib/useClock';
 import { useSteadyLine } from '../lib/steady';
 import { useApp } from '../lib/store';
+import { useAgentLevelLabel } from './IndependenceSetting';
 import { haptic } from '../lib/haptics';
 import {
   avatarSize,
@@ -286,6 +287,8 @@ function RowBody({
     )
   );
   const state = onMac || quiet ? undefined : lineState(agent);
+  // Its own level, only when it differs from the team's ("Full send").
+  const level = useAgentLevelLabel(agent);
   // Running (not queued for a slot): the line says what and how long, on a
   // clock that ticks only while it works (the avatar holds still; it bobs
   // once when the turn ends).
@@ -368,6 +371,17 @@ function RowBody({
           {agent.muted && (
             <Icon name="bell.slash.fill" size={iconSize.inline} color={colors.textMuted} />
           )}
+          {!!level && (
+            <T
+              variant="caption"
+              color={colors.textMuted}
+              numberOfLines={1}
+              maxFontSizeMultiplier={NAME_SCALE}
+              style={styles.level}
+            >
+              {level}
+            </T>
+          )}
           {!stacked && time}
         </View>
         <View style={styles.nameLine}>
@@ -429,6 +443,15 @@ const useStyles = makeStyles((colors) => ({
   // The name wins the line: it shrinks last, and the time never takes more than it needs.
   name: { flexShrink: 1, flexGrow: 1 },
   time: { flexShrink: 0, marginLeft: space.sm },
+  // A label, not a status: quiet, and it never pushes the name off the line.
+  level: {
+    flexShrink: 0,
+    paddingHorizontal: space.xs,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderSubtle,
+    borderRadius: radius.sm,
+    overflow: 'hidden',
+  },
   mark: { width: 14, alignItems: 'flex-end' },
   actions: { flexDirection: 'row' },
   action: { width: ACTION_W, alignItems: 'center', justifyContent: 'center' },

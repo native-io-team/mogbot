@@ -357,6 +357,16 @@ export interface Methods {
     result: { agentId: string; admin: boolean };
   };
   /**
+   * One agent's own independence level (`agents/policy.rs`), or `team` to put
+   * it back on the team's. The user choosing it, so it applies at once (from
+   * chat, raising one needs a card). Read back from each overview agent's
+   * `independence`. Audited. Newer Macs only.
+   */
+  'agents.setAgentIndependence': {
+    params: { agentId: string; level: AgentIndependence | 'team' };
+    result: { agentId: string; level: AgentIndependence | null };
+  };
+  /**
    * Each engine's usage accounts, in the order turns try them when one
    * reaches its usage limit (`agents::wallet`). Read-only: they are added
    * and signed in on the Mac. Newer Macs only.

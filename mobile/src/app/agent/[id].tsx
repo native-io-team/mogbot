@@ -36,6 +36,7 @@ import { choose } from '../../components/menu';
 import { TextAction } from '../../components/surfaces';
 import { WhatItCanReach } from '../../components/reach';
 import { WhatItCanDo } from '../../components/policy';
+import { AgentLevelRow } from '../../components/IndependenceSetting';
 import { ColorSwatches, LookChoices } from '../../components/pickers';
 import { Button, Icon, InsetDivider, Row, SectionTitle, SheetPage, T } from '../../components/ui';
 import { SheetTitle } from '../../components/SheetTitle';
@@ -243,6 +244,12 @@ function AgentSheet() {
             />
           )}
         </View>
+
+        {canCall('agents.setAgentIndependence', welcome) && (
+          <View style={styles.list}>
+            <AgentLevelRow agent={agent} enabled={live} onError={setError} last />
+          </View>
+        )}
 
         {canCall('agents.setAdmin', welcome) && (
           <View style={styles.list}>

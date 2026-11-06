@@ -5,8 +5,15 @@ import {
   INDEPENDENCE_DETAIL,
   INDEPENDENCE_LABEL,
   INDEPENDENCE_LEVELS,
+  INDEPENDENCE_ROW_LABEL,
+  INDEPENDENCE_SHORT,
   INDEPENDENCE_STILL_ASKS,
+  effectiveIndependence,
   independenceOf,
+  independenceRowLabel,
+  ownIndependenceCount,
+  ownIndependenceLine,
+  sameAsTeamLabel,
 } from './independence';
 import { READ_ONLY_METHODS } from './methods';
 import * as real from './fixtures.gen';
@@ -41,5 +48,31 @@ describe('independence', () => {
 
   it('setting it is a write: audited', () => {
     expect((READ_ONLY_METHODS as readonly string[]).includes('agents.setIndependence')).toBe(false);
+    expect((READ_ONLY_METHODS as readonly string[]).includes('agents.setAgentIndependence')).toBe(
+      false
+    );
+  });
+
+  it('one agent may have its own level: the overview says so, and the row only when it differs', () => {
+    const [agent] = real.agentsOverview.agents;
+    const team = real.agentsOverview.independence;
+    expect(agent.independence).toBe('full_send');
+    expect(effectiveIndependence(agent, team)).toBe('full_send');
+    expect(independenceRowLabel(agent, team)).toBe('Full send');
+    expect(real.agentsSetAgentIndependence.level).toBe('full_send');
+    // Same as the team, or none of its own: no label.
+    expect(independenceRowLabel({ independence: 'go_hard' }, 'go_hard')).toBeNull();
+    expect(independenceRowLabel({}, 'go_hard')).toBeNull();
+    expect(effectiveIndependence({}, 'go_hard')).toBe('go_hard');
+    expect(effectiveIndependence({}, undefined)).toBe('judgement');
+    expect(independenceRowLabel({ independence: 'often' }, 'go_hard')).toBe('Checks often');
+    expect(sameAsTeamLabel('go_hard')).toBe('Same as team (Go hard)');
+    expect(sameAsTeamLabel(undefined)).toBe('Same as team (Use good judgement)');
+    expect(ownIndependenceCount([{ independence: 'often' }, {}, { independence: 'go_hard' }])).toBe(2);
+    expect(ownIndependenceLine(2)).toBe('Agents set on their own: 2');
+    for (const level of INDEPENDENCE_LEVELS) {
+      expect(INDEPENDENCE_SHORT[level].length).toBeLessThan(20);
+      expect(INDEPENDENCE_ROW_LABEL[level].length).toBeLessThan(16);
+    }
   });
 });

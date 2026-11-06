@@ -51,3 +51,57 @@ export const INDEPENDENCE_STILL_ASKS: Record<AgentIndependence, string> = {
 export function independenceOf(level: AgentIndependence | null | undefined): AgentIndependence {
   return level && INDEPENDENCE_LEVELS.includes(level) ? level : DEFAULT_INDEPENDENCE;
 }
+
+/* ------------------------------------------------- one agent's own level */
+
+/** The level in a few words, for a picker's "Same as team (Go hard)". */
+export const INDEPENDENCE_SHORT: Record<AgentIndependence, string> = {
+  often: 'Check with me often',
+  judgement: 'Use good judgement',
+  go_hard: 'Go hard',
+  full_send: 'Full send',
+};
+
+/** The tiny label on an agent's row when its level differs from the team's. */
+export const INDEPENDENCE_ROW_LABEL: Record<AgentIndependence, string> = {
+  often: 'Checks often',
+  judgement: 'Good judgement',
+  go_hard: 'Go hard',
+  full_send: 'Full send',
+};
+
+/** The heading over one agent's level picker. */
+export const AGENT_INDEPENDENCE_TITLE = 'How much it does on its own';
+
+/** The picker's first option: follow the team, naming the team's level. */
+export function sameAsTeamLabel(team: AgentIndependence | null | undefined): string {
+  return `Same as team (${INDEPENDENCE_SHORT[independenceOf(team)]})`;
+}
+
+/** What an agent runs at: its own level, or the team's. */
+export function effectiveIndependence(
+  agent: { independence?: AgentIndependence | null },
+  team: AgentIndependence | null | undefined
+): AgentIndependence {
+  return agent.independence ?? independenceOf(team);
+}
+
+/** The row's label, only when the agent's own level differs from the team's. */
+export function independenceRowLabel(
+  agent: { independence?: AgentIndependence | null },
+  team: AgentIndependence | null | undefined
+): string | null {
+  const own = agent.independence;
+  if (!own || own === independenceOf(team)) return null;
+  return INDEPENDENCE_ROW_LABEL[own];
+}
+
+/** How many agents have a level of their own. */
+export function ownIndependenceCount(
+  agents: readonly { independence?: AgentIndependence | null }[]
+): number {
+  return agents.filter((a) => !!a.independence).length;
+}
+
+/** Under the team's picker, when any agent has its own level. */
+export const ownIndependenceLine = (n: number) => `Agents set on their own: ${n}`;

@@ -412,6 +412,8 @@ pub fn overview() -> Value {
         status,
         home: "/Users/julian/Library/Application Support/ShipStudio/agents/a1".into(),
         takeover: None,
+        // Its own level, above the team's Go hard.
+        independence: Some(crate::agents::independence::Level::FullSend),
     };
     super::wire::phone_overview(
         serde_json::to_value(crate::commands::agents::AgentsOverview {
@@ -555,6 +557,8 @@ pub struct Stub {
     /// Changes to new agents' defaults, as the router handed them over.
     pub defaults: Mutex<Vec<crate::agents::defaults::Change>>,
     pub independence: Mutex<Vec<crate::agents::independence::Level>>,
+    /// `agents.setAgentIndependence` calls: (agent, its own level or the team's).
+    pub agent_levels: Mutex<Vec<(String, Option<crate::agents::independence::Level>)>>,
     pub import_choices: Mutex<Vec<crate::agents::import_choice::Choice>>,
     pub admins: Mutex<Vec<(String, bool)>>,
     /// Agents started fresh, by id.
@@ -598,6 +602,7 @@ impl Stub {
             created: Mutex::new(Vec::new()),
             defaults: Mutex::new(Vec::new()),
             independence: Mutex::new(Vec::new()),
+            agent_levels: Mutex::new(Vec::new()),
             import_choices: Mutex::new(Vec::new()),
             admins: Mutex::new(Vec::new()),
             fresh: Mutex::new(Vec::new()),
@@ -1211,6 +1216,18 @@ impl Backend for Stub {
             .unwrap()
             .push((agent_id.to_string(), admin));
         Ok(json!({ "agentId": agent_id, "admin": admin }))
+    }
+
+    async fn set_agent_independence(
+        &self,
+        agent_id: &str,
+        level: Option<crate::agents::independence::Level>,
+    ) -> Result<Value, CommandError> {
+        self.agent_levels
+            .lock()
+            .unwrap()
+            .push((agent_id.to_string(), level));
+        Ok(json!({ "agentId": agent_id, "level": level }))
     }
 
     async fn import_status(&self) -> Result<Value, CommandError> {
@@ -2022,6 +2039,7 @@ pub fn settings_card() -> crate::agents::store::AgentMessage {
         }],
         why: Some("You asked for Hiring to help on the client's site".into()),
         has_rules: true,
+        mac: None,
     };
     m.approval = Some(Approval {
         request_id: "q13".into(),

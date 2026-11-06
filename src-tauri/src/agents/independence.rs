@@ -90,6 +90,27 @@ impl Level {
         matches!(self, Level::GoHard | Level::FullSend)
     }
 
+    /// Strictest first: `Often` is 0, `FullSend` 3. A change that raises an
+    /// agent's level needs the user's card; one that lowers it doesn't
+    /// (`policy_card::lowers_only`).
+    pub fn rank(self) -> u8 {
+        match self {
+            Level::Often => 0,
+            Level::Judgement => 1,
+            Level::GoHard => 2,
+            Level::FullSend => 3,
+        }
+    }
+
+    /// One step stricter ("Full send" → "Go hard"), or itself at the bottom.
+    pub fn stricter(self) -> Level {
+        match self {
+            Level::FullSend => Level::GoHard,
+            Level::GoHard => Level::Judgement,
+            Level::Judgement | Level::Often => Level::Often,
+        }
+    }
+
     /// The level in a receipt line ("Allowed automatically — Go hard").
     pub fn short(self) -> &'static str {
         match self {
@@ -272,6 +293,21 @@ mod tests {
         ] {
             assert_eq!(for_turn(chosen, false), chosen);
         }
+    }
+
+    #[test]
+    fn levels_rank_strictest_first() {
+        let all = [
+            Level::Often,
+            Level::Judgement,
+            Level::GoHard,
+            Level::FullSend,
+        ];
+        for w in all.windows(2) {
+            assert!(w[0].rank() < w[1].rank());
+            assert_eq!(w[1].stricter(), w[0]);
+        }
+        assert_eq!(Level::Often.stricter(), Level::Often);
     }
 
     #[test]

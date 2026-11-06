@@ -2875,7 +2875,7 @@
       "layer": "components",
       "owner": "GlobalOverlay",
       "status": "canonical",
-      "consumerCount": 1
+      "consumerCount": 2
     },
     {
       "name": "--z-tooltip",
@@ -4531,7 +4531,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 905
+      "consumerCount": 906
     },
     {
       "name": "--text-faint",
@@ -4939,7 +4939,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 485
+      "consumerCount": 486
     },
     {
       "name": "--font-size-control",
@@ -5235,7 +5235,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 563
+      "consumerCount": 564
     },
     {
       "name": "--spacing-lg",
@@ -5747,7 +5747,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 905
+      "consumerCount": 906
     },
     {
       "name": "--text-faint",

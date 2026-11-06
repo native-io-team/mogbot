@@ -99,6 +99,26 @@
   color: var(--text-primary);
 }
 
+/* Under the team's choice: how many agents have a level of their own. */
+.agent-independence-settings__own {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+/* One agent's own level, in its editor (AgentLevelPicker.tsx). */
+.agent-level-picker__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+/* Portalled out of the agent editor: above the dialog it opens from. */
+.ss-dropdown__menu.agent-level-menu {
+  z-index: var(--z-modal-menu);
+}
+
 /* The onboarding step (AgentOnboardingScreen's "independence" phase). */
 .agent-onboarding-independence {
   display: flex;

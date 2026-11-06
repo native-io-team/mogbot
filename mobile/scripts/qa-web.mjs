@@ -1091,6 +1091,25 @@ const LIVE = [
       'The avatar tapped: a row of eight shapes and a row of ten faces, each a small avatar in its colour, the current one ringed in a neutral grey; the colour swatches under them',
   },
   {
+    name: 'agent-sheet-level',
+    route: '/agent/fin',
+    ready: 'Finance',
+    act: async (page) => {
+      await page.clickText('How much it does on its own');
+      await sleep(600);
+    },
+    check:
+      'Finance’s sheet with its own level: the choice sheet titled “How much it does on its own”, “Same as team (Use good judgement)” first, then the four levels, and Cancel',
+  },
+  {
+    name: 'agent-sheet-level-row',
+    route: '/agent/fin',
+    ready: 'Finance',
+    act: scrollToText('How much it does on its own'),
+    check:
+      'The row “How much it does on its own”, value “Check with me often”, with its one line under it, above the Admin switch',
+  },
+  {
     name: 'agent-sheet-chief',
     route: '/agent/chief',
     ready: 'Chief of Staff',
