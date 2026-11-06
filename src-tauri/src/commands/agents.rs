@@ -534,6 +534,10 @@ pub struct UpdateAgentInput {
     pub model: Option<String>,
     /// What its routines run on: `""` automatic, `"same"`, or a model alias.
     pub routine_model: Option<String>,
+    /// How hard its conversation turns think: `low`, `medium` or `high`;
+    /// an empty string goes back to the engine's default.
+    #[serde(default)]
+    pub effort: Option<String>,
     /// A project path from `list_projects`; an empty string unbinds it.
     pub project: Option<String>,
     /// "Work directly in the project" instead of in a copy of it.
@@ -591,6 +595,11 @@ pub async fn agents_update(
         .as_deref()
         .map(|m| store::normalize_routine_model(engine.unwrap_or(current.engine), m))
         .transpose()?;
+    let effort = input
+        .effort
+        .as_deref()
+        .map(store::normalize_effort)
+        .transpose()?;
     let project = match input.project.as_deref() {
         Some(p) => Some(project::resolve(p).await?.map(|p| p.path)),
         None => None,
@@ -643,6 +652,9 @@ pub async fn agents_update(
         if let Some(m) = routine_model {
             a.routine_model = m;
         }
+        if let Some(e) = effort {
+            a.effort = e;
+        }
         if let Some(p) = project {
             a.project = p;
         }
@@ -665,8 +677,7 @@ pub async fn agents_update(
         };
         store::write_instructions(&store::agent_home(&agent_id)?, &updated, &instructions)?;
     }
-    if let Some(engine) = engine {
-        let line = format!("Runs on {} from its next message", engine.label());
+    if let Some(line) = settings_line(&current, &updated, engine.is_some()) {
         let _ = runner::record(
             &app,
             runner::new_message(&agent_id, store::MessageKind::Note, line),
@@ -678,6 +689,68 @@ pub async fn agents_update(
         notify::refresh_badge(&app);
     }
     Ok(updated)
+}
+
+/// The one quiet line in its chat when what its next message runs on
+/// changed: the engine, the model or the effort. `None` when none did.
+fn settings_line(before: &store::Agent, after: &store::Agent, moved: bool) -> Option<String> {
+    let changed = moved || before.model != after.model || before.effort != after.effort;
+    if !changed {
+        return None;
+    }
+    let model = match after.model.as_deref() {
+        Some(m) => model_label(after.engine, m),
+        None if moved => String::new(),
+        None => format!("{}'s default model", after.engine.label()),
+    };
+    let effort = match after.effort.as_deref() {
+        Some(e) => Some(effort_label(e)),
+        // Said only when it is what changed.
+        None if before.effort.is_some() => Some("default effort".to_string()),
+        None => None,
+    };
+    let parts: Vec<String> = [Some(model), effort]
+        .into_iter()
+        .flatten()
+        .filter(|p| !p.is_empty())
+        .collect();
+    let what = parts.join(" · ");
+    Some(if moved {
+        if what.is_empty() {
+            format!("Runs on {} from its next message", after.engine.label())
+        } else {
+            format!("Runs on {} · {what} from its next message", after.engine.label())
+        }
+    } else {
+        format!("Now on {what} from its next message")
+    })
+}
+
+/// A model by the name its engine lists it under: Claude Code's aliases
+/// capitalised ("Opus"), Codex's from its own list, else the id as given.
+fn model_label(engine: Engine, model: &str) -> String {
+    match engine {
+        Engine::Claude => {
+            let mut c = model.chars();
+            c.next()
+                .map(|f| f.to_uppercase().chain(c).collect())
+                .unwrap_or_default()
+        }
+        Engine::Codex => agents::codex::models()
+            .into_iter()
+            .find(|m| m.value == model)
+            .map(|m| m.label)
+            .unwrap_or_else(|| model.to_string()),
+    }
+}
+
+fn effort_label(effort: &str) -> String {
+    match effort {
+        "low" => "Low".into(),
+        "medium" => "Medium".into(),
+        "high" => "High".into(),
+        other => other.to_string(),
+    }
 }
 
 /// One file of a change card, as the diff modal shows it: this turn's change
@@ -2093,6 +2166,43 @@ pub async fn quick_entry_resize(app: AppHandle, height: f64) -> Result<(), Comma
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn one_quiet_line_says_what_the_next_message_runs_on() {
+        let base: store::Agent = serde_json::from_value(serde_json::json!({
+            "id": "a", "name": "A", "shape": 0, "color": "blue", "createdAt": 0
+        }))
+        .unwrap();
+        let with = |f: &dyn Fn(&mut store::Agent)| {
+            let mut a = base.clone();
+            f(&mut a);
+            a
+        };
+        assert_eq!(settings_line(&base, &base, false), None);
+        let opus_high = with(&|a| {
+            a.model = Some("opus".into());
+            a.effort = Some("high".into());
+        });
+        assert_eq!(
+            settings_line(&base, &opus_high, false).as_deref(),
+            Some("Now on Opus · High from its next message")
+        );
+        let back = with(&|a| a.model = Some("opus".into()));
+        assert_eq!(
+            settings_line(&opus_high, &back, false).as_deref(),
+            Some("Now on Opus · default effort from its next message")
+        );
+        let default_low = with(&|a| a.effort = Some("low".into()));
+        assert_eq!(
+            settings_line(&base, &default_low, false).as_deref(),
+            Some("Now on Claude Code's default model · Low from its next message")
+        );
+        let codex = with(&|a| a.engine = Engine::Codex);
+        assert_eq!(
+            settings_line(&base, &codex, true).as_deref(),
+            Some("Runs on Codex from its next message")
+        );
+    }
 
     fn engines(claude: bool, codex: bool) -> Vec<engine::EngineInfo> {
         [(Engine::Claude, claude), (Engine::Codex, codex)]

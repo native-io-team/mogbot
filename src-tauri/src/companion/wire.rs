@@ -365,6 +365,10 @@ pub const MAC_FEATURE_WATCH_LINKS: &str = "watch.links";
 /// `welcome.features`: `agents.update` takes `engine` and `model`.
 pub const MAC_FEATURE_ENGINE: &str = "agents.engine";
 
+/// `welcome.features`: `agents.update` takes `effort` (`low`, `medium`,
+/// `high`, or empty for the engine's default), and agents carry theirs.
+pub const MAC_FEATURE_EFFORT: &str = "agents.effort";
+
 /// Everything `welcome.features` lists.
 pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_REVISE_RESULTS,
@@ -377,6 +381,7 @@ pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_SIGNIN_PHONE,
     MAC_FEATURE_WATCH_LINKS,
     MAC_FEATURE_ENGINE,
+    MAC_FEATURE_EFFORT,
 ];
 
 /// What one connected app said it shows (`hello.features`).

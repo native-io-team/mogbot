@@ -31,6 +31,7 @@ import {
   type TeamLogins,
   type TeamNeed,
   type AgentsOverview,
+  type EngineInfo,
   type NewAgentDefaults,
   type AgentIndependence,
   type Alert,
@@ -343,6 +344,30 @@ interface Turn {
 const MAC_NAME = 'Julian’s MacBook Pro';
 const JOURNAL_LIMIT = 20_000;
 
+/** Mirrors `settings_line` in src-tauri/src/commands/agents.rs. */
+function settingsLine(
+  before: Pick<Agent, 'engine' | 'model' | 'effort'>,
+  after: Pick<Agent, 'engine' | 'model' | 'effort'>,
+  engines: EngineInfo[]
+): string | null {
+  const moved = before.engine !== after.engine;
+  if (!moved && before.model === after.model && before.effort === after.effort) return null;
+  const engine = after.engine === 'codex' ? 'Codex' : 'Claude Code';
+  const label = (m: string) =>
+    after.engine === 'claude'
+      ? m.charAt(0).toUpperCase() + m.slice(1)
+      : (engines.find((e) => e.id === 'codex')?.models.find((x) => x.value === m)?.label ?? m);
+  const model = after.model ? label(after.model) : moved ? '' : `${engine}'s default model`;
+  const effort = after.effort
+    ? after.effort.charAt(0).toUpperCase() + after.effort.slice(1)
+    : before.effort
+      ? 'default effort'
+      : '';
+  const what = [model, effort].filter(Boolean).join(' · ');
+  if (moved) return `Runs on ${engine}${what ? ` · ${what}` : ''} from its next message`;
+  return `Now on ${what} from its next message`;
+}
+
 export function createMockServer(opts: MockOptions = {}) {
   const log = (...a: unknown[]) => {
     // eslint-disable-next-line no-console -- a dev server talks on stdout
@@ -381,6 +406,15 @@ export function createMockServer(opts: MockOptions = {}) {
   const agents: Agent[] = seedAgents(now);
   // Finance checks with you often, on its own; the rest follow the team.
   for (const a of agents) if (a.id === 'fin') a.independence = 'often';
+  if (opts.bothEngines) {
+    // Designer's last turn reported its model, as Claude Code's stream names
+    // it, and it thinks hard: the chip reads "Opus 5.5 · High".
+    const design = agents.find((a) => a.id === 'design');
+    if (design) {
+      design.context = { used: 42_000, window: 200_000, at: now - 26 * 60_000, model: 'claude-opus-5-5' };
+      design.effort = 'high';
+    }
+  }
   if (opts.codexOnly) {
     for (const a of agents) {
       a.engine = 'codex';
@@ -2744,15 +2778,24 @@ export function createMockServer(opts: MockOptions = {}) {
         'color',
         'engine',
         'model',
+        'effort',
       ];
       if (!Object.keys(input).length || Object.keys(input).some((k) => !allowed.includes(k))) {
         return fail({
           type: 'Protocol',
           code: 'bad_params',
           message:
-            'Only pin, mute, hide, the instructions, how it looks, and its engine and model can be changed from the phone.',
+            'Only pin, mute, hide, the instructions, how it looks, and its engine, model and effort can be changed from the phone.',
         });
       }
+      if (input.effort !== undefined && !['', 'low', 'medium', 'high'].includes(String(input.effort))) {
+        return fail({
+          type: 'Validation',
+          field: 'effort',
+          reason: 'Pick Low, Medium, High or Engine’s default (no effort).',
+        });
+      }
+      const before = { engine: a.engine, model: a.model, effort: a.effort };
       if (typeof input.instructions === 'string') instructions.set(a.id, input.instructions);
       if (typeof input.pinned === 'boolean') a.pinned = input.pinned;
       if (typeof input.muted === 'boolean') a.muted = input.muted;
@@ -2772,7 +2815,21 @@ export function createMockServer(opts: MockOptions = {}) {
           a.model = null;
         }
       }
-      if (typeof input.model === 'string') a.model = input.model || null;
+      if (typeof input.model === 'string') {
+        const model = input.model || null;
+        // As `Agent::set_model`: a reading was against the old model's window.
+        if (model !== a.model) delete a.context;
+        a.model = model;
+      }
+      if (typeof input.effort === 'string') {
+        if (input.effort) a.effort = input.effort as Agent['effort'];
+        else delete a.effort;
+      }
+      // The Mac's one quiet line (`settings_line` in commands/agents.rs).
+      const line = settingsLine(before, a, engines());
+      if (line) {
+        putMessage({ id: `m_runs_${Date.now()}`, agentId: a.id, ts: Date.now(), kind: 'note', text: line });
+      }
       emit({ type: 'agents.registry', overview: overview() });
       const { status: _status, home: _home, ...stored } = a;
       return stored;

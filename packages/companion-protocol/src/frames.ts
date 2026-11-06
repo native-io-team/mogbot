@@ -200,6 +200,12 @@ export const MAC_FEATURES = {
    * new session that carries the conversation over as a recap.
    */
   engine: 'agents.engine',
+  /**
+   * `agents.update` takes `effort` (`low` / `medium` / `high`, '' for the
+   * engine's default) and agents carry theirs: how hard its conversation
+   * turns think, from its next message.
+   */
+  effort: 'agents.effort',
 } as const;
 export type MacFeature = (typeof MAC_FEATURES)[keyof typeof MAC_FEATURES];
 

@@ -196,6 +196,12 @@ export interface Agent {
   engine: AgentEngine;
   /** One of its engine's models; null is that engine's default. */
   model: string | null;
+  /**
+   * How hard its conversation turns think (Claude Code's `--effort`, Codex's
+   * reasoning effort); omitted is the engine's default. From a Mac that lists
+   * `MAC_FEATURES.effort`.
+   */
+  effort?: AgentEffort;
   /** What its routines run on; omitted when automatic. */
   routineModel?: string;
   /** The ready-made agent it was made from (`agents.templates`), if any. */
@@ -368,6 +374,10 @@ export interface SchedulePreview {
 }
 
 export type AgentEngine = 'claude' | 'codex';
+
+/** Mirrors `store::EFFORTS`: the levels both engines take. */
+export type AgentEffort = 'low' | 'medium' | 'high';
+export const AGENT_EFFORTS: readonly AgentEffort[] = ['low', 'medium', 'high'];
 
 export interface ModelChoice {
   value: string;
@@ -1334,6 +1344,8 @@ export interface UpdateAgentInput {
   engine?: AgentEngine;
   model?: string;
   routineModel?: string;
+  /** `low` / `medium` / `high`, or '' for the engine's default. */
+  effort?: AgentEffort | '';
   project?: string;
   workDirectly?: boolean;
 }

@@ -36,6 +36,9 @@ pub enum Driver {
 /// What every driver needs to build a turn's command line.
 pub struct TurnSpec<'a> {
     pub model: Option<&'a str>,
+    /// How hard it thinks (`store::EFFORTS`); `None` is the engine's default.
+    /// The app-server takes it on `turn/start` instead (`codex_app`).
+    pub effort: Option<&'a str>,
     /// The session to resume, or for a new one what [`Driver::new_session`] gave.
     pub session: &'a str,
     pub resuming: bool,
@@ -114,6 +117,7 @@ impl Driver {
     /// Every argument the turn's process gets.
     pub fn args(self, spec: &TurnSpec) -> Vec<String> {
         let args = with_compaction(self, self.base_args(spec), spec.window);
+        let args = with_effort(self, args, spec.effort);
         match spec.access {
             Some(access) => with_access(self, args, access),
             // Fail closed: a turn nobody worked out the reach of gets no
@@ -198,6 +202,33 @@ fn with_compaction(driver: Driver, mut args: Vec<String>, window: Option<u64>) -
     args
 }
 
+/// The effort level on the command line: Claude Code's `--effort`, or for
+/// `codex exec` the `model_reasoning_effort` override, placed where the other
+/// `-c` overrides go. The app-server's goes on `turn/start` (`codex_app`).
+/// Only a level `store::normalize_effort` let through ever gets here.
+fn with_effort(driver: Driver, mut args: Vec<String>, effort: Option<&str>) -> Vec<String> {
+    let Some(effort) = effort.filter(|e| super::store::EFFORTS.contains(e)) else {
+        return args;
+    };
+    match driver {
+        Driver::ClaudePrint => {
+            args.extend(["--effort".to_string(), effort.to_string()]);
+            args
+        }
+        Driver::CodexExec => {
+            let at = args
+                .iter()
+                .position(|a| a == "--skip-git-repo-check")
+                .map(|i| i + 1)
+                .unwrap_or(args.len());
+            let value = format!("model_reasoning_effort={}", super::codex::toml(effort));
+            args.splice(at..at, ["-c".to_string(), value]);
+            args
+        }
+        Driver::CodexApp => args,
+    }
+}
+
 /// A turn's command line with what this agent can reach laid in:
 /// Claude Code without its browser (`--no-chrome`) when the user took it
 /// away, and kept from the claude.ai connectors it isn't granted (added to
@@ -248,6 +279,7 @@ mod tests {
     fn spec<'a>(session: &'a str, resuming: bool, writable: &'a [String]) -> TurnSpec<'a> {
         TurnSpec {
             model: None,
+            effort: None,
             session,
             resuming,
             url: "http://x",
@@ -258,6 +290,39 @@ mod tests {
             access: None,
             window: None,
         }
+    }
+
+    #[test]
+    fn effort_reaches_each_engine_its_own_way() {
+        let writable: Vec<String> = Vec::new();
+        let mut s = spec("sid", true, &writable);
+        let pair = |args: &[String], flag: &str| {
+            args.windows(2)
+                .filter(|w| w[0] == flag)
+                .map(|w| w[1].clone())
+                .collect::<Vec<_>>()
+        };
+        // None: nothing passed, the engine's own default.
+        assert!(!Driver::ClaudePrint.args(&s).contains(&"--effort".to_string()));
+        assert!(!Driver::CodexExec
+            .args(&s)
+            .iter()
+            .any(|a| a.starts_with("model_reasoning_effort")));
+        s.effort = Some("high");
+        assert_eq!(pair(&Driver::ClaudePrint.args(&s), "--effort"), ["high"]);
+        let exec = Driver::CodexExec.args(&s);
+        assert!(pair(&exec, "-c").contains(&r#"model_reasoning_effort="high""#.to_string()));
+        // With the other overrides, before the session and the `-` of exec.
+        let at = exec
+            .iter()
+            .position(|a| a.starts_with("model_reasoning_effort"))
+            .unwrap();
+        assert!(at < exec.iter().position(|a| a == "-").unwrap_or(exec.len()));
+        // The app-server takes it on turn/start, not the command line.
+        assert!(!Driver::CodexApp.args(&s).iter().any(|a| a.contains("effort")));
+        // Anything else never reaches a command line.
+        s.effort = Some("max --x");
+        assert!(!Driver::ClaudePrint.args(&s).contains(&"--effort".to_string()));
     }
 
     #[test]

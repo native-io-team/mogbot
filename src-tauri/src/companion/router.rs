@@ -255,6 +255,10 @@ pub struct AgentToggles {
     /// One of that engine's models; empty is the engine's own default.
     #[serde(default)]
     pub model: Option<String>,
+    /// `low`, `medium` or `high`; empty is the engine's own default. From a
+    /// Mac that lists [`MAC_FEATURE_EFFORT`](super::wire::MAC_FEATURE_EFFORT).
+    #[serde(default)]
+    pub effort: Option<String>,
 }
 
 /// Instructions are a brief, not a document: the phone's editor stops here.
@@ -1233,6 +1237,10 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
                     .get("model")
                     .and_then(Value::as_str)
                     .map(|m| format!("model {}", if m.is_empty() { "default" } else { m })),
+                input
+                    .get("effort")
+                    .and_then(Value::as_str)
+                    .map(|e| format!("effort {}", if e.is_empty() { "default" } else { e })),
             ]
             .into_iter()
             .flatten()
@@ -1755,7 +1763,7 @@ async fn run(
         "agents.update" => {
             let p: UpdateParams = parse(params).map_err(|_| {
                 bad_params(
-                    "Only pin, mute, hide, the instructions, how it looks, and its engine and model can be changed from the phone.",
+                    "Only pin, mute, hide, the instructions, how it looks, and its engine, model and effort can be changed from the phone.",
                 )
             })?;
             if p.input == AgentToggles::default() {
@@ -3475,6 +3483,26 @@ mod tests {
             stub.audited().last().unwrap().2,
             format!("engine codex model gpt-5-codex {AGENT}")
         );
+    }
+
+    #[tokio::test]
+    async fn the_phone_can_set_an_agents_effort() {
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        dispatch(
+            &c,
+            &me,
+            "agents.update",
+            json!({ "agentId": AGENT, "input": { "effort": "high" } }),
+        )
+        .await
+        .unwrap();
+        let sent = stub.toggles.lock().unwrap();
+        assert_eq!(sent[0].1.effort.as_deref(), Some("high"));
+        drop(sent);
+        assert_eq!(stub.audited().last().unwrap().2, format!("effort high {AGENT}"));
+        assert!(super::super::wire::MAC_FEATURES.contains(&"agents.effort"));
     }
 
     #[tokio::test]

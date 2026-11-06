@@ -182,6 +182,8 @@ export interface Agent {
   engine: AgentEngine;
   /** One of its engine's models; null is that engine's default. */
   model: string | null;
+  /** How hard its conversation turns think; omitted is the engine's default. */
+  effort?: AgentEffort;
   /** What its routines run on (see `routineModelOf`); omitted when automatic. */
   routineModel?: string;
   /** The ready-made agent it was made from (`agentTemplates.ts`), if any. */
@@ -317,6 +319,21 @@ export interface SchedulePreview {
 }
 
 export type AgentEngine = 'claude' | 'codex';
+
+/** Mirrors `store::EFFORTS`: the levels both engines take. */
+export type AgentEffort = 'low' | 'medium' | 'high';
+
+/**
+ * How hard an agent thinks, said plainly: Claude Code's `--effort`, Codex's
+ * reasoning effort. '' passes nothing (the engine's default). Applies to its
+ * conversation, not its routines. Must match `EFFORTS` in store.rs.
+ */
+export const EFFORT_CHOICES: readonly { value: AgentEffort | ''; label: string }[] = [
+  { value: '', label: 'Engine’s default' },
+  { value: 'low', label: 'Low' },
+  { value: 'medium', label: 'Medium' },
+  { value: 'high', label: 'High' },
+];
 
 /** Mirrors `engine::ModelChoice`: a model as the engine lists it. */
 export interface EngineModel {
@@ -835,6 +852,8 @@ export interface UpdateAgentInput {
   model?: string;
   /** '' automatic, 'same' (its own model), or one of its engine's models. */
   routineModel?: string;
+  /** `low` / `medium` / `high`, or '' for the engine's default. */
+  effort?: AgentEffort | '';
   /** A project path from `list_projects`, or '' to unbind it. */
   project?: string;
   /** Work directly in the project instead of in a copy of it. */

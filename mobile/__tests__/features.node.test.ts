@@ -268,7 +268,7 @@ describe('files, search, schedules and projects against the mock Mac', () => {
     await until(() => qa()?.muted === true);
     await expect(
       t.request('agents.update', { agentId: 'qa', input: { name: 'Renamed' } })
-    ).rejects.toThrow(/pin, mute, hide, the instructions, how it looks, and its engine and model/);
+    ).rejects.toThrow(/pin, mute, hide, the instructions, how it looks, and its engine, model and effort/);
     await t.request('agents.update', {
       agentId: 'qa',
       input: { avatar: { shape: 'hexagon', face: 'smile' }, color: 'teal' },

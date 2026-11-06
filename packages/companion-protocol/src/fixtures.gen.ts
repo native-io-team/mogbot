@@ -174,6 +174,7 @@ export const agentsOverview = {
         "project": "/Users/julian/ShipStudio/site"
       },
       "createdAt": 1762200000000,
+      "effort": "high",
       "engine": "claude",
       "failure": {
         "kind": "usage_limit",
@@ -2527,6 +2528,7 @@ export const agentsUpdate = {
     "project": "/Users/julian/ShipStudio/site"
   },
   "createdAt": 1762200000000,
+  "effort": "high",
   "engine": "claude",
   "failure": {
     "kind": "usage_limit",
@@ -2756,6 +2758,7 @@ export const agentsStartFresh = {
     "project": "/Users/julian/ShipStudio/site"
   },
   "createdAt": 1762200000000,
+  "effort": "high",
   "engine": "claude",
   "failure": {
     "kind": "usage_limit",
@@ -3010,7 +3013,8 @@ export const frames = [
       "agents.keycaps",
       "signin.phone",
       "watch.links",
-      "agents.engine"
+      "agents.engine",
+      "agents.effort"
     ]
   },
   {
@@ -3604,6 +3608,7 @@ export const frames = [
               "project": "/Users/julian/ShipStudio/site"
             },
             "createdAt": 1762200000000,
+            "effort": "high",
             "engine": "claude",
             "failure": {
               "kind": "usage_limit",
@@ -4022,6 +4027,7 @@ export const frames = [
               "project": "/Users/julian/ShipStudio/site"
             },
             "createdAt": 1762200000000,
+            "effort": "high",
             "engine": "claude",
             "failure": {
               "kind": "usage_limit",

@@ -4050,6 +4050,17 @@ time. The e2e Codex scenarios run on the account when one is signed in.
   what it's doing, never the engine. Only Claude Code's own aliases are accepted, and the backend
   enforces that too. Default means no `--model`, so whatever Claude Code
   defaults to.
+- **Effort.** How hard its conversation turns think: Engine's default, Low,
+  Medium or High (`store::EFFORTS`, the three both engines take), in the
+  same … menu and on the phone's Agent controls. Claude Code gets
+  `--effort <level>` (2.1.319 also takes `xhigh` and `max`); `codex exec`
+  gets `-c model_reasoning_effort="<level>"`; the app-server gets `effort` on
+  `turn/start` (0.166's schema: "this turn and subsequent turns", so going
+  back to the default leaves a Codex thread on the level it last had until
+  it starts a new session). Routines don't take it: they mostly check, on a
+  cheaper model that may not offer the same levels. A change to the model or
+  effort, like an engine move, leaves one Note in the chat ("Now on Opus ·
+  High from its next message").
 - **Usage.** Each turn's final stream-json `result` event adds its token counts,
   `total_cost_usd` and `duration_ms` to the agent, all time and per day for the
   last 7 days (`src-tauri/src/agents/usage.rs`). Nothing is estimated: a turn

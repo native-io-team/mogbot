@@ -287,6 +287,12 @@ pub struct Agent {
     /// `None` uses the engine's own default.
     #[serde(default)]
     pub model: Option<String>,
+    /// How hard its conversation turns think: one of [`EFFORTS`], passed as
+    /// Claude Code's `--effort` or Codex's reasoning effort. `None` is the
+    /// engine's own default. Routines don't take it: they mostly check, and
+    /// run on a cheaper model that may not offer the same levels.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub effort: Option<String>,
     /// It moved to another engine and hasn't had a turn there yet: the next
     /// turn starts a new session and is handed the recent conversation.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
@@ -1082,6 +1088,30 @@ pub fn normalize_routine_model(
     }
 }
 
+/// The effort levels offered, on either engine: Claude Code's `--effort`
+/// takes them (it also has `xhigh` and `max`), and so does Codex's reasoning
+/// effort (`model_reasoning_effort`, the app-server's `effort` on
+/// `turn/start`; some models also offer `minimal` or `xhigh`). Only the
+/// three both say, so a level survives a move between engines.
+pub const EFFORTS: [&str; 3] = ["low", "medium", "high"];
+
+/// An effort setting from the UI: empty is the engine's default; anything
+/// else must be one of [`EFFORTS`]. It becomes an argument, so nothing else
+/// gets through.
+pub fn normalize_effort(effort: &str) -> Result<Option<String>, CommandError> {
+    let effort = effort.trim().to_ascii_lowercase();
+    if effort.is_empty() {
+        return Ok(None);
+    }
+    if !EFFORTS.contains(&effort.as_str()) {
+        return Err(super::err_invalid(
+            "effort",
+            "Pick Low, Medium, High or Engine's default (no effort).",
+        ));
+    }
+    Ok(Some(effort))
+}
+
 /// A `--model` value: empty means Claude Code's default; anything else must
 /// be one of [`MODELS`]. It becomes a CLI argument, so nothing else gets through.
 pub fn normalize_model(model: &str) -> Result<Option<String>, CommandError> {
@@ -1141,6 +1171,7 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         pending_approvals: 0,
         engine: Default::default(),
         model: None,
+        effort: None,
         new_engine: false,
         context: None,
         routine_model: None,
@@ -3146,6 +3177,27 @@ mod tests {
         assert!(normalize_model("gpt-5").is_err());
         assert!(normalize_model("--dangerously-skip-permissions").is_err());
         assert!(normalize_model("opus; rm -rf").is_err());
+    }
+
+    #[test]
+    fn efforts_are_the_three_both_engines_take() {
+        assert_eq!(normalize_effort("").unwrap(), None);
+        assert_eq!(normalize_effort(" High ").unwrap().as_deref(), Some("high"));
+        assert_eq!(normalize_effort("low").unwrap().as_deref(), Some("low"));
+        for refused in ["max", "minimal", "--model", "high\"; x=1"] {
+            assert!(normalize_effort(refused).is_err(), "{refused}");
+        }
+    }
+
+    #[test]
+    fn effort_is_left_out_of_the_registry_until_set() {
+        let mut a: Agent = serde_json::from_value(serde_json::json!({
+            "id": "a", "name": "A", "shape": 0, "color": "blue", "createdAt": 0
+        }))
+        .unwrap();
+        assert!(serde_json::to_value(&a).unwrap().get("effort").is_none());
+        a.effort = Some("high".into());
+        assert_eq!(serde_json::to_value(&a).unwrap()["effort"], "high");
     }
 
     #[test]

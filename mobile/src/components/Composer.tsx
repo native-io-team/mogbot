@@ -25,8 +25,8 @@
  * inside it, as in Claude's own: the + at its left, the mic, Stop and Send at
  * its right. Once the words wrap, or there are files, or it listens, it's a
  * card: files on top, the words across it, the buttons in a row under them
- * (the + and the engine's chip left). The line about queueing runs over it,
- * full width, with Send now at its right.
+ * (the + and the model chip, which opens Agent controls, left). The line
+ * about queueing runs over it, full width, with Send now at its right.
  *
  * What's typed, quoted, @mentioned and attached is the chat's draft
  * (drafts.ts): it survives leaving the chat and restarting the app. Files
@@ -111,17 +111,10 @@ import {
 } from '../lib/drafts';
 import { admit, pickDocuments, pickPhotos, takePhoto, type PickedFile } from '../lib/files';
 import { haptic } from '../lib/haptics';
-import {
-  canSwitch,
-  currentModels,
-  engineLocked,
-  modelRowLabel,
-  otherEngines,
-  switchedLine,
-} from '../lib/agentEngine';
-import { engineChip, modelOptions } from '../lib/newAgentDefaults';
+import { useRouter } from 'expo-router';
+import { chipLabel } from '../lib/agentControls';
 import { OUTBOX_WAIT_MS } from '../lib/outbox';
-import { describeError, send, setAgentEngine, stop, upload } from '../lib/session';
+import { describeError, send, stop, upload } from '../lib/session';
 import { getApp, useApp, useServed } from '../lib/store';
 import {
   avatarSize,
@@ -185,11 +178,17 @@ export function Composer({
   const team = useApp((s) => s.overview?.agents ?? NONE);
   const engines = useApp((s) => s.overview?.engines);
   // Only from a Mac that lists its engines: never a name guessed here.
-  const chip = useMemo(() => (engines ? engineChip(agent, engines) : null), [agent, engines]);
-  // Switching from the card, only on a Mac that takes `engine` on agents.update.
+  const chip = useMemo(() => (engines ? chipLabel(agent, engines) : null), [agent, engines]);
+  // The chip opens Agent controls on a Mac with something there to change:
+  // the model or engine, the effort, or its level (open even mid-turn).
   const switchable = useServed('agents.update', MAC_FEATURES.engine);
-  const canPick = switchable && !!engines && canSwitch(agent, engines);
-  const lock = engineLocked(agent);
+  const effortable = useServed('agents.update', MAC_FEATURES.effort);
+  const levelable = useServed('agents.setAgentIndependence');
+  const router = useRouter();
+  const openControls =
+    switchable || effortable || levelable
+      ? () => router.push({ pathname: '/controls', params: { id: agent.id } })
+      : undefined;
   const seq = useRef(0);
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   const [micHint, setMicHint] = useState<string | null>(null);
@@ -241,52 +240,6 @@ export function Composer({
     const t = setTimeout(() => input.current?.focus(), 0);
     return () => clearTimeout(t);
   }, [listening]);
-  // Moving to a model or engine: the Mac says yes before the line is shown.
-  const switchTo = (input: { engine?: Agent['engine']; model?: string }) => {
-    if (!engines) return;
-    const engine = input.engine ?? agent.engine;
-    const moved = engine !== agent.engine;
-    const label = modelOptions(engine, engines).find((m) => m.value === (input.model ?? ''));
-    const info = engineChip({ engine, model: input.model || null }, engines);
-    setAgentEngine(agent.id, input)
-      .then(() => {
-        haptic.success();
-        setMicHint(switchedLine(info.engine, input.model ? (label?.label ?? info.model) : null, moved));
-      })
-      .catch((error: unknown) => {
-        haptic.error();
-        onError(describeError(error));
-      });
-  };
-  const pickEngine = () => {
-    if (!engines) return;
-    if (lock) {
-      setMicHint(lock);
-      return;
-    }
-    const here = chip?.engine ?? '';
-    choose(
-      `Runs on ${here}`,
-      [
-        ...currentModels(agent, engines)
-          .filter((m) => !m.current)
-          .map((m) => ({ label: modelRowLabel(m), run: () => switchTo({ model: m.value }) })),
-        ...otherEngines(agent, engines).map((e) => ({
-          label: `Switch to ${e.label}…`,
-          run: () =>
-            choose(
-              `${e.label}: which model?`,
-              modelOptions(e.id, engines).map((m) => ({
-                label: modelRowLabel(m),
-                run: () => switchTo({ engine: e.id, model: m.value }),
-              })),
-              `${agent.name} keeps the conversation so far.`
-            ),
-        })),
-      ],
-      'Pick another model, or another engine for the next message.'
-    );
-  };
   const mic = () => {
     const hint = dictationHint(dictation.support);
     if (hint) {
@@ -692,9 +645,7 @@ export function Composer({
             ) : undefined
           }
           chip={
-            !listening && chip ? (
-              <EngineChip {...chip} onPress={canPick ? pickEngine : undefined} locked={lock} />
-            ) : undefined
+            !listening && chip ? <EngineChip {...chip} onPress={openControls} /> : undefined
           }
         >
           {/* Listening, the card's row: ×, the waveform filling the middle, Stop, Send. */}
@@ -807,30 +758,30 @@ export function Composer({
 }
 
 /**
- * What the agent runs on, in the card's row beside the +: the engine, and
- * its model lighter, as Claude's own model chip. Only what the Mac said.
+ * What the next message runs on, in the card's row beside the +: the model
+ * ("Opus 5.5"), and its effort lighter after a dot ("· High"), as Claude's
+ * own model chip; the engine only when nothing names a model. Only what the
+ * Mac said (`lib/agentControls.ts`). A tap opens Agent controls.
  */
 function EngineChip({
-  engine,
-  model,
+  main,
+  effort,
+  says,
   onPress,
-  locked,
 }: {
-  engine: string;
-  model: string | null;
-  /** Opens the picker; absent on a Mac too old to switch, where this is a label. */
+  main: string;
+  effort: string | null;
+  says: string;
+  /** Opens Agent controls; absent on a Mac with nothing to change there. */
   onPress?: () => void;
-  /** Why it can't be used now (a turn is running); a tap says so. */
-  locked?: string | null;
 }) {
   const field = useFieldStyles();
   const { send } = useComposerSize();
-  const says = model ? `Runs on ${engine}, ${model}` : `Runs on ${engine}`;
   const shape = [field.chip, { height: send, borderRadius: send / 2 }];
   if (!onPress) {
     return (
       <View accessible accessibilityRole="text" accessibilityLabel={says} style={shape}>
-        <EngineWords engine={engine} model={model} />
+        <EngineWords main={main} effort={effort} />
       </View>
     );
   }
@@ -838,30 +789,25 @@ function EngineChip({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={says}
-      accessibilityHint={locked ?? 'Double-tap to change the engine or model'}
-      accessibilityState={{ disabled: !!locked }}
+      accessibilityHint="Opens Agent controls: model, effort and how much it does on its own"
       onPress={() => {
         haptic.light();
         onPress();
       }}
-      style={({ pressed }) => [
-        shape,
-        locked ? field.off : null,
-        pressed && !locked ? PRESSED : null,
-      ]}
+      style={({ pressed }) => [shape, pressed ? PRESSED : null]}
     >
-      <EngineWords engine={engine} model={model} caret />
+      <EngineWords main={main} effort={effort} caret />
     </Pressable>
   );
 }
 
 function EngineWords({
-  engine,
-  model,
+  main,
+  effort,
   caret,
 }: {
-  engine: string;
-  model: string | null;
+  main: string;
+  effort: string | null;
   caret?: boolean;
 }) {
   const colors = useColors();
@@ -874,8 +820,8 @@ function EngineWords({
         style={{ flexShrink: 1 }}
         maxFontSizeMultiplier={chromeScale}
       >
-        {engine}
-        {model ? <T variant="small" color={colors.textSecondary}>{` ${model}`}</T> : null}
+        {main}
+        {effort ? <T variant="small" color={colors.textMuted}>{` · ${effort}`}</T> : null}
       </T>
       {caret ? (
         <Icon

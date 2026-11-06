@@ -1661,7 +1661,7 @@ const topOf = (page, text) =>
     const el = [...document.querySelectorAll('body *')].filter((e) => e.children.length === 0 && e.textContent.includes(${JSON.stringify(text)})).pop();
     return el ? el.getBoundingClientRect().top : null;
   })()`);
-// The composer on a narrow and a wide phone, and the engine chip's picker.
+// The composer on a narrow and a wide phone, the model chip, and Agent controls.
 const resize = (page, width) =>
   page.send('Emulation.setDeviceMetricsOverride', { ...VIEWPORT, width });
 const tapChip = (page) =>
@@ -1669,6 +1669,20 @@ const tapChip = (page) =>
     `() => [...document.querySelectorAll('[aria-label]')].find((e) => e.getAttribute('aria-label').startsWith('Runs on'))`,
     'the engine chip'
   );
+const closeSheet = (page) => page.eval('history.back()').then(() => sleep(900));
+// The chip is in the card's row: words that wrap make the card.
+const LONG_ASK = 'Can you pull last week’s numbers together for the Monday review, and flag anything that moved more than ten percent?';
+const openControls = async (page) => {
+  await clearField(page);
+  await page.type(LONG_ASK);
+  await sleep(700);
+  await tapChip(page);
+  await sleep(1200);
+};
+const closeAndClear = async (page) => {
+  await closeSheet(page);
+  await clearField(page);
+};
 const ENGINE = [
   ...[320, 360, 430].map((width) => ({
     name: `composer-empty-${width}`,
@@ -1682,52 +1696,51 @@ const ENGINE = [
     after: async (page) => resize(page, VIEWPORT.width),
   })),
   {
-    name: 'composer-engine-picker',
+    name: 'composer-chip',
     route: '/chat/design',
     ready: 'Designer',
     act: async (page) => {
       await page.type('Can you pull last week’s numbers together for the Monday review, and flag anything that moved more than ten percent?');
       await sleep(700);
-      await tapChip(page);
+    },
+    check:
+      'The card’s row: the model chip reads “Opus 5.5” with “· High” lighter and a small chevron (no engine name: the model is known)',
+    after: clearField,
+  },
+  {
+    name: 'controls-sheet',
+    route: '/chat/design',
+    ready: 'Designer',
+    act: openControls,
+    check:
+      'Agent controls: “Designer · Opus 5.5 · High”, then Model (Engine’s default ticked, saying it is Opus 5.5 now; “Switch to Codex…” under it), Effort (High ticked), how much it does on its own, Usage, More about Designer',
+    pages: 3,
+    after: closeAndClear,
+  },
+  {
+    name: 'controls-effort-changed',
+    route: '/chat/design',
+    ready: 'Designer',
+    act: async (page) => {
+      await openControls(page);
+      await page.clickText('Medium');
+      await sleep(900);
+      await closeSheet(page);
       await sleep(600);
     },
     check:
-      'The engine chip (Claude Code, with a small chevron) opened a sheet: the engine’s other models, then “Switch to Codex…”, then Cancel',
-    after: async (page) => {
-      await page.eval(`document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' }))`);
-      await clearField(page);
-    },
-  },
-  {
-    name: 'composer-engine-switched',
-    route: '/chat/design',
-    ready: 'Designer',
-    act: async (page) => {
-      await page.type('Can you pull last week’s numbers together for the Monday review, and flag anything that moved more than ten percent?');
-      await sleep(700);
-      await tapChip(page);
-      await sleep(500);
-      await page.clickText('Switch to Codex…');
-      await sleep(500);
-      await page.clickText('GPT-5 Codex');
-      await sleep(900);
-    },
-    check:
-      'The chip reads Codex GPT-5 Codex and the line over the field says “Now on Codex · GPT-5 Codex. It has the conversation so far.”',
+      'Back in the chat: one quiet line “Now on Claude Code’s default model · Medium from its next message”, and the chip reads “Opus 5.5 · Medium”',
     after: clearField,
   },
   {
-    name: 'composer-engine-busy',
+    name: 'controls-busy',
     route: '/chat/ops',
     ready: 'Ops',
-    act: async (page) => {
-      await page.type('and then the weekly summary');
-      await sleep(500);
-      await tapChip(page);
-      await sleep(500);
-    },
-    check: 'Ops is mid-turn: the chip is dimmed and the line over the field says to switch when the turn ends',
-    after: clearField,
+    act: openControls,
+    check:
+      'Ops is mid-turn: the sheet says to change the model and effort when this turn ends, their rows dimmed; the level stays open',
+    pages: 2,
+    after: closeAndClear,
   },
 ];
 const TORTURE = [

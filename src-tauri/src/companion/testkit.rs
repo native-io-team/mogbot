@@ -85,6 +85,7 @@ pub fn stored_agent() -> Agent {
             "pendingApprovals": 1,
             "engine": "claude",
             "model": "opus",
+            "effort": "high",
             "context": { "used": 30_099, "window": 200_000, "at": 1_762_290_000_000_i64 },
             "muted": false,
             "checkIns": check_ins(),
@@ -1097,6 +1098,7 @@ impl Backend for Stub {
         agent.unread = 0;
         agent.pending_approvals = 0;
         agent.model = None;
+        agent.effort = None;
         agent.context = None;
         agent.check_ins.clear();
         agent.permissions.clear();

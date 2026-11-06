@@ -1741,6 +1741,7 @@ mod tests {
             pending_approvals: 0,
             engine: Default::default(),
             model: None,
+            effort: None,
             new_engine: false,
             context: None,
             routine_model: None,
