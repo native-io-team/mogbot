@@ -1838,6 +1838,28 @@ pub fn enqueue_scheduled(
     );
 }
 
+/// Queue a message another assistant sent the Chief over Remote Access
+/// (`ask_chief`). It's outside text: the turn is capped and sealed the same
+/// way as any other text that didn't come from the user here.
+pub fn enqueue_assistant(app: &AppHandle, agent_id: &str, text: String) {
+    push(
+        app,
+        agent_id,
+        Inbound {
+            id: String::new(),
+            text,
+            from: From::User,
+            reply: false,
+            routine: false,
+            ticket: None,
+            room: None,
+            outside: true,
+            resume: 0,
+            typed: None,
+        },
+    );
+}
+
 /// Queue a "When…" routine's wake: like a scheduled one, but what it
 /// carries came from outside (see [`from_outside`]).
 pub fn enqueue_from_outside(app: &AppHandle, agent_id: &str, text: String, ticket: String) {
