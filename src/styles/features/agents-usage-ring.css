@@ -39,7 +39,7 @@
 .agent-usage-ring__dial[data-empty] {
   background: none;
   mask: none;
-  border: var(--border-width-default) dashed var(--border-strong);
+  border: var(--border-width-default) dashed var(--text-muted);
 }
 
 .ss-dropdown__menu.agent-usage {
