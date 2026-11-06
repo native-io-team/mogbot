@@ -713,10 +713,15 @@ fn find_asks(args: &[&str], ctx: &Ctx, outside: bool, known: bool) -> bool {
                 return true;
             }
             for root in &roots {
-                let words: Vec<String> = inner
+                let found = format!("{}/x", root.trim_end_matches('/'));
+                let mut words: Vec<String> = inner
                     .iter()
-                    .map(|w| if *w == "{}" { format!("{root}/x") } else { w.to_string() })
+                    .map(|w| if *w == "{}" { found.clone() } else { w.to_string() })
                     .collect();
+                // What it finds is an argument even where the line lost `{}`.
+                if !inner.contains(&"{}") {
+                    words.push(found);
+                }
                 if simple_asks(&words, ctx, outside, known || is_abs(root)) {
                     return true;
                 }
@@ -735,9 +740,13 @@ fn leaks_secret(prog: &str, args: &[&str], ctx: &Ctx) -> bool {
     use super::egress::{carries_secret, header_carries_secret, holds_secret, secret_name};
     let secrets = &ctx.secrets;
     let urls = || args.iter().copied().filter(|a| a.contains("://"));
-    // A secret sent to this Mac doesn't leave it.
+    // A secret sent to this Mac doesn't leave it (`localhost:3000/api`).
     let off_mac = || {
-        let named: Vec<&str> = urls().collect();
+        let named: Vec<&str> = args
+            .iter()
+            .copied()
+            .filter(|a| !a.starts_with('-') && (a.contains("://") || local_host(a)))
+            .collect();
         named.is_empty() || !named.iter().all(|a| local_host(a))
     };
     let url_leaks = || urls().any(|u| carries_secret(u, secrets));
