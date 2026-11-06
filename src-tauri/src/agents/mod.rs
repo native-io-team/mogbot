@@ -128,6 +128,7 @@ pub mod wallet;
 pub mod watch;
 pub mod watch_seal;
 pub mod work;
+pub mod workplace;
 
 use crate::errors::CommandError;
 

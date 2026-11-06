@@ -44,7 +44,15 @@ import { PixelLoaderRings } from './PixelLoaderRings';
 import { SpotifyWidget } from './SpotifyWidget';
 import { RemoteAccessIndicator } from '../remote/RemoteAccessIndicator';
 import { PhoneIndicator } from '../phone/PhoneIndicator';
-import { useProjectAgents } from './useProjectAgents';
+import {
+  atWorkLines,
+  openAgentChat,
+  useAgentsAtWork,
+  useProjectAgents,
+  type AtWorkLine,
+} from './useProjectAgents';
+import { ProjectAtWork } from './ProjectAtWork';
+import { useNow } from '../../hooks/useNow';
 import { UpdateBanner } from '../UpdateBanner';
 import { NewAccountModal } from '../accounts/NewAccountModal';
 import { RenameProjectModal } from '../dashboard/RenameProjectModal';
@@ -775,7 +783,23 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
   const filter = '';
   const openPalette = useOpenPalette();
   const [collapsed, setCollapsed] = useState<Record<SectionId, boolean>>(readCollapsed);
-  const projectAgents = useProjectAgents(currentProjectPath, onGoAgents);
+  // Agents at work in a project (bound, or a turn working in its folder):
+  // under each project's row, and in the open project's Agents section.
+  const agentsAtWork = useAgentsAtWork(Boolean(onGoAgents));
+  const anyAtWork = agentsAtWork.some((a) => a.status.state !== 'idle');
+  const now = useNow(anyAtWork, 5_000);
+  const projectAgents = useProjectAgents(agentsAtWork, currentProjectPath, onGoAgents, now);
+  const openAgent = onGoAgents ? (id: string) => openAgentChat(onGoAgents, id) : undefined;
+  const atWorkProjects = useMemo(
+    () => [
+      ...new Set(
+        agentsAtWork
+          .filter((a) => a.status.state !== 'idle' && !a.hidden)
+          .flatMap((a) => (a.status.work?.project ? [a.status.work.project] : []))
+      ),
+    ],
+    [agentsAtWork]
+  );
   const [projectExpanded, setProjectExpanded] =
     useState<Record<string, boolean>>(readProjectExpanded);
   // Groups default to open at mount — we deliberately don't persist
@@ -1044,6 +1068,22 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
         isCurrent: currentFamily === family,
       };
     });
+    // A project an agent is at work in shows here even with nothing open in
+    // it, unless it's pinned (it shows there) or already listed.
+    for (const path of atWorkProjects) {
+      const family = familyKeyOf(path);
+      if (pinnedPaths.has(path) || pinnedPaths.has(family)) continue;
+      if (rows.some((r) => r.projectPath === family)) continue;
+      rows.push({
+        projectPath: family,
+        fallbackName: basename(family) || 'Project',
+        status: 'inactive',
+        agentStatus: 'idle',
+        unreadCount: 0,
+        memoryBytes: 0,
+        isCurrent: currentFamily === family,
+      });
+    }
     // Stable name order (matches useProjectNumberShortcuts) so swapping
     // between two active projects doesn't reorder rows.
     rows.sort((a, b) => {
@@ -1059,7 +1099,14 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
       );
     });
     return rows;
-  }, [activeProjectOrder, pinnedPaths, currentFamily, registryVersion, familiesVersion]);
+  }, [
+    activeProjectOrder,
+    pinnedPaths,
+    currentFamily,
+    registryVersion,
+    familiesVersion,
+    atWorkProjects,
+  ]);
 
   // Keep stale ranks harmlessly in storage. SessionRegistry can be empty for
   // the first render while persisted sessions are still being restored; an
@@ -1247,6 +1294,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
         ? () => onUnpinProject(row.projectPath)
         : undefined;
     const isPinned = pinnedPaths.has(row.projectPath);
+    const atWork = atWorkLines(agentsAtWork, row.projectPath, now);
     const togglePin = onTogglePinProject
       ? (shouldPin: boolean) => {
           void onTogglePinProject(row.projectPath, shouldPin);
@@ -1307,7 +1355,9 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
         isCurrent={isCurrent}
         compact={!!isSidebarHidden}
         isExpanded={expanded}
-        isWorking={workingProjectFamilies.has(familyRootOf(row.projectPath))}
+        isWorking={workingProjectFamilies.has(familyRootOf(row.projectPath)) || atWork.length > 0}
+        atWork={atWork}
+        onOpenAgent={openAgent}
         serverSnapshot={serverSnapshot}
         shortcutNumber={shortcutNumberFor(row)}
         onToggleExpand={() => toggleProjectExpanded(row.projectPath)}
@@ -2240,9 +2290,15 @@ function ProjectGroup({
   sortable,
   sortIndex,
   sortGroup = 'pinned',
+  atWork = [],
+  onOpenAgent,
   children,
 }: {
   row: PinnedProjectRow;
+  /** Agents at work in this project right now, one line each. */
+  atWork?: AtWorkLine[];
+  /** Opens an agent's chat (Agents mode). */
+  onOpenAgent?: (agentId: string) => void;
   isCurrent: boolean;
   compact: boolean;
   isExpanded: boolean;
@@ -2278,7 +2334,9 @@ function ProjectGroup({
   const snap = sessionRegistry.snapshot(row.projectPath);
   const snapshotActivity = projectActivityStatus(row, snap?.terminalTabs);
   const activityStatus: ProjectActivityStatus =
-    snapshotActivity === 'idle' && isWorking ? 'working' : snapshotActivity;
+    (snapshotActivity === 'idle' || snapshotActivity === 'closed') && isWorking
+      ? 'working'
+      : snapshotActivity;
   const serverDot = serverStatusDot(serverSnapshot.status);
   const isExpandedBackgroundServerReady =
     isExpanded && !isCurrent && serverSnapshot.status === 'ready';
@@ -2424,6 +2482,7 @@ function ProjectGroup({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
+      {!compact && <ProjectAtWork lines={atWork} onOpenAgent={onOpenAgent} />}
       {!compact && isExpanded && children && <div className="sidebar-project-body">{children}</div>}
     </>
   );

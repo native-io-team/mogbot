@@ -2842,6 +2842,9 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         }
         let since = store::now_ms();
         super::work::begin(&agent_id, since);
+        // A bound agent works in its project (its copy is the project's).
+        let bound = store::get(&agent_id).ok().and_then(|a| a.project);
+        super::workplace::begin(&agent_id, bound.as_deref().map(std::path::Path::new));
         super::results::discard(&agent_id);
         if let Some(copy) = &made {
             let label = format!(
@@ -4083,6 +4086,7 @@ async fn run_turn(
                         }
                         Step::Action(action) => {
                             note_acted(agent_id);
+                            super::workplace::note(app, agent_id, &layout.cwd, &action);
                             let doing = super::work::on_action(agent_id, action, store::now_ms());
                             if status_of(agent_id).state != "waiting" {
                                 set_status(app, agent_id, Status { state: "working", activity: Some(doing), since: Some(started), work: None, room: None });

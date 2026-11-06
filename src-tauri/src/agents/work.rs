@@ -193,6 +193,10 @@ pub struct TurnWork {
     /// when the last sign of progress was. "No progress for 5 min".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quiet_since: Option<i64>,
+    /// Live only: the project folder the turn is working in
+    /// (`agents::workplace`), so the Projects sidebar can show it there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
 }
 
 /// A tool call, as the parsers describe it.
@@ -211,6 +215,9 @@ pub struct Action {
     pub ask: String,
     /// Full paths it edits, counted once the edit comes back successful.
     pub files: Vec<String>,
+    /// Other paths it reads or searches (`Read`, `Grep`, `Glob`), for
+    /// finding the codebase it works in (`agents::workplace`). Memory only.
+    pub paths: Vec<String>,
     /// The project a project-scoped call names, so its screenshot finds it.
     pub project: Option<String>,
     /// A tool known to take a while ([`super::describe`]).
@@ -375,6 +382,21 @@ pub fn describe_tool(name: &str, input: Option<&Value>) -> Option<Action> {
         let (server, tool) = rest.split_once("__").unwrap_or(("", rest));
         return Some(other_mcp(server, tool, &field));
     }
+    let looked_at: Vec<String> = ["file_path", "notebook_path", "path"]
+        .iter()
+        .filter_map(|k| field(k))
+        .collect();
+    let mut a = describe_builtin(name, &field)?;
+    if a.paths.is_empty()
+        && a.files.is_empty()
+        && matches!(name, "Read" | "NotebookRead" | "Grep" | "Glob" | "LS")
+    {
+        a.paths = looked_at;
+    }
+    Some(a)
+}
+
+fn describe_builtin(name: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Action> {
     Some(match name {
         "Read" | "NotebookRead" => match field("file_path").or_else(|| field("notebook_path")) {
             Some(path) => {
@@ -528,6 +550,7 @@ fn act(
         doing: doing.into(),
         ask: ask.into(),
         files: Vec::new(),
+        paths: Vec::new(),
         project: None,
         slow: None,
         command: None,
@@ -1732,9 +1755,14 @@ pub fn live(agent_id: &str) -> Option<TurnWork> {
             }),
             last_sign_at: Some(live.last_sign),
             quiet_since: live.quiet_since,
+            project: None,
         }
     })
     .filter(|w| w.step_count > 0 || w.current.is_some() || w.quiet_since.is_some())
+    .map(|mut w| {
+        w.project = super::workplace::working_in(agent_id);
+        w
+    })
 }
 
 /// The whole timeline so far, as it would be kept if the turn ended now
@@ -1774,6 +1802,7 @@ pub fn keep_under(app: &AppHandle, message: &AgentMessage, mut work: TurnWork, n
 
 /// The agent is gone: so is any timeline it was keeping.
 pub fn forget_agent(agent_id: &str) {
+    super::workplace::forget_agent(agent_id);
     LIVE.lock()
         .unwrap_or_else(|e| e.into_inner())
         .remove(agent_id);

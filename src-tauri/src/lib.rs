@@ -13,6 +13,9 @@
 
 pub mod agent;
 pub mod agent_bridge;
+// Prototype only: docs/internal/agent-browser.md.
+#[cfg(all(feature = "agent-browser", unix))]
+pub mod agent_browser;
 pub mod agents;
 pub mod brand;
 pub mod cache;

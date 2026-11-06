@@ -392,6 +392,7 @@ pub fn live_work() -> crate::agents::work::TurnWork {
         }),
         last_sign_at: Some(1_762_290_500_000),
         quiet_since: Some(1_762_290_420_000),
+        project: None,
     }
 }
 
