@@ -393,6 +393,7 @@ pub fn live_work() -> crate::agents::work::TurnWork {
         last_sign_at: Some(1_762_290_500_000),
         quiet_since: Some(1_762_290_420_000),
         project: None,
+        own_browser: false,
     }
 }
 
@@ -2065,7 +2066,52 @@ pub fn settings_card() -> crate::agents::store::AgentMessage {
         from_outside: None,
         front: None,
         settings: Some(proposal),
+        plan: None,
     });
+    m
+}
+
+/// "Do these under your name?" as `ask_plan` raises it: one card, the whole plan.
+pub fn plan_card() -> crate::agents::store::AgentMessage {
+    use crate::agents::plan_grant::{self, Kind, Plan, PlanAction};
+    use crate::agents::store::MessageKind;
+    let mut m = crate::agents::runner::new_message(AGENT, MessageKind::Approval, "");
+    m.id = "m42".into();
+    m.ts = 1_762_290_200_000;
+    let action = |kind, target: &str, summary: &str| PlanAction {
+        kind,
+        target: target.into(),
+        summary: summary.into(),
+    };
+    let plan = Plan {
+        actions: vec![
+            action(
+                Kind::Deploy,
+                "shippy",
+                "Redeploy shippy's production on Vercel",
+            ),
+            action(
+                Kind::Issue,
+                "julian/shippy",
+                "Open an issue about the failed build",
+            ),
+            action(
+                Kind::Comment,
+                "julian/shippy",
+                "Comment on #12 with the fix",
+            ),
+        ],
+        why: Some("Production is down since this morning's push".into()),
+    };
+    let mut approval = crate::agents::mcp::new_card(
+        "q14".into(),
+        plan_grant::TITLE.into(),
+        plan_grant::card_detail(&plan),
+        None,
+    );
+    approval.summary = Some(plan_grant::plan_summary(&plan));
+    approval.plan = Some(plan);
+    m.approval = Some(approval);
     m
 }
 
@@ -2104,6 +2150,7 @@ pub fn login_card() -> crate::agents::store::AgentMessage {
         connector: None,
         set_aside: None,
         settings: None,
+        plan: None,
         from_outside: None,
         login: Some(LoginRequest {
             service: "gmail".into(),

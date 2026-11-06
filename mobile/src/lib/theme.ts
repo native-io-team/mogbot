@@ -327,12 +327,14 @@ export const iconSize = { micro: 10, inline: 12, body: 16, button: 20, hero: 28 
 export const typingDot = { size: 5, gap: space.xs, lift: 1.5 } as const;
 
 /**
- * The message field: a chunky capsule of the system's glass (components/Glass.tsx),
- * like the tab bar's. One line is a 48pt pill and the corner stays 24 as it
- * grows, so several lines read as a rounded rectangle rather than a blob.
- * The + is a 48pt glass circle (as tall as one line); send, the mic and Stop
- * are 40pt circles inside the field, 4pt in from its edge. All sit on the
- * last line as the field grows. Every one of them is a 44pt target or more.
+ * The message field, as Claude's own: one capsule of the system's glass
+ * (components/Glass.tsx), like the tab bar's. Empty or one line it's a 48pt
+ * pill with everything inside it: the + at the left, the words, then the
+ * mic, Stop and send at the right, each a 40pt circle 4pt in from the edge
+ * (concentric with the 24pt corner). Once the words wrap, or there are files
+ * or it's listening, it becomes a card with the same 24pt corner: files on
+ * top, the words across its whole width, and the buttons in a row under them.
+ * Every one of them is a 44pt target or more.
  *
  * `line` and `corner` are the user bubble's (components/chat.tsx), which
  * keeps iMessage's 20pt line and 18pt corner; the field has its own.
@@ -348,6 +350,8 @@ export const composer = {
   padV: 13,
   padLeft: 18,
   padRight: 8,
+  /** From the + to the words beside it, in the pill. */
+  afterLead: 8,
   height: 48,
   fieldCorner: 24,
   /** Lines before it scrolls inside. */
@@ -359,7 +363,6 @@ export const composer = {
    */
   fade: 24,
   fadeBands: 12,
-  attach: 48,
   send: 40,
   /** Send's inset from the field's edge. */
   inset: 4,
@@ -369,6 +372,17 @@ export const composer = {
    * back down to this, so the field never touches the keys.
    */
   keyboardGap: 10,
+  /**
+   * Dictating, the field is a card (as Claude's own dictation): the words
+   * across its whole width on top with a caret after the last one, and under
+   * them a row of ×, the waveform, Stop and Send. The caret is the system
+   * caret's 2pt bar, a little shorter than the line, dropped to sit on the
+   * descender as a text input's does. It blinks at `caretBlink` per half.
+   */
+  caretWidth: 2,
+  caretHeight: 20,
+  caretDrop: 4,
+  caretBlink: 530,
 } as const;
 
 /**
@@ -381,11 +395,12 @@ export const composer = {
 export const chatFade = { height: 28, bands: 14 } as const;
 
 /**
- * The dictation waveform (`components/Waveform.tsx`), in the slim row over the
- * field with the time (never inside it: beside the words it squeezed them to
- * a few per line): 2pt bars 2pt apart, a dot at silence and 18pt at full
- * voice, the row's height. Under Reduce Motion a 2pt-thick meter of the same
- * width stands in. Twelve bars, about 0.85 s of voice.
+ * The dictation waveform (`components/Waveform.tsx`), in the dictation card's
+ * bottom row between × and Stop (under the words, never beside them: there it
+ * squeezed them to a few per line): 2pt bars 2pt apart, a dot at silence and
+ * 18pt at full voice. It fills the row, as many bars as fit; `bars` is the
+ * count where it has a fixed width. Under Reduce Motion a 2pt-thick meter of
+ * the same width stands in.
  */
 export const waveform = {
   bars: 12,

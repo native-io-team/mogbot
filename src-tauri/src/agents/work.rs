@@ -200,6 +200,10 @@ pub struct TurnWork {
     /// (`agents::workplace`), so the Projects sidebar can show it there.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub project: Option<String>,
+    /// Live only: the agent has a tab open in its own browser (the agents'
+    /// Chrome) right now, so the desk can offer to watch it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub own_browser: bool,
 }
 
 /// A tool call, as the parsers describe it.
@@ -383,6 +387,9 @@ pub fn describe_tool(name: &str, input: Option<&Value>) -> Option<Action> {
     }
     if let Some(rest) = name.strip_prefix("mcp__") {
         let (server, tool) = rest.split_once("__").unwrap_or(("", rest));
+        if server == crate::agent_browser::tools::SERVER_KEY {
+            return Some(own_browser(tool, field("url").as_deref()));
+        }
         return Some(other_mcp(server, tool, &field));
     }
     let looked_at: Vec<String> = ["file_path", "notebook_path", "path"]
@@ -590,6 +597,50 @@ fn browsed(url: Option<&str>) -> Action {
             "open a web page",
         ),
     }
+}
+
+/// The agents' own browser (`agent_browser::tools`): told apart from the
+/// user's Chrome on every step, "Using its own browser · example.com". The
+/// site is the address the call names (`open`, `navigate`); otherwise
+/// [`on_action`] fills in the page it's on.
+pub const OWN_BROWSER: &str = "its own browser";
+
+fn own_browser(tool: &str, url: Option<&str>) -> Action {
+    let kind = match tool {
+        "screenshot" => StepKind::Screenshot,
+        _ => StepKind::Web,
+    };
+    let site = url.and_then(site_of);
+    let tail = site.map(|h| format!(" · {h}")).unwrap_or_default();
+    act(
+        kind,
+        format!("Used {OWN_BROWSER}{tail}"),
+        format!("Using {OWN_BROWSER}{tail}"),
+        format!("use {OWN_BROWSER}{tail}"),
+    )
+}
+
+/// A web address's host, for a step: "example.com", never the path or query.
+fn site_of(url: &str) -> Option<String> {
+    super::browser_gate::host_of(url)
+        .map(|h| h.trim_start_matches("www.").to_string())
+        .filter(|h| !h.is_empty())
+}
+
+/// An own-browser step that didn't name a site: the page that agent's
+/// browser is on.
+fn with_site(agent_id: &str, mut action: Action) -> Action {
+    let bare = format!("Used {OWN_BROWSER}");
+    if action.label != bare {
+        return action;
+    }
+    let page = super::browser_gate::page_of(&super::browser_gate::agents_key(agent_id));
+    if let Some(h) = page.url.as_deref().and_then(site_of) {
+        action.label = format!("{bare} · {h}");
+        action.doing = format!("Using {OWN_BROWSER} · {h}");
+        action.ask = format!("use {OWN_BROWSER} · {h}");
+    }
+    action
 }
 
 /// Our own tools (the agent bridge), each in past-tense words.
@@ -1813,6 +1864,7 @@ pub fn begin(agent_id: &str, now: i64) {
 
 /// A tool call the turn made. Its working-line words are returned.
 pub fn on_action(agent_id: &str, action: Action, now: i64) -> String {
+    let action = with_site(agent_id, action);
     let doing = clean(&action.doing);
     with_live(agent_id, |live| live.action(action, now));
     doing
@@ -1911,11 +1963,13 @@ pub fn live(agent_id: &str) -> Option<TurnWork> {
             last_sign_at: Some(live.last_sign),
             quiet_since: live.quiet_since,
             project: None,
+            own_browser: false,
         }
     })
     .filter(|w| w.step_count > 0 || w.current.is_some() || w.quiet_since.is_some())
     .map(|mut w| {
         w.project = super::workplace::working_in(agent_id);
+        w.own_browser = crate::agent_browser::service::has_tabs(agent_id);
         w
     })
 }

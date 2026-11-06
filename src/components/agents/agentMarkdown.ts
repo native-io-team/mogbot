@@ -82,8 +82,12 @@ function alignFigures(tokens: Token[]): void {
 }
 
 export type Segment =
-  | { type: 'html'; html: string }
-  | { type: 'code'; text: string; lang?: string };
+  /**
+   * `parts`, from the streaming parser only: the run's top-level blocks, one
+   * HTML string each (joined, they are `html`). A run drawn from its parts
+   * keeps the DOM of every block that didn't change (`ProseRun`).
+   */
+  { type: 'html'; html: string; parts?: string[] } | { type: 'code'; text: string; lang?: string };
 
 /** Prose renders as sanitized HTML; code blocks render as components, so they can carry Copy. */
 export function toSegments(text: string): Segment[] {
@@ -122,20 +126,23 @@ function renderPiece(token: Token, links: TokensList['links']): Piece {
   return { type: 'html', html: sanitizeMessageHtml(markdown.parser(list)) };
 }
 
-/** Consecutive HTML pieces are one run, as in `toSegments`. */
+/** Consecutive HTML pieces are one run, as in `toSegments`; each keeps its own part. */
 function joinPieces(pieces: Piece[]): Segment[] {
   const segments: Segment[] = [];
   let html: string[] | null = null;
+  const flush = () => {
+    if (html) segments.push({ type: 'html', html: html.join(''), parts: html });
+    html = null;
+  };
   for (const piece of pieces) {
     if (piece.type === 'code') {
-      if (html) segments.push({ type: 'html', html: html.join('') });
-      html = null;
+      flush();
       segments.push(piece);
     } else {
       (html ??= []).push(piece.html);
     }
   }
-  if (html) segments.push({ type: 'html', html: html.join('') });
+  flush();
   return segments;
 }
 

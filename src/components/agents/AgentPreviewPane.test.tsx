@@ -29,6 +29,20 @@ vi.mock('../../lib/agentPreview', async (orig) => ({
     return Promise.resolve(() => undefined);
   },
 }));
+const fixApi = vi.hoisted(() => ({
+  previewFixState: vi.fn(),
+  askToFixPreview: vi.fn(),
+  handlers: [] as (() => void)[],
+}));
+vi.mock('../../lib/agentPreviewFix', async (orig) => ({
+  ...(await orig<typeof import('../../lib/agentPreviewFix')>()),
+  previewFixState: fixApi.previewFixState,
+  askToFixPreview: fixApi.askToFixPreview,
+  onPreviewFix: (h: () => void) => {
+    fixApi.handlers.push(h);
+    return Promise.resolve(() => undefined);
+  },
+}));
 vi.mock('../../lib/window', () => ({
   findAndReservePort: vi.fn((_path: string, port: number) => Promise.resolve(port + 1)),
   getWindowLabel: () => 'main',
@@ -59,6 +73,7 @@ vi.mock('../../contexts/ToastContext', async (orig) => ({
 
 import { AgentPreviewPane } from './AgentPreviewPane';
 import { devServerConsentStore } from '../../lib/devServerConsent';
+import { paneAgentFor, type PreviewFix } from '../../lib/agentPreviewFix';
 
 const agent = {
   id: 'site',
@@ -99,10 +114,12 @@ beforeEach(() => {
   api.startPreviewTest.mockResolvedValue({});
   api.stopPreviewTest.mockResolvedValue(true);
   api.attachPreviewPane.mockResolvedValue(undefined);
+  fixApi.previewFixState.mockResolvedValue(null);
 });
 
 afterEach(() => {
   api.handlers.length = 0;
+  fixApi.handlers.length = 0;
   vi.clearAllMocks();
   devServerConsentStore.clear(TARGET.path);
 });
@@ -274,6 +291,116 @@ describe('Test it', () => {
     );
     await screen.findByTitle('Preview of harbor-bakery');
     expect(screen.queryByText('Starting the test…')).toBeNull();
+  });
+});
+
+describe('a site that stopped by itself', () => {
+  const STOPPED = { status: 'stopped', address: 'localhost:4311' } as const;
+  const fix = (phase: PreviewFix['phase'], at = Date.now()): PreviewFix => ({
+    path: TARGET.path,
+    agentId: 'site',
+    agentName: 'Site Builder',
+    phase,
+    reason: 'a compile error',
+    at,
+  });
+  const open = vi.fn();
+  const pane = (a: Agent = agent, s = server(STOPPED)) =>
+    render(
+      <AgentPreviewPane
+        agent={a}
+        request={request}
+        server={s}
+        onClose={vi.fn()}
+        onOpenInWorkspace={open}
+      />
+    );
+
+  it('shows the agent fixing it while its turn runs, the workspace a quiet link', async () => {
+    fixApi.previewFixState.mockResolvedValue(fix('fixing'));
+    const busy = { ...agent, status: { state: 'working', activity: null, since: 1 } } as Agent;
+    pane(busy);
+    expect(await screen.findByText('Site Builder is fixing it…')).toBeTruthy();
+    expect(screen.getByText('The site stopped: a compile error.')).toBeTruthy();
+    expect(screen.queryByText(/The workspace shows why/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /Ask Site Builder/ })).toBeNull();
+    const links = screen.getAllByRole('button', { name: 'Open in workspace' });
+    fireEvent.click(links[links.length - 1]);
+    expect(open).toHaveBeenCalledWith(TARGET.path);
+  });
+
+  it('a fix that ended with the site still down offers to ask', async () => {
+    fixApi.previewFixState.mockResolvedValue(fix('fixing', Date.now() - 60_000));
+    pane();
+    expect(await screen.findByRole('button', { name: 'Ask Site Builder to fix it' })).toBeTruthy();
+  });
+
+  it('no wake fired: Ask <agent> to fix it, which asks the backend', async () => {
+    fixApi.previewFixState.mockResolvedValue(fix('ask'));
+    fixApi.askToFixPreview.mockResolvedValue(fix('fixing'));
+    pane();
+    fireEvent.click(await screen.findByRole('button', { name: 'Ask Site Builder to fix it' }));
+    await waitFor(() => expect(fixApi.askToFixPreview).toHaveBeenCalledWith('site', TARGET.path));
+    expect(await screen.findByText('Site Builder is fixing it…')).toBeTruthy();
+  });
+
+  it('after two fixes that didn’t hold it says so and offers to ask again', async () => {
+    fixApi.previewFixState.mockResolvedValue(fix('gave-up'));
+    pane();
+    expect(await screen.findByText('The site keeps stopping: a compile error.')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ask Site Builder again' })).toBeTruthy();
+  });
+
+  it('an event from the backend is read again for this folder', async () => {
+    pane();
+    await waitFor(() => expect(fixApi.handlers.length).toBeGreaterThan(0));
+    fixApi.previewFixState.mockResolvedValue(fix('fixing'));
+    act(() => {
+      for (const h of fixApi.handlers) h();
+    });
+    expect(await screen.findByText('Site Builder is fixing it…')).toBeTruthy();
+  });
+
+  it('with no agent owning it, the workspace line stays', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    pane();
+    // A beat to hear who owns it, without a call to action meanwhile.
+    expect(await screen.findByText('The site stopped running.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Ask / })).toBeNull();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(2_500);
+    });
+    expect(
+      await screen.findByText(
+        'The site stopped running. The workspace shows why and can start it again.'
+      )
+    ).toBeTruthy();
+    vi.useRealTimers();
+  });
+
+  it('the frame comes back once the server is up again', async () => {
+    fixApi.previewFixState.mockResolvedValue(fix('fixing'));
+    const s = server(STOPPED);
+    const { rerender } = pane(agent, s);
+    await screen.findByText('Site Builder is fixing it…');
+    s.status.mockReturnValue({ status: 'ready', address: 'localhost:4311' });
+    rerender(
+      <AgentPreviewPane
+        agent={agent}
+        request={request}
+        server={{ ...s, version: 1 }}
+        onClose={vi.fn()}
+        onOpenInWorkspace={open}
+      />
+    );
+    expect(await screen.findByTitle('Preview of harbor-bakery')).toBeTruthy();
+  });
+
+  it('the pane says whose preview this folder is while it is open', async () => {
+    const { unmount } = pane();
+    await waitFor(() => expect(paneAgentFor(TARGET.path)).toBe('site'));
+    unmount();
+    expect(paneAgentFor(TARGET.path)).toBeNull();
   });
 });
 

@@ -935,6 +935,10 @@ pub struct AppState {
         deserialize_with = "crate::agents::defaults::lenient"
     )]
     pub agent_defaults: Option<crate::agents::defaults::Saved>,
+    /// A preview that stops by itself goes back to the agent that owns it
+    /// (`agents::preview_fix`). `None` is on.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub agents_fix_previews: Option<bool>,
     /// Whether the dashboard home header is hidden
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dashboard_header_hidden: Option<bool>,

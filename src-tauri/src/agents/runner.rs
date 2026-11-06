@@ -4955,6 +4955,7 @@ async fn run_turn(
         tokio::select! {
             line = lines.next_line() => {
                 let Ok(Some(line)) = line else { break };
+                let line = super::e2e_alias::line(line);
                 last_word = store::now_ms();
                 let Ok(value) = serde_json::from_str::<serde_json::Value>(&line) else { continue };
                 let kind = value.get("type").and_then(|t| t.as_str());
@@ -6165,6 +6166,7 @@ mod tests {
                 from_outside: None,
                 front: None,
                 settings: None,
+                plan: None,
             });
             store::append_message(&card).unwrap();
             let err = begin_fresh(&a.id).unwrap_err().to_string();

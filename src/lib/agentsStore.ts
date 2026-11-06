@@ -460,22 +460,67 @@ function patchStatus(agentId: string, status: AgentStatus) {
   });
 }
 
+/**
+ * Status and draft events, held until the next frame. A reply streams as the
+ * whole text so far every 40 ms and six working agents send a status several
+ * times a second each; applied one by one, each was its own render of the
+ * chat and the sidebar, several between two frames the screen could show.
+ * Only the newest of each per agent matters, so a frame applies at most one
+ * of each, in the order they last arrived (a turn that ended and then began
+ * again ends, then begins). A message, a registry change or a room change
+ * applies what is held first, so nothing lands out of order. A hidden window
+ * gets no frames: the timer is the backstop.
+ */
+type Held =
+  | { kind: 'status'; agentId: string; status: AgentStatus }
+  | { kind: 'draft'; agentId: string; id: string; text: string };
+const held = new Map<string, Held>();
+let heldFrame: number | null = null;
+let heldTimer: ReturnType<typeof setTimeout> | null = null;
+const HELD_BACKSTOP_MS = 50;
+
+function hold(event: Held) {
+  const key = `${event.kind}:${event.agentId}`;
+  held.delete(key);
+  held.set(key, event);
+  if (heldTimer !== null) return;
+  heldTimer = setTimeout(applyHeld, HELD_BACKSTOP_MS);
+  if (typeof requestAnimationFrame === 'function') heldFrame = requestAnimationFrame(applyHeld);
+}
+
+function applyHeld() {
+  if (heldFrame !== null) cancelAnimationFrame(heldFrame);
+  if (heldTimer !== null) clearTimeout(heldTimer);
+  heldFrame = null;
+  heldTimer = null;
+  const events = [...held.values()];
+  held.clear();
+  for (const e of events) {
+    if (e.kind === 'status') patchStatus(e.agentId, e.status);
+    else updateDraft(e.agentId, e.id, e.text);
+  }
+}
+
 function start() {
   const mine = ++generation;
   void refreshAgents();
   void refreshRooms();
   void Promise.all([
-    listen<AgentMessage>(AGENT_EVENTS.message, (e) => upsertMessage(e.payload)),
+    listen<AgentMessage>(AGENT_EVENTS.message, (e) => {
+      applyHeld();
+      upsertMessage(e.payload);
+    }),
     listen<{ agentId: string; status: AgentStatus }>(AGENT_EVENTS.status, (e) =>
-      patchStatus(e.payload.agentId, e.payload.status)
+      hold({ kind: 'status', agentId: e.payload.agentId, status: e.payload.status })
     ),
     listen(AGENT_EVENTS.registry, () => {
+      applyHeld();
       scheduleRefresh();
       // A deleted agent leaves its rooms; a room's row follows its members.
       scheduleRoomsRefresh();
     }),
     listen<{ agentId: string; id: string; text: string }>(AGENT_EVENTS.draft, (e) =>
-      updateDraft(e.payload.agentId, e.payload.id, e.payload.text)
+      hold({ kind: 'draft', ...e.payload })
     ),
     listen(ROOMS_EVENT, () => scheduleRoomsRefresh()),
   ]).then((handles) => {
@@ -488,6 +533,7 @@ function start() {
 }
 
 function stop() {
+  applyHeld();
   generation++;
   unlistens.forEach((h) => h());
   unlistens = [];

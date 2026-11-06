@@ -790,6 +790,8 @@ async fn preview_start(
         None => None,
     };
     let mut done = Vec::new();
+    // Its preview from here on: if the server stops by itself, it hears (`preview_fix`).
+    super::preview_fix::claim(&t.path, &caller.id);
     // Already up: nothing to approve, install or start.
     let port = match shared::running_dev_server(&t.path).await {
         Some(port) => port,
@@ -829,6 +831,7 @@ async fn preview_start(
     } else {
         t.name().to_string()
     };
+    super::preview_fix::running_again(&t.path);
     let mut lines = done;
     lines.insert(0, format!("{whose} is running at http://localhost:{port}."));
     let mut content = Vec::new();

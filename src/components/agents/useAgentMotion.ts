@@ -79,6 +79,23 @@ export function usePresence(visible: boolean) {
 }
 
 /**
+ * True while `value` is, and for `ms` after it stops: "it was just doing
+ * that". A reply's block ending and the next starting a moment later (the
+ * Mac withdrawing narration, a quick read between two paragraphs) shouldn't
+ * open the working line for a blink between them.
+ */
+export function useRecently(value: boolean, ms: number): boolean {
+  const [recent, setRecent] = useState(value);
+  if (value && !recent) setRecent(true);
+  useEffect(() => {
+    if (value || !recent) return;
+    const timer = window.setTimeout(() => setRecent(false), ms);
+    return () => window.clearTimeout(timer);
+  }, [value, recent, ms]);
+  return value || recent;
+}
+
+/**
  * Follow the bottom of a chat while the reader is there.
  *
  * A ResizeObserver on the content keeps the bottom pinned while anything

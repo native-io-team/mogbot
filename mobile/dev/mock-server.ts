@@ -670,9 +670,12 @@ export function createMockServer(opts: MockOptions = {}) {
     'fixtures',
     [
       ...(structuredClone(real.agentsMessages.messages) as AgentMessage[]),
-      // "Change Hiring's settings?" (`propose_settings_change`), as the Mac sends it.
+      // "Change Hiring's settings?" (`propose_settings_change`) and "Do these
+      // under your name?" (`ask_plan`), as the Mac sends them.
       ...real.frames.flatMap((f) =>
-        f.t === 'evt' && f.event.type === 'agents.message' && f.event.message.approval?.settings
+        f.t === 'evt' &&
+        f.event.type === 'agents.message' &&
+        (f.event.message.approval?.settings || f.event.message.approval?.plan)
           ? [structuredClone(f.event.message) as AgentMessage]
           : []
       ),

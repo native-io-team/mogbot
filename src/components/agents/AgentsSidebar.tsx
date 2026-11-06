@@ -44,7 +44,7 @@ import { AgentMark } from './AgentSwitcher';
 import { RoomRow, type RoomActions } from './AgentRoomParts';
 import { sortRooms, type Room } from '../../lib/agentRooms';
 import { useFlipReorder } from './useAgentMotion';
-import { useAttentionOrder } from './useAttentionOrder';
+import { useSteadyList } from './useAttentionOrder';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import {
   avatarMood,
@@ -206,9 +206,15 @@ export function AgentsSidebar({
 }: AgentsSidebarProps) {
   const searching = query.trim().length > 0;
   // By attention (waiting on you, working, recent), held still while the
-  // list is in use so a row never moves under the pointer.
+  // list is in use so a row never moves under the pointer, and re-sorted at
+  // most every few seconds. The Needs-your-OK row pushes the rows under it,
+  // so it comes and goes at those same moments.
   const listRef = useRef<HTMLDivElement>(null);
-  const sorted = useAttentionOrder(agents, listRef);
+  const { agents: sorted, waiting: needsYouShown } = useSteadyList(
+    agents,
+    listRef,
+    needsYouCount > 0
+  );
   const { visible, hidden } = useMemo(
     () => ({
       visible: sorted.filter((a) => !a.hidden || a.id === selectedId),
@@ -218,7 +224,11 @@ export function AgentsSidebar({
   );
   // An agent that just did something slides into place instead of jumping.
   const shown = showHidden ? [...visible, ...hidden] : visible;
-  useFlipReorder(listRef, '[data-agent-id]', shown.map((a) => a.id).join(' '));
+  useFlipReorder(
+    listRef,
+    '[data-agent-id]',
+    `${needsYouShown ? 'needs ' : ''}${shown.map((a) => a.id).join(' ')}`
+  );
 
   // The one row in the Tab order: the open one, else the first.
   const tabStop = shown.some((a) => a.id === selectedId) ? selectedId : shown[0]?.id;
@@ -254,20 +264,24 @@ export function AgentsSidebar({
         <>
           {/* The Chief first, always (as on the phone); then what waits on you. */}
           {visible.filter((a) => a.isMain).map(row)}
-          {/* What's in flight, said where you look: only while something waits on you. */}
-          {needsYouCount > 0 && (
+          {/* What's in flight, said where you look: while something waits on
+              you (held a moment after the last answer, so it doesn't blink). */}
+          {needsYouShown && (
             <button
               type="button"
               tabIndex={0}
               className={`agents-list__needs-you${inFlightOpen ? ' is-current' : ''}`}
+              data-answered={needsYouCount === 0 || undefined}
               aria-current={inFlightOpen ? 'page' : undefined}
               onClick={onOpenInFlight}
               title={`Open What’s in flight · ${kbd('mod', 'J')} jumps to the next one`}
             >
               <span className="agents-list__needs-you-mark" aria-hidden="true">
-                <span className="sidebar-row-dot dot-attention" />
+                {needsYouCount > 0 && <span className="sidebar-row-dot dot-attention" />}
               </span>
-              <span className="agents-list__needs-you-label">Needs your OK · {needsYouCount}</span>
+              <span className="agents-list__needs-you-label">
+                {needsYouCount > 0 ? `Needs your OK · ${needsYouCount}` : 'All answered'}
+              </span>
               <ChevronRightIcon size={10} className="agents-list__needs-you-chevron" />
             </button>
           )}

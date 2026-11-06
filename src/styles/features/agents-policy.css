@@ -188,3 +188,36 @@
   font-size: var(--font-size-body-sm);
   color: var(--text-muted);
 }
+
+/* "Do these under your name?" (`ask_plan`): the plan, numbered. */
+.agent-plan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.agent-plan__actions {
+  margin: 0;
+  padding-left: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+  font-size: var(--font-size-body-md);
+  color: var(--text-primary);
+}
+
+.agent-plan__action {
+  overflow-wrap: anywhere;
+}
+
+.agent-plan__target {
+  margin-left: var(--spacing-xs);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-plan__why {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}

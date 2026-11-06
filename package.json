@@ -25,6 +25,7 @@
     "test:ui": "vitest --ui",
     "test:coverage": "vitest run --coverage",
     "test:scripts": "node --test scripts/*.test.mjs",
+    "test:agents:adversarial": "scripts/agents-adversarial.sh",
     "clean": "rm -rf dist",
     "clean:rust": "cd src-tauri && cargo clean",
     "clean:all": "pnpm clean && rm -rf node_modules && pnpm clean:rust",

@@ -2,27 +2,31 @@
  * The message field. What it will do is always on the button, never hidden
  * behind a gesture:
  *
- * - idle: the mic and **Send**;
- * - working, nothing typed: **Stop**, in place of the mic;
- * - working, with text: Stop and **Send**, which queues (the hint says it
- *   reads it when this turn ends), with **Send now** (interrupt, then send)
- *   in the hint row. Two controls in the field at most, never three;
+ * - idle: the mic and **Send** (dimmed until there's something to send);
+ * - working: the mic, **Stop** and **Send**. The mic stays, so you can talk
+ *   while it works: what you say queues, as what you type does. With words,
+ *   Send queues (the line over the field says it reads it when this turn
+ *   ends) and **Send now** (interrupt, then send) sits at that line's right;
  * - waiting on your OK: Send queues, and no Stop: the card above is the control;
  * - offline: **Send** waits for the Mac (outbox.ts), and says so;
- * - dictating: the field listens (lib/dictation.ts). The words stream into
- *   it, the last few lighter while the recognizer decides, at the field's
- *   full width and wrapping as typing does; the waveform and the time ride
- *   in a slim row over the field (never beside the words), × takes the +'s
- *   place, and two
- *   controls sit in the field, as Grok's dictation has them: **Stop** puts
- *   the words in the field to read and edit (as a few seconds of silence
- *   does), **Send** stops and sends what's on screen at once. × puts the
- *   draft back as it was. Nothing is sent unless you press Send. The
+ * - dictating: the field listens (lib/dictation.ts) and becomes one glass
+ *   card, as Claude's own dictation is. On top, the words stream in across
+ *   its whole width, the last few lighter while the recognizer decides, with
+ *   a caret after them, wrapping as typing does. Under them one row: **×**
+ *   puts the draft back as it was, the waveform fills the middle, **Stop**
+ *   puts the words in the field to read and edit (as a few seconds of
+ *   silence does), **Send** stops and sends what's on screen at once. No +
+ *   while it listens. Nothing is sent unless you press Send. The
  *   keyboard steps away while it listens and comes back after if it was up;
  *   tapping the words is Stop and edit.
  *
- * The field, the + and the × are the system's glass (Glass.tsx) where the
- * phone has it, as the tab bar is; a theme surface where it doesn't.
+ * The field is one piece of the system's glass (Glass.tsx) where the phone
+ * has it, as the tab bar is; a theme surface where it doesn't. Everything is
+ * inside it, as in Claude's own: the + at its left, the mic, Stop and Send at
+ * its right. Once the words wrap, or there are files, or it listens, it's a
+ * card: files on top, the words across it, the buttons in a row under them
+ * (the + and the engine's chip left). The line about queueing runs over it,
+ * full width, with Send now at its right.
  *
  * What's typed, quoted, @mentioned and attached is the chat's draft
  * (drafts.ts): it survives leaving the chat and restarting the app. Files
@@ -33,6 +37,7 @@
 
 import { MAX_ATTACHMENTS, type Agent, type AgentRef } from '@shipstudio/companion-protocol';
 import {
+  Children,
   useCallback,
   useEffect,
   useImperativeHandle,
@@ -66,9 +71,14 @@ import Animated, {
   LinearTransition,
   ZoomIn,
   ZoomOut,
+  cancelAnimation,
+  useAnimatedStyle,
+  useReducedMotion,
   useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
 } from 'react-native-reanimated';
-import { formatElapsed } from '../lib/waveform';
 import { Waveform } from './Waveform';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAccent } from '../lib/accent';
@@ -76,6 +86,7 @@ import { needsYou } from '../lib/agents';
 import { drivenWait } from '../lib/bars';
 import { ConversationBars } from './ConversationBars';
 import {
+  composerControls,
   followsEnd,
   mentionQuery,
   sendMode,
@@ -94,6 +105,7 @@ import {
 } from '../lib/drafts';
 import { admit, pickDocuments, pickPhotos, takePhoto, type PickedFile } from '../lib/files';
 import { haptic } from '../lib/haptics';
+import { engineChip } from '../lib/newAgentDefaults';
 import { OUTBOX_WAIT_MS } from '../lib/outbox';
 import { describeError, send, stop, upload } from '../lib/session';
 import { getApp, useApp, useServed } from '../lib/store';
@@ -107,7 +119,6 @@ import {
   scaledSize,
   space,
   type,
-  waveform,
   PRESSED,
 } from '../lib/theme';
 import { makeStyles, useAppearance, useColors, useTextScale } from '../lib/appearance';
@@ -158,6 +169,9 @@ export function Composer({
   // The Mac's last answer while it's away: "+" stays, disabled, so the field doesn't jump.
   const canAttach = useServed('agents.files');
   const team = useApp((s) => s.overview?.agents ?? NONE);
+  const engines = useApp((s) => s.overview?.engines);
+  // Only from a Mac that lists its engines: never a name guessed here.
+  const chip = useMemo(() => (engines ? engineChip(agent, engines) : null), [agent, engines]);
   const seq = useRef(0);
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   const [micHint, setMicHint] = useState<string | null>(null);
@@ -268,7 +282,7 @@ export function Composer({
   }, [agent.id]);
   const blocked = uploading || staged.some((f) => f.error);
   const mode = sendMode(agent, hasContent);
-  const busy = agent.status.state !== 'idle';
+  const controls = composerControls(agent);
   const waitingOnYou = needsYou(agent);
   // Offline, Send still works: it waits for the Mac in the outbox.
   const canSend = hasContent && !blocked;
@@ -390,25 +404,28 @@ export function Composer({
 
   // Driven on the Mac, an import, the link down: the bars above say those, once.
   // Listening says only where the words go when that's off the phone.
+  const queued =
+    mode === 'queue' && !driven
+      ? waitingOnYou
+        ? `${agent.name} reads it after you answer above`
+        : `${agent.name} reads it when this turn ends`
+      : null;
+  // Listening while it works, the queued line stays, so Send now has its sentence.
   const hint = listening
-    ? listeningNote(dictation.via)
+    ? (listeningNote(dictation.via) ?? queued)
     : problem
       ? problem.text
       : micHint
         ? micHint
         : restored
           ? 'Restored your draft'
-        : !connected
-          ? hasContent
-            ? `Send waits up to ${OUTBOX_WAIT_MS / 60_000} min for ${macName}`
-            : 'What you type stays here'
-          : uploading
-            ? `Uploading ${staged.filter((f) => !f.error).length} of ${attached}…`
-            : mode === 'queue' && !driven
-              ? waitingOnYou
-                ? `${agent.name} reads it after you answer above`
-                : `${agent.name} reads it when this turn ends`
-              : null;
+          : !connected
+            ? hasContent
+              ? `Send waits up to ${OUTBOX_WAIT_MS / 60_000} min for ${macName}`
+              : 'What you type stays here'
+            : uploading
+              ? `Uploading ${staged.filter((f) => !f.error).length} of ${attached}…`
+              : queued;
 
   return (
     <View
@@ -454,22 +471,14 @@ export function Composer({
           </ScrollView>
         </Animated.View>
       )}
-      {(listening || hint || chipNow || fixLabel) && (
+      {(hint || chipNow || fixLabel) && (
         <Animated.View
           entering={FadeIn.duration(150)}
           exiting={FadeOut.duration(100)}
           layout={LinearTransition.duration(150)}
-          style={[styles.hintRow, !canAttach && !listening && { marginLeft: composer.padLeft }]}
+          // Full width over the field, from its left edge to its right.
+          style={styles.hintRow}
         >
-          {/* Listening: the waveform and the time ride in this slim row over the
-              field, never beside the words, so they keep the field's whole width
-              and wrap exactly as typing does. */}
-          {listening && (
-            <View style={styles.listening} testID="dictation-meter">
-              <Waveform level={level} height={waveform.max} />
-              <Elapsed since={dictation.startedAt} />
-            </View>
-          )}
           <T variant="caption" color={colors.textSecondary} style={styles.hint}>
             {hint}
           </T>
@@ -537,105 +546,7 @@ export function Composer({
           ))}
         </View>
       )}
-      {attached > 0 && (
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.tray}
-          keyboardShouldPersistTaps="handled"
-        >
-          {ready.map((f) => (
-            <Animated.View
-              key={f.blobId}
-              entering={ZoomIn.duration(160)}
-              exiting={ZoomOut.duration(120)}
-              layout={LinearTransition.duration(160)}
-            >
-              <StagedTile
-                item={{ key: f.blobId, file: f, progress: 1, blob: f }}
-                onRemove={() => removeFiles(agent.id, [f.blobId])}
-                onRetry={() => {}}
-              />
-            </Animated.View>
-          ))}
-          {staged.map((f) => (
-            <Animated.View
-              key={f.key}
-              entering={ZoomIn.duration(160)}
-              exiting={ZoomOut.duration(120)}
-              layout={LinearTransition.duration(160)}
-            >
-              <StagedTile
-                item={f}
-                onRemove={() => setStaged((list) => list.filter((x) => x.key !== f.key))}
-                onRetry={() => {
-                  patch(f.key, { error: undefined, progress: 0 });
-                  void start(f);
-                }}
-              />
-            </Animated.View>
-          ))}
-        </ScrollView>
-      )}
       <View style={styles.row}>
-        {listening && (
-          // In the +'s place, the same circle: nothing in the row moves.
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Cancel dictation"
-            accessibilityHint="Puts the message back as it was"
-            onPress={dictationCancel}
-            hitSlop={4}
-          >
-            {({ pressed }) => (
-              <Animated.View entering={ZoomIn.duration(160)}>
-                <Glass
-                  interactive
-                  style={[
-                    field.attach,
-                    { width: size.field, height: size.field, borderRadius: size.field / 2 },
-                    pressed && field.pressed,
-                  ]}
-                >
-                  <Icon
-                    name="xmark"
-                    size={iconSize.button}
-                    color={colors.textPrimary}
-                    fallback={<T>×</T>}
-                  />
-                </Glass>
-              </Animated.View>
-            )}
-          </Pressable>
-        )}
-        {canAttach && !listening && (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel="Attach files"
-            disabled={!connected || attached >= MAX_ATTACHMENTS}
-            onPress={attach}
-            hitSlop={4}
-          >
-            {({ pressed }) => (
-              <Glass
-                interactive
-                style={[
-                  field.attach,
-                  { width: size.field, height: size.field, borderRadius: size.field / 2 },
-                  (!connected || attached >= MAX_ATTACHMENTS) && field.off,
-                  pressed && field.pressed,
-                ]}
-              >
-                <Icon
-                  name="plus"
-                  size={iconSize.button}
-                  color={colors.textPrimary}
-                  fallback={<T>+</T>}
-                />
-              </Glass>
-            )}
-          </Pressable>
-        )}
         <ComposerField
           // A new text size remounts the field, so it never keeps a stale height.
           key={`input-${fontScale}`}
@@ -654,7 +565,96 @@ export function Composer({
           label={`Message ${agent.name}`}
           inputRef={input}
           dictation={listening ? { ...dictation.display, onPress: editDictation } : undefined}
+          // The files ride at the card's top, as Claude's own, each with its ×.
+          top={
+            attached > 0 ? (
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={false}
+                contentContainerStyle={styles.tray}
+                keyboardShouldPersistTaps="handled"
+              >
+                {ready.map((f) => (
+                  <Animated.View
+                    key={f.blobId}
+                    entering={ZoomIn.duration(160)}
+                    exiting={ZoomOut.duration(120)}
+                    layout={LinearTransition.duration(160)}
+                  >
+                    <StagedTile
+                      item={{ key: f.blobId, file: f, progress: 1, blob: f }}
+                      onRemove={() => removeFiles(agent.id, [f.blobId])}
+                      onRetry={() => {}}
+                    />
+                  </Animated.View>
+                ))}
+                {staged.map((f) => (
+                  <Animated.View
+                    key={f.key}
+                    entering={ZoomIn.duration(160)}
+                    exiting={ZoomOut.duration(120)}
+                    layout={LinearTransition.duration(160)}
+                  >
+                    <StagedTile
+                      item={f}
+                      onRemove={() => setStaged((list) => list.filter((x) => x.key !== f.key))}
+                      onRetry={() => {
+                        patch(f.key, { error: undefined, progress: 0 });
+                        void start(f);
+                      }}
+                    />
+                  </Animated.View>
+                ))}
+              </ScrollView>
+            ) : undefined
+          }
+          // The + inside the field at its left; listening, × has its place.
+          leading={
+            canAttach && !listening ? (
+              <RoundButton
+                key="attach"
+                label="Attach files"
+                disabled={!connected || attached >= MAX_ATTACHMENTS}
+                onPress={attach}
+                tone="quiet"
+              >
+                <Icon
+                  name="plus"
+                  size={iconSize.button}
+                  color={colors.textPrimary}
+                  fallback={<T>+</T>}
+                />
+              </RoundButton>
+            ) : undefined
+          }
+          chip={!listening && chip ? <EngineChip {...chip} /> : undefined}
         >
+          {/* Listening, the card's row: ×, the waveform filling the middle, Stop, Send. */}
+          {listening && (
+            <RoundButton
+              key="dictation-cancel"
+              label="Cancel dictation"
+              hint="Puts the message back as it was"
+              onPress={dictationCancel}
+              tone="quiet"
+            >
+              <Icon
+                name="xmark"
+                size={iconSize.button}
+                color={colors.textPrimary}
+                fallback={<T>×</T>}
+              />
+            </RoundButton>
+          )}
+          {listening && (
+            <Waveform
+              key="dictation-waveform"
+              level={level}
+              height={size.send}
+              fill
+              style={field.wave}
+            />
+          )}
           {listening && (
             <RoundButton
               key="dictation-stop"
@@ -674,29 +674,28 @@ export function Composer({
               hint="Stops listening and sends what you said"
               disabled={!canSend}
               onPress={dictationSend}
-              tone={canSend ? 'accent' : 'off'}
+              tone="accent"
             >
               <Icon
                 name="arrow.up"
                 size={iconSize.button}
-                color={canSend ? accent.onAccent : colors.textMuted}
-                fallback={<T color={canSend ? accent.onAccent : colors.textMuted}>↑</T>}
+                color={accent.onAccent}
+                fallback={<T color={accent.onAccent}>↑</T>}
               />
             </RoundButton>
           )}
-          {/* While a turn runs the mic steps aside: Stop takes its place, never a third control.
-              Driven on the Mac there is no Stop here, so the mic stays. */}
-          {!listening && (!busy || driven) && (
-            <RoundButton key="mic" label="Dictate" onPress={mic} tone="off">
+          {/* The mic is always there: dictating while a turn runs queues, as typing does. */}
+          {!listening && controls.includes('mic') && (
+            <RoundButton key="mic" label="Dictate" onPress={mic} tone="quiet">
               <Icon
                 name="mic"
                 size={iconSize.button}
-                color={colors.textSecondary}
-                fallback={<T color={colors.textSecondary}>●</T>}
+                color={colors.textPrimary}
+                fallback={<T color={colors.textPrimary}>●</T>}
               />
             </RoundButton>
           )}
-          {!listening && (mode === 'stop' || (mode === 'queue' && !waitingOnYou && !driven)) && (
+          {!listening && controls.includes('stop') && (
             <RoundButton
               key="stop"
               label={`Stop ${agent.name}`}
@@ -707,10 +706,10 @@ export function Composer({
               <View style={styles.stopSquare} />
             </RoundButton>
           )}
-          {!listening && mode !== 'stop' && (
+          {!listening && controls.includes('send') && (
             <RoundButton
               key="send"
-              // Sending while it works queues: the hint above says so, so the button stays an arrow.
+              // Sending while it works queues: the line above says so, so the button stays an arrow.
               label={
                 driven
                   ? `Queue · ${drivenWait(agent.name)}`
@@ -722,13 +721,14 @@ export function Composer({
               }
               disabled={!canSend}
               onPress={() => submit(false)}
-              tone={canSend ? 'accent' : 'off'}
+              // Dimmed until there's something to send, as Claude's own.
+              tone="accent"
             >
               <Icon
                 name="arrow.up"
                 size={iconSize.button}
-                color={canSend ? accent.onAccent : colors.textMuted}
-                fallback={<T color={canSend ? accent.onAccent : colors.textMuted}>↑</T>}
+                color={accent.onAccent}
+                fallback={<T color={accent.onAccent}>↑</T>}
               />
             </RoundButton>
           )}
@@ -739,10 +739,43 @@ export function Composer({
 }
 
 /**
- * The field itself, shared with a session's and a room's composer: a 48pt
- * glass pill at one line that keeps its 24pt corner as it grows to six, then
- * scrolls inside. Its buttons (`children`) sit inside it at the right, on the
- * last line.
+ * What the agent runs on, in the card's row beside the +: the engine, and
+ * its model lighter, as Claude's own model chip. Only what the Mac said.
+ */
+function EngineChip({ engine, model }: { engine: string; model: string | null }) {
+  const colors = useColors();
+  const field = useFieldStyles();
+  const { send } = useComposerSize();
+  return (
+    <View
+      accessible
+      accessibilityRole="text"
+      accessibilityLabel={model ? `Runs on ${engine}, ${model}` : `Runs on ${engine}`}
+      style={[field.chip, { height: send, borderRadius: send / 2 }]}
+    >
+      <T
+        variant="small"
+        color={colors.textPrimary}
+        numberOfLines={1}
+        maxFontSizeMultiplier={chromeScale}
+      >
+        {engine}
+        {model ? <T variant="small" color={colors.textSecondary}>{` ${model}`}</T> : null}
+      </T>
+    </View>
+  );
+}
+
+/**
+ * The field itself, shared with a session's and a room's composer, shaped as
+ * Claude's own. Empty or one line it's a 48pt glass pill: `leading` (the +)
+ * at its left, the words, its buttons (`children`) at its right. Once the
+ * words would wrap there, or `top` holds files, or it's listening, it becomes
+ * a card with the same 24pt corner: `top` first, the words across its whole
+ * width (six lines, then they scroll inside), and one row under them with
+ * `leading` and `chip` at the left and the buttons at the right. Whether the
+ * words wrap is measured on one unwrapped line against the pill's room for
+ * them, so it doesn't flip back and forth as the card gives them more width.
  *
  * Past six lines it follows the newest line, as the words stream in while it
  * listens and as you type at the end (`followsEnd`); with the caret further
@@ -758,6 +791,9 @@ export function ComposerField({
   editable = true,
   inputRef,
   dictation,
+  leading,
+  chip,
+  top,
   children,
 }: {
   value: string;
@@ -773,6 +809,12 @@ export function ComposerField({
    * still being decided is lighter. A tap on them is `onPress`.
    */
   dictation?: { settled: string; deciding: string; onPress: () => void };
+  /** A round button at the field's left: the + (a 40pt `RoundButton`). */
+  leading?: ReactNode;
+  /** Beside `leading` in the card's row, never in the pill. */
+  chip?: ReactNode;
+  /** At the card's top, over the words: the files. Makes it a card. */
+  top?: ReactNode;
   children?: ReactNode;
 }) {
   const colors = useColors();
@@ -806,7 +848,9 @@ export function ComposerField({
     el.style.height = `${el.scrollHeight}px`;
   }, []);
   const follow = () => {
-    if (!followsEnd({ dictating: listening, caret: at.at, length: value.length, before: at.length }))
+    if (
+      !followsEnd({ dictating: listening, caret: at.at, length: value.length, before: at.length })
+    )
       return;
     scroll.current?.scrollToEnd({ animated: placed.current });
     placed.current = true;
@@ -844,69 +888,129 @@ export function ComposerField({
     }
   }, [generation]);
   const empty = dictation ? !dictation.settled && !dictation.deciding : false;
+  // The pill's room for the words: the field less the + and the buttons beside them.
+  const [width, setWidth] = useState(0);
+  const [oneLine, setOneLine] = useState(0);
+  const buttons = Children.toArray(children).length;
+  const slot = size.send + composer.inset;
+  const room =
+    width -
+    (leading ? composer.inset + slot + composer.afterLead : composer.padLeft) -
+    composer.padRight -
+    buttons * slot;
+  const wraps = value.includes('\n') || (width > 0 && oneLine > room);
+  const card = listening || Boolean(top) || wraps;
+  // The words keep their place in the tree whichever shape it is, so the
+  // input (and the keyboard) stays as the pill becomes a card and back.
   return (
-    <Glass style={[field.field, { minHeight: size.field }]}>
-      <View style={field.words}>
-        <ScrollView
-          ref={scroll}
-          style={{ maxHeight: size.maxHeight }}
-          // Listening, it only follows: a tap on the words is Stop and edit.
-          scrollEnabled={!dictation}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          onContentSizeChange={follow}
-          onScroll={onScroll}
-          scrollEventThrottle={16}
+    <Glass
+      style={[field.field, { minHeight: size.field }]}
+      onLayout={(e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width)}
+    >
+      <View
+        pointerEvents="none"
+        accessibilityElementsHidden
+        importantForAccessibility="no-hide-descendants"
+        style={field.measure}
+      >
+        <Text
+          maxFontSizeMultiplier={chromeScale}
+          numberOfLines={1}
+          style={[field.input, field.measureText]}
+          onLayout={(e: LayoutChangeEvent) => setOneLine(e.nativeEvent.layout.width)}
         >
-          {dictation ? (
-            <Pressable
-              onPress={dictation.onPress}
-              accessibilityRole="text"
-              accessibilityLabel={
-                empty ? 'Listening' : `${label}: ${dictation.settled}${dictation.deciding}`
-              }
-              accessibilityHint="Double-tap to stop and edit"
-              accessibilityLiveRegion="polite"
-            >
-              <Text maxFontSizeMultiplier={chromeScale} style={field.input}>
-                {empty ? (
-                  <Text style={{ color: colors.textMuted }}>{placeholder}</Text>
-                ) : (
-                  <>
-                    {dictation.settled}
-                    <Text style={{ color: colors.textSecondary }}>{dictation.deciding}</Text>
-                  </>
-                )}
-              </Text>
-            </Pressable>
-          ) : (
-            <TextInput
-              key={generation}
-              ref={own}
-              maxFontSizeMultiplier={chromeScale}
-              value={value}
-              autoFocus={autoFocus}
-              editable={editable}
-              onChangeText={onChangeText}
-              onSelectionChange={(e) =>
-                setCaret({ at: e.nativeEvent.selection, length: value.length, listening })
-              }
-              onLayout={fitWeb}
-              placeholder={placeholder}
-              placeholderTextColor={colors.textMuted}
-              multiline
-              // The field scrolls around it: the input is always as tall as its words.
-              scrollEnabled={false}
-              style={field.input}
-              selectionColor={accent.accent}
-              keyboardAppearance={appearance}
-              accessibilityLabel={label}
-            />
-          )}
-        </ScrollView>
-        {scrolled && <FieldFade />}
+          {value}
+        </Text>
       </View>
-      {children}
+      {top ? <View style={field.top}>{top}</View> : null}
+      <View style={card ? null : [field.pill, leading ? field.pillLed : null]}>
+        {!card && leading ? leading : null}
+        <View
+          style={[
+            card ? null : field.words,
+            {
+              paddingLeft: card
+                ? composer.padLeft
+                : leading
+                  ? composer.afterLead
+                  : composer.padLeft,
+            },
+          ]}
+        >
+          <ScrollView
+            ref={scroll}
+            style={{ maxHeight: size.maxHeight }}
+            // Listening, it only follows: a tap on the words is Stop and edit.
+            scrollEnabled={!dictation}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            onContentSizeChange={follow}
+            onScroll={onScroll}
+            scrollEventThrottle={16}
+          >
+            {dictation ? (
+              <Pressable
+                onPress={dictation.onPress}
+                accessibilityRole="text"
+                accessibilityLabel={
+                  empty ? 'Listening' : `${label}: ${dictation.settled}${dictation.deciding}`
+                }
+                accessibilityHint="Double-tap to stop and edit"
+                accessibilityLiveRegion="polite"
+              >
+                <Text maxFontSizeMultiplier={chromeScale} style={[field.input, field.cardInput]}>
+                  {empty ? (
+                    <>
+                      <Caret />
+                      <Text style={{ color: colors.textMuted }}>{placeholder}</Text>
+                    </>
+                  ) : (
+                    <>
+                      {dictation.settled}
+                      <Text style={{ color: colors.textSecondary }}>{dictation.deciding}</Text>
+                      <Caret />
+                    </>
+                  )}
+                </Text>
+              </Pressable>
+            ) : (
+              <TextInput
+                key={generation}
+                ref={own}
+                maxFontSizeMultiplier={chromeScale}
+                value={value}
+                autoFocus={autoFocus}
+                editable={editable}
+                onChangeText={onChangeText}
+                onSelectionChange={(e) =>
+                  setCaret({ at: e.nativeEvent.selection, length: value.length, listening })
+                }
+                onLayout={fitWeb}
+                placeholder={placeholder}
+                placeholderTextColor={colors.textMuted}
+                multiline
+                // The field scrolls around it: the input is always as tall as its words.
+                scrollEnabled={false}
+                style={[field.input, card && field.cardInput]}
+                selectionColor={accent.accent}
+                keyboardAppearance={appearance}
+                accessibilityLabel={label}
+              />
+            )}
+          </ScrollView>
+          {scrolled && <FieldFade />}
+        </View>
+        {card ? null : children}
+      </View>
+      {card ? (
+        <View style={field.cardRow}>
+          {leading}
+          {chip}
+          {/* Listening, the waveform fills the middle; otherwise the buttons go right. */}
+          {listening ? null : <View style={field.spacer} />}
+          {children}
+        </View>
+      ) : null}
     </Glass>
   );
 }
@@ -1008,32 +1112,38 @@ export function RoundButton({
   );
 }
 
-/** The time spent listening, beside the waveform: it ticks on the second. */
-function Elapsed({ since }: { since: number }) {
-  const colors = useColors();
-  const [now, setNow] = useState(() => Date.now());
+/**
+ * The caret after the words while it listens, as a text input's: the
+ * accent's 2pt bar on the last line, blinking. Under Reduce Motion it holds
+ * still. It rides inline in the words, so it wraps with them.
+ */
+function Caret() {
+  const accent = useAccent();
+  const still = useReducedMotion();
+  const shown = useSharedValue(1);
   useEffect(() => {
-    if (!since) return;
-    let t: ReturnType<typeof setTimeout>;
-    const tick = () => {
-      const at = Date.now();
-      setNow(at);
-      t = setTimeout(tick, 1000 - ((at - since) % 1000));
-    };
-    tick();
-    return () => clearTimeout(t);
-  }, [since]);
+    if (still) return;
+    const half = { duration: composer.caretBlink };
+    shown.set(withRepeat(withSequence(withTiming(1, half), withTiming(0, half)), -1));
+    return () => cancelAnimation(shown);
+  }, [still, shown]);
+  const blink = useAnimatedStyle(() => ({ opacity: shown.get() }));
   return (
-    <T
-      variant="caption"
-      color={colors.textSecondary}
-      maxFontSizeMultiplier={chromeScale}
-      style={{ fontVariant: ['tabular-nums'] }}
+    <Animated.View
       accessibilityElementsHidden
       importantForAccessibility="no"
-    >
-      {formatElapsed(since ? now - since : 0)}
-    </T>
+      testID="dictation-caret"
+      style={[
+        {
+          width: composer.caretWidth,
+          height: scaledSize(composer.caretHeight),
+          borderRadius: composer.caretWidth / 2,
+          backgroundColor: accent.accent,
+          transform: [{ translateY: scaledSize(composer.caretDrop) }],
+        },
+        blink,
+      ]}
+    />
   );
 }
 
@@ -1062,11 +1172,8 @@ export function useComposerSize() {
 const useFieldStyles = makeStyles((colors) => ({
   field: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'flex-end',
     minHeight: FIELD_MIN,
     borderRadius: composer.fieldCorner,
-    paddingLeft: composer.padLeft - StyleSheet.hairlineWidth,
   },
   input: {
     // As tall as its words, inside the field's scroll (never flex: it would size to the view, not the text).
@@ -1080,18 +1187,41 @@ const useFieldStyles = makeStyles((colors) => ({
     paddingRight: composer.padRight,
   },
   roundSlot: { marginRight: composer.inset, marginBottom: composer.inset },
+  // The pill: the +, the words, the buttons, all on the last line.
+  pill: { flexDirection: 'row', alignItems: 'flex-end' },
+  pillLed: { paddingLeft: composer.inset },
   words: { flex: 1 },
+  // The card: the words keep the input's type and top; at the right as wide as at the left.
+  cardInput: { paddingRight: composer.padLeft, paddingBottom: space.sm },
+  cardRow: { flexDirection: 'row', alignItems: 'flex-end', paddingLeft: composer.inset },
+  spacer: { flex: 1 },
+  top: { paddingTop: space.sm },
+  chip: {
+    justifyContent: 'center',
+    paddingHorizontal: space.md,
+    marginRight: composer.inset,
+    marginBottom: composer.inset,
+    flexShrink: 1,
+    backgroundColor: colors.surfaceSelected,
+  },
+  // One unwrapped line of the words, unseen: is it wider than the pill has room for?
+  // Clipped to the field, so a long line never widens the page (the web build).
+  measure: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    opacity: 0,
+    flexDirection: 'row',
+    overflow: 'hidden',
+  },
+  measureText: { paddingTop: 0, paddingBottom: 0, paddingRight: 0 },
+  // Between × and Stop, centred on them (their slots sit `inset` off the bottom).
+  wave: { marginHorizontal: space.sm, marginBottom: composer.inset },
   round: {
     width: composer.send,
     height: composer.send,
     borderRadius: composer.send / 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  attach: {
-    width: composer.attach,
-    height: composer.attach,
-    borderRadius: composer.attach / 2,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -1110,18 +1240,8 @@ const useStyles = makeStyles((colors) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    // Under the field's text, as the quote is: past the + and the gap, then the field's inset.
-    marginLeft: composer.attach + space.sm + composer.padLeft,
-    marginRight: space.xs,
   },
   hint: { flex: 1 },
-  // Over the field while it listens: as tall as the waveform at full voice.
-  listening: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.sm,
-    minHeight: waveform.max,
-  },
   nowChip: {
     paddingHorizontal: space.md,
     paddingVertical: space.xs,
@@ -1146,8 +1266,7 @@ const useStyles = makeStyles((colors) => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: space.sm,
-    // Its text under the field's: past the + and the gap, less its own rule and inset.
-    marginLeft: composer.attach + space.sm + composer.padLeft - space.md - 2,
+    // Its rule on the field's left edge, as the line above it.
     marginRight: space.md,
     paddingLeft: space.md,
     paddingVertical: space.xs,
@@ -1155,7 +1274,8 @@ const useStyles = makeStyles((colors) => ({
     borderLeftColor: colors.borderStrong,
   },
   row: { flexDirection: 'row', alignItems: 'flex-end', gap: space.sm },
-  tray: { gap: space.sm, paddingTop: space.tight, paddingHorizontal: space.xs },
+  // Inside the card's top: the tiles keep room above and right for their ×.
+  tray: { gap: space.xs, paddingTop: space.xs, paddingHorizontal: space.sm },
   stopSquare: {
     width: 14,
     height: 14,

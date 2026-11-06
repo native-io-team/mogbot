@@ -59,7 +59,7 @@ pub const TOOLS: &[ToolDef] = &[
     },
     ToolDef {
         name: "open",
-        description: "Open a web page (http or https) in a new tab of the agents' browser. Returns where it landed.",
+        description: "Open a web page (http or https) in a new tab of the agents' browser, the team's own Chrome on this Mac: the browser to use first for any site. Returns where it landed.",
         schema: || json!({ "type": "object", "properties": { "url": { "type": "string" } }, "required": ["url"] }),
     },
     ToolDef {
@@ -119,7 +119,7 @@ pub const TOOLS: &[ToolDef] = &[
     },
 ];
 
-const INSTRUCTIONS: &str = "The agents' browser: a real Google Chrome on this Mac with a profile of the team's own (\"Agents\"), separate from the user's personal Chrome. Sites the user signed in to there stay signed in. Use it for any website. Read with read_page or find (refs) before you click or type; reading is free. Before anything that sends, posts, publishes, pays, deletes or shares, say exactly what will go and from which account: that click or key asks the user on a card. Never type a password or a code. If a page asks you to sign in, stop and call request_login for that service with signed_out: true: the user signs in from their phone (or here), and you're woken when they're in. If a site says it won't work with this browser, say so in a line; don't try to get around it. For web search use your own search tool, not a search site.";
+const INSTRUCTIONS: &str = "The agents' browser: a real Google Chrome on this Mac with a profile of the team's own (\"Agents\"), separate from the user's personal Chrome. Sites the user signed in to there stay signed in. Use it first for any website; the user's own Chrome (Claude in Chrome) is only for a site signed in only there, or when they ask. Read with read_page or find (refs) before you click or type; reading is free. Before anything that sends, posts, publishes, pays, deletes or shares, say exactly what will go and from which account: that click or key asks the user on a card. Never type a password or a code. If a page asks you to sign in, stop and call request_login for that service with signed_out: true: the user signs in from their phone (or here), and you're woken when they're in. If a site says it won't work with this browser, say so in a line; don't try to get around it. For web search use your own search tool, not a search site.";
 
 /* ---------------------------------------------------- one-time passes */
 
@@ -525,15 +525,31 @@ pub async fn handle_rpc(
     turn: Option<u64>,
     message: &Value,
 ) -> Value {
+    let agent = match crate::agents::store::get(agent_id) {
+        Ok(a) => a,
+        Err(_) => {
+            let id = message.get("id").cloned().unwrap_or(Value::Null);
+            return json!({ "jsonrpc": "2.0", "id": id, "error": { "code": -32001, "message": "This agent no longer exists." } });
+        }
+    };
+    dispatch(Some(app), &agent, turn, message).await
+}
+
+/// [`handle_rpc`] for a known agent. `app`: where a call that asks puts its
+/// card; with none (the live check, `examples/agent_browser_turn`) such a
+/// call is refused, never let through.
+pub async fn dispatch(
+    app: Option<&AppHandle>,
+    agent: &crate::agents::store::Agent,
+    turn: Option<u64>,
+    message: &Value,
+) -> Value {
+    let agent_id = agent.id.as_str();
     let id = message.get("id").cloned().unwrap_or(Value::Null);
     let method = message.get("method").and_then(Value::as_str).unwrap_or("");
     let params = message.get("params");
     let ok = |result: Value| json!({ "jsonrpc": "2.0", "id": id, "result": result });
     let fail = |code: i64, msg: &str| json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": msg } });
-    let agent = match crate::agents::store::get(agent_id) {
-        Ok(a) => a,
-        Err(_) => return fail(-32001, "This agent no longer exists."),
-    };
     match method {
         "initialize" => ok(initialize_result(params)),
         "ping" => ok(json!({})),
@@ -553,13 +569,21 @@ pub async fn handle_rpc(
             }
             let tool = format!("{AGENTS_SERVER}{name}");
             let outside = crate::agents::runner::from_outside(agent_id);
-            match browser_gate::gate(&agent, &tool, &args, outside) {
+            match browser_gate::gate(agent, &tool, &args, outside) {
                 Gate::Allow | Gate::NotBrowser => {}
                 Gate::Refuse(why) => return ok(result(vec![text(why)], true)),
                 Gate::Ask => {
                     // Asked already (the engine's own approval), or the user
                     // is at the keyboard (a take-over): through. Else a card.
                     if !take_cleared(agent_id, &tool, &args) && turn.is_some() {
+                        let Some(app) = app else {
+                            return ok(result(
+                                vec![text(
+                                    "This needs the user's OK, and nobody can be asked here.",
+                                )],
+                                true,
+                            ));
+                        };
                         if let Err(why) =
                             crate::agents::mcp::decide_agents_browser(app, agent_id, &tool, &args)
                                 .await

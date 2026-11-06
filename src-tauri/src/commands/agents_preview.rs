@@ -2,6 +2,7 @@
 
 use tauri::{AppHandle, Emitter};
 
+use crate::agents::preview_fix;
 use crate::agents::preview_test::{self, PreviewTarget, Run};
 use crate::agents::{self, runner, store};
 use crate::errors::CommandError;
@@ -129,6 +130,52 @@ pub async fn agents_preview_test_stop(
     agent_id: String,
 ) -> Result<bool, CommandError> {
     Ok(preview_test::stop(&app, &agent_id))
+}
+
+/// A dev server this window owns stopped without anyone in the app asking
+/// it to (`useDevServer`'s exit watcher). `pane_agent`: the agent whose
+/// preview pane in this window shows the folder. What the pane shows next,
+/// or `None` when no agent owns it (`agents/preview_fix.rs`).
+#[tauri::command]
+#[tracing::instrument(skip(app, output))]
+pub async fn agents_dev_server_exited(
+    app: AppHandle,
+    path: String,
+    exit_code: Option<i64>,
+    output: String,
+    pane_agent: Option<String>,
+) -> Result<Option<preview_fix::View>, CommandError> {
+    let validated = validate_project_path(&path)?;
+    let path = validated.to_string_lossy().to_string();
+    Ok(preview_fix::exited(
+        &app,
+        &path,
+        exit_code,
+        &output,
+        pane_agent.as_deref(),
+    ))
+}
+
+/// Where a stopped preview stands: who is fixing it, or whether to ask.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_preview_fix_state(
+    path: String,
+) -> Result<Option<preview_fix::View>, CommandError> {
+    let validated = validate_project_path(&path)?;
+    Ok(preview_fix::view(&validated.to_string_lossy()))
+}
+
+/// "Ask <agent> to fix it" on a stopped preview.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_preview_fix_ask(
+    app: AppHandle,
+    agent_id: String,
+    path: String,
+) -> Result<preview_fix::View, CommandError> {
+    let validated = validate_project_path(&path)?;
+    preview_fix::ask(&app, &agent_id, &validated.to_string_lossy()).map_err(CommandError::expected)
 }
 
 /// The window's answer to an agent's request about a dev server

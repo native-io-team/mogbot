@@ -1,6 +1,7 @@
 /**
- * Answers agents' dev-server requests in this window (`lib/agentDevServer.ts`).
- * Nothing it does changes what the window shows.
+ * Answers agents' dev-server requests in this window (`lib/agentDevServer.ts`),
+ * and reports servers that stopped by themselves so their agent can fix them
+ * (`lib/agentPreviewFix.ts`). Nothing it does changes what the window shows.
  *
  * @module hooks/useAgentDevServerControl
  */
@@ -14,6 +15,8 @@ import {
   type DevServerRequest,
 } from '../lib/agentDevServer';
 import { logger } from '../lib/logger';
+import { onDevServerExit } from '../lib/devServerExits';
+import { paneAgentFor, reportDevServerExited } from '../lib/agentPreviewFix';
 
 export function useAgentDevServerControl(owner: DevServerOwner): void {
   // Requests outlive the render that received them: read the latest owner.
@@ -37,4 +40,16 @@ export function useAgentDevServerControl(owner: DevServerOwner): void {
       void unlisten.then((fn) => fn());
     };
   }, []);
+  // A server that stopped by itself goes back to the agent that owns it
+  // (`lib/agentPreviewFix.ts`); the backend decides who that is, if anyone.
+  useEffect(
+    () =>
+      onDevServerExit(({ projectPath, exitCode, output }) => {
+        void reportDevServerExited(projectPath, exitCode, output, paneAgentFor(projectPath)).catch(
+          (err: unknown) =>
+            logger.warn('[Agents] Could not report a stopped dev server', { error: String(err) })
+        );
+      }),
+    []
+  );
 }

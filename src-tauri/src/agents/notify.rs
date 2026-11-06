@@ -448,6 +448,7 @@ mod tests {
             from_outside: None,
             front: None,
             settings: None,
+            plan: None,
         });
         message
     }

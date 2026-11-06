@@ -3275,6 +3275,47 @@ export const frames = [
   },
   {
     "t": "evt",
+    "seq": 1,
+    "event": {
+      "type": "agents.message",
+      "message": {
+        "agentId": "a1",
+        "approval": {
+          "detail": "1. Redeploy shippy's production on Vercel (shippy)\n2. Open an issue about the failed build (julian/shippy)\n3. Comment on #12 with the fix (julian/shippy)\n\nWhy: Production is down since this morning's push",
+          "plan": {
+            "actions": [
+              {
+                "kind": "deploy",
+                "summary": "Redeploy shippy's production on Vercel",
+                "target": "shippy"
+              },
+              {
+                "kind": "issue",
+                "summary": "Open an issue about the failed build",
+                "target": "julian/shippy"
+              },
+              {
+                "kind": "comment",
+                "summary": "Comment on #12 with the fix",
+                "target": "julian/shippy"
+              }
+            ],
+            "why": "Production is down since this morning's push"
+          },
+          "requestId": "q14",
+          "status": "pending",
+          "summary": "1. Redeploy shippy's production on Vercel\n2. Open an issue about the failed build\n3. Comment on #12 with the fix\n\nProduction is down since this morning's push",
+          "title": "Do these under your name?"
+        },
+        "id": "m42",
+        "kind": "approval",
+        "text": "",
+        "ts": 1762290200000
+      }
+    }
+  },
+  {
+    "t": "evt",
     "seq": 2,
     "event": {
       "type": "agents.status",

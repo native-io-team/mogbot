@@ -122,6 +122,12 @@ pub fn run() {
     }
 
     tracing::info!("{} starting up", brand::NAME);
+    // Whether agents get a browser of their own, and if not why: a build
+    // without it once sent every agent to the user's Chrome unnoticed.
+    match agent_browser::unavailable_reason() {
+        None => tracing::info!("[AgentBrowser] available to agents"),
+        Some(why) => tracing::info!(why, "[AgentBrowser] not available to agents"),
+    }
 
     // Clean up any orphaned agent processes from previous crashed sessions
     cleanup_agent_processes();
@@ -728,6 +734,9 @@ pub fn run() {
             commands::agents_preview::agents_preview_test_state,
             commands::agents_preview::agents_preview_test_stop,
             commands::agents_preview::agents_dev_server_done,
+            commands::agents_preview::agents_dev_server_exited,
+            commands::agents_preview::agents_preview_fix_state,
+            commands::agents_preview::agents_preview_fix_ask,
             commands::agents::agents_send,
             commands::agents::agents_team_setup,
             commands::agents::agents_team_setup_step,
@@ -741,6 +750,7 @@ pub fn run() {
             commands::agents::agents_phone_signin_status,
             commands::agents::agents_phone_signin_stop,
             commands::agents::agents_agent_browser_status,
+            commands::agents::agents_show_agent_browser,
             commands::agents::agents_agent_browser_set_enabled,
             commands::agents::agents_agent_browser_permission,
             commands::agents::agents_browser_open_install,
@@ -1017,6 +1027,8 @@ pub fn run() {
             commands::settings::set_spotify_widget_enabled,
             commands::settings::get_keep_dev_servers_running,
             commands::settings::set_keep_dev_servers_running,
+            commands::settings::get_agents_fix_previews,
+            commands::settings::set_agents_fix_previews,
             commands::spotify::get_spotify_state,
             commands::spotify::spotify_control,
             commands::settings::get_dashboard_header_hidden,

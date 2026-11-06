@@ -555,6 +555,11 @@ pub struct Approval {
     /// (`summary`, `detail`) says the same for clients that don't know it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings: Option<super::policy_card::Proposal>,
+    /// "Do these under your name?" (`ask_plan`, `agents/plan_grant.rs`): the
+    /// actions, numbered. Allow makes one grant that covers each of them;
+    /// the card's own text (`summary`, `detail`) lists them too.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan: Option<super::plan_grant::Plan>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -2390,6 +2395,7 @@ mod tests {
                         from_outside: None,
                         front: None,
                         settings: None,
+                        plan: None,
                     });
                 }
                 append_message(&line).unwrap();
@@ -2598,6 +2604,7 @@ mod tests {
                     from_outside: None,
                     front: None,
                     settings: None,
+                    plan: None,
                 }),
                 attachments: Vec::new(),
                 check_in: None,
@@ -2717,6 +2724,7 @@ mod tests {
                 from_outside: None,
                 front: None,
                 settings: None,
+                plan: None,
             });
             append_message(&card).unwrap();
             let raw = std::fs::read(log_path(&a.id).unwrap()).unwrap();

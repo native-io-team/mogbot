@@ -9,14 +9,13 @@ import {
   memo,
   useCallback,
   useEffect,
-  useMemo,
   useRef,
   useState,
   type KeyboardEvent,
   type MouseEvent,
   type ReactNode,
 } from 'react';
-import { createStreamingSegments, toSegments, type Segment } from './agentMarkdown';
+import { DraftProse, FinishedProse, Prose } from './AgentProse';
 import { agentIn, getAgentsSnapshot, useAgentsSelector } from '../../lib/agentsStore';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
@@ -50,6 +49,7 @@ import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
 import { LoginCard } from './AgentLoginCard';
 import { AgentSettingsChange } from './AgentSettingsChange';
+import { AgentPlanList } from './AgentPlanList';
 import { AgentCard } from './AgentCard';
 import { ImportReviewCard } from './ImportReviewCard';
 import { ImportPlaybackCard } from './ImportPlaybackCard';
@@ -62,6 +62,7 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useHeightReveal } from './useAgentMotion';
 import { useCardGuard } from './useCardGuard';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
+import { useSteadyLine } from '../../hooks/useSteadyLine';
 import {
   connectorTextParts,
   CONTEXT_SUGGEST_AT,
@@ -129,27 +130,6 @@ function useProseLinks(agentId: string) {
     [agentId, showToast]
   );
 }
-
-const CodeBlock = memo(function CodeBlock({ text }: { text: string }) {
-  const { copy, isCopied } = useCopyToClipboard();
-  return (
-    <div className="agent-code">
-      <pre>
-        <code>{text}</code>
-      </pre>
-      <IconButton
-        variant="ghost"
-        size="compact"
-        tabIndex={0}
-        className="agent-code__copy"
-        icon={isCopied ? <CheckIcon size={12} /> : <CopyIcon size={12} />}
-        onClick={() => void copy(text)}
-        aria-label={isCopied ? 'Copied' : 'Copy code'}
-        title={isCopied ? 'Copied' : 'Copy'}
-      />
-    </div>
-  );
-});
 
 /**
  * Copy and the time, on hover or keyboard focus. They keep their space, so
@@ -230,45 +210,9 @@ interface AgentBubbleProps extends Arrival {
   onRemember?: (message: AgentMessage) => void;
 }
 
-/** Markdown prose with code blocks, shared by replies and agent-to-agent threads. */
-function Prose({ text }: { text: string }) {
-  const segments = useMemo(() => toSegments(text), [text]);
-  return <ProseSegments segments={segments} />;
-}
-
 /** The reply an agent is writing, as it is now: read from the store, not passed down. */
 const draftTextOf = (agentId: string) =>
   getAgentsSnapshot().drafts[agentId]?.text.trimStart() ?? '';
-
-/**
- * A reply still being written. It reads its own text from the store, so a
- * delta re-renders only this, and it parses only what changed since the last
- * one (`createStreamingSegments`): finished paragraphs keep their DOM.
- */
-function DraftProse({ agentId }: { agentId: string }) {
-  const text = useAgentsSelector((s) => s.drafts[agentId]?.text.trimStart() ?? '');
-  const [segmentsFor] = useState(createStreamingSegments);
-  const segments = useMemo(() => segmentsFor(text), [segmentsFor, text]);
-  return <ProseSegments segments={segments} />;
-}
-
-function ProseSegments({ segments }: { segments: Segment[] }) {
-  return (
-    <>
-      {segments.map((segment, i) =>
-        segment.type === 'code' ? (
-          <CodeBlock key={i} text={segment.text} />
-        ) : (
-          <div
-            key={i}
-            className="agent-markdown__prose"
-            dangerouslySetInnerHTML={{ __html: segment.html }}
-          />
-        )
-      )}
-    </>
-  );
-}
 
 /** A reply in prose, and any files the agent shared with it (`share_file`). */
 export const AgentBubble = memo(function AgentBubble({
@@ -308,7 +252,11 @@ export const AgentBubble = memo(function AgentBubble({
           aria-busy={streaming || undefined}
           onClick={onClick}
         >
-          {streaming ? <DraftProse agentId={message.agentId} /> : <Prose text={message.text} />}
+          {streaming ? (
+            <DraftProse agentId={message.agentId} id={message.id} />
+          ) : (
+            <FinishedProse id={message.id} text={message.text} />
+          )}
         </div>
       )}
       {message.stopped && <span className="agent-bubble__stopped">Stopped</span>}
@@ -1028,6 +976,9 @@ function outcomeText(approval: Approval, agentName: string, compact: boolean): R
   if (approval.settings && approval.status === 'allowed') {
     return 'Changed · from each agent’s next turn';
   }
+  if (approval.plan && approval.status === 'allowed') {
+    return 'Allowed · each step runs without asking for an hour';
+  }
   if (approval.choice && approval.status !== 'expired') {
     return `${STATUS_LABEL[approval.status as 'allowed' | 'denied']} · ${approval.choice}`;
   }
@@ -1241,6 +1192,8 @@ export const ApprovalCard = memo(function ApprovalCard({
       >
         {approval.settings ? (
           <AgentSettingsChange proposal={approval.settings} />
+        ) : approval.plan ? (
+          <AgentPlanList plan={approval.plan} />
         ) : fields ? (
           <dl className="agent-approval__fields">
             {fields.map(([label, value]) => (
@@ -1474,11 +1427,14 @@ export function WorkingIndicator({
   onExited,
   place,
 }: WorkingIndicatorProps) {
+  // Each step holds a moment and a blink of "Thinking" between two never
+  // shows (the sidebar's rule), so the line doesn't flicker step to step.
+  const steady = useSteadyLine(activity ?? '') || null;
   // Keep the last thing it said while it collapses, rather than blanking it.
-  const [shown, setShown] = useState(activity);
-  if (!leaving && activity !== shown) setShown(activity);
+  const [shown, setShown] = useState(steady);
+  if (!leaving && steady !== shown) setShown(steady);
   // Only a change of activity crossfades; the first one is just there.
-  const [first] = useState(activity);
+  const [first] = useState(shown);
   const live = useLiveWork({ work, agent, activity, leaving });
   const step = useLiveStep({ agent, work, activity, leaving });
   return (

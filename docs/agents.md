@@ -246,8 +246,15 @@ From the stream:
   finished message takes over the same bubble (`agents/stream.rs`, tested on a
   captured real stream). Sub-agent text, streamed or not, is internal and is
   dropped. Stop mid-reply keeps what streamed, as a message marked `stopped`;
+- on the desk the store applies draft and status events once per frame (the
+  newest per agent), the reply is revealed at the display's pace as on the
+  phone (`useReveal`: whatever is queued over ~260ms, never under 45
+  characters a second; the finished message carries on from where its draft
+  had got to), and only the block being written is re-parsed and redrawn
+  (`createStreamingSegments`, `ProseRun` in `AgentProse.tsx`);
 - while words are arriving the typing dots are hidden; they and the activity
-  line come back between text blocks, while tools run;
+  line come back between text blocks, while tools run, once the gap has
+  lasted 0.7s (a blink of them between two blocks read as a flash);
 - every **tool call** only updates the line under the agent's name ("Editing
   PricingTable.tsx", "Messaging Finance"); it never becomes a message;
 - `system/init` confirms the session id, which is stored for the next `--resume`,
@@ -1349,6 +1356,40 @@ it" / "yes do it" / "allow" and the chat has exactly one open card (not a
 sign-in, secret, session question or import card), it is allowed as their
 answer, with "Allowed from your message". Only the user's send gets there.
 
+**One yes for the whole plan** (`ask_plan`, `agents/plan_grant.rs`). Observed:
+the owner, at Go hard, typed "YES" to the Chief's plan (redeploy production on
+Vercel, one GitHub issue, two comments); the Chief told the agent doing it
+"each action may still show an approval card", and each did. Now an agent
+with several outward steps ahead lists them once: `ask_plan {actions: [{kind,
+target, summary}], why}` raises one card, "Do these under your name?", a
+numbered list with Allow / Deny (desk, phone, Catch up, or a typed yes, as
+above). When the user's own typed yes had no card to answer
+(`commands::agents::send_as`), the agent's reply just before it is kept for
+15 minutes, and an `ask_plan` from the turn answering that yes is granted
+without a card if every action's target is named in that reply ("Your yes
+covers, for an hour: …"). Allow makes a **plan grant** (in memory; a restart
+forgets it): each action matched on its kind (push, pull request, merge, issue,
+comment, release, deploy, publish, post, send, request, github) **and** its
+target (`owner/repo` from the checkout's remotes or `-R`, the folder or
+`.vercel/project.json` name, a deployment host named after the project, a
+connector's `owner`/`repo`/`channel`/`project`, a browser page's host), for 60
+minutes, each listed action once (the same call again, a retry, still
+passes). `message_agent` carries the grant to the agent it hands work to, and
+on down the chain (never from a turn answering outside text). Each covered
+call runs without a card and leaves "Under your OK · <summary>" in "What it
+did" and the chat. Production deploys, pushes to main, posting, sending and
+GitHub writes can be on a plan. **Never covered**: `sudo` and system tools,
+the Keychain and credentials (`gh secret`, `vercel env`, connector tools
+naming keys, tokens, passwords), payments (Stripe, payment APIs, connector
+tools that pay, charge or refund), anything that deletes (`rm -r` outside the
+work folders, `gh … delete`, `vercel rm`, a connector `delete_…`), force
+pushes, branch deletes, mirrors and tag pushes, launch agents and shell
+profiles, a turn answering outside text, and anything on the line the plan
+doesn't name: at "Check with me often" and "Use good judgement" (and after
+outside content) a covered command must be only listed steps and `cd`; at Go
+hard and Full send the rest of the line is judged by that level as usual
+(`go_hard::with_covered`).
+
 **Cards expire** (`agents/expiry.rs`; this supersedes the "stays live" and
 late-Allow behaviour below, which now only reaches a card from before it). A
 card whose turn ended, or that a restart left behind, closes at once as
@@ -2005,6 +2046,11 @@ their own, and the person signs in to it from the phone.
   sign-in, and when the app quits.
 - **Settings → Agents → Agents' browser**, on by default
   (`agent-browser.json`). Off: no turn gets it and cards don't offer it.
+  In every build unless built with the `no-agent-browser` cargo feature
+  (an opt-out: as a default feature it was dropped by `tauri dev`, and the
+  owner's agents all went to Claude in Chrome for a day). Launch logs
+  `[AgentBrowser] available to agents` or why not, and a turn that goes
+  without it logs why at info (`[AgentBrowser] not offered to this turn`).
 - **The `browser` MCP server** on the agent bridge (`/mcp/browser`, the
   turn's bearer secret, `agent_browser::tools`), added to every turn of
   either engine (`connections::for_turn`) unless the switch is off, the
@@ -2014,6 +2060,18 @@ their own, and the person signs in to it from the phone.
   `click`, `type`, `press`, `scroll`, `wait_for`, `close_tab`. No script,
   upload or download tool; `type` refuses password and one-time-code
   fields; an agent sees its own tabs only.
+- **Seeing it work.** Every step in "What it did" reads "Used its own
+  browser · example.com" ("Using its own browser · …" while it runs), the
+  site from the call or the page it's on, never the path; the user's Chrome
+  still reads "Browsed …". While the agent has a tab open, the live step
+  under its working line offers **Watch its browser**, which brings that
+  window on screen and in front (`agents_show_agent_browser`), and **Put it
+  away**, which parks it again.
+- **Checked end to end** with `cargo run --example agent_browser_turn --
+  <scratch>`: whether a turn gets the server, its `--mcp-config` / Codex
+  entry, then `initialize`, `tools/list`, `open` example.com and
+  `read_page` through the bridge's own dispatch (`tools::dispatch`), and the
+  timeline's words, on a scratch profile, never the app's or the user's.
 - **What asks** is `browser_gate`, the same rules as Claude in Chrome
   (`gate_agents_with` maps each tool to its Claude in Chrome equivalent):
   looking is free; a click on a control whose accessible name sends, posts,
@@ -3984,7 +4042,14 @@ cards.
   It holds still while the list is in use (pointer over it, or scrolled,
   clicked or keyed through in the last 2s): only new agents are added at the
   end and deleted ones dropped. It re-sorts once left alone for 2s, when the
-  window comes back to the front, and at once on a pin or unpin. Other lists
+  window comes back to the front, and at once on a pin or unpin; otherwise at
+  most once every 4s (`RESORT_MS`), the rows sliding to their places (FLIP).
+  The "Needs your OK" row comes and goes at those same moments ("All
+  answered" while it waits to go). Every row is one fixed height: the line
+  under the name is one line, cut with an ellipsis; a working row's step is
+  steadied (`useSteadyLine`, the phone's rule shared in the protocol package:
+  1.8s per step, "Thinking" only after 2.5s) and its time sits in a fixed
+  column of tabular figures. Other lists
   (switcher, Quick Entry) still use `sortAgents` (pinned, then recency).
 - **Sections** (user-made groups in the list) are not built: they need a
   persisted field, a naming flow, collapse state, and a story for how they
@@ -4476,6 +4541,29 @@ and asks the agent (`test_prompt`) to click through the site while you watch.
   the running app (the parts are unit-tested and the pane is seen in the UI
   harness against a fictional site); a report staged in the same turn as a
   `share_result` replaces it.
+
+### A preview that stops by itself (`agents/preview_fix.rs`)
+
+- **Seen where it happens.** `useDevServer`'s exit watcher reports every exit
+  the app didn't ask for (`lib/devServerExits.ts`) with the agent whose pane
+  shows that folder (`agents_dev_server_exited`). Owner: that pane's agent,
+  else the agent that last ran `preview_start` on it while it's working or the
+  folder is its copy. No owner: the pane keeps "The workspace shows why".
+- **The agent fixes it.** A note from the app (not the user): "Your preview for
+  <project> stopped: <reason>. Fix it and restart it with preview_start", with
+  the last 60 lines it printed. The reason reads the log first (port in use,
+  missing module, compile error), then the exit code.
+- **No loop.** At most one automatic wake per folder per 10 minutes; every fix,
+  woken or asked, counts; a server that stops again after 2 fixes gets one
+  plain error line in the agent's chat instead, then silence until a fix holds
+  30 minutes or the user asks again. Settings → Agents → "Fix stopped previews"
+  turns the wake off (the pane then offers to ask).
+- **The pane** shows "<Agent> is fixing it…" while that turn runs (15s grace for
+  it to start), the frame back once the server is; otherwise "Ask <Agent> to fix
+  it", with "Open in workspace" as a quiet link.
+- Not verified: a real crash → wake → restart round trip in the running app (the
+  decisions and prompt are unit-tested; the pane is seen in the harness with a
+  stub PTY that exits).
 
 ## Showing the work (`agents/narration.rs`, `agents/local_links.rs`, `agents/dev_servers.rs`)
 
