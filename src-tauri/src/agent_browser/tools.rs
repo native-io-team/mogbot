@@ -379,8 +379,10 @@ pub fn run(agent: &str, name: &str, args: &Value) -> Result<Vec<Value>, String> 
                 let (x, y) = svc.center_of(&tab, node.backend_node_id)?;
                 svc.click(&tab, x, y)?;
             }
-            if svc.focused_is_secret(&tab) {
-                return Err(NO_PASSWORDS.into());
+            match svc.focused_field(&tab) {
+                service::Focus::Plain => {}
+                service::Focus::Secret => return Err(NO_PASSWORDS.into()),
+                service::Focus::Unknown => return Err(CANT_TELL.into()),
             }
             svc.insert_text(&tab, t)?;
             Ok(vec![text("Typed.")])
@@ -472,7 +474,10 @@ pub fn run(agent: &str, name: &str, args: &Value) -> Result<Vec<Value>, String> 
     }
 }
 
-pub const NO_PASSWORDS: &str = "That's a password or code field: agents never type those. If the site needs signing in, call request_login for it with signed_out: true, and the user signs in themselves (from their phone, or here).";
+/// The focused field couldn't be checked (another site's frame, or the page
+/// didn't answer): typed into only when it's known not to be a password.
+pub const CANT_TELL: &str = "Couldn't tell whether the focused field takes a password (it may be inside another site's frame), so nothing was typed. Click the field by its ref from read_page and try again; if it's a sign-in, call request_login for it with signed_out: true.";
+pub const NO_PASSWORDS: &str ="That's a password or code field: agents never type those. If the site needs signing in, call request_login for it with signed_out: true, and the user signs in themselves (from their phone, or here).";
 
 /// An agent was deleted, or its browser taken away: its windows close.
 pub fn close_agent(agent: &str) {

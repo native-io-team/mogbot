@@ -65,7 +65,7 @@ pub(crate) fn fake_browser() -> (Browser, Fake) {
                 "Runtime.evaluate" => {
                     let e = m["params"]["expression"].as_str().unwrap_or("");
                     if e.contains("activeElement") {
-                        json!({ "result": { "type": "boolean", "value": false } })
+                        json!({ "result": { "type": "string", "value": "plain" } })
                     } else if e.contains("innerText") {
                         json!({ "result": { "type": "string", "value": "Example Domain" } })
                     } else {
@@ -131,6 +131,23 @@ pub(crate) fn fake_browser() -> (Browser, Fake) {
 
 fn agent(a: &str) -> Owner {
     Owner::Agent(a.into())
+}
+
+#[test]
+fn the_focus_check_fails_closed() {
+    let ok = |v: Value| Focus::from_answer(Ok(v));
+    assert_eq!(ok(json!("plain")), Focus::Plain);
+    assert_eq!(ok(json!("secret")), Focus::Secret);
+    // Another site's frame, an old boolean answer, nothing, or an error.
+    assert_eq!(ok(json!("unknown")), Focus::Unknown);
+    assert_eq!(ok(json!(false)), Focus::Unknown);
+    assert_eq!(ok(Value::Null), Focus::Unknown);
+    assert_eq!(
+        Focus::from_answer(Err("The page didn't answer.".into())),
+        Focus::Unknown
+    );
+    // It looks inside frames rather than stopping at the IFRAME element.
+    assert!(FOCUSED_FIELD_JS.contains("contentDocument"));
 }
 
 #[test]

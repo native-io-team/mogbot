@@ -45,6 +45,34 @@ pub const MAX_TABS: usize = 6;
 /// A CDP call's wait.
 const T: Duration = Duration::from_secs(20);
 
+/// What the focused field is, before anything is typed into it.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Focus {
+    /// Not a password or a code.
+    Plain,
+    /// A password or one-time-code field.
+    Secret,
+    /// Couldn't be told: focus in another site's frame, or no answer.
+    Unknown,
+}
+
+impl Focus {
+    /// [`FOCUSED_FIELD_JS`]'s answer. Anything but a plain "plain" fails
+    /// closed.
+    pub fn from_answer(answer: Result<Value, String>) -> Focus {
+        match answer.ok().as_ref().and_then(Value::as_str) {
+            Some("plain") => Focus::Plain,
+            Some("secret") => Focus::Secret,
+            _ => Focus::Unknown,
+        }
+    }
+}
+
+/// Follows focus through shadow roots and into same-origin frames; a frame
+/// whose document it can't read (another site's) is "unknown", as is a
+/// chain too deep to follow.
+const FOCUSED_FIELD_JS: &str = "(() => { let e = document.activeElement; for (let i = 0; e; i++) { if (i > 32) return 'unknown'; if (e.shadowRoot && e.shadowRoot.activeElement) { e = e.shadowRoot.activeElement; continue; } const tag = (e.tagName || '').toUpperCase(); if (tag === 'IFRAME' || tag === 'FRAME') { let d = null; try { d = e.contentDocument; } catch (_) { return 'unknown'; } if (!d) return 'unknown'; e = d.activeElement; continue; } break; } if (!e || (e.tagName || '').toUpperCase() !== 'INPUT') return 'plain'; const t = (e.type || '').toLowerCase(); const a = (e.autocomplete || '').toLowerCase(); return (t === 'password' || a.includes('one-time-code') || a.includes('current-password') || a.includes('new-password')) ? 'secret' : 'plain'; })()";
+
 /// Who a tab belongs to.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Owner {
@@ -438,15 +466,17 @@ impl Service {
         }
     }
 
-    /// The focused field is a password (or one-time code) field.
+    /// What the focused field is, followed into shadow roots and same-origin
+    /// frames. Focus in a frame the page can't see into (another site's), or
+    /// a check that didn't answer, is [`Focus::Unknown`]: never typed into.
+    pub fn focused_field(&self, tab: &Tab) -> Focus {
+        Focus::from_answer(self.eval(tab, FOCUSED_FIELD_JS))
+    }
+
+    /// The focused field may take a password or a code: a secret one, or
+    /// one that couldn't be told.
     pub fn focused_is_secret(&self, tab: &Tab) -> bool {
-        self.eval(
-            tab,
-            "(() => { let e = document.activeElement; while (e && e.shadowRoot && e.shadowRoot.activeElement) e = e.shadowRoot.activeElement; if (!e || e.tagName !== 'INPUT') return false; const t = (e.type || '').toLowerCase(); const a = (e.autocomplete || '').toLowerCase(); return t === 'password' || a.includes('one-time-code') || a.includes('current-password') || a.includes('new-password'); })()",
-        )
-        .ok()
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false)
+        self.focused_field(tab) != Focus::Plain
     }
 
     pub fn ax_nodes(&self, tab: &Tab) -> Result<Vec<Value>, String> {
@@ -481,14 +511,15 @@ impl Service {
         ))
     }
 
-    /// The node is a password (or one-time code) input.
+    /// The node is a password (or one-time code) input, or couldn't be
+    /// described: either way nothing is typed into it.
     pub fn node_is_secret(&self, tab: &Tab, backend_node_id: i64) -> bool {
         let Ok(d) = self.call(
             tab,
             "DOM.describeNode",
             json!({ "backendNodeId": backend_node_id }),
         ) else {
-            return false;
+            return true;
         };
         let attrs: Vec<String> = d["node"]["attributes"]
             .as_array()
