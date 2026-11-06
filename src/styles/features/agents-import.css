@@ -224,6 +224,7 @@
   color: var(--text-secondary);
   white-space: pre-wrap;
   border-radius: var(--radius-card);
+  -webkit-user-select: text;
   user-select: text;
   mask-image: linear-gradient(
     to bottom,
@@ -470,6 +471,7 @@
   white-space: pre-wrap;
   background: var(--surface-recessed);
   border-radius: var(--radius-control);
+  -webkit-user-select: text;
   user-select: text;
 }
 
@@ -485,6 +487,7 @@
   margin: 0;
   padding: 0;
   list-style: none;
+  -webkit-user-select: text;
   user-select: text;
 }
 
@@ -968,6 +971,7 @@
   color: var(--text-secondary);
   background: var(--surface-recessed);
   border-radius: var(--radius-control);
+  -webkit-user-select: text;
   user-select: text;
 }
 

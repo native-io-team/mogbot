@@ -338,6 +338,7 @@
   scrollbar-gutter: stable;
   padding: var(--spacing-sm) 0;
   line-height: 1.55;
+  -webkit-user-select: text;
   user-select: text;
 }
 

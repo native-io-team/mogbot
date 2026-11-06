@@ -316,6 +316,7 @@
   margin: 0;
   color: var(--text-primary);
   overflow-wrap: anywhere;
+  -webkit-user-select: text;
   user-select: text;
 }
 
@@ -329,6 +330,7 @@
   list-style: disc;
   background: var(--surface-warning);
   border-radius: var(--radius-sm);
+  -webkit-user-select: text;
   user-select: text;
 }
 
@@ -360,6 +362,7 @@
   font-size: var(--font-size-caption);
   color: var(--text-secondary);
   overflow-wrap: anywhere;
+  -webkit-user-select: text;
   user-select: text;
 }
 

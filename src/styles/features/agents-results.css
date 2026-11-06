@@ -44,6 +44,7 @@
   color: var(--text-primary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+  -webkit-user-select: text;
   user-select: text;
 }
 
@@ -93,6 +94,7 @@
 
 .agent-result__unverified li {
   color: var(--text-primary);
+  -webkit-user-select: text;
   user-select: text;
 }
 
@@ -103,6 +105,7 @@
 .agent-result__checked li {
   font-size: var(--font-size-body-sm);
   color: var(--text-secondary);
+  -webkit-user-select: text;
   user-select: text;
 }
 
