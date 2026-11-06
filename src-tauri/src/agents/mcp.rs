@@ -2821,6 +2821,8 @@ async fn approve(app: &AppHandle, caller: &store::Agent, turn: Option<u64>, args
         .get("tool_name")
         .and_then(Value::as_str)
         .unwrap_or("a tool");
+    let aliased = super::e2e_alias::tool(tool);
+    let tool: &str = &aliased;
     let input = args.get("input").cloned().unwrap_or_else(|| json!({}));
     let request_id = args.get("tool_use_id").and_then(Value::as_str);
     // Fail closed before anything else: no card for a turn that isn't running.
