@@ -18,7 +18,7 @@
  */
 
 import { useId, useState, type ReactNode } from 'react';
-import { ChevronRightIcon } from '@/components/icons';
+import { ChevronRightIcon, EyeOffIcon, GlobeIcon } from '@/components/icons';
 import { TextButton } from '../primitives/TextButton';
 import { useNow } from '../../hooks/useNow';
 import { useOptionalToast } from '../../contexts/ToastContext';
@@ -192,12 +192,12 @@ export function useLiveStep({ agent, work, activity, leaving }: LiveStepProps): 
           <div className="agent-live__row">
             <TextButton
               tabIndex={0}
-              variant="strong"
-              className="agent-live__action"
+              className="agent-work__toggle agent-live__toggle agent-live__watch"
+              leftIcon={watching ? <EyeOffIcon size={12} /> : <GlobeIcon size={12} />}
               disabled={busy}
               onClick={() => void run(watch)}
             >
-              {watching ? 'Put it away' : 'Watch its browser'}
+              {watching ? 'Hide its browser' : 'Watch its browser'}
             </TextButton>
           </div>
         )}

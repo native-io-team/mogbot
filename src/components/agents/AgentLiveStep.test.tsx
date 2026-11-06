@@ -238,7 +238,7 @@ describe('the step it is on right now', () => {
       args: { agentId: 'acme', show: true },
     });
     await act(async () => {
-      fireEvent.click(screen.getByRole('button', { name: 'Put it away' }));
+      fireEvent.click(screen.getByRole('button', { name: 'Hide its browser' }));
       await Promise.resolve();
     });
     expect(calls).toContainEqual({
