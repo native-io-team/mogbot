@@ -78,7 +78,7 @@ fn code_ranges(text: &str) -> Vec<(usize, usize)> {
     let bytes = text.as_bytes();
     let mut i = 0;
     while i < bytes.len() {
-        if text[i..].starts_with("```") {
+        if bytes[i..].starts_with(b"```") {
             let end = text[i + 3..]
                 .find("```")
                 .map(|e| i + 3 + e + 3)
