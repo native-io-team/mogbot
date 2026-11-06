@@ -36,6 +36,7 @@ fn user(text: &str) -> Inbound {
         room: None,
         outside: false,
         resume: 0,
+        typed: None,
     }
 }
 
@@ -56,6 +57,7 @@ fn from_chief(text: &str, reply: bool) -> Inbound {
         room: None,
         outside: false,
         resume: 0,
+        typed: None,
     }
 }
 

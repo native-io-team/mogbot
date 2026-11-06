@@ -232,6 +232,7 @@ impl Backend for DesktopBackend {
             crate::agents::work::apply(&agent_id, &mut page);
             crate::agents::logins::apply(&mut page);
             crate::agents::admin::apply(&mut page);
+            crate::agents::remember::apply(&agent_id, &mut page);
             Ok::<_, CommandError>((page, more))
         })
         .await

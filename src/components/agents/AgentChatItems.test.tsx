@@ -4,6 +4,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 import { act, fireEvent, render, screen } from '@testing-library/react';
+import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { ApprovalCard, ErrorLine, FreshHint, NoteLine } from './AgentChatItems';
 import type { Agent, AgentMessage } from '../../lib/agents';
 
@@ -90,6 +91,64 @@ describe('NoteLine', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Show its last screen' }));
     expect(container.querySelector('pre')?.textContent).toBe('Trust it?\n❯ 2. No, exit');
     expect(screen.queryByRole('button', { name: /retry/i })).toBeNull();
+  });
+});
+
+describe('A remembered rule', () => {
+  const line = (active: boolean): AgentMessage => ({
+    id: 'n3',
+    agentId: 'lead',
+    ts: 1,
+    kind: 'note',
+    text: 'Remembered: Lead Gen can always upsert social posts · Native os',
+    remembered: { ruleId: 'rule-1', active },
+  });
+
+  it('offers Undo, which takes the rule back', async () => {
+    const calls: Array<[string, unknown]> = [];
+    mockIPC((cmd, args) => {
+      calls.push([cmd, args]);
+    });
+    render(<NoteLine message={line(true)} />);
+    expect(screen.getByText(/Remembered: Lead Gen can always/)).toBeInTheDocument();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+      await Promise.resolve();
+    });
+    expect(calls).toContainEqual([
+      'agents_revoke_permission',
+      { agentId: 'lead', ruleId: 'rule-1' },
+    ]);
+    clearMocks();
+  });
+
+  it('says Undone once taken back, here or on the phone', () => {
+    render(<NoteLine message={line(false)} />);
+    expect(screen.queryByRole('button', { name: 'Undo' })).toBeNull();
+    expect(screen.getByText(/· Undone/)).toBeInTheDocument();
+  });
+
+  it('marks a card it allowed as by the user’s rule', () => {
+    const message: AgentMessage = {
+      ...approvalMessage,
+      approval: {
+        requestId: 'r2',
+        title: 'Use a tool',
+        detail: '',
+        status: 'allowed',
+        alwaysAllowed: true,
+        always: {
+          kind: 'tool',
+          value: 'mcp__native-os__upsertSocialPosts',
+          label: 'Upsert social posts · Native os',
+          said: 'ur always allowed to do those',
+        },
+      },
+    };
+    render(
+      <ApprovalCard message={message} agentName="Lead Gen" paused={false} onAnswer={vi.fn()} />
+    );
+    expect(screen.getByText(/Allowed by your rule/)).toBeInTheDocument();
   });
 });
 

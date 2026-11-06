@@ -358,6 +358,12 @@ const TOOLS: &[Tool] = &[
         schema: super::policy_card::schema,
     },
     Tool {
+        name: super::remember::TOOL,
+        description: super::remember::DESCRIPTION,
+        main_only: false,
+        schema: super::remember::schema,
+    },
+    Tool {
         name: "remember_browser_account",
         description: "After you checked, on the page itself, which account one of your sites is signed in as in the user's Chrome: remember which Chrome profile (browser) that was, so next time starts there. Only for your own sites; never a guess.",
         main_only: false,
@@ -665,6 +671,7 @@ async fn call(
             }
         }
         super::policy_card::TOOL => super::policy_card::propose(app, caller, turn, args).await,
+        super::remember::TOOL => super::remember::call(app, caller, turn, args).await,
         _ => error("Unknown tool"),
     }
 }
@@ -1956,7 +1963,11 @@ pub fn always_allow(
         ));
     };
     store::update(agent_id, |a| {
-        if !a.permissions.iter().any(|r| r.scope == scope) {
+        // The same rule remembered from chat becomes the card's: Always on
+        // the card is the user's own choice, floor and all.
+        if let Some(rule) = a.permissions.iter_mut().find(|r| r.scope.same_rule(&scope)) {
+            rule.scope.said = None;
+        } else {
             a.permissions.push(permissions::Rule {
                 id: store::new_id(),
                 scope: scope.clone(),
@@ -2211,11 +2222,12 @@ pub(super) enum Decision {
     Deny(String),
 }
 
-/// Whether a standing "Always allow" rule the user chose covers this call.
-/// With a one-time grant from a late Allow, the only way past a card: no
-/// setting (the independence level included) opens another.
+/// Whether a standing "Always allow" rule the user gave covers this call: one
+/// chosen on a card, or remembered from what they said in chat (`remember`,
+/// never on Go hard's floor). With a one-time grant from a late Allow, the
+/// only way past a card: no setting (the independence level included) opens another.
 fn always_allowed(caller: &store::Agent, tool: &str, input: &Value) -> bool {
-    permissions::matching(&caller.permissions, tool, input).is_some()
+    super::remember::covers(caller, tool, input)
 }
 
 /// Decide a tool call the engine wants the user's OK for: a one-time grant

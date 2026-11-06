@@ -79,6 +79,7 @@ import {
   localPathFromHref,
   openLocalPath,
   peerGroupLabel,
+  revokePermission,
   splitQuotes,
   type Agent,
   type AgentEngine,
@@ -686,6 +687,7 @@ export const NoteLine = memo(function NoteLine({
   // what it last showed. The agent didn't fail, so nothing offers a Retry.
   const tail = screenTail(message);
   if (tail) return <TakeoverEndedLine message={message} arrived={arrived} tail={tail} />;
+  if (message.remembered) return <RememberedLine message={message} arrived={arrived} />;
   // "Created Finance": the agent it names is a link, while that agent exists.
   const name = message.peer?.name;
   const at = name && onOpenPeer ? message.text.indexOf(name) : -1;
@@ -720,6 +722,44 @@ export const NoteLine = memo(function NoteLine({
     </>
   );
 });
+
+/**
+ * "Remembered: Lead Gen can always … · Undo": a rule the agent recorded from
+ * what you said in chat (`remember_permission`). Undo takes it back (on the
+ * phone too); the line then reads "Undone".
+ */
+function RememberedLine({ message, arrived }: { message: AgentMessage } & Arrival) {
+  const { showToast } = useOptionalToast();
+  const rule = message.remembered!;
+  const [busy, setBusy] = useState(false);
+  const undo = async () => {
+    setBusy(true);
+    try {
+      await revokePermission(message.agentId, rule.ruleId);
+    } catch (err) {
+      showToast(formatCommandError(asCommandError(err)), 'error');
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div
+      className="agent-note"
+      data-arrived={arrived || undefined}
+      data-message-ids={message.id}
+      data-remembered={rule.active ? 'active' : 'undone'}
+    >
+      {message.text} ·{' '}
+      {rule.active ? (
+        <TextButton className="agent-note__link" disabled={busy} onClick={() => void undo()}>
+          Undo
+        </TextButton>
+      ) : (
+        'Undone'
+      )}
+    </div>
+  );
+}
 
 /**
  * Links in the other assistant's words: web links open in the system
@@ -967,7 +1007,7 @@ function outcomeText(approval: Approval, agentName: string, compact: boolean): R
   if (approval.alwaysAllowed && approval.always) {
     return (
       <>
-        Always allowed ·{' '}
+        {approval.always.said ? 'Allowed by your rule' : 'Always allowed'} ·{' '}
         {approval.always.kind.startsWith('command') ? (
           <code>{approval.always.label}</code>
         ) : (

@@ -98,6 +98,23 @@ pub fn asks(tool: &str, input: &Value, ctx: &Ctx, outside: bool) -> bool {
     }
 }
 
+/// What no rule remembered from chat ever covers (`remember`), whatever it
+/// says: commands and file work on Go hard's own ask list (pushing,
+/// publishing, deploys, sending, `sudo`, deleting outside the work folders,
+/// credentials and system files), every action in the user's browser, and
+/// connector tools that send or post as the user, pay, push, delete or touch
+/// credentials: every connector call Go hard asks for, plus credentials,
+/// payouts and wipes. What is left for a remembered rule is what the lower
+/// levels ask for, such as updating the user's own records ("upsert social
+/// posts").
+pub fn floor(tool: &str, input: &Value, ctx: &Ctx) -> bool {
+    match tool {
+        t if t.starts_with(super::browser_gate::SERVER) => true,
+        t if t.starts_with("mcp__") => remembered_floor(t),
+        _ => asks(tool, input, ctx, false),
+    }
+}
+
 /* ------------------------------------------------------------ paths */
 
 fn resolve(raw: &str, ctx: &Ctx) -> Option<PathBuf> {
@@ -2003,6 +2020,70 @@ fn tool_words(tool: &str) -> Vec<String> {
         .filter(|w| !w.is_empty())
         .map(str::to_string)
         .collect()
+}
+
+/// A connector tool that asks at Go hard ([`connector_asks`]), or whose name
+/// says it pays out, wipes, or touches credentials ([`floor`]).
+fn remembered_floor(tool: &str) -> bool {
+    const FLOOR: &[&str] = &[
+        // Sending or posting as the user.
+        "send",
+        "reply",
+        "forward",
+        "post",
+        "publish",
+        "share",
+        "invite",
+        "submit",
+        "comment",
+        "react",
+        "tweet",
+        "dm",
+        "broadcast",
+        "notify",
+        // Money.
+        "charge",
+        "refund",
+        "pay",
+        "payment",
+        "payout",
+        "transfer",
+        "purchase",
+        "buy",
+        "checkout",
+        "subscribe",
+        // Pushing and deploying.
+        "push",
+        "deploy",
+        "release",
+        "merge",
+        // Deleting.
+        "delete",
+        "remove",
+        "trash",
+        "destroy",
+        "purge",
+        "erase",
+        "wipe",
+        "unpublish",
+        // Credentials.
+        "credential",
+        "credentials",
+        "password",
+        "passwords",
+        "secret",
+        "secrets",
+        "token",
+        "tokens",
+        "key",
+        "keys",
+        "apikey",
+        "auth",
+        "oauth",
+        "login",
+        "sudo",
+    ];
+    connector_asks(tool, false) || tool_words(tool).iter().any(|w| FLOOR.contains(&w.as_str()))
 }
 
 /// At Go hard a connector asks only when its name says it sends or publishes as

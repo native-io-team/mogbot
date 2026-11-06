@@ -20,7 +20,15 @@ import { useRouter } from 'expo-router';
 import { engineName, failureLine, folderName, formatClock } from '../lib/agents';
 import { drivenWait } from '../lib/bars';
 import { haptic } from '../lib/haptics';
-import { canCall, discardPending, editPending, resend, send } from '../lib/session';
+import {
+  canCall,
+  describeError,
+  discardPending,
+  editPending,
+  resend,
+  revokePermission,
+  send,
+} from '../lib/session';
 import type { PendingSend } from '../lib/sync';
 import {
   avatarSize,
@@ -282,6 +290,8 @@ export const MessageRow = memo(function MessageRow({
     case 'session':
       return message.session ? <SessionCard message={message} onError={onError} /> : null;
     case 'note':
+      // "Remembered: Lead Gen can always …": Undo while the rule is in force.
+      if (message.remembered) return <RememberedLine message={message} onError={onError} />;
       // "Started fresh · memory kept", a take-over that closed: something that happened.
       return <Line text={message.text} />;
     case 'sent_to_agent':
@@ -857,3 +867,38 @@ const useStyles = makeStyles((colors) => ({
     minHeight: lineHeight(type.small),
   },
 }));
+
+/**
+ * "Remembered: Lead Gen can always … · Undo": a rule the agent recorded from
+ * what the user said (`agents/remember.rs`). Undo takes it back, here or on
+ * the desk; the line then says "Undone".
+ */
+function RememberedLine({
+  message,
+  onError,
+}: {
+  message: AgentMessage;
+  onError: (text: string) => void;
+}) {
+  const [busy, setBusy] = useState(false);
+  const rule = message.remembered!;
+  if (!rule.active) return <Line text={`${message.text} · Undone`} />;
+  const action =
+    canCall('agents.revokePermission') && !busy
+      ? {
+          label: 'Undo',
+          hint: 'It asks again before doing this',
+          onPress: () => {
+            setBusy(true);
+            revokePermission(message.agentId, rule.ruleId)
+              .then(() => haptic.warning())
+              .catch((e: unknown) => {
+                haptic.error();
+                onError(describeError(e));
+              })
+              .finally(() => setBusy(false));
+          },
+        }
+      : undefined;
+  return <Line text={message.text} action={action} />;
+}

@@ -429,6 +429,8 @@ export interface PermissionScope {
   kind: 'command_prefix' | 'command' | 'domain' | 'tool';
   value: string;
   label: string;
+  /** The user's own words, when remembered from what they said in chat (`agents/remember.rs`). */
+  said?: string;
 }
 
 export interface PermissionRule extends PermissionScope {
@@ -1086,6 +1088,8 @@ export interface AgentMessage {
    * decide, each answered in place (the answer goes to that agent's card).
    */
   decide?: DecideItem[];
+  /** On a note: "Remembered: Lead Gen can always …", with Undo (`agents.revokePermission`) while active. */
+  remembered?: RememberedRule;
   /**
    * Links in the reply to a server on this Mac (`http://localhost:3400`),
    * taken out of the text by the Mac (`agents/local_links.rs`). One the Mac
@@ -1111,6 +1115,15 @@ export interface LocalLink {
   project?: string;
   /** `path` is an agent's copy of `project`. */
   copy?: boolean;
+}
+
+/** The rule behind a "Remembered: …" line. */
+export interface RememberedRule {
+  ruleId: string;
+  /** For every agent, not just this one. */
+  team?: boolean;
+  /** Still in force; false once undone, on the phone or the desk. */
+  active: boolean;
 }
 
 /** One of another agent's cards, brought to the user by an admin. */

@@ -116,6 +116,7 @@ pub mod prompts;
 pub mod quick_entry;
 pub mod quota;
 pub mod reach;
+pub mod remember;
 pub mod results;
 pub mod review;
 pub mod room_tools;
@@ -193,6 +194,7 @@ fn greet(agent_id: &str) {
         room: None,
         decide: Vec::new(),
         local_links: Vec::new(),
+        remembered: None,
     };
     if let Err(e) = store::append_message(&message) {
         tracing::warn!("[Agents] Couldn't write the Chief's greeting: {e}");
