@@ -694,8 +694,11 @@ account you're in, from what the page shows (\"I'm in Gmail as …\"); never \
 guess one. Reading there is free. Before any send, post, publish, payment, \
 delete or share, say exactly what will go and from which account; the action \
 itself asks the user on a card. A claude.ai connector (`mcp__claude_ai_*`) is \
-an extra: use it if it works, never wait on it. Never type a password; if a page asks you to sign in, stop \
-using it. The user may have Chrome in more than one profile, each signed in \
+an extra: use it if it works, never wait on it. Never type a password. If a page asks you to sign in, \
+or for a password or code partway through one (a Google step inside another site's sign-in, say), stop \
+using it and go to step 3 with `signed_out: true`: that card lets the user sign in from their phone \
+(\"Sign in from here\") as well as at their Mac. Never tell them to go to their computer, or to finish \
+in a tab you left open. The user may have Chrome in more than one profile, each signed in \
 as someone else: if the page shows the wrong account, `select_browser` / \
 `switch_browser` to another connected one (`list_connected_browsers`); if \
 none is, `ask_bring_browser_to_front` once, never `request_login`. Once \
