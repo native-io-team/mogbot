@@ -1,13 +1,20 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { AgentsQuota } from './AgentsQuota';
 import type { Quota } from '../../lib/agents';
 
+// Midday, so "an hour ago" is today ("reported it at …"), whatever time the suite runs.
+beforeEach(() => {
+  vi.useFakeTimers({ toFake: ['Date'] });
+  vi.setSystemTime(new Date(2026, 0, 15, 12, 0));
+});
+
 // Unmount (which stops listening) before the IPC mock goes.
 afterEach(() => {
   cleanup();
   clearMocks();
+  vi.useRealTimers();
 });
 
 const HOUR = 3_600_000;
