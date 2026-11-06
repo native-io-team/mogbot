@@ -247,6 +247,10 @@ struct Runtime {
     /// check-in, a room or outside text) is among what the turn in progress
     /// answers, or the one it replaced. What it hands on is the user's ask.
     user_asked: bool,
+    /// The queue ids of the messages the turn in progress answers. A user's
+    /// message is queued under its chat message's id (`enqueue_user`), so a
+    /// recap never hands the turn what it is also being sent.
+    batch_ids: Vec<String>,
 }
 
 /// Why a take-over can't start now.
@@ -265,6 +269,10 @@ impl Runtime {
     fn admit(&mut self, inbound: Inbound) -> Result<bool, Box<Inbound>> {
         if self.deleting {
             return Err(Box::new(inbound));
+        }
+        // The same message twice (one id, queued again): once is enough.
+        if !inbound.id.is_empty() && self.queue.iter().any(|m| m.id == inbound.id) {
+            return Ok(false);
         }
         self.queue.push_back(inbound);
         if self.running || self.driven {
@@ -1657,6 +1665,27 @@ pub fn enqueue(app: &AppHandle, agent_id: &str, text: String, from: From) {
     );
 }
 
+/// Queue the user's own message, under its chat message's id: the turn that
+/// answers it knows which line in the log it is (see [`with_recap`]), and the
+/// same message is never queued twice.
+pub fn enqueue_user(app: &AppHandle, agent_id: &str, message_id: &str, text: String) {
+    push(
+        app,
+        agent_id,
+        Inbound {
+            id: message_id.to_string(),
+            text,
+            from: From::User,
+            reply: false,
+            routine: false,
+            ticket: None,
+            room: None,
+            outside: false,
+            resume: 0,
+        },
+    );
+}
+
 /// Queue the turn a check-in wakes the agent for: one of its routines
 /// (`routine`), or a one-time check-in. `ticket` is the scheduled run it
 /// answers (`runs::issue`), settled however the turn ends.
@@ -2626,6 +2655,7 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     );
     let batch: Vec<Inbound> = runtime.queue.drain(..take).collect();
     save_inbox(agent_id, &runtime.queue);
+    runtime.batch_ids = batch.iter().map(|m| m.id.clone()).collect();
     runtime.room = batch.first().and_then(|m| m.room.clone()).map(|mut room| {
         // The deepest hop the turn answers, like an agent's request.
         room.hop = batch
@@ -3782,7 +3812,10 @@ fn with_recap(agent_id: &str, prompt: &str) -> String {
     let Ok(log) = store::messages(agent_id, 24) else {
         return prompt.to_string();
     };
-    let lines = recap_lines(&log);
+    // What this turn is sent, and what waits behind it, are already on their
+    // way as messages: in the recap too, the agent read them twice ("your
+    // message came through twice").
+    let lines = recap_lines_except(&log, &on_the_way(agent_id));
     if lines.is_empty() {
         return prompt.to_string();
     }
@@ -3796,6 +3829,31 @@ fn with_recap(agent_id: &str, prompt: &str) -> String {
 /// What came before it the user chose to leave behind, so a new session
 /// (an engine switch, a session that vanished) is never handed it again.
 fn recap_lines(log: &[store::AgentMessage]) -> Vec<String> {
+    recap_lines_except(log, &std::collections::HashSet::new())
+}
+
+/// The ids of what the turn in progress answers and what is queued behind it.
+fn on_the_way(agent_id: &str) -> std::collections::HashSet<String> {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .map(|r| {
+            r.batch_ids
+                .iter()
+                .chain(r.queue.iter().map(|m| &m.id))
+                .filter(|id| !id.is_empty())
+                .cloned()
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// [`recap_lines`], leaving out the messages in `skip` (by id).
+fn recap_lines_except(
+    log: &[store::AgentMessage],
+    skip: &std::collections::HashSet<String>,
+) -> Vec<String> {
     let since = log
         .iter()
         .rposition(|m| m.fresh && m.kind == MessageKind::Note)
@@ -3805,6 +3863,7 @@ fn recap_lines(log: &[store::AgentMessage]) -> Vec<String> {
         // An import conversation was the sealed interview's, never this
         // agent's: it isn't handed to its session.
         .filter(|m| !super::connector::is_connector_line(m))
+        .filter(|m| !skip.contains(&m.id))
         .filter_map(|m| {
             let who = match m.kind {
                 MessageKind::User => "User".to_string(),
@@ -5991,6 +6050,43 @@ mod tests {
         ];
         assert_eq!(recap_lines(&log), vec!["User: New topic", "You: Sure"]);
         assert_eq!(recap_lines(&log[..2]).len(), 2, "no divider: all of it");
+    }
+
+    /// A message sent while a turn ran is in the log *and* on the queue; a
+    /// recap (a lost session, an engine switch) used to hand it over as
+    /// conversation and then again as the new message: "your message came
+    /// through twice". The same message queued twice is also taken once.
+    #[test]
+    fn a_message_sent_mid_turn_reaches_the_agent_once() {
+        let id = "dup-agent";
+        let first = new_message(id, MessageKind::User, "Draft the newsletter");
+        let reply = new_message(id, MessageKind::Agent, "On it");
+        let later = new_message(id, MessageKind::User, "Also add the event dates");
+        let inbound = |m: &AgentMessage| Inbound {
+            id: m.id.clone(),
+            text: m.text.clone(),
+            from: From::User,
+            reply: false,
+            routine: false,
+            ticket: None,
+            room: None,
+            outside: false,
+            resume: 0,
+        };
+        {
+            let mut rt = RUNTIMES.lock().unwrap();
+            let r = rt.entry(id.into()).or_default();
+            // The turn in progress answers `first`; `later` arrived meanwhile,
+            // and a resend of it (one id) doesn't queue it again.
+            r.batch_ids = vec![first.id.clone()];
+            assert!(matches!(r.admit(inbound(&later)), Ok(true)));
+            assert!(matches!(r.admit(inbound(&later)), Ok(false)));
+            assert_eq!(r.queue.len(), 1);
+        }
+        let log = vec![first.clone(), reply, later.clone()];
+        assert_eq!(recap_lines_except(&log, &on_the_way(id)), vec!["You: On it"]);
+        assert_eq!(recap_lines(&log).len(), 3, "nothing on the way: all of it");
+        RUNTIMES.lock().unwrap().remove(id);
     }
 
     #[test]

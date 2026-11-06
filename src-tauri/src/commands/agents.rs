@@ -276,7 +276,7 @@ pub async fn agents_send(
             }
         }
     }
-    runner::enqueue(&app, &agent_id, prompt, runner::From::User);
+    runner::enqueue_user(&app, &agent_id, &message.id, prompt);
     agents::tray::mark_used(&app);
     Ok(message)
 }

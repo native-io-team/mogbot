@@ -3071,6 +3071,14 @@ starts a new session with the recent visible conversation (`with_recap`),
 would see only the chat, not what its tools did, and could do it all again
 (send a message twice, redo writes). That turn stops on a plain line instead
 (`runner::not_carried_line`). Carried copies are written 0600.
+
+**A recap never repeats what is on its way.** The user's message is queued
+under its chat message's id (`runner::enqueue_user`), and a recap leaves out
+the messages the turn answers and those queued behind it
+(`runner::on_the_way`): a message sent while a turn ran was in the log *and*
+on the queue, so a new session read it in the recap and then again as the new
+message ("your message came through twice"). The queue also refuses the same
+id twice.
 Claude Code itself handles thinking written under another organization: it
 says so and regenerates it (string in its binary), rather than failing.
 
