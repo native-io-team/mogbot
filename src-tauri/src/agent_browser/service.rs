@@ -811,6 +811,25 @@ pub fn profile_dir() -> PathBuf {
     profile_root().join("Agents")
 }
 
+/// `agent` has a tab open in the agents' Chrome now (doesn't start it).
+pub fn has_tabs(agent: &str) -> bool {
+    running().is_some_and(|s| s.has_owner(&Owner::Agent(agent.to_string())))
+}
+
+/// Bring `agent`'s current tab on screen and in front (`show`), or put it
+/// back in its corner (`!show`), so the person can watch it work.
+pub fn show_agent(agent: &str, show: bool) -> Result<(), String> {
+    let svc = running().ok_or("Its browser isn't open right now.")?;
+    let tab = svc
+        .tab_for(agent, None)
+        .map_err(|_| "It has no page open in its browser right now.".to_string())?;
+    if show {
+        svc.show(&tab)
+    } else {
+        svc.park(&tab)
+    }
+}
+
 /// The running Chrome, if there is one (doesn't start it).
 pub fn running() -> Option<Arc<Service>> {
     let mut g = RUNNING.lock().unwrap_or_else(|e| e.into_inner());

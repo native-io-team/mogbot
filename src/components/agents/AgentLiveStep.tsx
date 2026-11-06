@@ -6,7 +6,9 @@
  * this step". Calm by default; whether it's alive is always one click away
  * (the line itself: "Last activity 4s ago · using the CPU"). Once the Mac
  * says there's been no progress for too long, the line says so instead and
- * offers "Check on it" and "Stop".
+ * offers "Check on it" and "Stop". While it has a page open in its own
+ * browser (the agents' Chrome, parked in a corner of the screen), "Watch
+ * its browser" brings that window on screen, and "Put it away" parks it.
  *
  * The words come from the Mac (`agents::work`, `agents::describe`); the
  * timings and hints from the protocol's shared helpers, so the desk and the
@@ -29,6 +31,7 @@ import {
   type TurnWork,
   type WorkStep,
 } from '../../lib/agents';
+import { showAgentBrowser } from '../../lib/agentsOwnBrowser';
 import {
   formatElapsed,
   lifeLine,
@@ -106,6 +109,7 @@ export function useLiveStep({ agent, work, activity, leaving }: LiveStepProps): 
   const [lifeOpen, setLifeOpen] = useState(false);
   const [said, setSaid] = useState<{ at: number; text: string } | null>(null);
   const [busy, setBusy] = useState(false);
+  const [watching, setWatching] = useState(false);
   if (!agent || !work || leaving) return { line: null, details: null };
 
   const run = async (what: () => Promise<string | boolean>) => {
@@ -172,11 +176,31 @@ export function useLiveStep({ agent, work, activity, leaving }: LiveStepProps): 
   const stopStep = isCall && offersStopStep(call, now);
   const saidHere = said && said.at === work.startedAt ? said.text : null;
   const showLife = (lifeOpen || quiet) && life;
+  const browser = Boolean(work.ownBrowser);
+  const watch = async () => {
+    const show = !watching;
+    await showAgentBrowser(agent.id, show);
+    setWatching(show);
+    return true;
+  };
   const details =
-    hint || command || stopStep || saidHere || showLife ? (
+    hint || command || stopStep || saidHere || showLife || browser ? (
       <div className="agent-live">
         {showLife && <p className="agent-live__life">{life}</p>}
         {hint && <p className="agent-live__hint">{hint}</p>}
+        {browser && (
+          <div className="agent-live__row">
+            <TextButton
+              tabIndex={0}
+              variant="strong"
+              className="agent-live__action"
+              disabled={busy}
+              onClick={() => void run(watch)}
+            >
+              {watching ? 'Put it away' : 'Watch its browser'}
+            </TextButton>
+          </div>
+        )}
         {(command || stopStep) && (
           <div className="agent-live__row">
             {command && call && <OutputPeek lines={call.output ?? []} note={outputNote(call)} />}

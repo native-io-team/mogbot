@@ -639,15 +639,43 @@ fn toml(s: &str) -> String {
 /// Whether a turn of `agent` gets the agents' browser (`agent_browser`):
 /// switched on and Chrome is here, the agent's browser isn't off (in "What
 /// it can reach" or its settings), and the turn doesn't answer outside text.
+/// When it doesn't, the reason is logged at info
+/// (`agent_browser::log_unavailable`).
 pub fn agents_browser_for_turn(agent: &store::Agent, outside: bool) -> bool {
     let available = crate::agent_browser::available();
-    available
-        && agents_browser_allowed(
-            available,
-            super::policy::effective(agent).browser,
-            agent,
-            outside,
-        )
+    let policy = available && super::policy::effective(agent).browser;
+    let why = agents_browser_refusal(available, policy, agent, outside);
+    if let Some(why) = why {
+        let why = if why == UNAVAILABLE {
+            crate::agent_browser::unavailable_reason().unwrap_or(why)
+        } else {
+            why
+        };
+        crate::agent_browser::log_unavailable(&agent.id, why);
+    }
+    why.is_none()
+}
+
+const UNAVAILABLE: &str = "not available on this Mac";
+
+/// Why a turn goes without the agents' browser, or `None` when it gets it.
+fn agents_browser_refusal(
+    available: bool,
+    policy: bool,
+    agent: &store::Agent,
+    outside: bool,
+) -> Option<&'static str> {
+    if !available {
+        Some(UNAVAILABLE)
+    } else if outside {
+        Some("the turn answers outside text")
+    } else if agent.reach.browser_off {
+        Some("its browser is off in What it can reach")
+    } else if !policy {
+        Some("its settings don't let it use a browser")
+    } else {
+        None
+    }
 }
 
 /// [`agents_browser_for_turn`], pure. `policy`: its settings' browser rule.
@@ -657,7 +685,7 @@ pub fn agents_browser_allowed(
     agent: &store::Agent,
     outside: bool,
 ) -> bool {
-    available && policy && !outside && !agent.reach.browser_off
+    agents_browser_refusal(available, policy, agent, outside).is_none()
 }
 
 /// Everything a turn of `agent` gets, its servers on the bridge at `port`.
@@ -932,6 +960,30 @@ mod tests {
         store::set_root_for_tests(Some(dir.path().to_path_buf()));
         f(dir.path());
         store::set_root_for_tests(None);
+    }
+
+    #[test]
+    fn a_turn_without_the_agents_browser_says_why() {
+        let mut a: store::Agent = serde_json::from_value(serde_json::json!({
+            "id": "a", "name": "A", "shape": 0, "color": "red", "createdAt": 0
+        }))
+        .unwrap();
+        assert_eq!(agents_browser_refusal(true, true, &a, false), None);
+        assert_eq!(
+            agents_browser_refusal(false, true, &a, false),
+            Some(UNAVAILABLE)
+        );
+        assert!(agents_browser_refusal(true, true, &a, true)
+            .unwrap()
+            .contains("outside text"));
+        assert!(agents_browser_refusal(true, false, &a, false)
+            .unwrap()
+            .contains("settings"));
+        a.reach.browser_off = true;
+        assert!(agents_browser_refusal(true, true, &a, false)
+            .unwrap()
+            .contains("What it can reach"));
+        assert!(!agents_browser_allowed(true, true, &a, false));
     }
 
     fn oauth(url: &str) -> Kind {

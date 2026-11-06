@@ -183,6 +183,7 @@ const commands = {
   agents_check_on: () =>
     'Its command is still running but isn’t using the CPU, and its last progress was 5 min ago. It may be waiting on something, like a server or the network.',
   agents_stop_step: () => 'Stopped that step. It carries on from there.',
+  agents_show_agent_browser: () => null,
 };
 
 const openAcme = { click: '[data-agent-id="acme"]' };

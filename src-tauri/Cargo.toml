@@ -100,18 +100,22 @@ tauri-plugin-global-shortcut = "2"
 
 [features]
 # The agent browser (docs/internal/agent-browser.md): the user's installed
-# Chrome on a profile of the app's own, driven over a CDP pipe. On by
-# default; a build without it has no agents' browser and the login cards
-# fall back to Claude in Chrome.
-default = ["agent-browser"]
-agent-browser = []
+# Chrome on a profile of the app's own, driven over a CDP pipe. Always in
+# the build unless `no-agent-browser` is named: an opt-out, never a default
+# feature, because `tauri dev` builds with `--no-default-features` and adds
+# back only the defaults it read when it started, so a default feature
+# added while it runs (or any build that drops defaults) silently left
+# agents with no browser of their own. Without it the login cards fall
+# back to Claude in Chrome.
+default = []
+no-agent-browser = []
 # The demo's loopback stand-in for the phone (`agent_browser::viewer`): an
 # input server, so it's never in the app, only in the example and tests.
 browser-demo = []
 
 [[example]]
 name = "agent_browser_demo"
-required-features = ["agent-browser", "browser-demo"]
+required-features = ["browser-demo"]
 
 [dev-dependencies]
 
