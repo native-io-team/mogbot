@@ -1409,7 +1409,105 @@ Deny declines.
   redirect fails `state`. A team row signed in on the phone grants the
   row's other agents the same connection once it's in (`fan_out`).
 
+### The agents' browser (`agent_browser/`)
+
+Owner requirement: "It's still telling me to go to my computer and enter
+passwords. I want to do that from the phone." The agents get a Chrome of
+their own, and the person signs in to it from the phone.
+
+- **What it is.** The user's installed Google Chrome, started by the app
+  with a profile of its own (`<app support>/agent-browser/Agents`, never the
+  user's Chrome folder: `chrome::profile_is_ours`), over
+  `--remote-debugging-pipe`. No TCP port (nothing else on the Mac can
+  attach), no automation-masking switch, never headless (decision and
+  measurements: docs/internal/agent-browser.md). One window per tab, parked
+  in the bottom-right corner, not minimized. Started on first use, closed
+  after 15 idle minutes, when its Settings switch goes off, for a plain
+  sign-in, and when the app quits.
+- **Settings → Agents → Agents' browser**, on by default
+  (`agent-browser.json`). Off: no turn gets it and cards don't offer it.
+- **The `browser` MCP server** on the agent bridge (`/mcp/browser`, the
+  turn's bearer secret, `agent_browser::tools`), added to every turn of
+  either engine (`connections::for_turn`) unless the switch is off, the
+  agent's browser is off ("What it can reach" or its settings) or the turn
+  answers outside text. Tools: `tabs`, `open`, `navigate`, `read_page`
+  (the accessibility tree with `ref_N`), `find`, `get_text`, `screenshot`,
+  `click`, `type`, `press`, `scroll`, `wait_for`, `close_tab`. No script,
+  upload or download tool; `type` refuses password and one-time-code
+  fields; an agent sees its own tabs only.
+- **What asks** is `browser_gate`, the same rules as Claude in Chrome
+  (`gate_agents_with` maps each tool to its Claude in Chrome equivalent):
+  looking is free; a click on a control whose accessible name sends, posts,
+  pays, deletes or shares asks, as does Enter outside a search box and any
+  click on a checkout or compose page. Labels come from the tree the server
+  read itself. An engine that asked first leaves a one-call pass
+  (`tools::note_cleared`); a call nobody asked about is decided by the
+  server (`mcp::decide_agents_browser`). "Go hard" doesn't auto-allow a step
+  the browser gate said asks (this also closed that gap for Claude in
+  Chrome's send clicks).
+- **Which browser** (`access_chain`): the agents' browser first; the user's
+  own Chrome (Claude in Chrome) only when the site was last found signed in
+  only there (`browser_profiles`, site → profile; a site signed in in the
+  agents' browser is remembered as `Agents`). Never silently switched
+  because one was blocked.
+
+**Signing in from the phone** (`agents/phone_signin.rs`, `Via::AgentsBrowser`):
+
+1. A card for a site offers **Sign in here** first (method
+   `agent_browser`, either engine). On the phone that button is **Sign in
+   from here** and opens `/signin` (no `loginStart`).
+2. `agents.signinBegin` opens the site's account page (`probe_url`) in a
+   window of the agents' browser owned by the sign-in (no agent's tools can
+   reach it; the agent the card is for has its browser refused until it
+   ends, `signin::refusal_for`). No extension, so no per-site Allow at the
+   Mac.
+3. Frames: the window's screencast (`Page.startScreencast`, JPEG q60, at
+   most 780px wide), acked at most 15 times a second; the phone asks
+   `agents.signinFrame {after: seq}` and the Mac answers with the next
+   frame as soon as it's drawn (up to 1.5 s), newest wins, nothing queued
+   or kept. Over the authenticated companion socket, and the phone sends
+   it only over Tailscale to the Mac it pinned.
+4. Input: taps in the picture's pixels, mapped to the page's CSS pixels;
+   typing as one `Input.insertText`; the short key list; scrolls. While the
+   page's focused field is a password or code, the phone's field turns to
+   secure entry by itself (`secure` on the frame). What's typed is never
+   logged, audited or kept (as before).
+5. **Done** loads the account page in the same window and reads where it
+   landed. Signed in: the window closes, and `logins::complete_agents_browser`
+   answers the card ("Signed in · www.linkedin.com, in the agents' browser"),
+   gives the agent the site, wakes it, and answers every other waiting card
+   for the same service (one profile, one sign-in).
+
+**At the desk**, **Sign in here** brings the same window on screen; the card
+finishes by itself once the page reads as signed in twice, two seconds
+apart (`logins::agents_browser_at_desk`).
+
+**Google and other strict sign-ins.** A page that refuses a driven browser
+(`refusal::refuses`: Google's "This browser or app may not be secure",
+`/signin/rejected`) comes to the phone as a `blocked` frame with the reason,
+and **Sign in another way** (`agents.signinFallback`): the agents' Chrome is
+closed and the same profile opens in a plain Chrome app window
+(`--app=<url>`, no debugging switch at all, `plain.rs`), which the phone sees
+through macOS window capture (`screencapture -l`) and drives with CGEvents
+(`macos.rs`). That needs Screen Recording and Accessibility for the app:
+Settings → Agents shows both with **Allow…** (Screen Recording's own prompt,
+then the System Settings pane). Without them the phone says plainly that
+Google needs one sign-in at the Mac. At the desk the plain window just
+opens; quitting it (⌘Q) is when the card checks. Either way the agents'
+Chrome starts again on the profile and finds the new cookies.
+
+**Not verified** (and why): a real sign-in on any site (nothing was
+submitted); Google's refusal page itself (the detection is from its
+published words and URL); the plain-window path end to end (capture and
+CGEvent input need the two permissions granted to a built app, which
+weren't given); the frame rate over cellular; passkeys in the Agents
+profile. What was run: see docs/internal/agent-browser.md, "v1".
+
 ### Signing in on your Mac from the phone (`agents/phone_signin.rs`)
+
+*Since the agents' browser (above), this is the way for a card without
+it (`Via::Chrome`): its switch off, or no Chrome. The same screen,
+methods and rules.*
 
 Owner requirement: when an agent can't get into a site because the Mac's
 Chrome isn't signed in, the user can do that sign-in **from the phone**,

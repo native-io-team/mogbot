@@ -1,9 +1,10 @@
 # The agent browser
 
 Research and a working prototype, November 2026 (Chrome 156.0.8078.80, macOS
-26, this Mac). This is a proposal; nothing here is wired into agent turns. The
-prototype sits behind the `agent-browser` cargo feature, which is off in every
-build.
+26, this Mac), then **v1, shipped behind the `agent-browser` cargo feature,
+on by default** and a Settings → Agents switch, on by default. What v1 is and
+what was verified: "v1" at the end. The user-facing design is
+docs/agents.md, "The agents' browser".
 
 **The question.** Claude in Chrome is mediocre, and Grok Bot has its own
 computer with its own browser. Could agents get a real browser of their own on
@@ -405,3 +406,40 @@ couldn't give.
 - **Behaviour over cellular.** The viewer was loopback only.
 - **Windows.** The pipe code is unix-only; `chrome.rs` knows only the macOS
   path.
+
+## v1
+
+Shipped: `src-tauri/src/agent_browser/` (service, `browser` MCP server,
+sign-in windows, the Google fallback), the agents' browser way in on login
+cards, phone sign-in through it, Settings → Agents → Agents' browser.
+Design for users and agents: docs/agents.md, "The agents' browser".
+
+**Decisions kept from the research.** `--remote-debugging-pipe` only (no
+port, no `--disable-blink-features=AutomationControlled`, never headless);
+real Chrome; a profile of the app's own; one parked window per tab; no
+script tool; the human does sign-ins and challenges. Google's refusal goes
+to a plain window with no debugging switch, never to a disguised one.
+
+**Run on this Mac, 2026-11-05** (`cargo run --example agent_browser_live --
+<scratch>`: the shipped code against the installed Chrome, scratch profile,
+public sites, nothing typed into a sign-in page, nothing submitted):
+
+| Step | Result |
+| --- | --- |
+| Launch to first CDP reply | 306–329 ms |
+| `open` example.com, `read_page`, `click` its link by ref | landed on iana.org, 612 ms |
+| `screenshot` | 1280×773 at CSS size (first call ~2.9 s in a debug build) |
+| Wikipedia: `find` "search" → `type` by ref → `press` Enter | landed on the Rust article |
+| `open file://…`, `press cmd+w` | refused |
+| Sign-in window, github.com/login and accounts.google.com | first screencast frame 12–17 ms, 780×471, 9–11 KB; read as a sign-in page; not a refusal |
+| A tap on GitHub's form (picture → CSS mapping) | new frame; focused field read as secret (password) |
+| The agent the card is for, during / after | refused / free |
+| `macos::window_of` on the parked window | 1280×860 at the bottom right (x 1472, y 941) |
+| `macos::capture` of that one window | 780×524, 55 KB, ~1.5 s in a debug build |
+| `Browser.close` | Chrome exited, 0.4–3.2 s |
+
+**Not run:** a real sign-in anywhere; Google's refusal page (detected from
+its published words and URL; the identifier page loaded normally in the
+driven window); plain-mode input (CGEvents would have moved this Mac's
+cursor); the phone over Tailscale (the mobile screen was tested against the
+mock Mac and in unit tests); window capture's rate in a release build.
