@@ -60,7 +60,6 @@ pub mod autoallow;
 pub mod broker;
 pub mod browser;
 pub mod browser_gate;
-pub mod go_hard;
 pub mod browser_profiles;
 pub mod capabilities;
 pub mod capacity;
@@ -81,6 +80,7 @@ pub mod expiry;
 pub mod failure;
 pub mod files;
 pub mod forecast;
+pub mod go_hard;
 pub mod harvest;
 pub mod import;
 pub mod independence;
@@ -129,6 +129,7 @@ pub mod wallet;
 pub mod watch;
 pub mod watch_seal;
 pub mod work;
+pub mod workplace;
 
 use crate::errors::CommandError;
 

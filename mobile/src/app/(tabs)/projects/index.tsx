@@ -8,9 +8,20 @@
  * The phone is for the chat, so this is the plain-language view of what's
  * running: no branch names or git counts up front, just how many files
  * have changed, and each tab as its engine names it.
+ *
+ * An agent at work in a project (its turn's folder, as the Mac reports it:
+ * `TurnWork.project`) is listed on the project's card with the step it's on,
+ * in the words its chat uses; tapping it opens that chat. Those projects come
+ * first, after any waiting on a decision.
  */
 
-import type { ProjectSummary, SessionSummary } from '@shipstudio/companion-protocol';
+import {
+  agentsAtWork,
+  atWorkText,
+  type Agent,
+  type ProjectSummary,
+  type SessionSummary,
+} from '@shipstudio/companion-protocol';
 import { Stack, useRouter } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
@@ -20,22 +31,27 @@ import { ConnectionNotice, LinkProblem, useNow } from '../../../components/Conne
 import { SessionState, useTaskName } from '../../../components/session';
 import { choose } from '../../../components/menu';
 import { Button, Icon, useRipple, T } from '../../../components/ui';
-import { formatAgo } from '../../../lib/agents';
+import { formatAgo, workingLine } from '../../../lib/agents';
+import { AgentAvatar } from '../../../components/agent';
 import { haptic } from '../../../lib/haptics';
 import { canCall, describeError, previewScreenshot, refreshProjects } from '../../../lib/session';
 import { useApp } from '../../../lib/store';
 import { largeTitle } from '../../../lib/navigation';
 import { useRefresh } from '../../../lib/refresh';
-import { iconSize, radius, space } from '../../../lib/theme';
+import { avatarSize, iconSize, radius, space } from '../../../lib/theme';
 import { makeStyles, useColors } from '../../../lib/appearance';
 
-/** Waiting on you first, then the most recently active. */
-function order(projects: ProjectSummary[]): ProjectSummary[] {
+/** Waiting on you first, then where an agent is at work, then the most recently active. */
+function order(projects: ProjectSummary[], agents: readonly Agent[] = []): ProjectSummary[] {
   const asking = (p: ProjectSummary) => p.sessions.some((s) => s.state === 'needs_decision');
+  const busy = (p: ProjectSummary) => agentsAtWork(agents, p.path).length > 0;
   const last = (p: ProjectSummary) => Math.max(0, ...p.sessions.map((s) => s.lastOutputAt));
   return [...projects].sort(
     (a, b) =>
-      Number(asking(b)) - Number(asking(a)) || last(b) - last(a) || a.name.localeCompare(b.name)
+      Number(asking(b)) - Number(asking(a)) ||
+      Number(busy(b)) - Number(busy(a)) ||
+      last(b) - last(a) ||
+      a.name.localeCompare(b.name)
   );
 }
 
@@ -56,7 +72,8 @@ export default function Projects() {
       ),
     []
   );
-  const sorted = useMemo(() => order(projects ?? []), [projects]);
+  const agents = useApp((s) => s.overview?.agents);
+  const sorted = useMemo(() => order(projects ?? [], agents ?? []), [projects, agents]);
   const { refreshing, onRefresh } = useRefresh(load);
   const screenOptions = useMemo(() => largeTitle(colors, 'Projects'), [colors]);
 
@@ -146,6 +163,8 @@ function ProjectCard({
   const canStart = useApp((s) => canCall('sessions.start', s.welcome));
   const canShoot = useApp((s) => canCall('preview.screenshot', s.welcome));
   const [shooting, setShooting] = useState(false);
+  const agents = useApp((s) => s.overview?.agents);
+  const atWork = useMemo(() => agentsAtWork(agents ?? [], project.path), [agents, project.path]);
 
   const shoot = () =>
     choose('Screenshot the preview', [
@@ -188,13 +207,23 @@ function ProjectCard({
           </T>
         )}
       </View>
+      {atWork.map((a, i) => (
+        <AgentAtWorkRow key={a.id} agent={a} first={i === 0} />
+      ))}
       {project.sessions.length === 0 ? (
-        <T variant="small" color={colors.textSecondary} style={styles.empty}>
-          Nothing running here
-        </T>
+        atWork.length > 0 ? null : (
+          <T variant="small" color={colors.textSecondary} style={styles.empty}>
+            Nothing running here
+          </T>
+        )
       ) : (
         project.sessions.map((s, i) => (
-          <SessionRow key={s.sessionId} session={s} project={project} first={i === 0} />
+          <SessionRow
+            key={s.sessionId}
+            session={s}
+            project={project}
+            first={i === 0 && atWork.length === 0}
+          />
         ))
       )}
       {(canStart || canShoot) && (
@@ -228,6 +257,43 @@ function ProjectCard({
         </View>
       )}
     </Animated.View>
+  );
+}
+
+/** An agent at work in the project: the step it's on; tap for its chat. */
+function AgentAtWorkRow({ agent, first }: { agent: Agent; first: boolean }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const ripple = useRipple();
+  const router = useRouter();
+  const now = useNow(5_000);
+  const text = atWorkText(agent, workingLine(agent, true), now);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`${agent.name}, ${text}. Open its chat`}
+      android_ripple={ripple}
+      onPress={() => {
+        haptic.select();
+        router.push({ pathname: '/chat/[id]', params: { id: agent.id } });
+      }}
+      style={({ pressed }) => [
+        styles.session,
+        !first && styles.divider,
+        pressed && { backgroundColor: colors.surfaceControl },
+      ]}
+    >
+      <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.group} />
+      <View style={styles.sessionText}>
+        <T variant="subhead" color={colors.textStrong} numberOfLines={1}>
+          {agent.name}
+        </T>
+        <T variant="small" color={colors.textSecondary} numberOfLines={1}>
+          {text}
+        </T>
+      </View>
+      <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
+    </Pressable>
   );
 }
 
