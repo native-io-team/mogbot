@@ -407,7 +407,13 @@ fn the_users_own_request_for_a_declined_app_lifts_the_no() {
 
         let no = seen(&other, "slack", ApprovalStatus::Denied, None);
         assert!(matches!(
-            decide(&social, &r, &none, &Here::default(), std::slice::from_ref(&no)),
+            decide(
+                &social,
+                &r,
+                &none,
+                &Here::default(),
+                std::slice::from_ref(&no)
+            ),
             Step::AlreadyDeclined { .. }
         ));
         let asked = Here {

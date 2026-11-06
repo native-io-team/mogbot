@@ -684,7 +684,12 @@ pub fn open_questions(log: &[store::AgentMessage]) -> Vec<String> {
                 .lines()
                 .map(str::trim)
                 .filter(|l| l.ends_with('?'))
-                .map(|l| l.trim_start_matches(['-', '*', ' ']).chars().take(200).collect::<String>())
+                .map(|l| {
+                    l.trim_start_matches(['-', '*', ' '])
+                        .chars()
+                        .take(200)
+                        .collect::<String>()
+                })
                 .collect::<Vec<_>>()
         })
         .collect();
@@ -704,12 +709,7 @@ where
 
 /// [`wake_prompt`], with the questions still waiting on the user
 /// ([`open_questions`]).
-pub fn wake_prompt_with<Tz: TimeZone>(
-    tz: &Tz,
-    firing: &Firing,
-    now: i64,
-    open: &[String],
-) -> String
+pub fn wake_prompt_with<Tz: TimeZone>(tz: &Tz, firing: &Firing, now: i64, open: &[String]) -> String
 where
     Tz::Offset: std::fmt::Display,
 {
@@ -1812,13 +1812,18 @@ mod tests {
         assert!(is_nothing_new("[nothing new]"));
         assert!(is_nothing_new(" [Nothing new]. "));
         assert!(is_nothing_new("Nothing new"));
-        assert!(!is_nothing_new("Nothing new in the inbox, but the invoice bounced."));
+        assert!(!is_nothing_new(
+            "Nothing new in the inbox, but the invoice bounced."
+        ));
 
         let said = |kind, text: &str| crate::agents::runner::new_message("a", kind, text);
         let log = vec![
             said(MessageKind::Agent, "Should I archive last month's leads?"),
             said(MessageKind::User, "Yes"),
-            said(MessageKind::Agent, "Done.\n\nWhich list should the new leads go to?"),
+            said(
+                MessageKind::Agent,
+                "Done.\n\nWhich list should the new leads go to?",
+            ),
             said(MessageKind::CheckIn, "Sweep the inbox"),
             said(MessageKind::Agent, "Nothing urgent."),
         ];
@@ -1840,7 +1845,9 @@ mod tests {
             retry: None,
         };
         let p = wake_prompt_with(&Eastern, &firing, due_at, &open_questions(&log));
-        assert!(p.contains("Still waiting on the user, asked earlier: “Which list should the new leads go to?”"));
+        assert!(p.contains(
+            "Still waiting on the user, asked earlier: “Which list should the new leads go to?”"
+        ));
         assert!(p.contains(NOTHING_NEW));
         assert!(!wake_prompt(&Eastern, &firing, due_at).contains("Still waiting"));
     }

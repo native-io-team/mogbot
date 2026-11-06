@@ -362,6 +362,8 @@ export function createMockServer(opts: MockOptions = {}) {
 
   const now = Date.now();
   const agents: Agent[] = seedAgents(now);
+  // Finance checks with you often, on its own; the rest follow the team.
+  for (const a of agents) if (a.id === 'fin') a.independence = 'often';
   if (opts.codexOnly) {
     for (const a of agents) {
       a.engine = 'codex';
@@ -2484,6 +2486,24 @@ export function createMockServer(opts: MockOptions = {}) {
       independence = p.level;
       emit({ type: 'agents.registry', overview: overview() });
       return { level: independence };
+    },
+    // One agent's own level (`agents_policy_set`), or `team` for the team's.
+    'agents.setAgentIndependence': (p) => {
+      const a = agents.find((x) => x.id === p.agentId);
+      const level = p.level as AgentIndependence | 'team';
+      const levels = ['often', 'judgement', 'go_hard', 'full_send', 'team'];
+      if (!a || !levels.includes(level)) {
+        return fail({
+          type: 'Protocol',
+          code: 'bad_params',
+          message:
+            'An agent’s independence takes an agentId and a level: team, often, judgement, go_hard or full_send.',
+        });
+      }
+      if (level === 'team') delete a.independence;
+      else a.independence = level;
+      emit({ type: 'agents.registry', overview: overview() });
+      return { agentId: a.id, level: a.independence ?? null };
     },
     // The user's own Admin switch (`agents_set_admin`): kept on the agent.
     'agents.setAdmin': (p) => {

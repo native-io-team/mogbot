@@ -2145,7 +2145,10 @@ fn connector_asks(tool: &str, outside: bool) -> bool {
     // A send word counts only as the verb: `post_message`, `createPost`,
     // `publishPost` send; `capturePost`, `upsertSocialPosts` and `listPosts`
     // name posts without sending one.
-    if verbs.iter().any(|w| SENDS_SPENDS_DELETES.contains(&w.as_str())) {
+    if verbs
+        .iter()
+        .any(|w| SENDS_SPENDS_DELETES.contains(&w.as_str()))
+    {
         return true;
     }
     // A code host or a database: any write there is a push, a pull request,

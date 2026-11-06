@@ -57,9 +57,12 @@ export function AgentLevelPicker({ agent }: { agent: Agent }) {
     >
       <span className="agent-level-picker__row">
         <span>{AGENT_INDEPENDENCE_TITLE}</span>
+        {/* Opens upward: the row sits low in a long dialog, and a menu cut off by the window is no menu. */}
         <Dropdown
           align="right"
+          side="top"
           portal
+          menuClassName="agent-level-menu"
           trigger={(p) => (
             <MenuButton
               {...p}
