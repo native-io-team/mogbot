@@ -3903,3 +3903,33 @@ and asks the agent (`test_prompt`) to click through the site while you watch.
   `AGENTS_E2E_OUT=<file.json>`.
 - `node scripts/harness-capture.mjs agents-`: memory (`agents-memory`, `agents-memory-edit`, `agents-remember`), a routine's past runs and a pending retry (`agents-schedule-history`), project binding (`agents-project-*`), Chief audit (`agents-chief-audit`), brief in progress, team, What's in flight (`agents-team-overview`, via ⌘K), @mention menu, approval, secure input (`agents-secret-*`, `agents-secrets-editor`), first run (keep-awake off and on), new
   agent, import, Claude Code missing, the engine picker (`agents-engine-picker`), Codex not signed in (`agents-engine-unavailable`), one engine installed (`agents-engine-one`), a Codex that can't ask (`agents-codex-cant-ask`) and a Codex agent's chat (`agents-codex-chat`).
+
+### Real end-to-end tests
+
+The core jobs, on real `claude --print` turns (Haiku), at the independence
+levels people pick: `scripts/agents-e2e.sh core` (all seven, about $0.06 and
+under two minutes) or one `core-…` scenario
+(`src-tauri/examples/agents_e2e/core_jobs.rs`). Opt-in, never part of the
+default run. Like the rest of the suite it runs in a throwaway HOME (app
+data, agents, projects root and Claude Code's session files under it; set
+`AGENTS_E2E_HOME` to choose where), signs in through the login keychain
+(linked, read only, never copied) and is silent: `SHIPSTUDIO_AGENTS_SILENT`
+(debug builds only) stops every banner and sound, even for an agent the
+Chief makes mid-run.
+
+| Scenario | Checks |
+|---|---|
+| `core-delegate` | Go hard: the Chief creates Filer (on the saved default model), delegates a file write in its home, hears back; no cards anywhere |
+| `core-chain` | Go hard: `mkdir`, writes, `ls`, a `for` loop and a log in `$TMPDIR` in one Bash call; no card, its "Allowed automatically — Go hard" receipt in What it did |
+| `core-often` | The same chain at Check with me often: a card (allowed, so it finishes) |
+| `core-push` | Go hard: `git push` to a local bare remote raises a card; denied, nothing reaches the remote |
+| `core-result` | `share_result` with a file: one v1 result card naming it, no card for the write |
+| `core-kill` | The engine SIGKILLed mid-reply: the partial kept as stopped, a plain error line, and the next message answered |
+| `core-search` | WebSearch at Go hard: no card, a search step and its receipt |
+
+What the first run found and fixed: an agent asked to `git push` a repository
+in its home refused outright ("the push card can't be created"), because the
+prompt said to push "only with `push`", the tool that serves projects only.
+A push outside the projects now goes through git and its card
+(`prompts::PROJECTS`). Not covered: Codex, a project-bound agent's push,
+and resuming a killed turn (it ends honestly instead).

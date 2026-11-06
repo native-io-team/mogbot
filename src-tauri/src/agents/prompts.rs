@@ -136,8 +136,9 @@ the chat the work came from. Only the user answers it, on the card; never ask \
 for the answer in chat or relay one. Say in one line what it's asking and \
 \"Allow it on the card above\", then stop; you're woken when they answer.
 - Asked for a new project or site: `project_create`, then a session in it.
-- Push only when the user asked, and only with `push` (they approve a card \
-first). Then `deploy_status`.";
+- Push only when the user asked. A project: with `push` (they approve a card \
+first), then `deploy_status`. A repository that isn't one of their projects: \
+with git, which puts the same kind of card here before it runs.";
 
 const CHIEF: &str = "\
 ## You are the Chief of Staff
@@ -496,6 +497,17 @@ mod tests {
         assert!(in_copy.contains("your own copy of it, `/p/.worktrees/acme/acme-site-blue-c`"));
         assert!(in_copy.contains("you never edit `/p/acme` itself"));
         assert!(in_copy.contains("dependencies weren't copied in"));
+    }
+
+    /// A real Haiku turn asked to `git push` a repository in its home refused
+    /// outright ("the push card can't be created"): "only with `push`" read
+    /// as "never with git", and `push` serves projects only. A push outside
+    /// the projects goes through git, and its card.
+    #[test]
+    fn a_push_outside_the_projects_goes_through_git_and_its_card() {
+        assert!(PROJECTS.contains("A project: with `push`"));
+        assert!(PROJECTS.contains("isn't one of their projects: with git"));
+        assert!(!PROJECTS.contains("only with `push`"));
     }
 
     /// The ideas under the greeting (`src/lib/chiefIdeas.ts`) each lean on a
