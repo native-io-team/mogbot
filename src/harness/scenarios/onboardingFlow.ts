@@ -88,17 +88,33 @@ const flow = (
   commands: { ...ENGINE_READY, ...commands },
 });
 
-/** A phone that pairs on the second status read: the screen saw none, then this one. */
-function pairsOnSecondRead() {
-  let reads = 0;
-  return () => {
-    reads += 1;
-    return phoneStatus({
-      ...PHONE_ON,
-      devices:
-        reads < 2
-          ? []
-          : [
+const REQUEST = {
+  id: 'req_1',
+  device: {
+    name: 'Sam’s iPhone',
+    platform: 'ios',
+    model: 'iPhone 16',
+    appVersion: '1.0.0',
+    build: 'self',
+  },
+  requestedAt: Date.now() - 5000,
+  codeHint: 'X4QK',
+  login: LOGIN,
+  replaces: [],
+};
+
+/** A phone asking; once Allow is pressed, it's paired. */
+function pairsOnAllow() {
+  let allowed = false;
+  return {
+    companion_status: () =>
+      phoneStatus({
+        ...PHONE_ON,
+        pairing: allowed
+          ? { active: false }
+          : { active: true, expiresAt: Date.now() + 4 * MIN, request: REQUEST },
+        devices: allowed
+          ? [
               {
                 id: 'dev_new',
                 name: 'Sam’s iPhone',
@@ -111,8 +127,13 @@ function pairsOnSecondRead() {
                 lastRoute: 'tailscale',
                 connected: true,
               },
-            ],
-    });
+            ]
+          : [],
+      }),
+    companion_pair_decide: () => {
+      allowed = true;
+      return null;
+    },
   };
 }
 
@@ -280,7 +301,7 @@ export const onboardingFlowScenarios: Scenario[] = [
     'onboarding-phone-pair-https',
     'phonePair',
     '4d. Pair: HTTPS certificates off, after Check again',
-    '"Your phone · 4 of 4". "Scan this code". No code — instead an amber check: "Not done yet. HTTPS certificates are off in your Tailscale account.", the fix ("…click Enable HTTPS, then come back and check again"), an "Open Tailscale admin ↗" button, "Check again", and "Checked at <time>". Never a silent reload.',
+    '"Your phone · 4 of 4". "Turning on phone access". No code — instead an amber check: "Not done yet. HTTPS certificates are off in your Tailscale account.", the fix ("…click Enable HTTPS, then come back and check again"), an "Open Tailscale admin ↗" button, "Check again", and "Checked at <time>". Never a silent reload.',
     {
       companion_status: phoneStatus({
         ...PHONE_ON,
@@ -341,17 +362,15 @@ export const onboardingFlowScenarios: Scenario[] = [
   flow(
     'onboarding-phone-pair-done',
     'phonePair',
-    '4d. Pair: Done',
-    'A green-ticked "Done. Paired with Sam’s iPhone." (it moves on by itself a beat later).',
+    '4d. Pair: done, and on to Ready by itself',
+    'After Allow: the screen says "Done. Paired with Sam’s iPhone." and a beat later moved on by itself to the last step, "You’re ready", with the fifth segment lit.',
     {
-      companion_status: pairsOnSecondRead(),
-      companion_pair_start: {
-        link: PHONE_PAIRING_LINK,
-        qr: PHONE_QR,
-        expiresAt: Date.now() + 5 * MIN,
-      },
+      ...pairsOnAllow(),
     },
-    { requires: '.flow-check[data-state="pass"]' }
+    {
+      steps: [{ click: '[data-allow]' }],
+      requires: '.flow-check[data-state="pass"], [data-flow-step="ready"]',
+    }
   ),
   flow(
     'onboarding-handoff',

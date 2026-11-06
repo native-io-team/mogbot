@@ -109,7 +109,9 @@ export function PhoneIntroStep({ onNext, onBack, onSkip }: StepProps) {
 
 export function TailscaleMacStep({ onNext, onBack, onSkip }: StepProps) {
   const check = useFlowCheck(getPhoneStatus, { name: 'flow-tailscale-mac' });
-  const result = tailscaleMacCheck(check.data?.tailscale ?? null);
+  const checked = tailscaleMacCheck(check.data?.tailscale ?? null);
+  // The download is this screen's big button already; the check doesn't repeat it.
+  const result = checked.state === 'fail' ? { ...checked, action: undefined } : checked;
   const doneOnArrival = useAdvanceOnPass(result, onNext, check.data !== null);
   return (
     <FlowShell
@@ -375,11 +377,23 @@ export function PhonePairStep({ onNext, onBack, onSkip }: StepProps) {
   return (
     <FlowShell
       step="phonePair"
-      title={stage.kind === 'confirm' ? 'Allow your phone' : 'Scan this code'}
+      title={
+        stage.kind === 'confirm'
+          ? 'Allow your phone'
+          : stage.kind === 'code'
+            ? 'Scan this code'
+            : stage.kind === 'paired'
+              ? 'Your phone is paired'
+              : 'Turning on phone access'
+      }
       lede={
         stage.kind === 'confirm'
           ? 'Check it’s your phone and the code ending matches, then allow it.'
-          : `Open the ${BRAND.name} app on your phone, tap Pair, and point the camera here.`
+          : stage.kind === 'code'
+            ? `Open the ${BRAND.name} app on your phone, tap Pair, and point the camera here.`
+            : stage.kind === 'paired'
+              ? 'It reaches this Mac over your own Tailscale.'
+              : 'This Mac gets a private address your phone can reach. The code shows when it’s ready.'
       }
       onBack={onBack}
       wide
@@ -388,9 +402,7 @@ export function PhonePairStep({ onNext, onBack, onSkip }: StepProps) {
       {stage.kind === 'paired' && (
         <CheckLine result={{ state: 'pass', line: `Paired with ${stage.name}.` }} />
       )}
-      {stage.kind === 'starting' && (
-        <CheckLine result={{ state: 'checking', line: 'Turning on phone access…' }} />
-      )}
+      {stage.kind === 'starting' && <CheckLine result={{ state: 'checking', line: 'Starting…' }} />}
       {stage.kind === 'fix' && (
         <CheckLine
           result={stage.check}
