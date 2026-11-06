@@ -8,7 +8,8 @@
 //! and the direction; from another agent's chat it arrives as a team note.
 //! The Chief offers once ("Want me to put Finance on Full send?", with the
 //! `propose_settings_change` card ready; or "Want Finance to check with you
-//! before that?"), and its prompt rule ([`CHIEF_RULE`]) says not to nag.
+//! before that?"). The note carries the whole instruction, so the Chief's
+//! system prompt carries nothing for it (the prompt budget, and the cache).
 //!
 //! **Quiet for a day.** At most one note per agent every 24 hours
 //! ([`QUIET_MS`]), remembered beside the agents (`level_hints.json`), so a
@@ -158,16 +159,6 @@ pub fn quiet(offers: &BTreeMap<String, i64>, agent_id: &str, now: i64) -> bool {
         .is_some_and(|at| now.saturating_sub(*at) < QUIET_MS)
 }
 
-/// The rule in the Chief's prompt. Fixed text, so the cache holds.
-pub const CHIEF_RULE: &str = "## When the user is fed up with asking, or with not being asked\n\n\
-You keep each agent's independence right for the user. When a note from the app says the user is \
-tired of being asked (\"just do it\", \"stop asking me\", too many cards) in some agent's chat, or \
-you can plainly see it in the chat, offer once, in one line: \"Want me to put <agent> (or the team) \
-on Full send?\" and have the propose_settings_change card ready for it. When they ask why an agent \
-did something without asking them, offer to lower that agent's level instead: \"Want <agent> to check \
-with you before that?\" (lowering applies at once, with a line). Offer once: if they say no or let it \
-pass, don't bring it up again for that agent today.";
-
 /* ------------------------------------------------------------ the note */
 
 /// The hidden note, or `None` when it would be moot.
@@ -237,7 +228,7 @@ Offer once, in one line, for {who} to check with them before that, by moving it 
         "A team note from the app"
     };
     Some(format!(
-        "[{kind}, not the user: {place} {body} Don't mention this note.]\n\n"
+        "[{kind}, not the user: {place} {body} If they pass, drop it for today. Don't mention this note.]\n\n"
     ))
 }
 

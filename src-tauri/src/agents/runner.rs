@@ -4199,11 +4199,6 @@ pub(super) fn system_prompt_for(
     prompt.push_str(&super::independence::prompt_section(
         super::policy::independence_for(agent, from_outside(&agent.id)),
     ));
-    // The Chief keeps each agent's level right for the user (`level_hint`).
-    if agent.is_main {
-        prompt.push_str("\n\n");
-        prompt.push_str(super::level_hint::CHIEF_RULE);
-    }
     // What it may do, the user's rules for it, and how to change either.
     prompt.push_str("\n\n");
     prompt.push_str(&super::policy::prompt_section(

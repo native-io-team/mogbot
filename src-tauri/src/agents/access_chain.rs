@@ -208,14 +208,12 @@ pub fn decide(agent: &Agent, r: &LoginRequest, tried: &Tried, here: &Here, team:
     // 1a. "Not needed" on the setup checklist counts as a no. Unless the
     // user's own message in this turn asks for it again.
     let key = super::access_check::key_of(&r.service, &r.title);
-    if !here.user_named
-        && here.not_needed.iter().any(|k| {
-            k == &key
-                || (r.service == "other"
-                    && k.strip_prefix("other:")
-                        .is_some_and(|t| same_title(t, &r.title)))
-        })
-    {
+    if !here.user_named && here.not_needed.iter().any(|k| {
+        k == &key
+            || (r.service == "other"
+                && k.strip_prefix("other:")
+                    .is_some_and(|t| same_title(t, &r.title)))
+    }) {
         return Step::AlreadyDeclined {
             title: r.title.clone(),
             said: "Not needed".into(),
@@ -367,16 +365,7 @@ pub async fn request(
     // The user asked for it again: say so, once, where they are.
     let lifted = here.user_named
         && matches!(
-            decide(
-                agent,
-                &r,
-                tried,
-                &Here {
-                    user_named: false,
-                    ..here.clone()
-                },
-                &team
-            ),
+            decide(agent, &r, tried, &Here { user_named: false, ..here.clone() }, &team),
             Step::AlreadyDeclined { .. }
         );
     if lifted {

@@ -251,3 +251,31 @@ fn the_tool_tells_the_chief_how_to_set_one_agent() {
     assert!(schema.contains("make Finance check with me often"));
     assert!(schema.contains("Raising needs the user's card; lowering"));
 }
+
+#[test]
+fn fix_stopped_previews_changes_from_chat_like_any_setting() {
+    // On is more room: a card. Off only has agents do less: no card.
+    let on = mac_proposal(true, true, false, Some("you asked".into()), 4).unwrap();
+    assert_eq!(on.groups[0].who, "This Mac");
+    assert!(on.groups[0].changes[0].contains("fix their own stopped previews"));
+    assert!(on.targets.is_empty() && on.change.is_empty());
+    assert!(!mac_lowers(on.mac.as_ref().unwrap()));
+    let off = mac_proposal(true, false, true, None, 4).unwrap();
+    assert!(mac_lowers(off.mac.as_ref().unwrap()));
+    assert!(summary(&off.groups).starts_with("This Mac: Agents no longer fix"));
+    // Only an admin, and only a real change.
+    assert!(mac_proposal(false, false, true, None, 4).is_err());
+    assert!(mac_proposal(true, true, true, None, 4).is_err());
+    // It travels on the card as `mac`, and old cards read without it.
+    let v = serde_json::to_value(&on).unwrap();
+    assert_eq!(v["mac"]["fixPreviews"], true);
+    let old: Proposal = serde_json::from_value(json!({
+        "targets": [], "change": {}, "version": 1, "groups": []
+    }))
+    .unwrap();
+    assert_eq!(old.mac, None);
+    // The tool says it can.
+    let schema = schema().to_string();
+    assert!(schema.contains("fix_previews"));
+    assert!(DESCRIPTION.contains("Fix stopped previews”"));
+}

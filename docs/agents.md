@@ -1010,10 +1010,11 @@ tired of being asked ("just do it" as its own sentence, "stop asking me", "too
 many cards") or unhappy that something went ahead ("why did you do that without
 asking me?", "should've asked me"). Either leaves a hidden note for the Chief's
 next turn naming the agent, its level and the direction (from another agent's
-chat, a team note). The Chief's prompt rule (`level_hint::CHIEF_RULE`) is to
+chat, a team note). The note itself tells the Chief to
 offer once, in a line ("Want me to put Finance (or the team) on Full send?",
 the card ready; or "Want Finance to check with you before that?", which applies
-at once). At most one note per agent every 24 hours (`level_hints.json`), and
+at once), and to drop it for the day if the user passes; nothing is added to the
+Chief's system prompt for it. At most one note per agent every 24 hours (`level_hints.json`), and
 none when it would be moot (already Full send, already Check with me often).
 
 The level is one short app-owned section of every agent's system prompt,
@@ -4557,7 +4558,12 @@ and asks the agent (`test_prompt`) to click through the site while you watch.
   woken or asked, counts; a server that stops again after 2 fixes gets one
   plain error line in the agent's chat instead, then silence until a fix holds
   30 minutes or the user asks again. Settings → Agents → "Fix stopped previews"
-  turns the wake off (the pane then offers to ask).
+  turns the wake off (the pane then offers to ask). From chat too: the Chief's
+  `propose_settings_change` with `changes: { fix_previews }` and no agents
+  (admins only, on its own). Off only has agents do less, so it applies at once
+  with a "Settings changed: This Mac: …" line; on is a "Change this Mac's
+  settings?" card (`policy_card::mac_proposal`, the card's `mac` field). The
+  Settings row reads it again on every policy event.
 - **The pane** shows "<Agent> is fixing it…" while that turn runs (15s grace for
   it to start), the frame back once the server is; otherwise "Ask <Agent> to fix
   it", with "Open in workspace" as a quiet link.

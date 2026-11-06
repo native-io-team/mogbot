@@ -647,33 +647,18 @@ fn at_go_hard_a_compose_address_alone_never_asks() {
             "{level:?}"
         );
         assert_eq!(
-            in_editor(
-                level,
-                "form_input",
-                json!({"ref": "ref_98", "value": "x", "tabId": 3})
-            ),
+            in_editor(level, "form_input", json!({"ref": "ref_98", "value": "x", "tabId": 3})),
             Gate::Allow,
             "{level:?}"
         );
     }
     // By label: Post, Schedule, Send now still ask at Go hard, not at Full send.
     for r in ["ref_5", "ref_6", "ref_11"] {
-        assert_eq!(
-            in_editor(Level::GoHard, "computer", click(r)),
-            Gate::Ask,
-            "{r}"
-        );
-        assert_eq!(
-            in_editor(Level::FullSend, "computer", click(r)),
-            Gate::Allow,
-            "{r}"
-        );
+        assert_eq!(in_editor(Level::GoHard, "computer", click(r)), Gate::Ask, "{r}");
+        assert_eq!(in_editor(Level::FullSend, "computer", click(r)), Gate::Allow, "{r}");
     }
     // Below Go hard the address still makes an unknown click unsure.
-    assert_eq!(
-        in_editor(Level::Judgement, "computer", somewhere),
-        Gate::Ask
-    );
+    assert_eq!(in_editor(Level::Judgement, "computer", somewhere), Gate::Ask);
     // A checkout page stays unsure at every level.
     let checkout = json!({"action": "left_click", "coordinate": [10, 10], "tabId": 4});
     assert_eq!(in_editor(Level::GoHard, "computer", checkout), Gate::Ask);
