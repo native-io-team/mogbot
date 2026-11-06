@@ -9,8 +9,6 @@
  */
 
 :root {
-  /* A working agent's ring breathes: slow enough to read as calm. */
-  --agents-avatar-breathe: calc(var(--duration-loader-isolated) * 1.5);
   /* While working, a blink every few seconds (BLINK_EVERY_MS in avatar.ts). */
   --agents-avatar-blink-every: calc(var(--duration-loader-standard) * 4);
   /* When a turn ends, one bob (BOB_MS). */
@@ -48,7 +46,7 @@
   display: block;
   width: 100%;
   height: 100%;
-  /* The working ring sits just outside the shape. */
+  /* The bob lifts it a little out of its box. */
   overflow: visible;
 }
 
@@ -65,11 +63,6 @@
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
-}
-
-/* Working: the ring is the one line around it, never a second edge inside it. */
-.agent-avatar--working {
-  --agent-avatar-edge: transparent;
 }
 
 .agent-avatar--selected {
@@ -130,27 +123,6 @@
 
 /* --------------------------------------------------------------- motion */
 
-/* Working: a ring of its own colour, following its silhouette, that
-   breathes slowly. Never a flash; with Reduce Motion it simply stays. */
-.agent-avatar__ring {
-  fill: none;
-  stroke: var(--agents-tint, var(--text-muted));
-  stroke-width: var(--focus-ring-width);
-  opacity: 0.6;
-  animation: agents-avatar-breathe var(--agents-avatar-breathe) ease-in-out infinite;
-}
-
-@keyframes agents-avatar-breathe {
-  0%,
-  100% {
-    opacity: 0.25;
-  }
-
-  50% {
-    opacity: 0.8;
-  }
-}
-
 /* Working: a blink now and then, each agent in its own quarter of the
    cycle so a sidebar of busy agents never blinks in unison. */
 .agent-avatar--working .agent-avatar__eyes {
@@ -201,7 +173,6 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-avatar__ring,
   .agent-avatar--working .agent-avatar__eyes,
   .agent-avatar--bob {
     animation: none;

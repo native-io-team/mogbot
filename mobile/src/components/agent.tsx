@@ -108,8 +108,7 @@ export function AgentAvatar({
   // color-mix(tint 24%, --surface-control) / color-mix(tint 70%, --text-primary)
   const fill = selected ? tint : mix(tint, colors.surfaceControl, 0.24);
   const ink = selected ? colors.surfaceApp : mix(tint, colors.textPrimary, 0.7);
-  // Working, the ring is the one line around it: no second edge inside.
-  const edge = alpha(tint, selected || working ? 0 : 0.22);
+  const edge = alpha(tint, selected ? 0 : 0.22);
   const blink = useBlink(working && !still, id ?? name);
   const bob = useBob(working, still, size);
   const shape = SHAPE_SPECS[look.shape];
@@ -197,69 +196,6 @@ function useBob(working: boolean, still: boolean, size: number) {
   }, [working, still, size, lift]);
   return useAnimatedStyle(() => ({ transform: [{ translateY: lift.value }] }));
 }
-
-/** One breath of the working ring, ms: slow enough to sit in a list without drawing the eye. */
-const RING_BREATH_MS = 1600;
-
-/**
- * A working agent's ring, laid over its avatar (the parent is the avatar's
- * size): its own colour, following its silhouette, breathing slowly
- * (opacity only, never size or position, so nothing in the row moves).
- * Under Reduce Motion it is still.
- */
-export function WorkingRing({
-  color,
-  size = avatarSize.list,
-  id,
-  name = '',
-}: {
-  color: string;
-  size?: number;
-  id?: string;
-  name?: string;
-}) {
-  const styles = useStyles();
-  const appearance = useAppearance();
-  const look = useLook(id, name, undefined);
-  const still = useReducedMotion();
-  const breath = useSharedValue(0);
-  useEffect(() => {
-    if (still) return;
-    breath.set(
-      withRepeat(
-        withTiming(1, { duration: RING_BREATH_MS, easing: Easing.inOut(Easing.sin) }),
-        -1,
-        true
-      )
-    );
-    return () => cancelAnimation(breath);
-  }, [breath, still]);
-  const ringStyle = useAnimatedStyle(() => ({
-    opacity: still ? 0.7 : 0.35 + breath.value * 0.55,
-  }));
-  const ring = size + RING_GAP * 2;
-  return (
-    <Animated.View
-      testID="working-ring"
-      pointerEvents="none"
-      style={[styles.ring, { width: ring, height: ring }, ringStyle]}
-    >
-      <Svg width={ring} height={ring} viewBox="0 0 32 32">
-        <Path
-          d={SHAPE_SPECS[look.shape].d}
-          fill="none"
-          stroke={agentTint(color, appearance)}
-          strokeWidth={(2 * 32) / ring}
-          // The silhouette, drawn RING_GAP outside the avatar's own.
-          transform={`translate(16 16) scale(${size / ring + 0.02}) translate(-16 -16)`}
-        />
-      </Svg>
-    </Animated.View>
-  );
-}
-
-/** How far the working ring sits outside the tile. */
-const RING_GAP = 3;
 
 /**
  * `live` false: the Mac isn't answering, so this is only the last thing it
@@ -349,7 +285,6 @@ export function Spinner({
 
 const useStyles = makeStyles((colors) => ({
   avatar: { alignItems: 'center', justifyContent: 'center' },
-  ring: { position: 'absolute', top: -RING_GAP, left: -RING_GAP, borderWidth: 2 },
   // A still ring: "it was working when we last heard".
   wasWorking: {
     width: iconSize.inline,

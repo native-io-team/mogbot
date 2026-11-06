@@ -34,6 +34,7 @@ pub mod router;
 pub mod server;
 #[cfg(test)]
 pub(crate) mod testkit;
+pub mod watch;
 pub mod wire;
 
 use serde::{Deserialize, Serialize};
@@ -627,6 +628,8 @@ pub struct Companion {
     pub refusals: limits::RefusalLog,
     /// Thumbnails decoding now, and the ones already made.
     pub thumbs: files::Thumbs,
+    /// "Watch live" links and sessions (`watch`).
+    pub watch: watch::Watch,
 }
 
 impl Companion {
@@ -665,6 +668,7 @@ impl Companion {
             suggests: limits::Counter::default(),
             refusals: limits::RefusalLog::default(),
             thumbs: files::Thumbs::default(),
+            watch: watch::Watch::default(),
         }
     }
 
@@ -795,6 +799,7 @@ impl Companion {
         let gone = self.registry.revoke(device_id)?;
         if let Some(d) = &gone {
             self.blobs.forget_device(&d.id);
+            self.watch.forget_device(&d.id);
             self.forget_push_later(d);
             self.hub.signal(hub::HubItem::Revoked {
                 device_id: d.id.clone(),

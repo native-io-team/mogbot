@@ -14,9 +14,11 @@
 //! checkout, payment or compose page. When it can't be told, it asks. At
 //! "Check with me often" every interaction asks.
 //!
-//! **Always a card**, at every level: `javascript_tool`, `file_upload`,
+//! **Always a card** below "Go hard": `javascript_tool`, `file_upload`,
 //! `upload_image`, `shortcuts_execute` (each can carry data anywhere), and
-//! anything this build doesn't know.
+//! anything this build doesn't know. **At "Go hard"** everything runs,
+//! scripts and shortcuts included, except uploads, send-like clicks and
+//! keys, and a script that submits or posts (`go_hard::script_sends`).
 //!
 //! Turns answering outside text never get the browser at all
 //! (`browser::allowed`). Threat model: docs/agents.md, "Your browser".
@@ -43,6 +45,9 @@ pub enum Gate {
 }
 
 pub const SERVER: &str = "mcp__claude-in-chrome__";
+
+/// Every browser call while the user signs in from their phone.
+pub const PHONE_SIGNIN_REFUSAL: &str = "The user is signing in to a site in this Mac's Chrome from their phone right now. Don't use the browser until they're done: carry on with what doesn't need it, or wait a few minutes and try again.";
 
 /// Tools that only look: they change nothing on a page or a site.
 const LOOKS: &[&str] = &[
@@ -546,6 +551,16 @@ fn batch_steps(input: &Value) -> Option<Vec<(String, Value)>> {
 /// One browser tool (its name without the server) at `level`.
 fn decide(level: Level, agent: &Agent, name: &str, input: &Value, page: &Page) -> Gate {
     let free = |ok: bool| if ok { Gate::Allow } else { Gate::Ask };
+    // "Go hard": everything runs, scripts and shortcuts included, except
+    // uploads and what sends (a script that submits or posts, a send click).
+    if level == Level::GoHard {
+        match name {
+            "file_upload" | "upload_image" => return Gate::Ask,
+            "javascript_tool" => return free(!super::go_hard::script_sends(input)),
+            "shortcuts_execute" => return Gate::Allow,
+            _ => {}
+        }
+    }
     if ALWAYS_ASK.contains(&name) {
         return Gate::Ask;
     }
@@ -599,7 +614,7 @@ fn decide(level: Level, agent: &Agent, name: &str, input: &Value, page: &Page) -
             _ => Gate::Ask,
         },
         n if LOOKS.contains(&n) => Gate::Allow,
-        _ => Gate::Ask,
+        _ => free(level == Level::GoHard),
     }
 }
 
@@ -627,9 +642,20 @@ pub fn gate_with(
     decide(level, agent, name, input, page)
 }
 
+/// Every browser call is refused while a phone sign-in is live, at every
+/// level and for every agent: the tab is the user's, and so is the page.
+pub fn while_phone_signs_in(live: bool) -> Option<Gate> {
+    live.then(|| Gate::Refuse(PHONE_SIGNIN_REFUSAL.into()))
+}
+
 pub fn gate(agent: &Agent, tool: &str, input: &Value, outside: bool) -> Gate {
     if !tool.starts_with(SERVER) {
         return Gate::NotBrowser;
+    }
+    // The user's phone is driving a sign-in in this Chrome: no agent sees
+    // or touches it until it ends (`phone_signin`).
+    if let Some(refused) = while_phone_signs_in(super::phone_signin::live()) {
+        return refused;
     }
     let level = super::independence::for_turn(super::policy::chosen_level(agent), outside);
     gate_with(

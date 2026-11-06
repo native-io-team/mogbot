@@ -12,10 +12,12 @@ import type {
   EngineInfo,
   Failure,
   PermissionScope,
+  TeamSetupView,
   UsageTotals,
 } from '@shipstudio/companion-protocol';
 import {
   apiPrice,
+  needsYouCount,
   resetPhrase,
   secretTitle,
   tokenCount,
@@ -556,18 +558,16 @@ export function askingLine(
 type Chats = Record<string, { messages: AgentMessage[] } | undefined>;
 
 /**
- * "2 need you · 3 working", over the agents shown on Home. Needs-you counts
- * only what can be answered here, as far as the saved chats (`chats`) show;
- * the Agents tab's badge is this same number.
+ * "2 need you · 3 working", over the agents shown on Home. Needs-you is the
+ * one number every surface shows (`needsYouCount`, companion-protocol's
+ * attention.ts): Home's bar, the Agents tab's badge, the quick action, and
+ * the desk's sidebar, review bar and Dock badge. It once counted only what
+ * the saved chats showed answerable here, and said 14 beside Home's 13.
  */
-export function attentionCounts(
-  agents: Agent[],
-  chats: Chats = {},
-  quiet: ReadonlySet<string> = new Set()
-) {
+export function attentionCounts(agents: Agent[], setup?: TeamSetupView | null) {
   const shown = agents.filter((a) => !a.hidden);
   return {
-    needYou: shown.filter((a) => !quiet.has(a.id) && needsYouHere(a, chats[a.id]?.messages)).length,
+    needYou: needsYouCount(agents, setup),
     // As the desk's tray counts: one waiting for a slot is listed, not working.
     working: shown.filter((a) => !needsYou(a) && a.status.state === 'working' && !waitingForSlot(a))
       .length,

@@ -227,11 +227,25 @@ export const baseCommands: CommandMap = {
     blockedApps: [],
   },
   agents_logins_team: { needs: [], done: 0, total: 0 },
+  agents_logins_declined: [],
+  agents_logins_recheck: null,
+  agents_login_reopen: null,
+  agents_logins_undecline: 0,
+  agents_login_not_needed: {
+    keys: ['gmail'],
+    line: 'Not connecting Gmail. No agent will ask for it again.',
+    closed: 1,
+  },
+  agents_logins_not_needed: {
+    keys: ['linkedin'],
+    line: 'Not connecting LinkedIn. No agent will ask for it again.',
+    closed: 1,
+  },
   // Edit agent's "What it can do", and Settings → Agents → What agents can
   // do (`agents/policy.rs`): a Balanced team, as `fixtures.gen.ts` has it.
   agents_policy: (args: Record<string, unknown>) => ({
     ...BALANCED_VIEW,
-    agentId: String(args.agentId ?? ''),
+    agentId: typeof args.agentId === 'string' ? args.agentId : '',
   }),
   agents_policy_team: BALANCED_TEAM,
   agents_policy_set: null,
@@ -339,6 +353,8 @@ export const baseCommands: CommandMap = {
   agents_spare_add: { id: 'h1', text: 'x', addedBy: 'you', addedAt: 0, state: 'waiting' },
   agents_spare_remove: null,
   agents_focus: null,
+  agents_phone_signin_status: null,
+  agents_phone_signin_stop: null,
   // Rooms: none until someone makes one (`./agentsRooms`).
   agents_rooms: [],
   agents_room_focus: null,

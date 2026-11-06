@@ -71,14 +71,11 @@ leans away from its point) and scales it for the room it has (a pill is narrow).
   - Desk: a blink every 4.8s. Each agent blinks in its own quarter of the cycle, so a busy sidebar
     never blinks in unison.
   - Phone: a JS timer drives the same blink.
-  - A ring follows the agent's own silhouette. It is one SVG stroke in the agent's colour, scaled
-    1.16× on the desk and 3pt out on the phone. It breathes 25–80% opacity over 2.7s.
+  - No ring, border or breathing around it, on desk or phone. The owner ruled the pulsing border
+    out; the blink and the row's live step text are the whole working cue.
 - **Turn ends:** one bob of 8% of the avatar's size, lasting 500ms.
 - **At rest:** nothing moves.
-- **Reduce Motion:** nothing moves, and the ring stays as a static thin stroke.
-
-The ring replaced the old `::after` border, which sat around the tile's box shadow and read as a
-double border.
+- **Reduce Motion:** nothing moves.
 
 **Sizes on desk:**
 
@@ -103,12 +100,12 @@ double border.
   a Mac that lists `agents.looks` in `welcome.features`. `AgentToggles` gained `avatar` and `color`;
   older Macs refuse unknown fields, so the phone hides the picker for them. New agents made on the
   phone get a free shape too.
-- **From chat:** "Give Hiring a hexagon with a curious face". `propose_settings_change` takes
-  `changes.look: { shape?, face?, color? }` and puts up the ordinary "Change Hiring's settings?" card.
-  The card shows Hiring as it would look, with the line "Now a hexagon with a curious face".
-  - Allow applies it. A look-only card skips the policy version check.
-  - It is refused for the team's defaults.
-  - A non-admin may propose only its own look.
+- **From chat:** "Give Hiring a hexagon with a curious face". The Chief's `update_agent` takes
+  `shape`, `face` and `color` and applies them at once, with no card: a look isn't consequential,
+  so it isn't a setting (owner's call). Only what differs from what the agent wears now changes;
+  the reply says "Updated Hiring: now a hexagon with a curious face." Real settings still go
+  through `propose_settings_change` and its card. In a turn answering outside text (a "When…"
+  routine) `update_agent` still asks first, as it does for any change to the team.
 
 ## Three directions, and the choice
 
@@ -118,6 +115,9 @@ ones live in `src/harness/avatarDirections.css` and never ship.
 
 ### A · Tonal (chosen)
 
+These were captured before the working ring was removed: where a working agent shows a ring
+(sidebar, colours, phone list), it no longer has one.
+
 | | Dark | Light |
 | --- | --- | --- |
 | Sidebar of 12 + chat header | ![](avatars/tonal-sidebar-dark.png) | ![](avatars/tonal-sidebar-light.png) |
@@ -125,7 +125,6 @@ ones live in `src/harness/avatarDirections.css` and never ship.
 | Every face × shape | ![](avatars/tonal-faces-dark.png) | ![](avatars/tonal-faces-light.png) |
 | Colours: rest / selected / working | ![](avatars/tonal-colors-dark.png) | ![](avatars/tonal-colors-light.png) |
 | Editor picker | ![](avatars/tonal-picker-dark.png) | ![](avatars/tonal-picker-light.png) |
-| Card from chat | ![](avatars/tonal-card-dark.png) | ![](avatars/tonal-card-light.png) |
 | Phone list | ![](avatars/phone-list-dark.png) | ![](avatars/phone-list-light.png) |
 | Phone agent sheet, picker open | ![](avatars/phone-sheet-look-dark.png) | ![](avatars/phone-sheet-look-light.png) |
 
@@ -159,15 +158,14 @@ Line art: the silhouette and face in the agent's colour, over an 8% wash.
   the selected agent is solid in Tonal, which tells you which agent you're on without a second
   marker.
 - **Outline is the cleanest at 96px and the weakest at 24px.** A 1.5px silhouette plus a face is a
-  lot of line in a small box, and the shapes shimmer. It also makes the working ring, itself a line,
-  ambiguous: is that agent working, or just outlined?
+  lot of line in a small box, and the shapes shimmer.
 - **Tonal stays legible at 16px in both themes.** The face ink holds the contrast the initials had,
   and the edge hairline keeps pale tones from dissolving into light panels.
 
 ## Checked, and not checked
 
 **Checked:** these screenshots (harness: desk scenarios `agents-avatars`, `agents-avatars-picker` and
-`agents-avatars-card`, and `harness-avatars.html`; phone: `pnpm qa:web` `agents` and
+`agents-avatars-chat`, and `harness-avatars.html`; phone: `pnpm qa:web` `agents` and
 `agent-sheet-look`), plus the test suites listed in the commit.
 
 **Not checked:** a real WKWebView build, an iOS or Android device (react-native-svg is new and needs a

@@ -152,7 +152,13 @@ describe('files, search, schedules and projects against the mock Mac', () => {
       (await t.request('agents.files', { agentId: 'qa' })).map((f) => [f.name, f.from])
     ).toEqual([['notes.md', 'user']]);
     const site = await t.request('agents.files', { agentId: 'site' });
-    expect(site.map((f) => [f.name, f.from])).toEqual([['Lighthouse report.pdf', 'agent']]);
+    // A test's screenshots are the tested card's attachments, so Files lists them too.
+    expect(site.map((f) => [f.name, f.from])).toEqual([
+      ['step-1.png', 'agent'],
+      ['step-2.png', 'agent'],
+      ['step-3.png', 'agent'],
+      ['Lighthouse report.pdf', 'agent'],
+    ]);
     // A preview screenshot rides on its session card, not in Files.
     const shot = await t.download({ agentId: 'site', path: 'attachments/site_p2_4/Phone.png' });
     expect(readFileSync(shot).subarray(1, 4).toString()).toBe('PNG');

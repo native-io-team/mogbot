@@ -1,9 +1,8 @@
 //! Avatars: the keys match the shared spec the clients draw from, the
-//! default look matches theirs exactly, and a look changes from chat only
-//! through a settings card. Fixtures are fictional (Hiring, Sales).
+//! default look matches theirs exactly, and a look changes from chat at
+//! once through `update_agent` (no card: looks aren't settings). Fixtures are fictional (Hiring, Sales).
 
-use super::policy::{Change, Target};
-use super::policy_card::{self as card, LookChange};
+use super::mcp::{look_args, LookUpdate};
 use super::store::{self, Agent, AgentLook};
 use serde_json::json;
 
@@ -96,104 +95,57 @@ fn an_agent_without_a_look_reads_and_writes_as_before() {
         .contains("circle, rounded"));
 }
 
-fn hiring_only() -> Vec<Target> {
-    vec![Target::Agent {
-        agent_id: "h".into(),
-    }]
+fn look(a: &Agent, args: serde_json::Value) -> Result<LookUpdate, String> {
+    look_args(a, &args)
 }
 
 #[test]
-fn give_hiring_a_hexagon_with_a_curious_face() {
-    let agents = vec![chief(), agent("h", "Hiring")];
-    let look = card::parse_look(Some(&json!({ "shape": "Hexagon", "face": "curious" })))
-        .unwrap()
-        .unwrap();
-    let p = card::look_only(&chief(), true, hiring_only(), look, None, &agents).unwrap();
+fn give_hiring_a_hexagon_with_a_curious_face_applies_without_a_card() {
+    let hiring = agent("h", "Hiring");
+    let l = look(&hiring, json!({ "shape": "Hexagon", "face": "curious" })).unwrap();
     assert_eq!(
-        card::summary(&p.groups),
-        "Hiring: Now a hexagon with a curious face."
+        l.avatar,
+        Some(AgentLook {
+            shape: "hexagon".into(),
+            face: "curious".into()
+        })
     );
-    assert!(p.change.is_empty());
-    assert_eq!(p.look.as_ref().unwrap().shape.as_deref(), Some("hexagon"));
+    assert_eq!(
+        l.line().as_deref(),
+        Some("now a hexagon with a curious face")
+    );
     // Colour only.
-    let blue = card::parse_look(Some(&json!({ "color": "blue" })))
-        .unwrap()
-        .unwrap();
-    let p = card::look_only(&chief(), true, hiring_only(), blue, None, &agents).unwrap();
-    assert_eq!(card::summary(&p.groups), "Hiring: Now blue.");
+    let blue = look(&hiring, json!({ "color": "blue" })).unwrap();
+    assert_eq!(blue.avatar, None);
+    assert_eq!(blue.line().as_deref(), Some("now blue"));
+    // A face alone keeps the shape it wears.
+    let sleepy = look(&hiring, json!({ "face": "sleepy" })).unwrap();
+    let now = AgentLook::default_for("h", false);
+    assert_eq!(sleepy.avatar.as_ref().unwrap().shape, now.shape);
+    assert_eq!(sleepy.line().as_deref(), Some("now has a sleepy face"));
 }
 
 #[test]
-fn a_look_is_checked_and_refused_in_plain_words() {
-    let agents = vec![chief(), agent("h", "Hiring"), agent("s", "Sales")];
-    assert!(card::parse_look(Some(&json!({ "shape": "star" })))
+fn a_look_is_checked_in_plain_words_and_what_it_wears_changes_nothing() {
+    let hiring = agent("h", "Hiring");
+    assert!(look(&hiring, json!({ "shape": "star" }))
         .unwrap_err()
         .contains("no shape called \"star\""));
-    assert!(card::parse_look(Some(&json!({})))
+    assert!(look(&hiring, json!({ "color": "neon" }))
         .unwrap_err()
-        .contains("empty"));
-    assert_eq!(card::parse_look(None).unwrap(), None);
-    let hex = || LookChange {
-        shape: Some("hexagon".into()),
-        ..Default::default()
-    };
-    // Not for the team's defaults.
-    assert!(card::look_only(
-        &chief(),
-        true,
-        vec![Target::Team { everyone: false }],
-        hex(),
-        None,
-        &agents
-    )
-    .is_err());
-    // An agent proposes its own look; only an admin proposes another's.
-    let sales = agent("s", "Sales");
-    assert!(card::look_only(&sales, false, hiring_only(), hex(), None, &agents).is_err());
-    let own = vec![Target::Agent {
-        agent_id: "s".into(),
-    }];
-    assert!(card::look_only(&sales, false, own, hex(), None, &agents).is_ok());
+        .contains("no colour called \"neon\""));
+    // No look asked for: nothing.
+    assert_eq!(
+        look(&hiring, json!({ "role": "x" })).unwrap(),
+        LookUpdate::default()
+    );
     // What it already wears changes nothing.
     let now = AgentLook::default_for("h", false);
-    let same = LookChange {
-        shape: Some(now.shape),
-        face: Some(now.face),
-        color: Some("red".into()),
-    };
-    assert!(
-        card::look_only(&chief(), true, hiring_only(), same, None, &agents)
-            .unwrap_err()
-            .contains("already")
-    );
-}
-
-#[test]
-fn a_look_rides_along_with_a_policy_change_on_one_line_of_its_group() {
-    let agents = vec![chief(), agent("h", "Hiring")];
-    let base = card::Proposal {
-        targets: hiring_only(),
-        change: Change {
-            browser: Some(false),
-            ..Default::default()
-        },
-        version: 1,
-        groups: vec![card::Group {
-            who: "Hiring".into(),
-            agent_ids: vec!["h".into()],
-            changes: vec!["Can no longer use your browser".into()],
-        }],
-        why: None,
-        has_rules: false,
-        look: None,
-    };
-    let look = LookChange {
-        face: Some("sleepy".into()),
-        ..Default::default()
-    };
-    let p = card::add_look(base, &chief(), true, look, &agents).unwrap();
-    assert_eq!(
-        card::summary(&p.groups),
-        "Hiring: Can no longer use your browser. Now has a sleepy face."
-    );
+    let same = look(
+        &hiring,
+        json!({ "shape": now.shape, "face": now.face, "color": "red" }),
+    )
+    .unwrap();
+    assert_eq!(same, LookUpdate::default());
+    assert_eq!(same.line(), None);
 }

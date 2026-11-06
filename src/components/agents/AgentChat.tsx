@@ -47,6 +47,7 @@ import { AgentAvatar } from './AgentAvatar';
 import { AgentActionItems, type AgentActions } from './AgentActions';
 import { TakeoverBanner, TakeoverTerminal } from './AgentTakeover';
 import { AgentLine, ConversationBar, ConversationBars } from './AgentCard';
+import { PhoneSigninBar } from './PhoneSigninBar';
 import {
   needsLine,
   templateOf,
@@ -1677,6 +1678,8 @@ export const AgentChat = memo(function AgentChat({
               draft, dictation blocked. Two at most; the rest fold. */}
           <ConversationBars
             bars={[
+              // The phone is driving a tab in this Mac's Chrome: said in every conversation.
+              { id: 'phoneSignin', node: <PhoneSigninBar /> },
               {
                 id: 'waiting',
                 node: <WaitingForYouBar agent={agent} messages={messages} />,

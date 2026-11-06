@@ -7,11 +7,13 @@ import { agentsProjectScenarios } from './agentsProject';
 import { agentsWorkScenarios } from './agentsWork';
 import { agentsLiveScenarios } from './agentsLive';
 import { agentsResultsScenarios } from './agentsResults';
+import { agentsPreviewScenarios } from './agentsPreview';
 import { agentsRoomsScenarios } from './agentsRooms';
 import { agentsTakeoverScenarios } from './agentsTakeover';
 import { agentsStackScenarios } from './agentsStack';
 import { agentsFirstWinScenarios } from './agentsFirstWin';
 import { agentsStressScenarios } from './agentsStress';
+import { agentsTortureScenarios } from './agentsTorture';
 import { agentsRequestsScenarios } from './agentsRequests';
 import { agentsUsageScenarios } from './agentsUsage';
 import { agentsLoginsScenarios } from './agentsLogins';
@@ -32,6 +34,7 @@ import { phoneInstallScenarios } from './phoneInstall';
 import { previewErrorScenarios } from './previewError';
 import { remoteScenarios } from './remote';
 import { teamScenarios } from './team';
+import { projectsAtWorkScenarios } from './projectsAtWork';
 
 export const scenarios: Scenario[] = [
   ...agentsScenarios,
@@ -41,11 +44,13 @@ export const scenarios: Scenario[] = [
   ...agentsWorkScenarios,
   ...agentsLiveScenarios,
   ...agentsResultsScenarios,
+  ...agentsPreviewScenarios,
   ...agentsRoomsScenarios,
   ...agentsTakeoverScenarios,
   ...agentsStackScenarios,
   ...agentsFirstWinScenarios,
   ...agentsStressScenarios,
+  ...agentsTortureScenarios,
   ...agentsRequestsScenarios,
   ...agentsUsageScenarios,
   ...agentsLoginsScenarios,
@@ -65,6 +70,7 @@ export const scenarios: Scenario[] = [
   ...previewErrorScenarios,
   ...remoteScenarios,
   ...teamScenarios,
+  ...projectsAtWorkScenarios,
 ];
 
 export const DEFAULT_SCENARIO = 'dashboard';

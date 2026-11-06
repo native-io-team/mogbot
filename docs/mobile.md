@@ -149,7 +149,13 @@ inside it.
   `agents.loginSaveKey` (as `saveSecret`), `agents.loginsTeam|loginsConnect` ("What your team needs"),
   `agents.reach` (read-only); Mac feature `logins.phone`: `agents.loginPhoneBegin|loginPhoneFinish`
   (the sign-in sheet; the finish goes only to an identity-verified Mac) and `onPhone` on
-  `agents.loginStart|loginsConnect`
+  `agents.loginStart|loginsConnect`; Mac feature `signin.phone`:
+  `agents.signinBegin|signinFrame|signinInput|signinDone|signinStop` (signing in to a site in
+  the Mac's own Chrome from the phone; never audited by the router, see docs/agents.md,
+  "Signing in on your Mac from the phone"); "Not needed" for the team (docs/agents.md, "Not needed"):
+  `agents.loginNotNeeded|loginsNotNeeded|loginsUndecline` (shown only when the Mac lists them),
+  `agents.reach`'s `declined` (each with "Turn back on"), and `agents.loginsRecheck` when the app
+  comes back while claude.ai is being connected here
 - `agents.update` (`pinned`, `muted`, `hidden`, `instructions`),
   `agents.instructions|usage|revokePermission|changeDiff`
 - `agents.files|fetchPath|search`, `agents.schedule.preview|create|update|pause|cancel|runNow`
@@ -573,9 +579,9 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   · 42 passed, 3 failed", and a long or failed command keeps "Show output".
   On the list a working agent's avatar (a shape and a face, drawn with
   react-native-svg from the spec the desk uses: docs/internal/avatars.md;
-  the agent sheet changes it on a Mac listing `agents.looks`) gets a ring in
-  its colour that follows its silhouette and breathes slowly (still under
-  Reduce Motion) in place of the spinner, and
+  the agent sheet changes it on a Mac listing `agents.looks`) blinks every
+  few seconds (still under Reduce Motion; never a ring around it) in place
+  of the spinner, and
   its line says the step and how long ("Running the Cypress tests · 5m");
   the overview carries no steps, so until a live status arrives it is the
   status's words and the turn's time. The words come from
@@ -713,8 +719,11 @@ The phone can start work as well as answer it. Each piece is gated by
   back afterwards if it was up), and the field listens. The words stream into
   it as you speak, the last few lighter while the recognizer is still
   deciding them (`stablePrefix`: what a partial shares with the one before,
-  never its last word), with the recognizer's own punctuation. The mic's
-  place holds a waveform and the elapsed time, × takes the +'s place, and
+  never its last word), with the recognizer's own punctuation, at the
+  field's full width, wrapping exactly as typing does. A waveform and the
+  elapsed time ride in a slim row over the field (inside it, beside the
+  words, they squeezed a long dictation to three words a line), × takes the
+  +'s place, and
   the field holds **Stop** and **Send**, as Grok's dictation does. **Stop
   keeps the words in the draft** to read and edit; **Send** sends exactly
   what's on screen at once (the reducer's `send`: the partial too, then the
@@ -885,12 +894,54 @@ Haptics only for send, stop, approvals (after the Mac confirms), failures and
 toggles, and can be turned off. Android gets Material symbols, ripples and
 predictive back.
 
+### A tested card, and Watch live
+
+When the desk's **Test it** has run (docs/agents.md), the result card's new
+version carries `test`. The phone shows it in the card: the outcome in one
+line (a warning icon only when something is broken), the agent's summary and
+its list of what's broken, "N console errors" (the preview's own capture), and
+the screenshots as a sideways-paging strip, each captioned "2 of 3 · <step>"
+with the app's own step label. Tapping a picture opens the usual viewer. The
+"Changes since v1" line is left off a tested card: the test section says it.
+
+**Watch live** (a text action, like Ask for changes; shown when the Mac serves
+`agents.watchLive` and the card names a project or is a copy's card) opens the
+card's running site in the in-app browser, read-only:
+
+- The phone asks over its paired socket; the Mac resolves the folder from the
+  card exactly as the desk's Preview does (`preview_test::resolve`) and needs a
+  dev server already up for it (`proxy::dev_server_port_for`). None: "Open
+  Preview on the Mac first — the site isn't running there." The phone can't
+  start one.
+- The answer is a one-time link: `https://<mac>.ts.net:<companion port + 1>/__<slug>-watch/<ticket>`.
+  The ticket is 256 bits, kept only as a hash, bound to that phone and that
+  port, and good for a minute. Opening it trades it for an HttpOnly, Secure,
+  SameSite=Strict cookie good for 30 minutes (`companion/watch.rs`).
+- **Tailnet only**: the proxy binds loopback and is published with `tailscale
+  serve` on its own port, never Funnel (the port is never 443/8443/10000, and
+  a request Tailscale marks `Tailscale-Funnel-Request` is refused). Started on
+  the first Watch live, stopped with the phone server.
+- **Read-only**: GET and HEAD only; forms that post and WebSockets are
+  refused, so there's no live reload (reload the page). Every request re-checks
+  the phone is still paired: removing it on the Mac ends its sessions.
+- Passed through untouched: no script injection; our cookie and Tailscale's
+  identity headers are stripped, Host is the dev server's own.
+
+Verified: `cargo test --lib companion` (the decision function: one-use and
+expired tickets, revoked phones, cookie per port, Funnel and non-loopback
+refused, every write method refused, upgrades refused, cookie stripping;
+`agents.watchLive` served and audited), `mobile/__tests__/resultTest.test.tsx`,
+and the `result-tested` qa:web shot in both themes. **Not verified**:
+`tailscale serve` on the second port against a real tailnet, and a real dev
+server (Next, Vite) rendering through the proxy on a phone; with HMR refused,
+some dev clients may log reconnect attempts.
+
 ## Notifications
 
 `lib/notify.ts` keeps them honest: one per alert, grouped per agent
 (`threadIdentifier`, the same thread id the relay sets), taken back once
 handled anywhere (an approval answered or a chat read, here or at the desk),
-the icon badge equal to the desk's `badge_count`, and all cleared on Forget
+the icon badge equal to the desk's Dock badge (`notify::badge_now`, who needs you), and all cleared on Forget
 this Mac. Android has "Needs you" (high) and "Replies" channels. A tap waits
 for fonts and credentials, opens at the message, and replaces a chat already
 on top instead of stacking.

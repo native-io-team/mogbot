@@ -189,3 +189,30 @@
   font-size: var(--font-size-body-sm);
   color: var(--text-secondary);
 }
+
+/* The progress line and "Skip the rest" share the list's top line. */
+.team-logins__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+}
+
+.team-logins__skip-rest {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+}
+
+/* "Opened in your browser — didn't see it? Open again · Copy link" (SignInHelp). */
+.agent-login__help {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+/* Quiet for 20 s: said plainly, in the body colour, not as an error. */
+.agent-login__help[data-quiet] {
+  color: var(--text-secondary);
+}

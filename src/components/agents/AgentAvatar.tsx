@@ -9,8 +9,9 @@
  * not static artwork, which is what `src/assets/graphics/` holds.
  *
  * Motion is small and only means something: while it works, a blink now and
- * then (inside the breathing ring that says "working" in a list); when a
- * turn ends, one bob. Nothing at rest; nothing at all with Reduce Motion.
+ * then (never a ring around it: the owner ruled that out; the row's live
+ * step text says the rest); when a turn ends, one bob. Nothing at rest;
+ * nothing at all with Reduce Motion.
  *
  * @module components/agents/AgentAvatar
  */
@@ -100,10 +101,6 @@ function lookFromTeam(team: string, id: string): AgentLook | null {
 const SIZE_PX = { xs: 16, mini: 18, row: 24, field: 24, md: 40, hero: 46, xl: 96 } as const;
 export type AgentAvatarSize = keyof typeof SIZE_PX;
 
-/** A working ring sits this far outside the shape, as a scale of it. */
-const RING_SCALE = 1.16;
-const C = 16;
-
 interface AgentAvatarProps {
   /** Seeds the look of an agent that isn't in the registry (an import preview). */
   name: string;
@@ -121,7 +118,7 @@ interface AgentAvatarProps {
   size?: AgentAvatarSize;
   /** Solid, for the agent you're looking at (like the current project's badge). */
   selected?: boolean;
-  /** Mid-turn: blinks now and then, inside a ring of its colour that breathes. */
+  /** Mid-turn: blinks now and then (no ring around it). */
   working?: boolean;
   className?: string;
 }
@@ -164,14 +161,6 @@ export function AgentAvatar({
         viewBox="0 0 32 32"
         focusable="false"
       >
-        {working && (
-          <path
-            className="agent-avatar__ring"
-            d={shape.d}
-            transform={`translate(${C} ${C}) scale(${RING_SCALE}) translate(${-C} ${-C})`}
-            vectorEffect="non-scaling-stroke"
-          />
-        )}
         <path className="agent-avatar__shape" d={shape.d} />
         <g className="agent-avatar__face" transform={faceTransform(look.shape) || undefined}>
           <g className="agent-avatar__eyes">

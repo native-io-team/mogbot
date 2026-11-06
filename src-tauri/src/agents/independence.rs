@@ -15,16 +15,18 @@
 //! their own CLAUDE.md is touched. It changes only when the user changes the
 //! level, never per turn, so the engine's prompt cache holds. It also decides
 //! which *local* cards are answered for the user (`agents::autoallow`):
-//! "Use good judgement" answers reads, "Go hard" reads and local work in the
-//! home. Every card that asks before spending, sending, publishing, pushing,
-//! sharing, deleting the user's files or touching credentials appears at
-//! every level.
+//! "Use good judgement" answers reads; "Go hard" allows by default and asks
+//! only for its short list (`agents::go_hard`: pushing, publishing, deploys,
+//! sending, payments, network writes off this Mac, `sudo`, deleting outside
+//! projects, credentials and system changes), which appears at every level.
 //! The browser (`browser_gate`): above "Check with me often", looking around
 //! and clicks that don't send go through without a card; sending asks.
 //!
 //! **Outside text never goes hard.** A turn answering outside text (a
 //! "When…" routine's items, or anything that carried their taint through
-//! `message_agent` or a room) runs at most at `Judgement` ([`for_turn`]):
+//! `message_agent` or a room) runs at most at `Judgement` ([`for_turn`]) for
+//! its prompt and the browser; its approvals at "Go hard" stay allow-by-
+//! default plus network writes and fetched packages (`go_hard`):
 //! text from outside never gets "carry on without asking" or a write without
 //! a card, yet unattended routines still finish their work; the approval
 //! wall and the taint gate anything consequential.
@@ -92,28 +94,32 @@ const OFTEN: &str = "The user chose \"Check with me often\". Before a change wit
 or anything that's hard to undo, say your plan in a few lines and wait for their go-ahead. \
 Answering, reading and looking things up don't need it. If you can't finish, say exactly what's left and why.";
 
-const JUDGEMENT: &str = "The user chose \"Use good judgement\". Do what you're asked through to the end. \
-Before asking the user to do something, check whether you can do it yourself with your tools, their \
-connected apps and the files and CLIs on this Mac, and if you can, do it. Ask when a choice is really \
-theirs, or a step needs their money, their identity, or sending or publishing as them. If you can't \
-finish, say exactly what's left and why.";
+const JUDGEMENT: &str =
+    "The user chose \"Use good judgement\". Do what you're asked through to the end. \
+Ask when a choice is really theirs, or a step needs their money, their identity, or sending or \
+publishing as them.";
 
-const GO_HARD: &str = "The user chose \"Go hard — get it done\". Finish what you're asked. Before asking \
-the user to do anything, check: did they already ask you to do it, and have you actually tried every way \
-you have (your tools, their connected apps, their signed-in browser if allowed, the files and CLIs on this \
-Mac)? Only stop for things that need their money, their identity, sending or publishing as them, or \
-deleting their data: ask once, clearly, then carry on with everything else. Never end a turn with the task \
-silently unfinished; say exactly what's left and why.";
+const GO_HARD: &str = "The user chose \"Go hard — get it done\". Do what you're asked without asking at \
+each step; did they already ask you to do it? Then do it. Only stop for their money, their identity, \
+sending or publishing as them, pushing, deleting their data, or credentials: ask once, clearly, then \
+carry on with everything else.";
+
+/// Said at "Use good judgement" and "Go hard": do whatever it takes.
+const RELENTLESS: &str = "Be relentless and resourceful: do whatever it takes to get the job done. \
+When something blocks you, try every route you have before asking: your tools, the user's files and \
+CLIs on this Mac, their connected apps, their signed-in Chrome if you have it, search, a small script \
+you write, another agent. Never stop at the first error, and never hand back work you can do yourself. \
+Never end a turn with the task silently unfinished: finish it, or say exactly what's left and the one \
+thing you need.";
 
 /// The section for `level`. Short and fixed per level, so the prompt (and
 /// its cache) only changes when the user changes the level.
 pub fn prompt_section(level: Level) -> String {
-    let body = match level {
-        Level::Often => OFTEN,
-        Level::Judgement => JUDGEMENT,
-        Level::GoHard => GO_HARD,
-    };
-    format!("{HEADING}\n\n{body} {WALL}")
+    match level {
+        Level::Often => format!("{HEADING}\n\n{OFTEN} {WALL}"),
+        Level::Judgement => format!("{HEADING}\n\n{JUDGEMENT} {RELENTLESS} {WALL}"),
+        Level::GoHard => format!("{HEADING}\n\n{GO_HARD} {RELENTLESS} {WALL}"),
+    }
 }
 
 /// The level a turn runs at: the user's, but never "Go hard" when it answers
@@ -185,7 +191,7 @@ mod tests {
             assert!(s.starts_with(HEADING));
             assert!(s.ends_with(WALL), "every level says approvals don't change");
             // Short enough to sit in every prompt without weighing on it.
-            assert!(s.chars().count() < 900, "{}", s.chars().count());
+            assert!(s.chars().count() < 1200, "{}", s.chars().count());
             // Nothing that changes per turn: the cache holds.
             assert!(!s.chars().any(|c| c.is_ascii_digit()));
         }
@@ -198,11 +204,23 @@ mod tests {
         assert!(often.contains("wait for their go-ahead"));
         let go_hard = &sections[2];
         assert!(go_hard.contains("did they already ask you to do it"));
-        assert!(go_hard.contains("tried every way you have"));
         assert!(go_hard.contains("their money, their identity, sending or publishing as them"));
-        assert!(go_hard.contains("deleting their data"));
-        assert!(go_hard.contains("Never end a turn with the task silently unfinished"));
+        assert!(go_hard.contains("pushing, deleting their data, or credentials"));
         assert!(!go_hard.contains("wait for their go-ahead"));
+        // Whatever it takes, at "Use good judgement" and "Go hard".
+        for s in [&sections[1], &sections[2]] {
+            assert!(s.contains(RELENTLESS));
+            assert!(s.contains("do whatever it takes to get the job done"));
+            assert!(s.contains("try every route you have before asking"));
+            assert!(s.contains("their signed-in Chrome"));
+            assert!(s.contains("a small script"));
+            assert!(s.contains("another agent"));
+            assert!(s.contains("Never stop at the first error"));
+            assert!(s.contains("never hand back work you can do yourself"));
+            assert!(s.contains("Never end a turn with the task silently unfinished"));
+            assert!(s.contains("the one thing you need"));
+        }
+        assert!(!often.contains(RELENTLESS));
     }
 
     #[test]

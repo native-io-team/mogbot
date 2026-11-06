@@ -1787,6 +1787,20 @@ export const agentsScenarios: Scenario[] = [
     },
   },
   {
+    id: 'agents-markdown-1100',
+    title: 'Agents — a reply with a table, at a 1100px window',
+    looksRightWhen:
+      'The reply’s prose runs to the same right edge as the composer below it: one column, both edges shared. In the table, Amount and Days late are right-aligned with lined-up digits (header too); Client stays left.',
+    requires: '.agent-code',
+    openSelector: AGENTS_TAB,
+    viewport: { width: 1100, height: 800 },
+    steps: [{ click: '[data-agent-id="finance"]' }],
+    commands: {
+      agents_overview: overview(),
+      agents_messages: messagesFor,
+    },
+  },
+  {
     id: 'agents-check-in',
     title: 'Agents — a scheduled check-in fired in the chat',
     looksRightWhen:
@@ -2953,7 +2967,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-team-overview',
     title: 'Agents — What’s in flight (⌘K)',
     looksRightWhen:
-      'Opened from ⌘K; the agent list has no Team row and no row is selected. The header reads “What’s in flight”. The main column shows four sections in a fixed order: Needs your OK (Lead Gen, with its Gmail card answerable in place), Working now (Acme Site, “Editing PricingTable.tsx”, with the loader), Scheduled next (Finance’s two active check-ins, soonest first, the paused one absent), Recent replies (newest first, one plain line each, with times). Rows share the sidebar’s badge and type.',
+      'Opened from ⌘K; the agent list has no Team row and no row is selected. The header reads “What’s in flight”. The main column shows four sections in a fixed order, one line per agent (“Name · what · when”): Needs you (Lead Gen, open with its Gmail card answerable in place, a chevron and Open chat), Working (Acme Site · “Editing PricingTable.tsx”, with the loader), Scheduled next (Finance’s two active check-ins, soonest first, the paused one absent), Done recently (newest first, “2m ago” times). Rows share the sidebar’s badge and type.',
     command: 'agents.team',
     requires: '.agents-team .agent-approval',
     commands: {

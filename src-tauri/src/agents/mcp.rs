@@ -188,7 +188,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "update_agent",
-        description: "Change an agent's name, role, instructions, project or engine. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude` or `codex`) switches what it runs on from its next turn: a new session, handed the recent conversation.",
+        description: "Change an agent's name, role, instructions, project, engine or look. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude` or `codex`) switches what it runs on from its next turn: a new session, handed the recent conversation. `shape`, `face` and `color` change how it looks (\"give Hiring a hexagon with a curious face\"); give only what changes. A look applies at once, with no card: it isn't a setting.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -198,7 +198,10 @@ const TOOLS: &[Tool] = &[
                 "role": { "type": "string" },
                 "instructions": { "type": "string" },
                 "project": { "type": "string" },
-                "engine": { "type": "string", "enum": ["claude", "codex"] }
+                "engine": { "type": "string", "enum": ["claude", "codex"] },
+                "shape": { "type": "string", "enum": store::AVATAR_SHAPES },
+                "face": { "type": "string", "enum": store::AVATAR_FACES },
+                "color": { "type": "string", "enum": store::COLORS }
             },
             "required": ["agent"]
         }),
@@ -457,6 +460,8 @@ fn tools_list(caller: &store::Agent) -> Value {
     }
     // Every agent works on projects the same way.
     tools.extend(super::sessions::definitions());
+    // "Test it": only while the user's run is open (`preview_test`).
+    tools.extend(super::preview_test::definitions(&caller.id));
     json!({ "tools": tools })
 }
 
@@ -494,6 +499,11 @@ pub async fn handle_rpc(
                 .unwrap_or_else(|| json!({}));
             if let Some(tool) = super::sessions::find(name) {
                 return ok(super::sessions::call(app, &caller, tool, &args).await);
+            }
+            // The user's own local preview, after they pressed Test it: no
+            // card (local work), and nothing but that page.
+            if let Some(tool) = super::preview_test::find(name) {
+                return ok(super::preview_test::call(app, &caller, turn, tool, &args).await);
             }
             if let Some(tool) = super::usage_tools::find(name) {
                 return ok(usage_tool(app, &caller, turn, tool, &args).await);
@@ -930,7 +940,7 @@ pub fn created_routine_line(app: &AppHandle, agent_id: &str, c: &schedule::Check
 pub fn routine_line_text(c: &schedule::CheckIn) -> String {
     match &c.watch {
         Some(w) => format!(
-            "Set up a “When…” routine: when {}, {} · {}",
+            "Set up a “When…” routine for when {}: {} · {}",
             super::watch::describe(&w.source),
             short_line(&c.note),
             super::watch::cost_words(w)
@@ -1469,6 +1479,10 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         Some(Err(e)) => return error(e.to_string()),
         _ => None,
     };
+    let look = match look_args(&agent, args) {
+        Ok(l) => l,
+        Err(e) => return error(e),
+    };
     let role = arg(args, "role").map(str::to_string);
     let mut fields = Vec::new();
     if role.as_deref().is_some_and(|r| r != agent.role) {
@@ -1503,6 +1517,12 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         if let Some(engine) = engine {
             a.switch_engine(engine);
         }
+        if let Some(avatar) = look.avatar.clone() {
+            a.avatar = Some(avatar);
+        }
+        if let Some(c) = look.color.clone() {
+            a.color = c;
+        }
     });
     let updated = match updated {
         Ok(a) => a,
@@ -1521,7 +1541,79 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     for note in update_notes(caller, &agent, &updated, &fields) {
         let _ = runner::record(app, note);
     }
-    text(format!("Updated {}.", updated.name))
+    match look.line() {
+        Some(line) => text(format!("Updated {}: {line}.", updated.name)),
+        None => text(format!("Updated {}.", updated.name)),
+    }
+}
+
+/// What `update_agent`'s `shape` / `face` / `color` change for this agent:
+/// only what differs from what it wears now; the rest of its look stays.
+/// Looks aren't settings, so this applies without a card.
+#[derive(Debug, Default, PartialEq)]
+pub(super) struct LookUpdate {
+    /// Its whole new look, when the shape or face changes.
+    pub avatar: Option<store::AgentLook>,
+    pub color: Option<String>,
+    shape_changed: bool,
+    face_changed: bool,
+}
+
+impl LookUpdate {
+    /// "now a hexagon with a curious face, in blue", for the tool's reply.
+    pub fn line(&self) -> Option<String> {
+        let a = self.avatar.as_ref();
+        let desc = store::AgentLook::describe(
+            a.filter(|_| self.shape_changed).map(|l| l.shape.as_str()),
+            a.filter(|_| self.face_changed).map(|l| l.face.as_str()),
+        );
+        let what = match (self.shape_changed, desc.is_empty()) {
+            (_, true) => String::new(),
+            (false, false) => format!("now has {desc}"),
+            (true, false) => format!("now {desc}"),
+        };
+        match (what.is_empty(), &self.color) {
+            (false, Some(c)) => Some(format!("{what}, in {c}")),
+            (false, None) => Some(what),
+            (true, Some(c)) => Some(format!("now {c}")),
+            (true, None) => None,
+        }
+    }
+}
+
+pub(super) fn look_args(agent: &store::Agent, args: &Value) -> Result<LookUpdate, String> {
+    let key = |k: &str| {
+        args.get(k)
+            .and_then(Value::as_str)
+            .map(|s| s.trim().to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+    };
+    let (shape, face, color) = (key("shape"), key("face"), key("color"));
+    let now = store::AgentLook::of(agent);
+    let mut out = LookUpdate::default();
+    if shape.is_some() || face.is_some() {
+        let next = store::AgentLook::checked(
+            shape.as_deref().unwrap_or(&now.shape),
+            face.as_deref().unwrap_or(&now.face),
+        )?;
+        out.shape_changed = next.shape != now.shape;
+        out.face_changed = next.face != now.face;
+        if out.shape_changed || out.face_changed {
+            out.avatar = Some(next);
+        }
+    }
+    if let Some(c) = color {
+        if !store::COLORS.contains(&c.as_str()) {
+            return Err(format!(
+                "There's no colour called \"{c}\": {}.",
+                store::COLORS.join(", ")
+            ));
+        }
+        if c != agent.color {
+            out.color = Some(c);
+        }
+    }
+    Ok(out)
 }
 
 /// An admin's delete is a soft one: the agent leaves the team and waits in
@@ -1593,6 +1685,12 @@ fn request_secret_as(app: &AppHandle, caller: &store::Agent, args: &Value, quiet
     // Asked already in this task and nobody answered: not again.
     if super::expiry::already_expired(&caller.id, &super::expiry::secret_key(&request.name)) {
         return text(super::expiry::told_maybe_later(&request.name));
+    }
+    // An app the user chose not to connect isn't asked for by another door.
+    if let Some(refused) =
+        super::declined::refusal_for_text(&format!("{} {}", request.name, request.purpose))
+    {
+        return text(refused);
     }
     let open = store::pending_approvals(&caller.id).unwrap_or_default();
     if open
@@ -1898,14 +1996,23 @@ pub(super) fn mcp_title(tool: &str) -> String {
     let Some((server, name)) = tool.strip_prefix("mcp__").and_then(|t| t.split_once("__")) else {
         return format!("Use {tool}");
     };
-    // "tabs_context_mcp": the server's own suffix isn't a word anyone says.
+    if let Some(title) = browser_tool_title(server, name) {
+        return format!("{title} · {}", service_name(server));
+    }
+    // "tabs_context_mcp", "javascript_tool": the server's own suffix and the
+    // word "tool" aren't words anyone says.
     let words: Vec<String> = split_words(name)
         .into_iter()
-        .filter(|w| w != "mcp")
+        .filter(|w| w != "mcp" && w != "tool")
         .collect();
     let Some((verb, object)) = words.split_first() else {
         return format!("Use {tool}");
     };
+    // Not every tool's name starts with a verb ("tabs_context"): those read
+    // "Use tabs context", never "Tabs a context".
+    if !object.is_empty() && !TOOL_VERBS.contains(&verb.as_str()) {
+        return format!("Use {} · {}", words.join(" "), service_name(server));
+    }
     let mut phrase = capitalize(verb);
     if !object.is_empty() {
         let last = object.last().map(String::as_str).unwrap_or("");
@@ -1930,6 +2037,44 @@ pub(super) fn mcp_title(tool: &str) -> String {
         phrase.push_str(&object.join(" "));
     }
     format!("{phrase} · {}", service_name(server))
+}
+
+/// Verbs an MCP tool's name usually starts with. A name that starts with
+/// anything else is a noun phrase, said as "Use …".
+const TOOL_VERBS: [&str; 44] = [
+    "add", "append", "archive", "ask", "cancel", "check", "click", "close", "comment", "create",
+    "delete", "download", "draft", "edit", "fetch", "fill", "find", "get", "invite", "label",
+    "list", "load", "mark", "merge", "move", "open", "post", "publish", "query", "read", "remove",
+    "reply", "run", "save", "schedule", "search", "send", "set", "share", "start", "stop",
+    "submit", "update", "upload",
+];
+
+/// The browser extension's tools, in what they do to the page. Its names are
+/// nouns ("computer", "javascript_tool", "tabs_context_mcp"), which the verb
+/// rule turned into "Javascript a tool" and "Tabs a context".
+fn browser_tool_title(server: &str, name: &str) -> Option<&'static str> {
+    if !matches!(
+        server.to_ascii_lowercase().as_str(),
+        "claude-in-chrome" | "claude_in_chrome" | "chrome"
+    ) {
+        return None;
+    }
+    Some(match name {
+        "computer" => "Click and type in the browser",
+        "navigate" => "Open a page",
+        "javascript_tool" => "Run a script on the page",
+        "tabs_context_mcp" | "tabs_context" => "See its browser tabs",
+        "tabs_create_mcp" | "tabs_create" => "Open a tab",
+        "read_page" | "get_page_text" => "Read the page",
+        "find" => "Find something on the page",
+        "form_input" => "Fill in a form",
+        "read_console_messages" => "Read the page's console",
+        "read_network_requests" => "Read the page's network requests",
+        "upload_image" => "Upload an image",
+        "resize_window" => "Resize the browser window",
+        "gif_creator" => "Record the screen",
+        _ => return None,
+    })
 }
 
 /// An MCP server's name as a person would say it: `claude_ai_Gmail` →
@@ -2128,7 +2273,17 @@ fn auto_allowed(
     let chosen = super::policy::chosen_level(caller);
     let ctx = super::autoallow::Ctx::for_agent(caller)?;
     super::autoallow::auto(chosen, outside, tool, input, &ctx)
-        .map(|_| super::independence::for_turn(chosen, outside))
+        .map(|_| receipt_level(chosen, outside))
+}
+
+/// The level a receipt names: "Go hard" answers at its own level even for a
+/// turn answering outside text (`go_hard`); the others as the turn runs.
+fn receipt_level(chosen: super::independence::Level, outside: bool) -> super::independence::Level {
+    if chosen == super::independence::Level::GoHard {
+        chosen
+    } else {
+        super::independence::for_turn(chosen, outside)
+    }
 }
 
 /// "Allowed automatically — Go hard · ls -la ~/Notes".
@@ -2179,7 +2334,7 @@ pub fn sweep_auto_allowed(app: &AppHandle) -> usize {
             let (Some(tool), Some(input)) = (&card.tool, &card.input) else {
                 continue;
             };
-            let level = super::independence::for_turn(chosen, !inside);
+            let level = receipt_level(chosen, !inside);
             let Ok(Some(updated)) =
                 store::set_approval_status(&agent.id, &card.request_id, ApprovalStatus::Allowed)
             else {
@@ -2439,17 +2594,20 @@ mod tests {
             auto_allowed(&agent, "Bash", &ls, false),
             Some(Level::GoHard)
         );
-        // Outside text is capped: the read goes through, labelled as such.
-        assert_eq!(
-            auto_allowed(&agent, "Bash", &ls, true),
-            Some(Level::Judgement)
-        );
+        // Outside text keeps Go hard for reading and local work (`go_hard`);
+        // only network writes and fetched packages ask there.
+        assert_eq!(auto_allowed(&agent, "Bash", &ls, true), Some(Level::GoHard));
         let mkdir = json!({ "command": "mkdir -p ~/FictionalProjects/new-site" });
         assert_eq!(
             auto_allowed(&agent, "Bash", &mkdir, false),
             Some(Level::GoHard)
         );
-        assert_eq!(auto_allowed(&agent, "Bash", &mkdir, true), None);
+        assert_eq!(
+            auto_allowed(&agent, "Bash", &mkdir, true),
+            Some(Level::GoHard)
+        );
+        let fetched = json!({ "command": "npx some-fictional-package" });
+        assert_eq!(auto_allowed(&agent, "Bash", &fetched, true), None);
         assert!(auto_line(Level::GoHard, "Bash", &mkdir)
             .starts_with("Allowed automatically — Go hard · mkdir -p"));
         independence::set_level(Level::Often, 2).unwrap();
@@ -2489,7 +2647,8 @@ mod tests {
             sweepable(Level::GoHard, &write, &ctx, &no_browser),
             Some(true)
         );
-        // A card from before the marker, or from outside text: reads only.
+        // A card from before the marker, or from outside text: Go hard still
+        // answers local work; a network write from there waits.
         assert_eq!(
             sweepable(
                 Level::GoHard,
@@ -2497,12 +2656,21 @@ mod tests {
                 &ctx,
                 &no_browser
             ),
-            None
+            Some(false)
         );
         assert_eq!(
             sweepable(
                 Level::GoHard,
-                &card("mkdir ~/Desk/new", Some(true)),
+                &card("curl -X POST localhost:3000/api -d x", Some(true)),
+                &ctx,
+                &no_browser
+            ),
+            None
+        );
+        assert_eq!(
+            sweepable(
+                Level::Judgement,
+                &card("mkdir ~/Desk/new", None),
                 &ctx,
                 &no_browser
             ),
@@ -2631,6 +2799,26 @@ mod tests {
         );
         assert_eq!(title("mcp__linear__search"), "Search · Linear");
         assert_eq!(title("SomethingElse"), "Use SomethingElse");
+        // Real cards read "Javascript a tool · Chrome" and "Tabs a context
+        // mcp · Chrome".
+        assert_eq!(
+            title("mcp__claude-in-chrome__javascript_tool"),
+            "Run a script on the page · Chrome"
+        );
+        assert_eq!(
+            title("mcp__claude-in-chrome__tabs_context_mcp"),
+            "See its browser tabs · Chrome"
+        );
+        assert_eq!(
+            title("mcp__claude-in-chrome__navigate"),
+            "Open a page · Chrome"
+        );
+        // A noun-first name elsewhere is "Use …", never a made-up verb.
+        assert_eq!(
+            title("mcp__acme__ticket_history"),
+            "Use ticket history · Acme"
+        );
+        assert_eq!(title("mcp__acme__render_tool"), "Render · Acme");
     }
 
     #[test]

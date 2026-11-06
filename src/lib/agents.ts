@@ -138,6 +138,12 @@ export interface TurnWork {
   lastSignAt?: number;
   /** While it runs, once it has made no progress for too long: when it last did. */
   quietSince?: number;
+  /**
+   * While it runs: the project folder it is working in (by its own commands,
+   * a session or its binding), so the Projects list shows it there. Older
+   * Macs omit it.
+   */
+  project?: string;
 }
 
 export interface Agent {
@@ -1055,6 +1061,11 @@ export const AGENT_EVENTS = {
   importTalk: 'agents://import-talk',
   /** How far a copy from the other app has got: `OtherAppProgress`. */
   importProgress: 'agents://import-progress',
+  /**
+   * An agent's turn is working in a codebase the app just registered or
+   * pinned (`agents::workplace`): `{ path, agentId }`. Re-read the projects.
+   */
+  projectFound: 'agents://project-found',
 } as const;
 
 export const getAgentsOverview = () => invoke<AgentsOverview>('agents_overview');

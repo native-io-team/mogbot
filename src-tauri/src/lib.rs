@@ -13,6 +13,9 @@
 
 pub mod agent;
 pub mod agent_bridge;
+// Prototype only: docs/internal/agent-browser.md.
+#[cfg(all(feature = "agent-browser", unix))]
+pub mod agent_browser;
 pub mod agents;
 pub mod brand;
 pub mod cache;
@@ -720,6 +723,11 @@ pub fn run() {
             commands::agents::agents_change_diff,
             commands::agents::agents_copy_keep,
             commands::agents::agents_copy_discard,
+            commands::agents_preview::agents_preview_target,
+            commands::agents_preview::agents_preview_attach,
+            commands::agents_preview::agents_preview_test_start,
+            commands::agents_preview::agents_preview_test_state,
+            commands::agents_preview::agents_preview_test_stop,
             commands::agents::agents_send,
             commands::agents::agents_team_setup,
             commands::agents::agents_team_setup_step,
@@ -730,6 +738,8 @@ pub fn run() {
             commands::agents::agents_browser_status,
             commands::agents::agents_browser_enable,
             commands::agents::agents_browser_disable,
+            commands::agents::agents_phone_signin_status,
+            commands::agents::agents_phone_signin_stop,
             commands::agents::agents_browser_open_install,
             commands::agents::agents_access_check,
             commands::agents::agents_team_setup_later,
@@ -783,6 +793,12 @@ pub fn run() {
             commands::agents::agents_login_save_key,
             commands::agents::agents_logins_team,
             commands::agents::agents_login_dismiss,
+            commands::agents::agents_login_not_needed,
+            commands::agents::agents_logins_not_needed,
+            commands::agents::agents_logins_undecline,
+            commands::agents::agents_logins_declined,
+            commands::agents::agents_login_reopen,
+            commands::agents::agents_logins_recheck,
             commands::agents::agents_logins_connect,
             commands::agents::agents_reach,
             commands::agents::agents_reach_remove,

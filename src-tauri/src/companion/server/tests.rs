@@ -663,6 +663,10 @@ async fn upload_send_and_download_a_photo_end_to_end() {
         .to_str()
         .unwrap()
         .starts_with("private"));
+    // Phone builds before the protocol fix doubled the `attachments/`
+    // segment; those still get the file rather than a 404 (an empty box).
+    let doubled = route.replacen("/attachments/", "/attachments/attachments/", 1);
+    assert_eq!(get(port, Some(&token), &doubled).await.status(), 200);
     let thumb = get(port, Some(&token), &format!("{route}?w=200")).await;
     assert_eq!(thumb.status(), 200);
     assert_eq!(thumb.headers()["content-type"], "image/jpeg");

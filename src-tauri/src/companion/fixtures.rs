@@ -602,6 +602,30 @@ async fn generate() -> String {
         .await,
     );
     out += &entry(
+        "agentsSigninBegin",
+        "Result<'agents.signinBegin'>",
+        call(
+            "agents.signinBegin",
+            json!({ "agentId": AGENT, "requestId": "q12" }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsSigninFrame",
+        "Result<'agents.signinFrame'>",
+        call("agents.signinFrame", json!({ "sessionId": "signin_0123" })).await,
+    );
+    out += &entry(
+        "agentsSigninFrameOutside",
+        "Result<'agents.signinFrame'>",
+        call("agents.signinFrame", json!({ "sessionId": "outside" })).await,
+    );
+    out += &entry(
+        "agentsSigninDone",
+        "Result<'agents.signinDone'>",
+        call("agents.signinDone", json!({ "sessionId": "signin_0123" })).await,
+    );
+    out += &entry(
         "agentsLoginSaveKey",
         "Result<'agents.loginSaveKey'>",
         call(

@@ -7,6 +7,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { CLAUDE_AI_CONNECTORS_URL } from '../../packages/companion-protocol/src/links';
 
 /** Where a server is set up, which decides whether this panel may remove it. */
 export type AgentAppSource = 'user' | 'claudeAi' | 'other';
@@ -33,8 +34,8 @@ export interface AgentApps {
   suggestions: AgentAppSuggestion[];
 }
 
-/** Where claude.ai's own connectors (Gmail, Calendar, Slack…) are set up. */
-export const CLAUDE_CONNECTORS_URL = 'https://claude.ai/settings/connectors';
+/** Where claude.ai's own connectors (Gmail, Calendar, Slack…) are set up: one copy, in the protocol package. */
+export const CLAUDE_CONNECTORS_URL = CLAUDE_AI_CONNECTORS_URL;
 
 /** Opens claude.ai's connector settings in the browser. */
 export const openClaudeConnectors = () => openUrl(CLAUDE_CONNECTORS_URL);

@@ -142,6 +142,7 @@ fn result_message(id: &str, card_id: &str, version: u32) -> AgentMessage {
         not_verified: Vec::new(),
         changes: None,
         project: None,
+        test: None,
     });
     m
 }

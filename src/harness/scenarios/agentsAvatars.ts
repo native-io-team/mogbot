@@ -1,7 +1,7 @@
 /**
  * Agent avatars (docs/internal/avatars.md): a sidebar of twelve agents in
  * their defaults and a few chosen looks, the Chief's chat header, the look
- * picker in the editor, and the settings card a look change from chat makes.
+ * picker in the editor, and a look changed from chat (at once, no card).
  * Add `&avatarDirection=solid|outline` to see a direction that wasn't chosen.
  * Fictional team.
  */
@@ -45,49 +45,21 @@ const TWELVE = [
   }),
 ];
 
-const SUMMARY = 'Hiring: Now a hexagon with a curious face.';
-
+/** A look asked for in chat: the Chief changes it at once, no card. */
 const lookChat = (args: Record<string, unknown>) =>
   args.agentId === 'chief'
     ? [
         msg('user', 'Give Hiring a hexagon with a curious face.', 2),
-        msg('agent', 'Put it on a card for you.', 1),
-        msg('approval', '', 1, {
-          agentId: 'chief',
-          approval: {
-            requestId: 'look-1',
-            title: 'Change Hiring’s settings?',
-            detail: `${SUMMARY}\n\nWhy: You asked for it`,
-            summary: SUMMARY,
-            status: 'pending',
-            settings: {
-              targets: [{ kind: 'agent', agentId: 'hiring' }],
-              change: {},
-              version: 0,
-              groups: [
-                {
-                  who: 'Hiring',
-                  agentIds: ['hiring'],
-                  changes: ['Now a hexagon with a curious face'],
-                },
-              ],
-              why: 'You asked for it',
-              look: { shape: 'hexagon', face: 'curious' },
-            },
-          },
-        }),
+        msg('agent', 'Done: Hiring is now a hexagon with a curious face.', 1),
       ]
     : messagesFor(args);
-
-/** Hiring before it chose: its default, so the card shows a change. */
-const BEFORE = TWELVE.map((a) => (a.id === 'hiring' ? { ...a, avatar: undefined } : a));
 
 export const agentsAvatarsScenarios: Scenario[] = [
   {
     id: 'agents-avatars',
     title: 'Agents — avatars: a sidebar of twelve, the Chief’s chat open',
     looksRightWhen:
-      'Twelve sidebar rows, each a soft shape in a tone of the agent’s colour with a small two-dot face in an ink of the same hue: no two neighbours alike, nothing neon, the Chief a squircle with a calm face, solid as the open agent. Acme Site and Research are working: a thin ring of their colour follows their silhouette. Hiring is a hexagon with a curious face (glancing right). The chat header shows the Chief’s avatar at the same weight as the row’s.',
+      'Twelve sidebar rows, each a soft shape in a tone of the agent’s colour with a small two-dot face in an ink of the same hue: no two neighbours alike, nothing neon, the Chief a squircle with a calm face, solid as the open agent. Acme Site and Research are working: no ring or border around their avatars, only their row’s live step text. Hiring is a hexagon with a curious face (glancing right). The chat header shows the Chief’s avatar at the same weight as the row’s.',
     openSelector: AGENTS_TAB,
     requires: '.agents-list__row .agent-avatar[data-shape="hexagon"]',
     commands: {
@@ -108,14 +80,14 @@ export const agentsAvatarsScenarios: Scenario[] = [
     },
   },
   {
-    id: 'agents-avatars-card',
+    id: 'agents-avatars-chat',
     title: 'Agents — “Give Hiring a hexagon with a curious face” from chat',
     looksRightWhen:
-      'The Chief’s chat: the request, a one-line reply, then the ordinary “Change Hiring’s settings?” card: Hiring shown as it would look (a pink hexagon, curious face) beside its name, “Now a hexagon with a curious face”, Why. Allow is neutral, Deny beside it. In the sidebar Hiring still wears its old look until Allow.',
+      'The Chief’s chat: the request, then a one-line reply saying it’s done. No card: a look isn’t a setting. In the sidebar Hiring is already a pink hexagon with a curious face.',
     openSelector: AGENTS_TAB,
-    requires: '.agent-settings-change__who .agent-avatar[data-shape="hexagon"]',
+    requires: '.agents-list__row .agent-avatar[data-shape="hexagon"]',
     commands: {
-      agents_overview: overview(BEFORE),
+      agents_overview: overview(TWELVE),
       agents_messages: lookChat,
     },
   },

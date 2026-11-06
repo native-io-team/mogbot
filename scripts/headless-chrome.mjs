@@ -35,6 +35,14 @@
  * - **Sweep on the way in.** Anything still running from a previous run of the
  *   same tool is ours to reap; it is identified by the profile prefix we set,
  *   so nothing else on the machine can match.
+ * - **A ceiling.** `maxMs` closes the browser (and ends the run) if the run
+ *   outlives it, so a hung capture can't keep a browser alive overnight.
+ *
+ * Why this matters beyond memory: macOS hands a link the user clicks (an
+ * app's "Sign in" opening the default browser) to a *running* Chrome, and a
+ * headless one counts. A leaked headless Chrome swallowed real sign-in pages
+ * that way, so the user saw nothing open. A profile of our own under TMPDIR,
+ * and never outliving the run, is what keeps our browsers out of that.
  *
  * @module scripts/headless-chrome
  */
@@ -92,8 +100,27 @@ async function findFreePort(basePort, span = 40) {
  * name, so this can only ever match a browser this module started. Chrome
  * instances a person opened, and other tools' instances, do not match.
  */
-function sweepOrphans(tool) {
+/**
+ * Which `ps -Ao pid=,ppid=,command=` lines are browsers this tool started and
+ * nobody owns any more: our profile marker (or an older one in `legacy`), a
+ * headless browser process, and orphaned (parent is init). Pure, for tests.
+ */
+export function orphanPids(psOutput, tool, legacy = [], selfPid = process.pid) {
   const marker = `${PROFILE_TAG}-${tool}-`;
+  const ours = (line) => line.includes(marker) || legacy.some((re) => re.test(line));
+  const pids = [];
+  for (const line of psOutput.split('\n')) {
+    if (!ours(line) || !line.includes('--headless')) continue;
+    const [pid, ppid] = line.trim().split(/\s+/, 2).map(Number);
+    // Only the browser process itself (it holds the --user-data-dir flag) and
+    // only once orphaned: a live run's parent is still around to clean up.
+    if (!pid || ppid !== 1 || pid === selfPid) continue;
+    pids.push(pid);
+  }
+  return pids;
+}
+
+export function sweepOrphans(tool, legacy = []) {
   let out = '';
   try {
     out = execFileSync('ps', ['-Ao', 'pid=,ppid=,command='], { encoding: 'utf8' });
@@ -101,12 +128,7 @@ function sweepOrphans(tool) {
     return 0; // No ps, no sweep. Not worth failing a run over.
   }
   let killed = 0;
-  for (const line of out.split('\n')) {
-    if (!line.includes(marker)) continue;
-    const [pid, ppid] = line.trim().split(/\s+/, 2).map(Number);
-    // Only the browser process itself (it holds the --user-data-dir flag) and
-    // only once orphaned: a live run's parent is still around to clean up.
-    if (!pid || ppid !== 1 || pid === process.pid) continue;
+  for (const pid of orphanPids(out, tool, legacy)) {
     try {
       process.kill(pid, 'SIGKILL');
       killed += 1;
@@ -124,16 +146,28 @@ function sweepOrphans(tool) {
  * @param {string} options.tool      Short name; picks the profile and the sweep scope.
  * @param {number} options.basePort  Preferred port. Taken ports are skipped, not adopted.
  * @param {string[]} [options.args]  Extra Chrome flags.
- * @returns {Promise<{port: number, close: () => void, swept: number}>}
+ * @param {number} [options.scale]   Device scale factor (default 1).
+ * @param {boolean} [options.disableGpu] Pass --disable-gpu (default true).
+ * @param {number} [options.maxMs]   Close the browser and end the run after this long.
+ * @param {RegExp[]} [options.legacy] Profiles an older version of the tool used, swept too.
+ * @returns {Promise<{port: number, close: () => void, swept: number, profile: string}>}
  */
-export async function launchChrome({ tool, basePort, args = [] }) {
+export async function launchChrome({
+  tool,
+  basePort,
+  args = [],
+  scale = 1,
+  disableGpu = true,
+  maxMs,
+  legacy = [],
+}) {
   if (!CHROME) {
     throw new Error(
       'No Chrome or Chromium found. Install Google Chrome, or point the tool at a Chromium build.'
     );
   }
 
-  const swept = sweepOrphans(tool);
+  const swept = sweepOrphans(tool, legacy);
   const port = await findFreePort(basePort);
   const profile = path.join(os.tmpdir(), `${PROFILE_TAG}-${tool}-${port}-${process.pid}`);
 
@@ -143,8 +177,8 @@ export async function launchChrome({ tool, basePort, args = [] }) {
       '--headless=new',
       `--remote-debugging-port=${port}`,
       '--hide-scrollbars',
-      '--force-device-scale-factor=1',
-      '--disable-gpu',
+      `--force-device-scale-factor=${scale}`,
+      ...(disableGpu ? ['--disable-gpu'] : []),
       '--no-first-run',
       '--no-default-browser-check',
       `--user-data-dir=${profile}`,
@@ -195,9 +229,22 @@ export async function launchChrome({ tool, basePort, args = [] }) {
     close();
     throw err;
   });
+  process.once('unhandledRejection', (err) => {
+    close();
+    throw err;
+  });
+  if (maxMs) {
+    setTimeout(() => {
+      console.error(
+        `[${tool}] still running after ${Math.round(maxMs / 1000)}s; closing Chrome and stopping.`
+      );
+      close();
+      process.exit(124);
+    }, maxMs).unref?.();
+  }
 
   await waitForCdp(port);
-  return { port, close, swept };
+  return { port, close, swept, profile };
 }
 
 /** Wait for the browser we just started to answer on its own port. */

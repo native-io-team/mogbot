@@ -123,6 +123,12 @@ export interface TurnWork {
   lastSignAt?: number;
   /** While it runs, once it has made no progress for too long: when it last did. */
   quietSince?: number;
+  /**
+   * While it runs: the project folder it is working in (by its own commands,
+   * a session or its binding), so the Projects list shows it there. Older
+   * Macs omit it.
+   */
+  project?: string;
 }
 
 export interface Agent {
@@ -507,6 +513,10 @@ export interface LoginFlow {
   /** A device sign-in's one-time code (GitHub), typed at `verificationUri` on either device. */
   userCode?: string;
   verificationUri?: string;
+  /** The page the Mac's browser was asked to open, for "Open again" and "Copy link". */
+  url?: string;
+  /** When the Mac last asked its browser to open `url` (unix ms). */
+  openedAt?: number;
 }
 
 export interface LoginRequest {
@@ -530,6 +540,68 @@ export interface LoginRequest {
   /** Other agents that asked for the same and joined this card: answering it answers them. */
   alsoFor?: string[];
 }
+
+/**
+ * `agents.signinBegin`: a tab of the Mac's own in its Chrome, open on the
+ * card's site, for this phone alone (`agents/phone_signin.rs`).
+ */
+export interface SigninBegun {
+  sessionId: string;
+  /** "figma.com": what the phone and the Mac's bar name. */
+  domain: string;
+  title: string;
+  /** No input for this long and the Mac closes it. */
+  idleSeconds: number;
+}
+
+/**
+ * `agents.signinFrame`: one picture of that tab. `outside`: it went
+ * somewhere that isn't the sign-in, which isn't shown; only Back works.
+ */
+export interface SigninFrame {
+  state: 'live' | 'outside';
+  /** Where the tab is, host only. */
+  host?: string;
+  /** A JPEG, base64. Only when `live`. */
+  image?: string;
+  /** The picture's size: taps are sent in these pixels. */
+  width: number;
+  height: number;
+}
+
+export type SigninKey =
+  | 'enter'
+  | 'tab'
+  | 'backspace'
+  | 'delete'
+  | 'escape'
+  | 'space'
+  | 'arrow_up'
+  | 'arrow_down'
+  | 'arrow_left'
+  | 'arrow_right';
+
+/**
+ * What the phone does on the tab, in the frame's pixels. `type` with
+ * `secure`: hidden as it was typed (a password). Never kept or logged by
+ * either side; the Mac sends it only to Chrome.
+ */
+export type SigninInput =
+  | { kind: 'tap'; x: number; y: number }
+  | { kind: 'type'; text: string; secure?: boolean }
+  | { kind: 'key'; key: SigninKey }
+  | {
+      kind: 'scroll';
+      x: number;
+      y: number;
+      direction: 'up' | 'down' | 'left' | 'right';
+      amount?: number;
+    }
+  | { kind: 'back' }
+  | { kind: 'reload' };
+
+/** `agents.signinDone`: signed in (the card answered itself), not yet, or can't tell. */
+export type SigninOutcome = 'signed_in' | 'signed_out' | 'unknown';
 
 /** `agents.loginPhoneBegin`: what the phone opens. No secret: the PKCE verifier stays on the Mac. */
 export interface LoginPhoneBegin {
@@ -615,6 +687,24 @@ export interface AgentReach {
   }[];
   /** Claude Code apps kept from this agent. */
   blockedApps: string[];
+  /** Apps the user chose not to connect, team-wide; each can be turned back on. Absent from older Macs. */
+  declined?: DeclinedApp[];
+}
+
+/** An app the user chose not to connect ("Not needed"); no agent asks for it again. */
+export interface DeclinedApp {
+  /** The catalogue id, or `other:<title>` for an app it doesn't know. */
+  key: string;
+  title: string;
+  declinedAt: number;
+}
+
+/** What a "Not needed" did: its one-line receipt, and the keys an Undo turns back on. */
+export interface DeclineReceipt {
+  keys: string[];
+  line: string;
+  /** Waiting cards it put away. */
+  closed: number;
 }
 
 /**

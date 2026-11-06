@@ -13,6 +13,11 @@ import type {
   AgentMessage,
   AgentReach,
   LoginPhoneBegin,
+  DeclineReceipt,
+  SigninBegun,
+  SigninFrame,
+  SigninInput,
+  SigninOutcome,
   TeamLogins,
   AgentSecret,
   AgentsOverview,
@@ -175,6 +180,27 @@ export interface Methods {
     params: { flowId: string; callbackUrl: string };
     result: null;
   };
+  /**
+   * Mac feature `signin.phone`: open a login card's site in a tab of the
+   * Mac's own in its Chrome, for this phone to sign in on (the card must
+   * have a `browser` way in). One at a time on a Mac; five idle minutes
+   * end it. Never audited beyond the domain and how it ended.
+   */
+  'agents.signinBegin': { params: { agentId: string; requestId: string }; result: SigninBegun };
+  /** One picture of the tab. Polling it doesn't keep the session alive. */
+  'agents.signinFrame': { params: { sessionId: string }; result: SigninFrame };
+  /** A tap, typing, a key, a scroll, Back or Reload. Only from the phone that began it. */
+  'agents.signinInput': { params: { sessionId: string; input: SigninInput }; result: null };
+  /**
+   * Checked on the Mac: signed in, the card answers itself and the agent
+   * carries on. `anyway`: hand it over without the check.
+   */
+  'agents.signinDone': {
+    params: { sessionId: string; anyway?: boolean };
+    result: { outcome: SigninOutcome };
+  };
+  /** The tab closes; nothing is kept. */
+  'agents.signinStop': { params: { sessionId: string }; result: null };
   'agents.loginCancel': { params: { agentId: string; requestId: string }; result: null };
   'agents.loginDecline': {
     params: { agentId: string; requestId: string; note?: string };
@@ -200,8 +226,23 @@ export interface Methods {
     params: { key: string; optionId: string; skip?: string[]; onPhone?: boolean };
     result: null;
   };
-  /** "Not needed": the card is put away and the agent isn't woken. */
+  /** One agent's card put away (the agent isn't woken). */
   'agents.loginDismiss': { params: { agentId: string; requestId: string }; result: null };
+  /**
+   * "Not needed" on a card: its app, declined for the whole team and
+   * remembered; every waiting ask for it closes and no agent asks again.
+   * Present when the Mac lists it in `welcome.methods`.
+   */
+  'agents.loginNotNeeded': {
+    params: { agentId: string; requestId: string };
+    result: DeclineReceipt;
+  };
+  /** "Not needed" on rows of "What your team needs" (`keys`), or "Skip the rest" (no `keys`). */
+  'agents.loginsNotNeeded': { params: { keys?: string[] }; result: DeclineReceipt };
+  /** Undo a decline, or turn one back on: how many cards came back (only right after). */
+  'agents.loginsUndecline': { params: { keys: string[] }; result: number };
+  /** The phone is back in front of the user: the Mac checks claude.ai connectors now. */
+  'agents.loginsRecheck': { params: Record<string, never>; result: null };
   /** `agents_memory`: the agent's `## Memory` entries. */
   'agents.memory': { params: { agentId: string }; result: MemoryView };
   /** `agents_memory_change`: add, edit or delete one entry. */
@@ -321,6 +362,16 @@ export interface Methods {
   };
   /** "Discard" on a change card: the copy and everything in it, gone. */
   'agents.discardCopy': { params: { agentId: string; copyId: string }; result: null };
+  /**
+   * "Watch live" on a card with a project: a one-time link (valid a minute)
+   * to that card's running dev server, read-only, served on this Mac's own
+   * tailnet only (`companion/watch.rs`). Refused when the site isn't running
+   * on the Mac (its Preview starts it).
+   */
+  'agents.watchLive': {
+    params: { agentId: string; messageId: string };
+    result: { url: string; expiresAt: number };
+  };
   /**
    * The phone's stand-in for `agents_open_path` (which opens Finder on the
    * Mac): a path written in an agent's reply, made downloadable. Only paths

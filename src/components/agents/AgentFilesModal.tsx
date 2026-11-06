@@ -87,7 +87,7 @@ export function AgentFilesModal({ agent, isOpen, onClose }: AgentFilesModalProps
                 >
                   <span className="agent-files__icon" aria-hidden>
                     {isImageMime(file.mime) ? (
-                      <img src={attachmentUrl(agent.home, file)} alt="" loading="lazy" />
+                      <ImageThumb src={attachmentUrl(agent.home, file)} mime={file.mime} />
                     ) : (
                       <FileGlyph mime={file.mime} />
                     )}
@@ -129,4 +129,11 @@ export function AgentFilesModal({ agent, isOpen, onClose }: AgentFilesModalProps
       </div>
     </ModalFrame>
   );
+}
+
+/** A row's little picture; the file's glyph when it can't be loaded, never a blank square. */
+function ImageThumb({ src, mime }: { src: string; mime: string }) {
+  const [failed, setFailed] = useState(false);
+  if (failed) return <FileGlyph mime={mime} />;
+  return <img src={src} alt="" decoding="async" onError={() => setFailed(true)} />;
 }

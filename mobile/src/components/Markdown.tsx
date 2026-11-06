@@ -13,6 +13,7 @@
  */
 
 import * as Clipboard from 'expo-clipboard';
+import { columnAlign } from '@shipstudio/companion-protocol';
 import { Lexer, type Token, type Tokens } from 'marked';
 import { createContext, memo, useContext, useMemo, useState, type ReactNode } from 'react';
 import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -338,6 +339,12 @@ function Table({ table }: { table: Tokens.Table }) {
     const longest = Math.max(h.text.length, ...table.rows.map((r) => r[c]?.text.length ?? 0));
     return Math.min(260, Math.max(64, longest * 7.5 + space.lg * 2));
   });
+  // Figures right-aligned with tabular digits, as on the desk (`columnAlign`):
+  // a column whose body is all figures, unless the author aligned it.
+  const align = columnAlign(
+    table.align,
+    table.rows.map((r) => r.map((cell) => cell.text))
+  );
   const row = (cells: Tokens.TableCell[], header: boolean, key: number) => (
     <View key={key} style={[styles.tr, header && styles.th]}>
       {cells.map((cell, c) => (
@@ -351,7 +358,12 @@ function Table({ table }: { table: Tokens.Table }) {
         >
           <Text
             maxFontSizeMultiplier={READ_MAX_SCALE}
-            style={[styles.cell, header && styles.strong]}
+            style={[
+              styles.cell,
+              header && styles.strong,
+              align[c] === 'right' && styles.figures,
+              align[c] === 'center' && { textAlign: 'center' },
+            ]}
           >
             {inline(cell.tokens, styles)}
           </Text>
@@ -497,4 +509,5 @@ const useStyles = makeStyles((colors) => ({
   th: { backgroundColor: alpha(colors.textStrong, 0.03) },
   td: { paddingHorizontal: space.md, paddingVertical: space.sm },
   cell: { ...bodyOf(colors), fontSize: type.small, lineHeight: lineHeight(type.small, 1.45) },
+  figures: { textAlign: 'right', fontVariant: ['tabular-nums'] },
 }));
