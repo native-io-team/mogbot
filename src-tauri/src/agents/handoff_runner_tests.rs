@@ -190,6 +190,29 @@ fn a_delegated_agents_card_is_pointed_to_where_the_user_is_talking() {
     });
 }
 
+/// Only a turn answering nothing but scheduled runs may end with no post.
+#[test]
+fn only_a_check_in_alone_may_finish_with_nothing_new() {
+    scratch(|| {
+        let sweeper = agent("Sweeper");
+        let mut fired = user("[Scheduled check-in you set: sweep the inbox]");
+        fired.routine = true;
+        fired.ticket = Some("t-sweep".into());
+        queue(&sweeper.id, fired.clone());
+        take_batch(&sweeper.id).unwrap();
+        assert!(quiet_check_in(&sweeper.id));
+        finish(&sweeper.id);
+        take_tickets(&sweeper.id);
+
+        // The user wrote too: their message gets an answer.
+        queue(&sweeper.id, fired);
+        queue(&sweeper.id, user("anything from the bank?"));
+        take_batch(&sweeper.id).unwrap();
+        assert!(!quiet_check_in(&sweeper.id));
+        RUNTIMES.lock().unwrap().remove(&sweeper.id);
+    });
+}
+
 /// Three deep: each level is noted as it asks, so the outcome climbs.
 #[test]
 fn a_three_level_chain_reports_all_the_way_up() {

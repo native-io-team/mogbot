@@ -2768,6 +2768,16 @@ as the same schedule; a Rust test holds `describe` to that) and Return saves
 it in place: same id, paused stays paused, `when` re-read from now. It can't be
 edited into a copy of another row. Esc leaves the edit, not the popover.
 
+**Nothing new posts nothing.** A check-in whose turn answers only scheduled
+runs may reply with exactly `[nothing new]` (`schedule::NOTHING_NEW`): the
+reply isn't posted, the notification is dropped, the unread its firing line
+added is taken back, and one quiet line says it ran ("Checked · nothing new",
+`runner::nothing_new`). An hourly sweep used to post a line every hour, which
+pinged the user and buried the question the agent was waiting on. The wake
+also carries **the questions still open**: the agent's lines ending in "?"
+since the user last wrote, at most three (`schedule::open_questions`), so a
+sweep keeps them in view instead of covering them.
+
 **When a run fails** (`agents/runs.rs`). A firing leaves a ticket with the
 exact prompt it queued; the turn that carried that prompt settles it by how it
 ended (its newest line an error, or not). A temporary failure (the usage

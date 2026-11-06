@@ -332,6 +332,39 @@ impl Runtime {
 static RUNTIMES: LazyLock<Mutex<HashMap<String, Runtime>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+/// The turn in progress answers only scheduled runs (check-ins, routines,
+/// "When…" firings): no user words, no agent's request, no room.
+fn quiet_check_in(agent_id: &str) -> bool {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .is_some_and(|r| {
+            r.running
+                && !r.tickets.is_empty()
+                && !r.user_asked
+                && r.origin.is_none()
+                && r.owed.is_empty()
+                && r.room.is_none()
+        })
+}
+
+/// A check-in answered [`super::schedule::NOTHING_NEW`]: no reply, no
+/// notification, and the unread its firing line added taken back. One quiet
+/// line says it ran.
+fn nothing_new(app: &AppHandle, agent_id: &str) {
+    notify::replace_held(agent_id, None);
+    // Off screen, the firing line counted as unread (`announce`).
+    if !notify::on_screen(app, agent_id) {
+        let _ = store::update(agent_id, |a| a.unread = a.unread.saturating_sub(1));
+    }
+    let _ = record_in_turn(app, new_message(agent_id, MessageKind::Note, NOTHING_NEW_LINE));
+    let _ = app.emit(EVENT_REGISTRY, ());
+}
+
+/// The quiet line a check-in with nothing new leaves.
+pub const NOTHING_NEW_LINE: &str = "Checked · nothing new";
+
 /// Whether the turn in progress answers the user's own message (and no
 /// outside text): what it hands on is the user asking.
 pub fn answering_user(agent_id: &str) -> bool {
@@ -4797,6 +4830,15 @@ async fn run_turn(
                         Step::Reply(text) => {
                             // Recorded under the draft's id, so it takes the draft's place.
                             let draft_id = drafts.finish(&text);
+                            // A check-in with nothing new posts nothing.
+                            if !quiet && super::schedule::is_nothing_new(&text) && quiet_check_in(agent_id) {
+                                if let Some(id) = &draft_id {
+                                    emit_draft(app, agent_id, id, "");
+                                }
+                                said_anything = true;
+                                nothing_new(app, agent_id);
+                                continue;
+                            }
                             if !text.is_empty() && !quiet {
                                 let (before, held) = narration.reply(draft_id.clone(), &text);
                                 settle_narration(app, agent_id, before, &mut said_anything).await;
