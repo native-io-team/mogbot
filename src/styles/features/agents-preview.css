@@ -291,7 +291,7 @@
 }
 
 .agent-preview__step + .agent-preview__step {
-  margin-top: var(--spacing-xs);
+  margin-top: var(--spacing-sm);
 }
 
 .agent-preview__step-head {

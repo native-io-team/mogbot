@@ -62,8 +62,9 @@
 }
 
 .independence-choice__always {
-  margin: 0;
+  margin: var(--spacing-xs) 0 0;
   font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
   color: var(--text-muted);
 }
 
