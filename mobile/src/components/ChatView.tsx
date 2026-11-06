@@ -562,7 +562,7 @@ export function ChatView({
       {!embedded && NATIVE_HEADER_BUTTONS && (
         <Stack.Toolbar placement="right">
           {/* Left of ⓘ: the ring, only once an engine has reported the window. */}
-          <Stack.Toolbar.View hidden={!ring} hidesSharedBackground>
+          <Stack.Toolbar.View hidden={!ring} separateBackground>
             {usageRing || <View />}
           </Stack.Toolbar.View>
           <Stack.Toolbar.Button
