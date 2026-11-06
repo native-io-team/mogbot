@@ -250,6 +250,8 @@ export function AgentsSidebar({
         />
       ) : (
         <>
+          {/* The Chief first, always (as on the phone); then what waits on you. */}
+          {visible.filter((a) => a.isMain).map(row)}
           {/* What's in flight, said where you look: only while something waits on you. */}
           {needsYouCount > 0 && (
             <button
@@ -267,7 +269,7 @@ export function AgentsSidebar({
               <ChevronRightIcon size={10} className="agents-list__needs-you-chevron" />
             </button>
           )}
-          {visible.map(row)}
+          {visible.filter((a) => !a.isMain).map(row)}
           {/* Rooms right after the agents, before the hidden ones (as on the
               phone), so they're seen without scrolling past the hidden list. */}
           {rooms.length > 0 && (
