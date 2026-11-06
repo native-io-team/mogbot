@@ -127,7 +127,11 @@ describe('every account', () => {
     } as unknown as UsageInventory;
     const blocks = accountBlocks(inv, NOW);
     expect(blocks.map((b) => b.title)).toEqual(['Claude · Work', 'Codex · Personal']);
-    expect(blocks[0].meters.map((m) => m.label)).toEqual(['All models', '5-hour limit', 'Opus']);
+    expect(blocks[0].meters.map((m) => m.label)).toEqual([
+      '5-hour limit',
+      'Weekly · All models',
+      'Weekly · Opus',
+    ]);
     expect(blocks[0].state).toBeNull();
     expect(blocks[1].meters).toEqual([]);
     expect(blocks[1].state).toBe('No reading yet');

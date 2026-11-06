@@ -6,6 +6,11 @@
  * here answers it there (one request id, one answer), so the card in that
  * agent's own chat resolves too; "Open chat" goes to it.
  *
+ * Open, the panel and the bar are one surface: the panel has no header of
+ * its own (the bar under it already says who and how many), the bar's Done
+ * is the one way to close it (Escape and a click elsewhere too), and the
+ * cards inside sit on it flat rather than as cards within a card.
+ *
  * It replaced a chip per agent at the foot of the conversation, which after
  * an import stacked sixteen deep and followed every message. A bar is the
  * state of this conversation until it ends (docs/agents.md, "Lines, cards and
@@ -40,9 +45,8 @@ import {
   type KeyboardEvent,
   type MouseEvent,
 } from 'react';
-import { ChevronRightIcon, CloseIcon } from '@/components/icons';
+import { ChevronRightIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
-import { IconButton } from '../primitives/IconButton';
 import { TextButton } from '../primitives/TextButton';
 import { AgentAvatar } from './AgentAvatar';
 import { ConversationBar } from './AgentCard';
@@ -59,7 +63,6 @@ import {
   allowAllLine,
   groupLine,
   groupRequests,
-  requestsCounts,
   requestsDetail,
   requestsTitle,
   type RequestGroup,
@@ -334,7 +337,12 @@ export function AgentRequestsBar({
 
   if (!open && summary.requests === 0) return null;
   return (
-    <div className="agent-requests" ref={rootRef} onKeyDown={open ? onKeyDown : undefined}>
+    <div
+      className="agent-requests"
+      ref={rootRef}
+      data-open={open || undefined}
+      onKeyDown={open ? onKeyDown : undefined}
+    >
       {open && (
         <section
           id={panelId}
@@ -344,66 +352,6 @@ export function AgentRequestsBar({
           role="region"
           aria-label="Requests from other agents"
         >
-          <header className="agent-requests-panel__head">
-            <div className="agent-requests-panel__heading">
-              <h3 className="agent-requests-panel__title">Needs your OK</h3>
-              {summary.requests > 0 && (
-                <p className="agent-requests-panel__counts">{requestsCounts(summary, team)}</p>
-              )}
-            </div>
-            {allowable > 1 && !confirming && (
-              <Button
-                tabIndex={0}
-                size="compact"
-                variant="secondary"
-                data-testid="agent-requests-allow-all"
-                onClick={() => askAllowAll(summary.groups)}
-              >
-                Allow all
-              </Button>
-            )}
-            <IconButton
-              tabIndex={0}
-              variant="ghost"
-              size="compact"
-              icon={<CloseIcon size={12} />}
-              aria-label="Close"
-              title="Close"
-              onClick={() => close(true)}
-            />
-          </header>
-          {confirming && (
-            <div
-              className="agent-requests-panel__confirm"
-              role="group"
-              aria-label="Allow all"
-              data-testid="agent-requests-allow-all-confirm"
-            >
-              <p className="agent-requests-panel__confirm-line">
-                {confirming.agentId
-                  ? `${confirming.targets[0].asker.name}: ${allowAllLine(confirming.targets.map((t) => t.message))}`
-                  : allowAllLine(confirming.targets.map((t) => t.message))}
-              </p>
-              <Button
-                tabIndex={0}
-                size="compact"
-                variant="ghost"
-                disabled={allowingAll}
-                onClick={() => setConfirming(null)}
-              >
-                Cancel
-              </Button>
-              <Button
-                tabIndex={0}
-                size="compact"
-                variant="strong"
-                disabled={allowingAll}
-                onClick={() => void allowAll()}
-              >
-                Allow all
-              </Button>
-            </div>
-          )}
           <div className="agent-requests-panel__list">
             {summary.groups.map((group) => (
               <Group
@@ -449,6 +397,39 @@ export function AgentRequestsBar({
               </p>
             )}
           </div>
+          {/* Allow all's confirm line sits right above the bar whose button asked it. */}
+          {confirming && (
+            <div
+              className="agent-requests-panel__confirm"
+              role="group"
+              aria-label="Allow all"
+              data-testid="agent-requests-allow-all-confirm"
+            >
+              <p className="agent-requests-panel__confirm-line">
+                {confirming.agentId
+                  ? `${confirming.targets[0].asker.name}: ${allowAllLine(confirming.targets.map((t) => t.message))}`
+                  : allowAllLine(confirming.targets.map((t) => t.message))}
+              </p>
+              <Button
+                tabIndex={0}
+                size="compact"
+                variant="ghost"
+                disabled={allowingAll}
+                onClick={() => setConfirming(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                tabIndex={0}
+                size="compact"
+                variant="strong"
+                disabled={allowingAll}
+                onClick={() => void allowAll()}
+              >
+                Allow all
+              </Button>
+            </div>
+          )}
         </section>
       )}
       <ConversationBar
@@ -458,7 +439,18 @@ export function AgentRequestsBar({
         detail={requestsDetail(summary)}
         actions={
           <>
-            {summary.logins > 1 && (
+            {open && allowable > 1 && !confirming && (
+              <Button
+                tabIndex={0}
+                size="compact"
+                variant="ghost"
+                data-testid="agent-requests-allow-all"
+                onClick={() => askAllowAll(summary.groups)}
+              >
+                Allow all
+              </Button>
+            )}
+            {!open && summary.logins > 1 && (
               <Button
                 tabIndex={0}
                 size="compact"

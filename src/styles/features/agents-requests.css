@@ -4,7 +4,10 @@
 /* ------------------------------------------------- other agents' requests */
 
 /* One bar above the composer ("16 agents need your OK · 41 logins to add"),
-   and the panel Review opens, rising from it across the reading column. */
+   and the panel Review opens, rising from it across the reading column.
+   Open, the two are ONE surface: the panel sits flush on the bar with no
+   header of its own (the bar is its foot, title and Done), and the cards in
+   it lie flat on it, so nothing is a box inside a box inside a box. */
 .agent-requests {
   position: relative;
 }
@@ -20,7 +23,7 @@
 .agent-requests-panel {
   position: absolute;
   right: 0;
-  bottom: calc(100% + var(--spacing-xs));
+  bottom: 100%;
   left: 0;
   z-index: var(--z-dropdown);
   display: flex;
@@ -28,46 +31,31 @@
   max-height: min(560px, calc(100vh - var(--spacing-2xl) * 4));
   background: var(--surface-panel);
   border: var(--border-width-default) solid var(--border-default);
-  border-radius: var(--radius-card);
+  /* The seam with the bar: a hairline inside one surface, not an edge. */
+  border-bottom-color: var(--border-subtle);
+  border-radius: var(--radius-card) var(--radius-card) 0 0;
   box-shadow: var(--shadow-window);
+  /* The shadow stops at the seam so it never falls across the bar below. */
+  clip-path: inset(calc(var(--spacing-2xl) * -2) calc(var(--spacing-2xl) * -2) 0);
   animation: agents-motion-swap-in var(--agents-motion-enter) backwards;
+}
+
+/* The bar, while the panel is open, is the panel's foot: the same surface,
+   its edge continued down the sides and along the bottom. */
+.agent-requests[data-open] .agent-bar {
+  border-radius: 0 0 var(--radius-card) var(--radius-card);
+  box-shadow:
+    inset var(--border-width-default) 0 0 var(--border-default),
+    inset calc(var(--border-width-default) * -1) 0 0 var(--border-default),
+    inset 0 calc(var(--border-width-default) * -1) 0 var(--border-default);
+  animation: none;
 }
 
 .agent-requests-panel:focus {
   outline: none;
 }
 
-.agent-requests-panel__head {
-  display: flex;
-  flex: none;
-  align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) var(--spacing-md);
-  border-bottom: var(--border-width-default) solid var(--border-subtle);
-}
-
-.agent-requests-panel__heading {
-  display: flex;
-  flex: 1;
-  align-items: baseline;
-  gap: var(--spacing-sm);
-  min-width: 0;
-}
-
-.agent-requests-panel__title {
-  margin: 0;
-  font-size: var(--font-size-body-md);
-  font-weight: var(--font-weight-label);
-  color: var(--text-primary);
-}
-
-.agent-requests-panel__counts {
-  margin: 0;
-  font-size: var(--font-size-body-sm);
-  color: var(--text-muted);
-}
-
-/* "Allow all": its confirm line, under the head, with what it answers. */
+/* "Allow all": its confirm line, above the bar that asked it, with what it answers. */
 .agent-requests-panel__confirm {
   display: flex;
   flex: none;
@@ -75,7 +63,7 @@
   align-items: center;
   gap: var(--spacing-sm);
   padding: var(--spacing-sm) var(--spacing-sm) var(--spacing-sm) var(--spacing-md);
-  border-bottom: var(--border-width-default) solid var(--border-subtle);
+  border-top: var(--border-width-default) solid var(--border-subtle);
 }
 
 .agent-requests-panel__confirm-line {
@@ -92,6 +80,11 @@
   padding: var(--spacing-xs);
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+/* Agents apart by a hairline, not by boxes. */
+.agent-requests-panel__group + .agent-requests-panel__group {
+  border-top: var(--border-width-default) solid var(--border-subtle);
 }
 
 .agent-requests-panel__row {
@@ -188,6 +181,28 @@
   flex: 1;
   width: auto;
   max-width: none;
+}
+
+/* Flat on the panel: a card here is its title, words and buttons, with no
+   surface of its own, and what it would send reads as rows of text rather
+   than a third box. Two cards from one agent part by a hairline. */
+.agent-requests-panel__cards .agent-card {
+  padding: 0;
+  background: none;
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.agent-requests-panel__cards .agent-chat__row--card + .agent-chat__row--card {
+  padding-top: var(--spacing-sm);
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-requests-panel__cards .agent-approval__fields,
+.agent-requests-panel__cards .agent-approval__detail {
+  padding: 0;
+  background: none;
+  border-radius: 0;
 }
 
 .agent-requests-panel__cards .agent-message__actions {

@@ -1,9 +1,11 @@
 /**
- * "Waiting for you": the bar a chat shows while its agent's turn is stopped
- * on a card the user's level doesn't answer. It names the card in one line,
- * so a blocked agent never looks like a busy one. The sidebar row, the
- * review bar, the Dock badge and the notification say the same from their
- * own counts (`pendingApprovals`, `status.state === 'waiting'`).
+ * "<Agent> is waiting on you": the bar a chat shows while its agent's turn
+ * is held on a card the user's level doesn't answer, so a blocked agent
+ * never looks like a busy one. It says the state and nothing more: the card
+ * already asks its question, and a bar never repeats it (docs/agents.md,
+ * "Lines, cards and bars"). Review brings the card into view. The sidebar
+ * row, the requests bar, the Dock badge and the notification say the same
+ * from their own counts (`pendingApprovals`, `status.state === 'waiting'`).
  *
  * @module components/agents/WaitingForYouBar
  */
@@ -63,11 +65,10 @@ export function WaitingForYouBar({
       state="waiting"
       role="alert"
       data-testid="agent-waiting-bar"
-      title="Waiting for you"
-      detail={`${agent.name} is stopped until you answer: ${card.title}.`}
+      title={`${agent.name} is waiting on you`}
       actions={
         <Button variant="secondary" size="compact" onClick={show}>
-          Show
+          Review
         </Button>
       }
     />

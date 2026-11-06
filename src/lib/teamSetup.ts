@@ -13,6 +13,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { useEffect, useState, useSyncExternalStore } from 'react';
+import { humanise } from '../../packages/companion-protocol/src/loginNames';
 import { AGENT_EVENTS, failedTurn, type Agent, type AgentMessage, type ChatItem } from './agents';
 
 export type SetupStepId = 'logins' | 'routines' | 'missing' | 'hello';
@@ -38,17 +39,8 @@ export interface SetupLogin {
   account?: string;
 }
 
-/** A key as words: "email_drafts" → "Email drafts" (as the Mac's `team_setup::humanise`). */
-export function humanise(key: string): string {
-  const words = key
-    .trim()
-    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-    .split(/[\s_.-]+/)
-    .filter(Boolean)
-    .join(' ')
-    .toLowerCase();
-  return words ? words[0].toUpperCase() + words.slice(1) : 'A login';
-}
+/** A key as words, with known names spelled right (`companion-protocol/loginNames`, as the Mac's `team_setup::humanise`). */
+export { humanise };
 
 /** A login's row title: never the raw key. */
 export const loginTitle = (l: SetupLogin) => l.title ?? humanise(l.name);

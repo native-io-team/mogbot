@@ -1,13 +1,14 @@
 /**
- * Usage, from the ring in a chat's header: this agent's context, its
- * engine's plan (the 5-hour and weekly limits) and every account the
- * Mac knows, each with its limits. Only what the Mac serves
+ * Usage, from the ring in a chat's header: this agent's context, the 5-hour
+ * and weekly limits of the account its turns run on, and every other account
+ * the Mac knows with its own limits. Each reading shows once: the top
+ * account is never listed again under it (lib/usageSheet.ts `usageSheet`). Only what the Mac serves
  * (lib/usageSheet.ts): a section with no reading isn't drawn. The one
  * estimate, the pace line under a limit, is the Mac's (`UsagePace`) and says
  * it is one. ↻ reads it all again.
  */
 
-import type { UsageInventory } from '@shipstudio/companion-protocol';
+import type { AccountBlock, UsageInventory } from '@shipstudio/companion-protocol';
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
@@ -23,7 +24,7 @@ import { call, canCall } from '../lib/session';
 import { setApp, useApp } from '../lib/store';
 import { iconSize, space } from '../lib/theme';
 import { usePolling } from '../lib/usePolling';
-import { accountBlocks, contextMeter, planUsage } from '../lib/usageSheet';
+import { accountBlocks, contextMeter, usageSheet } from '../lib/usageSheet';
 
 export default function Usage() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -64,9 +65,15 @@ export default function Usage() {
   };
 
   const context = contextMeter(agent?.context);
-  const plan = agent ? planUsage(quotas, agent.engine, now, inventory) : null;
-  const accounts = useMemo(() => accountBlocks(inventory, now), [inventory, now]);
-  const nothing = !context && !plan && accounts.length === 0;
+  const engine = agent?.engine;
+  const { active, others } = useMemo(
+    () =>
+      engine
+        ? usageSheet(quotas, engine, inventory, now)
+        : { active: null, others: accountBlocks(inventory, now) },
+    [quotas, engine, inventory, now]
+  );
+  const nothing = !context && !active && others.length === 0;
 
   return (
     <SheetPage>
@@ -101,50 +108,33 @@ export default function Usage() {
           </Section>
         )}
 
-        {plan?.session && agent && (
+        {active && agent && (
           <Section title={`Plan usage · ${engineName(agent)}`}>
             <View style={styles.block}>
-              <MeterRow meter={plan.session} />
-            </View>
-          </Section>
-        )}
-
-        {plan && plan.weekly.length > 0 && (
-          <Section title="Weekly limits">
-            <View style={styles.block}>
-              {plan.weekly.map((m) => (
+              {active.account && (
+                <T variant="small" color={colors.textMuted}>
+                  {active.account}
+                </T>
+              )}
+              {active.state && (
+                <T
+                  variant="small"
+                  color={active.tone === 'calm' ? colors.textSecondary : colors.accentWarning}
+                >
+                  {active.state}
+                </T>
+              )}
+              {active.meters.map((m) => (
                 <MeterRow key={m.key} meter={m} />
               ))}
             </View>
           </Section>
         )}
 
-        {accounts.length > 0 && (
-          <Section title="Accounts">
-            {accounts.map((a, i) => (
-              <View key={a.key} style={[styles.block, i > 0 && styles.divided]}>
-                <View style={styles.accountHead}>
-                  <T variant="headline" color={colors.textStrong} numberOfLines={1}>
-                    {a.title}
-                  </T>
-                  {a.tags.length > 0 && (
-                    <T variant="small" color={colors.textMuted}>
-                      {a.tags.join(' · ')}
-                    </T>
-                  )}
-                </View>
-                {a.state && (
-                  <T
-                    variant="small"
-                    color={a.tone === 'calm' ? colors.textSecondary : colors.accentWarning}
-                  >
-                    {a.state}
-                  </T>
-                )}
-                {a.meters.map((m) => (
-                  <MeterRow key={m.key} meter={m} />
-                ))}
-              </View>
+        {others.length > 0 && (
+          <Section title={active ? 'Other accounts' : 'Accounts'}>
+            {others.map((a, i) => (
+              <AccountRows key={a.key} account={a} divided={i > 0} />
             ))}
           </Section>
         )}
@@ -163,6 +153,33 @@ export default function Usage() {
         )}
       </ScrollView>
     </SheetPage>
+  );
+}
+
+function AccountRows({ account: a, divided }: { account: AccountBlock; divided: boolean }) {
+  const styles = useStyles();
+  const colors = useColors();
+  return (
+    <View style={[styles.block, divided && styles.divided]}>
+      <View style={styles.accountHead}>
+        <T variant="headline" color={colors.textStrong} numberOfLines={1}>
+          {a.title}
+        </T>
+        {a.tags.length > 0 && (
+          <T variant="small" color={colors.textMuted}>
+            {a.tags.join(' · ')}
+          </T>
+        )}
+      </View>
+      {a.state && (
+        <T variant="small" color={a.tone === 'calm' ? colors.textSecondary : colors.accentWarning}>
+          {a.state}
+        </T>
+      )}
+      {a.meters.map((m) => (
+        <MeterRow key={m.key} meter={m} />
+      ))}
+    </View>
   );
 }
 

@@ -39,23 +39,38 @@ describe('waitingOn', () => {
 });
 
 describe('WaitingForYouBar', () => {
-  it('says plainly who is stopped and on what', () => {
-    render(
-      <WaitingForYouBar agent={waiting as never} messages={[msg({ title: 'Push to GitHub' })]} />
-    );
-    expect(screen.getByTestId('agent-waiting-bar').textContent).toContain('Waiting for you');
-    expect(screen.getByTestId('agent-waiting-bar').textContent).toContain(
-      'Researcher is stopped until you answer: Push to GitHub'
-    );
-  });
-
-  it('never points "below" (it sits under the card) and offers to bring the card into view', () => {
+  it('says who is waiting on you, calmly, and nothing more', () => {
     render(
       <WaitingForYouBar agent={waiting as never} messages={[msg({ title: 'Push to GitHub' })]} />
     );
     const bar = screen.getByTestId('agent-waiting-bar');
-    expect(bar.textContent).not.toMatch(/below|above/);
-    expect(screen.getByRole('button', { name: 'Show' })).toBeTruthy();
+    expect(bar.textContent).toBe('Researcher is waiting on youReview');
+    expect(bar.textContent).not.toMatch(/stopped|until you answer/i);
+  });
+
+  it("never repeats the card's question (docs/agents.md, a bar says the state)", () => {
+    render(
+      <WaitingForYouBar agent={waiting as never} messages={[msg({ title: 'Push to GitHub' })]} />
+    );
+    expect(screen.getByTestId('agent-waiting-bar').textContent).not.toContain('Push to GitHub');
+  });
+
+  it('never points "below" or at "the card" and offers Review, which brings it into view', () => {
+    render(
+      <WaitingForYouBar agent={waiting as never} messages={[msg({ title: 'Push to GitHub' })]} />
+    );
+    const bar = screen.getByTestId('agent-waiting-bar');
+    expect(bar.textContent).not.toMatch(/below|above|the card/);
+    const scrolled: Element[] = [];
+    const card = document.createElement('div');
+    card.dataset.messageIds = 'm';
+    card.scrollIntoView = function (this: Element) {
+      scrolled.push(this);
+    };
+    document.body.appendChild(card);
+    screen.getByRole('button', { name: 'Review' }).click();
+    expect(scrolled).toEqual([card]);
+    card.remove();
   });
 
   it('shows nothing while the agent works', () => {

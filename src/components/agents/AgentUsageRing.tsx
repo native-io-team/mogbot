@@ -2,8 +2,9 @@
  * Usage, from the agent chat's header: a small ring (the current 5-hour
  * window, as the engine reported it) that opens a popover with what the
  * phone's Usage sheet shows: this agent's context (only when its engine
- * reported it), its engine's 5-hour and weekly limits, every account the
- * wallet knows with its own limits, and under a limit the Mac's pace line
+ * reported it), the 5-hour and weekly limits of the account its turns run
+ * on, every other account the wallet knows with its own limits (each
+ * reading once, never the top account again), and under a limit the Mac's pace line
  * when it has one ("At this pace you'll hit the limit this afternoon, before
  * it resets at 4:00 PM"), always with what that estimate rests on.
  *
@@ -22,10 +23,10 @@ import { Dropdown } from '../primitives/Dropdown';
 import { IconButton } from '../primitives/IconButton';
 import { ENGINE_LABEL, type Agent, type Quota } from '../../lib/agents';
 import {
-  accountBlocks,
   contextMeter,
-  planUsage,
   ringPercent,
+  usageSheet,
+  type AccountBlock,
   type UsageMeter,
 } from '../../lib/agentsUsage';
 import { useQuotas } from './AgentsQuota';
@@ -90,9 +91,8 @@ function UsageBody({
   const { inventory, now } = useUsageInventory();
   const at = Math.max(now, quotasNow);
   const context = contextMeter(agent.context);
-  const plan = planUsage(quotas, agent.engine, at, inventory);
-  const accounts = accountBlocks(inventory, at);
-  const nothing = !context && !plan && accounts.length === 0;
+  const { active, others } = usageSheet(quotas, agent.engine, inventory, at);
+  const nothing = !context && !active && others.length === 0;
 
   return (
     <div className="agent-usage__body">
@@ -102,37 +102,23 @@ function UsageBody({
           <Meter meter={context} title={`${agent.name}’s conversation`} />
         </Section>
       )}
-      {plan?.session && (
+      {active && (
         <Section title={`Plan usage · ${ENGINE_LABEL[agent.engine]}`}>
-          <Meter meter={plan.session} />
-        </Section>
-      )}
-      {plan && plan.weekly.length > 0 && (
-        <Section title="Weekly limits">
-          {plan.weekly.map((m) => (
+          {active.account && <span className="agent-usage__muted">{active.account}</span>}
+          {active.state && (
+            <span className="agent-usage__state" data-tone={active.tone}>
+              {active.state}
+            </span>
+          )}
+          {active.meters.map((m) => (
             <Meter key={m.key} meter={m} />
           ))}
         </Section>
       )}
-      {accounts.length > 0 && (
-        <Section title="Accounts">
-          {accounts.map((a) => (
-            <div className="agent-usage__account" key={a.key}>
-              <div className="agent-usage__account-head">
-                <span className="agent-usage__account-name">{a.title}</span>
-                {a.tags.length > 0 && (
-                  <span className="agent-usage__muted">{a.tags.join(' · ')}</span>
-                )}
-              </div>
-              {a.state && (
-                <span className="agent-usage__state" data-tone={a.tone}>
-                  {a.state}
-                </span>
-              )}
-              {a.meters.map((m) => (
-                <Meter key={m.key} meter={m} />
-              ))}
-            </div>
+      {others.length > 0 && (
+        <Section title={active ? 'Other accounts' : 'Accounts'}>
+          {others.map((a) => (
+            <Account key={a.key} account={a} />
           ))}
         </Section>
       )}
@@ -141,6 +127,25 @@ function UsageBody({
           ? 'Nothing reported yet. Figures appear once an engine reports them after a turn.'
           : 'As each engine last reported it. Use of the same plan anywhere else counts too.'}
       </p>
+    </div>
+  );
+}
+
+function Account({ account: a }: { account: AccountBlock }) {
+  return (
+    <div className="agent-usage__account">
+      <div className="agent-usage__account-head">
+        <span className="agent-usage__account-name">{a.title}</span>
+        {a.tags.length > 0 && <span className="agent-usage__muted">{a.tags.join(' · ')}</span>}
+      </div>
+      {a.state && (
+        <span className="agent-usage__state" data-tone={a.tone}>
+          {a.state}
+        </span>
+      )}
+      {a.meters.map((m) => (
+        <Meter key={m.key} meter={m} />
+      ))}
     </div>
   );
 }

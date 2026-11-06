@@ -9,6 +9,12 @@
  * says "Finish signing in on your Mac — it's open there". The card's
  * `login.flow` arrives with every change, from either device.
  *
+ * One way in leads: the access chain's first (`primaryOption`; for Gmail,
+ * Use my browser), beside Not now, with one short line saying what it does.
+ * Every other way, why there's no connector, and Not needed wait behind
+ * "Other ways", each with its full account, so the card is a question and
+ * one answer rather than five buttons and three paragraphs.
+ *
  * A password is never asked for. The only field is the key option's, for an
  * API key made for programs, under a secret card's rules: in a ref, wiped on
  * Save, when the app leaves the screen and when the card goes; only over
@@ -37,6 +43,7 @@ import {
   keyOption,
   openHere,
   phoneDetail,
+  phoneLine,
   phoneWay,
   signInWithSheet,
   loginCancel,
@@ -58,7 +65,7 @@ import { CARD_TITLE_SCALE, fonts, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { Receipt, useArmed, useCardStyles } from './ApprovalCard';
 import { DeclineReceiptLine, useDeclineReceipt, useRecheckWhenBack } from './loginExtras';
-import { ACTION, Card, CardActions, OFFLINE_NOTE, useActionShare } from './surfaces';
+import { ACTION, Card, CardActions, OFFLINE_NOTE, TextAction, useActionShare } from './surfaces';
 import { Button, T } from './ui';
 
 export function LoginCard({
@@ -86,6 +93,7 @@ export function LoginCard({
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [typing, setTyping] = useState(false);
+  const [otherWays, setOtherWays] = useState(false);
   const [filled, setFilled] = useState(false);
   const value = useRef('');
   const input = useRef<ComponentRef<typeof TextInput> | null>(null);
@@ -94,7 +102,9 @@ export function LoginCard({
   const canDecline = useServed('agents.loginNotNeeded');
   const [receipt, setReceipt] = useDeclineReceipt();
   useRecheckWhenBack(
-    login.flow?.state === 'waiting' && login.flow.onPhone === true && login.flow.option === 'claude_ai'
+    login.flow?.state === 'waiting' &&
+      login.flow.onPhone === true &&
+      login.flow.option === 'claude_ai'
   );
   // The Mac's browser, driven from here: the agents' own (the card's
   // `agent_browser` way in), or the user's Chrome for an older card.
@@ -172,10 +182,14 @@ export function LoginCard({
     );
   const cancel = () => run('cancel', () => loginCancel(message.agentId, approval.requestId));
   const notNeeded = () =>
-    run('notNeeded', async () => setReceipt(await loginNotNeeded(message.agentId, approval.requestId)), () => {
-      wipe();
-      haptic.select();
-    });
+    run(
+      'notNeeded',
+      async () => setReceipt(await loginNotNeeded(message.agentId, approval.requestId)),
+      () => {
+        wipe();
+        haptic.select();
+      }
+    );
   const saveKey = () =>
     run(
       'key',
@@ -194,13 +208,14 @@ export function LoginCard({
   const onMacShare = useActionShare([
     ...(signingIn?.userCode ? ['Copy code'] : []),
     ...(signingIn?.onPhone && signingIn.verificationUri ? ['Open GitHub'] : []),
-    ...(signingIn?.onPhone && signingInOption?.method === 'claude_ai' ? ['Open Claude’s connectors'] : []),
+    ...(signingIn?.onPhone && signingInOption?.method === 'claude_ai'
+      ? ['Open Claude’s connectors']
+      : []),
     'Cancel',
   ]);
   const firstOption = primaryOption(login);
   const answerShare = useActionShare([
     'Not now',
-    ...(canDecline ? ['Not needed'] : []),
     ...(firstOption && firstOption.method !== 'key'
       ? [
           phase === 'failed' && login.flow?.option === firstOption.id
@@ -338,6 +353,96 @@ export function LoginCard({
   const failed = phase === 'failed';
   const connects = !!first && ['oauth', 'claude_ai', 'gh', 'existing'].includes(first.method);
   const off = !connected || !!busy || !armed;
+  // The one way in the card leads with; a key is never it (it opens a field).
+  const lead = first && first.method !== 'key' ? first : undefined;
+  const signinHereExtra =
+    signinServed &&
+    login.options.some((o) => o.method === 'browser') &&
+    !login.options.some((o) => o.method === 'agent_browser');
+  const hasOtherWays =
+    others.length > 0 ||
+    signinHereExtra ||
+    (!!lead && !!key && !!login.key) ||
+    canDecline ||
+    (!!login.noConnector && !connects);
+  // A way that failed is shown where its Try again is.
+  const showOtherWays =
+    otherWays || (failed && !!login.flow && login.flow.option !== lead?.id && hasOtherWays);
+  const keyWay = key && login.key && (
+    <View style={styles.other}>
+      {!typing ? (
+        <>
+          <Button
+            title={key.label}
+            variant="ghost"
+            disabled={off}
+            onPress={() => setTyping(true)}
+          />
+          <T variant="caption" color={colors.textMuted}>
+            {key.detail}
+          </T>
+        </>
+      ) : keyProblem ? (
+        <T variant="small" color={colors.textMuted}>
+          {keyProblem}
+        </T>
+      ) : (
+        <>
+          <T
+            variant="small"
+            color={colors.textSecondary}
+            style={{ fontFamily: fonts.medium }}
+            maxFontSizeMultiplier={CARD_TITLE_SCALE}
+          >
+            {login.key.fields[0]?.label ?? 'API key'}
+          </T>
+          <TextInput
+            ref={input}
+            secureTextEntry
+            textContentType="none"
+            autoComplete="off"
+            importantForAutofill="no"
+            autoCorrect={false}
+            autoCapitalize="none"
+            spellCheck={false}
+            editable={!busy}
+            keyboardAppearance={appearance}
+            accessibilityLabel={login.key.fields[0]?.label ?? 'API key'}
+            onChangeText={(v) => {
+              value.current = v;
+              setFilled(v.trim().length > 0);
+            }}
+            onSubmitEditing={() => void saveKey()}
+            placeholderTextColor={colors.textMuted}
+            style={[cardStyles.input, styles.secret]}
+          />
+          <T variant="caption" color={colors.textMuted}>
+            {key.detail} This phone keeps nothing.
+          </T>
+          <CardActions>
+            <Button
+              title="Cancel"
+              variant="outline"
+              disabled={!!busy}
+              onPress={() => {
+                wipe();
+                setTyping(false);
+              }}
+              style={ACTION}
+            />
+            <Button
+              title="Save"
+              variant="answer"
+              busy={busy === 'key'}
+              disabled={off || !filled}
+              onPress={() => void saveKey()}
+              style={ACTION}
+            />
+          </CardActions>
+        </>
+      )}
+    </View>
+  );
 
   return (
     <Card
@@ -354,15 +459,14 @@ export function LoginCard({
           {login.flow?.message || 'That didn’t finish on your Mac.'}
         </T>
       )}
-      {/* Why there's no connector, only when the card can't lead with one. */}
-      {!!login.noConnector && !connects && (
-        <T variant="small" color={colors.textMuted} testID="login-no-connector">
-          {login.noConnector}
-        </T>
-      )}
-      {first && first.method !== 'key' && (
-        <T variant="small" color={colors.textMuted} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
-          {phoneDetail(first, way(first), login.title)}
+      {lead && (
+        <T
+          variant="small"
+          color={colors.textMuted}
+          maxFontSizeMultiplier={CARD_TITLE_SCALE}
+          testID="login-lead-line"
+        >
+          {phoneLine(lead, way(lead), login.title)}
         </T>
       )}
       {errorLine}
@@ -375,131 +479,80 @@ export function LoginCard({
           onPress={() => void decline()}
           style={answerShare}
         />
-        {canDecline && (
+        {lead && (
           <Button
-            title="Not needed"
-            variant="outline"
-            busy={busy === 'notNeeded'}
-            disabled={off}
-            onPress={() => void notNeeded()}
-            style={answerShare}
-            testID="login-not-needed"
-          />
-        )}
-        {first && first.method !== 'key' && (
-          <Button
-            title={failed && login.flow?.option === first.id ? 'Try again' : label(first)}
+            title={failed && login.flow?.option === lead.id ? 'Try again' : label(lead)}
             // The affirmative answer is the neutral filled one, never the accent.
             variant="answer"
-            busy={busy === first.id}
+            busy={busy === lead.id}
             disabled={off}
-            onPress={() => void start(first)}
+            onPress={() => void start(lead)}
             style={answerShare}
           />
         )}
       </CardActions>
-      {others.map((o) => (
-        <View key={o.id} style={styles.other}>
-          <Button
-            title={failed && login.flow?.option === o.id ? `Try again: ${label(o)}` : label(o)}
-            variant="outline"
-            busy={busy === o.id}
-            disabled={off}
-            onPress={() => void start(o)}
-          />
-          <T variant="caption" color={colors.textMuted}>
-            {phoneDetail(o, way(o), login.title)}
-          </T>
-        </View>
-      ))}
-      {signinServed &&
-        login.options.some((o) => o.method === 'browser') &&
-        !login.options.some((o) => o.method === 'agent_browser') && (
-          <View style={styles.other}>
-            <Button
-              title="Sign in from here"
-              variant="outline"
-              disabled={off}
-              onPress={signinHere}
-              testID="login-signin-here"
-            />
-            <T variant="caption" color={colors.textMuted}>
-              {signinHereLine(login.title)}
+      {!lead && keyWay}
+      {hasOtherWays && (
+        <TextAction
+          label={showOtherWays ? 'Fewer ways' : 'Other ways'}
+          muted
+          onPress={() => {
+            haptic.select();
+            setOtherWays(!showOtherWays);
+          }}
+        />
+      )}
+      {showOtherWays && (
+        <View style={styles.otherWays} testID="login-other-ways">
+          {/* Why there's no connector, only when the card can't lead with one. */}
+          {!!login.noConnector && !connects && (
+            <T variant="small" color={colors.textMuted} testID="login-no-connector">
+              {login.noConnector}
             </T>
-          </View>
-        )}
-      {key && login.key && (
-        <View style={styles.other}>
-          {!typing ? (
-            <>
+          )}
+          {others.map((o) => (
+            <View key={o.id} style={styles.other}>
               <Button
-                title={key.label}
-                variant="ghost"
+                title={failed && login.flow?.option === o.id ? `Try again: ${label(o)}` : label(o)}
+                variant="outline"
+                busy={busy === o.id}
                 disabled={off}
-                onPress={() => setTyping(true)}
+                onPress={() => void start(o)}
               />
               <T variant="caption" color={colors.textMuted}>
-                {key.detail}
+                {phoneDetail(o, way(o), login.title)}
               </T>
-            </>
-          ) : keyProblem ? (
-            <T variant="small" color={colors.textMuted}>
-              {keyProblem}
-            </T>
-          ) : (
-            <>
-              <T
-                variant="small"
-                color={colors.textSecondary}
-                style={{ fontFamily: fonts.medium }}
-                maxFontSizeMultiplier={CARD_TITLE_SCALE}
-              >
-                {login.key.fields[0]?.label ?? 'API key'}
-              </T>
-              <TextInput
-                ref={input}
-                secureTextEntry
-                textContentType="none"
-                autoComplete="off"
-                importantForAutofill="no"
-                autoCorrect={false}
-                autoCapitalize="none"
-                spellCheck={false}
-                editable={!busy}
-                keyboardAppearance={appearance}
-                accessibilityLabel={login.key.fields[0]?.label ?? 'API key'}
-                onChangeText={(v) => {
-                  value.current = v;
-                  setFilled(v.trim().length > 0);
-                }}
-                onSubmitEditing={() => void saveKey()}
-                placeholderTextColor={colors.textMuted}
-                style={[cardStyles.input, styles.secret]}
+            </View>
+          ))}
+          {signinHereExtra && (
+            <View style={styles.other}>
+              <Button
+                title="Sign in from here"
+                variant="outline"
+                disabled={off}
+                onPress={signinHere}
+                testID="login-signin-here"
               />
               <T variant="caption" color={colors.textMuted}>
-                {key.detail} This phone keeps nothing.
+                {signinHereLine(login.title)}
               </T>
-              <CardActions>
-                <Button
-                  title="Cancel"
-                  variant="outline"
-                  disabled={!!busy}
-                  onPress={() => {
-                    wipe();
-                    setTyping(false);
-                  }}
-                  style={ACTION}
-                />
-                <Button
-                  title="Save"
-                  variant="answer"
-                  busy={busy === 'key'}
-                  disabled={off || !filled}
-                  onPress={() => void saveKey()}
-                  style={ACTION}
-                />
-              </CardActions>
-            </>
+            </View>
+          )}
+          {lead && keyWay}
+          {canDecline && (
+            <View style={styles.other}>
+              <Button
+                title="Not needed"
+                variant="outline"
+                busy={busy === 'notNeeded'}
+                disabled={off}
+                onPress={() => void notNeeded()}
+                testID="login-not-needed"
+              />
+              <T variant="caption" color={colors.textMuted}>
+                Puts this away for {agent.name}. Nothing gets connected.
+              </T>
+            </View>
           )}
         </View>
       )}
@@ -511,6 +564,7 @@ const useStyles = makeStyles(() => ({
   abilities: { gap: space.tight },
   onMac: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   other: { gap: space.tight },
+  otherWays: { gap: space.md },
   secret: { fontFamily: fonts.mono },
   code: { gap: space.tight },
   codeValue: { fontFamily: fonts.mono, fontSize: type.title },

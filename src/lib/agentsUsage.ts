@@ -49,10 +49,13 @@ export {
   paceLine,
   planUsage,
   ringPercent,
+  usageSheet,
   type AccountBlock,
+  type ActiveUsage,
   type PaceLine,
   type PlanUsage,
   type UsageMeter,
+  type UsageSheet,
 } from '../../packages/companion-protocol/src/usageSheet';
 
 /** The mode or the list changed (`runner::EVENT_USAGE_PLAN`). */

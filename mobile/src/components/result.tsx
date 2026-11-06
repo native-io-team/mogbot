@@ -31,12 +31,12 @@ import {
   type TestReport,
 } from '@shipstudio/companion-protocol';
 import { useState, type ReactNode } from 'react';
-import { Linking, Pressable, ScrollView, View } from 'react-native';
+import { Linking, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { openHere } from '../lib/logins';
 import { describeError, watchLive } from '../lib/session';
 import { haptic } from '../lib/haptics';
 import { makeStyles, useColors } from '../lib/appearance';
-import { alpha, iconSize, radius, space } from '../lib/theme';
+import { iconSize, radius, space } from '../lib/theme';
 import { useApp, useServed } from '../lib/store';
 import { Attachments } from './attachments';
 import { Compare } from './compare';
@@ -206,12 +206,10 @@ function Body({
           accessibilityLabel={`Not verified: ${notVerified.join('. ')}`}
         >
           <View style={styles.row}>
-            <Icon
-              name="exclamationmark.triangle"
-              size={iconSize.inline}
-              color={colors.accentWarning}
-            />
-            <T variant="small" style={styles.strong}>
+            {/* What wasn't checked is normal and expected: a quiet question,
+                as on the desk, never the warning triangle (real danger only). */}
+            <Icon name="questionmark.circle" size={iconSize.inline} color={colors.textMuted} />
+            <T variant="small" style={styles.unverifiedTitle}>
               Not verified
             </T>
           </View>
@@ -371,9 +369,10 @@ const useStyles = makeStyles((colors) => ({
     gap: space.xs,
     padding: space.md,
     borderRadius: radius.inner,
-    backgroundColor: alpha(colors.accentWarning, 0.14),
-    overflow: 'hidden',
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderDefault,
   },
+  unverifiedTitle: { fontWeight: '600' as const, color: colors.textSecondary },
   link: {
     flexDirection: 'row',
     alignItems: 'center',

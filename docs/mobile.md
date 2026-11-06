@@ -449,9 +449,12 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   in a chat's header shows the agent's engine's current 5-hour window, only
   once the engine has reported one (`agents.quota`). Tapping it opens the
   Usage sheet: this agent's context ("90% used · 180K of 200K tokens",
-  only when its engine reported it), the 5-hour limit and its reset, the
-  weekly limits (All models, then per model), and every account from
-  `agents.usagePlan` with its limits or its state; ↻ reads it all again.
+  only when its engine reported it), then each reading once: under "Plan
+  usage" the account this agent's next turns run on (its 5-hour limit, then
+  "Weekly · All models" and each model's week), and under "Other accounts"
+  every other account from `agents.usagePlan` with its limits or its state,
+  never the top one again (`usageSheet`, shared with the desk's popover);
+  ↻ reads it all again.
   No pace warning: the Mac serves no forecast of when a window runs out,
   and the phone doesn't guess one.
 - **Catch up** (`app/catch-up.tsx`, `lib/catchUp.ts`), from Home's "N agents

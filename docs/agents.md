@@ -1438,8 +1438,11 @@ a login": a login is a secure input card) and **Review**. The bar has one
 height and one place, so the conversation never moves for it; it replaced a
 chip per agent at the foot of the chat, which after an import stacked sixteen
 deep under every message. Review opens one panel rising from the bar across
-the reading column: "Needs your OK · 16 agents · 41 logins", the agents in
-name order (so the list holds still as you answer it), each a row with its
+the reading column, flush on it: open, the panel and the bar are one
+surface, the bar its foot (no header of its own, since the bar already says
+who and how many; the bar's **Done** is the one close), and the cards in it
+lie flat on that surface rather than as cards, and fields, boxed inside it.
+The agents in name order (so the list holds still as you answer it), each a row with its
 line ("4 logins: Slack bot token, Slack user token…", or the one request's
 title) that opens to its cards, answerable in place, and **Open chat**. With
 one or two agents every row starts open; past that, all start folded, so
@@ -1458,9 +1461,10 @@ agent with nothing of yours between says "2 of 3 similar requests" on each
 card, counted from the cards that have arrived, never from how many might
 follow (`approvalSeries`).
 
-**Allow all.** With more than one Allow card shown, the panel's head offers
-**Allow all**, and an agent's row with more than one offers its own. Either
-asks first on one confirm line with the counts by kind ("Allow 7 requests? 4
+**Allow all.** With more than one Allow card shown, the bar under the open
+panel offers **Allow all** beside Done, and an agent's row with more than one offers its own. Either
+asks first on one confirm line (at the foot of the panel, right above the
+bar) with the counts by kind ("Allow 7 requests? 4
 commands, 2 file changes, Send an email · Gmail", or "Lead Gen: Allow 3
 requests? …"), then answers each card shown with Allow, one after another,
 through the same command as a single Allow (`allowAllCards` /

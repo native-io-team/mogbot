@@ -430,27 +430,12 @@ export function SettingsModal({
           value={activeSettingsTab}
           onValueChange={(value) => setActiveSettingsTab(value as SettingsTab)}
         >
-          <TabsList
-            className="command-palette-tabs"
-            variant="stretch"
-            appearance="underline"
-            aria-label="Settings sections"
-          >
-            <TabsTab value="agents" width="fill" className="command-palette-tab">
-              Agents
-            </TabsTab>
-            <TabsTab value="general" width="fill" className="command-palette-tab">
-              General
-            </TabsTab>
-            <TabsTab value="projects" width="fill" className="command-palette-tab">
-              Projects
-            </TabsTab>
-            <TabsTab value="appearance" width="fill" className="command-palette-tab">
-              Appearance
-            </TabsTab>
-            <TabsTab value="experimental" width="fill" className="command-palette-tab">
-              Experimental
-            </TabsTab>
+          <TabsList className="settings-tabs" appearance="underline" aria-label="Settings sections">
+            <TabsTab value="agents">Agents</TabsTab>
+            <TabsTab value="general">General</TabsTab>
+            <TabsTab value="projects">Projects</TabsTab>
+            <TabsTab value="appearance">Appearance</TabsTab>
+            <TabsTab value="experimental">Experimental</TabsTab>
           </TabsList>
 
           {/* Agents first: it is the primary view, and every agent setting

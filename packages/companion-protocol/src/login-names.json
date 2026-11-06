@@ -1,0 +1,313 @@
+{
+  "_comment": "Login keys and how a person reads them. The desk and the phone (companion-protocol/src/loginNames.ts) and the Mac (agents/team_setup.rs, humanise) are each held to every case, and each side's tests fail on a known name with no case here, so the two maps can't drift.",
+  "cases": [
+    {
+      "key": "crm",
+      "title": "CRM"
+    },
+    {
+      "key": "github_workshop",
+      "title": "GitHub workshop"
+    },
+    {
+      "key": "crm_api_key",
+      "title": "CRM API key"
+    },
+    {
+      "key": "email_drafts",
+      "title": "Email drafts"
+    },
+    {
+      "key": "slack_workspaces",
+      "title": "Slack workspaces"
+    },
+    {
+      "key": "emailDrafts",
+      "title": "Email drafts"
+    },
+    {
+      "key": "x-api.token",
+      "title": "X API token"
+    },
+    {
+      "key": "  ",
+      "title": "A login"
+    },
+    {
+      "key": "linkedIn",
+      "title": "LinkedIn"
+    },
+    {
+      "key": "hubSpot_token",
+      "title": "HubSpot token"
+    },
+    {
+      "key": "Git_Hub_pat",
+      "title": "GitHub PAT"
+    },
+    {
+      "key": "CRMToken",
+      "title": "CRM token"
+    },
+    {
+      "key": "OAuthClientId",
+      "title": "OAuth client ID"
+    },
+    {
+      "key": "shop_admin",
+      "title": "Shop admin"
+    },
+    {
+      "key": "leads_db",
+      "title": "Leads DB"
+    },
+    {
+      "key": "ios_app_store",
+      "title": "iOS app store"
+    },
+    {
+      "key": "work_gmail",
+      "title": "Work Gmail"
+    },
+    {
+      "key": "Payroll app",
+      "title": "Payroll app"
+    },
+    {
+      "key": "chat-widget",
+      "title": "Chat widget"
+    },
+    {
+      "key": "airtable_login",
+      "title": "Airtable login"
+    },
+    {
+      "key": "asana_login",
+      "title": "Asana login"
+    },
+    {
+      "key": "calendly_login",
+      "title": "Calendly login"
+    },
+    {
+      "key": "discord_login",
+      "title": "Discord login"
+    },
+    {
+      "key": "dropbox_login",
+      "title": "Dropbox login"
+    },
+    {
+      "key": "facebook_login",
+      "title": "Facebook login"
+    },
+    {
+      "key": "figma_login",
+      "title": "Figma login"
+    },
+    {
+      "key": "github_login",
+      "title": "GitHub login"
+    },
+    {
+      "key": "gitlab_login",
+      "title": "GitLab login"
+    },
+    {
+      "key": "gmail_login",
+      "title": "Gmail login"
+    },
+    {
+      "key": "google_login",
+      "title": "Google login"
+    },
+    {
+      "key": "hubspot_login",
+      "title": "HubSpot login"
+    },
+    {
+      "key": "instagram_login",
+      "title": "Instagram login"
+    },
+    {
+      "key": "intercom_login",
+      "title": "Intercom login"
+    },
+    {
+      "key": "jira_login",
+      "title": "Jira login"
+    },
+    {
+      "key": "linear_login",
+      "title": "Linear login"
+    },
+    {
+      "key": "linkedin_login",
+      "title": "LinkedIn login"
+    },
+    {
+      "key": "mailchimp_login",
+      "title": "Mailchimp login"
+    },
+    {
+      "key": "netlify_login",
+      "title": "Netlify login"
+    },
+    {
+      "key": "notion_login",
+      "title": "Notion login"
+    },
+    {
+      "key": "openai_login",
+      "title": "OpenAI login"
+    },
+    {
+      "key": "paypal_login",
+      "title": "PayPal login"
+    },
+    {
+      "key": "pipedrive_login",
+      "title": "Pipedrive login"
+    },
+    {
+      "key": "quickbooks_login",
+      "title": "QuickBooks login"
+    },
+    {
+      "key": "salesforce_login",
+      "title": "Salesforce login"
+    },
+    {
+      "key": "sendgrid_login",
+      "title": "SendGrid login"
+    },
+    {
+      "key": "shopify_login",
+      "title": "Shopify login"
+    },
+    {
+      "key": "slack_login",
+      "title": "Slack login"
+    },
+    {
+      "key": "stripe_login",
+      "title": "Stripe login"
+    },
+    {
+      "key": "telegram_login",
+      "title": "Telegram login"
+    },
+    {
+      "key": "tiktok_login",
+      "title": "TikTok login"
+    },
+    {
+      "key": "trello_login",
+      "title": "Trello login"
+    },
+    {
+      "key": "twilio_login",
+      "title": "Twilio login"
+    },
+    {
+      "key": "twitter_login",
+      "title": "Twitter login"
+    },
+    {
+      "key": "vercel_login",
+      "title": "Vercel login"
+    },
+    {
+      "key": "webflow_login",
+      "title": "Webflow login"
+    },
+    {
+      "key": "whatsapp_login",
+      "title": "WhatsApp login"
+    },
+    {
+      "key": "wordpress_login",
+      "title": "WordPress login"
+    },
+    {
+      "key": "x_login",
+      "title": "X login"
+    },
+    {
+      "key": "xero_login",
+      "title": "Xero login"
+    },
+    {
+      "key": "youtube_login",
+      "title": "YouTube login"
+    },
+    {
+      "key": "zendesk_login",
+      "title": "Zendesk login"
+    },
+    {
+      "key": "zoom_login",
+      "title": "Zoom login"
+    },
+    {
+      "key": "ai_login",
+      "title": "AI login"
+    },
+    {
+      "key": "api_login",
+      "title": "API login"
+    },
+    {
+      "key": "aws_login",
+      "title": "AWS login"
+    },
+    {
+      "key": "cms_login",
+      "title": "CMS login"
+    },
+    {
+      "key": "db_login",
+      "title": "DB login"
+    },
+    {
+      "key": "id_login",
+      "title": "ID login"
+    },
+    {
+      "key": "ios_login",
+      "title": "iOS login"
+    },
+    {
+      "key": "oauth_login",
+      "title": "OAuth login"
+    },
+    {
+      "key": "pat_login",
+      "title": "PAT login"
+    },
+    {
+      "key": "seo_login",
+      "title": "SEO login"
+    },
+    {
+      "key": "sms_login",
+      "title": "SMS login"
+    },
+    {
+      "key": "smtp_login",
+      "title": "SMTP login"
+    },
+    {
+      "key": "sql_login",
+      "title": "SQL login"
+    },
+    {
+      "key": "ssh_login",
+      "title": "SSH login"
+    },
+    {
+      "key": "url_login",
+      "title": "URL login"
+    }
+  ]
+}

@@ -37,6 +37,9 @@ describe('the setup card’s logins', () => {
   it('reads an unknown key as words, from an older Mac too', () => {
     expect(humanise('slack_workspaces')).toBe('Slack workspaces');
     expect(humanise('ledgerApp_owner')).toBe('Ledger app owner');
+    // Known names as their makers write them (login-names.json, shared with the Mac).
+    expect(humanise('crm')).toBe('CRM');
+    expect(humanise('github_workshop')).toBe('GitHub workshop');
     expect(groupLogins([l('travel_portal')])[0].name).toBe('Travel portal');
   });
 
