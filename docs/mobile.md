@@ -756,11 +756,10 @@ The phone can start work as well as answer it. Each piece is gated by
   it as you speak, the last few lighter while the recognizer is still
   deciding them (`stablePrefix`: what a partial shares with the one before,
   never its last word), with the recognizer's own punctuation, at the
-  field's full width, wrapping exactly as typing does. A waveform and the
-  elapsed time ride in a slim row over the field (inside it, beside the
-  words, they squeezed a long dictation to three words a line), × takes the
-  +'s place, and
-  the field holds **Stop** and **Send**, as Grok's dictation does. **Stop
+  field's full width, wrapping exactly as typing does. The field is a card
+  while it listens, as Claude's dictation is: the words on top, and one row
+  under them of ×, the waveform filling the middle, **Stop** and **Send**.
+  The mic stays while an agent works, so what you say then queues. **Stop
   keeps the words in the draft** to read and edit; **Send** sends exactly
   what's on screen at once (the reducer's `send`: the partial too, then the
   recognizer is aborted so no late word lands in the emptied field).
@@ -808,8 +807,17 @@ The phone can start work as well as answer it. Each piece is gated by
   a phone.
 - **The composer** is the system's glass where the phone has it
   (`components/Glass.tsx`, expo-glass-effect: iOS 26 Liquid Glass, the tab
-  bar's material): a 48pt capsule with 17pt text, a 48pt glass + beside it,
-  and 40pt circles inside (mic, Stop, and Send as accent-tinted glass). On iOS
+  bar's material), shaped as Claude's own input: empty or one line, a 48pt
+  capsule with 17pt text and everything inside it as 40pt circles (the + at
+  the left; the mic, Stop while a turn runs, and Send as accent-tinted glass,
+  dimmed until there's something to send). The mic is always there, so you
+  can talk while an agent works; what you say queues as typing does. Once
+  the words would wrap, or files are attached, or it listens, the capsule
+  becomes a card: the files as thumbnails at its top, each with its ×, the
+  words across its whole width, and a row under them with the + and the
+  agent's engine chip (only what the Mac's overview names) at the left and
+  the buttons at the right. The queued line ("… reads it when this turn
+  ends") runs full width over it with Send now at its right. On iOS
   before 26, Android and the web build it's `composerFill` with its
   hairline. The chat header's ⓘ is a native bar button (`Stack.Toolbar`) on
   iOS, so the system draws it as a true circle.

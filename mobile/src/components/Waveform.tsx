@@ -1,5 +1,5 @@
 /**
- * The waveform in the field while it listens: your voice, as bars that scroll
+ * The waveform in the dictation card: your voice, as bars that scroll
  * in from the right and settle to dots when you're quiet.
  *
  * Everything moves on the UI thread. The JS thread only writes the level the
@@ -15,7 +15,8 @@
  * in `theme.waveform`.
  */
 
-import { View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { View, type LayoutChangeEvent, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useFrameCallback,
@@ -38,34 +39,56 @@ import {
 
 const PITCH = waveform.bar + waveform.gap;
 export const WAVEFORM_WIDTH = waveform.bars * PITCH;
-/** One more than shows: the live bar sliding in at the right. */
-const INDEXES = Array.from({ length: waveform.bars + 1 }, (_, i) => i);
 
+/**
+ * `fill`: as wide as its parent gives it (the dictation card's row), with as
+ * many bars as fit, centred. Otherwise `waveform.bars` wide.
+ */
 export function Waveform({
   level,
   height,
   color,
+  fill,
+  style,
 }: {
   /** 0..1, written by the JS thread. */
   level: SharedValue<number>;
   height: number;
   color?: string;
+  fill?: boolean;
+  style?: StyleProp<ViewStyle>;
 }) {
   const colors = useColors();
   const still = useReducedMotion();
   const tint = color ?? colors.textPrimary;
+  const [width, setWidth] = useState(fill ? 0 : WAVEFORM_WIDTH);
+  const onLayout = (e: LayoutChangeEvent) => setWidth(e.nativeEvent.layout.width);
+  const count = Math.max(1, Math.floor(width / PITCH));
   return (
     <View
       // The field says it's listening; the bars are decoration.
       importantForAccessibility="no-hide-descendants"
       accessibilityElementsHidden
       testID="dictation-waveform"
-      style={{ width: WAVEFORM_WIDTH, height, overflow: 'hidden', justifyContent: 'center' }}
+      onLayout={fill ? onLayout : undefined}
+      style={[
+        fill ? { flex: 1 } : { width: WAVEFORM_WIDTH },
+        { height, overflow: 'hidden', justifyContent: 'center' },
+        style,
+      ]}
     >
-      {still ? (
-        <Meter level={level} color={tint} track={colors.surfaceSelected} />
+      {width <= 0 ? null : still ? (
+        <Meter level={level} color={tint} track={colors.surfaceSelected} width={width} />
       ) : (
-        <Bars level={level} height={height} color={tint} />
+        // A new width starts a new strip: its history is that many bars long.
+        <Bars
+          key={count}
+          level={level}
+          height={height}
+          color={tint}
+          count={count}
+          left={(width - count * PITCH) / 2}
+        />
       )}
     </View>
   );
@@ -75,13 +98,19 @@ function Bars({
   level,
   height,
   color,
+  count,
+  left,
 }: {
   level: SharedValue<number>;
   height: number;
   color: string;
+  count: number;
+  left: number;
 }) {
+  // One more than shows: the live bar sliding in at the right.
+  const indexes = useMemo(() => Array.from({ length: count + 1 }, (_, i) => i), [count]);
   const live = useSharedValue(0);
-  const history = useSharedValue<number[]>(new Array(waveform.bars).fill(0));
+  const history = useSharedValue<number[]>(new Array(count).fill(0));
   const since = useSharedValue(0);
   const progress = useSharedValue(0);
   useFrameCallback((frame) => {
@@ -101,10 +130,12 @@ function Bars({
   const top = (height - waveform.max) / 2;
   return (
     <>
-      {INDEXES.map((i) => (
+      {indexes.map((i) => (
         <Bar
           key={i}
           index={i}
+          last={count}
+          left={left}
           live={live}
           history={history}
           progress={progress}
@@ -118,6 +149,8 @@ function Bars({
 
 function Bar({
   index,
+  last,
+  left,
   live,
   history,
   progress,
@@ -125,6 +158,9 @@ function Bar({
   top,
 }: {
   index: number;
+  /** The live bar's index: the history holds the ones before it. */
+  last: number;
+  left: number;
   live: SharedValue<number>;
   history: SharedValue<number[]>;
   progress: SharedValue<number>;
@@ -132,7 +168,7 @@ function Bar({
   top: number;
 }) {
   const style = useAnimatedStyle(() => {
-    const value = index === waveform.bars ? live.get() : (history.get()[index] ?? 0);
+    const value = index === last ? live.get() : (history.get()[index] ?? 0);
     const x = (index - progress.get()) * PITCH;
     return {
       opacity: barOpacity(x, waveform.fade),
@@ -147,7 +183,7 @@ function Bar({
       style={[
         {
           position: 'absolute',
-          left: 0,
+          left,
           top,
           width: waveform.bar,
           height: waveform.max,
@@ -165,10 +201,12 @@ function Meter({
   level,
   color,
   track,
+  width,
 }: {
   level: SharedValue<number>;
   color: string;
   track: string;
+  width: number;
 }) {
   const shown = useSharedValue(0);
   useFrameCallback((frame) => {
@@ -191,7 +229,7 @@ function Meter({
         style={[
           {
             height: waveform.min,
-            width: WAVEFORM_WIDTH,
+            width,
             backgroundColor: color,
             transformOrigin: 'left',
           },
