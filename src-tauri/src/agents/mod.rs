@@ -120,6 +120,7 @@ pub mod schedule;
 pub mod search;
 pub mod secrets;
 pub mod sessions;
+pub mod share_text;
 pub mod store;
 pub mod stream;
 pub mod takeover;

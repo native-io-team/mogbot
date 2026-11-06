@@ -3549,7 +3549,7 @@ of their own is open.
 
 ## Files back from agents (`src-tauri/src/agents/files.rs`)
 
-- `share_file {path, caption?}` takes `~/…`, an absolute path, or one relative
+- `share_file {path, text?, caption?}` takes `~/…`, an absolute path, or one relative
   to the agent's home. The path is canonicalised and must land inside the
   agent's home or a registered project, so `..` and symlinks are judged by
   where they really lead; folders are refused (zip first). The file is
@@ -3560,6 +3560,20 @@ of their own is open.
   history all treat it like a reply. Images show inline; files are the same
   chips as yours, on the left. Click opens; Show in Finder sits on hover and in
   the image view. The prompt tells agents to share rather than paste.
+- **Text with a file** (`agents/share_text.rs`). `text` is the message shown
+  above the file, full markdown, as any reply on desk and phone; `caption` is
+  a short label put first (`share_text::message_text`). The tool's answer says
+  when only a label went out. Why: asked "full text then image, post by post",
+  an agent sent six images labelled "1 of 6 · Fri 10am" and said the posts had
+  gone out as written, because `caption` was described as one short line. The
+  prompt (`FILES`) now says one `share_file` per item with its full text, and
+  to re-read what was sent when a request is repeated. A guard backs it: when
+  the user's messages ask for text ("text", "copy", "caption", "full",
+  "wording", "words") and a finished turn in the agent's own chat shared files
+  whose text is all under 40 characters, with no message of 160 or more, the
+  next turn there opens with a quiet note from the app
+  (`share_text::LABELS_ONLY_NOTE`). It is in memory only (a restart drops it),
+  read once, dropped by Start fresh, and never shown to the user.
 - **Files** (header … menu, or ⌘K "Files shared with <agent>") lists every
   attachment in the conversation, both ways, newest first
   (`agents_files`, a scan of the whole log), filterable All / From you /
