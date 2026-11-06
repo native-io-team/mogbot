@@ -144,6 +144,28 @@ the download finished\"): it's shown on the card. When you're stopped on a card 
 the user has to answer, or can't go on without them, say so plainly in one line \
 of your reply (\"Waiting on you: allow the push to GitHub on the card\").";
 
+/// Reading a link the user gave: its content straight, before any browser.
+/// App-owned and built every turn, so every agent has it whenever it was
+/// made. Observed: a claude.ai artifact link sent an agent into Chrome for
+/// twenty steps of scraping a canvas that `Artifact` returns in one call
+/// (`claude::ENV`).
+const LINKS_CLAUDE: &str = "\
+Read a link directly before any browser, a claude.ai artifact with the \
+`Artifact` tool (`read`; ToolSearch loads it).";
+
+/// Codex has no `Artifact` tool: the browser, said in a line.
+const LINKS_CODEX: &str = "\
+Read a link directly (`gh`, `curl`) before any browser. On Codex a claude.ai \
+artifact link opens only in the browser: say so in one line.";
+
+/// The links line for an agent on `engine`, after "Getting access".
+pub fn links_section(engine: super::engine::Engine) -> &'static str {
+    match engine {
+        super::engine::Engine::Codex => LINKS_CODEX,
+        _ => LINKS_CLAUDE,
+    }
+}
+
 /// Codex's sandbox is the guard, and going past it asks the user through a
 /// card (see `codex_app`). The agent is told so rather than left to find out.
 const CODEX_SANDBOX: &str = "\
@@ -354,6 +376,7 @@ pub fn system_prompt(agent: &Agent, bound: Option<&Bound>) -> String {
         VOICE.to_string(),
         WORK.to_string(),
         super::logins::RULES.to_string(),
+        links_section(agent.engine).to_string(),
         super::secrets::RULES.to_string(),
     ];
     if agent.engine == super::engine::Engine::Codex {
@@ -718,6 +741,27 @@ mod tests {
         assert!(prompt.contains("never repeat one that's waiting or was answered"));
         assert!(prompt.contains("`request_secret` is only for an API key"));
         assert!(prompt.contains("Never ask the user to paste a credential in chat"));
+    }
+
+    #[test]
+    fn links_are_read_directly_and_claude_ai_artifacts_through_the_artifact_tool() {
+        let mut agent: Agent = serde_json::from_value(serde_json::json!({
+            "id": "a", "name": "Courses", "shape": 0, "color": "red", "createdAt": 0
+        }))
+        .unwrap();
+        let prompt = system_prompt(&agent, None);
+        let at = |s: &str| prompt.find(s).unwrap_or_else(|| panic!("{s}"));
+        assert!(at("Read a link directly before any browser") < at("`Artifact` tool (`read`"));
+        assert!(prompt.contains("ToolSearch loads it"));
+
+        agent.engine = super::super::engine::Engine::Codex;
+        let codex = system_prompt(&agent, None);
+        assert!(
+            !codex.contains("`Artifact` tool"),
+            "Codex has no Artifact tool"
+        );
+        assert!(codex.contains("On Codex a claude.ai artifact link opens only in the browser"));
+        assert!(codex.contains("say so in one line"));
     }
 
     #[test]

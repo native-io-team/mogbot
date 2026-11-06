@@ -223,6 +223,38 @@ fn files_and_connectors_at_go_hard() {
 }
 
 #[test]
+fn reading_a_claude_ai_artifact_runs_and_publishing_one_asks() {
+    let c = ctx();
+    let url = "https://claude.ai/artifact/00000000-0000-0000-0000-000000000000";
+    assert!(!asks(
+        "Artifact",
+        &json!({ "action": "read", "url": url }),
+        &c,
+        false
+    ));
+    assert!(!asks(
+        "ArtifactData",
+        &json!({ "action": "query" }),
+        &c,
+        false
+    ));
+    for input in [
+        json!({ "file_path": "/tmp/page.html" }),
+        json!({ "action": "publish", "file_path": "/tmp/page.html" }),
+        json!({ "action": "delete", "url": url }),
+    ] {
+        assert!(asks("Artifact", &input, &c, false), "{input}");
+    }
+    assert!(asks("ArtifactData", &json!({ "action": "set" }), &c, false));
+    assert!(asks(
+        "ArtifactComments",
+        &json!({ "action": "reply" }),
+        &c,
+        false
+    ));
+}
+
+#[test]
 fn browser_scripts_that_read_or_click_run_and_ones_that_send_ask() {
     let js = |code: &str| {
         script_sends(

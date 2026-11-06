@@ -27,6 +27,11 @@
 //! 7. Only then: one login card (`logins::raise`), whose first way in is a
 //!    sign-in button, never a field, unless the service has nothing else.
 //!
+//! Reading a link the user gave isn't a login: it's read directly first
+//! (claude.ai artifacts through Claude Code's `Artifact` tool, anything else
+//! fetched), and the browser only when it needs a signed-in page
+//! (`prompts::links_section`).
+//!
 //! Full design: docs/agents.md, "Just try first".
 
 use serde::{Deserialize, Serialize};

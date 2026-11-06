@@ -4306,6 +4306,8 @@ async fn run_turn(
             cmd.env_remove(key);
         }
         cmd.envs(super::tidy::claude_env());
+        // claude.ai artifact links read directly (`claude::ENV`).
+        cmd.envs(super::claude::ENV);
     }
     if engine == Engine::Codex {
         // Read by `bearer_token_env_var`. Codex's default shell environment

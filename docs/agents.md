@@ -1582,6 +1582,19 @@ never up front, one thing at a time, never a password or token in chat.
 A connection someone else has (not this agent) still needs a one-tap "Use
 \<account>" card: per-agent grants stay the wall for connectors.
 
+**A link is read before it's browsed** (`prompts::links_section`, one
+app-owned line after "Getting access", every turn). A claude.ai artifact link
+(`claude.ai/artifact/…`) goes to Claude Code's `Artifact` tool with `read`:
+one call returns the page and its files, where Chrome meant twenty steps
+scraping a canvas. `--print` turns it off by default (the `sdk-cli`
+entrypoint), so every Claude turn runs with `CLAUDE_CODE_ARTIFACT=1`
+(`claude::ENV`); it needs a claude.ai sign-in. A read is a read (`autoallow`,
+and runs at Go hard) and counts as outside content (`exposure`), like a
+fetched page; publishing, commenting or writing an artifact's rows asks
+(at Full send only deleting one does). Codex has no `Artifact` tool: it opens
+the link in the browser and says so in one line. The line fit the prompt
+budget by trimming two examples from "Getting access".
+
 ### Your browser (`agents/browser.rs`)
 
 The mechanism is Claude Code's **Claude in Chrome**: `claude --chrome` loads

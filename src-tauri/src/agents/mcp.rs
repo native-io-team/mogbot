@@ -2042,6 +2042,9 @@ pub fn describe_request(tool: &str, input: &Value) -> (String, String) {
         "Read" => ("Read a file outside its folders".into(), field("file_path")),
         "WebFetch" => ("Open a web page".into(), field("url")),
         "WebSearch" => ("Search the web".into(), field("query")),
+        "Artifact" if field("action") == "read" => {
+            ("Read a claude.ai artifact".into(), field("url"))
+        }
         other => {
             let mut detail = serde_json::to_string_pretty(input).unwrap_or_default();
             if detail.chars().count() > 600 {

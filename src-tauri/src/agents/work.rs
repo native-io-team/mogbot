@@ -507,6 +507,12 @@ fn describe_builtin(name: &str, field: &dyn Fn(&str) -> Option<String>) -> Optio
             ),
         },
         "WebFetch" => browsed(field("url").as_deref()),
+        "Artifact" if field("action").as_deref() == Some("read") => act(
+            StepKind::Web,
+            "Read a claude.ai artifact",
+            "Reading a claude.ai artifact",
+            "read a claude.ai artifact",
+        ),
         "Task" | "Agent" => match field("description") {
             Some(d) => {
                 let d = clip(&scrub(&d), 60);
