@@ -140,6 +140,7 @@ fn a_turn_tainted_by_outside_text_carries_nothing() {
             r.running = true;
             // The interrupted turn this replaces answered outside text.
             r.outside = true;
+            r.interrupted = Some("[You were interrupted]".into());
         }
         take_batch(id).unwrap();
         assert_eq!(typed_input(id), None);

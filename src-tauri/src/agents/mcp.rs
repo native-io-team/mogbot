@@ -1172,6 +1172,12 @@ fn message_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value 
     let Some(hop) = runner::next_hop(&caller.id) else {
         return error("Not sent: this chain of agent-to-agent messages is too long. Tell the user where things stand instead.");
     };
+    // "The user approved" with nothing of theirs behind it, or a send after
+    // a draft it promised to show them first (`approval_claim`).
+    if let Some(why) = super::approval_claim::check(&caller.id, body, store::now_ms()) {
+        tracing::info!(agent = %caller.id, target = %target.id, "[Agents] message_agent refused: approval it can't show");
+        return error(why);
+    }
     // Handing out work is capped per reply, and an agent that just came in
     // with an import stays quiet until the user says hi. An answer to an
     // agent that asked isn't new work.

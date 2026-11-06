@@ -2855,8 +2855,13 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
         }
     }
     runtime.user_text = words.join("\n");
-    // Outside text taints the turn, and the turn that replaces it.
-    runtime.outside |= batch.iter().any(|m| m.outside);
+    // Outside text taints the turn, and the turn that *replaces* it (an
+    // interruption carries its prompt over). Never the next turn after one
+    // that finished: a worker runs turns back to back while its queue isn't
+    // empty, and the user's own "Use it" queued behind a "When…" turn was
+    // sealed as outside text (`fromOutside` on its cards).
+    runtime.outside =
+        batch.iter().any(|m| m.outside) || (runtime.outside && runtime.interrupted.is_some());
     runtime.typed = typed_of(&batch, runtime.outside);
     let request = batch.first().map(|m| m.text.clone()).unwrap_or_default();
     let user_said = batch
@@ -6513,3 +6518,11 @@ mod remember_runner_tests;
 #[cfg(test)]
 #[path = "handoff_runner_tests.rs"]
 mod handoff_runner_tests;
+
+#[cfg(test)]
+#[path = "outside_runner_tests.rs"]
+mod outside_runner_tests;
+
+#[cfg(test)]
+#[path = "relay_runner_tests.rs"]
+mod relay_runner_tests;

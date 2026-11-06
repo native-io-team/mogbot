@@ -684,7 +684,12 @@ pub fn open_questions(log: &[store::AgentMessage]) -> Vec<String> {
                 .lines()
                 .map(str::trim)
                 .filter(|l| l.ends_with('?'))
-                .map(|l| l.trim_start_matches(['-', '*', ' ']).chars().take(200).collect::<String>())
+                .map(|l| {
+                    l.trim_start_matches(['-', '*', ' '])
+                        .chars()
+                        .take(200)
+                        .collect::<String>()
+                })
                 .collect::<Vec<_>>()
         })
         .collect();
@@ -693,6 +698,11 @@ pub fn open_questions(log: &[store::AgentMessage]) -> Vec<String> {
     out.drain(..skip);
     out
 }
+
+/// How a check-in decides. Observed (2026-11-06, an hourly "Agent sweep"
+/// at Full send): its posts handed decisions back ("that's your call",
+/// "pick one, my recommendation is…") on things it could have just done.
+pub const SWEEP: &str = "Anything reversible your level covers, decide and do now; never ask the user's opinion on a reversible choice (no \"your call\", no \"pick one\"): pick, act, say what you chose. Surface only what's truly blocked on them or on the floor (money, credentials, deleting for good, production), each with the one thing it needs.";
 
 /// What the agent is woken with.
 pub fn wake_prompt<Tz: TimeZone>(tz: &Tz, firing: &Firing, now: i64) -> String
@@ -704,12 +714,7 @@ where
 
 /// [`wake_prompt`], with the questions still waiting on the user
 /// ([`open_questions`]).
-pub fn wake_prompt_with<Tz: TimeZone>(
-    tz: &Tz,
-    firing: &Firing,
-    now: i64,
-    open: &[String],
-) -> String
+pub fn wake_prompt_with<Tz: TimeZone>(tz: &Tz, firing: &Firing, now: i64, open: &[String]) -> String
 where
     Tz::Offset: std::fmt::Display,
 {
@@ -753,12 +758,12 @@ where
     let waiting = match open {
         [] => String::new(),
         qs => format!(
-            "\n\n[Still waiting on the user, asked earlier: {}. Don't bury it: if what you find bears on it, say so; if it still stands, keep it in view.]",
+            "\n\n[Still waiting on the user, asked earlier: {}. A reversible choice your level covers isn't theirs: decide it now and say what you chose. One truly blocked on them stays in view: if what you find bears on it, say so.]",
             qs.iter().map(|q| format!("“{q}”")).collect::<Vec<_>>().join(", ")
         ),
     };
     format!(
-        "[Scheduled check-in you set: {}]{also}{waiting}\n\n[It's now {}.{late}{repeats} Do what the note says, then tell the user what you found in a few lines. If nothing changed since your last check-in and nothing needs them, reply with exactly {NOTHING_NEW} and nothing else: no post goes in their chat.]",
+        "[Scheduled check-in you set: {}]{also}{waiting}\n\n[It's now {}.{late}{repeats} Do what the note says. {SWEEP} Then tell the user in a few lines what you did and what's left. If nothing changed since your last check-in and nothing needs them, reply with exactly {NOTHING_NEW} and nothing else: no post goes in their chat.]",
         c.note,
         format_time(tz, now)
     )
@@ -1812,13 +1817,18 @@ mod tests {
         assert!(is_nothing_new("[nothing new]"));
         assert!(is_nothing_new(" [Nothing new]. "));
         assert!(is_nothing_new("Nothing new"));
-        assert!(!is_nothing_new("Nothing new in the inbox, but the invoice bounced."));
+        assert!(!is_nothing_new(
+            "Nothing new in the inbox, but the invoice bounced."
+        ));
 
         let said = |kind, text: &str| crate::agents::runner::new_message("a", kind, text);
         let log = vec![
             said(MessageKind::Agent, "Should I archive last month's leads?"),
             said(MessageKind::User, "Yes"),
-            said(MessageKind::Agent, "Done.\n\nWhich list should the new leads go to?"),
+            said(
+                MessageKind::Agent,
+                "Done.\n\nWhich list should the new leads go to?",
+            ),
             said(MessageKind::CheckIn, "Sweep the inbox"),
             said(MessageKind::Agent, "Nothing urgent."),
         ];
@@ -1840,9 +1850,36 @@ mod tests {
             retry: None,
         };
         let p = wake_prompt_with(&Eastern, &firing, due_at, &open_questions(&log));
-        assert!(p.contains("Still waiting on the user, asked earlier: “Which list should the new leads go to?”"));
+        assert!(p.contains(
+            "Still waiting on the user, asked earlier: “Which list should the new leads go to?”"
+        ));
         assert!(p.contains(NOTHING_NEW));
         assert!(!wake_prompt(&Eastern, &firing, due_at).contains("Still waiting"));
+        // A choice it asked about earlier is decided, not carried along.
+        assert!(p.contains("A reversible choice your level covers isn't theirs: decide it now"));
+    }
+
+    /// The "Agent sweep" check-in handed decisions back ("that's your call",
+    /// "pick one, my recommendation…"): every wake says to decide and act on
+    /// what's reversible, and to surface only what's blocked or on the floor.
+    #[test]
+    fn a_check_in_decides_what_is_reversible_and_surfaces_only_blocks() {
+        let due_at = at(2026, 11, 2, 9, 0);
+        let firing = Firing {
+            agent_id: "a".into(),
+            check_in: check_in("Agent sweep for the owner", due_at, weekdays_at_nine()),
+            late: false,
+            next: None,
+            also: vec![],
+            manual: false,
+            retry: None,
+        };
+        let p = wake_prompt(&Eastern, &firing, due_at);
+        assert!(p.contains(SWEEP));
+        assert!(p.contains("decide and do now"));
+        assert!(p.contains("no \"your call\", no \"pick one\""));
+        assert!(p.contains("Surface only what's truly blocked on them or on the floor"));
+        assert!(p.contains(NOTHING_NEW), "a quiet sweep still posts nothing");
     }
 
     #[test]
