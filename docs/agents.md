@@ -730,8 +730,8 @@ be confused with agent-to-agent `message_agent`:
     Playwright capture) against the project's running dev server, found
     through its preview proxy (`proxy::dev_server_port_for`) — so not even
     the page or width of a preview the user is looking at changes. With no
-    dev server running, the answer says the preview isn't running and the user
-    can open the project; starting one would mean opening the project.
+    dev server running, the answer sends the agent to `preview_start`, which
+    starts one in the background (see "Running a project from chat").
   - *Closing* a session is the tab's × done in the background, the same way.
   - `project_open` is the one tool that switches the window, because the user
     asked to see the project. "Open session" on a session line does too: the
@@ -777,6 +777,52 @@ be confused with agent-to-agent `message_agent`:
   previews only), with `actor` set to the agent's name. The Remote access
   modal's activity list leaves those out.
 - **Bound agents** are still an option; sessions are the default.
+
+### Running a project from chat (`src-tauri/src/agents/project_tools.rs`)
+
+The user never has to open Projects: what the workspace's buttons do, an
+agent does from chat, through the same Rust commands and the window's own
+dev-server owner.
+
+- `preview_start`: consent card if needed → install if `node_modules` is
+  missing → start in the background → wait until it answers → screenshot
+  (kept in the chat and the agent's folder, so the phone sees it) → NEXT:
+  `share_result` naming the project, whose card has Preview on the Mac and
+  Watch live on the phone.
+- **Consent** is the dev-server consent (`dev_consent.rs`): a card in the
+  agent's chat ("Run bakery's own commands?") listing the scripts and files,
+  as the Preview's prompt does. Allow approves exactly the fingerprint shown
+  (`approve_dev_server`); nothing installs or starts on Deny or no answer.
+  The card has no tool call behind it, so it can't be always-allowed, and no
+  independence level answers it.
+- **Installs** (`project_install`, or inside `preview_start`) run
+  `plan_package_install`'s command (scripts only once approved) on this Mac,
+  then `mark_install_scripts_ran`. The output's tail goes back to the agent
+  on failure; the prompt makes fixing a missing package the agent's job.
+- **The dev server is the window's**: `agents://dev-server` → 
+  `useAgentDevServerControl` → `lib/agentDevServer.ts`, which calls
+  `startServerForProject` / `stopServer` (the Agents pane's path), then
+  `start_preview_proxy` as the workspace preview would. That proxy is what
+  `proxy::dev_server_port_for` finds, so screenshots, the pane and Watch live
+  all see the server. The window answers on `agents_dev_server_done`
+  (status, port, type, the output's tail). The window never moves.
+- `preview_stop` (stop, or `restart`), `preview_logs` (status and the last
+  40 lines it printed), `git_commit` (`commit_changes`), `git_branch` (list,
+  switch with auto-stash, create), `pull_request` (a card saying it pushes and
+  who sees it, then `create_pull_request`; refused with uncommitted changes).
+- **Budget**: a call answers within 250 s (the engines cap a tool call at
+  300 s). An install or cold start still going says `STATUS: installing` /
+  `starting`; the install keeps running and the next call waits on it.
+- **Who**: a bound agent with a live copy of the project works on the copy
+  (its server, its packages) and is refused commit, branch and pull request
+  there. Settings (`policy::session_refusal`) treat install, commit, branch
+  and pull request as changes. A turn answering outside text can't use the
+  changing ones.
+- Not added: importing from GitHub, env vars, assets, snapshots/rewind,
+  workflows, the iOS simulator; agents reach most of those with their own
+  file and git tools.
+- Not verified: a real `preview_start` in the running app (window round trip,
+  install, proxy, screenshot); the parts are unit-tested.
 
 ### Where it's working (`src-tauri/src/agents/workplace.rs`)
 

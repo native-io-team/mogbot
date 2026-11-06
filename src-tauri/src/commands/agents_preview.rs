@@ -130,3 +130,15 @@ pub async fn agents_preview_test_stop(
 ) -> Result<bool, CommandError> {
     Ok(preview_test::stop(&app, &agent_id))
 }
+
+/// The window's answer to an agent's request about a dev server
+/// (`agents/project_tools.rs`, `agents://dev-server`). False when nobody is
+/// waiting any more (the call gave up).
+#[tauri::command]
+#[tracing::instrument(skip(report))]
+pub async fn agents_dev_server_done(
+    request_id: String,
+    report: agents::project_tools::Report,
+) -> Result<bool, CommandError> {
+    Ok(agents::project_tools::answer(&request_id, report))
+}

@@ -315,28 +315,39 @@ fn record_lines(
         line.session = Some(mark(project, event, Some(outcome)));
         let _ = runner::record(app, line);
     }
-    let mut kept = Vec::new();
-    let Ok(home) = store::agent_home(&caller.id) else {
-        return kept;
-    };
-    for (device, jpeg) in &seen.shots {
-        use base64::Engine;
-        let mut line = runner::new_message(&caller.id, MessageKind::Session, *device);
-        let saved = super::attachments::save(
-            &home,
-            &line.id,
-            vec![super::attachments::OutgoingAttachment {
-                name: format!("{}-{device}.jpg", shared::project_name(project)),
-                path: None,
-                data: Some(base64::engine::general_purpose::STANDARD.encode(jpeg)),
-            }],
-        );
-        let Ok(attachments) = saved else { continue };
-        kept.extend(attachments.iter().map(|a| a.path.clone()));
-        line.attachments = attachments;
-        line.session = Some(mark(project, SessionEvent::Screenshot, None));
-        let _ = runner::record(app, line);
-    }
+    seen.shots
+        .iter()
+        .filter_map(|(device, jpeg)| keep_screenshot(app, caller, project, device, jpeg))
+        .collect()
+}
+
+/// Put one screenshot in the agent's chat (a `session` line, so the phone
+/// sees it too) and keep it in its folder. Returns where it was kept,
+/// relative to the agent's home, for `share_result`.
+pub(super) fn keep_screenshot(
+    app: &AppHandle,
+    caller: &store::Agent,
+    project: &str,
+    device: &str,
+    jpeg: &[u8],
+) -> Option<String> {
+    use base64::Engine;
+    let home = store::agent_home(&caller.id).ok()?;
+    let mut line = runner::new_message(&caller.id, MessageKind::Session, device);
+    let attachments = super::attachments::save(
+        &home,
+        &line.id,
+        vec![super::attachments::OutgoingAttachment {
+            name: format!("{}-{device}.jpg", shared::project_name(project)),
+            path: None,
+            data: Some(base64::engine::general_purpose::STANDARD.encode(jpeg)),
+        }],
+    )
+    .ok()?;
+    let kept = attachments.first().map(|a| a.path.clone());
+    line.attachments = attachments;
+    line.session = Some(mark(project, SessionEvent::Screenshot, None));
+    let _ = runner::record(app, line);
     kept
 }
 

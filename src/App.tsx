@@ -85,7 +85,9 @@ import { useQuitGuard } from './hooks/useQuitGuard';
 import { useStayOn } from './hooks/useStayOn';
 import type { AppView } from './lib/types';
 import type { AgentPreviewServer } from './lib/agentPreview';
-import { getWindowLabel } from './lib/window';
+import { findAndReservePort, getWindowLabel } from './lib/window';
+import { useAgentDevServerControl } from './hooks/useAgentDevServerControl';
+import { startPreviewProxyFor } from './lib/agentDevServer';
 import './styles/index.css';
 
 // Boot-path guard: a throw at module scope would leave a black window (#173),
@@ -268,6 +270,7 @@ function AppContents({ initialProjectPath }: AppProps) {
     getProjectDevServerSnapshot,
     getProjectType,
     getProjectNeedsInstall,
+    getProjectOutput,
     saveCustomDevCommand,
     needsInstall,
     devServerUnexpectedExit,
@@ -1193,6 +1196,19 @@ function AppContents({ initialProjectPath }: AppProps) {
       serverLifecycleVersion,
     ]
   );
+
+  // Agents start, stop and read dev servers from chat (preview_start, …)
+  // through the same owner, in the background (lib/agentDevServer.ts).
+  useAgentDevServerControl({
+    status: getProjectDevServerSnapshot,
+    start: (path, name, port) => startServerForProject(path, name, port, getWindowLabel()),
+    stop: stopServer,
+    needsInstall: getProjectNeedsInstall,
+    projectType: getProjectType,
+    output: getProjectOutput,
+    reservePort: findAndReservePort,
+    startProxy: (path, port) => startPreviewProxyFor(getWindowLabel(), path, port),
+  });
 
   const quitConfirmModal = quitGuard.asking && (
     <QuitConfirmModal
