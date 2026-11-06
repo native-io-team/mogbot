@@ -1,7 +1,7 @@
 /**
- * Under a project's row in the sidebar: the agents at work in it right now,
- * each as one line ("Juno · Running the build"), the step in the same words
- * its chat's working line uses. Clicking one opens that agent's chat.
+ * Beside a collapsed project's row: who is working in it, as a small stack of
+ * key-cap avatars (three at most, then "+N"). Nothing else: the live step is
+ * a row among the project's sessions once it is expanded (`AgentWorkRow`).
  *
  * Only what the Mac reported: an agent shows here while its turn is working
  * in this folder (`TurnWork.project`), and not otherwise.
@@ -10,38 +10,32 @@
  */
 
 import type { AtWorkLine } from './useProjectAgents';
-import { TextButton } from '../primitives/TextButton';
+import { AgentAvatar } from '../agents/AgentAvatar';
 
-export function ProjectAtWork({
-  lines,
-  onOpenAgent,
-}: {
-  lines: AtWorkLine[];
-  onOpenAgent?: (agentId: string) => void;
-}) {
+export const AT_WORK_STACK_MAX = 3;
+
+export function ProjectAtWork({ lines }: { lines: AtWorkLine[] }) {
   if (lines.length === 0) return null;
+  const shown = lines.slice(0, AT_WORK_STACK_MAX);
+  const more = lines.length - shown.length;
   return (
-    <ul className="sidebar-project-at-work" aria-label="Agents at work here">
-      {lines.map((line) => (
-        <li key={line.agentId} className="sidebar-project-at-work__line">
-          <span
-            className={`sidebar-row-dot dot-${line.waiting ? 'waiting' : 'active'}`}
-            aria-hidden="true"
-          />
-          <TextButton
-            className="sidebar-project-at-work__link"
-            onClick={onOpenAgent ? () => onOpenAgent(line.agentId) : undefined}
-            disabled={!onOpenAgent}
-            title={`${line.name} · ${line.text}`}
-            aria-label={`${line.name}, ${line.text}. Open its chat`}
-          >
-            <span className="sidebar-project-at-work__words">
-              <span className="sidebar-project-at-work__name">{line.name}</span>
-              <span className="sidebar-project-at-work__text"> · {line.text}</span>
-            </span>
-          </TextButton>
-        </li>
+    <span
+      className="sidebar-project-at-work"
+      role="img"
+      aria-label={`At work here: ${lines.map((l) => l.name).join(', ')}`}
+    >
+      {shown.map((line) => (
+        <AgentAvatar
+          key={line.agentId}
+          id={line.agentId}
+          name={line.name}
+          color={line.color}
+          size="xs"
+          working={!line.waiting}
+          className="sidebar-project-at-work__avatar"
+        />
       ))}
-    </ul>
+      {more > 0 && <span className="sidebar-project-at-work__more">+{more}</span>}
+    </span>
   );
 }
