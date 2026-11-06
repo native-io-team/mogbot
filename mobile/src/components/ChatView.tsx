@@ -26,6 +26,7 @@ import {
   Platform,
   Pressable,
   StyleSheet,
+  useWindowDimensions,
   View,
   type ScrollViewProps,
   type FlatListProps,
@@ -911,11 +912,18 @@ function Glow() {
  * a card), never a third time up here in words; the avatar only shows it, by
  * how it looks around (`agentMood`).
  */
+/**
+ * What the header's buttons take: back on the left, the usage ring and ⓘ on
+ * the right, and the bar's insets. The title stops short of them.
+ */
+const HEADER_RESERVED = 200;
+
 function Header({ agent }: { agent: Agent }) {
   const colors = useColors();
   const styles = useStyles();
+  const { width } = useWindowDimensions();
   return (
-    <View style={styles.header}>
+    <View style={[styles.header, { maxWidth: Math.min(260, width - HEADER_RESERVED) }]}>
       <AgentAvatar
         id={agent.id}
         name={agent.name}

@@ -133,7 +133,7 @@ export function MeterRow({ meter, title }: { meter: UsageMeter; title?: string }
 }
 
 const useStyles = makeStyles((colors) => ({
-  ring: { alignItems: 'center', justifyContent: 'center', padding: space.xs },
+  ring: { alignItems: 'center', justifyContent: 'center', padding: space['3xs'] },
   track: {
     height: space.tight,
     borderRadius: radius.pill,
