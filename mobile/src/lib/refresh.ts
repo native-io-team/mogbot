@@ -20,6 +20,12 @@
  * Keep the `RefreshControl` mounted for the screen's life (pass `onRefresh`
  * even while offline: it just lets go).
  *
+ * - **It says how it went.** `outcome` is `done` for [`REFRESH_DONE_MS`]
+ *   after a refresh that worked, then `idle` again; `failed` after one that
+ *   threw or never answered, until it's dismissed or tried again.
+ *   `components/RefreshStatus` turns that into the line under the spinner.
+ *   So `run` must reject when it didn't reach the Mac (offline included).
+ *
  * @module lib/refresh
  */
 
@@ -28,13 +34,20 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 /** No refresh holds the spinner longer than this. */
 export const REFRESH_TIMEOUT_MS = 15_000;
 
+/** How long "Up to date" stays before it folds away. */
+export const REFRESH_DONE_MS = 1_500;
+
+export type RefreshOutcome = 'idle' | 'done' | 'failed';
+
 /**
  * `run` is the refresh; it may reject (the screen reports its own error).
  * Returns the two props a `RefreshControl` needs.
  */
 export function useRefresh(run: () => Promise<unknown> | void) {
   const [refreshing, setRefreshing] = useState(false);
+  const [outcome, setOutcome] = useState<RefreshOutcome>('idle');
   const inFlight = useRef<Promise<void> | null>(null);
+  const settle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const mounted = useRef(true);
   const latest = useRef(run);
   useEffect(() => {
@@ -44,27 +57,45 @@ export function useRefresh(run: () => Promise<unknown> | void) {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      clearTimeout(settle.current);
     };
   }, []);
 
   const onRefresh = useCallback(() => {
     if (inFlight.current) return inFlight.current;
+    clearTimeout(settle.current);
+    setOutcome('idle');
     setRefreshing(true);
     let timer: ReturnType<typeof setTimeout> | undefined;
     const work = Promise.resolve()
       .then(() => latest.current())
-      .catch(() => {});
-    const timeout = new Promise<void>((resolve) => {
-      timer = setTimeout(resolve, REFRESH_TIMEOUT_MS);
+      .then(
+        () => 'done' as const,
+        () => 'failed' as const
+      );
+    const timeout = new Promise<'failed'>((resolve) => {
+      timer = setTimeout(() => resolve('failed'), REFRESH_TIMEOUT_MS);
     });
-    const done = Promise.race([work, timeout]).then(() => {
+    const done = Promise.race([work, timeout]).then((result) => {
       clearTimeout(timer);
       inFlight.current = null;
-      if (mounted.current) setRefreshing(false);
+      if (!mounted.current) return;
+      setRefreshing(false);
+      setOutcome(result);
+      if (result === 'done') {
+        settle.current = setTimeout(() => {
+          if (mounted.current) setOutcome('idle');
+        }, REFRESH_DONE_MS);
+      }
     });
     inFlight.current = done;
     return done;
   }, []);
 
-  return { refreshing, onRefresh };
+  const dismiss = useCallback(() => {
+    clearTimeout(settle.current);
+    setOutcome('idle');
+  }, []);
+
+  return { refreshing, onRefresh, outcome, dismiss };
 }

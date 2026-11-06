@@ -18,6 +18,7 @@ import { formatAgo } from '../../lib/agents';
 import { extensionOf, formatSize, isPreviewableImage, share } from '../../lib/files';
 import { attachmentSource, describeError, download, listFiles } from '../../lib/session';
 import { useRefresh } from '../../lib/refresh';
+import { RefreshStatus } from '../../components/RefreshStatus';
 import { useApp } from '../../lib/store';
 import { withAgentAccent } from '../../lib/accentScreen';
 import { iconSize, radius, space, type } from '../../lib/theme';
@@ -53,7 +54,21 @@ function Files() {
       )
       .finally(() => setLoading(false));
   }, [id]);
-  const { refreshing, onRefresh } = useRefresh(load);
+  const { refreshing, onRefresh, outcome, dismiss } = useRefresh(() => {
+    setLoading(true);
+    return listFiles(id)
+      .then(
+        (f) => {
+          setFiles(f);
+          setError(null);
+        },
+        (e: unknown) => {
+          setError(describeError(e));
+          throw e;
+        }
+      )
+      .finally(() => setLoading(false));
+  });
   // Asked once the link is up, and again each time it comes back: a cold or
   // deep-linked open lands here before the socket is.
   useEffect(() => {
@@ -109,6 +124,7 @@ function Files() {
       }
       ListHeaderComponent={
         <View style={styles.head}>
+          <RefreshStatus outcome={outcome} onRetry={onRefresh} onDismiss={dismiss} />
           <Segmented<Filter>
             value={filter}
             onChange={setFilter}

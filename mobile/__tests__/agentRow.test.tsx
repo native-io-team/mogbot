@@ -73,6 +73,8 @@ jest.mock('react-native-reanimated', () => {
     LinearTransition: preset,
     interpolate: () => 0,
     useAnimatedStyle: () => ({}),
+    useSharedValue: (v: number) => ({ value: v }),
+    withTiming: (v: number) => v,
   };
 });
 jest.mock('react-native-safe-area-context', () => ({

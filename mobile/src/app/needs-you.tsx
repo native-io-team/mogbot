@@ -8,15 +8,18 @@
 import type { Agent } from '@shipstudio/companion-protocol';
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { AgentAvatar } from '../components/agent';
+import { RefreshStatus } from '../components/RefreshStatus';
 import { SheetTitle } from '../components/SheetTitle';
 import { Icon, SheetPage, T, useRipple } from '../components/ui';
 import { failedTurn, failureLine, needsLine, pendingApproval } from '../lib/agents';
 import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
 import { barWords, buildHome } from '../lib/home';
-import { useApp } from '../lib/store';
+import { useRefresh } from '../lib/refresh';
+import { call } from '../lib/session';
+import { setApp, useApp } from '../lib/store';
 import { progress } from '../lib/teamSetup';
 import { avatarSize, iconSize, PRESSED, space } from '../lib/theme';
 
@@ -39,6 +42,10 @@ export default function NeedsYou() {
     ...waiting.filter((a) => a !== chief),
   ];
   const setupOpen = !!home?.bar && (home.bar.kind === 'setup' || home.bar.setup);
+  const { refreshing, onRefresh, outcome, dismiss } = useRefresh(async () => {
+    if (useApp.getState().link.kind !== 'connected') throw new Error('offline');
+    setApp({ overview: await call('agents.overview', {}) });
+  });
 
   const open = (agent: Agent) => {
     haptic.select();
@@ -52,7 +59,17 @@ export default function NeedsYou() {
 
   return (
     <SheetPage>
-      <ScrollView contentContainerStyle={styles.page}>
+      <ScrollView
+        contentContainerStyle={styles.page}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.textSecondary}
+          />
+        }
+      >
+        <RefreshStatus outcome={outcome} onRetry={onRefresh} onDismiss={dismiss} />
         <SheetTitle>Needs your OK</SheetTitle>
         {setupOpen && chief && (
           <Row

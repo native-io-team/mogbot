@@ -49,6 +49,7 @@ import {
 } from '../../../lib/session';
 import { setApp, useApp } from '../../../lib/store';
 import { useRefresh } from '../../../lib/refresh';
+import { RefreshStatus } from '../../../components/RefreshStatus';
 import { largeTitle } from '../../../lib/navigation';
 import { chromeScale, iconSize, PRESSED, radius, space } from '../../../lib/theme';
 import { makeStyles, useColors } from '../../../lib/appearance';
@@ -237,13 +238,14 @@ export default function Agents() {
 
   // Offline, a pull just lets go: the control stays mounted either way, since
   // unmounting one mid-refresh leaves the list held down (lib/refresh).
-  const { refreshing, onRefresh } = useRefresh(async () => {
-    if (useApp.getState().link.kind !== 'connected') return;
+  const { refreshing, onRefresh, outcome, dismiss } = useRefresh(async () => {
+    if (useApp.getState().link.kind !== 'connected') throw new Error('offline');
     try {
       setApp({ overview: await call('agents.overview', {}) });
       if (roomsOffered(useApp.getState().welcome)) await refreshRooms();
     } catch (e) {
       setError(describeError(e));
+      throw e;
     }
   });
 
@@ -316,6 +318,7 @@ export default function Agents() {
       }
       ListHeaderComponent={
         <>
+          <RefreshStatus outcome={outcome} onRetry={onRefresh} onDismiss={dismiss} />
           <ConnectionNotice />
           <Refused />
           {!removed && <QuotaLines lines={quota} style={styles.quota} />}
