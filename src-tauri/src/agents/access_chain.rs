@@ -11,13 +11,17 @@
 //! 3. **This Mac is signed in already**: GitHub through `gh`. The agent works
 //!    through `gh`, whose commands still ask through the approval broker.
 //! 4. **A browser**: for a site, the agents' own browser first
-//!    (`agent_browser`, either engine), unless the site was last found
-//!    signed in only in the user's personal Chrome and this turn has Claude
-//!    in Chrome (`browser::for_turn`); then that. Never for outside text.
-//!    The site is given to the agent and it's told to open it and say which
-//!    account it's in. Only when the page shows a sign-in does it come back
-//!    with `signed_out`, and the card it then gets offers "Sign in from
-//!    here" first.
+//!    (`agent_browser`, either engine), unless this turn has Claude in
+//!    Chrome (`browser::for_turn`) and the site is Google's or Slack's
+//!    ([`users_chrome_first`]: Google refuses a sign-in in a driven
+//!    browser) or was last found signed in only in the user's personal
+//!    Chrome; then that. A sign-in page in the agents' browser
+//!    (`signed_out`) moves the agent to the user's Chrome at once. Never for
+//!    outside text. The site is given to the agent and it's told to open it
+//!    and say which account it's in. Only when no browser is left
+//!    (`signed_out` in the user's Chrome, `browser: "chrome"`, or with no
+//!    Chrome) does it get a card, which offers "Sign in from here" first.
+//!    A plain Deny on an import's quiet card doesn't stop the user's Chrome.
 //! 5. **Someone already asked** for it and the card is waiting: this agent is
 //!    added to that card instead of raising its own ([`Waiters`]), and woken
 //!    with the same answer when the user gives it. One ask per service,
@@ -49,8 +53,11 @@ use crate::errors::CommandError;
 /// What the agent asked, plus what it tried.
 #[derive(Debug, Clone, Default)]
 pub struct Tried {
-    /// It opened the site in the user's browser and got a sign-in page.
+    /// It opened the site in a browser and got a sign-in page.
     pub signed_out: bool,
+    /// That browser was the user's own Chrome (`browser: "chrome"`), not
+    /// the agents' browser.
+    pub in_chrome: bool,
 }
 
 impl Tried {
@@ -60,8 +67,29 @@ impl Tried {
                 .get("signed_out")
                 .and_then(serde_json::Value::as_bool)
                 .unwrap_or(false),
+            in_chrome: args
+                .get("browser")
+                .and_then(serde_json::Value::as_str)
+                .is_some_and(|b| {
+                    let b = b.to_ascii_lowercase();
+                    b.contains("chrome") || b.contains("user")
+                }),
         }
     }
+}
+
+/// Sites the user is signed in to in their own Chrome and the agents'
+/// browser can't sign in to: Google refuses a sign-in in a driven browser
+/// ("This browser or app may not be secure"), and Slack's workspace sign-in
+/// goes by email links to the user's inbox. With Claude in Chrome these go
+/// straight to the user's Chrome. Observed: Gmail opened in the agents'
+/// browser landed on Google's signed-out product page every time, and the
+/// agent was then told to carry on without Gmail.
+pub fn users_chrome_first(service: &str) -> bool {
+    matches!(service, "gmail" | "google_calendar" | "google_drive" | "slack")
+        || logins::service(service)
+            .and_then(|s| s.site)
+            .is_some_and(|site| site == "google.com" || site.ends_with(".google.com"))
 }
 
 /// What the chain found, before anything is changed. Pure: [`decide`].
@@ -234,6 +262,17 @@ pub fn decide(agent: &Agent, r: &LoginRequest, tried: &Tried, here: &Here, team:
         .filter(|s| turned_on.is_none_or(|on| s.at > on))
         .last()
     {
+        // A plain no on a card an import raised (a setup ask, for an agent
+        // nobody was working with yet) said "don't connect it", not "never
+        // use it": the user's own Chrome, where they're already signed in,
+        // connects nothing and asks before every send. Observed: one such
+        // Deny for another agent left the Chief "carrying on without Gmail"
+        // while Gmail sat open and signed in in the user's Chrome.
+        if no.login.quiet && no.said.is_none() {
+            if let Some(step @ Step::Browser { .. }) = browser_step(r, tried, here) {
+                return step;
+            }
+        }
         return Step::AlreadyDeclined {
             title: r.title.clone(),
             said: no.said.clone().unwrap_or_else(|| "No".into()),
@@ -259,25 +298,13 @@ pub fn decide(agent: &Agent, r: &LoginRequest, tried: &Tried, here: &Here, team:
             return Step::Gh(login.clone());
         }
     }
-    // 4. A browser, unless it showed a sign-in page (never for outside
-    // text: such a turn has no browser). The agents' own first; the user's
-    // personal Chrome when the site is known to be signed in only there.
-    if !here.outside && !tried.signed_out {
-        if let Some(site) = logins::service(&r.service).and_then(|s| s.site) {
-            let personal = here.browser && here.personal_site;
-            if here.agents_browser && !personal {
-                return Step::AgentsBrowser {
-                    site: site.to_string(),
-                    title: r.title.clone(),
-                };
-            }
-            if here.browser {
-                return Step::Browser {
-                    site: site.to_string(),
-                    title: r.title.clone(),
-                };
-            }
-        }
+    // 4. A browser (never for outside text: such a turn has no browser).
+    // The agents' own first; the user's own Chrome for a site signed in
+    // only there (known, or Google's and Slack's, [`users_chrome_first`]),
+    // and at once when the agents' browser showed a sign-in page. A sign-in
+    // page in the user's Chrome (or with no Chrome to try) is a card.
+    if let Some(step) = browser_step(r, tried, here) {
+        return step;
     }
     // 5. Someone's card for it is waiting: join it. Outside text doesn't
     // join (the answer would grant it unseen); it raises its own card.
@@ -305,6 +332,28 @@ pub fn decide(agent: &Agent, r: &LoginRequest, tried: &Tried, here: &Here, team:
     Step::Ask
 }
 
+/// Step 4 of [`decide`]: which browser, if any.
+fn browser_step(r: &LoginRequest, tried: &Tried, here: &Here) -> Option<Step> {
+    if here.outside {
+        return None;
+    }
+    let site = logins::service(&r.service).and_then(|s| s.site)?;
+    let (site, title) = (site.to_string(), r.title.clone());
+    // Signed out in the user's Chrome, or with no agents' browser it could
+    // have been anywhere else.
+    let chrome_failed = tried.signed_out && (tried.in_chrome || !here.agents_browser);
+    if here.browser && !chrome_failed {
+        let chrome_first = here.personal_site || users_chrome_first(&r.service);
+        if chrome_first || !here.agents_browser || tried.signed_out {
+            return Some(Step::Browser { site, title });
+        }
+    }
+    if here.agents_browser && !tried.signed_out {
+        return Some(Step::AgentsBrowser { site, title });
+    }
+    None
+}
+
 /// What the agent is told for each step.
 pub fn reply(step: &Step) -> String {
     match step {
@@ -316,10 +365,10 @@ pub fn reply(step: &Step) -> String {
             "GitHub is signed in on this Mac as {login}: use the `gh` command. Anything that changes GitHub asks the user on a card first. Nothing to ask."
         ),
         Step::Browser { site, title } => format!(
-            "Use {title} in the user's own Chrome, where they're already signed in: the Claude in Chrome tools (mcp__claude-in-chrome__*), on {site}. First open it in a new tab and tell the user in one line which account you're in, from what the page shows (\"I'm in {title} as …\"); never guess one. Reading there needs no card. Before any send, post, publish, payment, delete or share, say in chat exactly what will go and from which account; the click or keystroke that does it asks the user on a card, which shows it too. Never type a password. If the page asks you to sign in, call request_login again for it with signed_out: true."
+            "Use {title} in the user's own Chrome, where they're already signed in: the Claude in Chrome tools (mcp__claude-in-chrome__*), on {site}. First open it in a new tab and tell the user in one line which account you're in, from what the page shows (\"I'm in {title} as …\"); never guess one. Reading there needs no card. Before any send, post, publish, payment, delete or share, say in chat exactly what will go and from which account; the click or keystroke that does it asks the user on a card, which shows it too. Never type a password. If the page asks you to sign in, call request_login again for it with signed_out: true and browser: \"chrome\"."
         ),
         Step::AgentsBrowser { site, title } => format!(
-            "Use {title} in the agents' browser (the mcp__browser__* tools), a Chrome of the team's own on this Mac: open {site} and tell the user in one line which account you're in, from what the page shows (\"I'm in {title} as …\"); never guess one. Reading there needs no card. Before any send, post, publish, payment, delete or share, say in chat exactly what will go and from which account; the click or keystroke that does it asks the user on a card. Never type a password. If the page asks you to sign in, call request_login again for it with signed_out: true: the user signs in from their phone."
+            "Use {title} in the agents' browser (the mcp__browser__* tools), a Chrome of the team's own on this Mac: open {site} and tell the user in one line which account you're in, from what the page shows (\"I'm in {title} as …\"); never guess one. Reading there needs no card. Before any send, post, publish, payment, delete or share, say in chat exactly what will go and from which account; the click or keystroke that does it asks the user on a card. Never type a password. If the page asks you to sign in (or shows a signed-out product page), call request_login again for it with signed_out: true: that moves you to the user's own Chrome when you have it, else the user signs in from their phone."
         ),
         Step::Join { agent_name, title, .. } => format!(
             "The user is already being asked about {title} (for {agent_name}). You're on that same card: you'll be woken when they answer. Don't ask again; stop here or carry on with what doesn't need it."

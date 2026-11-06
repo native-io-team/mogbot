@@ -1763,7 +1763,8 @@ signed-in browser and say which account it's in, and ask only if both fail.
 4. **The user's browser**, when this turn has it (below) and the service has
    a site: the site is added to the agent's `browser_sites` and it's told to
    open it in a new tab and say "I'm in Figma as …" from what the page shows,
-   never a guess. A sign-in page sends it back with `signed_out: true`.
+   never a guess. A sign-in page sends it back with `signed_out: true`
+   (and `browser`): one in the agents' browser moves it to the user's Chrome.
 5. **Someone's card for it is waiting**: the agent joins that card
    (`login-waiters.json`; the card shows "Also for …") and gets the same
    answer, never more access than the card allowed.
@@ -2084,10 +2085,19 @@ their own, and the person signs in to it from the phone.
   the browser gate said asks (this also closed that gap for Claude in
   Chrome's send clicks).
 - **Which browser** (`access_chain`): the agents' browser first; the user's
-  own Chrome (Claude in Chrome) only when the site was last found signed in
-  only there (`browser_profiles`, site → profile; a site signed in in the
-  agents' browser is remembered as `Agents`). Never silently switched
-  because one was blocked.
+  own Chrome (Claude in Chrome) for Gmail, Google Calendar, Drive and Slack
+  (`users_chrome_first`: Google refuses a sign-in in a driven browser, and
+  signed out, mail.google.com lands on Google's product page), when the site
+  was last found signed in only there (`browser_profiles`, site → profile; a
+  site signed in in the agents' browser is remembered as `Agents`), and at
+  once when the agents' browser showed a sign-in or signed-out page
+  (`request_login` with `signed_out`). The agent says which account it's in,
+  so the switch is never silent. A card only when Chrome is signed out too
+  (`browser: "chrome"`) or the turn has no Chrome. A plain Deny on an
+  import's quiet card doesn't stop the user's Chrome (it connects nothing);
+  a Deny on a task's card, or one with the user's words, still does.
+  Observed: an import's denied Gmail card told the Chief to "carry on
+  without Gmail" while Gmail was open and signed in in the user's Chrome.
 
 **Signing in from the phone** (`agents/phone_signin.rs`, `Via::AgentsBrowser`):
 

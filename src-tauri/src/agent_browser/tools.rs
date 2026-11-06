@@ -119,7 +119,7 @@ pub const TOOLS: &[ToolDef] = &[
     },
 ];
 
-const INSTRUCTIONS: &str = "The agents' browser: a real Google Chrome on this Mac with a profile of the team's own (\"Agents\"), separate from the user's personal Chrome. Sites the user signed in to there stay signed in. Use it first for any website; the user's own Chrome (Claude in Chrome) is only for a site signed in only there, or when they ask. Read with read_page or find (refs) before you click or type; reading is free. Before anything that sends, posts, publishes, pays, deletes or shares, say exactly what will go and from which account: that click or key asks the user on a card. Never type a password or a code. If a page asks you to sign in, stop and call request_login for that service with signed_out: true: the user signs in from their phone (or here), and you're woken when they're in. If a site says it won't work with this browser, say so in a line; don't try to get around it. For web search use your own search tool, not a search site.";
+const INSTRUCTIONS: &str = "The agents' browser: a real Google Chrome on this Mac with a profile of the team's own (\"Agents\"), separate from the user's personal Chrome. Sites the user signed in to there stay signed in. Use it first for any website except Gmail, Google and Slack, which go to the user's own Chrome (Claude in Chrome), where they're signed in; that Chrome also for a site signed in only there, or when they ask. Read with read_page or find (refs) before you click or type; reading is free. Before anything that sends, posts, publishes, pays, deletes or shares, say exactly what will go and from which account: that click or key asks the user on a card. Never type a password or a code. If a page asks you to sign in (or shows a signed-out product page), stop and call request_login for that service with signed_out: true: it moves you to the user's Chrome when you have it, else the user signs in from their phone (or here). If a site says it won't work with this browser, say so in a line; don't try to get around it. For web search use your own search tool, not a search site.";
 
 /* ---------------------------------------------------- one-time passes */
 
@@ -265,7 +265,7 @@ fn where_line(svc: &Service, tab: &Tab) -> String {
             line.push_str(" To sign in, call request_login for it with signed_out: true.");
         }
     } else if crate::agents::browser::signed_in("", &landed) == Some(false) {
-        line.push_str("\n\nThis is a sign-in page. Don't type anything into it: call request_login for this service with signed_out: true, and the user signs in from their phone or here.");
+        line.push_str("\n\nSigned out here (a sign-in or signed-out page). Don't type anything into it: if you have the Claude in Chrome tools (mcp__claude-in-chrome__*), open it there now, where the user is signed in, without asking; else call request_login for this service with signed_out: true, and the user signs in from their phone or here.");
     }
     line
 }

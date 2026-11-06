@@ -69,7 +69,10 @@ fn the_chain_runs_in_order_and_asks_last() {
             Step::Browser { ref site, .. } if site == "www.figma.com"
         ));
         // ...unless it showed a sign-in page.
-        let out = Tried { signed_out: true };
+        let out = Tried {
+            signed_out: true,
+            ..Default::default()
+        };
         assert_eq!(decide(&designer, &r, &out, &browser(), &[]), Step::Ask);
         // Granted already beats the browser.
         connections::add_and_grant(
@@ -371,9 +374,25 @@ fn the_agents_browser_comes_before_the_users_own_chrome() {
             decide(&social, &r, &none, &personal, &[]),
             Step::Browser { .. }
         ));
-        // A sign-in page: a card (whose first way in is "Sign in from here").
-        let out = Tried { signed_out: true };
-        assert_eq!(decide(&social, &r, &out, &both, &[]), Step::Ask);
+        // A sign-in page in the agents' browser: the user's own Chrome at
+        // once, no card.
+        let out = Tried {
+            signed_out: true,
+            ..Default::default()
+        };
+        assert!(matches!(
+            decide(&social, &r, &out, &both, &[]),
+            Step::Browser { .. }
+        ));
+        // Signed out in their Chrome too: a card (whose first way in is
+        // "Sign in from here").
+        let out_everywhere = Tried {
+            signed_out: true,
+            in_chrome: true,
+        };
+        assert_eq!(decide(&social, &r, &out_everywhere, &both, &[]), Step::Ask);
+        // Signed out with only the agents' browser to try: a card.
+        assert_eq!(decide(&social, &r, &out, &agents_only, &[]), Step::Ask);
         assert_eq!(r.options[0].method, logins::Method::AgentBrowser);
         // Never for outside text.
         let outside = Here {
@@ -427,4 +446,99 @@ fn the_users_own_request_for_a_declined_app_lifts_the_no() {
             "You asked for Slack in this request, so the earlier no is set aside for it"
         );
     });
+}
+
+/// Gmail opened in the agents' browser lands on Google's signed-out product
+/// page (Google refuses a sign-in in a driven browser), and the agent was then
+/// told to carry on without Gmail. Google's and Slack's sites go to the user's
+/// own Chrome first, and a Deny on an import's quiet setup card doesn't stop
+/// that.
+#[test]
+fn gmail_goes_straight_to_the_users_chrome() {
+    with_root(|| {
+        let chief = agent("Chief");
+        let recruiter = agent("Recruiter");
+        let r = logins::build(&chief, &ask("gmail")).unwrap();
+        let none = Tried::default();
+        let both = Here {
+            browser: true,
+            agents_browser: true,
+            ..Default::default()
+        };
+        for service in ["gmail", "google_calendar", "google_drive", "slack"] {
+            assert!(users_chrome_first(service), "{service}");
+            let r = logins::build(&chief, &ask(service)).unwrap();
+            assert!(
+                matches!(decide(&chief, &r, &none, &both, &[]), Step::Browser { .. }),
+                "{service}"
+            );
+        }
+        assert!(!users_chrome_first("linkedin") && !users_chrome_first("figma"));
+        // No Claude in Chrome this turn (Codex): the agents' browser.
+        let agents_only = Here {
+            agents_browser: true,
+            ..Default::default()
+        };
+        assert!(matches!(
+            decide(&chief, &r, &none, &agents_only, &[]),
+            Step::AgentsBrowser { .. }
+        ));
+        // The agents' browser showed it signed out: the user's Chrome.
+        let out = Tried {
+            signed_out: true,
+            ..Default::default()
+        };
+        assert!(matches!(
+            decide(&chief, &r, &out, &both, &[]),
+            Step::Browser { ref site, .. } if site == "mail.google.com"
+        ));
+        // An import's quiet card for another agent, denied with no words:
+        // still the user's Chrome, where they're signed in already.
+        let mut quiet = seen(&recruiter, "gmail", ApprovalStatus::Denied, None);
+        quiet.login.quiet = true;
+        assert!(matches!(
+            decide(&chief, &r, &out, &both, std::slice::from_ref(&quiet)),
+            Step::Browser { .. }
+        ));
+        // ...but never a new card: with no Chrome, the no stands.
+        assert!(matches!(
+            decide(&chief, &r, &out, &agents_only, std::slice::from_ref(&quiet)),
+            Step::AlreadyDeclined { .. }
+        ));
+        // A no the user gave on a task's card, or in words, still stands.
+        let plain = seen(&recruiter, "gmail", ApprovalStatus::Denied, None);
+        assert!(matches!(
+            decide(&chief, &r, &none, &both, &[plain]),
+            Step::AlreadyDeclined { .. }
+        ));
+        let mut worded = seen(&recruiter, "gmail", ApprovalStatus::Denied, Some("Not my inbox"));
+        worded.login.quiet = true;
+        assert!(matches!(
+            decide(&chief, &r, &none, &both, &[worded]),
+            Step::AlreadyDeclined { .. }
+        ));
+        // Never for outside text.
+        let outside = Here {
+            outside: true,
+            ..both.clone()
+        };
+        assert_eq!(decide(&chief, &r, &none, &outside, &[]), Step::Ask);
+        // The Chrome reply says how to report a sign-in there.
+        let told = reply(&Step::Browser {
+            site: "mail.google.com".into(),
+            title: "Gmail".into(),
+        });
+        assert!(told.contains("Reading there needs no card"));
+        assert!(told.contains("browser: \"chrome\""));
+    });
+}
+
+#[test]
+fn which_browser_showed_the_sign_in_is_read_from_the_call() {
+    let t = Tried::from_args(&serde_json::json!({"signed_out": true, "browser": "chrome"}));
+    assert!(t.signed_out && t.in_chrome);
+    let t = Tried::from_args(&serde_json::json!({"signed_out": true, "browser": "agents"}));
+    assert!(t.signed_out && !t.in_chrome);
+    let t = Tried::from_args(&serde_json::json!({"signed_out": true}));
+    assert!(!t.in_chrome);
 }
