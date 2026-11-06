@@ -8,14 +8,14 @@ little personality — not cheesy", like Grok Bot's pick-a-shape-and-a-face avat
 - **Desk:** `src/components/agents/AgentAvatar.tsx` + `src/styles/features/agents-avatar.css`. This is
   the design system's second marked dynamic-SVG exception (`data-dynamic-svg="agent-avatar"`,
   `scripts/icons.mjs`).
-- **Phone:** `AgentAvatar` / `WorkingRing` in `mobile/src/components/agent.tsx`, drawn with
+- **Phone:** `AgentAvatar` in `mobile/src/components/agent.tsx`, drawn with
   react-native-svg 15.16 (a new native dependency, so the phone app needs a new build; the
   fingerprint runtime keeps an OTA update off older binaries).
 - **Stored:** `avatar: { shape, face }` on the agent (additive, optional). Without one, both clients
   and the Mac (`AgentLook::default_for`) derive the same look from the id with FNV-1a. A test table in
   `avatar.test.ts` and `avatar_tests.rs` keeps the TS and Rust results identical. The Chief defaults
-  to a calm squircle, and no other agent gets the squircle by default. Defaults never include a wink
-  or the sleepy face: three winks in a sidebar read as a gag.
+  to a calm squircle, and no other agent gets the squircle by default. Defaults never include the wink
+  or the sleepy face: they are a personality someone picks.
 
 ## Why the last attempt looked horrible
 
@@ -42,19 +42,28 @@ leans away from its point) and scales it for the room it has (a pill is narrow).
 
 **Faces (10):** calm, cheerful, curious, focused, sleepy, wink, determined, quiet, content and bright.
 
-- Every face is two eyes and at most one short mouth, drawn as round-capped strokes in a single ink.
-- A dot eye is a zero-length stroke, so it is exactly as wide as the eye weight.
-- Eyes are 7 units apart, and the mouth sits 5 units below them.
-- The face takes up about a third of the width and sits just below the centre.
+- Every face is two **open** eyes and at most one short mouth. No lids, no closed-eye arcs, no blink:
+  the owner found closed eyes horrible, so "cheerful" smiles with open eyes, "sleepy" is a low,
+  downward gaze and "wink" is a sideways glance with a lopsided smile (the keys are stored, so they
+  stay; only the drawings changed).
+- **One line.** Every feature, eye or mouth, is a round-capped, round-joined stroke at the same
+  weight. A dot eye is a 1-unit vertical stroke (a soft oval a touch taller than wide), a tall eye a
+  2.4-unit one, a mouth a line or a shallow curve. Eye size, mouth weight and spacing are therefore
+  the same proportions on every face.
+- **One grid.** Eyes 8.5 units apart on y = 15, the mouth on y = 19.75: features sit a little low,
+  which reads friendlier, and the face's own centre lands on the shape's optical centre. Glances
+  (curious, wink) move both eyes 0.9 units; nothing else is per-face.
+- **Optical centring per shape**, not the bounding box: an arch's weight is low (face 1 unit down),
+  a drop leans away from its tight corner, a hexagon and cookie have less flat room, a pill is
+  narrow. The face group is moved and scaled per shape, and the stroke width is divided by that scale
+  (`faceStrokeWidth`), so a pill's face has exactly the circle's line. A test keeps every feature
+  inside the shape with room to spare.
 
-**Weights:** the weights step with size (`faceWeights`):
-
-| Avatar size | Eye weight | Line weight |
-| --- | --- | --- |
-| 16–20px | 3.4 | 2.3 |
-| 24–32px | 3.1 | 2.0 |
-| 40–56px | 2.8 | 1.75 |
-| 96px | 2.4 | 1.45 |
+**Weight:** one weight, `faceWeight(px)`: 2.1 grid units (6.6% of the avatar) at every size,
+so 24px and 96px are the same drawing, with a floor of 1.6 device pixels that takes over below about
+24px, where a proportional line would go faint. The shape's edge is a 1px hairline at every size on
+both clients (`vector-effect: non-scaling-stroke` on desk, `32 / size` on the phone): it's a
+silhouette aid, not part of the drawing.
 
 **Colour (tonal):**
 
@@ -67,15 +76,11 @@ leans away from its point) and scales it for the room it has (a pill is narrow).
 
 **Motion:**
 
-- **Working:**
-  - Desk: a blink every 4.8s. Each agent blinks in its own quarter of the cycle, so a busy sidebar
-    never blinks in unison.
-  - Phone: a JS timer drives the same blink.
-  - No ring, border or breathing around it, on desk or phone. The owner ruled the pulsing border
-    out; the blink and the row's live step text are the whole working cue.
+- **Working:** nothing moves. No blink (removed: a closed eye, even for a frame, was the thing the
+  owner disliked), and no ring, border or breathing around it (ruled out earlier). The row's live
+  step text and clock say it's working.
 - **Turn ends:** one bob of 8% of the avatar's size, lasting 500ms.
-- **At rest:** nothing moves.
-- **Reduce Motion:** nothing moves.
+- **At rest / Reduce Motion:** nothing moves.
 
 **Sizes on desk:**
 
@@ -115,8 +120,9 @@ ones live in `src/harness/avatarDirections.css` and never ship.
 
 ### A · Tonal (chosen)
 
-These were captured before the working ring was removed: where a working agent shows a ring
-(sidebar, colours, phone list), it no longer has one.
+These were captured before the working ring was removed and before the face redraw (open eyes, one
+stroke weight); the redraw's before/after contact sheet is made from `harness-avatars.html?section=sheet`
+and `pnpm qa:web --only agent`.
 
 | | Dark | Light |
 | --- | --- | --- |
@@ -169,5 +175,5 @@ Line art: the silhouette and face in the agent's colour, over an 8% wash.
 `agent-sheet-look`), plus the test suites listed in the commit.
 
 **Not checked:** a real WKWebView build, an iOS or Android device (react-native-svg is new and needs a
-native build), and blink and bob timing by eye. The harness freezes motion, and qa:web is
+native build), and bob timing by eye. The harness freezes motion, and qa:web is
 react-native-web.

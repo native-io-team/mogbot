@@ -9,8 +9,9 @@ import {
   SHAPE_SPECS,
   defaultLook,
   describeLook,
+  faceStrokeWidth,
   faceTransform,
-  faceWeights,
+  faceWeight,
   freeLook,
   lookFor,
 } from './avatar';
@@ -72,17 +73,51 @@ describe('the drawing', () => {
     }
     for (const f of AVATAR_FACES) {
       expect(FACE_SPECS[f].length).toBeGreaterThanOrEqual(2);
-      expect(FACE_SPECS[f].some((p) => p.role === 'eye' || p.blinks)).toBe(true);
+      expect(FACE_SPECS[f].filter((p) => p.role === 'eye')).toHaveLength(2);
+      expect(FACE_SPECS[f].filter((p) => p.role === 'mouth').length).toBeLessThanOrEqual(1);
       expect(FACE_NAMES[f]).toBeTruthy();
     }
     expect(faceTransform('circle')).toBe('');
     expect(faceTransform('arch')).toMatch(/^translate\(16 17\) scale\(0\.96\)/);
   });
 
-  it('weighs strokes up as the avatar gets smaller', () => {
-    expect(faceWeights(16).eye).toBeGreaterThan(faceWeights(96).eye);
-    expect(faceWeights(16).line).toBeGreaterThan(faceWeights(40).line);
-    expect(faceWeights(24).line).toBeGreaterThan(faceWeights(96).line);
+  it('never draws a closed eye: every eye is a short vertical stroke', () => {
+    for (const f of AVATAR_FACES) {
+      for (const eye of FACE_SPECS[f].filter((p) => p.role === 'eye')) {
+        expect(eye.d).toMatch(/^M[\d.]+ [\d.]+v[\d.]+$/);
+      }
+    }
+  });
+
+  it('keeps every feature off the edge of its shape', () => {
+    // The face, after its shape's transform, stays inside the shape's
+    // narrowest inner band with the stroke's half-width to spare.
+    for (const shape of AVATAR_SHAPES) {
+      const { dx, dy, scale } = SHAPE_SPECS[shape].face;
+      for (const f of AVATAR_FACES) {
+        for (const p of FACE_SPECS[f]) {
+          const nums = p.d.match(/-?[\d.]+/g)!.map(Number);
+          const [x, y] = [nums[0], nums[1]];
+          const fx = 16 + dx + (x - 16) * scale;
+          const fy = 16 + dy + (y - 16) * scale;
+          expect(fx).toBeGreaterThan(8);
+          expect(fx).toBeLessThan(24);
+          expect(fy).toBeGreaterThan(10);
+          expect(fy).toBeLessThan(23);
+        }
+      }
+    }
+  });
+
+  it('draws eyes and mouth at one weight: proportional, with a pixel floor when small', () => {
+    // Above the floor, the weight in device pixels is the same fraction of the avatar.
+    expect(faceWeight(40)).toBe(faceWeight(96));
+    expect((faceWeight(96) * 96) / 32 / 96).toBeCloseTo((faceWeight(24) * 24) / 32 / 24);
+    // Below it, never thinner than 1.6 device pixels.
+    expect((faceWeight(16) * 16) / 32).toBeCloseTo(1.6);
+    expect(faceWeight(16)).toBeGreaterThan(faceWeight(24));
+    // A scaled-down face (a pill's) keeps the same line on screen.
+    expect(faceStrokeWidth(40, 'pill') * SHAPE_SPECS.pill.face.scale).toBeCloseTo(faceWeight(40));
   });
 });
 
