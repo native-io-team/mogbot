@@ -53,6 +53,7 @@ const STEP_ICON: Record<string, IconComponent> = {
   web: GlobeIcon,
   command: TerminalIcon,
   message: CommentIcon,
+  note: CommentIcon,
   approval: ShieldCheckIcon,
   screenshot: CameraIcon,
   plan: ListIcon,

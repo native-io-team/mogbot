@@ -11,7 +11,15 @@
 import { newestResults, type Agent, type AgentMessage } from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
-import { type ComponentProps, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import {
+  type ComponentProps,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   type FlatList,
   type LayoutChangeEvent,
@@ -93,6 +101,7 @@ import { Line } from './surfaces';
 import { RoomFoldRow } from './RoomRow';
 import { TeamSetupCard } from './TeamSetupCard';
 import { PathContext } from './Markdown';
+import { GalleryContext, chatGallery } from '../lib/gallery';
 import { PaneContext, type Pane } from './ApprovalCard';
 import { showActions } from './menu';
 import { SelectSheet } from './SelectSheet';
@@ -272,6 +281,8 @@ export function ChatView({
   }, [messages, agent?.copy?.id]);
   // Each result's newest version is drawn in full; older ones fold.
   const newestResult = useMemo(() => new Set(newestResults(messages).values()), [messages]);
+  // Every picture in the chat, for the viewer to page through.
+  const gallery = useMemo(() => chatGallery(messages), [messages]);
   // The failure that ended the last turn, with nothing said since: only it
   // says "send a message to try again".
   const latestFailure = useMemo(() => {
@@ -533,107 +544,109 @@ export function ChatView({
           />
         )}
         <PathContext.Provider value={openPath}>
-          <PaneContext.Provider value={pane}>
-            <Animated.FlatList
-              ref={list}
-              inverted
-              data={items}
-              keyExtractor={(i) => i.key}
-              itemLayoutAnimation={glide}
-              onLayout={(e: LayoutChangeEvent) => setListHeight(e.nativeEvent.layout.height)}
-              // Let go to read back: the rows on screen hold still while the
-              // newest grows or arrives below them. Following: none, so the
-              // inverted list keeps the newest line on the composer.
-              maintainVisibleContentPosition={holdFor(follow)}
-              renderItem={({ item, index }) => (
-                <ItemView
-                  item={item}
-                  // Lines one after another sit at the Line gap, not a paragraph apart.
-                  afterLine={
-                    index + 1 < items.length
-                      ? isLineItem(items[index + 1])
-                      : !!chat?.loaded && !chat.more
-                  }
-                  agent={agent}
-                  liveCopyCard={liveCopyCard}
-                  newestResult={newestResult}
-                  latestFailure={latestFailure}
-                  onError={showError}
-                  onLongPress={onMessageAction}
-                  lit={item.key === target}
-                />
-              )}
-              onScrollToIndexFailed={(info) => {
-                // Not measured yet: get near it, then try again once it's laid out.
-                list.current?.scrollToOffset({
-                  offset: info.averageItemLength * info.index,
-                  animated: false,
-                });
-                setTimeout(
-                  () =>
-                    list.current?.scrollToIndex({
-                      index: info.index,
-                      viewPosition: 0.5,
-                      animated: true,
-                    }),
-                  120
-                );
-              }}
-              renderScrollComponent={renderScroll}
-              contentContainerStyle={[
-                styles.content,
-                { paddingLeft: space.lg + side.left, paddingRight: space.lg + side.right },
-              ]}
-              keyboardDismissMode="interactive"
-              keyboardShouldPersistTaps="handled"
-              onEndReached={older}
-              onEndReachedThreshold={0.6}
-              onViewableItemsChanged={onViewable}
-              viewabilityConfig={VIEWABILITY}
-              onScrollBeginDrag={() => {
-                dragging.current = true;
-              }}
-              onScrollEndDrag={() => {
-                dragging.current = false;
-              }}
-              onMomentumScrollBegin={() => {
-                flinging.current = true;
-              }}
-              onMomentumScrollEnd={() => {
-                flinging.current = false;
-              }}
-              onScroll={(e) => {
-                const distance = fromEnd(e.nativeEvent.contentOffset.y, insetTop.current);
-                const byUser = dragging.current || flinging.current;
-                // Bail-outs keep these from re-rendering on every event.
-                setFollow((now) => scrolled(now, distance, newestRef.current, byUser));
-                setFar(distance > FAR);
-              }}
-              scrollEventThrottle={32}
-              initialNumToRender={16}
-              maxToRenderPerBatch={12}
-              windowSize={13}
-              ListFooterComponent={
-                chat?.loaded && !chat.more ? (
-                  <Line text={`Start of your conversation with ${agent.name}`} />
-                ) : chat?.loaded ? (
-                  <View style={styles.start}>{loadingOlder && <Spinner />}</View>
-                ) : undefined
-              }
-              ListEmptyComponent={
-                chat?.loaded ? undefined : (
-                  <View style={[styles.start, { transform: [{ scaleY: -1 }] }]}>
-                    {connected ? (
-                      <Spinner />
-                    ) : (
-                      // Nothing saved for this chat and the Mac away: why, and what to do.
-                      <LinkProblem what="Your conversations" macName={macName} />
-                    )}
-                  </View>
-                )
-              }
-            />
-          </PaneContext.Provider>
+          <GalleryContext.Provider value={gallery}>
+            <PaneContext.Provider value={pane}>
+              <Animated.FlatList
+                ref={list}
+                inverted
+                data={items}
+                keyExtractor={(i) => i.key}
+                itemLayoutAnimation={glide}
+                onLayout={(e: LayoutChangeEvent) => setListHeight(e.nativeEvent.layout.height)}
+                // Let go to read back: the rows on screen hold still while the
+                // newest grows or arrives below them. Following: none, so the
+                // inverted list keeps the newest line on the composer.
+                maintainVisibleContentPosition={holdFor(follow)}
+                renderItem={({ item, index }) => (
+                  <ItemView
+                    item={item}
+                    // Lines one after another sit at the Line gap, not a paragraph apart.
+                    afterLine={
+                      index + 1 < items.length
+                        ? isLineItem(items[index + 1])
+                        : !!chat?.loaded && !chat.more
+                    }
+                    agent={agent}
+                    liveCopyCard={liveCopyCard}
+                    newestResult={newestResult}
+                    latestFailure={latestFailure}
+                    onError={showError}
+                    onLongPress={onMessageAction}
+                    lit={item.key === target}
+                  />
+                )}
+                onScrollToIndexFailed={(info) => {
+                  // Not measured yet: get near it, then try again once it's laid out.
+                  list.current?.scrollToOffset({
+                    offset: info.averageItemLength * info.index,
+                    animated: false,
+                  });
+                  setTimeout(
+                    () =>
+                      list.current?.scrollToIndex({
+                        index: info.index,
+                        viewPosition: 0.5,
+                        animated: true,
+                      }),
+                    120
+                  );
+                }}
+                renderScrollComponent={renderScroll}
+                contentContainerStyle={[
+                  styles.content,
+                  { paddingLeft: space.lg + side.left, paddingRight: space.lg + side.right },
+                ]}
+                keyboardDismissMode="interactive"
+                keyboardShouldPersistTaps="handled"
+                onEndReached={older}
+                onEndReachedThreshold={0.6}
+                onViewableItemsChanged={onViewable}
+                viewabilityConfig={VIEWABILITY}
+                onScrollBeginDrag={() => {
+                  dragging.current = true;
+                }}
+                onScrollEndDrag={() => {
+                  dragging.current = false;
+                }}
+                onMomentumScrollBegin={() => {
+                  flinging.current = true;
+                }}
+                onMomentumScrollEnd={() => {
+                  flinging.current = false;
+                }}
+                onScroll={(e) => {
+                  const distance = fromEnd(e.nativeEvent.contentOffset.y, insetTop.current);
+                  const byUser = dragging.current || flinging.current;
+                  // Bail-outs keep these from re-rendering on every event.
+                  setFollow((now) => scrolled(now, distance, newestRef.current, byUser));
+                  setFar(distance > FAR);
+                }}
+                scrollEventThrottle={32}
+                initialNumToRender={16}
+                maxToRenderPerBatch={12}
+                windowSize={13}
+                ListFooterComponent={
+                  chat?.loaded && !chat.more ? (
+                    <Line text={`Start of your conversation with ${agent.name}`} />
+                  ) : chat?.loaded ? (
+                    <View style={styles.start}>{loadingOlder && <Spinner />}</View>
+                  ) : undefined
+                }
+                ListEmptyComponent={
+                  chat?.loaded ? undefined : (
+                    <View style={[styles.start, { transform: [{ scaleY: -1 }] }]}>
+                      {connected ? (
+                        <Spinner />
+                      ) : (
+                        // Nothing saved for this chat and the Mac away: why, and what to do.
+                        <LinkProblem what="Your conversations" macName={macName} />
+                      )}
+                    </View>
+                  )
+                }
+              />
+            </PaneContext.Provider>
+          </GalleryContext.Provider>
         </PathContext.Provider>
         {/* Under the header: older words fade up into it. */}
         <EdgeFade edge="top" color={colors.surfaceApp} />

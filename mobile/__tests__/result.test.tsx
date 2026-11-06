@@ -23,6 +23,8 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 jest.mock('expo-haptics', () => ({}));
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+jest.mock('expo-image', () => ({ Image: () => null }));
 jest.mock('../src/lib/session', () => ({
   answerApproval: jest.fn(),
   describeError: String,
@@ -105,8 +107,8 @@ describe('the result card on the phone', () => {
     expect(
       screen.getByText("Changes since v1: EUR invoices use the rate on each invoice's date")
     ).toBeTruthy();
-    expect(screen.getByText('Before')).toBeTruthy();
-    expect(screen.getByText('After')).toBeTruthy();
+    // One page, both sides: the compare, captioned.
+    expect(screen.getByText('Before · After')).toBeTruthy();
     // The agent listed nothing it didn't verify this time: no box.
     expect(screen.queryByText('Not verified')).toBeNull();
     expect(screen.queryByText('Ask for changes')).toBeNull();

@@ -2,8 +2,8 @@
  * The result card (`share_result`), on the shared card as the desk draws it:
  * a document icon, the title with its version, what changed since the last
  * one, then the summary, what the agent didn't verify (up front, tinted,
- * only when it said), a before/after pair, its files and links, what it
- * says it checked, and "Ask for changes". A project copy's card is the same
+ * only when it said), the before and after per page (a slider or side by
+ * side, `compare`), its files and links, what it says it checked, and "Ask for changes". A project copy's card is the same
  * card with the copy's note and Discard / Keep changes in its answer row
  * (`copy`), never a second card inside it.
  *
@@ -12,8 +12,9 @@
  */
 
 import {
-  beforeAfter,
   CHECKED_HEADING,
+  CHECKPOINT_LABEL,
+  comparePages,
   changesLine,
   consoleLine,
   testHeadline,
@@ -38,6 +39,7 @@ import { makeStyles, useColors } from '../lib/appearance';
 import { alpha, iconSize, radius, space } from '../lib/theme';
 import { useApp, useServed } from '../lib/store';
 import { Attachments } from './attachments';
+import { Compare } from './compare';
 import { useCopyParts, type CopyProps } from './copy';
 import { Card, Line, OFFLINE_NOTE, TextAction } from './surfaces';
 import { Icon, T } from './ui';
@@ -189,7 +191,7 @@ function Body({
 }) {
   const colors = useColors();
   const styles = useStyles();
-  const pair = beforeAfter(card.items);
+  const pages = comparePages(card.items);
   const items = listedItems(card.items);
   const files = items.flatMap((i) => (i.kind === 'file' ? [i.file] : []));
   const links = items.filter((i): i is Extract<ResultItem, { kind: 'link' }> => i.kind === 'link');
@@ -220,23 +222,7 @@ function Body({
           ))}
         </View>
       )}
-      {pair && (
-        <View style={styles.pair}>
-          {(['before', 'after'] as const).map((side) => (
-            <View key={side} style={{ flex: 1, gap: space.xs }}>
-              <Attachments
-                agentId={agentId}
-                attachments={[pair[side]]}
-                width={150}
-                onError={onError}
-              />
-              <T variant="caption" color={colors.textMuted}>
-                {side === 'before' ? 'Before' : 'After'}
-              </T>
-            </View>
-          ))}
-        </View>
-      )}
+      {pages.length > 0 && <Compare agentId={agentId} pages={pages} />}
       {files.length > 0 && <Attachments agentId={agentId} attachments={files} onError={onError} />}
       {links.map((l, i) => (
         <LinkRow key={`${i}:${l.url}`} item={l} />
@@ -333,7 +319,11 @@ export function ResultCardView({
     <Card
       icon="doc.text"
       title={card.title}
-      meta={card.version > 1 ? `v${card.version}` : undefined}
+      meta={
+        [card.checkpoint ? CHECKPOINT_LABEL : null, card.version > 1 ? `v${card.version}` : null]
+          .filter(Boolean)
+          .join(' · ') || undefined
+      }
       // A test's own section says how it went; the same words aren't repeated above it.
       source={(card.test ? null : changesLine(card)) ?? undefined}
       // Offline the answers stay, disabled, with the one note every card uses
@@ -369,7 +359,6 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: alpha(colors.accentWarning, 0.14),
     overflow: 'hidden',
   },
-  pair: { flexDirection: 'row', gap: space.sm },
   link: {
     flexDirection: 'row',
     alignItems: 'center',

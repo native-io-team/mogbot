@@ -692,6 +692,7 @@ pub trait Backend: Send + Sync + 'static {
         &self,
         agent_id: &str,
         message_id: &str,
+        link: Option<usize>,
     ) -> Result<(String, u16), CommandError>;
     /// Publish the watch proxy on the tailnet (lazily, once): its base URL.
     async fn watch_publish(&self) -> Result<String, CommandError>;
@@ -1039,6 +1040,9 @@ struct DiffParams {
 struct WatchParams {
     agent_id: String,
     message_id: String,
+    /// One of the message's local links (`watch.links`), not the card.
+    #[serde(default)]
+    link: Option<usize>,
 }
 
 #[derive(Deserialize)]
@@ -1987,7 +1991,7 @@ async fn run(
         }
         "agents.watchLive" => {
             let p: WatchParams = parse(params)?;
-            let (path, port) = b.watch_port(&p.agent_id, &p.message_id).await?;
+            let (path, port) = b.watch_port(&p.agent_id, &p.message_id, p.link).await?;
             let base = b.watch_publish().await?;
             let (ticket, expires_at) = c.watch.mint(&caller.device_id, &path, port, now_ms());
             Ok(json!({

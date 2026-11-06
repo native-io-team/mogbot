@@ -19,6 +19,7 @@ import {
   share,
   type PickedFile,
 } from '../lib/files';
+import { useChatGallery, viewerParams } from '../lib/gallery';
 import { attachmentSource, describeError, download } from '../lib/session';
 import type { PendingAttachment } from '../lib/sync';
 import { alpha, iconSize, radius, space, type, PRESSED } from '../lib/theme';
@@ -86,6 +87,8 @@ function Thumb({
   const styles = useStyles();
   const router = useRouter();
   const colors = useColors();
+  // Opened, it pages through every picture in the chat, starting here.
+  const gallery = useChatGallery();
   // Until it loads its shape is unknown; then it keeps its own, within reason.
   const [ratio, setRatio] = useState(square ? 1 : 4 / 3);
   // A file the Mac couldn't send (gone, or not reachable) says so with its
@@ -123,7 +126,7 @@ function Thumb({
       onPress={() => {
         router.push({
           pathname: '/viewer',
-          params: { agentId, path: file.path, name: file.name, mime: file.mime },
+          params: viewerParams(gallery, agentId, file),
         });
       }}
       style={({ pressed }) => [

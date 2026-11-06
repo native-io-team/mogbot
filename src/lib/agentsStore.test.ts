@@ -40,6 +40,17 @@ describe('streaming drafts', () => {
     expect(getAgentsSnapshot().drafts.a).toBeUndefined();
   });
 
+  it('empty text withdraws that draft (narration folded into the timeline), never another', () => {
+    updateDraft('a', 'd1', 'Starting the previews now');
+    updateDraft('a', 'other', '');
+    expect(getAgentsSnapshot().drafts.a?.id).toBe('d1');
+    updateDraft('a', 'd1', '');
+    expect(getAgentsSnapshot().drafts.a).toBeUndefined();
+    // A withdrawal for a draft never seen leaves no empty bubble behind.
+    updateDraft('a', 'd3', '');
+    expect(getAgentsSnapshot().drafts.a).toBeUndefined();
+  });
+
   it('a different message leaves the draft alone', () => {
     updateDraft('a', 'd2', 'Next');
     upsertMessage(reply('d1', 'Earlier.'));

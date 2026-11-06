@@ -5,18 +5,10 @@
  * @module components/agents/AgentAttachments
  */
 
-import { useCallback, useState } from 'react';
-import {
-  CloseIcon,
-  FileIcon,
-  FileTextIcon,
-  FolderOpenIcon,
-  ExternalLinkIcon,
-  ImageIcon,
-} from '@/components/icons';
-import { Button } from '../primitives/Button';
+import { useCallback, useMemo, useState } from 'react';
+import { CloseIcon, FileIcon, FileTextIcon, FolderOpenIcon, ImageIcon } from '@/components/icons';
 import { IconButton } from '../primitives/IconButton';
-import { ModalFrame } from '../primitives/ModalFrame';
+import { GalleryLightbox, imagesOf, useImageViewer } from './AgentGallery';
 import {
   attachmentUrl,
   formatBytes,
@@ -207,8 +199,8 @@ interface MessageAttachmentsProps {
 /** What a message carried: images as thumbnails, everything else as chips. */
 export function MessageAttachments({ agent, attachments, side = 'user' }: MessageAttachmentsProps) {
   const open = useAttachmentOpener(agent.id);
-  const [viewing, setViewing] = useState<Attachment | null>(null);
   const images = attachments.filter((a) => isImageMime(a.mime));
+  const { view, viewer } = useImageViewer(agent, () => imagesOf(agent.id, images));
   const files = attachments.filter((a) => !isImageMime(a.mime));
 
   return (
@@ -220,7 +212,7 @@ export function MessageAttachments({ agent, attachments, side = 'user' }: Messag
               <button
                 type="button"
                 className="agent-attachments__image"
-                onClick={() => setViewing(image)}
+                onClick={() => view(image)}
                 aria-label={`View ${image.name}`}
                 title={image.name}
               >
@@ -256,54 +248,51 @@ export function MessageAttachments({ agent, attachments, side = 'user' }: Messag
           ))}
         </div>
       )}
-      <AttachmentLightbox agent={agent} viewing={viewing} onClose={() => setViewing(null)} />
+      {viewer}
     </div>
   );
 }
 
-/** An image at full size, with Open and Show in Finder. */
+/**
+ * Images at full size, with Open and Show in Finder: a gallery over `images`
+ * (default: just `viewing`) that opens at `viewing`. The chat's own viewer is
+ * `AgentGallery`; this is for surfaces outside it (the preview pane).
+ */
 export function AttachmentLightbox({
   agent,
   viewing,
+  images,
   onClose,
 }: {
   agent: Agent;
   viewing: Attachment | null;
+  images?: readonly Attachment[];
   onClose: () => void;
 }) {
-  const open = useAttachmentOpener(agent.id);
+  const list = useMemo(() => {
+    if (!viewing) return [];
+    const files = images?.some((f) => f.path === viewing.path) ? images : [viewing];
+    return imagesOf(agent.id, files);
+  }, [agent.id, viewing, images]);
+  const [index, setIndex] = useState<number | null>(null);
+  const start = viewing
+    ? Math.max(
+        0,
+        list.findIndex((g) => g.file.path === viewing.path)
+      )
+    : 0;
+  // A new picture opened from outside starts the gallery there.
+  const [openedFor, setOpenedFor] = useState<Attachment | null>(null);
+  if (openedFor !== viewing) {
+    setOpenedFor(viewing);
+    setIndex(null);
+  }
   return (
-    <ModalFrame
-      isOpen={viewing !== null}
+    <GalleryLightbox
+      opened={viewing ? { images: list, index: index ?? start } : null}
+      agentOf={() => agent}
+      onIndex={setIndex}
       onClose={onClose}
-      title={viewing?.name ?? ''}
-      className="agent-lightbox"
-      headerActions={
-        viewing && (
-          <>
-            <Button
-              variant="ghost"
-              size="compact"
-              leftIcon={<ExternalLinkIcon size={14} />}
-              onClick={() => void open(viewing)}
-            >
-              Open
-            </Button>
-            <Button
-              variant="ghost"
-              size="compact"
-              leftIcon={<FolderOpenIcon size={14} />}
-              onClick={() => void open(viewing, true)}
-            >
-              Show in Finder
-            </Button>
-          </>
-        )
-      }
-    >
-      {viewing && (
-        <AttachmentImage agent={agent} attachment={viewing} className="agent-lightbox__image" />
-      )}
-    </ModalFrame>
+    />
   );
 }

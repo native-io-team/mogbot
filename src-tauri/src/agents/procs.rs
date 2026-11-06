@@ -62,6 +62,29 @@ pub fn kill_tree_sync(root: u32) {
     signal_all(&[root], &members);
 }
 
+/// Stop one tree except the subtrees under `spare` (dev servers someone is
+/// looking at, `dev_servers`). The group isn't signalled, since the spared
+/// processes are still in it: everything else is signalled by pid.
+/// Blocking; call it from `spawn_blocking`.
+pub fn kill_tree_sparing_sync(root: u32, spare: &[u32]) {
+    if spare.is_empty() {
+        return kill_tree_sync(root);
+    }
+    let spared: HashSet<u32> = spare.iter().flat_map(|s| tree(*s)).collect();
+    let members: Vec<u32> = tree(root)
+        .into_iter()
+        .filter(|pid| *pid != root && !spared.contains(pid))
+        .collect();
+    send(&[], &members, Signal::Term);
+    let deadline = Instant::now() + GRACE;
+    while Instant::now() < deadline && members.iter().any(|pid| alive(*pid)) {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let left: Vec<u32> = members.into_iter().filter(|pid| alive(*pid)).collect();
+    send(&[], &left, Signal::Kill);
+    kill_one(root, Signal::Kill);
+}
+
 fn signal_all(groups: &[u32], members: &[u32]) {
     send(groups, members, Signal::Term);
     // A group leader is our own child: it stays a zombie until tokio reaps

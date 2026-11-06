@@ -183,6 +183,11 @@ export const MAC_FEATURES = {
    * `agents.signin*` methods, one tab shown live here and driven from here.
    */
   signinPhone: 'signin.phone',
+  /**
+   * `agents.watchLive` takes `link`: Watch live on a dev server an agent's
+   * reply linked to (`localLinks` on the message), not only on a card.
+   */
+  watchLinks: 'watch.links',
 } as const;
 export type MacFeature = (typeof MAC_FEATURES)[keyof typeof MAC_FEATURES];
 

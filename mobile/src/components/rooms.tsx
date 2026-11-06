@@ -57,6 +57,7 @@ import { ComposerField, RoundButton } from './Composer';
 import { RoomBars } from './ConversationBars';
 import { Icon, T, useRipple } from './ui';
 import { StackedAvatars } from './RoomRow';
+import { GalleryContext, chatGallery } from '../lib/gallery';
 
 const NONE: never[] = [];
 
@@ -163,9 +164,7 @@ function RoomChat({ id }: { id: string }) {
   const own = useApp(
     useShallow((s) => Object.fromEntries(carded.map((m) => [m.id, s.chats[m.id]?.messages])))
   );
-  const ownLoaded = useApp(
-    useShallow((s) => carded.map((m) => !!s.chats[m.id]?.loaded))
-  );
+  const ownLoaded = useApp(useShallow((s) => carded.map((m) => !!s.chats[m.id]?.loaded)));
   // Once per member per connection: a read that fails leaves that member's
   // cards as the room has them, and isn't retried on every status update
   // (`carded` is rebuilt whenever a member's status or a message changes).
@@ -181,11 +180,9 @@ function RoomChat({ id }: { id: string }) {
       loadLatest(m.id).catch(() => {});
     });
   }, [connected, carded, ownLoaded]);
-  const liveCopies = useMemo(
-    () => liveCopyCards(members, messages, own),
-    [members, messages, own]
-  );
+  const liveCopies = useMemo(() => liveCopyCards(members, messages, own), [members, messages, own]);
   const newest = useMemo(() => newestRoomResults(messages, own), [messages, own]);
+  const gallery = useMemo(() => chatGallery(messages), [messages]);
   // A room message can't revise a result: the member's own chat opens with
   // the request staged in its composer, as on the desk.
   const router = useRouter();
@@ -236,87 +233,89 @@ function RoomChat({ id }: { id: string }) {
   const fallback = members[0];
 
   return (
-    <View style={{ flex: 1 }}>
-      <Stack.Screen
-        options={{
-          headerTintColor: colors.textPrimary,
-          headerTitle: () => <RoomHeader room={room} members={members} working={working} />,
-        }}
-      />
-      <MentionContext.Provider value={mentionColors}>
-        <Animated.FlatList
-          ref={list}
-          inverted
-          data={items}
-          keyExtractor={(i) => i.key}
-          itemLayoutAnimation={glide}
-          renderScrollComponent={renderScroll}
-          contentContainerStyle={[
-            styles.content,
-            { paddingLeft: space.lg + insets.left, paddingRight: space.lg + insets.right },
-          ]}
-          keyboardDismissMode="interactive"
-          keyboardShouldPersistTaps="handled"
-          onEndReached={older}
-          onEndReachedThreshold={0.6}
-          renderItem={({ item }) => (
-            <RoomItemView
-              item={item}
-              agent={item.kind === 'message' ? byId.get(item.message.agentId) : undefined}
-              fallback={fallback}
-              memberCount={members.length}
-              liveCopy={item.kind === 'message' && liveCopies.has(item.message.id)}
-              newestResult={
-                item.kind !== 'message' || !item.message.result || newest.has(item.message.id)
-              }
-              onAskForChanges={askForChanges}
-              onError={showError}
-            />
-          )}
-          ListFooterComponent={
-            chat?.loaded && !chat.more ? (
-              <View style={styles.start}>
-                <StackedAvatars members={members} />
-                <T variant="caption" color={colors.textSecondary} style={{ textAlign: 'center' }}>
-                  {room.name} · {ROOM_INTRO}
-                </T>
-              </View>
-            ) : chat?.loaded ? (
-              <View style={styles.start}>{loadingOlder && <Spinner />}</View>
-            ) : undefined
-          }
+    <GalleryContext.Provider value={gallery}>
+      <View style={{ flex: 1 }}>
+        <Stack.Screen
+          options={{
+            headerTintColor: colors.textPrimary,
+            headerTitle: () => <RoomHeader room={room} members={members} working={working} />,
+          }}
         />
-      </MentionContext.Provider>
-      {toast && (
-        <Animated.View
-          entering={FadeInDown.duration(180)}
-          exiting={FadeOut.duration(150)}
-          style={[styles.toast, { bottom: composerHeight + space.md }]}
-          accessibilityLiveRegion="polite"
-        >
-          <T variant="small" color={colors.textStrong}>
-            {toast}
+        <MentionContext.Provider value={mentionColors}>
+          <Animated.FlatList
+            ref={list}
+            inverted
+            data={items}
+            keyExtractor={(i) => i.key}
+            itemLayoutAnimation={glide}
+            renderScrollComponent={renderScroll}
+            contentContainerStyle={[
+              styles.content,
+              { paddingLeft: space.lg + insets.left, paddingRight: space.lg + insets.right },
+            ]}
+            keyboardDismissMode="interactive"
+            keyboardShouldPersistTaps="handled"
+            onEndReached={older}
+            onEndReachedThreshold={0.6}
+            renderItem={({ item }) => (
+              <RoomItemView
+                item={item}
+                agent={item.kind === 'message' ? byId.get(item.message.agentId) : undefined}
+                fallback={fallback}
+                memberCount={members.length}
+                liveCopy={item.kind === 'message' && liveCopies.has(item.message.id)}
+                newestResult={
+                  item.kind !== 'message' || !item.message.result || newest.has(item.message.id)
+                }
+                onAskForChanges={askForChanges}
+                onError={showError}
+              />
+            )}
+            ListFooterComponent={
+              chat?.loaded && !chat.more ? (
+                <View style={styles.start}>
+                  <StackedAvatars members={members} />
+                  <T variant="caption" color={colors.textSecondary} style={{ textAlign: 'center' }}>
+                    {room.name} · {ROOM_INTRO}
+                  </T>
+                </View>
+              ) : chat?.loaded ? (
+                <View style={styles.start}>{loadingOlder && <Spinner />}</View>
+              ) : undefined
+            }
+          />
+        </MentionContext.Provider>
+        {toast && (
+          <Animated.View
+            entering={FadeInDown.duration(180)}
+            exiting={FadeOut.duration(150)}
+            style={[styles.toast, { bottom: composerHeight + space.md }]}
+            accessibilityLiveRegion="polite"
+          >
+            <T variant="small" color={colors.textStrong}>
+              {toast}
+            </T>
+          </Animated.View>
+        )}
+        <KeyboardStickyView offset={{ opened: insets.bottom }}>
+          <RoomComposer
+            room={room}
+            members={members}
+            connected={connected}
+            macName={macName}
+            working={working.length > 0}
+            onError={showError}
+            onHeight={setComposerHeight}
+            onSent={() => list.current?.scrollToOffset({ offset: 0, animated: true })}
+          />
+        </KeyboardStickyView>
+        {members.length === 0 && (
+          <T color={colors.textSecondary} style={styles.center}>
+            Nobody is in this room any more.
           </T>
-        </Animated.View>
-      )}
-      <KeyboardStickyView offset={{ opened: insets.bottom }}>
-        <RoomComposer
-          room={room}
-          members={members}
-          connected={connected}
-          macName={macName}
-          working={working.length > 0}
-          onError={showError}
-          onHeight={setComposerHeight}
-          onSent={() => list.current?.scrollToOffset({ offset: 0, animated: true })}
-        />
-      </KeyboardStickyView>
-      {members.length === 0 && (
-        <T color={colors.textSecondary} style={styles.center}>
-          Nobody is in this room any more.
-        </T>
-      )}
-    </View>
+        )}
+      </View>
+    </GalleryContext.Provider>
   );
 }
 

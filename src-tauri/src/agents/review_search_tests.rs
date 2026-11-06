@@ -49,6 +49,7 @@ fn msg(agent: &store::Agent, ts: i64, text: &str) -> AgentMessage {
         result: None,
         revises: None,
         decide: Vec::new(),
+        local_links: Vec::new(),
     }
 }
 

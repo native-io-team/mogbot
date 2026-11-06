@@ -692,6 +692,7 @@ fn a_result_card_is_where_the_turn_ends() {
         changes: None,
         project: None,
         test: None,
+        checkpoint: false,
     });
     let merged = super::super::results::ride_on(message(MessageKind::Changes, "c"), card);
     assert_eq!(

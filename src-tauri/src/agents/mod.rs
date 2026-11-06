@@ -74,6 +74,7 @@ pub mod decisions;
 pub mod declined;
 pub mod defaults;
 pub mod describe;
+pub mod dev_servers;
 pub mod driver;
 pub mod engine;
 pub mod expiry;
@@ -86,10 +87,12 @@ pub mod import;
 pub mod independence;
 pub mod interview;
 pub mod inventory;
+pub mod local_links;
 pub mod login_relay;
 pub mod logins;
 pub mod mcp;
 pub mod memory;
+pub mod narration;
 pub mod notify;
 pub mod oauth;
 pub mod other_app;
@@ -178,6 +181,7 @@ fn greet(agent_id: &str) {
         takeover: false,
         room: None,
         decide: Vec::new(),
+        local_links: Vec::new(),
     };
     if let Err(e) = store::append_message(&message) {
         tracing::warn!("[Agents] Couldn't write the Chief's greeting: {e}");

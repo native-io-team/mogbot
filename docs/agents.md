@@ -3795,6 +3795,49 @@ and asks the agent (`test_prompt`) to click through the site while you watch.
   harness against a fictional site); a report staged in the same turn as a
   `share_result` replaces it.
 
+## Showing the work (`agents/narration.rs`, `agents/local_links.rs`, `agents/dev_servers.rs`)
+
+Visual work is shown, early and on one card, without being asked. The rules
+live in the app-owned `SHOW_WORK` section of every agent's system prompt
+(`prompts.rs`), built each turn, so agents created before it get it with
+nothing in their own `CLAUDE.md` touched.
+
+- **One card for visual work.** `share_result` file items take a `page` next
+  to `role` (before/after). The card shows one compare per page (side by
+  side or a slider, a page switcher, the agent's captions) with Preview,
+  Watch live and Test it (`comparePages` in `companion-protocol/results.ts`).
+- **Checkpoints.** `checkpoint: true` records the card at once, marked
+  "Partway through"; the same turn's next `share_result` becomes its next
+  version (`results::continue_checkpoint`), so a turn still ends on one card.
+- **Narration folds into the timeline.** A short reply (no question, link,
+  list, code or blocker; ≤240 chars) is held. If the turn writes again or
+  calls a tool, it becomes a `note` step and its streamed draft is withdrawn
+  (an empty draft event). If the turn ends on it, it is the reply; a turn
+  that only narrated still ends on its last line. Nothing goes silent.
+- **Local links.** `http://localhost:…` (and 127.0.0.1, 0.0.0.0, [::1]) in a
+  reply is taken out of the text into `localLinks`. A port the app knows
+  serves a project (a preview proxy, a server the turn left in a project or
+  its copy, a listener whose folder is a project) offers Preview
+  (`agents_preview_target` with `link`) and, on Macs with `watch.links`,
+  Watch live; any other is a "running on this Mac" chip, never a dead link.
+  Code spans are left alone.
+- **Dev servers are cleaned up.** What the turn's engine started is noted by
+  ancestry (its process tree while it ran, its process group). At the turn's
+  end, listeners nobody is looking at are stopped; one a pane shows, a phone
+  watches, or the turn just showed (a link, a card naming its project) is
+  kept, and stopped after 10 minutes unwatched. Before any stop the pid must
+  still run the command recorded.
+- **No plumbing talk.** The prompt forbids tool, server, port and
+  "offline" talk; the preview bridge's "nothing is showing" error tells the
+  agent what to do instead and not to relay it.
+- **Unlisted projects.** A card naming a repository folder that isn't a
+  project yet lists it first (`project::ensure_listed` → `workplace`'s
+  registration), so Preview works without the user opening anything.
+
+Not verified: a live turn end-to-end (narration folding and dev-server
+cleanup are covered by unit tests of the rules, not a real Claude Code run);
+Watch live on a server the turn left (outside a preview proxy).
+
 ## The Chief's audit trail and live hand-offs
 
 - `create_agent`, `update_agent` and `delete_agent` leave a quiet note in the

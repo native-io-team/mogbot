@@ -27,3 +27,4 @@ export * from './secretName';
 export * from './avatar';
 export * from './attention';
 export * from './tables';
+export * from './gallery';

@@ -24,6 +24,7 @@ fn saved_port(path: &str) -> Option<u16> {
 pub(crate) async fn target_for(
     agent_id: &str,
     message_id: &str,
+    link: Option<usize>,
 ) -> Result<PreviewTarget, CommandError> {
     let agent = store::get(agent_id)?;
     let (log_of, wanted) = (agent_id.to_string(), message_id.to_string());
@@ -39,9 +40,10 @@ pub(crate) async fn target_for(
         .into_iter()
         .map(|p| p.path)
         .collect();
-    preview_test::resolve(
+    preview_test::resolve_at(
         &agent,
         &message,
+        link,
         &projects,
         crate::proxy::dev_server_port_for,
         saved_port,
@@ -50,14 +52,16 @@ pub(crate) async fn target_for(
 }
 
 /// What a card's Preview opens: the folder (the agent's copy, or the
-/// project), its port, and whether a server is already up for it.
+/// project), its port, and whether a server is already up for it. With
+/// `link`, one of the message's local links instead (`agents/local_links.rs`).
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_preview_target(
     agent_id: String,
     message_id: String,
+    link: Option<usize>,
 ) -> Result<PreviewTarget, CommandError> {
-    target_for(&agent_id, &message_id).await
+    target_for(&agent_id, &message_id, link).await
 }
 
 /// The pane is (or stops being) live in this window for `path`: the agent
@@ -84,7 +88,7 @@ pub async fn agents_preview_test_start(
     agent_id: String,
     message_id: String,
 ) -> Result<Run, CommandError> {
-    let target = target_for(&agent_id, &message_id).await?;
+    let target = target_for(&agent_id, &message_id, None).await?;
     if preview_test::pane_window(&target.path).is_none() {
         return Err(CommandError::expected(
             "Open the preview first: the test runs in it, where you can watch.",

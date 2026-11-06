@@ -2868,7 +2868,8 @@ export const frames = [
       "logins",
       "logins.phone",
       "agents.looks",
-      "signin.phone"
+      "signin.phone",
+      "watch.links"
     ]
   },
   {

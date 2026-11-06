@@ -106,6 +106,7 @@ exports[`the words a person reads use the agreed words the way the snapshot hold
   "Routine · …",
   "Routines",
   "Routines arrive paused and logins are asked for securely. Replacing one of your agents is done on your Mac.",
+  "Running on your Mac · …",
   "Saved to your Mac’s Keychain",
   "Saved to your Mac’s Keychain · … uses …",
   "Saving a secret needs your Mac. It stays here until then.",
@@ -205,5 +206,6 @@ exports[`the words a person reads use the agreed words the way the snapshot hold
   "… is working on a copy of …",
   "… · in your Mac’s Keychain. …",
   "…: hand it back first.",
+  "…running on your Mac at …",
 ]
 `;
