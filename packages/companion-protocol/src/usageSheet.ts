@@ -31,11 +31,12 @@ import {
   QUOTA_STALE_MS,
   QUOTA_WARN_PERCENT,
   readDay,
+  resetDay,
   resetPhrase,
   retryPhrase,
   windowName,
 } from './quota';
-import { accountTags, accountUsage, type UsageTone } from './usage';
+import { accountTags, accountUsage, planLabel, type UsageTone } from './usage';
 
 /** When a window runs out at the recent rate: always with what it rests on. */
 export interface PaceLine {
@@ -378,5 +379,245 @@ export function usageSheet(
       tone: current.tone,
     },
     others: blocks.filter((b) => b !== current),
+  };
+}
+
+/* ------------------------------------------------------ total compute */
+
+/**
+ * Every account at once, for the top of the usage popover, Settings → Usage
+ * and the phone's Usage sheet: what there is room on now (the Mac's
+ * `totals`, from readings only), each kind of limit across accounts, the
+ * Mac's run-out estimate when it has one, then each account as a compact
+ * row, most room first. Null from a Mac that doesn't serve totals.
+ */
+export interface ComputeView {
+  /** "You have room on 2 accounts right now. Claude · Work resets at 3:20 PM." */
+  headline: string;
+  tone: UsageTone;
+  /** "3 accounts · Claude 2, Codex 1", with "· 1 not read yet" when so. */
+  summary: string;
+  /** "5-hour · 2 of 3 have room · Soonest reset 3:20 PM · Claude · Work". */
+  windows: ComputeWindowLine[];
+  /** The estimate across accounts, with what it rests on. Null without one. */
+  forecast: PaceLine | null;
+  rows: ComputeRow[];
+}
+
+export interface ComputeWindowLine {
+  key: 'session' | 'weekly';
+  /** "5-hour", "Weekly". */
+  label: string;
+  /** "2 of 3 have room". */
+  text: string;
+  /** "Soonest reset 3:20 PM · Claude · Work"; null when none was reported. */
+  reset: string | null;
+  tone: UsageTone;
+}
+
+/** One account, compact: its 5-hour and weekly bars side by side. */
+export interface ComputeRow {
+  key: string;
+  engine: AgentEngine;
+  /** "Claude · Work". */
+  title: string;
+  /** Its engine's next turn runs on it. */
+  next: boolean;
+  /** "Max plan", only when the engine said. */
+  tags: string[];
+  session: UsageMeter | null;
+  weekly: UsageMeter | null;
+  /** A per-model weekly limit, only when it's nearly or wholly used. */
+  extra: UsageMeter[];
+  /** When there's no bar to draw: "No reading yet · runs to measure", "Out of usage until …". */
+  state: string | null;
+  tone: UsageTone;
+  /** Its soonest pace estimate: "5-hour: At this pace you'll hit the limit …". */
+  pace: PaceLine | null;
+}
+
+const isWeeklyAll = (w: Pick<QuotaWindow, 'kind' | 'windowMinutes'>) =>
+  w.kind === 'seven_day' || w.windowMinutes === 7 * 24 * 60;
+
+/** Points left on the tightest of its 5-hour and weekly limits; null with no reading. */
+function roomOf(a: UsageAccountLine, now: number): number | null {
+  if (!a.signedIn) return null;
+  const plan = a.windows.filter((w) => live(w, now) && (isSession(w) || isWeeklyAll(w)));
+  if (plan.length === 0) return null;
+  if (a.out) return 0;
+  return Math.min(...plan.map((w) => 100 - usedOf(w)));
+}
+
+/** Why an account has no bars, honestly. */
+function unreadState(a: UsageAccountLine): string {
+  switch (a.check?.outcome) {
+    case 'cant_read':
+      return 'No reading yet · runs to measure';
+    case 'failed':
+      return 'No reading yet · couldn’t check just now';
+    case 'no_plan':
+      return 'No plan limits reported for this sign-in';
+    default:
+      return 'No reading yet';
+  }
+}
+
+/** Most room first; then not read yet; then no room; then signed out. */
+function rank(a: UsageAccountLine, now: number): number {
+  if (!a.signedIn) return -3;
+  const r = roomOf(a, now);
+  if (r === null) return -1;
+  return r > 0 ? r : -2;
+}
+
+const accountName = (engine: AgentEngine, name: string) =>
+  `${ENGINE_NAME[engine] ?? engine} · ${name}`;
+
+/** The compact rows, most room first (the next account first among equals). */
+export function computeRows(
+  inventory: UsageInventory | null | undefined,
+  now = Date.now()
+): ComputeRow[] {
+  const accounts = [...(inventory?.accounts ?? [])].sort(
+    (a, b) =>
+      rank(b, now) - rank(a, now) ||
+      Number(b.next) - Number(a.next) ||
+      Number(a.engine !== 'claude') - Number(b.engine !== 'claude')
+  );
+  return accounts.map((a) => {
+    const windows = a.out ? [] : a.windows.filter((w) => live(w, now));
+    const meter = (w: QuotaWindow | undefined, label: string): UsageMeter | null => {
+      const m = w ? meterOf(`${a.engine}:${a.id}:${w.kind}`, label, w, now) : null;
+      if (!m) return null;
+      // The row says its one pace line itself; a bar never repeats it.
+      return { key: m.key, label: m.label, percent: m.percent, detail: m.detail, tone: m.tone };
+    };
+    const session = meter(windows.find(isSession), '5-hour');
+    const weekly = meter(windows.find(isWeeklyAll), 'Weekly');
+    const extra = windows
+      .filter((w) => !isSession(w) && !isWeeklyAll(w) && usedOf(w) >= QUOTA_WARN_PERCENT)
+      .map((w) => meter(w, `Weekly · ${weeklyLabel(w)}`))
+      .filter((m): m is UsageMeter => m !== null);
+    const paces = (a.out ? [] : (a.pace ?? []))
+      .map((p) => {
+        const line = paceLine(p, now);
+        const w = a.windows.find((x) => x.kind === p.kind);
+        return line && w
+          ? { at: p.reachesAt, line, label: isSession(w) ? '5-hour' : 'Weekly' }
+          : null;
+      })
+      .filter((p): p is { at: number; line: PaceLine; label: string } => p !== null)
+      .sort((x, y) => x.at - y.at);
+    const first = paces[0];
+    const usage = accountUsage(a, now);
+    const bars = session !== null || weekly !== null;
+    const state = !a.signedIn || a.out ? usage.text : bars ? null : unreadState(a);
+    return {
+      key: `${a.engine}:${a.id}`,
+      engine: a.engine,
+      title: accountName(a.engine, a.name),
+      next: a.next,
+      tags: a.plan ? [planLabel(a.plan)] : [],
+      session,
+      weekly,
+      extra,
+      state,
+      tone: usage.tone,
+      pace: first ? { text: `${first.label}: ${first.line.text}`, basis: first.line.basis } : null,
+    };
+  });
+}
+
+const plural = (n: number, one: string) => `${n} ${one}${n === 1 ? '' : 's'}`;
+
+/** "by Mon afternoon", "in about 2 hours": when, roughly, for "you'll run out …". */
+function roughBy(at: number, now: number): string {
+  const when = roughWhen(at, now);
+  return when.startsWith('in ') ? when : `by ${when}`;
+}
+
+/** The estimate across accounts, when the Mac sent one; never filled in. */
+export function computeForecast(
+  inventory: UsageInventory | null | undefined,
+  now = Date.now()
+): PaceLine | null {
+  const t = inventory?.totals;
+  const runs = (t?.runOut ?? []).filter(
+    (r) => r.estimate === true && r.reachesAt > now && r.readings > 0
+  );
+  if (!t || runs.length === 0) return null;
+  const out = runs.map(
+    (r) =>
+      `you’ll run out of ${ENGINE_NAME[r.engine] ?? r.engine} on every account ${roughBy(r.reachesAt, now)}`
+  );
+  const roomy = t.engines
+    .filter((e) => e.room > 0 && !runs.some((r) => r.engine === e.engine))
+    .map((e) => `${ENGINE_NAME[e.engine] ?? e.engine} has room`);
+  const readings = runs.reduce((n, r) => n + r.readings, 0);
+  const accounts = runs.reduce((n, r) => n + r.accounts, 0);
+  return {
+    text: `At this pace ${out.join(' and ')}${roomy.length ? `; ${roomy.join(', ')}` : ''}.`,
+    basis: `Estimate from ${readings} readings across ${plural(accounts, 'account')}`,
+  };
+}
+
+/** Total compute, or null from a Mac that doesn't serve it. */
+export function computeView(
+  inventory: UsageInventory | null | undefined,
+  now = Date.now()
+): ComputeView | null {
+  const t = inventory?.totals;
+  if (!inventory || !t || t.accounts === 0) return null;
+  const unread = Math.max(0, t.accounts - t.read);
+  const engines = t.engines.map((e) => `${ENGINE_NAME[e.engine] ?? e.engine} ${e.accounts}`);
+  const summary = [
+    plural(t.accounts, 'account'),
+    engines.join(', '),
+    unread > 0 ? `${unread} not read yet` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const back = t.nextRoom && t.nextRoom.at > now ? t.nextRoom : undefined;
+  const backWho = back ? accountName(back.engine, back.accountName) : '';
+  let headline: string;
+  let tone: UsageTone = 'calm';
+  if (t.read === 0) {
+    headline = t.accounts === 1 ? 'No reading yet.' : 'No readings yet.';
+  } else if (t.room === 0) {
+    tone = 'limited';
+    headline = `No room on ${t.read === 1 ? 'your account' : 'any account'} right now.${
+      back ? ` ${backWho} resets first, ${retryPhrase(back.at, now)}.` : ''
+    }`;
+  } else if (t.room === t.accounts) {
+    headline =
+      t.room === 1
+        ? 'You have room on your account right now.'
+        : `You have room on all ${t.room} accounts right now.`;
+  } else {
+    headline = `You have room on ${plural(t.room, 'account')} right now.${
+      back ? ` ${backWho} resets ${retryPhrase(back.at, now)}.` : ''
+    }`;
+  }
+  const windows: ComputeWindowLine[] = t.windows
+    .filter((w) => w.read > 0)
+    .map((w) => {
+      const r = w.soonestReset && w.soonestReset.at > now ? w.soonestReset : undefined;
+      return {
+        key: w.family,
+        label: w.family === 'session' ? '5-hour' : 'Weekly',
+        text: `${w.room} of ${w.read} ${w.room === 1 ? 'has' : 'have'} room`,
+        reset: r
+          ? `Soonest reset ${resetDay(r.at, now)} · ${accountName(r.engine, r.accountName)}`
+          : null,
+        tone: w.room === 0 ? 'limited' : 'calm',
+      };
+    });
+  return {
+    headline,
+    tone,
+    summary,
+    windows,
+    forecast: computeForecast(inventory, now),
+    rows: computeRows(inventory, now),
   };
 }

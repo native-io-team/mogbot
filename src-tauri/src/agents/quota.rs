@@ -86,8 +86,8 @@ pub struct Quota {
     pub engine: Engine,
     pub windows: Vec<QuotaWindow>,
     /// The plan's name, when the engine said it (Codex's `planType`:
-    /// `plus`, `pro`, …). Claude Code's stream doesn't say, so it's never
-    /// filled in for Claude.
+    /// `plus`, `pro`, …). Claude Code's stream doesn't say; its credentials'
+    /// `subscriptionType` does, for a reading taken without a turn (`usage_read`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan: Option<String>,
 }

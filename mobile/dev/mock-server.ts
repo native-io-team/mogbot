@@ -2434,13 +2434,22 @@ export function createMockServer(opts: MockOptions = {}) {
       for (const a of plan.accounts) {
         // As `inventory::reading_for` does: the engine's reading (`agents.quota`)
         // is the account it came from, here this Mac's Claude sign-in, whole.
-        if (a.engine === 'claude' && a.windows.length > 0)
+        if (a.engine === 'claude' && a.thisMac && a.windows.length > 0)
           Object.assign(a, { windows: claudeWindows(now) });
         else
           for (const w of a.windows)
             Object.assign(w, { resetsAt: reset, observedAt: now - 5 * 60_000 });
+        if (a.out) a.outUntil = reset;
+        if (a.check) a.check.at = now - 5 * 60_000;
         for (const p of a.pace ?? [])
           Object.assign(p, { resetsAt: reset, reachesAt: now + 80 * 60_000 });
+      }
+      // The totals' times follow the accounts' (the Mac works them out from them).
+      const t = plan.totals;
+      if (t) {
+        for (const w of t.windows) if (w.soonestReset) w.soonestReset.at = reset;
+        if (t.nextRoom) t.nextRoom.at = reset;
+        for (const r of t.runOut ?? []) r.reachesAt = now + 80 * 60_000;
       }
       return { ...plan, now };
     },

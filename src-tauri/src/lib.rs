@@ -285,6 +285,8 @@ pub fn run() {
             agents::schedule::spawn(_app.handle().clone());
             // "When…" routines: their checks, on their own minute tick.
             agents::watch::spawn(_app.handle().clone());
+            // Every account's limits, read without a turn: on open, then every 10 minutes.
+            agents::usage_read::spawn(_app.handle().clone());
 
             // Start the agent preview bridge (global loopback MCP server) at
             // launch so it's listening before any agent session spawns —

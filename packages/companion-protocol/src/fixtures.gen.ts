@@ -687,6 +687,10 @@ export const agentsAccounts = [
 export const agentsUsagePlan = {
   "accounts": [
     {
+      "check": {
+        "at": 1762294000000,
+        "outcome": "read"
+      },
       "engine": "claude",
       "id": "default",
       "learned": [
@@ -719,6 +723,42 @@ export const agentsUsagePlan = {
       ]
     },
     {
+      "engine": "claude",
+      "id": "w1",
+      "learned": [],
+      "name": "Work",
+      "next": false,
+      "out": false,
+      "pace": [
+        {
+          "estimate": true,
+          "kind": "five_hour",
+          "reachesAt": 1762297000000,
+          "readings": 5,
+          "resetsAt": 1762301000000,
+          "spanMinutes": 70
+        }
+      ],
+      "plan": "max",
+      "signedIn": true,
+      "thisMac": false,
+      "windows": [
+        {
+          "kind": "five_hour",
+          "limited": false,
+          "observedAt": 1762290000000,
+          "resetsAt": 1762301000000,
+          "usedPercent": 80.0,
+          "windowMinutes": 300
+        }
+      ]
+    },
+    {
+      "check": {
+        "at": 1762294000000,
+        "outcome": "failed",
+        "why": "Codex didn't answer in time"
+      },
       "engine": "codex",
       "id": "c1",
       "learned": [],
@@ -729,7 +769,16 @@ export const agentsUsagePlan = {
       "plan": "plus",
       "signedIn": true,
       "thisMac": false,
-      "windows": []
+      "windows": [
+        {
+          "kind": "primary",
+          "limited": true,
+          "observedAt": 1762290000000,
+          "resetsAt": 1762400000000,
+          "usedPercent": 100.0,
+          "windowMinutes": 300
+        }
+      ]
     }
   ],
   "agents": [
@@ -823,7 +872,54 @@ export const agentsUsagePlan = {
       "usedPercent": 38.0,
       "windowMinutes": 300
     }
-  ]
+  ],
+  "totals": {
+    "accounts": 3,
+    "engines": [
+      {
+        "accounts": 2,
+        "engine": "claude",
+        "read": 2,
+        "room": 2
+      },
+      {
+        "accounts": 1,
+        "engine": "codex",
+        "read": 1,
+        "room": 0
+      }
+    ],
+    "nextRoom": {
+      "accountId": "c1",
+      "accountName": "Plus",
+      "at": 1762400000000,
+      "engine": "codex"
+    },
+    "read": 3,
+    "room": 2,
+    "runOut": [
+      {
+        "accounts": 2,
+        "engine": "claude",
+        "estimate": true,
+        "reachesAt": 1762298000000,
+        "readings": 11
+      }
+    ],
+    "windows": [
+      {
+        "family": "session",
+        "read": 3,
+        "room": 2,
+        "soonestReset": {
+          "accountId": "default",
+          "accountName": "This Mac",
+          "at": 1762300000000,
+          "engine": "claude"
+        }
+      }
+    ]
+  }
 } satisfies Result<'agents.usagePlan'>;
 export const agentsMessages = {
   "asOf": {

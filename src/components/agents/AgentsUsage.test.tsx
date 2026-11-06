@@ -3,7 +3,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { AgentUsageSettings, AgentsSpareNote } from './AgentsUsage';
 import type { UsageInventory } from '../../lib/agentsUsage';
-import { EMPTY_INVENTORY, FULL_INVENTORY } from '../../harness/scenarios/agentsUsage';
+import {
+  EMPTY_INVENTORY,
+  FULL_INVENTORY,
+  RUNOUT_INVENTORY,
+} from '../../harness/scenarios/agentsUsage';
 
 afterEach(() => {
   cleanup();
@@ -29,13 +33,31 @@ describe('Settings → Agents → Usage', () => {
     expect(
       await screen.findByText('How agents use your limits', { selector: 'span' })
     ).toBeInTheDocument();
-    expect(screen.getByText(/^5-hour 38% · resets .* · Weekly 61%/)).toBeInTheDocument();
+    // Every account at once, from readings only.
     expect(
-      screen.getByText('About 48k tokens a turn · estimate from 212 past runs')
+      screen.getByText(/^You have room on 2 accounts right now\. Claude · Work resets /)
     ).toBeInTheDocument();
-    expect(screen.getByText('No reading yet')).toBeInTheDocument();
-    expect(screen.getByText(/^Out of usage until /)).toBeInTheDocument();
-    expect(screen.getByText('Plus plan · Next turns run here')).toBeInTheDocument();
+    expect(screen.getByText('4 accounts · Claude 3, Codex 1 · 1 not read yet')).toBeInTheDocument();
+    expect(screen.getByText('2 of 2 have room')).toBeInTheDocument();
+    expect(screen.getByText('1 of 2 has room')).toBeInTheDocument();
+    // Each account once, most room first, its bars side by side.
+    const rows = screen.getAllByRole('listitem').filter((li) => li.matches('.agents-compute__row'));
+    expect(rows.map((r) => r.querySelector('.agents-compute__name')?.textContent)).toEqual([
+      'Claude · This Mac',
+      'Codex · ChatGPT Plus',
+      'Claude · Personal',
+      'Claude · Work',
+    ]);
+    expect(rows[0].querySelectorAll('[role="meter"]')).toHaveLength(2);
+    expect(rows[0].textContent).toContain('Next turn');
+    expect(rows[0].textContent).toMatch(/Weekly: At this pace you’ll hit the limit/);
+    expect(rows[1].textContent).toContain('Plus plan');
+    expect(rows[2].textContent).toContain('No reading yet · runs to measure');
+    expect(rows[3].textContent).toMatch(/Out of usage until /);
+    expect(rows[3].querySelectorAll('[role="meter"]')).toHaveLength(0);
+    expect(
+      screen.getByText('Claude Code: About 48k tokens a turn · estimate from 212 past runs')
+    ).toBeInTheDocument();
     expect(
       screen.getByText('Ollama · running · llama3.2:3b, qwen2.5-coder:7b')
     ).toBeInTheDocument();
@@ -49,6 +71,8 @@ describe('Settings → Agents → Usage', () => {
     serve(EMPTY_INVENTORY);
     const { container } = render(<AgentUsageSettings />);
     expect(await screen.findByText('No reading yet')).toBeInTheDocument();
+    expect(screen.getByText('No reading yet.')).toBeInTheDocument();
+    expect(container.querySelectorAll('[role="meter"]')).toHaveLength(0);
     expect(container.textContent).not.toMatch(/estimate|tokens a turn|unused/);
     expect(container.textContent).not.toContain('Codex');
     expect(container.textContent).not.toContain('Other compute');
@@ -71,6 +95,30 @@ describe('Settings → Agents → Usage', () => {
         args: { text: 'Read the backlog', agentId: null },
       })
     );
+  });
+});
+
+describe('Settings → Agents → Usage: running out everywhere', () => {
+  it('says the estimate across accounts with what it rests on', async () => {
+    serve(RUNOUT_INVENTORY);
+    render(<AgentUsageSettings />);
+    expect(
+      await screen.findByText('You have room on all 3 accounts right now.')
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'At this pace you’ll run out of Claude on every account in about 3 hours; Codex has room.'
+      )
+    ).toBeInTheDocument();
+    expect(screen.getByText('Estimate from 13 readings across 2 accounts')).toBeInTheDocument();
+  });
+
+  it('falls back to each engine’s list from a Mac that serves no totals', async () => {
+    const { totals: _none, ...older } = FULL_INVENTORY;
+    serve(older);
+    render(<AgentUsageSettings />);
+    expect(await screen.findByText(/^5-hour 38% · resets .* · Weekly 61%/)).toBeInTheDocument();
+    expect(document.querySelector('.agents-compute')).toBeNull();
   });
 });
 

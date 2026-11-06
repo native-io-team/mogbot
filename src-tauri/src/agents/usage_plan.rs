@@ -126,6 +126,36 @@ struct ReadingsFile {
     /// Each account's running token count, from turns this app ran.
     #[serde(default)]
     tokens: BTreeMap<String, u64>,
+    /// How each account's last check without a turn went (`usage_read`).
+    #[serde(default)]
+    checks: BTreeMap<String, Check>,
+}
+
+/// How a check of an account's limits without a turn came out
+/// (`usage_read`). A reading itself goes where a turn's does
+/// ([`archive`]); this says only whether it could be read, and when.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CheckOutcome {
+    /// Read: its reading is the account's own, with this time.
+    Read,
+    /// The engine answered with no plan windows for this login.
+    NoPlan,
+    /// This account can't be read without a turn (a sign-in that may not
+    /// read limits, signed out, or a token only its engine can refresh).
+    CantRead,
+    /// The engine or the network didn't answer this time.
+    Failed,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Check {
+    pub at: i64,
+    pub outcome: CheckOutcome,
+    /// Why, in a few plain words, when it wasn't read.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub why: Option<String>,
 }
 
 pub fn account_key(engine: Engine, id: &str) -> String {
@@ -478,6 +508,27 @@ pub fn forget_reading(engine: Engine, account: &str) {
     change_readings(|f| {
         f.readings.remove(&key);
     });
+}
+
+/// Note how an account's check without a turn went. True when that is
+/// news (a different outcome from the last check).
+pub fn set_check(engine: Engine, account: &str, check: Check) -> bool {
+    let key = account_key(engine, account);
+    let mut news = false;
+    change_readings(|f| {
+        news = f
+            .checks
+            .get(&key)
+            .is_none_or(|c| c.outcome != check.outcome || c.why != check.why);
+        f.checks.insert(key, check);
+    });
+    news
+}
+
+/// Every account's last check without a turn.
+pub fn checks() -> BTreeMap<String, Check> {
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    read_json::<ReadingsFile>(readings_path()).checks
 }
 
 /// Every account's last reading and samples, as stored.

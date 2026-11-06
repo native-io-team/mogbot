@@ -13,9 +13,18 @@ fn changed(app: &AppHandle) {
 
 /// Every engine and account with what each last reported, other compute on
 /// this Mac, spare windows, estimates from past runs, and the list.
+///
+/// Someone is looking: every account is read again without a turn
+/// (`usage_read`), unless that ran in the last two minutes. That happens
+/// behind this answer, which is what is known now; a change arrives as
+/// `agents://quota`.
 #[tauri::command]
-#[tracing::instrument]
-pub async fn agents_usage_overview() -> Result<Inventory, CommandError> {
+#[tracing::instrument(skip(app))]
+pub async fn agents_usage_overview(app: AppHandle) -> Result<Inventory, CommandError> {
+    let handle = app.clone();
+    tauri::async_runtime::spawn(async move {
+        agents::usage_read::refresh_if_stale(&handle).await;
+    });
     Ok(agents::inventory::read().await)
 }
 

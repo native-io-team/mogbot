@@ -31,6 +31,7 @@ import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { AGENT_EVENTS, ENGINE_LABEL } from '../../lib/agents';
 import { takeSettingsSectionRequest } from '../../lib/settings';
+import { ComputeTotal } from './AgentsCompute';
 import {
   USAGE_MODES,
   USAGE_MODE_DETAIL,
@@ -38,6 +39,7 @@ import {
   accountTags,
   accountUsage,
   addSpareItem,
+  computeView,
   estimateLine,
   getUsageInventory,
   localLine,
@@ -223,6 +225,10 @@ export function AgentUsageSettings() {
   };
   const engines = inventory.engines.filter((e) => e.installed);
   const spare = spareLine(inventory, now);
+  const total = computeView(inventory, now);
+  const estimates = engines
+    .map((e) => ({ id: e.id, line: estimateLine(e.perTurn) }))
+    .filter((e): e is { id: typeof e.id; line: string } => e.line !== null);
 
   return (
     <section
@@ -245,7 +251,27 @@ export function AgentUsageSettings() {
         <span className="agents-usage__muted">{USAGE_MODE_DETAIL[inventory.mode]}</span>
       </div>
 
-      {engines.length > 0 && (
+      {engines.length > 0 && total && (
+        <div className="agents-usage__block">
+          <span className="agents-usage__heading">What you have</span>
+          <ComputeTotal view={total} />
+          {estimates.map((e) => (
+            <span className="agents-usage__muted" key={e.id}>
+              {ENGINE_LABEL[e.id]}: {e.line}
+            </span>
+          ))}
+          {spare && (
+            <span className="agents-usage-spare" title={spare.detail}>
+              {spare.text}
+            </span>
+          )}
+          <span className="agents-usage__muted">
+            As each account last reported it. Use of the same plan anywhere else counts too.
+          </span>
+        </div>
+      )}
+
+      {engines.length > 0 && !total && (
         <div className="agents-usage__block">
           <span className="agents-usage__heading">What you have</span>
           <span className="agents-usage__muted">

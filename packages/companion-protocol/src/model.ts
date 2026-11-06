@@ -1488,6 +1488,67 @@ export interface UsageAccountLine {
    * after the reset), and from Macs that predate it.
    */
   pace?: UsagePace[];
+  /**
+   * How the Mac's last check of this account without a turn went
+   * (`agents::usage_read`, every 10 minutes while it's open). Absent before
+   * the first check, and from Macs that predate it.
+   */
+  check?: UsageCheck;
+}
+
+/** One check of an account's limits without a turn. */
+export interface UsageCheck {
+  at: number;
+  /**
+   * `read`: its windows are from this check. `no_plan`: the engine said this
+   * login has no plan limits. `cant_read`: it can't be read without a turn
+   * (its next turn reports them). `failed`: no answer this time.
+   */
+  outcome: 'read' | 'no_plan' | 'cant_read' | 'failed';
+  why?: string;
+}
+
+/** An account and a time (a reset, or when it has room again). */
+export interface UsageAccountAt {
+  engine: AgentEngine;
+  accountId: string;
+  accountName: string;
+  at: number;
+}
+
+/**
+ * Every account at once (`agents::compute::Totals`). Room is only what a
+ * reading said: an account with no reading is "not read", never counted as
+ * having room.
+ */
+export interface ComputeTotals {
+  /** Every account listed. */
+  accounts: number;
+  engines: { engine: AgentEngine; accounts: number; read: number; room: number }[];
+  /** With a current reading. */
+  read: number;
+  /** With room now, by that reading. */
+  room: number;
+  /** 5-hour (`session`) then weekly; a kind no account reported is absent. */
+  windows: {
+    family: 'session' | 'weekly';
+    read: number;
+    room: number;
+    soonestReset?: UsageAccountAt;
+  }[];
+  /** Of the accounts without room, the soonest one has room again. */
+  nextRoom?: UsageAccountAt;
+  /**
+   * An ESTIMATE: an engine that runs out on every one of its accounts at the
+   * recent pace, before any resets. Only with 2+ accounts, every one read.
+   */
+  runOut?: {
+    estimate: true;
+    engine: AgentEngine;
+    reachesAt: number;
+    readings: number;
+    accounts: number;
+  }[];
 }
 
 /**
@@ -1568,6 +1629,8 @@ export interface UsageInventory {
   backlog: SpareItem[];
   agents: UsageAgentLine[];
   routines: UsageRoutineLine[];
+  /** Every account at once. Absent from Macs that predate it. */
+  totals?: ComputeTotals;
   now: number;
 }
 

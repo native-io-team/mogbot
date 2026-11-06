@@ -21,7 +21,7 @@ pub struct Def {
 pub const TOOLS: &[Def] = &[
     Def {
         name: "usage_overview",
-        description: "What the user has to run agents on and what is left of it: the usage mode they chose, every engine and account (Claude Code, Codex) with each account's last REPORTED limit windows and reset times (only what the engines said, with when; \"No reading\" when there's none), which account the next turn runs on, other compute installed on this Mac (Opencode, Ollama, LM Studio), windows near a reset with capacity left, ESTIMATES of what a turn or routine uses from this user's past runs, and the spare-capacity list. Read-only. Use it before planning anything big, and whenever the user asks about usage or limits.",
+        description: "What the user has to run agents on and what is left of it (their total compute): a TOTAL line across every account (how many have room now, per 5-hour and weekly limit, the soonest reset, and, as an ESTIMATE, when an engine runs out on every account at the recent pace), the usage mode they chose, every engine and account (Claude Code, Codex) with each account's last REPORTED limit windows and reset times (each account is read every 10 minutes without a turn where it can be) (only what the engines said, with when; \"No reading\" when there's none), which account the next turn runs on, other compute installed on this Mac (Opencode, Ollama, LM Studio), windows near a reset with capacity left, ESTIMATES of what a turn or routine uses from this user's past runs, and the spare-capacity list. Read-only. Use it before planning anything big, and whenever the user asks about usage or limits.",
         main_only: false,
         schema: || json!({ "type": "object", "properties": {} }),
     },
@@ -116,7 +116,15 @@ fn count(args: &Value, key: &str) -> u32 {
         .unwrap_or(1)
 }
 
-pub async fn overview() -> Value {
+/// Read every account again first (when that hasn't run in two minutes), so
+/// "how much do I have left?" is answered from what each one says now. At
+/// most ~20 seconds; past that, what is known.
+pub async fn overview(app: &AppHandle) -> Value {
+    let _ = tokio::time::timeout(
+        std::time::Duration::from_secs(20),
+        super::usage_read::refresh_if_stale(app),
+    )
+    .await;
     let inv = inventory::read().await;
     text(inventory::overview_text(&inv, &chrono::Local))
 }
@@ -429,6 +437,7 @@ mod tests {
                 per_turn: Some(per(5_000)),
             }],
             routines: vec![],
+            totals: crate::agents::compute::totals(&[], 0),
             now: 0,
         }
     }
