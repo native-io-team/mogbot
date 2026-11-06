@@ -839,7 +839,7 @@
       "owner": "WorkspaceSidebar",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 15
+      "consumerCount": 18
     },
     {
       "name": "--size-sidebar-project",
@@ -866,7 +866,7 @@
       "owner": "WorkspaceSidebar",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 2
+      "consumerCount": 4
     },
     {
       "name": "--size-sidebar-section-row",
@@ -950,13 +950,31 @@
       "consumerCount": 1
     },
     {
+      "name": "--size-icon-xs",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "IconGallery",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 1
+    },
+    {
+      "name": "--size-icon-compact",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "IconGallery",
+      "status": "canonical",
+      "pluginStable": false,
+      "consumerCount": 3
+    },
+    {
       "name": "--size-icon-sm",
       "definitionFile": "src/styles/global/tokens-components.css",
       "layer": "components",
       "owner": "IconGallery",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 39
+      "consumerCount": 40
     },
     {
       "name": "--size-icon-button",
@@ -965,7 +983,7 @@
       "owner": "IconGallery",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 55
+      "consumerCount": 56
     },
     {
       "name": "--size-icon-md",
@@ -2963,7 +2981,7 @@
       "owner": "GlobalOverlay",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 17
+      "consumerCount": 16
     },
     {
       "name": "--z-preview-fullscreen",
@@ -4745,7 +4763,7 @@
       "owner": "global/core",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 46
+      "consumerCount": 41
     },
     {
       "name": "--space-09",
@@ -5258,7 +5276,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 266
+      "consumerCount": 264
     },
     {
       "name": "--surface-control",
@@ -5474,7 +5492,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 175
+      "consumerCount": 173
     },
     {
       "name": "--border-strong",
@@ -5510,7 +5528,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 274
+      "consumerCount": 273
     },
     {
       "name": "--border-width-emphasis",
@@ -6149,7 +6167,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 666
+      "consumerCount": 661
     },
     {
       "name": "--spacing-sm",
@@ -6158,7 +6176,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 846
+      "consumerCount": 842
     },
     {
       "name": "--spacing-md",
@@ -6167,7 +6185,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 564
+      "consumerCount": 562
     },
     {
       "name": "--spacing-lg",
@@ -6257,7 +6275,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 2
+      "consumerCount": 4
     },
     {
       "name": "--tint-subtle",
@@ -6617,7 +6635,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 266
+      "consumerCount": 264
     },
     {
       "name": "--surface-control",
@@ -6833,7 +6851,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 175
+      "consumerCount": 173
     },
     {
       "name": "--border-strong",

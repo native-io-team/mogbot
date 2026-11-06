@@ -20,7 +20,7 @@
   --size-sidebar-project-shortcut: 24px;
   --size-sidebar-project: 214px;
   --size-sidebar-project-row: 46px;
-  /* How far the sidebar footer's fade reaches up over the list above it. */
+  /* The band at the bottom of the sidebar list that fades into the footer. */
   --size-sidebar-footer-fade: calc(var(--space-32) + var(--space-16));
   --size-sidebar-section-row: 22px;
   --size-sidebar-shortcut: 21px;
@@ -38,6 +38,8 @@
    * over the panel's own bottom border. */
   --spotify-widget-progress-height: var(--stroke-2);
 
+  --size-icon-xs: 10px;
+  --size-icon-compact: 12px;
   --size-icon-sm: 14px;
   --size-icon-button: 16px;
   --size-icon-md: 18px;

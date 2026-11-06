@@ -604,9 +604,17 @@ body.compact-mode-active html {
   font-size: var(--font-size-button);
 }
 
+/* A compact button is one height with or without an icon. Growing to fit a
+   16px icon slot made "▶ Test it" 28px tall beside 20px neighbours; the icon
+   slot shrinks to the compact icon size instead. */
 .button--size-compact.button--has-icon:not(.button--icon-only) {
-  height: auto;
-  padding: var(--space-06);
+  padding: 0 var(--space-06);
+}
+
+.button--size-compact:not(.button--icon-only) .button__icon {
+  flex-basis: var(--size-icon-compact);
+  width: var(--size-icon-compact);
+  height: var(--size-icon-compact);
 }
 
 .button--size-medium {

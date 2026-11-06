@@ -11,6 +11,12 @@
   --agents-preview-shot-height: 64px; /* css-ok: a step's thumbnail */
   --agents-test-shot-width: 168px; /* css-ok: a report thumbnail */
   --agents-test-shot-height: 112px; /* css-ok: a report thumbnail */
+  /* The header and the toolbar share one grid: the same row height, the same
+     inset, a leading column the width of one control (the globe above the
+     back arrow), and every control at one height. */
+  --agents-preview-control: calc(var(--control-height-compact) + var(--space-04));
+  --agents-preview-gap: var(--spacing-xs);
+  --agents-preview-inset: var(--spacing-sm);
 }
 
 .agent-preview {
@@ -35,14 +41,51 @@
   border-left: none;
 }
 
-.agent-preview__header {
+.agent-preview__header,
+.agent-preview__toolbar {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
-  gap: var(--spacing-sm);
-  min-height: 44px; /* css-ok: matches the chat header */
-  padding: var(--spacing-xs) var(--spacing-sm) var(--spacing-xs) var(--spacing-md);
-  color: var(--text-muted);
+  gap: var(--agents-preview-gap);
+  height: var(--agents-header-height);
+  padding: 0 var(--agents-preview-inset);
   border-bottom: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-preview__header {
+  color: var(--text-muted);
+}
+
+/* The globe gets the back arrow's box, so the two share a centre and the
+   title starts where the address field does. */
+.agent-preview__header > svg:first-child {
+  box-sizing: content-box;
+  flex: 0 0 auto;
+  padding-inline: calc((var(--agents-preview-control) - var(--size-icon-sm)) / 2);
+}
+
+/* Every control in both rows is one height: the address field's. */
+.agent-preview__header .button,
+.agent-preview__toolbar .button {
+  height: var(--agents-preview-control);
+  min-height: var(--agents-preview-control);
+}
+
+.agent-preview__header .button--icon-only,
+.agent-preview__toolbar > .button--icon-only {
+  width: var(--agents-preview-control);
+  min-width: var(--agents-preview-control);
+}
+
+.agent-preview__toolbar > .segmented-control {
+  box-sizing: border-box;
+  height: var(--agents-preview-control);
+  align-items: stretch;
+}
+
+.agent-preview__toolbar > .segmented-control > .button {
+  height: auto;
+  min-height: 0;
 }
 
 .agent-preview__heading {
@@ -73,7 +116,7 @@
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: var(--spacing-xs);
+  gap: var(--agents-preview-gap);
 }
 
 .agent-preview__body {
@@ -129,18 +172,10 @@
   min-height: 0;
 }
 
-.agent-preview__toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border-bottom: var(--border-width-default) solid var(--border-subtle);
-}
-
 .agent-preview__address {
   flex: 1;
   min-width: 0;
-  height: 26px; /* css-ok: a compact control's height */
+  height: var(--agents-preview-control);
   padding: 0 var(--spacing-sm);
   font-family: var(--font-code);
   font-size: var(--font-size-caption);
@@ -197,6 +232,10 @@
   display: flex;
   flex: 0 0 var(--agents-preview-steps-width);
   flex-direction: column;
+  /* Never narrower than its column: squeezed, every label broke one letter
+     per line. */
+  width: var(--agents-preview-steps-width);
+  min-width: var(--agents-preview-steps-width);
   min-height: 0;
   border-left: var(--border-width-default) solid var(--border-subtle);
 }
@@ -216,37 +255,57 @@
 
 .agent-preview__steps-title {
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   gap: var(--spacing-xs);
+  /* The toolbar's row, so its hairline runs on across the steps. */
+  height: var(--agents-header-height);
   margin: 0;
-  padding: var(--spacing-sm) var(--spacing-md);
+  padding: 0 var(--spacing-md);
   font-size: var(--font-size-body-sm);
   font-weight: var(--font-weight-label);
   color: var(--text-primary);
+  border-bottom: var(--border-width-default) solid var(--border-subtle);
 }
 
+/* A calm vertical list: one step per line (icon, then its words), and a
+   screenshot under its step at the column's full width. Block flow, not a
+   flex or grid of items, so no engine can lay the steps out side by side
+   or shrink a label to its narrowest word. */
 .agent-preview__step-list {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
+  display: block;
+  flex: 1 1 auto;
+  min-height: 0;
   margin: 0;
-  padding: 0 var(--spacing-md) var(--spacing-md);
+  padding: var(--spacing-sm) var(--spacing-md) var(--spacing-md);
   overflow-y: auto;
   list-style: none;
 }
 
 .agent-preview__step {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: var(--spacing-2xs) var(--spacing-xs);
-  align-items: start;
+  display: block;
+  width: 100%;
   font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-compact);
   color: var(--text-secondary);
+}
+
+.agent-preview__step + .agent-preview__step {
+  margin-top: var(--spacing-xs);
+}
+
+.agent-preview__step-head {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--spacing-xs);
+  width: 100%;
 }
 
 .agent-preview__step-icon {
   display: inline-flex;
-  padding-top: var(--spacing-3xs);
+  flex: 0 0 auto;
+  align-items: center;
+  height: calc(1em * var(--line-height-compact));
   color: var(--accent-error);
 }
 
@@ -255,13 +314,17 @@
 }
 
 .agent-preview__step-label {
+  flex: 1 1 0;
   min-width: 0;
-  overflow-wrap: anywhere;
+  overflow-wrap: break-word;
 }
 
 .agent-preview__step-shot {
-  grid-column: 2;
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
   height: var(--agents-preview-shot-height);
+  margin-top: var(--spacing-xs);
   padding: 0;
   overflow: hidden;
   cursor: zoom-in;
