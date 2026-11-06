@@ -10,13 +10,12 @@
  * @module main
  */
 
-import './instrument';
+import { lazyReactErrorHandler } from './instrument';
 // Before any React root: keeps infinite CSS animations on the compositor.
 import './lib/noAnimationIterationListeners';
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-import { reactErrorHandler } from '@sentry/react';
 import App from './App';
 import { QuickEntry } from './components/agents/QuickEntry';
 import { ErrorBoundary } from './components/ErrorBoundary';
@@ -264,8 +263,8 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement, {
   // Only report errors that escape ErrorBoundary. Caught errors already flow
   // through `logger.logError` → backend `log_frontend_event` → `tracing::error!`
   // → sentry_tracing layer, so wiring `onCaughtError` here would double-report.
-  onUncaughtError: reactErrorHandler(),
-  onRecoverableError: reactErrorHandler(),
+  onUncaughtError: lazyReactErrorHandler(),
+  onRecoverableError: lazyReactErrorHandler(),
 }).render(
   <React.StrictMode>
     <ErrorBoundary>

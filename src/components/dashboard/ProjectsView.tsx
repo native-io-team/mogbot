@@ -13,7 +13,7 @@ import { CreateProject, type CreateProjectTab } from './CreateProject';
 import { ImportProject } from './ImportProject';
 import { ImportTypePicker } from './ImportTypePicker';
 import { Button } from '../primitives/Button';
-import { OnboardingTerminal } from '../setup';
+import { OnboardingTerminal } from '../terminal/lazyTerminals';
 import type { Project } from '../../lib/project';
 import type { AuthTerminalConfig } from '../../hooks/useIntegrationStatus';
 

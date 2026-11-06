@@ -8,6 +8,7 @@
  * screen (iPad, or a big phone in landscape) the chat opens beside the list.
  */
 
+import { shareStructure } from '../../../lib/structure';
 import type { Agent, RoomView } from '@shipstudio/companion-protocol';
 import { Stack, useRouter } from 'expo-router';
 import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
@@ -241,7 +242,8 @@ export default function Agents() {
   const { refreshing, onRefresh, outcome, dismiss } = useRefresh(async () => {
     if (useApp.getState().link.kind !== 'connected') throw new Error('offline');
     try {
-      setApp({ overview: await call('agents.overview', {}) });
+      const fresh = await call('agents.overview', {});
+      setApp((s) => ({ overview: shareStructure(s.overview, fresh) }));
       if (roomsOffered(useApp.getState().welcome)) await refreshRooms();
     } catch (e) {
       setError(describeError(e));

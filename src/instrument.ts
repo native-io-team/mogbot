@@ -1,4 +1,4 @@
-import * as Sentry from '@sentry/react';
+type SentryModule = typeof import('@sentry/react');
 import { BRAND } from './lib/brand';
 
 declare const __APP_VERSION__: string;
@@ -31,29 +31,51 @@ function scrub<T>(value: T): T {
 
 const forceEnabled = import.meta.env.VITE_SENTRY_FORCE === '1';
 
+// The SDK is ~600 kB of JavaScript the window would parse before painting, so
+// it is only fetched when there is a DSN to report to (none, in a build whose
+// brand.json names no Sentry project). React's error hooks route through
+// `reactErrorHandler` below, which is a no-op until the SDK has loaded.
+let sentry: SentryModule | null = null;
+
+/** `Sentry.reactErrorHandler()` that works before (or without) the SDK. */
+export function lazyReactErrorHandler(): (
+  error: unknown,
+  errorInfo: { componentStack?: string }
+) => void {
+  return (error, errorInfo) => {
+    if (!sentry) return;
+    sentry.reactErrorHandler()(error, errorInfo as never);
+  };
+}
+
 // Boot-path guard: instrument.ts is the first module main.tsx evaluates, so a
 // throw here means a black window (#173) — crash reporting must never be the
 // thing that crashes the app.
 try {
   if (DSN && (import.meta.env.PROD || forceEnabled)) {
-    Sentry.init({
-      dsn: DSN,
-      environment: import.meta.env.PROD ? 'production' : 'development',
-      release: `${BRAND.slug}@${__APP_VERSION__}`,
+    void import('@sentry/react')
+      .then((Sentry) => {
+        Sentry.init({
+          dsn: DSN,
+          environment: import.meta.env.PROD ? 'production' : 'development',
+          release: `${BRAND.slug}@${__APP_VERSION__}`,
 
-      sendDefaultPii: false,
+          sendDefaultPii: false,
 
-      integrations: [Sentry.browserTracingIntegration()],
+          integrations: [Sentry.browserTracingIntegration()],
 
-      tracesSampleRate: 0.1,
+          tracesSampleRate: 0.1,
 
-      beforeSend(event) {
-        return scrub(event);
-      },
-      beforeBreadcrumb(breadcrumb) {
-        return scrub(breadcrumb);
-      },
-    });
+          beforeSend(event) {
+            return scrub(event);
+          },
+          beforeBreadcrumb(breadcrumb) {
+            return scrub(breadcrumb);
+          },
+        });
+        sentry = Sentry;
+      })
+      .catch((err) => console.error('[instrument] Sentry init failed', err));
   }
 } catch (err) {
   console.error('[instrument] Sentry init failed', err);

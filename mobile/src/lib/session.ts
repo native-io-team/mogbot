@@ -3,6 +3,7 @@
  * into the store, and exposes the actions screens call. One Mac, one session.
  */
 
+import { shareStructure } from './structure';
 import type {
   Alert,
   AgentMessage,
@@ -613,7 +614,8 @@ export async function createAgent(
 ) {
   const stored = await call('agents.create', { input, clientId });
   if (!getApp().overview?.agents.some((a) => a.id === stored.id)) {
-    setApp({ overview: await call('agents.overview', {}) });
+    const fresh = await call('agents.overview', {});
+    setApp((s) => ({ overview: shareStructure(s.overview, fresh) }));
   }
   return stored;
 }

@@ -18,8 +18,7 @@ import { useRef, useState } from 'react';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
 import { TextField } from '../primitives/TextField';
-import { ClaudeConnectTerminal } from '../dashboard/ClaudeConnectTerminal';
-import { WorkspaceConnectTerminal } from '../dashboard/WorkspaceConnectTerminal';
+import { ClaudeConnectTerminal, WorkspaceConnectTerminal } from '../terminal/lazyTerminals';
 import { ENGINE_LABEL } from '../../lib/agents';
 import type { UsageAccount } from '../../lib/agentAccounts';
 

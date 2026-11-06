@@ -13,7 +13,7 @@
  */
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { OnboardingTerminal } from '../OnboardingTerminal';
+import { OnboardingTerminal } from '../../terminal/lazyTerminals';
 import { DemoAgentTerminal } from './DemoAgentTerminal';
 import { SetupChecklist } from './SetupChecklist';
 import { Button } from '../../primitives/Button';

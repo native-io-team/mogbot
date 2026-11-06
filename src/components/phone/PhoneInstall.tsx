@@ -16,7 +16,7 @@ import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
 import { SegmentedControl } from '../primitives/SegmentedControl';
 import { Spinner } from '../primitives/Spinner';
-import { OnboardingTerminal } from '../setup/OnboardingTerminal';
+import { OnboardingTerminal } from '../terminal/lazyTerminals';
 import { ArrowLeftIcon, ChevronRightIcon, ExternalLinkIcon } from '@/components/icons';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { usePolling } from '../../hooks/usePolling';

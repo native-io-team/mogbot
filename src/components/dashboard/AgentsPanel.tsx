@@ -31,8 +31,7 @@ import {
   DEFAULT_ACCOUNT_ID,
   type AccountCredentialStatus,
 } from '../../lib/accounts';
-import { OnboardingTerminal } from '../setup/OnboardingTerminal';
-import { ClaudeConnectTerminal } from './ClaudeConnectTerminal';
+import { OnboardingTerminal, ClaudeConnectTerminal } from '../terminal/lazyTerminals';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { DashboardCardDisclosure } from './DashboardCardDisclosure';
 import { Button } from '../primitives/Button';

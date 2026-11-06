@@ -20,7 +20,7 @@
 
 import { useCallback, useState, type ReactNode } from 'react';
 import { ModalFrame } from '../components/primitives/ModalFrame';
-import { OnboardingTerminal } from '../components/setup/OnboardingTerminal';
+import { OnboardingTerminal } from '../components/terminal/lazyTerminals';
 import { WorkspaceConnectModal } from '../components/dashboard/WorkspaceConnectModal';
 import { VercelTokenModal } from '../components/dashboard/VercelTokenModal';
 import {

@@ -34,7 +34,7 @@ import { Dropdown, DropdownItem } from '../primitives/Dropdown';
 import { IconButton } from '../primitives/IconButton';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
-import { AttachedTerminal } from '../terminal/AttachedTerminal';
+import { AttachedTerminal } from '../terminal/lazyTerminals';
 import { ProjectActionConfirmModal } from '../dashboard/ProjectActionConfirmModal';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';

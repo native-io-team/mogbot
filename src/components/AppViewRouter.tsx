@@ -4,26 +4,65 @@
  * focused on orchestration rather than markup.
  */
 
-import type { ComponentProps, ReactNode } from 'react';
+import { Suspense, lazy, useEffect, type ComponentProps, type ReactNode } from 'react';
 import { AccountSelectScreen } from './accounts/AccountSelectScreen';
-import { ProjectsView } from './dashboard/ProjectsView';
-import { MonorepoPickerModal } from './dashboard/MonorepoPickerModal';
+import type { ProjectsView } from './dashboard/ProjectsView';
 import { BootLoadingScreen } from './BootLoadingScreen';
 import { ThumbnailConsentModal } from './preview/ThumbnailConsentModal';
 import { ToastList } from './primitives/ToastList';
-import { OnboardingRouter } from './setup';
 import { HomeSidebar } from './workspace/HomeSidebar';
 import { CompactModeToggle } from './workspace/ModeToggle';
-import { StandingWorkView } from './workspace/StandingWorkView';
 import { AgentsView } from './agents/AgentsView';
 import { WorkspaceNavigation, WorkspaceTitlebar } from './workspace/WorkspaceHeader';
 import { WorkspaceSidebar } from './workspace/WorkspaceSidebar';
-import { WorkspaceView } from './workspace/WorkspaceView';
+import type { WorkspaceView } from './workspace/WorkspaceView';
 import { Spinner } from './primitives/Spinner';
 import type { Project, WorkspaceInfo } from '../lib/project';
 import type { AppView } from '../lib/types';
 import type { AgentPreviewServer } from '../lib/agentPreview';
 import type { WorkspacePick } from './dashboard/MonorepoPickerModal';
+
+// Agents is where the app opens, so what it doesn't need to paint (the
+// workspace with its terminals and editor, the projects dashboard, onboarding,
+// Workflows/Inbox) is its own chunk, fetched when a view first asks for it and
+// warmed shortly after launch so the first switch doesn't wait.
+const loadProjectsView = () => import('./dashboard/ProjectsView');
+const loadMonorepoPicker = () => import('./dashboard/MonorepoPickerModal');
+const loadOnboarding = () => import('./setup');
+const loadStandingWork = () => import('./workspace/StandingWorkView');
+const loadWorkspaceView = () => import('./workspace/WorkspaceView');
+const LazyProjectsView = lazy(() => loadProjectsView().then((m) => ({ default: m.ProjectsView })));
+const LazyMonorepoPicker = lazy(() =>
+  loadMonorepoPicker().then((m) => ({ default: m.MonorepoPickerModal }))
+);
+const LazyOnboardingRouter = lazy(() =>
+  loadOnboarding().then((m) => ({ default: m.OnboardingRouter }))
+);
+const LazyStandingWorkView = lazy(() =>
+  loadStandingWork().then((m) => ({ default: m.StandingWorkView }))
+);
+const LazyWorkspaceView = lazy(() =>
+  loadWorkspaceView().then((m) => ({ default: m.WorkspaceView }))
+);
+
+const WARM_AFTER_MS = 4000;
+function useWarmViewChunks(view: AppView) {
+  useEffect(() => {
+    if (view === 'loading' || view === 'onboarding') return;
+    const id = window.setTimeout(() => {
+      void loadProjectsView();
+      void loadWorkspaceView();
+      void loadStandingWork();
+    }, WARM_AFTER_MS);
+    return () => window.clearTimeout(id);
+  }, [view]);
+}
+
+const viewFallback = (
+  <div className="app loading">
+    <Spinner size="lg" />
+  </div>
+);
 
 type AccountSelectProps = ComponentProps<typeof AccountSelectScreen>;
 type HomeSidebarProps = Omit<ComponentProps<typeof HomeSidebar>, 'activeNav'>;
@@ -88,6 +127,7 @@ export function AppViewRouter({
   quitConfirmModal,
   agentPreviewServer,
 }: AppViewRouterProps) {
+  useWarmViewChunks(view);
   if (view === 'loading') {
     return (
       <>
@@ -101,7 +141,9 @@ export function AppViewRouter({
     return (
       <>
         <div className="app">
-          <OnboardingRouter onComplete={onOnboardingComplete} />
+          <Suspense fallback={null}>
+            <LazyOnboardingRouter onComplete={onOnboardingComplete} />
+          </Suspense>
         </div>
         {quitConfirmModal}
       </>
@@ -133,18 +175,22 @@ export function AppViewRouter({
             ) : (
               <HomeSidebar {...homeSidebarProps} activeNav="home" />
             )}
-            <ProjectsView {...projectsViewProps} />
+            <Suspense fallback={null}>
+              <LazyProjectsView {...projectsViewProps} />
+            </Suspense>
           </div>
         </div>
         {pendingMonorepoPick && (
-          <MonorepoPickerModal
-            projectName={pendingMonorepoPick.project.name}
-            workspaces={pendingMonorepoPick.workspaces}
-            selectedPick={pendingMonorepoPick.selectedPick}
-            onSelect={onSelectMonorepoPick}
-            onConfirm={onConfirmMonorepoPick}
-            onCancel={onCancelMonorepoPick}
-          />
+          <Suspense fallback={null}>
+            <LazyMonorepoPicker
+              projectName={pendingMonorepoPick.project.name}
+              workspaces={pendingMonorepoPick.workspaces}
+              selectedPick={pendingMonorepoPick.selectedPick}
+              onSelect={onSelectMonorepoPick}
+              onConfirm={onConfirmMonorepoPick}
+              onCancel={onCancelMonorepoPick}
+            />
+          </Suspense>
         )}
         <ToastList toasts={toasts} onDismiss={onDismissToast} />
         {quitConfirmModal}
@@ -171,13 +217,15 @@ export function AppViewRouter({
   if (view === 'workflows' || view === 'inbox') {
     return (
       <>
-        <StandingWorkView
-          view={view}
-          isCompact={isCompact}
-          sidebarProps={homeSidebarProps}
-          currentProjectPath={currentProject?.path ?? null}
-          onOpenProject={projectsViewProps.onSelectProject}
-        />
+        <Suspense fallback={viewFallback}>
+          <LazyStandingWorkView
+            view={view}
+            isCompact={isCompact}
+            sidebarProps={homeSidebarProps}
+            currentProjectPath={currentProject?.path ?? null}
+            onOpenProject={projectsViewProps.onSelectProject}
+          />
+        </Suspense>
         <ToastList toasts={toasts} onDismiss={onDismissToast} />
         {quitConfirmModal}
       </>
@@ -247,7 +295,9 @@ export function AppViewRouter({
 
   return (
     <>
-      <WorkspaceView {...workspaceViewProps} currentProject={project} />
+      <Suspense fallback={viewFallback}>
+        <LazyWorkspaceView {...workspaceViewProps} currentProject={project} />
+      </Suspense>
       <ThumbnailConsentModal {...thumbnailConsentProps} />
       {quitConfirmModal}
     </>

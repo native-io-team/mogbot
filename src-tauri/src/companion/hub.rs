@@ -298,6 +298,13 @@ impl Drafts {
         self.emit(agent_id, id, text, now)
     }
 
+    /// Whether anything is waiting out the throttle. A connection with nothing
+    /// pending has no reason to wake every [`DRAFT_EVERY`], so its tick is
+    /// only armed while this is true.
+    pub fn has_pending(&self) -> bool {
+        !self.pending.is_empty()
+    }
+
     /// Held drafts whose throttle has passed.
     pub fn flush(&mut self, now: Instant) -> Vec<Event> {
         let due: Vec<String> = self
@@ -614,5 +621,31 @@ mod tests {
         // The message landed: a later draft with that id starts from 0.
         d.finished("r1");
         assert_eq!(offer(&mut d, "Hi again", t3), Some((0, "Hi again".into())));
+    }
+
+    #[test]
+    fn an_idle_connection_has_nothing_to_tick_for() {
+        let t0 = Instant::now();
+        let mut d = Drafts::default();
+        assert!(!d.has_pending());
+        d.offer("a".into(), "r1".into(), "Hel".into(), t0);
+        assert!(!d.has_pending(), "sent at once: nothing held");
+        d.offer(
+            "a".into(),
+            "r1".into(),
+            "Hello".into(),
+            t0 + Duration::from_millis(1),
+        );
+        assert!(d.has_pending(), "held back by the throttle");
+        d.flush(t0 + DRAFT_EVERY);
+        assert!(!d.has_pending(), "flushed: the tick goes quiet again");
+        d.offer(
+            "a".into(),
+            "r1".into(),
+            "Hello!".into(),
+            t0 + DRAFT_EVERY + Duration::from_millis(1),
+        );
+        d.finished("r1");
+        assert!(!d.has_pending(), "a finished message drops what was held");
     }
 }

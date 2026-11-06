@@ -13,7 +13,7 @@
 import { useRef, useState } from 'react';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
-import { WorkspaceConnectTerminal } from './WorkspaceConnectTerminal';
+import { WorkspaceConnectTerminal } from '../terminal/lazyTerminals';
 import type { WorkspaceConnectService } from '../../lib/accounts';
 
 const SERVICE_META: Record<WorkspaceConnectService, { label: string; instructions: string }> = {

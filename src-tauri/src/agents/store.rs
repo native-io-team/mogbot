@@ -647,7 +647,7 @@ pub struct AgentMessage {
 /// read (a newer build's, or a bad hand edit) is hidden but written back
 /// untouched, and so are top-level keys it doesn't know. An older build must
 /// never delete an agent a newer one saved.
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 struct Registry {
     agents: Vec<Agent>,
     unreadable: Vec<serde_json::Value>,
@@ -755,8 +755,62 @@ fn registry_path() -> Result<PathBuf, CommandError> {
     Ok(agents_root()?.join("agents.json"))
 }
 
+/// What identifies one version of `agents.json` on disk. Every write here is
+/// an atomic rename, so a new version is a new inode and mtime; a hand edit or
+/// another app's write changes the stamp too.
+#[derive(Debug, Clone, PartialEq, Eq)]
+struct FileStamp {
+    modified: Option<std::time::SystemTime>,
+    len: u64,
+    #[cfg(unix)]
+    inode: u64,
+}
+
+impl FileStamp {
+    fn of(path: &Path) -> Option<FileStamp> {
+        let meta = std::fs::metadata(path).ok()?;
+        Some(FileStamp {
+            modified: meta.modified().ok(),
+            len: meta.len(),
+            #[cfg(unix)]
+            inode: std::os::unix::fs::MetadataExt::ino(&meta),
+        })
+    }
+}
+
+/// The parsed registry, kept while the file is the version it was parsed
+/// from. `list()`/`get()` run on every status event, approval, routine tick
+/// and overview (dozens of times a second while agents work), and each one
+/// used to read and parse the whole pretty-printed file.
+static REGISTRY_CACHE: LazyLock<Mutex<Option<(PathBuf, FileStamp, Registry)>>> =
+    LazyLock::new(|| Mutex::new(None));
+
 fn read_registry() -> Result<Registry, CommandError> {
     let path = registry_path()?;
+    // Stamped *before* reading: a write that lands in between leaves the
+    // cached copy with an older stamp, so the next read parses again.
+    let stamp = FileStamp::of(&path);
+    if let Some(stamp) = &stamp {
+        let cache = REGISTRY_CACHE.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some((cached_path, cached_stamp, registry)) = cache.as_ref() {
+            if *cached_path == path && cached_stamp == stamp {
+                return Ok(registry.clone());
+            }
+        }
+    }
+    let registry = parse_registry(&path)?;
+    if let Some(stamp) = stamp {
+        // Recovery rewrote the file: that read is not cached.
+        if FileStamp::of(&path).as_ref() == Some(&stamp) {
+            *REGISTRY_CACHE.lock().unwrap_or_else(|e| e.into_inner()) =
+                Some((path, stamp, registry.clone()));
+        }
+    }
+    Ok(registry)
+}
+
+fn parse_registry(path: &Path) -> Result<Registry, CommandError> {
+    let path = path.to_path_buf();
     let raw = match std::fs::read_to_string(&path) {
         Ok(raw) => raw,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => return Ok(Registry::default()),
@@ -891,6 +945,7 @@ fn write_registry(registry: &Registry) -> Result<(), CommandError> {
     let json = serde_json::to_vec_pretty(&registry.to_value()?)
         .map_err(|e| super::err_other(e.to_string()))?;
     let path = registry_path()?;
+    *REGISTRY_CACHE.lock().unwrap_or_else(|e| e.into_inner()) = None;
     write_atomic(&path, &json)?;
     if let Err(e) = write_atomic(&path.with_extension("json.bak"), &json) {
         tracing::warn!("[Agents] registry backup not written: {e}");
@@ -3056,6 +3111,30 @@ mod tests {
                 create(new("Travel")).is_err(),
                 "must not overwrite what it couldn't read"
             );
+        });
+    }
+
+    #[test]
+    fn a_repeat_read_is_served_from_the_cache_until_the_file_changes() {
+        with_root(|| {
+            create(new("Finance")).unwrap();
+            assert_eq!(list().unwrap().len(), 1);
+            let path = registry_path().unwrap();
+            let stamp = FileStamp::of(&path).unwrap();
+            {
+                let cache = REGISTRY_CACHE.lock().unwrap();
+                let (cached_path, cached_stamp, _) = cache.as_ref().expect("a read is cached");
+                assert_eq!((cached_path, cached_stamp), (&path, &stamp));
+            }
+            // A write drops it, and the next read sees the write.
+            create(new("Travel")).unwrap();
+            assert_eq!(list().unwrap().len(), 2);
+            // Somebody else rewriting the file in place, to the same length.
+            let text = std::fs::read_to_string(&path).unwrap();
+            assert!(text.contains("Travel"));
+            std::fs::write(&path, text.replace("Travel", "Travle")).unwrap();
+            let names: Vec<String> = list().unwrap().into_iter().map(|a| a.name).collect();
+            assert_eq!(names, ["Finance", "Travle"]);
         });
     }
 

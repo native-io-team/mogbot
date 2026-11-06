@@ -984,7 +984,9 @@ where
                     return Ended::SendFailed;
                 }
             }
-            _ = draft_tick.tick() => {
+            // Armed only while a draft is held back: an idle socket used to
+            // wake 20 times a second to flush nothing.
+            _ = draft_tick.tick(), if drafts.has_pending() => {
                 for event in drafts.flush(Instant::now()) {
                     if !send(ws, &event_frame(None, event)).await {
                         return Ended::SendFailed;

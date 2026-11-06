@@ -17,7 +17,7 @@ import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
 import { Spinner } from '../primitives/Spinner';
-import { OnboardingTerminal } from '../setup/OnboardingTerminal';
+import { OnboardingTerminal } from '../terminal/lazyTerminals';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import {
