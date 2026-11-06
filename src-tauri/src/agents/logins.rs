@@ -745,8 +745,8 @@ this order:
 1. One of the app's own connections you were given (`mcp__<app>__*` for \
 Linear, Notion, Figma, Stripe, Vercel), or its command on this Mac (`gh` for \
 GitHub). Use it.
-2. Otherwise, for most things (Gmail, Calendar, Drive, Slack, LinkedIn, X, \
-a bank, an internal tool), a browser. First the agents' browser \
+2. Otherwise, for most things (Gmail, Drive, Slack, LinkedIn, a bank, an \
+internal tool), a browser. First the agents' browser \
 (`mcp__browser__*`, when you have it): the team's own Chrome on this Mac, \
 where sites the user signed in to for the team stay signed in. \
 Open the site, and tell the user in one line which account you're in, from \

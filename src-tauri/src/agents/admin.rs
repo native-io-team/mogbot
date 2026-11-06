@@ -584,6 +584,7 @@ fn what(tool: &str, input: &Value) -> Option<String> {
         "Read" => format!("Read {}", file(&field("file_path"))),
         "WebFetch" => format!("Open a page on {}", host(&field("url"))),
         "WebSearch" => format!("Search the web for {}", quoted(&field("query"))),
+        "Artifact" if field("action") == "read" => "Read a claude.ai artifact".to_string(),
         t if t.starts_with("mcp__") => super::mcp::mcp_title(t),
         _ => return None,
     })

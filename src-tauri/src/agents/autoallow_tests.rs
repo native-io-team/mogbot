@@ -502,6 +502,28 @@ fn scripts_are_read_before_they_run() {
 }
 
 #[test]
+fn a_claude_ai_artifact_read_is_a_read_and_a_publish_asks() {
+    let c = ctx();
+    let url = "https://claude.ai/artifact/00000000-0000-0000-0000-000000000000";
+    assert_eq!(
+        classify("Artifact", &json!({ "action": "read", "url": url }), &c),
+        Read
+    );
+    assert_eq!(
+        classify("Artifact", &json!({ "action": "publish" }), &c),
+        Ask
+    );
+    assert_eq!(
+        classify("Artifact", &json!({ "file_path": "/tmp/p.html" }), &c),
+        Ask
+    );
+    assert_eq!(
+        classify("ArtifactData", &json!({ "action": "batch" }), &c),
+        Ask
+    );
+}
+
+#[test]
 fn levels_answer_what_they_say() {
     assert!(!allows(Level::Often, Read));
     assert!(allows(Level::Judgement, Read));

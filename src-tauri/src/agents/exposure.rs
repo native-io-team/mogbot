@@ -163,6 +163,8 @@ pub fn reads_outside(tool: &str, input: &Value, page: Option<&str>) -> bool {
         }
         // claude.ai connectors: mail, chat, documents from other people.
         _ if tool.starts_with("mcp__claude_ai_") => true,
+        // A claude.ai artifact someone shared is a page from outside too.
+        _ if super::autoallow::artifact_read(tool, input) == Some(true) => true,
         _ => false,
     }
 }
@@ -287,6 +289,11 @@ mod tests {
     fn outside_content_is_recognised() {
         for (tool, input, page) in [
             ("WebFetch", json!({ "url": "https://example.test/" }), None),
+            (
+                "Artifact",
+                json!({ "action": "read", "url": "https://claude.ai/artifact/fictional-id" }),
+                None,
+            ),
             ("WebSearch", json!({ "query": "x" }), None),
             ("web_search", json!({ "query": "x" }), None),
             ("Bash", bash("curl -s https://example.test/api"), None),

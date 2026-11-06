@@ -63,6 +63,19 @@ pub(super) fn args(
     args
 }
 
+/// The environment a turn's `claude` gets on top of the app's own.
+///
+/// `CLAUDE_CODE_ARTIFACT=1` turns on Claude Code's `Artifact` tool, which
+/// reads a claude.ai artifact link (`claude.ai/artifact/{id}`) straight from
+/// the user's claude.ai account instead of driving their browser. `--print`
+/// runs as the `sdk-cli` entrypoint, where that tool is off by default.
+/// Verified on 2.1.318: without the variable the tool isn't listed at all;
+/// with it, `Artifact` is listed directly (not deferred), and a `read` of an
+/// artifact it can't vouch for asks through the permission prompt tool, so
+/// it reaches the approval broker like any other call. Without a claude.ai
+/// sign-in the tool simply isn't there.
+pub(super) const ENV: [(&str, &str); 1] = [("CLAUDE_CODE_ARTIFACT", "1")];
+
 /// What only a `--print` turn gets: its output format, and approvals through
 /// our `approve` tool. A flag here that takes a value drops it too.
 const PRINT_ONLY: [&str; 5] = [
@@ -105,6 +118,46 @@ pub(super) fn interactive_args(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Every `--disallowedTools` entry: the arguments after the flag up to
+    /// the next flag, and any `--disallowedTools=` form.
+    fn denied(args: &[String]) -> Vec<String> {
+        let mut out = Vec::new();
+        let mut inside = false;
+        for a in args {
+            if let Some(v) = a.strip_prefix("--disallowedTools=") {
+                out.push(v.to_string());
+                inside = false;
+            } else if a == "--disallowedTools" {
+                inside = true;
+            } else if a.starts_with("--") {
+                inside = false;
+            } else if inside {
+                out.push(a.clone());
+            }
+        }
+        out
+    }
+
+    #[test]
+    fn a_turn_keeps_the_artifact_tool_that_reads_claude_ai_links() {
+        let dirs = vec!["/u/home".to_string()];
+        let turn = args(None, "sid", false, "/s/mcp.json", "be you", &dirs);
+        let deny = denied(&turn);
+        assert!(!deny.is_empty(), "the deny list is still there");
+        for rule in &deny {
+            assert!(
+                !rule.starts_with("Artifact") && rule != "ToolSearch",
+                "{rule} would hide the Artifact tool"
+            );
+        }
+        // Nothing narrows the tool set to a list that leaves it out.
+        assert!(!turn
+            .iter()
+            .any(|a| a == "--tools" || a.starts_with("--tools=")));
+        // `--print` lists it only with the switch on.
+        assert!(ENV.contains(&("CLAUDE_CODE_ARTIFACT", "1")));
+    }
 
     #[test]
     fn taking_over_runs_the_turns_own_command_line_minus_print() {

@@ -93,6 +93,12 @@ pub fn asks(tool: &str, input: &Value, ctx: &Ctx, outside: bool) -> bool {
                 connector_asks(t, outside)
             }
         }
+        // claude.ai artifacts: reading runs; publishing, commenting or writing
+        // rows acts as the user on claude.ai, so it asks (at "Full send" only
+        // deleting one does, as for connectors).
+        t if super::autoallow::artifact_read(t, input) == Some(false) => {
+            !ctx.full_send || field("action") == "delete"
+        }
         // Claude Code's and Codex's own tools (web search, todo lists, tasks).
         _ => false,
     }

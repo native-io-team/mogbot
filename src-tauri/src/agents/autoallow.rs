@@ -422,6 +422,20 @@ pub(super) fn sensitive_name(p: &Path) -> bool {
 // Tool calls
 // ============================================================================
 
+/// Claude Code's claude.ai artifact tools (`claude::ENV`): whether this call
+/// only reads (a page, a listing, a database row), as the user's own
+/// claude.ai account can. `None` for any other tool. Publishing, deleting,
+/// commenting, writing rows and anything unrecognised are not reads.
+pub fn artifact_read(tool: &str, input: &Value) -> Option<bool> {
+    let action = input.get("action").and_then(Value::as_str).unwrap_or("");
+    match tool {
+        "Artifact" => Some(matches!(action, "read" | "list")),
+        "ArtifactData" => Some(matches!(action, "get" | "list" | "query")),
+        "ArtifactComments" => Some(matches!(action, "read" | "list")),
+        _ => None,
+    }
+}
+
 /// The class of one call an engine asked about.
 pub fn classify(tool: &str, input: &Value, ctx: &Ctx) -> Class {
     let field = |k: &str| input.get(k).and_then(Value::as_str).unwrap_or("").trim();
@@ -463,6 +477,8 @@ pub fn classify(tool: &str, input: &Value, ctx: &Ctx) -> Class {
             Class::Ask
         }
         "WebSearch" | "WebFetch" | "web_search" => Class::Read,
+        // Reading a claude.ai artifact is reading a page; publishing one asks.
+        t if artifact_read(t, input) == Some(true) => Class::Read,
         // Connectors, payments, anything else.
         _ => Class::Ask,
     }
