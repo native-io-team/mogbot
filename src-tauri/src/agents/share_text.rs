@@ -27,8 +27,6 @@ pub fn message_text(caption: &str, text: &str) -> String {
 
 /// Under this many characters a file's text is a label, not the text.
 pub const LABEL_CHARS: usize = 40;
-/// A message this long in the turn is real text, so the turn isn't flagged.
-const TEXT_CHARS: usize = 160;
 
 /// Words that mean the user asked for the text itself.
 const ASKED_FOR_TEXT: &[&str] = &[
@@ -44,21 +42,24 @@ pub fn asks_for_text(user_said: &str) -> bool {
 
 /// The note for the agent's next turn, when the user asked for text and the
 /// turn's reply (`replies`: what the agent said in it) shared files with
-/// short labels only and no real text anywhere.
+/// short labels only.
+///
+/// Only the messages that carry files are judged: a wrap-up ("That's all six
+/// posts, each exactly as written…") is about the items, not their text, and
+/// any message of 160 characters or more used to switch the check off.
 pub fn labels_only_note(user_said: &str, replies: &[AgentMessage]) -> Option<String> {
     if !asks_for_text(user_said) {
         return None;
     }
-    let said: Vec<&AgentMessage> = replies
+    let files: Vec<&AgentMessage> = replies
         .iter()
-        .filter(|m| m.kind == MessageKind::Agent)
+        .filter(|m| m.kind == MessageKind::Agent && !m.attachments.is_empty())
         .collect();
-    let files: Vec<&&AgentMessage> = said.iter().filter(|m| !m.attachments.is_empty()).collect();
     if files.is_empty() {
         return None;
     }
     let len = |m: &AgentMessage| m.text.trim().chars().count();
-    if files.iter().any(|m| len(m) >= LABEL_CHARS) || said.iter().any(|m| len(m) >= TEXT_CHARS) {
+    if files.iter().any(|m| len(m) >= LABEL_CHARS) {
         return None;
     }
     Some(LABELS_ONLY_NOTE.to_string())
@@ -141,6 +142,25 @@ mod tests {
     }
 
     #[test]
+    fn a_long_wrap_up_no_longer_switches_the_check_off() {
+        // Only the messages with files are judged: a 160+ character wrap-up
+        // said nothing of the items' text.
+        let replies = vec![
+            reply("1 of 6 · Fri 10am", true),
+            reply("2 of 6 · Sat 9am", true),
+            reply(
+                &"That's all six scheduled posts, each exactly as set to go out. ".repeat(3),
+                false,
+            ),
+        ];
+        assert!(replies[2].text.chars().count() >= 160);
+        assert_eq!(
+            labels_only_note("full text then image", &replies).as_deref(),
+            Some(LABELS_ONLY_NOTE)
+        );
+    }
+
+    #[test]
     fn no_note_when_the_text_was_sent_or_not_asked_for() {
         let labels = vec![reply("1 of 6", true)];
         // Not asked for text.
@@ -154,12 +174,6 @@ mod tests {
             true,
         )];
         assert_eq!(labels_only_note("full text please", &full), None);
-        // The text went out in its own message.
-        let separate = vec![
-            reply(&"Our new menu is here. ".repeat(10), false),
-            reply("1 of 6", true),
-        ];
-        assert_eq!(labels_only_note("full text please", &separate), None);
         // No file at all.
         assert_eq!(labels_only_note("full text", &[reply("ok", false)]), None);
         // What the user said isn't the agent's.

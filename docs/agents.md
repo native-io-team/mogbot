@@ -3992,8 +3992,8 @@ of their own is open.
   to re-read what was sent when a request is repeated. A guard backs it: when
   the user's messages ask for text ("text", "copy", "caption", "full",
   "wording", "words") and a finished turn in the agent's own chat shared files
-  whose text is all under 40 characters, with no message of 160 or more, the
-  next turn there opens with a quiet note from the app
+  whose text is all under 40 characters (only the messages carrying files are
+  judged: a long wrap-up used to switch it off), the next turn there opens with a quiet note from the app
   (`share_text::LABELS_ONLY_NOTE`). It is in memory only (a restart drops it),
   read once, dropped by Start fresh, and never shown to the user.
 - **Files** (header … menu, or ⌘K "Files shared with <agent>") lists every
