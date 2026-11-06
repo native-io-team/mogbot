@@ -5,7 +5,7 @@
  * @module components/agents/AgentAttachments
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useState, type CSSProperties } from 'react';
 import { CloseIcon, FileIcon, FileTextIcon, FolderOpenIcon, ImageIcon } from '@/components/icons';
 import { IconButton } from '../primitives/IconButton';
 import { GalleryLightbox, imagesOf, useImageViewer } from './AgentGallery';
@@ -128,10 +128,15 @@ export function AttachmentImage({
   agent,
   attachment,
   className,
+  style,
+  onLoad,
 }: {
   agent: Pick<Agent, 'home'>;
   attachment: Attachment;
   className?: string;
+  style?: CSSProperties;
+  /** The picture's own size, once it has loaded (the lightbox zooms from it). */
+  onLoad?: (natural: { width: number; height: number }) => void;
 }) {
   const src = attachmentUrl(agent.home, attachment);
   const [failedSrc, setFailedSrc] = useState<string | null>(null);
@@ -154,6 +159,13 @@ export function AttachmentImage({
       src={src}
       alt={attachment.name}
       decoding="async"
+      style={style}
+      onLoad={(event) =>
+        onLoad?.({
+          width: event.currentTarget.naturalWidth,
+          height: event.currentTarget.naturalHeight,
+        })
+      }
       onError={() => setFailedSrc(src)}
     />
   );
