@@ -1866,6 +1866,20 @@ export const agentsScenarios: Scenario[] = [
     },
   },
   {
+    id: 'agents-sidebar-overflow',
+    title: 'Agents — a list longer than the sidebar, with the usage line at its foot',
+    looksRightWhen:
+      'A short window: the agent list runs past the sidebar. Its last visible rows fade out softly into the footer; no hard edge, no hairline and no solid block cuts a row in half above “Claude usage 85% · resets <weekday>”. Scrolled to the end, the last row sits fully clear of the fade.',
+    command: 'agents.open',
+    viewport: { width: 1440, height: 640 },
+    requires: '.agents-quota__line[data-tone="calm"]',
+    commands: {
+      agents_overview: liveOverview,
+      agents_messages: messagesFor,
+      agents_quota: claudeQuota(85),
+    },
+  },
+  {
     id: 'agents-quota-warning',
     title: 'Agents — plan usage at 93%, in What’s in flight',
     looksRightWhen:

@@ -1,24 +1,16 @@
 /* Workspace sidebar footer, trailing actions, and their empty-state supports. */
 
-/* Footer is the button itself — no inner outline, no padding gap. */
+/* Footer is the button itself — no inner outline, no padding gap. It sits
+ * below the list rather than over it: the list's own mask fades its rows out
+ * above the footer (sidebar.css, .workspace-sidebar-scroll), so no row is
+ * ever cut by an edge or covered by a block. */
 .workspace-sidebar-footer {
-  --workspace-sidebar-footer-fade-height: var(--size-sidebar-footer-fade);
   position: relative;
   z-index: var(--z-dropdown);
   flex-shrink: 0;
-  margin-top: calc(-1 * var(--workspace-sidebar-footer-fade-height));
-  padding: calc(var(--workspace-sidebar-footer-fade-height) + var(--space-08)) var(--space-08)
-    var(--space-08);
+  padding: var(--space-08);
   border-top: 0;
   overflow: visible;
-  /* The fade is only a look: clicks in it reach the row underneath. Without
-   * this, the last row of a long list (Import agents, a project) sat under
-   * the footer's transparent top and could not be clicked. */
-  pointer-events: none;
-}
-
-.workspace-sidebar-footer > * {
-  pointer-events: auto;
 }
 
 .workspace-sidebar-footer-actions {
@@ -30,25 +22,6 @@
 
 .workspace-sidebar-footer-actions > * {
   position: relative;
-}
-
-/* Keep the fade attached to the fixed action group so it stays at the bottom
- * while the sidebar content scrolls behind it. The gradient reaches full
- * opacity exactly at the scroll area's clip line (fade height minus the 8px
- * gap between them), so rows are fully invisible before they're cut off, then
- * stay solid behind the buttons and the footer's bottom padding. */
-.workspace-sidebar-footer-actions::before {
-  position: absolute;
-  inset-inline: calc(-1 * var(--space-08));
-  top: calc(-1 * var(--workspace-sidebar-footer-fade-height));
-  bottom: calc(-1 * var(--space-08));
-  background: linear-gradient(
-    to bottom,
-    transparent,
-    var(--surface-panel) calc(var(--workspace-sidebar-footer-fade-height) - var(--space-08))
-  );
-  content: '';
-  pointer-events: none;
 }
 
 /* Belt-and-suspenders against a horizontal scrollbar appearing inside a
@@ -111,6 +84,21 @@
   gap: var(--spacing-sm);
   font-size: var(--font-size-body-sm);
   color: var(--text-secondary);
+}
+
+/* One icon column for the whole sidebar. Expanded, the footer rows' icons
+   sit in a badge-wide box from the footer's inset, centred where the agent
+   badges, the New agent icon and the Needs-your-OK dot are, and their labels
+   start on the names' column. */
+.workspace-sidebar:not(.is-hidden) .workspace-sidebar-footer .remote-indicator,
+.workspace-sidebar:not(.is-hidden) .workspace-sidebar-settings--row {
+  padding-inline-start: 0;
+}
+
+.workspace-sidebar:not(.is-hidden) .workspace-sidebar-footer .remote-indicator > .button__icon,
+.workspace-sidebar:not(.is-hidden) .workspace-sidebar-settings--row > .button__icon {
+  box-sizing: content-box;
+  padding-inline: calc((var(--size-sidebar-project-shortcut) - var(--size-icon-button)) / 2);
 }
 
 /* Project picker styles removed — replaced by the command palette (⌘O). */
