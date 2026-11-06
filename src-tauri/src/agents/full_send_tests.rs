@@ -118,6 +118,29 @@ const SENDS: &[&str] = &[
     "git send-email --to=list@example.com 0001.patch",
 ];
 
+/// `--prod` on a command that only looks picks what to list; it deploys
+/// nothing. Observed: `vercel ls --prod` asked as a production deploy.
+#[test]
+fn looking_at_production_is_not_deploying_to_it() {
+    for c in [
+        "vercel ls --prod",
+        "cd site && vercel ls --prod 2>&1 | head -8; vercel ls 2>&1 | head -8",
+        "vercel list --prod",
+        "vercel logs --prod",
+        "vercel inspect https://site-abc.vercel.app --prod",
+    ] {
+        assert!(!bash_card(Level::FullSend, c), "a look at Full send: {c}");
+        assert!(!bash_card(Level::GoHard, c), "a look at Go hard: {c}");
+    }
+    for c in [
+        "vercel --prod",
+        "vercel deploy --prod",
+        "vercel --target production",
+    ] {
+        assert!(bash_card(Level::FullSend, c), "still asks: {c}");
+    }
+}
+
 #[test]
 fn full_send_lets_sending_through() {
     for c in SENDS {

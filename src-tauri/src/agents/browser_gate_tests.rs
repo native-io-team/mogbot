@@ -391,6 +391,29 @@ fn a_batch_goes_through_only_when_every_step_would() {
     assert_eq!(at(Level::Often, "browser_batch", calm), Gate::Ask);
 }
 
+/// Steps written flat read as the same tools: looking goes, sending asks.
+#[test]
+fn a_flat_batch_is_judged_step_by_step() {
+    let look = json!({"actions": [
+        {"action": "navigate", "tabId": 7, "url": "https://mail.google.com/mail/u/0/#sent"},
+        {"action": "wait", "duration": 3},
+        {"action": "screenshot", "scale": 0.5, "tabId": 7}
+    ]});
+    let sends = json!({"actions": [
+        {"action": "type", "text": "Hi", "tabId": 7},
+        {"action": "left_click", "ref": "ref_4", "tabId": 7}
+    ]});
+    for level in [Level::GoHard, Level::FullSend] {
+        assert_eq!(
+            at(level, "browser_batch", look.clone()),
+            Gate::Allow,
+            "{level:?}"
+        );
+    }
+    assert_eq!(at(Level::GoHard, "browser_batch", sends), Gate::Ask);
+    assert_eq!(at(Level::Often, "browser_batch", look), Gate::Ask);
+}
+
 #[test]
 fn outside_text_never_gets_the_browser() {
     let a = agent();
@@ -647,18 +670,33 @@ fn at_go_hard_a_compose_address_alone_never_asks() {
             "{level:?}"
         );
         assert_eq!(
-            in_editor(level, "form_input", json!({"ref": "ref_98", "value": "x", "tabId": 3})),
+            in_editor(
+                level,
+                "form_input",
+                json!({"ref": "ref_98", "value": "x", "tabId": 3})
+            ),
             Gate::Allow,
             "{level:?}"
         );
     }
     // By label: Post, Schedule, Send now still ask at Go hard, not at Full send.
     for r in ["ref_5", "ref_6", "ref_11"] {
-        assert_eq!(in_editor(Level::GoHard, "computer", click(r)), Gate::Ask, "{r}");
-        assert_eq!(in_editor(Level::FullSend, "computer", click(r)), Gate::Allow, "{r}");
+        assert_eq!(
+            in_editor(Level::GoHard, "computer", click(r)),
+            Gate::Ask,
+            "{r}"
+        );
+        assert_eq!(
+            in_editor(Level::FullSend, "computer", click(r)),
+            Gate::Allow,
+            "{r}"
+        );
     }
     // Below Go hard the address still makes an unknown click unsure.
-    assert_eq!(in_editor(Level::Judgement, "computer", somewhere), Gate::Ask);
+    assert_eq!(
+        in_editor(Level::Judgement, "computer", somewhere),
+        Gate::Ask
+    );
     // A checkout page stays unsure at every level.
     let checkout = json!({"action": "left_click", "coordinate": [10, 10], "tabId": 4});
     assert_eq!(in_editor(Level::GoHard, "computer", checkout), Gate::Ask);

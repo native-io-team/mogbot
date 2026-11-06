@@ -768,17 +768,26 @@ fn is_field(label: &str) -> bool {
 }
 
 /// The steps of a `browser_batch`, as (tool, input). `None` when its shape
-/// can't be read (it asks).
+/// can't be read (it asks). A step written flat, `{"action": "navigate",
+/// "url": …}` or `{"action": "screenshot"}`, is that `navigate` or that
+/// `computer` action. Observed: navigate, wait and screenshot written flat
+/// raised a card at Full send.
 fn batch_steps(input: &Value) -> Option<Vec<(String, Value)>> {
     let list = ["actions", "steps", "calls", "batch", "commands"]
         .iter()
         .find_map(|k| input.get(*k).and_then(Value::as_array))?;
     list.iter()
         .map(|s| {
+            let flat = match s.get("action").and_then(Value::as_str) {
+                Some("navigate") => Some("navigate"),
+                Some(_) => Some("computer"),
+                None => None,
+            };
             let name = s
                 .get("tool")
                 .or_else(|| s.get("name"))
-                .and_then(Value::as_str)?;
+                .and_then(Value::as_str)
+                .or(flat)?;
             let args = s
                 .get("input")
                 .or_else(|| s.get("args"))

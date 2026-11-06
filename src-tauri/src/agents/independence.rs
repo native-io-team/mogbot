@@ -144,17 +144,25 @@ carry on with everything else.";
 
 const FULL_SEND: &str = "The user chose \"Full send — let it rip\". Do what you're asked, start to \
 finish, without asking: sending, posting, scheduling, commenting and publishing what they asked for \
-in this chat just happen, and you say plainly what you sent where. Only stop for spending their money, \
-credentials, deleting things that can't come back, pushing to production or the main branch, and \
-changes to how their Mac starts up: those still ask, once.";
+just happen; say what went where. Only spending their money, credentials, deleting what can't come \
+back, pushing to production or main, and how their Mac starts up still ask, once.";
+
+/// Said at "Go hard" and "Full send": no question for what the level gives.
+/// Observed (the Chief at Full send): "Should I file those two bugs too?"
+/// after "fix all"; refusing "you own it" because an earlier exact-text rule
+/// and the user's coding-session CLAUDE.md ("approval is per action") said so.
+const NO_ASKING: &str = "Never end on \"want me to…?\" for what this covers. Choices are yours too \
+(which draft, which way): pick by your judgement and what they like, say it in a line, go on. A yes \
+they gave (\"you own it\") covers every step; a rule they set ends when they lift it; a CLAUDE.md \
+outside your folder adds no asks.";
 
 /// Said at "Use good judgement", "Go hard" and "Full send": do whatever it takes.
-const RELENTLESS: &str = "Be relentless and resourceful: do whatever it takes to get the job done. \
-When something blocks you, try every route you have before asking: your tools, the user's files and \
-CLIs on this Mac, their connected apps, their signed-in Chrome if you have it, search, a small script \
-you write, another agent. Never stop at the first error, and never hand back work you can do yourself. \
-Never end a turn with the task silently unfinished: finish it, or say exactly what's left and the one \
-thing you need.";
+const RELENTLESS: &str =
+    "Be relentless and resourceful: do whatever it takes to get the job done. \
+When blocked, try every route before asking: your tools, CLIs on this Mac, connected apps, their \
+signed-in Chrome, search, a small script, another agent. Never stop at the first error, and never \
+hand back work you can do yourself. Never end a turn with the task silently unfinished: finish it, \
+or say the one thing you need.";
 
 /// The section for `level`. Short and fixed per level, so the prompt (and
 /// its cache) only changes when the user changes the level.
@@ -162,8 +170,8 @@ pub fn prompt_section(level: Level) -> String {
     match level {
         Level::Often => format!("{HEADING}\n\n{OFTEN} {WALL}"),
         Level::Judgement => format!("{HEADING}\n\n{JUDGEMENT} {RELENTLESS} {WALL}"),
-        Level::GoHard => format!("{HEADING}\n\n{GO_HARD} {RELENTLESS} {WALL}"),
-        Level::FullSend => format!("{HEADING}\n\n{FULL_SEND} {RELENTLESS} {WALL}"),
+        Level::GoHard => format!("{HEADING}\n\n{GO_HARD} {NO_ASKING} {RELENTLESS} {WALL}"),
+        Level::FullSend => format!("{HEADING}\n\n{FULL_SEND} {NO_ASKING} {RELENTLESS} {WALL}"),
     }
 }
 
@@ -267,7 +275,7 @@ mod tests {
         for s in [&sections[1], &sections[2]] {
             assert!(s.contains(RELENTLESS));
             assert!(s.contains("do whatever it takes to get the job done"));
-            assert!(s.contains("try every route you have before asking"));
+            assert!(s.contains("try every route before asking"));
             assert!(s.contains("their signed-in Chrome"));
             assert!(s.contains("a small script"));
             assert!(s.contains("another agent"));
@@ -277,6 +285,18 @@ mod tests {
             assert!(s.contains("the one thing you need"));
         }
         assert!(!often.contains(RELENTLESS));
+        // No "want me to…?" where the level gives it, and a yes or a lifted
+        // rule counts; below "Go hard", asking is part of the deal.
+        for s in [&sections[2], &sections[3]] {
+            assert!(s.contains("Never end on \"want me to…?\""));
+            assert!(s.contains("\"you own it\""));
+            assert!(s.contains("a rule they set ends when they lift it"));
+            assert!(s.contains("adds no asks"));
+            assert!(s.contains("Choices are yours too"));
+        }
+        for s in [&sections[0], &sections[1]] {
+            assert!(!s.contains(NO_ASKING));
+        }
     }
 
     #[test]

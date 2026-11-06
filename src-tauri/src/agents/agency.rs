@@ -14,7 +14,17 @@
 //! #agents-errors from here, since I have no Slack tool, and a Slack post
 //! goes out under the user's name. Julian would need to say yes to that.
 //! Until then, I'd send Nate the note through `message_agent`…"
+//!
+//! **Needless asks** ([`needless_asks`]), only at "Go hard" and "Full send":
+//! a question for an OK the level already gives ("Want me to…?", "Should I
+//! file…?", "Do you want me to keep going, or would you rather send them
+//! yourself?"). A question about the floor (money, credentials, deleting for
+//! good, production or main, exact text the user wants to see) is left alone.
+//! Observed (2026-11-06, the Chief at Full send): of 26 questions in a
+//! morning, about 20 asked for something the level covered, several after
+//! the user had already said "fix all", "you own it" or "STOP ASKING".
 
+use super::independence::Level;
 use super::store::{AgentMessage, MessageKind};
 
 /// One way of giving up, and what to do instead.
@@ -136,15 +146,142 @@ fn sentence_at(text: &str, needle: &str) -> Option<String> {
     Some(text[start..end].trim().chars().take(200).collect())
 }
 
+const NEEDLESS_ASK: &str = "Your level covers this, so don't ask: do it, then say in a line what you did. A choice (which draft, which way) is yours: pick by your judgement and what they like, and say what you chose. Ask only for spending money, credentials, deleting what can't come back, production or the main branch, or what the user said needs their word, and then once. A yes they already gave (\"fix all\", \"you own it\", \"do it\") covers the steps it takes.";
+
+/// Asking for an OK, or handing the work back, in so many words.
+const ASKS: &[&str] = &[
+    "want me to",
+    "should i ",
+    "shall i ",
+    "would you like me",
+    "would you rather",
+    "do you want me",
+    "do you want to send",
+    "ok to ",
+    "okay to ",
+    "is it ok",
+    "if you're ok with",
+    "which do you want",
+    "which one?",
+    "which of these",
+    "which would you",
+    "do you prefer",
+    "would you prefer",
+    "your call",
+    "let me know which",
+    "tell me which",
+    "tell me whether",
+    "or leave that to you",
+    "or leave it to you",
+    "or will you",
+    "say when to",
+    "if you say so",
+    "until you say so",
+    "without your yes",
+    "without your ok",
+    "without your word",
+];
+
+/// The floor, and the user's own exact-text rule: asking about these is right.
+const FLOOR: &[&str] = &[
+    "pay",
+    "spend",
+    "charge",
+    "invoice",
+    "refund",
+    "purchase",
+    "buy ",
+    "$",
+    "€",
+    "£",
+    "password",
+    "credential",
+    "token",
+    "api key",
+    "keychain",
+    "sign in",
+    "log in",
+    "login",
+    "2fa",
+    "for good",
+    "permanently",
+    "can't be undone",
+    "can't come back",
+    "production",
+    "main branch",
+    "to main",
+    "into main",
+    "merge",
+    "exact text",
+    "word for word",
+    "wording",
+];
+
+/// The sentences of `text` (split on `.`, `!`, `?` and newlines, keeping the
+/// mark), trimmed.
+fn sentences(text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let mut cur = String::new();
+    for c in text.chars() {
+        if c != '\n' {
+            cur.push(c);
+        }
+        if matches!(c, '.' | '!' | '?' | '\n') {
+            let s = cur.trim();
+            if !s.is_empty() {
+                out.push(s.to_string());
+            }
+            cur.clear();
+        }
+    }
+    if !cur.trim().is_empty() {
+        out.push(cur.trim().to_string());
+    }
+    out
+}
+
+/// The sentences of `text` that ask for an OK the level already gives, or
+/// hand the work back (see the module docs). The floor counts in the
+/// sentence or the one before it ("Here's the exact text. Send it?").
+pub fn needless_asks(text: &str) -> Vec<String> {
+    let all: Vec<String> = sentences(text);
+    let low: Vec<String> = all
+        .iter()
+        .map(|s| s.to_lowercase().replace(['’', '‘'], "'"))
+        .collect();
+    let floor = |s: &str| FLOOR.iter().any(|f| s.contains(f));
+    all.iter()
+        .enumerate()
+        .filter(|(i, _)| {
+            let lower = &low[*i];
+            let asks = ASKS.iter().any(|a| lower.contains(a))
+                || (lower.ends_with('?') && lower.contains("yourself"));
+            asks && !floor(lower) && !(*i > 0 && floor(&low[i - 1]))
+        })
+        .map(|(_, s)| s.chars().take(200).collect())
+        .collect()
+}
+
 /// The hidden note for the agent's next turn, when its replies this turn
-/// gave up (see the module docs). `None` when they didn't.
-pub fn lazy_reply_note(replies: &[AgentMessage]) -> Option<String> {
+/// gave up (see the module docs), at the level the turn ran at. `None` when
+/// they didn't.
+pub fn lazy_reply_note(replies: &[AgentMessage], level: Level) -> Option<String> {
     let mut said: Vec<String> = Vec::new();
     let mut fixes: Vec<&str> = Vec::new();
     for m in replies
         .iter()
         .filter(|m| m.kind == MessageKind::Agent && m.room.is_none())
     {
+        if level.goes_hard() {
+            for s in needless_asks(&m.text) {
+                if !said.contains(&s) {
+                    said.push(s);
+                }
+                if !fixes.contains(&NEEDLESS_ASK) {
+                    fixes.push(NEEDLESS_ASK);
+                }
+            }
+        }
         let lower = m.text.to_lowercase();
         for p in PATTERNS {
             if matches(&lower, p.all) {
@@ -183,7 +320,7 @@ mod tests {
     #[test]
     fn the_observed_lazy_reply_gets_a_nudge_for_each_failure() {
         let observed = reply("Done with the build notes. I also can't post in #agents-errors from here, since I have no Slack tool, and a Slack post goes out under the user's name. Julian would need to say yes to that. Until then, I'd send Nate the note through `message_agent`.");
-        let note = lazy_reply_note(&[observed]).expect("flagged");
+        let note = lazy_reply_note(&[observed], Level::GoHard).expect("flagged");
         assert!(note.starts_with("[A note from the app, not the user:"));
         assert!(note.contains("I have no Slack tool"));
         assert!(note.contains("access chain"));
@@ -199,18 +336,71 @@ mod tests {
             "The tool tip on the button now says Save.",
             "I'm in Gmail as julian@example.com; the draft is ready to send on the card.",
         ] {
-            assert_eq!(lazy_reply_note(&[reply(text)]), None, "{text}");
+            assert_eq!(lazy_reply_note(&[reply(text)], Level::FullSend), None, "{text}");
         }
         // The user's own words, or another agent's, aren't the agent's reply.
         let mut user = reply("I have no Slack tool, can you help?");
         user.kind = MessageKind::User;
-        assert_eq!(lazy_reply_note(&[user]), None);
+        assert_eq!(lazy_reply_note(&[user], Level::FullSend), None);
     }
 
     #[test]
     fn plumbing_alone_is_a_one_line_reminder() {
-        let note = lazy_reply_note(&[reply("I'll use share_result for the report.")]).unwrap();
+        let note = lazy_reply_note(
+            &[reply("I'll use share_result for the report.")],
+            Level::Judgement,
+        )
+        .unwrap();
         assert!(note.contains("share_result"));
         assert!(!note.contains("access chain"));
+    }
+
+    /// The shapes of the Chief's needless questions at Full send (names
+    /// made up): each is caught, at "Go hard" and "Full send" only.
+    #[test]
+    fn needless_asks_are_nudged_when_the_level_covers_them() {
+        for text in [
+            "Found the cause. Do you want me to check out the branch locally and test it there?",
+            "It's fixed on the branch. Want me to tell Sam it's fixed in #errors, or leave that to you?",
+            "Both bugs are filed. Should I file the two new ones as issues too?",
+            "OK to say \"Ohio bookkeeping\" publicly?",
+            "Two options: I can draft a short correction, or you can leave it. Tell me which.",
+            "Do you want me to keep going one at a time, or would you rather send the six yourself?",
+            "The other app is still running. Do you want me to tell you how, or will you quit it yourself?",
+            "The Social team can swap those in if you're OK with it.",
+            "I'm not taking it on without your word.",
+            "Three drafts are below. Which of these do you want to go with?",
+            "Keep the lesson with the warning, or drop it? Your call.",
+            "Do you prefer the dark image or the light one?",
+        ] {
+            let note = lazy_reply_note(&[reply(text)], Level::FullSend)
+                .unwrap_or_else(|| panic!("flagged at Full send: {text}"));
+            assert!(note.contains("Your level covers this"), "{text}");
+            assert!(lazy_reply_note(&[reply(text)], Level::GoHard).is_some());
+            // Lower levels ask by design.
+            assert_eq!(lazy_reply_note(&[reply(text)], Level::Judgement), None, "{text}");
+            assert_eq!(lazy_reply_note(&[reply(text)], Level::Often), None, "{text}");
+        }
+    }
+
+    /// Asking about the floor, or the exact text the user wants to see, is right.
+    #[test]
+    fn floor_questions_are_left_alone() {
+        for text in [
+            "OK to redeploy production now?",
+            "Should I merge it into main?",
+            "Do you want me to pay the $40 invoice?",
+            "Should I sign in with the work account? It needs your password.",
+            "Want me to delete the backups for good?",
+            "Here's the exact text. Should I send it as is?",
+            "Sent it to Sam at 10:02. Nothing else is waiting on you.",
+            "Did the image land the way you wanted?",
+        ] {
+            assert_eq!(
+                lazy_reply_note(&[reply(text)], Level::FullSend),
+                None,
+                "{text}"
+            );
+        }
     }
 }
