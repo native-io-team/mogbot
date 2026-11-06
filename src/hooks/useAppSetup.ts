@@ -7,6 +7,7 @@
  * @module hooks/useAppSetup
  */
 
+import { isOnboardingInProgress } from '../lib/onboardingFlow';
 import { useState, useEffect, useRef, useCallback } from 'react';
 import type { Project } from '../lib/project';
 import type { ProjectGitHubStatus } from '../lib/github';
@@ -59,8 +60,14 @@ const BOOT_PROGRESS = {
  * whose setup is on an agent Agents can't run (Opencode, Cursor, their own):
  * they land on their projects, and Agents explains what it needs.
  */
-export function postSetupViewFor(initialProjectPath?: string | null, agentsEngine = true): AppView {
+export function postSetupViewFor(
+  initialProjectPath?: string | null,
+  agentsEngine = true,
+  onboardingUnfinished = false
+): AppView {
   if (initialProjectPath) return 'projects';
+  // Quit halfway through onboarding (the phone, the import): open where it stopped.
+  if (onboardingUnfinished) return 'onboarding';
   return agentsEngine ? 'agents' : 'projects';
 }
 
@@ -152,7 +159,11 @@ export function useAppSetup({
         );
         setBootProgress(BOOT_PROGRESS.setupProbe);
         if (quickCheck.setupCompleteCached && quickCheck.allPresent) {
-          const postSetupView = postSetupViewFor(initialProjectPath, quickCheck.agentsEngine);
+          const postSetupView = postSetupViewFor(
+            initialProjectPath,
+            quickCheck.agentsEngine,
+            isOnboardingInProgress()
+          );
           // Setup was completed before and all binaries still exist
           // Show projects/account picker immediately, verify auth in background
           // Use functional update to avoid overwriting HMR recovery's 'workspace' view
@@ -196,7 +207,8 @@ export function useAppSetup({
       if (setupStatus.allReady) {
         const postSetupView = postSetupViewFor(
           initialProjectPath,
-          hasAgentsEngine(setupStatus.detectedAgents)
+          hasAgentsEngine(setupStatus.detectedAgents),
+          isOnboardingInProgress()
         );
         // Persist setup complete for existing users upgrading to this version
         // (they already completed onboarding but don't have the cached state yet)

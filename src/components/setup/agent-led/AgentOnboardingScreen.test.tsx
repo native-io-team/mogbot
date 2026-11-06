@@ -1,14 +1,13 @@
 /**
- * Onboarding's key states: a machine with an engine ready goes straight to
- * the hand-off; a fresh one sees the engine cards, each saying what pressing
- * it does; force mode always shows the pick; a card for an engine that isn't
- * ready opens its install → sign-in steps; a failed check offers a retry.
- * Between a ready engine and the hand-off, one question: how much agents do
- * on their own (Skip keeps the default).
+ * Onboarding as one line of one-question screens: Welcome, the engine (a
+ * screen per install / sign-in), independence, the phone (skippable), and
+ * "You're ready: bring your agents, or start fresh?". Each screen has one
+ * big button and Back; the step is saved, so a relaunch resumes it.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import type { SetupItem } from '../../../lib/setup';
+import { FLOW_STORAGE_KEY, saveProgress } from '../../../lib/onboardingFlow';
 
 const getFullSetupStatus = vi.hoisted(() => vi.fn());
 const setDefaultAgentId = vi.hoisted(() => vi.fn());
@@ -25,11 +24,6 @@ vi.mock('../../../lib/analytics', () => ({
   trackEvent: vi.fn().mockResolvedValue(undefined),
   setActiveScreen: vi.fn(),
 }));
-vi.mock('../CelebrationScreen', () => ({
-  CelebrationScreen: ({ engineName }: { engineName: string | null }) => (
-    <div data-testid="handoff">{engineName}</div>
-  ),
-}));
 vi.mock('../OnboardingTerminal', () => ({ OnboardingTerminal: () => null }));
 const getIndependence = vi.hoisted(() => vi.fn());
 const setIndependence = vi.hoisted(() => vi.fn());
@@ -37,22 +31,18 @@ vi.mock('../../../lib/agentIndependence', async (importOriginal) => {
   const actual = await importOriginal<typeof import('../../../lib/agentIndependence')>();
   return { ...actual, getIndependence, setIndependence };
 });
+const setImportChoice = vi.hoisted(() => vi.fn());
+vi.mock('../../../lib/agents', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../lib/agents')>();
+  return { ...actual, setImportChoice };
+});
+const getPhoneStatus = vi.hoisted(() => vi.fn());
+vi.mock('../../../lib/companion', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../../lib/companion')>();
+  return { ...actual, getPhoneStatus };
+});
 
 import { AgentOnboardingScreen } from './AgentOnboardingScreen';
-
-/** The engine card with this name (cards are list items, named by their text). */
-async function card(name: string): Promise<HTMLElement> {
-  const label = await screen.findByText(name, { selector: '.agent-pick-card-name' });
-  return label.closest('button') as HTMLElement;
-}
-
-/** The independence question, answered by skipping it. */
-async function skipIndependence() {
-  expect(
-    await screen.findByRole('heading', { name: 'How much should your agents do on their own?' })
-  ).toBeInTheDocument();
-  fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
-}
 
 const item = (id: string, status: SetupItem['status']): SetupItem => ({
   id,
@@ -66,102 +56,133 @@ const machine = (over: Record<string, SetupItem['status']> = {}) => ({
   ),
 });
 
+const heading = (name: string | RegExp) => screen.findByRole('heading', { name });
+const press = (name: string | RegExp) => fireEvent.click(screen.getByRole('button', { name }));
+
 describe('AgentOnboardingScreen', () => {
   beforeEach(() => {
+    localStorage.clear();
     getFullSetupStatus.mockReset();
     setDefaultAgentId.mockReset().mockResolvedValue(undefined);
     getOnboardingTestMode.mockReset().mockResolvedValue({ mock: false, forceOnboarding: false });
     getIndependence.mockReset().mockResolvedValue('judgement');
-    setIndependence.mockReset().mockImplementation(async (level: string) => level);
+    setIndependence.mockReset().mockImplementation((level: string) => Promise.resolve(level));
+    setImportChoice.mockReset().mockResolvedValue('declined');
+    getPhoneStatus.mockReset().mockResolvedValue({
+      enabled: false,
+      devices: [],
+      tailscale: { state: 'notInstalled' },
+    });
   });
 
-  it('goes straight to the hand-off when an engine is already ready', async () => {
+  it('walks one screen at a time to the end, and Start fresh hands off', async () => {
     getFullSetupStatus.mockResolvedValue(machine({ codex: 'ready', codex_auth: 'ready' }));
-    render(<AgentOnboardingScreen onComplete={vi.fn()} />);
-    await skipIndependence();
-    expect(await screen.findByTestId('handoff')).toHaveTextContent('Codex');
-    expect(setDefaultAgentId).toHaveBeenCalledWith('codex');
-    // Skipped: nothing saved, so the default stands.
+    const onComplete = vi.fn();
+    render(<AgentOnboardingScreen onComplete={onComplete} />);
+
+    expect(await heading('Your own team of AI agents')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Back' })).not.toBeInTheDocument();
+    press('Get started');
+
+    // Already set up here: "Done", and one button.
+    expect(await heading('Codex is connected')).toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('Done.');
+    press('Continue');
+    await waitFor(() => expect(setDefaultAgentId).toHaveBeenCalledWith('codex'));
+
+    expect(await heading('How much should your agents do on their own?')).toBeInTheDocument();
+    press('Skip');
     expect(setIndependence).not.toHaveBeenCalled();
+
+    expect(await heading('Use your agents from your phone?')).toBeInTheDocument();
+    press('Skip for now');
+
+    expect(await heading('You’re ready')).toBeInTheDocument();
+    expect(screen.getByText(/bring your agents from Grok, ChatGPT/)).toBeInTheDocument();
+    press('Start fresh');
+    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
+    expect(setImportChoice).toHaveBeenCalledWith('declined');
+    expect(JSON.parse(localStorage.getItem(FLOW_STORAGE_KEY) ?? '{}')).toMatchObject({
+      finished: true,
+    });
   });
 
-  it('asks how much agents do on their own, defaulting to good judgement', async () => {
+  it('saves each step, and Back goes one screen back', async () => {
     getFullSetupStatus.mockResolvedValue(machine({ claude: 'ready', claude_auth: 'ready' }));
     render(<AgentOnboardingScreen onComplete={vi.fn()} />);
-    await screen.findByRole('heading', { name: 'How much should your agents do on their own?' });
-    expect(screen.queryByTestId('handoff')).not.toBeInTheDocument();
-    const radios = screen.getAllByRole('radio');
-    expect(radios.map((r) => r.textContent)).toEqual([
-      expect.stringContaining('Check with me often'),
-      expect.stringContaining('Use good judgement'),
-      expect.stringContaining('Go hard — get it done'),
-    ]);
+    await screen.findByRole('button', { name: 'Get started' });
+    press('Get started');
+    expect(await heading('Claude Code is connected')).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem(FLOW_STORAGE_KEY) ?? '{}')).toMatchObject({
+      step: 'engine',
+    });
+    press('Back');
+    expect(await heading('Your own team of AI agents')).toBeInTheDocument();
+  });
+
+  it('a relaunch opens where it stopped', async () => {
+    saveProgress('ready');
+    getFullSetupStatus.mockResolvedValue(machine({ claude: 'ready', claude_auth: 'ready' }));
+    render(<AgentOnboardingScreen onComplete={vi.fn()} />);
+    expect(await heading('You’re ready')).toBeInTheDocument();
+    expect(screen.getByText(/Claude Code is connected/)).toBeInTheDocument();
+  });
+
+  it('a relaunch past the engine goes back to it when it’s signed out since', async () => {
+    saveProgress('phonePair');
+    getFullSetupStatus.mockResolvedValue(machine({ claude: 'ready' }));
+    render(<AgentOnboardingScreen onComplete={vi.fn()} />);
+    expect(await heading('Which AI should your agents run on?')).toBeInTheDocument();
+  });
+
+  it('the independence choice is saved, and a failure says so with Skip still there', async () => {
+    saveProgress('independence');
+    getFullSetupStatus.mockResolvedValue(machine({ claude: 'ready', claude_auth: 'ready' }));
+    setIndependence.mockRejectedValueOnce({ type: 'Other', message: 'Disk full' });
+    render(<AgentOnboardingScreen onComplete={vi.fn()} />);
+    await heading('How much should your agents do on their own?');
     expect(screen.getByRole('radio', { name: /Use good judgement/ })).toHaveAttribute(
       'aria-checked',
       'true'
     );
-    // Honest about what never changes.
-    expect(
-      screen.getByText(
-        'You’ll always be asked before anything that spends money, sends as you, or deletes.'
-      )
-    ).toBeInTheDocument();
     fireEvent.click(screen.getByRole('radio', { name: /Go hard/ }));
-    expect(screen.getByRole('radio', { name: /Go hard/ })).toHaveAttribute('aria-checked', 'true');
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
-    expect(await screen.findByTestId('handoff')).toHaveTextContent('Claude Code');
-    expect(setIndependence).toHaveBeenCalledWith('go_hard');
-  });
-
-  it('a choice that doesn’t save says so and stays, with Skip still there', async () => {
-    getFullSetupStatus.mockResolvedValue(machine({ claude: 'ready', claude_auth: 'ready' }));
-    setIndependence.mockRejectedValue({ type: 'Other', message: 'Disk full' });
-    render(<AgentOnboardingScreen onComplete={vi.fn()} />);
-    await screen.findByRole('heading', { name: 'How much should your agents do on their own?' });
-    fireEvent.click(screen.getByRole('button', { name: 'Continue' }));
+    press('Continue');
     expect(await screen.findByRole('alert')).toHaveTextContent('Disk full');
-    expect(screen.queryByTestId('handoff')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Skip' }));
-    expect(await screen.findByTestId('handoff')).toBeInTheDocument();
+    press('Continue');
+    expect(await heading('Use your agents from your phone?')).toBeInTheDocument();
+    expect(setIndependence).toHaveBeenLastCalledWith('go_hard');
   });
 
-  it('a fresh machine sees one line on how it works and two actionable cards', async () => {
-    getFullSetupStatus.mockResolvedValue(machine({ claude: 'ready' }));
+  it('a fresh machine picks an engine, then sees one screen for its first step', async () => {
+    saveProgress('engine');
+    getFullSetupStatus.mockResolvedValue(machine());
     render(<AgentOnboardingScreen onComplete={vi.fn()} />);
-    expect(await screen.findByText('Your own team of AI agents')).toBeInTheDocument();
-    expect(
-      screen.getByText(/Talk to your Chief of Staff\. It builds a team\./)
-    ).toBeInTheDocument();
-    expect(await card('Claude Code')).toHaveTextContent('Sign in');
-    expect(await card('Codex')).toHaveTextContent('Install & sign in');
+    await heading('Which AI should your agents run on?');
+    const claude = screen.getByText('Claude Code', { selector: '.agent-pick-card-name' });
+    expect(screen.getByText('Codex', { selector: '.agent-pick-card-name' })).toBeInTheDocument();
+    fireEvent.click(claude.closest('button') as HTMLElement);
+    expect(await heading('Install Claude Code')).toBeInTheDocument();
+    expect(screen.getByText('Claude Code · 1 of 2')).toBeInTheDocument();
   });
 
-  it('force mode shows the pick even with an engine ready; its card finishes', async () => {
+  it('force mode shows the choice even with an engine ready; its card goes on', async () => {
+    saveProgress('engine');
     getOnboardingTestMode.mockResolvedValue({ mock: false, forceOnboarding: true });
     getFullSetupStatus.mockResolvedValue(machine({ claude: 'ready', claude_auth: 'ready' }));
     render(<AgentOnboardingScreen onComplete={vi.fn()} />);
-    const claude = await card('Claude Code');
-    expect(claude).toHaveTextContent('Ready');
-    fireEvent.click(claude);
-    await skipIndependence();
-    expect(await screen.findByTestId('handoff')).toHaveTextContent('Claude Code');
+    await heading('Which AI should your agents run on?');
+    fireEvent.click(
+      screen.getByText('Claude Code', { selector: '.agent-pick-card-name' }).closest('button')!
+    );
+    expect(await heading('How much should your agents do on their own?')).toBeInTheDocument();
+    expect(setDefaultAgentId).toHaveBeenCalledWith('claude-code');
   });
 
-  it('a card for an engine that isn’t ready opens its setup steps', async () => {
-    getFullSetupStatus.mockResolvedValue(machine());
-    render(<AgentOnboardingScreen onComplete={vi.fn()} />);
-    fireEvent.click(await card('Claude Code'));
-    expect(await screen.findByRole('heading', { name: 'Claude Code' })).toBeInTheDocument();
-    expect(screen.queryByTestId('handoff')).not.toBeInTheDocument();
-    // The way back is there (held while its first step starts on its own).
-    expect(screen.getByRole('button', { name: /Choose a different one/ })).toBeInTheDocument();
-  });
-
-  it('a failed check offers a retry instead of guessing', async () => {
+  it('a failed status check offers a retry instead of guessing', async () => {
     getFullSetupStatus.mockRejectedValueOnce(new Error('boom')).mockResolvedValue(machine());
     render(<AgentOnboardingScreen onComplete={vi.fn()} />);
     expect(await screen.findByText('Couldn’t check this Mac. Try again.')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Try again' }));
+    press('Try again');
     await waitFor(() =>
       expect(screen.queryByText('Couldn’t check this Mac. Try again.')).not.toBeInTheDocument()
     );

@@ -113,6 +113,21 @@ export const setPhonePush = (enabled: boolean) =>
 
 export const retryPhoneTailscale = () => invoke<PhoneStatus>('companion_retry_tailscale');
 
+/** A phone signed in to this Mac's Tailscale account (`tailscale::TailnetPhone`). */
+export interface TailnetPhone {
+  name: string;
+  os: 'ios' | 'android';
+  /** Tailscale is switched on on it right now. */
+  online: boolean;
+}
+
+/** This account's phones on the tailnet: onboarding's "is it on your phone?" check. */
+export const getTailnetPhones = () => invoke<TailnetPhone[]>('companion_tailnet_phones');
+
+/** A QR code for a web page (a store link), drawn by `PhoneQr`. */
+export const getLinkQr = (url: string) =>
+  invoke<{ size: number; modules: string }>('companion_link_qr', { url });
+
 export const startPairing = () => invoke<PairingCode>('companion_pair_start');
 
 export const cancelPairing = () => invoke<void>('companion_pair_cancel');

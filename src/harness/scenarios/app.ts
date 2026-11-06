@@ -9,6 +9,7 @@ import { projects, readySetupItems } from './base';
 import { workspaceCommands, WORKSPACE_PROJECT } from './workspace';
 import { messagesFor, overview } from './agents';
 import { neverAnswers } from '../reject';
+import { FLOW_STORAGE_KEY } from '../../lib/onboardingFlow';
 
 const notInstalled = (id: string, friendlyName: string) => ({
   id,
@@ -241,28 +242,12 @@ export const appScenarios: Scenario[] = [
     },
   },
   {
-    id: 'onboarding-fresh',
-    title: 'Onboarding — nothing installed',
-    looksRightWhen:
-      'No product wordmark. “Your own team of AI agents”, a large white headline, then one line on how it works (“Talk to your Chief of Staff. It builds a team. Anything risky waits for your OK.”), one line that agents run on this computer with your own AI account, and two cards only — Claude Code (“Claude, by Anthropic”) and Codex (“GPT, by OpenAI”) — each ending “Install & sign in →”. No developer tools, no hosting, no classic-onboarding toggle.',
-    requires: '.agent-pick-grid',
-    commands: ONBOARDING_FRESH,
-  },
-  {
-    id: 'onboarding-codex-prereqs',
-    title: 'Onboarding — Codex on a bare machine',
-    looksRightWhen:
-      'Codex’s setup: a line saying Codex needs the package manager and Node.js first, then four rows in order (Package Manager, Node.js, Codex, Codex Account), the first one starting by itself and the rest waiting their turn. “← Choose a different one” above.',
-    openSelector: '.agent-pick-card:nth-child(2)',
-    requires: '.agent-setup-detail',
-    commands: { ...ONBOARDING_FRESH, mock_mark_setup_item_ready: null },
-  },
-  {
     id: 'onboarding-auth-only',
     title: 'Onboarding — installed but signed out',
     looksRightWhen:
       'Both cards end “Sign in →”; nothing else (developer tools, hosting) is asked about.',
     requires: '.agent-pick-grid',
+    storage: { [FLOW_STORAGE_KEY]: JSON.stringify({ v: 1, step: 'engine', finished: false }) },
     commands: {
       quick_setup_check: { allPresent: true, setupCompleteCached: false },
       get_full_setup_status: {
@@ -283,31 +268,12 @@ export const appScenarios: Scenario[] = [
     },
   },
   {
-    id: 'onboarding-independence',
-    title: 'Onboarding — how much agents do on their own',
-    looksRightWhen:
-      'Claude Code was already set up, so the one question before the hand-off: “How much should your agents do on their own?”, a line that it applies to every agent and can be changed in Settings → Agents, then three bordered choices with one line each — Check with me often, Use good judgement (selected, a stronger neutral border, not the accent), Go hard — get it done — and under them “You’ll always be asked before anything that spends money, sends as you, or deletes.” Skip and Continue below.',
-    requires: '.agent-onboarding-independence .independence-choice__option[aria-checked="true"]',
-    commands: ONBOARDING_ENGINE_ONLY,
-  },
-  {
-    id: 'onboarding-handoff',
-    title: 'Onboarding — the end: hand-off to the Chief of Staff',
-    looksRightWhen:
-      'Claude Code was already set up on this machine, and nothing else was (no Node, no Git): after the independence question (skipped here), the hand-off. The Chief’s badge, “You’re all set”, “Claude Code is connected. Your Chief of Staff is waiting for you.” and one button, “Meet your Chief of Staff”. No rocket, no “dev environment”.',
-    steps: [{ click: '.agent-onboarding-independence__actions .button:first-child' }],
-    requires: '.celebration-screen',
-    commands: ONBOARDING_ENGINE_ONLY,
-  },
-  {
     id: 'onboarding-end-to-agents',
     title: 'Onboarding — after the hand-off, Agents with the Chief',
     looksRightWhen:
-      'Agents mode, not the projects dashboard: the Chief of Staff selected in the sidebar, its chat open on the greeting, with the three starters and More ideas… under it and the composer ready.',
-    steps: [
-      { click: '.agent-onboarding-independence__actions .button:first-child' },
-      { click: '.celebration-btn' },
-    ],
+      'After “Start fresh” on the last onboarding step: Agents mode, not the projects dashboard: the Chief of Staff selected in the sidebar, its chat open on the greeting, with the three starters and More ideas… under it and the composer ready.',
+    storage: { [FLOW_STORAGE_KEY]: JSON.stringify({ v: 1, step: 'ready', finished: false }) },
+    steps: [{ click: '[data-flow-fresh]' }],
     requires: '.agents-mode .agent-chat__messages > .agent-chat__starters',
     commands: ONBOARDING_ENGINE_ONLY,
   },

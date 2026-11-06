@@ -21,7 +21,7 @@ const source = {
 };
 
 /** This Mac, as `companion_install_ios_status` read it on 4 Nov 2026. */
-const THIS_MAC = {
+export const THIS_MAC = {
   xcode: { state: 'tooOld', version: '26.1' },
   xcodeMinimum: '26.4',
   clt: true,
@@ -50,7 +50,7 @@ const IPHONE = {
 };
 
 /** As `companion_install_android_status` read this Mac: adb, Java and SDK, no phone. */
-const ANDROID_THIS_MAC = {
+export const ANDROID_THIS_MAC = {
   adb: 'Android Debug Bridge version 1.0.41',
   sdk: true,
   jdk: true,

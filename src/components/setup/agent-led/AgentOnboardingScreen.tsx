@@ -1,61 +1,59 @@
 /**
- * Onboarding: from nothing to talking with the Chief of Staff.
+ * Onboarding: from nothing to talking with the Chief of Staff, as one
+ * straight line of one-question screens (`lib/onboardingFlow`).
  *
- * It asks for exactly one thing, an engine Agents can run on (Claude Code or
- * Codex), installed and signed in. That is the only part that can't be
- * agent-led, and it is all a person needs before their Chief of Staff can
- * answer. Everything a project needs (a package manager, Node, Git, a GitHub
- * sign-in, hosting) is asked for later, when work first becomes a project
- * (`ProjectToolsModal`).
+ * Welcome → the engine (pick, then install and sign in, a screen each) →
+ * how independent agents are → your phone (optional: Tailscale here,
+ * Tailscale there, the app, scan and Allow) → "You're ready: bring your
+ * agents, or start fresh?" The import is its own short line off the end.
  *
- * The app verifies; nothing self-certifies: an engine counts as set up when
- * the app's own checks say it is installed and signed in.
+ * Only the engine is required. Everything a project needs is asked for
+ * later, when work first becomes a project (`ProjectToolsModal`). The app
+ * verifies; nothing self-certifies: every check here is the app's own.
  *
- * States: loading → pick (grid → per-engine detail) → independence → complete,
- * which hands off to Agents. Independence asks how much agents do on their
- * own (`IndependenceChoice`); skipping it keeps the default, "Use good
- * judgement". A machine that already has an engine ready fast-paths to
- * complete — except under SHIPSTUDIO_FORCE_ONBOARDING, where the pick phase
- * is always shown so the flow can be eyeballed on a dev machine.
+ * The step is saved as it changes, so quitting halfway opens where it
+ * stopped (`useAppSetup` sends a launch back here while it's unfinished).
  */
 
-import { ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { CelebrationScreen } from '../CelebrationScreen';
-import { OnboardingTerminal } from '../OnboardingTerminal';
-import { AgentPickGrid, AgentCardKey } from './AgentPickGrid';
-import { AgentSetupDetail } from './AgentSetupDetail';
-import { useAgentSetupActions } from './useAgentSetupActions';
-import { Button } from '../../primitives/Button';
+import { useCallback, useEffect, useState } from 'react';
 import { Spinner } from '../../primitives/Spinner';
-import { IndependenceChoice } from '../../agents/IndependenceChoice';
+import { Button } from '../../primitives/Button';
+import { EngineStep, engineName } from '../flow/EngineStep';
+import { IndependenceStep, ReadyStep, WelcomeStep } from '../flow/SimpleSteps';
 import {
-  DEFAULT_INDEPENDENCE,
-  INDEPENDENCE_QUESTION,
-  getIndependence,
-  setIndependence,
-  type AgentIndependence,
-} from '../../../lib/agentIndependence';
-import { asCommandError, formatCommandError } from '../../../lib/errors';
+  PhoneAppStep,
+  PhoneIntroStep,
+  PhonePairStep,
+  TailscaleMacStep,
+  TailscalePhoneStep,
+} from '../flow/PhoneSteps';
+import { ImportConnectStep, ImportRemoteStep, ImportStartStep } from '../flow/ImportSteps';
+import type { AgentCardKey } from './AgentPickGrid';
 import {
   SetupItem,
   FullSetupStatus,
   getFullSetupStatus,
   setDefaultAgentId,
-  SETUP_FRIENDLY_NAMES,
 } from '../../../lib/setup';
 import {
   getOnboardingTestMode,
-  isEnginePairReady,
   readyAgentsEngine,
   OnboardingTestMode,
 } from '../../../lib/agentOnboarding';
-import { initDefaultAgent, getAgentById } from '../../../lib/agent';
-import { ClaudeIcon, CodexIcon } from '@/components/icons';
+import {
+  nextStep,
+  prevStep,
+  readProgress,
+  resumeStep,
+  saveProgress,
+  skipPhone,
+  type FlowStep,
+} from '../../../lib/onboardingFlow';
+import { setImportChoice } from '../../../lib/agents';
+import { initDefaultAgent } from '../../../lib/agent';
 import { withTimeout, TimeoutError } from '../../../lib/withTimeout';
 import { trackEvent, setActiveScreen } from '../../../lib/analytics';
 import { logger } from '../../../lib/logger';
-
-type Phase = 'loading' | 'pick' | 'independence' | 'complete';
 
 const SETUP_STATUS_TIMEOUT_MS = 15_000;
 
@@ -68,28 +66,16 @@ function agentIdForBinary(binaryId: string): string {
   return binaryId === 'claude' ? 'claude-code' : binaryId;
 }
 
-const DETAIL_ICONS: Record<AgentCardKey, ReactNode> = {
-  claude: <ClaudeIcon size={28} />,
-  codex: <CodexIcon size={28} />,
-};
-
-/** How it works, in one line: the three things a person does. */
-const HOW_IT_WORKS =
-  'Talk to your Chief of Staff. It builds a team. Anything risky waits for your OK.';
-
 interface AgentOnboardingScreenProps {
-  /** Called when setup is complete and the user continues. */
-  onComplete: () => void;
+  /** Called at the end of the line: Start fresh, or into the Chief's chat. */
+  onComplete: () => void | Promise<void>;
 }
 
 export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps) {
-  const [phase, setPhase] = useState<Phase>('loading');
+  const [step, setStep] = useState<FlowStep | null>(null);
   const [items, setItems] = useState<SetupItem[]>([]);
   const [error, setError] = useState<string | null>(null);
-  /** Engine card being set up in the detail view (grid shown when null). */
-  const [detailAgent, setDetailAgent] = useState<AgentCardKey | null>(null);
-  /** The engine committed to; named on the hand-off screen. */
-  const [chosenKey, setChosenKey] = useState<AgentCardKey | null>(null);
+  const [chosen, setChosen] = useState<AgentCardKey | null>(null);
   const [testMode, setTestMode] = useState<OnboardingTestMode>({
     mock: false,
     forceOnboarding: false,
@@ -120,24 +106,17 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
     setItems((prev) => prev.map((item) => (item.id === itemId ? { ...item, ...updates } : item)));
   }, []);
 
-  const actions = useAgentSetupActions({ fetchStatus, updateItemStatus, mock: testMode.mock });
-
-  /** Commit a verified engine as the default and hand off. */
-  const finishWith = useCallback(async (binaryId: AgentCardKey, entryPath: string) => {
-    const agentId = agentIdForBinary(binaryId);
-    await setDefaultAgentId(agentId);
-    initDefaultAgent(agentId);
-    setChosenKey(binaryId);
-    setDetailAgent(null);
-    void trackEvent('onboarding_completed', {
-      agents: [agentId],
-      entry_path: entryPath,
-      $screen_name: 'Onboarding',
-    });
-    setPhase('independence');
+  const go = useCallback((next: FlowStep | null) => {
+    if (!next) return;
+    saveProgress(next);
+    setStep(next);
   }, []);
 
-  // Initial load: test mode + status, then route.
+  useEffect(() => {
+    if (step) setActiveScreen(`Onboarding - ${step}`);
+  }, [step]);
+
+  // First load: test mode and status, then where to open.
   useEffect(() => {
     const init = async () => {
       const mode = await getOnboardingTestMode().catch(() => ({
@@ -146,56 +125,48 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
       }));
       setTestMode(mode);
       const status = await fetchStatus();
-      if (!status) {
-        setPhase('pick'); // show the error banner with Retry
-        return;
-      }
       if (!agentSetupStartedFired) {
         agentSetupStartedFired = true;
         void trackEvent('setup_started', { entry_path: 'agent_led', entry_step: null });
       }
-
-      // Fast path: an engine is already ready — except under
-      // force-onboarding, where showing the pick phase is the whole point.
-      const ready = readyAgentsEngine(status.items);
-      if (!mode.forceOnboarding && ready) {
-        await finishWith(ready, 'agent_led_fast_path');
-        return;
-      }
-      setActiveScreen('Onboarding - Agent Pick');
-      setPhase('pick');
+      const ready = status ? readyAgentsEngine(status.items) : null;
+      if (ready) setChosen(ready);
+      setStep(resumeStep(readProgress(), ready !== null));
     };
     void init();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [fetchStatus]);
 
-  const handleCardSelect = useCallback(
-    (key: AgentCardKey) => {
-      const pairReady = isEnginePairReady(items, key);
-      void trackEvent('agent_card_selected', { key, already_ready: pairReady });
-      if (pairReady) void finishWith(key, 'agent_led');
-      else setDetailAgent(key);
+  /** The engine is installed and signed in: make it the default and go on. */
+  const engineReady = useCallback(
+    async (key: AgentCardKey) => {
+      const agentId = agentIdForBinary(key);
+      await setDefaultAgentId(agentId);
+      initDefaultAgent(agentId);
+      setChosen(key);
+      void trackEvent('onboarding_completed', {
+        agents: [agentId],
+        entry_path: 'agent_led',
+        $screen_name: 'Onboarding',
+      });
+      go(nextStep('engine'));
     },
-    [items, finishWith]
+    [go]
   );
 
-  // Detail view: the moment the chosen engine is verified installed and
-  // signed in, finish — the user already committed by clicking the card.
-  // Guarded to fire once.
-  const advancedFromDetailRef = useRef(false);
-  useEffect(() => {
-    if (!detailAgent || phase !== 'pick') {
-      advancedFromDetailRef.current = false;
-      return;
-    }
-    const busy = actions.activeItemId !== null || actions.terminalConfig !== null;
-    if (isEnginePairReady(items, detailAgent) && !busy && !advancedFromDetailRef.current) {
-      advancedFromDetailRef.current = true;
-      void finishWith(detailAgent, 'agent_led');
-    }
-  }, [detailAgent, phase, items, actions.activeItemId, actions.terminalConfig, finishWith]);
+  /** The end of the line: saved as finished, then off to Agents. */
+  const finish = useCallback(async () => {
+    saveProgress('ready', true);
+    await onComplete();
+  }, [onComplete]);
 
-  if (phase === 'loading') {
+  const startFresh = useCallback(async () => {
+    await setImportChoice('declined').catch((e: unknown) =>
+      logger.warn('Could not save the import choice', { error: String(e) })
+    );
+    await finish();
+  }, [finish]);
+
+  if (!step) {
     return (
       <div className="onboarding-screen onboarding-loading">
         <Spinner size="lg" style={{ color: 'var(--text-muted)' }} />
@@ -204,157 +175,69 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
     );
   }
 
-  if (phase === 'independence') {
-    return <IndependenceStep onDone={() => setPhase('complete')} />;
-  }
+  const back = () => go(prevStep(step));
+  const forward = () => go(nextStep(step));
+  const skip = () => go(skipPhone());
+  const phone = { onNext: forward, onBack: back, onSkip: skip };
+  const importing = { onNext: forward, onBack: back, onStartFresh: () => void startFresh() };
 
-  if (phase === 'complete') {
-    return (
-      <CelebrationScreen
-        onContinue={onComplete}
-        engineName={chosenKey ? getAgentById(agentIdForBinary(chosenKey)).displayName : null}
-      />
-    );
-  }
-
-  return (
-    <div className="onboarding-screen">
-      <div className="onboarding-content agent-onboarding-content">
-        {!detailAgent && (
-          <div className="onboarding-header">
-            <h1>Your own team of AI agents</h1>
-            <p className="onboarding-how">{HOW_IT_WORKS}</p>
-            <p className="onboarding-reassurance">
-              They run on this Mac, on your own AI account. Pick one; you can add the other later.
-            </p>
-          </div>
-        )}
-
-        {error && (
-          <div className="onboarding-error">
-            <p>{error}</p>
-            <Button variant="secondary" onClick={() => void fetchStatus()}>
-              Try again
-            </Button>
-          </div>
-        )}
-
-        {!detailAgent && (
-          <AgentPickGrid
+  const screen = (() => {
+    switch (step) {
+      case 'welcome':
+        return <WelcomeStep onNext={forward} />;
+      case 'engine':
+        return (
+          <EngineStep
             items={items}
-            onSelect={handleCardSelect}
-            disabled={actions.activeItemId !== null || actions.terminalConfig !== null}
+            fetchStatus={fetchStatus}
+            updateItemStatus={updateItemStatus}
+            mock={testMode.mock}
+            forcePick={testMode.forceOnboarding}
+            onEngineReady={engineReady}
+            onBack={back}
           />
-        )}
-
-        {detailAgent && (
-          <AgentSetupDetail
-            binaryId={detailAgent}
-            displayName={getAgentById(agentIdForBinary(detailAgent)).displayName}
-            icon={DETAIL_ICONS[detailAgent]}
-            items={items}
-            onItemAction={(id) => void actions.handleItemAction(id)}
-            activeItemId={actions.activeItemId}
-            terminalActive={actions.terminalConfig !== null}
-            onBack={() => setDetailAgent(null)}
+        );
+      case 'independence':
+        return <IndependenceStep onNext={forward} onBack={back} />;
+      case 'phone':
+        return <PhoneIntroStep {...phone} />;
+      case 'tailscaleMac':
+        return <TailscaleMacStep {...phone} />;
+      case 'tailscalePhone':
+        return <TailscalePhoneStep {...phone} />;
+      case 'phoneApp':
+        return <PhoneAppStep {...phone} />;
+      case 'phonePair':
+        return <PhonePairStep {...phone} />;
+      case 'ready':
+        return (
+          <ReadyStep
+            engineName={chosen ? engineName(chosen) : null}
+            onImport={() => go('importRemote')}
+            onStartFresh={startFresh}
+            onBack={back}
           />
-        )}
-
-        {/* Terminal modal for install/sign-in commands (shared CSS classes
-            from setup.css). */}
-        {actions.terminalConfig && (
-          <div className="onboarding-terminal-overlay">
-            <div className="onboarding-terminal-modal">
-              <div className="onboarding-terminal-header">
-                <span className="onboarding-terminal-title">
-                  {SETUP_FRIENDLY_NAMES[actions.terminalConfig.itemId] ||
-                    actions.terminalConfig.itemId}
-                </span>
-                <Button variant="ghost" size="compact" onClick={actions.handleTerminalCancel}>
-                  {actions.terminalExitCode ? 'Close' : 'Cancel'}
-                </Button>
-              </div>
-              <OnboardingTerminal
-                command={actions.terminalConfig.command}
-                args={actions.terminalConfig.args}
-                onExit={(exitCode, outputTail) =>
-                  void actions.handleTerminalExit(exitCode, outputTail)
-                }
-              />
-              <div className="onboarding-terminal-hint">
-                <strong>If you're asked for a password</strong>, type it and press Enter. It stays
-                hidden as you type — no dots or characters appear — but it is being entered.
-              </div>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
-/**
- * How much agents do on their own, once the engine is ready and before the
- * hand-off. Skip keeps whatever is saved (the default when nothing is).
- */
-function IndependenceStep({ onDone }: { onDone: () => void }) {
-  const [level, setLevel] = useState<AgentIndependence>(DEFAULT_INDEPENDENCE);
-  const [saving, setSaving] = useState(false);
-  const [problem, setProblem] = useState<string | null>(null);
-  // One chosen before (onboarding shown again) is what's offered.
-  const touched = useRef(false);
-  useEffect(() => {
-    let live = true;
-    getIndependence()
-      .then((saved) => {
-        if (live && !touched.current) setLevel(saved);
-      })
-      .catch(() => {});
-    return () => {
-      live = false;
-    };
-  }, []);
-  useEffect(() => setActiveScreen('Onboarding - Independence'), []);
-
-  const pick = (next: AgentIndependence) => {
-    touched.current = true;
-    setLevel(next);
-  };
-  const save = async () => {
-    setSaving(true);
-    try {
-      await setIndependence(level);
-      onDone();
-    } catch (e) {
-      setProblem(formatCommandError(asCommandError(e)));
-      setSaving(false);
+        );
+      case 'importRemote':
+        return <ImportRemoteStep {...importing} />;
+      case 'importConnect':
+        return <ImportConnectStep {...importing} />;
+      case 'importStart':
+        return <ImportStartStep {...importing} onOpenChief={finish} />;
     }
-  };
+  })();
 
   return (
-    <div className="onboarding-screen">
-      <div className="onboarding-content agent-onboarding-independence">
-        <div className="onboarding-header">
-          <h1>{INDEPENDENCE_QUESTION}</h1>
-          <p className="onboarding-reassurance">
-            It applies to every agent. You can change it in Settings → Agents.
-          </p>
-        </div>
-        <IndependenceChoice value={level} onChange={pick} disabled={saving} large />
-        {problem && (
-          <div className="onboarding-error" role="alert">
-            <p>{problem}</p>
-          </div>
-        )}
-        <div className="agent-onboarding-independence__actions">
-          <Button variant="ghost" onClick={onDone} disabled={saving}>
-            Skip
-          </Button>
-          <Button variant="primary" onClick={() => void save()} disabled={saving}>
-            {saving ? <Spinner size="sm" /> : 'Continue'}
+    <>
+      {error && (
+        <div className="onboarding-error flow-error" role="alert">
+          <p>{error}</p>
+          <Button variant="secondary" onClick={() => void fetchStatus()}>
+            Try again
           </Button>
         </div>
-      </div>
-    </div>
+      )}
+      {screen}
+    </>
   );
 }
