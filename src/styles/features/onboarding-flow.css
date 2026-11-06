@@ -42,7 +42,8 @@
 .flow-progress__segment {
   height: 4px;
   border-radius: var(--radius-pill);
-  background: var(--surface-control);
+  /* The track: --surface-control all but disappears on light's app background. */
+  background: var(--progress-track);
 }
 
 .flow-progress__segment[data-state='done'] {

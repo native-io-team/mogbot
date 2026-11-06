@@ -593,7 +593,9 @@
   padding: 0 var(--spacing-xs);
   font-family: var(--font-code);
   font-size: var(--font-size-body-md);
-  background: var(--surface-control);
+  /* A tint, not a surface: --surface-control is one step off the light
+     theme's app background, so the chip vanished and read as stray spaces. */
+  background: var(--tint-strong);
   border-radius: var(--radius-sm);
 }
 

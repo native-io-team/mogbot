@@ -14,6 +14,9 @@
   --agents-work-shot: 200px; /* css-ok: a screenshot thumbnail in a step */
 
   flex: 0 0 100%;
+  /* Full width in a column row too (a result card's row), or the steps'
+     bubble measure is a share of the toggle's width and every label cuts. */
+  align-self: stretch;
   min-width: 0;
 }
 

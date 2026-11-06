@@ -345,22 +345,26 @@ export function CopyActions({
           Ask for changes
         </TextButton>
       )}
-      {onReview && (
-        <Button variant="secondary" onClick={onReview}>
-          Review changes
-        </Button>
-      )}
-      <Tooltip content={waitHint ?? keepHint(agent.name, project)}>
-        <Button
-          variant="strong"
-          // Not the click that only brought the window forward (lib/firstClick).
-          onClick={(event) => !isFocusClick(event) && void keep()}
-          disabled={busy !== null || held}
-          leftIcon={busy === 'keep' ? <Spinner size="sm" /> : undefined}
-        >
-          Keep changes
-        </Button>
-      </Tooltip>
+      {/* The two answers wrap as one: split across lines, Keep changes sat
+          alone under the text actions with Review changes among them. */}
+      <span className="agent-copy__answers">
+        {onReview && (
+          <Button variant="secondary" onClick={onReview}>
+            Review changes
+          </Button>
+        )}
+        <Tooltip content={waitHint ?? keepHint(agent.name, project)}>
+          <Button
+            variant="strong"
+            // Not the click that only brought the window forward (lib/firstClick).
+            onClick={(event) => !isFocusClick(event) && void keep()}
+            disabled={busy !== null || held}
+            leftIcon={busy === 'keep' ? <Spinner size="sm" /> : undefined}
+          >
+            Keep changes
+          </Button>
+        </Tooltip>
+      </span>
     </div>
   );
 }

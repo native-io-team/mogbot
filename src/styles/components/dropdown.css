@@ -117,8 +117,13 @@
   cursor: not-allowed;
 }
 
+/* The current choice: accent text plus a fill and weight, because hue alone
+   says nothing when the accent is white (docs/design-system.md, "Selected
+   needs a second cue"). */
 .ss-dropdown__item--active {
   color: var(--accent-active);
+  font-weight: var(--font-weight-label);
+  background: var(--surface-selected);
 }
 
 /* The ON/OFF (and SWAP) badge at the end of a toggle item — one style for

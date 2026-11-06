@@ -885,7 +885,9 @@ function Summarized({ approval, lines }: { approval: Approval; lines: number }) 
           accessibilityState={{ expanded: open }}
           onPress={() => setOpen((v) => !v)}
           hitSlop={{ top: 12, bottom: 12 }}
-          style={({ pressed }) => [cardStyles.showAll, pressed && PRESSED]}
+          // On the summary's own edge: showAll's inset is for a toggle inside a
+          // field box, and here it left "Details" hanging off the text.
+          style={({ pressed }) => [cardStyles.detailsToggle, pressed && PRESSED]}
         >
           <T variant="caption" color={colors.textSecondary} style={{ fontFamily: fonts.medium }}>
             {open ? 'Hide details' : 'Details'}
@@ -984,6 +986,8 @@ export const useCardStyles = makeStyles((colors) => ({
   fields: { gap: space.sm },
   field: { gap: space.xs },
   showAll: { paddingHorizontal: space.md, paddingBottom: space.sm },
+  /** "Details" under a summary: on the text's edge, not a field's inset. */
+  detailsToggle: { alignSelf: 'flex-start' as const },
   /** ⋯ · Deny · Allow: one row, the affirmative last. */
   answers: { flexDirection: 'row', flexWrap: 'wrap', flexGrow: 1, gap: space.sm },
   /** A task's own menu: each option a full row, then the pair. */
