@@ -181,6 +181,7 @@
   font-size: var(--font-size-body-lg);
   font-weight: var(--font-weight-label);
   color: var(--text-primary);
+  -webkit-user-select: all;
   user-select: all;
 }
 

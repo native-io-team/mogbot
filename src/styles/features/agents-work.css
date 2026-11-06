@@ -102,6 +102,7 @@
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  -webkit-user-select: text;
   user-select: text;
 }
 
@@ -272,6 +273,7 @@
   white-space: pre;
   background: var(--surface-recessed);
   border-radius: var(--radius-card);
+  -webkit-user-select: text;
   user-select: text;
 }
 
