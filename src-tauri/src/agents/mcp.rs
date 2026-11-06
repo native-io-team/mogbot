@@ -332,7 +332,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "request_login",
-        description: "Get access to an app or account you're blocked on for the user's task (Gmail, Google Calendar, Slack, LinkedIn, X, GitHub, Linear, Notion, Figma…). Try first: your own tools for it, then the user's signed-in browser (mcp__claude-in-chrome__*) if you have it. This checks the same on the Mac before asking: it may answer that you can reach it already (and how), that the user already answered, or that someone else's card for it is waiting and you're on it. Only otherwise does one card appear in this chat, on their phone too, with a sign-in button (the app's own sign-in in their Mac's browser; you never see a password). Never ask for a password or a login in chat, never up front, one at a time. When a card was raised, stop and tell the user in one line what it's for; you're woken when they answer.",
+        description: "Get access to an app or account you're blocked on for the user's task (Gmail, Google Calendar, Slack, LinkedIn, X, GitHub, Linear, Notion, Figma…). Try first: your own tools for it, then the user's signed-in browser (mcp__claude-in-chrome__*) if you have it. This checks the same on the Mac before asking: it may answer that you can reach it already (and how), that the user already answered, or that someone else's card for it is waiting and you're on it. Only otherwise does one card appear in this chat, on their phone too, with a sign-in button (the app's own sign-in; for a site in their Chrome they can do it from the phone, \"Sign in from here\"; you never see a password). Use it, with signed_out: true, when a page in their browser asks for a sign-in or a password: never tell the user to go to their computer or to finish in a tab you left open. Never ask for a password or a login in chat, never up front, one at a time. When a card was raised, stop and tell the user in one line what it's for; you're woken when they answer.",
         main_only: false,
         schema: || json!({
             "type": "object",
@@ -1171,7 +1171,7 @@ async fn share_result(
             Ok(path) => Some(path),
             // A site the agent built in a folder of its own: the app lists
             // it as a project, where it can, rather than refusing the card.
-            Err(_) => super::project::ensure_listed(&wanted, &home).await,
+            Err(_) => super::project::ensure_listed(app, &caller.id, &wanted).await,
         };
         match found {
             Some(path) => {
@@ -1627,6 +1627,12 @@ fn request_secret_as(app: &AppHandle, caller: &store::Agent, args: &Value, quiet
     // Asked already in this task and nobody answered: not again.
     if super::expiry::already_expired(&caller.id, &super::expiry::secret_key(&request.name)) {
         return text(super::expiry::told_maybe_later(&request.name));
+    }
+    // An app the user chose not to connect isn't asked for by another door.
+    if let Some(refused) =
+        super::declined::refusal_for_text(&format!("{} {}", request.name, request.purpose))
+    {
+        return text(refused);
     }
     let open = store::pending_approvals(&caller.id).unwrap_or_default();
     if open

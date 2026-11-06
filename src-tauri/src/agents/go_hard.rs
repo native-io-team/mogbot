@@ -35,7 +35,9 @@
 //!
 //! Parsing is deliberately forgiving: a command line is split into every
 //! command it runs, including those inside quotes (`bash -c "…"`), and each
-//! is checked against the list. Something it can't read runs, because "Go
+//! is checked against the list. A here-document's body is data unless a
+//! shell (or `ssh`, `osascript`) runs it, or it is a script that starts
+//! processes, whose strings are then checked. Something it can't read runs, because "Go
 //! hard" is allow-by-default; the list is what has to be right.
 
 use serde_json::Value;
@@ -238,7 +240,177 @@ fn repo_of(p: &Path) -> Option<PathBuf> {
 /// follows `$(` or a backtick.
 pub(super) fn commands(src: &str) -> Vec<Vec<String>> {
     let mut out = Vec::new();
-    lex_into(src, &mut out, 0);
+    lex_into(&without_heredoc_data(src), &mut out, 0);
+    out
+}
+
+/// What an AppleScript that sends mail or a message says.
+const OSASCRIPT_SENDS: &[&str] = &[
+    "\"mail\"",
+    "\"messages\"",
+    "send ",
+    "outgoing message",
+    "mail.app",
+];
+
+/// How a script in a here-document starts a process (Python, Node, Ruby,
+/// Perl): its string literals are then read as commands.
+const SPAWNS: &[&str] = &[
+    "subprocess",
+    "os.system",
+    "os.popen",
+    "child_process",
+    "execSync",
+    "execFile",
+    "spawn",
+    "system(",
+    "exec(",
+    "Popen",
+];
+
+/// Programs whose here-document is run as commands, not kept as data.
+const RUNS_ITS_INPUT: &[&str] = &[
+    "sh",
+    "bash",
+    "zsh",
+    "dash",
+    "ksh",
+    "fish",
+    "ssh",
+    "osascript",
+    "eval",
+    "source",
+    "xargs",
+    "su",
+    "sudo",
+    "doas",
+];
+
+/// `src` with the body of each here-document dropped when it is data: the
+/// file a `cat > f.mjs <<'EOF'` writes is a script's text (regexes with
+/// `<` and `>`, words like `import`), not commands this line runs. A body
+/// fed to a shell (`bash <<EOF`) or another program that runs it (`ssh`,
+/// `osascript`) is kept and checked like the rest, and so
+/// is everything when a body has no closing line (nothing is dropped on a
+/// guess). `<<` inside quotes is text, and `<<<` is a here-string.
+fn without_heredoc_data(src: &str) -> String {
+    if !src.contains("<<") {
+        return src.to_string();
+    }
+    let chars: Vec<char> = src.chars().collect();
+    let mut out = String::with_capacity(src.len());
+    let mut quote: Option<char> = None;
+    let mut pending: Vec<(String, bool)> = Vec::new();
+    let mut line_start = 0;
+    let mut i = 0;
+    while i < chars.len() {
+        let c = chars[i];
+        if let Some(q) = quote {
+            if c == '\\' && q == '"' && i + 1 < chars.len() {
+                out.push(c);
+                out.push(chars[i + 1]);
+                i += 2;
+                continue;
+            }
+            if c == q {
+                quote = None;
+            }
+            out.push(c);
+            i += 1;
+            continue;
+        }
+        match c {
+            '\\' if i + 1 < chars.len() => {
+                out.push(c);
+                out.push(chars[i + 1]);
+                i += 2;
+                continue;
+            }
+            '\'' | '"' => quote = Some(c),
+            '<' if chars.get(i + 1) == Some(&'<') => {
+                if chars.get(i + 2) == Some(&'<') {
+                    out.push_str("<<<");
+                    i += 3;
+                    continue;
+                }
+                let mut j = i + 2;
+                let tabs = chars.get(j) == Some(&'-');
+                if tabs {
+                    j += 1;
+                }
+                while chars.get(j).is_some_and(|c| *c == ' ' || *c == '\t') {
+                    j += 1;
+                }
+                let mut delim = String::new();
+                while let Some(&d) = chars.get(j) {
+                    if d.is_whitespace() || matches!(d, ';' | '&' | '|' | '<' | '>' | '(' | ')') {
+                        break;
+                    }
+                    if d != '\'' && d != '"' && d != '\\' {
+                        delim.push(d);
+                    }
+                    j += 1;
+                }
+                if !delim.is_empty() {
+                    pending.push((delim, tabs));
+                }
+                out.extend(&chars[i..j]);
+                i = j;
+                continue;
+            }
+            '\n' if !pending.is_empty() => {
+                out.push('\n');
+                let line: String = chars[line_start..i].iter().collect();
+                let runs = line
+                    .split(|c: char| c.is_whitespace() || matches!(c, ';' | '&' | '|' | '(' | ')'))
+                    .any(|w| RUNS_ITS_INPUT.contains(&base(w)));
+                let rest: String = chars[i + 1..].iter().collect();
+                let mut bodies = rest.split_inclusive('\n');
+                let mut used = 0;
+                for (delim, tabs) in pending.drain(..) {
+                    let mut closed = false;
+                    let mut data = String::new();
+                    for body in bodies.by_ref() {
+                        used += body.chars().count();
+                        let end = body.trim_end_matches(['\n', '\r']);
+                        let end = if tabs {
+                            end.trim_start_matches('\t')
+                        } else {
+                            end
+                        };
+                        if end == delim {
+                            // A script that starts processes: the commands
+                            // it names in its strings are checked.
+                            if SPAWNS.iter().any(|s| data.contains(s)) {
+                                for lit in string_literals(&data) {
+                                    out.push_str(&lit);
+                                    out.push('\n');
+                                }
+                            }
+                            out.push_str(body);
+                            closed = true;
+                            break;
+                        }
+                        if runs {
+                            out.push_str(body);
+                        } else {
+                            data.push_str(body);
+                        }
+                    }
+                    if !closed {
+                        return src.to_string();
+                    }
+                }
+                i += 1 + used;
+                line_start = i;
+                continue;
+            }
+            '\n' => line_start = i + 1,
+            _ => {}
+        }
+        out.push(c);
+        i += 1;
+    }
     out
 }
 
@@ -339,6 +511,11 @@ fn lex_into(src: &str, out: &mut Vec<Vec<String>>, depth: u8) {
 
 fn command_asks(command: &str, ctx: &Ctx, outside: bool) -> bool {
     let lower = command.to_ascii_lowercase();
+    // `osascript` reading its script from a here-document or a pipe: the
+    // script is not its arguments, so look at the whole line.
+    if lower.contains("osascript") && OSASCRIPT_SENDS.iter().any(|w| lower.contains(w)) {
+        return true;
+    }
     // Fetched code piped into a shell: a new package by another name.
     if outside
         && [
@@ -691,15 +868,7 @@ fn program(prog: &str, args: &[&str], ctx: &Ctx, outside: bool, known: bool) -> 
         }
         "osascript" => {
             let text = args.join(" ").to_ascii_lowercase();
-            [
-                "\"mail\"",
-                "\"messages\"",
-                "send ",
-                "outgoing message",
-                "mail.app",
-            ]
-            .iter()
-            .any(|w| text.contains(w))
+            OSASCRIPT_SENDS.iter().any(|w| text.contains(w))
         }
         "curl" => curl(args, outside),
         "wget" => {

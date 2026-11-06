@@ -48,7 +48,7 @@ describe('a login card, in words', () => {
   const gmail = loginCard('Finance', 'gmail');
   const linkedin = loginCard('Social', 'linkedin');
 
-  it('leads with the browser, and offers claude.ai’s connector as an extra', () => {
+  it('leads with the browser for a claude.ai app, and offers Claude second', () => {
     expect(primaryOption(gmail)?.method).toBe('browser');
     expect(otherOptions(gmail).map((o) => o.method)).toEqual(['claude_ai']);
     // No connector: the browser leads, and the card says why there's no connector.
@@ -254,5 +254,67 @@ describe('login cards against the mock Mac', () => {
     await expect(
       t.request('agents.loginStart', { agentId: 'qa', requestId: 'req_login_linkedin', optionId: 'browser' })
     ).rejects.toBeTruthy();
+  });
+});
+
+describe('"Not needed" for the whole team, against the mock Mac', () => {
+  const mock = createMockServer({ quiet: true, allowAfterMs: 0, draftEveryMs: 10, loginAfterMs: 150 });
+  let t: DirectTransport;
+  let state = emptySync();
+
+  beforeAll(async () => {
+    const url = await mock.listen();
+    t = new DirectTransport({
+      routes: [{ kind: 'tailscale', url }],
+      token: mock.issueToken().token,
+      app: { version: '0.1.0', runtimeVersion: 'test' },
+      getResume: () => state.cursor ?? undefined,
+      foreground: true,
+      WebSocketImpl: WebSocket as unknown as typeof globalThis.WebSocket,
+      ...provenBy(mock),
+    });
+    t.onEvent((e: CompanionEvent, c?: Cursor) => {
+      state = applyEvent(state, e, c);
+    });
+    await until(() => state.syncedAt != null);
+  });
+
+  afterAll(async () => {
+    t.close();
+    await mock.close();
+  });
+
+  const card = async (agentId: string, requestId: string) =>
+    (await t.request('agents.messages', { agentId })).messages.find(
+      (m: AgentMessage) => m.approval?.requestId === requestId
+    )!;
+
+  it('is served, declines a card’s app with a receipt, and is remembered until turned back on', async () => {
+    await until(() => !!t.welcome);
+    for (const m of ['agents.loginNotNeeded', 'agents.loginsNotNeeded', 'agents.loginsUndecline', 'agents.loginsRecheck']) {
+      expect(t.welcome!.methods).toContain(m);
+    }
+    const receipt = await t.request('agents.loginNotNeeded', { agentId: 'qa', requestId: 'req_login_linkedin' });
+    expect(receipt).toEqual({
+      keys: ['linkedin'],
+      line: 'Not connecting LinkedIn. No agent will ask for it again.',
+      closed: 1,
+    });
+    expect((await card('qa', 'req_login_linkedin')).approval).toMatchObject({ status: 'denied', note: 'Not needed' });
+    const reach = await t.request('agents.reach', { agentId: 'qa' });
+    expect(reach.declined?.map((d) => d.title)).toEqual(['LinkedIn']);
+    expect(await t.request('agents.loginsUndecline', { keys: ['linkedin'] })).toBe(1);
+    expect((await t.request('agents.reach', { agentId: 'qa' })).declined).toBeUndefined();
+  });
+
+  it('Skip the rest declines every row still waiting', async () => {
+    const before = await t.request('agents.loginsTeam', {});
+    const waiting = before.needs.filter((n) => !n.done).length;
+    expect(waiting).toBeGreaterThan(1);
+    const receipt = await t.request('agents.loginsNotNeeded', {});
+    expect(receipt.keys.length).toBeGreaterThanOrEqual(waiting);
+    const after = await t.request('agents.loginsTeam', {});
+    expect(after.needs.filter((n) => !n.done)).toEqual([]);
+    await t.request('agents.loginsRecheck', {});
   });
 });

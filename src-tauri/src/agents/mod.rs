@@ -71,6 +71,7 @@ pub mod connections;
 pub mod connector;
 pub mod context;
 pub mod decisions;
+pub mod declined;
 pub mod defaults;
 pub mod describe;
 pub mod dev_servers;
@@ -131,6 +132,7 @@ pub mod wallet;
 pub mod watch;
 pub mod watch_seal;
 pub mod work;
+pub mod workplace;
 
 use crate::errors::CommandError;
 

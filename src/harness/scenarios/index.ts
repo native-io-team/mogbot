@@ -34,6 +34,7 @@ import { phoneInstallScenarios } from './phoneInstall';
 import { previewErrorScenarios } from './previewError';
 import { remoteScenarios } from './remote';
 import { teamScenarios } from './team';
+import { projectsAtWorkScenarios } from './projectsAtWork';
 
 export const scenarios: Scenario[] = [
   ...agentsScenarios,
@@ -69,6 +70,7 @@ export const scenarios: Scenario[] = [
   ...previewErrorScenarios,
   ...remoteScenarios,
   ...teamScenarios,
+  ...projectsAtWorkScenarios,
 ];
 
 export const DEFAULT_SCENARIO = 'dashboard';

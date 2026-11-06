@@ -624,6 +624,12 @@ mod tests {
         .unwrap();
         let prompt = system_prompt(&agent, None);
         assert!(prompt.contains("Never ask for a password"));
+        // A sign-in page (or a password step inside one) is a card the user
+        // can answer from the phone, never "go to your computer".
+        assert!(
+            prompt.contains("`signed_out: true`: that card lets the user sign in from their phone")
+        );
+        assert!(prompt.contains("Never tell them to go to their computer"));
         // The chain, in order: our own connection, the browser, then one ask;
         // claude.ai's connectors are an extra, never waited on.
         assert!(prompt.contains("an extra: use it if it works, never wait on it"));

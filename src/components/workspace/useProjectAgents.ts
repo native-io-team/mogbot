@@ -1,8 +1,14 @@
 /**
- * The persistent agents that work in a project, as rows for the workspace
- * sidebar. The sidebar's other section is the project's terminal sessions;
- * these are the teammates from Agents bound to this folder, so a person
- * dropping into the project sees who works here and can message them.
+ * The persistent agents that work in a project, for the workspace sidebar.
+ * The sidebar's other section is the project's terminal sessions; these are
+ * the teammates from Agents: the ones bound to this folder, and any agent
+ * whose turn is working in it right now (by its own commands or a session;
+ * the Mac reports the folder, `TurnWork.project`). A person dropping into the
+ * project sees who works here and what they're doing, and can open the chat.
+ *
+ * Every project row in the sidebar also gets its agents at work
+ * (`useAgentsAtWork`), so a project an agent is busy in shows it on the
+ * Projects side without opening it.
  *
  * Clicking a row switches to Agents with that agent's conversation open.
  *
@@ -15,11 +21,17 @@ import {
   AGENT_EVENTS,
   getAgentsWithProjects,
   needsYou,
+  plainActivity,
   type Agent,
   type AgentStatus,
 } from '../../lib/agents';
 import { logger } from '../../lib/logger';
 import { requestAgentsIntent } from '../../commands/useAgentsCommands';
+import {
+  agentsAtWork,
+  atWorkText,
+  sameFolder,
+} from '../../../packages/companion-protocol/src/work';
 
 export interface ProjectAgentRow {
   key: string;
@@ -29,51 +41,102 @@ export interface ProjectAgentRow {
   onSelect: () => void;
 }
 
-/** Trailing slashes aside, the same folder. Never a guess beyond that. */
-function sameFolder(a: string, b: string): boolean {
-  return a.replace(/\/+$/, '') === b.replace(/\/+$/, '');
+/** "Juno · Running the build": an agent at work in a project, in its row. */
+export interface AtWorkLine {
+  agentId: string;
+  name: string;
+  text: string;
+  waiting: boolean;
+}
+
+export function atWorkLines(agents: Agent[], projectPath: string, now: number): AtWorkLine[] {
+  return agentsAtWork(agents, projectPath).map((a) => ({
+    agentId: a.id,
+    name: a.name,
+    text: atWorkText(a, plainActivity(a.status.activity), now),
+    waiting: needsYou(a),
+  }));
 }
 
 export function projectAgentRows(
   agents: Agent[],
   projectPath: string | null,
-  openAgent: (agentId: string) => void
+  openAgent: (agentId: string) => void,
+  now: number = Date.now()
 ): ProjectAgentRow[] {
   if (!projectPath) return [];
-  return agents
-    .filter((a) => !a.hidden && a.project && sameFolder(a.project, projectPath))
-    .map((a) => ({
+  const atWork = atWorkLines(agents, projectPath, now);
+  const bound = agents.filter(
+    (a) =>
+      !a.hidden &&
+      a.project &&
+      sameFolder(a.project, projectPath) &&
+      !atWork.some((w) => w.agentId === a.id)
+  );
+  const working = atWork.map((w) => agents.find((a) => a.id === w.agentId)!);
+  return [...working, ...bound].map((a) => {
+    const line = atWork.find((w) => w.agentId === a.id);
+    return {
       key: `agent-${a.id}`,
       label: a.name,
       dotState: needsYou(a) ? 'waiting' : a.status.state === 'working' ? 'thinking' : 'idle',
-      // Only a state worth reading; an idle row says nothing (it's a link).
-      meta: needsYou(a) ? 'needs you' : a.status.state === 'working' ? 'working' : undefined,
+      // What it's doing here, in the words its chat uses; an idle row says
+      // nothing (it's a link).
+      meta: line
+        ? line.text
+        : needsYou(a)
+          ? 'needs you'
+          : a.status.state === 'working'
+            ? 'working'
+            : undefined,
       onSelect: () => openAgent(a.id),
-    }));
+    };
+  });
 }
 
 /**
- * The registry's project-bound agents, kept current from Agents' own events.
- * Deliberately not the Agents store: that one creates the Chief of Staff and
- * probes every engine, which a project window has no reason to do.
+ * The agents the sidebar can show at work: bound ones and any whose turn is
+ * in a project, kept current from Agents' own events. Deliberately not the
+ * Agents store: that one creates the Chief of Staff and probes every engine,
+ * which a project window has no reason to do.
  */
-function useAgentsWithProjects(enabled: boolean): Agent[] {
+export function useAgentsAtWork(enabled: boolean): Agent[] {
   const [agents, setAgents] = useState<Agent[]>([]);
   useEffect(() => {
     if (!enabled) return;
     let alive = true;
+    let known = new Set<string>();
     const refetch = () =>
       getAgentsWithProjects()
-        .then((list) => alive && setAgents(list))
+        .then((list) => {
+          if (!alive) return;
+          known = new Set(list.map((a) => a.id));
+          setAgents(list);
+        })
         .catch((e) => logger.warn('[Agents] project agents failed', { error: String(e) }));
     void refetch();
-    const unlistens: Promise<UnlistenFn>[] = [
-      listen(AGENT_EVENTS.registry, () => void refetch()),
-      listen<{ agentId: string; status: AgentStatus }>(AGENT_EVENTS.status, (e) => {
-        const { agentId, status } = e.payload;
-        setAgents((list) => list.map((a) => (a.id === agentId ? { ...a, status } : a)));
-      }),
-    ];
+    const unlistens: Promise<UnlistenFn>[] = [];
+    const on: typeof listen = (event, handler) => {
+      try {
+        const p = listen(event, handler);
+        unlistens.push(p.catch(() => () => undefined));
+        return p;
+      } catch {
+        // No Tauri event bridge (tests, the harness): nothing to listen to.
+        return Promise.resolve(() => undefined);
+      }
+    };
+    void on(AGENT_EVENTS.registry, () => void refetch());
+    void on<{ agentId: string; status: AgentStatus }>(AGENT_EVENTS.status, (e) => {
+      const { agentId, status } = e.payload;
+      if (!known.has(agentId)) {
+        // An agent this list doesn't have yet just started working in a
+        // project: read the list again to get it.
+        if (status.work?.project) void refetch();
+        return;
+      }
+      setAgents((list) => list.map((a) => (a.id === agentId ? { ...a, status } : a)));
+    });
     return () => {
       alive = false;
       for (const u of unlistens) void u.then((off) => off()).catch(() => undefined);
@@ -82,20 +145,24 @@ function useAgentsWithProjects(enabled: boolean): Agent[] {
   return agents;
 }
 
+/** Opens an agent's chat in Agents. */
+export function openAgentChat(onGoAgents: () => void, agentId: string) {
+  requestAgentsIntent({ kind: 'open', agentId });
+  onGoAgents();
+}
+
 /** Rows for the project open in this window; empty when no agent works here. */
 export function useProjectAgents(
+  agents: Agent[],
   projectPath: string | null,
-  onGoAgents: (() => void) | undefined
+  onGoAgents: (() => void) | undefined,
+  now: number
 ): ProjectAgentRow[] {
-  const agents = useAgentsWithProjects(Boolean(onGoAgents && projectPath));
   return useMemo(
     () =>
       onGoAgents
-        ? projectAgentRows(agents, projectPath, (agentId) => {
-            requestAgentsIntent({ kind: 'open', agentId });
-            onGoAgents();
-          })
+        ? projectAgentRows(agents, projectPath, (id) => openAgentChat(onGoAgents, id), now)
         : [],
-    [agents, projectPath, onGoAgents]
+    [agents, projectPath, onGoAgents, now]
   );
 }

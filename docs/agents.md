@@ -635,6 +635,31 @@ be confused with agent-to-agent `message_agent`:
   modal's activity list leaves those out.
 - **Bound agents** are still an option; sessions are the default.
 
+### Where it's working (`src-tauri/src/agents/workplace.rs`)
+
+An agent working in a codebase shows on the Projects side, whichever way it
+got there: its own commands (`cd ~/Desktop/Projects/site && npm run build`,
+`git -C …`, `--prefix`/`--cwd`/`--dir`), reading or editing files there, a
+project tool (`project`), or its binding. Each tool call's paths are walked up
+to the nearest folder with a `.git` **directory** (a `.git` file stops the
+walk); the home folder and above, a projects root, the app's own data and task
+copies (`.worktrees/`) never count. The folder rides on the live status as
+`TurnWork.project`, while the turn runs only.
+
+- **Registered and pinned once.** A repository the app doesn't list yet is
+  registered through `ensure_external_project_registered` (its "looks like a
+  project" check included) and pinned to the top of the sidebar the first time
+  it is found (`found-projects.json` beside the agents), so one the user
+  unpinned stays unpinned. `agents://project-found` re-reads pins and the list.
+- **Desk:** under the project's sidebar row, "Acme Site · Running the build"
+  (the working line's words, `atWorkText`); the row shows as working; an
+  unpinned project with an agent in it appears under Active. In the open
+  project, its Agents section lists agents at work there first. A line opens
+  the agent's chat.
+- **Phone:** the Projects tab lists the agent on that project's card with the
+  same words; those projects sort first after any waiting on a decision.
+- Agents' behaviour is unchanged: nothing here routes their work.
+
 ## What an agent can do (`src-tauri/src/agents/capabilities.rs`)
 
 Turns run with `--chrome`. Each turn's `system/init` lists the session's
@@ -1140,13 +1165,76 @@ to do (read; and, when `scopes` asks for more, send/post/change, which
 | 1 | **Connect** (ours, `oauth.rs`): the app's own OAuth in the Mac's browser | this Mac's Keychain, `<slug>-connection-<id>` | both |
 | 1 | **Use GitHub on this Mac**: the `gh` sign-in | `gh`'s own Keychain item | both |
 | 2 | **Use my browser**: Claude in Chrome, in the user's own Chrome where they're signed in; every click/post/send/pay asks. The default for every service without our own OAuth (Gmail, Calendar, Drive, Slack, LinkedIn, X…) | nowhere new | Claude Code |
-| 3 | **Use claude.ai's connector** (optional, after the browser): opens claude.ai's connector settings in the Mac's browser if it isn't added yet; the card watches `claude mcp list` until it's connected. If it doesn't, the card says to use the browser instead: never a dead end. A claude.ai connection made for another agent sits here too | claude.ai | Claude Code |
+| 3 | **Connect in Claude instead** (optional, after the browser): "Connect Gmail in Claude: it opens Claude's connectors page; turn on Gmail, then come back." Opens Claude's connectors page (Customize → Connectors, below) in the Mac's browser if it isn't added yet; the card watches `claude mcp list` (every 20 s, and at once when the window or the phone app comes back, `agents_logins_recheck`) until it's connected. If it doesn't, the card says to use the browser instead: never a dead end. A claude.ai connection made for another agent sits here too | claude.ai | Claude Code |
 | 4 | **Enter an API key**: the masked field (`secrets.rs`), only where a key made for programs is a real way in (X API, Stripe restricted key, an app we don't know) | this Mac's Keychain | both |
 
 A service with no connector says so in one line on the card ("LinkedIn has
 no connector agents can sign in to."), instead of a password field. A Codex
 agent is told plainly what it can't use (claude.ai connectors and the
 browser are Claude Code's).
+
+### Where claude.ai connectors are added (verified 2026-11-05)
+
+`https://claude.ai/customize/connectors` (Customize → Connectors). Verified
+2026-11-05 against Anthropic's own docs:
+[claude.com/docs/connectors/google/gmail](https://claude.com/docs/connectors/google/gmail)
+("Go to Customize > Connectors in claude.ai … Find Gmail in the list and
+select Connect") and
+[claude.com/docs/connectors/directory](https://claude.com/docs/connectors/directory),
+which link exactly that URL. The old `claude.ai/settings/connectors` page now
+says it moved to Customize. No link to one connector is documented, so the
+card names the connector to look for rather than guessing a deep link.
+
+The URL lives in one place, `packages/companion-protocol/src/links.ts`
+(`CLAUDE_AI_CONNECTORS_URL`, used by the desk and the phone), with
+`links.test.ts` holding it well-formed and on `/customize/connectors`; the
+Rust copy (`logins::CLAUDE_AI_CONNECTORS`) is held equal to it by a test that
+reads `links.ts`. Re-verify against the docs above when Claude's settings
+move again, and update the date here.
+
+### When the browser doesn't show it
+
+Opening a sign-in goes through Tauri's opener (`open` on macOS) and logs one
+line either way (`asked the OS to open a sign-in page…`, or a `warn` with
+the OS's error). An "opened" page can still be invisible: on one Mac a
+leftover headless Chrome from our own test tooling was the instance macOS
+handed the link to. So a waiting card never only spins: it keeps the page it
+opened (`flow.url`, `flow.openedAt`) and says "Opened in your browser —
+didn't see it? Open again · Copy link"; if nothing has come back 20 s
+(`NO_CALLBACK_MS`) after the browser was asked, it says so plainly with the
+same two actions. Open again is `agents_login_reopen`. If the OS reports a
+failure, the card stays waiting with the link rather than failing.
+
+### "Not needed": an app the user doesn't want connected (`agents/declined.rs`)
+
+Every login card and every row of "What your team needs" offers **Not
+needed** beside its main action, and the list has **Skip the rest**. It is
+for the app, across the team, and it is remembered
+(`<agents root>/declined-services.json`):
+
+- every waiting card for it (and every secret card that means it) closes as
+  "Not needed", with a one-line receipt ("Not connecting Acme Bank. No agent
+  will ask for it again.") and **Undo** for a few seconds;
+- `request_login` and `request_secret` for it answer "The user chose not to
+  connect … don't ask for it" instead of raising a card;
+- every turn's app-owned system prompt carries "## Apps the user chose not
+  to connect" (titles only, so the cache holds), telling agents to do the
+  work another way or say what they can't do. No agent is woken for it.
+
+An app the catalogue doesn't know is declined by its title (`other:acme
+bank`), never as `other`, and gets a row of its own on the team list.
+Turning one back on: **Undo** (within 5 minutes the cards it closed come
+back as fresh cards), or "Turn back on" in "What it can reach" (desk and
+phone) and Settings → Agents, after which agents may simply ask again.
+Commands: `agents_login_not_needed`, `agents_logins_not_needed(keys?)`,
+`agents_logins_undecline`, `agents_logins_declined`; on the phone
+`agents.loginNotNeeded`, `agents.loginsNotNeeded`, `agents.loginsUndecline`
+(additive: an older Mac doesn't list them and the phone doesn't offer them).
+The per-agent action on a row is now **Skip** (`agents_login_dismiss`: that
+agent's card). The access chain counts both as a no (below, "Just try
+first", step 1): the team-wide list feeds its "Not needed" keys, and turning
+an app back on records when (`turnedOn` in the same file), so a no on a card
+from before then stops counting.
 
 ### Just try first (`agents/access_chain.rs`)
 
@@ -1573,7 +1661,7 @@ claude.ai). Each row lists every agent that asked, with what it asked to
 do; one Connect answers them all: the first card of each service signs in,
 and when it's connected the others are granted the same connection
 (`connect_need`); the browser is given to each agent that can use it.
-Untick an agent to leave it out, or "Not needed" (`agents_login_dismiss`:
+Untick an agent to leave it out, or "Skip" (`agents_login_dismiss`:
 declined with "Not needed", the agent isn't woken; it asks again if it
 really needs it). With `since`, rows answered since then are included, so
 the screen can say "4 of 9 connected". Identical asks are one line: three
@@ -3738,8 +3826,9 @@ nothing in their own `CLAUDE.md` touched.
 - **No plumbing talk.** The prompt forbids tool, server, port and
   "offline" talk; the preview bridge's "nothing is showing" error tells the
   agent what to do instead and not to relay it.
-- **Seam:** `project::ensure_listed` is where a folder an agent built gets
-  listed as a project; until that lands only already-listed folders resolve.
+- **Unlisted projects.** A card naming a repository folder that isn't a
+  project yet lists it first (`project::ensure_listed` → `workplace`'s
+  registration), so Preview works without the user opening anything.
 
 Not verified: a live turn end-to-end (narration folding and dev-server
 cleanup are covered by unit tests of the rules, not a real Claude Code run);

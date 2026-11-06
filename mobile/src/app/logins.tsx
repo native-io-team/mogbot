@@ -19,8 +19,9 @@ export default function Logins() {
       <ScrollView contentContainerStyle={styles.root}>
         <SheetTitle>What your team needs</SheetTitle>
         <T color={colors.textSecondary}>
-          Each app once, for every agent that asked. Connecting opens the sign-in on your Mac, and
-          the sign-in stays there; no password goes through a chat.
+          Each app once, for every agent that asked. Connect signs in from here when the app
+          allows it, or opens it on your Mac. The sign-in stays on your Mac; no password goes
+          through a chat.
         </T>
         <TeamLoginsList />
       </ScrollView>

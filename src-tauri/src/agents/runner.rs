@@ -2531,6 +2531,9 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         }
         let since = store::now_ms();
         super::work::begin(&agent_id, since);
+        // A bound agent works in its project (its copy is the project's).
+        let bound = store::get(&agent_id).ok().and_then(|a| a.project);
+        super::workplace::begin(&agent_id, bound.as_deref().map(std::path::Path::new));
         super::results::discard(&agent_id);
         super::dev_servers::begin(&agent_id);
         if let Some(copy) = &made {
@@ -3003,6 +3006,11 @@ pub(super) fn system_prompt_for(
     if super::admin::admin_now(agent) {
         prompt.push_str("\n\n");
         prompt.push_str(super::admin::PROMPT_SECTION);
+    }
+    // Apps the user chose not to connect: don't ask, work around them.
+    if let Some(declined) = super::declined::prompt_section() {
+        prompt.push_str("\n\n");
+        prompt.push_str(&declined);
     }
     if agent.is_main {
         if let Some(team) = store::list()
@@ -3780,6 +3788,7 @@ async fn run_turn(
                         Step::Action(action) => {
                             note_acted(agent_id);
                             settle_narration(app, agent_id, narration.work(), &mut said_anything).await;
+                            super::workplace::note(app, agent_id, &layout.cwd, &action);
                             let doing = super::work::on_action(agent_id, action, store::now_ms());
                             if status_of(agent_id).state != "waiting" {
                                 set_status(app, agent_id, Status { state: "working", activity: Some(doing), since: Some(started), work: None, room: None });

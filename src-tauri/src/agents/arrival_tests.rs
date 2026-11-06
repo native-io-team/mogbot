@@ -380,14 +380,18 @@ fn an_older_logins_bullet_becomes_just_try_first_and_nothing_else_moves() {
     let path = store::agent_home(&agent.id).unwrap().join("CLAUDE.md");
     // As an older build wrote it.
     let now = claude_md(&agent.id);
-    let old = now.replacen(LOGINS_LINE, PAST_LOGINS_LINES[0], 1);
-    assert_ne!(old, now);
-    std::fs::write(&path, &old).unwrap();
-    assert!(upgrade(&agent).unwrap());
-    let after = claude_md(&agent.id);
-    assert!(!upgrade(&agent).unwrap(), "once");
+    let mut after = String::new();
+    for past in PAST_LOGINS_LINES {
+        let old = now.replacen(LOGINS_LINE, past, 1);
+        assert_ne!(old, now);
+        std::fs::write(&path, &old).unwrap();
+        assert!(upgrade(&agent).unwrap());
+        after = claude_md(&agent.id);
+        assert!(!upgrade(&agent).unwrap(), "once");
+        assert_eq!(after, now, "only the bullet changed");
+    }
     store::set_root_for_tests(None);
-    assert_eq!(after, now, "only the bullet changed");
+    assert!(after.contains("sign in from their phone"));
     assert!(after.contains("just try first"));
     assert!(after.contains("never up front"));
     assert!(after.contains("which account you're in"));

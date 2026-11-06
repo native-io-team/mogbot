@@ -106,20 +106,17 @@ pub async fn resolve(query: &str) -> Result<Option<ProjectRef>, CommandError> {
 }
 
 /// A folder an agent names as its work's project that isn't in the project
-/// list yet (a site it built in its own folder): the project's path once
-/// it is listed, so its card can offer Preview.
-///
-/// Seam: listing a folder as a project (so it shows in the Projects tab) is
-/// being built separately. Until that lands, only a folder that is already
-/// listed under another name resolves here, and anything else is `None`
-/// (the agent is told the project doesn't exist, as before).
-pub async fn ensure_listed(wanted: &str, _home: &std::path::Path) -> Option<String> {
-    let wanted = wanted.trim();
-    let path = std::path::Path::new(wanted);
+/// list yet (a site it built in a repository of its own): listed as a
+/// project the way a folder an agent works in is (`workplace`), so its card
+/// can offer Preview. `None` for anything that isn't a repository the app
+/// may list (a home, an agent's own folder, a task copy).
+pub async fn ensure_listed(app: &tauri::AppHandle, agent_id: &str, wanted: &str) -> Option<String> {
+    let path = std::path::Path::new(wanted.trim());
     if !path.is_absolute() || !path.is_dir() {
         return None;
     }
-    let real = dunce::canonicalize(path).ok()?;
+    let root = super::workplace::adopt_named(app, agent_id, path).await?;
+    let real = dunce::canonicalize(&root).ok()?;
     crate::commands::projects::list_projects()
         .await
         .ok()?

@@ -52,6 +52,29 @@ supposed to look like. Useful query parameters:
 | `chrome=off` | Hide the harness's own switcher, for a clean capture |
 | `freeze=off` | Re-enable animation, for watching a transition by hand |
 
+### It never leaves Chrome running
+
+The capture script (and the phone's `pnpm qa:web`) start headless Chrome
+through `scripts/headless-chrome.mjs`, and a stray one is not just memory:
+macOS hands links the user clicks to a *running* Chrome, headless or not,
+and a leftover one swallowed the app's real sign-in pages that way. So
+every browser these tools start:
+
+- has its own profile under `TMPDIR` (`shipstudio-cdp-<tool>-…`; qa:web's is
+  `qa-web-…/shipstudio-cdp-qa-web-chrome`), never your Chrome's;
+- runs in its own process group, and the group is killed on normal exit,
+  on an error (uncaught or unhandled), on SIGINT/SIGTERM/SIGHUP, and after
+  a ceiling (`HARNESS_MAX_MS`, default 45 min; `QA_MAX_MS` / `--max-ms`,
+  default 30 min), which also fails the run (exit 124);
+- takes a free debugging port, never adopting one that already answers;
+- is preceded by a sweep: an orphaned headless Chrome carrying this tool's
+  profile marker (or the fixed profile older versions used) is killed at
+  startup. A browser you opened, or a live run's, never matches
+  (`orphanPids`, tested in `scripts/headless-chrome.test.mjs`).
+
+Only SIGKILL of the script itself can still leave one, and the next run's
+sweep closes it.
+
 The capture script speaks the Chrome DevTools Protocol over Node's built-in
 `WebSocket` and `fetch`. It has no npm dependencies on purpose — Playwright
 would add a second browser download and a build step for roughly this much code.

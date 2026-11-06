@@ -41,6 +41,10 @@ pub const METHODS: &[&str] = &[
     "agents.loginsTeam",
     "agents.loginsConnect",
     "agents.loginDismiss",
+    "agents.loginNotNeeded",
+    "agents.loginsNotNeeded",
+    "agents.loginsUndecline",
+    "agents.loginsRecheck",
     "agents.loginPhoneBegin",
     "agents.loginPhoneFinish",
     "agents.signinBegin",
@@ -577,8 +581,22 @@ pub trait Backend: Send + Sync + 'static {
         skip: Vec<String>,
         on_phone: bool,
     ) -> Result<(), CommandError>;
-    /// `agents_login_dismiss`: "Not needed".
+    /// `agents_login_dismiss`: put one agent's card away.
     async fn login_dismiss(&self, agent_id: &str, request_id: &str) -> Result<(), CommandError>;
+    /// `agents_login_not_needed`: the card's service, declined for the team
+    /// and remembered. The receipt (`keys`, `line`, `closed`).
+    async fn login_not_needed(
+        &self,
+        agent_id: &str,
+        request_id: &str,
+    ) -> Result<Value, CommandError>;
+    /// `agents_logins_not_needed`: rows of "What your team needs", or every
+    /// row still waiting ("Skip the rest") when `keys` is `None`.
+    async fn logins_not_needed(&self, keys: Option<Vec<String>>) -> Result<Value, CommandError>;
+    /// `agents_logins_undecline`: Undo, or turn back on. How many cards came back.
+    async fn logins_undecline(&self, keys: Vec<String>) -> Result<Value, CommandError>;
+    /// `agents_logins_recheck`: the user is back; check claude.ai connectors now.
+    async fn logins_recheck(&self) -> Result<(), CommandError>;
     /// `agents_change_diff`: one file of a change card.
     async fn change_diff(
         &self,
@@ -959,6 +977,13 @@ struct TeamParams {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct DeclineParams {
+    #[serde(default)]
+    keys: Option<Vec<String>>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct TeamConnectParams {
     key: String,
     option_id: String,
@@ -1202,6 +1227,20 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             field("optionId")
         ),
         "agents.loginDismiss" => format!("not needed: a login for {}", field("agentId")),
+        "agents.loginNotNeeded" => {
+            format!("chose not to connect an app {} asked for", field("agentId"))
+        }
+        "agents.loginsNotNeeded" => match params.get("keys").and_then(Value::as_array) {
+            Some(keys) => format!(
+                "chose not to connect {}",
+                keys.iter()
+                    .filter_map(Value::as_str)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            None => "skipped the rest of the team's logins".into(),
+        },
+        "agents.loginsUndecline" => "turned a declined app back on".into(),
         "agents.loginDecline" => format!("declined a login for {}", field("agentId")),
         // Never the sign-in's URL or its code: only that it happened.
         "agents.loginPhoneBegin" => format!(
@@ -1879,6 +1918,32 @@ async fn run(
             b.login_dismiss(&p.agent_id, &p.request_id).await?;
             Ok(Value::Null)
         }
+        "agents.loginNotNeeded" => {
+            let p: LoginParams = parse(params)?;
+            Ok(b.login_not_needed(&p.agent_id, &p.request_id).await?)
+        }
+        "agents.loginsNotNeeded" => {
+            let p: DeclineParams = parse(params)?;
+            if p.keys
+                .as_ref()
+                .is_some_and(|k| k.is_empty() || k.len() > 200)
+            {
+                return Err(bad_params("Which rows?"));
+            }
+            Ok(b.logins_not_needed(p.keys).await?)
+        }
+        "agents.loginsUndecline" => {
+            let p: DeclineParams = parse(params)?;
+            let keys = p.keys.unwrap_or_default();
+            if keys.is_empty() || keys.len() > 200 {
+                return Err(bad_params("Which apps?"));
+            }
+            Ok(b.logins_undecline(keys).await?)
+        }
+        "agents.loginsRecheck" => {
+            b.logins_recheck().await?;
+            Ok(Value::Null)
+        }
         "agents.revokePermission" => {
             let p: RuleParams = parse(params)?;
             b.revoke_permission(&p.agent_id, &p.rule_id).await?;
@@ -2235,6 +2300,51 @@ mod tests {
             .await
             .unwrap();
         assert_eq!(reach["connections"][0]["account"], "work@acme.com");
+        // Not needed: a card's service, a row, the rest; then Undo.
+        let receipt = dispatch(
+            &c,
+            &me,
+            "agents.loginNotNeeded",
+            json!({ "agentId": AGENT, "requestId": "q21" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(receipt["keys"][0], "other:acme bank");
+        dispatch(
+            &c,
+            &me,
+            "agents.loginsNotNeeded",
+            json!({ "keys": ["slack"] }),
+        )
+        .await
+        .unwrap();
+        dispatch(&c, &me, "agents.loginsNotNeeded", json!({}))
+            .await
+            .unwrap();
+        assert!(
+            dispatch(&c, &me, "agents.loginsUndecline", json!({ "keys": [] }))
+                .await
+                .is_err(),
+            "an Undo names what it turns back on"
+        );
+        let back = dispatch(
+            &c,
+            &me,
+            "agents.loginsUndecline",
+            json!({ "keys": ["slack"] }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(back, json!(1));
+        assert_eq!(
+            stub.logins.lock().unwrap()[5..],
+            [
+                "not needed q21",
+                "not needed rows slack",
+                "not needed rows linkedin",
+                "undecline slack"
+            ]
+        );
         let audited = stub.audited();
         assert!(audited
             .iter()

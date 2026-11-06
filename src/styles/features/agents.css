@@ -513,15 +513,11 @@
   position: relative;
 }
 
+/* The ring around the avatar is gone (owner: it read as a broken double
+   border). The working state is carried by the row's live step text; the
+   avatar redesign owns any future in-avatar cue. */
 .agent-avatar--working::after {
-  position: absolute;
-  inset: calc(var(--focus-ring-offset) * -1);
-  pointer-events: none;
-  content: '';
-  border: var(--focus-ring-width) solid var(--agents-tint, var(--text-muted));
-  border-radius: inherit;
-  opacity: 0.6;
-  animation: agents-avatar-breathe var(--agents-avatar-breathe) ease-in-out infinite;
+  content: none;
 }
 
 @keyframes agents-avatar-breathe {
