@@ -1,4 +1,8 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 import { act, fireEvent, render, screen } from '@testing-library/react';
 import { ApprovalCard, ErrorLine, FreshHint, NoteLine } from './AgentChatItems';
 import type { Agent, AgentMessage } from '../../lib/agents';
@@ -107,6 +111,9 @@ describe('ErrorLine', () => {
   });
 
   it('schedules one retry at the reset however fast the second click comes', async () => {
+    // Midday, so "in an hour" is today ("Retry at …"), whatever time the suite runs.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 0, 15, 12, 0));
     let finish = () => {};
     const onRetryAt = vi.fn(() => new Promise<void>((resolve) => (finish = resolve)));
     const message: AgentMessage = {
@@ -131,6 +138,9 @@ describe('ErrorLine', () => {
   });
 
   it('keeps “Try anyway” beside the retry at the reset', () => {
+    // Midday, so "in an hour" is today ("Retry at …"), whatever time the suite runs.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 0, 15, 12, 0));
     const onRetry = vi.fn();
     const message: AgentMessage = {
       id: 'e2',
