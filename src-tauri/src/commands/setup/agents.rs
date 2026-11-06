@@ -199,17 +199,65 @@ pub async fn get_agents_status() -> Vec<AgentStatus> {
         .collect()
 }
 
-/// Remove an agent's auth indicator files so the CLI is no longer signed in.
-/// The binary itself is left intact.
+/// What sign-out never deletes, even where it is one of an agent's
+/// `auth_indicators` (whose presence suggests a sign-in, which is all detection
+/// needs). Claude Code's `projects` is every conversation the user has had
+/// (Claude Code's own and this app's agents'), and `settings.json` is their
+/// settings; neither is a credential. Deleting them signed nobody out (Claude
+/// Code keeps its login in the Keychain) and, through the old
+/// `sign_out_agent_accepts_all_known_ids` test, wiped the owner's
+/// `~/.claude/projects` and `settings.json` on every `cargo test --lib`.
+pub(crate) const KEPT_ON_SIGN_OUT: &[&str] = &["projects", "settings.json"];
+
+/// The agent `agent_id` names, or an error for an id we don't know
+/// (`get_agent_by_id` falls back to Claude Code, so it is checked here).
+fn known_agent(agent_id: &str) -> Result<&'static crate::agent::AgentConfig, CommandError> {
+    ALL_AGENTS
+        .iter()
+        .copied()
+        .find(|a| a.id == agent_id)
+        .ok_or_else(|| (format!("Unknown agent: {agent_id}")).into())
+}
+
+/// Remove `agent`'s credential files from `dir`, and nothing else
+/// ([`KEPT_ON_SIGN_OUT`]). Paths come only from the caller, so tests run this
+/// on a temp folder and never on the real home.
+pub(crate) fn sign_out_files_in(
+    agent: &crate::agent::AgentConfig,
+    dir: &std::path::Path,
+) -> Result<(), CommandError> {
+    if !dir.exists() {
+        // Already signed out
+        return Ok(());
+    }
+    for indicator in agent.auth_indicators {
+        if KEPT_ON_SIGN_OUT.contains(indicator) {
+            continue;
+        }
+        let path = dir.join(indicator);
+        // symlink_metadata: a linked indicator is removed as the link, never
+        // followed into whatever it points at.
+        let Ok(meta) = path.symlink_metadata() else {
+            continue;
+        };
+        if meta.is_dir() {
+            std::fs::remove_dir_all(&path)
+                .map_err(|e| format!("Failed to remove {}: {e}", path.display()))?;
+        } else {
+            std::fs::remove_file(&path)
+                .map_err(|e| format!("Failed to remove {}: {e}", path.display()))?;
+        }
+    }
+    Ok(())
+}
+
+/// Remove an agent's credential files so the CLI is no longer signed in.
+/// The binary itself, and the user's conversations and settings, are left
+/// intact ([`KEPT_ON_SIGN_OUT`]).
 #[tauri::command]
 #[tracing::instrument]
 pub async fn sign_out_agent(agent_id: String) -> Result<(), CommandError> {
-    let agent = get_agent_by_id(&agent_id);
-
-    // Reject unknown IDs: get_agent_by_id falls back to CLAUDE_CODE, so explicitly check.
-    if agent.id != agent_id {
-        return Err((format!("Unknown agent: {agent_id}")).into());
-    }
+    let agent = known_agent(&agent_id)?;
 
     // Keychain-based agents (Cursor) can't be signed out by deleting files —
     // their token lives in the system keychain. Use the CLI's own logout.
@@ -225,25 +273,7 @@ pub async fn sign_out_agent(agent_id: String) -> Result<(), CommandError> {
     }
 
     let active_account_id = get_active_account_id().unwrap_or_else(|_| "default".to_string());
-    let dir = agent_auth_dir(&active_account_id, agent);
-
-    if !dir.exists() {
-        // Already signed out
-        return Ok(());
-    }
-
-    for indicator in agent.auth_indicators {
-        let path = dir.join(indicator);
-        if path.exists() {
-            if path.is_dir() {
-                std::fs::remove_dir_all(&path)
-                    .map_err(|e| format!("Failed to remove {}: {e}", path.display()))?;
-            } else {
-                std::fs::remove_file(&path)
-                    .map_err(|e| format!("Failed to remove {}: {e}", path.display()))?;
-            }
-        }
-    }
+    sign_out_files_in(agent, &agent_auth_dir(&active_account_id, agent))?;
 
     tracing::info!(agent_id = agent_id.as_str(), "Agent signed out");
     Ok(())
@@ -369,23 +399,60 @@ mod tests {
         assert!(result.is_err(), "empty agent id must be rejected");
     }
 
-    #[tokio::test]
-    async fn sign_out_agent_accepts_all_known_ids() {
-        // Every agent in ALL_AGENTS must round-trip through sign_out_agent's
-        // id-validation step without the "Unknown agent" error. (The actual
-        // file-removal step may be a no-op on a machine that never signed in,
-        // but the id check should always pass.)
+    // These never call `sign_out_agent` with a real id: that signs this Mac
+    // out for real (it once deleted the owner's `~/.claude/projects` and
+    // `settings.json` on every `cargo test --lib`). They go through
+    // `known_agent` and `sign_out_files_in` on a temp folder instead.
+
+    #[test]
+    fn every_known_agent_id_is_known() {
         for agent in crate::agent::ALL_AGENTS {
-            let result = sign_out_agent(agent.id.to_string()).await;
-            if let Err(e) = &result {
-                let msg = format!("{:?}", e);
-                assert!(
-                    !msg.contains("Unknown agent"),
-                    "agent {} should not be rejected as unknown: {msg}",
-                    agent.id
-                );
-            }
+            assert_eq!(known_agent(agent.id).unwrap().id, agent.id);
         }
+        assert!(known_agent("not-a-real-agent").is_err());
+        assert!(known_agent("").is_err());
+    }
+
+    #[test]
+    fn signing_out_claude_code_keeps_conversations_and_settings() {
+        let home = tempfile::tempdir().unwrap();
+        let dir = home.path().join(".claude");
+        let transcript = dir.join("projects/-Users-me-site/85100e7a.jsonl");
+        std::fs::create_dir_all(transcript.parent().unwrap()).unwrap();
+        std::fs::write(&transcript, "{}\n").unwrap();
+        std::fs::write(dir.join("settings.json"), "{}").unwrap();
+        std::fs::create_dir_all(dir.join("statsig")).unwrap();
+
+        sign_out_files_in(&crate::agent::CLAUDE_CODE, &dir).unwrap();
+
+        assert!(
+            transcript.is_file(),
+            "conversations must survive a sign-out"
+        );
+        assert!(dir.join("settings.json").is_file(), "settings must survive");
+        assert!(!dir.join("statsig").exists());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn signing_out_removes_a_linked_credential_as_a_link() {
+        let home = tempfile::tempdir().unwrap();
+        let (dir, elsewhere) = (home.path().join(".codex"), home.path().join("real"));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::create_dir_all(&elsewhere).unwrap();
+        std::fs::write(elsewhere.join("auth.json"), "{}").unwrap();
+        std::os::unix::fs::symlink(elsewhere.join("auth.json"), dir.join("auth.json")).unwrap();
+
+        sign_out_files_in(&crate::agent::CODEX, &dir).unwrap();
+
+        assert!(dir.join("auth.json").symlink_metadata().is_err());
+        assert!(elsewhere.join("auth.json").is_file());
+    }
+
+    #[test]
+    fn signing_out_a_folder_that_isnt_there_is_fine() {
+        let home = tempfile::tempdir().unwrap();
+        sign_out_files_in(&crate::agent::CODEX, &home.path().join("missing")).unwrap();
     }
 
     // ============ uninstall_agent ============
