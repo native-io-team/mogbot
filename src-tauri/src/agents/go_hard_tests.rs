@@ -233,3 +233,61 @@ fn browser_scripts_that_read_or_click_run_and_ones_that_send_ask() {
         assert!(js(code), "should ask: {code}");
     }
 }
+
+/// A script written with a here-document and then run: its text is data
+/// (regexes full of `<` and `>`), not commands. A real card at "Go hard".
+#[test]
+fn a_heredoc_script_is_data_not_commands() {
+    let script = r#"cat > /tmp/fx/h2.mjs <<'EOF'
+import {readFileSync, writeFileSync} from 'fs'; import {execSync} from 'child_process';
+process.chdir(process.argv[2]);
+const { LIST } = await import(process.argv[2] + '/scripts/x.mjs');
+const files = execSync('git ls-files app components',{encoding:'utf8'}).trim().split('\n').filter(f=>/\.tsx$/.test(f));
+const RULES = [
+  [/(?<![\w:-])text-3xl md:text-4xl lg:text-5xl(?![\w-])/, 'text-3xl sm:text-4xl lg:text-5xl'],
+];
+let n=0; const touched=[];
+for (const f of files) { if (LIST.has(f)) continue; const s=readFileSync(f,'utf8');
+  const out = s.replace(/<h2\b[^>]*>/gs, tag => { let t=tag; for (const [re,rep] of RULES) if (re.test(t)) { t=t.replace(re,rep); n++; } return t; });
+  if (out!==s) { writeFileSync(f,out); touched.push(f); } }
+console.log(n, 'h2s in', touched.length, 'files');
+EOF
+cd /Users/fictional-tester/Desktop/Projects/fx && node /tmp/fx/h2.mjs $PWD && sed -i '' 's/mt-3 font-extrabold \${tone.text}/mt-3 font-bold ${tone.text}/' app/x.tsx && git diff --stat | tail -1"#;
+    assert!(!bash_asks(script, false));
+    assert!(!bash_asks(
+        "cat > notes.md <<EOF\nthen run git push and npm publish\nEOF\nwc -l notes.md",
+        false
+    ));
+    assert!(!bash_asks(
+        "cat <<-END > /tmp/x.txt\n\t<b>x</b> > ~/.zshrc\n\tEND",
+        false
+    ));
+    // A Python edit whose text mentions a push (a real card at "Go hard").
+    let edit = "python3 - <<'EOF'\np='agent/tools/publish.ts'\ns=open(p).read()\nold=\"\"\"    await git(box, `git push -u origin ${branch}`);\n\"\"\"\nnew=\"\"\"    const push = await pushBranch(box, branch);\n\"\"\"\nassert old in s\nopen(p,'w').write(s.replace(old,new))\nEOF\ngrep -n 'git(' agent/tools/publish.ts";
+    assert!(!bash_asks(edit, false));
+    // A script that starts processes: what it runs is still checked.
+    assert!(bash_asks(
+        "python3 - <<'EOF'\nimport subprocess\nsubprocess.run('git push origin main', shell=True)\nEOF",
+        false
+    ));
+    assert!(bash_asks(
+        "node <<'EOF'\nrequire('child_process').execSync('npm publish')\nEOF",
+        false
+    ));
+    // The rest of the line, and what follows the body, are still checked.
+    for c in [
+        "cat > /tmp/a.txt <<'EOF'\nhello\nEOF\ngit push origin main",
+        "cat > /tmp/a.txt <<EOF && git push\nhello\nEOF",
+        // Fed to something that runs it.
+        "bash <<'EOF'\ngit push origin main\nEOF",
+        "ssh box <<EOF\nrm -rf ~\nEOF",
+        "osascript <<EOF\ntell application \"Mail\" to send newMessage\nEOF",
+        // `<<` in quotes is text, not a here-document.
+        "echo \"a <<x\"\ngit push\nx",
+        // No closing line: nothing is dropped.
+        "cat > /tmp/a <<EOF\ngit push",
+        "cat <<< 'x'\ngit push",
+    ] {
+        assert!(bash_asks(c, false), "should ask: {c}");
+    }
+}

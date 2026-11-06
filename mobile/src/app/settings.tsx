@@ -199,7 +199,7 @@ export default function Settings() {
       {servesTeam && (
         <Section
           title="Logins"
-          footer="The apps your agents asked for, one row each. Signing in happens on your Mac."
+          footer="The apps your agents asked for, one row each. Sign in from here, or on your Mac."
         >
           <Row label="What your team needs" onPress={() => router.push('/logins')} last />
         </Section>

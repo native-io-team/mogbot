@@ -12,6 +12,7 @@
  */
 
 import type { AgentSecret, TeamLogins, TeamNeed } from '@shipstudio/companion-protocol';
+import { CLAUDE_AI_CONNECTORS_URL } from '@shipstudio/companion-protocol';
 import { requireOptionalNativeModule } from 'expo';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
@@ -33,6 +34,20 @@ export const loginDecline = (agentId: string, requestId: string, note?: string) 
 
 export const loginDismiss = (agentId: string, requestId: string) =>
   call('agents.loginDismiss', { agentId, requestId });
+
+/** "Not needed" on a card: its app, declined for the whole team and remembered on the Mac. */
+export const loginNotNeeded = (agentId: string, requestId: string) =>
+  call('agents.loginNotNeeded', { agentId, requestId });
+
+/** "Not needed" on rows (`keys`), or "Skip the rest" (none: every row still waiting). */
+export const loginsNotNeeded = (keys?: string[]) =>
+  call('agents.loginsNotNeeded', keys ? { keys } : {});
+
+/** Undo a "Not needed", or turn an app back on. */
+export const loginsUndecline = (keys: string[]) => call('agents.loginsUndecline', { keys });
+
+/** The app is back in front of the user: the Mac checks claude.ai connectors now. */
+export const loginsRecheck = () => call('agents.loginsRecheck', {});
 
 export const readReach = (agentId: string) => call('agents.reach', { agentId });
 
@@ -67,8 +82,8 @@ export const connectNeed = (key: string, optionId: string, skip: string[], onPho
     ...(onPhone ? { onPhone } : {}),
   });
 
-/** Where claude.ai's connectors are added. */
-export const CLAUDE_AI_CONNECTORS = 'https://claude.ai/settings/connectors';
+/** Where claude.ai's connectors are added (Customize → Connectors): one copy, in the protocol package. */
+export const CLAUDE_AI_CONNECTORS = CLAUDE_AI_CONNECTORS_URL;
 
 type WebBrowserModule = typeof import('expo-web-browser');
 

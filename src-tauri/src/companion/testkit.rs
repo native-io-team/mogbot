@@ -392,6 +392,7 @@ pub fn live_work() -> crate::agents::work::TurnWork {
         }),
         last_sign_at: Some(1_762_290_500_000),
         quiet_since: Some(1_762_290_420_000),
+        project: None,
     }
 }
 
@@ -1447,6 +1448,43 @@ impl Backend for Stub {
         Ok(())
     }
 
+    async fn login_not_needed(
+        &self,
+        _agent_id: &str,
+        request_id: &str,
+    ) -> Result<Value, CommandError> {
+        self.logins
+            .lock()
+            .unwrap()
+            .push(format!("not needed {request_id}"));
+        Ok(
+            json!({ "keys": ["other:acme bank"], "line": "Not connecting Acme Bank. No agent will ask for it again.", "closed": 1 }),
+        )
+    }
+
+    async fn logins_not_needed(&self, keys: Option<Vec<String>>) -> Result<Value, CommandError> {
+        let keys = keys.unwrap_or_else(|| vec!["linkedin".into()]);
+        self.logins
+            .lock()
+            .unwrap()
+            .push(format!("not needed rows {}", keys.join(",")));
+        Ok(
+            json!({ "keys": keys, "line": "Not connecting LinkedIn. No agent will ask for it again.", "closed": 1 }),
+        )
+    }
+
+    async fn logins_undecline(&self, keys: Vec<String>) -> Result<Value, CommandError> {
+        self.logins
+            .lock()
+            .unwrap()
+            .push(format!("undecline {}", keys.join(",")));
+        Ok(json!(1))
+    }
+
+    async fn logins_recheck(&self) -> Result<(), CommandError> {
+        Ok(())
+    }
+
     async fn usage_plan(&self) -> Result<Value, CommandError> {
         use crate::agents::engine::Engine;
         use crate::agents::forecast::PerRun;
@@ -2042,6 +2080,8 @@ pub fn login_card() -> crate::agents::store::AgentMessage {
                 on_phone: true,
                 user_code: Some("9985-8448".into()),
                 verification_uri: Some("https://github.com/login/device".into()),
+                url: None,
+                opened_at: None,
             }),
             also_for: vec!["Ops".into()],
         }),

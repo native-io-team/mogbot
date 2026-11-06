@@ -152,7 +152,10 @@ inside it.
   `agents.loginStart|loginsConnect`; Mac feature `signin.phone`:
   `agents.signinBegin|signinFrame|signinInput|signinDone|signinStop` (signing in to a site in
   the Mac's own Chrome from the phone; never audited by the router, see docs/agents.md,
-  "Signing in on your Mac from the phone")
+  "Signing in on your Mac from the phone"); "Not needed" for the team (docs/agents.md, "Not needed"):
+  `agents.loginNotNeeded|loginsNotNeeded|loginsUndecline` (shown only when the Mac lists them),
+  `agents.reach`'s `declined` (each with "Turn back on"), and `agents.loginsRecheck` when the app
+  comes back while claude.ai is being connected here
 - `agents.update` (`pinned`, `muted`, `hidden`, `instructions`),
   `agents.instructions|usage|revokePermission|changeDiff`
 - `agents.files|fetchPath|search`, `agents.schedule.preview|create|update|pause|cancel|runNow`

@@ -193,6 +193,10 @@ pub struct TurnWork {
     /// when the last sign of progress was. "No progress for 5 min".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub quiet_since: Option<i64>,
+    /// Live only: the project folder the turn is working in
+    /// (`agents::workplace`), so the Projects sidebar can show it there.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub project: Option<String>,
 }
 
 /// A tool call, as the parsers describe it.
@@ -211,6 +215,9 @@ pub struct Action {
     pub ask: String,
     /// Full paths it edits, counted once the edit comes back successful.
     pub files: Vec<String>,
+    /// Other paths it reads or searches (`Read`, `Grep`, `Glob`), for
+    /// finding the codebase it works in (`agents::workplace`). Memory only.
+    pub paths: Vec<String>,
     /// The project a project-scoped call names, so its screenshot finds it.
     pub project: Option<String>,
     /// A tool known to take a while ([`super::describe`]).
@@ -375,6 +382,21 @@ pub fn describe_tool(name: &str, input: Option<&Value>) -> Option<Action> {
         let (server, tool) = rest.split_once("__").unwrap_or(("", rest));
         return Some(other_mcp(server, tool, &field));
     }
+    let looked_at: Vec<String> = ["file_path", "notebook_path", "path"]
+        .iter()
+        .filter_map(|k| field(k))
+        .collect();
+    let mut a = describe_builtin(name, &field)?;
+    if a.paths.is_empty()
+        && a.files.is_empty()
+        && matches!(name, "Read" | "NotebookRead" | "Grep" | "Glob" | "LS")
+    {
+        a.paths = looked_at;
+    }
+    Some(a)
+}
+
+fn describe_builtin(name: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Action> {
     Some(match name {
         "Read" | "NotebookRead" => match field("file_path").or_else(|| field("notebook_path")) {
             Some(path) => {
@@ -528,6 +550,7 @@ fn act(
         doing: doing.into(),
         ask: ask.into(),
         files: Vec::new(),
+        paths: Vec::new(),
         project: None,
         slow: None,
         command: None,
@@ -816,6 +839,103 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
             format!("Checked {p}'s deploy"),
             format!("Checking {p}'s deploy"),
             format!("check {p}'s deploy"),
+        ),
+        // Usage and spare capacity (`usage_tools`).
+        "usage_overview" => act(
+            StepKind::Plan,
+            "Checked the team's usage",
+            "Checking the team's usage",
+            "check the team's usage",
+        ),
+        "forecast_usage" => act(
+            StepKind::Plan,
+            "Estimated what the work will use",
+            "Estimating what the work will use",
+            "estimate what the work will use",
+        ),
+        "set_usage_mode" => act(
+            StepKind::Plan,
+            "Changed how your limits are used",
+            "Changing how your limits are used",
+            "change how your limits are used",
+        ),
+        "add_spare_work" => act(
+            StepKind::Plan,
+            "Added to the spare-time list",
+            "Adding to the spare-time list",
+            "add to the spare-time list",
+        ),
+        "finish_spare_work" => act(
+            StepKind::Plan,
+            "Updated the spare-time list",
+            "Updating the spare-time list",
+            "update the spare-time list",
+        ),
+        "run_routine_now" => act(
+            StepKind::Plan,
+            "Ran a routine now",
+            "Running a routine now",
+            "run a routine now",
+        ),
+        // Testing a site in the preview (`preview_test`).
+        "test_open" => {
+            let path = named("path", "a page");
+            act(
+                StepKind::Web,
+                format!("Opened {path} in the preview"),
+                format!("Opening {path} in the preview"),
+                format!("open {path} in the preview"),
+            )
+        }
+        "test_click" | "test_type" | "test_scroll" => {
+            let (done, doing, to) = match tool {
+                "test_click" => ("Clicked", "Clicking", "click"),
+                "test_type" => ("Filled in", "Filling in", "fill in"),
+                _ => ("Scrolled", "Scrolling", "scroll"),
+            };
+            act(
+                StepKind::Web,
+                format!("{done} in the preview"),
+                format!("{doing} in the preview"),
+                format!("{to} in the preview"),
+            )
+        }
+        "test_viewport" => act(
+            StepKind::Web,
+            "Tried another width",
+            "Trying another width",
+            "try another width",
+        ),
+        "test_page" | "test_console" | "test_network" => {
+            let what = match tool {
+                "test_page" => "the page",
+                "test_console" => "the console",
+                _ => "the network requests",
+            };
+            act(
+                StepKind::Read,
+                format!("Read {what}"),
+                format!("Reading {what}"),
+                format!("read {what}"),
+            )
+        }
+        "test_screenshot" => act(
+            StepKind::Screenshot,
+            "Took a screenshot of the preview",
+            "Looking at the preview",
+            "take a screenshot of the preview",
+        ),
+        "test_note" => act(
+            StepKind::Message,
+            "Noted what it saw",
+            "Noting what it sees",
+            "note what it saw",
+        ),
+        "test_report" => act(
+            StepKind::Message,
+            "Finished the test",
+            "Finishing the test",
+            "finish the test",
         ),
         _ => act(StepKind::Tool, "Used a tool", "Using a tool", "use a tool"),
     };
@@ -1732,13 +1852,19 @@ pub fn live(agent_id: &str) -> Option<TurnWork> {
             }),
             last_sign_at: Some(live.last_sign),
             quiet_since: live.quiet_since,
+            project: None,
         }
     })
     .filter(|w| w.step_count > 0 || w.current.is_some() || w.quiet_since.is_some())
+    .map(|mut w| {
+        w.project = super::workplace::working_in(agent_id);
+        w
+    })
 }
 
 /// The agent is gone: so is any timeline it was keeping.
 pub fn forget_agent(agent_id: &str) {
+    super::workplace::forget_agent(agent_id);
     LIVE.lock()
         .unwrap_or_else(|e| e.into_inner())
         .remove(agent_id);

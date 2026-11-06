@@ -330,7 +330,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "request_login",
-        description: "Get access to an app or account you're blocked on for the user's task (Gmail, Google Calendar, Slack, LinkedIn, X, GitHub, Linear, Notion, Figma…). Try first: your own tools for it, then the user's signed-in browser (mcp__claude-in-chrome__*) if you have it. This checks the same on the Mac before asking: it may answer that you can reach it already (and how), that the user already answered, or that someone else's card for it is waiting and you're on it. Only otherwise does one card appear in this chat, on their phone too, with a sign-in button (the app's own sign-in in their Mac's browser; you never see a password). Never ask for a password or a login in chat, never up front, one at a time. When a card was raised, stop and tell the user in one line what it's for; you're woken when they answer.",
+        description: "Get access to an app or account you're blocked on for the user's task (Gmail, Google Calendar, Slack, LinkedIn, X, GitHub, Linear, Notion, Figma…). Try first: your own tools for it, then the user's signed-in browser (mcp__claude-in-chrome__*) if you have it. This checks the same on the Mac before asking: it may answer that you can reach it already (and how), that the user already answered, or that someone else's card for it is waiting and you're on it. Only otherwise does one card appear in this chat, on their phone too, with a sign-in button (the app's own sign-in; for a site in their Chrome they can do it from the phone, \"Sign in from here\"; you never see a password). Use it, with signed_out: true, when a page in their browser asks for a sign-in or a password: never tell the user to go to their computer or to finish in a tab you left open. Never ask for a password or a login in chat, never up front, one at a time. When a card was raised, stop and tell the user in one line what it's for; you're woken when they answer.",
         main_only: false,
         schema: || json!({
             "type": "object",
@@ -1600,6 +1600,12 @@ fn request_secret_as(app: &AppHandle, caller: &store::Agent, args: &Value, quiet
     if super::expiry::already_expired(&caller.id, &super::expiry::secret_key(&request.name)) {
         return text(super::expiry::told_maybe_later(&request.name));
     }
+    // An app the user chose not to connect isn't asked for by another door.
+    if let Some(refused) =
+        super::declined::refusal_for_text(&format!("{} {}", request.name, request.purpose))
+    {
+        return text(refused);
+    }
     let open = store::pending_approvals(&caller.id).unwrap_or_default();
     if open
         .iter()
@@ -2180,15 +2186,13 @@ fn auto_allowed(
     // Its own level when its settings give it one (`policy`).
     let chosen = super::policy::chosen_level(caller);
     let ctx = super::autoallow::Ctx::for_agent(caller)?;
-    super::autoallow::auto(chosen, outside, tool, input, &ctx).map(|_| receipt_level(chosen, outside))
+    super::autoallow::auto(chosen, outside, tool, input, &ctx)
+        .map(|_| receipt_level(chosen, outside))
 }
 
 /// The level a receipt names: "Go hard" answers at its own level even for a
 /// turn answering outside text (`go_hard`); the others as the turn runs.
-fn receipt_level(
-    chosen: super::independence::Level,
-    outside: bool,
-) -> super::independence::Level {
+fn receipt_level(chosen: super::independence::Level, outside: bool) -> super::independence::Level {
     if chosen == super::independence::Level::GoHard {
         chosen
     } else {
@@ -2506,10 +2510,7 @@ mod tests {
         );
         // Outside text keeps Go hard for reading and local work (`go_hard`);
         // only network writes and fetched packages ask there.
-        assert_eq!(
-            auto_allowed(&agent, "Bash", &ls, true),
-            Some(Level::GoHard)
-        );
+        assert_eq!(auto_allowed(&agent, "Bash", &ls, true), Some(Level::GoHard));
         let mkdir = json!({ "command": "mkdir -p ~/FictionalProjects/new-site" });
         assert_eq!(
             auto_allowed(&agent, "Bash", &mkdir, false),

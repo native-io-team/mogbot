@@ -13,6 +13,9 @@
 
 pub mod agent;
 pub mod agent_bridge;
+// Prototype only: docs/internal/agent-browser.md.
+#[cfg(all(feature = "agent-browser", unix))]
+pub mod agent_browser;
 pub mod agents;
 pub mod brand;
 pub mod cache;
@@ -790,6 +793,12 @@ pub fn run() {
             commands::agents::agents_login_save_key,
             commands::agents::agents_logins_team,
             commands::agents::agents_login_dismiss,
+            commands::agents::agents_login_not_needed,
+            commands::agents::agents_logins_not_needed,
+            commands::agents::agents_logins_undecline,
+            commands::agents::agents_logins_declined,
+            commands::agents::agents_login_reopen,
+            commands::agents::agents_logins_recheck,
             commands::agents::agents_logins_connect,
             commands::agents::agents_reach,
             commands::agents::agents_reach_remove,

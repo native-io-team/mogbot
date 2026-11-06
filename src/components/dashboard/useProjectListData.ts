@@ -11,6 +11,8 @@ import {
 } from '../../lib/errors';
 import { TimeoutError, withTimeout } from '../../lib/withTimeout';
 import { logger } from '../../lib/logger';
+import { listen } from '@tauri-apps/api/event';
+import { AGENT_EVENTS } from '../../lib/agents';
 import { classifyThumbnailLoadFailure } from './projectThumbnailErrors';
 
 /** Dashboard project with loaded thumbnail data */
@@ -179,6 +181,26 @@ export function useProjectListData(activeAccountId: string | null | undefined) {
   useEffect(() => {
     void loadAll();
   }, [loadAll, activeAccountId]);
+
+  // An agent registered a codebase it works in (`agents::workplace`): list
+  // it, as a quiet refresh (no loading state over a list already shown).
+  const loadProjectsRef = useRef(loadProjects);
+  loadProjectsRef.current = loadProjects;
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    let alive = true;
+    try {
+      void listen(AGENT_EVENTS.projectFound, () => void loadProjectsRef.current())
+        .then((u) => (alive ? (off = u) : u()))
+        .catch(() => undefined);
+    } catch {
+      // No Tauri event bridge (tests, the harness): nothing to listen to.
+    }
+    return () => {
+      alive = false;
+      off?.();
+    };
+  }, []);
 
   return {
     projects,
