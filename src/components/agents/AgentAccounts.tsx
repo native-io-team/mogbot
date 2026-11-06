@@ -4,9 +4,13 @@
  * (`agents/wallet.rs`). This Mac's own sign-in is always in the list; more
  * can be added, each signed in into a folder of its own.
  *
- * Every row is a Line: name, one muted line of state (only what is known),
- * and quiet actions. Adding names the account, then runs its engine's own
- * sign-in in a terminal (`AccountSignIn`).
+ * Every row is a Line: its name in full, then one muted line of state with
+ * who it is signed in as and its plan, only as the engine's own files say
+ * (`agents/identity.rs`). Actions are quiet: Sign in when it isn't, a More
+ * menu (Rename, Sign in again, Remove…, which asks first; This Mac's own
+ * sign-in can't be removed and says why), and the two order arrows as one
+ * group. Adding names the account, then runs its engine's own sign-in in a
+ * terminal (`AccountSignIn`).
  *
  * @module components/agents/AgentAccounts
  */
@@ -15,14 +19,23 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '../primitives/Button';
 import { IconButton } from '../primitives/IconButton';
 import { TextField } from '../primitives/TextField';
-import { ArrowDownIcon, ArrowUpIcon } from '../icons';
+import { Tooltip } from '../primitives/Tooltip';
+import { Dropdown, DropdownDivider, DropdownItem } from '../primitives/Dropdown';
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  EditIcon,
+  MoreHorizontalIcon,
+  ResetIcon,
+  TrashIcon,
+} from '../icons';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { ENGINE_LABEL, type AgentEngine, type EngineInfo } from '../../lib/agents';
 import {
+  accountDetail,
   accountKind,
-  accountState,
   accountsOf,
   addUsageAccount,
   listUsageAccounts,
@@ -64,6 +77,8 @@ function AccountRow({
     if (await onRename(name)) setEditing(false);
   };
   const tone = account.out ? 'out' : account.signedIn ? 'ok' : 'off';
+  const detail = accountDetail(account);
+  const engine = ENGINE_LABEL[account.engine];
 
   return (
     <li className={`agent-account agent-account--${tone}`} data-account={account.id}>
@@ -89,16 +104,26 @@ function AccountRow({
             }}
           />
         ) : (
-          <span className="agent-account__name">{account.name}</span>
+          <Tooltip content={`${account.name} · ${accountKind(account)}`}>
+            <span className="agent-account__name">{account.name}</span>
+          </Tooltip>
         )}
-        <span className="agent-account__state">{accountState(account)}</span>
-        {account.thisMac && <span className="agent-account__kind">{accountKind(account)}</span>}
+        <span className="agent-account__detail">
+          <span className="agent-account__state">{detail.state}</span>
+          {detail.email && (
+            <Tooltip content={detail.email}>
+              <span className="agent-account__email">{detail.email}</span>
+            </Tooltip>
+          )}
+          {detail.plan && <span className="agent-account__plan">{detail.plan}</span>}
+          {detail.note && <span className="agent-account__note">{detail.note}</span>}
+        </span>
       </div>
       <div className="agent-account__actions">
         {confirming ? (
           <>
             <span className="agent-account__confirm">Remove its sign-in from this Mac?</span>
-            <Button size="compact" variant="secondary" onClick={() => setConfirming(false)}>
+            <Button size="compact" variant="ghost" onClick={() => setConfirming(false)}>
               Keep
             </Button>
             <Button size="compact" variant="danger" onClick={onRemove}>
@@ -112,35 +137,67 @@ function AccountRow({
                 Sign in
               </Button>
             )}
-            {!account.thisMac && account.signedIn && (
-              <Button size="compact" variant="ghost" onClick={onSignIn}>
-                Sign in again
-              </Button>
-            )}
-            <Button size="compact" variant="ghost" onClick={() => setEditing(true)}>
-              Rename
-            </Button>
-            {!account.thisMac && (
-              <Button size="compact" variant="ghost" onClick={() => setConfirming(true)}>
-                Remove
-              </Button>
-            )}
-            <IconButton
-              size="compact"
-              variant="ghost"
-              icon={<ArrowUpIcon size={14} />}
-              aria-label={`Try ${account.name} earlier`}
-              disabled={index === 0}
-              onClick={() => onMove(-1)}
-            />
-            <IconButton
-              size="compact"
-              variant="ghost"
-              icon={<ArrowDownIcon size={14} />}
-              aria-label={`Try ${account.name} later`}
-              disabled={index === count - 1}
-              onClick={() => onMove(1)}
-            />
+            <Dropdown
+              align="right"
+              portal
+              quietOpen
+              trigger={(p) => (
+                <IconButton
+                  {...p}
+                  tabIndex={0}
+                  size="compact"
+                  variant="ghost"
+                  icon={<MoreHorizontalIcon size={14} />}
+                  aria-label={`More for ${account.name}`}
+                />
+              )}
+            >
+              <DropdownItem icon={<EditIcon size={14} />} onSelect={() => setEditing(true)}>
+                Rename
+              </DropdownItem>
+              {account.signedIn && !account.thisMac && (
+                <DropdownItem icon={<ResetIcon size={14} />} onSelect={onSignIn}>
+                  Sign in again
+                </DropdownItem>
+              )}
+              <DropdownDivider />
+              {account.thisMac ? (
+                <span
+                  className="agent-account__no-remove"
+                  title={`This Mac’s own ${engine} sign-in stays. To change it, sign out in ${engine} itself.`}
+                >
+                  <DropdownItem icon={<TrashIcon size={14} />} disabled onSelect={() => undefined}>
+                    Remove…
+                  </DropdownItem>
+                </span>
+              ) : (
+                <DropdownItem
+                  icon={<TrashIcon size={14} />}
+                  variant="danger"
+                  onSelect={() => setConfirming(true)}
+                >
+                  Remove…
+                </DropdownItem>
+              )}
+            </Dropdown>
+            <span className="agent-account__order-controls" role="group" aria-label="Order">
+              <IconButton
+                size="compact"
+                variant="ghost"
+                icon={<ArrowUpIcon size={14} />}
+                aria-label={`Try ${account.name} earlier`}
+                disabled={index === 0}
+                onClick={() => onMove(-1)}
+              />
+              <IconButton
+                size="compact"
+                variant="ghost"
+                icon={<ArrowDownIcon size={14} />}
+                aria-label={`Try ${account.name} later`}
+                disabled={index === count - 1}
+                onClick={() => onMove(1)}
+              />
+            </span>
           </>
         )}
       </div>
@@ -223,9 +280,12 @@ export function AgentAccounts({ engines }: { engines: EngineInfo[] }) {
     void onUsageAccountsChanged(reload)
       .then((u) => (gone ? u() : (unlisten = u)))
       .catch(() => undefined);
+    // A sign-in can change in a terminal outside the app: read again on return.
+    window.addEventListener('focus', reload);
     return () => {
       gone = true;
       unlisten?.();
+      window.removeEventListener('focus', reload);
     };
   }, [reload]);
   useEffect(() => {

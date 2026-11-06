@@ -352,6 +352,10 @@ pub const MAC_FEATURE_LOOKS: &str = "agents.looks";
 /// phone, the tab shown live there (`agents.signin*`; `agents/phone_signin.rs`).
 pub const MAC_FEATURE_SIGNIN_PHONE: &str = "signin.phone";
 
+/// `welcome.features`: `agents.watchLive` takes `link`, one of a message's
+/// `localLinks` (`agents/local_links.rs`).
+pub const MAC_FEATURE_WATCH_LINKS: &str = "watch.links";
+
 /// Everything `welcome.features` lists.
 pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_REVISE_RESULTS,
@@ -361,6 +365,7 @@ pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_LOGINS_PHONE,
     MAC_FEATURE_LOOKS,
     MAC_FEATURE_SIGNIN_PHONE,
+    MAC_FEATURE_WATCH_LINKS,
 ];
 
 /// What one connected app said it shows (`hello.features`).

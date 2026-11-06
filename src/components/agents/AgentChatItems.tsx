@@ -43,6 +43,7 @@ import { TextButton } from '../primitives/TextButton';
 import { TextField } from '../primitives/TextField';
 import { Tooltip } from '../primitives/Tooltip';
 import { ComposerAttachments, MessageAttachments } from './AgentAttachments';
+import { LocalLinks } from './AgentLocalLinks';
 import type { DraftAttachment } from './useComposerAttachments';
 import { MentionText } from './AgentMentions';
 import { AgentPeerStatus } from './AgentPeerStatus';
@@ -295,6 +296,7 @@ export const AgentBubble = memo(function AgentBubble({
       data-arrived={arrived || undefined}
       data-stopped={message.stopped || undefined}
       data-attachments={attachments.length > 0 || undefined}
+      data-local-links={(message.localLinks?.length ?? 0) > 0 || undefined}
       data-work={message.work ? true : undefined}
       data-message-ids={message.id}
     >
@@ -309,6 +311,7 @@ export const AgentBubble = memo(function AgentBubble({
         </div>
       )}
       {message.stopped && <span className="agent-bubble__stopped">Stopped</span>}
+      {!streaming && <LocalLinks message={message} />}
       {attachments.length > 0 ? (
         <div className="agent-chat__line agent-chat__line--agent">
           <MessageAttachments agent={agent} attachments={attachments} side="agent" />

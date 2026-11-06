@@ -93,6 +93,51 @@ export function siteScreenshot(): Buffer {
   );
 }
 
+/**
+ * One page of a fictional café's site ("Moss & Co."), before or after a
+ * design pass: the after has a bolder header, more room and a green accent,
+ * so a before/after compare visibly differs. `page` shifts the layout so
+ * Home, Menu and Visit don't look alike.
+ */
+export function cafePage(page: 0 | 1 | 2, after: boolean): Buffer {
+  const W = 390;
+  const ink: RGB = after ? [20, 32, 24] : [60, 60, 64];
+  const accent: RGB = after ? [46, 125, 80] : [150, 150, 156];
+  const soft: RGB = after ? [228, 240, 231] : [232, 232, 234];
+  const gap = after ? 28 : 16;
+  const rects: Rect[] = [
+    { x: 0, y: 0, w: W, h: after ? 84 : 60, color: after ? [246, 250, 247] : [255, 255, 255] },
+    { x: 20, y: after ? 30 : 20, w: after ? 120 : 90, h: after ? 24 : 18, color: ink, r: 4 },
+    { x: 300, y: after ? 28 : 18, w: 70, h: after ? 28 : 22, color: accent, r: after ? 14 : 3 },
+  ];
+  let y = after ? 120 : 84;
+  for (let i = 0; i < 3 + page; i++) {
+    const h = page === 1 ? 44 : i === 0 ? (after ? 200 : 150) : 90;
+    rects.push({
+      x: 20,
+      y,
+      w: W - 40,
+      h,
+      color: i === 0 ? soft : [240, 240, 242],
+      r: after ? 18 : 6,
+    });
+    rects.push({
+      x: 36,
+      y: y + 14,
+      w: page === 1 ? 180 : 220,
+      h: after ? 16 : 12,
+      color: ink,
+      r: 6,
+    });
+    if (page === 1)
+      rects.push({ x: W - 100, y: y + 12, w: 50, h: after ? 20 : 12, color: accent, r: 6 });
+    y += h + gap;
+  }
+  if (page === 2)
+    rects.push({ x: 20, y, w: W - 40, h: 160, color: [214, 226, 218], r: after ? 18 : 6 });
+  return png(W, 760, after ? [252, 253, 252] : [246, 246, 246], rects);
+}
+
 /** A site's sign-in page as the Mac's Chrome would show it (fictional). */
 export function signinPage(): Buffer {
   const W = 800;

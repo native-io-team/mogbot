@@ -9,6 +9,7 @@
 
 import type { Scenario } from '../types';
 import { AGENTS_TAB, DEFAULTS, ENGINES, msg, now, overview, TEAM } from './agents';
+import { FULL_INVENTORY } from './agentsUsage';
 
 /** The composer's window is 600pt wide; the capture gives it a little air. */
 const QUICK_ENTRY_VIEWPORT = { width: 600, height: 320 };
@@ -67,6 +68,37 @@ const quickEntryCommands = {
   cancel_dictation: null,
   stop_dictation: null,
 };
+
+/** Two Claude Code sign-ins (fictional addresses) and Codex signed out. */
+const TWO_CLAUDE = [
+  {
+    id: 'default',
+    engine: 'claude',
+    name: 'This Mac',
+    thisMac: true,
+    signedIn: true,
+    email: 'sam@example.com',
+    plan: 'Max',
+    out: false,
+  },
+  {
+    id: 'a1personal',
+    engine: 'claude',
+    name: 'Personal Account',
+    thisMac: false,
+    signedIn: true,
+    email: 'sam.personal@example.net',
+    out: false,
+  },
+  {
+    id: 'default',
+    engine: 'codex',
+    name: 'This Mac',
+    thisMac: true,
+    signedIn: false,
+    out: false,
+  },
+];
 
 export const agentsDesktopScenarios: Scenario[] = [
   {
@@ -340,7 +372,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'settings-agents-accounts',
     title: 'Settings — Agents → Accounts (usage wallets)',
     looksRightWhen:
-      'Under “Accounts”, one muted sentence (“When one runs out of usage, agents carry on with the next, in this order.”), then Claude Code and Codex, each a bordered list of numbered lines. Claude Code: 1 “This Mac” signed in, 2 “Work” in amber “Out of usage until …” with the reset time, 3 “Personal” signed in as its email with a past limit; Codex: 1 “This Mac”, 2 “ChatGPT Plus” “Not signed in” with Sign in. Each line has Rename, Remove (not on This Mac) and up/down arrows, the first up and last down disabled; under each list a secondary “Add a … account”. Neutral buttons only, no accent.',
+      'Under “Accounts”, one muted sentence (“When one runs out of usage, agents carry on with the next, in this order.”), then Claude Code and Codex, each a bordered list of numbered lines. Claude Code: 1 “This Mac” signed in, 2 “Work” in amber “Out of usage until …” with the reset time, then its email, 3 “Personal” “Signed in · me@example.com · last limit …”; Codex: 1 “This Mac”, 2 “ChatGPT Plus” “Not signed in” with Sign in. Each line has a “…” menu (Rename, Sign in again, Remove…) and the up/down pair, the first up and last down disabled; a signed-out line also has one secondary Sign in. Under each list a secondary “Add a … account”, with air before the next engine. Neutral buttons only, no accent.',
     command: 'agents.accounts',
     requires: '.agent-accounts .agent-account',
     clipSelector: '.agent-accounts',
@@ -399,6 +431,50 @@ export const agentsDesktopScenarios: Scenario[] = [
           out: false,
         },
       ],
+      agents_account_reorder: [],
+      agents_account_rename: null,
+      agents_account_remove: null,
+      agents_account_add: null,
+    },
+  },
+  {
+    id: 'settings-agents-accounts-two-claude',
+    title: 'Settings — Agents → Accounts: two Claude Code sign-ins, Codex signed out',
+    looksRightWhen:
+      'Claude Code lists two lines, each with its name in full on the first line and “Signed in · <email>” on the second: 1 “This Mac” with sam@example.com and “Max plan” (read from Claude Code’s own file), and 2 “Personal Account” with sam.personal@example.net. Neither name is cut off; a long email is the thing that truncates. Codex: 1 “This Mac” “Not signed in” with one Sign in button. Row actions are quiet compact buttons on one baseline, the reorder arrows grouped together, Rename, Sign in again and Remove… are in each row’s “…” menu (This Mac’s Remove is greyed, its hover saying why). Each “Add a … account” button has air above the next engine’s heading. Neutral only, no accent.',
+    command: 'agents.accounts',
+    requires: '.agent-accounts .agent-account',
+    clipSelector: '.agent-accounts',
+    commands: {
+      agents_overview: {
+        ...overview(),
+        engines: [ENGINES[0], { ...ENGINES[1], signedIn: false }],
+      },
+      agents_desktop_settings: DESKTOP_SETTINGS,
+      agents_accounts: TWO_CLAUDE,
+      agents_account_reorder: [],
+      agents_account_rename: null,
+      agents_account_remove: null,
+      agents_account_add: null,
+    },
+  },
+  {
+    id: 'settings-agents-page',
+    title: 'Settings — Agents, the whole tab',
+    looksRightWhen:
+      'Every group of Settings → Agents in one tall shot: On this Mac, Engines and models, Usage, Accounts, Notifications, Away from your desk. Each group has the same small muted heading, the same air above and below, and one full-width divider under it that never touches the last control. Rows line up on one left edge; every description is one muted line. Both themes readable; nothing accent-coloured except chosen state.',
+    command: 'agents.accounts',
+    requires: '.agent-accounts .agent-account',
+    clipSelector: '.agents-settings',
+    viewport: { width: 1280, height: 3000 },
+    commands: {
+      agents_overview: {
+        ...overview(),
+        engines: [ENGINES[0], { ...ENGINES[1], signedIn: false }],
+      },
+      agents_desktop_settings: DESKTOP_SETTINGS,
+      agents_usage_overview: FULL_INVENTORY,
+      agents_accounts: TWO_CLAUDE,
       agents_account_reorder: [],
       agents_account_rename: null,
       agents_account_remove: null,

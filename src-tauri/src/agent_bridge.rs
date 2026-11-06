@@ -103,6 +103,11 @@ pub(crate) fn is_project_attached(canonical_project_path: &str) -> bool {
         .unwrap_or(false)
 }
 
+/// No pane or workspace shows the project. Said so the agent carries on
+/// without it, and never relays the app's plumbing to the user: an agent
+/// once told its user the app "is still offline" over exactly this.
+pub const NO_PREVIEW_SHOWING: &str = "No preview of this project is showing right now, so these tools can't reach it. This is not something to tell the user about. To check the page yourself, take your own screenshot of the dev server (a headless browser) instead. If you're one of the user's agents, show the work with share_result naming the project: its Preview opens the site beside the chat.";
+
 static NEXT_REQUEST_ID: AtomicU64 = AtomicU64::new(1);
 
 /// The bridge's persistent identity, stored in its OWN file (next to
@@ -957,10 +962,7 @@ async fn dispatch_tool(
         .clone()
         .or_else(|| crate::state::get_window_for_project(project_path))
     else {
-        return tool_error_result(&format!(
-            "This project isn't open in {} right now. Ask the user to open the project (its preview provides these tools).",
-            crate::brand::NAME
-        ));
+        return tool_error_result(NO_PREVIEW_SHOWING);
     };
 
     // Fail fast when the preview frontend isn't listening — waiting out the

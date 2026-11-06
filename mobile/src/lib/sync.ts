@@ -241,6 +241,14 @@ function applyDraft(
   e: Extract<CompanionEvent, { type: 'agents.draft' }>
 ): Record<string, Draft> {
   const held = drafts[e.agentId];
+  // Withdrawn: the Mac found it was a progress line and put it in the
+  // timeline instead. No bubble, no typing dots for it.
+  if (e.from === 0 && e.text === '') {
+    if (!held || held.id !== e.id) return drafts;
+    const next = { ...drafts };
+    delete next[e.agentId];
+    return next;
+  }
   if (e.from === 0) return { ...drafts, [e.agentId]: { id: e.id, text: e.text } };
   if (held?.id === e.id && held.text.length === e.from) {
     return { ...drafts, [e.agentId]: { id: e.id, text: held.text + e.text } };

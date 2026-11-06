@@ -70,8 +70,15 @@ export interface AgentPreviewServer {
 
 export const EVENT_PREVIEW_TEST = 'agents://preview-test';
 
-export function previewTarget(agentId: string, messageId: string): Promise<PreviewTarget> {
-  return invoke<PreviewTarget>('agents_preview_target', { agentId, messageId });
+export function previewTarget(
+  agentId: string,
+  messageId: string,
+  link?: number
+): Promise<PreviewTarget> {
+  return invoke<PreviewTarget>(
+    'agents_preview_target',
+    link === undefined ? { agentId, messageId } : { agentId, messageId, link }
+  );
 }
 
 /** The pane is (or stops being) live for `path` in this window. */

@@ -94,6 +94,7 @@ static QUITTING: AtomicBool = AtomicBool::new(false);
 /// already on disk. Returns how many turns were stopped.
 pub fn shutdown_sync() -> usize {
     QUITTING.store(true, Ordering::SeqCst);
+    super::dev_servers::stop_all_sync();
     procs::kill_all_sync()
 }
 
@@ -1143,6 +1144,7 @@ pub fn new_message(agent_id: &str, kind: MessageKind, text: impl Into<String>) -
         takeover: false,
         room: None,
         decide: Vec::new(),
+        local_links: Vec::new(),
     }
 }
 
@@ -2534,6 +2536,7 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         super::workplace::begin(&agent_id, bound.as_deref().map(std::path::Path::new));
         super::exposure::begin(&agent_id);
         super::results::discard(&agent_id);
+        super::dev_servers::begin(&agent_id);
         if let Some(copy) = &made {
             let label = format!(
                 "Started a copy of {}",
@@ -3049,27 +3052,87 @@ fn system_prompt_base(
 /// Wait for `claude` to exit, at most [`EXIT_BOUND`] (a moment, once its
 /// result is in and only background work could be keeping it); then stop
 /// its tree.
+/// A dev server someone is looking at is spared (`dev_servers`), when the
+/// turn ended normally (`settle`). Returns whether that was decided here.
 async fn finish(
     child: &mut tokio::process::Child,
     pid: Option<u32>,
     done: bool,
-) -> std::io::Result<std::process::ExitStatus> {
+    agent_id: &str,
+    settle: bool,
+) -> (std::io::Result<std::process::ExitStatus>, bool) {
     let bound = if done {
         Duration::from_secs(2)
     } else {
         EXIT_BOUND
     };
     if let Ok(status) = tokio::time::timeout(bound, child.wait()).await {
-        return status;
+        return (status, false);
     }
     tracing::info!(
         "[Agents] Claude Code is still running after its turn; stopping it and what it started"
     );
+    let spare = if settle {
+        super::dev_servers::turn_ended(agent_id, pid).await
+    } else {
+        Vec::new()
+    };
     if let Some(pid) = pid {
-        let _ = tokio::task::spawn_blocking(move || procs::kill_tree_sync(pid)).await;
+        let _ =
+            tokio::task::spawn_blocking(move || procs::kill_tree_sparing_sync(pid, &spare)).await;
     }
     let _ = child.start_kill();
-    child.wait().await
+    (child.wait().await, settle)
+}
+
+/// Note what runs under the engine now, for `dev_servers` at the turn's end.
+async fn note_engine_tree(agent_id: &str, pid: u32) {
+    if let Ok(Some(rows)) = tokio::task::spawn_blocking(procs::snapshot).await {
+        super::dev_servers::note_tree(agent_id, &rows, pid);
+    }
+}
+
+/// A reply, as the chat keeps it: its links to this Mac taken out of the
+/// text (`local_links`), under its draft's id so it takes the draft's place.
+async fn record_reply(app: &AppHandle, agent_id: &str, draft_id: Option<String>, text: String) {
+    let mut message = new_message(agent_id, MessageKind::Agent, text);
+    if let Some(id) = draft_id {
+        message.id = id;
+    }
+    let message = super::local_links::apply(message).await;
+    for link in message.local_links.iter().filter(|l| l.path.is_some()) {
+        super::dev_servers::note_shown_port(agent_id, link.port);
+    }
+    record_off(app, message).await;
+}
+
+/// What became of a held line (`narration`): a note in the timeline, its
+/// draft withdrawn; or the reply.
+async fn settle_narration(
+    app: &AppHandle,
+    agent_id: &str,
+    fate: Option<super::narration::Fate>,
+    said_anything: &mut bool,
+) {
+    use super::narration::Fate;
+    match fate {
+        None => {}
+        Some(Fate::Fold(held)) => {
+            super::work::on_step(
+                agent_id,
+                super::work::StepKind::Note,
+                &super::narration::note_label(&held.text),
+                store::now_ms(),
+            );
+            if let Some(id) = &held.draft_id {
+                emit_draft(app, agent_id, id, "");
+            }
+        }
+        Some(Fate::Keep(held)) => {
+            *said_anything = true;
+            record_reply(app, agent_id, held.draft_id, held.text).await;
+        }
+    }
 }
 
 /// Write to an app-server turn's stdin; `None` closes it.
@@ -3594,6 +3657,10 @@ async fn run_turn(
     let mut drafts = Drafts::default();
     let mut draft_tick = tokio::time::interval(DRAFT_EVERY);
     draft_tick.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
+    // Short lines written mid-turn go to the timeline (`narration`).
+    let mut narration = super::narration::Narration::default();
+    // When the engine's process tree was last looked at (`dev_servers`).
+    let mut tree_seen_at = 0_i64;
     // `claude` exited. Its output normally closes with it, but a child that
     // inherited the pipe can hold it open: read what's left for a moment,
     // then stop waiting for an end that may never come. Likewise once the
@@ -3714,12 +3781,12 @@ async fn run_turn(
                             // Recorded under the draft's id, so it takes the draft's place.
                             let draft_id = drafts.finish(&text);
                             if !text.is_empty() {
-                                said_anything = true;
-                                let mut message = new_message(agent_id, MessageKind::Agent, text);
-                                if let Some(id) = draft_id {
-                                    message.id = id;
+                                let (before, held) = narration.reply(draft_id.clone(), &text);
+                                settle_narration(app, agent_id, before, &mut said_anything).await;
+                                if !held {
+                                    said_anything = true;
+                                    record_reply(app, agent_id, draft_id, text).await;
                                 }
-                                record_off(app, message).await;
                             }
                         }
                         Step::Activity(activity) => {
@@ -3729,6 +3796,7 @@ async fn run_turn(
                         }
                         Step::Action(action) => {
                             note_acted(agent_id);
+                            settle_narration(app, agent_id, narration.work(), &mut said_anything).await;
                             super::workplace::note(app, agent_id, &layout.cwd, &action);
                             let doing = super::work::on_action(agent_id, action, store::now_ms());
                             if status_of(agent_id).state != "waiting" {
@@ -3736,6 +3804,11 @@ async fn run_turn(
                             }
                         }
                         Step::Result(result) => {
+                            // What the call left running (a dev server it started).
+                            if let Some(pid) = pid.filter(|_| store::now_ms() - tree_seen_at > 5_000) {
+                                tree_seen_at = store::now_ms();
+                                note_engine_tree(agent_id, pid).await;
+                            }
                             let before = super::work::live(agent_id).and_then(|w| w.doing);
                             super::work::on_result(agent_id, result);
                             // The step's outcome changed: the open list says so.
@@ -3808,6 +3881,12 @@ async fn run_turn(
                         Step::Done => {
                             saw_result = true;
                             timing.mark_result();
+                            // The turn's last word, if it was held back.
+                            settle_narration(app, agent_id, narration.end(said_anything), &mut said_anything).await;
+                            // The engine is still up: what it started is still under it.
+                            if let Some(pid) = pid {
+                                note_engine_tree(agent_id, pid).await;
+                            }
                             // Its reply is complete: no "working" while the CLI exits.
                             set_status(app, agent_id, Status::idle());
                             drain_rest.as_mut().reset(tokio::time::Instant::now() + Duration::from_secs(3));
@@ -3885,9 +3964,7 @@ async fn run_turn(
                             // Completed under the interrupt: kept whole, not cut off.
                             Out::Step(Step::Reply(text)) if !text.is_empty() => {
                                 let id = drafts.finish(&text).unwrap_or_else(store::new_id);
-                                let mut message = new_message(agent_id, MessageKind::Agent, text);
-                                message.id = id;
-                                record_off(app, message).await;
+                                record_reply(app, agent_id, Some(id), text).await;
                             }
                             _ => {}
                         }
@@ -3909,10 +3986,22 @@ async fn run_turn(
             let _ = tokio::task::spawn_blocking(move || procs::kill_tree_sync(pid)).await;
         }
     }
-    let status = match exited {
-        Some(status) => status,
-        None => finish(&mut child, pid, saw_result).await,
+    // A held line the turn never followed up (stopped, cut off) is its word.
+    settle_narration(
+        app,
+        agent_id,
+        narration.end(said_anything),
+        &mut said_anything,
+    )
+    .await;
+    let (status, settled) = match exited {
+        Some(status) => (status, false),
+        None => finish(&mut child, pid, saw_result, agent_id, stopped.is_none()).await,
     };
+    // Dev servers it left: stopped unless someone is looking at them.
+    if stopped.is_none() && !settled {
+        super::dev_servers::turn_ended(agent_id, pid).await;
+    }
     procs::unregister(agent_id);
     timing.log(agent_id);
     let status = status.map_err(super::err_io)?;
@@ -4280,6 +4369,35 @@ mod tests {
     /// it is app-owned, built into the system prompt from code, so nothing in
     /// their own CLAUDE.md is rewritten. The Chief also gets its own lines,
     /// and both get the user's mode.
+    #[test]
+    fn agents_from_an_older_build_are_told_to_show_their_work_without_touching_their_files() {
+        let _serial = store::tests_lock();
+        let root = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(root.path().to_path_buf()));
+        let home = tempfile::tempdir().unwrap();
+        let claude_md = home.path().join("CLAUDE.md");
+        let before = "Design the bakery site.\n\n## Memory\n\n- Prefers serif headings\n";
+        std::fs::write(&claude_md, before).unwrap();
+        let old: store::Agent = serde_json::from_value(serde_json::json!({
+            "id": "des1", "name": "Designer", "role": "Design", "shape": 0,
+            "color": "red", "createdAt": 0
+        }))
+        .unwrap();
+        let layout = super::super::project::layout(&old, home.path(), vec![]);
+        let prompt = system_prompt_for(&old, home.path(), &layout);
+        store::set_root_for_tests(None);
+
+        assert!(prompt.contains(prompts::SHOW_WORK));
+        assert!(prompt.contains("checkpoint: true"));
+        assert!(prompt.contains("ONE card"));
+        assert!(prompt.contains("Look before you scale"));
+        assert!(prompt.contains("Plumbing stays out of the chat"));
+        assert!(!prompt.contains("One short line before a long job is fine"));
+        // Nothing app-owned names an app (\"Ship Studio\" or this one).
+        assert!(!prompt.contains("Ship Studio"));
+        assert_eq!(std::fs::read_to_string(&claude_md).unwrap(), before);
+    }
+
     #[test]
     fn agents_from_an_older_build_get_the_usage_section_without_touching_their_files() {
         let _serial = store::tests_lock();

@@ -18,6 +18,8 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 jest.mock('expo-haptics', () => ({}));
+jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));
+jest.mock('expo-image', () => ({ Image: () => null }));
 const mockWatchLive = jest.fn();
 jest.mock('../src/lib/session', () => ({
   answerApproval: jest.fn(),
@@ -141,7 +143,10 @@ describe('a tested card on the phone', () => {
 
   it('opens the one-time tailnet link the Mac hands back', async () => {
     welcome(['agents.watchLive']);
-    mockWatchLive.mockResolvedValue({ url: 'https://mac.example.ts.net:47464/__dashbot-watch/t', expiresAt: 9 });
+    mockWatchLive.mockResolvedValue({
+      url: 'https://mac.example.ts.net:47464/__dashbot-watch/t',
+      expiresAt: 9,
+    });
     await show();
     await act(async () => {
       fireEvent.press(screen.getByText('Watch live'));
@@ -152,13 +157,17 @@ describe('a tested card on the phone', () => {
 
   it('says why when the site isn’t running on the Mac', async () => {
     welcome(['agents.watchLive']);
-    mockWatchLive.mockRejectedValue(new Error('Open Preview on the Mac first — the site isn’t running there.'));
+    mockWatchLive.mockRejectedValue(
+      new Error('Open Preview on the Mac first — the site isn’t running there.')
+    );
     const onError = jest.fn();
     await show(tested, onError);
     await act(async () => {
       fireEvent.press(screen.getByText('Watch live'));
     });
     expect(mockOpenHere).not.toHaveBeenCalled();
-    expect(onError).toHaveBeenCalledWith('Open Preview on the Mac first — the site isn’t running there.');
+    expect(onError).toHaveBeenCalledWith(
+      'Open Preview on the Mac first — the site isn’t running there.'
+    );
   });
 });

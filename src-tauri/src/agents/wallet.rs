@@ -959,9 +959,13 @@ pub struct AccountView {
     pub name: String,
     pub this_mac: bool,
     pub signed_in: bool,
-    /// The email the user gave when signing it in (Claude Code), if any.
+    /// Who it is signed in as, as the engine recorded it (`identity`), or
+    /// the email captured when it was signed in here. Never guessed.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub email: Option<String>,
+    /// The plan's name, only when the engine's own file names it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub plan: Option<String>,
     /// The last limit hit, as recorded (only from a turn that hit it).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub limit: Option<LimitHit>,
@@ -969,14 +973,39 @@ pub struct AccountView {
     pub out: bool,
 }
 
+/// Who `account` is signed in as, from its engine's own files; for an added
+/// Claude Code account, the email captured at its sign-in comes first (its
+/// folder's settings file may not name one).
+fn identity_of(account: &Account) -> super::identity::Identity {
+    use super::identity;
+    match account.engine {
+        Engine::Claude => {
+            let mut who = identity::read(claude_config_for(account).as_deref(), identity::claude);
+            if !account.is_this_mac() {
+                if let Some(email) = accounts::claude_email_for(&account.id) {
+                    who.email = Some(email);
+                }
+            }
+            who
+        }
+        Engine::Codex => identity::read(
+            Some(&accounts::codex_home_dir(&account.id).join("auth.json")),
+            identity::codex,
+        ),
+    }
+}
+
 pub async fn views() -> Vec<AccountView> {
     let now = super::store::now_ms();
     let mut out = Vec::new();
     for account in list() {
         let signed_in = signed_in(&account).await;
-        let email = (!account.is_this_mac() && account.engine == Engine::Claude)
-            .then(|| accounts::claude_email_for(&account.id))
-            .flatten();
+        // Only for a sign-in that is there: a file can outlive a sign-out.
+        let who = if signed_in {
+            identity_of(&account)
+        } else {
+            super::identity::Identity::default()
+        };
         out.push(AccountView {
             out: account.out(now).is_some(),
             this_mac: account.is_this_mac(),
@@ -984,7 +1013,8 @@ pub async fn views() -> Vec<AccountView> {
             engine: account.engine,
             name: account.name,
             signed_in,
-            email,
+            email: who.email,
+            plan: who.plan,
             limit: account.limit,
         });
     }
