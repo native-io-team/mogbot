@@ -124,22 +124,28 @@ const INSTRUCTIONS: &str = "The agents' browser: a real Google Chrome on this Ma
 /* ---------------------------------------------------- one-time passes */
 
 const CLEARED_FOR: Duration = Duration::from_secs(120);
-static CLEARED: Mutex<Vec<(String, String, Instant)>> = Mutex::new(Vec::new());
+type Pass = (String, String, Value, Instant);
+static CLEARED: Mutex<Vec<Pass>> = Mutex::new(Vec::new());
 
-/// The engine asked and the user (or a rule) allowed it: the call it's
-/// about to make goes through once.
-pub fn note_cleared(agent_id: &str, tool: &str) {
+/// The engine asked, the browser gate said this call asks, and the user
+/// allowed it: that exact call (tool and input) goes through once. A call
+/// the gate let through on its own leaves nothing, so no pass is lying
+/// around for a later click that does ask.
+pub fn note_cleared(agent_id: &str, tool: &str, input: &Value) {
     let mut v = CLEARED.lock().unwrap_or_else(|e| e.into_inner());
     let now = Instant::now();
-    v.retain(|(_, _, at)| now.duration_since(*at) < CLEARED_FOR);
-    v.push((agent_id.to_string(), tool.to_string(), now));
+    v.retain(|(_, _, _, at)| now.duration_since(*at) < CLEARED_FOR);
+    v.push((agent_id.to_string(), tool.to_string(), input.clone(), now));
 }
 
-fn take_cleared(agent_id: &str, tool: &str) -> bool {
+fn take_cleared(agent_id: &str, tool: &str, input: &Value) -> bool {
     let mut v = CLEARED.lock().unwrap_or_else(|e| e.into_inner());
     let now = Instant::now();
-    v.retain(|(_, _, at)| now.duration_since(*at) < CLEARED_FOR);
-    match v.iter().position(|(a, t, _)| a == agent_id && t == tool) {
+    v.retain(|(_, _, _, at)| now.duration_since(*at) < CLEARED_FOR);
+    match v
+        .iter()
+        .position(|(a, t, i, _)| a == agent_id && t == tool && i == input)
+    {
         Some(i) => {
             v.remove(i);
             true
@@ -553,7 +559,7 @@ pub async fn handle_rpc(
                 Gate::Ask => {
                     // Asked already (the engine's own approval), or the user
                     // is at the keyboard (a take-over): through. Else a card.
-                    if !take_cleared(agent_id, &tool) && turn.is_some() {
+                    if !take_cleared(agent_id, &tool, &args) && turn.is_some() {
                         if let Err(why) =
                             crate::agents::mcp::decide_agents_browser(app, agent_id, &tool, &args)
                                 .await

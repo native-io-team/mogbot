@@ -2222,9 +2222,15 @@ pub(super) async fn decide(
     if decision == Decision::Allow && super::connections::is_connection_tool(tool) {
         super::connections::note_cleared(&caller.id, tool);
     }
-    // The same for the agents' browser server.
-    if decision == Decision::Allow && tool.starts_with(super::browser_gate::AGENTS_SERVER) {
-        crate::agent_browser::tools::note_cleared(&caller.id, tool);
+    // The same for the agents' browser server, for a call its gate asks
+    // about (one it lets through needs no pass, and a pass left over would
+    // wait for a later call that does ask).
+    if decision == Decision::Allow
+        && tool.starts_with(super::browser_gate::AGENTS_SERVER)
+        && super::browser_gate::gate(caller, tool, input, runner::from_outside(&caller.id))
+            == super::browser_gate::Gate::Ask
+    {
+        crate::agent_browser::tools::note_cleared(&caller.id, tool, input);
     }
     decision
 }

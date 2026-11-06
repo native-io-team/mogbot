@@ -169,10 +169,19 @@ fn no_script_upload_or_download_tool_exists() {
 
 #[test]
 fn an_engines_approval_is_a_pass_for_one_call() {
-    note_cleared("a_pass", "mcp__browser__click");
-    assert!(take_cleared("a_pass", "mcp__browser__click"));
-    assert!(!take_cleared("a_pass", "mcp__browser__click"));
-    assert!(!take_cleared("someone_else", "mcp__browser__click"));
+    let send = json!({ "ref": "ref_2" });
+    note_cleared("a_pass", "mcp__browser__click", &send);
+    assert!(take_cleared("a_pass", "mcp__browser__click", &send));
+    assert!(!take_cleared("a_pass", "mcp__browser__click", &send));
+    note_cleared("a_pass", "mcp__browser__click", &send);
+    assert!(!take_cleared("someone_else", "mcp__browser__click", &send));
+    // Only that call: a click on another control isn't covered.
+    assert!(!take_cleared(
+        "a_pass",
+        "mcp__browser__click",
+        &json!({ "ref": "ref_9" })
+    ));
+    assert!(take_cleared("a_pass", "mcp__browser__click", &send));
 }
 
 #[test]
