@@ -4,6 +4,7 @@
  * links, and the viewer pages through every picture in the chat.
  */
 
+import 'react-native-gesture-handler/jestSetup';
 import {
   comparePages,
   galleryOf,
@@ -14,6 +15,7 @@ import {
   type WelcomeFrame,
 } from '@shipstudio/companion-protocol';
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { fireGestureHandler, getByGestureTestId } from 'react-native-gesture-handler/jest-utils';
 import { Text } from 'react-native';
 
 const mockPush = jest.fn();
@@ -26,19 +28,12 @@ jest.mock('expo-image', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
   return { Image: (p: { source?: { uri?: string } }) => <View testID={`img:${p.source?.uri}`} /> };
 });
-jest.mock('react-native-reanimated', () => {
-  const { View } = jest.requireActual<typeof import('react-native')>('react-native');
-  const preset: Record<string, unknown> = {};
-  preset.duration = () => preset;
-  preset.delay = () => preset;
-  return {
-    __esModule: true,
-    default: { View },
-    FadeIn: preset,
-    FadeOut: preset,
-    LinearTransition: preset,
-  };
-});
+jest.mock('react-native-reanimated', () =>
+  jest.requireActual<typeof import('./reanimatedStub')>('./reanimatedStub').reanimated()
+);
+jest.mock('react-native-worklets', () =>
+  jest.requireActual<typeof import('./reanimatedStub')>('./reanimatedStub').worklets()
+);
 jest.mock('expo-status-bar', () => ({ StatusBar: () => null }));
 jest.mock('expo-haptics', () => ({}));
 jest.mock('react-native-safe-area-context', () => ({
@@ -205,6 +200,20 @@ describe('the viewer as a gallery', () => {
     await render(<Viewer />);
     expect(screen.getByText('4 of 8')).toBeTruthy();
     expect(screen.getByTestId('viewer-caption').props.children).toBe('Menu · Before');
+  });
+
+  it('swipes to the next picture at fit, and the counter and caption follow', async () => {
+    mockParams = viewerParams(galleryOf(messages), 'design', shot('menu-b.png'));
+    await render(<Viewer />);
+    await act(() => {
+      fireGestureHandler(getByGestureTestId('viewer-pan'), [
+        { translationX: 0, translationY: 0, velocityX: 0 },
+        { translationX: -60, translationY: 0, changeX: -60, velocityX: -100 },
+        { translationX: -200, translationY: 0, changeX: -140, velocityX: -100 },
+      ]);
+    });
+    expect(screen.getByText('5 of 8')).toBeTruthy();
+    expect(screen.getByTestId('viewer-caption').props.children).toBe('Menu, larger prices');
   });
 
   it('a picture outside any chat is a gallery of one, with no counter', async () => {

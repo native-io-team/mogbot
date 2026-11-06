@@ -421,16 +421,60 @@
 /* ---------------------------------------------------------- image view */
 
 .modal-frame-content.agent-lightbox {
-  width: auto;
+  width: min(1100px, 92vw); /* css-ok: image viewer bound */
   max-width: min(1100px, 92vw); /* css-ok: image viewer bound */
 }
 
+.agent-lightbox__zoom {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--spacing-xs);
+  align-self: stretch;
+  min-width: 0;
+}
+
+/* A fixed stage the picture zooms inside; it never resizes the dialog. */
+.agent-lightbox__viewport {
+  position: relative;
+  height: 70vh; /* css-ok: leave room for the header */
+  overflow: hidden;
+  border-radius: var(--radius-control);
+  background: var(--surface-recessed);
+  cursor: zoom-in;
+  touch-action: none;
+  user-select: none;
+}
+
+.agent-lightbox__viewport[data-zoomed] {
+  cursor: grab;
+}
+
+.agent-lightbox__viewport[data-dragging] {
+  cursor: grabbing;
+}
+
 .agent-lightbox__image {
+  position: absolute;
+  top: 50%;
+  left: 50%;
   display: block;
   max-width: 100%;
-  max-height: 70vh; /* css-ok: leave room for the header */
-  margin: 0 auto;
-  border-radius: var(--radius-control);
+  max-height: 100%;
+  transform: translate(-50%, -50%);
+  -webkit-user-drag: none;
+}
+
+.agent-lightbox__zoom-bar {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--spacing-3xs);
+}
+
+.agent-lightbox__zoom-readout {
+  min-width: calc(var(--spacing-xl) * 2);
+  font-variant-numeric: tabular-nums;
 }
 
 /* ------------------------------------------------------------ Files list */

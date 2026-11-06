@@ -2,7 +2,8 @@
  * The full-size image viewer as a gallery: every picture in the chat
  * (`galleryOf`, shared with the phone), in the order the chat shows them.
  * Opening one starts at it; ← / → (keys, the buttons, a sideways trackpad
- * swipe) step through the rest; Esc closes.
+ * swipe at fit) step through the rest; Esc closes. Each picture zooms on its
+ * own (`AgentLightboxZoom`): ⌘+ / ⌘− / ⌘0, pinch, click for 100%, drag to pan.
  *
  * The chat provides the gallery (`AgentGalleryProvider`); anything drawn
  * outside one (the preview pane, a card in isolation) falls back to the
@@ -42,7 +43,8 @@ import {
   type Attachment,
   type GalleryImage,
 } from '../../lib/agents';
-import { AttachmentImage, useAttachmentOpener } from './AgentAttachments';
+import { useAttachmentOpener } from './AgentAttachments';
+import { ZoomableImage } from './AgentLightboxZoom';
 
 /** A sideways swipe this long (px of wheel delta) turns the page. */
 const SWIPE_PX = 60;
@@ -257,12 +259,8 @@ export function GalleryLightbox({
             />
           )}
           <figure className="agent-lightbox__figure">
-            <AttachmentImage
-              key={current.key}
-              agent={owner}
-              attachment={current.file}
-              className="agent-lightbox__image"
-            />
+            {/* Keyed: each picture opens at fit. */}
+            <ZoomableImage key={current.key} agent={owner} attachment={current.file} />
             {current.caption !== current.file.name && (
               <figcaption className="agent-lightbox__caption">{current.file.name}</figcaption>
             )}

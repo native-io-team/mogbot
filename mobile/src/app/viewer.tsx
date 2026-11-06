@@ -1,144 +1,30 @@
 /**
  * Pictures, full screen, on black. Opened from a chat it is a gallery of
  * every picture in that chat (`galleryOf`, the desk's order too), starting
- * at the one tapped: swipe sideways for the next, pinch or double-tap to
- * zoom, swipe down or Done to close, "3 of 8" and the caption over it,
- * Share to send the one shown on. An attachment shows the Mac's thumbnail
+ * at the one tapped. Pinch (to 5×) or double-tap to zoom where the fingers
+ * are, drag to look around; at fit, swipe sideways for the next and down (or
+ * Done) to close; one tap hides "3 of 8", the caption and Share (to send or
+ * save the one shown). The gestures run on the UI thread (`ZoomGallery`). An attachment shows the Mac's thumbnail
  * at once and swaps in the full file when that has loaded; a file already
  * on the phone (`uri`, such as a preview screenshot) shows as it is.
  */
 
 import { galleryCounter, galleryKey, type GalleryImage } from '@shipstudio/companion-protocol';
-import { Image } from 'expo-image';
 import { StatusBar } from 'expo-status-bar';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useRef, useState, type ComponentRef } from 'react';
-import {
-  FlatList,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-} from 'react-native';
+import { useCallback, useMemo, useState } from 'react';
+import { Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Spinner } from '../components/agent';
 import { T } from '../components/ui';
+import { ZoomGallery, type ZoomPage } from '../components/ZoomGallery';
 import { share } from '../lib/files';
 import { getGallery, viewerStart } from '../lib/gallery';
 import { attachmentSource, describeError, download } from '../lib/session';
 import { IMAGE_UNAVAILABLE } from '../components/attachments';
 import { alpha, iconSize, radius, space, PRESSED } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
-
-/** Pulled down this far past the top, at normal zoom, closes, as Photos does. */
-const CLOSE_PULL = 90;
-/** Two taps this close together zoom in (or back out). */
-const DOUBLE_TAP_MS = 280;
-const MAX_ZOOM = 4;
-const TAP_ZOOM = 2.5;
-
-/** One page: a picture that zooms on its own. */
-function Page({
-  image,
-  uri,
-  width,
-  height,
-  onClose,
-  onZoomed,
-  onError,
-}: {
-  image: GalleryImage | null;
-  uri?: string;
-  width: number;
-  height: number;
-  onClose: () => void;
-  onZoomed: (zoomed: boolean) => void;
-  onError: (text: string) => void;
-}) {
-  const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
-  const zoom = useRef(1);
-  const lastTap = useRef(0);
-  const name = image?.file.name ?? '';
-  const remote = image ? { agentId: image.agentId, path: image.file.path } : null;
-
-  const tapped = (x: number, y: number) => {
-    const now = Date.now();
-    if (now - lastTap.current > DOUBLE_TAP_MS) {
-      lastTap.current = now;
-      return;
-    }
-    lastTap.current = 0;
-    const zoomIn = zoom.current <= 1.01;
-    const w = zoomIn ? width / TAP_ZOOM : width;
-    const h = zoomIn ? height / TAP_ZOOM : height;
-    // iOS zooms a ScrollView to a rectangle; Android has no zooming ScrollView.
-    const responder = scroll.current as unknown as {
-      scrollResponderZoomTo?: (r: {
-        x: number;
-        y: number;
-        width: number;
-        height: number;
-        animated: boolean;
-      }) => void;
-    } | null;
-    responder?.scrollResponderZoomTo?.({
-      x: zoomIn ? x - w / 2 : 0,
-      y: zoomIn ? y - h / 2 : 0,
-      width: w,
-      height: h,
-      animated: true,
-    });
-  };
-
-  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const z = e.nativeEvent.zoomScale ?? 1;
-    if (z > 1.01 !== zoom.current > 1.01) onZoomed(z > 1.01);
-    zoom.current = z;
-  };
-
-  return (
-    <ScrollView
-      ref={scroll}
-      style={{ width, height }}
-      contentContainerStyle={{ width, height }}
-      maximumZoomScale={MAX_ZOOM}
-      minimumZoomScale={1}
-      centerContent
-      alwaysBounceVertical
-      showsHorizontalScrollIndicator={false}
-      showsVerticalScrollIndicator={false}
-      bouncesZoom
-      scrollEventThrottle={32}
-      onScroll={onScroll}
-      onScrollEndDrag={(e) => {
-        if ((e.nativeEvent.zoomScale ?? 1) <= 1 && e.nativeEvent.contentOffset.y < -CLOSE_PULL)
-          onClose();
-      }}
-    >
-      <Pressable
-        onPress={(e) => tapped(e.nativeEvent.locationX, e.nativeEvent.locationY)}
-        accessibilityRole="image"
-        accessibilityLabel={image?.caption ?? name}
-        accessibilityHint="Double-tap to zoom"
-        testID="viewer-page"
-      >
-        <Image
-          source={uri ? { uri } : remote && attachmentSource(remote.agentId, remote.path)}
-          placeholder={remote ? attachmentSource(remote.agentId, remote.path, 232) : undefined}
-          placeholderContentFit="contain"
-          style={{ width, height }}
-          contentFit="contain"
-          transition={150}
-          recyclingKey={image?.key ?? uri}
-          onError={() => onError(`${IMAGE_UNAVAILABLE}: ${name}`)}
-        />
-      </Pressable>
-    </ScrollView>
-  );
-}
 
 export default function Viewer() {
   const colors = useColors();
@@ -173,13 +59,37 @@ export default function Viewer() {
   }, [params.gallery, agentId, path, name, mime]);
   const start = useMemo(() => viewerStart(images, agentId, path), [images, agentId, path]);
   const [index, setIndex] = useState(start);
-  const [zoomed, setZoomed] = useState(false);
   const [sharing, setSharing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const shown = images[index] ?? null;
   const counter = galleryCounter(index, images.length);
   const caption = shown?.caption ?? name;
   const close = useCallback(() => router.back(), [router]);
+  const turned = useCallback((at: number) => {
+    setIndex(at);
+    setError(null);
+  }, []);
+
+  // A file already on the phone is one page; a chat's pictures, one each.
+  const pages = useMemo<ZoomPage[]>(() => {
+    if (uri) {
+      return [
+        {
+          key: uri,
+          source: { uri },
+          label: name,
+          onError: () => setError(`${IMAGE_UNAVAILABLE}: ${name}`),
+        },
+      ];
+    }
+    return images.map((image) => ({
+      key: image.key,
+      source: attachmentSource(image.agentId, image.file.path),
+      placeholder: attachmentSource(image.agentId, image.file.path, 232),
+      label: image.caption ?? image.file.name,
+      onError: () => setError(`${IMAGE_UNAVAILABLE}: ${image.file.name}`),
+    }));
+  }, [uri, name, images]);
 
   const doShare = async () => {
     setSharing(true);
@@ -193,54 +103,8 @@ export default function Viewer() {
     }
   };
 
-  return (
-    <View style={styles.root} testID="viewer">
-      {uri ? (
-        <Page
-          image={null}
-          uri={uri}
-          width={width}
-          height={height}
-          onClose={close}
-          onZoomed={setZoomed}
-          onError={setError}
-        />
-      ) : (
-        <FlatList
-          data={images}
-          keyExtractor={(g) => g.key}
-          horizontal
-          pagingEnabled
-          // Zoomed in, a drag pans the picture rather than turning the page.
-          scrollEnabled={!zoomed}
-          initialScrollIndex={start}
-          getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
-          showsHorizontalScrollIndicator={false}
-          windowSize={3}
-          initialNumToRender={1}
-          onMomentumScrollEnd={(e) => {
-            const at = Math.round(e.nativeEvent.contentOffset.x / Math.max(width, 1));
-            if (at !== index) {
-              setIndex(at);
-              setError(null);
-            }
-          }}
-          renderItem={({ item }) => (
-            <Page
-              image={item}
-              width={width}
-              height={height}
-              onClose={close}
-              onZoomed={setZoomed}
-              onError={setError}
-            />
-          )}
-          style={StyleSheet.absoluteFill}
-          testID="viewer-pages"
-        />
-      )}
-      {/* A photo sits on black in either appearance, so the clock is white over it. */}
-      <StatusBar style="light" />
+  const overlay = (
+    <>
       <View style={[styles.bar, { paddingTop: insets.top + space.xs }]} pointerEvents="box-none">
         <Pressable
           onPress={close}
@@ -298,6 +162,22 @@ export default function Viewer() {
           </T>
         </View>
       )}
+    </>
+  );
+
+  return (
+    <GestureHandlerRootView style={styles.root} testID="viewer">
+      <ZoomGallery
+        pages={pages}
+        start={uri ? 0 : start}
+        width={width}
+        height={height}
+        onIndex={turned}
+        onClose={close}
+        overlay={overlay}
+      />
+      {/* A photo sits on black in either appearance, so the clock is white over it. */}
+      <StatusBar style="light" />
       {error && (
         <Pressable
           onPress={() => setError(null)}
@@ -308,7 +188,7 @@ export default function Viewer() {
           </T>
         </Pressable>
       )}
-    </View>
+    </GestureHandlerRootView>
   );
 }
 
