@@ -646,8 +646,8 @@ const OUTCOME = {
 
 /** An expired card's receipt, as the desk words it (`expiryLine` in src/lib/agents.ts). */
 const EXPIRY_OUTCOME = {
-  moved_on: 'Expired — the agent moved on',
-  no_answer: 'No answer — ask again later if it still matters',
+  moved_on: 'Expired',
+  no_answer: 'No answer',
   maybe_later: 'Maybe later',
 } as const;
 
