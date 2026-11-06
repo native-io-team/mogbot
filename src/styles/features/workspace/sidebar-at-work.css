@@ -1,48 +1,41 @@
-/* Agents at work in a project, under its sidebar row (ProjectAtWork.tsx):
- * one quiet line each, indented to the project's name. */
+/* Agents at work in a project. Collapsed: a small overlapping stack of key-cap
+ * avatars in the project row (ProjectAtWork.tsx). Expanded: a row among the
+ * sessions (`sidebar-row--agent`, built in WorkspaceSidebar.tsx). */
 
 .sidebar-project-at-work {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-3xs);
-  margin: 0;
-  padding: 0 var(--spacing-md) var(--spacing-xs) calc(var(--spacing-md) + var(--spacing-sm));
-  list-style: none;
-}
-
-.sidebar-project-at-work__line {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  gap: var(--spacing-sm);
+  flex-shrink: 0;
   min-width: 0;
 }
 
-.sidebar-project-at-work__link {
-  display: block;
-  min-width: 0;
-  overflow: hidden;
-  font-size: var(--font-size-caption);
-  color: var(--text-secondary);
-  text-align: left;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+.sidebar-project-at-work__avatar + .sidebar-project-at-work__avatar {
+  margin-left: calc(var(--spacing-xs) * -1);
 }
 
-.sidebar-project-at-work__words {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sidebar-project-at-work__name {
-  color: var(--text-primary);
-}
-
-.sidebar-project-at-work__text {
+.sidebar-project-at-work__more {
+  margin-left: var(--spacing-2xs);
+  font-size: var(--font-size-badge);
   color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }
 
 .workspace-sidebar.is-hidden .sidebar-project-at-work {
   display: none;
+}
+
+/* An agent's row among the sessions: avatar, name, then its live step, all on
+ * one clipped line (the label already clips with an ellipsis). The avatar is
+ * wider than the status dot's slot, so the slot lets go of its fixed size. */
+.sidebar-row--agent .sidebar-row-status {
+  width: auto;
+  height: auto;
+}
+
+.sidebar-row-agent-name {
+  color: var(--text-primary);
+}
+
+.sidebar-row-agent-step {
+  color: var(--text-muted);
 }

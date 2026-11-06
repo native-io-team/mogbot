@@ -3,7 +3,7 @@
  * project's row ("Juno · Running the build"), as its own row when the project
  * isn't pinned or open, and never for a turn the Mac didn't say was there.
  */
-import { fireEvent, render, screen } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { HomeSidebar } from './HomeSidebar';
 import { atWorkLines, projectAgentRows } from './useProjectAgents';
@@ -115,22 +115,24 @@ describe('agents at work in the Projects sidebar', () => {
     vi.clearAllMocks();
   });
 
-  it("shows the agent and its step under the project's row, and opens its chat", async () => {
+  it('collapsed, shows only a stack of avatars: no line, no step text', async () => {
     team = [agent('juno', 'Juno', 'working', SITE)];
     renderSidebar([row(SITE)]);
-    const link = await screen.findByRole('button', {
-      name: 'Juno, Running the build. Open its chat',
-    });
-    fireEvent.click(link);
-    expect(intents).toEqual([{ kind: 'open', agentId: 'juno' }]);
-    expect(props.onGoAgents).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole('img', { name: 'At work here: Juno' })).toBeInTheDocument();
+    expect(screen.queryByText(/Running the build/)).not.toBeInTheDocument();
+  });
+
+  it('caps the stack at three and counts the rest', async () => {
+    team = ['a', 'b', 'c', 'd', 'e'].map((id) => agent(id, id.toUpperCase(), 'working', SITE));
+    renderSidebar([row(SITE)]);
+    expect(await screen.findByText('+2')).toBeInTheDocument();
   });
 
   it("lists a project an agent is at work in even when it isn't pinned", async () => {
     team = [agent('juno', 'Juno', 'working', SITE)];
     renderSidebar([row(ACME)]);
     expect(await screen.findByText('lumen-site')).toBeInTheDocument();
-    expect(screen.getByText('Juno')).toBeInTheDocument();
+    expect(await screen.findByRole('img', { name: 'At work here: Juno' })).toBeInTheDocument();
   });
 
   it('says nothing for an idle agent, or a turn working somewhere else', async () => {
@@ -138,22 +140,19 @@ describe('agents at work in the Projects sidebar', () => {
     renderSidebar([row(SITE)]);
     await screen.findByText('acme-marketing');
     expect(screen.queryByText('Idle One')).not.toBeInTheDocument();
-    expect(screen.queryAllByRole('button', { name: /Open its chat/ })).toHaveLength(1);
+    expect(screen.queryAllByRole('img', { name: /At work here/ })).toHaveLength(1);
   });
 });
 
 describe('the open project lists who works here', () => {
-  it('puts agents at work first, with their step, then bound ones', () => {
+  it('leaves agents at work to the sessions list, and lists the bound idle ones', () => {
     const team = [
       agent('b', 'Bound Idle', 'idle', undefined, SITE),
       agent('w', 'Worker', 'working', SITE),
       agent('x', 'Elsewhere', 'working', ACME),
     ];
     const rows = projectAgentRows(team, SITE, () => undefined, 0);
-    expect(rows.map((r) => [r.label, r.meta])).toEqual([
-      ['Worker', 'Running the build'],
-      ['Bound Idle', undefined],
-    ]);
+    expect(rows.map((r) => [r.label, r.meta])).toEqual([['Bound Idle', undefined]]);
     expect(atWorkLines(team, ACME, 0).map((l) => l.text)).toEqual(['Running the build']);
   });
 });

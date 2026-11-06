@@ -52,6 +52,8 @@ import {
   type AtWorkLine,
 } from './useProjectAgents';
 import { ProjectAtWork } from './ProjectAtWork';
+import { AgentAvatar } from '../agents/AgentAvatar';
+import { useSteadyLine } from '../../lib/steady';
 import { useNow } from '../../hooks/useNow';
 import { useMoreBelow } from '../../hooks/useMoreBelow';
 import { UpdateBanner } from '../UpdateBanner';
@@ -136,6 +138,10 @@ interface SidebarItem {
   onClose?: () => void;
   isActive?: boolean;
   meta?: string;
+  /** Replaces the status dot (an agent's avatar). */
+  leading?: ReactNode;
+  /** After the label, muted and steadied so a live step doesn't flicker: an agent's current step. */
+  detail?: string;
   /** Optional inline action button (e.g. restart) rendered before the close
    *  button. Not shown when `actionBusy` is true — pair it with a meta value
    *  like "restarting" so the row still communicates activity. */
@@ -1337,6 +1343,16 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
     };
     // Hot sessions in this family other than the row's own path — rendered
     // as a Worktrees section inside non-current rows' bodies.
+    // Agents working here, as rows among the sessions (one row if it also has a session tab).
+    const workItems = agentWorkItems(
+      atWork,
+      isCurrent
+        ? agentItems.map((i) => i.label)
+        : (sessionRegistry.snapshot(row.projectPath)?.terminalTabs ?? []).map((t) =>
+            t.title?.trim() ? t.title : ''
+          ),
+      openAgent
+    );
     const familyWorktreeItems: SidebarItem[] = sessionRegistry
       .snapshotAll()
       .filter(
@@ -1360,7 +1376,6 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
         isExpanded={expanded}
         isWorking={workingProjectFamilies.has(familyRootOf(row.projectPath)) || atWork.length > 0}
         atWork={atWork}
-        onOpenAgent={openAgent}
         serverSnapshot={serverSnapshot}
         shortcutNumber={shortcutNumberFor(row)}
         onToggleExpand={() => toggleProjectExpanded(row.projectPath)}
@@ -1407,7 +1422,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
               <SidebarSection
                 id="agents"
                 label="Sessions"
-                total={agentItems.length}
+                total={workItems.length + agentItems.length}
                 collapsed={collapsed.agents}
                 onToggle={() => toggleSection('agents')}
                 addOptions={atMaxTabs ? undefined : AGENT_ADD_OPTIONS}
@@ -1415,7 +1430,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                 addLabel="New session"
                 addShortcut={kbd('mod', 'T')}
                 addFooterLabel={atMaxTabs ? undefined : 'New session'}
-                items={filteredAgents}
+                items={[...workItems.filter((i) => matchesFilter(i.label)), ...filteredAgents]}
                 emptyHint={filter ? 'No matches' : 'No sessions running'}
               />
               <SidebarSection
@@ -1443,6 +1458,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
             <div key="inactive-body" className="sidebar-project-body-inner">
               <InactiveProjectSections
                 snapshot={sessionRegistry.snapshot(row.projectPath)}
+                workItems={workItems}
                 worktreeItems={familyWorktreeItems}
                 filterLower={filterLower}
                 serverSnapshot={serverSnapshot}
@@ -2164,12 +2180,15 @@ function SidebarGroupHeader({
  */
 function InactiveProjectSections({
   snapshot,
+  workItems = [],
   worktreeItems,
   filterLower,
   serverSnapshot,
   onSelectTab,
 }: {
   snapshot: SessionSnapshot | undefined;
+  /** Agents working in this project, listed first among its sessions. */
+  workItems?: SidebarItem[];
   /** Hot worktree sessions in this project's family (empty when none). */
   worktreeItems?: SidebarItem[];
   filterLower: string;
@@ -2227,10 +2246,10 @@ function InactiveProjectSections({
       <SidebarSection
         id="agents"
         label="Sessions"
-        total={agents.length}
+        total={workItems.length + agents.length}
         collapsed={false}
         onToggle={() => {}}
-        items={agents}
+        items={[...workItems.filter((i) => matches(i.label)), ...agents]}
         emptyHint={filterLower ? 'No matches' : 'No sessions running'}
       />
       <SidebarSection
@@ -2294,14 +2313,12 @@ function ProjectGroup({
   sortIndex,
   sortGroup = 'pinned',
   atWork = [],
-  onOpenAgent,
   children,
 }: {
   row: PinnedProjectRow;
   /** Agents at work in this project right now, one line each. */
   atWork?: AtWorkLine[];
   /** Opens an agent's chat (Agents mode). */
-  onOpenAgent?: (agentId: string) => void;
   isCurrent: boolean;
   compact: boolean;
   isExpanded: boolean;
@@ -2452,6 +2469,7 @@ function ProjectGroup({
             )}
             {!compact && (
               <span className="sidebar-project-status">
+                {!isExpanded && <ProjectAtWork lines={atWork} />}
                 {showWorkingIndicator ? (
                   <PixelLoaderRings
                     className="sidebar-project-pixel-loader"
@@ -2485,7 +2503,6 @@ function ProjectGroup({
           </ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
-      {!compact && <ProjectAtWork lines={atWork} onOpenAgent={onOpenAgent} />}
       {!compact && isExpanded && children && <div className="sidebar-project-body">{children}</div>}
     </>
   );
@@ -2776,6 +2793,42 @@ function SidebarSection({
   );
 }
 
+/** "Name · step" on one clipped line; the step holds a moment before it changes. */
+function SteadyDetail({ name, step }: { name: string; step: string }) {
+  const shown = useSteadyLine(step);
+  return (
+    <>
+      <span className="sidebar-row-agent-name">{name}</span>
+      {shown && <span className="sidebar-row-agent-step"> · {shown}</span>}
+    </>
+  );
+}
+
+/**
+ * Agents working in a project, as rows among its sessions: avatar, name and
+ * the live step. An agent that already has a session tab here (a taken-over
+ * one, titled with its name) is that one row, not two.
+ */
+function agentWorkItems(
+  lines: AtWorkLine[],
+  sessionLabels: readonly string[],
+  openAgent: ((agentId: string) => void) | undefined
+): SidebarItem[] {
+  const taken = new Set(sessionLabels.map((l) => l.trim().toLowerCase()));
+  return lines
+    .filter((l) => !taken.has(l.name.trim().toLowerCase()))
+    .map((l) => ({
+      key: `agent-work-${l.agentId}`,
+      label: l.name,
+      detail: l.text,
+      dotState: l.waiting ? ('waiting' as const) : ('active' as const),
+      leading: (
+        <AgentAvatar id={l.agentId} name={l.name} color={l.color} size="xs" working={!l.waiting} />
+      ),
+      onSelect: openAgent ? () => openAgent(l.agentId) : undefined,
+    }));
+}
+
 function SidebarRow({ item }: { item: SidebarItem }) {
   // The draft is only read while `isEditing`. We seed it from `item.label`
   // when the user enters edit mode (see `enterEditMode`) and let it go
@@ -2839,6 +2892,7 @@ function SidebarRow({ item }: { item: SidebarItem }) {
         item.isActive ? 'is-active' : '',
         isAttention && !item.isActive ? 'is-attention' : '',
         isEditing ? 'is-editing' : '',
+        item.leading ? 'sidebar-row--agent' : '',
       ]
         .filter(Boolean)
         .join(' ')}
@@ -2849,7 +2903,9 @@ function SidebarRow({ item }: { item: SidebarItem }) {
       onKeyDown={handleKeyDown}
     >
       <span className="sidebar-row-status">
-        {item.dotState === 'thinking' ? (
+        {item.leading ? (
+          item.leading
+        ) : item.dotState === 'thinking' ? (
           <PixelLoaderRings
             className="sidebar-row-pixel-loader"
             size="sm"
@@ -2880,7 +2936,13 @@ function SidebarRow({ item }: { item: SidebarItem }) {
           aria-label="Rename tab"
         />
       ) : (
-        <span className="sidebar-row-label">{item.label}</span>
+        <span className="sidebar-row-label">
+          {item.detail !== undefined ? (
+            <SteadyDetail name={item.label} step={item.detail} />
+          ) : (
+            item.label
+          )}
+        </span>
       )}
       <span className="sidebar-row-meta">{item.meta}</span>
       <span className="sidebar-row-control-slot">
