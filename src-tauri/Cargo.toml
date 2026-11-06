@@ -105,10 +105,13 @@ tauri-plugin-global-shortcut = "2"
 # fall back to Claude in Chrome.
 default = ["agent-browser"]
 agent-browser = []
+# The demo's loopback stand-in for the phone (`agent_browser::viewer`): an
+# input server, so it's never in the app, only in the example and tests.
+browser-demo = []
 
 [[example]]
 name = "agent_browser_demo"
-required-features = ["agent-browser"]
+required-features = ["agent-browser", "browser-demo"]
 
 [dev-dependencies]
 

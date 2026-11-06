@@ -51,7 +51,7 @@ stand-in) and `src-tauri/examples/agent_browser_demo.rs`. Run it with:
 
 ```bash
 cd src-tauri
-cargo run --features agent-browser --example agent_browser_demo -- <scratch dir> demo|tabs|viewer|persist|sites
+cargo run --features agent-browser,browser-demo --example agent_browser_demo -- <scratch dir> demo|tabs|viewer|persist|sites
 ```
 
 `scripts/agent-browser-flags.mjs` compares launch modes. Everything ran on a

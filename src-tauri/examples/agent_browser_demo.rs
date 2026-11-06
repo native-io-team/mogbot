@@ -2,7 +2,7 @@
 //! viewer loop, several agents at once, a persistent profile, and how real
 //! sites react. Nothing here signs in to anything.
 //!
-//! `cargo run --features agent-browser --example agent_browser_demo -- <scratch> <cmd>`
+//! `cargo run --features agent-browser,browser-demo --example agent_browser_demo -- <scratch> <cmd>`
 //!
 //! - `demo`    throwaway profile: what a page sees, screenshot, screencast
 //!   fps/latency, keystroke→frame, window states, a link click
