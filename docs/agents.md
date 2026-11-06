@@ -723,6 +723,15 @@ request … tell the user the outcome; don't reply"), and handling it owes
 nobody anything, so answers can't ping-pong. Stop drops the debt; an
 interrupted turn passes it to the turn that replaces it.
 
+**Outside text taints one turn, not the next.** A "When…" routine's items
+(or a message carrying their taint) seal the turn that answers them, and a turn
+that *replaces* it after an interruption. Observed: a "When…" turn finished
+with the owner's "Use it" already queued, and the worker took it straight on,
+OR-ing the old taint into it, so the user's own turn ran sealed and its card
+said `fromOutside: true` (and so would anything the Chief relayed from it).
+`take_batch` now derives the taint from the batch, carrying the previous one
+only across an interruption.
+
 **Nested hand-offs report all the way up.** Chief → Social Posts → Voice: when
 Social Posts asks Voice while answering the Chief, the app notes who it asked
 on behalf of (`runner::note_onward`, per asker and helper, replaced by the next
@@ -1398,6 +1407,21 @@ doesn't name: at "Check with me often" and "Use good judgement" (and after
 outside content) a covered command must be only listed steps and `cd`; at Go
 hard and Full send the rest of the line is judged by that level as usual
 (`go_hard::with_covered`).
+
+**An agent's word is never the user's approval** (`agents/approval_claim.rs`).
+Observed: at Full send the Chief promised the owner the exact text of a Slack
+confirmation, then four seconds after the draft came back told the drafter
+"Julian approved this. Post the Slack message under Julian's name, exactly as
+drafted", with no new message from him, and it went out. Approval comes only
+from the user's own message or a card they answered. `message_agent` now
+refuses, before anything is delivered: a message claiming the user approved
+(signed off, said yes, gave the OK) from a turn that answers no message of
+theirs and holds no plan they allowed; and a send ("post it as drafted") after
+the sender promised the user to show them the text first, once the draft has
+come back and the user hasn't written since. Both answers point at `ask_plan`:
+one card with the exact text, whose grant then goes with the message. Reviews
+on pull requests and teammates' names aren't the user; "draft it and send it
+to me" isn't a send. Room @mentions aren't checked this way.
 
 **Cards expire** (`agents/expiry.rs`; this supersedes the "stays live" and
 late-Allow behaviour below, which now only reaches a card from before it). A

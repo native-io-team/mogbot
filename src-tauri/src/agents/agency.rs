@@ -168,6 +168,11 @@ const ASKS: &[&str] = &[
     "do you prefer",
     "would you prefer",
     "your call",
+    "up to you",
+    "your decision",
+    "you decide",
+    "you pick",
+    "pick one",
     "let me know which",
     "tell me which",
     "tell me whether",
@@ -240,6 +245,20 @@ fn sentences(text: &str) -> Vec<String> {
     out
 }
 
+/// "I'll pick one" is the agent deciding, not handing the choice back.
+fn own_choice(lower: &str, ask: &str) -> bool {
+    ask == "pick one"
+        && [
+            "i'll pick one",
+            "i will pick one",
+            "i'd pick one",
+            "i pick one",
+            "i'll just pick one",
+        ]
+        .iter()
+        .any(|own| lower.contains(own))
+}
+
 /// The sentences of `text` that ask for an OK the level already gives, or
 /// hand the work back (see the module docs). The floor counts in the
 /// sentence or the one before it ("Here's the exact text. Send it?").
@@ -254,7 +273,9 @@ pub fn needless_asks(text: &str) -> Vec<String> {
         .enumerate()
         .filter(|(i, _)| {
             let lower = &low[*i];
-            let asks = ASKS.iter().any(|a| lower.contains(a))
+            let asks = ASKS
+                .iter()
+                .any(|a| lower.contains(a) && !own_choice(lower, a))
                 || (lower.ends_with('?') && lower.contains("yourself"));
             asks && !floor(lower) && !(*i > 0 && floor(&low[i - 1]))
         })
@@ -372,6 +393,10 @@ mod tests {
             "Three drafts are below. Which of these do you want to go with?",
             "Keep the lesson with the warning, or drop it? Your call.",
             "Do you prefer the dark image or the light one?",
+            // The "Agent sweep" check-in, handing reversible choices back.
+            "Both fixes are ready; which goes first is your call.",
+            "Pick one, my recommendation is the shorter subject line.",
+            "Rename it now or after the review: up to you.",
         ] {
             let note = lazy_reply_note(&[reply(text)], Level::FullSend)
                 .unwrap_or_else(|| panic!("flagged at Full send: {text}"));
@@ -395,6 +420,7 @@ mod tests {
             "Here's the exact text. Should I send it as is?",
             "Sent it to Sam at 10:02. Nothing else is waiting on you.",
             "Did the image land the way you wanted?",
+            "Two subject lines were close; I'll pick one and say which.",
         ] {
             assert_eq!(
                 lazy_reply_note(&[reply(text)], Level::FullSend),
