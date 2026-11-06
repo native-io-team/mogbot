@@ -1,0 +1,200 @@
+/* Total compute (AgentsCompute): every account at once, in the usage popover
+   and Settings → Usage. Readings and labelled estimates only; status colours
+   for near and at a limit, never the accent. */
+
+.agents-compute {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  align-self: stretch;
+}
+
+.agents-compute p {
+  margin: 0;
+}
+
+.agents-compute__top {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+}
+
+.agents-compute__headline {
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
+  line-height: var(--line-height-help);
+  color: var(--text-primary);
+}
+
+.agents-compute__headline[data-tone='limited'] {
+  color: var(--accent-warning);
+}
+
+.agents-compute__muted,
+.agents-compute__state {
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.agents-compute__state:is([data-tone='warning'], [data-tone='limited']) {
+  color: var(--accent-warning);
+}
+
+/* Each kind of limit across accounts: one quiet line each. */
+.agents-compute__windows {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  margin: 0;
+}
+
+.agents-compute__window {
+  display: grid;
+  grid-template-columns: 4.5em minmax(0, 1fr); /* css-ok: a column wide enough for "5-hour" and "Weekly" */
+  align-items: baseline;
+  column-gap: var(--spacing-sm);
+}
+
+.agents-compute__window dd {
+  grid-column: 2;
+}
+
+.agents-compute__window dd {
+  margin: 0;
+}
+
+.agents-compute__window-name {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+}
+
+.agents-compute__window-room {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.agents-compute__window[data-tone='limited'] .agents-compute__window-room {
+  color: var(--accent-warning);
+}
+
+/* An estimate, said as one: amber words, then what it rests on. */
+.agents-compute__pace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+}
+
+.agents-compute__pace-text {
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--accent-warning);
+}
+
+.agents-compute__rows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-card);
+}
+
+.agents-compute__row {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+}
+
+.agents-compute__row + .agents-compute__row {
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agents-compute__row-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  column-gap: var(--spacing-sm);
+}
+
+.agents-compute__name {
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* Where the next turn runs: a neutral tag, never the accent. */
+.agents-compute__next {
+  margin-left: auto;
+  padding: 0 var(--spacing-xs);
+  border-radius: var(--radius-pill);
+  background: var(--surface-control);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+/* The 5-hour and weekly bars side by side. */
+.agents-compute__meters {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--spacing-md);
+}
+
+.agents-compute__meter {
+  --agents-compute-ink: var(--text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+  min-width: 0;
+}
+
+.agents-compute__meter[data-tone='warning'] {
+  --agents-compute-ink: var(--accent-warning);
+}
+
+.agents-compute__meter[data-tone='limited'] {
+  --agents-compute-ink: var(--accent-error);
+}
+
+.agents-compute__meter-head {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+}
+
+.agents-compute__figure {
+  font-variant-numeric: tabular-nums;
+}
+
+.agents-compute__meter:is([data-tone='warning'], [data-tone='limited']) .agents-compute__figure {
+  color: var(--agents-compute-ink);
+}
+
+.agents-compute__bar {
+  height: var(--spacing-xs);
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--surface-control);
+}
+
+.agents-compute__fill {
+  display: block;
+  width: var(--agents-compute-fill);
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--agents-compute-ink);
+}
+
+.agents-compute__meter .agents-compute__muted {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

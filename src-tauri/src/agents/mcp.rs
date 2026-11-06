@@ -625,7 +625,7 @@ async fn usage_tool(
     }
     let outside = runner::from_outside(&caller.id) && super::broker::is_live(&caller.id, turn);
     match tool.name {
-        "usage_overview" => u::overview().await,
+        "usage_overview" => u::overview(app).await,
         "forecast_usage" => u::forecast(args).await,
         "add_spare_work" | "finish_spare_work" | "run_routine_now" if outside => error(
             "Not while answering what a “When…” routine found: that text came from outside this app. Tell the user instead.",

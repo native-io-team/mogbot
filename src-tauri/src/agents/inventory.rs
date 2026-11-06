@@ -9,8 +9,8 @@
 //!   with none says "no reading". The engine-wide reading (`quota.json`) is
 //!   given to an account only when the wallet recorded it came from that
 //!   one, or the engine has a single account; otherwise it isn't anyone's.
-//! - **Plan names** only when the engine said (Codex's `planType`). Claude
-//!   Code reports none, so none is shown for Claude.
+//! - **Plan names** only when the engine said (Codex's `planType`; Claude
+//!   Code's credentials' `subscriptionType`, read with its limits by `usage_read`).
 //! - **Other compute** is detected, never assumed: Opencode's binary, and
 //!   Ollama or LM Studio when installed, with the models their own local
 //!   servers list when they're running. Agents here don't run on them; they
@@ -24,6 +24,7 @@ use std::time::{Duration, Instant};
 
 use chrono::NaiveDate;
 
+use super::compute;
 use super::engine::{Engine, EngineInfo};
 use super::forecast::{self, PerRun, Unit, WindowShare};
 use super::quota::{Quota, QuotaWindow};
@@ -76,6 +77,9 @@ pub struct AccountLine {
     /// per window that has one. Empty: none to say.
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub pace: Vec<forecast::Pace>,
+    /// How its last check without a turn went (`usage_read`), when there was one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub check: Option<usage_plan::Check>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -132,6 +136,8 @@ pub struct Inventory {
     pub backlog: Vec<SpareItem>,
     pub agents: Vec<AgentLine>,
     pub routines: Vec<RoutineLine>,
+    /// Every account at once: what there is room on, by reading (`compute.rs`).
+    pub totals: compute::Totals,
     pub now: i64,
 }
 
@@ -146,6 +152,8 @@ pub struct Parts {
     pub reading_from: Vec<(Engine, Option<String>)>,
     pub archived: std::collections::BTreeMap<String, Quota>,
     pub samples: std::collections::BTreeMap<String, Vec<forecast::Sample>>,
+    /// Each account's last check without a turn (`usage_plan::checks`).
+    pub checks: std::collections::BTreeMap<String, usage_plan::Check>,
     pub agents: Vec<Agent>,
     pub local: Vec<LocalCompute>,
     pub backlog: Vec<SpareItem>,
@@ -180,14 +188,17 @@ fn reading_for(parts: &Parts, account: &Account) -> Option<Quota> {
         .find(|q| q.engine == engine)
         .filter(|_| attributed)
         .cloned();
-    engine_wide
-        .or_else(|| {
-            parts
-                .archived
-                .get(&usage_plan::account_key(engine, &account.id))
-                .cloned()
-        })
-        .and_then(|q| current(&q, parts.now))
+    let own = parts
+        .archived
+        .get(&usage_plan::account_key(engine, &account.id))
+        .cloned();
+    // The newer of the two: a check without a turn can be newer than the last turn's.
+    let newest = |q: &Quota| q.windows.iter().map(|w| w.observed_at).max().unwrap_or(0);
+    match (engine_wide, own) {
+        (Some(e), Some(o)) => Some(if newest(&o) > newest(&e) { o } else { e }),
+        (e, o) => e.or(o),
+    }
+    .and_then(|q| current(&q, parts.now))
 }
 
 pub fn build(parts: Parts) -> Inventory {
@@ -265,6 +276,7 @@ pub fn build(parts: Parts) -> Inventory {
                 learned,
                 // An account that's out has nothing left to run out of.
                 pace: if out.is_some() { Vec::new() } else { pace },
+                check: parts.checks.get(&key).cloned(),
             });
         }
     }
@@ -324,6 +336,7 @@ pub fn build(parts: Parts) -> Inventory {
         mode: parts.mode.0,
         mode_set_at: (parts.mode.1 > 0).then_some(parts.mode.1),
         spare: usage_plan::spare(&readings, now),
+        totals: compute::totals(&accounts, now),
         engines,
         accounts,
         local: parts.local,
@@ -433,6 +446,7 @@ pub async fn read() -> Inventory {
                 .collect(),
             archived,
             samples,
+            checks: usage_plan::checks(),
             agents: super::store::list().unwrap_or_default(),
             local,
             backlog: usage_plan::backlog(),
@@ -455,6 +469,7 @@ fn empty(now: i64) -> Inventory {
         backlog: Vec::new(),
         agents: Vec::new(),
         routines: Vec::new(),
+        totals: compute::totals(&[], now),
         now,
     }
 }
@@ -598,6 +613,7 @@ where
         Mode::Save => " Ask before heavy work; send light work to lighter models or engines.\n",
         Mode::UseItAll => " The user's standing OK to use capacity that would otherwise expire on work from the spare-capacity list.\n",
     });
+    total_text(&mut s, inv, tz);
     s.push_str("\nREADINGS (only what the engines reported):\n");
     for e in &inv.engines {
         if !e.installed {
@@ -632,7 +648,20 @@ where
                 }
             }
             if a.windows.is_empty() {
-                line.push_str(". No reading.");
+                line.push_str(". No reading");
+                match a.check.as_ref() {
+                    Some(c) if c.outcome == usage_plan::CheckOutcome::CantRead => {
+                        line.push_str(&format!(
+                            " (can't be read without a turn: {}; its next turn reports it)",
+                            c.why.as_deref().unwrap_or("no reason given").to_lowercase()
+                        ))
+                    }
+                    Some(c) if c.outcome == usage_plan::CheckOutcome::NoPlan => {
+                        line.push_str(" (the engine reported no plan limits for this login)")
+                    }
+                    _ => {}
+                }
+                line.push('.');
             } else {
                 let parts: Vec<String> = a
                     .windows
@@ -694,6 +723,16 @@ where
     }
     s.push_str("\nESTIMATES (from this user's past runs; not readings):\n");
     let mut any = false;
+    for r in &inv.totals.run_out {
+        any = true;
+        s.push_str(&format!(
+            "- {} across all its accounts: at the recent pace every one would be at its limit by {}, before any resets (ESTIMATE from {} readings across {} accounts, not a reading).\n",
+            engine_name(r.engine),
+            when(tz, r.reaches_at, now),
+            r.readings,
+            r.accounts
+        ));
+    }
     for a in &inv.accounts {
         for p in &a.pace {
             any = true;
@@ -762,6 +801,73 @@ where
         ));
     }
     s
+}
+
+fn plural(n: u32, one: &str) -> String {
+    format!("{n} {one}{}", if n == 1 { "" } else { "s" })
+}
+
+/// The TOTAL lines: every account at once, by reading.
+fn total_text<Tz: chrono::TimeZone>(s: &mut String, inv: &Inventory, tz: &Tz)
+where
+    Tz::Offset: std::fmt::Display,
+{
+    let t = &inv.totals;
+    if t.accounts == 0 {
+        return;
+    }
+    let now = inv.now;
+    let by: Vec<String> = t
+        .engines
+        .iter()
+        .map(|e| format!("{} {}", engine_name(e.engine), e.accounts))
+        .collect();
+    s.push_str("\nTOTAL COMPUTE (from readings; an account with none is \"not read\", never assumed to have room):\n");
+    let unread = t.accounts - t.read;
+    s.push_str(&format!(
+        "- {} ({}). Room now on {} of {} read{}.\n",
+        plural(t.accounts, "account"),
+        by.join(", "),
+        t.room,
+        t.read,
+        if unread > 0 {
+            format!(" ({unread} not read yet)")
+        } else {
+            String::new()
+        }
+    ));
+    for w in &t.windows {
+        let name = match w.family {
+            compute::Family::Session => "5-hour",
+            compute::Family::Weekly => "Weekly",
+        };
+        let soonest = w
+            .soonest_reset
+            .as_ref()
+            .map(|r| {
+                format!(
+                    "; soonest reset {} \"{}\" {}",
+                    engine_name(r.engine),
+                    r.account_name,
+                    when(tz, r.at, now)
+                )
+            })
+            .unwrap_or_default();
+        s.push_str(&format!(
+            "- {name} limits: {} of {} {} room{soonest}.\n",
+            w.room,
+            plural(w.read, "account"),
+            if w.room == 1 { "has" } else { "have" }
+        ));
+    }
+    if let Some(n) = &t.next_room {
+        s.push_str(&format!(
+            "- First back: {} \"{}\" has room again {}.\n",
+            engine_name(n.engine),
+            n.account_name,
+            when(tz, n.at, now)
+        ));
+    }
 }
 
 /// What `forecast_usage` answers.
@@ -905,6 +1011,7 @@ mod tests {
             reading_from: vec![(Engine::Claude, Some("w1".into())), (Engine::Codex, None)],
             archived: Default::default(),
             samples: Default::default(),
+            checks: Default::default(),
             agents: Vec::new(),
             local: Vec::new(),
             backlog: Vec::new(),
@@ -964,6 +1071,44 @@ mod tests {
         let this_mac = &inv.accounts[0];
         assert_eq!(this_mac.windows.len(), 1);
         assert_eq!(this_mac.windows[0].kind, "seven_day");
+    }
+
+    #[test]
+    fn a_check_without_a_turn_newer_than_the_last_turn_wins_and_totals_follow() {
+        let mut p = parts();
+        // Work's last turn said 40% a minute ago; a check just now says 55%.
+        let mut fresh = window("five_hour", 55.0, 30 * 60_000);
+        fresh.observed_at = NOW;
+        p.archived.insert(
+            "claude:w1".into(),
+            Quota {
+                engine: Engine::Claude,
+                windows: vec![fresh],
+                plan: Some("max".into()),
+            },
+        );
+        // This Mac couldn't be read, and says why.
+        p.checks.insert(
+            "claude:default".into(),
+            usage_plan::Check {
+                at: NOW,
+                outcome: usage_plan::CheckOutcome::CantRead,
+                why: Some("Its sign-in can't read limits without a turn".into()),
+            },
+        );
+        let inv = build(p);
+        let work = &inv.accounts[1];
+        assert_eq!(work.windows[0].used_percent, Some(55.0));
+        assert_eq!(work.plan.as_deref(), Some("max"));
+        assert_eq!(inv.totals.accounts, 2);
+        assert_eq!((inv.totals.read, inv.totals.room), (1, 1));
+        let text = overview_text(&inv, &chrono::Utc);
+        assert!(text.contains("TOTAL COMPUTE"));
+        assert!(
+            text.contains("2 accounts (Claude Code 2). Room now on 1 of 1 read (1 not read yet).")
+        );
+        assert!(text.contains("5-hour limits: 1 of 1 account has room"));
+        assert!(text.contains("can't be read without a turn: its sign-in can't read limits"));
     }
 
     #[test]

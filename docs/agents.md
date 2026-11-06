@@ -3424,10 +3424,81 @@ never slow down for limits unless the user chose that.
   wallet recorded it came from that one (`wallet::reading_from`), or the
   engine has a single account; otherwise it is nobody's, and that account
   says "No reading yet". A signed-out failure forgets that account's own
-  reading too. Windows past their reset drop, as in `quota::shown`.
+  reading too. Windows past their reset drop, as in `quota::shown`. When
+  both exist, the newer of the engine-wide and the account's own is shown
+  (a check without a turn is often newer than the last turn).
+- **Every account read without a turn** (`agents/usage_read.rs`): on open
+  (20 s after launch), every 10 minutes while the app is open, and when
+  someone looks (the usage popover, Settings → Usage, the phone's
+  `agents.usagePlan`, an agent's `usage_overview`, which waits up to 20 s for
+  it) unless a check ran in the last 2 minutes; one at a time, never
+  doubled. Each account's outcome is kept beside its reading
+  (`usage_plan::Check`: `read`, `no_plan`, `cant_read` with why, `failed`)
+  and served as `AccountLine.check`. A reading goes where a turn's goes
+  (`usage_plan::archive`, with a pace sample), into `quota.json` too when
+  it is that account's picture, and a used-up window marks the account out
+  until its reset (`wallet::reported_out`). A refusal never clears a
+  reading.
+  - **Claude Code** (verified against a Max sign-in, 2.1.319):
+    `GET https://api.anthropic.com/api/oauth/usage` with the sign-in's OAuth
+    access token (`anthropic-beta: oauth-2025-04-20`), what Claude Code's
+    own `/usage` reads. It answers each window (`five_hour`, `seven_day`,
+    `seven_day_opus`, `seven_day_sonnet`, …) as `utilization` 0–100 and an
+    RFC 3339 `resets_at`, `null` when it doesn't apply
+    (`testdata/claude-oauth-usage.json` is a real answer, trimmed). The
+    token is read where Claude Code keeps it: the login Keychain item
+    `Claude Code-credentials` (suffixed `-<first 8 hex of sha256(config
+    dir)>` when `CLAUDE_CONFIG_DIR` is set, as Claude Code names it) under
+    the user's name, through `/usr/bin/security` on a pipe (Claude Code
+    writes that item with it, so no prompt), else `<config
+    dir>/.credentials.json`; for an added account, its own folder's item,
+    then the setup token in this app's Keychain. `subscriptionType` there
+    is the plan name shown ("Max plan"). The endpoint needs `user:profile`:
+    a `claude setup-token` token (how accounts added here sign in) is
+    refused `403 oauth_scope_insufficient` (verified), so such an account
+    says "No reading yet · runs to measure" and is asked again only every 6
+    hours. An access token past its `expiresAt` is not used and **never
+    refreshed** here (a refresh rotates the refresh token and would sign
+    Claude Code out); it reads again once any turn has refreshed it. No
+    redirect is followed, and the request's error text is never kept.
+    `count_tokens` was tried as a no-spend fallback for setup tokens: it
+    carries no rate-limit headers.
+  - **Codex** (handshake verified on 0.166; **not** against a signed-in
+    account, none was available): `codex app-server` under the account's
+    `CODEX_HOME`, `initialize`, `initialized`, `account/rateLimits/read`,
+    then killed: no thread, no turn. Signed out it answers "codex account
+    authentication required to read rate limits" (verified), said "Not
+    signed in".
+  - Tokens stay in memory for the one request: never argv, a log, an error
+    string or the phone.
+- **Total compute** (`agents/compute.rs`, `Inventory.totals`): every
+  account at once. Room is only what a reading said: an account counts as
+  having room when it is signed in, not out, and its current 5-hour or
+  weekly (all models) reading isn't used up; one with no reading is *not
+  read*, never room. Per kind of window (5-hour: `five_hour` or 300
+  minutes; weekly: `seven_day` or 10080), how many read accounts have room
+  and the soonest reset; of the accounts without room, the one back first.
+  **Run-out across accounts** (`RunOut`, an estimate) only for an engine
+  with 2+ signed-in accounts, every one read, each either out (back at a
+  known time) or running out before its reset by its own pace, and none
+  back before the last runs out; else nothing. Said on the desk (the usage
+  popover's "All accounts", Settings → Usage's "What you have") and the
+  phone's Usage sheet by `computeView` in `usageSheet.ts`: "You have room on
+  2 accounts right now. Claude · Work resets at 3:20 PM", "4 accounts ·
+  Claude 3, Codex 1 · 1 not read yet", "5-hour 2 of 2 have room · Soonest
+  reset …", "At this pace you'll run out of Claude on every account by Mon
+  afternoon; Codex has room" over "Estimate from 13 readings across 2
+  accounts", then one compact row per account (5-hour and weekly bars side
+  by side, its soonest pace line, a neutral "Next turn" tag), most room
+  first, then not read, then without room, then signed out. Each reading
+  shows once: the popover no longer draws the next account's meters above
+  the list. `usage_overview` heads its answer with the same TOTAL COMPUTE
+  lines, and the run-out under ESTIMATES. A Mac that serves no totals gets
+  the old per-engine lists.
 - **Plan names only when reported**: Codex's snapshot carries `planType`
-  (`Quota::plan`); Claude Code's stream reports none, so no Claude plan is
-  ever shown.
+  (`Quota::plan`); Claude Code's stream reports none, but its credentials'
+  `subscriptionType` does, so a Claude account read without a turn shows
+  its plan.
 - **Other compute**, detected, never assumed (`inventory::local_compute`,
   cached a minute): Opencode's binary; Ollama (binary or app) and LM Studio
   (`lms` or the app), each asked over loopback for its model list

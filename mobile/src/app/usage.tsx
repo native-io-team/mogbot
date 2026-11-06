@@ -14,7 +14,7 @@ import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Spinner } from '../components/agent';
 import { SheetTitle } from '../components/SheetTitle';
-import { MeterRow } from '../components/usage';
+import { ComputeAccount, ComputeSummary, MeterRow } from '../components/usage';
 import { IconButton, Section, SheetPage, T } from '../components/ui';
 import { engineName } from '../lib/agents';
 import { makeStyles, useColors } from '../lib/appearance';
@@ -24,7 +24,7 @@ import { call, canCall } from '../lib/session';
 import { setApp, useApp } from '../lib/store';
 import { iconSize, space } from '../lib/theme';
 import { usePolling } from '../lib/usePolling';
-import { accountBlocks, contextMeter, usageSheet } from '../lib/usageSheet';
+import { accountBlocks, computeView, contextMeter, usageSheet } from '../lib/usageSheet';
 
 export default function Usage() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -73,7 +73,10 @@ export default function Usage() {
         : { active: null, others: accountBlocks(inventory, now) },
     [quotas, engine, inventory, now]
   );
-  const nothing = !context && !active && others.length === 0;
+  // Every account at once, from a Mac that serves it: each reading once,
+  // the account turns run on next marked in the list.
+  const total = useMemo(() => computeView(inventory, now), [inventory, now]);
+  const nothing = !context && !total && !active && others.length === 0;
 
   return (
     <SheetPage>
@@ -108,7 +111,18 @@ export default function Usage() {
           </Section>
         )}
 
-        {active && agent && (
+        {total && (
+          <Section title="All accounts">
+            <ComputeSummary view={total} />
+            {total.rows.map((r) => (
+              <View key={r.key} style={styles.divided}>
+                <ComputeAccount row={r} />
+              </View>
+            ))}
+          </Section>
+        )}
+
+        {!total && active && agent && (
           <Section title={`Plan usage · ${engineName(agent)}`}>
             <View style={styles.block}>
               {active.account && (
@@ -131,7 +145,7 @@ export default function Usage() {
           </Section>
         )}
 
-        {others.length > 0 && (
+        {!total && others.length > 0 && (
           <Section title={active ? 'Other accounts' : 'Accounts'}>
             {others.map((a, i) => (
               <AccountRows key={a.key} account={a} divided={i > 0} />

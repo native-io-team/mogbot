@@ -112,6 +112,12 @@ export const FULL_INVENTORY = {
       next: false,
       windows: [],
       learned: [],
+      // A `claude setup-token` sign-in: refused for its scope (agents::usage_read).
+      check: {
+        at: now - 4 * 60_000,
+        outcome: 'cant_read',
+        why: 'Its sign-in can’t read limits without a turn',
+      },
     },
     {
       engine: 'codex',
@@ -179,7 +185,158 @@ export const FULL_INVENTORY = {
     },
   ],
   routines: [],
+  // As agents::compute::totals works them out from the accounts above.
+  totals: {
+    accounts: 4,
+    engines: [
+      { engine: 'claude', accounts: 3, read: 2, room: 1 },
+      { engine: 'codex', accounts: 1, read: 1, room: 1 },
+    ],
+    read: 3,
+    room: 2,
+    windows: [
+      {
+        family: 'session',
+        read: 2,
+        room: 2,
+        soonestReset: {
+          engine: 'claude',
+          accountId: 'default',
+          accountName: 'This Mac',
+          at: now + 40 * 60_000,
+        },
+      },
+      {
+        family: 'weekly',
+        read: 2,
+        room: 1,
+        soonestReset: {
+          engine: 'claude',
+          accountId: 'a1work',
+          accountName: 'Work',
+          at: now + 5 * H,
+        },
+      },
+    ],
+    nextRoom: { engine: 'claude', accountId: 'a1work', accountName: 'Work', at: now + 5 * H },
+  },
   now,
+};
+
+const win = (kind: string, usedPercent: number, resetsIn: number, windowMinutes?: number) => ({
+  kind,
+  usedPercent,
+  resetsAt: now + resetsIn,
+  ...(windowMinutes ? { windowMinutes } : {}),
+  limited: false,
+  observedAt: now - 6 * 60_000,
+});
+
+/**
+ * Two Claude accounts both running out before either resets, and Codex with
+ * room: the Mac's run-out estimate across accounts (agents::compute).
+ */
+export const RUNOUT_INVENTORY = {
+  ...FULL_INVENTORY,
+  mode: 'normal',
+  spare: [],
+  backlog: [],
+  accounts: [
+    {
+      engine: 'claude',
+      id: 'default',
+      name: 'This Mac',
+      thisMac: true,
+      signedIn: true,
+      out: false,
+      next: true,
+      plan: 'max',
+      windows: [win('five_hour', 72, 3 * H), win('seven_day', 58, 74 * H)],
+      learned: ['five_hour'],
+      pace: [
+        {
+          estimate: true,
+          kind: 'five_hour',
+          resetsAt: now + 3 * H,
+          reachesAt: now + 2 * H,
+          readings: 7,
+          spanMinutes: 95,
+        },
+      ],
+      check: { at: now - 6 * 60_000, outcome: 'read' },
+    },
+    {
+      engine: 'claude',
+      id: 'a1work',
+      name: 'Work',
+      thisMac: false,
+      signedIn: true,
+      out: false,
+      next: false,
+      windows: [win('five_hour', 81, 4 * H), win('seven_day', 44, 120 * H)],
+      learned: [],
+      pace: [
+        {
+          estimate: true,
+          kind: 'five_hour',
+          resetsAt: now + 4 * H,
+          reachesAt: now + 2.75 * H,
+          readings: 6,
+          spanMinutes: 80,
+        },
+      ],
+      check: { at: now - 6 * 60_000, outcome: 'read' },
+    },
+    {
+      engine: 'codex',
+      id: 'c1plus',
+      name: 'ChatGPT Plus',
+      thisMac: false,
+      signedIn: true,
+      out: false,
+      next: true,
+      plan: 'plus',
+      windows: [win('primary', 30, 3 * H, 300), win('secondary', 12, 96 * H, 10080)],
+      learned: [],
+      check: { at: now - 6 * 60_000, outcome: 'read' },
+    },
+  ],
+  totals: {
+    accounts: 3,
+    engines: [
+      { engine: 'claude', accounts: 2, read: 2, room: 2 },
+      { engine: 'codex', accounts: 1, read: 1, room: 1 },
+    ],
+    read: 3,
+    room: 3,
+    windows: [
+      {
+        family: 'session',
+        read: 3,
+        room: 3,
+        soonestReset: {
+          engine: 'claude',
+          accountId: 'default',
+          accountName: 'This Mac',
+          at: now + 3 * H,
+        },
+      },
+      {
+        family: 'weekly',
+        read: 3,
+        room: 3,
+        soonestReset: {
+          engine: 'claude',
+          accountId: 'default',
+          accountName: 'This Mac',
+          at: now + 74 * H,
+        },
+      },
+    ],
+    runOut: [
+      { estimate: true, engine: 'claude', reachesAt: now + 2.75 * H, readings: 13, accounts: 2 },
+    ],
+  },
 };
 
 /** Fresh: no reading from any engine, too little history to estimate. */
@@ -215,6 +372,13 @@ export const EMPTY_INVENTORY = {
   backlog: [],
   agents: [],
   routines: [],
+  totals: {
+    accounts: 1,
+    engines: [{ engine: 'claude', accounts: 1, read: 0, room: 0 }],
+    read: 0,
+    room: 0,
+    windows: [],
+  },
   now,
 };
 
@@ -246,9 +410,9 @@ export const agentsUsageScenarios: Scenario[] = [
     id: 'agents-chat-usage',
     title: 'Agents — the chat header’s usage ring and its popover',
     looksRightWhen:
-      'Finance’s chat. In the header, left of the clock, a small ring about a third filled (38% of the 5-hour window), in the muted ink, not the accent. Its popover: “Usage”; Context — “Finance’s conversation” 64% used with a bar and “128.4K of 200K tokens”; Plan usage · Claude Code — “5-hour limit” 38%, “Resets at <time>”; Weekly limits — “All models” 61%, “Resets <weekday> …”, then an amber line “At this pace you’ll hit the limit <weekday> <part of day>, before it resets <weekday> <time>” and a muted “Estimate from 14 readings over 23 hours”; Accounts — Claude · This Mac (Next turns run here) with both bars and the same pace line, Claude · Work “Out of usage until …”, Claude · Personal “No reading yet”, Codex · ChatGPT Plus with its Primary bar in amber. A muted footnote that use elsewhere counts too. Readable in both themes.',
+      'Finance’s chat. In the header, left of the clock, a small ring about a third filled (38% of the 5-hour window), in the muted ink, not the accent. Its popover: “Usage”; Context — “Finance’s conversation” 64% used with a bar and “128.4K of 200K tokens”; All accounts — “You have room on 2 accounts right now. Claude · Work resets at <time>.”, a muted “4 accounts · Claude 3, Codex 1 · 1 not read yet”, then two quiet lines: “5-hour 2 of 2 have room · Soonest reset <time> · Claude · This Mac” and “Weekly 1 of 2 has room · Soonest reset <time> · Claude · Work”. Then one list, most room first: Claude · This Mac with a neutral “Next turn” tag, its 5-hour (38%) and Weekly (61%) bars side by side, and an amber “Weekly: At this pace you’ll hit the limit …” with “Estimate from 14 readings over 23 hours”; Codex · ChatGPT Plus (Plus plan, Next turn) with its 5-hour bar at 92% in amber; Claude · Personal “No reading yet · runs to measure”; Claude · Work in amber “Out of usage until …”. No separate “Plan usage” block: each account’s bars appear once. A muted footnote that use elsewhere counts too. Readable in both themes.',
     openSelector: AGENTS_TAB,
-    requires: '.agent-usage .agent-usage__pace',
+    requires: '.agent-usage .agents-compute__pace',
     clipSelector: '.agent-usage',
     steps: [{ click: '[data-agent-id="finance"]' }, { click: '.agent-usage-ring' }],
     commands: {
@@ -280,7 +444,7 @@ export const agentsUsageScenarios: Scenario[] = [
     looksRightWhen:
       'A “Usage” group. “How agents use your limits” with a three-way control (Normal | Save my limits | Use it all before reset), the last pressed, neutral not accent, and one muted line under it saying Allow cards still apply. “What you have”: Claude Code’s list — This Mac “5-hour 38% · resets <time> · Weekly 61% · resets <weekday>”, an amber “Weekly: At this pace you’ll hit the limit <weekday> <part of day>, before it resets … · Estimate from 14 readings over 23 hours”, and “Next turns run here”; Work in amber “Out of usage until …”; Personal “No reading yet”; then a muted “About 48k tokens a turn · estimate from 212 past runs”. Codex’s list: ChatGPT Plus “Primary 92% …” in amber, tagged “Plus plan · Next turns run here”, and no estimate line. A muted line “Claude 5-hour limit resets <time> · 62% unused”. “Other compute on this Mac”: Opencode installed; Ollama running with two models. “Spare-capacity list”: two lines (one “Added by you · for Research”, one “Added by Finance · Started”), each with a remove ×, and a field with a secondary Add. Readable in both themes; nothing is accent-coloured.',
     command: 'agents.usage',
-    requires: '.agents-usage .agents-usage__line',
+    requires: '.agents-usage .agents-compute__row',
     clipSelector: '.agents-usage',
     commands: {
       agents_overview: overview(),
@@ -289,12 +453,26 @@ export const agentsUsageScenarios: Scenario[] = [
     },
   },
   {
+    id: 'settings-agents-usage-runout',
+    title: 'Settings — Agents → Usage: Claude runs out on every account at this pace',
+    looksRightWhen:
+      '“What you have”: “You have room on all 3 accounts right now.”, “3 accounts · Claude 2, Codex 1”, the 5-hour and Weekly lines (3 of 3 have room), then an amber “At this pace you’ll run out of Claude on every account in about 3 hours; Codex has room.” with a muted “Estimate from 13 readings across 2 accounts”. The list: Codex · ChatGPT Plus first (most room), then Claude · This Mac (Max plan, Next turn) and Claude · Work, each with both bars and its own amber 5-hour pace line. Nothing accent-coloured.',
+    command: 'agents.usage',
+    requires: '.agents-usage .agents-compute__pace',
+    clipSelector: '.agents-usage',
+    commands: {
+      agents_overview: overview(),
+      agents_desktop_settings: DESKTOP_SETTINGS,
+      agents_usage_overview: RUNOUT_INVENTORY,
+    },
+  },
+  {
     id: 'settings-agents-usage-empty',
     title: 'Settings — Agents → Usage with no reading and no history',
     looksRightWhen:
-      'The Usage group with Normal pressed and its line (“Agents never slow down for limits…”). “What you have” lists only Claude Code (Codex isn’t installed): This Mac “No reading yet”, “Next turns run here”, and no estimate line at all — never a made-up figure. No “Other compute” group. The spare-capacity list shows only its sentence and the field.',
+      'The Usage group with Normal pressed and its line (“Agents never slow down for limits…”). “What you have”: “No reading yet.”, “1 account · Claude 1 · 1 not read yet”, no limit lines, and one row: Claude · This Mac with a “Next turn” tag and “No reading yet” — no bars, no estimate line at all, never a made-up figure. No “Other compute” group. The spare-capacity list shows only its sentence and the field.',
     command: 'agents.usage',
-    requires: '.agents-usage .agents-usage__line',
+    requires: '.agents-usage .agents-compute__row',
     clipSelector: '.agents-usage',
     commands: {
       agents_overview: overview(),

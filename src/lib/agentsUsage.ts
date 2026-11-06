@@ -45,7 +45,13 @@ export { windowName } from '../../packages/companion-protocol/src/quota';
 // The chat header's ring and its popover say what the phone's do.
 export {
   accountBlocks,
+  computeForecast,
+  computeRows,
+  computeView,
   contextMeter,
+  type ComputeRow,
+  type ComputeView,
+  type ComputeWindowLine,
   paceLine,
   planUsage,
   ringPercent,

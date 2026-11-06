@@ -1574,6 +1574,89 @@ impl Backend for Stub {
             limited: false,
             observed_at: 1_762_290_000_000,
         };
+        let accounts = vec![
+            AccountLine {
+                engine: Engine::Claude,
+                id: "default".into(),
+                name: "This Mac".into(),
+                this_mac: true,
+                signed_in: true,
+                out: false,
+                out_until: None,
+                next: true,
+                plan: None,
+                windows: vec![window.clone()],
+                learned: vec!["five_hour".into()],
+                pace: vec![crate::agents::forecast::Pace {
+                    estimate: true,
+                    kind: "five_hour".into(),
+                    resets_at: 1_762_300_000_000,
+                    reaches_at: 1_762_298_000_000,
+                    readings: 6,
+                    span_minutes: 95,
+                }],
+                check: Some(crate::agents::usage_plan::Check {
+                    at: 1_762_294_000_000,
+                    outcome: crate::agents::usage_plan::CheckOutcome::Read,
+                    why: None,
+                }),
+            },
+            AccountLine {
+                engine: Engine::Claude,
+                id: "w1".into(),
+                name: "Work".into(),
+                this_mac: false,
+                signed_in: true,
+                out: false,
+                out_until: None,
+                next: false,
+                plan: Some("max".into()),
+                windows: vec![QuotaWindow {
+                    used_percent: Some(80.0),
+                    resets_at: Some(1_762_301_000_000),
+                    ..window.clone()
+                }],
+                learned: vec![],
+                pace: vec![crate::agents::forecast::Pace {
+                    estimate: true,
+                    kind: "five_hour".into(),
+                    resets_at: 1_762_301_000_000,
+                    reaches_at: 1_762_297_000_000,
+                    readings: 5,
+                    span_minutes: 70,
+                }],
+                check: None,
+            },
+            AccountLine {
+                engine: Engine::Codex,
+                id: "c1".into(),
+                name: "Plus".into(),
+                this_mac: false,
+                signed_in: true,
+                out: true,
+                out_until: Some(1_762_400_000_000),
+                next: false,
+                plan: Some("plus".into()),
+                windows: vec![QuotaWindow {
+                    kind: "primary".into(),
+                    used_percent: Some(100.0),
+                    resets_at: Some(1_762_400_000_000),
+                    window_minutes: Some(300),
+                    limited: true,
+                    observed_at: 1_762_290_000_000,
+                }],
+                learned: vec![],
+                pace: vec![],
+                check: Some(crate::agents::usage_plan::Check {
+                    at: 1_762_294_000_000,
+                    outcome: crate::agents::usage_plan::CheckOutcome::Failed,
+                    why: Some("Codex didn't answer in time".into()),
+                }),
+            },
+        ];
+        // Totals as the Mac works them out, from these accounts: every field
+        // set (a soonest reset, who is back first, a run-out estimate).
+        let totals = crate::agents::compute::totals(&accounts, 1_762_295_000_000);
         let inv = Inventory {
             mode: Mode::UseItAll,
             mode_set_at: Some(1_762_200_000_000),
@@ -1587,43 +1670,7 @@ impl Backend for Stub {
                 all_out: false,
                 per_turn: Some(per.clone()),
             }],
-            accounts: vec![
-                AccountLine {
-                    engine: Engine::Claude,
-                    id: "default".into(),
-                    name: "This Mac".into(),
-                    this_mac: true,
-                    signed_in: true,
-                    out: false,
-                    out_until: None,
-                    next: true,
-                    plan: None,
-                    windows: vec![window.clone()],
-                    learned: vec!["five_hour".into()],
-                    pace: vec![crate::agents::forecast::Pace {
-                        estimate: true,
-                        kind: "five_hour".into(),
-                        resets_at: 1_762_300_000_000,
-                        reaches_at: 1_762_298_000_000,
-                        readings: 6,
-                        span_minutes: 95,
-                    }],
-                },
-                AccountLine {
-                    engine: Engine::Codex,
-                    id: "c1".into(),
-                    name: "Plus".into(),
-                    this_mac: false,
-                    signed_in: true,
-                    out: true,
-                    out_until: Some(1_762_400_000_000),
-                    next: false,
-                    plan: Some("plus".into()),
-                    windows: vec![],
-                    learned: vec![],
-                    pace: vec![],
-                },
-            ],
+            accounts,
             local: vec![
                 LocalCompute {
                     name: "Ollama",
@@ -1671,6 +1718,7 @@ impl Backend for Stub {
                 when: false,
                 per_run: Some(per),
             }],
+            totals,
             now: 1_762_295_000_000,
         };
         serde_json::to_value(inv).map_err(|e| CommandError::expected(e.to_string()))

@@ -8,7 +8,7 @@
 import { Pressable, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { makeStyles, useColors } from '../lib/appearance';
-import type { UsageMeter, UsageTone } from '../lib/usageSheet';
+import type { ComputeRow, ComputeView, UsageMeter, UsageTone } from '../lib/usageSheet';
 import { iconSize, PRESSED, radius, space, type Palette } from '../lib/theme';
 import { T } from './ui';
 
@@ -132,7 +132,157 @@ export function MeterRow({ meter, title }: { meter: UsageMeter; title?: string }
   );
 }
 
+/**
+ * Total compute's top: the headline, how many accounts, each kind of limit
+ * across them, and the Mac's run-out estimate when it sent one.
+ */
+export function ComputeSummary({ view }: { view: ComputeView }) {
+  const colors = useColors();
+  const styles = useStyles();
+  return (
+    <View style={styles.summary}>
+      <View style={styles.tight}>
+        <T
+          variant="headline"
+          color={view.tone === 'limited' ? colors.accentWarning : colors.textStrong}
+        >
+          {view.headline}
+        </T>
+        <T variant="small" color={colors.textMuted}>
+          {view.summary}
+        </T>
+      </View>
+      {view.windows.map((w) => (
+        <View key={w.key} style={styles.windowLine}>
+          <T variant="small" color={colors.textSecondary} style={styles.windowName}>
+            {w.label}
+          </T>
+          <View style={styles.grow}>
+            <T
+              variant="small"
+              color={w.tone === 'limited' ? colors.accentWarning : colors.textStrong}
+            >
+              {w.text}
+            </T>
+            {w.reset && (
+              <T variant="small" color={colors.textMuted}>
+                {w.reset}
+              </T>
+            )}
+          </View>
+        </View>
+      ))}
+      {view.forecast && (
+        <View style={styles.pace}>
+          <T variant="small" color={colors.accentWarning}>
+            {view.forecast.text}
+          </T>
+          <T variant="small" color={colors.textMuted}>
+            {view.forecast.basis}
+          </T>
+        </View>
+      )}
+    </View>
+  );
+}
+
+/** One bar of a compact row: "5-hour  38%", the bar, "Resets at 3:20 PM". */
+function MiniMeter({ meter }: { meter: UsageMeter }) {
+  const colors = useColors();
+  const styles = useStyles();
+  return (
+    <View style={styles.mini}>
+      <View style={styles.meterHead}>
+        <T variant="small" color={colors.textSecondary} style={styles.grow}>
+          {meter.label}
+        </T>
+        <T
+          variant="small"
+          color={meter.tone === 'calm' ? colors.textSecondary : inkOf(colors, meter.tone)}
+        >
+          {`${meter.percent}%`}
+        </T>
+      </View>
+      <UsageBar percent={meter.percent} tone={meter.tone} />
+      <T variant="small" color={colors.textMuted} numberOfLines={1}>
+        {meter.detail}
+      </T>
+    </View>
+  );
+}
+
+/** One account, compact: its name, the 5-hour and weekly bars side by side, its pace. */
+export function ComputeAccount({ row: r }: { row: ComputeRow }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const meters = [r.session, r.weekly].filter((m): m is UsageMeter => m !== null);
+  return (
+    <View style={styles.row}>
+      <View style={styles.rowHead}>
+        <View style={styles.grow}>
+          <T variant="body" color={colors.textStrong} numberOfLines={1}>
+            {r.title}
+          </T>
+          {r.tags.length > 0 && (
+            <T variant="small" color={colors.textMuted}>
+              {r.tags.join(' · ')}
+            </T>
+          )}
+        </View>
+        {r.next && (
+          <View style={styles.tag}>
+            <T variant="small" color={colors.textSecondary}>
+              Next turn
+            </T>
+          </View>
+        )}
+      </View>
+      {r.state && (
+        <T variant="small" color={r.tone === 'calm' ? colors.textSecondary : colors.accentWarning}>
+          {r.state}
+        </T>
+      )}
+      {meters.length > 0 && (
+        <View style={styles.meters}>
+          {meters.map((m) => (
+            <MiniMeter key={m.key} meter={m} />
+          ))}
+          {/* One bar keeps half the row, as on the desk: bars line up account to account. */}
+          {meters.length === 1 && <View style={styles.mini} />}
+        </View>
+      )}
+      {r.extra.map((m) => (
+        <MiniMeter key={m.key} meter={m} />
+      ))}
+      {r.pace && (
+        <View style={styles.pace}>
+          <T variant="small" color={colors.accentWarning}>
+            {r.pace.text}
+          </T>
+          <T variant="small" color={colors.textMuted}>
+            {r.pace.basis}
+          </T>
+        </View>
+      )}
+    </View>
+  );
+}
+
 const useStyles = makeStyles((colors) => ({
+  summary: { gap: space.md, padding: space.lg },
+  tight: { gap: space['2xs'] },
+  windowLine: { flexDirection: 'row', gap: space.sm },
+  windowName: { minWidth: space['2xl'] + space.xl },
+  row: { gap: space.sm, padding: space.lg },
+  rowHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  tag: {
+    paddingHorizontal: space.sm,
+    paddingVertical: space['2xs'],
+    borderRadius: radius.pill,
+    backgroundColor: colors.surfaceControl,
+  },
+  meters: { flexDirection: 'row', gap: space.md },
+  mini: { flex: 1, gap: space.xs, minWidth: 0 },
   ring: { alignItems: 'center', justifyContent: 'center', padding: space['3xs'] },
   track: {
     height: space.tight,

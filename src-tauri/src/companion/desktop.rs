@@ -549,7 +549,7 @@ impl Backend for DesktopBackend {
     }
 
     async fn usage_plan(&self) -> Result<Value, CommandError> {
-        json(crate::commands::agents_usage::agents_usage_overview().await?)
+        json(crate::commands::agents_usage::agents_usage_overview(self.app.clone()).await?)
     }
 
     async fn import_status(&self) -> Result<Value, CommandError> {

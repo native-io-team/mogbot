@@ -7,7 +7,10 @@
 
 export {
   accountBlocks,
+  computeView,
   contextMeter,
+  type ComputeRow,
+  type ComputeView,
   paceLine,
   planUsage,
   resetsLine,

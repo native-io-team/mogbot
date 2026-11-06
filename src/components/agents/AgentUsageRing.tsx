@@ -23,12 +23,14 @@ import { Dropdown } from '../primitives/Dropdown';
 import { IconButton } from '../primitives/IconButton';
 import { ENGINE_LABEL, type Agent, type Quota } from '../../lib/agents';
 import {
+  computeView,
   contextMeter,
   ringPercent,
   usageSheet,
   type AccountBlock,
   type UsageMeter,
 } from '../../lib/agentsUsage';
+import { ComputeTotal } from './AgentsCompute';
 import { useQuotas } from './AgentsQuota';
 import { useUsageInventory } from './AgentsUsage';
 
@@ -91,8 +93,30 @@ function UsageBody({
   const { inventory, now } = useUsageInventory();
   const at = Math.max(now, quotasNow);
   const context = contextMeter(agent.context);
+  const total = computeView(inventory, at);
   const { active, others } = usageSheet(quotas, agent.engine, inventory, at);
   const nothing = !context && !active && others.length === 0;
+
+  // Every account at once, each reading once: the account turns run on next
+  // is marked in the list rather than drawn again above it.
+  if (total) {
+    return (
+      <div className="agent-usage__body">
+        <p className="agent-usage__title">Usage</p>
+        {context && (
+          <Section title="Context">
+            <Meter meter={context} title={`${agent.name}’s conversation`} />
+          </Section>
+        )}
+        <Section title="All accounts">
+          <ComputeTotal view={total} />
+        </Section>
+        <p className="agent-usage__muted">
+          As each account last reported it. Use of the same plan anywhere else counts too.
+        </p>
+      </div>
+    );
+  }
 
   return (
     <div className="agent-usage__body">
