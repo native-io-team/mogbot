@@ -800,6 +800,22 @@ fn batch_steps(input: &Value) -> Option<Vec<(String, Value)>> {
         .collect()
 }
 
+/// What an agent is told about a batch whose steps name no tool.
+pub const BATCH_SHAPE: &str = "Nothing ran: each browser_batch step needs \"name\" (the tool, e.g. \"navigate\", \"computer\", \"get_page_text\") and \"input\" (its arguments, with tabId). Or call the tools one at a time.";
+
+/// A batch with a list of steps, at least one of them naming no tool.
+fn batch_unnamed(input: &Value) -> bool {
+    ["actions", "steps", "calls", "batch", "commands"]
+        .iter()
+        .find_map(|k| input.get(*k).and_then(Value::as_array))
+        .is_some_and(|list| {
+            !list.is_empty()
+                && list.iter().any(|s| {
+                    s.get("tool").or_else(|| s.get("name")).and_then(Value::as_str).is_none()
+                })
+        })
+}
+
 /// One browser tool (its name without the server) at `level`.
 fn decide(level: Level, agent: &Agent, name: &str, input: &Value, page: &Page) -> Gate {
     let free = |ok: bool| if ok { Gate::Allow } else { Gate::Ask };
@@ -870,6 +886,11 @@ fn decide(level: Level, agent: &Agent, name: &str, input: &Value, page: &Page) -
                 }
                 Gate::Allow
             }
+            // Steps without a tool name: Chrome refuses the batch without
+            // doing anything, so a card for it is a question about nothing.
+            // Observed: a navigate-and-screenshot batch on Gmail, written as
+            // `{"action": …}`, asked the user, then failed once allowed.
+            None if batch_unnamed(input) => Gate::Refuse(BATCH_SHAPE.into()),
             _ => Gate::Ask,
         },
         n if LOOKS.contains(&n) => Gate::Allow,

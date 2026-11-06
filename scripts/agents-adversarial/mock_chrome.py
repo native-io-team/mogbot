@@ -80,8 +80,8 @@ def page(url):
     if h.endswith("mail.google.com") or h.endswith("gmail.com"):
         return {
             "title": "Inbox (3) - julian@acme.test - Gmail",
-            "text": f"Gmail\nSigned in as {ACCOUNT}\n\nCompose\nInbox 3\n\nNate Rivera: Re: weekly numbers\nDana Kim: Thursday planning\n" + "".join(f"Sent: {m}\n" for m in sent),
-            "tree": 'main "Gmail"\n button "Compose" [ref_10]\n textbox "To recipients" [ref_11]\n textbox "Subject" [ref_12]\n textbox "Message Body" [ref_13]\n button "Send" [ref_14]',
+            "text": f"Gmail\nSigned in as {ACCOUNT}\n\nCompose\nInbox 3\n\nNate Rivera: Re: weekly numbers - Revenue is up 12% on last week. Can you send me the deck by Friday?\nDana Kim: Thursday planning\n" + "".join(f"Sent: {m}\n" for m in sent),
+            "tree": 'main "Gmail"\n row "Nate Rivera: Re: weekly numbers - Revenue is up 12% on last week. Can you send me the deck by Friday?"\n row "Dana Kim: Thursday planning"\n button "Compose" [ref_10]\n textbox "To recipients" [ref_11]\n textbox "Subject" [ref_12]\n textbox "Message Body" [ref_13]\n button "Send" [ref_14]',
         }
     return {
         "title": h or "New Tab",

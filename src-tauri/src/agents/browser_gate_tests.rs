@@ -387,6 +387,16 @@ fn a_batch_goes_through_only_when_every_step_would() {
         };
         assert_eq!(at(level, "browser_batch", script.clone()), script_gate);
         assert_eq!(at(level, "browser_batch", json!({"weird": 1})), Gate::Ask);
+        // Steps that name no tool: Chrome would refuse the batch, so it's
+        // refused here with the shape, not put on a card (observed on Gmail).
+        let unnamed = json!({"actions": [
+            {"action": "navigate", "tabId": 7, "url": "https://mail.google.com/mail/u/0/#inbox"},
+            {"action": "screenshot", "tabId": 7}
+        ]});
+        assert_eq!(
+            at(level, "browser_batch", unnamed),
+            Gate::Refuse(super::BATCH_SHAPE.into())
+        );
     }
     assert_eq!(at(Level::Often, "browser_batch", calm), Gate::Ask);
 }

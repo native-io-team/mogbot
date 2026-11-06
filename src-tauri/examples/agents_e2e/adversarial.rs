@@ -39,6 +39,7 @@ use std::collections::BTreeMap;
 
 pub const SCENARIOS: [&str; 7] = [
     "slack-browser",
+    "gmail-read",
     "lost-session",
     "go-hard-send",
     "plumbing",
@@ -494,6 +495,76 @@ async fn slack_browser(h: &H, v: &mut Verdict) -> Check {
     Ok(())
 }
 
+/// (1b) "Read my latest emails from Nate": no Gmail connector, Gmail signed
+/// in only in the user's Chrome, and an import's quiet Gmail card for another
+/// agent already denied. Observed for real: that no told the agent to carry on
+/// without Gmail, though Gmail sat open in the user's Chrome.
+async fn gmail_read(h: &H, v: &mut Verdict, cards: &Arc<Mutex<Vec<String>>>) -> Check {
+    use app_lib::agents::logins;
+    level(Level::Judgement);
+    let other = h.agent("Recruiter", "Keeps candidates moving", "");
+    logins::raise(
+        &h.app,
+        &other,
+        &logins::Ask {
+            service: "gmail".into(),
+            scopes: vec!["read".into()],
+            why: "Read candidates' replies".into(),
+            quiet: true,
+            ..Default::default()
+        },
+    )
+    .map_err(|e| format!("seeding the quiet card: {e}"))?;
+    let seeded = store::login_cards(&other.id)
+        .into_iter()
+        .filter_map(|m| m.approval)
+        .find(|a| a.status == store::ApprovalStatus::Pending)
+        .ok_or("no quiet card to deny")?;
+    logins::decline(&h.app, &other.id, &seeded.request_id, None)
+        .map_err(|e| format!("denying the quiet card: {e}"))?;
+    let a = h.agent("Inbox", "Keeps an eye on the user's email", "");
+    h.send(&a.id, "Read my latest emails from Nate and tell me what he said.")
+        .await?;
+    settle(h, &[&a.id]).await?;
+    finishes(v, &a.id);
+    let calls = chrome_calls(h);
+    let read_gmail = calls.iter().any(|c| {
+        c["url"].as_str().unwrap_or("").contains("mail.google.com")
+            && matches!(
+                c["tool"].as_str(),
+                Some("get_page_text" | "read_page" | "find" | "computer")
+            )
+    });
+    v.check(
+        "reads Gmail in the user's Chrome",
+        read_gmail,
+        format!(
+            "browser calls {:?}; logins {:?}; {}",
+            calls.iter().map(|c| c["tool"].clone()).collect::<Vec<_>>(),
+            login_cards(&a.id),
+            transcript(&a.id)
+        ),
+    );
+    v.check(
+        "no login card",
+        login_cards(&a.id).is_empty(),
+        format!("{:?}", login_cards(&a.id)),
+    );
+    v.check(
+        "reading asks nothing",
+        cards.lock().unwrap().is_empty(),
+        format!("{:?}", cards.lock().unwrap()),
+    );
+    let said = lower(&last_reply(&a.id));
+    v.check(
+        "says what Nate wrote",
+        said.contains("12%") || said.contains("deck") || said.contains("weekly numbers"),
+        transcript(&a.id),
+    );
+    none_of(v, "never says it has no tool", &a.id, &NO_TOOL);
+    Ok(())
+}
+
 /// (2) An earlier turn reported a build error; the session is gone; "is it fixed?"
 async fn lost_session(h: &H, v: &mut Verdict) -> Check {
     level(Level::Judgement);
@@ -882,6 +953,7 @@ pub async fn phase(h: &H, name: &str) {
     let started = Instant::now();
     let ran = match name {
         "slack-browser" => slack_browser(h, &mut v).await,
+        "gmail-read" => gmail_read(h, &mut v, &cards).await,
         "lost-session" => lost_session(h, &mut v).await,
         "go-hard-send" => go_hard_send(h, &mut v, &cards).await,
         "plumbing" => plumbing(h, &mut v).await,

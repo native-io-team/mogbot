@@ -696,6 +696,13 @@ pub fn signed_in(site: &str, landed: &Landed) -> Option<bool> {
         "/i/flow/login",
         "/checkpoint",
         "/authwall",
+        // Signed out of Google, mail.google.com redirects to the product
+        // page (observed: workspace.google.com/intl/…/gmail/), not to a
+        // sign-in; Slack's signed-out pages likewise.
+        "workspace.google.com",
+        "google.com/gmail/about",
+        "slack.com/get-started",
+        "slack.com/workspace-signin",
     ];
     if SIGN_IN.iter().any(|w| lower.contains(w))
         || ["sign in", "log in", "login", "sign up"].iter().any(|w| {

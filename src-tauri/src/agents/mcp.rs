@@ -360,7 +360,8 @@ const TOOLS: &[Tool] = &[
                 "account_hint": { "type": "string", "description": "Optional: which account, when it matters (\"work Gmail\", \"sam@acme.com\")." },
                 "scopes": { "type": "array", "items": { "type": "string" }, "description": "What you need: [\"read\"], or also [\"send\"], [\"post\"], [\"write\"]. Ask for the least that does the job." },
                 "why": { "type": "string", "description": "What you'll use it for, in one line. Shown on the card." },
-                "signed_out": { "type": "boolean", "description": "true when you opened it in the user's browser and the page asked you to sign in." }
+                "signed_out": { "type": "boolean", "description": "true when you opened it in a browser and the page asked you to sign in (or showed a signed-out product page)." },
+                "browser": { "type": "string", "enum": ["agents", "chrome"], "description": "With signed_out: which browser showed it: the agents' browser (mcp__browser__*) or the user's own Chrome (mcp__claude-in-chrome__*)." }
             },
             "required": ["service", "why"]
         }),

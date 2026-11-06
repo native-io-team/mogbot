@@ -269,6 +269,17 @@ fn signed_in_is_only_said_when_the_account_page_stayed_put() {
         ),
         Some(false)
     );
+    // Signed out of Google, Gmail redirects to the product page instead.
+    assert_eq!(
+        signed_in(
+            "mail.google.com",
+            &at(
+                "https://workspace.google.com/intl/en-US/gmail/#sent",
+                "Gmail: Secure, AI-Powered Email for Everyone | Google Workspace"
+            )
+        ),
+        Some(false)
+    );
     // Somewhere else entirely: can't be told.
     assert_eq!(signed_in(gh, &at("https://example.com/", "Example")), None);
     assert_eq!(
