@@ -54,6 +54,9 @@ pub struct TurnSpec<'a> {
     /// claude.ai connectors it's kept from, Codex's connection servers.
     /// `None` is the defaults (browser on, nothing blocked or added).
     pub access: Option<&'a super::connections::TurnAccess>,
+    /// The model's context window from the agent's last reading, for
+    /// Codex's compaction threshold (`tidy::codex_config`).
+    pub window: Option<u64>,
 }
 
 impl Driver {
@@ -110,7 +113,7 @@ impl Driver {
 
     /// Every argument the turn's process gets.
     pub fn args(self, spec: &TurnSpec) -> Vec<String> {
-        let args = self.base_args(spec);
+        let args = with_compaction(self, self.base_args(spec), spec.window);
         match spec.access {
             Some(access) => with_access(self, args, access),
             // Fail closed: a turn nobody worked out the reach of gets no
@@ -176,6 +179,25 @@ impl Driver {
     }
 }
 
+/// Codex's compaction, on and tuned (`tidy`), as `-c` overrides placed where
+/// [`with_access`] puts its own. Claude Code's is in its own command line.
+fn with_compaction(driver: Driver, mut args: Vec<String>, window: Option<u64>) -> Vec<String> {
+    if driver.engine() != Engine::Codex {
+        return args;
+    }
+    let extra: Vec<String> = super::tidy::codex_config(window)
+        .into_iter()
+        .flat_map(|c| ["-c".to_string(), c])
+        .collect();
+    let at = args
+        .iter()
+        .position(|a| a == "--skip-git-repo-check")
+        .map(|i| i + 1)
+        .unwrap_or(args.len());
+    args.splice(at..at, extra);
+    args
+}
+
 /// A turn's command line with what this agent can reach laid in:
 /// Claude Code without its browser (`--no-chrome`) when the user took it
 /// away, and kept from the claude.ai connectors it isn't granted (added to
@@ -234,7 +256,34 @@ mod tests {
             writable,
             protected: None,
             access: None,
+            window: None,
         }
+    }
+
+    #[test]
+    fn every_turn_has_compaction_on_whichever_engine() {
+        let writable: Vec<String> = Vec::new();
+        let mut s = spec("sid", true, &writable);
+        s.window = Some(258_400);
+        let claude = Driver::ClaudePrint.args(&s);
+        assert!(claude
+            .windows(2)
+            .any(|w| w[0] == "--settings" && w[1] == r#"{"autoCompactEnabled":true}"#));
+        for driver in [Driver::CodexApp, Driver::CodexExec] {
+            let args = driver.args(&s);
+            let config: Vec<&str> = args
+                .windows(2)
+                .filter(|w| w[0] == "-c")
+                .map(|w| w[1].as_str())
+                .collect();
+            assert!(config.iter().any(|c| c.starts_with("compact_prompt=")));
+            assert!(config.contains(&"model_auto_compact_token_limit=219640"));
+            assert!(!args.iter().any(|a| a == "--settings"));
+        }
+        assert_eq!(
+            Driver::CodexExec.args(&s).last().map(String::as_str),
+            Some("-")
+        );
     }
 
     #[test]

@@ -31,6 +31,8 @@ pub(super) fn args(
     ]
     .map(String::from)
     .to_vec();
+    // Compaction on, whatever the user's own settings say (`tidy`).
+    args.extend(["--settings".to_string(), super::tidy::claude_settings()]);
     let session_flag = if resuming { "--resume" } else { "--session-id" };
     args.extend([session_flag.to_string(), session_id.to_string()]);
     args.extend([

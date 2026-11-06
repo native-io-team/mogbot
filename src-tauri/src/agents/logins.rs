@@ -740,20 +740,14 @@ an extra: use it if it works, never wait on it. Never type a password. If a page
 or for a password or code partway through one (a Google step inside another site's sign-in, say), stop \
 using it and go to step 3 with `signed_out: true`: that card lets the user sign in from their phone \
 (\"Sign in from here\") as well as at their Mac. Never tell them to go to their computer, or to finish \
-in a tab you left open. The user may have Chrome in more than one profile, each signed in \
-as someone else: if the page shows the wrong account, `select_browser` / \
-`switch_browser` to another connected one (`list_connected_browsers`); if \
-none is, `ask_bring_browser_to_front` once, never `request_login`. Once \
-it's right, `remember_browser_account`.
+in a tab you left open. Wrong account (Chrome can have several \
+profiles)? `switch_browser` to another connected one \
+(`list_connected_browsers`), else `ask_bring_browser_to_front` once, never \
+`request_login`; once right, `remember_browser_account`.
 3. Only if neither works: `request_login`, once, for that one app (with \
 `signed_out: true` if the browser showed a sign-in page). It may answer \
 that you can reach it already, or that someone already asked: do what it \
-says. One ask at a time; never repeat one that's waiting or was answered.
-
-Never ask for a password, and never ask the user to paste a login, token or \
-code in chat. `request_secret` is only for an API key made for programs, \
-when the service has no sign-in at all. Sending, posting and paying always \
-ask the user on a card first.";
+says. One ask at a time; never repeat one that's waiting or was answered.";
 
 /* ---------------------------------------------------------- live state */
 

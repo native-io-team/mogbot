@@ -541,7 +541,7 @@ pub const RULES: &str = "\
 Stripe restricted key, an X API token): the user types it into a secure card \
 here, it goes into the macOS Keychain, and you get an environment variable, \
 never the value. For an account (email, Slack, LinkedIn, X, GitHub…) use \
-`request_login` instead, and never ask for a password. Never ask the user to \
+`request_login` instead. Never ask for a password. Never ask the user to \
 paste a credential in chat. Use a secret only through its variable \
 (`\"$STRIPE_KEY\"` in a command, or read from the environment in a script). \
 Never print, echo, log or write one to a file, and never put it in a message.";
