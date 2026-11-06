@@ -445,6 +445,25 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   from the other tabs. Every other state keeps its mark. Swipe to mute, hide (with Undo) or pin; hold for the
   context menu. Quick actions on the icon: "Needs you" and "New message to
   Chief of Staff".
+- **Catch up** (`app/catch-up.tsx`, `lib/catchUp.ts`), from Home's "N agents
+  need your OK" bar, in place of the old list: everything waiting, one card
+  at a time, full screen. Setting up your team first, then every request
+  this phone can answer (oldest first), then each agent with something new
+  to read or a turn that needs you. A card is the agent, what it said since
+  you last spoke (up to three messages, markdown and pictures as in the
+  chat) and the request, with Allow · Deny under the thumb (the card's own
+  answers hidden, the same 400 ms arming); a login, a key or a task's
+  question has one action instead ("Sign in", "Enter key", "Answer") that
+  opens it in its chat. **Chat** opens the agent's chat at the card, and back
+  returns to the same card; **Next** or a swipe left moves on. Swiping right
+  never allows: an Allow can't be undone and a command scrolls sideways
+  under the same finger. "3 of 8" and a thin bar; success haptic on Allow,
+  light on Next. A card on screen counts as read (`setOpenChat`). Passed
+  cards stay counted, cards ahead answered or read elsewhere drop out, new
+  ones join the end; the card in front of you, answered on the desk or
+  expired, says so for a beat and moves on. Done: "All caught up" and Back
+  to agents. Chats the cards need are loaded once before it starts (up to
+  5 s; offline it uses what's cached), so the order doesn't shift.
 - **Chat.** An inverted list: newest on the composer, older pages loaded on
   scroll. Replies stream one display frame at a time (`lib/reveal.ts`) and the
   finished message carries on from where its draft got to. **Following**

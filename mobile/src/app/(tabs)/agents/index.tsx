@@ -476,7 +476,7 @@ function AttentionBar({ bar, onOpenChief }: { bar: HomeBar; onOpenChief: (id: st
     <Pressable
       onPress={() => {
         haptic.select();
-        if (bar.kind === 'needs') router.push('/needs-you');
+        if (bar.kind === 'needs') router.push('/catch-up');
         else if (chief) onOpenChief(chief.id);
       }}
       android_ripple={ripple}
