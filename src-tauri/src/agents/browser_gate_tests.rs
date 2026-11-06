@@ -628,6 +628,42 @@ fn at_go_hard_only_the_final_send_in_an_editor_asks() {
     );
 }
 
+/// The owner's scheduled-posts page is under ".../compose/...": at Go hard a
+/// click there is judged by what it clicks, not by the address, so clicks
+/// with no readable label run. The final submit still asks by its label.
+#[test]
+fn at_go_hard_a_compose_address_alone_never_asks() {
+    let somewhere = json!({"action": "left_click", "coordinate": [40, 300], "tabId": 3});
+    let unknown_ref = json!({"action": "left_click", "ref": "ref_99", "tabId": 3});
+    for level in [Level::GoHard, Level::FullSend] {
+        assert_eq!(
+            in_editor(level, "computer", somewhere.clone()),
+            Gate::Allow,
+            "{level:?}"
+        );
+        assert_eq!(
+            in_editor(level, "computer", unknown_ref.clone()),
+            Gate::Allow,
+            "{level:?}"
+        );
+        assert_eq!(
+            in_editor(level, "form_input", json!({"ref": "ref_98", "value": "x", "tabId": 3})),
+            Gate::Allow,
+            "{level:?}"
+        );
+    }
+    // By label: Post, Schedule, Send now still ask at Go hard, not at Full send.
+    for r in ["ref_5", "ref_6", "ref_11"] {
+        assert_eq!(in_editor(Level::GoHard, "computer", click(r)), Gate::Ask, "{r}");
+        assert_eq!(in_editor(Level::FullSend, "computer", click(r)), Gate::Allow, "{r}");
+    }
+    // Below Go hard the address still makes an unknown click unsure.
+    assert_eq!(in_editor(Level::Judgement, "computer", somewhere), Gate::Ask);
+    // A checkout page stays unsure at every level.
+    let checkout = json!({"action": "left_click", "coordinate": [10, 10], "tabId": 4});
+    assert_eq!(in_editor(Level::GoHard, "computer", checkout), Gate::Ask);
+}
+
 #[test]
 fn full_send_still_asks_for_money_accounts_and_secrets_in_the_browser() {
     for r in ["ref_8", "ref_10"] {

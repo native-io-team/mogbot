@@ -1658,7 +1658,13 @@ place the independence level changes an approval, and only for the browser:
   ("Post", "Send now", "Schedule", "Delete post"), or a short one holding one
   that doesn't start by describing; "Will send on Fri…", "Post text" (a text
   box), "Discard changes", "Close" and "Edit post" run. Password boxes ask at
-  Go hard and above. **At Full send** only money, closing an account or a
+  Go hard and above. At Go hard and above a click is judged by what it clicks
+  (label and role), never by the page's address: an X-like scheduled-posts
+  list lives under `/compose/…`, and every unlabelled click there asked. So a
+  click that can't be named (by coordinate, or a `ref` nothing labelled) asks
+  at Go hard only on a payment host or checkout / cart / billing page: **an
+  accepted gap**, the same one "Use good judgement" accepts for ordinary
+  pages; a "Post" clicked by coordinate goes through. **At Full send** only money, closing an account or a
   repository / project, password boxes and checkout pages ask; uploads run
   unless the file looks like a key.
 - **At Go hard everything runs**, `javascript_tool`, shortcuts and unknown
