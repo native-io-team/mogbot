@@ -460,6 +460,8 @@ fn tools_list(caller: &store::Agent) -> Value {
     }
     // Every agent works on projects the same way.
     tools.extend(super::sessions::definitions());
+    // …and runs them without the Projects view (`project_tools`).
+    tools.extend(super::project_tools::definitions());
     // "Test it": only while the user's run is open (`preview_test`).
     tools.extend(super::preview_test::definitions(&caller.id));
     json!({ "tools": tools })
@@ -499,6 +501,9 @@ pub async fn handle_rpc(
                 .unwrap_or_else(|| json!({}));
             if let Some(tool) = super::sessions::find(name) {
                 return ok(super::sessions::call(app, &caller, tool, &args).await);
+            }
+            if let Some(tool) = super::project_tools::find(name) {
+                return ok(super::project_tools::call(app, &caller, turn, tool, &args).await);
             }
             // The user's own local preview, after they pressed Test it: no
             // card (local work), and nothing but that page.

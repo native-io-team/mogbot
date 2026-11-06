@@ -1139,7 +1139,7 @@ async fn agent_outcome(
                 && for_agents()
                 && crate::proxy::dev_server_port_for(project).is_none()
             {
-                format!("NEXT: Reply to the user now: one or two plain sentences on what the agent did (from its reply). {}'s preview isn't running, so there's no screenshot; they can open the project to see it. If its reply asks the user something, put that question to them.", project_name(project))
+                format!("NEXT: {}'s preview isn't running, so there's no screenshot yet: call preview_start for one, then reply to the user in one or two plain sentences on what the agent did (from its reply). If its reply asks the user something, put that question to them.", project_name(project))
             } else if changed_any {
                 "NEXT: Call show_progress for a screenshot, then reply to the user in one or two plain sentences on what the agent did. If its reply asks the user something, put that question to them.".into()
             } else {
@@ -1887,7 +1887,7 @@ fn is_still_starting(message: &str) -> bool {
 const SERVER_SETTLE: Duration = Duration::from_secs(10);
 
 /// The port of `project`'s running dev server, once it accepts connections.
-async fn running_dev_server(project: &str) -> Option<u16> {
+pub(crate) async fn running_dev_server(project: &str) -> Option<u16> {
     let port = crate::proxy::dev_server_port_for(project)?;
     let url = format!("http://localhost:{port}");
     let deadline = tokio::time::Instant::now() + SERVER_SETTLE;
@@ -1907,17 +1907,18 @@ async fn running_dev_server(project: &str) -> Option<u16> {
     }
 }
 
-/// An agent's answer when the project's preview isn't running. Starting it
-/// would mean opening the project over whatever the user is looking at.
+/// An agent's answer when the project's preview isn't running. An agent
+/// starts it itself, in the background (`agents/project_tools.rs`), never by
+/// opening the project over whatever the user is looking at.
 fn preview_not_running(project: &str) -> String {
     let name = project_name(project);
     format!(
-        "{name}'s preview isn't running, so there's no screenshot: starting it would switch the user's window to {name}. Tell them they can open {name} to see it, or call open_project if they ask to see it now."
+        "{name}'s preview isn't running, so there's no screenshot yet. NEXT: call preview_start with project \"{name}\": it installs what's missing and starts it in the background, without moving the user's window, and returns a screenshot."
     )
 }
 
 /// A path within the site, like `/pricing`.
-fn check_page(page: &str) -> Result<&str, String> {
+pub(crate) fn check_page(page: &str) -> Result<&str, String> {
     let page = page.trim();
     // Browsers read `\` as `/` and drop tabs and newlines in a URL, so
     // `/\evil.com` would become the scheme-relative `//evil.com`.
@@ -3419,7 +3420,8 @@ mod tests {
         assert_eq!(check_page("/a/b?c=d#e"), Ok("/a/b?c=d#e"));
         let said = preview_not_running("/Users/me/ShipStudio/bakery");
         assert!(said.contains("bakery's preview isn't running"));
-        assert!(said.contains("open_project"));
+        assert!(said.contains("preview_start"));
+        assert!(!said.contains("open_project"));
     }
 
     /// A tiny site on a free port, standing in for a project's dev server.

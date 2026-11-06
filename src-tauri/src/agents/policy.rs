@@ -927,7 +927,17 @@ pub fn session_refusal(
     tool: &str,
     project: Option<&str>,
 ) -> Option<String> {
-    const CHANGES: [&str; 4] = ["session_start", "session_message", "session_key", "push"];
+    const CHANGES: [&str; 8] = [
+        "session_start",
+        "session_message",
+        "session_key",
+        "push",
+        // `agents/project_tools.rs`: what changes the folder or GitHub.
+        "project_install",
+        "git_commit",
+        "git_branch",
+        "pull_request",
+    ];
     if tool == "project_create" {
         return (eff.projects.scope != Scope::All || eff.projects.elsewhere == Elsewhere::Read)
             .then(|| format!("Your settings don't let you create projects. {ASK_LINE}"));

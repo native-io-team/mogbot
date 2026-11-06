@@ -1226,6 +1226,14 @@ export function useDevServer(currentProjectPath: string | null) {
     []
   );
 
+  // The end of any project's dev-server output, for an agent reading why it
+  // failed (`useAgentDevServerControl`).
+  const getProjectOutput = useCallback(
+    (projectPath: string, maxChars = 8000): string =>
+      (statesRef.current.get(projectPath)?.outputBuffer ?? '').slice(-maxChars),
+    []
+  );
+
   // Any project's install gate, current or not (the Agents preview pane
   // starts servers for folders the window hasn't opened).
   const getProjectNeedsInstall = useCallback(
@@ -1650,6 +1658,7 @@ export function useDevServer(currentProjectPath: string | null) {
     getProjectDevServerSnapshot,
     getProjectType,
     getProjectNeedsInstall,
+    getProjectOutput,
     clearOutputBuffers,
     saveCustomDevCommand,
     clearNeedsInstall,

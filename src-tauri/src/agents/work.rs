@@ -840,6 +840,49 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
             format!("Checking {p}'s deploy"),
             format!("check {p}'s deploy"),
         ),
+        // Running a project without the Projects view (`project_tools`).
+        "preview_start" => act(
+            StepKind::Screenshot,
+            format!("Started {p}'s preview"),
+            format!("Starting {p}'s preview"),
+            format!("start {p}'s preview"),
+        ),
+        "preview_stop" => act(
+            StepKind::Project,
+            format!("Stopped or restarted {p}'s preview"),
+            format!("Restarting {p}'s preview"),
+            format!("stop {p}'s preview"),
+        ),
+        "preview_logs" => act(
+            StepKind::Project,
+            format!("Read {p}'s dev server output"),
+            format!("Reading {p}'s dev server output"),
+            format!("read {p}'s dev server output"),
+        ),
+        "project_install" => act(
+            StepKind::Project,
+            format!("Installed {p}'s packages"),
+            format!("Installing {p}'s packages"),
+            format!("install {p}'s packages"),
+        ),
+        "git_commit" => act(
+            StepKind::Project,
+            format!("Committed {p}'s changes"),
+            format!("Committing {p}'s changes"),
+            format!("commit {p}'s changes"),
+        ),
+        "git_branch" => act(
+            StepKind::Project,
+            format!("Worked with {p}'s branches"),
+            format!("Working with {p}'s branches"),
+            format!("work with {p}'s branches"),
+        ),
+        "pull_request" => act(
+            StepKind::Project,
+            format!("Opened a pull request in {p}"),
+            format!("Opening a pull request in {p}"),
+            format!("open a pull request in {p}"),
+        ),
         // Usage and spare capacity (`usage_tools`).
         "usage_overview" => act(
             StepKind::Plan,

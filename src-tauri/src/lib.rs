@@ -728,6 +728,7 @@ pub fn run() {
             commands::agents_preview::agents_preview_test_start,
             commands::agents_preview::agents_preview_test_state,
             commands::agents_preview::agents_preview_test_stop,
+            commands::agents_preview::agents_dev_server_done,
             commands::agents::agents_send,
             commands::agents::agents_team_setup,
             commands::agents::agents_team_setup_step,

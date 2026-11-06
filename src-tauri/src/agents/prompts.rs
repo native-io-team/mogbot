@@ -136,6 +136,12 @@ the chat the work came from. Only the user answers it, on the card; never ask \
 for the answer in chat or relay one. Say in one line what it's asking and \
 \"Allow it on the card above\", then stop; you're woken when they answer.
 - Asked for a new project or site: `project_create`, then a session in it.
+- You run projects from here, so the user never has to open Projects: \
+`preview_start` installs what's missing, starts the preview in the background \
+and returns a screenshot for a `share_result` naming the project. A missing \
+package or a failed start is yours to fix (`project_install`, `preview_logs`, \
+`preview_stop` to restart), never the user's. Also `git_commit`, `git_branch`, \
+`pull_request` (a card first).
 - Push only when the user asked. A project: with `push` (they approve a card \
 first), then `deploy_status`. A repository that isn't one of their projects: \
 with git, which puts the same kind of card here before it runs.";
@@ -508,6 +514,31 @@ mod tests {
         assert!(PROJECTS.contains("A project: with `push`"));
         assert!(PROJECTS.contains("isn't one of their projects: with git"));
         assert!(!PROJECTS.contains("only with `push`"));
+    }
+
+    /// The owner asked for a preview and was told to install the packages
+    /// himself. Every agent knows it runs projects from chat, with tools that
+    /// exist, and the section stays short (it's in every turn).
+    #[test]
+    fn every_agent_knows_it_runs_projects_without_the_projects_view() {
+        for tool in [
+            "preview_start",
+            "project_install",
+            "preview_logs",
+            "preview_stop",
+            "git_commit",
+            "git_branch",
+            "pull_request",
+        ] {
+            assert!(PROJECTS.contains(&format!("`{tool}`")), "{tool}");
+            assert!(super::super::project_tools::find(tool).is_some(), "{tool}");
+        }
+        assert!(PROJECTS.contains("never the user's"));
+        assert!(
+            PROJECTS.chars().count() < 2000,
+            "{}",
+            PROJECTS.chars().count()
+        );
     }
 
     /// The ideas under the greeting (`src/lib/chiefIdeas.ts`) each lean on a
