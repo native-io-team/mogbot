@@ -271,6 +271,7 @@ export function ResultCardView({
   const connected = useApp((s) => s.link.kind === 'connected');
   const canWatch = useCanWatch();
   const [opening, setOpening] = useState(false);
+  const styles = useStyles();
   if (!newest && !opened) {
     return (
       <Line
@@ -285,35 +286,31 @@ export function ResultCardView({
   // among them as a button. Beside a copy's answers it takes the line above
   // them, at the start, so Discard / Keep changes keep their full width.
   const ask = newest && onAskForChanges && (
-    <View style={parts ? { flexBasis: '100%' } : undefined}>
-      <TextAction
-        label="Ask for changes"
-        disabled={!connected}
-        onPress={() => {
-          haptic.light();
-          onAskForChanges(refOf(card));
-        }}
-      />
-    </View>
+    <TextAction
+      label="Ask for changes"
+      disabled={!connected}
+      onPress={() => {
+        haptic.light();
+        onAskForChanges(refOf(card));
+      }}
+    />
   );
   // The running site, read-only, over this Mac's own tailnet: a way to look,
   // not an answer, so a text action like Ask for changes.
   const watch = newest && canWatch && Boolean(card.project || copy) && (
-    <View style={parts ? { flexBasis: '100%' } : undefined}>
-      <TextAction
-        label={opening ? 'Opening…' : 'Watch live'}
-        hint="Opens the site running on your Mac, read-only"
-        disabled={!connected || opening}
-        onPress={() => {
-          haptic.light();
-          setOpening(true);
-          watchLive(agent.id, message.id)
-            .then((link) => openHere(link.url))
-            .catch((e: unknown) => onError(describeError(e)))
-            .finally(() => setOpening(false));
-        }}
-      />
-    </View>
+    <TextAction
+      label={opening ? 'Opening…' : 'Watch live'}
+      hint="Opens the site running on your Mac, read-only"
+      disabled={!connected || opening}
+      onPress={() => {
+        haptic.light();
+        setOpening(true);
+        watchLive(agent.id, message.id)
+          .then((link) => openHere(link.url))
+          .catch((e: unknown) => onError(describeError(e)))
+          .finally(() => setOpening(false));
+      }}
+    />
   );
   return (
     <Card
@@ -332,8 +329,19 @@ export function ResultCardView({
       actions={
         ask || watch || parts ? (
           <>
-            {watch}
-            {ask}
+            {/* Beside a copy's answers the text actions share one line above
+                them (each on a line of its own read as a list, not actions). */}
+            {parts && (watch || ask) ? (
+              <View style={styles.textActions}>
+                {watch}
+                {ask}
+              </View>
+            ) : (
+              <>
+                {watch}
+                {ask}
+              </>
+            )}
             {parts?.actions}
           </>
         ) : undefined
@@ -351,6 +359,13 @@ export function ResultCardView({
 
 const useStyles = makeStyles((colors) => ({
   row: { flexDirection: 'row', alignItems: 'center', gap: space.tight },
+  textActions: {
+    flexBasis: '100%',
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: space.md,
+  },
   strong: { fontWeight: '600' as const, color: colors.textPrimary },
   unverified: {
     gap: space.xs,

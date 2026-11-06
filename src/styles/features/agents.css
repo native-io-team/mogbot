@@ -33,6 +33,10 @@
   );
   --agents-chat-width: 720px;
   --agents-bubble-max: 80%;
+  /* Below this a card fills the column instead of keeping the bubble's 80%:
+     beside the preview the column is ~420px, and 80% of it squeezed a result
+     card's before/after pair into thumbnails beside a composer wider than it. */
+  --agents-card-floor: 480px; /* css-ok: a card's narrowest comfortable width */
   /* Agent prose sits on the canvas, not in a bubble, across the same column
      as the composer under it: one edge on both sides at every window size.
      (A 38em measure left the replies narrower than the composer at 1100px.) */
@@ -189,7 +193,9 @@
 
 .agents-list__pin {
   flex: 0 0 auto;
-  color: var(--text-faint);
+  /* Pinned and muted are facts about the row, not decoration: --text-faint is
+     for rules and disabled glyphs, and on light it all but vanished. */
+  color: var(--text-muted);
   pointer-events: none;
 }
 

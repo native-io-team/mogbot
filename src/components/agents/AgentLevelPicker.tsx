@@ -10,6 +10,7 @@
 import { useState } from 'react';
 import { Dropdown, DropdownDivider, DropdownItem } from '../primitives/Dropdown';
 import { MenuButton } from '../primitives/MenuButton';
+import { ChevronIcon } from '@/components/icons';
 import {
   AGENT_INDEPENDENCE_TITLE,
   INDEPENDENCE_DETAIL,
@@ -70,6 +71,12 @@ export function AgentLevelPicker({ agent }: { agent: Agent }) {
               variant="secondary"
               size="compact"
               disabled={picked !== null}
+              rightIcon={
+                <ChevronIcon
+                  size={10}
+                  className={p['aria-expanded'] ? 'chevron-flipped' : undefined}
+                />
+              }
             >
               {own ? INDEPENDENCE_LABEL[own] : sameAsTeamLabel(team)}
             </MenuButton>

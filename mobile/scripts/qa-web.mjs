@@ -1120,9 +1120,11 @@ const LIVE = [
     name: 'login-choose',
     route: '/chat/fin',
     ready: 'Finance',
-    act: scrollToText('Connect Gmail'),
+    // Gmail has no connector of its own (Google approves which apps may use
+    // it), so the card leads with Use my browser, not "Connect Gmail".
+    act: scrollToText('Use my browser'),
     check:
-      'Login card: "Finance needs your Gmail", asked-as line, what it can do, the no-connector line, Not now + Connect Gmail (neutral), Use my browser below with what it means; no password field',
+      'Login card: "Finance needs your Gmail", asked-as line, what it can do, the no-connector line, Not now + Not needed (neutral), Use my browser with what it means, then Connect in Claude and Sign in from here; no password field',
   },
   {
     name: 'login-on-mac',

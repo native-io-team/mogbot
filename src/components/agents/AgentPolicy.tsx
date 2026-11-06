@@ -10,7 +10,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
-import { ErrorIcon } from '@/components/icons';
+import { ChevronIcon, ErrorIcon } from '@/components/icons';
 import { Dropdown, DropdownDivider, DropdownItem } from '../primitives/Dropdown';
 import { MenuButton } from '../primitives/MenuButton';
 import { TextButton } from '../primitives/TextButton';
@@ -148,6 +148,12 @@ export function AgentPolicy({
                 variant="secondary"
                 size="compact"
                 disabled={busy}
+                rightIcon={
+                  <ChevronIcon
+                    size={10}
+                    className={p['aria-expanded'] ? 'chevron-flipped' : undefined}
+                  />
+                }
               >
                 {current}
               </MenuButton>

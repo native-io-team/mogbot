@@ -156,6 +156,13 @@
 
 /* --------------------------------------------- a change card for a copy */
 
+/* A copy's Review changes + Keep changes: one group, so a wrap never splits them. */
+.agent-copy__answers {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
 /* The card's rarest action: the … sits with the other actions on the right,
    as it does on an approval card. */
 .agent-copy__more {
