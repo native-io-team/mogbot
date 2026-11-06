@@ -57,7 +57,7 @@ export function StackedAvatars({
       <View style={styles.pairRow} accessible={false}>
         {shown.map((m) => (
           <View key={m.id} style={[styles.ring, ring, { borderRadius: radius.inner }]}>
-            <AgentAvatar name={m.name} color={m.color} size={tile} />
+            <AgentAvatar id={m.id} name={m.name} color={m.color} size={tile} />
           </View>
         ))}
         {plus}
@@ -85,7 +85,7 @@ export function StackedAvatars({
             { left: spots[i][0], top: spots[i][1], borderRadius: radius.inner },
           ]}
         >
-          <AgentAvatar name={m.name} color={m.color} size={tile} />
+          <AgentAvatar id={m.id} name={m.name} color={m.color} size={tile} />
         </View>
       ))}
       {plus}

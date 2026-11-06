@@ -1587,7 +1587,11 @@ pub(crate) fn record_card(
     r: LoginRequest,
 ) -> Result<String, CommandError> {
     let m = card_message(agent, r);
-    let request_id = m.approval.as_ref().map(|a| a.request_id.clone()).unwrap_or_default();
+    let request_id = m
+        .approval
+        .as_ref()
+        .map(|a| a.request_id.clone())
+        .unwrap_or_default();
     runner::record_own(app, m)?;
     store::refresh_pending(&agent.id);
     super::notify::refresh_badge(app);
@@ -2382,6 +2386,7 @@ mod tests {
             role: String::new(),
             instructions: String::new(),
             shape: None,
+            avatar: None,
             color: None,
             is_main: false,
         })

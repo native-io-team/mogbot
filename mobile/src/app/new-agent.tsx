@@ -15,11 +15,18 @@
 
 import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
-import type { NewAgentDefaults, RoleTemplateSummary } from '@shipstudio/companion-protocol';
+import {
+  freeLook,
+  lookFor,
+  MAC_FEATURES,
+  type AgentLook,
+  type NewAgentDefaults,
+  type RoleTemplateSummary,
+} from '@shipstudio/companion-protocol';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { AgentAvatar } from '../components/agent';
-import { Chip, ChipRow, ColorSwatches } from '../components/pickers';
+import { Chip, ChipRow, ColorSwatches, LookChoices } from '../components/pickers';
 import { Button, SheetPage, T } from '../components/ui';
 import { SheetTitle } from '../components/SheetTitle';
 import { AccentProvider, useAccent } from '../lib/accent';
@@ -72,6 +79,14 @@ export default function NewAgent() {
   const [name, setName] = useState('');
   const takenColors = useMemo(() => (agents ?? []).map((a) => a.color), [agents]);
   const [color, setColor] = useState(() => freeColor(takenColors));
+  // A Mac that keeps looks: a shape nobody wears yet, shown as it'll be.
+  const looks = useApp((s) => !!s.welcome?.features?.includes(MAC_FEATURES.looks));
+  const [look, setLook] = useState<AgentLook>(() =>
+    freeLook(
+      (agents ?? []).map((a) => lookFor(a)),
+      String(Date.now())
+    )
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const clientId = useRef(Crypto.randomUUID());
@@ -100,7 +115,13 @@ export default function NewAgent() {
     setError(null);
     haptic.light();
     createAgent(
-      { name: finalName, role: role.trim(), color, ...(template ? { template: template.id } : {}) },
+      {
+        name: finalName,
+        role: role.trim(),
+        color,
+        ...(template ? { template: template.id } : {}),
+        ...(looks ? { avatar: look } : {}),
+      },
       clientId.current
     )
       .then((stored) => {
@@ -187,7 +208,12 @@ export default function NewAgent() {
           <>
             <View style={styles.identity}>
               <AccentProvider color={color}>
-                <AgentAvatar name={finalName || '?'} color={color} size={avatarSize.list} />
+                <AgentAvatar
+                  name={finalName || '?'}
+                  color={color}
+                  look={looks ? look : undefined}
+                  size={avatarSize.list}
+                />
               </AccentProvider>
               <TextInput
                 value={name}
@@ -206,6 +232,9 @@ export default function NewAgent() {
               />
             </View>
             <ColorSwatches value={color} onChange={setColor} />
+            {looks && (
+              <LookChoices name={finalName || '?'} color={color} look={look} onChange={setLook} />
+            )}
             {engine && (
               <T variant="caption" color={colors.textMuted}>
                 Runs on {engine} on {macName}

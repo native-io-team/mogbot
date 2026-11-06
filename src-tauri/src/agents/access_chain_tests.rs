@@ -16,6 +16,7 @@ fn agent(name: &str) -> Agent {
         role: String::new(),
         instructions: String::new(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: false,
     })
@@ -316,7 +317,12 @@ fn a_no_from_before_the_user_turned_it_back_on_no_longer_counts() {
         let writer = agent("Writer");
         let none = Tried::default();
         let r = logins::build(&writer, &ask("figma")).unwrap();
-        let mut no = seen(&designer, "figma", ApprovalStatus::Denied, Some("Not needed"));
+        let mut no = seen(
+            &designer,
+            "figma",
+            ApprovalStatus::Denied,
+            Some("Not needed"),
+        );
         no.at = 10;
         let team = [no];
         assert!(matches!(

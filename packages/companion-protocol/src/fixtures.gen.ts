@@ -2867,6 +2867,7 @@ export const frames = [
       "rooms",
       "logins",
       "logins.phone",
+      "agents.looks",
       "signin.phone"
     ]
   },

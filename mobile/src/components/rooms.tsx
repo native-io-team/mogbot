@@ -73,7 +73,7 @@ function Speaker({ agent }: { agent: Agent }) {
   const color = useNameColor(agent.color);
   return (
     <View style={styles.speaker}>
-      <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.group} />
+      <AgentAvatar id={agent.id} name={agent.name} color={agent.color} size={avatarSize.group} />
       <T variant="small" color={color} style={{ fontFamily: fonts.semibold }} numberOfLines={1}>
         {agent.name}
       </T>
@@ -629,7 +629,7 @@ function Chip({ agent, label, onPress }: { agent?: Agent; label?: string; onPres
       style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
     >
       {agent ? (
-        <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.group} />
+        <AgentAvatar id={agent.id} name={agent.name} color={agent.color} size={avatarSize.group} />
       ) : (
         <Icon name="person.2" size={iconSize.inline} color={colors.textSecondary} />
       )}

@@ -18,6 +18,7 @@ fn agent(name: &str, is_main: bool) -> store::Agent {
         role: format!("{name}'s work"),
         instructions: String::new(),
         shape: None,
+        avatar: None,
         color: None,
         is_main,
     })

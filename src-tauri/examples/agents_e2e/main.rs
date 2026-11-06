@@ -127,6 +127,7 @@ impl H {
             role: role.into(),
             instructions: instructions.into(),
             shape: None,
+            avatar: None,
             color: None,
             is_main: false,
         })

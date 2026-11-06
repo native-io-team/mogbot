@@ -10,6 +10,7 @@ import type { FileDiff } from './git';
 import type { AgentSecret, SecretRequest } from './agentSecrets';
 import type { Watch, WatchSource } from '../../packages/companion-protocol/src/model';
 import type { SettingsProposal } from '../../packages/companion-protocol/src/policy';
+import type { AgentLook } from '../../packages/companion-protocol/src/avatar';
 
 export type { Watch, WatchEvent, WatchSource } from '../../packages/companion-protocol/src/model';
 
@@ -150,6 +151,8 @@ export interface Agent {
   name: string;
   role: string;
   shape: number;
+  /** Its chosen shape and face. Absent: derived from its id (`lookFor` in avatar.ts). */
+  avatar?: AgentLook;
   /** One of AGENT_COLORS; typed loosely because the registry is a file. */
   color: string;
   isMain: boolean;
@@ -762,6 +765,7 @@ export const attachmentUrl = (home: string, attachment: Attachment) =>
 export interface NewAgentInput {
   name: string;
   shape?: number;
+  avatar?: AgentLook;
   color?: string;
   role?: string;
   instructions?: string;
@@ -776,6 +780,7 @@ export interface NewAgentInput {
 export interface UpdateAgentInput {
   name?: string;
   shape?: number;
+  avatar?: AgentLook;
   color?: string;
   role?: string;
   instructions?: string;

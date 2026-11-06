@@ -128,7 +128,7 @@ export default function Search() {
             {section.room ? (
               <Icon name="person.2" size={iconSize.inline} color={colors.textSecondary} />
             ) : (
-              <AgentAvatar name={section.name} color={section.color} size={avatarSize.group} />
+              <AgentAvatar id={section.key} name={section.name} color={section.color} size={avatarSize.group} />
             )}
             <T
               variant="small"

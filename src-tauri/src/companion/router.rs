@@ -226,9 +226,11 @@ impl ScheduleOp {
     }
 }
 
-/// What the phone may change about an agent: the row's own toggles, and
-/// its instructions (the agent sheet shows them, so it can correct them).
-/// Its name, role, model and project stay the desk's.
+/// What the phone may change about an agent: the row's own toggles, its
+/// instructions (the agent sheet shows them, so it can correct them), and
+/// how it looks (`avatar` and `color`, from a Mac that lists
+/// [`MAC_FEATURE_LOOKS`](super::wire::MAC_FEATURE_LOOKS)). Its name, role,
+/// model and project stay the desk's.
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AgentToggles {
@@ -236,6 +238,10 @@ pub struct AgentToggles {
     pub hidden: Option<bool>,
     pub muted: Option<bool>,
     pub instructions: Option<String>,
+    #[serde(default)]
+    pub avatar: Option<crate::agents::store::AgentLook>,
+    #[serde(default)]
+    pub color: Option<String>,
 }
 
 /// Instructions are a brief, not a document: the phone's editor stops here.
@@ -255,6 +261,9 @@ pub struct PhoneNewAgent {
     pub role: String,
     #[serde(default)]
     pub color: Option<String>,
+    /// Its shape and face, as the phone's preview showed them.
+    #[serde(default)]
+    pub avatar: Option<crate::agents::store::AgentLook>,
     /// An id from `agents.templates`.
     #[serde(default)]
     pub template: Option<String>,
@@ -346,8 +355,18 @@ fn check_new_agent(input: PhoneNewAgent) -> Result<PhoneNewAgent, WireError> {
         name,
         role,
         color,
+        avatar: check_look(input.avatar)?,
         template,
     })
+}
+
+/// A look the phone sent: keys this Mac draws, or a refusal naming them.
+fn check_look(
+    look: Option<crate::agents::store::AgentLook>,
+) -> Result<Option<crate::agents::store::AgentLook>, WireError> {
+    look.map(|l| crate::agents::store::AgentLook::checked(&l.shape, &l.face))
+        .transpose()
+        .map_err(bad_params)
 }
 
 /// "Setting up your team" from the phone (`agents::team_setup`): the same
@@ -1678,7 +1697,7 @@ async fn run(
         "agents.update" => {
             let p: UpdateParams = parse(params).map_err(|_| {
                 bad_params(
-                    "Only pin, mute, hide and the instructions can be changed from the phone.",
+                    "Only pin, mute, hide, the instructions and how it looks can be changed from the phone.",
                 )
             })?;
             if p.input == AgentToggles::default() {
@@ -1695,6 +1714,13 @@ async fn run(
             }
             if let Some(i) = &p.input.instructions {
                 refuse_unsafe_text(i, "Instructions")?;
+            }
+            let mut p = p;
+            p.input.avatar = check_look(p.input.avatar.take())?;
+            if let Some(c) = p.input.color.as_deref().map(str::trim) {
+                if !crate::agents::store::COLORS.contains(&c) {
+                    return Err(bad_params(format!("{c} isn't one of the agent colours.")));
+                }
             }
             // `StoredAgent` doesn't carry lifetime usage, as the overview doesn't.
             let mut stored = b.update_agent(&p.agent_id, p.input).await?;

@@ -335,6 +335,7 @@ fn scale() {
             role: "Does things".into(),
             instructions: "Be useful. ".repeat(50),
             shape: None,
+            avatar: None,
             color: None,
             is_main: a == 0,
         })
@@ -433,6 +434,7 @@ fn pending_approvals_follow_cards_and_answers_and_outside_changes() {
         role: String::new(),
         instructions: String::new(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: false,
     })
@@ -485,6 +487,7 @@ fn a_message_recorded_after_delete_never_resurrects_the_home() {
         role: String::new(),
         instructions: String::new(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: false,
     })
@@ -508,6 +511,7 @@ fn a_message_recorded_after_delete_never_resurrects_the_home() {
         role: String::new(),
         instructions: String::new(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: false,
     })

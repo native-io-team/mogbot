@@ -415,6 +415,7 @@ impl Backend for DesktopBackend {
         let input = cmd::CreateAgentInput {
             name: input.name,
             shape: None,
+            avatar: input.avatar,
             color: Some(color),
             role: input.role,
             instructions: template.map(|t| t.instructions()).unwrap_or_default(),
@@ -445,7 +446,8 @@ impl Backend for DesktopBackend {
         let input = cmd::UpdateAgentInput {
             name: None,
             shape: None,
-            color: None,
+            avatar: toggles.avatar,
+            color: toggles.color.map(|c| c.trim().to_string()),
             role: None,
             instructions: toggles.instructions,
             pinned: toggles.pinned,

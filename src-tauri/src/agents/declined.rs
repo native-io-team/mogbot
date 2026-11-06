@@ -94,7 +94,11 @@ impl Saved {
 /// Services turned back on, and when.
 pub fn turned_on() -> Vec<(String, i64)> {
     let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    read().turned_on.into_iter().map(|t| (t.key, t.at)).collect()
+    read()
+        .turned_on
+        .into_iter()
+        .map(|t| (t.key, t.at))
+        .collect()
 }
 
 static LOCK: Mutex<()> = Mutex::new(());
@@ -387,6 +391,7 @@ mod tests {
             role: String::new(),
             instructions: String::new(),
             shape: None,
+            avatar: None,
             color: None,
             is_main: false,
         })

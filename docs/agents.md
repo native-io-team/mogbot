@@ -184,7 +184,7 @@ and Inbox against a live Gmail connector.
 
 | Piece | Where | Notes |
 | --- | --- | --- |
-| Identity | `<projects root>/.shipstudio/agents/agents.json` | name, role, avatar (shape + colour key), pinned/hidden, unread, Claude session id |
+| Identity | `<projects root>/.shipstudio/agents/agents.json` | name, role, colour key, `avatar` (a shape and a face; absent, derived from the id: see docs/internal/avatars.md), pinned/hidden, unread, Claude session id |
 | Home | `<projects root>/.shipstudio/agents/<id>/` | the agent's working directory |
 | Instructions + memory | `<home>/CLAUDE.md` | Claude Code loads it every turn. Instructions on top, `## Memory` below, which the agent maintains itself. Editing instructions never touches memory. |
 | Conversation | `<home>/messages.jsonl` | what *you* were shown: your messages, its replies, agent-to-agent lines, approval cards, errors. Append-only |
@@ -471,8 +471,8 @@ steps has no line.
   ends the turn with a line saying so (`HUNG_NOTE`).
 - **In the lists**: a working agent's row (sidebar, What's in flight)
   says the step and how long ("Running the Cypress tests · 5m") or "No
-  progress for 5 min", never "Working…", and its badge's ring breathes
-  slowly in its colour (still under Reduce Motion).
+  progress for 5 min", never "Working…", and its avatar blinks every few
+  seconds (still under Reduce Motion). No ring around it.
 - **Stored** beside the log, never in it: `turns/<message-id>.json`, sent
   again on `agents://message` when the turn ends, and applied only to the
   paged chat reads (desktop and phone), after the log's lock is released,

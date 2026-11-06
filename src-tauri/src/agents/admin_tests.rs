@@ -87,6 +87,7 @@ fn only_the_user_switch_sets_admin_and_a_revoke_holds_at_once() {
         role: "Books".into(),
         instructions: "Keep the books.".into(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: false,
     })
@@ -504,6 +505,7 @@ fn a_deleted_agent_waits_thirty_days_and_comes_back_whole() {
         role: "Watches the kite shop".into(),
         instructions: "Watch it.".into(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: false,
     })
@@ -550,6 +552,7 @@ fn the_chief_cant_be_soft_deleted() {
         role: "Runs the team".into(),
         instructions: "Run it.".into(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: true,
     })
@@ -568,6 +571,7 @@ fn an_existing_chief_is_told_once_and_a_new_one_never() {
         role: "Runs the team".into(),
         instructions: "Run it.".into(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: true,
     })
@@ -584,6 +588,7 @@ fn an_existing_chief_is_told_once_and_a_new_one_never() {
         role: "x".into(),
         instructions: "x".into(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: true,
     })

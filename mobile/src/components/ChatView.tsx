@@ -857,7 +857,7 @@ function Header({ agent }: { agent: Agent }) {
   const styles = useStyles();
   return (
     <View style={styles.header}>
-      <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.header} />
+      <AgentAvatar id={agent.id} name={agent.name} color={agent.color} size={avatarSize.header} />
       <View style={{ flexShrink: 1 }}>
         <T
           variant="headline"

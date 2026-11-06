@@ -278,15 +278,16 @@ export interface Methods {
    */
   'agents.create': {
     params: {
-      input: Pick<NewAgentInput, 'name' | 'role' | 'color' | 'template'>;
+      input: Pick<NewAgentInput, 'name' | 'role' | 'color' | 'template' | 'avatar'>;
       clientId?: string;
     };
     result: StoredAgent;
   };
   /**
    * From the phone, only the row's toggles (`pinned`, `muted`, `hidden`)
-   * and `instructions` (at most 20,000 characters); any other field is
-   * refused with `bad_params`. The name, role, model and project stay the desk's.
+   * and `instructions` (at most 20,000 characters), and from a Mac listing
+   * `MAC_FEATURES.looks`, `avatar` and `color`; any other field is refused
+   * with `bad_params`. The name, role, model and project stay the desk's.
    */
   'agents.update': { params: { agentId: string; input: UpdateAgentInput }; result: StoredAgent };
   /** The phone asks for confirmation first; the server asks nothing further. */

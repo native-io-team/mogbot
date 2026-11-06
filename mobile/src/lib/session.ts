@@ -13,6 +13,7 @@ import type {
   ResultRef,
   TeamSetupStepId,
   TeamSetupStepState,
+  AgentLook,
 } from '@shipstudio/companion-protocol';
 import NetInfo from '@react-native-community/netinfo';
 import { AccessibilityInfo, AppState, Platform } from 'react-native';
@@ -565,7 +566,11 @@ export const deviceSelf = () => call('devices.self', {});
 /** Pin, mute or hide: shown at once, put back if the Mac says no. */
 export async function setAgentToggles(
   agentId: string,
-  input: Partial<Record<'pinned' | 'muted' | 'hidden', boolean>>
+  input: Partial<Record<'pinned' | 'muted' | 'hidden', boolean>> & {
+    /** How it looks, from a Mac listing `MAC_FEATURES.looks`. */
+    avatar?: AgentLook;
+    color?: string;
+  }
 ) {
   const before = getApp().overview;
   const patch = (on: typeof before) =>

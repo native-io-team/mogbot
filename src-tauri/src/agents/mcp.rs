@@ -188,7 +188,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "update_agent",
-        description: "Change an agent's name, role, instructions, project or engine. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude` or `codex`) switches what it runs on from its next turn: a new session, handed the recent conversation.",
+        description: "Change an agent's name, role, instructions, project, engine or look. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude` or `codex`) switches what it runs on from its next turn: a new session, handed the recent conversation. `shape`, `face` and `color` change how it looks (\"give Hiring a hexagon with a curious face\"); give only what changes. A look applies at once, with no card: it isn't a setting.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -198,7 +198,10 @@ const TOOLS: &[Tool] = &[
                 "role": { "type": "string" },
                 "instructions": { "type": "string" },
                 "project": { "type": "string" },
-                "engine": { "type": "string", "enum": ["claude", "codex"] }
+                "engine": { "type": "string", "enum": ["claude", "codex"] },
+                "shape": { "type": "string", "enum": store::AVATAR_SHAPES },
+                "face": { "type": "string", "enum": store::AVATAR_FACES },
+                "color": { "type": "string", "enum": store::COLORS }
             },
             "required": ["agent"]
         }),
@@ -1383,6 +1386,7 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         role,
         instructions,
         shape: None,
+        avatar: None,
         color,
         is_main: false,
     });
@@ -1475,6 +1479,10 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         Some(Err(e)) => return error(e.to_string()),
         _ => None,
     };
+    let look = match look_args(&agent, args) {
+        Ok(l) => l,
+        Err(e) => return error(e),
+    };
     let role = arg(args, "role").map(str::to_string);
     let mut fields = Vec::new();
     if role.as_deref().is_some_and(|r| r != agent.role) {
@@ -1509,6 +1517,12 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         if let Some(engine) = engine {
             a.switch_engine(engine);
         }
+        if let Some(avatar) = look.avatar.clone() {
+            a.avatar = Some(avatar);
+        }
+        if let Some(c) = look.color.clone() {
+            a.color = c;
+        }
     });
     let updated = match updated {
         Ok(a) => a,
@@ -1527,7 +1541,79 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     for note in update_notes(caller, &agent, &updated, &fields) {
         let _ = runner::record(app, note);
     }
-    text(format!("Updated {}.", updated.name))
+    match look.line() {
+        Some(line) => text(format!("Updated {}: {line}.", updated.name)),
+        None => text(format!("Updated {}.", updated.name)),
+    }
+}
+
+/// What `update_agent`'s `shape` / `face` / `color` change for this agent:
+/// only what differs from what it wears now; the rest of its look stays.
+/// Looks aren't settings, so this applies without a card.
+#[derive(Debug, Default, PartialEq)]
+pub(super) struct LookUpdate {
+    /// Its whole new look, when the shape or face changes.
+    pub avatar: Option<store::AgentLook>,
+    pub color: Option<String>,
+    shape_changed: bool,
+    face_changed: bool,
+}
+
+impl LookUpdate {
+    /// "now a hexagon with a curious face, in blue", for the tool's reply.
+    pub fn line(&self) -> Option<String> {
+        let a = self.avatar.as_ref();
+        let desc = store::AgentLook::describe(
+            a.filter(|_| self.shape_changed).map(|l| l.shape.as_str()),
+            a.filter(|_| self.face_changed).map(|l| l.face.as_str()),
+        );
+        let what = match (self.shape_changed, desc.is_empty()) {
+            (_, true) => String::new(),
+            (false, false) => format!("now has {desc}"),
+            (true, false) => format!("now {desc}"),
+        };
+        match (what.is_empty(), &self.color) {
+            (false, Some(c)) => Some(format!("{what}, in {c}")),
+            (false, None) => Some(what),
+            (true, Some(c)) => Some(format!("now {c}")),
+            (true, None) => None,
+        }
+    }
+}
+
+pub(super) fn look_args(agent: &store::Agent, args: &Value) -> Result<LookUpdate, String> {
+    let key = |k: &str| {
+        args.get(k)
+            .and_then(Value::as_str)
+            .map(|s| s.trim().to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+    };
+    let (shape, face, color) = (key("shape"), key("face"), key("color"));
+    let now = store::AgentLook::of(agent);
+    let mut out = LookUpdate::default();
+    if shape.is_some() || face.is_some() {
+        let next = store::AgentLook::checked(
+            shape.as_deref().unwrap_or(&now.shape),
+            face.as_deref().unwrap_or(&now.face),
+        )?;
+        out.shape_changed = next.shape != now.shape;
+        out.face_changed = next.face != now.face;
+        if out.shape_changed || out.face_changed {
+            out.avatar = Some(next);
+        }
+    }
+    if let Some(c) = color {
+        if !store::COLORS.contains(&c.as_str()) {
+            return Err(format!(
+                "There's no colour called \"{c}\": {}.",
+                store::COLORS.join(", ")
+            ));
+        }
+        if c != agent.color {
+            out.color = Some(c);
+        }
+    }
+    Ok(out)
 }
 
 /// An admin's delete is a soft one: the agent leaves the team and waits in
@@ -2742,6 +2828,7 @@ mod tests {
             name: "Finance".into(),
             role: String::new(),
             shape: 0,
+            avatar: None,
             color: "red".into(),
             is_main: false,
             pinned: false,

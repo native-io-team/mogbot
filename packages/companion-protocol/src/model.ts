@@ -16,6 +16,7 @@
 
 import type { ResultCard, ResultRef } from './results';
 import type { SettingsProposal } from './policy';
+import type { AgentLook } from './avatar';
 
 export interface AgentStatus {
   state: 'idle' | 'working' | 'waiting';
@@ -135,6 +136,8 @@ export interface Agent {
   name: string;
   role: string;
   shape: number;
+  /** Its chosen shape and face. Absent: derived from its id (`lookFor` in avatar.ts). */
+  avatar?: AgentLook;
   color: string;
   isMain: boolean;
   /**
@@ -1179,6 +1182,7 @@ export interface SharedFile extends Attachment {
 export interface NewAgentInput {
   name: string;
   shape?: number;
+  avatar?: AgentLook;
   color?: string;
   role?: string;
   instructions?: string;
@@ -1204,6 +1208,7 @@ export interface RoleTemplateSummary {
 export interface UpdateAgentInput {
   name?: string;
   shape?: number;
+  avatar?: AgentLook;
   color?: string;
   role?: string;
   instructions?: string;

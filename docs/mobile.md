@@ -577,8 +577,11 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   "Check on it" (`agents.checkOn`: what the Mac can see, one line, never
   interrupting) and Stop. Finished steps read "Ran the Cypress tests · 6m 12s
   · 42 passed, 3 failed", and a long or failed command keeps "Show output".
-  On the list a working agent's avatar gets a ring in its colour that
-  breathes slowly (still under Reduce Motion) in place of the spinner, and
+  On the list a working agent's avatar (a shape and a face, drawn with
+  react-native-svg from the spec the desk uses: docs/internal/avatars.md;
+  the agent sheet changes it on a Mac listing `agents.looks`) blinks every
+  few seconds (still under Reduce Motion; never a ring around it) in place
+  of the spinner, and
   its line says the step and how long ("Running the Cypress tests · 5m");
   the overview carries no steps, so until a live status arrives it is the
   status's words and the turn's time. The words come from

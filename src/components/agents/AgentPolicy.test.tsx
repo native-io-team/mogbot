@@ -19,7 +19,13 @@ vi.mock('../../lib/agentPolicy', async (orig) => ({
   ...api,
 }));
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
-vi.mock('../../lib/agentsStore', () => ({ refreshAgents: vi.fn(() => Promise.resolve()) }));
+vi.mock('../../lib/agentsStore', () => ({
+  refreshAgents: vi.fn(() => Promise.resolve()),
+  useAgentsList: () => [],
+  agentIn: () => undefined,
+  getAgentsSnapshot: () => ({ agents: [] }),
+  subscribeAgents: () => () => {},
+}));
 
 import { AgentSettingsChange } from './AgentSettingsChange';
 import { AgentPolicy } from './AgentPolicy';
@@ -148,6 +154,7 @@ describe('AgentTeamPolicySettings', () => {
     const trusted = await screen.findByRole('radio', { name: /I trust my agents/ });
     await act(async () => {
       fireEvent.click(trusted);
+      await Promise.resolve();
     });
     expect(api.setPolicy).toHaveBeenCalledWith(
       { kind: 'team', everyone: false },
@@ -159,6 +166,7 @@ describe('AgentTeamPolicySettings', () => {
     expect(await screen.findByText(/Hiring lose their own settings/)).toBeInTheDocument();
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Reset everyone' }));
+      await Promise.resolve();
     });
     expect(api.setPolicy).toHaveBeenCalledWith(
       { kind: 'team', everyone: true },
