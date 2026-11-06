@@ -143,6 +143,13 @@ fn frames() -> Vec<ServerFrame> {
             },
         ),
         (
+            Some(1),
+            // "Do these under your name?" (`ask_plan`).
+            Event::Message {
+                message: serde_json::to_value(testkit::plan_card()).unwrap(),
+            },
+        ),
+        (
             Some(2),
             Event::Status {
                 agent_id: AGENT.into(),

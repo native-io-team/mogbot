@@ -976,6 +976,32 @@ pub fn sent_at_full_send(
     Some((verb, place))
 }
 
+/// A browser step a plan the user allowed could cover (`plan_grant`): one
+/// "Full send" would let through and the agent's own level asks for (a post,
+/// a reply, a send on a site), with what it does and where. Never the floor
+/// "Full send" still asks for (paying, passwords, uploads of secrets), never
+/// a script or an upload, and never a step with no known site.
+pub fn plan_step(agent: &Agent, tool: &str, input: &Value) -> Option<(&'static str, String)> {
+    let (page, name, input) = if let Some(name) = tool.strip_prefix(AGENTS_SERVER) {
+        let (n, i) = agents_equivalent(name, input);
+        (page_of(&agents_key(&agent.id)), n, i)
+    } else {
+        let name = tool.strip_prefix(SERVER)?;
+        (page_of(&agent.id), name.to_string(), input.clone())
+    };
+    if matches!(
+        name.as_str(),
+        "javascript_tool" | "file_upload" | "upload_image"
+    ) || decide(Level::FullSend, agent, &name, &input, &page) != Gate::Allow
+    {
+        return None;
+    }
+    let label = target_of(&page, &input).unwrap_or_default();
+    let verb = super::full_send::browser_verb(&label);
+    let host = url_for(&page, &input).and_then(|u| host_of(&u))?;
+    Some((verb, host))
+}
+
 /* --------------------------------------------- the agents' browser */
 
 /// The agents' own browser's MCP server (`agent_browser::tools`), as its

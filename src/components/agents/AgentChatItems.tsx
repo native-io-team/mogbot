@@ -50,6 +50,7 @@ import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
 import { LoginCard } from './AgentLoginCard';
 import { AgentSettingsChange } from './AgentSettingsChange';
+import { AgentPlanList } from './AgentPlanList';
 import { AgentCard } from './AgentCard';
 import { ImportReviewCard } from './ImportReviewCard';
 import { ImportPlaybackCard } from './ImportPlaybackCard';
@@ -1028,6 +1029,9 @@ function outcomeText(approval: Approval, agentName: string, compact: boolean): R
   if (approval.settings && approval.status === 'allowed') {
     return 'Changed · from each agent’s next turn';
   }
+  if (approval.plan && approval.status === 'allowed') {
+    return 'Allowed · each step runs without asking for an hour';
+  }
   if (approval.choice && approval.status !== 'expired') {
     return `${STATUS_LABEL[approval.status as 'allowed' | 'denied']} · ${approval.choice}`;
   }
@@ -1241,6 +1245,8 @@ export const ApprovalCard = memo(function ApprovalCard({
       >
         {approval.settings ? (
           <AgentSettingsChange proposal={approval.settings} />
+        ) : approval.plan ? (
+          <AgentPlanList plan={approval.plan} />
         ) : fields ? (
           <dl className="agent-approval__fields">
             {fields.map(([label, value]) => (

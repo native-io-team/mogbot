@@ -16,6 +16,35 @@
 
 import type { ResultCard, ResultRef } from './results';
 import type { SettingsProposal } from './policy';
+
+/** What a planned action is (`agents/plan_grant.rs`, `Kind`). */
+export type PlanKind =
+  | 'push'
+  | 'pull_request'
+  | 'merge'
+  | 'issue'
+  | 'comment'
+  | 'release'
+  | 'deploy'
+  | 'publish'
+  | 'post'
+  | 'send'
+  | 'request'
+  | 'github';
+
+/** One action on a plan card: what, where, and the agent's words for it. */
+export interface PlanAction {
+  kind: PlanKind;
+  /** Where: a repo (`owner/repo`), a project, a channel, a site. */
+  target: string;
+  summary: string;
+}
+
+/** "Do these under your name?" (`ask_plan`): one card, one Allow, for the whole plan. */
+export interface PlanCard {
+  actions: PlanAction[];
+  why?: string;
+}
 import type { AgentLook } from './avatar';
 
 export interface AgentStatus {
@@ -471,6 +500,8 @@ export interface Approval {
   setAside?: string;
   /** "Change this agent's settings?" (`propose_settings_change`): who, and what changes in plain words. Allow applies it. A Mac without it never sends it. */
   settings?: SettingsProposal;
+  /** "Do these under your name?" (`ask_plan`): the actions, numbered. Allow is one OK for each of them. `summary` lists them too, for a phone that doesn't know it. */
+  plan?: PlanCard;
   /**
    * "Bring your work Chrome window to the front so I can use it": Allow means
    * Check again, Deny means Not now. Never a login.

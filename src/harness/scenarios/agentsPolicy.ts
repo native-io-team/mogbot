@@ -96,7 +96,63 @@ const HIRING_VIEW = {
   },
 };
 
+/** "Do these under your name?" (`ask_plan`): the owner's real plan, one card. */
+const PLAN = {
+  actions: [
+    { kind: 'deploy', target: 'shippy', summary: 'Redeploy shippy’s production on Vercel' },
+    { kind: 'issue', target: 'julian/shippy', summary: 'Open an issue about the failed build' },
+    { kind: 'comment', target: 'julian/shippy', summary: 'Comment on #12 with the fix' },
+    { kind: 'comment', target: 'julian/shippy', summary: 'Comment on #14 pointing to the issue' },
+  ],
+  why: 'Production is down since this morning’s push',
+};
+const PLAN_LIST = PLAN.actions.map((a, i) => `${i + 1}. ${a.summary}`).join('\n');
+
+const planChat = (status: 'pending' | 'allowed') => (args: Record<string, unknown>) =>
+  args.agentId === 'chief'
+    ? [
+        msg('user', 'Get shippy back up and tell people on GitHub what happened.', 2),
+        msg('agent', 'Here’s the plan. One OK covers all four.', 1),
+        msg('approval', '', 1, {
+          agentId: 'chief',
+          approval: {
+            requestId: 'plan-1',
+            title: 'Do these under your name?',
+            detail: PLAN_LIST,
+            summary: `${PLAN_LIST}\n\n${PLAN.why}`,
+            status,
+            plan: PLAN,
+          },
+        }),
+      ]
+    : messagesFor(args);
+
 export const agentsPolicyScenarios: Scenario[] = [
+  {
+    id: 'agents-plan-card',
+    title: 'Agents — “Do these under your name?”, one card for the whole plan',
+    looksRightWhen:
+      'The Chief’s chat: the user’s ask, the Chief’s one line, then one card titled “Do these under your name?” with a numbered list of four actions, each with where it happens (shippy, julian/shippy) in muted text after it, and a muted “Why: …”. Deny (outlined) and Allow (neutral strong, never the accent). No raw command.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-plan',
+    clipSelector: '.agent-approval',
+    commands: {
+      agents_overview: overview(TEAM),
+      agents_messages: planChat('pending'),
+    },
+  },
+  {
+    id: 'agents-plan-card-allowed',
+    title: 'Agents — a plan card once allowed',
+    looksRightWhen:
+      'The same card folded to one quiet line: “Do these under your name? · Allowed · each step runs without asking for an hour”. No buttons.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-chat__row--agent',
+    commands: {
+      agents_overview: overview(TEAM),
+      agents_messages: planChat('allowed'),
+    },
+  },
   {
     id: 'agents-settings-card',
     title: 'Agents — “Change Hiring’s settings?”, proposed from chat',

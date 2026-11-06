@@ -358,6 +358,12 @@ const TOOLS: &[Tool] = &[
         schema: super::policy_card::schema,
     },
     Tool {
+        name: super::plan_grant::TOOL,
+        description: super::plan_grant::DESCRIPTION,
+        main_only: false,
+        schema: super::plan_grant::schema,
+    },
+    Tool {
         name: super::remember::TOOL,
         description: super::remember::DESCRIPTION,
         main_only: false,
@@ -672,6 +678,7 @@ async fn call(
         }
         super::policy_card::TOOL => super::policy_card::propose(app, caller, turn, args).await,
         super::remember::TOOL => super::remember::call(app, caller, turn, args).await,
+        super::plan_grant::TOOL => super::plan_grant::call(app, caller, args).await,
         _ => error("Unknown tool"),
     }
 }
@@ -1108,6 +1115,8 @@ fn message_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value 
     }
     // Asked while answering someone: they're owed what this makes possible.
     runner::note_onward(&caller.id, &target.id);
+    // A plan the user allowed goes with the work (`plan_grant`).
+    let carried = !outside && super::plan_grant::carry(&caller.id, &target.id, store::now_ms());
     runner::enqueue_request(
         app,
         &target.id,
@@ -1116,8 +1125,13 @@ fn message_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value 
         hop,
         outside,
     );
+    let plan = if carried {
+        " The user's OK for your plan goes with it: what it lists runs without a card for them too."
+    } else {
+        ""
+    };
     text(format!(
-        "Delivered to {}. Their answer comes back to you as a new message when they're done; don't wait for it.",
+        "Delivered to {}. Their answer comes back to you as a new message when they're done; don't wait for it.{plan}",
         target.name
     ))
 }
@@ -1829,6 +1843,31 @@ async fn ask(
     detail: String,
     call: Option<(&str, &Value)>,
 ) -> Answer {
+    ask_inner(app, caller, title, summary, detail, call, None).await
+}
+
+/// "Do these under your name?" (`ask_plan`): one card for the whole plan.
+/// Allow makes the grant where it's answered (`answer_card`).
+pub(super) async fn ask_plan_card(
+    app: &AppHandle,
+    caller: &store::Agent,
+    title: String,
+    summary: String,
+    detail: String,
+    plan: super::plan_grant::Plan,
+) -> Answer {
+    ask_inner(app, caller, title, Some(summary), detail, None, Some(plan)).await
+}
+
+async fn ask_inner(
+    app: &AppHandle,
+    caller: &store::Agent,
+    title: String,
+    summary: Option<String>,
+    detail: String,
+    call: Option<(&str, &Value)>,
+    plan: Option<super::plan_grant::Plan>,
+) -> Answer {
     // The same ask expired unanswered earlier in this task: not raised again.
     let key = match call {
         Some((tool, input)) => super::expiry::tool_key(tool, input),
@@ -1850,6 +1889,7 @@ async fn ask(
     if summary.is_some() {
         approval.summary = summary;
     }
+    approval.plan = plan;
     if call.is_some() {
         approval.from_outside =
             Some(runner::from_outside(&caller.id) || super::exposure::read_outside(&caller.id));
@@ -1928,7 +1968,7 @@ pub(super) fn refused_reply(answer: &Answer, what: &str) -> Option<String> {
 
 /// The card for a request. Only a Claude Code tool call can be always
 /// allowed: Ship Studio's own confirmations (delete an agent) never offer it.
-pub(super) fn new_card(
+pub(crate) fn new_card(
     request_id: String,
     title: String,
     detail: String,
@@ -1956,6 +1996,7 @@ pub(super) fn new_card(
         from_outside: None,
         front: None,
         settings: None,
+        plan: None,
     }
 }
 
@@ -2024,6 +2065,18 @@ pub fn answer_late(
     approval: &Approval,
     allow: bool,
 ) -> Result<(), CommandError> {
+    // A plan: the grant was made where it was answered; wake the agent to do it.
+    if let Some(plan) = &approval.plan {
+        if allow {
+            runner::enqueue(
+                app,
+                agent_id,
+                super::plan_grant::late_line(plan),
+                runner::From::User,
+            );
+        }
+        return Ok(());
+    }
     let (Some(tool), Some(input)) = (&approval.tool, &approval.input) else {
         return Err(CommandError::expected(
             "That request isn't waiting any more. Ask the agent to try again.",
@@ -2311,6 +2364,9 @@ pub(crate) async fn decide_agents_browser(
     if take_grant(&caller.id, tool, input) {
         return Ok(());
     }
+    if under_plan(app, &caller, tool, input, runner::from_outside(&caller.id)) {
+        return Ok(());
+    }
     match agents_browser_card(app, &caller, tool, input).await {
         Decision::Allow => Ok(()),
         Decision::Deny(why) => Err(why),
@@ -2383,6 +2439,10 @@ async fn decide_inner(
         super::browser::Gate::Ask => true,
         super::browser::Gate::NotBrowser => false,
     };
+    // A plan the user allowed (`ask_plan`) covers what it lists.
+    if under_plan(app, caller, tool, input, outside) {
+        return Decision::Allow;
+    }
     // The agents' browser has its own card words ("in the agents' browser").
     if tool.starts_with(super::browser_gate::AGENTS_SERVER) {
         return agents_browser_card(app, caller, tool, input).await;
@@ -2471,6 +2531,49 @@ async fn decide_inner(
         Answer::Denied(note) => Decision::Deny(denied(note)),
         Answer::NotYet => Decision::Deny(NOT_YET.to_string()),
     }
+}
+
+/// Whether a plan the user allowed (`plan_grant`) covers this call: never in
+/// a turn answering outside text. Each covered action leaves a line in "What
+/// it did" and in the chat.
+fn under_plan(
+    app: &AppHandle,
+    caller: &store::Agent,
+    tool: &str,
+    input: &Value,
+    outside: bool,
+) -> bool {
+    let now = store::now_ms();
+    if outside || !super::plan_grant::holds(&caller.id, now) {
+        return false;
+    }
+    let Some(ctx) = super::autoallow::Ctx::for_agent(caller) else {
+        return false;
+    };
+    let browser = (tool.starts_with(super::browser_gate::SERVER)
+        || tool.starts_with(super::browser_gate::AGENTS_SERVER))
+    .then(|| super::browser_gate::plan_step(caller, tool, input))
+    .flatten();
+    let turn = super::plan_grant::Turn {
+        holder: &caller.id,
+        ctx: &ctx,
+        level: super::policy::chosen_level(caller),
+        exposed: super::exposure::read_outside(&caller.id),
+        browser,
+        now,
+    };
+    let Some(lines) = super::plan_grant::cover(tool, input, &turn) else {
+        return false;
+    };
+    for line in lines {
+        let line = format!("{} · {line}", super::plan_grant::LINE);
+        super::work::on_step(&caller.id, super::work::StepKind::Approval, &line, now);
+        let _ = runner::record_in_turn(
+            app,
+            runner::new_message(&caller.id, MessageKind::Note, line),
+        );
+    }
+    true
 }
 
 /// The level that answers this call without a card, if the user's does.

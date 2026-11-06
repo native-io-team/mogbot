@@ -105,7 +105,7 @@ const HEADING: &str = "## How much to do on your own";
 
 /// Said at every level: the level is about how the agent works, never about
 /// what needs the user's OK.
-const WALL: &str = "Approvals don't change with this: anything that needs the user's OK still asks through a card in this chat.";
+const WALL: &str = "Approvals don't change with this: what needs the user's OK asks on a card here (one `ask_plan` for several).";
 
 const OFTEN: &str = "The user chose \"Check with me often\". Before a change with several steps, \
 or anything that's hard to undo, say your plan in a few lines and wait for their go-ahead. \

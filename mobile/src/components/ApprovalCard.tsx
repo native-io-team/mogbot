@@ -41,6 +41,7 @@ import { fonts, iconSize, radius, space, type, PRESSED } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { choose } from './menu';
 import { SettingsChange } from './settingsChange';
+import { PlanList } from './planList';
 import { ShowAll } from './ShowAll';
 import { Card, Line, OFFLINE_NOTE, useActionShare } from './surfaces';
 import { Button, Icon, T } from './ui';
@@ -871,6 +872,7 @@ function Summarized({ approval, lines }: { approval: Approval; lines: number }) 
   const cardStyles = useCardStyles();
   const [open, setOpen] = useState(false);
   const summary = approval.summary?.trim();
+  if (approval.plan) return <PlanList plan={approval.plan} />;
   if (!summary || approvalFields(approval.tool, approval.input)) {
     return <Detail approval={approval} lines={lines} />;
   }

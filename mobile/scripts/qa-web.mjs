@@ -1045,6 +1045,14 @@ const LIVE = [
     check:
       'A “Change Hiring’s settings?” card with a sliders icon: “Hiring” over bulleted plain lines, a muted Why and the rules note; Deny outlined, Allow the neutral answer.',
   },
+  {
+    name: 'plan-card',
+    route: '/chat/fixtures',
+    ready: 'Fixtures',
+    act: scrollToText('Do these under your name?'),
+    check:
+      'One “Do these under your name?” card: three numbered actions, each with where it happens muted under it, and a muted Why; no Details, no raw command; Deny outlined, Allow the neutral answer.',
+  },
   { name: 'memory', route: '/memory?id=site', ready: 'Memory', check: 'Placeholder not clipped' },
   { name: 'instructions', route: '/instructions?id=site', check: 'Instructions editor' },
   { name: 'files', route: '/files/site', check: 'Files list' },
