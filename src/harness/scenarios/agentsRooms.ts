@@ -313,7 +313,7 @@ export const agentsRoomsScenarios: Scenario[] = [
     title: 'Rooms — two members replying at once, one waiting',
     looksRightWhen:
       'Same thread. Under the last message, at the thread’s usual gap, Finance and Social Posts each have their name in their colour over one set of typing dots and what they’re doing (“Reading invoices.csv”, “Thinking”), no ⋯ beside them; then a quiet centred “Chief of Staff will reply after what it’s doing now”, then a muted “3 of 8 replies for this message”. The sidebar row says “2 are replying…” with the loader. With nothing typed the composer’s send button is a Stop square; a paperclip and a mic sit in the composer as in a 1:1 chat.',
-    requires: '.agent-room__working .agent-working',
+    requires: '.agent-room__working .agent-working__line',
     openSelector: AGENTS_TAB,
     steps: [openRoom(LAUNCH)],
     commands: roomCommands(

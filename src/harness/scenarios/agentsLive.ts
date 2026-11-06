@@ -285,6 +285,37 @@ const doneCommands = {
   },
 };
 
+/** The same run, eleven minutes in: the hint and "Stop this step". */
+const LONG_CALL = { ...CYPRESS, startedAt: now - 11 * MIN };
+const longCommands = {
+  ...commands,
+  agents_overview: overview(
+    TEAM.map((a) =>
+      a.id === 'acme'
+        ? {
+            ...a,
+            project: ACME_PATH,
+            engine: 'codex' as const,
+            status: {
+              state: 'working',
+              activity: CYPRESS.label,
+              since: now - 12 * MIN,
+              work: {
+                ...LIVE_TURN,
+                startedAt: now - 12 * MIN,
+                current: LONG_CALL,
+                steps: [
+                  ...LIVE_TURN.steps.slice(0, -1),
+                  { ...LIVE_TURN.steps[4], at: LONG_CALL.startedAt },
+                ],
+              },
+            },
+          }
+        : a
+    )
+  ),
+};
+
 const openAcme = { click: '[data-agent-id="acme"]' };
 const openFinance = { click: '[data-agent-id="finance"]' };
 const openLeadgen = { click: '[data-agent-id="leadgen"]' };
@@ -294,8 +325,8 @@ export const agentsLiveScenarios: Scenario[] = [
     id: 'agents-live-step',
     title: 'Agents — the step it’s on right now, with its timer',
     looksRightWhen:
-      'Acme Site’s chat. At the bottom, the working line: three dots, then “Running the Cypress tests · 5:32” (the time ticks), beside it a muted “5 steps” toggle and the ⋯. Under it, two quiet muted lines: “Test runs usually take a few minutes” and a chevron “Show output”. No accent colour. In the sidebar Acme Site’s row reads “Running the Cypress tests · 5m” (not “Working…”), its badge has a soft ring in its green.',
-    requires: '.agent-live__timer',
+      'Acme Site’s chat. At the bottom, one line with no pill: Acme’s small green key cap on the reply’s left edge, then “Running the Cypress tests” (a soft shimmer passes over it) and, muted, “· 5 steps · 6:00” (the time ticks). Under it, on the words’ edge, one muted line: “Test runs usually take a few minutes”. No “Show output” and no separate steps toggle. No accent colour. In the sidebar Acme Site’s row reads “Running the Cypress tests · 5m” (not “Working…”).',
+    requires: '.agent-working__meta',
     openSelector: AGENTS_TAB,
     steps: [openAcme],
     commands,
@@ -304,17 +335,27 @@ export const agentsLiveScenarios: Scenario[] = [
     id: 'agents-live-output',
     title: 'Agents — Show output on the running step',
     looksRightWhen:
-      'As agents-live-step, with “Show output” open (chevron down): a recessed monospace box under it with the Cypress lines so far (“Running: pages/pricing.cy.ts (7 of 12)”, four ✓ lines, “1) applies the annual discount”). Clicking the step’s words also shows a muted “Last activity 3s ago · using the CPU” above the hint.',
-    requires: '.agent-live__output',
+      'As agents-live-step, with the line pressed open: under it, the steps so far, icons under the key cap and words on the line’s edge, times on the right; the last row is “Running the Cypress tests” in full text with its own ticking “5:32”, and under its words “Last activity 3s ago · using the CPU” and “Show output” open (chevron down) on a recessed monospace box with the Cypress lines so far. The hint stays under the list.',
+    requires: '.agent-work__step[data-current] .agent-live__output',
     openSelector: AGENTS_TAB,
-    steps: [openAcme, { click: '.agent-live__step' }, { click: '.agent-live__toggle' }],
+    steps: [openAcme, { click: '.agent-working__toggle' }, { click: '.agent-live__toggle' }],
     commands,
+  },
+  {
+    id: 'agents-live-long',
+    title: 'Agents — a long-running step: its hint and Stop this step',
+    looksRightWhen:
+      'Acme Site’s chat. The working line “Running the Cypress tests · 5 steps · 12:00” with a quiet text action “Stop this step” at the line’s right end, on the same edge as the steps’ times would be; under the words, “Test runs usually take a few minutes”. Nothing else.',
+    requires: '.agent-working__actions .agent-live__action',
+    openSelector: AGENTS_TAB,
+    steps: [openAcme],
+    commands: longCommands,
   },
   {
     id: 'agents-live-browser',
     title: 'Agents — an agent working in its own browser',
     looksRightWhen:
-      'Lead Gen’s chat. Under the working bubble (“Using its own browser · northwind-supply.com · 0:14”, “7 steps”), a rounded card the bubble’s left edge: a header with a globe, “northwind-supply.com” and a breathing blue dot “Live”, then a 16:10 picture of the supplier directory’s top. No orphaned text button. Hovering shows a “Watch” pill in the corner.',
+      'Lead Gen’s chat. Under the working line (key cap, “Using its own browser · northwind-supply.com · 7 steps · 3:00”), a rounded card on the words’ left edge: a header with a globe, “northwind-supply.com” and a breathing blue dot “Live”, then a 16:10 picture of the supplier directory’s top. No orphaned text button. Hovering shows a “Watch” pill in the corner.',
     requires: '.agent-browser-card .agent-browser-card__screen img',
     openSelector: AGENTS_TAB,
     steps: [openLeadgen],
@@ -344,10 +385,10 @@ export const agentsLiveScenarios: Scenario[] = [
     id: 'agents-live-stalled',
     title: 'Agents — no progress for 5 min, checked on',
     looksRightWhen:
-      'Finance’s chat. The working line reads, muted, “No progress for 5 min · Building the project” followed by two neutral text actions “Check on it” and “Stop” (not accent, not red). Under it “Last activity 4s ago · not using the CPU”, “Builds usually take a few minutes”, “Show output”, and — after Check on it — the line “Its command is still running but isn’t using the CPU, and its last progress was 5 min ago…” in secondary text. The sidebar’s Finance row says “No progress for 5 min”.',
+      'Finance’s chat. The working line: Finance’s key cap, still, then “No progress for 5 min · Building the project · 2 steps · 9:00” with no shimmer, and at the line’s right end two neutral text actions “Check on it” and “Stop” (not accent, not red). Under it, on the words’ edge, “Last activity 4s ago · not using the CPU” and — after Check on it — “Its command is still running but isn’t using the CPU, and its last progress was 5 min ago…” in secondary text. The sidebar’s Finance row says “No progress for 5 min”.',
     requires: '.agent-live__said',
     openSelector: AGENTS_TAB,
-    steps: [openFinance, { click: '.agent-live__quiet .agent-live__action' }],
+    steps: [openFinance, { click: '.agent-working__actions .agent-live__action' }],
     commands,
   },
   {

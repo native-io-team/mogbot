@@ -615,16 +615,23 @@ steps has no line.
   came with a session's reply) is a step of its own.
 - **Live**: while the turn runs, the status carries `work` (the newest 12
   steps and the counts; no file names) plus `doing`, the running call's
-  working-line words. The desktop's working line gets a "5 steps" toggle
-  that opens the steps so far above it; the newest is left out only while
-  the working line is saying it (`doing` equals the activity), never when
-  the line is blank. A bound agent's list offers **Open project** (its
-  workspace), and every agent's offers **Take over** (below), as does the
-  working line itself. Taking over a browser tab the agent drives is not
-  built.
+  working-line words. The working line (`AgentWorkingIndicator`) is one
+  line, no bubble: the agent's key cap looking around in the steps' icon
+  column, what it's doing with a soft shimmer while it's live, then muted
+  "· 5 steps · 6:02" (the turn's time). The line is the toggle: it opens
+  the steps so far under it, in the column the finished timeline uses,
+  ending on the step it's on (its own words, timer and output); the newest
+  step is left out only while the line is saying it (`doing` equals the
+  activity), never when the line is blank. Hints, what a check found and
+  the live browser card sit under the line on the words' edge; actions
+  (Stop this step, Check on it, Stop, the ⋯ with Open project and **Take
+  over**) are quiet text at its right end. When the turn ends the line
+  gives way to "› Worked 6 min · 5 steps" in the same place, its chevron in
+  the column the key cap held. Taking over a browser tab the agent drives
+  is not built.
 - **The step it's on right now** (`work::LiveCall`, `AgentLiveStep`): from
   the moment a call starts, the status's `work.current` carries its words,
-  when it started (the working line's live timer, "· 5:32"), whether it's a
+  when it started (its own timer in the opened list, "5:32"), whether it's a
   known slow tool (`describe::Slow`: after a minute, a quiet "Test runs
   usually take a few minutes"), and what it has printed so far, only
   where the engine streams it (Codex's app server sends
@@ -673,8 +680,9 @@ steps has no line.
 - **Bounded**: at most 60 steps per turn (the newest; `stepCount` says how
   many there were), 30 file names.
 - **Phone**: the message's `work` shows as the folded line and list under it
-  (`mobile/src/components/work.tsx`). While it works, "Working · 8 steps"
-  sits folded under the working row and opens into the steps so far. Live
+  (`mobile/src/components/work.tsx`). While it works the working row is the
+  desk's line ("Running the tests · 8 steps · 3:00") and opens into the
+  steps so far. Live
   steps go only to an app that says it shows them (`hello.features:
   ["work.live"]`); others get the status without `work`, and the overview
   never carries it (it goes out on every registry change).

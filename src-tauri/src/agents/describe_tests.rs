@@ -118,9 +118,9 @@ fn commands_read_as_plain_words() {
         ("which pnpm", "Checking pnpm is installed"),
         // loops: the inner command and how many times
         ("for n in 248 249 250; do gh pr view $n --json title; done", "Looking up a PR on GitHub, 3 times"),
-        ("for f in src/*.ts; do wc -l \"$f\"; done", "Counting lines, repeatedly"),
+        ("for f in src/*.ts; do wc -l \"$f\"; done", "Counting lines"),
         ("for i in {1..5}; do curl -s http://localhost:3000; sleep 1; done", "Fetching localhost:3000, 5 times"),
-        ("while true; do curl -s http://localhost:3000/health; sleep 5; done", "Fetching localhost:3000, repeatedly"),
+        ("while true; do curl -s http://localhost:3000/health; sleep 5; done", "Fetching localhost:3000"),
         // A loop printing what a search found is searching, not printing.
         ("cd /x && for p in 'shadow-\\[' 'box-shadow' 'border-(gray|slate)-' ; do printf \"%-40s %s\\n\" \"$p\" \"$(grep -rEo --include=*.tsx \"$p\" app components | wc -l)\"; done", "Searching the files, 3 times"),
         (r#"cd /x/site && for p in 'shadow-\[' 'boxShadow' 'box-shadow' 'rounded-\[' 'border-\[#' 'border-(gray|slate|zinc|neutral)-' 'shadow-(sm|md|lg|xl|2xl)\b' 'border-border' 'border-skin' 'divide-' 'ring-\[#|ring-(gray|slate)' ; do printf "%-40s %s\n" "$p" "$(grep -rEo --include=*.tsx --include=*.ts --include=*.css "$p" app components | wc -l)"; done"#, "Searching the files, 11 times"),

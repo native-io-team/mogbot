@@ -898,33 +898,5 @@
   text-align: start;
 }
 
-/* Typing dots (primitives/TypingDots) + what it's doing. */
-.agent-working {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  /* The dots take it (currentColor). */
-  color: var(--text-muted);
-  /* The cap is on the line (whose parent is the full row): a percentage
-     here resolved against the shrink-to-fit line and cut every status. */
-  min-width: 0;
-  min-height: calc(var(--font-size-subhead) * 1.4 + var(--spacing-sm) * 2);
-  padding: 0 var(--spacing-md);
-  background: var(--surface-control);
-  border-radius: var(--radius-lg);
-}
-
-.agent-working__place {
-  flex-shrink: 0;
-  font-size: var(--font-size-body-sm);
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.agent-working__activity {
-  overflow: hidden;
-  font-size: var(--font-size-body-sm);
-  color: var(--text-muted);
-  white-space: nowrap;
-  text-overflow: ellipsis;
-}
+/* The working line (AgentWorkingIndicator) lives with the timeline it
+   opens, in agents-work.css. */

@@ -58,15 +58,40 @@ afterEach(() => {
 });
 
 describe('the step it is on right now', () => {
-  it('shows from the moment the call starts, with a live timer', async () => {
+  it('is one line: what it is doing, its steps so far and the turn’s time', async () => {
     at(332_000);
     render(<WorkingIndicator activity="Running the Cypress tests" work={live()} agent={agent} />);
     expect(screen.getByText('Running the Cypress tests')).toBeInTheDocument();
-    expect(screen.getByText('· 5:32')).toBeInTheDocument();
+    // The turn started a minute before the call: the line times the turn.
+    expect(screen.getByText('· 2 steps · 6:32')).toBeInTheDocument();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2_000);
     });
-    expect(screen.getByText('· 5:34')).toBeInTheDocument();
+    expect(screen.getByText('· 2 steps · 6:34')).toBeInTheDocument();
+    // No pill, no dots, no second toggle: the line is the toggle.
+    const line = screen.getByRole('button', { name: /^Running the Cypress tests · 2 steps/ });
+    expect(line).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('button', { name: 'Show output' })).toBeNull();
+  });
+
+  it('opens into the steps, ending on this one with its own live timer', () => {
+    at(332_000);
+    render(
+      <WorkingIndicator
+        activity="Running the Cypress tests"
+        work={live()}
+        agent={{ ...agent, id: 'opens' }}
+      />
+    );
+    fireEvent.click(screen.getByRole('button', { name: /^Running the Cypress tests/ }));
+    const rows = screen.getAllByRole('listitem');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].textContent).toContain('Read cypress.config.ts');
+    // The running call, in its present-tense words, not its past-tense step too.
+    expect(rows[1]).toHaveAttribute('data-current');
+    expect(rows[1].textContent).toContain('Running the Cypress tests');
+    expect(rows[1].textContent).toContain('5:32');
+    expect(screen.queryByText('Ran the Cypress tests')).toBeNull();
   });
 
   it('gives a known slow tool a quiet hint only after a minute', async () => {
@@ -92,8 +117,14 @@ describe('the step it is on right now', () => {
   it('peeks at the output, or says when it will appear', () => {
     at(5_000);
     const { unmount } = render(
-      <WorkingIndicator activity="Running the Cypress tests" work={live()} agent={agent} />
+      <WorkingIndicator
+        activity="Running the Cypress tests"
+        work={live()}
+        agent={{ ...agent, id: 'peek-1' }}
+      />
     );
+    // Output belongs to its step, inside the opened timeline.
+    fireEvent.click(screen.getByRole('button', { name: /^Running the Cypress tests/ }));
     const peek = screen.getByRole('button', { name: 'Show output' });
     expect(peek).toHaveAttribute('aria-expanded', 'false');
     fireEvent.click(peek);
@@ -104,9 +135,10 @@ describe('the step it is on right now', () => {
       <WorkingIndicator
         activity="Running the Cypress tests"
         work={live({ current: call({ streams: false, output: undefined }) })}
-        agent={agent}
+        agent={{ ...agent, id: 'peek-2' }}
       />
     );
+    fireEvent.click(screen.getByRole('button', { name: /^Running the Cypress tests/ }));
     fireEvent.click(screen.getByRole('button', { name: 'Show output' }));
     expect(screen.getByText('Output appears when it finishes')).toBeInTheDocument();
   });
@@ -117,11 +149,11 @@ describe('the step it is on right now', () => {
       <WorkingIndicator
         activity="Running the Cypress tests"
         work={live({ current: call({ busy: true }) })}
-        agent={agent}
+        agent={{ ...agent, id: 'alive' }}
       />
     );
     expect(screen.queryByText(/Last activity/)).toBeNull();
-    fireEvent.click(screen.getByRole('button', { name: /Running the Cypress tests/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Running the Cypress tests/ }));
     expect(screen.getByText('Last activity 4s ago · using the CPU')).toBeInTheDocument();
   });
 

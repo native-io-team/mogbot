@@ -1092,7 +1092,8 @@ function WorkingFor({
   return (
     <div className="agent-room__speaker" {...scope}>
       <div className="agent-room__speaker-name" data-color={agent.color}>
-        <AgentAvatar id={agent.id} name={agent.name} color={agent.color} size="mini" />
+        {/* Its key cap looks around here; the line under it doesn't repeat it. */}
+        <AgentAvatar id={agent.id} name={agent.name} color={agent.color} size="mini" working />
         <span>{agent.name}</span>
       </div>
       <WorkingIndicator

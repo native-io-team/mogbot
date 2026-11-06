@@ -61,7 +61,7 @@ import { SecretCard } from './SecretCard';
 import { LoginCard } from './LoginCard';
 import { servesLogins } from '../lib/logins';
 import { useTaskName } from './session';
-import { LiveStep, LiveWork, WorkLine } from './work';
+import { LiveStep, WorkLine } from './work';
 import { liveCallShown } from '../lib/work';
 import { useClock } from '../lib/useClock';
 import { CopyCard } from './copy';
@@ -774,27 +774,42 @@ function Prose({ id, text, streaming = false }: { id: string; text: string; stre
   );
 }
 
-/** The working row, and under it the turn's steps so far, folded (`LiveWork`). */
+/**
+ * The working row: one line that opens into the turn's steps so far
+ * (`LiveStep`). Mid-import (no words) the bar says it: just the dots.
+ */
 export function WorkingRow({
   label,
   agent,
   onError,
+  bare,
 }: {
   label: string;
   agent?: Agent;
   onError?: (text: string) => void;
+  /** Under a speaker's name in a room: no second key cap. */
+  bare?: boolean;
 }) {
   const colors = useColors();
   const styles = useStyles();
   const work = agent?.status.work;
-  // Mid-import (no words) the bar says it: no step, no timer, just the dots.
   const live = label ? liveCallShown(work, agent?.status.activity) : undefined;
-  const ticking = !!label && (live != null || work?.quietSince != null);
+  const ticking = !!label && (work != null || live != null);
   const now = useClock(ticking);
   return (
     <Animated.View entering={FadeIn.duration(250)} style={styles.working}>
-      {agent && ticking ? (
-        <LiveStep agentId={agent.id} work={work} call={live} label={label} now={now} />
+      {agent && label ? (
+        <LiveStep
+          agentId={agent.id}
+          agent={agent}
+          work={work}
+          call={live}
+          label={label}
+          now={now}
+          activity={agent.status.activity}
+          onError={onError}
+          bare={bare}
+        />
       ) : (
         <View style={styles.workingRow}>
           {/* No words (mid-import, when the bar says it): the dots speak. */}
@@ -805,14 +820,6 @@ export function WorkingRow({
             </T>
           )}
         </View>
-      )}
-      {agent && (
-        <LiveWork
-          agentId={agent.id}
-          work={agent.status.work}
-          activity={agent.status.activity}
-          onError={onError ?? (() => {})}
-        />
       )}
     </Animated.View>
   );
@@ -858,7 +865,7 @@ const useStyles = makeStyles((colors) => ({
     borderLeftColor: colors.borderDefault,
   },
   peerHead: { flexDirection: 'row', alignItems: 'center', gap: space.tight },
-  working: { gap: space.sm, paddingVertical: space.xs },
+  working: { paddingVertical: space.xs },
   workingRow: {
     flexDirection: 'row',
     alignItems: 'center',

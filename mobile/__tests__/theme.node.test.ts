@@ -269,7 +269,7 @@ describe('the scale', () => {
 
   it('has the four icon sizes and one exception, and the avatar sizes, as the spec sets them', () => {
     expect(iconSize).toEqual({ micro: 10, inline: 12, body: 16, button: 20, hero: 28 });
-    expect(avatarSize).toEqual({ group: 24, header: 28, list: 48, sheet: 56 });
+    expect(avatarSize).toEqual({ line: 16, group: 24, header: 28, list: 48, sheet: 56 });
     // A well's corner is tighter than its card's, so the two read as nested.
     expect(radius.inner).toBeLessThan(radius.card);
   });

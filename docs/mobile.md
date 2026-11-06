@@ -601,18 +601,22 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   ("new agents: engine codex"), and answers with an `agents.registry` event.
   On a Mac without the method the choice shows but isn't tappable. Existing
   agents keep theirs ([agents.md](agents.md), "Defaults for new agents").
-- **What it's doing right now** (`LiveStep` in `components/work.tsx`): while
-  a call runs, the working row says it in plain words with a live timer
-  ("Running the Cypress tests 5:32", the call's `status.work.current`); after
-  a minute on a known slow tool a quiet "Test runs usually take a few
-  minutes"; "Show output" opens the last lines the command printed (Codex
-  streams them; under Claude Code it says "Output appears when it
-  finishes"); after ten minutes "Stop this step" (`agents.stopStep`, the
-  turn carries on). Tapping the line says when it last showed life ("Last
-  activity 4s ago · using the CPU"). Once the Mac reports no progress
-  (`quietSince`) the line reads "No progress for 5 min" with a still clock,
-  "Check on it" (`agents.checkOn`: what the Mac can see, one line, never
-  interrupting) and Stop. Finished steps read "Ran the Cypress tests · 6m 12s
+- **What it's doing right now** (`LiveStep` in `components/work.tsx`): the
+  working row is the desk's one line: the agent's key cap looking around,
+  what it's doing in plain words (gently breathing while it's live,
+  `Shimmer`), then muted "· 5 steps · 6:02" (the turn's time). Tapping the
+  line opens the steps so far under it, ending on the call it's on (the
+  call's `status.work.current`) with its own timer, when it last showed life
+  ("Last activity 4s ago · using the CPU") and "Show output" (the last lines
+  the command printed; Codex streams them, under Claude Code it says "Output
+  appears when it finishes"). Under the line, on the words' edge: after a
+  minute on a known slow tool a quiet "Test runs usually take a few
+  minutes". Quiet text actions sit at the right edge on a row of their own:
+  after ten minutes "Stop this step" (`agents.stopStep`, the turn carries
+  on); once the Mac reports no progress (`quietSince`) the line reads "No
+  progress for 5 min · …", stops breathing, and offers "Check on it"
+  (`agents.checkOn`: what the Mac can see, one line, never interrupting)
+  and Stop. Finished steps read "Ran the Cypress tests · 6m 12s
   · 42 passed, 3 failed", and a long or failed command keeps "Show output".
   On the list a working agent's avatar (a shape and a face, drawn with
   react-native-svg from the spec the desk uses: docs/internal/avatars.md;

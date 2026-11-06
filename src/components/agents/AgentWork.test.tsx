@@ -89,14 +89,16 @@ describe('the timeline under a reply', () => {
 describe('the working line, live', () => {
   const live: TurnWork = { ...work, endedAt: undefined, files: [], doing: 'Running npm test' };
 
-  it('is still one line, with the steps so far folded beside it', () => {
+  it('is one line that says its steps so far and is itself the toggle', () => {
     render(<WorkingIndicator activity="Running npm test" work={live} agent={agent} />);
     expect(screen.getByText('Running npm test')).toBeInTheDocument();
-    const toggle = screen.getByRole('button', { name: '3 steps · edited 1 file' });
+    const toggle = screen.getByRole('button', { name: /^Running npm test · 3 steps/ });
     expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    // One control: no separate "3 steps" toggle beside it.
+    expect(screen.queryByRole('button', { name: /^3 steps/ })).toBeNull();
   });
 
-  it('opens above the current step, which is not listed twice', () => {
+  it('opens under the line, and the step it is saying is not listed twice', () => {
     render(<WorkingIndicator activity="Running npm test" work={live} agent={agent} />);
     fireEvent.click(screen.getByRole('button', { name: /steps/ }));
     const steps = screen.getAllByRole('listitem').map((li) => li.textContent);

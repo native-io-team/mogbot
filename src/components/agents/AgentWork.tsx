@@ -2,8 +2,9 @@
  * What a turn did, under the message it ended on: one quiet folded line
  * ("Worked 6 min · 23 steps · edited 2 files") that opens into the steps in
  * order, each with its time into the turn and any screenshot it produced.
- * While the agent works the same list hangs above the working line, which
- * stays the current step while its call runs (`WorkingIndicator`, `liveSteps`).
+ * While the agent works the working line itself is the toggle ("Running the
+ * tests · 5 steps · 6:02", `WorkingIndicator`), and the same list opens under
+ * it, ending on the step it's on now with its live timer and output.
  * A step the user declined, or that failed, says so in words and is drawn
  * quieter (`data-outcome`).
  *
@@ -13,7 +14,7 @@
  * @module components/agents/AgentWork
  */
 
-import { memo, useId, useState, type ComponentType } from 'react';
+import { memo, useId, useState, type ComponentType, type ReactNode } from 'react';
 import {
   AgentsIcon,
   CameraIcon,
@@ -30,11 +31,10 @@ import {
   TerminalIcon,
 } from '@/components/icons';
 import { TextButton } from '../primitives/TextButton';
-import type { Agent, TurnWork, WorkStep } from '../../lib/agents';
+import type { Agent, LiveCall, TurnWork, WorkStep } from '../../lib/agents';
 import {
   earlierSteps,
   liveSteps,
-  liveSummary,
   rememberLiveOpen,
   stepOffset,
   wasOpenLive,
@@ -64,7 +64,7 @@ const STEP_ICON: Record<string, IconComponent> = {
 };
 
 /** A kind a newer Mac sent that this build doesn't know reads as a tool. */
-function StepIcon({ kind }: { kind: string }) {
+export function StepIcon({ kind }: { kind: string }) {
   const Icon = STEP_ICON[kind] ?? PuzzleIcon;
   return (
     <span className="agent-work__icon" aria-hidden>
@@ -105,16 +105,49 @@ function StepRow({ step, startedAt, agent }: { step: WorkStep; startedAt: number
   );
 }
 
+/** The step it's on now, while its call runs: present tense, live timer, its output under it. */
+export interface CurrentStep {
+  call: LiveCall;
+  /** "5:32" since the call started. */
+  elapsed: string;
+  /** Under its words: when it last showed life, "Show output". */
+  details: ReactNode;
+}
+
+function CurrentRow({ current }: { current: CurrentStep }) {
+  const { call, elapsed, details } = current;
+  return (
+    <li className="agent-work__step" data-kind={call.kind} data-current>
+      <StepIcon kind={call.kind} />
+      <span className="agent-work__label" title={call.label}>
+        {call.label}
+      </span>
+      <time className="agent-work__time">{elapsed}</time>
+      {details && <div className="agent-work__output">{details}</div>}
+    </li>
+  );
+}
+
+/** The running call's own step is drawn as the current row, not twice (same start, `agents::work`). */
+function withoutCall(steps: WorkStep[], call: LiveCall): WorkStep[] {
+  const last = steps[steps.length - 1];
+  return last && last.at === call.startedAt ? steps.slice(0, -1) : steps;
+}
+
 interface StepListProps {
   work: TurnWork;
   agent: Agent;
-  /** While it works: what the working line under the list says (`liveSteps`). */
-  live?: { activity: string | null | undefined };
+  /** While it works: what the working line says (`liveSteps`), and the step it's on. */
+  live?: { activity: string | null | undefined; current?: CurrentStep | null };
 }
 
 /** The steps, oldest first, and the files the turn edited. */
 function StepList({ work, agent, live }: StepListProps) {
-  const steps = live ? liveSteps(work, live.activity) : work.steps;
+  const steps = live
+    ? live.current
+      ? withoutCall(work.steps, live.current.call)
+      : liveSteps(work, live.activity)
+    : work.steps;
   const earlier = earlierSteps(work);
   const files = work.files ?? [];
   const more = work.fileCount - files.length;
@@ -129,6 +162,7 @@ function StepList({ work, agent, live }: StepListProps) {
         {steps.map((step, i) => (
           <StepRow key={`${step.at}-${i}`} step={step} startedAt={work.startedAt} agent={agent} />
         ))}
+        {live?.current && <CurrentRow current={live.current} />}
       </ol>
       {!live && files.length > 0 && (
         <p className="agent-work__files">
@@ -155,7 +189,7 @@ function Toggle({
   return (
     <TextButton
       tabIndex={0}
-      className="agent-work__toggle"
+      className="agent-work__toggle agent-work__head-toggle"
       aria-expanded={open}
       aria-controls={controls}
       data-open={open || undefined}
@@ -213,10 +247,15 @@ interface LiveWorkProps {
   activity: string | null | undefined;
   /** The working line collapsing at the turn's end: nothing opens now. */
   leaving?: boolean;
+  /** The step it's on, last in the list (`useLiveStep`). */
+  current?: CurrentStep | null;
 }
 
-/** The toggle beside the working line, and the steps so far above it. */
-export function useLiveWork({ work, agent, activity, leaving }: LiveWorkProps) {
+/**
+ * The working line is the toggle: whether it's open, how to open it, and the
+ * steps so far, which open under it in the column the finished timeline uses.
+ */
+export function useLiveWork({ work, agent, activity, leaving, current }: LiveWorkProps) {
   const [openAt, setOpenAt] = useState<number | null>(() =>
     work && agent && wasOpenLive(agent.id, work.startedAt) ? work.startedAt : null
   );
@@ -224,28 +263,25 @@ export function useLiveWork({ work, agent, activity, leaving }: LiveWorkProps) {
   const id = useId();
   // A new turn starts folded, whatever the last one did.
   const open = Boolean(work && openAt === work.startedAt && !leaving);
-  if (!work || !agent || work.stepCount === 0) return { toggle: null, list: null, open: false };
-  const toggle = (
-    <Toggle
-      open={open}
-      label={liveSummary(work)}
-      controls={id}
-      onToggle={() => {
-        const next = !open;
-        setEver(true);
-        setOpenAt(next ? work.startedAt : null);
-        rememberLiveOpen(agent.id, work.startedAt, next);
-      }}
-    />
-  );
+  if (!work || !agent || work.stepCount === 0) {
+    return { toggle: null, list: null, open: false, controls: id };
+  }
+  const toggle = () => {
+    const next = !open;
+    setEver(true);
+    setOpenAt(next ? work.startedAt : null);
+    rememberLiveOpen(agent.id, work.startedAt, next);
+  };
   const list = (
     <div className="agent-work agent-work--live" data-open={open || undefined}>
       <div className="agent-work__body" id={id} aria-hidden={!open}>
         <div className="agent-work__inner">
-          {(open || ever) && <StepList work={work} agent={agent} live={{ activity }} />}
+          {(open || ever) && (
+            <StepList work={work} agent={agent} live={{ activity, current: current ?? null }} />
+          )}
         </div>
       </div>
     </div>
   );
-  return { toggle, list, open };
+  return { toggle, list, open, controls: id };
 }

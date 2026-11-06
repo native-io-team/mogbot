@@ -433,7 +433,7 @@ function RoomItemView({
     body = (
       <View style={{ gap: space.xs }}>
         {a && <Speaker agent={a} />}
-        <WorkingRow label={item.label} agent={a} onError={onError} />
+        <WorkingRow label={item.label} agent={a} onError={onError} bare={!!a} />
       </View>
     );
   }

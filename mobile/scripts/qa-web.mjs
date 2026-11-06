@@ -1474,7 +1474,7 @@ const LIVE_WORK = [
     ready: 'QA 2',
     settle: 2500,
     check:
-      'Working row: dots, “Running the Cypress tests”, a muted 5:3x timer; under it “Test runs usually take a few minutes”, then a folded “Show output”',
+      'Working row, one line, no bubble: QA 2’s small key cap, “Running the Cypress tests” (breathing gently), then muted “· 3 steps · 5:3x”; under it, on the words’ edge, “Test runs usually take a few minutes”. No dots, no “Show output” under the line',
   },
   {
     name: 'live-output',
@@ -1482,13 +1482,13 @@ const LIVE_WORK = [
     ready: 'QA 2',
     settle: 2500,
     act: async (page) => {
-      await page.clickText('Show output');
-      await sleep(600);
       await page.clickText('Running the Cypress tests');
+      await sleep(600);
+      await page.clickText('Show output');
       await sleep(600);
     },
     check:
-      'The last lines Cypress printed in mono on a quiet panel; “Last activity … · using the CPU” revealed under the hint',
+      'The line opened: the steps so far under it (icons under the key cap, words on the line’s edge), ending on “Running the Cypress tests” with its own timer, “Last activity … · using the CPU” and the last lines Cypress printed in mono on a quiet panel, all inside that step; the hint after the list',
   },
   {
     name: 'live-finished',
@@ -1510,7 +1510,7 @@ const LIVE_WORK = [
     ready: 'Finance',
     settle: 2500,
     check:
-      'The working line reads “No progress for 5 min” with a still clock (no dots), then neutral “Check on it” and outlined “Stop”',
+      'The working line reads “No progress for 5 min · Building the project” with Finance’s key cap still and the words not breathing, “Last activity …” under it on the words’ edge, then quiet text actions “Check on it” and “Stop” at the right edge',
   },
   {
     name: 'live-check',
@@ -1521,7 +1521,7 @@ const LIVE_WORK = [
       await page.clickText('Check on it');
       await sleep(900);
     },
-    check: 'What the Mac saw, one quiet line under the buttons',
+    check: 'What the Mac saw, one quiet line under the line, on the words’ edge, above the actions',
   },
 ];
 
@@ -1532,8 +1532,8 @@ const IMPORTING = [
     route: '/chat/design',
     ready: 'Designer',
     settle: 2500,
-    check: 'Under the last message: three dots in one even wave, then “Checking the button tokens”',
-    frames: dotFrames('typing'),
+    check:
+      'Under the last message, one line: Designer’s small key cap looking around, then “Checking the button tokens” breathing gently and a muted count and time. No dots: the key cap says it’s working',
   },
   {
     name: 'import-live',
@@ -1541,7 +1541,8 @@ const IMPORTING = [
     ready: 'Chief of Staff',
     settle: 2500,
     check:
-      'One bar above the composer, one line: blue typing dots, “Importing from Grok”. The working row under the chat has the same dots',
+      'One bar above the composer, one line: blue typing dots, “Importing from Grok”. The working row under the chat has the same dots (mid-import it has no words, so the dots speak)',
+    frames: dotFrames('typing'),
   },
   {
     name: 'import-screen-live',

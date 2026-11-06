@@ -258,7 +258,7 @@ export function WorkMenu({ agent: given }: { agent: Agent }) {
   if (!project && !takeOver) return null;
   return (
     <Dropdown
-      align="left"
+      align="right"
       portal
       className="agent-working__more"
       trigger={(p) => (

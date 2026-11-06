@@ -1887,10 +1887,13 @@ pub fn describe(command: &str, depth: u8) -> Option<Phrase> {
             }
         }
         if let Some(times) = cmd.times {
+            // A count written down is worth saying (", 3 times"); a loop with
+            // no count (`while true`, `for f in src/*`) is how it works, not
+            // what it does, and the line's timer already says it's taking a
+            // while. ", repeatedly" read like a machine talking.
             let tail = match times {
-                Some(1) => String::new(),
-                Some(n) => format!(", {n} times"),
-                None => ", repeatedly".to_string(),
+                Some(n) if n > 1 => format!(", {n} times"),
+                _ => String::new(),
             };
             // A number a loop fills in isn't one: "PR #$n" can't happen, but
             // a loop's own count says how many.

@@ -174,20 +174,20 @@ export const agentsWorkScenarios: Scenario[] = [
     id: 'agents-work-live',
     title: 'Agents — the working line with its steps so far, folded',
     looksRightWhen:
-      'At the bottom of Acme Site’s chat, the usual working line (three dots, “Running npm test”) with, beside it, a muted chevron and “8 steps · edited 1 file”, then a quiet “Take over”. One line: the steps are not shown and nothing is duplicated.',
-    requires: '.agent-chat__row--working .agent-work__toggle',
+      'At the bottom of Acme Site’s chat, one working line: Acme’s small key cap, “Running npm test” with a soft shimmer, then muted “· 8 steps · 3:00”. The line itself is the toggle; no chevron, no pill, no second control beside it. The steps are not shown and nothing is duplicated.',
+    requires: '.agent-chat__row--working .agent-working__toggle',
     openSelector: AGENTS_TAB,
     steps: [openAcme],
     commands: workCommands(true),
   },
   {
     id: 'agents-work-live-open',
-    title: 'Agents — the live timeline, opened above the current step',
+    title: 'Agents — the live timeline, opened under the working line',
     looksRightWhen:
-      'Above the working line, the seven steps already done (Read Footer.tsx, Searched for “href=”, Browsed acme.com, Browsed staging.acme.com, Worked in Chrome, Edited Footer.tsx, Took a screenshot of acme-marketing with its thumbnail), each with its time, at the same left edge (icons in the same column) as a finished reply’s list; the eighth step is the working line itself (“Running npm test” with the dots), not repeated in the list. Under the list two quiet links side by side, “Open project” (Acme Site works in acme-marketing) and “Take over”. The chevron beside “8 steps · edited 1 file” points down.',
+      'The working line (“Running npm test · 8 steps · 3:00”, its meta a shade brighter now it’s open), and under it the steps already done (Read Footer.tsx, Searched for “href=”, Browsed acme.com, Browsed staging.acme.com, Worked in Chrome, Edited Footer.tsx, Took a screenshot of acme-marketing with its thumbnail), each with its time; the icons sit in the key cap’s column and the words on the line’s edge, exactly as a finished reply’s list. The last row is the step it’s on now, in full text, with its own ticking time and “Show output” under its words.',
     requires: '.agent-chat__row--working .agent-work[data-open] .agent-work__step',
     openSelector: AGENTS_TAB,
-    steps: [openAcme, { click: '.agent-chat__row--working .agent-work__toggle' }],
+    steps: [openAcme, { click: '.agent-chat__row--working .agent-working__toggle' }],
     commands: workCommands(true),
   },
 ];

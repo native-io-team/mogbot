@@ -52,6 +52,17 @@
   transform: rotate(90deg);
 }
 
+/* The folded line's chevron sits in the steps' icon column, where the key
+   cap sat while it worked, so its words start on the steps' label edge. */
+.text-button.button.agent-work__head-toggle {
+  gap: var(--spacing-sm);
+}
+
+.text-button.button.agent-work__head-toggle .button__icon {
+  justify-content: center;
+  width: var(--agents-work-icon);
+}
+
 /* Height animates by grid rows (0fr ↔ 1fr): no measuring, no fixed height. */
 .agent-work__body {
   display: grid;
@@ -72,8 +83,10 @@
   overflow: hidden;
 }
 
+/* The times sit on the column's right edge: the edge your messages and the
+   composer end on, and where the working line's actions sit. */
 .agent-work__steps {
-  max-width: min(var(--agents-bubble-max), 100%);
+  max-width: min(var(--agents-prose-measure), 100%);
 }
 
 .agent-work__steps {
@@ -153,9 +166,16 @@
 
 /* ----------------------------------------------------- while it works */
 
-/* The steps so far sit above the working line, which stays the current
-   step; the list keeps the finished list's left edge, so it doesn't jump
-   when the turn ends. */
+/* components/agents/AgentWorkingIndicator.tsx: one line, no bubble. The
+   key cap sits in the steps' icon column, the words on the steps' label
+   edge, the actions at the steps' time edge; everything under the line
+   starts on the words' edge. So the live line, its opened steps and the
+   finished "› Worked 6 min · 5 steps" share one grid and nothing jumps. */
+.agent-chat__row--working {
+  --agents-work-icon: var(--spacing-lg);
+  --agents-work-indent: calc(var(--agents-work-icon) + var(--spacing-sm));
+}
+
 .agent-chat__row--working[data-work] {
   flex-direction: column;
   align-items: flex-start;
@@ -163,16 +183,142 @@
 
 .agent-working__line {
   display: flex;
+  align-self: stretch;
   align-items: center;
   gap: var(--spacing-sm);
   min-width: 0;
-  max-width: var(--agents-bubble-max);
+  max-width: min(var(--agents-prose-measure), 100%);
+  /* One line tall whatever it says: a reply's first streamed line holds
+     the same height, so the line hands off in place (agents-motion.css). */
+  min-height: var(--agents-motion-working-height);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-compact);
+  color: var(--text-muted);
 }
 
-/* "7 steps" beside the bubble never breaks over two lines in a narrow chat. */
-.agent-working__line > .agent-work__toggle {
+.agent-working__lead {
+  display: inline-flex;
+  flex: 0 0 auto;
+  justify-content: center;
+  min-width: var(--agents-work-icon);
+  color: var(--text-muted);
+}
+
+.agent-working__place {
   flex-shrink: 0;
   white-space: nowrap;
+}
+
+/* The whole line opens the steps; it reads as text, never as a link. */
+.text-button.button.agent-working__toggle {
+  flex: 0 1 auto;
+  justify-content: flex-start;
+  min-width: 0;
+  color: inherit;
+}
+
+.text-button.button.agent-working__toggle:hover:not(:disabled) {
+  text-decoration: none;
+}
+
+.agent-working__toggle:hover .agent-working__meta,
+.agent-working__toggle[aria-expanded='true'] .agent-working__meta {
+  color: var(--text-secondary);
+}
+
+.agent-working__text {
+  display: flex;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+.agent-working__activity {
+  overflow: hidden;
+  color: var(--text-secondary);
+  text-overflow: ellipsis;
+}
+
+/* Live: a soft light passes over the words, the way a thinking line does.
+   Stalled ("No progress for 5 min") or leaving, it holds still. */
+.agent-working__activity[data-live] {
+  color: transparent;
+  background: linear-gradient(
+      90deg,
+      var(--text-secondary) 0%,
+      var(--text-secondary) 40%,
+      var(--text-primary) 50%,
+      var(--text-secondary) 60%,
+      var(--text-secondary) 100%
+    )
+    0 0 / 250% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: agents-work-shimmer var(--agents-work-shimmer-period) linear infinite;
+}
+
+/* A new step eases in and keeps shimmering. */
+.agent-working__activity[data-live][data-changed] {
+  animation:
+    agents-motion-swap-in var(--agents-motion-enter) backwards,
+    agents-work-shimmer var(--agents-work-shimmer-period) linear infinite;
+}
+
+.agent-chat__row--working {
+  --agents-work-shimmer-period: calc(var(--duration-loader-isolated) * 1.5);
+}
+
+@keyframes agents-work-shimmer {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: 0 0;
+  }
+}
+
+.agent-working__meta {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: pre;
+  color: var(--text-muted);
+  transition: color var(--transition-interaction);
+}
+
+/* At the line's right end, on the steps' time edge. */
+.agent-working__actions {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: var(--spacing-md);
+  margin-left: auto;
+  padding-left: var(--spacing-md);
+}
+
+.text-button.button.agent-live__action {
+  flex-shrink: 0;
+}
+
+/* The ⋯ sits in the actions; the gap is theirs. */
+.agent-working__actions .agent-working__more {
+  margin-left: 0;
+}
+
+/* Hints, what a check found, its browser: on the words' edge. */
+.agent-working__under {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  width: 100%;
+  max-width: min(var(--agents-prose-measure), 100%);
+  padding-left: var(--agents-work-indent);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-compact);
+  color: var(--text-muted);
+}
+
+.agent-working__under > .agent-browser-card {
+  margin-top: var(--spacing-xs);
 }
 
 .agent-work--live {
@@ -181,77 +327,34 @@
 }
 
 .agent-work--live .agent-work__steps {
-  padding: 0 0 var(--spacing-sm);
+  padding: var(--spacing-2xs) 0 var(--spacing-sm);
+}
+
+/* The step it's on: present tense, the time ticking. */
+.agent-work__step[data-current] .agent-work__label {
+  color: var(--text-primary);
 }
 
 @media (prefers-reduced-motion: reduce) {
   .agent-work__toggle svg,
-  .agent-work__body {
+  .agent-work__body,
+  .agent-working__meta {
     transition: none;
+  }
+
+  .agent-working__activity[data-live],
+  .agent-working__activity[data-live][data-changed] {
+    color: var(--text-secondary);
+    background: none;
+    animation: none;
   }
 }
 
 /* ------------------------------------------- the step it's on right now */
 
-/* components/agents/AgentLiveStep.tsx: the step and its timer in the
-   working line, and under it the quiet hint, "Show output", "Stop this
-   step" and what a check found. Metadata size, muted, the line's left
-   edge (past the dots). */
-
-/* The line's words are a button (it opens "Last activity …") that reads as text. */
-.text-button.button.agent-live__step {
-  gap: var(--spacing-xs);
-  min-width: 0;
-  color: var(--text-muted);
-  font-size: var(--font-size-body-sm);
-}
-
-.text-button.button.agent-live__step:hover:not(:disabled) {
-  color: var(--text-secondary);
-}
-
-.agent-live__timer {
-  flex-shrink: 0;
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.agent-live__quiet {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  min-width: 0;
-}
-
-.text-button.button.agent-live__action {
-  flex-shrink: 0;
-  font-size: var(--font-size-body-sm);
-}
-
-/* "Check on it" and "Stop" in the bubble: set off from the words they act
-   on by a hairline, rather than running on as more of the sentence. */
-.agent-live__quiet > .text-button.button.agent-live__action:first-of-type {
-  padding-left: var(--spacing-sm);
-  border-left: var(--border-width-default) solid var(--border-default);
-  border-radius: 0;
-}
-
-.agent-live {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2xs);
-  width: 100%;
-  max-width: min(var(--agents-bubble-max), 100%);
-  /* Under the bubble's words: its inset, the three dots and their gap.
-     (spacing-lg + spacing-sm landed between the bubble's edge and its text,
-     under neither.) */
-  padding-left: calc(
-    var(--spacing-md) + var(--typing-dots-size) * 3 + var(--typing-dots-gap) * 2 + var(--spacing-sm)
-  );
-  font-size: var(--font-size-body-sm);
-  line-height: var(--line-height-compact);
-  color: var(--text-muted);
-}
+/* components/agents/AgentLiveStep.tsx: the hint and what a check found
+   under the line; when it last showed life and "Show output" inside the
+   current step. Metadata size, muted. */
 
 .agent-live__life,
 .agent-live__hint,
@@ -264,22 +367,11 @@
   color: var(--text-secondary);
 }
 
-.agent-live__row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: var(--spacing-xs) var(--spacing-md);
-}
-
 .agent-live__peek {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
   min-width: 0;
-}
-
-.agent-live__peek[data-open] {
-  flex: 1 0 100%;
 }
 
 .agent-live__output {
@@ -298,16 +390,18 @@
   user-select: text;
 }
 
+/* Under a step's words: its life line and its output, one column. */
 .agent-work__output {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
   grid-column: 2 / -1;
+  min-width: 0;
   margin-top: var(--spacing-2xs);
+  color: var(--text-muted);
 }
 
 /* A step with its time and counts wraps rather than cutting "3 failed" off. */
 .agent-work__step[data-detail] .agent-work__label {
   white-space: normal;
-}
-
-.agent-work__output {
-  min-width: 0;
 }

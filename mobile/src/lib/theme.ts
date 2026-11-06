@@ -412,8 +412,11 @@ export const waveform = {
   fade: 16,
 } as const;
 
-/** Agent avatars: in a search group, a chat header, a list row, the agent sheet. */
-export const avatarSize = { group: 24, header: 28, list: 48, sheet: 56 } as const;
+/**
+ * Agent avatars: leading the working line (the steps' icon column), in a
+ * search group, a chat header, a list row, the agent sheet.
+ */
+export const avatarSize = { line: 16, group: 24, header: 28, list: 48, sheet: 56 } as const;
 
 /**
  * A key cap's light and shade (avatar.ts `AVATAR_LIGHT`): white and black at
