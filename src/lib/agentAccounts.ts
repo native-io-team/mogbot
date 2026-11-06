@@ -16,6 +16,9 @@ import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { AgentEngine } from './agents';
 import { ENGINE_LABEL } from './agents';
 import type { UsageAccount } from '../../packages/companion-protocol/src/model';
+import { accountState } from '../../packages/companion-protocol/src/accounts';
+import { planLabel } from '../../packages/companion-protocol/src/usage';
+import { readDay } from '../../packages/companion-protocol/src/quota';
 
 /** One shape on the desk and the phone (`agents::wallet::AccountView`). */
 export type {
@@ -59,7 +62,27 @@ export function moved(ids: string[], from: number, by: -1 | 1): string[] | null 
 /** The account's one-line state, worded once for the desk and the phone. */
 export { accountState } from '../../packages/companion-protocol/src/accounts';
 
-/** What the row is called under its name. */
+/**
+ * The row's second line, in parts so the email is what truncates: the state
+ * ("Signed in", "Not signed in", "Out of usage until …"), who it is signed
+ * in as and its plan, each only when the engine reported it, and only while
+ * it is signed in; then a past limit (last limit Mon).
+ */
+export function accountDetail(
+  a: UsageAccount,
+  now = Date.now()
+): { state: string; email?: string; plan?: string; note?: string } {
+  if (!a.signedIn) return { state: accountState({ ...a, email: undefined }, now) };
+  return {
+    // Out now says so with its reset; otherwise a past limit goes last.
+    state: accountState({ ...a, email: undefined, limit: a.out ? a.limit : undefined }, now),
+    email: a.email,
+    plan: a.plan ? planLabel(a.plan) : undefined,
+    note: !a.out && a.limit ? `last limit ${readDay(a.limit.at, now)}` : undefined,
+  };
+}
+
+/** What the row is called, in its tooltip. */
 export function accountKind(a: UsageAccount): string {
   return a.thisMac
     ? `This Mac’s own ${ENGINE_LABEL[a.engine]} sign-in`

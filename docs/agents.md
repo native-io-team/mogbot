@@ -2545,7 +2545,12 @@ Accounts; ⌘K "Usage accounts…", "Add a Claude Code account…", "Add a Codex
 account…"). The first is always **This Mac**: the `claude` / `codex` login
 already on the machine (`id: "default"`), which every turn used before
 wallets and still uses while it is the only one. It can be renamed and moved
-down, not removed. Each added account is signed in into a folder of its own,
+down, not removed (its row's menu says why). Every row, This Mac included,
+says who it is signed in as and its plan only as the engine's own files
+record them (`agents/identity.rs`: Claude Code's `.claude.json`
+`oauthAccount.emailAddress` / `planDisplayName`; Codex's `auth.json`
+`id_token` `email` / `chatgpt_plan_type`), re-read on every listing and when
+the window regains focus; nothing there, nothing shown. Each added account is signed in into a folder of its own,
 reusing the isolation `commands/accounts.rs` already had for workspaces (an
 added account's id is a fresh one, never a workspace's):
 

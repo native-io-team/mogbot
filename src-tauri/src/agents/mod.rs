@@ -83,6 +83,7 @@ pub mod files;
 pub mod forecast;
 pub mod go_hard;
 pub mod harvest;
+pub mod identity;
 pub mod import;
 pub mod independence;
 pub mod interview;

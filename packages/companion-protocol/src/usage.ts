@@ -106,10 +106,15 @@ export function accountUsage(
   };
 }
 
+/** "Plus plan" from the engine's own word for it ("plus", "Max"). */
+export function planLabel(plan: string): string {
+  return `${plan.charAt(0).toUpperCase()}${plan.slice(1)} plan`;
+}
+
 /** "Plus plan" when the engine said; "Next turns run here" for the next. */
 export function accountTags(a: UsageAccountLine): string[] {
   const tags: string[] = [];
-  if (a.plan) tags.push(`${a.plan.charAt(0).toUpperCase()}${a.plan.slice(1)} plan`);
+  if (a.plan) tags.push(planLabel(a.plan));
   if (a.next) tags.push('Next turns run here');
   return tags;
 }
