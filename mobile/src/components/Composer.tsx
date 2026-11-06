@@ -824,6 +824,25 @@ export function ComposerField({
     const away = e.nativeEvent.contentOffset.y > StyleSheet.hairlineWidth;
     if (away !== scrolled) setScrolled(away);
   };
+  // iOS keeps a multiline input at its last height when its text is cleared
+  // from code (a send): emptied, it's remounted so it starts at one line, and
+  // keeps the keyboard if it had it.
+  const [generation, setGeneration] = useState(0);
+  const had = useRef(value.length > 0);
+  const refocus = useRef(false);
+  useLayoutEffect(() => {
+    if (had.current && value.length === 0 && Platform.OS !== 'web') {
+      refocus.current = own.current?.isFocused?.() ?? false;
+      setGeneration((g) => g + 1);
+    }
+    had.current = value.length > 0;
+  }, [value]);
+  useEffect(() => {
+    if (refocus.current) {
+      refocus.current = false;
+      own.current?.focus();
+    }
+  }, [generation]);
   const empty = dictation ? !dictation.settled && !dictation.deciding : false;
   return (
     <Glass style={[field.field, { minHeight: size.field }]}>
@@ -862,6 +881,7 @@ export function ComposerField({
             </Pressable>
           ) : (
             <TextInput
+              key={generation}
               ref={own}
               maxFontSizeMultiplier={chromeScale}
               value={value}
