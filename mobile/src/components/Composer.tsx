@@ -35,6 +35,8 @@ import { MAX_ATTACHMENTS, type Agent, type AgentRef } from '@shipstudio/companio
 import {
   useCallback,
   useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
   useState,
@@ -45,6 +47,7 @@ import {
 import {
   Keyboard,
   Linking,
+  Platform,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -53,6 +56,8 @@ import {
   View,
   useWindowDimensions,
   type LayoutChangeEvent,
+  type NativeScrollEvent,
+  type NativeSyntheticEvent,
 } from 'react-native';
 import { dictationHint, listeningNote, problemCopy, useDictation } from '../lib/dictation';
 import Animated, {
@@ -70,7 +75,13 @@ import { useAccent } from '../lib/accent';
 import { needsYou } from '../lib/agents';
 import { drivenWait } from '../lib/bars';
 import { ConversationBars } from './ConversationBars';
-import { mentionQuery, sendMode, takeDraft } from '../lib/composer';
+import {
+  followsEnd,
+  mentionQuery,
+  sendMode,
+  takeDraft,
+  type FieldCaret,
+} from '../lib/composer';
 import {
   addFile,
   clearComposer,
@@ -93,14 +104,15 @@ import {
   fonts,
   iconSize,
   radius,
+  scaledSize,
   space,
   type,
   waveform,
   PRESSED,
 } from '../lib/theme';
-import { makeStyles, useAppearance, useColors } from '../lib/appearance';
+import { makeStyles, useAppearance, useColors, useTextScale } from '../lib/appearance';
 import { AgentAvatar } from './agent';
-import { Glass } from './Glass';
+import { Glass, hasLiquidGlass } from './Glass';
 import { StagedTile, type Staged } from './attachments';
 import { choose } from './menu';
 import { DISABLED_OPACITY, Icon, useRipple, T } from './ui';
@@ -731,6 +743,11 @@ export function Composer({
  * glass pill at one line that keeps its 24pt corner as it grows to six, then
  * scrolls inside. Its buttons (`children`) sit inside it at the right, on the
  * last line.
+ *
+ * Past six lines it follows the newest line, as the words stream in while it
+ * listens and as you type at the end (`followsEnd`); with the caret further
+ * up it holds still. The lines scrolled away at the top fade out
+ * (`FieldFade`) rather than being cut by the edge.
  */
 export function ComposerField({
   value,
@@ -763,66 +780,150 @@ export function ComposerField({
   const appearance = useAppearance();
   const accent = useAccent();
   const size = useComposerSize();
-  const words = useRef<ComponentRef<typeof ScrollView>>(null);
-  if (dictation) {
-    const empty = !dictation.settled && !dictation.deciding;
-    return (
-      <Glass style={[field.field, { minHeight: size.field }]}>
-        <Pressable
-          style={field.words}
-          onPress={dictation.onPress}
-          accessibilityRole="text"
-          accessibilityLabel={
-            empty ? 'Listening' : `${label}: ${dictation.settled}${dictation.deciding}`
-          }
-          accessibilityHint="Double-tap to stop and edit"
-          accessibilityLiveRegion="polite"
-        >
-          <ScrollView
-            ref={words}
-            style={{ maxHeight: size.maxHeight }}
-            scrollEnabled={false}
-            showsVerticalScrollIndicator={false}
-            // The newest words in view, as the input would keep its cursor.
-            onContentSizeChange={() => words.current?.scrollToEnd({ animated: false })}
-          >
-            <Text maxFontSizeMultiplier={chromeScale} style={field.input}>
-              {empty ? (
-                <Text style={{ color: colors.textMuted }}>{placeholder}</Text>
-              ) : (
-                <>
-                  {dictation.settled}
-                  <Text style={{ color: colors.textSecondary }}>{dictation.deciding}</Text>
-                </>
-              )}
-            </Text>
-          </ScrollView>
-        </Pressable>
-        {children}
-      </Glass>
-    );
-  }
+  const scroll = useRef<ComponentRef<typeof ScrollView>>(null);
+  const listening = Boolean(dictation);
+  // Where the caret is, and the text's length it was reported against. The
+  // words becoming typed or heard is a different view: the caret starts over
+  // at the end.
+  const [caret, setCaret] = useState<{ at: FieldCaret; length: number; listening: boolean }>(
+    () => ({ at: null, length: value.length, listening })
+  );
+  const at = caret.listening === listening ? caret : { at: null, length: value.length, listening };
+  if (at !== caret) setCaret(at);
+  // The first size after mounting (a long draft reopened) jumps there; after that it glides.
+  const placed = useRef(false);
+  // Only once something has scrolled away at the top is there anything to fade.
+  const [scrolled, setScrolled] = useState(false);
+  // The web's textarea doesn't grow with its words as the native one does:
+  // it's measured (QA only; the phone's input sizes itself).
+  const own = useRef<ComponentRef<typeof TextInput>>(null);
+  // The caller's ref is the same input (it focuses it), handed on once it's there.
+  useImperativeHandle(inputRef, () => own.current as ComponentRef<typeof TextInput>);
+  const fitWeb = useCallback(() => {
+    const el = own.current as unknown as HTMLTextAreaElement | null;
+    if (Platform.OS !== 'web' || !el?.style) return;
+    el.style.height = '0px';
+    el.style.height = `${el.scrollHeight}px`;
+  }, []);
+  const follow = () => {
+    if (!followsEnd({ dictating: listening, caret: at.at, length: value.length, before: at.length }))
+      return;
+    scroll.current?.scrollToEnd({ animated: placed.current });
+    placed.current = true;
+  };
+  // Heard words becoming typed ones (Stop) can keep the size and so not
+  // report one: the end is followed across the swap too.
+  useLayoutEffect(() => {
+    fitWeb();
+    follow();
+    // Only on the swap and the text size; a new size of the words reports itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [listening, size.maxHeight]);
+  useLayoutEffect(fitWeb, [fitWeb, value]);
+  const onScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const away = e.nativeEvent.contentOffset.y > StyleSheet.hairlineWidth;
+    if (away !== scrolled) setScrolled(away);
+  };
+  const empty = dictation ? !dictation.settled && !dictation.deciding : false;
   return (
     <Glass style={[field.field, { minHeight: size.field }]}>
-      <TextInput
-        ref={inputRef}
-        maxFontSizeMultiplier={chromeScale}
-        value={value}
-        autoFocus={autoFocus}
-        editable={editable}
-        onChangeText={onChangeText}
-        placeholder={placeholder}
-        placeholderTextColor={colors.textMuted}
-        multiline
-        style={[field.input, { maxHeight: size.maxHeight }]}
-        selectionColor={accent.accent}
-        keyboardAppearance={appearance}
-        accessibilityLabel={label}
-      />
+      <View style={field.words}>
+        <ScrollView
+          ref={scroll}
+          style={{ maxHeight: size.maxHeight }}
+          // Listening, it only follows: a tap on the words is Stop and edit.
+          scrollEnabled={!dictation}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+          onContentSizeChange={follow}
+          onScroll={onScroll}
+          scrollEventThrottle={16}
+        >
+          {dictation ? (
+            <Pressable
+              onPress={dictation.onPress}
+              accessibilityRole="text"
+              accessibilityLabel={
+                empty ? 'Listening' : `${label}: ${dictation.settled}${dictation.deciding}`
+              }
+              accessibilityHint="Double-tap to stop and edit"
+              accessibilityLiveRegion="polite"
+            >
+              <Text maxFontSizeMultiplier={chromeScale} style={field.input}>
+                {empty ? (
+                  <Text style={{ color: colors.textMuted }}>{placeholder}</Text>
+                ) : (
+                  <>
+                    {dictation.settled}
+                    <Text style={{ color: colors.textSecondary }}>{dictation.deciding}</Text>
+                  </>
+                )}
+              </Text>
+            </Pressable>
+          ) : (
+            <TextInput
+              ref={own}
+              maxFontSizeMultiplier={chromeScale}
+              value={value}
+              autoFocus={autoFocus}
+              editable={editable}
+              onChangeText={onChangeText}
+              onSelectionChange={(e) =>
+                setCaret({ at: e.nativeEvent.selection, length: value.length, listening })
+              }
+              onLayout={fitWeb}
+              placeholder={placeholder}
+              placeholderTextColor={colors.textMuted}
+              multiline
+              // The field scrolls around it: the input is always as tall as its words.
+              scrollEnabled={false}
+              style={field.input}
+              selectionColor={accent.accent}
+              keyboardAppearance={appearance}
+              accessibilityLabel={label}
+            />
+          )}
+        </ScrollView>
+        {scrolled && <FieldFade />}
+      </View>
       {children}
     </Glass>
   );
 }
+
+/**
+ * The top edge of a field scrolled past six lines: the field's fill in
+ * `composer.fadeBands` steps, opaque at the edge to clear inward, so the
+ * lines leaving fade out. Bands of a solid colour rather than a gradient (as
+ * the chat's own edge, ChatView.tsx), so it needs no native module. On
+ * Liquid Glass the fill is the surface under the glass, which the glass shows.
+ */
+function FieldFade() {
+  const colors = useColors();
+  const color = hasLiquidGlass() ? colors.surfaceApp : colors.composerFill;
+  const bands = Array.from({ length: composer.fadeBands }, (_, i) => {
+    // i = 0 at the edge. Eased, so the last steps into the words are gentlest.
+    const t = 1 - i / composer.fadeBands;
+    return t * t;
+  });
+  return (
+    <View
+      pointerEvents="none"
+      accessibilityElementsHidden
+      importantForAccessibility="no-hide-descendants"
+      testID="composer-fade"
+      style={fieldFade.wrap}
+    >
+      {bands.map((opacity, i) => (
+        <View key={i} style={{ flex: 1, backgroundColor: color, opacity }} />
+      ))}
+    </View>
+  );
+}
+
+const fieldFade = StyleSheet.create({
+  wrap: { position: 'absolute', top: 0, left: 0, right: 0, height: composer.fade },
+});
 
 /**
  * A 40pt circle inside the field, 4pt in from its edge and its last line, in
@@ -927,7 +1028,8 @@ export const FIELD_MIN = composer.height;
  */
 export function useComposerSize() {
   const { fontScale } = useWindowDimensions();
-  const k = Math.min(Math.max(fontScale, 1), chromeScale);
+  // Dynamic Type as far as chrome follows it, times Settings → Text size.
+  const k = Math.min(Math.max(fontScale, 1), chromeScale) * useTextScale();
   const line = composer.fieldLine * k;
   const field = Math.round(line + composer.padV * 2);
   return {
@@ -947,13 +1049,12 @@ const useFieldStyles = makeStyles((colors) => ({
     paddingLeft: composer.padLeft - StyleSheet.hairlineWidth,
   },
   input: {
-    flex: 1,
+    // As tall as its words, inside the field's scroll (never flex: it would size to the view, not the text).
     fontFamily: fonts.regular,
     fontSize: type.field,
-    lineHeight: composer.fieldLine,
+    // The line grows with Settings → Text size, as the words do (`useComposerSize`).
+    lineHeight: scaledSize(composer.fieldLine),
     color: colors.textBody,
-    // Six lines, then it scrolls inside: the field never takes over the chat.
-    maxHeight: composer.fieldLine * composer.maxLines + composer.padV * 2,
     paddingTop: composer.padV - StyleSheet.hairlineWidth,
     paddingBottom: composer.padV - StyleSheet.hairlineWidth,
     paddingRight: composer.padRight,

@@ -352,6 +352,13 @@ export const composer = {
   fieldCorner: 24,
   /** Lines before it scrolls inside. */
   maxLines: 6,
+  /**
+   * Past six lines the words scroll inside and the lines leaving at the top
+   * fade out over this much (the top padding and most of a line), in
+   * `fadeBands` steps of the field's own fill, rather than being cut.
+   */
+  fade: 24,
+  fadeBands: 12,
   attach: 48,
   send: 40,
   /** Send's inset from the field's edge. */

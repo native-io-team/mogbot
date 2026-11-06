@@ -808,13 +808,57 @@ const LIVE = [
       await sleep(800);
     },
     check:
-      'Stopped, keep editing: the paragraph in the field at the same width it had while listening, no row over it, mic and Send back',
+      'Stopped, keep editing: the paragraph in the field at the same width it had while listening, no row over it, mic and Send back; still on its last line, the top lines fading out',
     after: async (page) => {
       await page.eval(`globalThis.__qaDictation = {}`);
       await page.clickLabel('Send').catch(() => {});
       await sleep(800);
     },
   },
+  // The same two at Largest: the field's lines grow with the words, and still follow the end.
+  ...[
+    { name: 'dictation-long-largest', stop: false },
+    { name: 'dictation-long-done-largest', stop: true },
+  ].map(({ name, stop }) => ({
+    name,
+    route: '/settings',
+    ready: 'Largest',
+    act: async (page) => {
+      await scrollToText('Largest')(page);
+      await page.clickText('Largest');
+      await sleep(400);
+      // The Designer's chat, idle (Finance is still answering the shot before's Send).
+      await page.goto(`${WEB}/chat/design`);
+      await page.waitFor(`document.body.innerText.includes('Designer')`, 20_000, 'Designer');
+      await sleep(1500);
+      await page.eval(`globalThis.__qaDictation = { long: true }`);
+      await page.clickLabel('Dictate');
+      await sleep(5000);
+      if (stop) {
+        await page.clickLabel('Stop dictating');
+        await sleep(800);
+      }
+    },
+    check: stop
+      ? 'Largest, stopped: the paragraph at the large size, its last line in view, the top lines fading out, no line cut through'
+      : 'Largest, listening: the newest words on the last line in view, the top lines fading out, Stop and Send on the last line',
+    after: async (page) => {
+      if (!stop) await page.clickLabel('Cancel dictation').catch(() => {});
+      await page.eval(`globalThis.__qaDictation = {}`);
+      if (stop) {
+        // Clear the kept words rather than send them, so the Designer stays idle for later shots.
+        await page.eval(`document.querySelector('textarea')?.select()`);
+        await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 });
+        await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: 'Backspace', code: 'Backspace', windowsVirtualKeyCode: 8 });
+      }
+      await sleep(800);
+      await page.goto(`${WEB}/settings`);
+      await page.waitFor(`document.body.innerText.includes('Largest')`, 20_000, 'Largest');
+      await scrollToText('Largest')(page);
+      await page.clickText('Default');
+      await sleep(400);
+    },
+  })),
   {
     name: 'dictation-denied',
     route: '/chat/design',
