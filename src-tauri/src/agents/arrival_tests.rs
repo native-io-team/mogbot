@@ -191,6 +191,7 @@ fn editing_or_renaming_an_imported_agent_keeps_its_preamble() {
         role: "Books".into(),
         instructions: "Keep /workspace/finance/status.md".into(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: false,
     })
@@ -215,6 +216,7 @@ fn already_imported(name: &str, instructions: &str, memory: &str) -> (store::Age
         role: "Research".into(),
         instructions: instructions.into(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: false,
     })
@@ -256,6 +258,7 @@ fn the_upgrade_leaves_the_chief_ship_studio_agents_and_our_own_alone() {
         role: String::new(),
         instructions: "Be brief.".into(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: false,
     })
@@ -271,6 +274,7 @@ fn the_upgrade_leaves_the_chief_ship_studio_agents_and_our_own_alone() {
         role: String::new(),
         instructions: "Mentions ### Imported from Grok Bot in its instructions.".into(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: false,
     })

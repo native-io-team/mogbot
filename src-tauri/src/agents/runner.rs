@@ -4496,6 +4496,7 @@ mod tests {
             role: "Does things".into(),
             instructions: "Be brief.".into(),
             shape: None,
+            avatar: None,
             color: None,
             is_main: false,
         })
@@ -4540,6 +4541,7 @@ mod tests {
                 role: String::new(),
                 instructions: String::new(),
                 shape: None,
+                avatar: None,
                 color: None,
                 is_main: false,
             })

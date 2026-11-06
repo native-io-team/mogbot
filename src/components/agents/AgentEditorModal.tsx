@@ -2,7 +2,8 @@
  * Create a new agent, or edit one. Creating starts with "Start from": blank,
  * or a ready-made agent (`lib/agentTemplates`) that fills in the fields below
  * with its briefing, which stays editable. Up front: a name, what it should do and
- * what it should know. Colour, what it runs on (a choice only once two
+ * what it should know; the avatar beside the name opens its look (shape,
+ * face, colour). What it runs on (a choice only once two
  * engines are installed; otherwise a quiet "Also use …" at the foot), model,
  * project and apps sit under Advanced, because most agents are created by
  * the Chief of Staff and briefed in conversation.
@@ -21,6 +22,8 @@ import { Tabs, TabsList, TabsPanel, TabsTab } from '../primitives/Tabs';
 import { AgentProjectField } from './AgentProject';
 import { AgentMemory } from './AgentMemory';
 import { AgentAvatar } from './AgentAvatar';
+import { AgentLookPicker } from './AgentLookPicker';
+import { freeLook, lookFor, type AgentLook } from '../../../packages/companion-protocol/src/avatar';
 import { AgentReach } from './AgentReach';
 import { AgentPolicy } from './AgentPolicy';
 import { AgentEngineField, AgentEngineMore } from './AgentEngine';
@@ -29,7 +32,6 @@ import { ChevronRightIcon } from '@/components/icons';
 import {
   AGENT_COLORS,
   COST_BASIS_NOTE,
-  type AgentColor,
   type AgentEngine,
   createAgent,
   discardCopy,
@@ -55,7 +57,7 @@ import {
   type UsageTotals,
 } from '../../lib/agents';
 import { asCommandError, formatCommandError } from '../../lib/errors';
-import { useAgentsSelector } from '../../lib/agentsStore';
+import { getAgentsSnapshot, useAgentsSelector } from '../../lib/agentsStore';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { AccentScope } from '../../contexts/AccentScopeContext';
 import { AdminSwitch } from './AgentAdmin';
@@ -244,6 +246,19 @@ export function AgentEditorModal({
   const [color, setColor] = useState<string>(
     () => agent?.color ?? templateColor(first, takenColors) ?? freeColor(takenColors)
   );
+  // Editing: what it wears now. Creating: a shape nobody else wears yet, so
+  // the preview is exactly what the new agent gets.
+  const [initialLook] = useState<AgentLook>(() =>
+    agent
+      ? lookFor(agent)
+      : freeLook(
+          getAgentsSnapshot().agents.map((a) => lookFor(a)),
+          String(Date.now())
+        )
+  );
+  const [look, setLook] = useState<AgentLook>(initialLook);
+  const lookChanged = look.shape !== initialLook.shape || look.face !== initialLook.face;
+  const [showLook, setShowLook] = useState(false);
   const [role, setRole] = useState(agent?.role ?? first?.role ?? '');
   const [instructions, setInstructions] = useState(first ? templateInstructions(first) : '');
 
@@ -317,6 +332,7 @@ export function AgentEditorModal({
         await updateAgent(agent.id, {
           name,
           color,
+          ...(lookChanged ? { avatar: look } : {}),
           role,
           instructions,
           engine,
@@ -329,6 +345,7 @@ export function AgentEditorModal({
         const created = await createAgent({
           name,
           color,
+          avatar: look,
           role,
           instructions,
           engine,
@@ -414,7 +431,17 @@ export function AgentEditorModal({
       )}
 
       <div className="agent-editor__identity">
-        <AgentAvatar name={name} color={color} size="field" selected />
+        {/* The avatar opens its own picker: shape, face and colour. */}
+        <button
+          type="button"
+          className="agent-editor__look-toggle"
+          aria-label="Change how it looks"
+          title="Change how it looks"
+          aria-expanded={showLook}
+          onClick={() => setShowLook((open) => !open)}
+        >
+          <AgentAvatar name={name} color={color} look={look} size="field" />
+        </button>
         <TextField
           placeholder="Name"
           value={name}
@@ -424,6 +451,15 @@ export function AgentEditorModal({
           autoFocus
         />
       </div>
+      {showLook && (
+        <AgentLookPicker
+          name={name}
+          color={color}
+          look={look}
+          onLookChange={setLook}
+          onColorChange={setColor}
+        />
+      )}
 
       <label className="agent-editor__label">
         What should it do?
@@ -494,46 +530,6 @@ export function AgentEditorModal({
         </TextButton>
         {showAdvanced && (
           <div className="agent-editor__advanced-body">
-            {/* One Tab stop; the arrows move focus and the choice together, as radios do. */}
-            <div className="agent-editor__label" role="group" aria-label="Color">
-              Color
-              <div
-                className="agent-editor__colors"
-                role="radiogroup"
-                aria-label="Color"
-                onKeyDown={(e) => {
-                  const step = { ArrowRight: 1, ArrowDown: 1, ArrowLeft: -1, ArrowUp: -1 }[e.key];
-                  if (!step) return;
-                  e.preventDefault();
-                  const at = AGENT_COLORS.indexOf(color as AgentColor);
-                  const next =
-                    AGENT_COLORS[(at + step + AGENT_COLORS.length) % AGENT_COLORS.length];
-                  setColor(next);
-                  e.currentTarget.querySelector<HTMLElement>(`[data-color="${next}"]`)?.focus();
-                }}
-              >
-                {AGENT_COLORS.map((key) => (
-                  <button
-                    key={key}
-                    type="button"
-                    role="radio"
-                    tabIndex={
-                      color === key ||
-                      (key === AGENT_COLORS[0] && !AGENT_COLORS.includes(color as AgentColor))
-                        ? 0
-                        : -1
-                    }
-                    aria-checked={color === key}
-                    aria-label={key}
-                    className="agent-editor__swatch"
-                    data-color={key}
-                    data-selected={color === key || undefined}
-                    onClick={() => setColor(key)}
-                  />
-                ))}
-              </div>
-            </div>
-
             <div className="agent-editor__label" role="group" aria-label="Model">
               Model
               <SegmentedControl

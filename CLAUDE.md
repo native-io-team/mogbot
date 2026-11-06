@@ -261,8 +261,8 @@ Single-file domains:
 
 Shared icons are imported from `@/components/icons`, never from an internal icon module or a raw
 SVG asset. Static inline SVG is prohibited in feature components; use the shared icon modules or
-`src/assets/graphics/` for feature artwork. The marked dynamic `BranchGraph.tsx` exception is the
-only inline SVG. See [Icons and SVG graphics](docs/design-system.md#icons-and-svg-graphics).
+`src/assets/graphics/` for feature artwork. The marked dynamic exceptions, `BranchGraph.tsx` and
+`AgentAvatar.tsx` (drawn from the avatar spec shared with the phone), are the only inline SVG. See [Icons and SVG graphics](docs/design-system.md#icons-and-svg-graphics).
 
 When a request adds an icon to a feature, always follow
 [Importing a new icon](docs/design-system.md#importing-a-new-icon): process files from the temporary

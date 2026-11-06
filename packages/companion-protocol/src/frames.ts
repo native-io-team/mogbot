@@ -173,6 +173,11 @@ export const MAC_FEATURES = {
    * device code).
    */
   loginsPhone: 'logins.phone',
+  /**
+   * Agents carry `avatar` (a shape and a face; `lookFor` in avatar.ts), and
+   * `agents.create` / `agents.update` take `avatar` (and `agents.update` `color`).
+   */
+  looks: 'agents.looks',
 } as const;
 export type MacFeature = (typeof MAC_FEATURES)[keyof typeof MAC_FEATURES];
 

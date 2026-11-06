@@ -87,6 +87,7 @@ fn the_first_load_writes_access_json_from_the_registry_once() {
         role: "Recruiting".into(),
         instructions: "Be kind.".into(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: false,
     })
@@ -375,6 +376,7 @@ fn reset_and_set_write_through_and_keep_the_mirrors_in_step() {
         role: String::new(),
         instructions: String::new(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: false,
     })
@@ -1027,6 +1029,7 @@ fn nothing_changes_until_the_user_allows_and_a_stale_card_applies_nothing() {
         role: String::new(),
         instructions: String::new(),
         shape: None,
+        avatar: None,
         color: None,
         is_main: false,
     })

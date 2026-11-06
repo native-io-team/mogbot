@@ -23,3 +23,4 @@ export * from './independence';
 export * from './policy';
 export * from './work';
 export * from './secretName';
+export * from './avatar';

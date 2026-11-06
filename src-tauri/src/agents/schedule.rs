@@ -1643,6 +1643,7 @@ mod tests {
             name: id.into(),
             role: String::new(),
             shape: 0,
+            avatar: None,
             color: "red".into(),
             is_main: false,
             pinned: false,
@@ -1757,6 +1758,7 @@ mod tests {
             role: String::new(),
             instructions: String::new(),
             shape: None,
+            avatar: None,
             color: None,
             is_main: false,
         })
@@ -1926,6 +1928,7 @@ mod tests {
             role: String::new(),
             instructions: String::new(),
             shape: None,
+            avatar: None,
             color: None,
             is_main: false,
         })
@@ -1960,6 +1963,7 @@ mod tests {
             role: String::new(),
             instructions: String::new(),
             shape: None,
+            avatar: None,
             color: None,
             is_main: false,
         })

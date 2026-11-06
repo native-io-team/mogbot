@@ -1861,6 +1861,7 @@ pub fn settings_card() -> crate::agents::store::AgentMessage {
         }],
         why: Some("You asked for Hiring to help on the client's site".into()),
         has_rules: true,
+        look: None,
     };
     m.approval = Some(Approval {
         request_id: "q13".into(),

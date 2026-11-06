@@ -1376,6 +1376,7 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         role,
         instructions,
         shape: None,
+        avatar: None,
         color,
         is_main: false,
     });
@@ -2639,6 +2640,7 @@ mod tests {
             name: "Finance".into(),
             role: String::new(),
             shape: 0,
+            avatar: None,
             color: "red".into(),
             is_main: false,
             pinned: false,

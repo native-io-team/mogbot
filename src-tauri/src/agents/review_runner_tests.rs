@@ -421,6 +421,7 @@ fn a_turn_that_never_took_its_messages_is_resent_not_retried() {
             role: String::new(),
             instructions: String::new(),
             shape: None,
+            avatar: None,
             color: None,
             is_main: false,
         })
@@ -481,6 +482,7 @@ fn an_old_inbox_gets_ids_when_read_back() {
             role: String::new(),
             instructions: String::new(),
             shape: None,
+            avatar: None,
             color: None,
             is_main: false,
         })

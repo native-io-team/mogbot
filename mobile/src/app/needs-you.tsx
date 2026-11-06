@@ -111,7 +111,7 @@ function Row({
       accessibilityLabel={`${title}. ${line}`}
       style={({ pressed }) => [styles.row, pressed && PRESSED]}
     >
-      <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.list} />
+      <AgentAvatar id={agent.id} name={agent.name} color={agent.color} size={avatarSize.list} />
       <View style={styles.text}>
         <T variant="headline" color={colors.textStrong} numberOfLines={1}>
           {title}

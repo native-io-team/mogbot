@@ -331,6 +331,9 @@ pub async fn agents_open_path(
 pub struct CreateAgentInput {
     pub name: String,
     pub shape: Option<u8>,
+    /// Its shape and face; omitted, the clients derive one from its id.
+    #[serde(default)]
+    pub avatar: Option<store::AgentLook>,
     pub color: Option<String>,
     #[serde(default)]
     pub role: String,
@@ -397,6 +400,7 @@ pub async fn agents_create(
         role: input.role,
         instructions: input.instructions,
         shape: input.shape,
+        avatar: input.avatar,
         color: input.color,
         is_main: false,
     })?;
@@ -423,6 +427,9 @@ pub async fn agents_create(
 pub struct UpdateAgentInput {
     pub name: Option<String>,
     pub shape: Option<u8>,
+    /// Its shape and face; keys this build doesn't draw are ignored.
+    #[serde(default)]
+    pub avatar: Option<store::AgentLook>,
     pub color: Option<String>,
     pub role: Option<String>,
     pub instructions: Option<String>,
@@ -468,6 +475,7 @@ pub async fn agents_update(
     }
     let color = input.color.filter(|c| store::COLORS.contains(&c.as_str()));
     let shape = input.shape.filter(|s| *s < store::SHAPE_COUNT);
+    let avatar = input.avatar.filter(store::AgentLook::is_valid);
     let role = input.role.clone();
     let current = store::get(&agent_id)?;
     let engine = match input.engine.as_deref().map(Engine::parse).transpose()? {
@@ -520,6 +528,9 @@ pub async fn agents_update(
         }
         if let Some(s) = shape {
             a.shape = s;
+        }
+        if let Some(look) = avatar {
+            a.avatar = Some(look);
         }
         if let Some(r) = role {
             a.role = r.trim().to_string();

@@ -339,8 +339,14 @@ function RowBody({
     >
       {/* Working: a ring in its colour breathes around the tile, in place of the list's spinner. */}
       <View style={styles.avatar}>
-        <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.list} />
-        {running && <WorkingRing color={agent.color} size={avatarSize.list} />}
+        <AgentAvatar
+          id={agent.id}
+          name={agent.name}
+          color={agent.color}
+          size={avatarSize.list}
+          working={running}
+        />
+        {running && <WorkingRing id={agent.id} name={agent.name} color={agent.color} size={avatarSize.list} />}
       </View>
       <View style={styles.text}>
         <View style={styles.nameLine}>

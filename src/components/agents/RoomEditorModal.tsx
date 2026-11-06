@@ -139,7 +139,7 @@ export function RoomEditorModal({ isOpen, room, agents, onClose, onSaved }: Room
                     label={`${agent.name} in this room`}
                     onChange={(checked) => toggle(agent.id, checked)}
                   />
-                  <AgentAvatar name={agent.name} color={agent.color} size="mini" />
+                  <AgentAvatar id={agent.id} name={agent.name} color={agent.color} size="mini" />
                   <span className="agent-room-editor__member-name">{agent.name}</span>
                   {agent.role && (
                     <span className="agent-room-editor__member-role">{agent.role}</span>

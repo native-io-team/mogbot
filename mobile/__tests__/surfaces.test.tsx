@@ -45,6 +45,13 @@ jest.mock('react-native-reanimated', () => {
     ZoomIn: preset,
     ZoomOut: preset,
     LinearTransition: preset,
+    // What an agent's avatar uses (its bob): still, in a test.
+    useReducedMotion: () => true,
+    useSharedValue: (v: unknown) => ({ value: v, set: () => {} }),
+    useAnimatedStyle: () => ({}),
+    withSequence: () => 0,
+    withTiming: () => 0,
+    Easing: { out: () => 0, inOut: () => 0, quad: 0 },
   };
 });
 jest.mock('expo-router', () => ({ useRouter: () => ({ push: jest.fn() }) }));

@@ -200,7 +200,7 @@ interface RowProps {
 function Row({ agent, place, line, meta, state, working, onOpen }: RowProps) {
   return (
     <button type="button" tabIndex={0} className="agents-team__row" onClick={onOpen}>
-      <AgentAvatar name={agent.name} color={agent.color} working={working} />
+      <AgentAvatar id={agent.id} name={agent.name} color={agent.color} working={working} />
       <span className="agents-team__text">
         <span className="agents-team__name">
           <span className="agents-team__name-text">{agent.name}</span>
@@ -412,7 +412,7 @@ export function AgentsTeamView({
 
   const title = (
     <>
-      <span className="agent-avatar agent-avatar--row agent-avatar--selected agents-team__badge">
+      <span className="agent-avatar agent-avatar--row agent-avatar--tile agent-avatar--selected agents-team__badge">
         <CollaboratorsIcon size={14} />
       </span>
       <h2 className="agent-chat__name">What’s in flight</h2>
@@ -457,7 +457,7 @@ export function AgentsTeamView({
                   .catch(toastError);
               }}
             >
-              <AgentAvatar name={chief.name} color={chief.color} />
+              <AgentAvatar id={chief.id} name={chief.name} color={chief.color} />
               <span className="agents-team__text">
                 <span className="agents-team__name">
                   <span className="agents-team__name-text">{SETUP_TITLE}</span>

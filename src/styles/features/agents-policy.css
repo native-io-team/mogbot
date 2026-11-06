@@ -170,6 +170,9 @@
 }
 
 .agent-settings-change__who {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-sm);
   font-size: var(--font-size-body-md);
   font-weight: var(--font-weight-label);
   color: var(--text-primary);

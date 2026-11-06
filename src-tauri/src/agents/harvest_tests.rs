@@ -287,6 +287,7 @@ fn everything_lands_in_memory_and_past_conversations_land_read_only() {
             role: "Money".into(),
             instructions: "Log.".into(),
             shape: None,
+            avatar: None,
             color: None,
             is_main: false,
         })

@@ -52,6 +52,22 @@ pub struct Proposal {
     /// Some of it is a rule: words the agent is given, not something the app stops.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub has_rules: bool,
+    /// How they'll look (`changes.look`), when that changes too.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub look: Option<LookChange>,
+}
+
+/// How the targeted agents will look: any of a shape, a face and a colour
+/// (keys). Applied to each agent named; the rest of its look stays.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LookChange {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub shape: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub face: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
 }
 
 pub const TOOL: &str = "propose_settings_change";
@@ -106,6 +122,15 @@ pub fn schema() -> Value {
                             "add": { "type": "array", "items": { "type": "string" }, "description": "Plain rules, e.g. \"Never email clients\"." },
                             "remove": { "type": "array", "items": { "type": "string" } }
                         }
+                    },
+                    "look": {
+                        "type": "object",
+                        "description": "How the named agents look: only what changes. Not for the team.",
+                        "properties": {
+                            "shape": { "type": "string", "enum": store::AVATAR_SHAPES },
+                            "face": { "type": "string", "enum": store::AVATAR_FACES },
+                            "color": { "type": "string", "enum": store::COLORS }
+                        }
                     }
                 }
             },
@@ -115,7 +140,7 @@ pub fn schema() -> Value {
     })
 }
 
-pub const DESCRIPTION: &str = "Propose a change to what an agent may do (projects and how it works in them, folders on this Mac, apps, the user's browser, independence, admin, rules), or to the team's defaults. Use it whenever the user says an agent should or shouldn't be able to do something, or asks to reset settings or make one agent like another. The user gets a card showing the change in plain words and applies it with Allow; nothing changes before. It returns at once: say in one line what you proposed and stop; you're told when they answer. Never tell the user to go to Settings.";
+pub const DESCRIPTION: &str = "Propose a change to what an agent may do (projects and how it works in them, folders on this Mac, apps, the user's browser, independence, admin, rules), to how it looks (its avatar's shape and face, its colour), or to the team's defaults. Use it whenever the user says an agent should or shouldn't be able to do something, asks to reset settings or make one agent like another, or asks for an agent to look different (\"give Hiring a hexagon with a curious face\"). The user gets a card showing the change in plain words and applies it with Allow; nothing changes before. It returns at once: say in one line what you proposed and stop; you're told when they answer. Never tell the user to go to Settings.";
 
 fn text(message: impl Into<String>) -> Value {
     json!({ "content": [{ "type": "text", "text": message.into() }] })
@@ -437,7 +462,156 @@ pub fn build(
             .map(|w| w.trim().chars().take(200).collect())
             .filter(|w: &String| !w.is_empty()),
         has_rules,
+        look: None,
     })
+}
+
+/// `changes.look`, keys checked. `None` when it isn't there.
+pub fn parse_look(v: Option<&Value>) -> Result<Option<LookChange>, String> {
+    let Some(v) = v.filter(|v| !v.is_null()) else {
+        return Ok(None);
+    };
+    let key = |k: &str| {
+        v.get(k)
+            .and_then(Value::as_str)
+            .map(|s| s.trim().to_ascii_lowercase())
+            .filter(|s| !s.is_empty())
+    };
+    let look = LookChange {
+        shape: key("shape"),
+        face: key("face"),
+        color: key("color"),
+    };
+    if let Some(s) = &look.shape {
+        if !store::AVATAR_SHAPES.contains(&s.as_str()) {
+            return Err(format!(
+                "There's no shape called \"{s}\": {}.",
+                store::AVATAR_SHAPES.join(", ")
+            ));
+        }
+    }
+    if let Some(f) = &look.face {
+        if !store::AVATAR_FACES.contains(&f.as_str()) {
+            return Err(format!(
+                "There's no face called \"{f}\": {}.",
+                store::AVATAR_FACES.join(", ")
+            ));
+        }
+    }
+    if let Some(c) = &look.color {
+        if !store::COLORS.contains(&c.as_str()) {
+            return Err(format!(
+                "There's no colour called \"{c}\": {}.",
+                store::COLORS.join(", ")
+            ));
+        }
+    }
+    if look == LookChange::default() {
+        return Err("`changes.look` is empty: say the shape, face or colour.".into());
+    }
+    Ok(Some(look))
+}
+
+/// The card's line for a look: "Now a hexagon with a curious face, in blue",
+/// "Now has a sleepy face", "Now blue".
+pub fn look_line(look: &LookChange) -> String {
+    let desc = store::AgentLook::describe(look.shape.as_deref(), look.face.as_deref());
+    let what = match (look.shape.is_some(), desc.is_empty()) {
+        (_, true) => String::new(),
+        (false, false) => format!("Now has {desc}"),
+        (true, false) => format!("Now {desc}"),
+    };
+    match (what.is_empty(), &look.color) {
+        (false, Some(c)) => format!("{what}, in {c}"),
+        (false, None) => what,
+        (true, Some(c)) => format!("Now {c}"),
+        (true, None) => String::new(),
+    }
+}
+
+/// What `look` would change for this agent, if anything.
+fn changes_look(agent: &Agent, look: &LookChange) -> bool {
+    let now = store::AgentLook::of(agent);
+    look.shape.as_ref().is_some_and(|s| *s != now.shape)
+        || look.face.as_ref().is_some_and(|f| *f != now.face)
+        || look.color.as_ref().is_some_and(|c| *c != agent.color)
+}
+
+/// A proposal's look, onto its groups: the look's line joins a group of
+/// agents it all applies to, or makes its own. Pure, for tests.
+pub fn add_look(
+    mut p: Proposal,
+    caller: &Agent,
+    admin: bool,
+    look: LookChange,
+    agents: &[Agent],
+) -> Result<Proposal, String> {
+    may_propose(caller, admin, &p.targets, &Change::default())?;
+    let mut ids = Vec::new();
+    for t in &p.targets {
+        match t {
+            Target::Team { .. } => {
+                return Err("A look is for agents by name, not the team's defaults.".into())
+            }
+            Target::Agent { agent_id } => {
+                if let Some(a) = agents.iter().find(|a| a.id == *agent_id) {
+                    if changes_look(a, &look) {
+                        ids.push(a.id.clone());
+                    }
+                }
+            }
+        }
+    }
+    if ids.is_empty() {
+        if p.groups.is_empty() {
+            return Err("That's already how it looks: nothing would change.".into());
+        }
+        return Ok(p);
+    }
+    let line = look_line(&look);
+    let mut placed: Vec<String> = Vec::new();
+    for g in &mut p.groups {
+        if !g.agent_ids.is_empty() && g.agent_ids.iter().all(|id| ids.contains(id)) {
+            g.changes.push(line.clone());
+            placed.extend(g.agent_ids.iter().cloned());
+        }
+    }
+    let rest: Vec<&Agent> = agents
+        .iter()
+        .filter(|a| ids.contains(&a.id) && !placed.contains(&a.id))
+        .collect();
+    if !rest.is_empty() {
+        p.groups.push(Group {
+            who: names(&rest),
+            agent_ids: rest.iter().map(|a| a.id.clone()).collect(),
+            changes: vec![line],
+        });
+    }
+    p.look = Some(look);
+    Ok(p)
+}
+
+/// A proposal that only changes how agents look: no policy, no version check.
+pub fn look_only(
+    caller: &Agent,
+    admin: bool,
+    targets: Vec<Target>,
+    look: LookChange,
+    why: Option<String>,
+    agents: &[Agent],
+) -> Result<Proposal, String> {
+    let base = Proposal {
+        targets,
+        change: Change::default(),
+        version: 0,
+        groups: Vec::new(),
+        why: why
+            .map(|w| w.trim().chars().take(200).collect())
+            .filter(|w: &String| !w.is_empty()),
+        has_rules: false,
+        look: None,
+    };
+    add_look(base, caller, admin, look, agents)
 }
 
 /// A turn answering outside text (a "When…" routine's items, or anything
@@ -454,25 +628,57 @@ pub async fn propose(app: &AppHandle, caller: &Agent, turn: Option<u64>, args: &
     ) {
         return error(refused);
     }
-    let change = match parse_change(args.get("changes").unwrap_or(&Value::Null)).await {
-        Ok(c) => c,
+    // A look rides along with the policy change, or is the whole of it.
+    let mut changes = args.get("changes").cloned().unwrap_or(Value::Null);
+    let look = match parse_look(changes.get("look")) {
+        Ok(l) => l,
         Err(e) => return error(e),
+    };
+    if let Some(o) = changes.as_object_mut() {
+        o.remove("look");
+    }
+    let only_look = look.is_some() && changes.as_object().is_none_or(|o| o.is_empty());
+    let change = if only_look {
+        Change::default()
+    } else {
+        match parse_change(&changes).await {
+            Ok(c) => c,
+            Err(e) => return error(e),
+        }
     };
     let targets = match parse_targets(caller, &strings(args.get("agents"))) {
         Ok(t) => t,
         Err(e) => return error(e),
     };
     let agents = store::list().unwrap_or_default();
-    let proposal = match build(
-        caller,
-        policy::is_admin(caller),
-        targets,
-        change,
-        args.get("why").and_then(Value::as_str).map(str::to_string),
-        &policy::load(),
-        &agents,
-        super::independence::level(),
-    ) {
+    let admin = policy::is_admin(caller);
+    let why = args.get("why").and_then(Value::as_str).map(str::to_string);
+    let built = if only_look {
+        look_only(
+            caller,
+            admin,
+            targets,
+            look.unwrap_or_default(),
+            why,
+            &agents,
+        )
+    } else {
+        build(
+            caller,
+            admin,
+            targets,
+            change,
+            why,
+            &policy::load(),
+            &agents,
+            super::independence::level(),
+        )
+        .and_then(|p| match look {
+            Some(l) => add_look(p, caller, admin, l, &agents),
+            None => Ok(p),
+        })
+    };
+    let proposal = match built {
         Ok(p) => p,
         Err(e) => return error(e),
     };
@@ -576,6 +782,42 @@ pub fn answer_card(
 
 /// Apply what a card showed, or say why it can't be any more.
 pub fn apply_proposal(p: &Proposal) -> Result<(), String> {
+    if !p.change.is_empty() {
+        apply_policy(p)?;
+    }
+    if let Some(look) = &p.look {
+        apply_look(p, look)?;
+    }
+    Ok(())
+}
+
+/// Each named agent takes what the look changes; the rest of its look stays.
+fn apply_look(p: &Proposal, look: &LookChange) -> Result<(), String> {
+    for t in &p.targets {
+        let Target::Agent { agent_id } = t else {
+            continue;
+        };
+        store::update(agent_id, |a| {
+            let mut now = store::AgentLook::of(a);
+            if look.shape.is_some() || look.face.is_some() {
+                if let Some(s) = &look.shape {
+                    now.shape = s.clone();
+                }
+                if let Some(f) = &look.face {
+                    now.face = f.clone();
+                }
+                a.avatar = Some(now);
+            }
+            if let Some(c) = &look.color {
+                a.color = c.clone();
+            }
+        })
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn apply_policy(p: &Proposal) -> Result<(), String> {
     let level = super::independence::level();
     let agents = store::list().unwrap_or_default();
     let mut new_level = level;

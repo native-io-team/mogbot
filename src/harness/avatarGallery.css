@@ -1,0 +1,64 @@
+/* Layout for harness-avatars.html only. */
+
+body {
+  margin: 0;
+  background: var(--surface-app);
+}
+
+.avatar-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xl);
+  padding: var(--spacing-xl);
+  color: var(--text-primary);
+}
+
+.avatar-gallery__head {
+  color: var(--text-secondary);
+  font-size: var(--font-size-body-sm);
+}
+
+.avatar-gallery__section h2 {
+  margin: 0 0 var(--spacing-md);
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-heading);
+  font-size: var(--font-size-body-md);
+}
+
+.avatar-gallery__sizes {
+  display: grid;
+  grid-template-columns: repeat(2, max-content);
+  gap: var(--spacing-lg) var(--spacing-2xl);
+}
+
+.avatar-gallery__size-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+}
+
+.avatar-gallery__grid {
+  display: grid;
+  grid-template-columns: repeat(11, max-content);
+  align-items: center;
+  justify-items: center;
+  gap: var(--spacing-md) var(--spacing-lg);
+}
+
+.avatar-gallery__colors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xl);
+}
+
+.avatar-gallery__color {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.avatar-gallery__caption {
+  color: var(--text-muted);
+  font-size: var(--font-size-caption);
+}

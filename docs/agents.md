@@ -184,7 +184,7 @@ and Inbox against a live Gmail connector.
 
 | Piece | Where | Notes |
 | --- | --- | --- |
-| Identity | `<projects root>/.shipstudio/agents/agents.json` | name, role, avatar (shape + colour key), pinned/hidden, unread, Claude session id |
+| Identity | `<projects root>/.shipstudio/agents/agents.json` | name, role, colour key, `avatar` (a shape and a face; absent, derived from the id: see docs/internal/avatars.md), pinned/hidden, unread, Claude session id |
 | Home | `<projects root>/.shipstudio/agents/<id>/` | the agent's working directory |
 | Instructions + memory | `<home>/CLAUDE.md` | Claude Code loads it every turn. Instructions on top, `## Memory` below, which the agent maintains itself. Editing instructions never touches memory. |
 | Conversation | `<home>/messages.jsonl` | what *you* were shown: your messages, its replies, agent-to-agent lines, approval cards, errors. Append-only |

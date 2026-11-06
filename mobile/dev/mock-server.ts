@@ -2275,7 +2275,7 @@ export function createMockServer(opts: MockOptions = {}) {
     // The router's rules (router.rs `check_new_agent`): a name, a role, a colour and a template only.
     'agents.create': (p, c) => {
       const input = (p.input ?? {}) as Record<string, unknown>;
-      if (Object.keys(input).some((k) => !['name', 'role', 'color', 'template'].includes(k))) {
+      if (Object.keys(input).some((k) => !['name', 'role', 'color', 'template', 'avatar'].includes(k))) {
         return fail({
           type: 'Protocol',
           code: 'bad_params',
@@ -2319,6 +2319,7 @@ export function createMockServer(opts: MockOptions = {}) {
         role,
         shape: agents.length % 14,
         color: typeof input.color === 'string' && input.color ? input.color : 'orange',
+        ...(input.avatar ? { avatar: input.avatar as Agent['avatar'] } : {}),
         isMain: false,
         pinned: false,
         hidden: false,
@@ -2346,18 +2347,20 @@ export function createMockServer(opts: MockOptions = {}) {
       const a = agent(String(p.agentId));
       if (!a) return fail({ type: 'Validation', field: 'agentId', reason: 'No such agent' });
       const input = (p.input ?? {}) as Record<string, unknown>;
-      const allowed = ['pinned', 'muted', 'hidden', 'instructions'];
+      const allowed = ['pinned', 'muted', 'hidden', 'instructions', 'avatar', 'color'];
       if (!Object.keys(input).length || Object.keys(input).some((k) => !allowed.includes(k))) {
         return fail({
           type: 'Protocol',
           code: 'bad_params',
-          message: 'Only pin, mute, hide and the instructions can be changed from the phone.',
+          message: 'Only pin, mute, hide, the instructions and how it looks can be changed from the phone.',
         });
       }
       if (typeof input.instructions === 'string') instructions.set(a.id, input.instructions);
       if (typeof input.pinned === 'boolean') a.pinned = input.pinned;
       if (typeof input.muted === 'boolean') a.muted = input.muted;
       if (typeof input.hidden === 'boolean') a.hidden = input.hidden;
+      if (input.avatar) a.avatar = input.avatar as Agent['avatar'];
+      if (typeof input.color === 'string') a.color = input.color;
       emit({ type: 'agents.registry', overview: overview() });
       const { status: _status, home: _home, ...stored } = a;
       return stored;

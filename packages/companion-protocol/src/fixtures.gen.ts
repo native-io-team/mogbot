@@ -2834,7 +2834,8 @@ export const frames = [
       "routines.when",
       "rooms",
       "logins",
-      "logins.phone"
+      "logins.phone",
+      "agents.looks"
     ]
   },
   {

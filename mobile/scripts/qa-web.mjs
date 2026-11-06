@@ -698,6 +698,17 @@ const LIVE = [
     check: 'Allowed without asking: Revoke aligned with the other row values',
   },
   {
+    name: 'agent-sheet-look',
+    route: '/agent/site',
+    ready: 'Acme Site',
+    act: async (page) => {
+      await page.clickLabel('Change how it looks');
+      await sleep(500);
+    },
+    check:
+      'The avatar tapped: a row of eight shapes and a row of ten faces, each a small avatar in its colour, the current one ringed in a neutral grey; the colour swatches under them',
+  },
+  {
     name: 'agent-sheet-chief',
     route: '/agent/chief',
     ready: 'Chief of Staff',

@@ -430,7 +430,7 @@ export function Composer({
                 onPress={() => pickMention(a)}
                 style={({ pressed }) => [styles.suggestion, pressed && styles.pressed]}
               >
-                <AgentAvatar name={a.name} color={a.color} size={avatarSize.group} />
+                <AgentAvatar id={a.id} name={a.name} color={a.color} size={avatarSize.group} />
                 <T variant="small" color={colors.textPrimary} maxFontSizeMultiplier={chromeScale}>
                   {a.name}
                 </T>

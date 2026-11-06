@@ -839,7 +839,7 @@
       "owner": "WorkspaceSidebar",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 13
+      "consumerCount": 15
     },
     {
       "name": "--size-sidebar-project",
@@ -5249,7 +5249,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 90
+      "consumerCount": 89
     },
     {
       "name": "--surface-panel",
@@ -5258,7 +5258,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 266
+      "consumerCount": 265
     },
     {
       "name": "--surface-control",
@@ -5267,7 +5267,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 355
+      "consumerCount": 357
     },
     {
       "name": "--surface-control-hover",
@@ -5357,7 +5357,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 583
+      "consumerCount": 582
     },
     {
       "name": "--text-secondary",
@@ -5375,7 +5375,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 891
+      "consumerCount": 890
     },
     {
       "name": "--text-faint",
@@ -5483,7 +5483,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 50
+      "consumerCount": 51
     },
     {
       "name": "--border-control",
@@ -5555,7 +5555,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 60
+      "consumerCount": 62
     },
     {
       "name": "--focus-ring-width",
@@ -5564,7 +5564,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 31
+      "consumerCount": 34
     },
     {
       "name": "--focus-ring-offset",
@@ -5789,7 +5789,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 30
+      "consumerCount": 29
     },
     {
       "name": "--font-size-subhead-lg",
@@ -5816,7 +5816,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 187
+      "consumerCount": 186
     },
     {
       "name": "--font-size-body-md",
@@ -5825,7 +5825,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 362
+      "consumerCount": 361
     },
     {
       "name": "--font-size-body-sm",
@@ -5834,7 +5834,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 479
+      "consumerCount": 477
     },
     {
       "name": "--font-size-control",
@@ -5942,7 +5942,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 41
+      "consumerCount": 40
     },
     {
       "name": "--font-weight-title",
@@ -6014,7 +6014,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 59
+      "consumerCount": 60
     },
     {
       "name": "--transition-interaction",
@@ -6140,7 +6140,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 276
+      "consumerCount": 279
     },
     {
       "name": "--spacing-xs",
@@ -6158,7 +6158,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 830
+      "consumerCount": 831
     },
     {
       "name": "--spacing-md",
@@ -6167,7 +6167,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 554
+      "consumerCount": 555
     },
     {
       "name": "--spacing-lg",
@@ -6176,7 +6176,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 217
+      "consumerCount": 218
     },
     {
       "name": "--spacing-xl",
@@ -6185,7 +6185,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 147
+      "consumerCount": 145
     },
     {
       "name": "--spacing-2xl",
@@ -6230,7 +6230,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 218
+      "consumerCount": 217
     },
     {
       "name": "--radius-lg",
@@ -6608,7 +6608,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 90
+      "consumerCount": 89
     },
     {
       "name": "--surface-panel",
@@ -6617,7 +6617,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 266
+      "consumerCount": 265
     },
     {
       "name": "--surface-control",
@@ -6626,7 +6626,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 355
+      "consumerCount": 357
     },
     {
       "name": "--surface-control-hover",
@@ -6716,7 +6716,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 583
+      "consumerCount": 582
     },
     {
       "name": "--text-secondary",
@@ -6743,7 +6743,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": true,
-      "consumerCount": 891
+      "consumerCount": 890
     },
     {
       "name": "--text-faint",
@@ -6842,7 +6842,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 50
+      "consumerCount": 51
     },
     {
       "name": "--border-control",
@@ -7499,7 +7499,7 @@
       "owner": "global/semantic",
       "status": "canonical",
       "pluginStable": false,
-      "consumerCount": 165
+      "consumerCount": 164
     },
     {
       "name": "--accent-active-hover",

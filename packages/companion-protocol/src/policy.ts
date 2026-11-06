@@ -125,6 +125,18 @@ export interface SettingsProposal {
   why?: string;
   /** Some of it is a rule: words, not something the app stops. */
   hasRules?: boolean;
+  /**
+   * How the targeted agents will look (`propose_settings_change`'s
+   * `changes.look`): only what changes; the rest stays as each one is.
+   */
+  look?: LookChange;
+}
+
+/** A proposed look: any of a shape, a face and a colour (keys, as the registry stores them). */
+export interface LookChange {
+  shape?: string;
+  face?: string;
+  color?: string;
 }
 
 export const PRESET_LABEL: Record<PolicyPreset, string> = {

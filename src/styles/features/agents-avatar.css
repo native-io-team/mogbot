@@ -1,0 +1,209 @@
+/* An agent's avatar (AgentAvatar.tsx; the spec is
+ * packages/companion-protocol/src/avatar.ts, the design docs/internal/avatars.md).
+ *
+ * A soft shape in a tone of the agent's colour, a face in an ink of the same
+ * hue: the tint and ink the initials badge used, which kept every hue above
+ * 4.5:1 in both themes. Solid with the canvas colour as ink when it's the
+ * agent you're looking at, as a project badge turns solid. The face's stroke
+ * weights come from the spec per size; colour, size and motion are here.
+ */
+
+:root {
+  /* A working agent's ring breathes: slow enough to read as calm. */
+  --agents-avatar-breathe: calc(var(--duration-loader-isolated) * 1.5);
+  /* While working, a blink every few seconds (BLINK_EVERY_MS in avatar.ts). */
+  --agents-avatar-blink-every: calc(var(--duration-loader-standard) * 4);
+  /* When a turn ends, one bob (BOB_MS). */
+  --agents-avatar-bob: calc(var(--duration-sortable-settle) * 2);
+  /* The picker's preview. */
+  --agents-avatar-xl: calc(var(--spacing-lg) * 6);
+}
+
+.agent-avatar {
+  /* Tone and ink. 16% tint alone was under 4.5:1 for the darker hues. */
+  --agent-avatar-fill: color-mix(
+    in srgb,
+    var(--agents-tint, var(--text-muted)) 24%,
+    var(--surface-control)
+  );
+  --agent-avatar-ink: color-mix(
+    in srgb,
+    var(--agents-tint, var(--text-secondary)) 70%,
+    var(--text-primary)
+  );
+  /* A hairline of the hue on the shape's edge, so a pale tone on a pale
+     panel (light theme) still has a silhouette. */
+  --agent-avatar-edge: color-mix(in srgb, var(--agents-tint, var(--text-muted)) 22%, transparent);
+
+  position: relative;
+  display: inline-flex;
+  flex: 0 0 auto;
+  width: var(--agent-avatar-size);
+  height: var(--agent-avatar-size);
+  color: var(--agent-avatar-ink);
+  user-select: none;
+}
+
+.agent-avatar__art {
+  display: block;
+  width: 100%;
+  height: 100%;
+  /* The working ring sits just outside the shape. */
+  overflow: visible;
+}
+
+.agent-avatar__shape {
+  fill: var(--agent-avatar-fill);
+  stroke: var(--agent-avatar-edge);
+  stroke-width: 1px;
+  vector-effect: non-scaling-stroke;
+  transition: fill var(--transition-interaction-fast);
+}
+
+.agent-avatar__face path {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Working: the ring is the one line around it, never a second edge inside it. */
+.agent-avatar--working {
+  --agent-avatar-edge: transparent;
+}
+
+.agent-avatar--selected {
+  --agent-avatar-fill: var(--agents-tint, var(--accent-active));
+  --agent-avatar-ink: var(--surface-app);
+  --agent-avatar-edge: transparent;
+}
+
+/* Not an agent: an icon on a neutral tile in an avatar's footprint (the
+   team's badge, a mention menu's group). A tile, never a face, so it can't
+   pass for an agent. */
+.agent-avatar--tile {
+  --agent-avatar-fill: var(--surface-control);
+  --agent-avatar-ink: var(--text-secondary);
+
+  align-items: center;
+  justify-content: center;
+  color: var(--agent-avatar-ink);
+  background: var(--agent-avatar-fill);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-button);
+}
+
+.agent-avatar--tile.agent-avatar--selected {
+  --agent-avatar-fill: var(--text-primary);
+  --agent-avatar-ink: var(--surface-app);
+}
+
+/* ---------------------------------------------------------------- sizes */
+
+.agent-avatar--xs {
+  --agent-avatar-size: var(--spacing-lg);
+}
+
+.agent-avatar--mini {
+  --agent-avatar-size: calc(var(--spacing-lg) + var(--spacing-2xs));
+}
+
+.agent-avatar--row {
+  --agent-avatar-size: var(--size-sidebar-project-shortcut);
+}
+
+.agent-avatar--field {
+  --agent-avatar-size: var(--control-height-standard);
+}
+
+.agent-avatar--md {
+  --agent-avatar-size: calc(var(--spacing-lg) * 2.5);
+}
+
+.agent-avatar--hero {
+  --agent-avatar-size: calc(var(--control-height-standard) + var(--spacing-lg));
+}
+
+.agent-avatar--xl {
+  --agent-avatar-size: var(--agents-avatar-xl);
+}
+
+/* --------------------------------------------------------------- motion */
+
+/* Working: a ring of its own colour, following its silhouette, that
+   breathes slowly. Never a flash; with Reduce Motion it simply stays. */
+.agent-avatar__ring {
+  fill: none;
+  stroke: var(--agents-tint, var(--text-muted));
+  stroke-width: var(--focus-ring-width);
+  opacity: 0.6;
+  animation: agents-avatar-breathe var(--agents-avatar-breathe) ease-in-out infinite;
+}
+
+@keyframes agents-avatar-breathe {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+
+  50% {
+    opacity: 0.8;
+  }
+}
+
+/* Working: a blink now and then, each agent in its own quarter of the
+   cycle so a sidebar of busy agents never blinks in unison. */
+.agent-avatar--working .agent-avatar__eyes {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: agents-avatar-blink var(--agents-avatar-blink-every) ease-in-out infinite;
+}
+
+.agent-avatar--working[data-blink='1'] .agent-avatar__eyes {
+  animation-delay: calc(var(--agents-avatar-blink-every) * -0.25);
+}
+
+.agent-avatar--working[data-blink='2'] .agent-avatar__eyes {
+  animation-delay: calc(var(--agents-avatar-blink-every) * -0.5);
+}
+
+.agent-avatar--working[data-blink='3'] .agent-avatar__eyes {
+  animation-delay: calc(var(--agents-avatar-blink-every) * -0.75);
+}
+
+@keyframes agents-avatar-blink {
+  0%,
+  94%,
+  97.5%,
+  100% {
+    transform: scaleY(1);
+  }
+
+  95.75% {
+    transform: scaleY(0.12);
+  }
+}
+
+/* A turn ended: one small lift and settle. */
+.agent-avatar--bob {
+  animation: agents-avatar-bob var(--agents-avatar-bob) ease-out;
+}
+
+@keyframes agents-avatar-bob {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  40% {
+    transform: translateY(-8%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-avatar__ring,
+  .agent-avatar--working .agent-avatar__eyes,
+  .agent-avatar--bob {
+    animation: none;
+  }
+}

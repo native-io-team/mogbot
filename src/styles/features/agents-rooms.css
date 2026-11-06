@@ -260,8 +260,6 @@
 
 .agent-room__empty .agent-room-avatars .agent-avatar {
   --agent-avatar-size: var(--control-height-standard);
-  font-size: var(--font-size-body-sm);
-  border-radius: var(--radius-control);
 }
 
 .agent-room__empty .agent-room-avatars__more {
