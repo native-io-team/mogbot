@@ -44,6 +44,19 @@ import { AttachmentImage } from './AgentAttachments';
 /** A press that moves less than this is a click, not a drag. */
 const CLICK_SLOP_PX = 4;
 const LINE_HEIGHT_PX = 16;
+/** A wheel or pinch with no event for this long has settled. */
+const SETTLE_MS = 150;
+
+/** The image's size and place for a view (state renders it; gestures write it). */
+function imageStyleOf(view: ZoomView, fit: Size) {
+  return {
+    width: `${fit.width * view.scale}px`,
+    height: `${fit.height * view.scale}px`,
+    maxWidth: 'none',
+    maxHeight: 'none',
+    transform: `translate(calc(-50% + ${view.x}px), calc(-50% + ${view.y}px))`,
+  };
+}
 
 interface GestureLikeEvent extends Event {
   scale: number;
@@ -84,14 +97,63 @@ export function ZoomableImage({
   const zoomed = isZoomed(view);
 
   // Read by the listeners, which are registered once.
-  const live = useRef({ ready, natural, stage, fit, max, view });
+  const live = useRef({ ready, natural, stage, fit, max });
   useEffect(() => {
-    live.current = { ready, natural, stage, fit, max, view };
+    live.current = { ready, natural, stage, fit, max };
   });
+
+  // Where the picture is now. During a wheel, pinch or drag it runs ahead
+  // of `view`: written straight to the image once per animation frame, and
+  // committed to state (the readout, the buttons) when the gesture settles.
+  const current = useRef<ZoomView>(view);
+  const frame = useRef<number | null>(null);
+  const settleTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const cancelPending = useCallback(() => {
+    if (frame.current !== null) cancelAnimationFrame(frame.current);
+    frame.current = null;
+    if (settleTimer.current !== null) clearTimeout(settleTimer.current);
+    settleTimer.current = null;
+  }, []);
+
+  /** A discrete change (a key, a button, a click): straight to state. */
+  const setNow = useCallback(
+    (next: (v: ZoomView) => ZoomView) => {
+      cancelPending();
+      current.current = next(current.current);
+      setView(current.current);
+    },
+    [cancelPending]
+  );
+
+  /** Where the gesture has got to becomes the view. */
+  const commit = useCallback(() => setNow((v) => v), [setNow]);
+
+  /** A step of a gesture: drawn on the next frame, committed once it settles. */
+  const moveLive = useCallback(
+    (next: (v: ZoomView) => ZoomView, settle: 'later' | 'on-release') => {
+      current.current = next(current.current);
+      if (frame.current === null) {
+        frame.current = requestAnimationFrame(() => {
+          frame.current = null;
+          const img = stageRef.current?.querySelector('img');
+          const { fit } = live.current;
+          if (img) Object.assign(img.style, imageStyleOf(current.current, fit));
+        });
+      }
+      if (settle === 'later') {
+        if (settleTimer.current !== null) clearTimeout(settleTimer.current);
+        settleTimer.current = setTimeout(commit, SETTLE_MS);
+      }
+    },
+    [commit]
+  );
+
+  useEffect(() => cancelPending, [cancelPending]);
 
   // A resize keeps the picture inside its new bounds.
   useEffect(() => {
-    if (ready) setView((v) => clampView(v, fit, stage));
+    if (ready) setNow((v) => clampView(v, fit, stage));
     // fit follows from stage and natural.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [ready, stage.width, stage.height, natural?.width, natural?.height]);
@@ -103,14 +165,23 @@ export function ZoomableImage({
     return { x: clientX - box.left - box.width / 2, y: clientY - box.top - box.height / 2 };
   }, []);
 
-  /** Zoom to the scale `next` picks from the current one, holding `focal` still. */
+  /**
+   * Zoom to the scale `next` picks from the current one, holding `focal`
+   * still: at once, or as a step of a gesture.
+   */
   const zoomWith = useCallback(
-    (next: (scale: number, max: number) => number, focal: Point = { x: 0, y: 0 }) => {
+    (
+      next: (scale: number, max: number) => number,
+      focal: Point = { x: 0, y: 0 },
+      gesture = false
+    ) => {
       const { ready, fit, stage, max } = live.current;
       if (!ready) return;
-      setView((v) => zoomAround(v, next(v.scale, max), focal, fit, stage, max));
+      const to = (v: ZoomView) => zoomAround(v, next(v.scale, max), focal, fit, stage, max);
+      if (gesture) moveLive(to, 'later');
+      else setNow(to);
     },
-    []
+    [moveLive, setNow]
   );
 
   const step = useCallback(
@@ -130,7 +201,7 @@ export function ZoomableImage({
       let handled = true;
       if (event.key === '=' || event.key === '+') step('in');
       else if (event.key === '-' || event.key === '_') step('out');
-      else if (event.key === '0') setView(FIT_VIEW);
+      else if (event.key === '0') setNow(() => FIT_VIEW);
       else handled = false;
       if (handled) {
         event.preventDefault();
@@ -139,14 +210,14 @@ export function ZoomableImage({
     };
     window.addEventListener('keydown', onKey, true);
     return () => window.removeEventListener('keydown', onKey, true);
-  }, [step]);
+  }, [step, setNow]);
 
   // Wheel and pinch, non-passive so the app window never zooms or scrolls instead.
   useEffect(() => {
     const node = stageRef.current;
     if (!node) return;
     const onWheel = (event: WheelEvent) => {
-      const { ready, view, fit, stage } = live.current;
+      const { ready, fit, stage } = live.current;
       if (!ready) return;
       if (event.ctrlKey || event.metaKey) {
         event.preventDefault();
@@ -154,16 +225,19 @@ export function ZoomableImage({
         const { deltaY } = event;
         zoomWith(
           (scale, max) => wheelScale(scale, deltaY, max),
-          focalOf(event.clientX, event.clientY)
+          focalOf(event.clientX, event.clientY),
+          true
         );
         return;
       }
       // At fit a wheel is the gallery's (a sideways swipe turns the page).
-      if (!isZoomed(view)) return;
+      if (!isZoomed(current.current)) return;
       event.preventDefault();
       event.stopPropagation();
       const factor = event.deltaMode === 1 ? LINE_HEIGHT_PX : 1;
-      setView((v) => panView(v, -event.deltaX * factor, -event.deltaY * factor, fit, stage));
+      const dx = -event.deltaX * factor;
+      const dy = -event.deltaY * factor;
+      moveLive((v) => panView(v, dx, dy, fit, stage), 'later');
     };
     let gestureScale = 1;
     const onGestureStart = (event: GestureLikeEvent) => {
@@ -175,11 +249,12 @@ export function ZoomableImage({
       const now = event.scale || 1;
       const factor = gestureScale > 0 ? now / gestureScale : 1;
       gestureScale = now;
-      zoomWith((scale) => scale * factor, focalOf(event.clientX, event.clientY));
+      zoomWith((scale) => scale * factor, focalOf(event.clientX, event.clientY), true);
     };
     const onGestureEnd = (event: GestureLikeEvent) => {
       event.preventDefault();
       gestureScale = 1;
+      commit();
     };
     node.addEventListener('wheel', onWheel, { passive: false });
     node.addEventListener('gesturestart', onGestureStart as EventListener, { passive: false });
@@ -191,13 +266,15 @@ export function ZoomableImage({
       node.removeEventListener('gesturechange', onGestureChange as EventListener);
       node.removeEventListener('gestureend', onGestureEnd as EventListener);
     };
-  }, [focalOf, zoomWith]);
+  }, [focalOf, zoomWith, commit, moveLive]);
 
   // A press: a drag pans (zoomed), a click toggles fit ↔ 100%.
   const press = useRef<{ x: number; y: number; view: ZoomView; moved: boolean } | null>(null);
   const onPointerDown = (event: ReactPointerEvent<HTMLDivElement>) => {
     if (event.button !== 0 || !ready) return;
-    press.current = { x: event.clientX, y: event.clientY, view, moved: false };
+    // A wheel still settling is where this press starts from.
+    commit();
+    press.current = { x: event.clientX, y: event.clientY, view: current.current, moved: false };
     event.currentTarget.setPointerCapture?.(event.pointerId);
   };
   const onPointerMove = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -209,27 +286,22 @@ export function ZoomableImage({
     start.moved = true;
     if (!isZoomed(start.view)) return;
     setDragging(true);
-    setView(panView(start.view, dx, dy, fit, stage));
+    moveLive(() => panView(start.view, dx, dy, fit, stage), 'on-release');
   };
   const onPointerUp = (event: ReactPointerEvent<HTMLDivElement>) => {
     const start = press.current;
     press.current = null;
     setDragging(false);
     event.currentTarget.releasePointerCapture?.(event.pointerId);
-    if (!start || start.moved || !natural) return;
-    setView((v) => toggleView(v, focalOf(event.clientX, event.clientY), natural, fit, stage));
+    if (!start || start.moved || !natural) {
+      commit();
+      return;
+    }
+    setNow((v) => toggleView(v, focalOf(event.clientX, event.clientY), natural, fit, stage));
   };
 
   const percent = ready ? zoomPercent(view, natural, fit) : 100;
-  const imageStyle = ready
-    ? {
-        width: fit.width * view.scale,
-        height: fit.height * view.scale,
-        maxWidth: 'none',
-        maxHeight: 'none',
-        transform: `translate(calc(-50% + ${view.x}px), calc(-50% + ${view.y}px))`,
-      }
-    : undefined;
+  const imageStyle = ready ? imageStyleOf(view, fit) : undefined;
 
   return (
     <div className="agent-lightbox__zoom">
@@ -244,6 +316,7 @@ export function ZoomableImage({
         onPointerCancel={() => {
           press.current = null;
           setDragging(false);
+          commit();
         }}
         onDragStart={(event) => event.preventDefault()}
         title={zoomed ? undefined : 'Click to see it at full size'}
@@ -290,7 +363,7 @@ export function ZoomableImage({
           <Button
             size="compact"
             variant={zoomed ? 'ghost' : 'secondary'}
-            onClick={() => setView(FIT_VIEW)}
+            onClick={() => setNow(() => FIT_VIEW)}
             aria-pressed={!zoomed}
             title={`Fit (${kbd('mod', '0')})`}
           >
