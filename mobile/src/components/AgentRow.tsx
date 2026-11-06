@@ -27,6 +27,7 @@ import {
   waitingOnMac,
 } from '../lib/agents';
 import { useClock } from '../lib/useClock';
+import { useSteadyLine } from '../lib/steady';
 import { useApp } from '../lib/store';
 import { haptic } from '../lib/haptics';
 import {
@@ -299,7 +300,8 @@ function RowBody({
   );
   const tinted = !!state && live && (state === 'waiting' || state === 'failed');
   const cut = line.indexOf(' · ');
-  const head = cut < 0 ? line : line.slice(0, cut);
+  // Steadied while it works, so step → "Thinking" → step doesn't flicker.
+  const head = useSteadyLine(cut < 0 ? line : line.slice(0, cut), running);
   const tail = cut < 0 ? '' : line.slice(cut);
   const time = (
     <T
