@@ -162,7 +162,9 @@ for (const ev of ['uncaughtException', 'unhandledRejection']) {
   });
 }
 setTimeout(() => {
-  console.error(`[qa:web] still running after ${Math.round(MAX_MS / 1000)}s; stopping everything it started.`);
+  console.error(
+    `[qa:web] still running after ${Math.round(MAX_MS / 1000)}s; stopping everything it started.`
+  );
   stopAllNow();
   process.exit(124);
 }, MAX_MS).unref();
@@ -429,7 +431,7 @@ const wanted = (name) => !ONLY || name.startsWith(ONLY);
 
 /**
  * The pairing screens before anything is paired, in each theme: the welcome
- * ("Before you scan"), "Reaching <Mac>…" against a server that never
+ * (Tailscale on, then scan: a screen each), "Reaching <Mac>…" against a server that never
  * answers, and the failure that follows (identity timeout, then the
  * diagnosis). `d` is the mock's own link, with its route swapped.
  */
@@ -447,7 +449,7 @@ async function prePairShots(page, d) {
       if (wanted(`pair-start-${theme}`)) {
         await page.goto(`${WEB}/pair`);
         await page.waitFor(
-          `document.body.innerText.includes('Before you scan')`,
+          `document.body.innerText.includes('Turn on Tailscale on this phone')`,
           180_000,
           'the welcome'
         );
@@ -455,7 +457,28 @@ async function prePairShots(page, d) {
         await capture(page, `pair-start-${theme}`, {
           route: '/pair',
           check:
-            '“Before you scan” card above Scan: three lines (installed, connected, same account), why, and a Get/Open Tailscale button',
+            '“Step 1 of 2”, “Turn on Tailscale on this phone”, why, three lines (installed, same account, switched on), Get/Open Tailscale, then one big “It’s on — next”',
+          theme,
+        });
+      }
+      if (wanted(`pair-scan-${theme}`)) {
+        await page.goto(`${WEB}/pair`);
+        await page.waitFor(
+          `document.body.innerText.includes('It’s on — next')`,
+          180_000,
+          'the welcome'
+        );
+        await page.clickText('It’s on — next');
+        await page.waitFor(
+          `document.body.innerText.includes('Scan the code on your Mac')`,
+          10_000,
+          'the scan step'
+        );
+        await sleep(500);
+        await capture(page, `pair-scan-${theme}`, {
+          route: '/pair (step 2)',
+          check:
+            '“Step 2 of 2”, “Scan the code on your Mac”, where the code is on the Mac, one big “Scan the code”, then “Paste a pairing link instead” and Back',
           theme,
         });
       }
@@ -1538,7 +1561,7 @@ async function main() {
   const page = await openTab();
   await setTheme(page, THEMES[0]);
 
-  // Before pairing: the welcome with "Before you scan", then a Mac that
+  // Before pairing: the welcome (Tailscale on, then scan), then a Mac that
   // never answers (a silent server in the link's place): "Reaching…" while
   // it waits, then the reason, never a spinner forever.
   const link = await (await fetch(`${MOCK}/dev/link`)).text();

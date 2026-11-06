@@ -2,7 +2,7 @@
  * Import agents from another assistant (Grok, ChatGPT, Claude…), from the
  * phone (desktop `agents/connector.rs`, docs/agents.md "Import").
  *
- * Three steps, each said plainly:
+ * Three steps, one screen at a time (`phoneImportStep`), each said plainly:
  * 1. **Remote access on, and the assistant connected.** Done once, at the
  *    Mac: Remote access gets this app's own address (beside any other app's
  *    mount on the same Funnel), and its link is added to the assistant as a
@@ -31,6 +31,7 @@ import { MAC_FEATURES } from '@shipstudio/companion-protocol';
 import { useApp, useServed } from '../lib/store';
 import { space, typingDot } from '../lib/theme';
 import { TypingDots } from '../components/TypingDots';
+import { phoneImportStep } from '../lib/importChoice';
 
 /** How often the screen asks the Mac where the import has got to. */
 const POLL_MS = 3000;
@@ -119,8 +120,6 @@ export default function ImportScreen() {
     }
   };
 
-  const remote = status?.remoteAccess;
-  const reachable = !!remote?.enabled && !!remote.funnelOn;
   const talk = status?.talk ?? null;
   const going = live(talk);
   const armed = !!status?.armed;
@@ -129,128 +128,131 @@ export default function ImportScreen() {
     if (id) router.replace({ pathname: '/chat/[id]', params: { id } });
   };
 
+  const step = phoneImportStep(status);
+
   return (
     <SheetPage>
       <ScrollView contentContainerStyle={styles.root}>
         <SheetTitle>Import agents</SheetTitle>
-        <T color={colors.textSecondary}>
-          Bring the agents another assistant runs for you (like Grok). It tells {chiefName}{' '}
-          everything each agent does; {chiefName} plays it back to you, and you choose what to
-          import.
+        <T variant="caption" color={colors.textMuted} testID="import-progress">
+          Step {step.index} of 3
         </T>
 
-        <View style={styles.step}>
-          <T variant="headline" color={colors.textStrong}>
-            1. Connect your assistant {reachable && remote?.everConnected ? '✓' : ''}
-          </T>
-          {!status ? (
-            <T variant="small" color={colors.textSecondary}>
-              {connected ? `Asking ${macName}…` : `Needs ${macName}.`}
+        {step.id === 'connect' && (
+          <View style={styles.step}>
+            <T variant="headline" color={colors.textStrong}>
+              {!status
+                ? 'Checking your Mac…'
+                : !step.reachable
+                  ? `Turn on Remote access at ${macName}`
+                  : 'Add the link to your assistant'}
             </T>
-          ) : !reachable ? (
-            <T variant="small" color={colors.textSecondary}>
-              Once, at {macName}: open Settings → Remote access and turn it on. This app gets its
-              own address, so another app’s Remote access keeps working beside it.
+            <T color={colors.textSecondary}>
+              {!status
+                ? connected
+                  ? `Asking ${macName}…`
+                  : `Needs ${macName}.`
+                : !step.reachable
+                  ? `Once, at ${macName}: press ⌘K → Import agents and follow its first step. This screen ticks when it’s on.`
+                  : `Once, at ${macName}: press Copy link and add it to your assistant as a connector. The link is a key, so it never comes to this phone. This ticks when your assistant connects.`}
             </T>
-          ) : !remote?.everConnected ? (
-            <T variant="small" color={colors.textSecondary}>
-              Once, at {macName}: in Remote access press Copy link, and add it to your assistant as
-              a connector. The link is a key to {macName}, so it never comes to this phone.
-            </T>
-          ) : (
-            <T variant="small" color={colors.textSecondary}>
-              Remote access is on and your assistant has connected.
-            </T>
-          )}
-        </View>
+            {status && <TypingDots color={colors.textMuted} />}
+          </View>
+        )}
 
-        <View style={styles.step}>
-          <T variant="headline" color={colors.textStrong}>
-            2. Start, then send it this message
-          </T>
-          {going ? (
-            <T variant="small" color={colors.textSecondary}>
-              Sent. {talk?.source} is talking to {chiefName}.
+        {step.id === 'start' && (
+          <View style={styles.step}>
+            <T variant="headline" color={colors.textStrong}>
+              Send your assistant this message
             </T>
-          ) : armed ? (
-            <>
-              <T variant="small" color={colors.textBody}>
-                {status?.prompt}
-              </T>
-              <Button
-                title={copied ? 'Copied' : 'Copy message'}
-                variant="answer"
-                icon="doc.on.doc"
-                onPress={() => {
-                  void Clipboard.setStringAsync(status?.prompt ?? '').then(() => {
-                    setCopied(true);
-                    haptic.success();
-                  });
-                }}
-              />
-              <T variant="caption" color={colors.textSecondary}>
-                Paste it into your assistant. It holds no keys or passwords.
-              </T>
-            </>
-          ) : (
-            <>
-              <T variant="small" color={colors.textSecondary}>
-                Start lets one import begin, until it ends or {macName} quits.
-              </T>
-              <Button
-                title="Start"
-                variant="answer"
-                busy={busy}
-                disabled={!connected || busy || !reachable}
-                onPress={() => void act('agents.import.start')}
-              />
-            </>
-          )}
-        </View>
-
-        <View style={styles.step}>
-          <T variant="headline" color={colors.textStrong}>
-            3. Allow it, check the plan, import
-          </T>
-          {talk?.state === 'interviewing' ? (
-            // Going on now: the typing dots, one line of what, one of how far.
-            <View style={styles.live} accessible accessibilityLiveRegion="polite">
-              <View style={styles.liveRow}>
-                <TypingDots color={colors.statusRunning} />
-                <T variant="small" color={colors.textBody} style={styles.flex}>
-                  {phoneTalkLine(talk, chiefName)}
+            {armed ? (
+              <>
+                <T variant="small" color={colors.textBody}>
+                  {status?.prompt}
                 </T>
+                <Button
+                  title={copied ? 'Copied' : 'Copy message'}
+                  variant="answer"
+                  size="large"
+                  icon="doc.on.doc"
+                  onPress={() => {
+                    void Clipboard.setStringAsync(status?.prompt ?? '').then(() => {
+                      setCopied(true);
+                      haptic.success();
+                    });
+                  }}
+                />
+                <T variant="caption" color={colors.textSecondary}>
+                  Paste it into a new chat with your assistant and send it. It holds no keys or
+                  passwords.
+                </T>
+              </>
+            ) : (
+              <>
+                <T color={colors.textSecondary}>
+                  Start lets one import begin, until it ends or {macName} quits.
+                </T>
+                <Button
+                  title="Start"
+                  variant="answer"
+                  size="large"
+                  busy={busy}
+                  disabled={!connected || busy}
+                  onPress={() => void act('agents.import.start')}
+                />
+              </>
+            )}
+          </View>
+        )}
+
+        {step.id === 'follow' && talk && (
+          <View style={styles.step}>
+            <T variant="headline" color={colors.textStrong}>
+              {talk.state === 'imported' ? 'Done' : `Answer ${chiefName} in its chat`}
+            </T>
+            {talk.state === 'interviewing' ? (
+              // Going on now: the typing dots, one line of what, one of how far.
+              <View style={styles.live} accessible accessibilityLiveRegion="polite">
+                <View style={styles.liveRow}>
+                  <TypingDots color={colors.statusRunning} />
+                  <T variant="small" color={colors.textBody} style={styles.flex}>
+                    {phoneTalkLine(talk, chiefName)}
+                  </T>
+                </View>
+                {importCounts(talk) && (
+                  <T variant="caption" color={colors.textSecondary} style={styles.counts}>
+                    {importCounts(talk)}
+                  </T>
+                )}
               </View>
-              {importCounts(talk) && (
-                <T variant="caption" color={colors.textSecondary} style={styles.counts}>
-                  {importCounts(talk)}
-                </T>
-              )}
-            </View>
-          ) : (
-            <T variant="small" color={going ? colors.textBody : colors.textSecondary}>
-              {talk
-                ? phoneTalkLine(talk, chiefName)
-                : `${chiefName} asks you first, then tells you what each agent will do and asks what’s missing. You answer here or on ${macName}.`}
-            </T>
-          )}
-          {(chief || status?.chiefId) && (
-            <Button title={`Open ${chiefName}`} variant="outline" onPress={openChief} />
-          )}
-          {talk?.state === 'imported' && talk.imported.length > 0 && servesTeam && (
-            <Button
-              title="Give them what they need"
-              variant="answer"
-              icon="person.2"
-              onPress={() => router.push('/logins')}
-            />
-          )}
-        </View>
+            ) : (
+              <T variant="small" color={colors.textBody}>
+                {phoneTalkLine(talk, chiefName)}
+              </T>
+            )}
+            {(chief || status?.chiefId) && (
+              <Button
+                title={`Open ${chiefName}`}
+                variant={going ? 'answer' : 'outline'}
+                size="large"
+                onPress={openChief}
+              />
+            )}
+            {talk.state === 'imported' && talk.imported.length > 0 && servesTeam && (
+              <Button
+                title="Give them what they need"
+                variant="answer"
+                icon="person.2"
+                onPress={() => router.push('/logins')}
+              />
+            )}
+          </View>
+        )}
 
         {(armed || going) && (
           <Button
             title={going ? 'Stop import' : 'Cancel'}
-            variant="outline"
+            variant="ghost"
             busy={busy}
             disabled={!connected || busy}
             onPress={() => void act('agents.import.stop')}
