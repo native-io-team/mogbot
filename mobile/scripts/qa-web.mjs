@@ -14,7 +14,7 @@
  * the Chrome DevTools Protocol over Node's built-in WebSocket and fetch.
  *
  *   pnpm qa:web                          # everything, into qa-shots/
- *   pnpm qa:web --only chat-             # shots whose name starts with chat-
+ *   pnpm qa:web --only chat-,composer-   # shots whose name starts with chat- or composer-
  *   pnpm qa:web --phases heavy           # only these phases (fresh,live,cached,impostor,bars,heavy,importing,team-setup,live-work,torture)
  *   pnpm qa:web --themes dark            # one theme
  *   pnpm qa:web --out /tmp/shots
@@ -427,7 +427,7 @@ const FIND_SCROLLER = `(() => {
 })()`;
 
 const shots = [];
-const wanted = (name) => !ONLY || name.startsWith(ONLY);
+const wanted = (name) => !ONLY || ONLY.split(',').some((o) => name.startsWith(o));
 
 /**
  * The pairing screens before anything is paired, in each theme: the welcome
@@ -571,6 +571,20 @@ async function screen(page, theme, s) {
 }
 
 // ---- What to capture ----------------------------------------------------------------
+
+/** Empty the message field (select all, Backspace), so the draft doesn't carry into later shots. */
+async function clearField(page) {
+  await page.eval(`document.querySelector('textarea')?.select()`);
+  for (const type of ['keyDown', 'keyUp']) {
+    await page.send('Input.dispatchKeyEvent', {
+      type,
+      key: 'Backspace',
+      code: 'Backspace',
+      windowsVirtualKeyCode: 8,
+    });
+  }
+  await sleep(800);
+}
 
 const scrollToText = (text) => async (page) => {
   await page.eval(FIND_SCROLLER);
@@ -939,6 +953,98 @@ const LIVE = [
       'Permission refused: the plain line over the field and an Open Settings chip; the mic still there',
     after: async (page) => {
       await page.eval(`globalThis.__qaDictation = {}`);
+    },
+  },
+  // The composer's shapes, as Claude's own input: one capsule empty, a card with words.
+  {
+    name: 'composer-empty',
+    route: '/chat/design',
+    ready: 'Designer',
+    check:
+      'One glass capsule: the round + inside it at the left, the placeholder, the mic, Send dimmed',
+  },
+  {
+    name: 'composer-typed',
+    route: '/chat/design',
+    ready: 'Designer',
+    act: async (page) => {
+      await page.type(
+        'Can you pull last week’s numbers together for the Monday review, and flag anything that moved more than ten percent? A short note per line is plenty.'
+      );
+      await sleep(700);
+    },
+    check:
+      'A card: the words across its whole width on top; under them + and the engine chip at the left, the mic and Send (accent) at the right',
+    after: clearField,
+  },
+  {
+    name: 'composer-attachments',
+    route: '/chat/design',
+    ready: 'Designer',
+    act: async (page) => {
+      await page.type('Here are the two receipts');
+      // The draft reaches the disk, then gets two files the Mac already holds, and comes back.
+      await sleep(1200);
+      await page.eval(`(() => {
+        const key = Object.keys(localStorage).find((k) => k.includes('drafts-'));
+        if (!key) return false;
+        const all = JSON.parse(localStorage.getItem(key));
+        const swatch = (c) => 'data:image/svg+xml;utf8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120"><rect width="120" height="120" fill="' + c + '"/><rect x="20" y="24" width="80" height="10" fill="white"/><rect x="20" y="44" width="56" height="10" fill="white"/></svg>');
+        all.design.files = [
+          { blobId: 'qa-b1', uri: swatch('#7a8ca3'), name: 'receipt.png', mime: 'image/png', size: 2048, stagedAt: Date.now() },
+          { blobId: 'qa-b2', uri: 'file:///qa/invoice.pdf', name: 'invoice-0412.pdf', mime: 'application/pdf', size: 4096, stagedAt: Date.now() },
+        ];
+        localStorage.setItem(key, JSON.stringify(all));
+        // Leaving the page writes the draft as the app holds it (no files): not this time.
+        const set = Storage.prototype.setItem;
+        Storage.prototype.setItem = function (k, v) {
+          if (k === key) return;
+          return set.call(this, k, v);
+        };
+        return true;
+      })()`);
+      await page.goto(`${WEB}/chat/design`);
+      await page.waitFor(`document.body.innerText.includes('Designer')`, 20_000, 'Designer');
+      await sleep(1800);
+    },
+    check:
+      'The card with the two files at its top, each with a small ×, the words under them, the row under those',
+    after: async (page) => {
+      // One at a time: a tile leaving animates, and the next is found once it's gone.
+      await page.clickLabel('Remove receipt.png').catch(() => {});
+      await sleep(500);
+      await page.clickLabel('Remove invoice-0412.pdf').catch(() => {});
+      await sleep(500);
+      await clearField(page);
+    },
+  },
+  {
+    name: 'composer-queued',
+    route: '/chat/ops',
+    ready: 'Ops',
+    act: async (page) => {
+      // Ops is mid-turn in the mock (queued behind the cap): what's typed waits for it.
+      await page.type('and then the weekly summary');
+      await sleep(500);
+    },
+    check:
+      'Working, with words: “Ops reads it when this turn ends” full width over the field from its left edge, Send now at its right; in the field the mic, Stop and Send',
+    after: clearField,
+  },
+  {
+    name: 'dictation-working',
+    route: '/chat/ops',
+    ready: 'Ops',
+    act: async (page) => {
+      // Ops is mid-turn: the mic is still there, and what's said queues as typing does.
+      await page.clickLabel('Dictate');
+      await sleep(2300);
+    },
+    check:
+      'Dictating while the agent works: the card with the words streaming, ×, the waveform, Stop and Send; the queued line over it',
+    after: async (page) => {
+      await page.clickLabel('Cancel dictation').catch(() => {});
+      await sleep(600);
     },
   },
   {

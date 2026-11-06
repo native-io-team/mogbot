@@ -11,7 +11,7 @@ import { emptySync, type PendingSend } from '../src/lib/sync';
 import { chatItems, dayLabel, timeLabel } from '../src/lib/timeline';
 import { WireFailure } from '../src/lib/transport';
 import { looksLikePath, splitStable } from '../src/components/Markdown';
-import { mentionQuery, sendMode } from '../src/lib/composer';
+import { composerControls, mentionQuery, sendMode } from '../src/lib/composer';
 import { subtitle } from '../src/lib/agents';
 import { drivenBar, drivenLine, drivenWait } from '../src/lib/bars';
 import { agent, msg } from './helpers';
@@ -192,6 +192,16 @@ describe('composer', () => {
     expect(sendMode(waiting, true)).toBe('queue');
   });
 
+  it('keeps the mic while a turn runs: what you say queues, as what you type does', () => {
+    const working = agent({ status: { state: 'working', activity: null, since: 1 } });
+    const waiting = agent({ status: { state: 'waiting', activity: null, since: 1 } });
+    expect(composerControls(agent())).toEqual(['mic', 'send']);
+    expect(composerControls(working)).toEqual(['mic', 'stop', 'send']);
+    // An approval waiting: the card is the control, never Stop; the mic and Send stay.
+    expect(composerControls(waiting)).toEqual(['mic', 'send']);
+    expect(composerControls({ ...working, pendingApprovals: 1 })).toEqual(['mic', 'send']);
+  });
+
   it('finds the @mention being typed at the end, and only there', () => {
     expect(mentionQuery('ask @Op')).toBe('Op');
     expect(mentionQuery('@')).toBe('');
@@ -356,6 +366,7 @@ describe('driven on the Mac', () => {
   it('there is no turn to stop: what you send waits, and nothing offers Stop', () => {
     expect(sendMode(driven(), false)).toBe('none');
     expect(sendMode(driven(), true)).toBe('queue');
+    expect(composerControls(driven())).toEqual(['mic', 'send']);
   });
 
   it('says it one way everywhere: the row and the bar, in the desk’s words', () => {

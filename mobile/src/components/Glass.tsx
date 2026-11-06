@@ -13,7 +13,14 @@
 
 import { requireOptionalNativeModule } from 'expo';
 import type { ReactNode } from 'react';
-import { Platform, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  Platform,
+  StyleSheet,
+  View,
+  type LayoutChangeEvent,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { useAppearance, useColors } from '../lib/appearance';
 
 type GlassModule = typeof import('expo-glass-effect');
@@ -41,6 +48,7 @@ export function Glass({
   style,
   tint,
   interactive,
+  onLayout,
   children,
 }: {
   style?: StyleProp<ViewStyle>;
@@ -48,6 +56,7 @@ export function Glass({
   tint?: string;
   /** It's a button: the glass answers the touch as the system's own do. */
   interactive?: boolean;
+  onLayout?: (e: LayoutChangeEvent) => void;
   children?: ReactNode;
 }) {
   const colors = useColors();
@@ -61,6 +70,7 @@ export function Glass({
         tintColor={tint}
         colorScheme={appearance}
         style={style}
+        onLayout={onLayout}
       >
         {children}
       </g.GlassView>
@@ -68,6 +78,7 @@ export function Glass({
   }
   return (
     <View
+      onLayout={onLayout}
       style={[
         style,
         tint

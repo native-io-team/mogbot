@@ -19,6 +19,22 @@ export function sendMode(agent: Agent, hasContent: boolean): SendMode {
   return 'none';
 }
 
+/** The buttons at the field's right, in order (the + and the engine chip are at its left). */
+export type ComposerControl = 'mic' | 'stop' | 'send';
+
+/**
+ * The mic is always there: dictating while a turn runs queues what you say,
+ * as typing does. Stop joins it while a turn runs that can be stopped here
+ * (not one waiting on your OK, where the card is the control, nor one driven
+ * on the Mac). Send is always there too, dimmed until there's something to
+ * send; while a turn runs it queues.
+ */
+export function composerControls(agent: Agent): ComposerControl[] {
+  const busy = agent.status.state !== 'idle';
+  const stoppable = busy && !agent.takeover && !needsYou(agent);
+  return stoppable ? ['mic', 'stop', 'send'] : ['mic', 'send'];
+}
+
 /**
  * What Send sends from a draft: the words with their quotes, the agents
  * still @mentioned, the uploaded files. Null when there's nothing to send,
