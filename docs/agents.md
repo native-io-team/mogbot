@@ -793,7 +793,11 @@ below; it asks only for:
 - writes to `~/.ssh`, Keychains, shell profiles, `~/Library/LaunchAgents`,
   the app's own data (another agent's home, this agent's log and
   instructions), or outside the home and temporary folders; reading a
-  credential store (`~/.ssh`, Keychains, `~/.gnupg`); `crontab` (except `-l`),
+  credential store (`~/.ssh`, Keychains, `~/.gnupg`) or the app's own data:
+  its tokens, and the agents folder's account files (`wallet.json`,
+  `connections.json`). The Chief and admins read the rest of the agents
+  folder (every agent's `CLAUDE.md`, chat log, timeline) without a card;
+  other agents read only their own home; `crontab` (except `-l`),
   `security`, `launchctl`, `diskutil`, `dd`, `csrutil`, `pmset`, `nvram` and
   other system tools; `defaults write` to `-g` or a `/Library` domain
 - connector tools whose name writes (send, create, update, delete, pay…);

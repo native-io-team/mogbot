@@ -14,6 +14,7 @@ fn ctx() -> Ctx {
         cwd: own.clone().into(),
         scratch: vec![own.into()],
         app_data: vec![app.into()],
+        team_reader: false,
     }
 }
 
@@ -287,6 +288,79 @@ cd /Users/fictional-tester/Desktop/Projects/fx && node /tmp/fx/h2.mjs $PWD && se
         // No closing line: nothing is dropped.
         "cat > /tmp/a <<EOF\ngit push",
         "cat <<< 'x'\ngit push",
+    ] {
+        assert!(bash_asks(c, false), "should ask: {c}");
+    }
+}
+
+/// The Chief (an admin) reads the team's files without a card; writes there,
+/// the app's tokens and the account files still ask; other agents read only
+/// their own home. (Real cards at "Go hard", paths fictional.)
+#[test]
+fn an_admin_reads_the_team_folder_without_a_card() {
+    let app = format!("{HOME}/Library/Application Support/FictionalApp");
+    let chief = Ctx {
+        team_reader: true,
+        ..ctx()
+    };
+    let asks_as = |c: &Ctx, command: &str| asks("Bash", &json!({ "command": command }), c, false);
+    let reads = [
+        format!("grep -rli \"site university\" ~/ShipStudio ~/Desktop/Projects/*/CLAUDE.md \"{app}/agents\" --include='*.md' 2>/dev/null | head; git -C ~/Desktop/Projects/site branch -a --list '*univ*'"),
+        "cd ~; grep -rliE \"work ?van\" ~/ShipStudio/alpha ~/ShipStudio/beta \"$HOME/Library/Application Support/FictionalApp/agents\" --exclude-dir=node_modules 2>/dev/null | head -30".to_string(),
+        "cat ~/.claude/skills/voice/SKILL.md; echo ---; ls -la ~/Library/Application\\ Support/FictionalApp/agents/*/messages.jsonl; wc -l ~/Library/Application\\ Support/FictionalApp/agents/*/messages.jsonl".to_string(),
+        format!("cat \"{app}/agents/b2/CLAUDE.md\""),
+    ];
+    for c in &reads {
+        assert!(!asks_as(&chief, c), "an admin should read: {c}");
+        assert!(asks_as(&ctx(), c), "another agent should ask: {c}");
+    }
+    assert!(!asks(
+        "Read",
+        &json!({ "file_path": format!("{app}/agents/b2/messages.jsonl") }),
+        &chief,
+        false
+    ));
+    // Its own home, whoever it is.
+    assert!(!asks_as(
+        &ctx(),
+        &format!("cat \"{app}/agents/a1/messages.jsonl\"")
+    ));
+    for c in [
+        format!("echo x >> \"{app}/agents/b2/CLAUDE.md\""),
+        format!("sed -i '' 's/a/b/' \"{app}/agents/b2/CLAUDE.md\""),
+        format!("cp /tmp/x \"{app}/agents/b2/CLAUDE.md\""),
+        format!("cat \"{app}/agent_bridge.json\""),
+        format!("grep -r token \"{app}\""),
+        format!("cat \"{app}/agent-bridge/mcp-1.json\""),
+        format!("cat \"{app}/agents/wallet.json\""),
+        format!("cat \"{app}/agents/connections.json\""),
+        "cat ~/.ssh/id_ed25519".to_string(),
+    ] {
+        assert!(asks_as(&chief, &c), "should still ask: {c}");
+    }
+    assert!(asks(
+        "Write",
+        &json!({ "file_path": format!("{app}/agents/b2/CLAUDE.md") }),
+        &chief,
+        false
+    ));
+}
+
+/// The rest of what the owner was asked about at "Go hard" (paths
+/// fictional): local work runs; acting as the user on GitHub asks.
+#[test]
+fn the_owners_remaining_cards_run() {
+    for c in [
+        "cd ~/Desktop/Projects/site && git fetch -q origin && git worktree list && git worktree add -b design/skin ../site-skin origin/design/skin 2>&1 | tail -2 && cd ../site-skin && ls && cat package.json | head -30",
+        "cd /Users/fictional-tester/Desktop/Projects/site-skin && ls -la node_modules 2>&1 | head -2; git diff origin/main...origin/design/skin --stat | tail -40; cat scripts/check.mjs | head -80",
+        "cd /Users/fictional-tester/Desktop/Projects/site-skin && for p in 'shadow-\\[' 'rounded-\\[' 'border-(gray|slate)-' ; do printf \"%-40s %s\\n\" \"$p\" \"$(grep -rEo --include=*.tsx \"$p\" app components | wc -l)\"; done",
+    ] {
+        assert!(!bash_asks(c, false), "should run: {c}");
+    }
+    for c in [
+        "gh pr create --base main --head fix/retry --title \"Retry\" --body \"x\"",
+        "gh pr merge 8 --repo fictional/site --squash",
+        "gh pr review 248 --repo fictional/site --approve 2>&1",
     ] {
         assert!(bash_asks(c, false), "should ask: {c}");
     }

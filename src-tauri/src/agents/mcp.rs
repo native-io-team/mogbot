@@ -2540,6 +2540,7 @@ mod tests {
             cwd: own.into(),
             scratch: vec![own.into()],
             app_data: vec!["/Users/fictional/Library/Application Support/App".into()],
+            team_reader: false,
         };
         let card = |cmd: &str, outside: Option<bool>| {
             let mut c = new_card(

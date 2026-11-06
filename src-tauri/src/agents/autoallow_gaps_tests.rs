@@ -17,6 +17,7 @@ fn ctx() -> Ctx {
         cwd: own.clone().into(),
         scratch: vec![own.into()],
         app_data: vec![app.into()],
+        team_reader: false,
     }
 }
 
