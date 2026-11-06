@@ -167,10 +167,21 @@ fn host_of(url: &str) -> Option<String> {
 
 /// Our own tools never reach `approve`; Claude Code's file tools are scoped
 /// by folder, which is a different conversation, so they aren't offered.
+/// Neither browser is: a browser step only reaches a card when the browser
+/// gate said it asks (a send, a payment, a delete, an unknown target), and a
+/// rule for the whole tool ("Click on the page") would then let every click
+/// on every site through, Pay and Post included. A rule kept for one before
+/// this matches nothing.
 fn is_scopable_tool(tool: &str) -> bool {
     tool == "WebSearch"
         || (tool.starts_with("mcp__")
-            && !tool.starts_with(&format!("mcp__{}__", super::prompts::SERVER_KEY)))
+            && !tool.starts_with(&format!("mcp__{}__", super::prompts::SERVER_KEY))
+            && !is_browser_tool(tool))
+}
+
+fn is_browser_tool(tool: &str) -> bool {
+    tool.starts_with(super::browser_gate::SERVER)
+        || tool.starts_with(super::browser_gate::AGENTS_SERVER)
 }
 
 /// What a card for this call may offer to always allow, if anything.
@@ -390,6 +401,28 @@ mod tests {
             label: "Bash".into(),
         };
         assert!(!blanket.matches("Bash", &bash("ls")));
+    }
+
+    #[test]
+    fn browser_steps_are_never_offered_always_and_old_rules_match_nothing() {
+        let click = json!({ "action": "left_click", "ref": "ref_3" });
+        for tool in [
+            "mcp__claude-in-chrome__computer",
+            "mcp__claude-in-chrome__form_input",
+            "mcp__browser__click",
+            "mcp__browser__press",
+        ] {
+            assert_eq!(suggest(tool, &click), None, "{tool}");
+            // A rule kept before this change ("Always" on one click).
+            let kept = Scope {
+                kind: RuleKind::Tool,
+                value: tool.into(),
+                label: "Click on the page".into(),
+            };
+            assert!(!kept.matches(tool, &click), "{tool}");
+        }
+        // Other connectors keep their one-tool offer.
+        assert!(suggest("mcp__gmail__send_email", &json!({})).is_some());
     }
 
     #[test]
