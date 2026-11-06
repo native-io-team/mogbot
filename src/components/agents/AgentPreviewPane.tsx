@@ -633,10 +633,12 @@ export function RunSteps({ agent, run }: { agent: Agent; run: PreviewRun }) {
             data-ok={step.ok || undefined}
             data-kind={step.kind}
           >
-            <span className="agent-preview__step-icon">
-              <StepIcon step={step} />
-            </span>
-            <span className="agent-preview__step-label">{step.label}</span>
+            <div className="agent-preview__step-head">
+              <span className="agent-preview__step-icon">
+                <StepIcon step={step} />
+              </span>
+              <span className="agent-preview__step-label">{step.label}</span>
+            </div>
             {step.shot && (
               <button
                 type="button"
