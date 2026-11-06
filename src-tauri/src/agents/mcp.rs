@@ -2236,30 +2236,29 @@ pub(super) async fn decide(
     if decision == Decision::Allow && super::connections::is_connection_tool(tool) {
         super::connections::note_cleared(&caller.id, tool);
     }
-    // The same for the agents' browser server.
-    if decision == Decision::Allow && tool.starts_with(super::browser_gate::AGENTS_SERVER) {
-        crate::agent_browser::tools::note_cleared(&caller.id, tool);
+    // The same for the agents' browser server, for a call its gate asks
+    // about (one it lets through needs no pass, and a pass left over would
+    // wait for a later call that does ask).
+    if decision == Decision::Allow
+        && tool.starts_with(super::browser_gate::AGENTS_SERVER)
+        && super::browser_gate::gate(caller, tool, input, runner::from_outside(&caller.id))
+            == super::browser_gate::Gate::Ask
+    {
+        crate::agent_browser::tools::note_cleared(&caller.id, tool, input);
     }
     decision
 }
 
-/// A step in the agents' browser the browser gate said asks: a standing
-/// "Always allow" rule answers it, else a card in the agents' browser's
-/// words. Never the independence level: the gate already applied it.
+/// A step in the agents' browser the browser gate said asks: a card in the
+/// agents' browser's words. Never the independence level (the gate already
+/// applied it) and never a standing "Always allow" rule: a rule is for a
+/// whole tool, and the gate's send/pay/delete call is about this one step.
 async fn agents_browser_card(
     app: &AppHandle,
     caller: &store::Agent,
     tool: &str,
     input: &Value,
 ) -> Decision {
-    if always_allowed(caller, tool, input) {
-        let line = format!("{} · always allowed", one_line(tool, input));
-        let _ = runner::record_in_turn(
-            app,
-            runner::new_message(&caller.id, MessageKind::Note, line),
-        );
-        return Decision::Allow;
-    }
     let page = super::browser_gate::page_of(&super::browser_gate::agents_key(&caller.id));
     let (title, said) = super::browser_gate::describe_agents(tool, input, &page);
     let (_, detail) = describe_request(tool, input);
@@ -2360,7 +2359,9 @@ async fn decide_inner(
     if tool.starts_with(super::browser_gate::AGENTS_SERVER) {
         return agents_browser_card(app, caller, tool, input).await;
     }
-    if always_allowed(caller, tool, input) {
+    // Never for a browser step the gate said asks: a tool-wide rule doesn't
+    // override its send/pay/delete call (`permissions::is_scopable_tool`).
+    if !browser_asks && always_allowed(caller, tool, input) {
         // Nothing happens invisibly: each one leaves a quiet line in the chat.
         let line = format!("{} · always allowed", one_line(tool, input));
         let _ = runner::record_in_turn(

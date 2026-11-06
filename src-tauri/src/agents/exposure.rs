@@ -5,8 +5,9 @@
 //! outside (a web page, a search result, an email or chat message through a
 //! connection, issue and pull request comments, a page in the browser on
 //! someone else's site) shouldn't be able to ride on it off this Mac. So the
-//! first time a turn reads any of that, it is marked ([`note`]), and for the
-//! rest of that turn two things ask on a card even at "Go hard"
+//! first time a turn reads any of that, its conversation is marked
+//! ([`note`]), and for the rest of that conversation two things ask on a
+//! card even at "Go hard"
 //! (`autoallow::after_outside_asks`, from `mcp::decide`): sending anything
 //! to the network beyond a read (a `curl` body or upload, a non-GET, a `gh`
 //! write, `git push`, `ssh`/`scp`/`rsync`…, to anywhere but this Mac), and
@@ -19,7 +20,12 @@
 //! ways, whichever comes first: every call `mcp::decide` lets through, every
 //! call through the connection relay, and every tool call in the engine's
 //! stream (calls the engine runs without asking, like Codex's web search).
-//! The next turn starts clean ([`begin`]).
+//!
+//! What was read stays in the engine's conversation, so the mark does too:
+//! the next turn, a turn picked up after a crash or a quit, and the memory
+//! tidy all carry it. It is kept in the agent's home (`outside.json`), tied
+//! to the conversation it was made in, and ends with that conversation:
+//! Start fresh ([`forget`]), or a turn that starts a new one ([`begin`]).
 //!
 //! This is much narrower than a turn answering outside text
 //! (`runner::from_outside`, a "When…" routine's items), which is capped at
@@ -41,27 +47,108 @@ pub const LINE: &str =
 pub const LINE_FULL_SEND: &str =
     "Asking before it moves data to another server or runs a new package, because it read outside content";
 
-/// Agents whose turn in progress read outside content.
-static MARKED: Mutex<Option<HashMap<String, ()>>> = Mutex::new(None);
+/// Whether an agent's conversation read outside content: `Some(session)`
+/// when it did (the engine's conversation it was in, when known), `None`
+/// when it didn't. An agent not in the map hasn't been read from disk yet.
+type Marks = HashMap<String, Option<Option<String>>>;
+static MARKED: Mutex<Option<Marks>> = Mutex::new(None);
 
-fn with<T>(f: impl FnOnce(&mut HashMap<String, ()>) -> T) -> T {
+/// The file that keeps an agent's mark across a restart, a picked-up turn
+/// and a tidy, until its conversation ends.
+const FILE: &str = "outside.json";
+
+fn with<T>(agent_id: &str, f: impl FnOnce(&mut Option<Option<String>>) -> T) -> T {
     let mut guard = MARKED.lock().unwrap_or_else(|e| e.into_inner());
-    f(guard.get_or_insert_with(HashMap::new))
+    let marks = guard.get_or_insert_with(HashMap::new);
+    let entry = marks
+        .entry(agent_id.to_string())
+        .or_insert_with(|| load(agent_id));
+    f(entry)
 }
 
-/// A turn starts: nothing read yet.
-pub fn begin(agent_id: &str) {
-    with(|m| m.remove(agent_id));
+fn path(agent_id: &str) -> Option<std::path::PathBuf> {
+    super::store::agent_home(agent_id)
+        .ok()
+        .filter(|h| h.is_dir())
+        .map(|h| h.join(FILE))
 }
 
-/// Whether the agent's turn in progress read outside content.
+fn load(agent_id: &str) -> Option<Option<String>> {
+    let raw = std::fs::read(path(agent_id)?).ok()?;
+    parse(&raw)
+}
+
+fn parse(raw: &[u8]) -> Option<Option<String>> {
+    let v: Value = serde_json::from_slice(raw).ok()?;
+    Some(v.get("session").and_then(Value::as_str).map(str::to_string))
+}
+
+fn save(agent_id: &str, state: &Option<Option<String>>) {
+    let Some(path) = path(agent_id) else { return };
+    match state {
+        Some(session) => {
+            let body = serde_json::json!({ "session": session }).to_string();
+            let _ = super::store::write_private(&path, body.as_bytes());
+        }
+        None => {
+            let _ = std::fs::remove_file(path);
+        }
+    }
+}
+
+/// What a mark becomes when a turn starts that `resumes` the engine's
+/// conversation (`None`: a new one). Pure.
+fn carried(mark: Option<Option<String>>, resumes: Option<&str>) -> Option<Option<String>> {
+    match (mark, resumes) {
+        (None, _) | (Some(_), None) => None,
+        // Marked before the engine named its conversation: this is it.
+        (Some(None), Some(r)) => Some(Some(r.to_string())),
+        (Some(Some(s)), Some(r)) => (s == r).then_some(Some(s)),
+    }
+}
+
+/// A turn starts, in the conversation `resumes` (`None`: a new one). What the
+/// conversation read is still in it, so the mark stays until the
+/// conversation ends (Start fresh, a tidy that starts fresh, a new engine).
+pub fn begin(agent_id: &str, resumes: Option<&str>) {
+    with(agent_id, |m| {
+        let next = carried(m.clone(), resumes);
+        if next != *m {
+            *m = next;
+            save(agent_id, m);
+        }
+    });
+}
+
+/// The conversation ended (Start fresh): nothing it read carries over.
+pub fn forget(agent_id: &str) {
+    with(agent_id, |m| {
+        *m = None;
+        save(agent_id, m);
+    });
+}
+
+/// Whether the agent's conversation read outside content.
 pub fn read_outside(agent_id: &str) -> bool {
-    with(|m| m.contains_key(agent_id))
+    with(agent_id, |m| m.is_some())
 }
 
-/// Mark the turn; `true` the first time.
+/// Mark the conversation; `true` the first time.
 fn mark(agent_id: &str) -> bool {
-    with(|m| m.insert(agent_id.to_string(), ()).is_none())
+    let first = with(agent_id, |m| m.is_none());
+    if !first {
+        return false;
+    }
+    // Read outside the lock: the turn's own mark names its conversation.
+    let session = super::runner::turn_session(agent_id);
+    with(agent_id, |m| {
+        let first = m.is_none();
+        if first {
+            *m = Some(session);
+            save(agent_id, m);
+        }
+        first
+    })
 }
 
 /// Whether a call reads content from outside this Mac. `page`: the page the
@@ -308,14 +395,43 @@ mod tests {
     }
 
     #[test]
-    fn a_mark_lasts_until_the_next_turn() {
+    fn a_mark_lasts_for_the_conversation() {
         let id = "exposure-test-agent";
-        begin(id);
+        forget(id);
+        begin(id, Some("s1"));
         assert!(!read_outside(id));
         assert!(mark(id));
         assert!(!mark(id), "marked once");
         assert!(read_outside(id));
-        begin(id);
+        // The next turn, a picked-up turn and a tidy carry on in it.
+        begin(id, Some("s1"));
+        assert!(read_outside(id));
+        // Start fresh ends it.
+        forget(id);
         assert!(!read_outside(id));
+        // A turn in a new conversation starts clean.
+        mark(id);
+        begin(id, None);
+        assert!(!read_outside(id));
+    }
+
+    #[test]
+    fn a_mark_follows_its_conversation() {
+        let s = |v: &str| Some(Some(v.to_string()));
+        assert_eq!(carried(None, Some("s1")), None);
+        assert_eq!(carried(s("s1"), Some("s1")), s("s1"));
+        // Marked before the engine named it: the conversation it continued.
+        assert_eq!(carried(Some(None), Some("t1")), s("t1"));
+        // Another conversation (a new engine, a fresh start): clean.
+        assert_eq!(carried(s("s1"), Some("s2")), None);
+        assert_eq!(carried(s("s1"), None), None);
+        assert_eq!(carried(Some(None), None), None);
+    }
+
+    #[test]
+    fn a_saved_mark_reads_back() {
+        assert_eq!(parse(br#"{"session":"s1"}"#), Some(Some("s1".into())));
+        assert_eq!(parse(br#"{"session":null}"#), Some(None));
+        assert_eq!(parse(b"not json"), None);
     }
 }

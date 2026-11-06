@@ -31,6 +31,8 @@ pub mod service;
 pub mod settings;
 pub mod signin;
 pub mod tools;
+/// A loopback input server for the demo only: never compiled into the app.
+#[cfg(any(test, feature = "browser-demo"))]
 pub mod viewer;
 
 /// This build has the agents' browser (the `agent-browser` feature, on by

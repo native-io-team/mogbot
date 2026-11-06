@@ -114,15 +114,57 @@ describe('the lightbox zoom', () => {
   });
 
   it('pinches (ctrl+wheel) and holds the ceiling', () => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'],
+    });
+    restore.push(() => vi.useRealTimers());
     render(<ZoomableImage agent={agent} attachment={png('shot.png')} />);
-    loaded();
+    const img = loaded();
     fireEvent.wheel(viewport(), { deltaY: -120, ctrlKey: true, clientX: 500, clientY: 300 });
+    // Drawn on the next frame, without a render: the readout waits for it to settle.
+    act(() => {
+      vi.advanceTimersByTime(20);
+    });
+    expect(img.style.width).toBe('1250px');
+    expect(readout()).toBe('50%');
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
     expect(readout()).toBe('63%');
     for (let i = 0; i < 40; i++) {
       fireEvent.wheel(viewport(), { deltaY: -120, ctrlKey: true, clientX: 500, clientY: 300 });
     }
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
     expect(readout()).toBe('400%');
+    expect(img.style.width).toBe('8000px');
     expect(screen.getByRole('button', { name: 'Zoom in' })).toHaveProperty('disabled', true);
+  });
+
+  it('a drag is drawn per frame and committed on release', () => {
+    vi.useFakeTimers({
+      toFake: ['setTimeout', 'clearTimeout', 'requestAnimationFrame', 'cancelAnimationFrame'],
+    });
+    restore.push(() => vi.useRealTimers());
+    render(<ZoomableImage agent={agent} attachment={png('shot.png')} />);
+    const img = loaded();
+    const stage = viewport();
+    fireEvent.pointerDown(stage, { button: 0, clientX: 500, clientY: 300, pointerId: 1 });
+    fireEvent.pointerUp(stage, { button: 0, clientX: 500, clientY: 300, pointerId: 1 });
+    expect(readout()).toBe('100%');
+    fireEvent.pointerDown(stage, { button: 0, clientX: 500, clientY: 300, pointerId: 1 });
+    for (let i = 1; i <= 5; i++) {
+      fireEvent.pointerMove(stage, { clientX: 500 + i * 10, clientY: 300, pointerId: 1 });
+    }
+    act(() => {
+      vi.advanceTimersByTime(20);
+    });
+    // Five moves, one frame: drawn where the last one put it.
+    expect(img.style.transform).toBe('translate(calc(-50% + 50px), calc(-50% + 0px))');
+    fireEvent.pointerUp(stage, { button: 0, clientX: 550, clientY: 300, pointerId: 1 });
+    expect(img.style.transform).toBe('translate(calc(-50% + 50px), calc(-50% + 0px))');
+    expect(readout()).toBe('100%');
   });
 
   it('turns the page on a sideways swipe at fit, and pans instead when zoomed', () => {

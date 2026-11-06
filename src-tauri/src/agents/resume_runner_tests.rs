@@ -87,6 +87,30 @@ fn not_on_disk(_: Engine, _: &str) -> bool {
 }
 
 #[test]
+fn a_tidy_cut_off_by_a_restart_is_dropped_quietly() {
+    scratch(|| {
+        let a = agent("Tidy");
+        // The tidy's process spawns with no turn's mark before it.
+        write_mark(
+            &a.id,
+            TurnMark {
+                pid: Some(424242),
+                session: SESSION.into(),
+                session_id: Some(SESSION.into()),
+                quiet: true,
+                ..TurnMark::default()
+            },
+        );
+        let plan = plan_recovery(&a.id, &[], false, on_disk);
+        assert_eq!(plan.pickup, None, "no line, no carry on");
+        assert!(plan.partial.is_none());
+        assert!(queue_of(&a.id).is_empty(), "nothing queued");
+        assert!(read_mark(&a.id).is_none(), "the mark is dealt with");
+        forget(&a.id);
+    });
+}
+
+#[test]
 fn a_cut_off_turn_is_detected_and_picked_up_once_in_the_same_session() {
     scratch(|| {
         let a = agent("Ada");

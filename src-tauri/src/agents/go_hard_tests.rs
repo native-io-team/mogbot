@@ -387,3 +387,38 @@ fn the_owners_remaining_cards_run() {
         assert!(bash_asks(c, false), "should ask: {c}");
     }
 }
+
+#[test]
+fn code_hosts_and_databases_ask_for_writes_and_run_reads() {
+    let c = ctx();
+    for tool in [
+        "mcp__github__push_files",
+        "mcp__github__create_or_update_file",
+        "mcp__github__create_pull_request",
+        "mcp__github__create_release",
+        "mcp__github__create_branch",
+        "mcp__claude_ai_GitHub__create_pull_request",
+        "mcp__gitlab__create_merge_request",
+        "mcp__supabase__execute_sql",
+        "mcp__supabase__apply_migration",
+        "mcp__neon__run_sql",
+        // Pushing or uploading anywhere sends.
+        "mcp__fictional__push_update",
+        "mcp__gdrive__upload_file",
+    ] {
+        assert!(asks(tool, &json!({}), &c, false), "should ask: {tool}");
+    }
+    for tool in [
+        "mcp__github__get_file_contents",
+        "mcp__github__list_pull_requests",
+        "mcp__github__search_code",
+        "mcp__supabase__list_tables",
+        "mcp__supabase__get_logs",
+        "mcp__supabase__generate_typescript_types",
+        // Records in the user's own tools still just run.
+        "mcp__linear__create_issue",
+        "mcp__notion__updatePage",
+    ] {
+        assert!(!asks(tool, &json!({}), &c, false), "should run: {tool}");
+    }
+}
