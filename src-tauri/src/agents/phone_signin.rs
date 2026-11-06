@@ -53,6 +53,9 @@ use crate::errors::CommandError;
 pub const IDLE: Duration = Duration::from_secs(5 * 60);
 /// However busy, a session ends after this long.
 pub const MAX_AGE: Duration = Duration::from_secs(20 * 60);
+/// However slow the browser, opening the page answers the phone within this
+/// (the phone gives up a little after it, so the Mac's reason arrives first).
+pub const BEGIN_TIMEOUT: Duration = Duration::from_secs(20);
 /// What one `type` may carry: a password or a code, never a document.
 pub const MAX_TEXT: usize = 256;
 /// The widest frame sent: plenty for a phone, small enough to stream.
@@ -521,7 +524,7 @@ fn is_expired<T>(l: &Live<T>, now: Instant) -> bool {
 /* ----------------------------------------------------------- wire views */
 
 /// How the phone sees and drives the sign-in.
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum Via {
     /// A window of the agents' own Chrome (`agent_browser`): screencast
@@ -627,12 +630,29 @@ pub struct Banner {
 }
 
 /// One request from the phone, as the router hands it over. `Debug` is
+impl Op {
+    /// For the log: the step, never its contents.
+    pub fn name(&self) -> &'static str {
+        match self {
+            Op::Begin { .. } => "begin",
+            Op::Frame { .. } => "frame",
+            Op::Input { .. } => "input",
+            Op::Done { .. } => "done",
+            Op::Stop { .. } => "stop",
+            Op::Fallback { .. } => "fallback",
+        }
+    }
+}
+
 /// [`Input`]'s: no typed text.
 #[derive(Debug, Clone, PartialEq)]
 pub enum Op {
     Begin {
         agent_id: String,
         request_id: String,
+        /// The phone asked for this way ("Try the agents' browser"); none:
+        /// the Mac picks ([`choose`]).
+        way: Option<Via>,
     },
     Frame {
         session_id: String,
@@ -686,6 +706,8 @@ pub enum Driver {
 pub struct Shared {
     via: Via,
     driver: Arc<tokio::sync::Mutex<Driver>>,
+    /// The first picture reached the phone (logged once).
+    shown: Arc<std::sync::atomic::AtomicBool>,
 }
 
 impl Shared {
@@ -693,6 +715,7 @@ impl Shared {
         Shared {
             via,
             driver: Arc::new(tokio::sync::Mutex::new(d)),
+            shown: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
     }
 }
@@ -778,17 +801,35 @@ pub fn frame_gap(via: Via) -> Duration {
     }
 }
 
-/// Which way a card signs in from the phone: the agents' browser when the
-/// card offers it and it's here, else the user's own Chrome. Pure.
-pub fn choose(agents_offered: bool, agents_available: bool, chrome_offered: bool) -> Option<Via> {
-    if agents_offered && agents_available {
-        Some(Via::AgentsBrowser)
-    } else if chrome_offered {
-        Some(Via::Chrome)
-    } else {
-        None
+/// Which way a sign-in from the phone goes, decided when the phone asks,
+/// not when the card was raised: the agents' browser whenever it's here
+/// (the card names a site), whatever the card offered, so a card raised by
+/// an older build or while the switch was off still gets it; else the
+/// user's own Chrome when the card has that way. `asked`: the phone named
+/// a way. Pure.
+pub fn choose(
+    asked: Option<Via>,
+    agents_available: bool,
+    chrome_offered: bool,
+) -> Result<Via, &'static str> {
+    match asked {
+        Some(Via::AgentsBrowser | Via::MacWindow) if agents_available => Ok(Via::AgentsBrowser),
+        Some(Via::AgentsBrowser | Via::MacWindow) => Err(NO_AGENTS_BROWSER),
+        Some(Via::Chrome) if chrome_offered => Ok(Via::Chrome),
+        Some(Via::Chrome) => Err(NOT_FROM_HERE),
+        None if agents_available => Ok(Via::AgentsBrowser),
+        None if chrome_offered => Ok(Via::Chrome),
+        None => Err(NOT_FROM_HERE),
     }
 }
+
+pub const NO_AGENTS_BROWSER: &str = "The agents' browser isn't on on this Mac (Settings → Agents), or Google Chrome isn't installed there.";
+const NOT_FROM_HERE: &str = "This card isn't one you can sign in to from here.";
+/// The Mac's reasons when opening it failed or took too long.
+pub const CHROME_SLOW: &str =
+    "Chrome on your Mac isn't answering. It needs to be open there with Claude in Chrome on.";
+pub const AGENTS_SLOW: &str =
+    "The agents' browser on your Mac didn't open the page in time. Try again.";
 
 /// Start a session for a login card: its site's sign-in page in a window
 /// of the agents' browser (or, for a card without that, a tab of the
@@ -799,18 +840,33 @@ pub async fn begin(
     device_name: &str,
     agent_id: &str,
     request_id: &str,
+    asked: Option<Via>,
 ) -> Result<Begun, CommandError> {
-    let r = super::logins::pending_login(agent_id, request_id)?;
-    let has = |m: super::logins::Method| r.options.iter().any(|o| o.method == m);
-    let via = choose(
-        has(super::logins::Method::AgentBrowser),
-        crate::agent_browser::available(),
-        has(super::logins::Method::Browser),
-    )
-    .ok_or_else(|| CommandError::expected("This card isn't one you can sign in to from here."))?;
+    tracing::info!(?asked, "[Agents] phone sign-in: begin asked");
+    let r = super::logins::pending_login(agent_id, request_id).inspect_err(|e| {
+        tracing::info!(error = %e, "[Agents] phone sign-in: card not pending");
+    })?;
     let site = super::logins::service(&r.service)
         .and_then(|s| s.site)
         .ok_or_else(|| CommandError::expected("This card has no site to open."))?;
+    let has = |m: super::logins::Method| r.options.iter().any(|o| o.method == m);
+    let agents_available = crate::agent_browser::available();
+    let via =
+        choose(asked, agents_available, has(super::logins::Method::Browser)).map_err(|why| {
+            tracing::info!(
+                service = %r.service,
+                agents_available,
+                "[Agents] phone sign-in: no way from the phone"
+            );
+            CommandError::expected(why)
+        })?;
+    tracing::info!(
+        service = %r.service,
+        ?via,
+        card_offered_agents_browser = has(super::logins::Method::AgentBrowser),
+        agents_available,
+        "[Agents] phone sign-in: way chosen"
+    );
     let scope = Scope::for_site(site);
     // Busy elsewhere: refused before any browser is touched.
     if let Some(other) = with_table(|t| {
@@ -822,31 +878,27 @@ pub async fn begin(
         return Err(refused(other));
     }
     let url = start_url(&r.service, site);
-    let shared = match via {
-        Via::AgentsBrowser => {
-            let (key, agent, u) = (request_id.to_string(), agent_id.to_string(), url.clone());
-            let win = tokio::task::spawn_blocking(move || {
-                crate::agent_browser::signin::SigninWindow::open(&key, &agent, &u, false)
-            })
-            .await
-            .map_err(super::err_other)?
-            .map_err(|e| {
-                audit(
-                    device_name,
-                    &scope.domain,
-                    "the agents' browser didn't open",
-                    false,
-                );
-                CommandError::expected(e)
-            })?;
-            Shared::new(via, Driver::Agents(AgentsTab { win, geom: None }))
+    let shared = match tokio::time::timeout(
+        BEGIN_TIMEOUT,
+        open_way(via, device_name, agent_id, request_id, site, &scope, &url),
+    )
+    .await
+    {
+        Ok(Ok(shared)) => shared,
+        Ok(Err(e)) => {
+            tracing::info!(domain = %scope.domain, ?via, error = %e, "[Agents] phone sign-in: didn't open");
+            return Err(e);
         }
-        _ => Shared::new(
-            via,
-            Driver::Chrome(Box::new(
-                open_chrome(device_name, site, &scope, &url).await?,
-            )),
-        ),
+        Err(_) => {
+            tracing::info!(
+                domain = %scope.domain,
+                ?via,
+                secs = BEGIN_TIMEOUT.as_secs(),
+                "[Agents] phone sign-in: opening timed out"
+            );
+            audit(device_name, &scope.domain, "timed out opening it", false);
+            return Err(CommandError::expected(slow(via)));
+        }
     };
     let open = Opening {
         device_id: device_id.to_string(),
@@ -880,6 +932,84 @@ pub async fn begin(
     })
 }
 
+/// The phone's words when opening it took longer than [`BEGIN_TIMEOUT`].
+pub fn slow(via: Via) -> &'static str {
+    match via {
+        Via::Chrome => CHROME_SLOW,
+        Via::AgentsBrowser | Via::MacWindow => AGENTS_SLOW,
+    }
+}
+
+/// Open the page the chosen way. Bounded by the caller ([`BEGIN_TIMEOUT`]);
+/// a window that opens after the phone was told it timed out is closed.
+async fn open_way(
+    via: Via,
+    device_name: &str,
+    agent_id: &str,
+    request_id: &str,
+    site: &str,
+    scope: &Scope,
+    url: &str,
+) -> Result<Shared, CommandError> {
+    match via {
+        Via::AgentsBrowser | Via::MacWindow => {
+            let (key, agent, u) = (
+                request_id.to_string(),
+                agent_id.to_string(),
+                url.to_string(),
+            );
+            let job = tokio::task::spawn_blocking(move || {
+                crate::agent_browser::signin::SigninWindow::open(&key, &agent, &u, false)
+            });
+            // Dropping a join handle doesn't stop the work: if the caller
+            // gives up, the window that opens late is closed, not left.
+            let mut late = LateWindow(Some(job));
+            let joined = match late.0.as_mut() {
+                Some(job) => job.await,
+                None => unreachable!(),
+            };
+            late.0 = None;
+            let win = joined.map_err(super::err_other)?.map_err(|e| {
+                audit(
+                    device_name,
+                    &scope.domain,
+                    "the agents' browser didn't open",
+                    false,
+                );
+                CommandError::expected(e)
+            })?;
+            tracing::info!("[Agents] phone sign-in: agents' browser window open");
+            Ok(Shared::new(
+                Via::AgentsBrowser,
+                Driver::Agents(AgentsTab { win, geom: None }),
+            ))
+        }
+        Via::Chrome => Ok(Shared::new(
+            via,
+            Driver::Chrome(Box::new(open_chrome(device_name, site, scope, url).await?)),
+        )),
+    }
+}
+
+type OpenJob =
+    tokio::task::JoinHandle<Result<Arc<crate::agent_browser::signin::SigninWindow>, String>>;
+
+/// A window still opening when its caller gave up: closed once it opens.
+struct LateWindow(Option<OpenJob>);
+
+impl Drop for LateWindow {
+    fn drop(&mut self) {
+        if let Some(job) = self.0.take() {
+            tauri::async_runtime::spawn(async move {
+                if let Ok(Ok(w)) = job.await {
+                    tracing::info!("[Agents] phone sign-in: closing a window that opened too late");
+                    let _ = tokio::task::spawn_blocking(move || w.close()).await;
+                }
+            });
+        }
+    }
+}
+
 /// A tab of the app's own in the user's Chrome, at `url` (Claude in Chrome).
 async fn open_chrome(
     device_name: &str,
@@ -892,16 +1022,22 @@ async fn open_chrome(
         .ok_or_else(|| {
             CommandError::expected("Claude Code isn't on this Mac, so its Chrome can't be reached.")
         })?;
-    let mut mcp = ChromeMcp::start(&claude).await?;
+    tracing::info!("[Agents] phone sign-in: starting Claude in Chrome");
+    let mut mcp = ChromeMcp::start(&claude).await.map_err(|e| {
+        tracing::info!(error = %e, "[Agents] phone sign-in: Claude in Chrome didn't start");
+        CommandError::expected(CHROME_SLOW)
+    })?;
     let browsers = mcp
         .call("list_connected_browsers", json!({}))
         .await
         .unwrap_or_default();
     let connected = super::browser_profiles::parse_browsers(&browsers);
+    tracing::info!(
+        connected = connected.len(),
+        "[Agents] phone sign-in: Chrome browsers connected"
+    );
     if connected.is_empty() {
-        return Err(CommandError::expected(
-            "Chrome on your Mac isn't answering. It needs to be open there with Claude in Chrome on.",
-        ));
+        return Err(CommandError::expected(CHROME_SLOW));
     }
     // The profile this site was last found signed in to, when it's connected.
     if let Some(known) = super::browser_profiles::remembered(site) {
@@ -1003,9 +1139,38 @@ fn session(device_id: &str, id: &str) -> Result<(Shared, Scope), CommandError> {
 /// for a newer one.
 pub async fn frame(device_id: &str, id: &str, after: Option<u64>) -> Result<Frame, CommandError> {
     let (shared, scope) = session(device_id, id)?;
+    let r = frame_of(&shared, &scope, after).await;
+    match &r {
+        Ok(f) if f.image.is_some() => {
+            if !shared
+                .shown
+                .swap(true, std::sync::atomic::Ordering::Relaxed)
+            {
+                tracing::info!(
+                    domain = %scope.domain,
+                    via = ?shared.via,
+                    width = f.width,
+                    height = f.height,
+                    "[Agents] phone sign-in: first picture"
+                );
+            }
+        }
+        Ok(_) => {}
+        Err(e) => {
+            tracing::info!(domain = %scope.domain, via = ?shared.via, error = %e, "[Agents] phone sign-in: picture failed");
+        }
+    }
+    r
+}
+
+async fn frame_of(
+    shared: &Shared,
+    scope: &Scope,
+    after: Option<u64>,
+) -> Result<Frame, CommandError> {
     let mut d = shared.driver.lock().await;
     match &mut *d {
-        Driver::Chrome(b) => chrome_frame(b, &scope).await,
+        Driver::Chrome(b) => chrome_frame(b, scope).await,
         Driver::Agents(a) => {
             let w = a.win.clone();
             let shot = tokio::task::spawn_blocking(move || {
@@ -1405,6 +1570,26 @@ pub async fn run(
     device_name: &str,
     op: Op,
 ) -> Result<Value, CommandError> {
+    let name = op.name();
+    // Frames log their own first picture and failures; the rest, each step.
+    if !matches!(op, Op::Frame { .. } | Op::Begin { .. }) {
+        tracing::info!(op = name, "[Agents] phone sign-in: step");
+    }
+    let r = run_op(app, device_id, device_name, op).await;
+    if let Err(e) = &r {
+        if name != "frame" {
+            tracing::info!(op = name, error = %e, "[Agents] phone sign-in: step failed");
+        }
+    }
+    r
+}
+
+async fn run_op(
+    app: &AppHandle,
+    device_id: &str,
+    device_name: &str,
+    op: Op,
+) -> Result<Value, CommandError> {
     fn v<T: Serialize>(r: Result<T, CommandError>) -> Result<Value, CommandError> {
         r.and_then(|x| serde_json::to_value(x).map_err(super::err_other))
     }
@@ -1412,7 +1597,8 @@ pub async fn run(
         Op::Begin {
             agent_id,
             request_id,
-        } => v(begin(app, device_id, device_name, &agent_id, &request_id).await),
+            way,
+        } => v(begin(app, device_id, device_name, &agent_id, &request_id, way).await),
         Op::Frame { session_id, after } => v(frame(device_id, &session_id, after).await),
         Op::Input {
             session_id,

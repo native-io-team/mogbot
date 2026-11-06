@@ -972,6 +972,9 @@ struct PhoneBeginParams {
 struct SigninBeginParams {
     agent_id: String,
     request_id: String,
+    /// "agents_browser" / "chrome": the phone asked for that way.
+    #[serde(default)]
+    way: Option<crate::agents::phone_signin::Via>,
 }
 
 #[derive(Deserialize)]
@@ -1390,6 +1393,7 @@ fn signin_op(method: &str, params: Value) -> Result<crate::agents::phone_signin:
             Op::Begin {
                 agent_id: p.agent_id,
                 request_id: p.request_id,
+                way: p.way,
             }
         }
         "agents.signinInput" => {
@@ -2491,6 +2495,33 @@ mod tests {
             assert!(METHODS.contains(m));
             assert!(!READ_ONLY_METHODS.contains(m));
         }
+    }
+
+    /// "Try the agents' browser": the phone names the way; none, the Mac picks.
+    #[tokio::test]
+    async fn a_phone_sign_in_may_ask_for_the_agents_browser() {
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        for params in [
+            json!({ "agentId": AGENT, "requestId": "q12", "way": "agents_browser" }),
+            json!({ "agentId": AGENT, "requestId": "q12" }),
+        ] {
+            dispatch(&c, &me, "agents.signinBegin", params)
+                .await
+                .unwrap();
+        }
+        let e = dispatch(
+            &c,
+            &me,
+            "agents.signinBegin",
+            json!({ "agentId": AGENT, "requestId": "q12", "way": "somewhere" }),
+        )
+        .await;
+        assert!(e.is_err());
+        let record = stub.logins.lock().unwrap().join("\n");
+        assert!(record.contains("way: Some(AgentsBrowser)"), "{record}");
+        assert!(record.contains("way: None"), "{record}");
     }
 
     /// Signing in on the phone itself: the sheet is begun for the caller's

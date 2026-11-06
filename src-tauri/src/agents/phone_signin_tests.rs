@@ -381,15 +381,63 @@ fn agents_are_kept_out_of_the_browser_while_it_runs() {
 /* -------------------------------------------- the agents' browser way */
 
 #[test]
-fn the_agents_browser_comes_first_when_the_card_offers_it() {
-    assert_eq!(choose(true, true, true), Some(Via::AgentsBrowser));
-    assert_eq!(choose(true, true, false), Some(Via::AgentsBrowser));
+fn the_agents_browser_comes_first_decided_when_the_phone_asks() {
+    // Here: the agents' browser, whatever the card offered when it was
+    // raised (a Vercel card from an older build offered only OAuth and
+    // "Use my browser", and went to the user's Chrome).
+    assert_eq!(choose(None, true, true), Ok(Via::AgentsBrowser));
+    assert_eq!(choose(None, true, false), Ok(Via::AgentsBrowser));
     // Switched off or no Chrome: the user's own Chrome, when the card has it.
-    assert_eq!(choose(true, false, true), Some(Via::Chrome));
-    assert_eq!(choose(false, true, true), Some(Via::Chrome));
-    assert_eq!(choose(true, false, false), None);
+    assert_eq!(choose(None, false, true), Ok(Via::Chrome));
+    assert!(choose(None, false, false).is_err());
+    // The phone asked for a way ("Try the agents' browser").
+    assert_eq!(
+        choose(Some(Via::AgentsBrowser), true, true),
+        Ok(Via::AgentsBrowser)
+    );
+    assert_eq!(
+        choose(Some(Via::AgentsBrowser), false, true),
+        Err(NO_AGENTS_BROWSER)
+    );
+    assert_eq!(
+        choose(Some(Via::MacWindow), true, false),
+        Ok(Via::AgentsBrowser)
+    );
+    assert_eq!(choose(Some(Via::Chrome), true, true), Ok(Via::Chrome));
+    assert!(choose(Some(Via::Chrome), true, false).is_err());
     // Pictures come as fast as the screencast draws them there.
     assert!(frame_gap(Via::AgentsBrowser) < frame_gap(Via::Chrome));
+}
+
+#[test]
+fn opening_never_hangs_and_says_which_browser_was_slow() {
+    // The phone's own limit is 25s and its socket's 30s: the Mac answers first.
+    assert!(BEGIN_TIMEOUT <= Duration::from_secs(20));
+    assert_eq!(slow(Via::Chrome), CHROME_SLOW);
+    assert!(CHROME_SLOW.starts_with("Chrome on your Mac isn't answering"));
+    assert_eq!(slow(Via::AgentsBrowser), AGENTS_SLOW);
+    assert_eq!(slow(Via::MacWindow), AGENTS_SLOW);
+}
+
+#[test]
+fn a_step_is_logged_by_name_never_by_contents() {
+    let op = Op::Input {
+        session_id: "signin_1".into(),
+        input: Input::Type {
+            text: SECRET.into(),
+            secure: true,
+        },
+    };
+    assert_eq!(op.name(), "input");
+    let begin = Op::Begin {
+        agent_id: "a".into(),
+        request_id: "q".into(),
+        way: Some(Via::AgentsBrowser),
+    };
+    assert_eq!(begin.name(), "begin");
+    // The way the phone names parses from its wire words.
+    let v: Via = serde_json::from_value(json!("agents_browser")).unwrap();
+    assert_eq!(v, Via::AgentsBrowser);
 }
 
 #[test]

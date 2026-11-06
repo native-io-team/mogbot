@@ -3,7 +3,7 @@
  * and its words are `signinView.ts`.
  */
 
-import type { SigninInput } from '@shipstudio/companion-protocol';
+import type { SigninInput, SigninVia } from '@shipstudio/companion-protocol';
 import { secretRouteProblem } from './secrets';
 import { currentTransport } from './session';
 import { signinRouteProblem } from './signinView';
@@ -28,8 +28,8 @@ function guarded() {
 }
 
 // Async throughout, so a refusal arrives as a rejected promise, never a throw.
-export const signinBegin = async (agentId: string, requestId: string) =>
-  guarded().request('agents.signinBegin', { agentId, requestId });
+export const signinBegin = async (agentId: string, requestId: string, way?: SigninVia) =>
+  guarded().request('agents.signinBegin', way ? { agentId, requestId, way } : { agentId, requestId });
 // Pictures too: what's on the page (an address, a name) stays on Tailscale.
 export const signinFrame = async (sessionId: string, after?: number) =>
   guarded().request('agents.signinFrame', after ? { sessionId, after } : { sessionId });

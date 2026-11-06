@@ -32,9 +32,48 @@ export function viaLabel(via: SigninVia | undefined): string {
       return 'The agents’ browser on your Mac';
     case 'mac_window':
       return 'A Chrome window on your Mac';
-    default:
+    case 'chrome':
       return 'Chrome on your Mac';
+    default:
+      // Still opening: the Mac hasn't said which browser yet.
+      return 'Your Mac';
   }
+}
+
+/**
+ * How long "Opening it on your Mac…" may last. The Mac gives up at 20s
+ * with its own reason (`BEGIN_TIMEOUT`); this is for a Mac that never
+ * answers at all, inside the socket's own 30s.
+ */
+export const BEGIN_TIMEOUT_MS = 25_000;
+export const BEGIN_TIMEOUT_MESSAGE = 'Your Mac didn’t open the sign-in in time.';
+
+/** `p`, or a rejection with `message` after `ms`. */
+export function withTimeout<T>(p: Promise<T>, ms: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error(message)), ms);
+    p.then(
+      (v) => {
+        clearTimeout(timer);
+        resolve(v);
+      },
+      (e) => {
+        clearTimeout(timer);
+        reject(e);
+      }
+    );
+  });
+}
+
+/** What a failed start offers: try again, and the agents' browser by name. */
+export function retryWays(view: SigninView): { label: string; way?: SigninVia }[] {
+  if (view.phase !== 'ended' || !view.retry) return [];
+  const ways: { label: string; way?: SigninVia }[] = [{ label: 'Try again' }];
+  // The Mac said the agents' browser isn't there: don't offer it.
+  if (!/agents.? browser isn.?t on/.test(view.message)) {
+    ways.push({ label: 'Try the agents’ browser', way: 'agents_browser' });
+  }
+  return ways;
 }
 
 /** The Mac's way for this sign-in: an older Mac names none (its Chrome). */
@@ -79,7 +118,14 @@ export type SigninView =
       /** The Mac's last refusal or failure, in its words. */
       note: string | null;
     }
-  | { phase: 'ended'; reason: EndReason; message: string; domain?: string };
+  | {
+      phase: 'ended';
+      reason: EndReason;
+      message: string;
+      domain?: string;
+      /** It never opened: the screen offers to start it again. */
+      retry?: boolean;
+    };
 
 export type SigninEvent =
   | { t: 'begun'; begun: SigninBegun }
@@ -90,18 +136,23 @@ export type SigninEvent =
   | { t: 'switched'; begun: SigninBegun }
   | { t: 'checking' }
   | { t: 'outcome'; outcome: SigninOutcome }
-  | { t: 'end'; reason: EndReason; message: string };
+  | { t: 'end'; reason: EndReason; message: string }
+  /** Start again after a failed start. */
+  | { t: 'retry' };
 
 export const initialView: SigninView = { phase: 'starting' };
 
 export function reduce(view: SigninView, e: SigninEvent): SigninView {
-  if (view.phase === 'ended') return view;
+  if (view.phase === 'ended') return e.t === 'retry' && view.retry ? initialView : view;
+  if (e.t === 'retry') return view;
   if (e.t === 'end') {
+    const atStart = view.phase === 'starting' && e.reason === 'failed';
     return {
       phase: 'ended',
       reason: e.reason,
       message: e.message,
       domain: view.phase === 'live' ? view.begun.domain : undefined,
+      ...(atStart ? { retry: true } : {}),
     };
   }
   if (view.phase === 'starting') {

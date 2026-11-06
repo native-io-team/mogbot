@@ -43,6 +43,24 @@ jest.mock('../src/lib/phoneSignin', () => ({
 }));
 
 describe('the sign-in screen', () => {
+  it('never hangs on opening: it times out, and Try the agents’ browser asks for it', async () => {
+    const ps = jest.requireMock('../src/lib/phoneSignin');
+    jest.useFakeTimers();
+    try {
+      ps.signinBegin.mockImplementationOnce(() => new Promise(() => {}));
+      await render(<SignInFromPhone />);
+      expect(screen.getByText('Your Mac')).toBeTruthy();
+      await act(async () => {
+        jest.advanceTimersByTime(25_000);
+      });
+      expect(screen.getByText(/didn’t open the sign-in in time/)).toBeTruthy();
+      await fireEvent.press(screen.getByTestId('signin-retry-agents'));
+      expect(ps.signinBegin).toHaveBeenLastCalledWith('qa', 'req_1', 'agents_browser');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('opens, shows the page, and types a hidden field once', async () => {
     await render(<SignInFromPhone />);
     expect(await screen.findByText('example.com')).toBeTruthy();
