@@ -28,7 +28,13 @@
 //!   disk and system tools; `defaults write` / `delete` / `import`
 //! - reading the app's own data, except that an admin (the Chief) reads the
 //!   agents folder (every agent's home) and an agent its own home
-//! - connector tools whose name writes (send, create, delete…); file uploads
+//! - connector tools whose name sends, publishes, pushes, uploads, spends or
+//!   deletes (send, post, push, upload, pay, delete…); records in the user's
+//!   own tools (create, update) run. On a code host or a database
+//!   (`github`, `gitlab`, `bitbucket`, `supabase`, `postgres`, `neon`,
+//!   `planetscale`, `mysql`) every write asks: pushing files, creating or
+//!   updating a file, a branch, a pull request, a release or a tag, and
+//!   running SQL. Reads (`get_…`, `list_…`, `search_…`) run
 //! - a network request with a secret in its address, query or headers
 //!   (`egress`): `curl`, `wget`, `http`, `gh api`, `git` remotes, WebFetch,
 //!   WebSearch; requests to this Mac are exempt
@@ -1612,6 +1618,7 @@ fn connector_asks(tool: &str, outside: bool) -> bool {
         "comment", "react", "charge", "refund", "pay", "payment",
         "transfer", "purchase", "buy", "order", "book", "subscribe", "cancel", "delete",
         "remove", "trash", "destroy", "purge", "deploy", "merge", "approve",
+        "push", "upload",
     ];
     // A read named after what it reads ("get_post", "list_comments") is a read.
     const READS: &[&str] = &["get", "list", "search", "fetch", "read", "find", "query", "view", "count"];
@@ -1621,7 +1628,51 @@ fn connector_asks(tool: &str, outside: bool) -> bool {
     if has(SENDS_SPENDS_DELETES) {
         return true;
     }
+    // A code host or a database: any write there is a push, a pull request,
+    // a release or a statement against live data, which ask like `git push`
+    // and `gh` writes do.
+    if repo_or_database(tool) && (connector_writes(&words) || has(REPO_DB_WRITES)) {
+        return true;
+    }
     outside && connector_writes(&words)
+}
+
+/// Connector servers whose writes always ask at Go hard: code hosts and
+/// databases. Matched within the server's name, so a claude.ai connector
+/// (`mcp__claude_ai_GitHub__…`) counts too.
+const REPO_DB_SERVERS: &[&str] = &[
+    "github",
+    "gitlab",
+    "bitbucket",
+    "supabase",
+    "postgres",
+    "neon",
+    "planetscale",
+    "mysql",
+];
+
+/// Words that write on a code host or a database beyond [`connector_writes`].
+const REPO_DB_WRITES: &[&str] = &[
+    "push",
+    "pull",
+    "release",
+    "tag",
+    "sql",
+    "fork",
+    "branch",
+    "commit",
+    "apply",
+    "migration",
+    "restore",
+    "reset",
+    "rollback",
+    "drop",
+    "truncate",
+];
+
+fn repo_or_database(tool: &str) -> bool {
+    let server = tool.split("__").nth(1).unwrap_or("").to_ascii_lowercase();
+    REPO_DB_SERVERS.iter().any(|s| server.contains(s))
 }
 
 /// A connector tool whose name says it writes anything at all.
