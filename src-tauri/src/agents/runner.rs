@@ -229,6 +229,10 @@ struct Runtime {
     room: Option<super::rooms::RoomRef>,
     /// The turn in progress (or one it replaced) answers text from outside.
     outside: bool,
+    /// A quiet note for the next turn in the agent's own chat
+    /// (`share_text::labels_only_note`). Unlike `interrupted` it outlasts the
+    /// worker going idle: the user's next message is when it is read.
+    nudge: Option<String>,
 }
 
 /// Why a take-over can't start now.
@@ -1797,6 +1801,7 @@ fn begin_fresh(agent_id: &str) -> Result<(store::Agent, AgentMessage), CommandEr
     if let Some(r) = runtimes.get_mut(agent_id) {
         r.interrupted = None;
         r.interrupted_in = None;
+        r.nudge = None;
     }
     let mut line = new_message(agent_id, MessageKind::Note, FRESH_LINE);
     line.fresh = true;
@@ -2058,6 +2063,9 @@ struct Batch {
     routine: bool,
     /// The first message's text: what a bound agent's copy is named after.
     request: String,
+    /// What the user said in the turn's messages (empty when none was the
+    /// user's): what the labels-only guard reads.
+    user_said: String,
     /// Asked in a room: the prompt is the room's, written as the turn starts.
     room: Option<RoomBatch>,
 }
@@ -2109,6 +2117,12 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     // Outside text taints the turn, and the turn that replaces it.
     runtime.outside |= batch.iter().any(|m| m.outside);
     let request = batch.first().map(|m| m.text.clone()).unwrap_or_default();
+    let user_said = batch
+        .iter()
+        .filter(|m| matches!(m.from, From::User) && m.room.is_none())
+        .map(|m| m.text.as_str())
+        .collect::<Vec<_>>()
+        .join("\n");
     // The turn inherits the deepest hop it is answering; a user message
     // in the batch resets the chain.
     runtime.origin = if batch.iter().any(|m| matches!(m.from, From::User)) {
@@ -2173,12 +2187,19 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     } else {
         String::new()
     };
+    // The labels-only note belongs to the agent's own chat, where it was earned.
+    let nudge = if place.is_none() {
+        runtime.nudge.take().unwrap_or_default()
+    } else {
+        String::new()
+    };
     let room = runtime.room.clone();
-    let prompt = format!("{preamble}{prompt}");
+    let prompt = format!("{nudge}{preamble}{prompt}");
     Some(Batch {
         prompt,
         routine,
         request,
+        user_said,
         room: room.map(|room| RoomBatch {
             room,
             preamble,
@@ -2486,6 +2507,7 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
             prompt,
             routine,
             request,
+            user_said,
             room,
         } = batch;
         let room_ref = room.as_ref().map(|r| r.room.clone());
@@ -2593,7 +2615,12 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
                 return_results(&app, &agent_id, since, Some(stopped_reason(note)));
                 settle_as = Some(note.unwrap_or("Stopped"));
             }
-            Ok(Ended::Finished) => return_results(&app, &agent_id, since, None),
+            Ok(Ended::Finished) => {
+                if room_ref.is_none() {
+                    leave_labels_only_note(&agent_id, &user_said, since);
+                }
+                return_results(&app, &agent_id, since, None)
+            }
             Err(err) => {
                 let engine = store::get(&agent_id).map(|a| a.engine).unwrap_or_default();
                 // Every account of its engine out: the wallet's own line.
@@ -2708,6 +2735,29 @@ fn tell_couldnt_finish(app: &AppHandle, agent_id: &str, to: &AgentRef, why: &str
     line.peer = Some(sender.clone());
     let _ = record(app, line);
     enqueue_reply(app, &to.id, text, sender, hop);
+}
+
+/// The user asked for text and the turn that just finished sent only files
+/// with short labels: its next turn in this chat is told so, quietly
+/// (`share_text`). Nothing is shown to the user.
+fn leave_labels_only_note(agent_id: &str, user_said: &str, since: i64) {
+    if user_said.trim().is_empty() {
+        return;
+    }
+    let replies: Vec<AgentMessage> = store::messages(agent_id, 40)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|m| m.ts >= since)
+        .collect();
+    set_labels_only_note(agent_id, user_said, &replies);
+}
+
+fn set_labels_only_note(agent_id: &str, user_said: &str, replies: &[AgentMessage]) {
+    let Some(note) = super::share_text::labels_only_note(user_said, replies) else {
+        return;
+    };
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    runtimes.entry(agent_id.to_string()).or_default().nudge = Some(note);
 }
 
 fn take_owed(agent_id: &str) -> Vec<AgentRef> {
@@ -4861,3 +4911,7 @@ mod review_runner_tests;
 #[cfg(test)]
 #[path = "rooms_runner_tests.rs"]
 mod rooms_runner_tests;
+
+#[cfg(test)]
+#[path = "share_text_runner_tests.rs"]
+mod share_text_runner_tests;
