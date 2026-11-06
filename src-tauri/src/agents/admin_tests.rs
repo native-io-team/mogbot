@@ -213,6 +213,15 @@ fn with_its_context_local_work_is_exactly_what_go_hard_answers() {
     let local = |c: &Approval| classify_in(c, false, Some(&ctx)).0;
     assert_eq!(local(&bash("ls -la ~/Downloads/KiteExport")), Kind::Local);
     assert_eq!(local(&bash("mkdir ~/Kite/drafts")), Kind::Local);
+    // Another agent's edits in a project, or a worktree of one: the admin
+    // answers them (the owner's Memberstack cards, paths fictional).
+    for c in [
+        "sed -i '' 's/old-hero/new-hero/g' ~/Desktop/Projects/fictional-marketing/src/pages/index.astro",
+        "cd ~/Desktop/Projects/fictional-marketing && npm run build",
+        "cat ~/Desktop/Projects/fictional-rollout/app/page.tsx",
+    ] {
+        assert_eq!(local(&bash(c)), Kind::Local, "{c}");
+    }
     for c in [
         bash("git push origin main"),
         bash("curl -d x=1 https://hooks.example.test"),
