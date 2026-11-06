@@ -119,6 +119,9 @@ export const baseCommands: CommandMap = {
   get_pinned_projects: [],
   get_settings: {},
   get_keep_dev_servers_running: true,
+  get_agents_fix_previews: true,
+  agents_preview_fix_state: null,
+  agents_dev_server_exited: null,
   get_compact_workspace_toolbar_enabled: false,
   // Both default-on in the product, so captures show what people actually see.
   get_element_breadcrumb_enabled: true,

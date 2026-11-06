@@ -10,6 +10,7 @@
 import type { Scenario } from '../types';
 import { rejectsWith } from '../reject';
 import { HARNESS_ROOT } from './base';
+import { workspaceCommands } from './workspace';
 import { AGENTS_TAB, MIN, TEAM, messagesFor, msg, now, overview, status } from './agents';
 
 const ACME_PATH = `${HARNESS_ROOT}/acme-marketing`;
@@ -198,6 +199,37 @@ const pane = (chat: unknown[], over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
+/** The copy's dev server starts, then exits with a compile error (the PTY stub). */
+const STOPS = { 'harness:pty-exit': '1' };
+
+/** The pane on a copy whose server stopped by itself, and where its fix stands. */
+const stoppedPane = (phase: 'fixing' | 'ask' | null, over: Record<string, unknown> = {}) =>
+  pane(BASE_CHAT, {
+    agents_preview_target: target(false),
+    agents_dev_server_exited: null,
+    // What starting it asks for, as a workspace open does (`./workspace`).
+    find_and_reserve_port: workspaceCommands.find_and_reserve_port,
+    get_workspace_subpath: workspaceCommands.get_workspace_subpath,
+    detect_project_type_command: workspaceCommands.detect_project_type_command,
+    get_force_static_serve: workspaceCommands.get_force_static_serve,
+    check_dependencies_installed: workspaceCommands.check_dependencies_installed,
+    get_dev_server_consent: workspaceCommands.get_dev_server_consent,
+    detect_package_manager: workspaceCommands.detect_package_manager,
+    plan_pending_install_scripts: workspaceCommands.plan_pending_install_scripts,
+    read_project_file: workspaceCommands.read_project_file,
+    get_system_env: workspaceCommands.get_system_env,
+    agents_preview_fix_state: () =>
+      phase && {
+        path: COPY.path,
+        agentId: 'acme',
+        agentName: 'Acme Site',
+        phase,
+        reason: 'a compile error',
+        at: Date.now(),
+      },
+    ...over,
+  });
+
 const OPEN_ACME = { click: '[data-agent-id="acme"]' };
 const PRESS_PREVIEW = { click: '.agent-changes button', text: 'Preview' };
 /** Wait for the site's first page to load in the frame (a step waits; `requires` doesn't). */
@@ -240,6 +272,43 @@ export const agentsPreviewScenarios: Scenario[] = [
       agents_overview: team('working'),
       agents_preview_test_state: RUN,
     }),
+  },
+  {
+    id: 'agents-preview-stopped-workspace',
+    title: 'Agents — the site stopped and no agent owns it: the workspace line (as before)',
+    looksRightWhen:
+      'The pane with no frame: a warning glyph and “The site stopped running. The workspace shows why and can start it again.” over an outlined “Open in workspace”. No agent named, no spinner. This is what every stopped preview showed before agents fixed their own.',
+    requires: '.agent-preview__status:not([data-stopped]) .button',
+    openSelector: AGENTS_TAB,
+    storage: STOPS,
+    steps: [
+      OPEN_ACME,
+      PRESS_PREVIEW,
+      { hover: '.agent-preview__status:not([data-stopped]) .button' },
+    ],
+    commands: stoppedPane(null),
+  },
+  {
+    id: 'agents-preview-stopped-fixing',
+    title: 'Agents — the site stopped and Acme Site is fixing it',
+    looksRightWhen:
+      'The pane with no frame: a small spinner, “Acme Site is fixing it…”, and under it, muted and smaller, “The site stopped: a compile error.” Then only a quiet text link “Open in workspace” (no outlined button, no “Ask” button). Acme Site shows as working in the sidebar. Nothing red.',
+    requires: '[data-stopped="fixing"]',
+    openSelector: AGENTS_TAB,
+    storage: STOPS,
+    steps: [OPEN_ACME, PRESS_PREVIEW, { hover: '[data-stopped="fixing"]' }],
+    commands: stoppedPane('fixing', { agents_overview: team('working') }),
+  },
+  {
+    id: 'agents-preview-stopped-ask',
+    title: 'Agents — the site stopped and nobody was woken: Ask Acme Site to fix it',
+    looksRightWhen:
+      'The pane with no frame: a warning glyph, “The site stopped: a compile error.”, a neutral filled “Ask Acme Site to fix it” button (not the agent’s colour), and under it a quiet text link “Open in workspace”. No spinner.',
+    requires: '[data-stopped="ask"]',
+    openSelector: AGENTS_TAB,
+    storage: STOPS,
+    steps: [OPEN_ACME, PRESS_PREVIEW, { hover: '[data-stopped="ask"]' }],
+    commands: stoppedPane('ask'),
   },
   {
     id: 'agents-preview-reported',

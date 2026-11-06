@@ -317,6 +317,23 @@ pub fn set_keep_dev_servers_running(app: AppHandle, enabled: bool) -> Result<(),
     Ok(())
 }
 
+/// Whether a preview that stops by itself wakes the agent that owns it
+/// (`agents::preview_fix`). On unless the user turned it off.
+#[tauri::command]
+#[tracing::instrument]
+pub fn get_agents_fix_previews() -> Result<bool, CommandError> {
+    Ok(read_app_state().agents_fix_previews.unwrap_or(true))
+}
+
+#[tauri::command]
+#[tracing::instrument]
+pub fn set_agents_fix_previews(enabled: bool) -> Result<(), CommandError> {
+    let mut state = read_app_state();
+    state.agents_fix_previews = Some(enabled);
+    write_app_state(&state)?;
+    Ok(())
+}
+
 /// Get whether the Slack community CTA is hidden on the dashboard.
 #[tauri::command]
 #[tracing::instrument]
