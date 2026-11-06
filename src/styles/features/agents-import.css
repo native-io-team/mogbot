@@ -263,7 +263,7 @@
 
 .agents-import__paste {
   width: 100%;
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: var(--font-size-body-sm);
   line-height: var(--line-height-help);
   resize: vertical;
@@ -907,7 +907,7 @@
 }
 
 .agent-import-review__diff {
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: var(--font-size-body-sm);
 }
 

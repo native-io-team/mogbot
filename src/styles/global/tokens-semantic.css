@@ -368,7 +368,7 @@
  * one value is set at runtime — `--accent-user` — by src/lib/accent.ts, along
  * with two companions it computes in JS: `--accent-on-user` (ink that reads on
  * the accent, chosen by WCAG contrast) and `--accent-user-rgb` (an r, g, b
- * triplet, kept only so the plugin-stable `--action-rgb` still works).
+ * triplet, for `rgba()` tints of the accent).
  *
  * The shades (hover, pressed/busy, the primary gradient's stops) are ALSO
  * computed in JS and written as finished hex — `--accent-user-hover`,

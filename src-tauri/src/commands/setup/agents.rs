@@ -275,7 +275,7 @@ pub async fn uninstall_agent(agent_id: String) -> Result<String, CommandError> {
     // Retry a file-lock failure before giving up: on Windows npm's unlink of a
     // just-used binary regularly loses a race with antivirus or a still-open
     // terminal, and the lock clears on its own within a second or two
-    // (issue #844) — the same shape `rename_with_retry` handles for plugins.
+    // (issue #844).
     let mut attempt: u32 = 0;
     let output = loop {
         attempt += 1;

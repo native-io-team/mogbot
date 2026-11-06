@@ -348,7 +348,7 @@
 .workflow-template-example-location {
   align-self: flex-start;
   color: var(--text-muted);
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: var(--font-size-body-sm);
 }
 
@@ -366,7 +366,7 @@
   border: var(--border-width-default) solid var(--border-subtle);
   border-radius: var(--radius-card);
   color: var(--text-secondary);
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: var(--font-size-body-sm);
   line-height: var(--line-height-help);
   white-space: pre-wrap;

@@ -65,17 +65,6 @@ function headerProps(): WorkspaceHeaderProps {
     onForcePublishOpenHandled: vi.fn(),
     forceBranchesOpen: false,
     onForceBranchesOpenHandled: vi.fn(),
-    getSlotPlugins: () => [],
-    pluginProject: null,
-    pluginActions: {
-      showToast: vi.fn(),
-      refreshGitStatus: vi.fn(),
-      refreshBranches: vi.fn(),
-      focusTerminal: vi.fn(),
-      openUrl: vi.fn(),
-      openTerminal: vi.fn(),
-    },
-    pluginTheme: {} as WorkspaceHeaderProps['pluginTheme'],
   };
 }
 

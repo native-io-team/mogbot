@@ -21,8 +21,6 @@ import ReactDOM from 'react-dom/client';
 import App from '../App';
 import { QuickEntry } from '../components/agents/QuickEntry';
 import { ErrorBoundary } from '../components/ErrorBoundary';
-import { exposeReactGlobals } from '../lib/plugin-loader';
-import { exposePluginContextRef } from '../contexts/PluginContext';
 import { installFakeBackend, whenIpcQuiet } from './fakeBackend';
 import { findScenario, scenarios } from './scenarios';
 import { unhandledCalls } from './unhandled';
@@ -52,9 +50,6 @@ installFakeBackend(scenario);
 
 // `?theme=light|dark|system` (resetStorage.ts seeds it before any app module).
 initTheme();
-
-exposeReactGlobals(React, ReactDOM);
-exposePluginContextRef();
 
 /**
  * What each scripted step did, so a capture can say a step never happened

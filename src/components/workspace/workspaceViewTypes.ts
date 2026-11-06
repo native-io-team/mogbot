@@ -1,8 +1,6 @@
-import type { PluginInfo } from '../../lib/plugins';
 import type { Dispatch, MutableRefObject, RefObject, SetStateAction } from 'react';
 import type { AgentConfig } from '../../lib/agent';
 import type { BranchInfo, PullRequestInfo } from '../../lib/branches';
-import type { PluginThemeData } from '../../contexts/PluginContext';
 import type { HealthTabPanelRef } from '../code/HealthTabPanel';
 import type { ChangedFile } from '../../lib/git';
 import type { DevServerUnexpectedExit, ProjectDevServerSnapshot } from '../../hooks/useDevServer';
@@ -14,7 +12,6 @@ import type { ProjectType } from '../../lib/static-server';
 import type { TerminalTab } from '../../hooks/useTerminalManagement';
 import type { AgentStatus, TerminalHandle } from '../terminal/Terminal';
 import type { Toast, ToastType } from '../../hooks/useToasts';
-import type { LoadedPlugin, PluginFailure } from '../../hooks/usePlugins';
 import type { PreviewHandle } from '../preview/Preview';
 import type { ToggleProjectPinHandler } from './WorkspaceSidebar';
 
@@ -146,26 +143,6 @@ interface LayoutProps {
   setWorkspaceTab: (tab: 'preview' | 'code' | 'branches' | 'prs') => void;
 }
 
-interface PluginStateProps {
-  pluginTerminal: {
-    command: string;
-    args: string[];
-    title: string;
-    resolve: (exitCode: number | null) => void;
-  } | null;
-  pluginTerminalExited: boolean;
-  closePluginTerminal: () => void;
-  handlePluginTerminalExit: (exitCode: number | null) => void;
-  pluginSuggestion: { pluginName: string; projectPath: string; repoUrl: string } | null;
-  setPluginSuggestion: (s: null) => void;
-  pluginSuggestionInstalling: boolean;
-  installSuggestedPlugin: (
-    onSuccess: (msg: string) => void,
-    onError: (msg: string) => void,
-    reloadPlugins: () => Promise<void>
-  ) => Promise<void>;
-}
-
 interface ModalProps {
   isEducationMode: boolean;
   setIsEducationMode: (mode: boolean) => void;
@@ -217,15 +194,6 @@ interface BranchProps {
   handleConflictsResolved: () => void;
 }
 
-interface PluginProps {
-  loadedPlugins: LoadedPlugin[];
-  pluginFailures: PluginFailure[];
-  /** Asked for by the project, not yet approved by this app: not loaded. */
-  pluginsPendingTrust: PluginInfo[];
-  getSlotPlugins: (slotName: string) => LoadedPlugin[];
-  reloadPlugins: () => Promise<void>;
-}
-
 interface LifecycleProps {
   autoAcceptMode: boolean;
   setCurrentPreviewPage: (page: string) => void;
@@ -254,29 +222,6 @@ interface LifecycleProps {
 // WorkspaceViewProps
 // ---------------------------------------------------------------------------
 
-/** Plugin project data as constructed by App.tsx (devServerUrl always present) */
-interface WorkspacePluginProject {
-  name: string;
-  path: string;
-  currentBranch: string;
-  hasUncommittedChanges: boolean;
-  devServerUrl: string;
-}
-
-/** Plugin actions as constructed by App.tsx (showToast includes 'info') */
-interface WorkspacePluginActions {
-  showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
-  refreshGitStatus: () => void;
-  refreshBranches: () => void;
-  focusTerminal: () => void;
-  openUrl: (url: string) => void;
-  openTerminal: (
-    command: string,
-    args: string[],
-    options?: { title?: string }
-  ) => Promise<number | null>;
-}
-
 export interface WorkspaceViewProps {
   currentProject: Project;
   previewRef: RefObject<PreviewHandle | null>;
@@ -286,15 +231,10 @@ export interface WorkspaceViewProps {
   integrationStatus: IntegrationProps;
   screenshots: ScreenshotProps;
   layout: LayoutProps;
-  pluginState: PluginStateProps;
   modals: ModalProps;
   toasts: ToastProps;
   branchMgmt: BranchProps;
-  plugins: PluginProps;
   lifecycle: LifecycleProps;
-  pluginProject: WorkspacePluginProject | null;
-  pluginActions: WorkspacePluginActions;
-  pluginTheme: PluginThemeData;
   /** Project list shown in the workspace sidebar. */
   projectRows: PinnedProjectRow[];
   /** Switch to a different project from the sidebar. */

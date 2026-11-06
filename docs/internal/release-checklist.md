@@ -58,7 +58,7 @@ Every null link turns its feature off and the UI hides it.
 | `links.issueRepo` | No in-app issue reports | `owner/repo` |
 | `links.securityAdvisories`, `links.discussions`, `links.community`, `links.website` | Those links and CTAs hidden, no PR footer credit | URLs |
 | `links.errorReports` | No automatic error reports (Rust) | Endpoint |
-| `links.pluginRegistry`, `links.templateApi` | No plugin library or template gallery | Ship Studio's services, or your own |
+| `links.templateApi` | No template gallery | Ship Studio's services, or your own |
 | `links.companionSource` | Built `.app` can't build the phone app (above) | This repo's git URL |
 | `links.pushRelay` | No push | The deployed relay URL |
 | `telemetry.posthogKey` / `posthogHost` / `sentryDsn` | Nothing sent (compile-time) | Keys. Only with a privacy note to match, and the App Store answers change |

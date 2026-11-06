@@ -213,10 +213,5 @@ describe('Logger', () => {
       logger.info('just info');
       expect(mockReportError).not.toHaveBeenCalled();
     });
-
-    it('does not forward plugin (blob:) errors', () => {
-      logger.error('plugin exploded', { stack: 'at blob:app://x/y:1:1' });
-      expect(mockReportError).not.toHaveBeenCalled();
-    });
   });
 });

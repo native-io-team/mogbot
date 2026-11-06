@@ -2,10 +2,9 @@
 //! power handling live in `crate::remote_access`; this is the UI's view of
 //! them, every field read back from the thing it describes.
 //!
-//! The link's secret never crosses into the webview. Plugins run JavaScript
-//! there, and anything a plugin can read it can send somewhere; so the UI is
-//! given a masked link, and "Copy link" puts the real one on the clipboard
-//! from Rust, marked to stay out of clipboard history, and clears it again
+//! The link's secret never crosses into the webview, where any script that
+//! read it could send it somewhere; so the UI is given a masked link, and
+//! "Copy link" puts the real one on the clipboard from Rust, marked to stay out of clipboard history, and clears it again
 //! shortly after.
 
 use crate::errors::CommandError;

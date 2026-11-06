@@ -7,19 +7,12 @@ import type { CommentAgent } from '../../lib/canvasComments';
  */
 
 import type { RefObject } from 'react';
-import type {
-  PluginAppActions,
-  PluginProjectData,
-  PluginThemeData,
-} from '../../contexts/PluginContext';
 import type { DevServerUnexpectedExit } from '../../hooks/useDevServer';
-import type { LoadedPlugin } from '../../hooks/usePlugins';
 import type { Project } from '../../lib/project';
 import type { ProjectType } from '../../lib/static-server';
 import { BranchPRTabContainer, type BranchPRTabContainerProps } from './BranchPRTabContainer';
 import { CodeTab } from '../code/CodeTab';
 import type { HealthTabPanelRef } from '../code/HealthTabPanel';
-import { PluginSlot } from '../plugins/PluginSlot';
 import { Preview, type InspectTab, type PreviewHandle } from '../preview/Preview';
 import { DeviceMirror } from '../preview/DeviceMirror';
 import { ShopifySetup } from '../shopify/ShopifySetup';
@@ -82,10 +75,6 @@ export interface WorkspacePreviewPaneProps {
   variablesPanelPinned: boolean;
   toggleVariablesPanelPinned: () => void;
   closeVariablesPanel: () => void;
-  pluginProject: PluginProjectData | null;
-  pluginActions: PluginAppActions;
-  pluginTheme: PluginThemeData;
-  getSlotPlugins: (slot: string) => LoadedPlugin[];
   shopify: {
     showGate: boolean;
     markReady: () => void;
@@ -158,10 +147,6 @@ export function WorkspacePreviewPane(props: WorkspacePreviewPaneProps) {
     variablesPanelPinned,
     toggleVariablesPanelPinned,
     closeVariablesPanel,
-    pluginProject,
-    pluginActions,
-    pluginTheme,
-    getSlotPlugins,
     shopify,
     branchTabs,
   } = props;
@@ -179,7 +164,6 @@ export function WorkspacePreviewPane(props: WorkspacePreviewPaneProps) {
     createBranchRequest,
     ...worktreeProps
   } = branchTabs;
-  const previewSlotPlugins = getSlotPlugins('preview');
   const previewSurfaceVisible = isWebProject || !projectTypeResolved;
 
   return (
@@ -255,17 +239,6 @@ export function WorkspacePreviewPane(props: WorkspacePreviewPaneProps) {
             variablesPanelPinned={variablesPanelPinned}
             onToggleVariablesPanelPin={toggleVariablesPanelPinned}
             onCloseVariablesPanel={closeVariablesPanel}
-            previewPlugins={
-              previewSlotPlugins.length > 0 ? (
-                <PluginSlot
-                  name="preview"
-                  plugins={previewSlotPlugins}
-                  project={pluginProject}
-                  actions={pluginActions}
-                  theme={pluginTheme}
-                />
-              ) : null
-            }
           />
         </div>
       )}

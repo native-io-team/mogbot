@@ -2037,7 +2037,7 @@ mod tests {
         fn macos_eperm_becomes_expected_with_privacy_remediation() {
             let e = std::io::Error::from_raw_os_error(1);
             let err = classify_fs_error(
-                "read this project's plugin storage",
+                "read this project's metadata",
                 std::path::Path::new("/Users/x/Desktop/proj/.shipstudio"),
                 &e,
             );
@@ -2047,7 +2047,7 @@ mod tests {
             );
             let msg = err.to_string();
             assert!(msg.contains("Privacy & Security"), "got: {msg}");
-            assert!(msg.contains("plugin storage"), "got: {msg}");
+            assert!(msg.contains("project's metadata"), "got: {msg}");
             assert!(msg.contains("/Users/x/Desktop/proj"), "got: {msg}");
         }
 
@@ -2055,13 +2055,13 @@ mod tests {
         fn other_io_errors_stay_labeled_io() {
             let e = std::io::Error::new(std::io::ErrorKind::InvalidData, "corrupt");
             let err = classify_fs_error(
-                "read this project's plugin registry",
+                "read this project's settings",
                 std::path::Path::new("/p/registry.json"),
                 &e,
             );
             match err {
                 crate::errors::CommandError::Io { message } => {
-                    assert!(message.contains("plugin registry"), "got: {message}");
+                    assert!(message.contains("project's settings"), "got: {message}");
                     assert!(message.contains("corrupt"), "got: {message}");
                 }
                 other => panic!("expected Io, got {other:?}"),
@@ -2151,14 +2151,14 @@ mod tests {
         }
 
         // The #948 shape: "Operation canceled (os error 89)" reading the
-        // plugin registry from a File Provider-backed folder.
+        // project settings from a File Provider-backed folder.
         #[test]
         #[cfg(target_os = "macos")]
         fn macos_ecanceled_becomes_expected() {
             let e = std::io::Error::from_raw_os_error(89);
             let err = classify_fs_error(
-                "read this project's plugin registry",
-                std::path::Path::new("/p/.shipstudio/plugins/registry.json"),
+                "read this project's settings",
+                std::path::Path::new("/p/.shipstudio/project.json"),
                 &e,
             );
             assert!(
@@ -2167,7 +2167,7 @@ mod tests {
             );
             let msg = err.to_string();
             assert!(msg.contains("cloud drive"), "got: {msg}");
-            assert!(msg.contains("registry.json"), "got: {msg}");
+            assert!(msg.contains("project.json"), "got: {msg}");
             assert!(!msg.contains("os error"), "got: {msg}");
         }
 

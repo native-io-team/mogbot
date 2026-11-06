@@ -7,9 +7,8 @@
  * and the UI hides it rather than pointing somewhere that isn't ours.
  *
  * Not here on purpose: the shared compat names (`~/ShipStudio`, the
- * in-project `.shipstudio/` folder, the plugin ABI `__SHIPSTUDIO_*` /
- * `@shipstudio/plugin-sdk` / `os-theme-shipstudio`). Those stay as they are so
- * this app and Ship Studio can open each other's projects and plugins.
+ * in-project `.shipstudio/` folder). Those stay as they are so this app and
+ * Ship Studio can open each other's projects.
  */
 import brandJson from '../../brand.json';
 
@@ -28,7 +27,6 @@ export interface BrandLinks {
   releases: string | null;
   /** Auto-update feed. Null: no update channel, the updater stays silent. */
   updates: string | null;
-  pluginRegistry: string | null;
   templateApi: string | null;
   /** GitHub org/user the project starter templates are cloned from. */
   starterRepoBase: string | null;

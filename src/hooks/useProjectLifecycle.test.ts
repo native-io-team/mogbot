@@ -117,7 +117,6 @@ function createParams(overrides?: Partial<UseProjectLifecycleParams>): UseProjec
     clearProjectStatuses: vi.fn(),
     fetchBranchInfo: vi.fn().mockResolvedValue(undefined),
     clearBranchState: vi.fn(),
-    checkPluginSuggestion: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }

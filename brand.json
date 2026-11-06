@@ -19,7 +19,6 @@
     "errorReports": null,
     "releases": null,
     "updates": null,
-    "pluginRegistry": null,
     "templateApi": null,
     "starterRepoBase": "https://github.com/ship-studio",
     "companionSource": null,

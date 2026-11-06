@@ -240,74 +240,6 @@ body.compact-mode-active html {
   }
 }
 
-/* Toolbar icon buttons (header actions row) */
-.toolbar-icon-btn {
-  appearance: none;
-  -webkit-appearance: none;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: var(--button-gap);
-  padding: 0 var(--button-padding);
-  height: var(--button-height);
-  min-height: var(--button-height);
-  background: var(--button-surface-default);
-  border: var(--stroke-1) solid var(--button-border-solid);
-  border-radius: var(--button-radius);
-  color: var(--button-text-default);
-  font-family: var(--font-ui);
-  font-size: var(--button-font-size);
-  line-height: var(--line-height-default);
-  font-weight: var(--button-font-weight);
-  cursor: pointer;
-  box-shadow: var(--button-shadow);
-  white-space: nowrap;
-  transition:
-    background-color var(--transition),
-    color var(--transition),
-    border-color var(--transition),
-    opacity var(--transition),
-    transform var(--transition);
-}
-
-.toolbar-icon-btn:hover:not(:disabled) {
-  background: var(--button-surface-hover);
-  color: var(--button-text-hover);
-  border-color: var(--button-border-solid);
-}
-
-.toolbar-icon-btn:disabled {
-  opacity: var(--button-disabled-opacity);
-  cursor: not-allowed;
-}
-
-.toolbar-icon-btn:active:not(:disabled) {
-  transform: scale(var(--button-active-scale));
-}
-
-.toolbar-icon-btn svg {
-  color: var(--text-muted);
-}
-
-.toolbar-icon-btn:hover:not(:disabled) svg {
-  color: var(--text-secondary);
-}
-
-/* Open/pressed state — e.g. when a dropdown trigger has its menu open.
-   Mirrors the hover state so the button reads as "engaged" without
-   introducing a separate color accent. */
-.toolbar-icon-btn.is-open,
-.toolbar-icon-btn.is-open:hover {
-  background: var(--surface-selected);
-  color: var(--text-primary);
-  border-color: var(--border-strong);
-}
-
-.toolbar-icon-btn.is-open svg {
-  color: var(--text-secondary);
-}
-
 /* Toggle pill button — label + iOS-style switch pill on the right.
    Use for boolean feature toggles (Inspect, Split, etc.). Pair the
    button with a child `.toggle-pill-switch` span that gets `.is-on`
@@ -394,7 +326,6 @@ body.compact-mode-active html {
 }
 
 /* Rotate the chevron 180° when its parent dropdown is open. */
-.toolbar-icon-btn .chevron-flipped,
 .button .chevron-flipped {
   transform: rotate(180deg);
   transition: transform var(--transition);
@@ -466,8 +397,7 @@ body.compact-mode-active html {
   transform: scale(var(--button-active-scale));
 }
 
-.button:focus-visible,
-.toolbar-icon-btn:focus-visible {
+.button:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
 }
@@ -527,19 +457,6 @@ body.compact-mode-active html {
 
 .button--danger:hover:not(:disabled) {
   background: rgba(var(--accent-error-light-rgb), 0.1);
-}
-
-/* Plugin compatibility only: `button--*` is plugin-facing CSS, so an installed
-   plugin may still use it. The React `Button` no longer offers `success` —
-   actions in the app are monochrome and green is a status colour. */
-.button--success {
-  background: transparent;
-  color: var(--button-success-text);
-  border-color: var(--button-success-border);
-}
-
-.button--success:hover:not(:disabled) {
-  background: var(--button-success-surface-hover);
 }
 
 .button--ghost {

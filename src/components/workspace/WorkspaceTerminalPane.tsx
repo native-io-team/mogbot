@@ -7,12 +7,6 @@
 
 import type { CSSProperties, MutableRefObject } from 'react';
 import { getAgentById, type AgentConfig } from '../../lib/agent';
-import type { LoadedPlugin } from '../../hooks/usePlugins';
-import {
-  type PluginAppActions,
-  type PluginProjectData,
-  type PluginThemeData,
-} from '../../contexts/PluginContext';
 import { sessionRegistry } from '../../lib/sessionRegistry';
 import { kbd } from '../../lib/shortcuts';
 import type { Project } from '../../lib/project';
@@ -109,10 +103,6 @@ export interface WorkspaceTerminalPaneProps {
   onMcp: () => void;
   onAutoAcceptToggle: () => void;
   onHelp: () => void;
-  terminalPlugins: LoadedPlugin[];
-  pluginProject: PluginProjectData | null;
-  pluginActions: PluginAppActions;
-  pluginTheme: PluginThemeData;
 }
 
 const AGENT_PANEL_FLOATING_SIZE = { width: 560, height: 680 };
@@ -171,10 +161,6 @@ export function WorkspaceTerminalPane(props: WorkspaceTerminalPaneProps) {
     onMcp,
     onAutoAcceptToggle,
     onHelp,
-    terminalPlugins,
-    pluginProject,
-    pluginActions,
-    pluginTheme,
   } = props;
 
   // The rail: which slot this panel's placeholder belongs in, and where to
@@ -464,10 +450,6 @@ export function WorkspaceTerminalPane(props: WorkspaceTerminalPaneProps) {
               onMcp={onMcp}
               onAutoAcceptToggle={onAutoAcceptToggle}
               onHelp={onHelp}
-              terminalPlugins={terminalPlugins}
-              pluginProject={pluginProject}
-              pluginActions={pluginActions}
-              pluginTheme={pluginTheme}
             />
           </div>
         </div>

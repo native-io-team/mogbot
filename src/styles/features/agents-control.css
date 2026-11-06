@@ -32,7 +32,7 @@
 
 .agent-approval__always code,
 .agent-permissions__what code {
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: var(--font-size-body-sm);
   color: var(--text-secondary);
 }
@@ -227,7 +227,7 @@
 
 .agent-secret__name,
 .agent-secrets__name code {
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: var(--font-size-body-md);
   font-weight: var(--font-weight-body);
 }
@@ -283,7 +283,7 @@
 }
 
 .agent-secrets__vars {
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
 }
 
 /* --------------------------------------------------------------- memory */

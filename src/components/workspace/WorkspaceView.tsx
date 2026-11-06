@@ -5,7 +5,7 @@ export type { WorkspaceViewProps } from './workspaceViewTypes';
  * Workspace view component.
  *
  * Renders the full workspace UI including terminal panes, preview panel,
- * branch/PR tabs, compact mode, modals, and plugin slots.
+ * branch/PR tabs, compact mode and modals.
  * Extracted from App.tsx to reduce root component size.
  *
  * Props are grouped by domain to avoid 80+ individual props.
@@ -46,7 +46,6 @@ import { trackEvent } from '../../lib/analytics';
 import { useWorkspaceCommands } from '../../commands/useWorkspaceCommands';
 import { useSnapshots } from '../../hooks/useSnapshots';
 import { useWorktreeWorkflow } from '../../hooks/useWorktreeWorkflow';
-import { WorkspacePluginsSlot } from '../plugins/WorkspacePluginsSlot';
 import { useShopifyTheme } from '../../hooks/useShopifyTheme';
 import { isMac } from '../../lib/setup';
 import { kbd } from '../../lib/shortcuts';
@@ -89,15 +88,10 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
   integrationStatus,
   screenshots,
   layout,
-  pluginState,
   modals,
   toasts,
   branchMgmt,
-  plugins,
   lifecycle,
-  pluginProject,
-  pluginActions,
-  pluginTheme,
   projectRows,
   onSelectProject,
   onCloseProject,
@@ -274,17 +268,6 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
     }
   }, [canSplit, splitPaneTabIds, disableSplitView]);
 
-  const {
-    pluginTerminal,
-    pluginTerminalExited,
-    closePluginTerminal,
-    handlePluginTerminalExit,
-    pluginSuggestion,
-    setPluginSuggestion,
-    pluginSuggestionInstalling,
-    installSuggestedPlugin,
-  } = pluginState;
-
   const { isEducationMode, closeEducation } = modals;
 
   const { toasts: toastList, showToast, dismissToast } = toasts;
@@ -322,8 +305,6 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
     handleResolveConflicts,
     handleConflictsResolved,
   } = branchMgmt;
-
-  const { loadedPlugins, getSlotPlugins, reloadPlugins } = plugins;
 
   const {
     autoAcceptMode,
@@ -747,14 +728,6 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
     layoutMenu: <WorkspaceLayoutMenu />,
     teamPresence: team.presence,
     modes: modesNode,
-    headerExtras: (
-      <WorkspacePluginsSlot
-        plugins={plugins}
-        pluginProject={pluginProject}
-        pluginActions={pluginActions}
-        pluginTheme={pluginTheme}
-      />
-    ),
     integrations,
     onGitHubStatusChange: handleGitHubStatusChange,
     onGitHubConnect: handleGitHubConnect,
@@ -796,10 +769,6 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
     onForcePublishOpenHandled: () => setForcePublishOpen(false),
     forceBranchesOpen,
     onForceBranchesOpenHandled: () => setForceBranchesOpen(false),
-    getSlotPlugins,
-    pluginProject,
-    pluginActions,
-    pluginTheme,
   });
 
   return (
@@ -991,10 +960,6 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
                       variablesPanelPinned={variablesPanelDocked}
                       toggleVariablesPanelPinned={toggleVariablesPanelDocked}
                       closeVariablesPanel={() => variables.setVisible(false)}
-                      pluginProject={pluginProject}
-                      pluginActions={pluginActions}
-                      pluginTheme={pluginTheme}
-                      getSlotPlugins={getSlotPlugins}
                       shopify={shopify}
                       branchTabs={{
                         integrations,
@@ -1065,10 +1030,6 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
                     onMcp={mcpModal.open}
                     onAutoAcceptToggle={handleToolbarAutoAcceptToggle}
                     onHelp={helpModal.open}
-                    terminalPlugins={getSlotPlugins('terminal')}
-                    pluginProject={pluginProject}
-                    pluginActions={pluginActions}
-                    pluginTheme={pluginTheme}
                   />
                   {team.panel}
                 </WorkspaceDock>
@@ -1119,20 +1080,6 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
           extensions={{
             agentId: getActiveTabAgent().id,
             activeAgent: getActiveTabAgent(),
-            onPluginsChanged: () => void reloadPlugins(),
-            loadedPlugins,
-          }}
-          pluginSuggestion={{
-            pluginSuggestion,
-            pluginSuggestionInstalling,
-            onDismissPluginSuggestion: () => setPluginSuggestion(null),
-            onInstallSuggestedPlugin: () => {
-              void installSuggestedPlugin(
-                (msg) => showToast(msg, 'success'),
-                (msg) => showToast(msg, 'error'),
-                reloadPlugins
-              );
-            },
           }}
           autoAccept={{
             showAutoAcceptWarning,
@@ -1202,12 +1149,6 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
             currentBranch: currentBranch || 'main',
             worktrees: worktree.worktrees,
             onWorktreeCreated: worktree.handleCreated,
-          }}
-          pluginTerminal={{
-            pluginTerminal,
-            pluginTerminalExited,
-            onClosePluginTerminal: closePluginTerminal,
-            onPluginTerminalExit: handlePluginTerminalExit,
           }}
         />
       </div>

@@ -4,7 +4,7 @@ One folder per feature domain. Token + primitive reference: [docs/design-system.
 
 ## Folders
 
-- **`primitives/`** — The design-system building blocks (`Button`, `IconButton`, `ToggleButton`, `MenuButton`, `ModalFrame`, `Dropdown`, `TextField`, `ValueField`, `PropertyField`, `Tabs`, `SegmentedControl`, `TextButton`, `DockablePanel`, `PanelResizeHandle`, `EmptyState`, `Spinner`, `PixelLoader`, `ToastList`, `Tooltip`, and `MiddleTruncate`). The complete registry is generated from [docs/design-system-registry.json](../../docs/design-system-registry.json) into [docs/design-system.generated.md](../../docs/design-system.generated.md), and drift is checked by `pnpm docs:check`. Generic, feature-agnostic primitives must not import from feature folders. Plugin-stable button selectors remain in `src/styles/global/base.css`; other primitive styles live in their named files under `src/styles/components/` or their explicitly documented feature owner.
+- **`primitives/`** — The design-system building blocks (`Button`, `IconButton`, `ToggleButton`, `MenuButton`, `ModalFrame`, `Dropdown`, `TextField`, `ValueField`, `PropertyField`, `Tabs`, `SegmentedControl`, `TextButton`, `DockablePanel`, `PanelResizeHandle`, `EmptyState`, `Spinner`, `PixelLoader`, `ToastList`, `Tooltip`, and `MiddleTruncate`). The complete registry is generated from [docs/design-system-registry.json](../../docs/design-system-registry.json) into [docs/design-system.generated.md](../../docs/design-system.generated.md), and drift is checked by `pnpm docs:check`. Generic, feature-agnostic primitives must not import from feature folders. The `.button*` rules behind `Button` live in `src/styles/global/base.css`; other primitive styles live in their named files under `src/styles/components/` or their explicitly documented feature owner.
 - **`icons/`** — Semantic SVG icon components grouped by domain (`brand`, `common`, `editor`, `editor-controls`, `layout`, `status`, `utility`) and re-exported from the public `index.tsx` barrel. Feature code imports icons from `@/components/icons`; the modules own asset imports and metadata, while `src/assets/icons/` and `src/assets/icons/old-icons/` own the SVG files. Feature-specific artwork belongs in `src/assets/graphics/` and stays with the consuming feature rather than entering the shared barrel. Static inline SVG is not used in feature components; `BranchGraph.tsx` is the marked dynamic exception.
 - **`dashboard/`** — The home screen: project grid/list and cards, folders, search/sort, project rail, create-project and template gallery, settings modal, changelog, agents panel, integration bar.
 - **`workspace/`** — The open-project shell: header, sidebar, split panes, compact mode, and workspace-scoped modals (env editor, languages, backups, project settings, notifications).
@@ -13,7 +13,7 @@ One folder per feature domain. Token + primitive reference: [docs/design-system.
 - **`terminal/`** — Embedded terminals: the agent PTY terminal, build terminal, dev-server status/logs, dev-command modal.
 - **`code/`** — Code mode: file tree, read-only code viewer, and the project health tab panel.
 - **`edit/`** — Visual editor internals: the editor panel, element tree, and the property controls (color, length, spacing, enum, opacity, image…).
-- **`plugins/`** — Plugin system UI plus the agent-extension modals: plugin manager/slots, skills modal, MCP modal.
+- **`extensions/`** — Agent-extension modals (Skills, MCP) and their shared layout parts.
 - **`setup/`** — First-run onboarding wizard: orchestrator, step indicator, per-step components under `steps/`, onboarding terminal, celebration screen.
 - **`shopify/`** — Shopify theme experience: theme setup flow and store-connection modal.
 - **`support/`** — In-app support panel: ticket list/form, conversation view, help articles.
@@ -29,7 +29,7 @@ Cross-cutting components mounted at the app level (by `App.tsx` or global hosts)
   still be globally mounted here)
 - `ConnectOverlay.tsx` — full-tab "connect GitHub" gate shown when a feature needs auth
 - `EducationOverlay.tsx` — Education Mode x-ray overlay (hover any UI element to learn it)
-- `ErrorBoundary.tsx` — top-level crash recovery, including plugin-crash attribution/uninstall
+- `ErrorBoundary.tsx` — top-level crash recovery
 - `HelpModal.tsx` — slash-command glossary, shortcuts, and tips (openable from anywhere)
 - `UpdateBanner.tsx` — sidebar update indicator and release-specific update modal
 

@@ -4,9 +4,8 @@
  * Renders the top header of the workspace view including:
  * - Back button to return to projects
  * - Project name and path
- * - Topbar action buttons (education, plugins, assets, IDE, env, backups)
+ * - Topbar action buttons (education, assets, IDE, env, backups)
  * - GitHub button and publish dropdown
- * - Plugin toolbar/publish slots
  *
  * IDE dropdown state (showIdeDropdown, openingIde, ideAvailability) is managed
  * internally since it is only used within this component.
@@ -14,22 +13,13 @@
  * @module components/WorkspaceHeader
  */
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  type MouseEvent,
-  type ReactNode,
-} from 'react';
+import { useCallback, useEffect, useRef, useState, type MouseEvent, type ReactNode } from 'react';
 import { getCurrentWindow } from '@tauri-apps/api/window';
 import { BranchIndicator } from '../branches/BranchIndicator';
 import { BranchesMenu } from '../branches/BranchesMenu';
 import { openInFinder } from '../../lib/ide';
 import { PublishBranchDropdown } from '../branches/PublishBranchDropdown';
 import { hasPushableRemote } from '../../lib/github';
-import { PluginSlot } from '../plugins/PluginSlot';
 import {
   AgentsIcon,
   BellIcon,
@@ -46,17 +36,8 @@ import { IconButton } from '../primitives/IconButton';
 import { MiddleTruncate } from '../primitives/MiddleTruncate';
 import { ToggleButton } from '../primitives/ToggleButton';
 import type { IntegrationState } from '../../hooks/useIntegrationStatus';
-import type { LoadedPlugin } from '../../hooks/usePlugins';
-import type { PluginThemeData } from '../../contexts/PluginContext';
 import type { BranchInfo, PullRequestInfo } from '../../lib/branches';
 import type { ChangedFile } from '../../lib/git';
-
-/** Re-exported from lib/plugins so non-UI code can share the list (issue #386). */
-export { HOSTING_PLUGIN_IDS } from '../../lib/plugins';
-import { HOSTING_PLUGIN_IDS, NATIVE_HOSTING_IDS } from '../../lib/plugins';
-
-/** The subset of hosting plugins whose controls render inside the Push workflow. */
-export { NATIVE_HOSTING_IDS } from '../../lib/plugins';
 
 export interface WorkspaceHeaderProps {
   // Project
@@ -73,7 +54,7 @@ export interface WorkspaceHeaderProps {
   compactWorkspaceToolbarEnabled: boolean;
 
   // Workspace tools that remain directly accessible from the topbar.
-  // Env editor, backups, plugin manager, learn mode, and IDE launch moved
+  // Env editor, backups, learn mode, and IDE launch moved
   // to the Cmd+K palette.
   onOpenAssetsPanel: () => void;
   assetsPanelVisible: boolean;
@@ -87,12 +68,6 @@ export interface WorkspaceHeaderProps {
   variablesPanelVisible: boolean;
   variablesPanelAvailable: boolean;
   onToggleVariablesPanel: () => void;
-
-  // Extra dropdown node rendered after Assets in the left cluster. Currently
-  // used for the Plugins dropdown. Provided as a
-  // pre-composed node because it needs plugin slot data that lives in
-  // WorkspaceView. Omit to hide.
-  headerExtras?: ReactNode;
 
   /**
    * Who else is in this repo. Pre-composed in WorkspaceView because it needs
@@ -142,29 +117,6 @@ export interface WorkspaceHeaderProps {
   onForcePublishOpenHandled: () => void;
   forceBranchesOpen: boolean;
   onForceBranchesOpenHandled: () => void;
-
-  // Plugin slots
-  getSlotPlugins: (slot: string) => LoadedPlugin[];
-  pluginProject: {
-    name: string;
-    path: string;
-    currentBranch: string;
-    hasUncommittedChanges: boolean;
-    devServerUrl: string;
-  } | null;
-  pluginActions: {
-    showToast: (message: string, type?: 'success' | 'error' | 'info') => void;
-    refreshGitStatus: () => void;
-    refreshBranches: () => void;
-    focusTerminal: () => void;
-    openUrl: (url: string) => void;
-    openTerminal: (
-      command: string,
-      args: string[],
-      options?: { title?: string }
-    ) => Promise<number | null>;
-  };
-  pluginTheme: PluginThemeData;
 }
 
 export interface WorkspaceNavigationProps {
@@ -284,7 +236,7 @@ export function WorkspaceTitlebar({ children }: WorkspaceTitlebarProps) {
   );
 }
 
-/** Arranges project navigation, workspace actions, team presence, and plugin controls. */
+/** Arranges project navigation, workspace actions, team presence, and publishing. */
 export function WorkspaceHeader({
   projectPath,
   projectName,
@@ -306,7 +258,6 @@ export function WorkspaceHeader({
   variablesPanelVisible,
   variablesPanelAvailable,
   onToggleVariablesPanel,
-  headerExtras,
   teamPresence,
   layoutMenu,
   modes,
@@ -337,10 +288,6 @@ export function WorkspaceHeader({
   onForcePublishOpenHandled,
   forceBranchesOpen,
   onForceBranchesOpenHandled,
-  getSlotPlugins,
-  pluginProject,
-  pluginActions,
-  pluginTheme,
 }: WorkspaceHeaderProps) {
   const [openSourceMenu, setOpenSourceMenu] = useState<'branches' | 'push' | null>(null);
   const currentBranchIsDefault =
@@ -377,29 +324,13 @@ export function WorkspaceHeader({
     setExpandedProjectPathWidth(null);
   }, []);
 
-  // Split toolbar plugins: hosting plugins (vercel, etc.) go on the right side
-  const toolbarPlugins = useMemo(() => {
-    const all = getSlotPlugins('toolbar');
-    return {
-      regular: all.filter((p) => !HOSTING_PLUGIN_IDS.includes(p.info.manifest.id)),
-      hosting: all.filter((p) => HOSTING_PLUGIN_IDS.includes(p.info.manifest.id)),
-    };
-  }, [getSlotPlugins]);
-  // Hosting is native now (components/hosting), so a hosting plugin no longer
-  // renders anywhere. `usePlugins` skips loading them outright — filtering only
-  // here would still run their activation and background timers.
-  const headerHostingPlugins = useMemo(
-    () => toolbarPlugins.hosting.filter((p) => !NATIVE_HOSTING_IDS.includes(p.info.manifest.id)),
-    [toolbarPlugins.hosting]
-  );
-
   useEffect(() => {
     if (!forceBranchesOpen) return;
     setOpenSourceMenu('branches');
     onForceBranchesOpenHandled();
   }, [forceBranchesOpen, onForceBranchesOpenHandled]);
 
-  // IDE launch, env editor, backups, plugin manager, and learn-mode toggle
+  // IDE launch, env editor, backups, and learn-mode toggle
   // now live in the Cmd+K palette. See src/commands/useAppCommands.tsx.
 
   const sourceControlActions = (
@@ -526,7 +457,6 @@ export function WorkspaceHeader({
         leftIcon={<ImageIcon size={16} />}
       />
       {teamPresence}
-      {headerExtras}
     </div>
   );
   const projectTitle = (
@@ -561,25 +491,6 @@ export function WorkspaceHeader({
       </div>
     </div>
   );
-  const publishingActions = (
-    <>
-      <PluginSlot
-        name="publish"
-        plugins={getSlotPlugins('publish')}
-        project={pluginProject}
-        actions={pluginActions}
-        theme={pluginTheme}
-      />
-      <PluginSlot
-        name="toolbar"
-        plugins={headerHostingPlugins}
-        project={pluginProject}
-        actions={pluginActions}
-        theme={pluginTheme}
-      />
-      {sourceControlActions}
-    </>
-  );
 
   if (!compactWorkspaceToolbarEnabled) {
     return {
@@ -601,7 +512,7 @@ export function WorkspaceHeader({
         <header className="workspace-header">
           <div className="workspace-header-left">{workspaceToolButtons}</div>
           <div className="workspace-header-center">{modes}</div>
-          <div className="workspace-header-right">{publishingActions}</div>
+          <div className="workspace-header-right">{sourceControlActions}</div>
         </header>
       ),
     };
@@ -634,7 +545,7 @@ export function WorkspaceHeader({
           <div className="workspace-titlebar-modes">{modes}</div>
         </div>
         <div className="workspace-titlebar-actions">
-          {publishingActions}
+          {sourceControlActions}
           {layoutMenu}
         </div>
       </WorkspaceTitlebar>

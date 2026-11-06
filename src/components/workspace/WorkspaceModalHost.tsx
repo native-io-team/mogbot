@@ -31,13 +31,7 @@ export interface WorkspaceModalHostProps {
     | 'onCloseNotificationSettings'
     | 'agentDisplayName'
   >;
-  extensions: ModalGroup<'agentId' | 'activeAgent' | 'onPluginsChanged' | 'loadedPlugins'>;
-  pluginSuggestion: ModalGroup<
-    | 'pluginSuggestion'
-    | 'pluginSuggestionInstalling'
-    | 'onDismissPluginSuggestion'
-    | 'onInstallSuggestedPlugin'
-  >;
+  extensions: ModalGroup<'agentId' | 'activeAgent'>;
   autoAccept: ModalGroup<
     'showAutoAcceptWarning' | 'onCloseAutoAcceptWarning' | 'onAcceptAutoAcceptWarning'
   >;
@@ -66,9 +60,6 @@ export interface WorkspaceModalHostProps {
   projectSettings: ModalGroup<'devServerPort' | 'onSavePort' | 'isWebProject'>;
   shopify: ModalGroup<'isShopifyTheme' | 'onShopifyStoreSaved'>;
   worktree: ModalGroup<'currentBranch' | 'worktrees' | 'onWorktreeCreated'>;
-  pluginTerminal: ModalGroup<
-    'pluginTerminal' | 'pluginTerminalExited' | 'onClosePluginTerminal' | 'onPluginTerminalExit'
-  >;
 }
 
 /** Mounts workspace-scoped modals while keeping their state out of the main view orchestrator. */
@@ -81,7 +72,6 @@ export function WorkspaceModalHost({
   screenshots,
   notification,
   extensions,
-  pluginSuggestion,
   autoAccept,
   review,
   git,
@@ -92,7 +82,6 @@ export function WorkspaceModalHost({
   projectSettings,
   shopify,
   worktree,
-  pluginTerminal,
 }: WorkspaceModalHostProps) {
   return (
     <WorkspaceModals
@@ -104,7 +93,6 @@ export function WorkspaceModalHost({
       {...screenshots}
       {...notification}
       {...extensions}
-      {...pluginSuggestion}
       {...autoAccept}
       {...review}
       {...git}
@@ -116,7 +104,6 @@ export function WorkspaceModalHost({
       {...projectSettings}
       {...shopify}
       {...worktree}
-      {...pluginTerminal}
     />
   );
 }

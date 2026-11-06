@@ -14,36 +14,6 @@ import { rejectsWith } from '../reject';
 
 const HOUR = 3_600_000;
 
-/** A plugin the project's registry lists, as `list_plugins` returns it (snake_case, `trust` camelCase). */
-function harnessPlugin(id: string, name: string, state: 'new' | 'changed' | 'trusted') {
-  return {
-    manifest: {
-      id,
-      name,
-      version: '1.2.0',
-      description: `${name} for this project`,
-      slots: ['toolbar'],
-      author: 'acme',
-      repository: '',
-      setup: [],
-      min_app_version: '',
-      icon: '',
-      required_commands: [],
-      api_version: 1,
-    },
-    enabled: true,
-    installed_at: 0,
-    source_url: `https://github.com/acme/${id}`,
-    is_dev: false,
-    local_path: '',
-    trust: {
-      state,
-      sha256: 'c'.repeat(64),
-      bundlePath: `${WORKSPACE_PROJECT}/.shipstudio/plugins/${id}/dist/index.js`,
-    },
-  };
-}
-
 const pr = (n: number, title: string, over: Record<string, unknown> = {}) => ({
   number: n,
   title,
@@ -162,23 +132,6 @@ export const featureScenarios: Scenario[] = [
         },
         installScriptsPending: false,
       },
-    },
-  },
-  {
-    id: 'plugin-trust-prompt',
-    requires: '.plugin-trust-prompt',
-    title: 'Workspace — a cloned project asks to load a plugin',
-    looksRightWhen:
-      'A small card under the Plugins control reads "This project wants to load a plugin that calls itself “Deploy Helper”", says plugins run code in the app, shows the bundle path and, labelled "Says it’s from", the repo the project claims, "1 of 2", and Don’t load / Allow buttons. Nothing is modal; the rest of the workspace is usable.',
-    project: WORKSPACE_PROJECT,
-    commands: {
-      ...workspaceCommands,
-      list_plugins: [
-        harnessPlugin('deploy-helper', 'Deploy Helper', 'new'),
-        harnessPlugin('seo-audit', 'SEO Audit', 'changed'),
-      ],
-      approve_plugin: null,
-      decline_plugin: null,
     },
   },
   {

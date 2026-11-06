@@ -20,7 +20,6 @@ export type ModalId =
   | 'help'
   | 'skills'
   | 'mcp'
-  | 'pluginManager'
   | 'devCommand'
   | 'projectSettings'
   | 'sidebarProjectSettings'

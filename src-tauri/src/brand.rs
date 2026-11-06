@@ -11,9 +11,9 @@
 //!   this app and Ship Studio can run side by side without touching each
 //!   other's state.
 //! - **Shared compat names**, deliberately *not* here: the `~/ShipStudio`
-//!   projects folder, the in-project `.shipstudio/` format, and the plugin
-//!   ABI (`__SHIPSTUDIO_*`, `@shipstudio/plugin-sdk`). Those let the two apps
-//!   open each other's projects and run each other's plugins.
+//!   projects folder and the in-project `.shipstudio/` format. Those let the
+//!   two apps open each other's projects. (Ship Studio's plugin folders inside
+//!   `.shipstudio/` are left alone and ignored here.)
 //! - **Shared state files**, also deliberately not here: `folders.json`,
 //!   `external-projects.json`, `attached-libraries.json` and
 //!   `workflows-state.json` in `~/ShipStudio/.shipstudio/`, which both apps

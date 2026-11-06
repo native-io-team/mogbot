@@ -20,9 +20,6 @@ import { reactErrorHandler } from '@sentry/react';
 import App from './App';
 import { QuickEntry } from './components/agents/QuickEntry';
 import { ErrorBoundary } from './components/ErrorBoundary';
-import { exposeReactGlobals, lookupBlobOwner, markPluginCrashed } from './lib/plugin-loader';
-import { uninstallPlugin } from './lib/plugins';
-import { exposePluginContextRef } from './contexts/PluginContext';
 import { reportError } from './lib/errorReporting';
 import { classifyRejection, describeRejectionReason } from './lib/globalErrorFilters';
 import { createScrollbarScanner, rootsFromMutations } from './lib/scrollbarScan';
@@ -32,65 +29,33 @@ import 'overlayscrollbars/overlayscrollbars.css';
 import { initTheme } from './lib/theme';
 import { installNavigationGuard } from './lib/navigationGuard';
 
-// Expose React globals and context ref for plugins before any rendering
-exposeReactGlobals(React, ReactDOM);
-exposePluginContextRef();
-
 // Follow the saved theme (index.html already painted the first frame in it).
 initTheme();
 
 // No link or form ever loads in the app window (see lib/navigationGuard).
 installNavigationGuard();
 
-// Global safety net: catch unhandled errors from plugins.
-// Plugins that bundle their own React can throw errors that escape React error
-// boundaries entirely. This catches them and auto-removes the crashing plugin.
+// Global safety net: an error that escaped every boundary is an app bug.
 window.addEventListener('error', (event) => {
   const err = event.error as { message?: string } | undefined;
   const msg: string = (typeof err?.message === 'string' ? err.message : event.message) ?? '';
-  const isPluginError =
-    event.filename?.startsWith('blob:') ||
-    msg.includes('Plugin context') ||
-    msg.includes('plugin-sdk');
-  if (!isPluginError) {
-    // A backend-classified Expected value thrown synchronously is the same
-    // non-bug it is on the rejection path (issue #916) — never file it.
-    if (isExpectedCommandError(event.error)) {
-      console.warn('Uncaught Expected backend error — not reported:', msg);
-      return;
-    }
-    // App bug (not third-party plugin code) — report to the admin agent.
-    reportError({
-      message: msg,
-      stack: event.error instanceof Error ? event.error.stack : undefined,
-      source: 'window-error',
-    });
+  // A backend-classified Expected value thrown synchronously is the same
+  // non-bug it is on the rejection path (issue #916) — never file it.
+  if (isExpectedCommandError(event.error)) {
+    console.warn('Uncaught Expected backend error — not reported:', msg);
     return;
   }
-
-  event.preventDefault();
-  console.error('Plugin error caught by global handler:', msg);
-
-  // Identify and auto-remove the crashing plugin
-  const blobUrl = event.filename?.startsWith('blob:') ? event.filename : null;
-  const owner = blobUrl ? lookupBlobOwner(blobUrl) : null;
-  if (owner) {
-    markPluginCrashed(owner.pluginId);
-    void uninstallPlugin(owner.projectPath, owner.pluginId).catch((e) =>
-      console.error(`Failed to auto-remove plugin "${owner.pluginId}":`, e)
-    );
-  }
+  reportError({
+    message: msg,
+    stack: event.error instanceof Error ? event.error.stack : undefined,
+    source: 'window-error',
+  });
 });
 window.addEventListener('unhandledrejection', (event) => {
   const reason: unknown = event.reason;
   const message = reason instanceof Error ? reason.message : describeRejectionReason(reason);
 
   switch (classifyRejection(reason)) {
-    case 'plugin':
-      event.preventDefault();
-      console.error('Plugin unhandled rejection caught by global handler:', reason);
-      return;
-
     case 'tauri-race':
       // Inert Tauri v2 runtime race — suppressed to keep the console clean.
       event.preventDefault();

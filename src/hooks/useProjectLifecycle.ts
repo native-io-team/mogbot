@@ -11,7 +11,7 @@
  * session registration (backend authority, `sessionRegistry` mirror) → kill +
  * reserve dev port → fetch branch info → start dev server via
  * `startServerForProject` (skipped when a hot session's server is reused) →
- * background GitHub status / screenshots / plugin suggestion.
+ * background GitHub status / screenshots.
  *
  * `handleBackToProjects` is a view switch, not a terminal teardown. Terminal
  * PTYs and the session-registry entry stay alive; background dev-server
@@ -144,8 +144,6 @@ export interface UseProjectLifecycleParams {
   // Branches
   fetchBranchInfo: (projectPath: string) => Promise<void>;
   clearBranchState: () => void;
-  // Plugin
-  checkPluginSuggestion: (projectPath: string) => Promise<void>;
 }
 
 export function useProjectLifecycle({
@@ -176,7 +174,6 @@ export function useProjectLifecycle({
   clearProjectStatuses,
   fetchBranchInfo,
   clearBranchState,
-  checkPluginSuggestion,
 }: UseProjectLifecycleParams) {
   // Auto-accept mode for the terminal agent
   const [autoAcceptMode, setAutoAcceptMode] = useState(false);
@@ -796,9 +793,6 @@ export function useProjectLifecycle({
 
     // Capture screenshots periodically
     startScreenshotInterval(project.path);
-
-    // Suggest Vercel plugin if project has .vercel config but plugin isn't installed
-    void checkPluginSuggestion(project.path);
 
     // Clear the guard after completion
     openingProjectPathRef.current = null;

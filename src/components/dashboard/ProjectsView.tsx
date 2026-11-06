@@ -12,17 +12,10 @@ import { ProjectList } from './ProjectList';
 import { CreateProject, type CreateProjectTab } from './CreateProject';
 import { ImportProject } from './ImportProject';
 import { ImportTypePicker } from './ImportTypePicker';
-import { PluginSlot } from '../plugins/PluginSlot';
 import { Button } from '../primitives/Button';
 import { OnboardingTerminal } from '../setup';
 import type { Project } from '../../lib/project';
 import type { AuthTerminalConfig } from '../../hooks/useIntegrationStatus';
-import type { LoadedPlugin } from '../../hooks/usePlugins';
-import type {
-  PluginProjectData,
-  PluginAppActions,
-  PluginThemeData,
-} from '../../contexts/PluginContext';
 
 interface ProjectsViewProps {
   onSelectProject: (project: Project) => void;
@@ -48,12 +41,6 @@ interface ProjectsViewProps {
   closeAuthTerminal: () => void;
   onAuthTerminalExit: (exitCode: number | null) => void;
 
-  pluginProject: PluginProjectData | null;
-  pluginActions: PluginAppActions;
-  pluginTheme: PluginThemeData;
-  getSlotPlugins: (slot: string) => LoadedPlugin[];
-
-  projectsLoading: boolean;
   onLoadingChange: (loading: boolean) => void;
   cleanupStatus?: string | null;
 
@@ -84,11 +71,6 @@ export const ProjectsView = memo(function ProjectsView({
   authTerminalConfig,
   closeAuthTerminal,
   onAuthTerminalExit,
-  pluginProject,
-  pluginActions,
-  pluginTheme,
-  getSlotPlugins,
-  projectsLoading,
   onLoadingChange,
   cleanupStatus,
   pinnedSet,
@@ -113,15 +95,6 @@ export const ProjectsView = memo(function ProjectsView({
             onTogglePin={onTogglePin}
             onSwitchAccount={onSwitchAccount}
           />
-          {!projectsLoading && (
-            <PluginSlot
-              name="sidebar"
-              plugins={getSlotPlugins('sidebar')}
-              project={pluginProject}
-              actions={pluginActions}
-              theme={pluginTheme}
-            />
-          )}
         </div>
         {showCreateModal && (
           <CreateProject

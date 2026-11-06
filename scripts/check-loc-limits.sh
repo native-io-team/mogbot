@@ -81,7 +81,6 @@ echo "Components (.tsx limit 1200):"
 # here. The ceiling has not moved since. Keep it that way.
 check_file src/components/workspace/WorkspaceView.tsx 1520
 check_file src/components/dashboard/ProjectList.tsx 900
-check_file src/components/plugins/PluginManager.tsx 700
 check_file src/components/dashboard/ImportProject.tsx 500
 # Raised from 1295 to 1330 in the v0.19 redesign merge. AppContents grew with
 # the workspace/account view branches; the compact-toolbar setting and the quit

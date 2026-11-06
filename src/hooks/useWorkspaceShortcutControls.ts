@@ -15,8 +15,6 @@ interface Params {
 }
 
 const PANEL_BUTTON_SELECTOR = '.workspace-panel-group button[data-workspace-panel]';
-const PANEL_SHORTCUT_ACTION_ATTR = 'data-workspace-panel-shortcut-action';
-const PANEL_SHORTCUT_TRIGGERED_ATTR = 'data-workspace-panel-shortcut-triggered';
 
 function isDigitKey(key: string): boolean {
   return key.length === 1 && key >= '1' && key <= '9';
@@ -31,13 +29,6 @@ function isEditableTarget(target: EventTarget | null): boolean {
 
 function isInsideDialog(target: EventTarget | null): boolean {
   return target instanceof Element && Boolean(target.closest('[role="dialog"]'));
-}
-
-function invokePanelButton(button: HTMLButtonElement): void {
-  const shortcutAction = button.getAttribute(PANEL_SHORTCUT_ACTION_ATTR);
-  if (shortcutAction) button.setAttribute(PANEL_SHORTCUT_TRIGGERED_ATTR, shortcutAction);
-  button.click();
-  if (shortcutAction) button.removeAttribute(PANEL_SHORTCUT_TRIGGERED_ATTR);
 }
 
 /**
@@ -106,7 +97,7 @@ export function useWorkspaceShortcutControls({
         if (!button) return;
         event.preventDefault();
         event.stopPropagation();
-        invokePanelButton(button);
+        button.click();
         return;
       }
 

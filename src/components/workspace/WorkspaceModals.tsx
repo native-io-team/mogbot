@@ -18,9 +18,8 @@ import { AssetsPanel } from './AssetsPanel';
 import { EducationOverlay } from '../EducationOverlay';
 import { ScreenshotToast, ScreenshotPreviewModal } from '../preview/ScreenshotPreview';
 import { NotificationSettingsModal } from './NotificationSettingsModal';
-import { SkillsModal } from '../plugins/SkillsModal';
-import { McpModal } from '../plugins/McpModal';
-import { PluginManager } from '../plugins/PluginManager';
+import { SkillsModal } from '../extensions/SkillsModal';
+import { McpModal } from '../extensions/McpModal';
 import { DevCommandModal } from '../terminal/DevCommandModal';
 import { ProjectSettingsModal } from './ProjectSettingsModal';
 import { ShopifyStoreModal } from '../shopify/ShopifyStoreModal';
@@ -29,7 +28,7 @@ import { SubmitReviewModal } from '../branches/SubmitReviewModal';
 import { WorktreeCreateModal } from '../branches/WorktreeCreateModal';
 import { ConflictResolutionModal } from '../branches/ConflictResolutionModal';
 import { OnboardingTerminal } from '../setup';
-import { DownloadIcon, VercelIcon, ZapIcon } from '@/components/icons';
+import { ZapIcon } from '@/components/icons';
 import { ToastList } from '../primitives/ToastList';
 import type { Toast } from '../../hooks/useToasts';
 import type { NotificationSettings } from '../../lib/sounds';
@@ -37,8 +36,6 @@ import type { AgentConfig } from '../../lib/agent';
 import type { BranchInfo } from '../../lib/branches';
 import type { WorktreeInfo } from '../../lib/worktrees';
 import type { AuthTerminalConfig, IntegrationState } from '../../hooks/useIntegrationStatus';
-import type { LoadedPlugin } from '../../hooks/usePlugins';
-import { Spinner } from '../primitives/Spinner';
 import { Button } from '../primitives/Button';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { BRAND } from '../../lib/brand';
@@ -81,16 +78,6 @@ export interface WorkspaceModalsProps {
   activeAgent: AgentConfig;
 
   // MCP modal — read state via useModal('mcp')
-
-  // Plugin manager — read state via useModal('pluginManager')
-  onPluginsChanged: () => void;
-  loadedPlugins?: LoadedPlugin[];
-
-  // Plugin suggestion
-  pluginSuggestion: { pluginName: string; projectPath: string; repoUrl: string } | null;
-  pluginSuggestionInstalling: boolean;
-  onDismissPluginSuggestion: () => void;
-  onInstallSuggestedPlugin: () => void;
 
   // Auto-accept warning
   showAutoAcceptWarning: boolean;
@@ -157,12 +144,6 @@ export interface WorkspaceModalsProps {
   currentBranch: string;
   worktrees: WorktreeInfo[];
   onWorktreeCreated: (path: string) => void;
-
-  // Plugin terminal
-  pluginTerminal: { command: string; args: string[]; title: string } | null;
-  pluginTerminalExited: boolean;
-  onClosePluginTerminal: () => void;
-  onPluginTerminalExit: (exitCode: number | null) => void;
 }
 
 export function WorkspaceModals({
@@ -186,12 +167,6 @@ export function WorkspaceModals({
   agentDisplayName,
   agentId,
   activeAgent,
-  onPluginsChanged,
-  loadedPlugins,
-  pluginSuggestion,
-  pluginSuggestionInstalling,
-  onDismissPluginSuggestion,
-  onInstallSuggestedPlugin,
   showAutoAcceptWarning,
   onCloseAutoAcceptWarning,
   onAcceptAutoAcceptWarning,
@@ -228,10 +203,6 @@ export function WorkspaceModals({
   currentBranch,
   worktrees,
   onWorktreeCreated,
-  pluginTerminal,
-  pluginTerminalExited,
-  onClosePluginTerminal,
-  onPluginTerminalExit,
 }: WorkspaceModalsProps) {
   return (
     <>
@@ -310,49 +281,6 @@ export function WorkspaceModals({
         agentDisplayName={agentDisplayName}
         agentBinaryName={activeAgent.binaryName}
       />
-
-      {/* Plugin Manager */}
-      <PluginManager
-        onPluginsChanged={onPluginsChanged}
-        projectPath={currentProjectPath ?? null}
-        loadedPlugins={loadedPlugins}
-      />
-
-      {/* Plugin Suggestion Popup */}
-      {pluginSuggestion && (
-        <ModalFrame
-          isOpen
-          onClose={onDismissPluginSuggestion}
-          ariaLabel="Plugin Available"
-          className="plugin-suggestion-modal"
-          showCloseButton={false}
-        >
-          <div className="plugin-suggestion-icon">
-            <VercelIcon size={26} />
-          </div>
-          <h3>Plugin Available</h3>
-          <p className="plugin-suggestion-desc">
-            This project uses <strong>{pluginSuggestion.pluginName}</strong>. Install the plugin to
-            see deployment information.
-          </p>
-          <div className="plugin-suggestion-actions">
-            <Button variant="secondary" width="fill" onClick={onDismissPluginSuggestion}>
-              Not Now
-            </Button>
-            <Button
-              variant="primary"
-              width="fill"
-              disabled={pluginSuggestionInstalling}
-              onClick={onInstallSuggestedPlugin}
-              leftIcon={
-                pluginSuggestionInstalling ? <Spinner size="sm" /> : <DownloadIcon size={14} />
-              }
-            >
-              {pluginSuggestionInstalling ? 'Installing…' : 'Install Plugin'}
-            </Button>
-          </div>
-        </ModalFrame>
-      )}
 
       {/* Auto-Accept Warning Modal */}
       {showAutoAcceptWarning && (
@@ -498,26 +426,6 @@ export function WorkspaceModals({
         isWebProject={isWebProject}
         projectPath={projectPath}
       />
-
-      {/* Plugin terminal modal — reuses OnboardingTerminal for interactive CLI commands */}
-      {pluginTerminal && (
-        <div className="onboarding-terminal-overlay">
-          <div className="onboarding-terminal-modal">
-            <div className="onboarding-terminal-header">
-              <span className="onboarding-terminal-title">{pluginTerminal.title}</span>
-              <Button variant="ghost" size="compact" onClick={onClosePluginTerminal}>
-                {pluginTerminalExited ? 'Close' : 'Cancel'}
-              </Button>
-            </div>
-            <OnboardingTerminal
-              command={pluginTerminal.command}
-              args={pluginTerminal.args}
-              cwd={currentProjectPath}
-              onExit={onPluginTerminalExit}
-            />
-          </div>
-        </div>
-      )}
     </>
   );
 }

@@ -32,7 +32,7 @@ interface HelpShortcut {
   keys: string[];
 }
 
-const DEFAULT_WORKSPACE_PANEL_LABELS = ['Agent', 'Elements', 'Variables', 'Assets', 'Plugins'];
+const DEFAULT_WORKSPACE_PANEL_LABELS = ['Agent', 'Elements', 'Variables', 'Assets'];
 
 function getWorkspacePanelLabels(): string[] {
   if (typeof document === 'undefined') return DEFAULT_WORKSPACE_PANEL_LABELS;

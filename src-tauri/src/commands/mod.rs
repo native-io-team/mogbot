@@ -39,7 +39,6 @@ pub mod mcp;
 pub mod migration;
 pub mod mobile;
 pub mod monorepo;
-pub mod plugins;
 pub mod projects;
 pub mod proxy;
 pub mod pty;
@@ -83,7 +82,6 @@ pub use ide::*;
 pub use issue_reports::*;
 pub use mcp::*;
 pub use monorepo::*;
-pub use plugins::*;
 pub use projects::*;
 pub use proxy::*;
 pub use pty::*;
@@ -133,7 +131,7 @@ mod log_hygiene_tests {
         "content",
         "prompt",
         "draft",
-        // A command line can carry a token (`exec_plugin_shell`'s args).
+        // A command line can carry a token.
         "args",
         "env",
     ];

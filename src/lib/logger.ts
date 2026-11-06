@@ -126,13 +126,9 @@ class Logger {
    * Forward an error-level log to the admin agent (docs/error-reporting.md).
    * Every `logger.error`/`logger.logError` call marks something not working
    * as intended, so each one becomes a report — deduped per session and
-   * throttled cross-session on the Rust side. Plugin errors (blob: URLs) are
-   * third-party code and excluded.
+   * throttled cross-session on the Rust side.
    */
   private forwardToAdminAgent(entry: LogEntry, reportSource?: string) {
-    const contextText = entry.context ? JSON.stringify(entry.context) : '';
-    if (entry.message.includes('blob:') || contextText.includes('blob:')) return;
-
     const { stack, ...rest } = entry.context ?? {};
     const parts: string[] = [];
     if (typeof stack === 'string') parts.push(stack);

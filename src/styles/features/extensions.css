@@ -1,5 +1,5 @@
 /* Shared extension-management contracts. Domain content remains in the
-   MCP, Skills, and Plugins stylesheets. */
+   MCP and Skills stylesheets. */
 
 .extension-manager-layout {
   display: flex;

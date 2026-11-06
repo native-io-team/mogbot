@@ -1,8 +1,8 @@
 /**
  * ToolbarDropdown - dropdown menu for terminal toolbar actions.
  *
- * Consolidates notification settings, skills, auto-accept, help,
- * and plugin actions into a single dropdown menu.
+ * Consolidates notification settings, skills, MCP, auto-accept and help
+ * into a single dropdown menu.
  *
  * Built on the Dropdown primitive in `portal` mode: the trigger lives in
  * .terminal-pane (overflow: hidden), so the menu renders fixed in a body
@@ -26,13 +26,6 @@ import {
 } from '@/components/icons';
 import { Dropdown, DropdownItem, DropdownDivider } from '../primitives/Dropdown';
 import { MenuButton } from '../primitives/MenuButton';
-import { PluginSlot } from '../plugins/PluginSlot';
-import type { LoadedPlugin } from '../../hooks/usePlugins';
-import type {
-  PluginProjectData,
-  PluginAppActions,
-  PluginThemeData,
-} from '../../contexts/PluginContext';
 import type { AgentConfig } from '../../lib/agent';
 
 interface ToolbarDropdownProps {
@@ -43,10 +36,6 @@ interface ToolbarDropdownProps {
   onMcp: () => void;
   onAutoAcceptToggle: () => void;
   onHelp: () => void;
-  terminalPlugins: LoadedPlugin[];
-  pluginProject: PluginProjectData | null;
-  pluginActions: PluginAppActions;
-  pluginTheme: PluginThemeData;
 }
 
 export function ToolbarDropdown({
@@ -57,10 +46,6 @@ export function ToolbarDropdown({
   onMcp,
   onAutoAcceptToggle,
   onHelp,
-  terminalPlugins,
-  pluginProject,
-  pluginActions,
-  pluginTheme,
 }: ToolbarDropdownProps) {
   return (
     <Dropdown
@@ -108,18 +93,6 @@ export function ToolbarDropdown({
             {autoAcceptMode ? 'ON' : 'OFF'}
           </span>
         </DropdownItem>
-      )}
-      {terminalPlugins.length > 0 && (
-        <>
-          <DropdownDivider />
-          <PluginSlot
-            name="terminal"
-            plugins={terminalPlugins}
-            project={pluginProject}
-            actions={pluginActions}
-            theme={pluginTheme}
-          />
-        </>
       )}
       <DropdownDivider />
       <DropdownItem icon={<HelpIcon size={14} />} onSelect={onHelp}>

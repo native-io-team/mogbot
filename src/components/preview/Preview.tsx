@@ -208,8 +208,6 @@ interface PreviewProps {
   projectType?: ProjectType;
   /** Callback to send prompt to Claude terminal */
   onSendToClaude?: (prompt: string) => void;
-  /** Plugin components rendered in the preview toolbar */
-  previewPlugins?: React.ReactNode;
   /** Whether the dev server logs panel is open */
   showLogs?: boolean;
   /** Callback to toggle the dev server logs panel */
@@ -336,7 +334,6 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
     serverInstanceId = null,
     projectType,
     onSendToClaude,
-    previewPlugins,
     showLogs = false,
     onToggleLogs,
     devServerOutput = '',
@@ -1518,8 +1515,6 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
               </ToggleButton>
             )}
 
-            {previewPlugins && <div className="preview-toolbar-plugins">{previewPlugins}</div>}
-
             {conn.serverReady && conn.externalUrl && (
               <BrowserDropdown
                 url={conn.externalUrl}
@@ -1863,7 +1858,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
               // with no scrollbar, so anything that scrolls it strands the
               // frame where the user cannot bring it back. Nothing scrolls it
               // on purpose; the overlays absolutely positioned over the frame
-              // (comment composer, element toolbar, plugin panels) do it by
+              // (comment composer, element toolbar) do it by
               // accident, because focus() reveals what it focuses. Snap back.
               onScroll={(e) => {
                 const el = e.currentTarget;

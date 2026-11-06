@@ -16,7 +16,6 @@
  * - `useScreenshotManagement` - Screenshot capture, crop, and thumbnail state
  * - `useDevServer` - Dev server lifecycle, output buffering, project type
  * - `useWorkspaceLayout` - Layout tabs, log panels, compact mode, pin state
- * - `usePluginState` - Plugin terminal modal and suggestion popup
  * - `useWorkspaceModals` - Workspace modal visibility state (env editor, backups, assets, etc.)
  *
  * @module App
@@ -25,13 +24,11 @@
 import { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useTerminalManagement } from './hooks/useTerminalManagement';
-import { usePlugins } from './hooks/usePlugins';
 import { useIntegrationStatus } from './hooks/useIntegrationStatus';
 import { useScreenshotManagement } from './hooks/useScreenshotManagement';
 import { useDevServer } from './hooks/useDevServer';
 import { useWorkspaceLayout } from './hooks/useWorkspaceLayout';
 import { useIsCompact } from './hooks/useIsCompact';
-import { usePluginState } from './hooks/usePluginState';
 import { useWorkspaceModals } from './hooks/useWorkspaceModals';
 import { useBranchManagement } from './hooks/useBranchManagement';
 import { useNotifications } from './hooks/useNotifications';
@@ -367,20 +364,6 @@ function AppContents({ initialProjectPath }: AppProps) {
       integrations.projectGithub?.status === 'other-remote',
   });
 
-  // Plugin state
-  const {
-    pluginTerminal,
-    pluginTerminalExited,
-    openPluginTerminal,
-    closePluginTerminal,
-    handlePluginTerminalExit,
-    pluginSuggestion,
-    setPluginSuggestion,
-    pluginSuggestionInstalling,
-    checkPluginSuggestion,
-    installSuggestedPlugin,
-  } = usePluginState();
-
   // Education-mode toggle state (the rest of the modal state lives in ModalContext)
   const { isEducationMode, setIsEducationMode, closeEducation } = useWorkspaceModals({
     focusActiveTerminal,
@@ -426,17 +409,6 @@ function AppContents({ initialProjectPath }: AppProps) {
     previewRef,
     healthPanelRef,
     showToast,
-  });
-
-  // Plugin system — lifecycle-hook failures (onActivate/onDeactivate) toast via onError
-  const {
-    plugins: loadedPlugins,
-    failures: pluginFailures,
-    pendingTrust: pluginsPendingTrust,
-    getSlotPlugins,
-    reloadPlugins,
-  } = usePlugins(currentProject?.path ?? null, {
-    onError: (name, msg) => showToast(`Plugin "${name}": ${msg}`, 'error'),
   });
 
   // Project lifecycle (selection, creation, import, publish, compact mode, etc.)
@@ -506,7 +478,6 @@ function AppContents({ initialProjectPath }: AppProps) {
     clearProjectStatuses,
     fetchBranchInfo,
     clearBranchState,
-    checkPluginSuggestion,
   });
 
   // A project's tools (Node, Git, …) are asked for when one first starts.
@@ -671,86 +642,23 @@ function AppContents({ initialProjectPath }: AppProps) {
   });
 
   // App setup, onboarding, HMR recovery, auto-open, keyboard shortcuts
-  const { projectsLoading, setProjectsLoading, bootProgress, handleOnboardingComplete } =
-    useAppSetup({
-      view,
-      setView,
-      initialProjectPath,
-      setCurrentProject,
-      setDevServerPort,
-      setWorkspaceTab,
-      setIsPreviewHidden,
-      handleSelectProject,
-      refreshAllCliStatuses,
-      setProjectGitHubStatus,
-      fetchBranchInfo,
-      openHelpModal: helpModal.open,
-    });
+  const { setProjectsLoading, bootProgress, handleOnboardingComplete } = useAppSetup({
+    view,
+    setView,
+    initialProjectPath,
+    setCurrentProject,
+    setDevServerPort,
+    setWorkspaceTab,
+    setIsPreviewHidden,
+    handleSelectProject,
+    refreshAllCliStatuses,
+    setProjectGitHubStatus,
+    fetchBranchInfo,
+    openHelpModal: helpModal.open,
+  });
 
-  // Plugin data for PluginSlot components (defined before early returns so all views can use them)
   const hasCurrentProject = Boolean(currentProject);
-  const pluginProjectName = currentProject?.name ?? '';
-  const pluginProjectPath = currentProject?.path ?? '';
-  const pluginProject = useMemo(
-    () =>
-      hasCurrentProject
-        ? {
-            name: pluginProjectName,
-            path: pluginProjectPath,
-            currentBranch: currentBranch || 'main',
-            hasUncommittedChanges,
-            devServerUrl: `http://localhost:${String(devServerPort)}`,
-            gitRemoteUrl: integrations.projectGithub?.github_url ?? undefined,
-          }
-        : null,
-    [
-      hasCurrentProject,
-      pluginProjectName,
-      pluginProjectPath,
-      currentBranch,
-      hasUncommittedChanges,
-      devServerPort,
-      integrations.projectGithub?.github_url,
-    ]
-  );
-
-  const pluginActions = useMemo(
-    () => ({
-      showToast,
-      refreshGitStatus: () => {
-        if (currentProject) void fetchBranchInfo(currentProject.path);
-      },
-      refreshBranches: () => {
-        if (currentProject) void fetchBranchInfo(currentProject.path);
-      },
-      focusTerminal: focusActiveTerminal,
-      openUrl: (url: string) => {
-        void import('@tauri-apps/plugin-opener').then(({ openUrl }) => openUrl(url));
-      },
-      openTerminal: openPluginTerminal,
-    }),
-    [showToast, currentProject, fetchBranchInfo, focusActiveTerminal, openPluginTerminal]
-  );
-
-  const pluginTheme = useMemo(
-    () => ({
-      bgPrimary: 'var(--surface-app)',
-      bgSecondary: 'var(--surface-panel)',
-      bgTertiary: 'var(--surface-control)',
-      textPrimary: 'var(--text-primary)',
-      textSecondary: 'var(--text-secondary)',
-      textMuted: 'var(--text-muted)',
-      border: 'var(--border-default)',
-      accent: 'var(--accent-active)',
-      accentHover: 'var(--accent-active-hover)',
-      action: 'var(--accent-active)',
-      actionHover: 'var(--accent-active-hover)',
-      actionText: 'var(--text-on-accent)',
-      error: 'var(--accent-error)',
-      success: 'var(--accent-success)',
-    }),
-    []
-  );
+  const currentProjectPath = currentProject?.path ?? '';
 
   // Memoized prop groups for WorkspaceView to prevent cascade re-renders
   // (Must be before early returns to maintain consistent hook call order)
@@ -819,7 +727,7 @@ function AppContents({ initialProjectPath }: AppProps) {
 
   const devServerProps = useMemo(
     () => ({
-      hasDevServer: hasCurrentProject ? isServerRunning(pluginProjectPath) : false,
+      hasDevServer: hasCurrentProject ? isServerRunning(currentProjectPath) : false,
       knownDevServerPort,
       healthPanelRef,
       devServerPort,
@@ -827,8 +735,10 @@ function AppContents({ initialProjectPath }: AppProps) {
       projectTypeResolved,
       isRestartingDevServer,
       devCommands,
+      // eslint-disable-next-line react-hooks/refs -- read again whenever its *Version counter bumps
       devServerOutput: devServerOutputRef.current,
       devServerOutputVersion,
+      // eslint-disable-next-line react-hooks/refs -- read again whenever its *Version counter bumps
       healthOutput: healthOutputRef.current,
       healthOutputVersion,
       handleHealthOutput,
@@ -841,7 +751,7 @@ function AppContents({ initialProjectPath }: AppProps) {
     }),
     [
       hasCurrentProject,
-      pluginProjectPath,
+      currentProjectPath,
       isServerRunning,
       knownDevServerPort,
       devServerPort,
@@ -970,29 +880,6 @@ function AppContents({ initialProjectPath }: AppProps) {
     ]
   );
 
-  const pluginStateProps = useMemo(
-    () => ({
-      pluginTerminal,
-      pluginTerminalExited,
-      closePluginTerminal,
-      handlePluginTerminalExit,
-      pluginSuggestion,
-      setPluginSuggestion,
-      pluginSuggestionInstalling,
-      installSuggestedPlugin,
-    }),
-    [
-      pluginTerminal,
-      pluginTerminalExited,
-      closePluginTerminal,
-      handlePluginTerminalExit,
-      pluginSuggestion,
-      setPluginSuggestion,
-      pluginSuggestionInstalling,
-      installSuggestedPlugin,
-    ]
-  );
-
   const modalsProps = useMemo(
     () => ({
       isEducationMode,
@@ -1049,17 +936,6 @@ function AppContents({ initialProjectPath }: AppProps) {
       handleResolveConflicts,
       handleConflictsResolved,
     ]
-  );
-
-  const pluginsProps = useMemo(
-    () => ({
-      loadedPlugins,
-      pluginFailures,
-      pluginsPendingTrust,
-      getSlotPlugins,
-      reloadPlugins,
-    }),
-    [loadedPlugins, pluginFailures, pluginsPendingTrust, getSlotPlugins, reloadPlugins]
   );
 
   // Shared configuration for the home-level
@@ -1239,11 +1115,6 @@ function AppContents({ initialProjectPath }: AppProps) {
     authTerminalConfig,
     closeAuthTerminal,
     onAuthTerminalExit: handleAuthTerminalExitForProjects,
-    pluginProject,
-    pluginActions,
-    pluginTheme,
-    getSlotPlugins,
-    projectsLoading,
     onLoadingChange: setProjectsLoading,
     cleanupStatus,
     pinnedSet: pinnedProjects.pinnedSet,
@@ -1256,20 +1127,16 @@ function AppContents({ initialProjectPath }: AppProps) {
     currentProject,
     previewRef,
     terminal: terminalProps,
+    // eslint-disable-next-line react-hooks/refs -- the output refs above, read on their version counters
     devServer: devServerProps,
     notifications: notificationsProps,
     integrationStatus: integrationStatusProps,
     screenshots: screenshotsProps,
     layout: layoutProps,
-    pluginState: pluginStateProps,
     modals: modalsProps,
     toasts: toastsProps,
     branchMgmt: branchMgmtProps,
-    plugins: pluginsProps,
     lifecycle: lifecycleProps,
-    pluginProject,
-    pluginActions,
-    pluginTheme,
     projectRows: pinnedProjects.rows,
     onSelectProject: handleRailClick,
     onCloseProject: handleCloseProject,

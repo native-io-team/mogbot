@@ -177,7 +177,7 @@
 }
 
 .agent-login__code-value {
-  font-family: var(--font-mono);
+  font-family: var(--font-code);
   font-size: var(--font-size-body-lg);
   font-weight: var(--font-weight-label);
   color: var(--text-primary);

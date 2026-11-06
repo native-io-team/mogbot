@@ -215,13 +215,10 @@ Branch names are never sent. Every event here is shape-only.
 | `merge_completed` | `total_conflicts` |
 | `merge_aborted` | — |
 
-### Plugins / Skills / MCP
+### Skills / MCP
 
 | Event | Properties |
 |---|---|
-| `plugin_installed` / `plugin_uninstalled` / `plugin_updated` | `plugin_id` |
-| `plugin_toggled` | `plugin_id`, `enabled` |
-| `plugin_dev_linked` / `plugin_dev_unlinked` | `plugin_id` |
 | `skill_installed` | `package`, `scope` |
 | `skill_removed` | `plugin`, `scope` |
 | `mcp_server_added` / `mcp_server_removed` | `scope` |
@@ -294,7 +291,7 @@ would drop exactly the cases the feature exists for.
 
 | Event | Properties |
 |---|---|
-| `error_occurred` | `action`, `error_message` (capped 500), `error_type` — fired by `trackError()` from catch blocks. The `action` is the operation that failed (`git_push`, `plugin_install`, `pr_create`, …) |
+| `error_occurred` | `action`, `error_message` (capped 500), `error_type` — fired by `trackError()` from catch blocks. The `action` is the operation that failed (`git_push`, `pr_create`, …) |
 
 `error_occurred` is analytics, not bug reporting. The admin-agent pipeline that
 files GitHub issues (including from error toasts) is documented in
@@ -312,7 +309,7 @@ files GitHub issues (including from error toasts) is documented in
    pr_merged`. Conversion at each step.
 4. **Feature adoption** — % of users with at least one of: `palette_command_run`,
    `inspect_panel_opened`, `visual_edit_started`, `logs_sent_to_agent`,
-   `screenshot_captured`, `plugin_installed`, `skill_installed`,
+   `screenshot_captured`, `skill_installed`,
    `mcp_server_added`, `workflow_created`, `asset_managed`.
 5. **Workflows** — `workflow_created` by `source`; `workflow_run_finished` by
    `source` and `status`; `workflow_finding_action` `fix` by `outcome` vs

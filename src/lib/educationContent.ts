@@ -246,13 +246,6 @@ export const educationContent: Record<string, EducationItem> = {
       'Access additional settings like notification sounds, skill management, and helpful commands.',
   },
 
-  // Plugin manager
-  'plugin-manager': {
-    title: 'Plugins',
-    description:
-      'Install and manage plugins that add new features to the app. Plugins can add toolbar buttons, sidebar panels, and more.',
-  },
-
   // Preview visibility
   'show-preview': {
     title: 'Show Preview',
