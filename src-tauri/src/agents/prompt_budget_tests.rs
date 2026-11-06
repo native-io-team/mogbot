@@ -58,6 +58,23 @@ fn the_app_owned_system_prompt_stays_within_its_budget() {
         // Every agent is told how its context is kept healthy.
         assert!(prompt.contains("tidied between turns"), "{name}");
         assert!(prompt.contains("in a file in your home"), "{name}");
+        // Agency: look before asking, no "no tool", sends not pre-declined,
+        // and the plumbing kept out of the user's chat.
+        assert!(prompt.contains("search_my_chat"), "{name}");
+        assert!(
+            prompt.contains("\"I have no X tool\" is never an answer"),
+            "{name}"
+        );
+        assert!(prompt.contains("never decline ahead"), "{name}");
+        assert!(prompt.contains("answer yes or no with"), "{name}");
+        assert!(
+            prompt.contains("## Plumbing stays out of the chat"),
+            "{name}"
+        );
+        assert!(
+            prompt.contains("(`message_agent`, `share_result`)"),
+            "{name}"
+        );
         // Nothing in it changes from turn to turn (the cache would miss).
         assert!(!prompt.contains(&chrono::Local::now().format("%Y-%m-%d").to_string()));
     }

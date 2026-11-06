@@ -267,8 +267,36 @@ From the stream:
   resets 3:00 PM" quietly with no dot at all (amber means needs you, only), and
   What's in flight lists it under Needs you with its remedy.
 
+**A conversation survives its engine's copy.** After every turn the app keeps
+its own 0600 copy of the agent's current transcript in `<home>/.session/`
+(`agents/transcript.rs`; only the current conversation's), and before a resume
+it puts the most complete copy it has (the longest, then the newest: transcripts
+only grow) where the engine will look: the account folder the turn runs with
+and, for Claude Code, the folder of the directory it runs in
+(`projects/<cwd with every non-alphanumeric as ->`), so another account, a
+bound agent's new copy of its project, or a deleted `~/.claude/projects` (seen
+on 2026-11-06: 62 "is gone" restarts in a day, none of those transcripts left
+on disk, no account switch and no change of folder) no longer start it blank.
+A pick-up after a restart counts the app's copy as on disk.
+
 A vanished session (`--resume` → "No conversation found") is replaced once with
-a fresh one. **Stop** ends the turn and drops the queue; it leaves a quiet
+a fresh one, only when the engine never started the conversation (its errors
+can mention an MCP server's "session not found"). The new one gets a recap
+(`with_recap`): the newest ~30 exchanges or ~6k tokens of the visible chat
+since the last fresh start, each message up to 2,000 characters, the agent's
+own reports, errors shown to the user and its approval cards included, then
+what is still open (cards waiting, questions unanswered), and it is told never
+to ask the user to repeat any of it; `search_my_chat` reaches further back.
+
+**Do it, don't ask.** Every agent's prompt (`prompts::AGENCY`) has it look
+before asking (`search_my_chat` over its own chat, or a teammate's for the
+Chief, admins and at Go hard; memory; the team; logs; its tools), never treat
+"I have no X tool" as an answer while the access chain has a browser left,
+never pre-decline a send (the app raises the card), and answer "is it good?"
+with an end-to-end check and proof. A reply that gives up anyway ("I have no
+Slack tool", "they'd need to say yes", a tool name in the user's chat) earns a
+hidden note at the start of its next turn in its own chat (`agents/agency.rs`,
+beside `share_text`'s): nothing shown, nothing re-run on its own. **Stop** ends the turn and drops the queue; it leaves a quiet
 "Stopped" note (your doing, not a failure). A turn is capped at 3 hours.
 
 **Start fresh, keep memory.** The agent menu, ⌘K and the phone's agent sheet

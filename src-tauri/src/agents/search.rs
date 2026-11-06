@@ -264,13 +264,29 @@ fn search_room(
     })
 }
 
+/// The messages in one agent's own chat that hold every word of `query`,
+/// whole, newest first (`search_my_chat`: an agent reading back what it and
+/// the user already said, instead of asking).
+pub fn own_messages(
+    agent_id: &str,
+    query: &str,
+    limit: usize,
+) -> Result<Vec<AgentMessage>, CommandError> {
+    let terms = terms(query);
+    if terms.is_empty() {
+        return Ok(Vec::new());
+    }
+    let path = store::agent_home(agent_id)?.join("messages.jsonl");
+    scan_log(&path, &terms, limit, |message, _| Some(message.clone()))
+}
+
 /// Hits in one log, newest first, read from its end in growing chunks.
-fn scan_log(
+fn scan_log<T>(
     path: &std::path::Path,
     terms: &[Vec<char>],
     limit: usize,
-    hit: impl Fn(&AgentMessage, String) -> Option<SearchHit>,
-) -> Result<Vec<SearchHit>, CommandError> {
+    hit: impl Fn(&AgentMessage, String) -> Option<T>,
+) -> Result<Vec<T>, CommandError> {
     use std::io::{Read, Seek, SeekFrom};
     let mut file = match std::fs::File::open(path) {
         Ok(f) => f,

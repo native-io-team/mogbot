@@ -54,6 +54,7 @@
 pub mod access_chain;
 pub mod access_check;
 pub mod admin;
+pub mod agency;
 pub mod apps;
 pub mod arrival;
 pub mod attachments;
@@ -136,6 +137,7 @@ pub mod task;
 pub mod team_setup;
 pub mod templates;
 pub mod tidy;
+pub mod transcript;
 pub mod tray;
 pub mod typed_answer;
 pub mod usage;
