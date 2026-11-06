@@ -304,6 +304,10 @@ pub fn import_with(
         add_routines(&updated, &incoming.routines, pause_routines, &mut summary);
         summary.updated.push(updated.name);
     }
+    // Anything came across: the "bring your agents?" question is answered.
+    if !summary.created.is_empty() || !summary.updated.is_empty() {
+        super::import_choice::record_import(store::now_ms());
+    }
     Ok(summary)
 }
 

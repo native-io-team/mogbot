@@ -83,6 +83,7 @@ pub mod forecast;
 pub mod go_hard;
 pub mod harvest;
 pub mod import;
+pub mod import_choice;
 pub mod independence;
 pub mod interview;
 pub mod inventory;

@@ -493,6 +493,16 @@ impl Backend for DesktopBackend {
         Ok(serde_json::json!({ "level": level }))
     }
 
+    async fn set_import_choice(
+        &self,
+        choice: crate::agents::import_choice::Choice,
+    ) -> Result<Value, CommandError> {
+        let choice = serde_json::to_value(choice).map_err(crate::agents::err_other)?;
+        let choice = choice.as_str().unwrap_or_default().to_string();
+        let choice = cmd::agents_set_import_choice(self.app.clone(), choice).await?;
+        Ok(serde_json::json!({ "choice": choice }))
+    }
+
     async fn set_admin(&self, agent_id: &str, admin: bool) -> Result<Value, CommandError> {
         let agent = cmd::agents_set_admin(self.app.clone(), agent_id.to_string(), admin).await?;
         Ok(serde_json::json!({

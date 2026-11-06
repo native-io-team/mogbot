@@ -419,6 +419,7 @@ pub fn overview() -> Value {
             engines: engines(),
             defaults: defaults(),
             independence: crate::agents::independence::Level::GoHard,
+            import_choice: crate::agents::import_choice::Choice::Undecided,
         })
         .unwrap(),
     )
@@ -553,6 +554,7 @@ pub struct Stub {
     /// Changes to new agents' defaults, as the router handed them over.
     pub defaults: Mutex<Vec<crate::agents::defaults::Change>>,
     pub independence: Mutex<Vec<crate::agents::independence::Level>>,
+    pub import_choices: Mutex<Vec<crate::agents::import_choice::Choice>>,
     pub admins: Mutex<Vec<(String, bool)>>,
     /// Agents started fresh, by id.
     pub fresh: Mutex<Vec<String>>,
@@ -595,6 +597,7 @@ impl Stub {
             created: Mutex::new(Vec::new()),
             defaults: Mutex::new(Vec::new()),
             independence: Mutex::new(Vec::new()),
+            import_choices: Mutex::new(Vec::new()),
             admins: Mutex::new(Vec::new()),
             fresh: Mutex::new(Vec::new()),
             typed: Mutex::new(Vec::new()),
@@ -1191,6 +1194,14 @@ impl Backend for Stub {
     ) -> Result<Value, CommandError> {
         self.independence.lock().unwrap().push(level);
         Ok(json!({ "level": level }))
+    }
+
+    async fn set_import_choice(
+        &self,
+        choice: crate::agents::import_choice::Choice,
+    ) -> Result<Value, CommandError> {
+        self.import_choices.lock().unwrap().push(choice);
+        Ok(json!({ "choice": choice }))
     }
 
     async fn set_admin(&self, agent_id: &str, admin: bool) -> Result<Value, CommandError> {
