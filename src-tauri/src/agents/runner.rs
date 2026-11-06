@@ -5839,6 +5839,7 @@ mod tests {
             "Edit(//ext/site/**/.git/**)",
             "Edit(//ext/site/**/.shipstudio/**)",
             "--disallowedTools=mcp__shipstudio-preview",
+            "--disallowedTools=SendMessage,ListAgents",
             "--model",
             "opus",
         ]

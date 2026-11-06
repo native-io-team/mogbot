@@ -57,11 +57,19 @@ pub(super) fn args(
     // Ship Studio's preview bridge is registered for the same projects; an
     // agent here drives our preview, never theirs.
     args.push(crate::preview_isolation::claude_flag());
+    // Agents talk to each other through the app (`message_agent`) and to the
+    // user's other assistants through Remote Access, never by messaging other
+    // Claude sessions on this Mac: a Chief that did took the developer's
+    // coding session for Grok Bot and handed it its whole job.
+    args.push(format!("--disallowedTools={}", CROSS_SESSION_TOOLS.join(",")));
     if let Some(model) = model {
         args.extend(["--model".to_string(), model.to_string()]);
     }
     args
 }
+
+/// Claude Code's tools for messaging other Claude sessions on this Mac.
+pub const CROSS_SESSION_TOOLS: &[&str] = &["SendMessage", "ListAgents"];
 
 /// The environment a turn's `claude` gets on top of the app's own.
 ///
@@ -157,6 +165,16 @@ mod tests {
             .any(|a| a == "--tools" || a.starts_with("--tools=")));
         // `--print` lists it only with the switch on.
         assert!(ENV.contains(&("CLAUDE_CODE_ARTIFACT", "1")));
+    }
+
+    #[test]
+    fn a_turn_cannot_message_other_claude_sessions_on_this_mac() {
+        let dirs = vec!["/u/home".to_string()];
+        let turn = args(None, "sid", false, "/s/mcp.json", "be you", &dirs);
+        let deny = denied(&turn).join(",");
+        for tool in CROSS_SESSION_TOOLS {
+            assert!(deny.split(',').any(|t| t == *tool), "{tool} is denied: {deny}");
+        }
     }
 
     #[test]
