@@ -2708,6 +2708,19 @@ gains a second segment, "From another assistant" | "From Ship Studio" (and
 under its projects folder (`<its projects root>/.shipstudio/agents`, the root
 read from its own `app_state.json`), else `~/ShipStudio/.shipstudio/agents`.
 
+**Its tool names become ours** (`other_app::to_ours`). Instructions written
+there say "via the shipstudio-local MCP" or `mcp__shipstudio_agents__…`,
+which don't exist here, so a copied CLAUDE.md, the Chief's merged
+instructions and anything imported over the connector (`arrival::annotate`)
+are rewritten: `shipstudio_agents` / `shipstudio-local` → `app` (our agent
+tools, `prompts::SERVER_KEY`), `shipstudio-preview` → our preview server, and
+its name → "this app". Headings (our own "### From Ship Studio") and the
+shared folders (`~/ShipStudio`, `.shipstudio/`) are left alone. Agents
+imported before this get the same rewrite **once at launch**
+(`other_app::migrate_names`, marked done by `.other-app-names-v1` in the
+agents folder, deferred while an agent is mid-turn), with "Updated its
+instructions to this app's tool names" in each changed agent's chat.
+
 Both apps use the same layout, so it's a copy, not a translation. The tab
 previews every agent (new, merges into the Chief, already here, or stays
 behind and why), with its instructions, memory, message and file counts,

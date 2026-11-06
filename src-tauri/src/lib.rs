@@ -217,6 +217,8 @@ pub fn run() {
                 // Agents imported before they were told where they are now
                 // (no Grok sandbox here): add the app's section, once.
                 let _ = tauri::async_runtime::spawn_blocking(agents::arrival::upgrade_all).await;
+                // Instructions that still name the other app's tools: in ours, once.
+                let _ = tauri::async_runtime::spawn_blocking(agents::other_app::migrate_names).await;
                 // A team imported before "Setting up your team" existed is
                 // folded into it once, before any turn can start.
                 let upgraded = tauri::async_runtime::spawn_blocking(|| {
