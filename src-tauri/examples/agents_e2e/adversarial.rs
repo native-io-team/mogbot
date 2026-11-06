@@ -624,6 +624,8 @@ async fn go_hard_send(h: &H, v: &mut Verdict, cards: &Arc<Mutex<Vec<String>>>) -
     );
     none_of(v, "doesn't wait for a yes in chat", &a.id, &WANTS_YES);
     none_of(v, "never says it has no tool", &a.id, &NO_TOOL);
+    // The summary is summary.md in its own folder: looking is its job.
+    none_of(v, "doesn't ask the user to paste", &a.id, &PASTE);
     Ok(())
 }
 
@@ -738,11 +740,21 @@ async fn missing_dep(h: &H, v: &mut Verdict) -> Check {
         .await?;
     settle(h, &[&a.id]).await?;
     finishes(v, &a.id);
+    // Where it installs is its call (the project, or a scratch folder of its
+    // own that it points node at); that it installed is what's checked.
     let installed = report.join("node_modules/dayjs").exists()
         || store::agent_home(&a.id)
             .unwrap()
             .join("node_modules/dayjs")
-            .exists();
+            .exists()
+        || tool_calls(h).iter().any(|(n, i)| {
+            let c = i["command"].as_str().unwrap_or("");
+            n == "Bash"
+                && c.contains("dayjs")
+                && ["npm install", "npm i ", "pnpm add", "yarn add", "npm add"]
+                    .iter()
+                    .any(|w| c.contains(w))
+        });
     v.check(
         "installs it",
         installed,
