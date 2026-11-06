@@ -698,6 +698,12 @@ pub fn reach(p: &Projects, project: &Path, own: Option<&str>) -> Reach {
     }
 }
 
+/// Its own project, read in place only because it works in a copy (not
+/// because it is read only, or other projects are).
+fn copy_only_reach(eff: &Effective, project: &Path, own: Option<&str>) -> bool {
+    eff.projects.how == How::Copy && own.is_some_and(|o| same(o, project))
+}
+
 /// Why its own project can't be worked in, when it can't.
 pub fn own_refusal(eff: &Effective, agent: &Agent) -> Option<String> {
     let own = agent.project.as_deref()?;
@@ -894,6 +900,19 @@ pub fn verdict(
                     .map(|n| n.to_string_lossy())
                     .unwrap_or_default()
             ))),
+            // "Work in its own copy" says where it works by default; at "Go
+            // hard" and above it is never a reason to stop an edit in its own
+            // project (or a worktree of it). Read only stays read only.
+            (Reach::Read, true)
+                if copy_only_reach(eff, &project, own)
+                    && super::independence::for_turn(
+                        chosen_level(agent),
+                        super::runner::from_outside(&agent.id),
+                    )
+                    == Level::GoHard =>
+            {
+                None
+            }
             (Reach::Read, true) => Some(Verdict::Deny(format!(
                 "Your settings let you read {} but not change it in place. {ASK_LINE}",
                 project

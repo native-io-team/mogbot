@@ -1133,3 +1133,41 @@ fn an_agents_own_level_and_the_outside_cap() {
     );
     store::set_root_for_tests(None);
 }
+
+/// "Its own copy" says where it works by default; at "Go hard" it never
+/// stops an edit in its own project or a worktree of it. Read only, and
+/// "Use good judgement", stay as they were. (Fictional folders.)
+#[test]
+fn working_in_a_copy_never_stops_an_edit_at_go_hard() {
+    let _serial = super::super::store::tests_lock();
+    let root = tempfile::tempdir().unwrap();
+    super::super::store::set_root_for_tests(Some(root.path().to_path_buf()));
+    let mut ms = agent("ms", "Memberstack");
+    ms.project = Some(MARKETING.into());
+    let team = Preset::Balanced.team();
+    let e = eff_of(&team, &Overrides::default(), &ms);
+    let edit = |path: &str| verdict(&e, &ms, &places(), "Edit", &json!({ "file_path": path }));
+    let in_place = format!("{MARKETING}/src/index.html");
+    let worktree = format!("{MARKETING}/.claude/worktrees/agent-a1/src/index.html");
+    super::super::independence::set_level(Level::Judgement, 1).unwrap();
+    assert!(matches!(edit(&in_place), Some(Verdict::Deny(_))));
+    super::super::independence::set_level(Level::GoHard, 2).unwrap();
+    assert_eq!(edit(&in_place), None, "the usual rules at Go hard");
+    assert_eq!(edit(&worktree), None, "the usual rules at Go hard");
+    // Read only is read only, whatever the level.
+    let locked = Overrides {
+        projects: Some(Projects {
+            scope: Scope::All,
+            listed: Vec::new(),
+            how: How::ReadOnly,
+            elsewhere: Elsewhere::Change,
+        }),
+        ..Default::default()
+    };
+    let e = eff_of(&team, &locked, &ms);
+    assert!(matches!(
+        verdict(&e, &ms, &places(), "Edit", &json!({ "file_path": in_place })),
+        Some(Verdict::Deny(_))
+    ));
+    super::super::store::set_root_for_tests(None);
+}

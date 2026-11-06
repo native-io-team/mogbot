@@ -173,3 +173,33 @@ fn wrappers_are_judged_by_what_they_run() {
         assert!(card("Bash", &bash(c)), "should ask: {c}");
     }
 }
+
+/// The owner's Memberstack cards at "Go hard" (paths fictional): in-place
+/// edits with `sed -i`, `perl -pi` and here-document scripts, in a project,
+/// a worktree of one, or a scratch folder, never ask. A `sed` or `perl`
+/// script such as `/^import/d` is not a file outside the home. Profiles and
+/// the Mac's own files still do.
+#[test]
+fn edits_in_projects_worktrees_and_scratch_never_ask() {
+    let wt = format!("{HOME}/Desktop/Projects/fictional-marketing/.claude/worktrees/agent-a1b2");
+    for c in [
+        format!("cd {wt} && sed -i '' '/^import legacy/d' src/pages/index.astro"),
+        format!("sed -i '' -e '/<script src=\"\\/old.js\">/d' {wt}/src/layouts/Base.astro"),
+        format!("sed -i.bak 's#/images/old#/images/new#g' {wt}/src/a.css"),
+        format!("cd {wt} && perl -pi -e 's#/assets/v1/#/assets/v2/#g' src/a.astro src/b.astro"),
+        format!("perl -0pi -e 's/\\/\\*old\\*\\///g' {wt}/src/c.css"),
+        "cd ~/Desktop/Projects/fictional-rollout && sed -i '' '/^\\/\\/ TODO/d' app/page.tsx".to_string(),
+        format!("cd {wt} && python3 - <<'EOF'\nimport re, pathlib\np = pathlib.Path('src/x.astro')\np.write_text(re.sub(r'/old/', '/new/', p.read_text()))\nEOF"),
+        format!("cat > {wt}/src/new.astro <<'EOF'\n<div class=\"a\">/x</div>\nEOF"),
+        "sed -i '' '/^$/d' /tmp/fictional-scratch/notes.txt".to_string(),
+    ] {
+        assert!(!card("Bash", &bash(&c)), "should run at Go hard: {c}");
+    }
+    for c in [
+        "sed -i '' '/^alias/d' ~/.zshrc",
+        "perl -pi -e 's/a/b/' /etc/hosts",
+        "sed -i '' -e '/x/d' /Library/Preferences/fictional.plist",
+    ] {
+        assert!(card("Bash", &bash(c)), "should still ask: {c}");
+    }
+}

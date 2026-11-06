@@ -461,6 +461,30 @@ pub(super) fn without_heredoc_data(src: &str) -> String {
     out
 }
 
+/// Quoted text given to a program that only matches or edits text with it:
+/// `sed`, `grep` and the like always, `perl` when the script starts no
+/// process. `words`: the command's words so far.
+fn pattern_text(words: &[String], inner: &str) -> bool {
+    let Some(prog) = words
+        .iter()
+        .map(String::as_str)
+        .find(|w| !is_assignment(w) && !KEYWORDS.contains(w))
+    else {
+        return false;
+    };
+    // A command substitution runs whatever it quotes.
+    if inner.contains("$(") || inner.contains('`') {
+        return false;
+    }
+    match base(prog) {
+        "sed" | "gsed" | "grep" | "egrep" | "fgrep" | "rg" | "jq" => true,
+        "perl" => !["system", "exec", "qx", "`", "open", "fork"]
+            .iter()
+            .any(|w| inner.contains(w)),
+        _ => false,
+    }
+}
+
 fn lex_into(src: &str, out: &mut Vec<Vec<String>>, depth: u8) {
     let chars: Vec<char> = src.chars().collect();
     let mut words: Vec<String> = Vec::new();
@@ -489,7 +513,12 @@ fn lex_into(src: &str, out: &mut Vec<Vec<String>>, depth: u8) {
                 let inner: String = chars[i + 1..end].iter().collect();
                 word.push_str(&inner);
                 started = true;
-                nested.push(inner);
+                // A `sed` or `grep` pattern is text, not commands it runs
+                // (`'/<script src="/old.js">/d'` isn't a redirect into `/d`),
+                // and so is a `perl` script that starts nothing.
+                if !pattern_text(&words, &inner) {
+                    nested.push(inner);
+                }
                 i = end + 1;
                 continue;
             }
@@ -1009,6 +1038,56 @@ const WRITERS: &[&str] = &[
     "ssh-copy-id",
 ];
 
+/// The file arguments of a program that writes them. For `sed` and `perl`
+/// the script (`-e …`, or `sed`'s first word without one) and the backup
+/// suffix of `-i` are not files; for the rest, every argument that isn't a
+/// flag.
+fn edit_targets<'a>(prog: &str, args: &[&'a str]) -> Vec<&'a str> {
+    if !matches!(prog, "sed" | "perl") {
+        return positional(args);
+    }
+    let mut out = Vec::new();
+    let mut script = false;
+    let mut i = 0;
+    while i < args.len() {
+        let a = args[i];
+        if matches!(a, "-e" | "-E" | "--expression" | "-f" | "--file")
+            && !(prog == "sed" && a == "-E")
+        {
+            script = true;
+            i += 2;
+            continue;
+        }
+        if a.starts_with("--expression=") || a.starts_with("--file=") {
+            script = true;
+        } else if prog == "perl" && a.starts_with('-') && !a.starts_with("--") && a.ends_with('e')
+        {
+            // `-pie 's/a/b/'`, `-pi -e`: the code follows.
+            script = true;
+            i += 2;
+            continue;
+        } else if a == "-i" && prog == "sed" {
+            // macOS `sed -i '' …` or `-i .bak`: the suffix isn't a file.
+            if args
+                .get(i + 1)
+                .is_some_and(|n| n.is_empty() || (n.starts_with('.') && !n.contains('/')))
+            {
+                i += 2;
+                continue;
+            }
+        } else if !a.starts_with('-') {
+            if !script && (prog == "sed" || out.is_empty() && prog == "perl") {
+                // The script itself (or perl's script file, which it reads).
+                script = true;
+            } else {
+                out.push(a);
+            }
+        }
+        i += 1;
+    }
+    out
+}
+
 fn has(args: &[&str], any: &[&str]) -> bool {
     args.iter().any(|a| any.contains(a))
 }
@@ -1033,30 +1112,25 @@ fn program(prog: &str, args: &[&str], ctx: &Ctx, outside: bool, known: bool) -> 
         || args
             .iter()
             .any(|a| a.starts_with("-i") || a.starts_with("-pi"));
+    // What it writes: its file arguments (a `sed` or `perl` script such as
+    // `/^import/d` is not a file outside the home).
+    let targets = edit_targets(prog, args);
     if WRITERS.contains(&prog)
         && edits_in_place
-        && args
+        && targets
             .iter()
-            .filter(|a| !a.starts_with('-'))
             .any(|a| resolve_known(a, ctx, known).is_some_and(|p| protected(&p, ctx)))
     {
         // Copying *from* the Mac's own files into the home is fine; only a
         // protected destination or a credential source asks.
-        let dest_or_secret =
-            args.iter()
-                .filter(|a| !a.starts_with('-'))
-                .enumerate()
-                .any(|(n, a)| {
-                    resolve_known(a, ctx, known).is_some_and(|p| {
-                        credential_store(&p, ctx)
-                            || (protected(&p, ctx)
-                                && (n + 1 == positional(args).len()
-                                    || !matches!(
-                                        prog,
-                                        "cp" | "rsync" | "ditto" | "ln" | "install"
-                                    )))
-                    })
-                });
+        let dest_or_secret = targets.iter().enumerate().any(|(n, a)| {
+            resolve_known(a, ctx, known).is_some_and(|p| {
+                credential_store(&p, ctx)
+                    || (protected(&p, ctx)
+                        && (n + 1 == targets.len()
+                            || !matches!(prog, "cp" | "rsync" | "ditto" | "ln" | "install")))
+            })
+        });
         if dest_or_secret {
             return true;
         }
