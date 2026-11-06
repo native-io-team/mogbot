@@ -320,6 +320,43 @@ impl Runtime {
 static RUNTIMES: LazyLock<Mutex<HashMap<String, Runtime>>> =
     LazyLock::new(|| Mutex::new(HashMap::new()));
 
+/// Who a request was really for, per (asker, helper). Chief → Social Posts →
+/// Voice: Social Posts asked Voice while answering the Chief, so Voice's
+/// answer reaches a Social Posts turn that owes the Chief, and what that turn
+/// says goes back up, however deep the chain (each level noted as it asks).
+/// Written when the request is sent, replaced by the next one between the
+/// same two; in memory only, like `owed`.
+static ONWARD: LazyLock<Mutex<HashMap<(String, String), Vec<AgentRef>>>> =
+    LazyLock::new(Default::default);
+
+/// `asker`'s turn is sending `helper` a request: whoever that turn owes an
+/// answer is owed the one `helper`'s reply makes possible too.
+pub fn note_onward(asker: &str, helper: &str) {
+    let owed = RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(asker)
+        .map(|r| r.owed.clone())
+        .unwrap_or_default();
+    let key = (asker.to_string(), helper.to_string());
+    let mut onward = ONWARD.lock().unwrap_or_else(|e| e.into_inner());
+    if owed.is_empty() {
+        onward.remove(&key);
+    } else {
+        onward.insert(key, owed);
+    }
+}
+
+/// Who `asker` asked `helper` on behalf of (see [`ONWARD`]).
+fn onward_for(asker: &str, helper: &str) -> Vec<AgentRef> {
+    ONWARD
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(&(asker.to_string(), helper.to_string()))
+        .cloned()
+        .unwrap_or_default()
+}
+
 /// The agent's status, without its timeline (checked all through a turn,
 /// so it never copies one). [`status_with_work`] is the one shown.
 pub fn status_of(agent_id: &str) -> Status {
@@ -2577,10 +2614,23 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
         runtime.hop = runtime.hop.max(room.hop);
     }
     // An interrupted turn's debts carry over to the turn that replaces it.
+    // An answer to a request this agent made on someone else's behalf owes
+    // them the outcome (see [`ONWARD`]), so it goes back up the chain.
+    let mut onward: HashMap<String, Vec<AgentRef>> = HashMap::new();
     for m in &batch {
-        if let (From::Agent { sender, .. }, false) = (&m.from, m.reply) {
-            if !runtime.owed.iter().any(|a| a.id == sender.id) {
-                runtime.owed.push(sender.clone());
+        let From::Agent { sender, .. } = &m.from else {
+            continue;
+        };
+        let to = if m.reply {
+            let up = onward_for(agent_id, &sender.id);
+            onward.insert(sender.id.clone(), up.clone());
+            up
+        } else {
+            vec![sender.clone()]
+        };
+        for to in to {
+            if to.id != agent_id && !runtime.owed.iter().any(|a| a.id == to.id) {
+                runtime.owed.push(to);
             }
         }
     }
@@ -2600,7 +2650,7 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     // the turn was asked is kept quoted, under who asked it.
     let prompt = match runtime.room {
         Some(_) => super::rooms::asks(&asked),
-        None => compose(&batch),
+        None => compose(&batch, &onward),
     };
     runtime.prompt = Some(prompt.clone());
     // What an interrupted turn left is told only to a turn in the same place;
@@ -3577,7 +3627,9 @@ async fn record_changes(
     None
 }
 
-fn compose(batch: &[Inbound]) -> String {
+/// `onward`: for an answer, who the request was asked on behalf of, by the
+/// helper's id (see [`ONWARD`]); the turn's outcome goes to them.
+fn compose(batch: &[Inbound], onward: &HashMap<String, Vec<AgentRef>>) -> String {
     batch
         .iter()
         // A pick-up's note is said once, in the app's words, to whoever
@@ -3586,7 +3638,16 @@ fn compose(batch: &[Inbound]) -> String {
         .map(|m| match &m.from {
             _ if m.resume > 0 => m.text.clone(),
             From::User => m.text.clone(),
-            From::Agent { sender, .. } => prompts::from_agent(&sender.name, &m.text, m.reply),
+            From::Agent { sender, .. } => {
+                let back_to: Vec<String> = match m.reply {
+                    true => onward
+                        .get(&sender.id)
+                        .map(|up| up.iter().map(|a| a.name.clone()).collect())
+                        .unwrap_or_default(),
+                    false => Vec::new(),
+                };
+                prompts::from_agent(&sender.name, &m.text, m.reply, &back_to)
+            }
         })
         .collect::<Vec<_>>()
         .join("\n\n")
@@ -5180,7 +5241,7 @@ mod tests {
                 resume: 0,
             },
         ];
-        let prompt = compose(&batch);
+        let prompt = compose(&batch, &HashMap::new());
         assert!(prompt.starts_with("Do X"));
         assert!(prompt.contains("[Message from Finance, another agent — not the user]"));
     }
@@ -5898,3 +5959,7 @@ mod share_text_runner_tests;
 #[cfg(test)]
 #[path = "prompt_budget_tests.rs"]
 mod prompt_budget_tests;
+
+#[cfg(test)]
+#[path = "handoff_runner_tests.rs"]
+mod handoff_runner_tests;

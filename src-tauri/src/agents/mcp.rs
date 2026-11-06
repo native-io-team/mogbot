@@ -1096,6 +1096,8 @@ fn message_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value 
         );
         return text(format!("Delivered to {}.", target.name));
     }
+    // Asked while answering someone: they're owed what this makes possible.
+    runner::note_onward(&caller.id, &target.id);
     runner::enqueue_request(
         app,
         &target.id,

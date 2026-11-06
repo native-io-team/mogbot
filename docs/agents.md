@@ -680,6 +680,17 @@ request … tell the user the outcome; don't reply"), and handling it owes
 nobody anything, so answers can't ping-pong. Stop drops the debt; an
 interrupted turn passes it to the turn that replaces it.
 
+**Nested hand-offs report all the way up.** Chief → Social Posts → Voice: when
+Social Posts asks Voice while answering the Chief, the app notes who it asked
+on behalf of (`runner::note_onward`, per asker and helper, replaced by the next
+request between the two, in memory). Voice's answer then reaches a Social Posts
+turn that owes the Chief, is framed "say the outcome: it goes back to Chief of
+Staff automatically" instead of "tell the user", and what it says is the
+Chief's answer. Each level is noted as it asks, so any depth climbs back. A
+request sent with nobody waiting on it carries nothing up. (A review of real
+chats found the Chief waiting 42 minutes for an answer that had been posted in
+Social Posts' own chat.)
+
 **Loops.** Agents messaging agents can ping-pong. A user message starts a chain
 at hop 0; each `message_agent` from a turn at hop *n* delivers at *n+1*, and
 `message_agent` refuses past hop 6. The prompts also tell agents not to send
