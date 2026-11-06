@@ -1199,6 +1199,19 @@ fn edit_targets<'a>(prog: &str, args: &[&'a str]) -> Vec<&'a str> {
     out
 }
 
+/// A `vercel` command aimed at production: `--prod` on a deploy. On a
+/// command that only looks (`vercel ls --prod`, `vercel logs --prod`) the
+/// flag picks what to list, so it isn't one. Observed: `vercel ls --prod`
+/// raised a "deploy to production" card at Full send.
+fn vercel_prod(args: &[&str]) -> bool {
+    const LOOKS: &[&str] = &["ls", "list", "inspect", "logs", "whoami", "pull", "build"];
+    let prod = has(args, &["--prod", "--production", "--target=production"])
+        || args
+            .windows(2)
+            .any(|w| w[0] == "--target" && w[1] == "production");
+    prod && positional(args).first().is_none_or(|s| !LOOKS.contains(s))
+}
+
 fn has(args: &[&str], any: &[&str]) -> bool {
     args.iter().any(|a| any.contains(a))
 }
@@ -1292,7 +1305,7 @@ fn program(prog: &str, args: &[&str], ctx: &Ctx, outside: bool, known: bool) -> 
                 "help", "project", "projects", "domains", "login", "switch", "teams", "certs",
                 "dns", "git", "init", "bisect",
             ];
-            has(args, &["--prod", "--production"])
+            vercel_prod(args)
                 || (args
                     .iter()
                     .all(|a| !matches!(*a, "--version" | "-v" | "--help" | "-h"))
@@ -1660,10 +1673,7 @@ fn full_send_program(prog: &str, args: &[&str], ctx: &Ctx) -> Option<bool> {
             const ASKS: &[&str] = &[
                 "promote", "alias", "rollback", "remove", "rm", "redeploy", "secrets", "secret",
             ];
-            has(args, &["--prod", "--production", "--target=production"])
-                || args
-                    .windows(2)
-                    .any(|w| w[0] == "--target" && w[1] == "production")
+            vercel_prod(args)
                 || pos.first().is_some_and(|s| ASKS.contains(s))
                 || (pos
                     .first()

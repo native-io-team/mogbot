@@ -3806,7 +3806,12 @@ fn set_labels_only_note(agent_id: &str, user_said: &str, replies: &[AgentMessage
     let labels = (!user_said.trim().is_empty())
         .then(|| super::share_text::labels_only_note(user_said, replies))
         .flatten();
-    let lazy = super::agency::lazy_reply_note(replies);
+    // The level this turn ran at: a turn answering outside text is capped,
+    // and asks by design.
+    let level = store::get(agent_id)
+        .map(|a| super::policy::independence_for(&a, from_outside(agent_id)))
+        .unwrap_or_default();
+    let lazy = super::agency::lazy_reply_note(replies, level);
     let note: String = labels.into_iter().chain(lazy).collect();
     if note.is_empty() {
         return;

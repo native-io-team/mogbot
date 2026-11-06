@@ -303,7 +303,15 @@ never pre-decline a send (the app raises the card), and answer "is it good?"
 with an end-to-end check and proof. A reply that gives up anyway ("I have no
 Slack tool", "they'd need to say yes", a tool name in the user's chat) earns a
 hidden note at the start of its next turn in its own chat (`agents/agency.rs`,
-beside `share_text`'s): nothing shown, nothing re-run on its own. **Stop** ends the turn and drops the queue; it leaves a quiet
+beside `share_text`'s): nothing shown, nothing re-run on its own. At Go hard
+and Full send a needless question gets one too ("Want me to…?", "Should I
+file those too?", "or would you rather send them yourself?"), unless it is
+about the floor (money, credentials, deleting for good, production or main,
+or exact text the user wants to see). The level's own section says the same
+(`independence::NO_ASKING`): a yes they gave covers every step, a rule they
+set ends when they lift it, and a CLAUDE.md written for their other tools
+(Claude Code loads `~/.claude/CLAUDE.md` into every turn) adds no asks.
+**Stop** ends the turn and drops the queue; it leaves a quiet
 "Stopped" note (your doing, not a failure). A turn is capped at 3 hours.
 
 **Start fresh, keep memory.** The agent menu, ⌘K and the phone's agent sheet
