@@ -197,7 +197,7 @@ interface RowProps {
   line: ReactNode;
   meta?: ReactNode;
   state?: 'working' | 'waiting' | 'failed' | 'limited';
-  /** Mid-turn: its avatar blinks now and then. */
+  /** Mid-turn: its avatar bobs once when the turn ends. */
   working?: boolean;
   onOpen: () => void;
   /** A row that folds what's under it: its chevron, and whether it's open. */

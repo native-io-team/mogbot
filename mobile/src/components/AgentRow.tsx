@@ -284,8 +284,9 @@ function RowBody({
     )
   );
   const state = onMac || quiet ? undefined : lineState(agent);
-  // Running (not queued for a slot): the avatar blinks, and the line
-  // says what and how long, on a clock that ticks only while it works.
+  // Running (not queued for a slot): the line says what and how long, on a
+  // clock that ticks only while it works (the avatar holds still; it bobs
+  // once when the turn ends).
   const running = live && !quiet && agent.status.state === 'working' && !waitingForSlot(agent);
   const now = useClock(running);
   // Waiting on you: say what for, when the saved chat knows.
@@ -337,7 +338,7 @@ function RowBody({
         if (id) onAction(id);
       }}
     >
-      {/* Working: the eyes blink now and then, and the line says what (never a ring around it). */}
+      {/* Working: the line says what (never a ring around the avatar, never closed eyes). */}
       <View style={styles.avatar}>
         <AgentAvatar
           id={agent.id}

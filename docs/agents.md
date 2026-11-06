@@ -471,8 +471,8 @@ steps has no line.
   ends the turn with a line saying so (`HUNG_NOTE`).
 - **In the lists**: a working agent's row (sidebar, What's in flight)
   says the step and how long ("Running the Cypress tests · 5m") or "No
-  progress for 5 min", never "Working…", and its avatar blinks every few
-  seconds (still under Reduce Motion). No ring around it.
+  progress for 5 min", never "Working…". The avatar holds still (no blink,
+  no ring around it) and bobs once when the turn ends.
 - **Stored** beside the log, never in it: `turns/<message-id>.json`, sent
   again on `agents://message` when the turn ends, and applied only to the
   paged chat reads (desktop and phone), after the log's lock is released,

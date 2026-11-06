@@ -6,11 +6,11 @@
  * docs/internal/avatars.md.
  *
  * Geometry lives on a 32-unit grid. Shapes fill it (optically balanced, so
- * a circle and a square read the same size); a face is a few round-capped
- * strokes in one ink, about a third of the width, sitting just below the
- * middle. Stroke weights step up as the avatar gets smaller (`faceWeights`),
- * which is what keeps two dots and a line legible at 16px without making
- * them clumsy at 96px.
+ * a circle and a square read the same size); a face is two open eyes and at
+ * most one mouth, every one of them a round-capped stroke at one weight in
+ * one ink, set on a shared grid and moved to each shape's optical centre.
+ * The weight is a fixed fraction of the avatar with a device-pixel floor
+ * (`faceWeight`), so 24px and 96px are the same drawing and 16px still reads.
  *
  * What the registry stores is keys (`AgentLook`), never paths, so a drawing
  * can be refined without touching anyone's saved choice. Keys are append-only.
@@ -249,77 +249,92 @@ export const SHAPE_SPECS: Record<AvatarShape, ShapeSpec> = {
 };
 
 /**
- * A face's strokes. `eye` strokes are the eyes (dots and short bars drawn
- * as zero- or short-length round-capped lines, so a dot is exactly as wide
- * as the eye weight) and are what blinks; `line` strokes are everything
- * else: closed-eye arcs, mouths.
+ * A face's strokes. Every feature, eyes and mouth alike, is one round-capped
+ * line at the one face weight (`faceWeight`): a dot eye is a very short
+ * vertical stroke (so it reads as a soft, slightly tall dot), a tall eye a
+ * longer one, a mouth a line or a shallow curve. Eyes are always open: no
+ * lids, no winks, no blink (the owner's call: a closed-eye face looks
+ * horrible at this size).
  */
 export interface FaceStroke {
   d: string;
-  role: 'eye' | 'line';
-  /** Part of the eyes (blinks with them), even when drawn as a line. */
-  blinks?: boolean;
+  role: 'eye' | 'mouth';
 }
 
-// Eyes 7 units apart on a line just above the middle; the mouth 5 below them.
-const EL = 12.5;
-const ER = 19.5;
-const EY = 14.75;
-/** Where the eyes sit (grid units): a blink squashes them toward this line. */
-export const EYE_LINE = EY;
+// The face grid, before a shape moves and sizes it (`SHAPE_SPECS[].face`).
+// Eyes 8.5 apart on a line a touch below the middle, the mouth 4.75 under them:
+// low-set features read friendlier, and the face's own centre (between the
+// eye line and the mouth) lands on the shape's optical centre plus a little.
+const EL = 11.75;
+const ER = 20.25;
+const EY = 15;
 const MY = 19.75;
+/** A glance moves both eyes this far (grid units). */
+const GLANCE = 0.9;
 
-const dot = (x: number, y = EY): FaceStroke => ({ d: `M${x} ${y}h0`, role: 'eye' });
-const bar = (x: number, y = EY): FaceStroke => ({ d: `M${x} ${y - 1.1}v2.2`, role: 'eye' });
-const dash = (x: number, y = EY + 0.3): FaceStroke => ({
-  d: `M${x - 1.1} ${y}h2.2`,
-  role: 'line',
-  blinks: true,
+/** A round eye: a 1-unit stroke, so it's a soft oval a little taller than wide. */
+const dot = (x: number, y = EY): FaceStroke => ({
+  d: `M${r2(x)} ${r2(y - 0.5)}v1`,
+  role: 'eye',
 });
-/** ∩: eyes closed, smiling. */
-const happyLid = (x: number, y = EY + 0.6): FaceStroke => ({
-  d: `M${x - 1.6} ${y}q1.6 -2 3.2 0`,
-  role: 'line',
-  blinks: true,
+/** A tall eye: the same weight, 2.4 units long. */
+const tall = (x: number, y = EY): FaceStroke => ({
+  d: `M${r2(x)} ${r2(y - 1.2)}v2.4`,
+  role: 'eye',
 });
-/** ∪: eyes closed, at rest. */
-const restLid = (x: number, y = EY - 0.2): FaceStroke => ({
-  d: `M${x - 1.6} ${y}q1.6 1.7 3.2 0`,
-  role: 'line',
-  blinks: true,
+/** A smile `w` wide whose curve dips `dip` below its ends. */
+const smile = (w: number, dip: number, x = 16, y = MY): FaceStroke => ({
+  d: `M${r2(x - w / 2)} ${r2(y - dip / 2)}q${r2(w / 2)} ${r2(dip * 2)} ${w} 0`,
+  role: 'mouth',
 });
-const smile = (w = 4, y = MY - 0.4, lift = 1.5): FaceStroke => ({
-  d: `M${16 - w / 2} ${y}q${w / 2} ${lift} ${w} 0`,
-  role: 'line',
+const flat = (w: number, x = 16, y = MY): FaceStroke => ({
+  d: `M${r2(x - w / 2)} ${r2(y)}h${w}`,
+  role: 'mouth',
 });
-const flat = (w = 3, y = MY, x = 16): FaceStroke => ({
-  d: `M${x - w / 2} ${y}h${w}`,
-  role: 'line',
+/** A smile lifted at one end only. */
+const smirk = (w: number, x = 16, y = MY): FaceStroke => ({
+  d: `M${r2(x - w / 2)} ${r2(y + w * 0.04)}q${r2(w * 0.5)} ${r2(w * 0.26)} ${w} ${r2(-w * 0.16)}`,
+  role: 'mouth',
 });
 
 export const FACE_SPECS: Record<AvatarFace, FaceStroke[]> = {
-  calm: [dot(EL), dot(ER), smile(3.6)],
-  cheerful: [happyLid(EL), happyLid(ER), smile(5, MY - 0.6, 2.1)],
-  curious: [dot(EL + 0.8, EY - 0.5), dot(ER + 0.8, EY - 0.5), flat(2.2, MY, 17.2)],
-  focused: [dash(EL), dash(ER), flat(3)],
-  sleepy: [restLid(EL), restLid(ER), flat(2, MY + 0.3)],
-  wink: [dot(EL), happyLid(ER), smile(3.6)],
-  determined: [bar(EL), bar(ER), flat(4)],
-  quiet: [bar(EL, EY + 1), bar(ER, EY + 1)],
-  content: [dot(EL, EY + 1), dot(ER, EY + 1)],
-  bright: [bar(EL), bar(ER), smile(4.4, MY - 0.5, 1.9)],
+  calm: [dot(EL), dot(ER), smile(4, 0.9)],
+  cheerful: [dot(EL), dot(ER), smile(5.6, 1.5)],
+  curious: [
+    dot(EL + GLANCE, EY - GLANCE * 0.6),
+    dot(ER + GLANCE, EY - GLANCE * 0.6),
+    flat(2.4, 16 + GLANCE),
+  ],
+  focused: [dot(EL), dot(ER), flat(3.4)],
+  // Gaze down and features low: unhurried, not asleep.
+  sleepy: [dot(EL, EY + 0.9), dot(ER, EY + 0.9), flat(2.2, 16, MY + 0.5)],
+  // The cheek of a wink without closing an eye: a sideways glance and a smirk.
+  wink: [dot(EL - GLANCE, EY), dot(ER - GLANCE, EY), smirk(4.2, 16 - 0.3)],
+  determined: [tall(EL), tall(ER), flat(4.4)],
+  quiet: [tall(EL, EY + 0.75), tall(ER, EY + 0.75)],
+  content: [dot(EL, EY + 0.75), dot(ER, EY + 0.75)],
+  bright: [tall(EL), tall(ER), smile(4.8, 1.3)],
 };
 
 /**
- * Stroke weights in grid units for an avatar `px` wide. A 16px avatar's
- * strokes are proportionally ~60% heavier than a 96px one's: drawn at one
- * weight, a face is either a smudge small or spindly big.
+ * The one stroke weight, in grid units, for an avatar `px` wide: the same
+ * fraction of the avatar at every size (so 24px and 96px are the same
+ * drawing), with a floor of `MIN_FACE_PX` device pixels below about 23px,
+ * where a proportional stroke would go faint. Eyes and mouth share it.
  */
-export function faceWeights(px: number): { eye: number; line: number } {
-  if (px <= 20) return { eye: 3.4, line: 2.3 };
-  if (px <= 32) return { eye: 3.1, line: 2 };
-  if (px <= 56) return { eye: 2.8, line: 1.75 };
-  return { eye: 2.4, line: 1.45 };
+export const FACE_WEIGHT = 2.1;
+export const MIN_FACE_PX = 1.6;
+export function faceWeight(px: number): number {
+  return r2(Math.max(FACE_WEIGHT, (MIN_FACE_PX * AVATAR_GRID) / px));
+}
+
+/**
+ * The stroke width to draw a face with on `shape`, compensating the face
+ * group's scale so a pill's narrower face keeps exactly the same line as a
+ * circle's.
+ */
+export function faceStrokeWidth(px: number, shape: AvatarShape): number {
+  return r2(faceWeight(px) / SHAPE_SPECS[shape].face.scale);
 }
 
 /** The face group's transform for a shape: its optical centre and room. */
@@ -330,14 +345,9 @@ export function faceTransform(shape: AvatarShape): string {
 }
 
 /**
- * The look's motion, same on both clients: while working, a blink every
- * `BLINK_EVERY_MS` (offset per agent so a sidebar never blinks in unison);
- * when a turn ends, one bob. Nothing while idle; nothing with Reduce Motion.
+ * The look's motion, same on both clients: when a turn ends, one bob.
+ * Nothing else ever moves, and never the eyes; nothing with Reduce Motion.
  */
-export const BLINK_EVERY_MS = 4800;
-export const BLINK_MS = 160;
 export const BOB_MS = 520;
 /** How far a bob lifts, as a fraction of the avatar's size. */
 export const BOB_LIFT = 0.08;
-/** 0–3: which quarter of the blink cycle this agent blinks in. */
-export const blinkPhase = (id: string) => hash(id) % 4;

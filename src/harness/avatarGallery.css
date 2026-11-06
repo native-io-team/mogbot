@@ -62,3 +62,17 @@ body {
   color: var(--text-muted);
   font-size: var(--font-size-caption);
 }
+
+.avatar-gallery__sheet {
+  display: grid;
+  grid-template-columns: repeat(10, max-content);
+  align-items: center;
+  justify-items: center;
+  gap: var(--spacing-sm) var(--spacing-lg);
+}
+
+.avatar-gallery__sheet-cell {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+}
