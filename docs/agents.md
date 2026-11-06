@@ -309,7 +309,8 @@ or a model change clears it.
 Two layers, both engines. **Every turn** has the engine's own compaction on
 and tuned, so nothing in the user's config can leave an agent to run into
 the wall mid-task. **Between turns** the app tidies a conversation that has
-grown past 70% of its window, at a moment nothing else needs the agent.
+grown past 70% of its window or 200k tokens, whichever comes first, at a
+moment nothing else needs the agent.
 
 *Every turn.* Claude Code gets `--settings '{"autoCompactEnabled":true}'`
 (command-line settings outrank the user's files), `CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=85`
@@ -324,7 +325,8 @@ take-over (its command line is the turn's).
 nothing queued, no card waiting on the user, not taken over, not a turn
 answering outside text (it can't write its memory), and not a bound agent
 with no copy open (its turn would run in the user's own folder), when the
-reading is ≥ 70%: two quiet turns in the same conversation, whose words never
+reading is ≥ 70% of the window or ≥ 200k tokens (`tidy::TIDY_PERCENT`,
+`tidy::TIDY_TOKENS`): two quiet turns in the same conversation, whose words never
 reach the chat (`tidy::QuietTurn`; no drafts, no bubbles, no vanished-session
 retry, no "Interrupted" note):
 
@@ -407,9 +409,9 @@ Codex 0.166 on this Mac):
   A compaction that never reports ends with the turn and falls back to a fresh
   start.
 - Real readings on this Mac (read-only, 2026-11-05): fifteen Claude agents on
-  Opus 5.5 with 1M windows, 3–9% full. At 70% of 1M a conversation is ~700k
-  tokens re-read on every resume, so the threshold may want an absolute cap
-  too; not done (a product decision).
+  Opus 5.5 with 1M windows, 3–9% full. At 70% of 1M a conversation would be
+  ~700k tokens re-read on every resume, which is why the 200k cap tidies
+  first on large windows.
 
 **Process trees.** Each turn's `claude` leads its own process group
 (`agents::procs`). Stop, interrupt, the timeout and quitting walk its process

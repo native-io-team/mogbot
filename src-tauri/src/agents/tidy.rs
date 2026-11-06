@@ -33,6 +33,10 @@ use super::driver::Driver;
 /// The share of the window at which the app tidies, between turns.
 pub const TIDY_PERCENT: u64 = 70;
 
+/// However large the window, the size at which the app tidies: a 1M window
+/// at 70% would re-read ~700k tokens on every resume.
+pub const TIDY_TOKENS: u64 = 200_000;
+
 /// The share at which the engine compacts on its own, mid-turn: the safety
 /// net under the app's tidy.
 pub const ENGINE_PERCENT: u64 = 85;
@@ -56,9 +60,14 @@ const CODEX_COMPACT: &str = "You are compacting this conversation so it can cont
 smaller context. Write a hand-off summary for yourself, in plain prose and short lists, that \
 lets you carry on without asking again.";
 
-/// Whether the reading says the conversation is due a tidy.
+/// Whether the reading says the conversation is due a tidy: at
+/// [`TIDY_PERCENT`] of its window, or [`TIDY_TOKENS`] used, whichever comes
+/// first.
 pub fn due(fill: Option<&ContextFill>) -> bool {
-    fill.is_some_and(|f| f.window > 0 && f.used.saturating_mul(100) >= f.window * TIDY_PERCENT)
+    fill.is_some_and(|f| {
+        f.used >= TIDY_TOKENS
+            || (f.window > 0 && f.used.saturating_mul(100) >= f.window * TIDY_PERCENT)
+    })
 }
 
 /// How a tidy ends the old context.
@@ -237,6 +246,19 @@ mod tests {
         assert!(due(Some(&fill(990_000, 1_000_000))));
         // A reading with no window says nothing.
         assert!(!due(Some(&fill(10, 0))));
+    }
+
+    #[test]
+    fn a_tidy_is_due_at_two_hundred_thousand_tokens_whatever_the_window() {
+        // A 1M window: 70% would be 700k; the cap comes first.
+        assert!(!due(Some(&fill(199_999, 1_000_000))));
+        assert!(due(Some(&fill(200_000, 1_000_000))));
+        assert!(due(Some(&fill(450_000, 1_000_000))));
+        // A small window still tidies at its 70%.
+        assert!(due(Some(&fill(90_000, 128_000))));
+        assert!(!due(Some(&fill(80_000, 128_000))));
+        // Used tokens alone are a reading, even without a window.
+        assert!(due(Some(&fill(200_000, 0))));
     }
 
     #[test]
