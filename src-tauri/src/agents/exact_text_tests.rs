@@ -141,6 +141,12 @@ fn it_is_set_from_chat_inherited_and_said_plainly() {
     assert!(line.value.contains("exact text"));
     let prompt = prompt_section(&eff, &voice);
     assert!(prompt.contains("until they OK its exact text"));
+    // Handed sends to own: one plan card and an offer to change the rule,
+    // never the rule argued back at them (observed, turn after turn).
+    assert!(prompt.contains("don't argue the rule or ask again"));
+    assert!(
+        prompt.contains("offer to stop holding sends for that work with propose_settings_change")
+    );
     assert!(
         !prompt_section(&resolve(&saved, &voice, Level::FullSend), &voice).contains("exact text:")
     );

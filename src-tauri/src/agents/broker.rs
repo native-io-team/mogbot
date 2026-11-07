@@ -160,6 +160,60 @@ pub fn caller(secret: &str) -> Option<Caller> {
     grants().get(secret).cloned()
 }
 
+/// Who a sealed "When…" check's secret is for: the routine's agent and the
+/// one connection it reads (`watch_seal`). Kept apart from [`caller`], so it
+/// opens nothing but that connection's relay, and only for reads.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SealedCaller {
+    pub agent_id: String,
+    pub server_key: String,
+}
+
+static SEALED: LazyLock<Mutex<HashMap<String, SealedCaller>>> = LazyLock::new(Default::default);
+
+fn sealed() -> std::sync::MutexGuard<'static, HashMap<String, SealedCaller>> {
+    SEALED.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// A secret for one sealed check. Dropping it revokes the secret.
+#[derive(Debug)]
+pub struct SealedAccess {
+    secret: String,
+}
+
+impl SealedAccess {
+    pub fn secret(&self) -> &str {
+        &self.secret
+    }
+}
+
+impl Drop for SealedAccess {
+    fn drop(&mut self) {
+        sealed().remove(&self.secret);
+    }
+}
+
+/// Issue a secret that reads `server_key`'s relay as `agent_id`, and nothing else.
+pub fn grant_sealed(agent_id: &str, server_key: &str) -> SealedAccess {
+    let secret = new_secret();
+    sealed().insert(
+        secret.clone(),
+        SealedCaller {
+            agent_id: agent_id.to_string(),
+            server_key: server_key.to_string(),
+        },
+    );
+    SealedAccess { secret }
+}
+
+/// Who holds a sealed check's `secret`, while it's live.
+pub fn sealed_caller(secret: &str) -> Option<SealedCaller> {
+    if secret.len() != 64 {
+        return None;
+    }
+    sealed().get(secret).cloned()
+}
+
 /// A turn's id, open for as long as this is held: dropped when `run_turn`
 /// returns, however it returns. It carries the turn's bridge secret, which
 /// is revoked with it.
@@ -340,6 +394,24 @@ pub fn needs_sign_in(agent_id: &str) -> Vec<String> {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn a_sealed_checks_secret_opens_only_its_connection_and_dies_with_it() {
+        let access = grant_sealed("a1", "linear");
+        let secret = access.secret().to_string();
+        assert_eq!(
+            sealed_caller(&secret),
+            Some(SealedCaller {
+                agent_id: "a1".into(),
+                server_key: "linear".into()
+            })
+        );
+        // Never a turn's caller: it can't reach the agents endpoint.
+        assert_eq!(caller(&secret), None);
+        drop(access);
+        assert_eq!(sealed_caller(&secret), None);
+        assert_eq!(sealed_caller(""), None);
+    }
 
     #[test]
     fn only_a_live_turns_requests_reach_the_user() {

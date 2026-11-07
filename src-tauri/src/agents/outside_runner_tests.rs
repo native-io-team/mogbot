@@ -8,6 +8,16 @@
 //! sealed and its card said `fromOutside: true`.
 use super::*;
 
+/// A turn answering outside text is told why it has less, so it never tells
+/// the user its browser "disconnected"; an ordinary turn's prompt is unchanged.
+#[test]
+fn an_outside_turn_is_told_its_missing_browser_is_on_purpose() {
+    assert_eq!(outside_note(false), None);
+    let note = outside_note(true).unwrap();
+    assert!(note.contains("no browser"));
+    assert!(note.contains("never say a browser or tool is disconnected"));
+}
+
 fn scratch(f: impl FnOnce()) {
     let _serial = store::tests_lock();
     let dir = tempfile::tempdir().unwrap();

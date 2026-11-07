@@ -17,6 +17,12 @@
 //! been allowed by `mcp::decide` (the engine's approval) or it is put on a
 //! card here. So a Codex `exec` turn, which has no approval channel, can't
 //! write through a connection unasked.
+//!
+//! A "When…" routine's sealed check (`watch_seal`) reaches its agent's
+//! connection here too, with a secret of its own (`broker::grant_sealed`)
+//! that opens only that one connection: its reads go through, anything
+//! else is refused, never put on a card, and the agent's conversation isn't
+//! marked as having read outside content (the wake turn is outside text).
 
 use std::time::Duration;
 
@@ -109,11 +115,33 @@ fn client() -> reqwest::Client {
         .unwrap_or_default()
 }
 
-/// One request from `agent_id`'s turn for its connection `key`.
+/// Who is calling through the relay.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Via {
+    /// A turn (`Some(id)`) or a take-over terminal (`None`) of the agent.
+    Turn(Option<u64>),
+    /// A sealed "When…" check for the agent's routine (`watch_seal`): it
+    /// may only read, and nothing it calls is ever put on a card.
+    Sealed,
+}
+
+/// Why a sealed check's call is refused: anything whose name doesn't start
+/// with a read verb (`watch_seal::READ_VERBS`), the same rule as the
+/// check's own `--allowedTools`, enforced here as well.
+pub fn sealed_refusal(tool_name: &str) -> Option<String> {
+    let name = tool_name.to_ascii_lowercase();
+    let reads = super::watch_seal::READ_VERBS
+        .iter()
+        .any(|v| name.starts_with(v));
+    (!reads).then(|| format!("This check can only read: `{tool_name}` isn't a read."))
+}
+
+/// One request from `agent_id`'s turn (or its routine's sealed check) for
+/// its connection `key`.
 pub async fn relay(
     app: &AppHandle,
     agent_id: &str,
-    turn: Option<u64>,
+    via: Via,
     key: &str,
     method: &Method,
     headers: &HeaderMap,
@@ -157,21 +185,34 @@ pub async fn relay(
                 .get("arguments")
                 .cloned()
                 .unwrap_or_else(|| json!({}));
-            let outside = super::runner::from_outside(agent_id);
-            match connections::relay_check(agent_id, &target, name, outside, turn.is_none()) {
-                RelayCall::Pass => {}
-                RelayCall::Refuse(why) => return refused(&id, &why),
-                RelayCall::Decide => {
-                    let tool = format!("mcp__{key}__{name}");
-                    if let Err(why) = super::mcp::decide_relayed(app, agent_id, &tool, &input).await
-                    {
+            match via {
+                // Reads only, and no card: no one is there to answer one.
+                // Not the agent's conversation, so nothing is marked.
+                Via::Sealed => {
+                    if let Some(why) = sealed_refusal(name) {
                         return refused(&id, &why);
                     }
                 }
+                Via::Turn(turn) => {
+                    let outside = super::runner::from_outside(agent_id);
+                    match connections::relay_check(agent_id, &target, name, outside, turn.is_none())
+                    {
+                        RelayCall::Pass => {}
+                        RelayCall::Refuse(why) => return refused(&id, &why),
+                        RelayCall::Decide => {
+                            let tool = format!("mcp__{key}__{name}");
+                            if let Err(why) =
+                                super::mcp::decide_relayed(app, agent_id, &tool, &input).await
+                            {
+                                return refused(&id, &why);
+                            }
+                        }
+                    }
+                    // Mail, chat, other people's documents: the rest of the
+                    // turn asks (`exposure`).
+                    super::exposure::mark_read(agent_id, &format!("mcp__{key}__{name}"));
+                }
             }
-            // Mail, chat, other people's documents: the rest of the turn
-            // asks (`exposure`).
-            super::exposure::mark_read(agent_id, &format!("mcp__{key}__{name}"));
         }
     }
     let mut req = client()
@@ -222,4 +263,33 @@ pub async fn relay(
     builder
         .body(ChannelBody { rx }.boxed())
         .unwrap_or_else(|_| plain(StatusCode::BAD_GATEWAY, "Bad answer from the app"))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_sealed_check_may_only_read() {
+        for read in [
+            "list_issues",
+            "get_issue",
+            "searchIssues",
+            "Query_things",
+            "find_user",
+            "read_doc",
+        ] {
+            assert_eq!(sealed_refusal(read), None, "{read}");
+        }
+        for write in [
+            "create_issue",
+            "update_issue",
+            "delete_comment",
+            "send_message",
+            "save_issue",
+            "",
+        ] {
+            assert!(sealed_refusal(write).is_some(), "{write}");
+        }
+    }
 }

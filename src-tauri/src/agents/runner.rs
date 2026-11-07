@@ -435,11 +435,37 @@ pub fn card_pointer(name: &str, title: &str) -> String {
     format!("{name} is waiting on your OK in its chat: {title}")
 }
 
+/// When each agent last had a [`card_pointer`] left for it.
+static POINTED: LazyLock<Mutex<HashMap<String, i64>>> = LazyLock::new(Default::default);
+
+/// How long one pointer stands for an agent's next cards.
+pub const POINTER_QUIET_MS: i64 = 15 * 60 * 1000;
+
+/// Whether a new card from an agent gets its own pointer: not while another
+/// of its cards is still waiting (the last pointer still says so), nor
+/// within [`POINTER_QUIET_MS`] of the last one. `pending` counts this card.
+pub fn pointer_due(pending: u32, last: Option<i64>, now: i64) -> bool {
+    pending <= 1 && last.is_none_or(|at| now - at >= POINTER_QUIET_MS)
+}
+
 /// Leave [`card_pointer`] in the Chief's chat when `agent` is working on a
 /// request from another agent (not the user's own words in its chat).
 pub fn point_to_card(app: &AppHandle, agent: &store::Agent, title: &str) {
     if agent.is_main || !delegated(&agent.id) {
         return;
+    }
+    // One pointer per wait: observed, four "waiting on your OK" lines in
+    // seven minutes for one agent's cards, each a new line in the Chief's chat.
+    let pending = store::get(&agent.id)
+        .map(|a| a.pending_approvals)
+        .unwrap_or(1);
+    let now = store::now_ms();
+    {
+        let mut last = POINTED.lock().unwrap_or_else(|e| e.into_inner());
+        if !pointer_due(pending, last.get(&agent.id).copied(), now) {
+            return;
+        }
+        last.insert(agent.id.clone(), now);
     }
     let Some(chief) = store::list()
         .ok()
@@ -1936,6 +1962,12 @@ pub fn from_outside(agent_id: &str) -> bool {
         .unwrap_or_else(|e| e.into_inner())
         .get(agent_id)
         .is_some_and(|r| r.running && r.outside)
+}
+
+/// What a turn answering outside text is told about itself, so it doesn't
+/// report the browser it wasn't given as broken (`prompts::OUTSIDE_TURN`).
+pub fn outside_note(outside: bool) -> Option<&'static str> {
+    outside.then_some(super::prompts::OUTSIDE_TURN)
 }
 
 /// What a turn answering outside text adds to Claude Code's command line:
@@ -4718,6 +4750,10 @@ async fn run_turn(
     if !access.prompt.is_empty() {
         system_prompt.push_str("\n\n");
         system_prompt.push_str(&access.prompt);
+    }
+    if let Some(note) = outside_note(outside) {
+        system_prompt.push_str("\n\n");
+        system_prompt.push_str(note);
     }
     let model = if routine {
         agent.routine_model()

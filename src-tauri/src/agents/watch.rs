@@ -107,7 +107,7 @@ pub enum Source {
     GithubMentions,
     /// Open issues and pull requests assigned to the user (`gh api search/issues`).
     GithubAssigned,
-    /// Linear issues assigned to the user, through their Linear connector.
+    /// Linear issues assigned to the user, through their Linear app (ours, else Claude Code's).
     LinearAssigned,
     /// A file appears in this folder (absolute path).
     NewFile { folder: String },
@@ -566,13 +566,13 @@ pub fn validate(source: Source, every_minutes: u32) -> Result<(Source, u32), Ref
             if app.is_empty() {
                 return Err(invalid(
                     "app",
-                    "Say which app to check through (one set up in Claude Code).".into(),
+                    "Say which app to check through (one under Apps).".into(),
                 ));
             }
             if app.starts_with("claude.ai ") {
                 return Err(invalid(
                     "app",
-                    format!("{app} is a claude.ai connector, which a sealed check can't load. Add the app in Claude Code (Apps) and pick it instead."),
+                    format!("{app} is a claude.ai connector, which a sealed check can't load. Connect the app under Apps and pick it instead."),
                 ));
             }
             Source::Custom { check, app }
@@ -1020,8 +1020,13 @@ impl Found {
     }
 }
 
-/// Run a source's check. A model check's usage comes back either way.
-pub async fn check(source: &Source) -> (Result<Found, String>, Option<UsageTotals>) {
+/// Run a source's check for `agent_id`'s routine. A model check's usage
+/// comes back either way.
+pub async fn check(
+    app: &AppHandle,
+    agent_id: &str,
+    source: &Source,
+) -> (Result<Found, String>, Option<UsageTotals>) {
     match source {
         Source::GithubMentions => (
             gh(&[
@@ -1047,7 +1052,7 @@ pub async fn check(source: &Source) -> (Result<Found, String>, Option<UsageTotal
             let now = store::now_ms();
             (read_folder(folder, now, FOLDER_TIMEOUT).await, None)
         }
-        Source::LinearAssigned | Source::Custom { .. } => model_check(source).await,
+        Source::LinearAssigned | Source::Custom { .. } => model_check(app, agent_id, source).await,
         Source::Unknown => (
             Err("This version of the app doesn't know that kind of routine.".into()),
             None,
@@ -1157,31 +1162,91 @@ pub fn parse_model_result(stdout: &str) -> (Result<String, String>, Option<Usage
     (Ok(text), usage)
 }
 
-/// The connector a model source checks through, as Claude Code has it set up.
-pub fn connector_for(source: &Source) -> Result<watch_seal::Connector, String> {
-    let config = watch_seal::read_config()
-        .ok_or_else(|| "Couldn't read Claude Code's settings to find the app.".to_string())?;
-    let root = store::agents_root().ok();
-    match source {
-        Source::LinearAssigned => {
-            watch_seal::find_connector(&config, root.as_deref(), None, watch_seal::is_linear)
-                .ok_or_else(|| {
-                    "Claude Code has no Linear app set up (a claude.ai connector can't be used here). Add Linear in Apps."
-                        .to_string()
-                })
-        }
+/// What a model source checks through.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Route {
+    /// One of our own connections (Apps, or a login card), by its server
+    /// key, reached through the bridge's relay: preferred.
+    Ours { server_key: String },
+    /// A server set up in Claude Code itself.
+    ClaudeCode(watch_seal::Connector),
+}
+
+/// What a model source checks through, for `agent_id`'s routine: our own
+/// connection granted to that agent first, else Claude Code's own server.
+/// `connections`: ours; `config`: Claude Code's config file, if read.
+pub fn route_for(
+    agent_id: &str,
+    source: &Source,
+    connections: &[super::connections::Connection],
+    config: Option<&str>,
+    agents_root: Option<&Path>,
+) -> Result<Route, String> {
+    let (wanted, title) = match source {
+        Source::LinearAssigned => (None, "Linear".to_string()),
         Source::Custom { app, .. } if !app.trim().is_empty() => {
-            watch_seal::find_connector(&config, root.as_deref(), Some(app.trim()), |_, _| false)
-                .ok_or_else(|| format!("Claude Code has no app called {} any more.", app.trim()))
+            (Some(app.trim()), app.trim().to_string())
         }
         Source::Custom { .. } => {
-            Err("This routine doesn't say which app to check through. Edit it and pick one.".into())
+            return Err(
+                "This routine doesn't say which app to check through. Edit it and pick one.".into(),
+            )
         }
-        _ => Err("This kind of routine doesn't check through an app.".into()),
+        _ => return Err("This kind of routine doesn't check through an app.".into()),
+    };
+    if let Some(c) = watch_seal::pick_ours(connections, agent_id, wanted) {
+        return Ok(Route::Ours {
+            server_key: c.server_key.clone(),
+        });
+    }
+    let theirs = config.and_then(|config| match wanted {
+        None => watch_seal::find_connector(config, agents_root, None, watch_seal::is_linear),
+        Some(w) => watch_seal::find_connector(config, agents_root, Some(w), |_, _| false),
+    });
+    if let Some(c) = theirs {
+        return Ok(Route::ClaudeCode(c));
+    }
+    // Connected here, but not usable by this agent: say which it is.
+    let ours_too = |c: &&super::connections::Connection| match wanted {
+        None => c.service == "linear",
+        Some(w) => {
+            c.server_key == w
+                || c.service.eq_ignore_ascii_case(w)
+                || c.title.eq_ignore_ascii_case(w)
+        }
+    };
+    match connections.iter().find(ours_too) {
+        Some(c) if c.needs_sign_in => Err(format!(
+            "{} needs signing in again. Connect it again in Apps.",
+            c.title
+        )),
+        Some(c) => Err(format!(
+            "{} is connected, but this agent wasn't given it. Give it access in Apps.",
+            c.title
+        )),
+        None => Err(format!("{title} isn't connected. Connect it in Apps.")),
     }
 }
 
-async fn model_check(source: &Source) -> (Result<Found, String>, Option<UsageTotals>) {
+/// [`route_for`], with what's on this Mac now.
+fn route_now(agent_id: &str, source: &Source) -> Result<Route, String> {
+    let connections = super::connections::list().unwrap_or_default();
+    let config = watch_seal::read_config();
+    let root = store::agents_root().ok();
+    route_for(
+        agent_id,
+        source,
+        &connections,
+        config.as_deref(),
+        root.as_deref(),
+    )
+}
+
+async fn model_check(
+    app: &AppHandle,
+    agent_id: &str,
+    source: &Source,
+) -> (Result<Found, String>, Option<UsageTotals>) {
     let binary = tokio::task::spawn_blocking(|| {
         crate::commands::claude::find_validated_binary("claude", "--version")
     })
@@ -1194,17 +1259,44 @@ async fn model_check(source: &Source) -> (Result<Found, String>, Option<UsageTot
             None,
         );
     };
-    let connector = match connector_for(source) {
-        Ok(c) => c,
+    let route = match route_now(agent_id, source) {
+        Ok(r) => r,
         Err(why) => return (Err(why), None),
+    };
+    // Ours: the relay, opened for this check alone (reads only, no cards),
+    // its secret revoked when `_sealed` drops at the end of the check.
+    let (connector, _sealed) = match route {
+        Route::ClaudeCode(c) => (c, None),
+        Route::Ours { server_key } => {
+            let port = match crate::agent_bridge::start_global_agent_bridge(app.clone()).await {
+                Ok((port, _)) => port,
+                Err(e) => {
+                    return (
+                        Err(format!("Couldn't open the app's connection: {e}")),
+                        None,
+                    )
+                }
+            };
+            let sealed = super::broker::grant_sealed(agent_id, &server_key);
+            let url = super::reach::connection_url(port, &server_key);
+            (
+                watch_seal::relay_connector(&server_key, &url, sealed.secret()),
+                Some(sealed),
+            )
+        }
     };
     let dir = watch_seal::work_dir();
     if let Err(e) = std::fs::create_dir_all(&dir) {
         return (Err(format!("Couldn't make the check's folder: {e}")), None);
     }
+    // The config in a 0600 file, removed when the check ends: never argv.
+    let config_file = match super::reach::write_config(&watch_seal::mcp_config(&connector)) {
+        Ok(f) => f,
+        Err(e) => return (Err(format!("Couldn't set up the check: {e}")), None),
+    };
     let mut cmd = crate::utils::create_command(&binary);
     // Sealed to this one connector's read tools: see `watch_seal`.
-    cmd.args(watch_seal::args(&connector));
+    cmd.args(watch_seal::args(&connector, &config_file.arg()));
     runner::strip_session_env(&mut cmd);
     cmd.env("PATH", crate::utils::get_extended_path());
     if let Some(home) = dirs::home_dir() {
@@ -1612,7 +1704,7 @@ async fn checked(
             )));
         }
     };
-    let (result, usage) = check(&source).await;
+    let (result, usage) = check(app, agent_id, &source).await;
     let now = store::now_ms();
     let mut applied = Applied::default();
     store::update(agent_id, |a| {

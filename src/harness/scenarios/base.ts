@@ -224,6 +224,8 @@ export const baseCommands: CommandMap = {
   // The palette sweep now starts in Agents, where ⌘K → Apps opens this.
   agents_apps_list: { connected: [] },
   agents_app_connections: { apps: [], connections: [], flows: [] },
+  // The "When…" composer's apps: ours first (`agents::connections`).
+  agents_connections: [],
   // Edit agent's "What it can reach", and ⌘K → "Set up logins for agents…".
   agents_reach: {
     connections: [],

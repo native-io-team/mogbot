@@ -161,6 +161,20 @@ its card; never decline ahead. Asked \"is it good?\": check \
 it end to end, then answer yes or no with the proof. Say \"fixed\" only \
 once you checked it, with why it broke and how it stands now.";
 
+/// Added to a turn answering outside text only (`runner::from_outside`), so
+/// it costs ordinary turns nothing. Observed: such a turn told the owner
+/// "the browser and Chrome tools have disconnected" and "I have no send
+/// path", when the turn had simply been given less.
+pub const OUTSIDE_TURN: &str = "\
+## This turn answers outside text
+
+This turn answers text that came from outside (a routine's items, another \
+assistant's message), so it runs with less: no browser, and sends, team \
+changes and memory edits ask. That is on purpose, not broken: never say a \
+browser or tool is disconnected or that you have no way to do something. \
+Do what you can; what needs more, say in one line you'll do when the user \
+asks here.";
+
 /// Reading a link the user gave: its content straight, before any browser.
 /// App-owned and built every turn, so every agent has it whenever it was
 /// made. Observed: a claude.ai artifact link sent an agent into Chrome for
