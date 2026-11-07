@@ -476,8 +476,21 @@ async fn handle_http(
         Some(SecretRoute::Connection(key)) => {
             // A connection the turn was granted: the relay adds the app's
             // token, which the turn never holds (`agents::conn_relay`).
-            let caller = bearer_of(&req).and_then(|s| crate::agents::broker::caller(&s));
-            let Some(caller) = caller else {
+            // Or a sealed "When…" check, for the one connection it reads
+            // (`agents::watch_seal`): reads only, never a card.
+            let secret = bearer_of(&req);
+            let caller = secret
+                .as_deref()
+                .and_then(crate::agents::broker::caller)
+                .map(|c| (c.agent_id, crate::agents::conn_relay::Via::Turn(c.turn)))
+                .or_else(|| {
+                    secret
+                        .as_deref()
+                        .and_then(crate::agents::broker::sealed_caller)
+                        .filter(|s| s.server_key == key)
+                        .map(|s| (s.agent_id, crate::agents::conn_relay::Via::Sealed))
+                });
+            let Some((agent_id, via)) = caller else {
                 return Ok(plain_response(StatusCode::NOT_FOUND, "Not found"));
             };
             let method = req.method().clone();
@@ -490,13 +503,7 @@ async fn handle_http(
                 ));
             }
             return Ok(crate::agents::conn_relay::relay(
-                &app,
-                &caller.agent_id,
-                caller.turn,
-                &key,
-                &method,
-                &headers,
-                body,
+                &app, &agent_id, via, &key, &method, &headers, body,
             )
             .await);
         }

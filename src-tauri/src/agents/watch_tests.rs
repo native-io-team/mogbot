@@ -1,6 +1,83 @@
 use super::*;
 use crate::agents::failure::Failure;
 
+fn connection(
+    service: &str,
+    key: &str,
+    granted: &[&str],
+) -> crate::agents::connections::Connection {
+    serde_json::from_value(serde_json::json!({
+        "id": format!("conn-{key}"), "service": service,
+        "title": if service == "linear" { "Linear" } else { "Notion" },
+        "account": "sam@example.com",
+        "kind": { "type": "oauth", "serverUrl": "https://mcp.example.com/mcp" },
+        "serverKey": key, "createdAt": 0,
+        "grants": granted.iter().map(|a| serde_json::json!({ "agentId": a, "access": "read", "grantedAt": 0 })).collect::<Vec<_>>(),
+    }))
+    .unwrap()
+}
+
+/// Claude Code's config with a Linear server of its own.
+const CLAUDE_LINEAR: &str =
+    r#"{"mcpServers":{"linear":{"type":"http","url":"https://mcp.linear.app/mcp"}}}"#;
+
+#[test]
+fn a_linear_routine_checks_through_our_own_linear_first() {
+    let ours = vec![connection("linear", "linear", &["a1"])];
+    let ours_route = Ok(Route::Ours {
+        server_key: "linear".into(),
+    });
+    // Ours, granted to this agent: preferred over Claude Code's.
+    assert_eq!(
+        route_for(
+            "a1",
+            &Source::LinearAssigned,
+            &ours,
+            Some(CLAUDE_LINEAR),
+            None
+        ),
+        ours_route
+    );
+    // Only ours: still found (Apps connects Linear as ours now).
+    assert_eq!(
+        route_for("a1", &Source::LinearAssigned, &ours, None, None),
+        ours_route
+    );
+    // Not given to this agent: Claude Code's own, when it has one.
+    match route_for(
+        "a2",
+        &Source::LinearAssigned,
+        &ours,
+        Some(CLAUDE_LINEAR),
+        None,
+    ) {
+        Ok(Route::ClaudeCode(c)) => assert_eq!(c.name, "linear"),
+        other => panic!("{other:?}"),
+    }
+    // Neither: says why, in a line the user can act on.
+    let why = route_for("a2", &Source::LinearAssigned, &ours, Some("{}"), None).unwrap_err();
+    assert!(why.contains("wasn't given it"), "{why}");
+    let why = route_for("a1", &Source::LinearAssigned, &[], Some("{}"), None).unwrap_err();
+    assert!(why.contains("isn't connected"), "{why}");
+}
+
+#[test]
+fn a_custom_routine_names_our_app_by_its_key() {
+    let ours = vec![connection("notion", "notion", &["a1"])];
+    let custom = |app: &str| Source::Custom {
+        check: "a new page in the roadmap".into(),
+        app: app.into(),
+    };
+    assert_eq!(
+        route_for("a1", &custom("notion"), &ours, None, None),
+        Ok(Route::Ours {
+            server_key: "notion".into()
+        })
+    );
+    assert!(route_for("a1", &custom("gmail"), &ours, Some("{}"), None).is_err());
+    assert!(route_for("a1", &custom(""), &ours, None, None).is_err());
+}
+
 const NOW: i64 = 1_793_613_600_000;
 const MIN: i64 = MINUTE_MS;
 

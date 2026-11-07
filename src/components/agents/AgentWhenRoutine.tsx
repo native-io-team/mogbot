@@ -9,9 +9,11 @@
  * folders are checked for free; an app source (Linear, anything else) is a
  * short read-only Claude Code call per check, at least 15 minutes apart and
  * at most 24 a day, sealed to that one app (`watch_seal.rs`). It checks
- * through an app set up in Claude Code; a claude.ai connector can't be
- * loaded into the sealed check, so it isn't offered. Linear is offered only
- * when such a Linear app is there. Backend: `src-tauri/src/agents/watch.rs`.
+ * through an app connected under Apps and given to this agent (ours,
+ * preferred, reached through the relay), else one set up in Claude Code
+ * itself; a claude.ai connector can't be loaded into the sealed check, so it
+ * isn't offered. Linear is offered only when such a Linear app is there.
+ * Backend: `src-tauri/src/agents/watch.rs`.
  *
  * @module components/agents/AgentWhenRoutine
  */
@@ -31,7 +33,8 @@ import {
   type CheckIn,
   type WatchSource,
 } from '../../lib/agents';
-import { appTitle, listAgentApps } from '../../lib/agentApps';
+import { appTitle, listAgentApps, type AgentApp } from '../../lib/agentApps';
+import { listConnections, type Connection } from '../../lib/agentLogins';
 import { refreshAgents } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useAsyncState } from '../../hooks/useAsyncState';
@@ -94,6 +97,43 @@ function sourceOf(kind: Kind, folder: string, check: string, app: string): Watch
   return { kind };
 }
 
+/** An app a check can read through: `value` is what the routine saves as `app`. */
+export interface WhenApp {
+  value: string;
+  label: string;
+}
+
+/**
+ * The apps `agentId`'s check can read through, ours first: our own
+ * connections given to this agent and signed in (by server key, the name its
+ * tools carry), then servers set up in Claude Code itself. A claude.ai
+ * connector can't be loaded into the sealed check. `linear`: whether either
+ * has Linear.
+ */
+export function whenApps(
+  agentId: string,
+  connections: Connection[],
+  claude: AgentApp[]
+): { apps: WhenApp[]; linear: boolean } {
+  const ours = connections.filter(
+    (c) => c.kind.type === 'oauth' && !c.needsSignIn && c.grants.some((g) => g.agentId === agentId)
+  );
+  const title = (c: Connection) =>
+    ours.filter((o) => o.title === c.title).length > 1 ? `${c.title} (${c.account})` : c.title;
+  const theirs = claude.filter(
+    (a) => a.source !== 'claudeAi' && !ours.some((c) => c.serverKey === a.name)
+  );
+  return {
+    apps: [
+      ...ours.map((c) => ({ value: c.serverKey, label: title(c) })),
+      ...theirs.map((a) => ({ value: a.name, label: appTitle(a) })),
+    ],
+    linear:
+      ours.some((c) => c.service === 'linear') ||
+      theirs.some((a) => /linear/i.test(a.name) || /linear\.app/i.test(a.target)),
+  };
+}
+
 /** A Validation error's reason; anything else as the app words it. */
 function reasonOf(err: unknown): string {
   const e = asCommandError(err);
@@ -118,33 +158,32 @@ export function WhenComposer({ agent, editing, onDone, onCancel }: WhenComposerP
   const [folder, setFolder] = useState(start?.kind === 'new_file' ? start.folder : '');
   const [check, setCheck] = useState(start?.kind === 'custom' ? start.check : '');
   const [app, setApp] = useState(start?.kind === 'custom' ? (start.app ?? '') : '');
-  // Apps set up in Claude Code itself: a claude.ai connector can't be loaded
-  // into the sealed check.
-  const [apps, setApps] = useState<string[]>([]);
+  // Apps connected under Apps for this agent, then Claude Code's own: a
+  // claude.ai connector can't be loaded into the sealed check.
+  const [apps, setApps] = useState<WhenApp[]>([]);
   const [every, setEvery] = useState(editing?.watch?.everyMinutes ?? DEFAULT_EVERY);
   const [note, setNote] = useState(editing?.note ?? '');
   const [error, setError] = useState<string | null>(null);
   const [hasLinear, setHasLinear] = useState(startKind === 'linear_assigned');
 
-  // Linear is offered only when Claude Code has a Linear app of its own.
+  // Linear is offered only when this agent can read a Linear app: ours, or
+  // Claude Code's own. Either list failing just leaves its apps out.
   useEffect(() => {
     let live = true;
-    listAgentApps()
-      .then((list) => {
-        if (!live) return;
-        const own = list.connected.filter((a) => a.source !== 'claudeAi');
-        setApps(own.map((a) => a.name));
-        if (own.some((a) => /linear/i.test(a.name) || /linear\.app/i.test(a.target))) {
-          setHasLinear(true);
-        }
-      })
-      .catch(() => {
-        /* Not knowing isn't an error worth showing: Linear just isn't offered. */
-      });
+    void Promise.allSettled([listConnections(), listAgentApps()]).then(([ours, theirs]) => {
+      if (!live) return;
+      const found = whenApps(
+        agent.id,
+        ours.status === 'fulfilled' ? (ours.value ?? []) : [],
+        theirs.status === 'fulfilled' ? (theirs.value?.connected ?? []) : []
+      );
+      setApps(found.apps);
+      if (found.linear) setHasLinear(true);
+    });
     return () => {
       live = false;
     };
-  }, []);
+  }, [agent.id]);
 
   const choices = SOURCES.filter((s) => s.kind !== 'linear_assigned' || hasLinear);
   const offered = intervalsFor(kind);
@@ -236,16 +275,13 @@ export function WhenComposer({ agent, editing, onDone, onCancel }: WhenComposerP
                 setApp(v);
                 setError(null);
               }}
-              options={apps.map((name) => ({
-                value: name,
-                label: appTitle({ name, source: 'user' }),
-              }))}
+              options={apps}
             />
           </div>
         ) : (
           <p className="agent-when__cost">
-            It checks through one of the apps you’ve added under Apps. Apps connected on claude.ai
-            can’t be used here.
+            It checks through an app connected under Apps and given to {agent.name}. Apps connected
+            on claude.ai can’t be used here.
           </p>
         ))}
       <TextField

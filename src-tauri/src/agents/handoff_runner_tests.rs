@@ -191,6 +191,20 @@ fn a_delegated_agents_card_is_pointed_to_where_the_user_is_talking() {
     });
 }
 
+/// One pointer per wait: a card joining others still waiting adds no line,
+/// and a new wait soon after the last pointer adds none either.
+#[test]
+fn one_pointer_stands_for_an_agents_cards_while_they_wait() {
+    let now = 1_800_000_000_000;
+    assert!(pointer_due(1, None, now));
+    // Another card of its own is still open: the last line still says so.
+    assert!(!pointer_due(2, None, now));
+    assert!(!pointer_due(3, Some(now - POINTER_QUIET_MS * 4), now));
+    // Its earlier cards answered, but the last line was minutes ago.
+    assert!(!pointer_due(1, Some(now - 60_000), now));
+    assert!(pointer_due(1, Some(now - POINTER_QUIET_MS), now));
+}
+
 /// Only a turn answering nothing but scheduled runs may end with no post.
 #[test]
 fn only_a_check_in_alone_may_finish_with_nothing_new() {

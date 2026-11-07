@@ -3211,7 +3211,7 @@ every few minutes:
 | Someone mentions me on GitHub | `gh api notifications` (all, participating), reason `mention`/`team_mention`; one firing per new mention (thread id + latest comment, or `updated_at`) | free |
 | An issue or PR is assigned to me | `gh api search/issues -f q="assignee:@me is:open"`, 100 a page, up to 300 | free |
 | A new file appears in a folder | the folder's listing (not hidden, not `.crdownload`/`.part`/…, not modified in the last 5 s; symlinks skipped); folders of at most 2,000 entries | free |
-| A Linear issue is assigned to me | one sealed headless Claude Code call on Haiku through the Linear app set up in Claude Code | a model call |
+| A Linear issue is assigned to me | one sealed headless Claude Code call on Haiku through Linear: ours first (connected under Apps or on a login card, given to this agent, reached through the relay with a secret that opens only that connection, for reads only, never a card: `conn_relay::Via::Sealed`), else the Linear server set up in Claude Code | a model call |
 | Something else… (in the user's words, through one named app) | the same sealed call, through that app | a model call |
 
 **The rules.** The first check is a baseline (it notes what's there and

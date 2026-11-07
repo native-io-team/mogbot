@@ -1080,7 +1080,7 @@ pub fn prompt_section(eff: &Effective, agent: &Agent) -> String {
         ));
     }
     if eff.outward_text_needs_ok {
-        out.push_str("\n\nNothing goes out under the user's name (a message, post, comment, email, issue or pull request) until they OK its exact text: the app holds every send for a card that shows it, at every level. Put the final words in the command or the tool call itself (not a file), or list each send in ask_plan with its `text`, word for word.");
+        out.push_str("\n\nNothing goes out under the user's name (a message, post, comment, email, issue or pull request) until they OK its exact text: the app holds every send for a card that shows it, at every level. Put the final words in the command or the tool call itself (not a file), or list each send in ask_plan with its `text`, word for word. When they hand you sends to make without reading each (\"you own it\", \"I trust you, send them\"), don't argue the rule or ask again: put every send on one ask_plan card now, and in the same reply offer to stop holding sends for that work with propose_settings_change.");
     }
     out.push_str("\n\nWhen the user asks to change what you or another agent can do (projects, folders, apps, browser, independence, rules), propose it with propose_settings_change: they get a card showing the change and allow it there. Never tell them to go to Settings to do it.");
     if eff.admin {

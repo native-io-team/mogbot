@@ -15,12 +15,33 @@ const agent = { id: 'a1', name: 'Finance' } as Agent;
 
 type AppRow = { name: string; target: string; status: string; source: string };
 
+/** One of our own connections (`agents_connections`), fictional. */
+function ours(service: string, serverKey: string, title: string, agentIds: string[]) {
+  return {
+    id: `c-${serverKey}`,
+    service,
+    title,
+    account: 'sam@example.com',
+    kind: { type: 'oauth', serverUrl: 'https://mcp.example.com/mcp' },
+    serverKey,
+    createdAt: 0,
+    grants: agentIds.map((agentId) => ({ agentId, access: 'read', grantedAt: 0 })),
+  };
+}
+
 function mount(
-  opts: { linear?: boolean; apps?: AppRow[]; editing?: CheckIn | null; reject?: string } = {}
+  opts: {
+    linear?: boolean;
+    apps?: AppRow[];
+    connections?: ReturnType<typeof ours>[];
+    editing?: CheckIn | null;
+    reject?: string;
+  } = {}
 ) {
   const calls: { cmd: string; args: Record<string, unknown> }[] = [];
   mockIPC((cmd, args) => {
     calls.push({ cmd, args: args as Record<string, unknown> });
+    if (cmd === 'agents_connections') return opts.connections ?? [];
     if (cmd === 'agents_apps_list') {
       return {
         connected: [
@@ -107,6 +128,51 @@ describe('WhenComposer', () => {
     );
     fireEvent.click(screen.getByRole('button', { name: 'every 4 hours' }));
     expect(screen.getByText(/up to 6 a day/)).toBeInTheDocument();
+  });
+
+  it('offers Linear connected under Apps for this agent, with no Claude Code server', async () => {
+    mount({ connections: [ours('linear', 'linear', 'Linear', ['a1'])] });
+    await waitFor(() => expect(radio('A Linear issue is assigned to me')).toBeInTheDocument());
+  });
+
+  it('doesn’t offer Linear connected only for another agent', async () => {
+    const { calls } = mount({ connections: [ours('linear', 'linear', 'Linear', ['other'])] });
+    await waitFor(() => expect(calls.some((c) => c.cmd === 'agents_apps_list')).toBe(true));
+    await act(() => Promise.resolve());
+    expect(screen.queryByRole('radio', { name: /Linear/ })).toBeNull();
+  });
+
+  it('checks “something else” through our own app first, saved by its key', async () => {
+    const { calls } = mount({
+      connections: [ours('notion', 'notion', 'Notion', ['a1'])],
+      apps: [
+        { name: 'figma', target: 'https://mcp.figma.com/mcp', status: 'connected', source: 'user' },
+      ],
+    });
+    fireEvent.click(radio('Something else'));
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Notion' })).toBeInTheDocument());
+    const order = screen
+      .getAllByRole('button')
+      .map((b) => b.textContent)
+      .filter((t) => t === 'Notion' || t === 'Figma');
+    expect(order).toEqual(['Notion', 'Figma']);
+    fireEvent.click(screen.getByRole('button', { name: 'Notion' }));
+    fireEvent.change(screen.getByLabelText('What to look out for'), {
+      target: { value: 'a new page in the roadmap' },
+    });
+    fireEvent.change(screen.getByLabelText('What to do when it happens'), {
+      target: { value: 'Summarise it' },
+    });
+    await act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+      return Promise.resolve();
+    });
+    const create = calls.find((c) => c.cmd === 'agents_watch_create');
+    expect(create?.args.source).toEqual({
+      kind: 'custom',
+      check: 'a new page in the roadmap',
+      app: 'notion',
+    });
   });
 
   it('never offers a claude.ai connector: the sealed check can’t load one', async () => {
