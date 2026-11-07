@@ -12,10 +12,10 @@
 //!    through `gh`, whose commands still ask through the approval broker.
 //! 4. **A browser**: for a site, the agents' own browser first
 //!    (`agent_browser`, either engine), unless this turn has Claude in
-//!    Chrome (`browser::for_turn`) and the site is Google's or Slack's
-//!    ([`users_chrome_first`]: Google refuses a sign-in in a driven
-//!    browser) or was last found signed in only in the user's personal
-//!    Chrome; then that. A sign-in page in the agents' browser
+//!    Chrome (`browser::for_turn`) and the site is Google's, Slack's, X's,
+//!    LinkedIn's or Grok's ([`users_chrome_first`]: Google refuses a
+//!    sign-in in a driven browser) or was last found signed in only in the
+//!    user's personal Chrome; then that. A sign-in page in the agents' browser
 //!    (`signed_out`) moves the agent to the user's Chrome at once. Never for
 //!    outside text. The site is given to the agent and it's told to open it
 //!    and say which account it's in. Only when no browser is left
@@ -81,15 +81,20 @@ impl Tried {
 /// Sites the user is signed in to in their own Chrome and the agents'
 /// browser can't sign in to: Google refuses a sign-in in a driven browser
 /// ("This browser or app may not be secure"), and Slack's workspace sign-in
-/// goes by email links to the user's inbox. With Claude in Chrome these go
-/// straight to the user's Chrome. Observed: Gmail opened in the agents'
-/// browser landed on Google's signed-out product page every time, and the
-/// agent was then told to carry on without Gmail.
+/// goes by email links to the user's inbox. X, LinkedIn and Grok (on
+/// grok.com or X) challenge a new browser and are signed in only in the
+/// user's own. With Claude in Chrome these go straight to the user's
+/// Chrome. Observed: Gmail opened in the agents' browser landed on Google's
+/// signed-out product page every time, and the agent was then told to carry
+/// on without Gmail; an agent "couldn't search X because the agents'
+/// browser isn't signed in there".
 pub fn users_chrome_first(service: &str) -> bool {
-    matches!(service, "gmail" | "google_calendar" | "google_drive" | "slack")
-        || logins::service(service)
-            .and_then(|s| s.site)
-            .is_some_and(|site| site == "google.com" || site.ends_with(".google.com"))
+    matches!(
+        service,
+        "gmail" | "google_calendar" | "google_drive" | "slack" | "x" | "linkedin" | "grok"
+    ) || logins::service(service)
+        .and_then(|s| s.site)
+        .is_some_and(|site| site == "google.com" || site.ends_with(".google.com"))
 }
 
 /// What the chain found, before anything is changed. Pure: [`decide`].

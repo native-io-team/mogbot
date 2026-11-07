@@ -18,7 +18,9 @@
 //! `upload_image`, `shortcuts_execute` (each can carry data anywhere), and
 //! anything this build doesn't know. **At "Go hard"** everything runs,
 //! scripts and shortcuts included, except uploads, send-like clicks and
-//! keys, and a script that submits or posts (`go_hard::script_sends`).
+//! keys, and a script that submits or posts (`go_hard::script_sends`). The
+//! Send or Enter that asks the user's own Grok a question in its chat
+//! (`assistant_chat`) isn't a send as them: it runs at "Go hard".
 //!
 //! Turns answering outside text never get the browser at all
 //! (`browser::allowed`). Threat model: docs/agents.md, "Your browser".
@@ -614,6 +616,36 @@ fn sensitive_page(url: Option<&str>) -> bool {
         .any(|w| SENSITIVE_PAGES.contains(&w.as_str()))
 }
 
+/// The user's own assistant's chat: Grok on grok.com, or on X under
+/// `/i/grok`. Asking it a question there is reading their own assistant, not
+/// posting as them, so at "Go hard" and above the Enter or Send that asks it
+/// goes through ([`asks_assistant`]). Sharing, publishing or deleting there
+/// still asks, and the rest of x.com (posts, replies) is unchanged.
+/// Observed: the Chief messaged an agent imported from Grok, which knew
+/// nothing, instead of asking the user's real Grok.
+pub fn assistant_chat(url: Option<&str>) -> bool {
+    let Some(u) = url.and_then(|u| url::Url::parse(u.trim()).ok()) else {
+        return false;
+    };
+    if !matches!(u.scheme(), "https" | "http") {
+        return false;
+    }
+    let host = u.host_str().unwrap_or("");
+    let path = u.path().to_ascii_lowercase();
+    host_matches(host, "grok.com")
+        || ((host_matches(host, "x.com") || host_matches(host, "twitter.com"))
+            && (path == "/i/grok" || path.starts_with("/i/grok/")))
+}
+
+/// A Send (or Submit, or Enter) in the user's own assistant's chat, at "Go
+/// hard" or above: asking it, which goes through. `what` is what
+/// [`final_submit`] said the control does.
+fn asks_assistant(level: Level, url: Option<&str>, what: &str) -> bool {
+    level.goes_hard()
+        && assistant_chat(url)
+        && matches!(what, "send it as you" | "submit it as you")
+}
+
 /// A page where a click may spend money: still unsure at "Full send".
 fn money_page(url: Option<&str>) -> bool {
     let Some(url) = url else { return false };
@@ -680,7 +712,8 @@ fn interaction_may_go(level: Level, page: &Page, name: &str, input: &Value) -> b
     };
     let ok_target = |label: &str| {
         if hard {
-            final_submit(label, level).is_none() && !money_page(url)
+            final_submit(label, level).is_none_or(|what| asks_assistant(level, url, what))
+                && !money_page(url)
         } else {
             sends(label).is_none() && !sensitive_page(url)
         }
@@ -714,6 +747,7 @@ fn interaction_may_go(level: Level, page: &Page, name: &str, input: &Value) -> b
                         return !(is_enter(key) && (money_page(url) || in_password()));
                     }
                     !is_enter(key)
+                        || (asks_assistant(level, url, "send it as you") && !in_password())
                         || page
                             .last_target
                             .as_deref()

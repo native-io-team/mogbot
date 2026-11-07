@@ -296,10 +296,14 @@ what is still open (cards waiting, questions unanswered), and it is told never
 to ask the user to repeat any of it; `search_my_chat` reaches further back.
 
 **Do it, don't ask.** Every agent's prompt (`prompts::AGENCY`) has it look
-before asking (`search_my_chat` over its own chat, or a teammate's for the
-Chief, admins and at Go hard; memory; the team; logs; its tools), never treat
+before asking (`search_my_chat` over its own chat, a teammate's, or with
+`agent: "team"` every agent's chat and memory at once, for the Chief, admins
+and at Go hard; memory; logs; its tools; then the user's own accounts and
+assistants in their Chrome: Gmail, X, Grok), asks the Chief to search the
+team when it isn't the Chief, and only then asks the user, one question, with
+its own pick and why when the choice is really theirs. It never treats
 "I have no X tool" as an answer while the access chain has a browser left,
-never pre-decline a send (the app raises the card), and answer "is it good?"
+never pre-declines a send (the app raises the card), and answers "is it good?"
 with an end-to-end check and proof. A reply that gives up anyway ("I have no
 Slack tool", "they'd need to say yes", a tool name in the user's chat) earns a
 hidden note at the start of its next turn in its own chat (`agents/agency.rs`,
@@ -402,7 +406,7 @@ characters, a Codex agent's 12,619, the Chief's 16,003 before its team list
 (budgets 12,500 / 13,100 / 16,600). The agents' browser in "Getting access"
 took them to 12,697 / 13,262 / 16,646 after trims elsewhere (the repeated
 "don't mention servers or ports", the password paragraph the Secrets section
-already says), and the budgets to 12,800 / 13,400 / 16,800, then 13,100 / 13,700 / 17,100 for running projects from chat, and 13,250 / 13,850 / 17,250 for remembered permissions and reading artifacts. Measured with Claude Code (Haiku 5.5,
+already says), and the budgets to 12,800 / 13,400 / 16,800, then 13,100 / 13,700 / 17,100 for running projects from chat, and 13,250 / 13,850 / 17,250 for remembered permissions and reading artifacts. Grok, the team-wide search and the Chief's tone rules went in within those budgets (13,209 / 13,794 / 17,246) by trimming the rooms, import and agent-editing bullets, "Look before you scale" and a dev-server line. Measured with Claude Code (Haiku 5.5,
 `--append-system-prompt-file`, input tokens over a bare run): on the base
 this work started from, 3,347 tokens before and 3,269 after for a plain agent
 (4,583 → 4,505 for the Chief), while gaining the paragraph above; with
@@ -2138,9 +2142,12 @@ their own, and the person signs in to it from the phone.
   the browser gate said asks (this also closed that gap for Claude in
   Chrome's send clicks).
 - **Which browser** (`access_chain`): the agents' browser first; the user's
-  own Chrome (Claude in Chrome) for Gmail, Google Calendar, Drive and Slack
-  (`users_chrome_first`: Google refuses a sign-in in a driven browser, and
-  signed out, mail.google.com lands on Google's product page), when the site
+  own Chrome (Claude in Chrome) for Gmail, Google Calendar, Drive, Slack, X,
+  LinkedIn and Grok (`users_chrome_first`: Google refuses a sign-in in a
+  driven browser, and signed out, mail.google.com lands on Google's product
+  page; X, LinkedIn and Grok are signed in only in the user's own Chrome, and
+  an agent once said it "couldn't search X because the agents' browser isn't
+  signed in there"), when the site
   was last found signed in only there (`browser_profiles`, site → profile; a
   site signed in in the agents' browser is remembered as `Agents`), and at
   once when the agents' browser showed a sign-in or signed-out page
@@ -2149,6 +2156,23 @@ their own, and the person signs in to it from the phone.
   (`browser: "chrome"`) or the turn has no Chrome. A plain Deny on an
   import's quiet card doesn't stop the user's Chrome (it connects nothing);
   a Deny on a task's card, or one with the user's words, still does.
+- **"Grok" is the user's real Grok** (grok.com, or x.com/i/grok), unless they
+  name an agent. The Chief's section says so, and its team list adds a line
+  for any agent named for Grok or "… Teammate": an agent on this team, an
+  imported one a copy that knows only what came over (`prompts::copies_note`).
+  The Chief asks Grok itself in the user's Chrome and reads the reply off the
+  page; at Go hard and above the Send or Enter in Grok's chat runs without a
+  card (`browser_gate::assistant_chat`), since asking their own assistant
+  isn't posting as them, while Share, Delete and anything elsewhere on X still
+  ask. Grok can reach the Chief over Remote Access (`ask_chief`); the Chief
+  can't open that channel, so it uses the browser. Observed: asked to "talk
+  to Grok… GROKBOT", the Chief messaged "Grok Bot Teammate", then asked the
+  owner for an X link and for "which project Grok's session is in".
+- **A project tool never sends the agent back to the user** for the project:
+  for an agent, "say which one" lists its projects and tells it to pick
+  (`remote_access::tools::agents_pick`), and says a session is a tab in a
+  project, never Grok or a teammate. The remote assistant's wording is
+  unchanged.
   Observed: an import's denied Gmail card told the Chief to "carry on
   without Gmail" while Gmail was open and signed in in the user's Chrome.
 

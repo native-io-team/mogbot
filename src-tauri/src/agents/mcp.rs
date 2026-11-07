@@ -157,13 +157,13 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "search_my_chat",
-        description: "Search your own chat with the user (and your messages with other agents), whole messages, newest first: what you reported, an error you hit, what the user decided. Use it before asking the user anything they or you may already have said. With `agent`, a teammate's chat instead (the Chief, admins, and at Go hard).",
+        description: "Search your own chat with the user (and your messages with other agents), whole messages, newest first: what you reported, an error you hit, what the user decided. Use it before asking the user anything they or you may already have said. With `agent`, a teammate's chat instead, or `\"team\"` for every agent's chat and memory at once (the Chief, admins, and at Go hard).",
         main_only: false,
         schema: || json!({
             "type": "object",
             "properties": {
                 "query": { "type": "string", "description": "Words that must all appear, e.g. \"slack error\"." },
-                "agent": { "type": "string", "description": "A teammate's name, to search their chat instead of yours." },
+                "agent": { "type": "string", "description": "A teammate's name, to search their chat instead of yours, or \"team\" for every chat and memory." },
                 "limit": { "type": "integer", "description": "Most messages back (default 10, at most 30)." }
             },
             "required": ["query"]
@@ -1057,17 +1057,110 @@ fn list_agents(caller: &store::Agent) -> Value {
 /// for the Chief, an admin, or one at Go hard (its own level, or the team's),
 /// never in a turn answering outside text.
 fn may_search_chat_of(caller: &store::Agent, whose: &store::Agent, outside: bool) -> bool {
-    whose.id == caller.id
-        || (!outside
-            && (caller.is_main
-                || super::admin::admin_now(caller)
-                || super::policy::chosen_level(caller).goes_hard()))
+    whose.id == caller.id || may_search_team(caller, outside)
+}
+
+/// Whether `caller` may search teammates' chats (and memories) at all.
+fn may_search_team(caller: &store::Agent, outside: bool) -> bool {
+    !outside
+        && (caller.is_main
+            || super::admin::admin_now(caller)
+            || super::policy::chosen_level(caller).goes_hard())
+}
+
+/// `agent: "team"`: every agent's chat and memory at once, for whoever may
+/// search a teammate's. Observed: the Chief asked the owner for facts about
+/// his truck that another agent's chat and memory already held.
+fn is_team_scope(name: &str) -> bool {
+    matches!(
+        name.trim().to_ascii_lowercase().as_str(),
+        "team" | "everyone" | "all" | "the team"
+    ) && !matches!(store::find(name), Ok(Some(_)))
+}
+
+fn search_team(caller: &store::Agent, query: &str, limit: usize) -> Value {
+    let everyone: Vec<store::Agent> = store::list()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|a| !a.hidden)
+        .collect();
+    let mut out = Vec::new();
+    let remembered: Vec<String> = everyone
+        .iter()
+        .flat_map(|a| {
+            let home = store::agent_home(&a.id).ok();
+            let who = if a.id == caller.id {
+                "You".to_string()
+            } else {
+                a.name.clone()
+            };
+            home.map(|h| super::search::memory_lines(&h, query, 3))
+                .unwrap_or_default()
+                .into_iter()
+                .map(move |l| format!("- {who}: {l}"))
+        })
+        .take(20)
+        .collect();
+    if !remembered.is_empty() {
+        out.push(format!(
+            "What agents remember (their CLAUDE.md):\n{}",
+            remembered.join("\n")
+        ));
+    }
+    match super::search::search_in(&everyone, query, limit) {
+        Ok(hits) if !hits.is_empty() => {
+            let lines: Vec<String> = hits
+                .iter()
+                .map(|h| {
+                    let when = chrono::DateTime::from_timestamp_millis(h.ts)
+                        .map(|t| {
+                            t.with_timezone(&chrono::Local)
+                                .format("%Y-%m-%d %H:%M")
+                                .to_string()
+                        })
+                        .unwrap_or_default();
+                    let said = match h.kind {
+                        MessageKind::User => "the user said",
+                        MessageKind::Agent => "it said",
+                        _ => "a note",
+                    };
+                    let place = h.room_name.as_deref().map_or_else(
+                        || format!("{}'s chat", h.agent_name),
+                        |r| format!("room {r}"),
+                    );
+                    format!("[{when}] {place}, {said}: {}", h.snippet)
+                })
+                .collect();
+            out.push(format!(
+                "In the team's chats (newest first; search_my_chat with that agent for whole messages):\n{}",
+                lines.join("\n")
+            ));
+        }
+        Ok(_) => {}
+        Err(e) => return error(format!("Couldn't read the team's chats: {e}")),
+    }
+    if out.is_empty() {
+        return text(format!(
+            "Nothing in any agent's chat or memory has every word of \"{query}\". Try fewer or other words, then the user's own accounts and assistants in their Chrome, before asking them."
+        ));
+    }
+    text(out.join("\n\n"))
 }
 
 fn search_my_chat(caller: &store::Agent, args: &Value) -> Value {
     let Some(query) = arg(args, "query") else {
         return error("`query` is required: the words to look for.");
     };
+    if arg(args, "agent").is_some_and(is_team_scope) {
+        if !may_search_team(caller, runner::from_outside(&caller.id)) {
+            return error("Only the Chief, an admin, or any agent at Go hard can search the team's chats. Ask the Chief of Staff to search the team with message_agent.");
+        }
+        let limit = args
+            .get("limit")
+            .and_then(Value::as_u64)
+            .map_or(15, |n| n.clamp(1, 30) as usize);
+        return search_team(caller, query, limit);
+    }
     let whose = match arg(args, "agent") {
         None => caller.clone(),
         Some(name) => match store::find(name) {
@@ -3039,6 +3132,66 @@ mod tests {
             .starts_with("Allowed automatically — Go hard · mkdir -p"));
         independence::set_level(Level::Often, 2).unwrap();
         assert_eq!(auto_allowed(&agent, "Bash", &ls, false), None);
+        store::set_root_for_tests(None);
+    }
+
+    /// The Car agent asked the owner about a truck the team already knew
+    /// about. `search_my_chat` with `agent: "team"` reads every agent's chat
+    /// and memory in one call, for the Chief (and admins, and at Go hard);
+    /// anyone else is told to ask the Chief.
+    #[test]
+    fn the_chief_searches_every_chat_and_memory_at_once() {
+        let _serial = store::tests_lock();
+        let root = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(root.path().to_path_buf()));
+        let new = |name: &str, instructions: &str, is_main: bool| {
+            store::create(store::NewAgent {
+                name: name.into(),
+                role: String::new(),
+                instructions: instructions.into(),
+                shape: None,
+                avatar: None,
+                color: None,
+                is_main,
+            })
+            .unwrap()
+        };
+        let chief = new("Chief of Staff", "", true);
+        let car = new("Car", "Looks after the user's vehicles.", false);
+        let home = store::agent_home(&car.id).unwrap();
+        let md = std::fs::read_to_string(home.join("CLAUDE.md")).unwrap();
+        std::fs::write(
+            home.join("CLAUDE.md"),
+            format!("{md}\n- The fictional F150 is booked in for brakes on Friday.\n"),
+        )
+        .unwrap();
+        let m: store::AgentMessage = serde_json::from_value(json!({
+            "id": store::new_id(), "agentId": car.id, "ts": store::now_ms(),
+            "kind": "user", "text": "The F150 tow hitch arrived today.",
+        }))
+        .unwrap();
+        store::append_message(&m).unwrap();
+        let said = |v: Value| v["content"][0]["text"].as_str().unwrap_or("").to_string();
+        let found = search_my_chat(&chief, &json!({ "query": "f150", "agent": "team" }));
+        assert!(found.get("isError").is_none(), "{found}");
+        let found = said(found);
+        assert!(
+            found.contains("- Car: - The fictional F150 is booked in for brakes"),
+            "{found}"
+        );
+        assert!(
+            found.contains("Car's chat, the user said") && found.contains("tow hitch"),
+            "{found}"
+        );
+        let none = said(search_my_chat(
+            &chief,
+            &json!({ "query": "zeppelin", "agent": "team" }),
+        ));
+        assert!(none.contains("before asking them"), "{none}");
+        // Not the Chief, not an admin, not at Go hard: ask the Chief.
+        let refused = search_my_chat(&car, &json!({ "query": "f150", "agent": "team" }));
+        assert_eq!(refused["isError"], true);
+        assert!(said(refused).contains("Ask the Chief of Staff to search the team"));
         store::set_root_for_tests(None);
     }
 

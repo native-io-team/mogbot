@@ -428,7 +428,7 @@ pub async fn call(app: &AppHandle, caller: &store::Agent, tool: &Tool, args: &Va
         match &project {
             Some(p) => push(app, caller, p).await,
             None => mcp_error(
-                shared::resolve_project(&projects, wanted)
+                shared::resolve_project_for_agents(&projects, wanted)
                     .err()
                     .unwrap_or_default(),
             ),

@@ -870,3 +870,65 @@ fn final_submit_tells_the_last_step_from_the_ones_before_it() {
         assert!(final_submit(l, Level::FullSend).is_some(), "{l}");
     }
 }
+
+/// "Talk to Grok": the Chief asks the user's real Grok in their Chrome. At
+/// "Go hard" and above, the Send (or Enter) that asks it a question runs
+/// without a card: it's their own assistant, not a post as them. Below that
+/// it asks, as every send does, and sharing or deleting in Grok, or posting
+/// anywhere else on X, still asks at "Go hard".
+#[test]
+fn asking_the_users_own_grok_runs_at_go_hard() {
+    let mut p = Page::default();
+    on_answer(
+        &mut p,
+        "textbox \"Ask Grok anything\" [ref_1]\nbutton \"Send\" [ref_2]\nbutton \"Share\" [ref_3]\nbutton \"Delete chat\" [ref_4]",
+    );
+    p.tabs.insert(1, "https://grok.com/".into());
+    p.tabs
+        .insert(2, "https://x.com/i/grok?conversation=1".into());
+    p.tabs.insert(3, "https://x.com/home".into());
+    let click = |level: Level, r: &str, tab: u64| {
+        gate_with(
+            true,
+            level,
+            &agent(),
+            &t("computer"),
+            &json!({"action": "left_click", "ref": r, "tabId": tab}),
+            false,
+            &p,
+        )
+    };
+    let enter = |level: Level, tab: u64| {
+        let mut p = p.clone();
+        p.last_target = Some("textbox \"Ask Grok anything\"".into());
+        gate_with(
+            true,
+            level,
+            &agent(),
+            &t("computer"),
+            &json!({"action": "key", "text": "Enter", "tabId": tab}),
+            false,
+            &p,
+        )
+    };
+    for level in [Level::GoHard, Level::FullSend] {
+        for tab in [1, 2] {
+            assert_eq!(click(level, "ref_2", tab), Gate::Allow, "{level:?} {tab}");
+            assert_eq!(enter(level, tab), Gate::Allow, "{level:?} {tab}");
+        }
+    }
+    // Share and delete still ask at Go hard; so does a send on X's timeline.
+    for r in ["ref_3", "ref_4"] {
+        assert_eq!(click(Level::GoHard, r, 1), Gate::Ask, "{r}");
+    }
+    assert_eq!(click(Level::GoHard, "ref_2", 3), Gate::Ask);
+    assert_eq!(enter(Level::GoHard, 3), Gate::Ask);
+    // Below Go hard a send asks, Grok or not.
+    assert_eq!(click(Level::Judgement, "ref_2", 1), Gate::Ask);
+    assert_eq!(enter(Level::Judgement, 1), Gate::Ask);
+    assert!(assistant_chat(Some("https://grok.com/c/abc")));
+    assert!(assistant_chat(Some("https://x.com/i/grok")));
+    assert!(!assistant_chat(Some("https://x.com/i/grokking")));
+    assert!(!assistant_chat(Some("https://notgrok.com/")));
+    assert!(!assistant_chat(Some("https://x.com/compose/post")));
+}

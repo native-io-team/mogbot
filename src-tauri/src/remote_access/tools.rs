@@ -815,21 +815,44 @@ fn same_path(a: &str, b: &str) -> bool {
     }
 }
 
+/// For an agent, a project it didn't name is its own pick, from the list.
+/// Observed: told "Several projects are shared; say which one", the Chief
+/// asked the owner which project held "Grok's session".
+fn agents_pick(names: &str) -> String {
+    format!(
+        "Your projects: {names}. Pick the one this work is in yourself and call again with `project` (project_list shows each one's sessions); never ask the user which."
+    )
+}
+
+/// A session is a coding tab in a project, so an agent looking for the
+/// user's other assistant, or a teammate, is somewhere else.
+const NOT_A_SESSION: &str = " A session is an agent tab in one of these projects: the user's Grok (or another assistant) is never one, it's asked in their Chrome (grok.com), and the team's agents are reached with your agent tools, not here.";
+
+/// [`resolve_project`] as one of the app's own agents is answered.
+pub(crate) fn resolve_project_for_agents(
+    projects: &[String],
+    wanted: Option<&str>,
+) -> Result<String, String> {
+    AGENTS_CALL.sync_scope(AgentsCall::default(), || resolve_project(projects, wanted))
+}
+
 /// Resolve the `project` argument against the opted-in list only.
 pub(crate) fn resolve_project(shared: &[String], wanted: Option<&str>) -> Result<String, String> {
     if shared.is_empty() {
         return Err(no_projects().into());
     }
+    let names = shared
+        .iter()
+        .map(|p| project_name(p))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let agents = for_agents();
     let Some(wanted) = wanted.map(str::trim).filter(|w| !w.is_empty()) else {
         return match shared {
             [only] => Ok(only.clone()),
+            _ if agents => Err(format!("{}{}", agents_pick(&names), NOT_A_SESSION)),
             _ => Err(format!(
-                "Several projects are shared; say which one: {}",
-                shared
-                    .iter()
-                    .map(|p| project_name(p))
-                    .collect::<Vec<_>>()
-                    .join(", ")
+                "Several projects are shared; say which one: {names}"
             )),
         };
     };
@@ -842,9 +865,12 @@ pub(crate) fn resolve_project(shared: &[String], wanted: Option<&str>) -> Result
         .collect();
     match matches.as_slice() {
         [one] => Ok((*one).clone()),
+        [] if agents => Err(format!(
+            "No project is called \"{wanted}\". {}{NOT_A_SESSION}",
+            agents_pick(&names)
+        )),
         [] => Err(format!(
-            "No shared project called \"{wanted}\". Shared projects: {}",
-            shared.iter().map(|p| project_name(p)).collect::<Vec<_>>().join(", ")
+            "No shared project called \"{wanted}\". Shared projects: {names}"
         )),
         _ => Err(format!("More than one shared project is called \"{wanted}\"; use its full path from list_projects.")),
     }
@@ -3364,6 +3390,35 @@ mod tests {
             "/Users/a/ShipStudio/site"
         );
         assert!(resolve_project(&config(&[]).projects, Some("site")).is_err());
+    }
+
+    /// "I couldn't reach Grok's session. It lives in one of your shared
+    /// projects… tell me which project": an agent's project tools list the
+    /// projects and tell it to pick one itself, and say Grok is never a
+    /// session. The remote assistant keeps its own wording.
+    #[test]
+    fn an_agent_is_told_to_pick_a_project_itself_and_that_grok_is_no_session() {
+        let c = config(&["/Users/a/ShipStudio/site", "/Users/a/ShipStudio/blog"]);
+        for wanted in [None, Some("Grok Bot")] {
+            let e = resolve_project_for_agents(&c.projects, wanted).unwrap_err();
+            assert!(e.contains("Your projects: site, blog"), "{e}");
+            assert!(e.contains("Pick the one this work is in yourself"), "{e}");
+            assert!(e.contains("never ask the user which"), "{e}");
+            assert!(
+                e.contains("the user's Grok (or another assistant) is never one"),
+                "{e}"
+            );
+            assert!(!e.contains("shared"), "{e}");
+        }
+        let remote = resolve_project(&c.projects, None).unwrap_err();
+        assert_eq!(
+            remote,
+            "Several projects are shared; say which one: site, blog"
+        );
+        assert_eq!(
+            resolve_project_for_agents(&c.projects, Some("blog")).unwrap(),
+            "/Users/a/ShipStudio/blog"
+        );
     }
 
     #[test]

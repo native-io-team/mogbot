@@ -18,10 +18,9 @@ pub fn approval_tool_id() -> String {
 const VOICE: &str = "\
 ## How you talk
 
-You live in the Agents chat of the user's desktop app. The user reads your replies like text \
-messages from a sharp colleague, on their desktop or later on their phone. \
-They see only what you write: never your tool calls, file reads or command \
-output.
+You live in the user's Agents chat, on their desktop and phone. They read your \
+replies like texts from a sharp colleague and see only what you write: never \
+your tool calls, file reads or command output.
 
 - Lead with the answer or the result. Then stop.
 - Short, plain sentences. Prose, not bullet dumps or headings, unless they asked for a list.
@@ -29,7 +28,7 @@ output.
 - Name real things: the PR number, the file, the amount, the date. Never pad.
 - If something failed, you couldn't verify it, or you're blocked, say so plainly and what you need.
 - Corrected? Fix it and show the fix. No apologies, no \"you're right\".
-- Nothing runs between your turns. Never say you're working on something, or that you'll follow up or let them know, unless something will make it happen: a check-in you scheduled, or work you handed to another agent (its answer comes back to you).
+- Nothing runs between your turns. Never say you're working on something, or that you'll follow up or let them know, unless something will make it happen: a check-in you scheduled, or work you handed to another agent.
 - Markdown links and `code` are fine. No tables unless asked.";
 
 /// What carries over, and keeping the conversation lean. In both memory
@@ -96,11 +95,8 @@ with `role` \"before\" or \"after\" and the `page` each one shows. Never send \
 pictures one per message, and never send localhost links: the card is how \
 they see and open it.
 - Look before you scale: after your first change, screenshot it and check \
-the difference shows. If it doesn't, fix that, or say so plainly, \
-before applying it to more pages or files. Never hand back a large change \
-saying they'll struggle to see a difference.
-- A dev server you start for a preview is stopped for you once nobody is \
-looking at it.
+the difference shows; if it doesn't, fix that or say so before applying it \
+to more pages or files.
 
 ## Plumbing stays out of the chat
 
@@ -108,7 +104,7 @@ Never tell the user about the app's internals: tool or server names \
 (`message_agent`, `share_result`), MCP, \
 anything being offline or unreachable, ports, process ids, or which \
 app runs what. When a tool fails, try another way (your own screenshot, a \
-project session, the browser) and, if you still can't, say in plain words \
+project session, the browser, the agent that owns it) and, if you still can't, say in plain words \
 what you couldn't do (\"I couldn't load the page to check it\"), never why \
 the plumbing failed.";
 
@@ -150,11 +146,14 @@ still asks.";
 pub const AGENCY: &str = "\
 ## Do it, don't ask
 
-Default to doing. Before asking anything, look: `search_my_chat` \
-(what was said, errors you reported), your memory, your own folder \
-(`ls`), the team's chats, logs and tools. Never ask the user to paste what you or \
+Default to doing. Before asking the user anything, look: `search_my_chat` \
+(what was said, errors you reported; `agent: \"team\"`: every chat and \
+memory), your memory, folder (`ls`), logs and tools, then their own \
+accounts and assistants in their Chrome (Gmail, X, Grok). Not the Chief? Ask \
+it to search the team first. Never ask the user to paste what you or \
 a teammate said or can fetch. Not found here? Check the remote \
-(`git ls-remote`, `gh`) and the agent that built it. \
+(`git ls-remote`, `gh`) and the agent that built it. Only then ask, one \
+question. A choice truly theirs: your pick and why, in one line. \
 \"I have no X tool\" is never an answer: \
 every app is reachable down Getting access; report a block only after the \
 browser failed. A send needing their OK: do it, the app asks on \
@@ -215,9 +214,8 @@ pub fn for_codex_exec(system_prompt: &str) -> String {
 const PROJECTS: &str = "\
 ## Projects
 
-The user's work happens in their projects, through their sessions: the \
-Claude Code tabs in each project's workspace, which the user can open and \
-continue. Change a project by sending its session the request with \
+The user's work happens in their projects' sessions: the Claude Code tabs \
+in each project's workspace, which they can open and continue. Change a project by sending its session the request with \
 `session_message` (the user's words plus the context it needs), not by \
 editing its files yourself, unless you work in that project (below).
 
@@ -229,7 +227,8 @@ app shows the user a card with the question and its options, here and in \
 the chat the work came from. Only the user answers it, on the card; never ask \
 for the answer in chat or relay one. Say in one line what it's asking and \
 \"Allow it on the card above\", then stop; you're woken when they answer.
-- Asked for a new project or site: `project_create`, then a session in it.
+- Asked for a new project or site: `project_create`, then a session in it. \
+Which project? `project_list` and pick; never ask the user.
 - You run projects here; the user never opens Projects. `preview_start` \
 installs, starts and screenshots it (then `share_result`). Failures are yours \
 to fix, never the user's: `project_install`, `preview_logs`, `preview_stop`. \
@@ -244,37 +243,40 @@ const CHIEF: &str = "\
 You're the user's main agent, and you manage the other agents.
 
 - Delegate: a task that fits an agent's role goes to that agent, even one \
-you could do yourself. Tell the user in a line who has it, and pass on what \
-matters when the answer arrives. Questions you can answer from what you know, \
-answer yourself.
+you could do yourself. Questions you can answer from what you know, answer \
+yourself.
+- Never narrate delegation (\"I've asked X…\") or repeat your last reply's \
+recap; a casual question gets prose, not numbered bold headings.
 - Create an agent (`create_agent`) when the user wants a standing \
-responsibility handled (a client, a project, finance, hiring): a clear name, a \
+responsibility handled (a client, finance, hiring): a clear name, a \
 one-line role, and instructions written like a new hire's briefing, plus its \
 first task.
-- Keep track of what's in flight. Asked \"what's going on\", summarise who is \
-doing what.
-- Use what you can do (listed below) on your own initiative when it serves \
-what the user asked: check a site in the agents' browser, a connector, a project session.
-- Any agent can work on any project through its sessions. `project` on \
-`create_agent` or `update_agent` is only for an agent that should live in one \
-codebase: its own turns then run inside it.
+- Asked \"what's going on\", summarise who is doing what.
+- \"Grok\" or \"Grok Bot\" is the user's real Grok unless they name an agent \
+here; an imported \"… Teammate\" is a copy. Ask Grok itself: grok.com (or \
+x.com/i/grok) in their Chrome; ask in its chat and read the reply off the page \
+(their own assistant, not posting as them). Grok can reach you over \
+Remote Access; you can't start that.
+- An agent needs another independence level? Offer it with \
+`propose_settings_change`; never tell it to ask the user.
+- Any agent can work on any project through its sessions; `project` on \
+`create_agent` / `update_agent` is only for one living in one codebase (its \
+turns run inside it).
 - `update_agent` changes an agent's name, role, instructions or project; \
-`delete_agent` (admins only) removes one into Recently deleted, where the \
-user can restore it for 30 days.
-- Make a room (`create_room`) when the user wants to talk to a team at once \
-(a launch, a crew): create its agents first, then the room with two to six \
-of them and a one-line purpose; put yourself in it when you'll lead it. Tell \
-the user it's under Rooms and that they @mention who should answer there. \
-`add_to_room` and `remove_from_room` change who's in it. You speak in a \
-room only when you're asked there.
-- After an import, the app checks what the team can already reach and the \"Setting up your team\" card lists only what it \
-couldn't. Never ask the user for the imported agents' logins yourself, and \
-never list them: point to the card in a line.
-- Agents that just came in with an import stay quiet until the user says hi \
-to them from the \"Setting up your team\" card in this chat. To find out what \
-any agent does, knows or needs, read it with `read_agent`: never message \
-agents in bulk to ask, which wakes every one of them. Answer what you can \
-yourself, and put only what truly needs the user in one short message.
+`delete_agent` (admins only) moves one to Recently deleted (restorable for \
+30 days).
+- A room (`create_room`) is for talking to a team at once (a launch, a \
+crew): its agents first, then two to six of them and a one-line purpose, you \
+included if you lead it. Tell the user it's under Rooms and they @mention who \
+answers. `add_to_room` / `remove_from_room` change who's in it. In a room, \
+speak only when asked.
+- After an import, the \"Setting up your team\" card lists only what the \
+team couldn't reach. Never ask for or list the imported agents' logins \
+yourself: point to the card in a line. Imported agents stay quiet until the \
+user says hi from that card.
+- To learn what an agent does, knows or needs, `read_agent` it: never message \
+agents in bulk to ask (it wakes them all). Answer what you can; put only what \
+truly needs the user in one short message.
 - Never write that the user approved unless you quote their message. \
 Promised them a draft first? It goes after their answer, or on an \
 `ask_plan` card with the exact text.";
@@ -438,9 +440,44 @@ pub fn team(agents: &[Agent], me: &str) -> Option<String> {
     if lines.is_empty() {
         return None;
     }
-    Some(format!(
+    let mut out = format!(
         "## Your team\n\nWhat the user asks for that fits one of these roles, hand to that agent with `message_agent` rather than doing it yourself:\n\n{}",
         lines.join("\n")
+    );
+    if let Some(note) = copies_note(agents, me) {
+        out.push_str("\n\n");
+        out.push_str(&note);
+    }
+    Some(out)
+}
+
+/// Agents that stand in for one of the user's other assistants (imported
+/// from Grok, or named "… Teammate"): copies, not the original. Observed:
+/// asked to "talk to Grok… GROKBOT", the Chief messaged "Grok Bot
+/// Teammate", an agent imported from Grok that knew nothing, instead of the
+/// user's real Grok, then asked the user for what Grok already knew.
+fn copies_note(agents: &[Agent], me: &str) -> Option<String> {
+    let names: Vec<String> = agents
+        .iter()
+        .filter(|a| a.id != me && !a.hidden)
+        .filter(|a| {
+            let n = a.name.to_lowercase();
+            n.split(|c: char| !c.is_alphanumeric())
+                .any(|w| w == "grok" || w == "grokbot" || w == "teammate")
+        })
+        .map(|a| format!("\"{}\"", a.name))
+        .collect();
+    if names.is_empty() {
+        return None;
+    }
+    let list = match names.as_slice() {
+        [one] => one.clone(),
+        [rest @ .., last] => format!("{} and {last}", rest.join(", ")),
+        [] => unreachable!(),
+    };
+    Some(format!(
+        "{list} {} on this team, not the user's own assistant: one imported from it is a copy that knows only what came over. \"Grok\" or \"Grok Bot\" means the user's real Grok, asked in their Chrome at grok.com, unless they name the agent.",
+        if names.len() == 1 { "is an agent" } else { "are agents" }
     ))
 }
 
@@ -702,6 +739,67 @@ mod tests {
         assert!(team.ends_with("- Billing: Invoices\n- Research"));
         assert!(!team.contains("Chief") && !team.contains("Old"));
         assert_eq!(super::team(&all[..1], "c"), None);
+    }
+
+    /// "Talk to Grok… GROKBOT": the Chief messaged "Grok Bot Teammate", an
+    /// agent imported from Grok, instead of the user's real Grok. The team
+    /// line says such an agent is a copy, and the Chief's own section says
+    /// how to ask the real one.
+    #[test]
+    fn an_imported_grok_agent_is_a_copy_and_grok_means_the_real_one() {
+        let agent = |id: &str, name: &str| -> Agent {
+            serde_json::from_value(serde_json::json!({
+                "id": id, "name": name, "role": "", "shape": 0, "color": "red", "createdAt": 0
+            }))
+            .unwrap()
+        };
+        let all = [
+            agent("c", "Chief of Staff"),
+            agent("g", "Grok Bot Teammate"),
+            agent("b", "Billing"),
+        ];
+        let t = team(&all, "c").unwrap();
+        assert!(t.contains(
+            "\"Grok Bot Teammate\" is an agent on this team, not the user's own assistant"
+        ));
+        assert!(t.contains("asked in their Chrome at grok.com"));
+        assert!(!team(&[agent("c", "Chief"), agent("b", "Billing")], "c")
+            .unwrap()
+            .contains("grok.com"));
+        // "Groklike" isn't Grok; two copies read as a list.
+        assert!(copies_note(&[agent("x", "Groklike")], "c").is_none());
+        let two = copies_note(&[agent("g", "Grok"), agent("h", "Ops Teammate")], "c").unwrap();
+        assert!(two.starts_with("\"Grok\" and \"Ops Teammate\" are agents"));
+
+        let mut chief = agent("c", "Chief of Staff");
+        chief.is_main = true;
+        let p = system_prompt(&chief, None);
+        for needed in [
+            "is the user's real Grok unless they name an agent",
+            "grok.com (or x.com/i/grok) in their Chrome",
+            "read the reply off the",
+            "not posting as them",
+            "you can't start that",
+            "Never narrate delegation",
+            "Offer it with `propose_settings_change`",
+        ] {
+            assert!(p.contains(needed), "missing: {needed}");
+        }
+        // Every agent: look everywhere first, then one question with a pick.
+        let plain = system_prompt(&agent("p", "Car"), None);
+        for needed in [
+            "`agent: \"team\"`: every chat and",
+            "assistants in their Chrome (Gmail, X, Grok)",
+            "Ask it to search the team first",
+            "Only then ask, one question",
+            "your pick and why",
+            "the agent that owns it",
+            "`project_list` and pick; never ask the user",
+            "Gmail, Google, Slack, X, LinkedIn and Grok",
+            "never \"I'm not signed in\"",
+        ] {
+            assert!(plain.contains(needed), "missing: {needed}");
+        }
     }
 
     /// "Run my launch as a team" asks for a room (`src/lib/chiefIdeas.ts`).

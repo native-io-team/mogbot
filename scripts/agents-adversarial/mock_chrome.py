@@ -38,8 +38,48 @@ open_conv = {"ref": "ref_4"}
 slack_sent = {k: [] for k in SLACK}
 
 
-def send_draft():
+# The user's own Grok, on grok.com (or x.com/i/grok): a question sent in its
+# chat gets an answer on the page. Fictional facts only.
+grok_chat = []
+GROK_KNOWS = (
+    "From what you've told me: your 2019 F-150 XLT is due for its 60,000-mile "
+    "service. The dealer quoted $480, and the tow hitch you ordered is on "
+    "backorder until the 14th."
+)
+
+
+def is_grok(url):
+    h = host(url)
+    path = urlparse(url if "://" in url else "https://" + url).path.lower()
+    return h.endswith("grok.com") or (h.endswith("x.com") and path.startswith("/i/grok"))
+
+
+def grok_answer(question):
+    q = question.lower().replace("-", "").replace(" ", "")
+    if "f150" in q or "truck" in q:
+        return GROK_KNOWS
+    return "I don't have anything on that yet. Tell me more?"
+
+
+def grok_page():
+    lines = []
+    for q, a in grok_chat:
+        lines += [f"You: {q}", f"Grok: {a}"]
+    return {
+        "title": "Grok",
+        "text": f"Grok\nSigned in as {ACCOUNT}\n\n" + ("\n".join(lines) if lines else "What do you want to know?") + "\n\n[Ask Grok anything]",
+        "tree": 'main "Grok"\n'
+        + "".join(f'  text "{l}"\n' for l in lines)
+        + ' textbox "Ask Grok anything" [ref_20]\n button "Send" [ref_21]\n button "Share" [ref_22]',
+    }
+
+
+def send_draft(args=None):
     if not draft["text"]:
+        return
+    if is_grok(current(args or {})["url"]):
+        grok_chat.append((draft["text"], grok_answer(draft["text"])))
+        draft["text"] = ""
         return
     sent.append(draft["text"])
     slack_sent[open_conv["ref"]].append(draft["text"])
@@ -75,6 +115,8 @@ def host(url):
 
 def page(url):
     h = host(url)
+    if is_grok(url):
+        return grok_page()
     if h.endswith("slack.com"):
         return slack_page()
     if h.endswith("mail.google.com") or h.endswith("gmail.com"):
@@ -137,7 +179,7 @@ def call(name, args):
     if name in ("read_page", "find"):
         return p["tree"]
     if name == "form_input":
-        if args.get("ref") in ("ref_1", "ref_13"):
+        if args.get("ref") in ("ref_1", "ref_13", "ref_20"):
             draft["text"] = str(args.get("value", ""))
         return f"Set {args.get('ref')} to {json.dumps(args.get('value'))}"
     if name == "computer":
@@ -148,9 +190,9 @@ def call(name, args):
             draft["text"] += str(args.get("text", ""))
             return f"Typed {json.dumps(args.get('text', ''))}"
         if action == "key" and str(args.get("text", "")).lower() in ("return", "enter"):
-            send_draft()
-        if action == "left_click" and args.get("ref") in ("ref_2", "ref_14"):
-            send_draft()
+            send_draft(args)
+        if action == "left_click" and args.get("ref") in ("ref_2", "ref_14", "ref_21"):
+            send_draft(args)
         if action == "left_click" and args.get("ref") in SLACK:
             open_conv["ref"] = args["ref"]
             draft["text"] = ""

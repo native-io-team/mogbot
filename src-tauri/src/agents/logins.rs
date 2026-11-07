@@ -145,6 +145,21 @@ pub const SERVICES: &[Service] = &[
         why_not: Some("X has no connector agents can sign in to; its API needs a developer account."),
         key: Some("X API bearer token"),
     },
+    // The user's own Grok (grok.com, or Grok on X), not an agent imported
+    // from it. Asked in their Chrome, where they're signed in: asking it a
+    // question is reading their own assistant, not posting as them
+    // (`browser_gate::assistant_chat`).
+    Service {
+        id: "grok",
+        title: "Grok",
+        aliases: &["grok", "grok bot", "grokbot", "grok app"],
+        connector: Connector::None,
+        site: Some("grok.com"),
+        read: "Ask Grok and read its answers",
+        write: "Ask Grok",
+        why_not: Some("Grok has no connector agents can sign in to, so agents ask it in your browser."),
+        key: None,
+    },
     Service {
         id: "github",
         title: "GitHub",
@@ -745,11 +760,11 @@ this order:
 1. One of the app's own connections you were given (`mcp__<app>__*` for \
 Linear, Notion, Figma, Stripe, Vercel), or its command on this Mac (`gh` for \
 GitHub). Use it.
-2. Otherwise a browser. Gmail, Google and Slack: the user's own Chrome \
-(`mcp__claude-in-chrome__*`), where they're signed in. Anything else: first \
-the agents' browser (`mcp__browser__*`, when you have it), the team's own \
-Chrome on this Mac; on a sign-in or signed-out page there, switch to the \
-user's Chrome at once, no ask. Their Chrome too for a site signed in only \
+2. Otherwise a browser. Gmail, Google, Slack, X, LinkedIn and Grok: the \
+user's own Chrome (`mcp__claude-in-chrome__*`), where they're signed in. \
+Anything else: first the agents' browser (`mcp__browser__*`, when you have \
+it), the team's own; a sign-in or signed-out page there: switch to the \
+user's Chrome at once, never \"I'm not signed in\". Their Chrome too for a site signed in only \
 there (`remember_browser_account` knows which), or when they say so. Say in \
 one line which account you're in, from what the page shows; never guess. \
 Reading is free in either. Before any send, post, publish, \
@@ -758,10 +773,9 @@ the action itself asks the user on a card. A claude.ai connector \
 (`mcp__claude_ai_*`) is an extra: use it if it works, never wait on it. Never \
 type a password. If their Chrome (or, with none, the agents' browser) asks \
 you to sign in, or for a password or code \
-partway through one (a Google step inside another site's sign-in, say), stop \
-using it and go to step 3 with `signed_out: true`: that card lets the user \
+partway through one, stop using it and go to step 3 with `signed_out: true`: that card lets the user \
 sign in from their phone (\"Sign in from here\") or at their Mac. Never tell them to go \
-to their computer, or to finish in a tab you left open. Wrong account in \
+to their computer or finish in a tab you left open. Wrong account in \
 their Chrome? `select_browser` / \
 `switch_browser` to another connected one (`list_connected_browsers`), else \
 `ask_bring_browser_to_front` once, never `request_login`; once right, \
