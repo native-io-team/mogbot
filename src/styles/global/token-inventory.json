@@ -4515,7 +4515,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 594
+      "consumerCount": 595
     },
     {
       "name": "--text-secondary",
@@ -4523,7 +4523,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 566
+      "consumerCount": 567
     },
     {
       "name": "--text-muted",
@@ -4531,7 +4531,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 911
+      "consumerCount": 913
     },
     {
       "name": "--text-faint",
@@ -4939,7 +4939,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 490
+      "consumerCount": 492
     },
     {
       "name": "--font-size-control",
@@ -5211,7 +5211,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 291
+      "consumerCount": 292
     },
     {
       "name": "--spacing-xs",
@@ -5219,7 +5219,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 677
+      "consumerCount": 684
     },
     {
       "name": "--spacing-sm",
@@ -5235,7 +5235,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 568
+      "consumerCount": 571
     },
     {
       "name": "--spacing-lg",
@@ -5723,7 +5723,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 594
+      "consumerCount": 595
     },
     {
       "name": "--text-secondary",
@@ -5731,7 +5731,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 566
+      "consumerCount": 567
     },
     {
       "name": "--text-quiet",
@@ -5747,7 +5747,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 911
+      "consumerCount": 913
     },
     {
       "name": "--text-faint",

@@ -188,6 +188,8 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
   /** The path the palette asked for, for this opening. */
   const [importPath, setImportPath] = useState<ImportPath | null>(null);
   const [appsOpen, setAppsOpen] = useState(false);
+  /** The agent the apps dialog was opened for: the one ticked to start with. */
+  const [appsFor, setAppsFor] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Agent | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
@@ -292,7 +294,11 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     setImportPath(from ?? null);
     setImportOpen(true);
   }, []);
-  const openApps = useCallback(() => setAppsOpen(true), []);
+  const openApps = useCallback((agentId?: string | null) => {
+    setAppsFor(agentId ?? null);
+    setAppsOpen(true);
+  }, []);
+  const openAppsForAll = useCallback(() => openApps(), [openApps]);
   const openInFlight = useCallback(() => setSelectedId(TEAM_ID), []);
   /** New agent's "Ask your Chief of Staff": the request, drafted in the Chief's composer. */
   const [prefill, setPrefill] = useState<{ agentId: string; text: string; n: number } | null>(null);
@@ -400,7 +406,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
   useAgentsIntents({
     onNewAgent: openNew,
     onImportAgents: openImportFrom,
-    onApps: openApps,
+    onApps: openAppsForAll,
     onOpenAgent: openAgent,
     onSearch: focusSearch,
     onIdeas: openIdeas,
@@ -960,7 +966,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
               onSetUpEngine={setUpShownEngine}
               onSignIn={signInShown}
               onImport={openImport}
-              onOpenApps={openApps}
+              onOpenApps={() => openApps(shown.id)}
               onMoreIdeas={shown.isMain ? openIdeas : undefined}
               onEscape={escapeSearch}
               compact={chatCompact}
@@ -992,7 +998,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
           openAgent(id);
         }}
         onDelete={setDeleting}
-        onOpenApps={openApps}
+        onOpenApps={() => openApps(editor.agent?.id)}
         onAskChief={
           editor.agent
             ? undefined
@@ -1028,7 +1034,12 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
           openAgent(id);
         }}
       />
-      <AgentAppsModal isOpen={appsOpen} onClose={() => setAppsOpen(false)} />
+      <AgentAppsModal
+        isOpen={appsOpen}
+        onClose={() => setAppsOpen(false)}
+        agents={agents}
+        forAgentId={appsFor}
+      />
       <TeamLoginsModal />
       <BrowserSetupModal />
       {roomEditor.open && (

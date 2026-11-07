@@ -1474,29 +1474,58 @@ const totals = (turns: number, tokens: number, cost: number, minutes: number) =>
   durationMs: minutes * MIN,
 });
 
-// apps.rs's order: everyday tools first, the developer ones last.
-const SUGGESTED = [
-  ['notion', 'Notion', 'Pages and databases', 'https://mcp.notion.com/mcp'],
-  ['stripe', 'Stripe', 'Customers, payments and invoices', 'https://mcp.stripe.com'],
-  ['linear', 'Linear', 'Issues, projects and cycles', 'https://mcp.linear.app/mcp'],
-  ['figma', 'Figma', 'Designs, frames and comments', 'https://mcp.figma.com/mcp'],
-  ['sentry', 'Sentry', 'Errors and their stack traces', 'https://mcp.sentry.dev/mcp'],
-  ['vercel', 'Vercel', 'Deployments, logs and projects', 'https://mcp.vercel.com'],
-] as const;
+// `logins::SERVICES` with a connector of our own, in its order (`app_connect::catalogue`).
+const OUR_APPS = [
+  ['linear', 'Linear', 'Read issues and projects', 'Create and update issues', 'mcp.linear.app'],
+  ['notion', 'Notion', 'Read pages and databases', 'Create and edit pages', 'mcp.notion.com'],
+  ['figma', 'Figma', 'Read designs and comments', 'Comment and change designs', 'mcp.figma.com'],
+  [
+    'stripe',
+    'Stripe',
+    'Read customers, payments and invoices',
+    'Create invoices, refunds and payments',
+    'mcp.stripe.com',
+  ],
+  [
+    'vercel',
+    'Vercel',
+    'Read projects, deployments and logs',
+    'Change projects and deploy',
+    'mcp.vercel.com',
+  ],
+  [
+    'sentry',
+    'Sentry',
+    'Read errors, issues and their stack traces',
+    'Resolve, assign and change issues',
+    'mcp.sentry.dev',
+  ],
+].map(([service, title, read, write, host]) => ({ service, title, read, write, host }));
 
-/** `agents_apps_list`: Claude Code's servers, and the curated list marked against them. */
+/** `agents_apps_list`: Claude Code's own servers. */
 const agentApps = (
   connected: { name: string; target: string; status: string; source: string }[]
-) => ({
-  connected,
-  suggestions: SUGGESTED.map(([serverName, title, blurb, url]) => ({
-    serverName,
-    title,
-    blurb,
-    url,
-    added: connected.some((c) => c.name === serverName || c.target === url),
-  })),
-});
+) => ({ connected });
+
+const VERCEL_CONNECTION = {
+  id: 'conn-vercel',
+  service: 'vercel',
+  title: 'Vercel',
+  account: 'sam@acme.com',
+  kind: { type: 'oauth', serverUrl: 'https://mcp.vercel.com' },
+  serverKey: 'vercel',
+  createdAt: now - 60_000,
+  grants: [
+    { agentId: 'chief', access: 'read', grantedAt: now - 60_000 },
+    { agentId: 'acme', access: 'full', grantedAt: now - 60_000 },
+  ],
+};
+
+/** `agents_app_connections`: our apps, the connections made, and a sign-in under way. */
+const appConnections = (
+  connections: unknown[] = [],
+  flows: unknown[] = []
+) => ({ apps: OUR_APPS, connections, flows });
 
 const CONNECTED_APPS = [
   // As Claude Code 2.1.318 lists a claude.ai connector.
@@ -2126,27 +2155,88 @@ export const agentsScenarios: Scenario[] = [
   },
   {
     id: 'agents-apps',
-    title: 'Agents — apps your agents can use',
+    title: 'Agents — apps your agents can use (connected)',
     looksRightWhen:
-      'A calm dialog: one sentence on why agents can use Claude Code’s apps; Connected lists Google Drive (managed on claude.ai), figma (Connected, Remove), linear (Needs sign-in in amber, Sign in…, Remove) and playwright (Can’t connect, set up elsewhere, no Remove); Add an app lists six with Figma and Linear marked Added; three short notes; Done.',
+      'Connected leads: “Vercel · sam@acme.com”, “Signed in on this Mac · Acme Site can read and change (asks first); Chief of Staff can read”, “Connected as sam@acme.com” in green, and Who can use it / Remove. Connect an app lists Linear, Notion, Figma, Stripe and Sentry, each with what reading lets an agent do and Connect. Through claude.ai names Google Drive as connected there, with Open claude.ai. Set up in Claude Code says only Claude Code agents use these: figma (Connect it above to use it on every engine, Connected, Remove), linear (the same line, Needs sign-in in amber, no Sign in…, Remove) and playwright (Can’t connect, set up elsewhere, no Remove). Done.',
     command: 'agents.apps',
     requires: '.agent-apps__list',
     commands: {
       agents_overview: overview(),
       agents_messages: messagesFor,
       agents_apps_list: agentApps(CONNECTED_APPS),
+      agents_app_connections: appConnections(
+        [VERCEL_CONNECTION],
+        [
+          {
+            service: 'vercel',
+            connected: { connectionId: 'conn-vercel', line: 'Connected as sam@acme.com' },
+          },
+        ]
+      ),
     },
   },
   {
     id: 'agents-apps-empty',
     title: 'Agents — apps, nothing connected yet',
-    looksRightWhen: 'Connected says “Nothing yet. Add one below.”; all six suggestions offer Add.',
+    looksRightWhen:
+      'No Connected section. Connect an app lists Linear, Notion, Figma, Stripe, Vercel and Sentry, each with what reading lets an agent do and Connect; Through claude.ai says to connect Gmail, Calendar and Slack on claude.ai (Customize → Connectors) for agents on Claude Code; no Claude Code section and no terminal hint.',
     command: 'agents.apps',
     requires: '.agent-apps__list',
     commands: {
       agents_overview: overview(),
       agents_messages: messagesFor,
       agents_apps_list: agentApps([]),
+      agents_app_connections: appConnections(),
+    },
+  },
+  {
+    id: 'agents-apps-choose',
+    title: 'Agents — connecting Vercel: which agents can use it',
+    looksRightWhen:
+      'Vercel’s row opened downward: “Which agents can use it?” with every agent as a checkbox and only Chief of Staff ticked (opened from ⌘K), Read only / Read and change with Read only pressed, the line saying changes are refused and they can ask for more, then Cancel and “Sign in to Vercel”.',
+    requires: '.agent-apps__grants',
+    // Steps run before a scenario's `command`, so the palette is opened by hand.
+    openSelector: AGENTS_TAB,
+    steps: [
+      { key: 'mod+k' },
+      { fill: '.command-palette-input', value: 'Connect an app for agents' },
+      { click: '.command-palette [role="option"]', text: 'Connect an app' },
+      { click: '[aria-label="Connect Vercel"]' },
+    ],
+    commands: {
+      agents_overview: overview(),
+      agents_messages: messagesFor,
+      agents_apps_list: agentApps([]),
+      agents_app_connections: appConnections(),
+    },
+  },
+  {
+    id: 'agents-apps-connecting',
+    title: 'Agents — connecting Vercel: its sign-in is open in the browser',
+    looksRightWhen:
+      'Vercel’s row shows a small spinner and “Vercel’s sign-in opened in your browser.” with Stop, then “Opened in your browser — didn’t see it? Open again · Copy link”, exactly as a login card says it; no Connect button on that row.',
+    command: 'agents.apps',
+    requires: '.agent-apps__flow',
+    commands: {
+      agents_overview: overview(),
+      agents_messages: messagesFor,
+      agents_apps_list: agentApps([]),
+      agents_app_connections: appConnections(
+        [],
+        [
+          {
+            service: 'vercel',
+            flow: {
+              state: 'waiting',
+              option: 'oauth',
+              message: 'Vercel’s sign-in opened in your browser.',
+              startedAt: now,
+              url: 'https://vercel.com/oauth/authorize?client_id=demo',
+              openedAt: now,
+            },
+          },
+        ]
+      ),
     },
   },
   {

@@ -512,6 +512,74 @@
   justify-content: flex-end;
 }
 
+/* A row that opens downward: the app's line, then its picker or sign-in. */
+.agent-apps__row--stack {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--spacing-xs);
+  padding-top: var(--spacing-xs);
+  padding-bottom: var(--spacing-xs);
+}
+
+.agent-apps__line {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.agent-apps__meta--wrap {
+  white-space: normal;
+}
+
+.agent-apps__account {
+  color: var(--text-muted);
+}
+
+.agent-apps__note {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-apps__grants {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) 0;
+}
+
+.agent-apps__grants-label {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+}
+
+.agent-apps__agents {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-xs) var(--spacing-md);
+}
+
+.agent-apps__agent {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  color: var(--text-primary);
+  cursor: pointer;
+}
+
+.agent-apps__row-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--spacing-md);
+}
+
+.agent-apps__flow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+}
+
 .agent-apps__terminal-hint {
   margin: 0 0 var(--spacing-sm);
   font-size: var(--font-size-body-md);

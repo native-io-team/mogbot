@@ -1,18 +1,22 @@
-//! Apps agents can use: the user's own Claude Code MCP servers.
+//! Claude Code's own MCP servers, as the apps dialog and "When…" routines
+//! see them.
 //!
-//! Every agent turn is a `claude` process, and Claude Code loads the user's
-//! MCP servers into it, so connecting an app here is connecting it in Claude
-//! Code. Nothing is stored by Ship Studio; this module only asks and tells
-//! Claude Code:
+//! Apps we sign in to ourselves (Linear, Notion, Figma, Stripe, Vercel,
+//! Sentry) are connections (`agents/app_connect.rs`, `connections.rs`), for
+//! every engine. What's here is what Claude Code itself brings into its
+//! turns: servers the user set up in Claude Code, and claude.ai's
+//! connectors. Nothing is stored by this app; this module only asks Claude
+//! Code:
 //!
 //! - **List**: `claude mcp list` (it health-checks each server, so the status
 //!   is Claude Code's own), plus a read-only look at Claude Code's config for
-//!   which of those are user-scope, the only ones this panel will remove.
-//! - **Add**: one of [`SUGGESTED`], with
-//!   `claude mcp add --scope user --transport http <name> <url>`. Only the
-//!   built-in list can be added from here, so no URL comes from the webview.
-//!   Sign-in is Claude Code's own OAuth, the first time an agent uses it.
+//!   which of those are user-scope, the only ones the dialog will remove.
 //! - **Remove**: `claude mcp remove --scope user <name>`.
+//!
+//! Adding a server to Claude Code from here (`claude mcp add`, then `/mcp`
+//! in a raw `claude` terminal to sign in) is gone: it showed Claude Code's
+//! folder-trust prompt, left the user in a CLI, and reached Claude Code
+//! agents only.
 //!
 //! Each call runs with the same stripped session environment as a turn
 //! (`runner::strip_session_env`), so what's listed is what agents get.
@@ -31,69 +35,13 @@ use crate::external_command::run_with_timeout;
 const LIST_TIMEOUT_SECS: u64 = 60;
 const CHANGE_TIMEOUT_SECS: u64 = 30;
 
-/// A popular app with an official remote MCP server, added by name.
-///
-/// Only endpoints the vendor itself publishes for remote MCP clients, each of
-/// which signs in with OAuth in the browser. Left out on purpose: GitHub (its
-/// remote server wants a personal access token in a header, not OAuth), and
-/// Gmail, Google Calendar and Slack (no public remote endpoint of their own;
-/// they come through claude.ai's connectors instead, which Claude Code
-/// loads when signed in with that account).
-pub struct Suggested {
-    pub server_name: &'static str,
-    pub title: &'static str,
-    pub blurb: &'static str,
-    pub url: &'static str,
-}
-
-/// Everyday tools first (docs, money, work tracking, design); the
-/// developer ones (errors, deploys) last.
-pub const SUGGESTED: &[Suggested] = &[
-    Suggested {
-        server_name: "notion",
-        title: "Notion",
-        blurb: "Pages and databases",
-        url: "https://mcp.notion.com/mcp",
-    },
-    Suggested {
-        server_name: "stripe",
-        title: "Stripe",
-        blurb: "Customers, payments and invoices",
-        url: "https://mcp.stripe.com",
-    },
-    Suggested {
-        server_name: "linear",
-        title: "Linear",
-        blurb: "Issues, projects and cycles",
-        url: "https://mcp.linear.app/mcp",
-    },
-    Suggested {
-        server_name: "figma",
-        title: "Figma",
-        blurb: "Designs, frames and comments",
-        url: "https://mcp.figma.com/mcp",
-    },
-    Suggested {
-        server_name: "sentry",
-        title: "Sentry",
-        blurb: "Errors and their stack traces",
-        url: "https://mcp.sentry.dev/mcp",
-    },
-    Suggested {
-        server_name: "vercel",
-        title: "Vercel",
-        blurb: "Deployments, logs and projects",
-        url: "https://mcp.vercel.com",
-    },
-];
-
-/// An app's name as people say it: the catalogue's title when it's one of
-/// ours, else its config id in words ("google-drive" → "Google Drive"),
+/// An app's name as people say it: the catalogue's title when it's one we
+/// know, else its config id in words ("google-drive" → "Google Drive"),
 /// never the raw lower-case id. Mirrors `appTitle` in `src/lib/agentApps.ts`.
 pub fn display_name(server: &str) -> String {
-    if let Some(s) = SUGGESTED
+    if let Some(s) = super::logins::SERVICES
         .iter()
-        .find(|s| s.server_name.eq_ignore_ascii_case(server))
+        .find(|s| s.id.eq_ignore_ascii_case(server))
     {
         return s.title.to_string();
     }
@@ -134,20 +82,8 @@ pub struct App {
 
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
-pub struct Suggestion {
-    pub server_name: String,
-    pub title: String,
-    pub blurb: String,
-    pub url: String,
-    /// Already set up, under this name or at this URL.
-    pub added: bool,
-}
-
-#[derive(Debug, Clone, Serialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Apps {
     pub connected: Vec<App>,
-    pub suggestions: Vec<Suggestion>,
 }
 
 /// One line of `claude mcp list`:
@@ -189,26 +125,6 @@ pub fn parse_list(output: &str, user_names: &[String]) -> Vec<App> {
                 status,
                 source,
             }
-        })
-        .collect()
-}
-
-fn same_url(a: &str, b: &str) -> bool {
-    a.trim_end_matches('/')
-        .eq_ignore_ascii_case(b.trim_end_matches('/'))
-}
-
-pub fn suggestions(connected: &[App]) -> Vec<Suggestion> {
-    SUGGESTED
-        .iter()
-        .map(|s| Suggestion {
-            server_name: s.server_name.to_string(),
-            title: s.title.to_string(),
-            blurb: s.blurb.to_string(),
-            url: s.url.to_string(),
-            added: connected
-                .iter()
-                .any(|a| a.name.eq_ignore_ascii_case(s.server_name) || same_url(&a.target, s.url)),
         })
         .collect()
 }
@@ -286,40 +202,9 @@ pub async fn list() -> Result<Apps, CommandError> {
             return Err(classify_mcp_failure("list Claude Code's apps", &details));
         }
     }
-    let connected = parse_list(&stdout, &read_user_scope_names());
-    let suggestions = suggestions(&connected);
     Ok(Apps {
-        connected,
-        suggestions,
+        connected: parse_list(&stdout, &read_user_scope_names()),
     })
-}
-
-/// Add one of [`SUGGESTED`] for every agent (user scope).
-pub async fn add(server_name: &str) -> Result<(), CommandError> {
-    let s = SUGGESTED
-        .iter()
-        .find(|s| s.server_name == server_name)
-        .ok_or_else(|| super::err_invalid("serverName", "That app isn't on the list."))?;
-    let cmd = claude(&[
-        "mcp",
-        "add",
-        "--scope",
-        "user",
-        "--transport",
-        "http",
-        s.server_name,
-        s.url,
-    ])?;
-    let output = run_with_timeout(cmd, "claude mcp add", CHANGE_TIMEOUT_SECS).await?;
-    if output.status.success() {
-        return Ok(());
-    }
-    let details = failure_details(&output);
-    // Added meanwhile (another window, or by hand): that's the goal state.
-    if details.to_ascii_lowercase().contains("already exists") {
-        return Ok(());
-    }
-    Err(classify_mcp_failure("add the app", &details))
 }
 
 /// Remove a user-scope server. Others are managed where they were set up.
@@ -349,6 +234,7 @@ mod tests {
     fn an_app_is_named_the_way_people_say_it() {
         assert_eq!(display_name("figma"), "Figma");
         assert_eq!(display_name("gmail"), "Gmail");
+        assert_eq!(display_name("google_calendar"), "Google Calendar");
         assert_eq!(display_name("google-drive"), "Google Drive");
         assert_eq!(display_name("claude.ai Google Calendar"), "Google Calendar");
     }
@@ -386,35 +272,10 @@ mod tests {
     }
 
     #[test]
-    fn a_suggestion_already_set_up_by_name_or_url_reads_as_added() {
-        let mut connected = apps();
-        connected.push(App {
-            name: "my-linear".into(),
-            target: "https://mcp.linear.app/mcp/".into(),
-            status: "connected".into(),
-            source: Source::User,
-        });
-        let s = suggestions(&connected);
-        let added = |n: &str| s.iter().find(|x| x.server_name == n).unwrap().added;
-        assert!(added("figma"));
-        assert!(added("linear"));
-        assert!(!added("notion"));
-    }
-
-    #[test]
     fn user_scope_is_read_from_the_top_level_servers_only() {
         let config = r#"{"mcpServers":{"figma":{"type":"http"}},"projects":{"/x":{"mcpServers":{"playwright":{}}}}}"#;
         assert_eq!(user_scope_names(config), vec!["figma".to_string()]);
         assert!(user_scope_names("not json").is_empty());
         assert!(user_scope_names("{}").is_empty());
-    }
-
-    #[test]
-    fn the_curated_list_is_https_and_uniquely_named() {
-        let mut names: Vec<_> = SUGGESTED.iter().map(|s| s.server_name).collect();
-        names.sort_unstable();
-        names.dedup();
-        assert_eq!(names.len(), SUGGESTED.len());
-        assert!(SUGGESTED.iter().all(|s| s.url.starts_with("https://")));
     }
 }

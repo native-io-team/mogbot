@@ -226,6 +226,17 @@ pub const SERVICES: &[Service] = &[
         why_not: None,
         key: None,
     },
+    Service {
+        id: "sentry",
+        title: "Sentry",
+        aliases: &["sentry"],
+        connector: Connector::Oauth("https://mcp.sentry.dev/mcp"),
+        site: Some("sentry.io"),
+        read: "Read errors, issues and their stack traces",
+        write: "Resolve, assign and change issues",
+        why_not: None,
+        key: None,
+    },
 ];
 
 pub fn service(id: &str) -> Option<&'static Service> {
@@ -1004,6 +1015,31 @@ fn connected_line(c: &connections::Connection) -> String {
         format!("Connected · {}", c.title)
     } else {
         format!("Connected · {} ({})", c.title, c.account)
+    }
+}
+
+/// A connection the user just made in "Apps your agents can use": every
+/// card waiting for that app from an agent it was granted to is answered
+/// with it, so nobody keeps waiting on a sign-in that's already done. Cards
+/// signing in on their own are left to finish.
+pub(crate) fn answer_waiting_with(app: &AppHandle, c: &connections::Connection) {
+    for g in &c.grants {
+        for m in store::login_cards(&g.agent_id) {
+            let Some(a) = m.approval else { continue };
+            let Some(r) = a.login.as_ref() else { continue };
+            if a.status != ApprovalStatus::Pending || r.service != c.service || busy(&a.request_id)
+            {
+                continue;
+            }
+            let _ = complete(
+                app,
+                &g.agent_id,
+                &a.request_id,
+                r,
+                connected_line(c),
+                tools_line(c, g.access),
+            );
+        }
     }
 }
 

@@ -1732,6 +1732,27 @@ no connector agents can sign in to."), instead of a password field. A Codex
 agent is told plainly what it can't use (claude.ai connectors and the
 browser are Claude Code's).
 
+### Connecting before anyone asks: "Apps your agents can use" (`agents/app_connect.rs`)
+
+The apps dialog (agent editor, a chat's "Connect an app…", ⌘K → "Connect an
+app for agents…") connects every app with a connector of our own
+(`Connector::Oauth`: Linear, Notion, Figma, Stripe, Vercel, Sentry) through
+the same sign-in as a card's Connect: pick the agents and Read only / Read
+and change first (the agent it was opened for is ticked, else the Chief;
+never the whole team; none keeps it for a later card's "Use <account>"),
+then the provider's sign-in opens in this Mac's browser, the token goes into
+the Keychain, and the row says "Connected as …". Same states and words as a
+card (Open again · Copy link, Stop). Works for Claude Code and Codex agents
+(the relay). Who can use it is changed there too
+(`agents_connection_set_grants`: the user's own answer, so it can narrow).
+A granted agent's card waiting for that app is answered at once. Then
+claude.ai's connectors, and Claude Code's own servers listed as such
+(Claude Code agents only); a Claude Code server that is one of ours points
+at Connect instead of `/mcp`. It used to `claude mcp add` the app and send
+the user to a raw `claude` terminal to type `/mcp`, which first showed
+Claude Code's folder-trust prompt. No phone equivalent: on the phone, an
+agent's login card (and its sign-in sheet, `login_relay.rs`) is the way in.
+
 ### Where claude.ai connectors are added (verified 2026-11-05)
 
 `https://claude.ai/customize/connectors` (Customize → Connectors). Verified
