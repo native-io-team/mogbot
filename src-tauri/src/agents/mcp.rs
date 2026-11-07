@@ -2589,8 +2589,9 @@ async fn decide_inner(
                     .is_none()
             });
         let line = if sent {
-            let (verb, place) = super::full_send::describe(tool, input);
-            super::full_send::note(&caller.id, verb, &place);
+            let ctx = super::autoallow::Ctx::for_agent(caller);
+            let (what, place) = super::full_send::describe(tool, input, ctx.as_ref());
+            super::full_send::note(&caller.id, &what, &place);
             format!("{SENT_LINE} · {}", one_line(tool, input))
         } else {
             auto_line(level, tool, input)

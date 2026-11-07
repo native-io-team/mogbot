@@ -329,7 +329,7 @@ pub(super) fn commands(src: &str) -> Vec<Vec<String>> {
 }
 
 /// What an AppleScript that sends mail or a message says.
-const OSASCRIPT_SENDS: &[&str] = &[
+pub(super) const OSASCRIPT_SENDS: &[&str] = &[
     "\"mail\"",
     "\"messages\"",
     "send ",
@@ -701,6 +701,16 @@ fn command_asks(command: &str, ctx: &Ctx, outside: bool) -> bool {
         }
     }
     false
+}
+
+/// Whether one command of a line (its words, from [`commands`]) asks at
+/// "Go hard": which part of a line was the send, for the summary.
+pub(super) fn words_ask_at_go_hard(words: &[String], ctx: &Ctx) -> bool {
+    let ctx = Ctx {
+        full_send: false,
+        ..ctx.clone()
+    };
+    simple_asks(words, &ctx, false, true)
 }
 
 /// Shell words that come before the command they run.
@@ -1212,6 +1222,125 @@ fn vercel_prod(args: &[&str]) -> bool {
     prod && positional(args).first().is_none_or(|s| !LOOKS.contains(s))
 }
 
+/// A `vercel` command that changes a project's settings: what others see
+/// (domains, DNS, certificates, aliases), how it is protected (deployment
+/// protection and its bypass secrets), its environment, its team, its
+/// integrations or its Git link. On the floor at "Full send" too.
+/// Observed: `vercel curl` made a protection bypass token on a production
+/// project at Full send with no card.
+fn vercel_settings(args: &[&str]) -> bool {
+    let pos = vercel_words(args);
+    let Some((sub, rest)) = pos.split_first() else {
+        return false;
+    };
+    let act = rest.first().copied().unwrap_or("");
+    // Protection and its bypass, in any subcommand or flag.
+    if args.iter().any(|a| {
+        let l = a.to_ascii_lowercase();
+        l.contains("protection") || l.contains("bypass")
+    }) {
+        return !matches!(*sub, "curl" | "api") || vercel_request_asks(args);
+    }
+    let looks = matches!(act, "" | "ls" | "list" | "inspect" | "get" | "help");
+    match *sub {
+        "env" => matches!(act, "add" | "rm" | "remove" | "update"),
+        "domains" | "domain" | "dns" | "certs" | "cert" | "alias" | "aliases" => !looks,
+        "project" | "projects" | "integration" | "integrations" | "webhooks" | "webhook" => !looks,
+        "redirects" | "rolling-release" | "target" | "targets" | "microfrontends" => !looks,
+        "git" => matches!(act, "connect" | "disconnect"),
+        "teams" | "team" => matches!(act, "add" | "invite" | "create" | "rm" | "remove"),
+        _ => false,
+    }
+}
+
+/// `vercel`'s positional words, without the values of its options.
+pub(super) fn vercel_words<'a>(args: &[&'a str]) -> Vec<&'a str> {
+    const TAKES: &[&str] = &[
+        "--scope",
+        "-S",
+        "--team",
+        "-T",
+        "--token",
+        "-t",
+        "--cwd",
+        "-A",
+        "--local-config",
+        "-Q",
+        "--global-config",
+        "-X",
+        "--request",
+        "--method",
+        "-H",
+        "--header",
+        "-d",
+        "--data",
+        "--deployment",
+        "--project",
+    ];
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        let a = args[i];
+        if TAKES.contains(&a) {
+            i += 2;
+            continue;
+        }
+        if !a.starts_with('-') {
+            out.push(a);
+        }
+        i += 1;
+    }
+    out
+}
+
+/// `vercel curl` / `vercel api`: a request made as the user's Vercel
+/// account. A write (any method but GET or HEAD, or a body), or any path
+/// about protection, bypass, the environment, domains, tokens or settings.
+fn vercel_request_asks(args: &[&str]) -> bool {
+    let method_write = |m: &str| !matches!(m.to_ascii_uppercase().as_str(), "GET" | "HEAD");
+    // Vercel's own options (`-T` is its team, not curl's upload).
+    const OWN: &[&str] = &[
+        "--scope", "-S", "--team", "-T", "--token", "-t", "--cwd", "-A", "-Q",
+    ];
+    let mut curl_args = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        if OWN.contains(&args[i]) {
+            i += 2;
+            continue;
+        }
+        curl_args.push(args[i]);
+        i += 1;
+    }
+    let write = curl(&curl_args, true)
+        || args.iter().any(|a| {
+            matches!(*a, "-f" | "-F" | "--field" | "--raw-field" | "--input")
+                || a.starts_with("--field=")
+                || a.starts_with("--input=")
+                || a.strip_prefix("--method=").is_some_and(method_write)
+        })
+        || args
+            .windows(2)
+            .any(|w| w[0] == "--method" && method_write(w[1]));
+    let pos = vercel_words(args);
+    let path = pos.get(1..).unwrap_or(&[]).join(" ").to_ascii_lowercase();
+    let env_segment = path
+        .split(|c: char| matches!(c, '/' | '?' | '&' | '=' | ' ' | '.'))
+        .any(|s| matches!(s, "env" | "envs"));
+    let sensitive = env_segment
+        || [
+            "protection",
+            "bypass",
+            "domain",
+            "settings",
+            "secret",
+            "token",
+        ]
+        .iter()
+        .any(|w| path.contains(w));
+    write || sensitive
+}
+
 fn has(args: &[&str], any: &[&str]) -> bool {
     args.iter().any(|a| any.contains(a))
 }
@@ -1310,7 +1439,7 @@ fn program(prog: &str, args: &[&str], ctx: &Ctx, outside: bool, known: bool) -> 
                     .iter()
                     .all(|a| !matches!(*a, "--version" | "-v" | "--help" | "-h"))
                     && pos.first().is_none_or(|s| !READS.contains(s)))
-                || (pos.first() == Some(&"env") && has(&pos, &["add", "rm", "remove"]))
+                || vercel_settings(args)
         }
         "netlify" | "ntl" => {
             has(args, &["deploy"]) && has(args, &["--prod", "--prod-if-unlocked", "-p"])
@@ -1656,6 +1785,11 @@ const PAY_API_HOSTS: &[&str] = &[
 /// production, Stripe live and package publishing are checked as at "Go
 /// hard"). Sending as the user runs: mail and chat CLIs, `git send-email`,
 /// `gh` comments, issues and pull requests, network writes, preview deploys.
+/// Settings that change what others see or how a project is protected stay
+/// on the floor: `vercel` domains, DNS, certificates, aliases, the
+/// environment, deployment protection and bypass secrets, project, team and
+/// Git link changes, and `vercel curl` / `vercel api` writes or requests
+/// about any of those ([`vercel_settings`], [`vercel_request_asks`]).
 fn full_send_program(prog: &str, args: &[&str], ctx: &Ctx) -> Option<bool> {
     Some(match prog {
         "git" => git_full_send(args, ctx),
@@ -1675,10 +1809,11 @@ fn full_send_program(prog: &str, args: &[&str], ctx: &Ctx) -> Option<bool> {
             ];
             vercel_prod(args)
                 || pos.first().is_some_and(|s| ASKS.contains(s))
-                || (pos
+                || vercel_settings(args)
+                || (vercel_words(args)
                     .first()
-                    .is_some_and(|s| matches!(*s, "env" | "domains" | "dns" | "certs"))
-                    && has(&pos, &["add", "rm", "remove"]))
+                    .is_some_and(|s| matches!(*s, "curl" | "api"))
+                    && vercel_request_asks(args))
         }
         _ => return None,
     })
@@ -1788,7 +1923,7 @@ fn protected_branch(name: &str) -> bool {
 /// The branch the working copy at `cwd` is on (`.git/HEAD`, following a
 /// worktree's `gitdir:`), when it's on one. The remote's default branch
 /// (`refs/remotes/origin/HEAD`) reads as `main`, whatever it's called.
-fn current_branch(cwd: &Path) -> Option<String> {
+pub(super) fn current_branch(cwd: &Path) -> Option<String> {
     let repo = repo_of(cwd)?;
     let dot = repo.join(".git");
     let gitdir = if dot.is_file() {
@@ -1825,9 +1960,11 @@ fn current_branch(cwd: &Path) -> Option<String> {
 }
 
 /// `gh` at "Full send": issues, pull requests, comments, reviews, gists
-/// and repos it makes run. Merging, releases, deleting or transferring,
-/// secrets and branch rules, starting workflows (they deploy) and the
-/// user's keys and sign-in ask.
+/// and private repos it makes run. Merging, releases, deleting or
+/// transferring, secrets and branch rules, a repo's or org's settings
+/// (`gh repo edit`, a new public repo, `gh api` writes to webhooks, Pages,
+/// environments, members, visibility…), starting workflows (they deploy)
+/// and the user's keys and sign-in ask.
 fn gh_full_send(args: &[&str]) -> bool {
     let pos = positional(args);
     let (Some(group), action) = (pos.first().copied(), pos.get(1).copied()) else {
@@ -1837,10 +1974,14 @@ fn gh_full_send(args: &[&str]) -> bool {
     match group {
         "pr" => action == "merge",
         "issue" => matches!(action, "delete" | "transfer"),
-        "repo" => matches!(
-            action,
-            "delete" | "archive" | "rename" | "deploy-key" | "transfer"
-        ),
+        // Its settings (visibility, default branch, features) change what
+        // others see; a new public repo publishes the code.
+        "repo" => {
+            matches!(
+                action,
+                "delete" | "archive" | "unarchive" | "rename" | "deploy-key" | "transfer" | "edit"
+            ) || (action == "create" && has(args, &["--public"]))
+        }
         "gist" | "run" | "label" | "cache" => action == "delete",
         "release" | "workflow" | "secret" | "variable" | "ruleset" => gh(args),
         "auth" | "ssh-key" | "gpg-key" => action != "status",
@@ -1853,7 +1994,9 @@ fn gh_full_send(args: &[&str]) -> bool {
             }) || args.iter().any(|a| {
                 a.eq_ignore_ascii_case("-XDELETE") || a.eq_ignore_ascii_case("--method=DELETE")
             });
-            let path = pos.get(1).copied().unwrap_or("").to_ascii_lowercase();
+            let path =
+                format!("/{}", gh_api_path(args).trim_start_matches('/')).to_ascii_lowercase();
+            let path = path.split('?').next().unwrap_or("").trim_end_matches('/');
             const ASKS: &[&str] = &[
                 "/merge",
                 "/merges",
@@ -1867,11 +2010,76 @@ fn gh_full_send(args: &[&str]) -> bool {
                 "/transfer",
                 "/dispatches",
                 "/deployments",
+                // Settings: what others see and how the repo is guarded.
+                "/hooks",
+                "/pages",
+                "/environments",
+                "/actions/permissions",
+                "/actions/variables",
+                "/vulnerability-alerts",
+                "/automated-security-fixes",
+                "/private-vulnerability-reporting",
+                "/interaction-limits",
+                "/autolinks",
+                "/invitations",
+                "/memberships",
+                "/members",
+                "/teams",
+                "/settings",
+                "/visibility",
+                "/topics",
+                "/properties",
             ];
-            delete || ASKS.iter().any(|w| path.contains(w))
+            // `repos/{owner}/{repo}` or `orgs/{org}` itself: its settings.
+            let segs: Vec<&str> = path.split('/').filter(|s| !s.is_empty()).collect();
+            let settings_root = matches!(segs.as_slice(), ["repos", _, _] | ["orgs", _] | ["user"]);
+            delete || settings_root || ASKS.iter().any(|w| path.contains(w))
         }
         _ => false,
     }
+}
+
+/// The endpoint of `gh api …`: its first positional word after `api` that
+/// isn't an option's value (`gh api -X PATCH repos/o/r` is `repos/o/r`).
+pub(super) fn gh_api_path<'a>(args: &[&'a str]) -> &'a str {
+    const TAKES: &[&str] = &[
+        "-X",
+        "--method",
+        "-H",
+        "--header",
+        "-f",
+        "-F",
+        "--field",
+        "--raw-field",
+        "--input",
+        "-q",
+        "--jq",
+        "-t",
+        "--template",
+        "--hostname",
+        "--cache",
+        "-p",
+        "--preview",
+        "-R",
+        "--repo",
+    ];
+    let mut i = 0;
+    let mut seen_api = false;
+    while i < args.len() {
+        let a = args[i];
+        if TAKES.contains(&a) {
+            i += 2;
+            continue;
+        }
+        if !a.starts_with('-') {
+            if seen_api {
+                return a;
+            }
+            seen_api = a == "api";
+        }
+        i += 1;
+    }
+    ""
 }
 
 /// A connector at "Full send": sending, posting, publishing, scheduling and

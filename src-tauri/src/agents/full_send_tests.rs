@@ -359,3 +359,89 @@ fn after_outside_content_full_send_still_guards_raw_data_leaving() {
         assert!(after_outside_asks("Bash", &bash(c), &full), "{c}");
     }
 }
+
+/// Settings that change what others see or how a project is protected stay
+/// on the floor at "Full send". Observed: `vercel curl` made a deployment
+/// protection bypass token on a production project with no card.
+#[test]
+fn project_settings_and_protection_stay_on_the_floor() {
+    for c in [
+        // The owner's case, and its neighbours.
+        "vercel curl /v1/projects/fictional-marketing/protection-bypass -X POST",
+        "vercel curl -X PATCH /v9/projects/fictional-marketing",
+        "vercel curl /v9/projects/fictional-marketing --data '{\"ssoProtection\":null}'",
+        "vercel curl /v9/projects/fictional-marketing/env",
+        "vercel curl /v5/domains",
+        "vercel curl /v9/projects/fictional-marketing/settings",
+        "vercel api /v1/projects/fictional-marketing/protection-bypass --method POST",
+        "vercel project protection disable fictional-marketing",
+        "vercel project protection enable fictional-marketing --sso",
+        "vercel bypass create fictional-marketing",
+        "vercel env add API_KEY production",
+        "vercel env rm API_KEY production --yes",
+        "vercel env update API_KEY preview",
+        "vercel domains add fictional.example",
+        "vercel domains rm fictional.example",
+        "vercel domains move fictional.example other-team",
+        "vercel domains buy fictional.example",
+        "vercel dns add fictional.example www CNAME cname.example",
+        "vercel certs issue fictional.example",
+        "vercel alias set site-abc.vercel.app fictional.example",
+        "vercel project rm fictional-marketing",
+        "vercel project add fictional-new",
+        "vercel git disconnect",
+        "vercel teams invite sam@example.com",
+        "vercel --scope fictional-team domains add fictional.example",
+        // GitHub settings.
+        "gh repo edit fictional/site --visibility public",
+        "gh repo edit --default-branch dev",
+        "gh repo create fictional/new --public",
+        "gh api -X PATCH repos/fictional/site -f visibility=public",
+        "gh api --method PATCH /repos/fictional/site -F private=false",
+        "gh api repos/fictional/site/hooks -f url=https://collect.example.net",
+        "gh api -X POST repos/fictional/site/pages -f source=main",
+        "gh api -X PUT repos/fictional/site/environments/production",
+        "gh api -X PUT orgs/fictional/members/sam",
+        "gh api -X PATCH orgs/fictional -f default_repository_permission=write",
+        "gh api -X PUT repos/fictional/site/collaborators/sam",
+        "gh api -X PUT repos/fictional/site/branches/main/protection --input rules.json",
+    ] {
+        assert!(
+            bash_card(Level::FullSend, c),
+            "should ask at Full send: {c}"
+        );
+        assert!(bash_card(Level::GoHard, c), "should ask at Go hard: {c}");
+    }
+    // Looking runs at Full send.
+    for c in [
+        "vercel curl /api/health",
+        "vercel curl /",
+        "vercel env ls",
+        "vercel env pull .env.local",
+        "vercel domains ls",
+        "vercel project ls",
+        "vercel project inspect fictional-marketing",
+        "gh repo create fictional/new --private",
+        "gh api repos/fictional/site/issues/3/comments -f body=Thanks",
+        "gh api repos/fictional/site/pulls",
+    ] {
+        assert!(!bash_card(Level::FullSend, c), "runs at Full send: {c}");
+    }
+    // Looking at Go hard runs too, as it did.
+    for c in ["vercel env ls", "vercel domains ls", "vercel project ls"] {
+        assert!(!bash_card(Level::GoHard, c), "runs at Go hard: {c}");
+    }
+}
+
+#[test]
+fn the_endpoint_of_gh_api_skips_option_values() {
+    assert_eq!(
+        gh_api_path(&["api", "-X", "PATCH", "repos/o/r", "-f", "a=b"]),
+        "repos/o/r"
+    );
+    assert_eq!(gh_api_path(&["api", "repos/o/r/hooks"]), "repos/o/r/hooks");
+    assert_eq!(
+        gh_api_path(&["-R", "o/r", "api", "--method", "PUT", "/user"]),
+        "/user"
+    );
+}
