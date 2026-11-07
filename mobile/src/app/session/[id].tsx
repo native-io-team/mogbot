@@ -598,3 +598,6 @@ const useStyles = makeStyles((colors) => ({
     lineHeight: lineHeight(type.caption, 1.5),
   },
 }));
+
+/** A throw while drawing stays on this screen, with the way back. */
+export { ScreenError as ErrorBoundary } from '../../components/ScreenError';

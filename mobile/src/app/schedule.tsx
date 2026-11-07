@@ -458,3 +458,6 @@ const useStyles = makeStyles((colors) => ({
   run: { paddingHorizontal: space.lg, paddingVertical: space.sm + 2, gap: space['2xs'] },
   divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderDefault },
 }));
+
+/** A throw while drawing stays on this screen, with the way back. */
+export { ScreenError as ErrorBoundary } from '../components/ScreenError';

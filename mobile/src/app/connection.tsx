@@ -141,3 +141,6 @@ const useStyles = makeStyles(() => ({
   dot: { paddingTop: space.sm },
   info: { flexDirection: 'row', justifyContent: 'space-between', gap: space.md, padding: space.lg },
 }));
+
+/** A throw while drawing stays on this screen, with the way back. */
+export { ScreenError as ErrorBoundary } from '../components/ScreenError';
