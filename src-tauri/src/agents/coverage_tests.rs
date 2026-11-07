@@ -177,3 +177,94 @@ fn progress_counts_closed_areas() {
     c.record(Area::Threads, none()).unwrap();
     assert_eq!(c.progress(&[]), (2, 8));
 }
+
+/// Observed against a stand-in assistant (the `import` e2e run): the
+/// interview recorded "Moneybird: invoicing; Ledger reads it" under
+/// accounts but never passed `resolves`, so every NEXT for six exchanges
+/// still opened on "You mentioned \"Moneybird\" in passing", contradicting
+/// what the interview itself was asking.
+#[test]
+fn a_later_fact_naming_a_mention_answers_it_without_resolves() {
+    let mut c = Coverage::default();
+    c.list_agents(&[]);
+    let mut r = facts(&["Ledger reads Moneybird for invoices"]);
+    r.mentions = vec!["Moneybird".into(), "Halvorsen Studio".into()];
+    c.record(Area::Agents, r).unwrap();
+    // Named in passing in its own call: still to chase.
+    assert_eq!(c.mentions, vec!["Moneybird", "Halvorsen Studio"]);
+    // A fact in the same call that is about it is its answer: never chased.
+    let mut r = facts(&["Fastmail: her work email", "Todoist is her task list"]);
+    r.mentions = vec!["Fastmail".into(), "todoist".into()];
+    c.record(Area::Accounts, r).unwrap();
+    assert_eq!(c.mentions, vec!["Moneybird", "Halvorsen Studio"]);
+    // Named by a later fact, in any area: answered.
+    c.record(
+        Area::Routines,
+        facts(&["Every Monday at 08:15: check MONEYBIRD for overdue invoices"]),
+    )
+    .unwrap();
+    assert_eq!(c.mentions, vec!["Halvorsen Studio"]);
+    // Whole words only.
+    c.record(Area::Tasks, facts(&["Halvorsen Studios abroad: none"]))
+        .unwrap();
+    assert_eq!(c.mentions, vec!["Halvorsen Studio"]);
+    c.record(
+        Area::People,
+        facts(&["Ingrid Halvorsen: client, runs Halvorsen Studio"]),
+    )
+    .unwrap();
+    assert!(c.mentions.is_empty());
+}
+
+#[test]
+fn a_mention_already_recorded_as_a_subject_is_not_chased() {
+    let mut c = Coverage::default();
+    c.record(Area::Accounts, facts(&["Todoist: her task list"]))
+        .unwrap();
+    let mut r = facts(&["Grant draft lives in Notion"]);
+    // "Al" is too short to tell; "todoist" is known; "Notion" is new.
+    r.mentions = vec!["todoist".into(), "Notion".into(), "Al".into()];
+    c.record(Area::Tasks, r).unwrap();
+    assert_eq!(c.mentions, vec!["Notion", "Al"]);
+    // Whole words only: "Notional" isn't Notion.
+    c.record(Area::Tasks, facts(&["Notional budget: EUR 300"]))
+        .unwrap();
+    assert_eq!(c.mentions, vec!["Notion", "Al"]);
+    c.record(Area::Accounts, facts(&["Al: a fictional cousin"]))
+        .unwrap();
+    assert_eq!(c.mentions, vec!["Notion", "Al"], "too short to tell");
+}
+
+#[test]
+fn a_mention_gets_one_next_of_its_own_and_is_never_chased_again() {
+    let mut c = Coverage::default();
+    c.list_agents(&["Scout".into()]);
+    let mut r = facts(&["Invoice M-2207 is with a client"]);
+    r.mentions = vec!["Halvorsen Studio".into(), "Kamp Zeewind".into()];
+    c.record(Area::Tasks, r).unwrap();
+    // While an agent is still to come, NEXT asks for it: no mention closes.
+    assert_eq!(c.answered_mention(&[]), None);
+    assert_eq!(c.mentions.len(), 2);
+    let staged = vec![("Scout".to_string(), true)];
+    assert!(c
+        .next(&staged)
+        .unwrap()
+        .ask
+        .contains("\"Halvorsen Studio\""));
+    // The assistant replied to that NEXT: it's done, the next one leads.
+    assert_eq!(
+        c.answered_mention(&staged).as_deref(),
+        Some("Halvorsen Studio")
+    );
+    assert!(c.next(&staged).unwrap().ask.contains("\"Kamp Zeewind\""));
+    // Mentioned again later: not chased a second time.
+    let mut r = facts(&["Second reminder drafted"]);
+    r.mentions = vec!["halvorsen studio".into()];
+    c.record(Area::Tasks, r).unwrap();
+    assert_eq!(c.mentions, vec!["Kamp Zeewind"]);
+    c.answered_mention(&staged);
+    assert!(c.mentions.is_empty());
+    // With no mention left, NEXT is an area again and nothing closes.
+    assert!(c.next(&staged).unwrap().area.is_some());
+    assert_eq!(c.answered_mention(&staged), None);
+}
