@@ -329,7 +329,7 @@ pub fn import_and_notify(
 /// assistant knows the connector it was just given.
 pub fn import_prompt(chief: &str) -> String {
     format!(
-        "Move my agents to the app I just connected you to, so each one picks up exactly where it left off. Use its import_conversation tool to talk to my {chief} there and tell it everything about each agent you run for me: its role and full instructions, every routine and schedule, everything it watches for, the apps it uses, my preferences and anything it knows that it still needs. Leave nothing out. If you can, also send each agent's past conversations with import_history once it's staged. Don't send passwords, API keys or card numbers: the app asks me for those itself."
+        "Move my agents, and everything you know about me, to the app I just connected you to, so nothing is lost. Use its import_conversation tool to talk to my {chief} there. It will ask for everything, area by area: each agent's full instructions and memory word for word, every scheduled task with its exact time, the people, tasks, preferences, accounts and personal facts you know, and the conversations still open. Send raw material, not summaries, and answer exactly what it asks for next. This takes many calls: keep calling import_conversation until it says the import is ready for me to review (STATUS: in_review), and don't stop or tell me it's done before then. If you can, also send each agent's past conversations with import_history once it's staged. Don't send passwords, API keys or card numbers: the app asks me for those itself."
     )
 }
 
@@ -509,5 +509,8 @@ mod tests {
         assert!(prompt.contains("import_conversation"));
         assert!(!prompt.contains(crate::brand::NAME));
         assert!(prompt.contains("Chief of Staff"));
+        // It tells the assistant to keep going until the app says it's done.
+        assert!(prompt.contains("keep calling import_conversation until"));
+        assert!(prompt.contains("STATUS: in_review"));
     }
 }

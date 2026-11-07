@@ -2723,6 +2723,22 @@ the tab.
 
 ## Import from Grok Bot (or any connected assistant)
 
+**A handover outside an import is one card.** An outside assistant can also
+dump what it knows on the Chief through `ask_chief` (Remote Access) without
+any import started. Packets that read as a handover (`handoff: true`, a long
+list of facts with no question, or the next part from a source that already
+has one open) are collected per source and no model turn runs for them
+(`agents/handoff.rs`). After 45 quiet seconds (or `done: true`) they become
+one card in the Chief's chat, "Grok Bot sent what it knows: N parts", with
+**Review** (the parts), **Ignore** and **Save to memory**; a late part folds
+into the unanswered card. Save to memory hands the parts to the Chief as a
+turn the user authorised: keep what's worth keeping in memory and brief the
+agents each part belongs to, anything in it asking for more listed for the
+user, not done. Ignore runs nothing. The card has no tool call, so no level,
+rule or admin answers it; it survives a restart; credentials are refused per
+part. A plain question still gets the Chief's answer, as before. Unposted
+parts live in memory only (a restart drops them; nothing was saved).
+
 The goal of an import is that each agent arrives understanding everything it
 is supposed to do, so working with it here feels like carrying on in the
 other assistant: its role and full instructions, every routine and schedule,
@@ -2765,19 +2781,44 @@ the full threat model in docs/remote-access.md):
 3. It then talks to a **sealed interview** (`agents/interview.rs`): a
    throwaway Claude Code session that speaks as the Chief but has no built-in
    tools, no settings or CLAUDE.md, no folders, not the Chief's session or
-   rules, and only `propose_agent` / `update_proposal` / `finish`, which
-   stage a draft. The user watches it in the Chief's chat: the other
-   assistant's lines are `from_agent` lines with a `connector:<source>` peer
-   ("From Grok"), the interview's replies `sent_to_agent`
-   lines to the same peer, indented as "To Grok · from the sealed
-   conversation". Neither ever reaches the
-   Chief's own session (`runner::recap_lines` skips them), and the other
+   rules, and only `propose_agent` / `update_proposal` / `list_agents` /
+   `record_area` / `finish`, which stage a draft. **No bubble per packet:**
+   the exchanges aren't written to the Chief's chat; one live line says how
+   far it has got (the Chief's row and working line read "Getting
+   everything from Grok · 3 of 8 areas", `connector::progress_line`), and
+   the review card shows what was gathered. (Older chats may still hold the
+   `connector:<source>` lines earlier builds wrote; they never reach the
+   Chief's own session, `runner::recap_lines` skips them.) The other
    assistant only hears what the interview wrote. A bar above the composer
    says where it is, that what you type stays between you and the Chief, and
    has a plain **Stop** (stopping loses nothing); the Chief's own Stop
-   (desktop or phone, where its row reads "Bringing in agents from Grok")
-   stops it too.
-4. **The interview asks for everything.** Per agent: its instructions word
+   (desktop or phone) stops it too.
+4. **It doesn't stop until it has everything** (`agents/coverage.rs`).
+   We can't call the other assistant, so we drive it through our answers:
+   every `import_conversation` reply ends on `NEXT: Still missing: …`,
+   the next concrete gap ("You listed 9 agents; send agent 4 "Outreach" in
+   full: …", "You mentioned "the cabin" in passing…", "What else in people
+   and contacts haven't you sent?"). The checklist is eight areas: agents
+   (each in full, verbatim), routines (exact times or cron), people, ongoing
+   tasks, preferences and standing rules, accounts and tools, personal facts
+   (health only if offered), open conversations. The interview records each
+   answer with `record_area` (specifics as facts, a pointed `follow_up` for
+   anything vague, `mentions` for names in passing, each its own follow-up
+   until `resolves`). An area closes only after a round of its own: specifics
+   first, then, asked "what else in it haven't you sent?", "nothing more"
+   (or "none" for an empty one); a general "that's everything" closes
+   nothing, and `finish` refuses with the gap until every area is closed.
+   The cap ([`connector::MAX_EXCHANGES`], 60) still holds: the last message
+   it allows carries the app's own note (outside the envelope) to finish,
+   `finish` is then allowed with gaps, and the card says it was cut short.
+   What was gathered goes on the review card by area ("What Grok told me":
+   facts per area, every gap, mentions never followed up) and into the
+   card's "Add to <Chief>'s notes", ticked by default on a thorough import
+   and on the phone's review (`agents.import.review` `notes: true`);
+   nothing reaches memory before Import. The message the user pastes
+   (`import::import_prompt`) tells the assistant to keep calling until
+   `STATUS: in_review`.
+5. **The interview asks for everything.** Per agent: its instructions word
    for word, every routine (when, what), everything it watches for (when X
    happens, what it does), the apps and connectors it uses and what for, the
    user's preferences, its standing context, what it remembers, and its
@@ -2785,7 +2826,7 @@ the full threat model in docs/remote-access.md):
    `update_proposal` carry `watches`, `apps`, `preferences` and `context`
    beside the old fields; all of them go through the same cleaning and the
    same credential refusal.
-5. **Playback** (`harvest::playback`, a `CardKind::Playback` card). `finish`
+6. **Playback** (`harvest::playback`, a `CardKind::Playback` card). `finish`
    doesn't go straight to review: it posts "Here's what your 2 agents will do
    for you", each agent's plan in the first person and plain words ("Every
    weekday at 09:00: check for new invoices (arrives paused: you switch it
@@ -2807,7 +2848,7 @@ the full threat model in docs/remote-access.md):
    (`connector::answer_card`); Deny with no note stops the import. While the
    plan is with the user the other assistant is told `STATUS: with_user`.
    The playback card expires on a restart (the interview is in memory).
-6. `finish` (once the user says that's everything) posts the review card: each agent ticked, with its role and the
+7. `finish` (once the user says that's everything) posts the review card: each agent ticked, with its role and the
    first lines of its instructions in view (**Show all** for the rest), its
    memory, routines (paused) and the logins it asks for a click away; a
    name already taken (or a lookalike of one) comes in as "<Name> (from

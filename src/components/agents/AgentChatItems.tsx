@@ -975,6 +975,12 @@ function outcomeText(approval: Approval, agentName: string, compact: boolean): R
   if (approval.plan && approval.status === 'allowed') {
     return 'Allowed · each step runs without asking for an hour';
   }
+  if (approval.handoff && approval.status === 'allowed') {
+    return `Saving to memory · ${agentName} is keeping it and briefing your agents`;
+  }
+  if (approval.handoff && approval.status === 'denied') {
+    return 'Ignored · nothing was saved';
+  }
   if (approval.choice && approval.status !== 'expired') {
     return `${STATUS_LABEL[approval.status as 'allowed' | 'denied']} · ${approval.choice}`;
   }
@@ -1069,7 +1075,9 @@ export const ApprovalCard = memo(function ApprovalCard({
   // doesn't open the "what instead" line.
   // "Bring your Chrome window to the front": Check again / Not now, nothing else.
   const front = !!approval.front;
-  const plainDeny = approval.connector?.kind === 'consent' || front;
+  // "<source> sent what it knows": Ignore / Save to memory, nothing else.
+  const handoff = !!approval.handoff;
+  const plainDeny = approval.connector?.kind === 'consent' || front || handoff;
   const pending = approval.status === 'pending';
   const fields = approvalFields(approval.tool, approval.input);
   const answer = async (allow: boolean, always = false, why?: string) => {
@@ -1093,6 +1101,8 @@ export const ApprovalCard = memo(function ApprovalCard({
         icon={
           front ? (
             <GlobeIcon size={14} />
+          ) : handoff ? (
+            <DownloadIcon size={14} />
           ) : plainDeny ? (
             <DownloadIcon size={14} />
           ) : approval.settings ? (
@@ -1167,7 +1177,7 @@ export const ApprovalCard = memo(function ApprovalCard({
                 disabled={busy}
                 onClick={() => void answer(false)}
               >
-                {front ? 'Not now' : 'Deny'}
+                {front ? 'Not now' : handoff ? 'Ignore' : 'Deny'}
               </Button>
               <Button
                 tabIndex={0}
@@ -1177,7 +1187,7 @@ export const ApprovalCard = memo(function ApprovalCard({
                 {...keyProps}
                 onClick={guard(() => void answer(true))}
               >
-                {front ? 'Check again' : 'Allow'}
+                {front ? 'Check again' : handoff ? 'Save to memory' : 'Allow'}
               </Button>
             </>
           ) : undefined
@@ -1211,7 +1221,7 @@ export const ApprovalCard = memo(function ApprovalCard({
                 aria-expanded={details}
                 onClick={() => setDetails((v) => !v)}
               >
-                {details ? 'Hide details' : 'Details'}
+                {details ? 'Hide details' : handoff ? 'Review' : 'Details'}
               </TextButton>
             )}
             {details && <pre className="agent-approval__detail">{approval.detail}</pre>}

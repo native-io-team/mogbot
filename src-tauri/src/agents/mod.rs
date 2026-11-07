@@ -74,6 +74,7 @@ pub mod conn_relay;
 pub mod connections;
 pub mod connector;
 pub mod context;
+pub mod coverage;
 pub mod decisions;
 pub mod declined;
 pub mod defaults;

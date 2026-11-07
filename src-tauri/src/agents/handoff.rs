@@ -312,7 +312,7 @@ pub fn card_for(source: &str, before: Option<(&str, usize)>, parts: &[String]) -
         None,
     );
     approval.summary = Some(format!(
-        "{total} {} from {source}, your other assistant. Nothing is saved until you say so: Allow saves it to memory and briefs the agents it's for; Deny ignores it.",
+        "{total} {} from {source}, your other assistant. Nothing is saved until you say so: Save to memory keeps it and briefs the agents it's for; Ignore drops it.",
         plural(total)
     ));
     approval.handoff = Some(Handoff {

@@ -451,10 +451,11 @@ export interface Methods {
   'agents.import.stop': { params: Record<string, never>; result: PhoneImportStatus };
   /**
    * Import from a review card: the agents with these keys, each as a new agent
-   * (a taken name comes in as a copy). Replace and the Chief's notes stay on the Mac.
+   * (a taken name comes in as a copy). Replace stays on the Mac. `notes`: also
+   * add what the other assistant told the Chief (by area); a Mac before it ignores it.
    */
   'agents.import.review': {
-    params: { agentId: string; requestId: string; keys: string[] };
+    params: { agentId: string; requestId: string; keys: string[]; notes?: boolean };
     result: ImportApplied;
   };
   /**

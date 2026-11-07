@@ -572,6 +572,7 @@ impl Backend for DesktopBackend {
         agent_id: &str,
         request_id: &str,
         keys: Vec<String>,
+        notes: bool,
     ) -> Result<Value, CommandError> {
         let app = self.app.clone();
         let (agent_id, request_id) = (agent_id.to_string(), request_id.to_string());
@@ -583,7 +584,7 @@ impl Backend for DesktopBackend {
                     ..Default::default()
                 })
                 .collect(),
-            chief_notes: false,
+            chief_notes: notes,
         };
         let applied = tauri::async_runtime::spawn_blocking(move || {
             crate::agents::connector::apply_review(&app, &agent_id, &request_id, &picks)

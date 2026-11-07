@@ -989,6 +989,28 @@
   color: var(--text-primary);
 }
 
+/* What the other assistant told the Chief, by area: gaps read quieter. */
+.agent-import-review__coverage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-body-md);
+}
+
+.agent-import-review__coverage-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  color: var(--text-secondary);
+}
+
+.agent-import-review__coverage-list li[data-gap] {
+  color: var(--text-muted);
+}
+
 .agent-import-review__outcome {
   display: flex;
   align-items: center;

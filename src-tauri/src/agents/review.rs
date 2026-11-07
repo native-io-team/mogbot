@@ -94,6 +94,10 @@ pub struct Review {
     /// The interviewer's one-paragraph summary.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
+    /// What the import gathered, area by area, and every gap
+    /// (`agents::coverage`). What it gathered is in `chief_notes`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub coverage: Option<super::coverage::CoverageReport>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
@@ -648,6 +652,11 @@ pub fn detail(review: &Review) -> String {
             }
         })
         .collect();
+    if let Some(c) = &review.coverage {
+        lines.push(String::new());
+        lines.push("What it told me, by area:".into());
+        lines.extend(c.lines());
+    }
     lines.push(REVIEW_ON_MAC.into());
     lines.join("\n")
 }
@@ -1098,6 +1107,7 @@ mod tests {
                 proposals,
                 chief_notes: None,
                 summary: None,
+                coverage: None,
             }),
             playback: None,
         }

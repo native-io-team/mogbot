@@ -1249,9 +1249,11 @@ impl Backend for Stub {
         _agent_id: &str,
         _request_id: &str,
         keys: Vec<String>,
+        notes: bool,
     ) -> Result<Value, CommandError> {
         let applied = crate::agents::review::Applied {
             agents: keys.iter().map(|k| format!("Agent {k}")).collect(),
+            chief_notes: notes,
             ..Default::default()
         };
         Ok(serde_json::to_value(applied).unwrap())

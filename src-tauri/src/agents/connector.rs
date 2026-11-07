@@ -53,7 +53,7 @@ use tokio::sync::Notify;
 use super::interview;
 use super::review::{self, CardKind, ConnectorCard, Picks, Proposal, Review};
 use super::runner;
-use super::store::{self, AgentRef, ApprovalStatus, MessageKind};
+use super::store::{self, ApprovalStatus, MessageKind};
 use crate::errors::CommandError;
 
 /// `agents://import-talk`, payload: the [`Gate`] (armed, and the talk or null).
@@ -74,6 +74,10 @@ pub const DEFAULT_WAIT_SECS: u64 = 40;
 pub const MAX_WAIT_SECS: u64 = 50;
 /// The peer id prefix that marks a line as part of the import conversation.
 pub const PEER_PREFIX: &str = "connector:";
+/// Added after the last message the exchange cap allows. Outside the
+/// envelope's text it would be the assistant's; the interview's prompt
+/// says the app adds exactly this line.
+pub const CAP_NOTE: &str = "\n\n[APP: this import has reached its message limit. Record what you have, stage every agent, and call finish now.]";
 /// What the other assistant is told when the interview failed on our side.
 /// Never the reason: that is for the user.
 const FAILED_REPLY: &str =
@@ -160,6 +164,12 @@ pub struct Talk {
     history_chars: usize,
     #[serde(skip)]
     next_key: u32,
+    /// What it has got out of the other assistant, by area (`coverage`).
+    #[serde(skip)]
+    coverage: super::coverage::Coverage,
+    /// The exchange cap ended it before everything was covered.
+    #[serde(skip)]
+    capped: bool,
 }
 
 #[derive(Default)]
@@ -241,13 +251,6 @@ fn note(app: &AppHandle, agent_id: &str, text: String) {
     let _ = runner::record(app, runner::new_message(agent_id, MessageKind::Note, text));
 }
 
-fn peer(source: &str) -> AgentRef {
-    AgentRef {
-        id: format!("{PEER_PREFIX}{source}"),
-        name: source.to_string(),
-    }
-}
-
 /// Whether this line is part of an import conversation (and so never part
 /// of the Chief's own context).
 pub fn is_connector_line(m: &store::AgentMessage) -> bool {
@@ -262,11 +265,35 @@ pub fn interview_status(agent_id: &str) -> Option<runner::Status> {
     let t = state.talk.as_ref()?;
     (t.chief_id == agent_id && t.state == TalkState::Interviewing).then(|| runner::Status {
         state: "working",
-        activity: Some(format!("Bringing in agents from {}", t.source)),
+        activity: Some(progress_line(t)),
         since: Some(t.started_at),
         work: None,
         room: None,
     })
+}
+
+/// The agents staged so far, and whether each came with its instructions.
+fn staged_in_full(t: &Talk) -> Vec<(String, bool)> {
+    t.draft
+        .proposals
+        .iter()
+        .map(|p| (p.name.clone(), !p.instructions.trim().is_empty()))
+        .collect()
+}
+
+/// The one live line in the Chief's chat while an import runs:
+/// "Getting everything from Grok · 3 of 8 areas".
+pub(crate) fn progress_line(t: &Talk) -> String {
+    let (done, total) = t.coverage.progress(&staged_in_full(t));
+    format!(
+        "Getting everything from {} · {done} of {total} areas",
+        t.source
+    )
+}
+
+/// The next thing the other assistant must send, if anything is missing.
+pub(crate) fn next_gap(t: &Talk) -> Option<String> {
+    t.coverage.next(&staged_in_full(t)).map(|g| g.ask)
 }
 
 /* --------------------------------------------------------------- arming */
@@ -613,6 +640,8 @@ pub(crate) fn admit(
             conversations: 0,
             playbacks: 0,
             next_key: 0,
+            coverage: Default::default(),
+            capped: false,
         });
         return Ok(Admit::AskConsent { talk_id: id });
     };
@@ -643,7 +672,7 @@ pub(crate) fn admit(
             chief.name
         )),
         _ => {
-            if talk.exchanges >= MAX_EXCHANGES || talk.chars + message.chars().count() > MAX_TOTAL_CHARS {
+            if talk.capped || talk.exchanges >= MAX_EXCHANGES || talk.chars + message.chars().count() > MAX_TOTAL_CHARS {
                 return Err(format!(
                     "STATUS: limit\n\nThis import has reached its limit ({MAX_EXCHANGES} messages, {MAX_TOTAL_CHARS} characters). This message was NOT delivered.\n\nNEXT: Ask {} to finish with what's staged (send a message saying that's everything), or tell the user they can add the rest by asking their {} directly.",
                     chief.name, chief.name
@@ -653,9 +682,17 @@ pub(crate) fn admit(
             talk.chars += message.chars().count();
             talk.last_at = now;
             talk.busy = true;
+            // The last message the cap allows: the interview is told to
+            // finish with what's staged, and the card says it was cut short.
+            let message = if talk.exchanges >= MAX_EXCHANGES {
+                talk.capped = true;
+                format!("{message}{CAP_NOTE}")
+            } else {
+                message.to_string()
+            };
             Ok(Admit::Deliver {
                 talk_id: talk.id.clone(),
-                message: message.to_string(),
+                message,
             })
         }
     }
@@ -713,9 +750,15 @@ pub(crate) fn answer(status: Status, talk: &Talk, chief: &str, replies: &[String
         ));
     }
     let next = match status {
-        Status::Replied => format!(
-            "Answer {chief} by calling import_conversation again with your reply, from everything you know about the user's agents. Send what it asks for in full and leave nothing out: instructions word for word, every routine and schedule, everything each agent watches for, the apps it uses, the user's preferences and standing context. Optionally, once an agent is staged, send its past conversations with import_history. Never include passwords, API keys, tokens or card numbers: the app asks the user for those. Keep going until STATUS is in_review."
-        ),
+        Status::Replied => {
+            let gap = match next_gap(talk) {
+                Some(gap) => format!("Still missing: {gap} "),
+                None => String::new(),
+            };
+            format!(
+                "{gap}Answer {chief} by calling import_conversation again with your reply. Send raw material, word for word, never a summary: full instructions and system prompts, memory and notes files, every scheduled task with its exact time, the connectors and what each is for, saved facts about the user, open threads. Never include passwords, API keys, tokens or card numbers: the app asks the user for those. This takes many calls and that's expected: keep calling until STATUS is in_review, and don't stop or tell the user it's finished before then."
+            )
+        }
         Status::WithUser => format!(
             "{chief} is playing the plan back to the user and asking if anything is missing. Call import_conversation with no message to wait: {chief} may come back with a question about what the user added. You can still send past conversations with import_history meanwhile."
         ),
@@ -1132,35 +1175,31 @@ fn deliver_from(app: &AppHandle, talk_id: &str, message: &str, from_user: bool) 
         busy.disarm();
         return;
     };
-    if !from_user {
-        let mut line =
-            runner::new_message(&t.chief_id, MessageKind::FromAgent, message.to_string());
-        line.peer = Some(peer(&t.source));
-        let _ = runner::record(app, line);
-    }
+    // No line per packet in the Chief's chat: the live line
+    // ([`progress_line`]) says how far it has got, and the review card shows
+    // what it gathered.
     emit(app, Some(&t.chief_id));
     let app = app.clone();
-    let prompt = if from_user {
+    // The cap's note is the app's, so it goes outside the envelope.
+    let (message, cap) = match message.strip_suffix(CAP_NOTE) {
+        Some(m) => (m, CAP_NOTE.trim_start()),
+        None => (message, ""),
+    };
+    let mut prompt = if from_user {
         interview::user_envelope(message)
     } else {
         interview::envelope(&t.source, message)
     };
+    if !cap.is_empty() {
+        prompt.push_str("\n\n");
+        prompt.push_str(cap);
+    }
     tauri::async_runtime::spawn(async move {
         let done = run_exchange(&app, &t, &prompt).await;
         let failed = match done.result {
             Ok(outcome) => {
                 let replies = outcome.replies;
-                if let Some(t) = busy.report(&replies, false, done.began) {
-                    for reply in &replies {
-                        let mut line = runner::new_message(
-                            &t.chief_id,
-                            MessageKind::SentToAgent,
-                            reply.clone(),
-                        );
-                        line.peer = Some(peer(&t.source));
-                        let _ = runner::record(&app, line);
-                    }
-                }
+                let _ = busy.report(&replies, false, done.began);
                 None
             }
             Err(interview::Failed::Stopped) => {
@@ -1332,6 +1371,32 @@ fn tool_defs() -> serde_json::Value {
             }
         },
         {
+            "name": "list_agents",
+            "description": "Record the agents, projects or personas the other assistant listed (before each is sent in full). Each must then be staged with propose_agent, with its instructions.",
+            "inputSchema": {
+                "type": "object",
+                "properties": { "names": { "type": "array", "items": { "type": "string" } } },
+                "required": ["names"]
+            }
+        },
+        {
+            "name": "record_area",
+            "description": "Record what the other assistant sent for one area, as specific facts (one per item, raw, with names, dates, amounts). An area closes only when, asked what else in it hasn't been sent, it says nothing more (exhausted), or says it has none at all (none). Never close an area from a general \"that's everything\".",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "area": { "type": "string", "enum": ["agents", "routines", "people", "tasks", "preferences", "accounts", "personal", "threads"] },
+                    "facts": { "type": "array", "items": { "type": "string" }, "description": "Specifics only. A summary (\"has a few clients\") isn't a fact: ask for the specifics instead." },
+                    "exhausted": { "type": "boolean", "description": "It said, for this area, there's nothing more." },
+                    "none": { "type": "boolean", "description": "It said it has nothing at all in this area." },
+                    "follow_up": { "type": "string", "description": "The pointed question a vague answer needs (\"Which client? What date? What amount?\")." },
+                    "mentions": { "type": "array", "items": { "type": "string" }, "description": "Names, projects, vehicles, places mentioned in passing that need their own follow-up." },
+                    "resolves": { "type": "array", "items": { "type": "string" }, "description": "Earlier mentions this answers." }
+                },
+                "required": ["area"]
+            }
+        },
+        {
             "name": "finish",
             "description": "Every agent is staged: play the plan back to the user in plain words and ask if anything is missing. What they add comes back to you in <from_user>; fold it in and call finish again. Then tell the other assistant the user is checking the plan.",
             "inputSchema": {
@@ -1478,9 +1543,76 @@ pub(crate) fn tool_call(
             t.draft.proposals[i] = p;
             Ok((format!("Updated {name} in the draft."), ToolEffect::None))
         }
+        "list_agents" => {
+            let names: Vec<String> = args
+                .get("names")
+                .and_then(|v| v.as_array())
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|v| v.as_str().map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default();
+            t.coverage.list_agents(&names);
+            let next = next_gap(t).unwrap_or_default();
+            Ok((
+                format!("Recorded {} listed. Next, ask for: {next}", names.len()),
+                ToolEffect::None,
+            ))
+        }
+        "record_area" => {
+            let area = args
+                .get("area")
+                .and_then(|v| v.as_str())
+                .and_then(super::coverage::Area::parse)
+                .ok_or("Name one area: agents, routines, people, tasks, preferences, accounts, personal or threads.")?;
+            let list = |k: &str| -> Vec<String> {
+                args.get(k)
+                    .and_then(|v| v.as_array())
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(|v| v.as_str().map(str::to_string))
+                            .collect()
+                    })
+                    .unwrap_or_default()
+            };
+            let flag = |k: &str| args.get(k).and_then(|v| v.as_bool()) == Some(true);
+            let said = t.coverage.record(
+                area,
+                super::coverage::Record {
+                    facts: list("facts"),
+                    exhausted: flag("exhausted"),
+                    none: flag("none"),
+                    follow_up: args
+                        .get("follow_up")
+                        .and_then(|v| v.as_str())
+                        .map(str::to_string),
+                    mentions: list("mentions"),
+                    resolves: list("resolves"),
+                },
+            )?;
+            let next = match next_gap(t) {
+                Some(gap) => format!(" Next, ask for: {gap}"),
+                None => " Every area is covered: call finish.".to_string(),
+            };
+            Ok((format!("{said}{next}"), ToolEffect::None))
+        }
         "finish" => {
-            if t.draft.proposals.is_empty() && t.draft.chief_notes.is_none() {
+            if t.draft.proposals.is_empty()
+                && t.draft.chief_notes.is_none()
+                && t.coverage.notes().is_none()
+            {
                 return Err("Nothing is staged yet: propose each agent first.".into());
+            }
+            // Never finished on a general "that's everything": every area
+            // is confirmed on its own first, unless the cap ended it.
+            if !t.capped {
+                if let Some(gap) = next_gap(t) {
+                    return Err(format!(
+                        "Not yet: the import isn't complete. Ask {} for this next: {gap}",
+                        t.source
+                    ));
+                }
             }
             let summary = review::clean_text(
                 args.get("summary").and_then(|v| v.as_str()).unwrap_or(""),
@@ -1507,12 +1639,30 @@ pub(crate) fn tool_call(
     }
 }
 
+/// What the review card holds: the staged agents, and what the other
+/// assistant told us by area as notes for the Chief (ticked on the card by
+/// default, applied only on Import), with the account of what was gathered
+/// and every gap.
+pub(crate) fn review_draft(t: &Talk) -> Review {
+    let mut draft = t.draft.clone();
+    if let Some(gathered) = t.coverage.notes() {
+        draft.chief_notes = Some(match draft.chief_notes.take() {
+            Some(n) if !n.trim().is_empty() => format!("{n}\n\n{gathered}"),
+            _ => gathered,
+        });
+    }
+    if t.coverage.listed.is_some() || !t.coverage.areas.is_empty() || t.capped {
+        draft.coverage = Some(t.coverage.report(&staged_in_full(t), t.capped));
+    }
+    draft
+}
+
 /// The review card, in the Chief's chat.
 fn post_review(app: &AppHandle, talk_id: &str) {
     let Some(t) = lock().talk.clone().filter(|t| t.id == talk_id) else {
         return;
     };
-    let review = review::with_arrival(review::with_clashes(t.draft.clone()), &t.source);
+    let review = review::with_arrival(review::with_clashes(review_draft(&t)), &t.source);
     let count = review.proposals.len();
     let mut approval = super::mcp::new_card(
         store::new_id(),
@@ -1934,6 +2084,8 @@ pub(crate) fn stage_one_shot_state(
         conversations: 0,
         playbacks: 0,
         next_key: 0,
+        coverage: Default::default(),
+        capped: false,
     });
     Ok(id)
 }
@@ -1987,6 +2139,29 @@ mod tests {
         assert_eq!(team_names(&names(3)), "A1, A2 and A3");
         assert_eq!(team_names(&names(5)), "A1, A2, A3, A4 and A5");
         assert_eq!(team_names(&names(16)), "A1, A2, A3, A4 and 12 more");
+    }
+
+    /// The interview records every area as covered (two rounds each), with
+    /// `listed` as the agents the assistant named.
+    fn cover_everything(s: &str, chief: &str, listed: &[&str]) {
+        tool_call(s, "list_agents", &json!({ "names": listed }), chief).unwrap();
+        for area in super::super::coverage::AREAS {
+            let key = area.key();
+            tool_call(
+                s,
+                "record_area",
+                &json!({"area": key, "facts": [format!("A fictional {key} fact")]}),
+                chief,
+            )
+            .unwrap();
+            tool_call(
+                s,
+                "record_area",
+                &json!({"area": key, "exhausted": true}),
+                chief,
+            )
+            .unwrap();
+        }
     }
 
     /// Armed, asked, allowed: the interview is going.
@@ -2175,6 +2350,7 @@ mod tests {
             &chief.name,
         )
         .unwrap();
+        cover_everything(&s, &chief.name, &["Finance"]);
         let (_, effect) =
             tool_call(&s, "finish", &json!({"summary": "One agent."}), &chief.name).unwrap();
         // The plan is played back first; "That's everything" brings the review.
@@ -2239,6 +2415,7 @@ mod tests {
             ],
             chief_notes: Some("- Likes tea".into()),
             summary: None,
+            coverage: None,
         });
         assert!(review.proposals[0].clash.is_some() && review.proposals[1].clash.is_none());
         let card = ConnectorCard {
@@ -2364,7 +2541,10 @@ mod tests {
         interviewing();
         let s = interview_status("chief").unwrap();
         assert_eq!(s.state, "working");
-        assert_eq!(s.activity.as_deref(), Some("Bringing in agents from Grok"));
+        assert_eq!(
+            s.activity.as_deref(),
+            Some("Getting everything from Grok · 0 of 8 areas")
+        );
         assert!(interview_status("someone-else").is_none());
         reset_for_tests();
     }
@@ -2565,6 +2745,163 @@ mod tests {
         store::set_root_for_tests(None);
     }
     #[test]
+    fn every_reply_names_the_next_gap_and_finish_waits_for_every_area() {
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(dir.path().to_path_buf()));
+        let chief = super::super::ensure_main().unwrap();
+        let talk = interviewing();
+        let s = secret();
+        let t = lock().talk.clone().unwrap();
+        let said = answer(Status::Replied, &t, &chief.name, &["Which agents?".into()]);
+        assert!(
+            said.contains("NEXT: Still missing: List every agent"),
+            "{said}"
+        );
+        assert!(said.contains("keep calling until STATUS is in_review"));
+        assert!(!said.contains("STATUS: done"));
+
+        tool_call(
+            &s,
+            "list_agents",
+            &json!({"names": ["Scout", "Ledger", "Outreach"]}),
+            &chief.name,
+        )
+        .unwrap();
+        tool_call(
+            &s,
+            "propose_agent",
+            &json!({"name": "Scout", "instructions": "Find leads."}),
+            &chief.name,
+        )
+        .unwrap();
+        let t = lock().talk.clone().unwrap();
+        let said = answer(Status::Replied, &t, &chief.name, &[]);
+        assert!(
+            said.contains("You listed 3 agents; send agent 2 \"Ledger\" in full"),
+            "{said}"
+        );
+        assert_eq!(
+            progress_line(&t),
+            "Getting everything from Grok · 0 of 8 areas"
+        );
+
+        // "That's everything" for the whole import: refused, with the gap.
+        let err =
+            tool_call(&s, "finish", &json!({"summary": "All done."}), &chief.name).unwrap_err();
+        assert!(
+            err.starts_with("Not yet") && err.contains("Ledger"),
+            "{err}"
+        );
+        // An area closes only after its own "what else" round.
+        let r = tool_call(
+            &s,
+            "record_area",
+            &json!({"area": "people", "facts": ["Jordan: accountant"], "exhausted": true}),
+            &chief.name,
+        )
+        .unwrap()
+        .0;
+        assert!(r.contains("not closed"), "{r}");
+        assert!(tool_call(&s, "record_area", &json!({"area": "health"}), &chief.name).is_err());
+        cover_everything(&s, &chief.name, &["Scout"]);
+        let t = lock().talk.clone().unwrap();
+        assert_eq!(
+            progress_line(&t),
+            "Getting everything from Grok · 8 of 8 areas"
+        );
+        assert!(tool_call(&s, "finish", &json!({"summary": "s"}), &chief.name).is_ok());
+
+        // What it gathered is only on the card: nothing in memory yet.
+        let t = lock().talk.clone().unwrap();
+        let review = review_draft(&t);
+        let notes = review.chief_notes.clone().unwrap();
+        assert!(
+            notes.contains("## People and contacts\n- Jordan: accountant"),
+            "{notes}"
+        );
+        let report = review.coverage.clone().unwrap();
+        assert!(report.areas.iter().all(|a| a.gap.is_none()));
+        let memory = || {
+            std::fs::read_to_string(store::agent_home(&chief.id).unwrap().join("CLAUDE.md"))
+                .unwrap_or_default()
+        };
+        assert!(
+            !memory().contains("Jordan"),
+            "nothing saved before the user's yes"
+        );
+        // Import without the notes ticked: still nothing.
+        let card = ConnectorCard {
+            kind: CardKind::Review,
+            talk_id: talk.clone(),
+            source: "Grok".into(),
+            review: Some(review.clone()),
+            playback: None,
+        };
+        review::apply(
+            None,
+            &chief,
+            &card,
+            &Picks {
+                agents: vec![],
+                chief_notes: false,
+            },
+        )
+        .unwrap();
+        assert!(!memory().contains("Jordan"));
+        // The user's yes on the notes: saved.
+        review::apply(
+            None,
+            &chief,
+            &card,
+            &Picks {
+                agents: vec![],
+                chief_notes: true,
+            },
+        )
+        .unwrap();
+        assert!(memory().contains("Jordan: accountant"));
+        reset_for_tests();
+        store::set_root_for_tests(None);
+    }
+
+    #[test]
+    fn the_cap_lets_the_import_finish_and_the_card_says_so() {
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(dir.path().to_path_buf()));
+        let chief = super::super::ensure_main().unwrap();
+        let talk = interviewing();
+        let s = secret();
+        lock().talk.as_mut().unwrap().exchanges = MAX_EXCHANGES - 1;
+        let Admit::Deliver { message, .. } =
+            admit("Grok", "Here's agent one.", &chief, 2_000).unwrap()
+        else {
+            panic!("the last one is delivered");
+        };
+        assert!(message.ends_with(CAP_NOTE));
+        on_exchange(&talk, &[], false, true);
+        let err = admit("Grok", "And more.", &chief, 2_100).unwrap_err();
+        assert!(err.starts_with("STATUS: limit"), "{err}");
+        tool_call(
+            &s,
+            "propose_agent",
+            &json!({"name": "Scout", "instructions": "Find leads."}),
+            &chief.name,
+        )
+        .unwrap();
+        // Capped: finish is allowed with gaps, and the card names them.
+        assert!(tool_call(&s, "finish", &json!({"summary": "s"}), &chief.name).is_ok());
+        let report = review_draft(&lock().talk.clone().unwrap())
+            .coverage
+            .unwrap();
+        assert!(report.capped);
+        assert!(report.lines().iter().any(|l| l.contains("message limit")));
+        reset_for_tests();
+        store::set_root_for_tests(None);
+    }
+
+    #[test]
     fn the_plan_is_played_back_and_what_the_user_adds_goes_to_the_interview() {
         let _serial = store::tests_lock();
         let dir = tempfile::tempdir().unwrap();
@@ -2583,6 +2920,7 @@ mod tests {
             &chief.name,
         )
         .unwrap();
+        cover_everything(&s, &chief.name, &[]);
         let (text, effect) =
             tool_call(&s, "finish", &json!({"summary": "s"}), &chief.name).unwrap();
         assert!(text.contains("<from_user>"), "{text}");
