@@ -264,6 +264,29 @@ fn search_room(
     })
 }
 
+/// Lines of an agent's own CLAUDE.md (its instructions and `## Memory`)
+/// holding every word of `query`, in file order, at most `limit`. For
+/// `search_my_chat` across the team: what an agent remembers is often the
+/// answer ("the F150 is in the shop until Friday") before any chat is.
+pub fn memory_lines(home: &std::path::Path, query: &str, limit: usize) -> Vec<String> {
+    let terms = terms(query);
+    if terms.is_empty() {
+        return Vec::new();
+    }
+    std::fs::read_to_string(home.join("CLAUDE.md"))
+        .unwrap_or_default()
+        .lines()
+        .map(str::trim)
+        .filter(|l| !l.is_empty())
+        .filter(|l| {
+            let lowered = lower_chars(l);
+            terms.iter().all(|t| find(&lowered, t).is_some())
+        })
+        .take(limit)
+        .map(|l| l.chars().take(500).collect())
+        .collect()
+}
+
 /// The messages in one agent's own chat that hold every word of `query`,
 /// whole, newest first (`search_my_chat`: an agent reading back what it and
 /// the user already said, instead of asking).

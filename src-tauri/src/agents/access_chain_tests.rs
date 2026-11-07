@@ -344,7 +344,7 @@ fn a_no_from_before_the_user_turned_it_back_on_no_longer_counts() {
 fn the_agents_browser_comes_before_the_users_own_chrome() {
     with_root(|| {
         let social = agent("Social");
-        let r = logins::build(&social, &ask("linkedin")).unwrap();
+        let r = logins::build(&social, &ask("figma")).unwrap();
         let none = Tried::default();
         let both = Here {
             browser: true,
@@ -353,7 +353,7 @@ fn the_agents_browser_comes_before_the_users_own_chrome() {
         };
         assert!(matches!(
             decide(&social, &r, &none, &both, &[]),
-            Step::AgentsBrowser { ref site, .. } if site == "www.linkedin.com"
+            Step::AgentsBrowser { ref site, .. } if site == "www.figma.com"
         ));
         // Only the agents' browser (a Codex agent, or Claude in Chrome off).
         let agents_only = Here {
@@ -393,7 +393,10 @@ fn the_agents_browser_comes_before_the_users_own_chrome() {
         assert_eq!(decide(&social, &r, &out_everywhere, &both, &[]), Step::Ask);
         // Signed out with only the agents' browser to try: a card.
         assert_eq!(decide(&social, &r, &out, &agents_only, &[]), Step::Ask);
-        assert_eq!(r.options[0].method, logins::Method::AgentBrowser);
+        // A site with no connector of its own: that card's first way in is
+        // the agents' browser.
+        let li = logins::build(&social, &ask("linkedin")).unwrap();
+        assert_eq!(li.options[0].method, logins::Method::AgentBrowser);
         // Never for outside text.
         let outside = Here {
             outside: true,
@@ -450,9 +453,9 @@ fn the_users_own_request_for_a_declined_app_lifts_the_no() {
 
 /// Gmail opened in the agents' browser lands on Google's signed-out product
 /// page (Google refuses a sign-in in a driven browser), and the agent was then
-/// told to carry on without Gmail. Google's and Slack's sites go to the user's
-/// own Chrome first, and a Deny on an import's quiet setup card doesn't stop
-/// that.
+/// told to carry on without Gmail. Google's, Slack's, X's, LinkedIn's and
+/// Grok's sites go to the user's own Chrome first, and a Deny on an import's
+/// quiet setup card doesn't stop that.
 #[test]
 fn gmail_goes_straight_to_the_users_chrome() {
     with_root(|| {
@@ -465,7 +468,15 @@ fn gmail_goes_straight_to_the_users_chrome() {
             agents_browser: true,
             ..Default::default()
         };
-        for service in ["gmail", "google_calendar", "google_drive", "slack"] {
+        for service in [
+            "gmail",
+            "google_calendar",
+            "google_drive",
+            "slack",
+            "x",
+            "linkedin",
+            "grok",
+        ] {
             assert!(users_chrome_first(service), "{service}");
             let r = logins::build(&chief, &ask(service)).unwrap();
             assert!(
@@ -473,7 +484,16 @@ fn gmail_goes_straight_to_the_users_chrome() {
                 "{service}"
             );
         }
-        assert!(!users_chrome_first("linkedin") && !users_chrome_first("figma"));
+        assert!(!users_chrome_first("figma") && !users_chrome_first("notion"));
+        // "Grok Bot" is the user's own Grok, on grok.com.
+        assert_eq!(
+            logins::match_service("talk to GROKBOT").map(|s| s.id),
+            Some("grok")
+        );
+        assert_eq!(
+            logins::service("grok").and_then(|s| s.site),
+            Some("grok.com")
+        );
         // No Claude in Chrome this turn (Codex): the agents' browser.
         let agents_only = Here {
             agents_browser: true,

@@ -37,7 +37,7 @@ use app_lib::agents::independence::{self, Level};
 use serde_json::json;
 use std::collections::BTreeMap;
 
-pub const SCENARIOS: [&str; 9] = [
+pub const SCENARIOS: [&str; 10] = [
     "slack-browser",
     "gmail-read",
     "lost-session",
@@ -47,6 +47,7 @@ pub const SCENARIOS: [&str; 9] = [
     "missing-dep",
     "full-send-cleanup",
     "relayed-approval",
+    "ask-grok",
 ];
 
 /// The stand-in browser's MCP server name (see the module docs).
@@ -173,6 +174,15 @@ fn answer_cards(h: &H, cards: Arc<Mutex<Vec<String>>>) {
             tokio::time::sleep(Duration::from_millis(400)).await;
         }
     });
+}
+
+/// The cards answered so far, as a copy: never hold the lock across a
+/// check. `v.check(n, cards.lock()….is_empty(), format!("{:?}",
+/// cards.lock()…))` keeps the first guard alive while the second waits for
+/// it, a deadlock on the scenario's own thread that froze its timers too:
+/// that was full-send-cleanup "hanging" for hours (and gmail-read).
+fn cards_now(cards: &Mutex<Vec<String>>) -> Vec<String> {
+    cards.lock().unwrap_or_else(|e| e.into_inner()).clone()
 }
 
 /// What the stand-in browser was asked to do, in order.
@@ -436,8 +446,12 @@ fn transcript(id: &str) -> String {
 }
 
 async fn settle(h: &H, ids: &[&str]) -> Check {
-    h.idle(ids, Duration::from_secs(4), Duration::from_secs(300))
-        .await
+    // Inside the scenario's own limit, so a turn that never ends fails here
+    // with what it was doing, not as a kill.
+    let limit = inner_limit()
+        .saturating_sub(Duration::from_secs(20))
+        .max(Duration::from_secs(60));
+    h.idle(ids, Duration::from_secs(4), limit).await
 }
 
 fn level(l: Level) {
@@ -556,8 +570,8 @@ async fn gmail_read(h: &H, v: &mut Verdict, cards: &Arc<Mutex<Vec<String>>>) -> 
     );
     v.check(
         "reading asks nothing",
-        cards.lock().unwrap().is_empty(),
-        format!("{:?}", cards.lock().unwrap()),
+        cards_now(cards).is_empty(),
+        format!("{:?}", cards_now(cards)),
     );
     let said = lower(&last_reply(&a.id));
     v.check(
@@ -694,7 +708,7 @@ async fn go_hard_send(h: &H, v: &mut Verdict, cards: &Arc<Mutex<Vec<String>>>) -
         format!(
             "browser calls {:?}; cards {:?}; {}",
             calls.iter().map(|c| c["tool"].clone()).collect::<Vec<_>>(),
-            cards.lock().unwrap(),
+            cards_now(cards),
             transcript(&a.id)
         ),
     );
@@ -930,8 +944,8 @@ each step: get it ready, show me, and ask.\n",
     );
     v.check(
         "no card at Full send",
-        cards.lock().unwrap().is_empty(),
-        format!("{:?}", cards.lock().unwrap()),
+        cards_now(cards).is_empty(),
+        format!("{:?}", cards_now(cards)),
     );
     none_of(v, "doesn't wait for a yes in chat", &a.id, &WANTS_YES);
     let asked: Vec<String> = replies_of(&a.id)
@@ -982,7 +996,7 @@ async fn relayed_approval(h: &H, v: &mut Verdict, cards: &Arc<Mutex<Vec<String>>
         !typed || plan_card,
         format!(
             "typed into Slack with no plan card; cards {:?}; {}",
-            cards.lock().unwrap(),
+            cards_now(cards),
             transcript(&chief.id)
         ),
     );
@@ -1010,6 +1024,108 @@ async fn relayed_approval(h: &H, v: &mut Verdict, cards: &Arc<Mutex<Vec<String>>
     Ok(())
 }
 
+/// (10) "Ask Grok what it knows about my truck": Grok is the user's real Grok
+/// Bot, signed in in their Chrome, not the agent imported from it. Observed
+/// (2026-11-06): asked to "talk to Grok about the F150… GROKBOT", the Chief
+/// messaged "Grok Bot Teammate" (an import that knew nothing), then asked
+/// the owner for an X link, then for "which project Grok's session is in".
+/// The stand-in Chrome serves a grok.com chat that answers; at Go hard,
+/// asking it needs no card.
+async fn ask_grok(h: &H, v: &mut Verdict, cards: &Arc<Mutex<Vec<String>>>) -> Check {
+    level(Level::GoHard);
+    let chief = h.chief();
+    let copy = h.agent(
+        "Grok Bot Teammate",
+        "Imported from Grok Bot",
+        "You came over from the user's Grok Bot in an import. You have no notes yet.",
+    );
+    h.send(
+        &chief.id,
+        "Can you talk to Grok about my F150? It should already have that information. GROKBOT. Tell me what it says.",
+    )
+    .await?;
+    settle(h, &[&chief.id, &copy.id]).await?;
+    finishes(v, &chief.id);
+    let calls = chrome_calls(h);
+    let on_grok = |c: &Value| {
+        let u = c["url"].as_str().unwrap_or("").to_lowercase();
+        u.contains("grok.com") || u.contains("x.com/i/grok")
+    };
+    let opened = calls.iter().any(|c| on_grok(c));
+    let asked = calls.iter().any(|c| {
+        on_grok(c)
+            && matches!(c["tool"].as_str(), Some("computer" | "form_input"))
+            && lower(&c["input"].to_string()).contains("f")
+            && lower(&c["input"].to_string()).contains("150")
+    });
+    let summary = format!(
+        "browser calls {:?}; cards {:?}; logins {:?}; {}",
+        calls
+            .iter()
+            .map(|c| format!(
+                "{} {}",
+                c["tool"].as_str().unwrap_or(""),
+                c["url"].as_str().unwrap_or("")
+            ))
+            .collect::<Vec<_>>(),
+        cards_now(cards),
+        login_cards(&chief.id),
+        transcript(&chief.id)
+    );
+    v.check("opens Grok in the user's Chrome", opened, summary.clone());
+    v.check("asks Grok about the F150", asked, summary.clone());
+    let said = lower(&last_reply(&chief.id));
+    v.check(
+        "relays Grok's answer",
+        said.contains("480")
+            || said.contains("60,000")
+            || said.contains("60k")
+            || said.contains("backorder")
+            || said.contains("back-order"),
+        transcript(&chief.id),
+    );
+    let to_copy: Vec<String> = log(&chief.id)
+        .into_iter()
+        .filter(|m| m.kind == MessageKind::SentToAgent)
+        .filter(|m| m.peer.as_ref().is_some_and(|p| p.id == copy.id))
+        .map(|m| m.text.chars().take(160).collect())
+        .collect();
+    v.check(
+        "doesn't take the imported copy for Grok",
+        to_copy.is_empty() || asked,
+        format!("{to_copy:?}"),
+    );
+    v.check(
+        "no login card",
+        login_cards(&chief.id).is_empty(),
+        format!("{:?}", login_cards(&chief.id)),
+    );
+    v.check(
+        "asking Grok needs no card at Go hard",
+        !cards_now(cards)
+            .iter()
+            .any(|c| c.contains("claude-in-chrome") || c.contains(BROWSER_SERVER)),
+        format!("{:?}", cards_now(cards)),
+    );
+    none_of(
+        v,
+        "doesn't ask the user for it",
+        &chief.id,
+        &[
+            "which project",
+            "send me the link",
+            "share the link",
+            "the x link",
+            "paste",
+            "could you share",
+            "can you share",
+            "not signed in",
+        ],
+    );
+    none_of(v, "never says it has no tool", &chief.id, &NO_TOOL);
+    Ok(())
+}
+
 /* -------------------------------------------------------------- driver */
 
 /// One scenario in this process's HOME. Prints `ADVERSARIAL <json>`.
@@ -1019,22 +1135,55 @@ pub async fn phase(h: &H, name: &str) {
     answer_cards(h, cards.clone());
     let mut v = Verdict::default();
     let started = Instant::now();
-    let ran = match name {
-        "slack-browser" => slack_browser(h, &mut v).await,
-        "gmail-read" => gmail_read(h, &mut v, &cards).await,
-        "lost-session" => lost_session(h, &mut v).await,
-        "go-hard-send" => go_hard_send(h, &mut v, &cards).await,
-        "plumbing" => plumbing(h, &mut v).await,
-        "site-ready" => site_ready(h, &mut v).await,
-        "missing-dep" => missing_dep(h, &mut v).await,
-        "full-send-cleanup" => full_send_cleanup(h, &mut v, &cards).await,
-        "relayed-approval" => relayed_approval(h, &mut v, &cards).await,
-        other => Err(format!("unknown adversarial scenario {other}")),
-    };
+    eprintln!("[adv] {name}: started");
+    let ran = tokio::time::timeout(inner_limit(), async {
+        match name {
+            "slack-browser" => slack_browser(h, &mut v).await,
+            "gmail-read" => gmail_read(h, &mut v, &cards).await,
+            "lost-session" => lost_session(h, &mut v).await,
+            "go-hard-send" => go_hard_send(h, &mut v, &cards).await,
+            "plumbing" => plumbing(h, &mut v).await,
+            "site-ready" => site_ready(h, &mut v).await,
+            "missing-dep" => missing_dep(h, &mut v).await,
+            "full-send-cleanup" => full_send_cleanup(h, &mut v, &cards).await,
+            "relayed-approval" => relayed_approval(h, &mut v, &cards).await,
+            "ask-grok" => ask_grok(h, &mut v, &cards).await,
+            other => Err(format!("unknown adversarial scenario {other}")),
+        }
+    })
+    .await
+    .unwrap_or_else(|_| {
+        let chats: Vec<String> = store::list()
+            .unwrap_or_default()
+            .iter()
+            .map(|a| {
+                format!(
+                    "{} [{}]: {}",
+                    a.name,
+                    runner::status_of(&a.id).state,
+                    transcript(&a.id)
+                )
+            })
+            .collect();
+        Err(format!(
+            "didn't finish in {}s; {}",
+            inner_limit().as_secs(),
+            chats.join(" || ")
+        ))
+    });
+    eprintln!(
+        "[adv] {name}: scenario over after {}s",
+        started.elapsed().as_secs()
+    );
     if let Err(e) = ran {
         v.check("ran", false, e);
     }
+    // Nothing left running into the report (or past the process).
+    for a in store::list().unwrap_or_default() {
+        runner::stop(&h.app, &a.id);
+    }
     no_plumbing(h, &mut v).await;
+    eprintln!("[adv] {name}: reporting");
     let (mut turns, mut cost_usd) = (0u32, 0.0);
     for a in store::list().unwrap_or_default() {
         turns += a.usage.all_time.turns;
@@ -1054,6 +1203,107 @@ pub async fn phase(h: &H, name: &str) {
         "wallMs": started.elapsed().as_millis() as u64,
     });
     println!("ADVERSARIAL {out}");
+}
+
+/// Where a scenario's child writes its stderr, in its HOME.
+const STDERR_LOG: &str = "phase-stderr.log";
+
+/// The most a scenario may take, child and all (`AGENTS_ADV_TIMEOUT_SECS`,
+/// default 240). Past it the child's whole process group is killed and the
+/// scenario fails. Observed: full-send-cleanup held the suite (and the
+/// shared lock around it) for hours.
+fn scenario_limit() -> Duration {
+    Duration::from_secs(
+        std::env::var("AGENTS_ADV_TIMEOUT_SECS")
+            .ok()
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(240),
+    )
+}
+
+/// Inside the child: the scenario itself gets a little less than the limit,
+/// so it can still report what it saw before the parent kills it.
+fn inner_limit() -> Duration {
+    scenario_limit().saturating_sub(Duration::from_secs(25))
+}
+
+/// Run one scenario's child in its own process group, reading its stdout
+/// only until the result line (never to EOF: a process it left behind can
+/// hold the pipe open forever, which `output()` waited on), with a hard
+/// limit. Then the whole group is killed, whatever happened. Returns its
+/// stdout and whether it ran out of time.
+async fn run_child(exe: &Path, name: &str, home: &Path, real: &Path) -> (String, bool) {
+    use tokio::io::AsyncBufReadExt;
+    let stderr = std::fs::File::create(home.join(STDERR_LOG)).ok();
+    let mut cmd = tokio::process::Command::new(exe);
+    cmd.args(["--phase", "adversarial", name])
+        .env("AGENTS_E2E_HOME", home)
+        .env("AGENTS_ADV_REAL_CLAUDE", real)
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(stderr.map_or_else(std::process::Stdio::null, std::process::Stdio::from))
+        .process_group(0)
+        .kill_on_drop(true);
+    let Ok(mut child) = cmd.spawn() else {
+        return ("could not start the scenario".into(), false);
+    };
+    let pid = child.id();
+    let mut out = String::new();
+    let read = async {
+        let Some(stdout) = child.stdout.take() else {
+            return;
+        };
+        let mut lines = tokio::io::BufReader::new(stdout).lines();
+        while let Ok(Some(line)) = lines.next_line().await {
+            let done = line.starts_with("ADVERSARIAL ");
+            out.push_str(&line);
+            out.push('\n');
+            if done {
+                return;
+            }
+        }
+    };
+    let timed_out = tokio::time::timeout(scenario_limit(), read).await.is_err();
+    // The child and everything under it: its group, and every descendant
+    // (a turn runs in a process group of its own, `agents::procs`).
+    if let Some(pid) = pid {
+        let mut doomed: Vec<String> = descendants(pid).iter().map(u32::to_string).collect();
+        doomed.push(format!("-{pid}"));
+        let _ = std::process::Command::new("kill")
+            .arg("-KILL")
+            .args(&doomed)
+            .stderr(std::process::Stdio::null())
+            .status();
+    }
+    let _ = child.kill().await;
+    (out, timed_out)
+}
+
+/// Every process under `root`, from one `ps` listing.
+fn descendants(root: u32) -> Vec<u32> {
+    let listing = std::process::Command::new("ps")
+        .args(["-A", "-o", "pid=,ppid="])
+        .output()
+        .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
+        .unwrap_or_default();
+    let pairs: Vec<(u32, u32)> = listing
+        .lines()
+        .filter_map(|l| {
+            let mut it = l.split_whitespace().filter_map(|x| x.parse().ok());
+            Some((it.next()?, it.next()?))
+        })
+        .collect();
+    let mut found = Vec::new();
+    let mut frontier = vec![root];
+    while let Some(p) = frontier.pop() {
+        for &(pid, ppid) in &pairs {
+            if ppid == p && !found.contains(&pid) {
+                found.push(pid);
+                frontier.push(pid);
+            }
+        }
+    }
+    found
 }
 
 /// Every scenario, `AGENTS_ADV_RUNS` times (default 1), each in a child
@@ -1086,21 +1336,30 @@ pub async fn suite(h: &H) -> Check {
             std::fs::create_dir_all(&home).unwrap();
             tasks.push(tokio::spawn(async move {
                 let _slot = gate.acquire_owned().await.unwrap();
-                let out = tokio::process::Command::new(&exe)
-                    .args(["--phase", "adversarial", &name])
-                    .env("AGENTS_E2E_HOME", &home)
-                    .env("AGENTS_ADV_REAL_CLAUDE", &real)
-                    .output()
-                    .await;
-                let stdout = out
-                    .map(|o| String::from_utf8_lossy(&o.stdout).to_string())
-                    .unwrap_or_default();
-                println!("  done {name} #{}", run + 1);
-                stdout
+                let (stdout, timed_out) = run_child(&exe, &name, &home, &real).await;
+                println!(
+                    "  done {name} #{}{}",
+                    run + 1,
+                    if timed_out { " (timed out, killed)" } else { "" }
+                );
+                let found = stdout
                     .lines()
                     .find_map(|l| l.strip_prefix("ADVERSARIAL "))
-                    .and_then(|j| serde_json::from_str::<Value>(j).ok())
-                    .unwrap_or_else(|| json!({ "scenario": name, "checks": [{ "name": "ran", "pass": false, "detail": stdout.chars().rev().take(400).collect::<String>().chars().rev().collect::<String>() }] }))
+                    .and_then(|j| serde_json::from_str::<Value>(j).ok());
+                found.unwrap_or_else(|| {
+                    let tail = |s: &str| s.chars().rev().take(400).collect::<String>().chars().rev().collect::<String>();
+                    let err = std::fs::read_to_string(home.join(STDERR_LOG)).unwrap_or_default();
+                    let detail = if timed_out {
+                        format!(
+                            "timed out after {}s and was killed; stderr: {}",
+                            scenario_limit().as_secs(),
+                            tail(&err)
+                        )
+                    } else {
+                        format!("{} / stderr: {}", tail(&stdout), tail(&err))
+                    };
+                    json!({ "scenario": name, "checks": [{ "name": "ran", "pass": false, "detail": detail }] })
+                })
             }));
         }
     }
