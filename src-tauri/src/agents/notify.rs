@@ -450,6 +450,7 @@ mod tests {
             front: None,
             settings: None,
             plan: None,
+            handoff: None,
         });
         message
     }

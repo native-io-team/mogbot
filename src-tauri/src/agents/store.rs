@@ -566,6 +566,13 @@ pub struct Approval {
     /// the card's own text (`summary`, `detail`) lists them too.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan: Option<super::plan_grant::Plan>,
+    /// "<source> sent what it knows" (`agents/handoff.rs`): an outside
+    /// assistant's handover over `ask_chief`, collected into one card. Its
+    /// parts are `detail`; Allow ("Save to memory") gives them to the Chief
+    /// as a turn the user authorised, Deny ("Ignore") saves nothing. Older
+    /// clients show a plain Allow / Deny over the same summary and detail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub handoff: Option<super::handoff::Handoff>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -2482,6 +2489,7 @@ mod tests {
                         front: None,
                         settings: None,
                         plan: None,
+                        handoff: None,
                     });
                 }
                 append_message(&line).unwrap();
@@ -2691,6 +2699,7 @@ mod tests {
                     front: None,
                     settings: None,
                     plan: None,
+                    handoff: None,
                 }),
                 attachments: Vec::new(),
                 check_in: None,
@@ -2811,6 +2820,7 @@ mod tests {
                 front: None,
                 settings: None,
                 plan: None,
+                handoff: None,
             });
             append_message(&card).unwrap();
             let raw = std::fs::read(log_path(&a.id).unwrap()).unwrap();

@@ -2119,6 +2119,7 @@ pub fn settings_card() -> crate::agents::store::AgentMessage {
         front: None,
         settings: Some(proposal),
         plan: None,
+        handoff: None,
     });
     m
 }
@@ -2204,6 +2205,7 @@ pub fn login_card() -> crate::agents::store::AgentMessage {
         set_aside: None,
         settings: None,
         plan: None,
+        handoff: None,
         from_outside: None,
         login: Some(LoginRequest {
             service: "gmail".into(),
