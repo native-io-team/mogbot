@@ -82,12 +82,15 @@ export function useNotNeeded() {
 }
 
 interface SignInHelpProps {
-  agentId: string;
-  requestId: string;
+  /** A card's sign-in: Open again reopens it. */
+  agentId?: string;
+  requestId?: string;
+  /** Anything else's (the apps dialog): how Open again reopens it. */
+  reopen?: () => Promise<void>;
   flow: LoginFlow | undefined;
 }
 
-export function SignInHelp({ agentId, requestId, flow }: SignInHelpProps) {
+export function SignInHelp({ agentId, requestId, reopen, flow }: SignInHelpProps) {
   const quiet = useQuietSignIn(flow);
   const { copy, isCopied } = useCopyToClipboard();
   const [error, setError] = useState<string | null>(null);
@@ -101,7 +104,8 @@ export function SignInHelp({ agentId, requestId, flow }: SignInHelpProps) {
         tabIndex={0}
         onClick={() => {
           setError(null);
-          void reopenLogin(agentId, requestId).catch((err) =>
+          const again = reopen ?? (() => reopenLogin(agentId ?? '', requestId ?? ''));
+          void again().catch((err) =>
             setError(formatCommandError(asCommandError(err)))
           );
         }}

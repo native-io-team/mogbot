@@ -18,9 +18,9 @@
 //! 4. **Exchange** the code for tokens, stored in the Keychain.
 //!
 //! Observed 2026-11 (unauthenticated metadata only, nothing registered):
-//! Linear, Notion, Figma, Stripe and Vercel advertise registration and
-//! S256; Slack, Google (Gmail/Calendar/Drive) and GitHub don't register
-//! clients. Never signed in end to end from this build: see docs/agents.md.
+//! Linear, Notion, Figma, Stripe, Vercel and Sentry advertise registration
+//! and S256; Slack, Google (Gmail/Calendar/Drive) and GitHub don't
+//! register clients. Never signed in end to end from this build: see docs/agents.md.
 
 use base64::Engine as _;
 use serde::Deserialize;

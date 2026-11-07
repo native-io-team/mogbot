@@ -56,6 +56,7 @@ pub mod access_check;
 pub mod admin;
 pub mod agency;
 pub mod approval_claim;
+pub mod app_connect;
 pub mod apps;
 pub mod arrival;
 pub mod attachments;

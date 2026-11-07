@@ -337,58 +337,111 @@ pub fn add_and_grant(
     agent_id: &str,
     access: Access,
 ) -> Result<Connection, CommandError> {
-    let account = account.trim();
     change(|r| {
-        // No account named: the one already there for this service, if any.
-        let existing = r.connections.iter().position(|c| {
-            c.service == service
-                && c.kind == kind
-                && (account.is_empty() || c.account.eq_ignore_ascii_case(account))
-        });
-        let index = match existing {
-            Some(i) => i,
-            None => {
-                let taken: Vec<String> =
-                    r.connections.iter().map(|c| c.server_key.clone()).collect();
-                let server_key = match &kind {
-                    Kind::ClaudeAi { server_name } => claude_tool_key(server_name),
-                    _ => server_key_for(service, account, &taken),
-                };
-                let account = if account.is_empty() {
-                    let n = r
-                        .connections
-                        .iter()
-                        .filter(|c| c.service == service)
-                        .count();
-                    if n == 0 {
-                        title.to_string()
-                    } else {
-                        format!("{title} {}", n + 1)
-                    }
-                } else {
-                    account.to_string()
-                };
-                r.connections.push(Connection {
-                    id: store::new_id(),
-                    service: service.to_string(),
-                    title: title.to_string(),
-                    account,
-                    kind,
-                    server_key,
-                    created_at: store::now_ms(),
-                    grants: Vec::new(),
-                    needs_sign_in: false,
-                    last_used_at: None,
-                    extra: Default::default(),
-                });
-                r.connections.len() - 1
-            }
-        };
+        let index = find_or_add(r, service, title, account, kind);
         let c = &mut r.connections[index];
         c.needs_sign_in = false;
         upsert_grant(c, agent_id, access);
         c.clone()
     })
+}
+
+/// Add a connection the user made themselves (Settings' "Apps your agents
+/// can use"), with exactly the agents they chose, or none: never more.
+/// One already there for the same service, kind and account is signed in
+/// again, and its grants are left as they were plus the ones chosen.
+pub fn add_for(
+    service: &str,
+    title: &str,
+    account: &str,
+    kind: Kind,
+    grants: &[(String, Access)],
+) -> Result<Connection, CommandError> {
+    change(|r| {
+        let index = find_or_add(r, service, title, account, kind);
+        let c = &mut r.connections[index];
+        c.needs_sign_in = false;
+        for (agent_id, access) in grants {
+            upsert_grant(c, agent_id, *access);
+        }
+        c.clone()
+    })
+}
+
+/// Exactly these agents may use it, each as chosen: the user's own answer,
+/// so unlike a card it can narrow a grant as well as widen it.
+pub fn set_grants(
+    connection_id: &str,
+    grants: &[(String, Access)],
+) -> Result<Connection, CommandError> {
+    change(|r| {
+        let c = r
+            .connections
+            .iter_mut()
+            .find(|c| c.id == connection_id)
+            .ok_or_else(|| CommandError::expected("That connection is gone."))?;
+        c.grants = grants
+            .iter()
+            .map(|(agent_id, access)| Grant {
+                agent_id: agent_id.clone(),
+                access: *access,
+                granted_at: c
+                    .grants
+                    .iter()
+                    .find(|g| &g.agent_id == agent_id)
+                    .map(|g| g.granted_at)
+                    .unwrap_or_else(store::now_ms),
+            })
+            .collect();
+        Ok(c.clone())
+    })?
+}
+
+/// The connection for this service, kind and account (no account named:
+/// the one already there), else a new one. Its index.
+fn find_or_add(r: &mut Registry, service: &str, title: &str, account: &str, kind: Kind) -> usize {
+    let account = account.trim();
+    let existing = r.connections.iter().position(|c| {
+        c.service == service
+            && c.kind == kind
+            && (account.is_empty() || c.account.eq_ignore_ascii_case(account))
+    });
+    if let Some(i) = existing {
+        return i;
+    }
+    let taken: Vec<String> = r.connections.iter().map(|c| c.server_key.clone()).collect();
+    let server_key = match &kind {
+        Kind::ClaudeAi { server_name } => claude_tool_key(server_name),
+        _ => server_key_for(service, account, &taken),
+    };
+    let account = if account.is_empty() {
+        let n = r
+            .connections
+            .iter()
+            .filter(|c| c.service == service)
+            .count();
+        if n == 0 {
+            title.to_string()
+        } else {
+            format!("{title} {}", n + 1)
+        }
+    } else {
+        account.to_string()
+    };
+    r.connections.push(Connection {
+        id: store::new_id(),
+        service: service.to_string(),
+        title: title.to_string(),
+        account,
+        kind,
+        server_key,
+        created_at: store::now_ms(),
+        grants: Vec::new(),
+        needs_sign_in: false,
+        last_used_at: None,
+        extra: Default::default(),
+    });
+    r.connections.len() - 1
 }
 
 fn upsert_grant(c: &mut Connection, agent_id: &str, access: Access) {
@@ -1016,6 +1069,51 @@ mod tests {
             })
             .map(|e| e.path().to_path_buf())
             .collect()
+    }
+
+    #[test]
+    fn a_connection_made_in_settings_reaches_only_the_agents_chosen() {
+        with_root(|_| {
+            // None chosen: kept, and nobody can use it until granted.
+            let c = add_for(
+                "vercel",
+                "Vercel",
+                "sam@acme.com",
+                oauth("https://mcp.vercel.com"),
+                &[],
+            )
+            .unwrap();
+            assert!(c.grants.is_empty());
+            // Signed in again with one agent chosen: the same connection.
+            let again = add_for(
+                "vercel",
+                "Vercel",
+                "SAM@acme.com",
+                oauth("https://mcp.vercel.com"),
+                &[("chief".into(), Access::Read)],
+            )
+            .unwrap();
+            assert_eq!(again.id, c.id);
+            assert_eq!(again.grants.len(), 1);
+            assert_eq!(list().unwrap().len(), 1);
+            // The user's own choice narrows as well as widens, and drops the rest.
+            let full = set_grants(
+                &c.id,
+                &[("chief".into(), Access::Full), ("rex".into(), Access::Read)],
+            )
+            .unwrap();
+            let first_granted = full
+                .grants
+                .iter()
+                .find(|g| g.agent_id == "chief")
+                .unwrap()
+                .granted_at;
+            let narrowed = set_grants(&c.id, &[("chief".into(), Access::Read)]).unwrap();
+            assert_eq!(narrowed.grants.len(), 1);
+            assert_eq!(narrowed.grants[0].access, Access::Read);
+            assert_eq!(narrowed.grants[0].granted_at, first_granted);
+            assert!(set_grants("gone", &[]).is_err());
+        });
     }
 
     #[test]

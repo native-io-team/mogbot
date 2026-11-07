@@ -1914,18 +1914,61 @@ pub async fn agents_watch_check_now(
     agents::watch::check_now(&app, &agent_id, &id).await
 }
 
-/// The apps agents can use: Claude Code's MCP servers, and a short list to add.
+/// Claude Code's own MCP servers, as Claude Code lists them.
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_apps_list() -> Result<apps::Apps, CommandError> {
     apps::list().await
 }
 
-/// Add one of the suggested apps for every agent (Claude Code user scope).
+/// "Apps your agents can use": the apps we sign in to ourselves, the
+/// connections made, and any sign-in under way (`agents/app_connect.rs`).
 #[tauri::command]
 #[tracing::instrument]
-pub async fn agents_apps_add(server_name: String) -> Result<(), CommandError> {
-    apps::add(&server_name).await
+pub async fn agents_app_connections() -> Result<agents::app_connect::Overview, CommandError> {
+    blocking(agents::app_connect::overview).await
+}
+
+/// Connect an app in this Mac's browser, for exactly the agents ticked.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_app_connect(
+    app: AppHandle,
+    service: String,
+    grants: Vec<agents::app_connect::GrantInput>,
+    again: Option<String>,
+) -> Result<(), CommandError> {
+    agents::app_connect::start(&app, &service, &grants, again.as_deref()).await
+}
+
+/// Stop a sign-in the apps dialog started.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_app_connect_cancel(
+    app: AppHandle,
+    service: String,
+) -> Result<(), CommandError> {
+    agents::app_connect::cancel(&app, &service)
+}
+
+/// "Open again" in the apps dialog.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_app_connect_reopen(
+    app: AppHandle,
+    service: String,
+) -> Result<(), CommandError> {
+    agents::app_connect::reopen(&app, &service)
+}
+
+/// Exactly these agents may use a connection, each as ticked.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_connection_set_grants(
+    connection_id: String,
+    grants: Vec<agents::app_connect::GrantInput>,
+) -> Result<agents::connections::Connection, CommandError> {
+    blocking(move || agents::app_connect::set_grants(&connection_id, &grants)).await
 }
 
 /// Remove a user-scope app from Claude Code.
