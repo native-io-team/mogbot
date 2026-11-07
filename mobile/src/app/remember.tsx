@@ -130,3 +130,6 @@ const useStyles = makeStyles((colors) => ({
   },
   actions: { flexDirection: 'row', gap: space.sm },
 }));
+
+/** A throw while drawing stays on this screen, with the way back. */
+export { ScreenError as ErrorBoundary } from '../components/ScreenError';

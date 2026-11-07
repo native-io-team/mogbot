@@ -403,3 +403,6 @@ const styles = StyleSheet.create({
   sizeTrail: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   error: { marginHorizontal: space.lg, marginTop: -space.md, marginBottom: space.lg },
 });
+
+/** A throw while drawing stays on this screen, with the way back. */
+export { ScreenError as ErrorBoundary } from '../components/ScreenError';

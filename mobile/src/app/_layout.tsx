@@ -2,16 +2,7 @@ import { Geist_400Regular, Geist_500Medium, Geist_600SemiBold } from '@expo-goog
 import { GeistMono_400Regular } from '@expo-google-fonts/geist-mono';
 import { useFonts } from 'expo-font';
 import * as Notifications from 'expo-notifications';
-import {
-  DarkTheme,
-  DefaultTheme,
-  Stack,
-  ThemeProvider,
-  usePathname,
-  useRouter,
-  type ErrorBoundaryProps,
-} from 'expo-router';
-import { View } from 'react-native';
+import { DarkTheme, DefaultTheme, Stack, ThemeProvider, usePathname, useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import * as SplashScreen from 'expo-splash-screen';
 import { StatusBar } from 'expo-status-bar';
@@ -31,47 +22,16 @@ import { boot, watchLifecycle } from '../lib/session';
 import { useApp } from '../lib/store';
 import { sheet, useStackOptions } from '../lib/navigation';
 import { RootAccent, useAccent } from '../lib/accent';
-import { AppearanceProvider, useColors, useTheme } from '../lib/appearance';
+import { AppearanceProvider, useTheme } from '../lib/appearance';
 import { ShareIntentBridge } from '../lib/shareIntent';
-import { installCrashHandler, recordCrash, startCrashWatch } from '../lib/crash';
-import { Button, T } from '../components/ui';
-import { space } from '../lib/theme';
+import { installCrashHandler, startCrashWatch } from '../lib/crash';
 
 // First, so a crash anywhere after this saves the drafts before the app ends.
 installCrashHandler();
 void SplashScreen.preventAutoHideAsync();
 
-/**
- * A screen that failed to draw: the app stays open, says so plainly, and
- * offers to try again. The error goes to this phone's crash log; the drafts
- * were never in the screen, so they're as they were.
- */
-export function ErrorBoundary({ error, retry }: ErrorBoundaryProps) {
-  const colors = useColors();
-  useEffect(() => {
-    void recordCrash(error, 'render', false).catch(() => {});
-  }, [error]);
-  return (
-    <View
-      style={{
-        flex: 1,
-        alignItems: 'center',
-        justifyContent: 'center',
-        gap: space.lg,
-        padding: space.xl,
-        backgroundColor: colors.surfaceApp,
-      }}
-    >
-      <T variant="title" color={colors.textStrong} style={{ textAlign: 'center' }}>
-        Something went wrong on this screen.
-      </T>
-      <T color={colors.textSecondary} style={{ textAlign: 'center' }}>
-        Your draft is safe.
-      </T>
-      <Button title="Try again" onPress={() => void retry()} />
-    </View>
-  );
-}
+/** The last resort when the layout itself fails to draw (each route has its own). */
+export { RootError as ErrorBoundary } from '../components/ScreenError';
 
 /** The navigation theme: the palette in force, with the accent in scope as `primary`. */
 function NavigationTheme({ children }: { children: ReactNode }) {

@@ -26,6 +26,7 @@ import { AgentsSidebar } from './AgentsSidebar';
 import { AgentsSearchPopover, AgentsTopSearch } from './AgentsSearchBox';
 import { EngineSignInModal, type EngineSetup } from './EngineSignInModal';
 import { AgentChat } from './AgentChat';
+import { PaneBoundary } from './AgentsErrorBoundary';
 import { AgentsTeamView } from './AgentsTeamView';
 import { AgentEditorModal, type EditorTab } from './AgentEditorModal';
 import { AgentProjectsProvider } from './AgentProject';
@@ -915,67 +916,71 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
               onOpenAgent={openAgentByName}
             />
           )}
-          {error && !loaded ? (
-            <div className="agents-main__state">{error}</div>
-          ) : loaded && noEngineInstalled(engines) ? (
-            <NoEngine
-              onSetUp={(engine) => setEngineSetup({ engine, step: 'install' })}
-              onGoProjects={sidebarProps.onGoProjects}
-            />
-          ) : room ? (
-            <RoomChat
-              key={room.id}
-              room={room}
-              agentsById={agentsById}
-              onOpenAgent={openAgent}
-              compact={
-                isCompact
-                  ? {
-                      agents,
-                      onGoHome: sidebarProps.onGoHome,
-                      onGoProjects: sidebarProps.onGoProjects,
-                    }
-                  : undefined
-              }
-              {...roomActions}
-            />
-          ) : teamOpen ? (
-            <AgentsTeamView
-              onOpenAgent={openAgent}
-              onOpenMessage={openMessage}
-              onSignIn={signIn}
-              compact={
-                isCompact
-                  ? {
-                      agents,
-                      onGoHome: sidebarProps.onGoHome,
-                      onGoProjects: sidebarProps.onGoProjects,
-                    }
-                  : undefined
-              }
-            />
-          ) : !shown ? (
-            <div className="agents-main__state">
-              <Spinner />
-            </div>
-          ) : (
-            <AgentChat
-              key={shown.id}
-              agent={shown}
-              onOpenAgent={setSelectedId}
-              onSetUpEngine={setUpShownEngine}
-              onSignIn={signInShown}
-              onImport={openImport}
-              onOpenApps={() => openApps(shown.id)}
-              onMoreIdeas={shown.isMain ? openIdeas : undefined}
-              onEscape={escapeSearch}
-              compact={chatCompact}
-              {...actions}
-              jumpTo={jump?.agentId === shown.id ? jump.messageId : null}
-              onJumped={clearJump}
-              prefill={prefill?.agentId === shown.id ? prefill : null}
-            />
-          )}
+          <PaneBoundary
+            resetKey={room ? roomKey(room.id) : teamOpen ? TEAM_ID : (shown?.id ?? null)}
+          >
+            {error && !loaded ? (
+              <div className="agents-main__state">{error}</div>
+            ) : loaded && noEngineInstalled(engines) ? (
+              <NoEngine
+                onSetUp={(engine) => setEngineSetup({ engine, step: 'install' })}
+                onGoProjects={sidebarProps.onGoProjects}
+              />
+            ) : room ? (
+              <RoomChat
+                key={room.id}
+                room={room}
+                agentsById={agentsById}
+                onOpenAgent={openAgent}
+                compact={
+                  isCompact
+                    ? {
+                        agents,
+                        onGoHome: sidebarProps.onGoHome,
+                        onGoProjects: sidebarProps.onGoProjects,
+                      }
+                    : undefined
+                }
+                {...roomActions}
+              />
+            ) : teamOpen ? (
+              <AgentsTeamView
+                onOpenAgent={openAgent}
+                onOpenMessage={openMessage}
+                onSignIn={signIn}
+                compact={
+                  isCompact
+                    ? {
+                        agents,
+                        onGoHome: sidebarProps.onGoHome,
+                        onGoProjects: sidebarProps.onGoProjects,
+                      }
+                    : undefined
+                }
+              />
+            ) : !shown ? (
+              <div className="agents-main__state">
+                <Spinner />
+              </div>
+            ) : (
+              <AgentChat
+                key={shown.id}
+                agent={shown}
+                onOpenAgent={setSelectedId}
+                onSetUpEngine={setUpShownEngine}
+                onSignIn={signInShown}
+                onImport={openImport}
+                onOpenApps={() => openApps(shown.id)}
+                onMoreIdeas={shown.isMain ? openIdeas : undefined}
+                onEscape={escapeSearch}
+                compact={chatCompact}
+                {...actions}
+                jumpTo={jump?.agentId === shown.id ? jump.messageId : null}
+                onJumped={clearJump}
+                prefill={prefill?.agentId === shown.id ? prefill : null}
+              />
+            )}
+          </PaneBoundary>
           {isCompact && preview}
         </main>
         {!isCompact && preview}

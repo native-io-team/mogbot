@@ -451,6 +451,19 @@
   color: var(--text-muted);
 }
 
+/* A pane that failed to draw (AgentsErrorBoundary): the line, then Try again. */
+.agents-main__state--error {
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+/* One history line that failed to draw. */
+.agents-row-error {
+  padding: var(--spacing-xs) 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
 /* No engine at all (an Opencode-, Cursor- or "Other"-only setup). */
 .agents-no-engine {
   display: flex;

@@ -280,3 +280,6 @@ const useStyles = makeStyles(() => ({
     paddingLeft: typingDot.size * 3 + typingDot.gap * 2 + space.sm,
   },
 }));
+
+/** A throw while drawing stays on this screen, with the way back. */
+export { ScreenError as ErrorBoundary } from '../components/ScreenError';

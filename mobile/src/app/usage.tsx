@@ -204,3 +204,6 @@ const useStyles = makeStyles((colors) => ({
   accountHead: { gap: space['2xs'] },
   spin: { padding: space.sm },
 }));
+
+/** A throw while drawing stays on this screen, with the way back. */
+export { ScreenError as ErrorBoundary } from '../components/ScreenError';

@@ -107,3 +107,6 @@ const useStyles = makeStyles((colors) => ({
   caption: { textAlign: 'center', paddingHorizontal: space.xl },
   close: { position: 'absolute', right: space.lg },
 }));
+
+/** A throw while drawing stays on this screen, with the way back. */
+export { ScreenError as ErrorBoundary } from '../components/ScreenError';

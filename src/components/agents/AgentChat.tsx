@@ -164,6 +164,7 @@ import { keepDraft, unsentDraft } from '../../lib/chatRestore';
 import { useChatReadTo } from './useChatReadTo';
 import { useAccentScope } from '../../lib/accent';
 import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
+import { guardRow } from './AgentsErrorBoundary';
 
 /**
  * The Chief's first open: three workflows that run without the user
@@ -1532,7 +1533,9 @@ export const AgentChat = memo(function AgentChat({
   const setupRow = setupHere && setupAt >= startIndex && (
     <TeamSetupCard key="team-setup" view={setupHere} chief={agent.name} onOpenAgent={onOpenAgent} />
   );
-  const withSetup = withIndicatorAt(setupAt - startIndex, history, setupRow);
+  // One line that fails to draw is one muted line, not a blank window.
+  const guarded = useMemo(() => history.map(guardRow), [history]);
+  const withSetup = withIndicatorAt(setupAt - startIndex, guarded, setupRow);
   const workingAt = Math.max(0, queuedFrom - startIndex);
   const rows = withIndicatorAt(
     setupRow && setupAt - startIndex <= workingAt ? workingAt + 1 : workingAt,

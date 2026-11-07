@@ -32,3 +32,6 @@ export default function Logins() {
 const useStyles = makeStyles(() => ({
   root: { padding: space.lg, paddingTop: space.xl, gap: space.md, paddingBottom: space['2xl'] },
 }));
+
+/** A throw while drawing stays on this screen, with the way back. */
+export { ScreenError as ErrorBoundary } from '../components/ScreenError';

@@ -870,8 +870,12 @@ The phone can start work as well as answer it. Each piece is gated by
   phone (nowhere else) before the app ends; a run that ended while on screen
   (a native crash) is caught by a foreground marker (release builds only).
   The next launch says "The app closed unexpectedly. Your draft is safe."
-  on Agents. A screen that fails to draw shows the root `ErrorBoundary`
-  with Try again.
+  on Agents. A screen that fails to draw shows its own `ErrorBoundary`
+  (`components/ScreenError.tsx`, exported by every route) with Try again and
+  Go back, so the navigator keeps working; the root layout's is the last
+  resort and also lets the splash go. Worklets in `lib/` are rebuilt as the
+  UI runtime runs them in tests (`__tests__/uiRuntime.ts`): a throw there
+  ends the app.
 - **"Send to agent…"** (`app/share.tsx`, `lib/share.ts`). Something shared
   into the app (a page, text, photos, files) lists your agents, with the
   shared text in full; picking one puts the link and text in that agent's

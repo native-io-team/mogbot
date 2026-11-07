@@ -17,3 +17,6 @@ export default withAgentAccent(function Controls() {
     </SheetPage>
   );
 });
+
+/** A throw while drawing stays on this screen, with the way back. */
+export { ScreenError as ErrorBoundary } from '../components/ScreenError';
