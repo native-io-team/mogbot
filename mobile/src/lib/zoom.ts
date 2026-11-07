@@ -43,10 +43,15 @@ export function fitSize(natural: Size, screen: Size): Size {
   return { width: natural.width * ratio, height: natural.height * ratio };
 }
 
-export function clampScale(scale: number, max: number = MAX_ZOOM): number {
+/**
+ * Never a default parameter naming a module constant in a worklet
+ * (`max = MAX_ZOOM`): on the UI runtime it is evaluated before the closure is
+ * unpacked and throws, which took the app down on every pinch.
+ */
+export function clampScale(scale: number, max?: number): number {
   'worklet';
   if (!Number.isFinite(scale)) return 1;
-  return Math.min(Math.max(scale, 1), max);
+  return Math.min(Math.max(scale, 1), max ?? MAX_ZOOM);
 }
 
 /** How far the centre may move along one axis, so no edge it could fill shows a gap. */
