@@ -255,7 +255,28 @@ Grok Bot ──HTTPS──▶ Tailscale ──▶ tailscaled Funnel (/<slug>, TL
 `prepare_push`, `confirm_push`, `deploy_status`, and for moving agents in,
 `import_conversation` (and the older one-shot `import_agents`).
 
+### Handing the Chief what an assistant knows (`ask_chief` with `handoff`)
+
+`ask_chief` answers questions with a Chief turn, as before. A handover is
+different: `handoff: true` (or a packet that reads like a list of facts, or
+the next part from a source with one open) is collected, not answered, and
+the call returns at once with `STATUS: collected` and NEXT "send the next
+part … done: true on the last". The parts become one card in the Chief's
+chat (`agents/handoff.rs`) the user reviews and saves or ignores; nothing is
+saved before that, and the Chief doesn't reply to each part. A credential in
+a part is refused; a source name that could pass for the user or an agent
+is refused (`connector::clean_source`). `import_conversation` with no import
+started falls back to `ask_chief`, so a dump there collapses into the same
+card instead of N refusals.
+
 ### Importing agents as a conversation (`import_conversation`)
+
+It is relentless by design (`agents/coverage.rs`, docs/agents.md "It doesn't
+stop until it has everything"): every reply's NEXT names the next concrete
+gap, an area closes only when the assistant says, for that area, there's
+nothing more, and `finish` refuses until every area is closed or the
+60-message cap is reached. Still read-only on the assistant's side (it only
+answers questions), sealed on ours, and nothing is saved before Import.
 
 MCP only goes from the assistant to us, so when the user asks their other
 assistant (Grok, ChatGPT, Claude…) to move its agents here, *it* drives

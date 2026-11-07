@@ -554,14 +554,16 @@ pub trait Backend: Send + Sync + 'static {
     /// Stop the import (`connector::stop`).
     async fn import_stop(&self) -> Result<Value, CommandError>;
     /// Import from a review card, from the phone: the kept agents come in as
-    /// new agents (a taken name as a copy), never replacing one here, with no
-    /// notes added to the Chief. Replace stays on the Mac, where its diff and
-    /// consequences are on screen.
+    /// new agents (a taken name as a copy), never replacing one here, and the
+    /// Chief's notes (what the other assistant told it, by area) only when
+    /// `notes`. Replace stays on the Mac, where its diff and consequences are
+    /// on screen.
     async fn import_review(
         &self,
         agent_id: &str,
         request_id: &str,
         keys: Vec<String>,
+        notes: bool,
     ) -> Result<Value, CommandError>;
     /// "Setting up your team": `agents_team_setup*`. `Get` answers the
     /// checklist or `null`; `Hello` and `Missing` the message they sent;
@@ -882,6 +884,10 @@ struct ImportReviewParams {
     agent_id: String,
     request_id: String,
     keys: Vec<String>,
+    /// Also add what the other assistant told the Chief (its notes, by
+    /// area), as the Mac's card offers. Off unless the phone says so.
+    #[serde(default)]
+    notes: bool,
 }
 
 #[derive(Deserialize)]
@@ -1875,7 +1881,8 @@ async fn run(
             if p.keys.len() > crate::agents::review::MAX_PROPOSALS {
                 return Err(bad_params("That's more agents than one import holds."));
             }
-            Ok(b.import_review(&p.agent_id, &p.request_id, p.keys).await?)
+            Ok(b.import_review(&p.agent_id, &p.request_id, p.keys, p.notes)
+                .await?)
         }
         "agents.teamSetup" => {
             let p: TeamSetupGetParams = if params.is_null() {
@@ -3501,7 +3508,10 @@ mod tests {
         let sent = stub.toggles.lock().unwrap();
         assert_eq!(sent[0].1.effort.as_deref(), Some("high"));
         drop(sent);
-        assert_eq!(stub.audited().last().unwrap().2, format!("effort high {AGENT}"));
+        assert_eq!(
+            stub.audited().last().unwrap().2,
+            format!("effort high {AGENT}")
+        );
         assert!(super::super::wire::MAC_FEATURES.contains(&"agents.effort"));
     }
 

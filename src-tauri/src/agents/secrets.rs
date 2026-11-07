@@ -699,6 +699,7 @@ mod tests {
             front: None,
             settings: None,
             plan: None,
+            handoff: None,
         });
         store::append_message(&card).unwrap();
         (request_id, request)

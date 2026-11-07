@@ -522,6 +522,8 @@ export interface Approval {
   settings?: SettingsProposal;
   /** "Do these under your name?" (`ask_plan`): the actions, numbered. Allow is one OK for each of them. */
   plan?: PlanCard;
+  /** "<source> sent what it knows": Allow saves it to memory (a turn the user authorised), Deny ignores it. Its parts are `detail`. */
+  handoff?: HandoffCard;
   /**
    * "Bring your work Chrome window to the front so I can use it": answered
    * with Check again (allow) or Not now, never a login.
@@ -1446,12 +1448,38 @@ export const answerImportPlayback = (agentId: string, requestId: string, additio
     addition: addition?.trim() ? addition : null,
   });
 
+/** What an import got out of the other assistant, area by area (`agents/coverage.rs`). */
+export interface ImportCoverage {
+  areas: {
+    area: string;
+    label: string;
+    /** Facts gathered in this area. */
+    facts: number;
+    /** It said it has none. */
+    none?: boolean;
+    /** What's missing, when it isn't confirmed complete. */
+    gap?: string;
+  }[];
+  /** Mentioned in passing and never followed up. */
+  openMentions?: string[];
+  /** The message limit ended it before everything was covered. */
+  capped?: boolean;
+}
+
+/** An outside assistant's handover over `ask_chief`, collected into one card (`agents/handoff.rs`). */
+export interface HandoffCard {
+  source: string;
+  parts: number;
+}
+
 /** What the other assistant proposed, staged for you. Nothing exists until you import. */
 export interface ImportReview {
   proposals: ImportProposal[];
   /** What its managing agent knew, offered as notes for your Chief. Off unless ticked. */
   chiefNotes?: string;
   summary?: string;
+  /** What it gathered by area and every gap; what it gathered is in `chiefNotes`. */
+  coverage?: ImportCoverage;
 }
 
 export interface ImportProposal {

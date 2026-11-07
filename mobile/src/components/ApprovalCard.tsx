@@ -252,12 +252,16 @@ export function ApprovalCard({
     { label: 'Deny with note…', run: () => setNoting(true) },
   ];
 
-  const consentCard = approval.connector?.kind === 'consent' || !!approval.front;
+  // "<source> sent what it knows": Ignore / Save to memory, nothing else.
+  const handoff = !!approval.handoff;
+  const consentCard = approval.connector?.kind === 'consent' || !!approval.front || handoff;
+  const [denyWord, allowWord] = approval.front
+    ? ['Not now', 'Check again']
+    : handoff
+      ? ['Ignore', 'Save to memory']
+      : ['Deny', 'Allow'];
   // Deny and Allow share the row beside ⋯ while both say their word whole.
-  const share = useActionShare(
-    approval.front ? ['Not now', 'Check again'] : ['Deny', 'Allow'],
-    consentCard ? 0 : 44
-  );
+  const share = useActionShare([denyWord, allowWord], consentCard ? 0 : 44);
 
   if (!pending) {
     return (
@@ -274,7 +278,7 @@ export function ApprovalCard({
     );
   }
 
-  const consent = approval.connector?.kind === 'consent' || !!approval.front;
+  const consent = consentCard;
   const actions = noting ? (
     <>
       <Button title="Cancel" variant="outline" onPress={() => setNoting(false)} style={share} />
@@ -309,7 +313,7 @@ export function ApprovalCard({
         />
       )}
       <Button
-        title={approval.front ? 'Not now' : 'Deny'}
+        title={denyWord}
         variant="outline"
         busy={busy === 'deny'}
         disabled={off}
@@ -318,7 +322,7 @@ export function ApprovalCard({
         style={share}
       />
       <Button
-        title={approval.front ? 'Check again' : 'Allow'}
+        title={allowWord}
         variant="answer"
         busy={busy === 'allow'}
         disabled={off}
@@ -629,6 +633,10 @@ export function PhoneReviewCard({
   const once = useInFlight();
   const proposals = approval.connector?.review?.proposals ?? [];
   const source = approval.connector?.source;
+  // A thorough import: what the other assistant told the Chief, by area,
+  // comes in with the agents (as on the Mac's card, ticked there by default).
+  const coverage = approval.connector?.review?.coverage;
+  const notes = !!coverage && !!approval.connector?.review?.chiefNotes;
 
   const run = (importing: boolean) =>
     once(async () => {
@@ -640,6 +648,7 @@ export function PhoneReviewCard({
             agentId: message.agentId,
             requestId: approval.requestId,
             keys: proposals.map((p) => p.key),
+            ...(notes ? { notes: true } : {}),
           });
         } else {
           await answerApproval(message.agentId, approval.requestId, false, false);
@@ -667,10 +676,19 @@ export function PhoneReviewCard({
     </View>
   ));
 
-  const share = useActionShare([
-    'Don’t import',
-    proposals.length === 1 ? 'Import 1 agent' : `Import ${proposals.length} agents`,
-  ]);
+  const importWord =
+    proposals.length === 0
+      ? 'Save'
+      : proposals.length === 1
+        ? 'Import 1 agent'
+        : `Import ${proposals.length} agents`;
+  const share = useActionShare(['Don’t import', importWord]);
+  const gathered = (coverage?.areas ?? []).map((a) => (
+    <T key={a.area} variant="small" color={a.gap ? colors.textSecondary : colors.textBody}>
+      {a.label}:{' '}
+      {a.none ? 'none' : a.gap ? (a.facts > 0 ? `${a.facts} · ${a.gap}` : a.gap) : `${a.facts}`}
+    </T>
+  ));
   if (!pending) {
     return (
       <Receipt status={approval.status} title={approval.title} outcome={cardOutcome(approval)}>
@@ -709,10 +727,10 @@ export function PhoneReviewCard({
             style={share}
           />
           <Button
-            title={proposals.length === 1 ? 'Import 1 agent' : `Import ${proposals.length} agents`}
+            title={importWord}
             variant="answer"
             busy={busy === 'import'}
-            disabled={off || proposals.length === 0}
+            disabled={off || (proposals.length === 0 && !notes)}
             onPress={() => void run(true)}
             style={share}
           />
@@ -720,6 +738,19 @@ export function PhoneReviewCard({
       }
     >
       <View style={{ gap: space.sm }}>{agents}</View>
+      {gathered.length > 0 && (
+        <View style={{ gap: space['2xs'] }}>
+          <T variant="small" color={colors.textPrimary}>
+            {`What ${source ?? 'it'} told your Chief${notes ? ' (saved when you import)' : ''}`}
+          </T>
+          {gathered}
+          {coverage?.capped && (
+            <T variant="small" color={colors.textSecondary}>
+              Stopped at the message limit before everything was covered.
+            </T>
+          )}
+        </View>
+      )}
     </Card>
   );
 }

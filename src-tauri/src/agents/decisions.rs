@@ -301,6 +301,7 @@ pub(crate) fn card(
         front: None,
         settings: None,
         plan: None,
+        handoff: None,
     }
 }
 

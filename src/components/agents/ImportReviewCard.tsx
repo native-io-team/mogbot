@@ -443,7 +443,9 @@ export const ImportReviewCard = memo(function ImportReviewCard({
   );
   const [choice, setChoice] = useState<Record<string, Choice>>({});
   const [keepLogins, setKeepLogins] = useState<Record<string, boolean>>({});
-  const [notes, setNotes] = useState(false);
+  // What the other assistant told the Chief, by area, is the point of a
+  // thorough import: ticked by default then, still applied only on Import.
+  const [notes, setNotes] = useState(() => !!review?.coverage && !!review?.chiefNotes);
   const [busy, setBusy] = useState(false);
   const { showToast } = useOptionalToast();
   const count = proposals.filter((p) => kept[p.key]).length;
@@ -565,6 +567,35 @@ export const ImportReviewCard = memo(function ImportReviewCard({
             ))}
           </ul>
         )}
+        {pending && review?.coverage && (
+          <div className="agent-import-review__coverage" data-testid="agent-import-coverage">
+            <span className="agent-import-review__notes-title">What {card.source} told me</span>
+            <ul className="agent-import-review__coverage-list">
+              {review.coverage.areas.map((a) => (
+                <li key={a.area} data-gap={a.gap ? true : undefined}>
+                  {a.label}:{' '}
+                  {a.none
+                    ? 'none'
+                    : a.gap
+                      ? a.facts > 0
+                        ? `${plural(a.facts, 'fact')} · ${a.gap}`
+                        : a.gap
+                      : `${plural(a.facts, 'fact')}`}
+                </li>
+              ))}
+              {!!review.coverage.openMentions?.length && (
+                <li data-gap>
+                  Mentioned but not followed up: {review.coverage.openMentions.join(', ')}
+                </li>
+              )}
+            </ul>
+            {review.coverage.capped && (
+              <p className="agent-import-review__muted">
+                Stopped at the message limit before everything was covered.
+              </p>
+            )}
+          </div>
+        )}
         {pending && review?.chiefNotes && (
           <div className="agent-import-review__notes">
             <Checkbox
@@ -577,7 +608,9 @@ export const ImportReviewCard = memo(function ImportReviewCard({
               <span className="agent-import-review__notes-title">
                 Add to {chiefName}’s notes{' '}
                 <span className="agent-import-review__muted">
-                  · what {card.source}’s managing agent knew. Off unless you tick it.
+                  {review.coverage
+                    ? `· what ${card.source} told me, by area. Saved only when you import.`
+                    : `· what ${card.source}’s managing agent knew. Off unless you tick it.`}
                 </span>
               </span>
               <p className="agent-import-review__text agent-import-review__text--short">

@@ -626,6 +626,53 @@ export const REVIEW_CARD = (status = 'pending', choice?: string) =>
     },
   });
 
+/** A thorough import's review: what the other assistant told the Chief, by area (fictional). */
+export const COVERAGE_REVIEW = {
+  ...REVIEW,
+  chiefNotes:
+    '## People and contacts\n- Jordan: the user’s accountant, files quarterly\n- Priya: sister, birthday 12 March\n\n## Personal facts\n- Drives a 2019 blue pickup, service due at 60,000 miles',
+  coverage: {
+    areas: [
+      { area: 'agents', label: 'Agents and projects', facts: 2 },
+      { area: 'routines', label: 'Routines and schedules', facts: 3 },
+      { area: 'people', label: 'People and contacts', facts: 4 },
+      { area: 'tasks', label: 'Ongoing tasks', facts: 2, gap: 'Not confirmed complete' },
+      { area: 'preferences', label: 'Preferences and standing rules', facts: 5 },
+      { area: 'accounts', label: 'Accounts and tools', facts: 0, none: true },
+      { area: 'personal', label: 'Personal facts', facts: 3 },
+      { area: 'threads', label: 'Open conversations', facts: 0, gap: 'Not covered' },
+    ],
+    openMentions: ['the cabin'],
+    capped: true,
+  },
+};
+
+export const COVERAGE_REVIEW_CARD = () =>
+  msg('approval', '', 0, {
+    approval: {
+      requestId: 'review2',
+      title: 'Bring in 2 agents from Grok',
+      detail: 'Finance · Tracks spending and chases invoices\nTravel · Trips and bookings',
+      status: 'pending',
+      connector: { kind: 'review', talkId: 'talk1', source: 'Grok', review: COVERAGE_REVIEW },
+    },
+  });
+
+/** An outside assistant's handover over ask_chief, collected into one card (fictional). */
+export const HANDOFF_CARD = () =>
+  msg('approval', '', 0, {
+    approval: {
+      requestId: 'handoff1',
+      title: 'Grok Bot sent what it knows',
+      summary:
+        '15 parts from Grok Bot, your other assistant. Nothing is saved until you say so: Save to memory keeps it and briefs the agents it’s for; Ignore drops it.',
+      detail:
+        '— Part 1 —\nAgents: Finance, Travel, Outreach.\n\n— Part 2 —\n- Vehicle: a 2019 blue pickup\n- Next service: oil change at 60,000 miles',
+      status: 'pending',
+      handoff: { source: 'Grok Bot', parts: 15 },
+    },
+  });
+
 export const REVIEW_CHAT = [
   ...IMPORT_TALK_CHAT,
   msg(
@@ -2899,6 +2946,37 @@ export const agentsScenarios: Scenario[] = [
         args.agentId === 'chief' ? [...REVIEW_CHAT, REVIEW_CARD()] : messagesFor(args),
       agents_import_talk: gateWith({ state: 'review' }),
       agents_import_review_current: REVIEW,
+    },
+  },
+  {
+    id: 'agents-import-review-coverage',
+    title: 'Agents — the review card after a thorough import: what Grok told the Chief, by area',
+    looksRightWhen:
+      'As agents-import-review, plus a “What Grok told me” list: Agents and projects: 2 facts; Routines and schedules: 3 facts; People and contacts: 4 facts; Ongoing tasks: 2 facts · Not confirmed complete (muted); Preferences: 5 facts; Accounts and tools: none; Personal facts: 3 facts; Open conversations: Not covered (muted); “Mentioned but not followed up: the cabin” (muted); “Stopped at the message limit…” in muted text. Under it “Add to Chief of Staff’s notes” is TICKED, with “· what Grok told me, by area. Saved only when you import.”',
+    command: 'agents.open',
+    requires: '[data-testid="agent-import-coverage"]',
+    commands: {
+      agents_overview: overview([
+        { ...TEAM[0], pendingApprovals: 1 },
+        TEAM.find((a) => a.id === 'finance') ?? TEAM[1],
+      ]),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? [...REVIEW_CHAT, COVERAGE_REVIEW_CARD()] : messagesFor(args),
+      agents_import_talk: gateWith({ state: 'review' }),
+      agents_import_review_current: COVERAGE_REVIEW,
+    },
+  },
+  {
+    id: 'agents-handoff-card',
+    title: 'Agents — an assistant’s handover over ask_chief: one card, not a reply per packet',
+    looksRightWhen:
+      'In the Chief’s chat, one card with a download icon: “Grok Bot sent what it knows”, the line “15 parts from Grok Bot, your other assistant. Nothing is saved until you say so…”, a Review link that opens the parts (“— Part 1 —” …). No ⋯ menu. Right-aligned: Ignore, then a neutral “Save to memory”. No Chief bubble per packet above it.',
+    command: 'agents.open',
+    requires: '.agent-approval',
+    commands: {
+      agents_overview: overview([{ ...TEAM[0], pendingApprovals: 1 }]),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? [HANDOFF_CARD()] : messagesFor(args),
     },
   },
   {

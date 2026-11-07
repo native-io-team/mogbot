@@ -150,6 +150,11 @@ pub fn verdict(a: &Approval, age_ms: i64, waited_on: bool, moment: Moment) -> Op
     if a.settings.is_some() {
         return None;
     }
+    // An outside assistant's handover carries everything it shows and
+    // nothing waits on it (`agents/handoff.rs`): it stays until answered.
+    if a.handoff.is_some() {
+        return None;
+    }
     if let Some(s) = &a.secret {
         // An import's old-style secure input (before sign-in cards, which
         // replaced it): nothing raises these any more and nothing waits on

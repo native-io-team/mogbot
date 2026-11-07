@@ -719,7 +719,10 @@ fn settings_line(before: &store::Agent, after: &store::Agent, moved: bool) -> Op
         if what.is_empty() {
             format!("Runs on {} from its next message", after.engine.label())
         } else {
-            format!("Runs on {} · {what} from its next message", after.engine.label())
+            format!(
+                "Runs on {} · {what} from its next message",
+                after.engine.label()
+            )
         }
     } else {
         format!("Now on {what} from its next message")
@@ -1335,6 +1338,11 @@ pub(crate) fn answer_card(
     // "Change this agent's settings?": Allow applies it, here and only here.
     if approval.settings.is_some() {
         return agents::policy_card::answer_card(app, agent_id, &approval, allow, note);
+    }
+    // "<source> sent what it knows": Save to memory gives it to the Chief as
+    // a turn the user authorised; Ignore runs nothing (`handoff`).
+    if approval.handoff.is_some() {
+        return agents::handoff::answer_card(app, agent_id, &approval, allow);
     }
     // "Do these under your name?": Allow is the user's OK for each listed
     // action, here and only here (`plan_grant`).
