@@ -93,6 +93,12 @@
   color: var(--accent-warning);
 }
 
+/* The estimate said right after the headline: the headline's size, amber. */
+.agents-compute__headline .agents-compute__pace-text {
+  font-size: inherit;
+  line-height: inherit;
+}
+
 .agents-compute__rows {
   display: flex;
   flex-direction: column;
@@ -126,17 +132,6 @@
   font-weight: var(--font-weight-label);
   color: var(--text-primary);
   overflow-wrap: anywhere;
-}
-
-/* Where the next turn runs: a neutral tag, never the accent. */
-.agents-compute__next {
-  margin-left: auto;
-  padding: 0 var(--spacing-xs);
-  border-radius: var(--radius-pill);
-  background: var(--surface-control);
-  font-size: var(--font-size-body-sm);
-  color: var(--text-secondary);
-  white-space: nowrap;
 }
 
 /* The 5-hour and weekly bars side by side. */

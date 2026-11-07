@@ -57,72 +57,146 @@ const inventory = (accounts: UsageAccountLine[], t?: ComputeTotals): UsageInvent
 const work = { engine: 'claude' as const, accountId: 'w', accountName: 'Work', at: NOW + 3 * HOUR };
 
 describe('total compute', () => {
-  it('says plainly what there is room on, and who is back first', () => {
-    const some = computeView(inventory([], totals({ nextRoom: work })), NOW);
-    expect(some?.headline).toBe(
-      'You have room on 2 accounts right now. Claude · Work resets at 3:00 PM.'
-    );
-    expect(some?.summary).toBe('3 accounts · Claude 2, Codex 1');
-    expect(some?.tone).toBe('calm');
-
-    const all = computeView(inventory([], totals({ room: 3 })), NOW);
-    expect(all?.headline).toBe('You have room on all 3 accounts right now.');
-
-    const none = computeView(inventory([], totals({ room: 0, nextRoom: work })), NOW);
-    expect(none?.headline).toBe(
-      'No room on any account right now. Claude · Work resets first, at 3:00 PM.'
-    );
-    expect(none?.tone).toBe('limited');
-
-    const one = computeView(
-      inventory(
-        [],
-        totals({
-          accounts: 1,
-          read: 1,
-          room: 1,
-          engines: [{ engine: 'claude', accounts: 1, read: 1, room: 1 }],
-        })
-      ),
-      NOW
-    );
-    expect(one?.headline).toBe('You have room on your account right now.');
-    expect(one?.summary).toBe('1 account · Claude 1');
+  const mac = acct({
+    id: 'mac',
+    name: 'This Mac',
+    thisMac: true,
+    next: true,
+    plan: 'max',
+    windows: [win('five_hour', 7, 3 * HOUR), win('seven_day', 71, 100 * HOUR)],
+  });
+  const personal = acct({
+    id: 'p',
+    name: 'Personal',
+    windows: [win('five_hour', 20, 2 * HOUR), win('seven_day', 40, 60 * HOUR)],
+  });
+  const codexOut = acct({ id: 'cx', name: 'This Mac', engine: 'codex', signedIn: false });
+  const one = (over: Partial<ComputeTotals> = {}) =>
+    totals({
+      accounts: 3,
+      signedIn: 2,
+      read: 1,
+      room: 1,
+      engines: [
+        { engine: 'claude', accounts: 2, read: 1, room: 1 },
+        { engine: 'codex', accounts: 1, read: 0, room: 0 },
+      ],
+      ...over,
+    });
+  const unread = acct({
+    id: 'p',
+    name: 'Personal',
+    check: { at: NOW, outcome: 'cant_read', why: 'Can’t read its limits between turns' },
   });
 
-  it('never counts an account it has no reading for', () => {
-    const v = computeView(inventory([], totals({ accounts: 4, read: 3, room: 3 })), NOW);
-    // Three read with room, one not read: not "all 4".
-    expect(v?.headline).toBe('You have room on 3 accounts right now.');
-    expect(v?.summary).toBe('4 accounts · Claude 2, Codex 1 · 1 not read yet');
-    const blank = computeView(inventory([], totals({ read: 0, room: 0 })), NOW);
-    expect(blank?.headline).toBe('No readings yet.');
+  it('names the one account read, and says nothing the rows already do', () => {
+    const v = computeView(inventory([mac, unread, codexOut], one()), NOW);
+    expect(v?.headline).toBe('Room now on Claude · This Mac.');
+    expect(v?.tone).toBe('calm');
+    // One account read: no counts, no aggregate lines (its row says it all).
+    expect(v?.summary).toBeNull();
+    expect(v?.windows).toEqual([]);
+    expect(v?.estimate).toBeNull();
   });
 
-  it('says each kind of limit across accounts, with the soonest reset still to come', () => {
+  it('says the one read account’s run-out estimate once, in the headline, and tints that bar', () => {
+    const paced = {
+      ...mac,
+      pace: [
+        {
+          estimate: true as const,
+          kind: 'seven_day',
+          resetsAt: NOW + 100 * HOUR,
+          reachesAt: NOW + 34 * HOUR,
+          readings: 200,
+          spanMinutes: 600,
+        },
+      ],
+    };
+    const v = computeView(inventory([paced, unread, codexOut], one()), NOW);
+    expect(v?.headline).toBe('Room now on Claude · This Mac.');
+    expect(v?.estimate?.text).toMatch(
+      /^At this pace the weekly limit runs out tomorrow night, before it resets /
+    );
+    expect(v?.estimate?.basis).toBe('Estimate from 200 readings over 10 hours');
+    const row = v?.rows[0];
+    expect(row?.title).toBe('Claude · This Mac');
+    // Said once: the row doesn't repeat it, and its weekly bar agrees with it.
+    expect(row?.pace).toBeNull();
+    expect(row?.weekly?.tone).toBe('warning');
+    expect(row?.session?.tone).toBe('calm');
+  });
+
+  it('counts and compares only when two or more accounts were read', () => {
     const v = computeView(
       inventory(
-        [],
-        totals({
+        [mac, personal, codexOut],
+        one({
+          read: 2,
+          room: 2,
+          engines: [
+            { engine: 'claude', accounts: 2, read: 2, room: 2 },
+            { engine: 'codex', accounts: 1, read: 0, room: 0 },
+          ],
           windows: [
-            { family: 'session', read: 3, room: 2, soonestReset: { ...work, at: NOW + 40 * MIN } },
-            { family: 'weekly', read: 2, room: 1, soonestReset: { ...work, at: NOW - MIN } },
+            { family: 'session', read: 2, room: 2, soonestReset: { ...work, at: NOW + 40 * MIN } },
+            { family: 'weekly', read: 2, room: 2, soonestReset: { ...work, at: NOW - MIN } },
           ],
         })
       ),
       NOW
     );
+    expect(v?.headline).toBe('Room now on Claude · Personal and Claude · This Mac.');
+    // Not signed in is not "not read".
+    expect(v?.summary).toBe('3 accounts · Claude 2, Codex 1');
     expect(v?.windows).toEqual([
       {
         key: 'session',
         label: '5-hour',
-        text: '2 of 3 have room',
-        reset: 'Soonest reset 12:40 PM · Claude · Work',
+        text: '2 of 2 have room · soonest reset 12:40 PM',
         tone: 'calm',
       },
       // A reset that has passed is history, not news.
-      { key: 'weekly', label: 'Weekly', text: '1 of 2 has room', reset: null, tone: 'calm' },
+      { key: 'weekly', label: 'Weekly', text: '2 of 2 have room', tone: 'calm' },
     ]);
+    // "Used next" only where its engine has a choice of account.
+    expect(v?.rows.find((r) => r.title === 'Claude · This Mac')?.tags).toEqual([
+      'Max plan',
+      'Used next',
+    ]);
+    const solo = computeRows(inventory([{ ...mac }, codexOut]), NOW);
+    expect(solo[0].tags).toEqual(['Max plan']);
+  });
+
+  it('counts a signed-in account it has no reading for as not read, never as room', () => {
+    const v = computeView(
+      inventory(
+        [mac, personal, unread, codexOut].map((a, i) => ({ ...a, id: `${a.id}${i}` })),
+        totals({ accounts: 4, signedIn: 3, read: 2, room: 2 })
+      ),
+      NOW
+    );
+    expect(v?.summary).toBe('4 accounts · Claude 2, Codex 1 · 1 not read');
+    expect(v?.headline).toBe('Room now on Claude · Personal and Claude · This Mac.');
+  });
+
+  it('says when there is no room, and who has room again first', () => {
+    const out = acct({
+      id: 'w',
+      name: 'Work',
+      out: true,
+      outUntil: NOW + 3 * HOUR,
+      windows: [win('five_hour', 100, 3 * HOUR)],
+    });
+    const v = computeView(inventory([out], totals({ read: 1, room: 0, nextRoom: work })), NOW);
+    expect(v?.headline).toBe('No room right now. Claude · Work has room again at 3:00 PM.');
+    expect(v?.tone).toBe('limited');
+    expect(computeView(inventory([unread], totals({ read: 0, room: 0 })), NOW)?.headline).toBe(
+      'No limits read yet.'
+    );
+    expect(computeView(inventory([codexOut], totals({ read: 0, room: 0 })), NOW)?.headline).toBe(
+      'No account is signed in.'
+    );
   });
 
   it('lists accounts most room first, then not read, then without room, then signed out', () => {
@@ -135,7 +209,7 @@ describe('total compute', () => {
           windows: [win('five_hour', 100, HOUR)],
         }),
         acct({ id: 'gone', signedIn: false }),
-        acct({ id: 'unread', check: { at: NOW, outcome: 'cant_read', why: 'x' } }),
+        acct({ id: 'unread', check: { at: NOW, outcome: 'cant_read', why: 'Its why' } }),
         acct({
           id: 'roomy',
           windows: [win('five_hour', 10, HOUR), win('seven_day', 30, 50 * HOUR)],
@@ -162,19 +236,28 @@ describe('total compute', () => {
     expect(roomy.state).toBeNull();
     expect(rows[1].next).toBe(true);
     expect(rows[1].session?.percent).toBe(90);
-    expect(rows[2].state).toBe('No reading yet · runs to measure');
+    // The Mac's own words for why.
+    expect(rows[2].state).toBe('Its why');
     expect(rows[3].state).toMatch(/^Out of usage until/);
     expect(rows[3].session).toBeNull();
     expect(rows[4].state).toBe('Not signed in');
+    expect(rows[4].tone).toBe('calm');
   });
 
-  it('says honestly why an account has no bars', () => {
+  it('says honestly why an account has no bars, never that it will turn up by itself', () => {
     const state = (check?: UsageAccountLine['check']) =>
       computeRows(inventory([acct({ id: 'a', check })]), NOW)[0].state;
-    expect(state(undefined)).toBe('No reading yet');
-    expect(state({ at: NOW, outcome: 'cant_read' })).toBe('No reading yet · runs to measure');
-    expect(state({ at: NOW, outcome: 'failed' })).toBe('No reading yet · couldn’t check just now');
+    expect(state(undefined)).toBe('Not checked yet');
+    expect(state({ at: NOW, outcome: 'cant_read' })).toBe('Can’t read its limits between turns');
+    expect(state({ at: NOW, outcome: 'failed' })).toBe('Couldn’t check its limits just now');
     expect(state({ at: NOW, outcome: 'no_plan' })).toBe('No plan limits reported for this sign-in');
+    for (const s of [
+      state(undefined),
+      state({ at: NOW, outcome: 'cant_read' }),
+      state({ at: NOW, outcome: 'failed' }),
+    ]) {
+      expect(s).not.toMatch(/runs to measure|will appear|soon/i);
+    }
   });
 
   it('gives a row one pace line, its soonest, and no bar repeats it', () => {
@@ -268,9 +351,11 @@ describe('total compute', () => {
     const v = computeView(served, served.now);
     expect(v).not.toBeNull();
     expect(v?.summary).toBe('3 accounts · Claude 2, Codex 1');
-    expect(v?.headline).toMatch(/^You have room on 2 accounts right now\. Codex · Plus resets /);
-    expect(v?.forecast?.text).toMatch(/^At this pace you’ll run out of Claude on every account /);
-    expect(v?.forecast?.basis).toBe('Estimate from 11 readings across 2 accounts');
+    expect(v?.headline).toMatch(
+      /^Room now on Claude · This Mac and Claude · Work\. Codex · Plus has room again /
+    );
+    expect(v?.estimate?.text).toMatch(/^At this pace you’ll run out of Claude on every account /);
+    expect(v?.estimate?.basis).toBe('Estimate from 11 readings across 2 accounts');
     expect(v?.rows.map((r) => r.title)).toEqual([
       'Claude · This Mac',
       'Claude · Work',

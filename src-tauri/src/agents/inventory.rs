@@ -823,7 +823,7 @@ where
         .map(|e| format!("{} {}", engine_name(e.engine), e.accounts))
         .collect();
     s.push_str("\nTOTAL COMPUTE (from readings; an account with none is \"not read\", never assumed to have room):\n");
-    let unread = t.accounts - t.read;
+    let unread = t.signed_in.saturating_sub(t.read);
     s.push_str(&format!(
         "- {} ({}). Room now on {} of {} read{}.\n",
         plural(t.accounts, "account"),
@@ -1094,6 +1094,7 @@ mod tests {
                 at: NOW,
                 outcome: usage_plan::CheckOutcome::CantRead,
                 why: Some("Its sign-in can't read limits without a turn".into()),
+                via: None,
             },
         );
         let inv = build(p);

@@ -99,6 +99,8 @@ pub struct RunOut {
 pub struct Totals {
     /// Every account listed (signed in or not).
     pub accounts: u32,
+    /// Of those, signed in: an account not signed in is never "not read".
+    pub signed_in: u32,
     pub engines: Vec<EngineCount>,
     /// Accounts with a current reading.
     pub read: u32,
@@ -270,6 +272,7 @@ pub fn totals(accounts: &[AccountLine], now: i64) -> Totals {
         .collect();
     Totals {
         accounts: accounts.len() as u32,
+        signed_in: accounts.iter().filter(|a| a.signed_in).count() as u32,
         read: engines.iter().map(|e| e.read).sum(),
         room: engines.iter().map(|e| e.room).sum(),
         engines,

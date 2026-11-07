@@ -52,7 +52,7 @@ const MAX_MS = Number(opt('--max-ms', 'QA_MAX_MS', 30 * 60 * 1000));
 const PHASES = opt(
   '--phases',
   'QA_PHASES',
-  'fresh,live,cached,impostor,bars,heavy,importing,team-setup,live-work,engine,torture'
+  'fresh,live,cached,impostor,bars,usage-accounts,heavy,importing,team-setup,live-work,engine,torture'
 ).split(',');
 const phase = (name) => PHASES.includes(name);
 // Ports other tools in this repo own: the desktop app, its harness, the phone's Metro.
@@ -2038,6 +2038,26 @@ async function main() {
     await page.goto(`${WEB}/agents`);
     await sleep(4000); // reconnect to the real key again
     await each(BARS);
+  }
+
+  if (phase('usage-accounts')) {
+    for (const variant of ['two-claude', 'one-read']) {
+      await startMock('--usage', variant);
+      await page.goto(`${WEB}/agents`);
+      await sleep(4000);
+      await each([
+        {
+          name: `usage-accounts-${variant}`,
+          route: '/usage?id=site',
+          ready: 'Usage',
+          act: scrollToText('ALL ACCOUNTS'),
+          check:
+            variant === 'two-claude'
+              ? 'All accounts: "Room now on Claude · This Mac. Claude · Personal has room again …", "3 accounts · Claude 2, Codex 1", one Weekly line; This Mac (Max plan · Used next) with an amber weekly bar and its pace line; Personal out until its reset; Codex · This Mac a quiet "Not signed in"'
+              : 'All accounts: "Room now on Claude · This Mac." then the amber estimate and its basis; no aggregate lines; This Mac (Max plan, no "Used next") with an amber weekly bar and no repeated pace line; Personal says why it can’t be read; Codex a quiet "Not signed in"',
+        },
+      ]);
+    }
   }
 
   if (phase('heavy')) {

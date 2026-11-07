@@ -85,6 +85,9 @@ function selfSigned(dir: string) {
     heavy: args.includes('--heavy'),
     torture: args.includes('--torture'),
     liveWork: args.includes('--live-work'),
+    ...(arg('--usage') === 'two-claude' || arg('--usage') === 'one-read'
+      ? { usage: arg('--usage') as 'two-claude' | 'one-read' }
+      : {}),
     identityFile: path.join(state, 'identity.pem'),
     // The same server id and paired phones, a different key: what a phone
     // sees when something else answers at its Mac's address.

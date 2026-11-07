@@ -147,6 +147,12 @@ export interface MockOptions {
    * they're missing, a few already met.
    */
   teamSetup?: boolean;
+  /**
+   * Two Claude accounts and a Codex one not signed in, in the Usage sheet:
+   * `two-claude`, both Claude accounts read (one by its rate-limit headers,
+   * at its weekly limit); `one-read`, the second one can't be read.
+   */
+  usage?: 'two-claude' | 'one-read';
   /** Answer CORS preflights and tag every response, for the web build (dev only). */
   cors?: boolean;
   /**
@@ -298,6 +304,133 @@ function claudeWindows(now: number): Quota['windows'] {
   ];
 }
 
+/**
+ * `opts.usage`'s inventory: Claude on this Mac (Max, the weekly limit running
+ * out before its reset, by estimate), a second Claude account, and Codex not
+ * signed in. Totals as `agents::compute::totals` works them out. Fictional.
+ */
+function twoClaudeUsage(
+  plan: typeof real.agentsUsagePlan,
+  variant: 'two-claude' | 'one-read',
+  now: number
+): typeof real.agentsUsagePlan {
+  const hour = 3_600_000;
+  const weekReset = now + 76 * hour;
+  const w = (kind: string, usedPercent: number, resetsAt: number) => ({
+    kind,
+    usedPercent,
+    resetsAt,
+    limited: usedPercent >= 100,
+    observedAt: now - 4 * 60_000,
+  });
+  const mac = {
+    engine: 'claude' as const,
+    id: 'default',
+    name: 'This Mac',
+    thisMac: true,
+    signedIn: true,
+    out: false,
+    next: true,
+    plan: 'max',
+    windows: [w('five_hour', 7, now + 3 * hour), w('seven_day', 71, weekReset)],
+    learned: ['five_hour', 'seven_day'],
+    pace: [
+      {
+        estimate: true as const,
+        kind: 'seven_day',
+        resetsAt: weekReset,
+        reachesAt: now + 34 * hour,
+        readings: 200,
+        spanMinutes: 600,
+      },
+    ],
+    check: { at: now - 4 * 60_000, outcome: 'read' as const },
+  };
+  const personalReset = now + 52 * hour;
+  const personal =
+    variant === 'two-claude'
+      ? {
+          engine: 'claude' as const,
+          id: 'p1',
+          name: 'Personal',
+          thisMac: false,
+          signedIn: true,
+          out: true,
+          outUntil: personalReset,
+          next: false,
+          windows: [w('seven_day', 100, personalReset)],
+          learned: [],
+          check: { at: now - 4 * 60_000, outcome: 'read' as const, via: 'headers' as const },
+        }
+      : {
+          engine: 'claude' as const,
+          id: 'p1',
+          name: 'Personal',
+          thisMac: false,
+          signedIn: true,
+          out: false,
+          next: false,
+          windows: [],
+          learned: [],
+          check: {
+            at: now - 4 * 60_000,
+            outcome: 'cant_read' as const,
+            why: 'Can’t read its limits between turns with the token it was added with. They show after a turn runs on it',
+          },
+        };
+  const codex = {
+    engine: 'codex' as const,
+    id: 'default',
+    name: 'This Mac',
+    thisMac: true,
+    signedIn: false,
+    out: false,
+    next: true,
+    windows: [],
+    learned: [],
+  };
+  const two = variant === 'two-claude';
+  const at = (accountId: string, accountName: string, t: number) => ({
+    engine: 'claude' as const,
+    accountId,
+    accountName,
+    at: t,
+  });
+  return {
+    ...plan,
+    accounts: [mac, personal, codex],
+    spare: [],
+    totals: {
+      accounts: 3,
+      signedIn: 2,
+      engines: [
+        { engine: 'claude', accounts: 2, read: two ? 2 : 1, room: 1 },
+        { engine: 'codex', accounts: 1, read: 0, room: 0 },
+      ],
+      read: two ? 2 : 1,
+      room: 1,
+      windows: [
+        {
+          family: 'session',
+          read: 1,
+          room: 1,
+          soonestReset: at('default', 'This Mac', now + 3 * hour),
+        },
+        {
+          family: 'weekly',
+          read: two ? 2 : 1,
+          room: 1,
+          soonestReset: two
+            ? at('p1', 'Personal', personalReset)
+            : at('default', 'This Mac', weekReset),
+        },
+      ],
+      ...(two ? { nextRoom: at('p1', 'Personal', personalReset) } : {}),
+    },
+    now,
+  } as unknown as typeof real.agentsUsagePlan;
+}
+
 /** The key in `file`, or a new one written there. */
 function persistentKey(file: string): KeyObject {
   if (existsSync(file)) return createPrivateKey(readFileSync(file, 'utf8'));
@@ -411,7 +544,12 @@ export function createMockServer(opts: MockOptions = {}) {
     // it, and it thinks hard: the chip reads "Opus 5.5 · High".
     const design = agents.find((a) => a.id === 'design');
     if (design) {
-      design.context = { used: 42_000, window: 200_000, at: now - 26 * 60_000, model: 'claude-opus-5-5' };
+      design.context = {
+        used: 42_000,
+        window: 200_000,
+        at: now - 26 * 60_000,
+        model: 'claude-opus-5-5',
+      };
       design.effort = 'high';
     }
   }
@@ -2462,6 +2600,7 @@ export function createMockServer(opts: MockOptions = {}) {
     'agents.usagePlan': () => {
       const now = Date.now();
       const plan = structuredClone(real.agentsUsagePlan);
+      if (opts.usage) return twoClaudeUsage(plan, opts.usage, now);
       for (const s of plan.spare)
         Object.assign(s, { resetsAt: now + 40 * 60_000, observedAt: now - 10 * 60_000 });
       const reset = now + 2 * 3_600_000;
@@ -2788,7 +2927,10 @@ export function createMockServer(opts: MockOptions = {}) {
             'Only pin, mute, hide, the instructions, how it looks, and its engine, model and effort can be changed from the phone.',
         });
       }
-      if (input.effort !== undefined && !['', 'low', 'medium', 'high'].includes(String(input.effort))) {
+      if (
+        input.effort !== undefined &&
+        !['', 'low', 'medium', 'high'].includes(String(input.effort))
+      ) {
         return fail({
           type: 'Validation',
           field: 'effort',
@@ -2828,7 +2970,13 @@ export function createMockServer(opts: MockOptions = {}) {
       // The Mac's one quiet line (`settings_line` in commands/agents.rs).
       const line = settingsLine(before, a, engines());
       if (line) {
-        putMessage({ id: `m_runs_${Date.now()}`, agentId: a.id, ts: Date.now(), kind: 'note', text: line });
+        putMessage({
+          id: `m_runs_${Date.now()}`,
+          agentId: a.id,
+          ts: Date.now(),
+          kind: 'note',
+          text: line,
+        });
       }
       emit({ type: 'agents.registry', overview: overview() });
       const { status: _status, home: _home, ...stored } = a;
