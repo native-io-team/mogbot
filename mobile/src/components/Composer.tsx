@@ -644,9 +644,7 @@ export function Composer({
               </RoundButton>
             ) : undefined
           }
-          chip={
-            !listening && chip ? <EngineChip {...chip} onPress={openControls} /> : undefined
-          }
+          chip={!listening && chip ? <EngineChip {...chip} onPress={openControls} /> : undefined}
         >
           {/* Listening, the card's row: ×, the waveform filling the middle, Stop, Send. */}
           {listening && (
@@ -938,24 +936,9 @@ export function ComposerField({
     if (away !== scrolled) setScrolled(away);
   };
   // iOS keeps a multiline input at its last height when its text is cleared
-  // from code (a send): emptied, it's remounted so it starts at one line, and
-  // keeps the keyboard if it had it.
-  const [generation, setGeneration] = useState(0);
-  const had = useRef(value.length > 0);
-  const refocus = useRef(false);
-  useLayoutEffect(() => {
-    if (had.current && value.length === 0 && Platform.OS !== 'web') {
-      refocus.current = own.current?.isFocused?.() ?? false;
-      setGeneration((g) => g + 1);
-    }
-    had.current = value.length > 0;
-  }, [value]);
-  useEffect(() => {
-    if (refocus.current) {
-      refocus.current = false;
-      own.current?.focus();
-    }
-  }, [generation]);
+  // from code (a send). Empty, it's held to one line (`emptyHeight`) rather
+  // than remounted: a remount took the keyboard away and gave it back on
+  // every send, and the composer and the chat dipped and rose with it.
   const empty = dictation ? !dictation.settled && !dictation.deciding : false;
   // The pill's room for the words: the field less the + and the buttons beside them.
   const [width, setWidth] = useState(0);
@@ -1043,47 +1026,50 @@ export function ComposerField({
               </Pressable>
             ) : (
               <View>
-              <TextInput
-                key={generation}
-                ref={own}
-                maxFontSizeMultiplier={chromeScale}
-                value={value}
-                autoFocus={autoFocus}
-                editable={editable}
-                onChangeText={onChangeText}
-                onSelectionChange={(e) =>
-                  setCaret({ at: e.nativeEvent.selection, length: value.length, listening })
-                }
-                onLayout={fitWeb}
-                multiline
-                // The field scrolls around it: the input is always as tall as its words.
-                scrollEnabled={false}
-                style={[field.input, card && field.cardInput]}
-                selectionColor={accent.accent}
-                keyboardAppearance={appearance}
-                accessibilityLabel={label}
-              />
-              {value.length === 0 ? (
-                // Drawn here, not by the input: a multiline input wraps its
-                // placeholder while the field is still laying out, so the empty
-                // capsule showed it on two lines for a moment. One line, clipped.
-                <Text
-                  pointerEvents="none"
-                  accessibilityElementsHidden
-                  importantForAccessibility="no"
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
+                <TextInput
+                  ref={own}
                   maxFontSizeMultiplier={chromeScale}
+                  value={value}
+                  autoFocus={autoFocus}
+                  editable={editable}
+                  onChangeText={onChangeText}
+                  onSelectionChange={(e) =>
+                    setCaret({ at: e.nativeEvent.selection, length: value.length, listening })
+                  }
+                  onLayout={fitWeb}
+                  multiline
+                  // The field scrolls around it: the input is always as tall as its words.
+                  scrollEnabled={false}
                   style={[
                     field.input,
                     card && field.cardInput,
-                    field.placeholder,
-                    { color: colors.textMuted },
+                    value.length === 0 && { maxHeight: emptyHeight(size.field, card) },
                   ]}
-                >
-                  {placeholder}
-                </Text>
-              ) : null}
+                  selectionColor={accent.accent}
+                  keyboardAppearance={appearance}
+                  accessibilityLabel={label}
+                />
+                {value.length === 0 ? (
+                  // Drawn here, not by the input: a multiline input wraps its
+                  // placeholder while the field is still laying out, so the empty
+                  // capsule showed it on two lines for a moment. One line, clipped.
+                  <Text
+                    pointerEvents="none"
+                    accessibilityElementsHidden
+                    importantForAccessibility="no"
+                    numberOfLines={1}
+                    ellipsizeMode="tail"
+                    maxFontSizeMultiplier={chromeScale}
+                    style={[
+                      field.input,
+                      card && field.cardInput,
+                      field.placeholder,
+                      { color: colors.textMuted },
+                    ]}
+                  >
+                    {placeholder}
+                  </Text>
+                ) : null}
               </View>
             )}
           </ScrollView>
@@ -1245,6 +1231,13 @@ export const FIELD_MIN = composer.height;
  * and the field, the + and send grow with them in step, so one line stays a
  * pill with its buttons on it at every size.
  */
+/**
+ * The input's height with nothing in it: one line and its padding (the
+ * field's own height), and the card's extra padding under the words. Never
+ * smaller than the input draws one line at; only a stale, taller one is cut.
+ */
+export const emptyHeight = (field: number, card: boolean) => field + (card ? space.sm : 0);
+
 export function useComposerSize() {
   const { fontScale } = useWindowDimensions();
   // Dynamic Type as far as chrome follows it, times Settings → Text size.

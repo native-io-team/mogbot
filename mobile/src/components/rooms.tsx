@@ -51,7 +51,7 @@ import { getApp, useApp } from '../lib/store';
 import { avatarSize, chromeScale, fonts, iconSize, mix, radius, space } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { AgentAvatar, Spinner } from './agent';
-import { DaySeparator, DraftRow, MessageRow, PendingRow, WorkingRow } from './chat';
+import { DaySeparator, DraftRow, MessageRow, PendingRow, SendRise, WorkingRow } from './chat';
 import { MentionContext } from './Markdown';
 import { ComposerField, RoundButton } from './Composer';
 import { RoomBars } from './ConversationBars';
@@ -437,8 +437,15 @@ function RoomItemView({
       </View>
     );
   }
-  const grouped = item.kind === 'message' && item.grouped;
-  return <View style={[styles.item, grouped && styles.itemGrouped]}>{body}</View>;
+  const grouped = (item.kind === 'message' || item.kind === 'pending') && item.grouped;
+  // Yours keeps one wrapper from pending to confirmed (same key): no remount when the Mac answers.
+  const yours =
+    item.kind === 'pending' || (item.kind === 'message' && item.message.kind === 'user');
+  return (
+    <View style={[styles.item, grouped && styles.itemGrouped]}>
+      {yours ? <SendRise rise={item.kind === 'pending'}>{body}</SendRise> : body}
+    </View>
+  );
 }
 
 /**

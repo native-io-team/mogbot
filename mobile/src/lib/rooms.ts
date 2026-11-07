@@ -22,7 +22,7 @@ import {
 import { previewText } from '@shipstudio/companion-protocol';
 import { formatClock, workingLine } from './agents';
 import type { PendingSend } from './sync';
-import { timeLabel, type Item } from './timeline';
+import { messageKey, pendingItems, timeLabel, type Item } from './timeline';
 
 const PREFIX = 'room:';
 
@@ -253,9 +253,8 @@ export function roomItems(
       out.push({ kind: 'working', key: `working:${a.id}`, label: workingLine(a), agentId: a.id });
     }
   }
-  for (let i = pending.length - 1; i >= 0; i--) {
-    out.push({ kind: 'pending', key: `pending:${pending[i].clientId}`, pending: pending[i] });
-  }
+  const last = messages[messages.length - 1];
+  out.push(...pendingItems(pending, last && { ts: last.ts, you: speakerOf(last) === '' }, now));
   for (let i = messages.length - 1; i >= 0; i--) {
     const m = messages[i];
     const prev = messages[i - 1];
@@ -264,9 +263,9 @@ export function roomItems(
       const same = !!prev && speakerOf(prev) === speakerOf(m) && m.ts - prev.ts <= RUN_MS;
       const grouped = !label && same;
       const speaker = !!m.agentId && m.kind !== 'note' && !grouped;
-      out.push({ kind: 'message', key: m.id, message: m, grouped, speaker });
+      out.push({ kind: 'message', key: messageKey(m), message: m, grouped, speaker });
     }
-    if (label) out.push({ kind: 'day', key: `day:${m.id}`, label });
+    if (label) out.push({ kind: 'day', key: `day:${messageKey(m)}`, label });
   }
   return out;
 }

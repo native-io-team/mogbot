@@ -10,7 +10,7 @@ import { OUTBOX_WAIT_MS, outboxPlan, restorePending, unreached } from '../src/li
 import { emptySync, type PendingSend } from '../src/lib/sync';
 import { chatItems, dayLabel, timeLabel } from '../src/lib/timeline';
 import { WireFailure } from '../src/lib/transport';
-import { looksLikePath, splitStable } from '../src/components/Markdown';
+import { looksLikePath, splitStable, withoutPartialFence } from '../src/components/Markdown';
 import { composerControls, mentionQuery, sendMode } from '../src/lib/composer';
 import { subtitle } from '../src/lib/agents';
 import { drivenBar, drivenLine, drivenWait } from '../src/lib/bars';
@@ -245,6 +245,52 @@ describe('timeline', () => {
     expect(items.filter((i) => i.key === 'r1')).toHaveLength(1);
     expect(items[0].kind).toBe('draft');
   });
+
+  // The Mac answering a send must not change the rows: same key, same time
+  // line, same run spacing. Any difference was a remount or a shift at send.
+  const shape = (items: Item[]) =>
+    items.map((i) =>
+      i.kind === 'message' || i.kind === 'pending'
+        ? `${i.key}${i.grouped ? '+' : ''}`
+        : i.kind === 'day'
+          ? `${i.key}=${i.label}`
+          : i.key
+    );
+  const sent = (clientId: string, ts: number) =>
+    msg(`m_${clientId}`, ts, { kind: 'user', text: clientId, clientId });
+
+  it('keeps a send’s row as it is when the Mac confirms it', () => {
+    const before = [msg('r0', now - 60_000)];
+    const pending = chatItems(agent(), before, [pend('c1', now)], undefined, now);
+    const confirmed = chatItems(agent(), [...before, sent('c1', now)], [], undefined, now);
+    expect(shape(confirmed)).toEqual(shape(pending));
+    expect(pending[0]).toMatchObject({ kind: 'pending', key: 'send:c1' });
+    expect(confirmed[0]).toMatchObject({ kind: 'message', key: 'send:c1' });
+  });
+
+  it('gives a pending send the time line and run its confirmed copy will have', () => {
+    // After a pause: the time line is there from the start, not popping in on confirm.
+    const quiet = [msg('r0', now - 2 * 3_600_000)];
+    expect(shape(chatItems(agent(), quiet, [pend('c1', now)], undefined, now))).toEqual(
+      shape(chatItems(agent(), [...quiet, sent('c1', now)], [], undefined, now))
+    );
+    // Two quick sends of yours: the second sits close under the first, before and after.
+    const one = [sent('c1', now - 30_000)];
+    const twoPending = chatItems(agent(), one, [pend('c2', now)], undefined, now);
+    expect(shape(twoPending)).toEqual([
+      'send:c2+',
+      'send:c1',
+      'day:send:c1=' + timeLabel(now - 30_000, undefined, now),
+    ]);
+    expect(shape(twoPending)).toEqual(
+      shape(chatItems(agent(), [...one, sent('c2', now)], [], undefined, now))
+    );
+  });
+
+  it('keys a message without a clientId (sent from the Mac) by its id', () => {
+    const items = chatItems(agent(), [msg('u1', now, { kind: 'user' })], [], undefined, now);
+    expect(items[0].key).toBe('u1');
+  });
 });
 
 describe('Setting up your team, in the timeline', () => {
@@ -269,7 +315,7 @@ describe('Setting up your team, in the timeline', () => {
       false
     );
     expect(keys(items)).toEqual([
-      'pending:sending',
+      'send:sending',
       'reply',
       'hi',
       SETUP_KEY,
@@ -337,6 +383,18 @@ describe('streaming markdown', () => {
     const fenced = 'intro\n\n```ts\nconst a = 1;\n\nconst b = 2;';
     expect(splitStable(fenced)).toEqual(['intro\n', '\n```ts\nconst a = 1;\n\nconst b = 2;']);
     expect(splitStable('no break yet')).toEqual(['', 'no break yet']);
+  });
+
+  it('leaves out a fence still being typed, so the code block never grows a line for a frame', () => {
+    const code = '```ts\nexport const done = true;';
+    expect(withoutPartialFence(`${code}\n\``)).toBe(code);
+    expect(withoutPartialFence(`${code}\n\`\``)).toBe(code);
+    // Whole, it closes the block: kept.
+    expect(withoutPartialFence(`${code}\n\`\`\``)).toBe(`${code}\n\`\`\``);
+    // A line break at the very end draws nothing yet.
+    expect(withoutPartialFence('Here’s the plan\n\n')).toBe('Here’s the plan');
+    // Backticks inside a line are words, not a fence.
+    expect(withoutPartialFence('run `ls')).toBe('run `ls');
   });
 
   it('treats file paths as openable and commands as not', () => {

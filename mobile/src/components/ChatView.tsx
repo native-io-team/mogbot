@@ -67,7 +67,7 @@ import {
 } from '../lib/session';
 import { useAccent } from '../lib/accent';
 import { useApp } from '../lib/store';
-import { SETUP_KEY, chatItems, sentAt, withSetupCard, type Item } from '../lib/timeline';
+import { SETUP_KEY, chatItems, isRowFor, sentAt, withSetupCard, type Item } from '../lib/timeline';
 import { setupAnchor, shows as showsSetup } from '../lib/teamSetup';
 import {
   alpha,
@@ -96,7 +96,7 @@ import {
 } from '../lib/follow';
 import { makeStyles, useColors } from '../lib/appearance';
 import { AgentAvatar, Spinner } from './agent';
-import { DaySeparator, DraftRow, MessageRow, PendingRow, WorkingRow } from './chat';
+import { DaySeparator, DraftRow, MessageRow, PendingRow, SendRise, WorkingRow } from './chat';
 import { Composer } from './Composer';
 import { LinkProblem } from './ConnectionPill';
 import { Line } from './surfaces';
@@ -119,8 +119,13 @@ const NO_KEYS: ReadonlySet<string> = new Set();
 /** A card counts as seen once its top is on screen: its title is the question. */
 const VIEWABILITY = { itemVisiblePercentThreshold: 10 };
 
-/** Rows glide to where a growing or collapsing neighbour puts them: nothing jumps. */
-const glide = LinearTransition.duration(220);
+/**
+ * Rows glide to where a growing or collapsing neighbour puts them: nothing
+ * jumps. Not on the web (QA only): there the glide is a transform on the
+ * cell, which replaces the inverted list's own flip, so every row it moved
+ * drew upside down for its 220 ms.
+ */
+const glide = Platform.OS === 'web' ? undefined : LinearTransition.duration(220);
 
 /**
  * A pending approval's question, held above a pane too short for the whole
@@ -389,7 +394,7 @@ export function ChatView({
     return () => clearTimeout(timer);
   }, [cardId, loaded, at]);
 
-  const targetIndex = target ? items.findIndex((i) => i.key === target) : -1;
+  const targetIndex = target ? items.findIndex((i) => isRowFor(i, target)) : -1;
   useEffect(() => {
     if (targetIndex < 0) return;
     const timer = setTimeout(
@@ -617,7 +622,7 @@ export function ChatView({
                     latestFailure={latestFailure}
                     onError={showError}
                     onLongPress={onMessageAction}
-                    lit={item.key === target}
+                    lit={!!target && isRowFor(item, target)}
                   />
                 )}
                 onScrollToIndexFailed={(info) => {
@@ -844,12 +849,18 @@ function ItemView({
     ) : (
       <WorkingRow label={item.label} agent={agent} onError={onError} />
     );
-  // A run from one side sits close together; a new speaker gets room.
-  const grouped = item.kind === 'message' && item.grouped;
+  // A run from one side sits close together; a new speaker gets room. A
+  // pending send is spaced as its confirmed copy will be, so nothing shifts.
+  const grouped = (item.kind === 'message' || item.kind === 'pending') && item.grouped;
+  // Yours, pending or confirmed: one wrapper for both, so the Mac's answer
+  // swaps what's inside it without remounting the row (`SendRise`).
+  const yours =
+    item.kind === 'pending' || (item.kind === 'message' && item.message.kind === 'user');
   // A meta line about the block above it (what changed, a session started)
   // belongs to that block: it sits close under it, not a paragraph away.
   const attached =
     grouped &&
+    item.kind === 'message' &&
     // A live copy's changes are a Card of their own, not a line under the block.
     ((item.message.kind === 'changes' && item.message.id !== liveCopyCard) ||
       (item.message.kind === 'session' &&
@@ -865,7 +876,7 @@ function ItemView({
       ]}
     >
       {lit && <Glow />}
-      {body}
+      {yours ? <SendRise rise={item.kind === 'pending'}>{body}</SendRise> : body}
     </View>
   );
 }

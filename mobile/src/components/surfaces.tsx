@@ -30,6 +30,7 @@ import {
   type LayoutChangeEvent,
   type StyleProp,
   type ViewStyle,
+  Platform,
 } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { makeStyles, useColors, useTextScale } from '../lib/appearance';
@@ -48,6 +49,14 @@ import {
 } from '../lib/theme';
 import type { SFName } from '../lib/icons';
 import { DISABLED_OPACITY, Dot, Icon, T, tap, useRipple } from './ui';
+
+/**
+ * A card glides to its new size as it folds. Not on the web (QA only):
+ * there a layout glide is measured on the screen, so a card in the inverted
+ * chat also slid whenever a row arrived below it, the wrong way, over the
+ * new row. On the phone it's measured within the card's parent.
+ */
+const CARD_GLIDE = Platform.OS === 'web' ? undefined : LinearTransition.duration(220);
 
 /** What the card's icon is tinted with: muted by default, warning only for real risk. */
 export type CardTone = 'warning' | 'error';
@@ -99,7 +108,7 @@ export function Card({
         : colors.textMuted;
   return (
     <Animated.View
-      layout={LinearTransition.duration(220)}
+      layout={CARD_GLIDE}
       onLayout={onLayout}
       style={[styles.card, style]}
       testID={testID}
