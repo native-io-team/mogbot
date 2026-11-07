@@ -2,6 +2,10 @@
  * The photo viewer's gestures, driven through Gesture Handler's test
  * controller: a swipe at fit turns the page, a swipe while zoomed doesn't,
  * a pull down closes, and one tap hides what's drawn over the picture.
+ *
+ * Every gesture callback runs as the UI runtime would rebuild it (./uiRuntime),
+ * and none may fail: on the phone a throw there kills the app, and here the
+ * viewer's guard would only log it.
  */
 
 import 'react-native-gesture-handler/jestSetup';
@@ -17,6 +21,23 @@ jest.mock('react-native-worklets', () =>
 jest.mock('react-native-reanimated', () =>
   jest.requireActual<typeof import('./reanimatedStub')>('./reanimatedStub').reanimated()
 );
+jest.mock('react-native-gesture-handler', () => {
+  const actual = jest.requireActual<Record<string, unknown>>('react-native-gesture-handler');
+  const { isWorklet, onUiRuntime } =
+    jest.requireActual<typeof import('./uiRuntime')>('./uiRuntime');
+  const onUi = (name: string) => (config: Record<string, unknown>) =>
+    (actual[name] as (config: Record<string, unknown>) => unknown)(
+      Object.fromEntries(
+        Object.entries(config).map(([k, v]) => [k, isWorklet(v) ? onUiRuntime(v) : v])
+      )
+    );
+  return {
+    ...actual,
+    usePinchGesture: onUi('usePinchGesture'),
+    usePanGesture: onUi('usePanGesture'),
+    useTapGesture: onUi('useTapGesture'),
+  };
+});
 jest.mock('expo-image', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
   return { Image: () => <View /> };
@@ -56,8 +77,17 @@ const fire = (id: string, events: Record<string, number>[]) =>
     jest.runAllTimers();
   });
 
-beforeEach(() => jest.useFakeTimers());
-afterEach(() => jest.useRealTimers());
+let warn: jest.SpyInstance<void, unknown[]>;
+beforeEach(() => {
+  jest.useFakeTimers();
+  warn = jest.spyOn(console, 'warn');
+});
+afterEach(() => {
+  jest.useRealTimers();
+  const failures = warn.mock.calls.filter((c) => String(c[0] as string).startsWith('Photo viewer'));
+  warn.mockRestore();
+  expect(failures).toEqual([]);
+});
 
 describe('the gallery’s gestures', () => {
   it('mounts the picture shown and its neighbours', async () => {

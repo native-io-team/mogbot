@@ -67,6 +67,10 @@ const NONE = 4;
 /** A drag at fit picks its direction after this many points. */
 const DECIDE_PX = 10;
 
+function logGestureError(message: string) {
+  console.warn(`Photo viewer: a gesture failed and was reset (${message})`);
+}
+
 export function ZoomGallery({
   pages,
   start,
@@ -151,9 +155,43 @@ export function ZoomGallery({
     );
   };
 
+  /**
+   * A throw from a gesture callback on the UI runtime aborts the whole app,
+   * so none leaves one: the picture goes back to fit and it is logged once.
+   */
+  const failed = useSharedValue(false);
+  const recover = (err: unknown) => {
+    'worklet';
+    cancelAnimation(scale);
+    cancelAnimation(x);
+    cancelAnimation(y);
+    cancelAnimation(drop);
+    scale.set(1);
+    x.set(0);
+    y.set(0);
+    drop.set(0);
+    pinching.set(false);
+    mode.set(UNDECIDED);
+    strip.set(-at.get() * width);
+    if (failed.get()) return;
+    failed.set(true);
+    scheduleOnRN(logGestureError, err instanceof Error ? err.message : String(err));
+  };
+  const guard =
+    <E,>(fn: (e: E) => void) =>
+    (e: E) => {
+      'worklet';
+      try {
+        fn(e);
+      } catch (err) {
+        recover(err);
+      }
+    };
+
   const pinch = usePinchGesture({
     testID: 'viewer-pinch',
-    onActivate: (e) => {
+    onActivate: guard((e) => {
+      'worklet';
       pinching.set(true);
       cancelAnimation(scale);
       cancelAnimation(x);
@@ -165,8 +203,9 @@ export function ZoomGallery({
         fx: e.focalX - width / 2,
         fy: e.focalY - height / 2,
       });
-    },
-    onUpdate: (e) => {
+    }),
+    onUpdate: guard((e) => {
+      'worklet';
       if (drop.get() !== 0) return;
       const b = base.get();
       const to = Math.min(Math.max(b.scale * e.scale, 0.6), MAX_OVERSHOOT);
@@ -174,24 +213,27 @@ export function ZoomGallery({
       x.set(zoomOffset(b.x, b.scale, to, b.fx, e.focalX - width / 2));
       y.set(zoomOffset(b.y, b.scale, to, b.fy, e.focalY - height / 2));
       scale.set(to);
-    },
-    onDeactivate: () => {
+    }),
+    onDeactivate: guard(() => {
+      'worklet';
       pinching.set(false);
       settle();
-    },
+    }),
   });
 
   const pan = usePanGesture({
     testID: 'viewer-pan',
     maxPointers: 1,
-    onActivate: () => {
+    onActivate: guard(() => {
+      'worklet';
       mode.set(isZoomed(scale.get()) ? PAN : UNDECIDED);
       if (mode.get() === PAN) {
         cancelAnimation(x);
         cancelAnimation(y);
       }
-    },
-    onUpdate: (e) => {
+    }),
+    onUpdate: guard((e) => {
+      'worklet';
       if (pinching.get() || e.numberOfPointers > 1) return;
       if (mode.get() === UNDECIDED) {
         const ax = Math.abs(e.translationX);
@@ -208,8 +250,9 @@ export function ZoomGallery({
       } else if (mode.get() === CLOSE) {
         drop.set(Math.max(0, e.translationY));
       }
-    },
-    onDeactivate: (e) => {
+    }),
+    onDeactivate: guard((e) => {
+      'worklet';
       const was = mode.get();
       mode.set(UNDECIDED);
       if (was === PAN) {
@@ -224,13 +267,14 @@ export function ZoomGallery({
         if (shouldClose(e.translationY, e.velocityY)) scheduleOnRN(onClose);
         else drop.set(withSpring(0, SPRING));
       }
-    },
+    }),
   });
 
   const doubleTap = useTapGesture({
     testID: 'viewer-double-tap',
     numberOfTaps: 2,
-    onActivate: (e) => {
+    onActivate: guard((e) => {
+      'worklet';
       const t = doubleTapTarget(
         scale.get(),
         { x: e.x - width / 2, y: e.y - height / 2 },
@@ -240,13 +284,14 @@ export function ZoomGallery({
       scale.set(withTiming(t.scale, TIMING));
       x.set(withTiming(t.x, TIMING));
       y.set(withTiming(t.y, TIMING));
-    },
+    }),
   });
   const singleTap = useTapGesture({
     testID: 'viewer-tap',
-    onActivate: () => {
+    onActivate: guard(() => {
+      'worklet';
       scheduleOnRN(toggleChrome);
-    },
+    }),
   });
   const taps = useExclusiveGestures(doubleTap, singleTap);
   const gesture = useSimultaneousGestures(pinch, pan, taps);
