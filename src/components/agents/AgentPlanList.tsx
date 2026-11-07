@@ -18,6 +18,7 @@ export function AgentPlanList({ plan }: { plan: PlanCard }) {
           <li key={`${i}-${a.summary}`} className="agent-plan__action">
             <span className="agent-plan__summary">{a.summary}</span>
             <span className="agent-plan__target">{a.target}</span>
+            {a.text && <span className="agent-plan__text">“{a.text}”</span>}
           </li>
         ))}
       </ol>

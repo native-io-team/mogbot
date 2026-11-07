@@ -51,6 +51,9 @@ const CHAT_YES_MS: i64 = 15 * 60 * 1000;
 /// At most this many actions on one card.
 const MAX_ACTIONS: usize = 12;
 
+/// At most this long, an action's exact text.
+const MAX_TEXT: usize = 4000;
+
 /// The line each covered action leaves, in "What it did" and the chat.
 pub const LINE: &str = "Under your OK";
 
@@ -102,6 +105,11 @@ pub struct PlanAction {
     pub target: String,
     /// In the agent's words: "Redeploy shippy's production on Vercel".
     pub summary: String,
+    /// The exact words it sends, posts or comments, when it does: shown on
+    /// the card, and the only words this action covers when the user holds
+    /// sends for the exact text (`outward`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub text: Option<String>,
 }
 
 /// What a plan card carries (`Approval::plan`).
@@ -126,7 +134,8 @@ pub fn schema() -> Value {
                     "properties": {
                         "kind": { "type": "string", "enum": kinds },
                         "target": { "type": "string", "description": "Where: the repo (owner/repo), the project, the channel, the site or address." },
-                        "summary": { "type": "string", "description": "What it does, in a few words the user reads on the card." }
+                        "summary": { "type": "string", "description": "What it does, in a few words the user reads on the card." },
+                        "text": { "type": "string", "description": "For a send, post, comment, email, issue or pull request: everything it will send (title and body), word for word. Required to cover it when the user OKs exact text; the call must send exactly these words." }
                     },
                     "required": ["kind", "target", "summary"]
                 }
@@ -248,7 +257,14 @@ fn take_chat_yes(agent_id: &str, plan: &Plan, now: i64) -> bool {
         map.remove(agent_id);
         return false;
     }
-    if !plan.actions.iter().all(|a| named_in(&a.target, proposal)) {
+    // An action's exact words were in the reply too: the yes saw them.
+    let said = super::outward::norm(proposal);
+    if !plan.actions.iter().all(|a| {
+        named_in(&a.target, proposal)
+            && a.text
+                .as_deref()
+                .is_none_or(|t| said.contains(&super::outward::norm(t)))
+    }) {
         return false;
     }
     map.remove(agent_id);
@@ -304,10 +320,21 @@ pub fn parse(args: &Value) -> Result<Plan, String> {
         if summary.is_empty() {
             return Err("Each action needs a `summary` the user reads.".into());
         }
+        let text = a
+            .get("text")
+            .and_then(Value::as_str)
+            .map(str::trim)
+            .filter(|t| !t.is_empty());
+        if text.is_some_and(|t| t.chars().count() > MAX_TEXT) {
+            return Err(format!(
+                "Keep each action's `text` under {MAX_TEXT} characters; ask for a longer one on its own card."
+            ));
+        }
         actions.push(PlanAction {
             kind,
             target: target.chars().take(200).collect(),
             summary: summary.chars().take(200).collect(),
+            text: text.map(str::to_string),
         });
     }
     let why = args
@@ -319,12 +346,20 @@ pub fn parse(args: &Value) -> Result<Plan, String> {
     Ok(Plan { actions, why })
 }
 
+/// An action's exact words, as the card shows them under it.
+fn text_line(a: &PlanAction) -> String {
+    a.text
+        .as_deref()
+        .map(|t| format!("\n   Exactly: “{t}”"))
+        .unwrap_or_default()
+}
+
 /// The numbered list, as the card and the agent read it.
 pub fn numbered(plan: &Plan) -> String {
     plan.actions
         .iter()
         .enumerate()
-        .map(|(i, a)| format!("{}. {}", i + 1, a.summary))
+        .map(|(i, a)| format!("{}. {}{}", i + 1, a.summary, text_line(a)))
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -334,7 +369,7 @@ pub fn card_detail(plan: &Plan) -> String {
         .actions
         .iter()
         .enumerate()
-        .map(|(i, a)| format!("{}. {} ({})", i + 1, a.summary, a.target))
+        .map(|(i, a)| format!("{}. {} ({}){}", i + 1, a.summary, a.target, text_line(a)))
         .collect::<Vec<_>>()
         .join("\n");
     match &plan.why {
@@ -480,12 +515,21 @@ fn target_ok(target: &str, places: &[String]) -> bool {
     })
 }
 
-fn matches(a: &PlanAction, call: &Call) -> bool {
-    kind_ok(a.kind, call.kind) && target_ok(&a.target, &call.places)
+/// `texts`: when the user OKs exact text (`outward`), what the call sends;
+/// the action must carry text holding all of it, word for word.
+fn matches(a: &PlanAction, call: &Call, texts: Option<&super::outward::Texts>) -> bool {
+    kind_ok(a.kind, call.kind)
+        && target_ok(&a.target, &call.places)
+        && texts.is_none_or(|t| {
+            a.text
+                .as_deref()
+                .is_some_and(|x| super::outward::approved_covers(x, t))
+        })
 }
 
 /// The slot covering `call` in a grant `holder` holds: one not used yet,
 /// else (the same call made again) the one it used.
+#[allow(clippy::too_many_arguments)]
 fn find(
     grants: &[Grant],
     holder: &str,
@@ -493,11 +537,12 @@ fn find(
     made: &(String, Value),
     taken: &[(usize, usize)],
     now: i64,
+    texts: Option<&super::outward::Texts>,
 ) -> Option<(usize, usize)> {
     let live = |g: &Grant| g.expires_at > now && g.holders.iter().any(|h| h == holder);
     for (gi, g) in grants.iter().enumerate().filter(|(_, g)| live(g)) {
         for (si, s) in g.slots.iter().enumerate() {
-            if !s.used && !taken.contains(&(gi, si)) && matches(&s.action, call) {
+            if !s.used && !taken.contains(&(gi, si)) && matches(&s.action, call, texts) {
                 return Some((gi, si));
             }
         }
@@ -507,7 +552,7 @@ fn find(
             if let Some(si) = g
                 .slots
                 .iter()
-                .position(|s| s.used && matches(&s.action, call))
+                .position(|s| s.used && matches(&s.action, call, texts))
             {
                 return Some((gi, si));
             }
@@ -541,6 +586,12 @@ pub(super) struct Turn<'a> {
     /// A browser step a plan could cover (`browser_gate::plan_step`).
     pub browser: Option<(&'static str, String)>,
     pub now: i64,
+    /// The user OKs the exact text of what goes out under their name
+    /// (`outward`), and this call sends: only an action whose `text` holds
+    /// every word it sends covers it.
+    pub exact: bool,
+    /// What was typed on the page, for a browser send.
+    pub typed: Vec<String>,
 }
 
 /// Whether a plan covers this call: the summaries of what it covers,
@@ -554,25 +605,39 @@ fn cover_in(grants: &mut [Grant], tool: &str, input: &Value, turn: &Turn) -> Opt
     if tool == "Bash" {
         let command = input.get("command").and_then(Value::as_str)?;
         let parts = bash_parts(command, turn.ctx);
+        // Exact text: what the line sends, and every part that sends must
+        // be covered by an action carrying those words.
+        let texts = turn
+            .exact
+            .then(|| super::outward::texts(tool, input, Some(turn.ctx), &[]));
         let mut picked = Vec::new();
         let mut covered = Vec::new();
         let mut all_listed = true;
+        let mut send_uncovered = false;
         for (words, part) in &parts {
+            let sends = turn.exact && super::outward::words_send(words);
             match part {
                 Part::Cd => {}
                 Part::Outward(call) => {
-                    match find(grants, turn.holder, call, &made, &picked, turn.now) {
+                    let need = if sends { texts.as_ref() } else { None };
+                    match find(grants, turn.holder, call, &made, &picked, turn.now, need) {
                         Some(slot) => {
                             picked.push(slot);
                             covered.push(words.clone());
                         }
-                        None => all_listed = false,
+                        None => {
+                            all_listed = false;
+                            send_uncovered |= sends;
+                        }
                     }
                 }
-                Part::Other => all_listed = false,
+                Part::Other => {
+                    all_listed = false;
+                    send_uncovered |= sends;
+                }
             }
         }
-        if picked.is_empty() {
+        if picked.is_empty() || send_uncovered {
             return None;
         }
         let strict = !turn.level.goes_hard() || turn.exposed;
@@ -606,7 +671,18 @@ fn cover_in(grants: &mut [Grant], tool: &str, input: &Value, turn: &Turn) -> Opt
     } else {
         return None;
     };
-    let slot = find(grants, turn.holder, &call, &made, &[], turn.now)?;
+    let texts = turn
+        .exact
+        .then(|| super::outward::texts(tool, input, Some(turn.ctx), &turn.typed));
+    let slot = find(
+        grants,
+        turn.holder,
+        &call,
+        &made,
+        &[],
+        turn.now,
+        texts.as_ref(),
+    )?;
     Some(commit(grants, &[slot], made))
 }
 

@@ -19,6 +19,7 @@ fn page_with(refs: &[(&str, &str)], url: &str) -> Page {
         tabs: Default::default(),
         url: Some(url.to_string()),
         last_target: None,
+        typed: Vec::new(),
     }
 }
 

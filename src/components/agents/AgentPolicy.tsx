@@ -62,6 +62,19 @@ function lineMenu(
         { label: 'Can use your browser', change: { browser: true }, active: e.browser },
         { label: 'No browser', change: { browser: false }, active: !e.browser },
       ];
+    case 'outward_text':
+      return [
+        {
+          label: 'Only after I OK the exact text',
+          change: { outwardTextNeedsOk: true },
+          active: e.outwardTextNeedsOk,
+        },
+        {
+          label: 'As its independence allows',
+          change: { outwardTextNeedsOk: false },
+          active: !e.outwardTextNeedsOk,
+        },
+      ];
     case 'independence':
       return [
         {

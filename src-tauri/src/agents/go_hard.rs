@@ -713,6 +713,13 @@ pub(super) fn words_ask_at_go_hard(words: &[String], ctx: &Ctx) -> bool {
     simple_asks(words, &ctx, false, true)
 }
 
+/// A web request (`curl`, `wget`, `http`, `xh`) that writes: a method other
+/// than GET/HEAD, or a body. Wherever it goes.
+pub(super) fn web_write(prog: &str, args: &[&str]) -> bool {
+    matches!(prog, "curl" | "wget" | "http" | "https" | "xh" | "xhs")
+        && program(prog, args, &Ctx::default(), true, true)
+}
+
 /// Shell words that come before the command they run.
 const KEYWORDS: &[&str] = &[
     "do", "then", "else", "elif", "if", "while", "until", "!", "time",
@@ -2270,7 +2277,7 @@ fn string_literals(code: &str) -> Vec<String> {
 /* ------------------------------------------------------------ connectors */
 
 /// The words of a connector tool's own name (camelCase and snake_case split).
-fn tool_words(tool: &str) -> Vec<String> {
+pub(super) fn tool_words(tool: &str) -> Vec<String> {
     let name = tool.rsplit("__").next().unwrap_or(tool);
     let mut spaced = String::new();
     for (n, c) in name.chars().enumerate() {

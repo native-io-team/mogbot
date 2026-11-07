@@ -216,6 +216,15 @@
   color: var(--text-muted);
 }
 
+/* The exact words an action sends, word for word. */
+.agent-plan__text {
+  display: block;
+  margin-top: var(--spacing-3xs);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+
 .agent-plan__why {
   margin: 0;
   font-size: var(--font-size-body-sm);

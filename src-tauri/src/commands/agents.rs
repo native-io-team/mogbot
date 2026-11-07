@@ -1241,14 +1241,21 @@ pub async fn agents_policy_set(
         agents::policy::set(&target, &change, &agents)?;
         let after = agents::policy::load();
         let new_level = agents::independence::level();
-        for g in agents::policy_card::groups(&before, &after, &agents, level, new_level) {
-            for id in &g.agent_ids {
-                let line = format!("Settings changed by you: {}", g.changes.join(" · "));
-                let _ = runner::record(
-                    &app2,
-                    runner::new_message(id, store::MessageKind::Note, line),
-                );
-            }
+        let groups = agents::policy_card::groups(&before, &after, &agents, level, new_level);
+        // One note in the Chief's chat for a team-wide change; a line for
+        // each agent whose own settings changed.
+        for (id, line) in agents::policy_card::notes_for(
+            &before,
+            &after,
+            &groups,
+            &agents,
+            None,
+            "Settings changed by you: ",
+        ) {
+            let _ = runner::record(
+                &app2,
+                runner::new_message(&id, store::MessageKind::Note, line),
+            );
         }
         Ok(())
     })

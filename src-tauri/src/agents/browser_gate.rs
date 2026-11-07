@@ -262,9 +262,46 @@ pub struct Page {
     pub url: Option<String>,
     /// The control it last clicked or filled (for Enter).
     pub last_target: Option<String>,
+    /// What it typed or filled in on this page, in order: the words a send
+    /// click would send, shown on that card (`outward`).
+    pub typed: Vec<String>,
 }
 
 const MAX_REFS: usize = 4000;
+const MAX_TYPED: usize = 8;
+
+/// Note what a typing step puts on the page (`form_input`'s value, a
+/// `computer` "type"), so a send card can show the words. A navigation
+/// starts over.
+fn on_typed(page: &mut Page, name: &str, input: &Value) {
+    let text = match name {
+        "navigate" => {
+            page.typed.clear();
+            return;
+        }
+        "form_input" => input.get("value").and_then(Value::as_str),
+        "computer" if input.get("action").and_then(Value::as_str) == Some("type") => {
+            input.get("text").and_then(Value::as_str)
+        }
+        _ => None,
+    };
+    let Some(text) = text.map(str::trim).filter(|t| !t.is_empty()) else {
+        return;
+    };
+    if page.typed.last().map(String::as_str) == Some(text) {
+        return;
+    }
+    page.typed.push(text.to_string());
+    if page.typed.len() > MAX_TYPED {
+        page.typed.remove(0);
+    }
+}
+
+/// An agents' browser call about to run: what it types, for the send card.
+pub fn note_typed_agents(agent_id: &str, name: &str, input: &Value) {
+    let (n, i) = agents_equivalent(name, input);
+    note_agents_page(agent_id, |p| on_typed(p, &n, &i));
+}
 
 static PAGES: Mutex<Option<HashMap<String, Page>>> = Mutex::new(None);
 
@@ -317,6 +354,7 @@ pub fn observe(agent_id: &str, value: &Value) {
 }
 
 fn on_call(page: &mut Page, name: &str, input: &Value) {
+    on_typed(page, name, input);
     match name {
         "navigate" | "tabs_create_mcp" => {
             if let Some(url) = input.get("url").and_then(Value::as_str) {
@@ -940,7 +978,7 @@ pub fn gate(agent: &Agent, tool: &str, input: &Value, outside: bool) -> Gate {
             return Gate::Refuse(why);
         }
         let level = super::independence::for_turn(super::policy::chosen_level(agent), outside);
-        return gate_agents_with(
+        let g = gate_agents_with(
             crate::agent_browser::settings::enabled(),
             level,
             agent,
@@ -949,6 +987,7 @@ pub fn gate(agent: &Agent, tool: &str, input: &Value, outside: bool) -> Gate {
             outside,
             &page_of(&agents_key(&agent.id)),
         );
+        return held_for_exact_text(g, agent, tool, input);
     }
     if !tool.starts_with(SERVER) {
         return Gate::NotBrowser;
@@ -959,7 +998,7 @@ pub fn gate(agent: &Agent, tool: &str, input: &Value, outside: bool) -> Gate {
         return refused;
     }
     let level = super::independence::for_turn(super::policy::chosen_level(agent), outside);
-    gate_with(
+    let g = gate_with(
         team_enabled(),
         level,
         agent,
@@ -967,7 +1006,55 @@ pub fn gate(agent: &Agent, tool: &str, input: &Value, outside: bool) -> Gate {
         input,
         outside,
         &page_of(&agent.id),
-    )
+    );
+    held_for_exact_text(g, agent, tool, input)
+}
+
+/// With "nothing goes out under my name unless I OK the exact text" on
+/// (`outward`), a send click, Enter or script that submits asks at every
+/// level, "Full send" included: its card shows what was typed.
+fn held_for_exact_text(g: Gate, agent: &Agent, tool: &str, input: &Value) -> Gate {
+    if g == Gate::Allow && super::outward::required(agent) && outward_step(agent, tool, input) {
+        Gate::Ask
+    } else {
+        g
+    }
+}
+
+/// A browser step that sends, posts or submits under the user's name: one
+/// "Go hard" asks for (a send click, Enter in a message box, a script that
+/// submits), other than opening a page or uploading a file.
+pub fn outward_step(agent: &Agent, tool: &str, input: &Value) -> bool {
+    let (page, name, input) = if let Some(name) = tool.strip_prefix(AGENTS_SERVER) {
+        let (n, i) = agents_equivalent(name, input);
+        (page_of(&agents_key(&agent.id)), n, i)
+    } else if let Some(name) = tool.strip_prefix(SERVER) {
+        (page_of(&agent.id), name.to_string(), input.clone())
+    } else {
+        return false;
+    };
+    outward_step_on(agent, &name, &input, &page)
+}
+
+/// [`outward_step`] on a known page, for tests.
+pub fn outward_step_on(agent: &Agent, name: &str, input: &Value, page: &Page) -> bool {
+    if matches!(
+        name,
+        "navigate" | "tabs_create_mcp" | "gif_creator" | "file_upload" | "upload_image"
+    ) || name.starts_with("unknown_")
+    {
+        return false;
+    }
+    decide(Level::GoHard, agent, name, input, page) != Gate::Allow
+}
+
+/// What was typed on the page a browser call acts on (`outward`'s card).
+pub fn typed_for(agent_id: &str, tool: &str) -> Vec<String> {
+    if tool.starts_with(AGENTS_SERVER) {
+        page_of(&agents_key(agent_id)).typed
+    } else {
+        page_of(agent_id).typed
+    }
 }
 
 /// A browser step "Full send" let through that "Go hard" would have asked

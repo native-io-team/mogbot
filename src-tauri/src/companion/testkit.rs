@@ -2039,6 +2039,7 @@ pub fn policy_fixture() -> Value {
         version: 3,
         team: Preset::Balanced.team(),
         agents: Default::default(),
+        exact_text_migrated: true,
     };
     saved.team.rules.push("Never email clients".into());
     saved.agents.insert(
@@ -2133,6 +2134,7 @@ pub fn plan_card() -> crate::agents::store::AgentMessage {
         kind,
         target: target.into(),
         summary: summary.into(),
+        text: None,
     };
     let plan = Plan {
         actions: vec![

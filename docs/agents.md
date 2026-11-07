@@ -1086,11 +1086,21 @@ account / repository / project"), **production and protected branches**
 (pushing `main`, `master`, `production`, `release`… or the remote's default
 branch, a bare `git push` on one or where it can't tell, tags, `gh pr merge`,
 releases, workflow runs, `vercel --prod` / promote, other production deploys,
-package publishing) and **system persistence** (launch agents, shell
-profiles, `crontab`, `launchctl`, `defaults write`). Each send leaves "Sent
-without asking — Full send · …" in "What it did", and the turn ends on one
-chat line ("Without asking (Full send): posted 3 times on x.com",
-`agents/full_send.rs`); there are no Undo or Open links yet. After outside
+package publishing), **settings that change what others see or how a project
+is protected** (`vercel` domains, DNS, certificates, aliases, env, project,
+team and Git-link changes, deployment protection and bypass secrets, and
+`vercel curl` / `vercel api` writes or requests about protection, bypass,
+env, domains, tokens or settings; `gh repo edit`, a new public repo, `gh api`
+writes to a repo's or org's settings, webhooks, Pages, environments, members
+or visibility; observed: `vercel curl` made a protection bypass token on a
+production project with no card) and **system persistence** (launch agents,
+shell profiles, `crontab`, `launchctl`, `defaults write`). Each send leaves
+"Sent without asking — Full send · …" in "What it did", and the turn ends on
+one chat line naming what happened ("Without asking (Full send): posted on
+x.com 3 times, pushed branch fix/copy, created a Vercel bypass token on
+<project>", `agents/full_send.rs`), read from the command or tool and its
+arguments, else the command's first words; there are no Undo or Open links
+yet. The exact-text switch below holds sends even here. After outside
 content only raw data leaving this Mac and new packages ask
 (`go_hard::moves_data_off_mac`). **Outside text never gets Full send**: such a
 turn's prompt and browser run at "Use good judgement" and its approvals by Go
@@ -1414,7 +1424,9 @@ profiles, a turn answering outside text, and anything on the line the plan
 doesn't name: at "Check with me often" and "Use good judgement" (and after
 outside content) a covered command must be only listed steps and `cd`; at Go
 hard and Full send the rest of the line is judged by that level as usual
-(`go_hard::with_covered`).
+(`go_hard::with_covered`). An action may carry `text`, the exact words it
+sends, shown on the card; with the exact-text switch on, a send is covered
+only by an action whose `text` is what it sends (see "What each agent can do").
 
 **An agent's word is never the user's approval** (`agents/approval_claim.rs`).
 Observed: at Full send the Chief promised the owner the exact text of a Slack
@@ -4082,7 +4094,38 @@ then its own).
 | Browser | yes / no | `--no-chrome` (mirrored to `reach.browser_off`, which the access chain's browser reads) and the broker |
 | Independence | team's or its own level | prompt only (`policy::independence_for`; outside text still never goes hard) |
 | Admin | may propose for others (Chief by default) | `propose_settings_change` |
+| Sent under your name | as its independence allows / only after you OK the exact text (`outward_text_needs_ok`) | the app, at every level including Full send (`agents/outward.rs`) |
 | Rules | free text | prompt only, and every UI line and card says so |
+
+**The exact-text switch** (`outward_text_needs_ok`, `agents/outward.rs`).
+The owner's rule "nothing goes out under my name unless I approve that exact
+text" was prompt text only, "(an instruction, not enforced)". Now it is a
+typed team or agent setting, set from chat (`propose_settings_change`
+`changes.outward_text_needs_ok`; on applies at once, off needs the card) or
+from "What it can do". On, any send, post, comment or email under the user's
+name (`outward::sends_as_user`: chat and mail CLIs, an AppleScript that sends,
+`git send-email`, `gh` issues, pull requests, comments, reviews, releases and
+gists and `gh api` writes to them, web writes to chat, mail and social APIs;
+a browser step Go hard asks for, such as a send click or Enter in a message
+box; connector tools that send, post, reply, comment or publish) runs only
+after a card whose summary shows the exact words going out
+(`outward::texts`: message, title and body flags, here-documents, body files,
+a connector's text fields, what was typed on the page), or under an
+`ask_plan` grant whose action carries those words in `text` (title and body
+together, whitespace aside; a part of the OK'd text is not covered, nor is a
+body file the app can't read). No level, standing rule, card sweep or admin
+answers it. A rule whose words already say this ("exact text", "word for
+word", "approve … text") turns it on, once, on load (`policy::migrate_exact_text`)
+or when added; the rule's words stay. Presets keep it. Limits: words the app
+can't read (a file it can't open, a page it didn't see typed) are said so on
+the card rather than shown; text an agent typed in a browser step the app
+never observed isn't known.
+
+**Who hears about a change** (`policy_card::notes_for`). One note in the
+Chief's chat for anything team-wide (the proposer's card, when it is the
+Chief); a quiet line in an agent's chat only when its own settings changed.
+Observed: one team rule put ~17 identical "Settings changed: New rule…" notes
+in every chat in the same minute.
 
 **Presets.** "I trust my agents" (direct, every app, browser, Go hard),
 **Balanced** (exactly the old behaviour, the default), "Locked down" (read

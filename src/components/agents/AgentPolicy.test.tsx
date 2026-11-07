@@ -57,6 +57,7 @@ const team: TeamPolicyView = {
     apps: { mode: 'all' },
     browser: true,
     rules: ['Never email clients'],
+    outwardTextNeedsOk: false,
   },
   ownSettings: ['Hiring'],
 };

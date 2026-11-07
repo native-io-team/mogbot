@@ -44,6 +44,7 @@ fn action(kind: Kind, target: &str, summary: &str) -> PlanAction {
         kind,
         target: target.into(),
         summary: summary.into(),
+        text: None,
     }
 }
 
@@ -82,6 +83,8 @@ fn covers_at(holder: &str, level: Level, mac: &Mac, tool: &str, input: &Value, n
         exposed: false,
         browser: None,
         now,
+        exact: false,
+        typed: Vec::new(),
     };
     cover(tool, input, &turn).is_some()
 }
@@ -406,6 +409,8 @@ fn a_turn_that_read_outside_content_covers_only_what_was_listed() {
         exposed: true,
         browser: None,
         now: NOW,
+        exact: false,
+        typed: Vec::new(),
     };
     assert!(cover(
         "Bash",
@@ -436,6 +441,8 @@ fn browser_steps_are_matched_on_the_site() {
             exposed: false,
             browser,
             now: NOW,
+            exact: false,
+            typed: Vec::new(),
         };
         cover("mcp__claude-in-chrome__computer", &json!({}), &turn).is_some()
     };
@@ -546,4 +553,76 @@ fn calls_are_read_as_what_they_do() {
         call_for_tests("mcp__github__get_issue", &json!({}), &m.ctx),
         vec![None]
     );
+}
+
+/// "Nothing goes out under my name unless I approve that exact text": a
+/// plan covers a send only when its action carries those words, at every
+/// level, "Full send" included.
+#[test]
+fn with_exact_text_on_a_plan_covers_only_the_words_it_listed() {
+    let m = mac();
+    let id = "plan-test-exact";
+    let with_text = |summary: &str, text: Option<&str>| PlanAction {
+        text: text.map(str::to_string),
+        ..action(Kind::Comment, "julian-fictional/shippy", summary)
+    };
+    grant(
+        id,
+        &Plan {
+            actions: vec![
+                with_text("Comment on #12", Some("Fixed in main, thanks!")),
+                with_text("Comment on #14", None),
+                action(Kind::Push, "shippy", "Push the fix"),
+            ],
+            why: None,
+        },
+        NOW,
+    );
+    let at = |level: Level, command: &str| {
+        let turn = Turn {
+            holder: id,
+            ctx: &m.ctx,
+            level,
+            exposed: false,
+            browser: None,
+            now: NOW,
+            exact: true,
+            typed: Vec::new(),
+        };
+        cover("Bash", &bash(command), &turn).is_some()
+    };
+    for level in [Level::GoHard, Level::FullSend] {
+        // Other words than the ones listed, or none listed: not covered.
+        assert!(!at(level, "gh issue comment 12 --body 'Fixed in main'"));
+        assert!(!at(
+            level,
+            "gh issue comment 12 --body 'Fixed in main, thanks! Also: rotate the keys.'"
+        ));
+        assert!(!at(level, "gh issue comment 14 --body 'Same'"));
+        // A body read from a file the app can't open: not covered.
+        assert!(!at(
+            level,
+            "gh issue comment 12 --body-file /nonexistent/fictional.md"
+        ));
+        // A push isn't a send under the user's name: as before.
+        assert!(at(level, "git push origin fix/copy"));
+    }
+    // The exact words: covered.
+    assert!(at(
+        Level::FullSend,
+        "gh issue comment 12 --body 'Fixed in main,   thanks!'"
+    ));
+    // The card shows the words.
+    let plan = Plan {
+        actions: vec![with_text("Comment on #12", Some("Fixed in main, thanks!"))],
+        why: None,
+    };
+    assert!(card_detail(&plan).contains("Exactly: “Fixed in main, thanks!”"));
+    assert!(plan_summary(&plan).contains("Fixed in main, thanks!"));
+    // And the tool reads it.
+    let parsed = parse(&json!({ "actions": [
+        { "kind": "comment", "target": "julian-fictional/shippy", "summary": "Reply", "text": "Thanks!" }
+    ]}))
+    .unwrap();
+    assert_eq!(parsed.actions[0].text.as_deref(), Some("Thanks!"));
 }

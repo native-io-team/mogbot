@@ -22,6 +22,11 @@ export function PlanList({ plan }: { plan: PlanCard }) {
           <T variant="small" color={colors.textMuted}>
             {a.target}
           </T>
+          {!!a.text && (
+            <T variant="small" color={colors.textBody}>
+              {`“${a.text}”`}
+            </T>
+          )}
         </View>
       ))}
       {!!plan.why && (

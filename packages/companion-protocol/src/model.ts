@@ -38,6 +38,8 @@ export interface PlanAction {
   /** Where: a repo (`owner/repo`), a project, a channel, a site. */
   target: string;
   summary: string;
+  /** The exact words it sends, posts or comments, when it does. */
+  text?: string;
 }
 
 /** "Do these under your name?" (`ask_plan`): one card, one Allow, for the whole plan. */
