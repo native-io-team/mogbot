@@ -69,9 +69,10 @@ describe('a plan card', () => {
       .find((m) => m.approval?.plan) as AgentMessage;
     expect(planCard.approval!.title).toBe('Do these under your name?');
     await render(<PlanList plan={planCard.approval!.plan!} />);
-    expect(screen.getByText("1. Redeploy shippy's production on Vercel")).toBeTruthy();
-    expect(screen.getByText('2. Open an issue about the failed build')).toBeTruthy();
-    expect(screen.getByText('3. Comment on #12 with the fix')).toBeTruthy();
+    expect(screen.getByText('1.')).toBeTruthy();
+    expect(screen.getByText("Redeploy shippy's production on Vercel")).toBeTruthy();
+    expect(screen.getByText('Open an issue about the failed build')).toBeTruthy();
+    expect(screen.getByText('Comment on #12 with the fix')).toBeTruthy();
     expect(screen.getAllByText('julian/shippy')).toHaveLength(2);
     expect(screen.getByText(/^Why: /)).toBeTruthy();
   });

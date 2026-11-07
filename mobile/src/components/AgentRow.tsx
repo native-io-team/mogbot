@@ -313,7 +313,7 @@ function RowBody({
       color={colors.textMuted}
       numberOfLines={1}
       maxFontSizeMultiplier={chromeScale}
-      style={styles.time}
+      style={[styles.time, !!level && !stacked && styles.timeAfterLevel]}
     >
       {formatAgo(agent.lastActivityAt)}
     </T>
@@ -379,7 +379,8 @@ function RowBody({
               maxFontSizeMultiplier={NAME_SCALE}
               style={styles.level}
             >
-              {level}
+              {/* Beside the time it reads as one quiet line: "Checks often · 3 h ago". */}
+              {stacked ? level : `${level} ·`}
             </T>
           )}
           {!stacked && time}
@@ -443,15 +444,10 @@ const useStyles = makeStyles((colors) => ({
   // The name wins the line: it shrinks last, and the time never takes more than it needs.
   name: { flexShrink: 1, flexGrow: 1 },
   time: { flexShrink: 0, marginLeft: space.sm },
+  timeAfterLevel: { marginLeft: 0 },
   // A label, not a status: quiet, and it never pushes the name off the line.
-  level: {
-    flexShrink: 0,
-    paddingHorizontal: space.xs,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderSubtle,
-    borderRadius: radius.sm,
-    overflow: 'hidden',
-  },
+  // Words, not a bordered box: a box on a row reads as a button.
+  level: { flexShrink: 0 },
   mark: { width: 14, alignItems: 'flex-end' },
   actions: { flexDirection: 'row' },
   action: { width: ACTION_W, alignItems: 'center', justifyContent: 'center' },

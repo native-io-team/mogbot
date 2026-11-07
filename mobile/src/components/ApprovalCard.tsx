@@ -37,13 +37,13 @@ import { haptic } from '../lib/haptics';
 import { useInFlight } from '../lib/once';
 import { answerApproval, call, describeError } from '../lib/session';
 import { useApp } from '../lib/store';
-import { fonts, iconSize, radius, space, type, PRESSED } from '../lib/theme';
+import { fonts, iconSize, radius, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { choose } from './menu';
 import { SettingsChange } from './settingsChange';
 import { PlanList } from './planList';
 import { ShowAll } from './ShowAll';
-import { Card, Line, OFFLINE_NOTE, useActionShare } from './surfaces';
+import { Card, Line, OFFLINE_NOTE, TextAction, useActionShare } from './surfaces';
 import { Button, Icon, T } from './ui';
 
 /**
@@ -930,19 +930,17 @@ function Summarized({ approval, lines }: { approval: Approval; lines: number }) 
     <View style={{ gap: space.xs }}>
       <T color={colors.textBody}>{summary}</T>
       {!!approval.detail && (
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ expanded: open }}
-          onPress={() => setOpen((v) => !v)}
-          hitSlop={{ top: 12, bottom: 12 }}
-          // On the summary's own edge: showAll's inset is for a toggle inside a
-          // field box, and here it left "Details" hanging off the text.
-          style={({ pressed }) => [cardStyles.detailsToggle, pressed && PRESSED]}
-        >
-          <T variant="caption" color={colors.textSecondary} style={{ fontFamily: fonts.medium }}>
-            {open ? 'Hide details' : 'Details'}
-          </T>
-        </Pressable>
+        // On the summary's own edge, and the same quiet text action as a
+        // login's "Other ways": a 12pt caption here was the card's smallest
+        // tap and read as a footnote.
+        <View style={cardStyles.detailsToggle}>
+          <TextAction
+            label={open ? 'Hide details' : 'Details'}
+            muted
+            expanded={open}
+            onPress={() => setOpen((v) => !v)}
+          />
+        </View>
       )}
       {open && <Detail approval={approval} lines={lines} />}
     </View>

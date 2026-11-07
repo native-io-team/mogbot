@@ -362,12 +362,15 @@ export function TextAction({
   hint,
   muted,
   disabled = false,
+  expanded,
 }: {
   label: string;
   onPress: () => void;
   hint?: string;
   muted?: boolean;
   disabled?: boolean;
+  /** A toggle that shows more (Details, Other ways): said to VoiceOver. */
+  expanded?: boolean;
 }) {
   const colors = useColors();
   const ripple = useRipple();
@@ -376,7 +379,7 @@ export function TextAction({
       accessibilityRole="button"
       accessibilityLabel={label}
       accessibilityHint={hint}
-      accessibilityState={{ disabled }}
+      accessibilityState={{ disabled, expanded }}
       disabled={disabled}
       hitSlop={{ top: 14, bottom: 14, left: 8, right: 8 }}
       android_ripple={{ ...ripple, borderless: true }}

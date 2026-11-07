@@ -419,7 +419,7 @@ function Shown({
           >
             <Button
               title={action.deny}
-              variant="secondary"
+              variant="outline"
               size="large"
               busy={busy === 'deny'}
               disabled={!!busy || !connected}
@@ -459,13 +459,11 @@ function Shown({
   );
 }
 
-/** The icon its own card in the chat wears. */
+/** The icon its own card in the chat wears (a login's is the lock, as a key's). */
 const askIcon = (a: Approval) =>
-  a.login
-    ? 'puzzlepiece'
-    : a.secret
-      ? 'lock.fill'
-      : a.connector
+  a.login || a.secret
+    ? 'lock.fill'
+    : a.connector
         ? 'square.and.arrow.down'
         : 'checkmark.shield';
 

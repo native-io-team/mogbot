@@ -334,6 +334,12 @@ export function ResultCardView({
                 {watch}
                 {ask}
               </View>
+            ) : watch && ask ? (
+              // Two words side by side keep their 44pt targets apart.
+              <View style={styles.textPair}>
+                {watch}
+                {ask}
+              </View>
             ) : (
               <>
                 {watch}
@@ -362,8 +368,11 @@ const useStyles = makeStyles((colors) => ({
     flexDirection: 'row',
     flexWrap: 'wrap',
     alignItems: 'center',
-    gap: space.md,
+    // Each text action reaches `space.sm` past its words: less than twice
+    // that and Watch live's target ran into Ask for changes'.
+    gap: space.lg,
   },
+  textPair: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   strong: { fontWeight: '600' as const, color: colors.textPrimary },
   unverified: {
     gap: space.xs,
