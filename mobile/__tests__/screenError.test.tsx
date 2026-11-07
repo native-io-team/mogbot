@@ -50,7 +50,7 @@ describe('ScreenError', () => {
   it('at the root, lets the splash go', async () => {
     await render(<RootError error={new Error('x')} retry={() => Promise.resolve()} />);
     expect(mockHideAsync).toHaveBeenCalled();
-    expect(screen.getByText('Something went wrong on this screen.')).toBeTruthy();
+    expect(screen.getByText('This couldn’t be shown.')).toBeTruthy();
   });
 });
 

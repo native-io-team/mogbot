@@ -143,13 +143,14 @@ export function ComputeSummary({ view }: { view: ComputeView }) {
   return (
     <View style={styles.summary}>
       <View style={styles.tight}>
+        {/* Medium, not semibold: the desk's weight for this sentence, a step under a card's title. */}
         <T
-          variant="headline"
+          variant="subhead"
           color={view.tone === 'limited' ? colors.accentWarning : colors.textStrong}
         >
           {view.headline}
           {view.estimate && (
-            <T variant="headline" color={colors.accentWarning}>
+            <T variant="subhead" color={colors.accentWarning}>
               {` ${view.estimate.text}`}
             </T>
           )}

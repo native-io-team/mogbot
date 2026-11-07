@@ -533,7 +533,7 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   "Denied" — answered requests are "Declined"), with a snapshot of the rest.
 - **Approvals** (`ApprovalCard`): the exact command, scrolling sideways rather
   than re-wrapped; ⋯ · Deny · Allow, with Always allow (with
-  `describeScope`'s sentence) and Deny with note behind ⋯. The answers are
+  `describeScope`'s sentence) and Deny with a note… behind ⋯. The answers are
   inert for 400 ms after the card lands, the desk's anti-misclick; Allow is
   the one tap the app must never take by accident. A pending card's detail
   (a command, a connector's fields, a task's diff) shows `DETAIL_LINES` (8;

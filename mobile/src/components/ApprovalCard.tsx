@@ -249,7 +249,7 @@ export function ApprovalCard({
     ...(approval.always
       ? [{ label: `Always allow ${approval.always.label}`, run: () => void answer(true, true) }]
       : []),
-    { label: 'Deny with note…', run: () => setNoting(true) },
+    { label: 'Deny with a note…', run: () => setNoting(true) },
   ];
 
   // "<source> sent what it knows": Ignore / Save to memory, nothing else.
@@ -608,6 +608,9 @@ export function PlaybackCard({
   );
 }
 
+/** "1 fact", "3 facts": a count said the way the Mac's card says it. */
+const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+
 /**
  * An import's review card on a Mac that serves `agents.import.review`: each
  * agent with its role and its instructions in view, then Import. From the
@@ -618,10 +621,13 @@ export function PlaybackCard({
 export function PhoneReviewCard({
   message,
   approval,
+  chiefName,
   onError,
 }: {
   message: AgentMessage;
   approval: Approval;
+  /** The chat it's in: the Chief's, whose notes it adds to. */
+  chiefName: string;
   onError: (text: string) => void;
 }) {
   const colors = useColors();
@@ -686,9 +692,17 @@ export function PhoneReviewCard({
   const gathered = (coverage?.areas ?? []).map((a) => (
     <T key={a.area} variant="small" color={a.gap ? colors.textSecondary : colors.textBody}>
       {a.label}:{' '}
-      {a.none ? 'none' : a.gap ? (a.facts > 0 ? `${a.facts} · ${a.gap}` : a.gap) : `${a.facts}`}
+      {a.none
+        ? 'none'
+        : a.gap
+          ? a.facts > 0
+            ? `${plural(a.facts, 'fact')} · ${a.gap}`
+            : a.gap
+          : plural(a.facts, 'fact')}
     </T>
   ));
+  // As on the Mac's card: what came up but was never followed, in the gap's ink.
+  const mentions = coverage?.openMentions ?? [];
   if (!pending) {
     return (
       <Receipt status={approval.status} title={approval.title} outcome={cardOutcome(approval)}>
@@ -741,9 +755,14 @@ export function PhoneReviewCard({
       {gathered.length > 0 && (
         <View style={{ gap: space['2xs'] }}>
           <T variant="small" color={colors.textPrimary}>
-            {`What ${source ?? 'it'} told your Chief${notes ? ' (saved when you import)' : ''}`}
+            {`What ${source ?? 'it'} told ${chiefName}${notes ? ' (saved when you import)' : ''}`}
           </T>
           {gathered}
+          {mentions.length > 0 && (
+            <T variant="small" color={colors.textSecondary}>
+              {`Mentioned but not followed up: ${mentions.join(', ')}`}
+            </T>
+          )}
           {coverage?.capped && (
             <T variant="small" color={colors.textSecondary}>
               Stopped at the message limit before everything was covered.

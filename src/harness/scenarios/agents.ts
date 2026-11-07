@@ -1569,10 +1569,11 @@ const VERCEL_CONNECTION = {
 };
 
 /** `agents_app_connections`: our apps, the connections made, and a sign-in under way. */
-const appConnections = (
-  connections: unknown[] = [],
-  flows: unknown[] = []
-) => ({ apps: OUR_APPS, connections, flows });
+const appConnections = (connections: unknown[] = [], flows: unknown[] = []) => ({
+  apps: OUR_APPS,
+  connections,
+  flows,
+});
 
 const CONNECTED_APPS = [
   // As Claude Code 2.1.318 lists a claude.ai connector.
@@ -3042,7 +3043,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-review-coverage',
     title: 'Agents — the review card after a thorough import: what Grok told the Chief, by area',
     looksRightWhen:
-      'As agents-import-review, plus a “What Grok told me” list: Agents and projects: 2 facts; Routines and schedules: 3 facts; People and contacts: 4 facts; Ongoing tasks: 2 facts · Not confirmed complete (muted); Preferences: 5 facts; Accounts and tools: none; Personal facts: 3 facts; Open conversations: Not covered (muted); “Mentioned but not followed up: the cabin” (muted); “Stopped at the message limit…” in muted text. Under it “Add to Chief of Staff’s notes” is TICKED, with “· what Grok told me, by area. Saved only when you import.”',
+      'As agents-import-review, plus a “What Grok told Chief of Staff” list: Agents and projects: 2 facts; Routines and schedules: 3 facts; People and contacts: 4 facts; Ongoing tasks: 2 facts · Not confirmed complete (muted); Preferences: 5 facts; Accounts and tools: none; Personal facts: 3 facts; Open conversations: Not covered (muted); “Mentioned but not followed up: the cabin” (muted); “Stopped at the message limit…” in muted text. Under it “Add to Chief of Staff’s notes” is TICKED, with “· by area, as above. Saved only when you import.”',
     command: 'agents.open',
     requires: '[data-testid="agent-import-coverage"]',
     commands: {
