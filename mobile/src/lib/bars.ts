@@ -91,7 +91,7 @@ export function importBar(
       };
     // The review card above says what happens; the bar only says the state.
     return reviewHere
-      ? { tone: 'waiting', title: `Import from ${connector.source} · ready to import` }
+      ? { tone: 'waiting', title: `Import from ${connector.source} · ready to review` }
       : { tone: 'waiting', title: `Import from ${connector.source} · waiting on your Mac` };
   }
   const going = agent.status.state !== 'idle' && IMPORTING.exec(agent.status.activity ?? '');

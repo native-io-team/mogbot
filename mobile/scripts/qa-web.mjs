@@ -1137,7 +1137,7 @@ const LIVE = [
       await scrollToText('Not needed')(page);
     },
     check:
-      'Gmail card, Other ways open: why there is no connector, Connect in Claude instead and Sign in from here each with what it means, then Not needed; "Fewer ways" closes it',
+      'Gmail card, Other ways open: why there is no connector, Connect in Claude instead and Sign in from here each with what it means, then Not needed; "Hide other ways" closes it',
   },
   {
     name: 'login-on-mac',

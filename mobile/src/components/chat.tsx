@@ -243,7 +243,12 @@ export const MessageRow = memo(function MessageRow({
       }
       if (message.approval?.connector?.kind === 'review') {
         return canCall('agents.import.review') ? (
-          <PhoneReviewCard message={message} approval={message.approval} onError={onError} />
+          <PhoneReviewCard
+            message={message}
+            approval={message.approval}
+            chiefName={agent.name}
+            onError={onError}
+          />
         ) : (
           <ReviewOnMacCard approval={message.approval} />
         );

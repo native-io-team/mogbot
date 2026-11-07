@@ -38,11 +38,12 @@ function Body({ error, retry, back }: ErrorBoundaryProps & { back?: () => void }
         backgroundColor: colors.surfaceApp,
       }}
     >
-      <T variant="title" color={colors.textStrong} style={{ textAlign: 'center' }}>
-        Something went wrong on this screen.
+      {/* The desk's words for the same thing (AgentsErrorBoundary). */}
+      <T variant="headline" color={colors.textStrong} style={{ textAlign: 'center' }}>
+        This couldn’t be shown.
       </T>
       <T color={colors.textSecondary} style={{ textAlign: 'center' }}>
-        Your draft is safe.
+        Nothing was lost.
       </T>
       <Button title="Try again" onPress={() => void retry()} />
       {back ? <Button title="Go back" variant="ghost" onPress={back} /> : null}

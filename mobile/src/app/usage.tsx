@@ -162,7 +162,7 @@ export default function Usage() {
         )}
         {!nothing && (
           <T variant="small" color={colors.textMuted}>
-            As each engine last reported it. Use of the same plan anywhere else counts too.
+            As each account last reported it. Use of the same plan anywhere else counts too.
           </T>
         )}
       </ScrollView>

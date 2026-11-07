@@ -569,7 +569,9 @@ export const ImportReviewCard = memo(function ImportReviewCard({
         )}
         {pending && review?.coverage && (
           <div className="agent-import-review__coverage" data-testid="agent-import-coverage">
-            <span className="agent-import-review__notes-title">What {card.source} told me</span>
+            <span className="agent-import-review__notes-title">
+              What {card.source} told {chiefName}
+            </span>
             <ul className="agent-import-review__coverage-list">
               {review.coverage.areas.map((a) => (
                 <li key={a.area} data-gap={a.gap ? true : undefined}>
@@ -609,7 +611,7 @@ export const ImportReviewCard = memo(function ImportReviewCard({
                 Add to {chiefName}’s notes{' '}
                 <span className="agent-import-review__muted">
                   {review.coverage
-                    ? `· what ${card.source} told me, by area. Saved only when you import.`
+                    ? '· by area, as above. Saved only when you import.'
                     : `· what ${card.source}’s managing agent knew. Off unless you tick it.`}
                 </span>
               </span>

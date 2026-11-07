@@ -2832,7 +2832,7 @@ the full threat model in docs/remote-access.md):
    The cap ([`connector::MAX_EXCHANGES`], 60) still holds: the last message
    it allows carries the app's own note (outside the envelope) to finish,
    `finish` is then allowed with gaps, and the card says it was cut short.
-   What was gathered goes on the review card by area ("What Grok told me":
+   What was gathered goes on the review card by area ("What Grok told <Chief>":
    facts per area, every gap, mentions never followed up) and into the
    card's "Add to <Chief>'s notes", ticked by default on a thorough import
    and on the phone's review (`agents.import.review` `notes: true`);

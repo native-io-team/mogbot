@@ -275,7 +275,7 @@ export function LoginCard({
   const flowOption = flow ? login.options.find((o) => o.id === flow.option) : undefined;
   if (phase === 'onMac') {
     return (
-      <Card icon="puzzlepiece" title={title} source={source} testID="login-card">
+      <Card icon="lock.fill" title={title} source={source} testID="login-card">
         <View style={styles.onMac} testID="login-on-mac">
           <ActivityIndicator size="small" color={colors.textMuted} />
           <T variant="small" color={colors.textBody} style={{ flex: 1 }}>
@@ -446,7 +446,7 @@ export function LoginCard({
 
   return (
     <Card
-      icon="puzzlepiece"
+      icon="lock.fill"
       title={title}
       source={source}
       testID="login-card"
@@ -494,7 +494,7 @@ export function LoginCard({
       {!lead && keyWay}
       {hasOtherWays && (
         <TextAction
-          label={showOtherWays ? 'Fewer ways' : 'Other ways'}
+          label={showOtherWays ? 'Hide other ways' : 'Other ways'}
           muted
           onPress={() => {
             haptic.select();
