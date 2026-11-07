@@ -562,7 +562,8 @@ export function LoginCard({
 
 const useStyles = makeStyles(() => ({
   abilities: { gap: space.tight },
-  onMac: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  // The spinner beside the first line, not the middle of four.
+  onMac: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
   other: { gap: space.tight },
   otherWays: { gap: space.md },
   secret: { fontFamily: fonts.mono },

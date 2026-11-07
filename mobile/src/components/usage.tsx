@@ -272,7 +272,9 @@ const useStyles = makeStyles((colors) => ({
   track: {
     height: space.tight,
     borderRadius: radius.pill,
-    backgroundColor: colors.surfaceControl,
+    // Selected, not control: on a dark group the control grey is a shade
+    // apart, and left the empty part of a meter invisible.
+    backgroundColor: colors.surfaceSelected,
     overflow: 'hidden',
   },
   fill: { height: '100%', borderRadius: radius.pill },
