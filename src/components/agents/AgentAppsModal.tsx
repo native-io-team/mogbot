@@ -135,8 +135,8 @@ export function AgentAppsModal({ isOpen, onClose, agents = [], forAgentId }: Age
       >
         <div className="agent-apps__body">
           <p className="agent-apps__lead">
-            Connect an app once and choose which agents can use it. You sign in in your browser;
-            the sign-in stays in this Mac’s Keychain.
+            Connect an app once and choose which agents can use it. You sign in in your browser; the
+            sign-in stays in this Mac’s Keychain.
           </p>
 
           {ours.error && (
@@ -328,9 +328,7 @@ function GrantPicker({
             <Checkbox
               checked={picked.includes(a.id)}
               label={a.name}
-              onChange={(on) =>
-                onPick(on ? [...picked, a.id] : picked.filter((id) => id !== a.id))
-              }
+              onChange={(on) => onPick(on ? [...picked, a.id] : picked.filter((id) => id !== a.id))}
             />
             <span>{a.name}</span>
           </label>
@@ -361,7 +359,15 @@ const grantsOf = (ids: readonly string[], access: Access): GrantChoice[] =>
 /* ----------------------------------------------------------------- rows */
 
 /** A connect from this dialog, while it signs in: the card's words, Open again · Copy link, Stop. */
-function FlowLine({ service, title, live }: { service: string; title: string; live: AppConnectFlow }) {
+function FlowLine({
+  service,
+  title,
+  live,
+}: {
+  service: string;
+  title: string;
+  live: AppConnectFlow;
+}) {
   const flow = live.flow;
   if (!flow) return null;
   if (flow.state === 'starting' || flow.state === 'waiting') {
@@ -383,8 +389,7 @@ function FlowLine({ service, title, live }: { service: string; title: string; li
       role={flow.state === 'failed' ? 'alert' : undefined}
     >
       {flow.state === 'failed' && <ErrorIcon size={12} className="inline-error-icon" />}
-      {flow.message ??
-        (flow.state === 'failed' ? 'That didn’t work. Try again.' : 'Stopped.')}
+      {flow.message ?? (flow.state === 'failed' ? 'That didn’t work. Try again.' : 'Stopped.')}
     </p>
   );
 }
@@ -539,7 +544,7 @@ function ConnectionRow({
         </div>
         {c.needsSignIn ? (
           <span className="agent-apps__status" data-status="needs_auth">
-            Needs signing in again
+            Needs sign-in
           </span>
         ) : (
           justNow && (

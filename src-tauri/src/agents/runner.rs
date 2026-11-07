@@ -4095,6 +4095,7 @@ fn recap_open(log: &[store::AgentMessage]) -> Vec<String> {
 /// The recap's lines: the visible conversation since the last fresh start.
 /// What came before it the user chose to leave behind, so a new session
 /// (an engine switch, a session that vanished) is never handed it again.
+#[cfg(test)]
 fn recap_lines(log: &[store::AgentMessage]) -> Vec<String> {
     recap_lines_except(log, &std::collections::HashSet::new())
 }

@@ -294,8 +294,8 @@ export function LoginCard({
         )}
         <T variant="small" color={colors.textMuted} maxFontSizeMultiplier={CARD_TITLE_SCALE}>
           {flow?.onPhone
-            ? 'Your Mac keeps the sign-in; this phone keeps nothing. This card updates when it’s done.'
-            : 'The sign-in and its token stay on your Mac. This card updates when it’s done.'}
+            ? 'Your Mac keeps the sign-in; this phone keeps nothing.'
+            : 'The sign-in and its token stay on your Mac.'}
         </T>
         {errorLine}
         <CardActions>

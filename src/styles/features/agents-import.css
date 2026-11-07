@@ -1008,7 +1008,7 @@
 }
 
 .agent-import-review__coverage-list li[data-gap] {
-  color: var(--text-muted);
+  color: var(--accent-warning);
 }
 
 .agent-import-review__outcome {
