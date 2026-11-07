@@ -75,6 +75,7 @@ struct RawDeployment {
     /// reported an earlier stage as `active`, so only `latest_stage` is
     /// trustworthy. Kept so a test can pin that.
     #[serde(default)]
+    #[allow(dead_code)]
     stages: Vec<RawStage>,
     #[serde(default)]
     created_on: Option<String>,

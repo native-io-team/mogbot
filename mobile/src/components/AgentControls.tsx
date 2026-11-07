@@ -160,7 +160,7 @@ export function AgentControls({ agentId }: { agentId: string }) {
             <Choice
               key={e.value || 'default'}
               label={e.label}
-              detail={e.detail}
+              detail={e.detail ?? `Whatever ${engineName(agent)} picks`}
               on={e.value === effort}
               disabled={off}
               onPress={() => save({ effort: e.value })}

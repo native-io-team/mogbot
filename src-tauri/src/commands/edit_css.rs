@@ -1478,6 +1478,7 @@ fn css_style_index(query: &str) -> Result<Option<usize>, ()> {
 }
 
 /// Map one cascade match to its source rule across the pre-indexed sheets.
+#[cfg(test)]
 fn locate_rule(sheets: &[SheetIndex], q: &MatchedRuleQuery) -> RuleLocation {
     locate_rule_with_root(None, sheets, q)
 }
@@ -2039,6 +2040,7 @@ fn locate_rule_with_root(
 
 /// Replace the verbatim body of the single rule matching `selector`+`bp` in `src`,
 /// drift-guarded against `old_inner`. The testable core of [`apply_css_rule_text`].
+#[cfg(test)]
 fn apply_rule_text_to_source(
     src: &str,
     selector: &str,
@@ -2074,6 +2076,7 @@ fn apply_rule_text_to_source(
 /// than one matches (a base rule plus the same selector inside `@container`/`@supports`/
 /// `@layer`, which the write API doesn't otherwise distinguish), narrow by the body the
 /// editor was seeded with (`old_inner`) — a natural, drift-safe discriminator.
+#[cfg(test)]
 fn pick_by_body<'a>(
     matches: &[&'a RuleSpan],
     src: &str,
@@ -2104,6 +2107,7 @@ fn pick_by_body<'a>(
 
 /// Find the single rule matching `selector`+`media_text` and verify its body still
 /// reads `old_inner` (drift guard). The shared front half of delete/wrap.
+#[cfg(test)]
 fn locate_one_editable<'a>(
     rules: &'a [RuleSpan],
     src: &str,
@@ -2130,6 +2134,7 @@ fn locate_one_editable<'a>(
 /// Remove the whole rule (selector through closing `}`, plus its line's leading
 /// indentation and one trailing newline) from `src`. The testable core of
 /// [`delete_css_rule`].
+#[cfg(test)]
 fn remove_rule_from_source(
     src: &str,
     selector: &str,
@@ -2201,6 +2206,7 @@ fn remove_rule_from_source(
 }
 
 /// True when an Astro `:global(...)` wrapper spans one entire selector-list member.
+#[cfg(test)]
 fn astro_global_wraps_entire_group(group: &str) -> bool {
     let group = group.trim();
     if !group
@@ -2258,6 +2264,7 @@ fn astro_global_wraps_entire_group(group: &str) -> bool {
 /// `old_inner`). Lets the user change a rule to any selector — combinators, pseudo
 /// classes, attributes — the only constraint is no `{`/`}`. Testable core of
 /// [`rename_css_selector`].
+#[cfg(test)]
 fn rename_selector_in_source(
     src: &str,
     selector: &str,
@@ -2300,6 +2307,7 @@ fn rename_selector_in_source(
 /// Replace the condition of the `@media` block enclosing the matching rule with
 /// `new_media` (drift-guarded). Edits the shared wrapper, so every rule inside that
 /// `@media` moves with it. Testable core of [`rename_css_at_rule`].
+#[cfg(test)]
 fn rename_at_rule_in_source(
     src: &str,
     selector: &str,
@@ -2345,6 +2353,7 @@ fn validate_at_prelude(at_prelude: &str) -> Result<(), CommandError> {
     Ok(())
 }
 
+#[cfg(test)]
 fn wrap_rule_in_source(
     src: &str,
     selector: &str,
@@ -3160,7 +3169,7 @@ fn set_custom_property_in_source(
         });
     }
 
-    let (rule, definition) = &definitions[0];
+    let (_, definition) = &definitions[0];
     let existing = src[definition.value_start..definition.value_end].trim_end();
     let keep_important = existing.to_ascii_lowercase().ends_with("!important")
         && !value.to_ascii_lowercase().contains("!important");
@@ -3977,6 +3986,7 @@ fn astro_style_blocks_with_indices(src: &str) -> Vec<(usize, (usize, usize))> {
 
 /// CSS-only style ranges in document order, kept for callers that don't need
 /// Astro's source-block index (for example, parser-focused unit tests).
+#[cfg(test)]
 fn astro_style_blocks(src: &str) -> Vec<(usize, usize)> {
     astro_style_blocks_with_indices(src)
         .into_iter()
@@ -4067,6 +4077,7 @@ fn load_editable_css(root: &Path, file: &str) -> Result<EditableCss, CommandErro
 
 /// Resolve a cascade match inside one exact source file and convert the parsed
 /// CSS line into a physical host-file line for embedded Astro style blocks.
+#[cfg(test)]
 fn resolve_css_source_line_in_file(
     root: &Path,
     file: &str,
