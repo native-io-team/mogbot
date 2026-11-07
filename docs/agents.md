@@ -718,7 +718,7 @@ those turns exposed is replaced once at the next launch.)
 | `request_login` | all | a login card: connect an app or account (Gmail, Slack, LinkedIn, GitHub…) on this Mac, never a password (below, "Logins") |
 | `request_secret` | all | a secure input card for an API key made for programs; the agent gets `$VAR` and a reference, never the value (below) |
 | `create_agent` | Chief | name, role, instructions, optional `template`, `project` and `first_task` |
-| `update_agent` | Chief | name / role / instructions / project (memory kept) |
+| `update_agent` | Chief | name / role / instructions / project (memory kept); engine, model, effort, routines' model and mute, with no card (below, "Settings from chat") |
 | `delete_agent` | Chief | puts an Allow / Deny card in the Chief's chat first |
 | `create_room` | Chief | name, 2–6 members, optional lead, a one-line purpose (`agents/room_tools.rs`, below, "Rooms") |
 | `add_to_room`, `remove_from_room` | Chief | change who's in a room (it keeps 2–6); a joiner gets the room's files |
@@ -4253,6 +4253,47 @@ nothing. Changes that would strand an open copy or the project an agent works
 in are refused up front. A turn answering outside text can't propose. Every
 agent's prompt carries "What you may do", its rules, and "never tell the user
 to go to Settings".
+
+### Settings from chat (`policy_card.rs`, `mcp.rs` `update_agent`)
+
+North star: every setting is changeable from chat. The rule for which ones
+ask: **more room for agents, or anything that reaches outside the Mac, is a
+card; less applies at once with a quiet line; secrets never go through chat.**
+Tests: `agents/settings_chat_tests.rs`.
+
+| Setting (desk) | From chat | Card? |
+| --- | --- | --- |
+| What it can do: projects, folders, apps, browser, admin, rules, exact-text OK | `propose_settings_change` | yes; lowering independence and turning the exact-text OK on apply at once |
+| Independence, per agent or team | `propose_settings_change` `independence` | raising yes, lowering no |
+| An app already connected here, per agent ("let Outreach use Linear") | `propose_settings_change` `changes.connections {give, take}` | giving or widening to full yes; taking away or down to read no |
+| Fix stopped previews; Keep this Mac awake; Keep running when closed; Open at login | `propose_settings_change` `fix_previews` / `keep_awake` / `keep_running` / `open_at_login`, admins only, on their own | on yes (open at login is a LaunchAgent); off no |
+| Usage mode | `set_usage_mode` (Chief) | yes |
+| Engine, model, effort, routines' model | `update_agent` (Chief) | no: what its turns run on, not what they may do; one "Now on Opus · High from its next message" line, as the editor leaves |
+| Mute an agent's notifications | `update_agent` `muted` (Chief) | no; unread and the badge still count it |
+| Name, role, instructions, project, look | `update_agent` / `create_agent` (Chief) | no (a card in a turn answering outside text, as before) |
+| Admin switch | `propose_settings_change` `admin` (admins) | yes |
+| Logins and secrets | `request_login`, `request_secret` | their own cards; never a value in chat |
+| Not from chat | the phone pairing and revoking, Remote Access on/off and its push PIN, account order (`wallet`), quick-entry shortcut and menu-bar icon, new agents' default engine/model, the agents' browser switch | each is either a security wall that must be confirmed on the desk (pairing, Remote Access, PIN) or rarely asked for; the desk is the way in |
+
+**An app already connected** (`policy_card::GrantChange`). No sign-in and no
+token: the tool finds the one connection for that app (service id or title,
+however spelled; `account` when there are several) and the card shows "Can
+use Linear (sam@acme.com), read only". Access is read unless `full` is asked
+(full still asks on a card before each send or change). A grant the agent's
+settings would hide is refused with the `apps.add` to put in the same change.
+Team targets are refused: apps are per agent. Allow re-checks each agent's
+access is what the card showed (`connections::set_access`), else applies
+nothing. An app not connected yet is the agent's own `request_login`.
+
+**This Mac's switches** (`policy_card::MacChange`) are read back from the
+thing itself (`commands::remote_access::stay_on_now`) and written by the same
+code as Settings (`write_stay_on`, then `sync_stay_on` for the menu bar and
+quick entry). Only what differs from now is put on the card.
+
+**What its turns run on** (`mcp::run_settings`): "Opus", "opus", "default"
+and "auto" are understood; anything the engine doesn't list is refused with
+the list. No card, because a model or effort changes cost, not reach; in
+"Save my limits" the Chief already asks before heavy work.
 
 **UI.** Edit agent → "What it can do" (lines with Team default / Its own /
 instructions, quick menus, "Change in chat"); Settings → Agents → "What agents

@@ -693,7 +693,11 @@ pub async fn agents_update(
 
 /// The one quiet line in its chat when what its next message runs on
 /// changed: the engine, the model or the effort. `None` when none did.
-fn settings_line(before: &store::Agent, after: &store::Agent, moved: bool) -> Option<String> {
+pub(crate) fn settings_line(
+    before: &store::Agent,
+    after: &store::Agent,
+    moved: bool,
+) -> Option<String> {
     let changed = moved || before.model != after.model || before.effort != after.effort;
     if !changed {
         return None;

@@ -902,7 +902,11 @@ pub fn app_allowed(apps: &Apps, names: &[&str]) -> bool {
 /// Whether `agent_id` may use a connection to `service` (titled `title`):
 /// what the connection relay and grants check.
 pub fn connection_allowed(agent_id: &str, service: &str, title: &str) -> bool {
-    let saved = load();
+    connection_allowed_in(&load(), agent_id, service, title)
+}
+
+/// [`connection_allowed`] against settings that aren't saved yet (a card's).
+pub fn connection_allowed_in(saved: &Saved, agent_id: &str, service: &str, title: &str) -> bool {
     let apps = saved
         .agents
         .get(agent_id)

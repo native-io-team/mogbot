@@ -319,6 +319,7 @@ fn a_settings_card_waits_for_the_user() {
         why: None,
         has_rules: false,
         mac: None,
+        grants: Vec::new(),
     });
     let over = (CARD_EXPIRY_SECS as i64) * 1000 * 100;
     for moment in [Moment::TurnEnded, Moment::Launch, Moment::Tick] {

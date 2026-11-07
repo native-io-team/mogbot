@@ -14,6 +14,13 @@
 //! - **What was shown is what's applied.** The card keeps the policy's
 //!   version; if anything changed since (the desk, another card), Allow
 //!   applies nothing and says to ask again.
+//! - **This Mac's switches** ("Fix stopped previews", "Keep this Mac
+//!   awake", "Keep running when closed", "Open at login") ride the same card
+//!   ([`MacChange`]): on is a card, off applies with a line.
+//! - **An app already connected here** ("let Outreach use Linear") is given,
+//!   narrowed or taken away on the same card ([`GrantChange`]): giving one
+//!   or widening it is a card; taking it away or down to read applies with a
+//!   line. No sign-in happens here, and no token is seen.
 //! - **Nothing that strands work.** A change that would leave an open copy's
 //!   work or the project an agent is set to work in out of reach is refused
 //!   up front, with the step to take first (`policy::blocker`).
@@ -22,6 +29,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use tauri::{AppHandle, Emitter};
 
+use super::connections::{self, Access, Connection};
 use super::independence::Level;
 use super::policy::{self, AppsMode, Change, Elsewhere, Folder, How, Preset, Saved, Scope, Target};
 use super::runner;
@@ -57,34 +65,135 @@ pub struct Proposal {
     /// empty and the policy isn't touched.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub mac: Option<MacChange>,
+    /// Apps already connected here, given to or taken from the agents named.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub grants: Vec<GrantChange>,
 }
 
-/// This Mac's switches that chat can change through the same card.
+/// This Mac's switches that chat can change through the same card. Each is
+/// "agents keep going / do more" when on, so off never needs the card.
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct MacChange {
     /// "Fix stopped previews" (`agents_fix_previews`, `preview_fix`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub fix_previews: Option<bool>,
+    /// "Keep this Mac awake" (`remote_access::power`, the `caffeinate` assertion).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keep_awake: Option<bool>,
+    /// "Keep running when closed".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub keep_running: Option<bool>,
+    /// "Open at login" (a LaunchAgent: system persistence, so on is a card).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub open_at_login: Option<bool>,
 }
 
-/// The switches' plain words on the card.
-const FIX_ON: &str = "Agents fix their own stopped previews without being asked";
-const FIX_OFF: &str = "Agents no longer fix stopped previews on their own: the preview offers to ask them";
+/// The tool's names for them, in [`MacChange`]'s order.
+pub const MAC_KEYS: [&str; 4] = [
+    "fix_previews",
+    "keep_awake",
+    "keep_running",
+    "open_at_login",
+];
 
-/// The card (or the line) for "Fix stopped previews", or why not. Only an
-/// admin proposes it: it is the whole Mac's, not one agent's.
+/// How this Mac's switches are now, read back from each thing itself.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct MacNow {
+    pub fix_previews: bool,
+    pub keep_awake: bool,
+    pub keep_running: bool,
+    pub open_at_login: bool,
+    /// macOS, where the last three exist.
+    pub stay_on_supported: bool,
+    /// False in a dev build: there is no app bundle to reopen.
+    pub open_at_login_available: bool,
+}
+
+/// The switches' plain words on the card: (on, off).
+const FIX: (&str, &str) = (
+    "Agents fix their own stopped previews without being asked",
+    "Agents no longer fix stopped previews on their own: the preview offers to ask them",
+);
+const AWAKE: (&str, &str) = (
+    "This Mac stays awake while the app is open, so agents keep going",
+    "This Mac may sleep again: agents pause while it sleeps",
+);
+const RUNNING: (&str, &str) = (
+    "Closing the window keeps agents going; ⌘Q still quits",
+    "Closing the window no longer keeps agents going",
+);
+const LOGIN: (&str, &str) = (
+    "The app reopens at login, so agents carry on after a restart",
+    "The app no longer reopens at login",
+);
+
+impl MacChange {
+    fn from_args(c: &Value) -> Self {
+        let b = |k: &str| c.get(k).and_then(Value::as_bool);
+        MacChange {
+            fix_previews: b("fix_previews"),
+            keep_awake: b("keep_awake"),
+            keep_running: b("keep_running"),
+            open_at_login: b("open_at_login"),
+        }
+    }
+
+    fn is_empty(&self) -> bool {
+        *self == MacChange::default()
+    }
+}
+
+/// The card (or the line) for this Mac's switches, or why not. Only an
+/// admin proposes them: they are the whole Mac's, not one agent's. Only
+/// what differs from now is kept.
 pub fn mac_proposal(
     admin: bool,
-    fix_previews: bool,
-    now_on: bool,
+    want: &MacChange,
+    now: &MacNow,
     why: Option<String>,
     version: u64,
 ) -> Result<Proposal, String> {
     if !admin {
         return Err("Only an admin (the Chief of Staff) can propose this Mac's settings. Ask it with message_agent.".into());
     }
-    if fix_previews == now_on {
+    let stay_on =
+        want.keep_awake.is_some() || want.keep_running.is_some() || want.open_at_login.is_some();
+    if stay_on && !now.stay_on_supported {
+        return Err("Keeping agents going (awake, running when closed, open at login) is only offered on macOS.".into());
+    }
+    if want.open_at_login == Some(true) && !now.open_at_login_available {
+        return Err("Open at login isn't available in this build: there is no app to reopen. Nothing changed.".into());
+    }
+    let mut kept = MacChange::default();
+    let mut lines = Vec::new();
+    for (wanted, is_now, words, slot) in [
+        (
+            want.fix_previews,
+            now.fix_previews,
+            FIX,
+            &mut kept.fix_previews,
+        ),
+        (want.keep_awake, now.keep_awake, AWAKE, &mut kept.keep_awake),
+        (
+            want.keep_running,
+            now.keep_running,
+            RUNNING,
+            &mut kept.keep_running,
+        ),
+        (
+            want.open_at_login,
+            now.open_at_login,
+            LOGIN,
+            &mut kept.open_at_login,
+        ),
+    ] {
+        if let Some(on) = wanted.filter(|on| *on != is_now) {
+            *slot = Some(on);
+            lines.push(if on { words.0 } else { words.1 }.to_string());
+        }
+    }
+    if lines.is_empty() {
         return Err("That's already how it is: nothing would change.".into());
     }
     Ok(Proposal {
@@ -94,32 +203,326 @@ pub fn mac_proposal(
         groups: vec![Group {
             who: "This Mac".into(),
             agent_ids: Vec::new(),
-            changes: vec![if fix_previews { FIX_ON } else { FIX_OFF }.to_string()],
+            changes: lines,
         }],
-        why: why
-            .map(|w| w.trim().chars().take(200).collect())
-            .filter(|w: &String| !w.is_empty()),
+        why: clean_why(why),
         has_rules: false,
-        mac: Some(MacChange {
-            fix_previews: Some(fix_previews),
-        }),
+        mac: Some(kept),
+        grants: Vec::new(),
     })
 }
 
-/// A Mac switch that only has agents do less on their own applies without a card.
-pub fn mac_lowers(m: &MacChange) -> bool {
-    m.fix_previews == Some(false)
+fn clean_why(why: Option<String>) -> Option<String> {
+    why.map(|w| w.trim().chars().take(200).collect())
+        .filter(|w: &String| !w.is_empty())
 }
 
-fn fix_previews_on() -> bool {
-    crate::commands::setup::read_app_state()
-        .agents_fix_previews
-        .unwrap_or(true)
+/// A Mac switch that only has agents do less on their own applies without
+/// a card: every switch it sets goes off.
+pub fn mac_lowers(m: &MacChange) -> bool {
+    !m.is_empty()
+        && [
+            m.fix_previews,
+            m.keep_awake,
+            m.keep_running,
+            m.open_at_login,
+        ]
+        .iter()
+        .all(|v| *v != Some(true))
+}
+
+fn mac_now() -> MacNow {
+    let stay = crate::commands::remote_access::stay_on_now();
+    MacNow {
+        fix_previews: crate::commands::setup::read_app_state()
+            .agents_fix_previews
+            .unwrap_or(true),
+        keep_awake: stay.keep_awake,
+        keep_running: stay.keep_running,
+        open_at_login: stay.open_at_login,
+        stay_on_supported: stay.supported,
+        open_at_login_available: stay.open_at_login_available,
+    }
 }
 
 fn apply_mac(m: &MacChange) -> Result<(), String> {
     if let Some(on) = m.fix_previews {
         crate::commands::settings::set_agents_fix_previews(on).map_err(|e| e.to_string())?;
+    }
+    if m.keep_awake.is_some() || m.keep_running.is_some() || m.open_at_login.is_some() {
+        crate::commands::remote_access::write_stay_on(
+            m.keep_awake,
+            m.keep_running,
+            m.open_at_login,
+        )
+        .map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+/// After a Mac change applied: the menu bar, quick entry and Settings show it.
+fn synced_mac(app: &AppHandle, p: &Proposal) {
+    if let Some(m) = &p.mac {
+        if m.keep_awake.is_some() || m.keep_running.is_some() || m.open_at_login.is_some() {
+            crate::commands::remote_access::sync_stay_on(app, m.keep_running.is_some());
+        }
+    }
+}
+
+/* ------------------------------------------------- apps already connected */
+
+/// One agent's access to one connection, as the card shows and applies it.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct GrantChange {
+    pub agent_id: String,
+    pub connection_id: String,
+    /// What it has now; Allow applies nothing if that moved.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub before: Option<Access>,
+    /// What it has after; `None` takes it away.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub access: Option<Access>,
+    /// "Can use Linear (sam@acme.com), read only".
+    pub line: String,
+}
+
+impl GrantChange {
+    /// Taking away, or down to read: less room, so no card.
+    pub fn lowers(&self) -> bool {
+        match (self.before, self.access) {
+            (_, None) => true,
+            (Some(Access::Full), Some(Access::Read)) => true,
+            _ => false,
+        }
+    }
+}
+
+/// What `changes.connections` asks for: (app, account, access) to give and
+/// (app, account) to take away.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct GrantAsk {
+    pub give: Vec<(String, Option<String>, Access)>,
+    pub take: Vec<(String, Option<String>)>,
+}
+
+impl GrantAsk {
+    pub fn parse(v: Option<&Value>) -> Result<Self, String> {
+        let Some(v) = v else {
+            return Ok(Self::default());
+        };
+        let item = |x: &Value| -> Result<(String, Option<String>, Option<String>), String> {
+            let app = x
+                .get("app")
+                .and_then(Value::as_str)
+                .or_else(|| x.as_str())
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .ok_or("Each app in `connections` needs `app`, e.g. \"Linear\".")?;
+            let s = |k: &str| {
+                x.get(k)
+                    .and_then(Value::as_str)
+                    .map(str::trim)
+                    .filter(|s| !s.is_empty())
+                    .map(str::to_string)
+            };
+            Ok((app.to_string(), s("account"), s("access")))
+        };
+        let mut out = Self::default();
+        for x in v
+            .get("give")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let (app, account, access) = item(x)?;
+            let access = match access.as_deref().map(str::to_ascii_lowercase).as_deref() {
+                None | Some("read") => Access::Read,
+                Some("full") | Some("send") | Some("write") => Access::Full,
+                Some(other) => return Err(format!("`access` can't be \"{other}\": read or full.")),
+            };
+            out.give.push((app, account, access));
+        }
+        for x in v
+            .get("take")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
+            let (app, account, _) = item(x)?;
+            out.take.push((app, account));
+        }
+        Ok(out)
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.give.is_empty() && self.take.is_empty()
+    }
+}
+
+fn squash(s: &str) -> String {
+    s.chars()
+        .filter(|c| c.is_alphanumeric())
+        .flat_map(char::to_lowercase)
+        .collect()
+}
+
+/// The one connection here for `app` (its service id or title, however
+/// spelled) and, when given, `account`. Pure, for tests.
+pub fn find_connection<'a>(
+    list: &'a [Connection],
+    app: &str,
+    account: Option<&str>,
+) -> Result<&'a Connection, String> {
+    let want = squash(app);
+    let of_app: Vec<&Connection> = list
+        .iter()
+        .filter(|c| squash(&c.service) == want || squash(&c.title) == want)
+        .collect();
+    if of_app.is_empty() {
+        return Err(format!("{app} isn't connected on this Mac yet, so there's nothing to give. The agent that needs it asks with request_login, which offers the sign-in."));
+    }
+    let picked: Vec<&Connection> = match account {
+        Some(a) => of_app
+            .iter()
+            .copied()
+            .filter(|c| c.account.to_lowercase().contains(&a.to_lowercase()))
+            .collect(),
+        None => of_app.clone(),
+    };
+    match picked.as_slice() {
+        [one] => Ok(one),
+        [] => Err(format!(
+            "There's no {} account matching \"{}\": {}.",
+            of_app[0].title,
+            account.unwrap_or_default(),
+            of_app
+                .iter()
+                .map(|c| c.account.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+        many => Err(format!(
+            "There are {} {} accounts here ({}): say which with `account`.",
+            many.len(),
+            many[0].title,
+            many.iter()
+                .map(|c| c.account.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        )),
+    }
+}
+
+/// The changes `ask` makes for each agent in `targets`, leaving out any
+/// that would change nothing. `allowed(agent_id, connection)`: whether its
+/// settings (after this card's own change) let it use that app at all, so a
+/// grant its settings would hide isn't offered. Pure, for tests.
+pub fn grant_changes(
+    targets: &[Target],
+    ask: &GrantAsk,
+    list: &[Connection],
+    allowed: impl Fn(&str, &Connection) -> bool,
+    names: impl Fn(&str) -> String,
+) -> Result<Vec<GrantChange>, String> {
+    let mut out: Vec<GrantChange> = Vec::new();
+    for t in targets {
+        let Target::Agent { agent_id } = t else {
+            return Err("Apps are given agent by agent: name the agents in `agents`.".into());
+        };
+        let wanted = ask
+            .give
+            .iter()
+            .map(|(app, acct, a)| (app, acct, Some(*a)))
+            .chain(ask.take.iter().map(|(app, acct)| (app, acct, None)));
+        for (app, account, access) in wanted {
+            let c = find_connection(list, app, account.as_deref())?;
+            if access.is_some() && !allowed(agent_id, c) {
+                return Err(format!(
+                    "{}'s settings keep it from {}: add `apps: {{\"add\": [\"{}\"]}}` to this same change.",
+                    names(agent_id),
+                    c.title,
+                    c.title
+                ));
+            }
+            let before = c
+                .grants
+                .iter()
+                .find(|g| g.agent_id == *agent_id)
+                .map(|g| g.access);
+            if before == access
+                || out
+                    .iter()
+                    .any(|g| g.agent_id == *agent_id && g.connection_id == c.id)
+            {
+                continue;
+            }
+            let what = format!("{} ({})", c.title, c.account);
+            let line = match (before, access) {
+                (_, None) => format!("Can no longer use {what}"),
+                (Some(Access::Full), Some(Access::Read)) => format!("{what}: read only now"),
+                (Some(_), Some(Access::Full)) => {
+                    format!("{what}: can now ask to send or change things too")
+                }
+                (None, Some(Access::Read)) => format!("Can use {what}, read only"),
+                (_, Some(Access::Full)) | (_, Some(Access::Read)) => {
+                    format!("Can use {what}, and asks you before it sends or changes anything")
+                }
+            };
+            out.push(GrantChange {
+                agent_id: agent_id.clone(),
+                connection_id: c.id.clone(),
+                before,
+                access,
+                line,
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// The grants' lines, into the card's groups: an agent's own group when it
+/// has one, else a new one.
+pub fn add_grant_lines(
+    groups: &mut Vec<Group>,
+    grants: &[GrantChange],
+    names: impl Fn(&str) -> String,
+) {
+    for g in grants {
+        match groups
+            .iter_mut()
+            .find(|x| x.agent_ids.len() == 1 && x.agent_ids[0] == g.agent_id)
+        {
+            Some(x) => x.changes.push(g.line.clone()),
+            None => groups.push(Group {
+                who: names(&g.agent_id),
+                agent_ids: vec![g.agent_id.clone()],
+                changes: vec![g.line.clone()],
+            }),
+        }
+    }
+}
+
+fn apply_grants(grants: &[GrantChange]) -> Result<(), String> {
+    // What the card showed, all of it, before anything is written.
+    let list = connections::list().map_err(|e| e.to_string())?;
+    for g in grants {
+        let c = list
+            .iter()
+            .find(|c| c.id == g.connection_id)
+            .ok_or("That app was disconnected after this was proposed.")?;
+        if c.grants
+            .iter()
+            .find(|x| x.agent_id == g.agent_id)
+            .map(|x| x.access)
+            != g.before
+        {
+            return Err("Its access to that app changed after this was proposed.".into());
+        }
+    }
+    for g in grants {
+        connections::set_access(&g.connection_id, &g.agent_id, g.before, g.access)
+            .map_err(|e| e.to_string())?;
     }
     Ok(())
 }
@@ -171,7 +574,18 @@ pub fn schema() -> Value {
                     "independence": { "type": "string", "enum": ["often", "judgement", "go_hard", "full_send", "team"], "description": "How much it does on its own, for the agents named (each may have its own; \"team\" puts one back on the team's level). Name the agent for one (\"put Social Posts on Full send\": agents [\"Social Posts\"]), \"team\" for everyone's default. full_send (\"Full send — let it rip\"): when the user says \"go full send\", \"let it rip\" or \"stop asking me\". Raising needs the user's card; lowering (\"make Finance check with me often\": often) applies at once." },
                     "admin": { "type": "boolean", "description": "Admins may propose changes for other agents." },
                     "outward_text_needs_ok": { "type": "boolean", "description": "Nothing goes out under the user's name (message, post, comment, email, issue, pull request) until they OK its exact text on a card, at every level including Full send. On when the user says \"nothing goes out unless I approve the exact text\" or \"word for word\": the app enforces it, unlike a rule. On applies at once." },
-                    "fix_previews": { "type": "boolean", "description": "This Mac's \"Fix stopped previews\" switch, on its own (no agents): agents fix a preview that stopped by itself. Off applies at once." },
+                    "fix_previews": { "type": "boolean", "description": "This Mac's \"Fix stopped previews\" switch: agents fix a preview that stopped by itself." },
+                    "keep_awake": { "type": "boolean", "description": "This Mac's \"Keep this Mac awake\": agents pause while it sleeps (\"keep going overnight\")." },
+                    "keep_running": { "type": "boolean", "description": "This Mac's \"Keep running when closed\": closing the window keeps agents going." },
+                    "open_at_login": { "type": "boolean", "description": "This Mac's \"Open at login\": the app reopens after a restart." },
+                    "connections": {
+                        "type": "object",
+                        "description": "Apps already connected on this Mac, for the agents named (\"let Outreach use Linear\"). Not a sign-in: an app not connected yet is the agent's request_login. Giving or widening is a card; taking away or down to read applies at once.",
+                        "properties": {
+                            "give": { "type": "array", "items": { "type": "object", "properties": { "app": { "type": "string" }, "account": { "type": "string", "description": "Which one, when there are several." }, "access": { "type": "string", "enum": ["read", "full"], "description": "read (the default), or full: may also send and change, asking on a card each time." } }, "required": ["app"] } },
+                            "take": { "type": "array", "items": { "type": "object", "properties": { "app": { "type": "string" }, "account": { "type": "string" } }, "required": ["app"] } }
+                        }
+                    },
                     "rules": {
                         "type": "object",
                         "properties": {
@@ -187,7 +601,7 @@ pub fn schema() -> Value {
     })
 }
 
-pub const DESCRIPTION: &str = "Propose a change to what an agent may do (projects and how it works in them, folders on this Mac, apps, the user's browser, independence, admin, rules, whether sends wait for the exact text's OK), to the team's defaults, or to this Mac's “Fix stopped previews” switch. Use it whenever the user says an agent should or shouldn't be able to do something, or asks to reset settings or make one agent like another. The user gets a card showing the change in plain words and applies it with Allow; nothing changes before. It returns at once: say in one line what you proposed and stop; you're told when they answer. Never tell the user to go to Settings.";
+pub const DESCRIPTION: &str = "Propose a change to what an agent may do (projects and how it works in them, folders on this Mac, apps, an app already connected here, the user's browser, independence, admin, rules, whether sends wait for the exact text's OK), to the team's defaults, or to this Mac's switches (“Fix stopped previews”, keep awake, keep running when closed, open at login; on their own, with no agents; off applies at once). Use it whenever the user says an agent should or shouldn't be able to do something, or asks to reset settings or make one agent like another. The user gets a card showing the change in plain words and applies it with Allow; nothing changes before. It returns at once: say in one line what you proposed and stop; you're told when they answer. Never tell the user to go to Settings.";
 
 fn text(message: impl Into<String>) -> Value {
     json!({ "content": [{ "type": "text", "text": message.into() }] })
@@ -515,6 +929,7 @@ pub fn build(
             .filter(|w: &String| !w.is_empty()),
         has_rules,
         mac: None,
+        grants: Vec::new(),
     })
 }
 
@@ -534,17 +949,18 @@ pub async fn propose(app: &AppHandle, caller: &Agent, turn: Option<u64>, args: &
     }
     let why = args.get("why").and_then(Value::as_str).map(str::to_string);
     let changes = args.get("changes").unwrap_or(&Value::Null);
-    if let Some(fix) = changes.get("fix_previews").and_then(Value::as_bool) {
+    let mac = MacChange::from_args(changes);
+    if !mac.is_empty() {
         let others = changes
             .as_object()
-            .is_some_and(|o| o.keys().any(|k| k != "fix_previews"));
+            .is_some_and(|o| o.keys().any(|k| !MAC_KEYS.contains(&k.as_str())));
         if others || !strings(args.get("agents")).is_empty() {
-            return error("Propose this Mac's \"Fix stopped previews\" on its own, with no agents, then any agent's change.");
+            return error("Propose this Mac's switches on their own, with no agents, then any agent's change.");
         }
         return match mac_proposal(
             policy::is_admin(caller),
-            fix,
-            fix_previews_on(),
+            &mac,
+            &mac_now(),
             why,
             policy::load().version,
         ) {
@@ -552,46 +968,116 @@ pub async fn propose(app: &AppHandle, caller: &Agent, turn: Option<u64>, args: &
             Err(e) => error(e),
         };
     }
-    let change = match parse_change(args.get("changes").unwrap_or(&Value::Null)).await {
-        Ok(c) => c,
+    let ask = match GrantAsk::parse(changes.get("connections")) {
+        Ok(a) => a,
         Err(e) => return error(e),
+    };
+    let only_grants = !ask.is_empty()
+        && changes
+            .as_object()
+            .is_some_and(|o| o.keys().all(|k| k == "connections"));
+    let change = if only_grants {
+        Change::default()
+    } else {
+        match parse_change(changes).await {
+            Ok(c) => c,
+            Err(e) => return error(e),
+        }
     };
     let targets = match parse_targets(caller, &strings(args.get("agents"))) {
         Ok(t) => t,
         Err(e) => return error(e),
     };
     let agents = store::list().unwrap_or_default();
-    let proposal = match build(
-        caller,
-        policy::is_admin(caller),
-        targets,
-        change,
-        why,
-        &policy::load(),
-        &agents,
-        super::independence::level(),
-    ) {
-        Ok(p) => p,
-        Err(e) => return error(e),
+    let admin = policy::is_admin(caller);
+    let saved = policy::load();
+    let level = super::independence::level();
+    let mut proposal = if only_grants {
+        if let Err(e) = may_propose(caller, admin, &targets, &change) {
+            return error(e);
+        }
+        Proposal {
+            targets: targets.clone(),
+            change,
+            version: saved.version,
+            groups: Vec::new(),
+            why: clean_why(why),
+            has_rules: false,
+            mac: None,
+            grants: Vec::new(),
+        }
+    } else {
+        match build(
+            caller,
+            admin,
+            targets.clone(),
+            change,
+            why,
+            &saved,
+            &agents,
+            level,
+        ) {
+            Ok(p) => p,
+            Err(e) => return error(e),
+        }
     };
+    if !ask.is_empty() {
+        let after = match simulate(&saved, &targets, &proposal.change, level) {
+            Ok((after, _)) => after,
+            Err(e) => return error(e),
+        };
+        let name_of = |id: &str| {
+            agents
+                .iter()
+                .find(|a| a.id == id)
+                .map(|a| a.name.clone())
+                .unwrap_or_else(|| "This agent".into())
+        };
+        let list = connections::list().unwrap_or_default();
+        let grants = match grant_changes(
+            &targets,
+            &ask,
+            &list,
+            |id, c| policy::connection_allowed_in(&after, id, &c.service, &c.title),
+            name_of,
+        ) {
+            Ok(g) => g,
+            Err(e) => return error(e),
+        };
+        if grants.is_empty() && proposal.groups.is_empty() {
+            return error("That's already how it is: nothing would change.");
+        }
+        add_grant_lines(&mut proposal.groups, &grants, name_of);
+        proposal.grants = grants;
+    }
     offer(app, caller, proposal, &agents)
+}
+
+/// Whether the card can be skipped: it only has agents do less on their own.
+pub fn proposal_lowers(p: &Proposal, saved: &Saved, agents: &[Agent], level: Level) -> bool {
+    if let Some(m) = &p.mac {
+        return mac_lowers(m);
+    }
+    let grants_lower = p.grants.iter().all(GrantChange::lowers);
+    if p.change.is_empty() {
+        return !p.grants.is_empty() && grants_lower;
+    }
+    grants_lower && lowers_proposal(p, saved, agents, level)
 }
 
 /// Only stricter: applied now, with a line in the chat. Anything else: the card.
 fn offer(app: &AppHandle, caller: &Agent, proposal: Proposal, agents: &[Agent]) -> Value {
     // A card is for giving agents more room, never for taking it away.
-    let lowers = match &proposal.mac {
-        Some(m) => mac_lowers(m),
-        None => lowers_proposal(
-            &proposal,
-            &policy::load(),
-            agents,
-            super::independence::level(),
-        ),
-    };
+    let lowers = proposal_lowers(
+        &proposal,
+        &policy::load(),
+        agents,
+        super::independence::level(),
+    );
     if lowers {
         return match apply_proposal(&proposal) {
             Ok(applied) => {
+                synced_mac(app, &proposal);
                 let lines = summary(&proposal.groups);
                 let _ = runner::record(
                     app,
@@ -602,6 +1088,7 @@ fn offer(app: &AppHandle, caller: &Agent, proposal: Proposal, agents: &[Agent]) 
                     ),
                 );
                 note_targets(app, &caller.id, &proposal, applied.as_ref());
+                note_grants(app, &caller.id, &proposal);
                 let _ = app.emit(runner::EVENT_REGISTRY, ());
                 let _ = app.emit(EVENT, ());
                 text(format!(
@@ -744,8 +1231,10 @@ pub fn answer_card(
         Ok(changed) => {
             let updated =
                 store::set_approval_status(agent_id, request_id, ApprovalStatus::Allowed)?;
+            synced_mac(app, p);
             finish(app, agent_id, updated);
             note_targets(app, agent_id, p, changed.as_ref());
+            note_grants(app, agent_id, p);
             // A level raised: open cards it now answers are answered.
             if p.change.independence.is_some() || p.change.preset.is_some() {
                 super::mcp::sweep_auto_allowed(app);
@@ -782,6 +1271,9 @@ pub fn apply_proposal(p: &Proposal) -> Result<Option<(Saved, Saved)>, String> {
     if let Some(m) = &p.mac {
         return apply_mac(m).map(|()| None);
     }
+    if p.change.is_empty() {
+        return apply_grants(&p.grants).map(|()| None);
+    }
     let level = super::independence::level();
     let agents = store::list().unwrap_or_default();
     let mut new_level = level;
@@ -809,6 +1301,7 @@ pub fn apply_proposal(p: &Proposal) -> Result<Option<(Saved, Saved)>, String> {
         super::independence::set_level(new_level, store::now_ms()).map_err(|e| e.to_string())?;
         policy::sync();
     }
+    apply_grants(&p.grants)?;
     Ok(changed)
 }
 
@@ -867,6 +1360,35 @@ pub fn notes_for(
     out
 }
 
+/// A quiet line in each agent's chat whose app access changed (the
+/// proposer's chat has the card or note already).
+fn note_grants(app: &AppHandle, proposer: &str, p: &Proposal) {
+    let by = store::get(proposer).ok().map(|a| AgentRef {
+        id: a.id.clone(),
+        name: a.name.clone(),
+    });
+    let mut done: Vec<&str> = Vec::new();
+    for g in &p.grants {
+        if g.agent_id == proposer || done.contains(&g.agent_id.as_str()) {
+            continue;
+        }
+        done.push(&g.agent_id);
+        let lines: Vec<&str> = p
+            .grants
+            .iter()
+            .filter(|x| x.agent_id == g.agent_id)
+            .map(|x| x.line.as_str())
+            .collect();
+        let mut line = runner::new_message(
+            &g.agent_id,
+            MessageKind::Note,
+            format!("Settings changed: {}", lines.join(" · ")),
+        );
+        line.peer = by.clone();
+        let _ = runner::record(app, line);
+    }
+}
+
 /// The notes for a change a card applied (the proposer's chat has the card).
 fn note_targets(app: &AppHandle, proposer: &str, p: &Proposal, applied: Option<&(Saved, Saved)>) {
     let Some((before, after)) = applied else {
@@ -877,10 +1399,25 @@ fn note_targets(app: &AppHandle, proposer: &str, p: &Proposal, applied: Option<&
         name: a.name.clone(),
     });
     let agents = store::list().unwrap_or_default();
+    // App lines are told by `note_grants`, once.
+    let groups: Vec<Group> = p
+        .groups
+        .iter()
+        .map(|g| Group {
+            changes: g
+                .changes
+                .iter()
+                .filter(|c| !p.grants.iter().any(|x| x.line == **c))
+                .cloned()
+                .collect(),
+            ..g.clone()
+        })
+        .filter(|g| !g.changes.is_empty())
+        .collect();
     for (id, text) in notes_for(
         before,
         after,
-        &p.groups,
+        &groups,
         &agents,
         Some(proposer),
         "Settings changed: ",
@@ -894,3 +1431,7 @@ fn note_targets(app: &AppHandle, proposer: &str, p: &Proposal, applied: Option<&
 #[cfg(test)]
 #[path = "agent_level_tests.rs"]
 mod agent_level_tests;
+
+#[cfg(test)]
+#[path = "settings_chat_tests.rs"]
+mod settings_chat_tests;

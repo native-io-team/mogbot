@@ -202,7 +202,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "update_agent",
-        description: "Change an agent's name, role, instructions, project, engine or look. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude` or `codex`) switches what it runs on from its next turn: a new session, handed the recent conversation. `shape`, `face`, `finish` (`keycap`, the default, or `embossed`) and `color` change how it looks (\"give Hiring a hexagon with dot eyes\"); give only what changes. A look applies at once, with no card: it isn't a setting.",
+        description: "Change an agent's name, role, instructions, project, engine, model, effort, routines' model, notifications or look. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude` or `codex`) switches what it runs on from its next turn: a new session, handed the recent conversation; its model goes back to the engine's default unless `model` comes with it. `model` (Claude Code: opus, sonnet, haiku; Codex: one it lists), `effort` (low, medium, high) and `routine_model` (\"auto\", \"same\" as its chats, or a model) take \"default\" for the engine's own and apply from its next message with no card: \"put Research on Opus\", \"have Finance think harder\". `muted: true` stops its notifications (\"stop pinging me about Social\"); unread and the badge still count it. `shape`, `face`, `finish` (`keycap`, the default, or `embossed`) and `color` change how it looks (\"give Hiring a hexagon with dot eyes\"); give only what changes. A look applies at once, with no card: it isn't a setting. What an agent may do (apps, projects, browser, independence) is propose_settings_change.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -213,6 +213,10 @@ const TOOLS: &[Tool] = &[
                 "instructions": { "type": "string" },
                 "project": { "type": "string" },
                 "engine": { "type": "string", "enum": ["claude", "codex"] },
+                "model": { "type": "string" },
+                "effort": { "type": "string", "enum": ["low", "medium", "high", "default"] },
+                "routine_model": { "type": "string" },
+                "muted": { "type": "boolean" },
                 "shape": { "type": "string", "enum": store::AVATAR_SHAPES },
                 "face": { "type": "string", "enum": store::AVATAR_FACES },
                 "finish": { "type": "string", "enum": store::AVATAR_FINISHES },
@@ -1755,8 +1759,13 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         Ok(l) => l,
         Err(e) => return error(e),
     };
+    let run = match run_settings(engine.unwrap_or(agent.engine), args) {
+        Ok(r) => r,
+        Err(e) => return error(e),
+    };
     let role = arg(args, "role").map(str::to_string);
     let mut fields = Vec::new();
+    fields.extend(run.changed(&agent, engine.is_some()));
     if role.as_deref().is_some_and(|r| r != agent.role) {
         fields.push("role");
     }
@@ -1789,6 +1798,7 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         if let Some(engine) = engine {
             a.switch_engine(engine);
         }
+        run.apply(a);
         if let Some(avatar) = look.avatar.clone() {
             a.avatar = Some(avatar);
         }
@@ -1813,9 +1823,152 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     for note in update_notes(caller, &agent, &updated, &fields) {
         let _ = runner::record(app, note);
     }
-    match look.line() {
-        Some(line) => text(format!("Updated {}: {line}.", updated.name)),
-        None => text(format!("Updated {}.", updated.name)),
+    // The same quiet line the editor leaves when what it runs on changes.
+    let runs_on = crate::commands::agents::settings_line(&agent, &updated, engine.is_some());
+    if let Some(line) = &runs_on {
+        let _ = runner::record(
+            app,
+            runner::new_message(&agent.id, store::MessageKind::Note, line.clone()),
+        );
+    }
+    let mut said: Vec<String> = look.line().into_iter().collect();
+    said.extend(runs_on);
+    said.extend(run.said(&agent, &updated));
+    if said.is_empty() {
+        text(format!("Updated {}.", updated.name))
+    } else {
+        text(format!("Updated {}: {}.", updated.name, said.join("; ")))
+    }
+}
+
+/// `update_agent`'s model, effort, routines' model and mute: each `Some`
+/// only when given. Model words are matched to the engine's own list
+/// ("Opus" is `opus`); "default" goes back to the engine's own. These apply
+/// without a card: they change what its turns run on and how loud it is,
+/// never what it may do (that is `propose_settings_change`).
+#[derive(Debug, Default, PartialEq)]
+pub(super) struct RunSettings {
+    pub model: Option<Option<String>>,
+    pub effort: Option<Option<String>>,
+    pub routine_model: Option<Option<String>>,
+    pub muted: Option<bool>,
+}
+
+fn is_default_word(raw: &str) -> bool {
+    matches!(
+        raw.trim().to_ascii_lowercase().as_str(),
+        "" | "default" | "engine's default" | "engine default" | "none"
+    )
+}
+
+/// A model in the user's words, for `engine`: its id or its label.
+pub(super) fn chat_model(engine: Engine, raw: &str) -> Result<Option<String>, String> {
+    if is_default_word(raw) {
+        return Ok(None);
+    }
+    let want = raw.trim();
+    let found = super::engine::models(engine)
+        .into_iter()
+        .find(|m| m.value.eq_ignore_ascii_case(want) || m.label.eq_ignore_ascii_case(want));
+    let value = found.map(|m| m.value).unwrap_or_else(|| want.to_string());
+    super::engine::normalize_model(engine, &value).map_err(|e| e.to_string())
+}
+
+pub(super) fn run_settings(engine: Engine, args: &Value) -> Result<RunSettings, String> {
+    let raw = |k: &str| args.get(k).and_then(Value::as_str);
+    let model = raw("model").map(|m| chat_model(engine, m)).transpose()?;
+    let effort = raw("effort")
+        .map(|e| {
+            if is_default_word(e) {
+                Ok(None)
+            } else {
+                store::normalize_effort(e).map_err(|e| e.to_string())
+            }
+        })
+        .transpose()?;
+    let routine_model = raw("routine_model")
+        .map(|m| match m.trim().to_ascii_lowercase().as_str() {
+            "auto" | "automatic" => Ok(None),
+            "same" | "same as its chats" => Ok(Some("same".to_string())),
+            _ => chat_model(engine, m),
+        })
+        .transpose()?;
+    Ok(RunSettings {
+        model,
+        effort,
+        routine_model,
+        muted: args.get("muted").and_then(Value::as_bool),
+    })
+}
+
+impl RunSettings {
+    /// What it changes on `agent`, for the audit lines. An engine move
+    /// resets the model and routines' model, so a given one is a change.
+    pub fn changed(&self, agent: &store::Agent, moved: bool) -> Vec<&'static str> {
+        let mut out = Vec::new();
+        if self
+            .model
+            .as_ref()
+            .is_some_and(|m| moved || *m != agent.model)
+        {
+            out.push("model");
+        }
+        if self.effort.as_ref().is_some_and(|e| *e != agent.effort) {
+            out.push("effort");
+        }
+        if self
+            .routine_model
+            .as_ref()
+            .is_some_and(|m| moved || *m != agent.routine_model)
+        {
+            out.push("routines' model");
+        }
+        if self.muted.is_some_and(|m| m != agent.muted) {
+            out.push("notifications");
+        }
+        out
+    }
+
+    pub fn apply(&self, a: &mut store::Agent) {
+        if let Some(m) = &self.model {
+            a.set_model(m.clone());
+        }
+        if let Some(e) = &self.effort {
+            a.effort = e.clone();
+        }
+        if let Some(m) = &self.routine_model {
+            a.routine_model = m.clone();
+        }
+        if let Some(m) = self.muted {
+            a.muted = m;
+        }
+    }
+
+    /// The tool's words for what changed beyond the model and effort (the
+    /// chat's "Now on …" line says those).
+    pub fn said(&self, before: &store::Agent, after: &store::Agent) -> Vec<String> {
+        let mut out = Vec::new();
+        if after.muted != before.muted {
+            out.push(
+                if after.muted {
+                    "no notifications from it now (unread and the badge still count it)"
+                } else {
+                    "it notifies again"
+                }
+                .to_string(),
+            );
+        }
+        if self.routine_model.is_some() && after.routine_model != before.routine_model {
+            out.push(format!(
+                "its routines run on {}",
+                match after.routine_model.as_deref() {
+                    None => "the automatic choice",
+                    Some("same") => "the same model as its chats",
+                    Some(m) => m,
+                }
+            ));
+        }
+        out
     }
 }
 
