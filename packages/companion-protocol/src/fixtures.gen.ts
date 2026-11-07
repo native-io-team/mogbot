@@ -907,6 +907,7 @@ export const agentsUsagePlan = {
         "readings": 11
       }
     ],
+    "signedIn": 3,
     "windows": [
       {
         "family": "session",

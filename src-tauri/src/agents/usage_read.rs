@@ -21,6 +21,18 @@
 //!   token past its expiry is not used and **never refreshed** here: a
 //!   refresh rotates the refresh token, which would sign Claude Code out. It
 //!   is read again once Claude Code (any turn) has refreshed it.
+//! - **A setup-token Claude account** (verified against a real setup token):
+//!   the usage endpoint refuses it, but a Messages answer on it carries the
+//!   plan's unified rate-limit headers: `anthropic-ratelimit-unified-7d-*`
+//!   (`utilization` 0–1, `reset` epoch seconds, `status` `allowed` /
+//!   `allowed_warning` / `rejected`), and `-5h-*` the same (named as Claude
+//!   Code's own `rate_limit_event` names its windows; only `7d` was seen, on
+//!   an account at its weekly limit, which answered 429). So such an account
+//!   is read with the smallest request there is ([`CLAUDE_PROBE_MODEL`],
+//!   `max_tokens` 1, about twenty input tokens), at most every
+//!   [`HEADER_RECHECK_MS`], and its check is marked `via: headers`. A 429
+//!   carries the headers too and costs nothing. Only the
+//!   `anthropic-ratelimit-unified-*` headers are kept; the body is dropped.
 //! - **Codex** (protocol verified against 0.166; *not* against a signed-in
 //!   account, none here): `codex app-server` with the account's
 //!   `CODEX_HOME`, `initialize` then `account/rateLimits/read`, and nothing
@@ -41,7 +53,7 @@ use tauri::{AppHandle, Emitter};
 
 use super::engine::Engine;
 use super::quota::{Quota, QuotaWindow};
-use super::usage_plan::{self, Check, CheckOutcome};
+use super::usage_plan::{self, Check, CheckOutcome, CheckVia};
 use super::wallet::{self, Account};
 
 /// How often every account is read while the app is open.
@@ -58,7 +70,15 @@ const EXPIRY_SLACK_MS: i64 = 60_000;
 /// the answer won't change until it signs in differently.
 const SCOPE_RECHECK_MS: i64 = 6 * 60 * 60 * 1000;
 /// Why, for a sign-in whose token may not read limits.
-pub const NO_SCOPE: &str = "Its sign-in can't read limits without a turn";
+pub const NO_SCOPE: &str =
+    "Can't read its limits between turns with the token it was added with. They show after a turn runs on it";
+/// A setup-token account read from response headers is asked this seldom:
+/// each read is a one-token request on the user's plan.
+const HEADER_RECHECK_MS: i64 = 30 * 60 * 1000;
+
+pub const CLAUDE_MESSAGES_URL: &str = "https://api.anthropic.com/v1/messages";
+/// The cheapest model, for the one-token request a setup token is read with.
+pub const CLAUDE_PROBE_MODEL: &str = "claude-haiku-4-5";
 
 pub const CLAUDE_USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 const CLAUDE_SERVICE: &str = "Claude Code-credentials";
@@ -75,6 +95,8 @@ const CLAUDE_WINDOWS: &[&str] = &[
 #[derive(Debug, Clone, PartialEq)]
 pub enum Answer {
     Read(Quota),
+    /// Read from a one-token request's rate-limit headers (a setup token).
+    ReadHeaders(Quota),
     NoPlan,
     CantRead(String),
     Failed(String),
@@ -89,6 +111,8 @@ pub struct ClaudeLogin {
     expires_at: Option<i64>,
     /// `subscriptionType` (`max`, `pro`, …), as Claude Code recorded it.
     plan: Option<String>,
+    /// A `claude setup-token` token: the usage endpoint refuses it.
+    setup_token: bool,
 }
 
 impl std::fmt::Debug for ClaudeLogin {
@@ -97,6 +121,7 @@ impl std::fmt::Debug for ClaudeLogin {
             .field("token", &"<redacted>")
             .field("expires_at", &self.expires_at)
             .field("plan", &self.plan)
+            .field("setup_token", &self.setup_token)
             .finish()
     }
 }
@@ -150,6 +175,7 @@ pub fn parse_claude_credentials(raw: &str) -> Option<ClaudeLogin> {
             .map(str::trim)
             .filter(|p| !p.is_empty())
             .map(str::to_string),
+        setup_token: false,
     })
 }
 
@@ -202,12 +228,13 @@ async fn claude_login_for(account: &Account) -> Result<ClaudeLogin, String> {
     if let Some(login) = claude_code_login(Some(&folder), &folder).await {
         return Ok(login);
     }
-    // The setup token it was added with (usually can't read limits; asked once to know).
+    // The setup token it was added with: read from response headers.
     match crate::commands::accounts::claude_token_for(&account.id) {
         Some(token) => Ok(ClaudeLogin {
             token,
             expires_at: None,
             plan: None,
+            setup_token: true,
         }),
         None => Err("Not signed in".into()),
     }
@@ -260,6 +287,105 @@ pub fn claude_answer(status: u16, body: &str, plan: Option<String>, now: i64) ->
     }
 }
 
+/// One reading from the unified rate-limit headers of a Messages answer
+/// (lower-cased names, `anthropic-ratelimit-unified-*` only). `None`: they
+/// named no window with a figure.
+pub fn parse_claude_headers(headers: &[(String, String)], now: i64) -> Option<Quota> {
+    let get = |name: String| {
+        headers
+            .iter()
+            .find(|(k, _)| *k == name)
+            .map(|(_, v)| v.trim())
+    };
+    let mut windows: Vec<QuotaWindow> = [("5h", "five_hour"), ("7d", "seven_day")]
+        .iter()
+        .filter_map(|(short, kind)| {
+            let at = |field: &str| get(format!("anthropic-ratelimit-unified-{short}-{field}"));
+            let used = at("utilization")?.parse::<f64>().ok()?;
+            Some(QuotaWindow {
+                kind: kind.to_string(),
+                used_percent: Some((used * 100.0).clamp(0.0, 100.0)),
+                resets_at: at("reset")
+                    .and_then(|r| r.parse::<i64>().ok())
+                    .map(|s| s * 1000),
+                window_minutes: None,
+                limited: at("status") == Some("rejected"),
+                observed_at: now,
+            })
+        })
+        .collect();
+    windows.sort_by(|a, b| a.kind.cmp(&b.kind));
+    (!windows.is_empty()).then_some(Quota {
+        engine: Engine::Claude,
+        windows,
+        plan: None,
+    })
+}
+
+/// What a one-token request's answer means for a setup-token account.
+pub fn claude_headers_answer(status: u16, headers: &[(String, String)], now: i64) -> Answer {
+    if let Some(q) = parse_claude_headers(headers, now) {
+        return Answer::ReadHeaders(q);
+    }
+    match status {
+        401 => {
+            Answer::CantRead("Its sign-in has expired. Sign it in again to see its limits".into())
+        }
+        403 => Answer::CantRead(NO_SCOPE.into()),
+        429 => Answer::Failed("Claude asked to wait".into()),
+        s => Answer::Failed(format!("Claude answered {s}")),
+    }
+}
+
+/// The smallest Messages request there is, for its rate-limit headers only:
+/// the cheapest model, one output token. The body is dropped unread.
+pub async fn claude_probe(url: &str, token: &str) -> Result<(u16, Vec<(String, String)>), String> {
+    let client = reqwest::Client::builder()
+        .timeout(HTTP_TIMEOUT)
+        .redirect(reqwest::redirect::Policy::none())
+        .build()
+        .map_err(|_| "couldn't start a request".to_string())?;
+    let body = json!({
+        "model": CLAUDE_PROBE_MODEL,
+        "max_tokens": 1,
+        // What Claude Code says first; a subscription token is Claude Code's.
+        "system": "You are Claude Code, Anthropic's official CLI for Claude.",
+        "messages": [{ "role": "user", "content": "hi" }],
+    });
+    let res = client
+        .post(url)
+        .bearer_auth(token)
+        .header("anthropic-version", "2023-06-01")
+        .header("anthropic-beta", "oauth-2025-04-20")
+        .header(
+            "User-Agent",
+            format!("{}/{}", crate::brand::SLUG, env!("CARGO_PKG_VERSION")),
+        )
+        .json(&body)
+        .send()
+        .await
+        .map_err(|e| {
+            if e.is_timeout() {
+                "Claude didn't answer in time".to_string()
+            } else {
+                "Couldn't reach Claude".to_string()
+            }
+        })?;
+    let status = res.status().as_u16();
+    let headers = res
+        .headers()
+        .iter()
+        .filter_map(|(k, v)| {
+            let k = k.as_str().to_ascii_lowercase();
+            if !k.starts_with("anthropic-ratelimit-unified-") {
+                return None;
+            }
+            Some((k, v.to_str().ok()?.to_string()))
+        })
+        .collect();
+    Ok((status, headers))
+}
+
 /// One GET of the usage endpoint at `url` with `token`. The token is a
 /// header, and no redirect is followed (it would carry the header along).
 pub async fn claude_get(url: &str, token: &str) -> Result<(u16, String), String> {
@@ -300,6 +426,12 @@ pub async fn read_claude(account: &Account, url: &str, now: i64) -> Answer {
         return Answer::CantRead(
             "Its sign-in needs refreshing by Claude Code; it reads again after a turn".into(),
         );
+    }
+    if login.setup_token {
+        return match claude_probe(CLAUDE_MESSAGES_URL, &login.token).await {
+            Ok((status, headers)) => claude_headers_answer(status, &headers, now),
+            Err(why) => Answer::Failed(why),
+        };
     }
     match claude_get(url, &login.token).await {
         Ok((status, body)) => claude_answer(status, &body, login.plan, now),
@@ -394,11 +526,12 @@ pub async fn read_codex(binary: &Path, account: &Account, now: i64) -> Answer {
 /// Keep what a check said about `account`. True when what's shown changed.
 pub fn record(account: &Account, answer: Answer, of_engine: usize, now: i64) -> bool {
     let engine = account.engine;
-    let (outcome, why) = match &answer {
-        Answer::Read(_) => (CheckOutcome::Read, None),
-        Answer::NoPlan => (CheckOutcome::NoPlan, None),
-        Answer::CantRead(w) => (CheckOutcome::CantRead, Some(w.clone())),
-        Answer::Failed(w) => (CheckOutcome::Failed, Some(w.clone())),
+    let (outcome, why, via) = match &answer {
+        Answer::Read(_) => (CheckOutcome::Read, None, None),
+        Answer::ReadHeaders(_) => (CheckOutcome::Read, None, Some(CheckVia::Headers)),
+        Answer::NoPlan => (CheckOutcome::NoPlan, None, None),
+        Answer::CantRead(w) => (CheckOutcome::CantRead, Some(w.clone()), None),
+        Answer::Failed(w) => (CheckOutcome::Failed, Some(w.clone()), None),
     };
     let mut changed = usage_plan::set_check(
         engine,
@@ -407,9 +540,10 @@ pub fn record(account: &Account, answer: Answer, of_engine: usize, now: i64) -> 
             at: now,
             outcome,
             why,
+            via,
         },
     );
-    if let Answer::Read(reading) = answer {
+    if let Answer::Read(reading) | Answer::ReadHeaders(reading) = answer {
         if let Some(at) = super::quota::limited_until(std::slice::from_ref(&reading), engine, now) {
             wallet::reported_out(engine, &account.id, at, now);
         }
@@ -438,12 +572,17 @@ static RUNNING: AtomicBool = AtomicBool::new(false);
 static LAST: Mutex<Option<std::time::Instant>> = Mutex::new(None);
 
 /// Whether to leave an account unasked this time: its sign-in was refused
-/// for its scope not long ago, and asking again would get the same refusal.
+/// for its scope not long ago (asking again would get the same refusal), or
+/// it was read from response headers not long ago (each read costs a token).
 pub fn skip(last: Option<&Check>, now: i64) -> bool {
     last.is_some_and(|c| {
-        c.outcome == CheckOutcome::CantRead
+        let refused = c.outcome == CheckOutcome::CantRead
             && c.why.as_deref() == Some(NO_SCOPE)
-            && now - c.at < SCOPE_RECHECK_MS
+            && now - c.at < SCOPE_RECHECK_MS;
+        let by_headers = c.outcome == CheckOutcome::Read
+            && c.via == Some(CheckVia::Headers)
+            && now - c.at < HEADER_RECHECK_MS;
+        refused || by_headers
     })
 }
 

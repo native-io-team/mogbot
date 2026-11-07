@@ -156,6 +156,18 @@ pub struct Check {
     /// Why, in a few plain words, when it wasn't read.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub why: Option<String>,
+    /// How it was read, when not the usual way (`usage_read`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via: Option<CheckVia>,
+}
+
+/// How a reading was taken without a turn, when not the engine's own usage read.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum CheckVia {
+    /// From the rate-limit headers of a one-token request (a setup-token
+    /// Claude sign-in, which the usage endpoint refuses).
+    Headers,
 }
 
 pub fn account_key(engine: Engine, id: &str) -> String {

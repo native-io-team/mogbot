@@ -133,8 +133,9 @@ export function MeterRow({ meter, title }: { meter: UsageMeter; title?: string }
 }
 
 /**
- * Total compute's top: the headline, how many accounts, each kind of limit
- * across them, and the Mac's run-out estimate when it sent one.
+ * Total compute's top: one sentence on what there is room on, the estimate
+ * right after it in the warning ink with what it rests on, and, with two or
+ * more accounts read, how many and each kind of limit across them.
  */
 export function ComputeSummary({ view }: { view: ComputeView }) {
   const colors = useColors();
@@ -147,41 +148,37 @@ export function ComputeSummary({ view }: { view: ComputeView }) {
           color={view.tone === 'limited' ? colors.accentWarning : colors.textStrong}
         >
           {view.headline}
+          {view.estimate && (
+            <T variant="headline" color={colors.accentWarning}>
+              {` ${view.estimate.text}`}
+            </T>
+          )}
         </T>
-        <T variant="small" color={colors.textMuted}>
-          {view.summary}
-        </T>
+        {view.estimate && (
+          <T variant="small" color={colors.textMuted}>
+            {view.estimate.basis}
+          </T>
+        )}
+        {view.summary && (
+          <T variant="small" color={colors.textMuted}>
+            {view.summary}
+          </T>
+        )}
       </View>
       {view.windows.map((w) => (
         <View key={w.key} style={styles.windowLine}>
           <T variant="small" color={colors.textSecondary} style={styles.windowName}>
             {w.label}
           </T>
-          <View style={styles.grow}>
-            <T
-              variant="small"
-              color={w.tone === 'limited' ? colors.accentWarning : colors.textStrong}
-            >
-              {w.text}
-            </T>
-            {w.reset && (
-              <T variant="small" color={colors.textMuted}>
-                {w.reset}
-              </T>
-            )}
-          </View>
+          <T
+            variant="small"
+            color={w.tone === 'limited' ? colors.accentWarning : colors.textStrong}
+            style={styles.grow}
+          >
+            {w.text}
+          </T>
         </View>
       ))}
-      {view.forecast && (
-        <View style={styles.pace}>
-          <T variant="small" color={colors.accentWarning}>
-            {view.forecast.text}
-          </T>
-          <T variant="small" color={colors.textMuted}>
-            {view.forecast.basis}
-          </T>
-        </View>
-      )}
     </View>
   );
 }
@@ -229,16 +226,9 @@ export function ComputeAccount({ row: r }: { row: ComputeRow }) {
             </T>
           )}
         </View>
-        {r.next && (
-          <View style={styles.tag}>
-            <T variant="small" color={colors.textSecondary}>
-              Next turn
-            </T>
-          </View>
-        )}
       </View>
       {r.state && (
-        <T variant="small" color={r.tone === 'calm' ? colors.textSecondary : colors.accentWarning}>
+        <T variant="small" color={r.tone === 'calm' ? colors.textMuted : colors.accentWarning}>
           {r.state}
         </T>
       )}
@@ -275,12 +265,6 @@ const useStyles = makeStyles((colors) => ({
   windowName: { minWidth: space['2xl'] + space.xl },
   row: { gap: space.sm, padding: space.lg },
   rowHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  tag: {
-    paddingHorizontal: space.sm,
-    paddingVertical: space['2xs'],
-    borderRadius: radius.pill,
-    backgroundColor: colors.surfaceControl,
-  },
   meters: { flexDirection: 'row', gap: space.md },
   mini: { flex: 1, gap: space.xs, minWidth: 0 },
   ring: { alignItems: 'center', justifyContent: 'center', padding: space['3xs'] },

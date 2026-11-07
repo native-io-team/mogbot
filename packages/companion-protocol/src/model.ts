@@ -1520,6 +1520,12 @@ export interface UsageCheck {
    */
   outcome: 'read' | 'no_plan' | 'cant_read' | 'failed';
   why?: string;
+  /**
+   * `headers`: read from the rate-limit headers of a one-token request (a
+   * setup-token Claude sign-in, which the usage endpoint refuses). Absent:
+   * the engine's own usage read. Absent from Macs that predate it.
+   */
+  via?: 'headers';
 }
 
 /** An account and a time (a reset, or when it has room again). */
@@ -1538,6 +1544,8 @@ export interface UsageAccountAt {
 export interface ComputeTotals {
   /** Every account listed. */
   accounts: number;
+  /** Of those, signed in (one not signed in is never "not read"). Absent from older Macs. */
+  signedIn?: number;
   engines: { engine: AgentEngine; accounts: number; read: number; room: number }[];
   /** With a current reading. */
   read: number;

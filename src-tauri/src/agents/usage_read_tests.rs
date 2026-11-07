@@ -354,6 +354,7 @@ fn a_scope_refusal_is_asked_again_only_now_and_then() {
         at,
         outcome: CheckOutcome::CantRead,
         why: Some(NO_SCOPE.into()),
+        via: None,
     };
     assert!(skip(Some(&refused(NOW - 60_000)), NOW));
     assert!(!skip(Some(&refused(NOW - 7 * 60 * 60 * 1000)), NOW));
@@ -363,4 +364,105 @@ fn a_scope_refusal_is_asked_again_only_now_and_then() {
     };
     assert!(!skip(Some(&other), NOW));
     assert!(!skip(None, NOW));
+}
+
+/* ------------------------------------------- a setup token, by headers */
+
+fn h(pairs: &[(&str, &str)]) -> Vec<(String, String)> {
+    pairs
+        .iter()
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .collect()
+}
+
+#[test]
+fn a_setup_token_is_read_from_its_rate_limit_headers() {
+    // The header names a real setup-token answer carried (429, at its weekly
+    // limit); the values are made up.
+    let at_limit = h(&[
+        ("anthropic-ratelimit-unified-7d-utilization", "1.0"),
+        ("anthropic-ratelimit-unified-7d-reset", "1794200000"),
+        ("anthropic-ratelimit-unified-7d-status", "rejected"),
+        ("anthropic-ratelimit-unified-status", "rejected"),
+    ]);
+    let Answer::ReadHeaders(q) = claude_headers_answer(429, &at_limit, NOW) else {
+        panic!("a 429 with headers is a reading");
+    };
+    assert_eq!(q.windows.len(), 1);
+    let w = &q.windows[0];
+    assert_eq!(w.kind, "seven_day");
+    assert_eq!(w.used_percent, Some(100.0));
+    assert_eq!(w.resets_at, Some(1_794_200_000_000));
+    assert!(w.limited);
+
+    let allowed = h(&[
+        ("anthropic-ratelimit-unified-5h-utilization", "0.07"),
+        ("anthropic-ratelimit-unified-5h-reset", "1794010000"),
+        ("anthropic-ratelimit-unified-5h-status", "allowed"),
+        ("anthropic-ratelimit-unified-7d-utilization", "0.5"),
+        ("anthropic-ratelimit-unified-7d-reset", "1794200000"),
+        ("anthropic-ratelimit-unified-7d-status", "allowed_warning"),
+    ]);
+    let Answer::ReadHeaders(q) = claude_headers_answer(200, &allowed, NOW) else {
+        panic!("a reading");
+    };
+    let kinds: Vec<&str> = q.windows.iter().map(|w| w.kind.as_str()).collect();
+    assert_eq!(kinds, ["five_hour", "seven_day"]);
+    assert!((q.windows[0].used_percent.unwrap() - 7.0).abs() < 1e-9);
+    assert!(q.windows.iter().all(|w| !w.limited));
+}
+
+#[test]
+fn a_header_read_without_headers_says_why() {
+    assert_eq!(
+        claude_headers_answer(403, &[], NOW),
+        Answer::CantRead(NO_SCOPE.into())
+    );
+    assert!(matches!(
+        claude_headers_answer(401, &[], NOW),
+        Answer::CantRead(_)
+    ));
+    assert!(matches!(
+        claude_headers_answer(429, &[], NOW),
+        Answer::Failed(_)
+    ));
+    // A figure that isn't one is no reading.
+    let junk = h(&[("anthropic-ratelimit-unified-7d-utilization", "lots")]);
+    assert!(matches!(
+        claude_headers_answer(200, &junk, NOW),
+        Answer::Failed(_)
+    ));
+}
+
+#[test]
+fn a_header_reading_is_marked_and_asked_again_only_every_half_hour() {
+    let _serial = store::tests_lock();
+    let dir = tempfile::tempdir().unwrap();
+    store::set_root_for_tests(Some(dir.path().to_path_buf()));
+    let personal = Account {
+        id: "p1".into(),
+        engine: Engine::Claude,
+        name: "Personal".into(),
+        added_at: 0,
+        limit: None,
+    };
+    let headers = h(&[
+        ("anthropic-ratelimit-unified-7d-utilization", "0.25"),
+        ("anthropic-ratelimit-unified-7d-reset", "1794200000"),
+    ]);
+    let answer = claude_headers_answer(200, &headers, NOW);
+    assert!(record(&personal, answer, 2, NOW));
+    let check = usage_plan::checks()["claude:p1"].clone();
+    assert_eq!(check.outcome, CheckOutcome::Read);
+    assert_eq!(check.via, Some(CheckVia::Headers));
+    assert_eq!(
+        usage_plan::readings().0["claude:p1"].windows[0].used_percent,
+        Some(25.0)
+    );
+    assert!(skip(Some(&check), NOW + 10 * 60 * 1000));
+    assert!(!skip(Some(&check), NOW + 31 * 60 * 1000));
+    // An ordinary reading is asked again every time.
+    let plain = Check { via: None, ..check };
+    assert!(!skip(Some(&plain), NOW + 60_000));
+    store::set_root_for_tests(None);
 }

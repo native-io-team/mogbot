@@ -1601,6 +1601,7 @@ impl Backend for Stub {
                     at: 1_762_294_000_000,
                     outcome: crate::agents::usage_plan::CheckOutcome::Read,
                     why: None,
+                    via: None,
                 }),
             },
             AccountLine {
@@ -1653,6 +1654,7 @@ impl Backend for Stub {
                     at: 1_762_294_000_000,
                     outcome: crate::agents::usage_plan::CheckOutcome::Failed,
                     why: Some("Codex didn't answer in time".into()),
+                    via: None,
                 }),
             },
         ];

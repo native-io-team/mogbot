@@ -3523,9 +3523,20 @@ never slow down for limits unless the user chose that.
     then the setup token in this app's Keychain. `subscriptionType` there
     is the plan name shown ("Max plan"). The endpoint needs `user:profile`:
     a `claude setup-token` token (how accounts added here sign in) is
-    refused `403 oauth_scope_insufficient` (verified), so such an account
-    says "No reading yet · runs to measure" and is asked again only every 6
-    hours. An access token past its `expiresAt` is not used and **never
+    refused `403 oauth_scope_insufficient` (verified). Such an account is
+    read instead from the **rate-limit headers of a one-token Messages
+    request** (`claude_probe`: `claude-haiku-4-5`, `max_tokens` 1, about
+    twenty input tokens): the answer carries `anthropic-ratelimit-unified-7d-*`
+    (`utilization` 0–1, `reset` epoch seconds, `status`) and, by Claude
+    Code's own window names, `-5h-*` (verified against a real setup token:
+    the 7d headers were present on a 429 from an account at its weekly
+    limit, which costs nothing; the 5h ones were absent there and are
+    unverified on an allowed answer). Only those headers are kept; the body
+    is dropped. It is asked at most every 30 minutes and its check is marked
+    `via: "headers"`. When even that gives no figure, the row says, in the
+    Mac's words, that it can't be read between turns and that its limits
+    show after a turn runs on it, and a scope refusal is asked again only
+    every 6 hours. An access token past its `expiresAt` is not used and **never
     refreshed** here (a refresh rotates the refresh token and would sign
     Claude Code out); it reads again once any turn has refreshed it. No
     redirect is followed, and the request's error text is never kept.
@@ -3551,14 +3562,23 @@ never slow down for limits unless the user chose that.
   known time) or running out before its reset by its own pace, and none
   back before the last runs out; else nothing. Said on the desk (the usage
   popover's "All accounts", Settings → Usage's "What you have") and the
-  phone's Usage sheet by `computeView` in `usageSheet.ts`: "You have room on
-  2 accounts right now. Claude · Work resets at 3:20 PM", "4 accounts ·
-  Claude 3, Codex 1 · 1 not read yet", "5-hour 2 of 2 have room · Soonest
-  reset …", "At this pace you'll run out of Claude on every account by Mon
-  afternoon; Codex has room" over "Estimate from 13 readings across 2
-  accounts", then one compact row per account (5-hour and weekly bars side
-  by side, its soonest pace line, a neutral "Next turn" tag), most room
-  first, then not read, then without room, then signed out. Each reading
+  phone's Usage sheet by `computeView` in `usageSheet.ts`. One sentence
+  naming what there is room on, from read accounts only ("Room now on
+  Claude · This Mac. Claude · Personal has room again Mon 4:00 PM."), then
+  in the warning ink the estimate, if any: across accounts when the Mac
+  sent one ("At this pace you'll run out of Claude on every account by Mon
+  afternoon; Codex has room"), else, with one account read, that account's
+  own ("At this pace the weekly limit runs out tomorrow night, before it
+  resets …"), over its basis ("Estimate from 200 readings over 10 hours").
+  Only with two or more accounts read: "3 accounts · Claude 2, Codex 1 · 1
+  not read" (an account not signed in is never "not read") and one quiet
+  line per kind of limit read on two or more ("Weekly 1 of 2 has room ·
+  soonest reset Mon"). Then one compact row per account (5-hour and weekly
+  bars side by side; the bar its soonest pace line is about tinted with the
+  warning role so the two agree; that line, unless the headline already
+  says it; a muted "Used next" only beside another read account of its
+  engine), most room first, then not read, then without room, then a quiet
+  "Not signed in". Each reading
   shows once: the popover no longer draws the next account's meters above
   the list. `usage_overview` heads its answer with the same TOTAL COMPUTE
   lines, and the run-out under ESTIMATES. A Mac that serves no totals gets
