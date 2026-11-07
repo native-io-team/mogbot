@@ -2824,8 +2824,13 @@ the full threat model in docs/remote-access.md):
    tasks, preferences and standing rules, accounts and tools, personal facts
    (health only if offered), open conversations. The interview records each
    answer with `record_area` (specifics as facts, a pointed `follow_up` for
-   anything vague, `mentions` for names in passing, each its own follow-up
-   until `resolves`). An area closes only after a round of its own: specifics
+   anything vague, `mentions` for names in passing). A mention is chased
+   until `resolves`, a later fact names it, or the other assistant has
+   answered one `NEXT:` asking about it alone (then never again); one that a
+   fact recorded with it is already about ("Fastmail: her work email") isn't
+   chased at all. A routine time that can't be scheduled here (anything
+   monthly) is said so on staging and on update, and the interview is told
+   not to ask again for a time that was already exact. An area closes only after a round of its own: specifics
    first, then, asked "what else in it haven't you sent?", "nothing more"
    (or "none" for an empty one); a general "that's everything" closes
    nothing, and `finish` refuses with the gap until every area is closed.
@@ -2839,6 +2844,14 @@ the full threat model in docs/remote-access.md):
    nothing reaches memory before Import. The message the user pastes
    (`import::import_prompt`) tells the assistant to keep calling until
    `STATUS: in_review`.
+   Measured end to end by `scripts/agents-e2e.sh import`
+   (`examples/agents_e2e/import_muse.rs`): Haiku plays "Muse", a fictional
+   assistant with a 60-fact persona (`scripts/agents-import/`), answering
+   only what it's asked in short summaries (`AGENTS_IMPORT_MUSE=terse`, the
+   default, or `cooperative`), over the real Remote Access server; the run
+   scores the facts that reach the review card, areas closed, exchanges and
+   cost, under a hard limit (`AGENTS_IMPORT_TIMEOUT_SECS`). Five runs in
+   November: 100% of facts every time, 6 to 26 exchanges, $0.08 to $0.34.
 5. **The interview asks for everything.** Per agent: its instructions word
    for word, every routine (when, what), everything it watches for (when X
    happens, what it does), the apps and connectors it uses and what for, the

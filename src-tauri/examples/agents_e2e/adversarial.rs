@@ -1280,7 +1280,7 @@ async fn run_child(exe: &Path, name: &str, home: &Path, real: &Path) -> (String,
 }
 
 /// Every process under `root`, from one `ps` listing.
-fn descendants(root: u32) -> Vec<u32> {
+pub(super) fn descendants(root: u32) -> Vec<u32> {
     let listing = std::process::Command::new("ps")
         .args(["-A", "-o", "pid=,ppid="])
         .output()

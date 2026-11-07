@@ -680,6 +680,10 @@ pub(crate) fn admit(
             }
             talk.exchanges += 1;
             talk.chars += message.chars().count();
+            // This reply answers the NEXT it was given: a mention asked
+            // about on its own is done (`Coverage::answered_mention`).
+            let staged = staged_in_full(talk);
+            talk.coverage.answered_mention(&staged);
             talk.last_at = now;
             talk.busy = true;
             // The last message the cap allows: the interview is told to
@@ -1468,24 +1472,13 @@ pub(crate) fn tool_call(
                     review::MAX_PROPOSALS
                 ));
             }
-            let refused: Vec<String> = p
-                .routines
-                .iter()
-                .filter_map(|r| {
-                    r.refused
-                        .as_ref()
-                        .map(|why| format!("\"{}\" ({why})", r.when))
-                })
-                .collect();
+            let refused = refused_routines(&p);
             let name = p.name.clone();
             t.draft.proposals.push(p);
             t.staged.push(name.clone());
-            let mut out = format!(
-                "Staged {name} for the user's review. Nothing is created until they import."
+            let out = format!(
+                "Staged {name} for the user's review. Nothing is created until they import.{refused}"
             );
-            if !refused.is_empty() {
-                out.push_str(&format!(" These routine times can't be read: {}; ask for a plain time and use update_proposal.", refused.join(", ")));
-            }
             Ok((out, ToolEffect::None))
         }
         "update_proposal" => {
@@ -1540,8 +1533,12 @@ pub(crate) fn tool_call(
             }
             t.staged[i] = p.name.clone();
             let name = p.name.clone();
+            let refused = refused_routines(&p);
             t.draft.proposals[i] = p;
-            Ok((format!("Updated {name} in the draft."), ToolEffect::None))
+            Ok((
+                format!("Updated {name} in the draft.{refused}"),
+                ToolEffect::None,
+            ))
         }
         "list_agents" => {
             let names: Vec<String> = args
@@ -1637,6 +1634,31 @@ pub(crate) fn tool_call(
         }
         other => Err(format!("{other} isn't available in this interview.")),
     }
+}
+
+/// What the interview is told about routine times the app can't schedule,
+/// or nothing. Observed against a stand-in assistant: told only "ask for a
+/// plain time", the interview spent an exchange asking for one that was
+/// already exact ("on the 1st of every month at 09:00", which no wording
+/// can schedule here), then told the assistant it had fixed it when the
+/// update was refused just the same.
+pub(crate) fn refused_routines(p: &Proposal) -> String {
+    let refused: Vec<String> = p
+        .routines
+        .iter()
+        .filter_map(|r| {
+            r.refused
+                .as_ref()
+                .map(|why| format!("\"{}\" ({why})", r.when))
+        })
+        .collect();
+    if refused.is_empty() {
+        return String::new();
+    }
+    format!(
+        " These routine times can't be scheduled here: {}. Routines run every so many minutes or hours (\"every 2 hours\"), or on named days at a time (\"every weekday at 9:00\", \"every monday and thursday at 7:30\"); nothing monthly or yearly. If one fits, use update_proposal with that wording. If the time was already exact and just doesn't fit, don't ask again: keep it as it is (the user sees on the card that it needs setting up by hand), record it under routines, and carry on. Never tell the other assistant it's scheduled.",
+        refused.join(", ")
+    )
 }
 
 /// What the review card holds: the staged agents, and what the other
@@ -2305,6 +2327,101 @@ mod tests {
             !text.contains("4417") && !text.contains("/Users/me"),
             "{text}"
         );
+        reset_for_tests();
+        store::set_root_for_tests(None);
+    }
+
+    #[test]
+    fn a_reply_to_a_mention_next_closes_that_mention() {
+        let _serial = store::tests_lock();
+        interviewing();
+        let s = secret();
+        let chief = chief();
+        tool_call(&s, "list_agents", &json!({ "names": [] }), &chief.name).unwrap();
+        tool_call(
+            &s,
+            "record_area",
+            &json!({"area": "tasks", "facts": ["Invoice M-2207 is unpaid"], "mentions": ["Halvorsen Studio"]}),
+            &chief.name,
+        )
+        .unwrap();
+        let next = next_gap(lock().talk.as_ref().unwrap()).unwrap();
+        assert!(next.contains("\"Halvorsen Studio\" in passing"), "{next}");
+        // The assistant's reply to that NEXT is delivered: the mention is done.
+        let admitted = admit(
+            "Grok",
+            "Halvorsen Studio: a fictional client.",
+            &chief,
+            2_000,
+        )
+        .unwrap();
+        assert!(matches!(admitted, Admit::Deliver { .. }));
+        let t = lock().talk.clone().unwrap();
+        assert!(t.coverage.mentions.is_empty());
+        assert!(!next_gap(&t).unwrap().contains("Halvorsen"));
+        reset_for_tests();
+    }
+
+    #[test]
+    fn a_routine_time_that_cant_be_scheduled_is_said_so_on_staging_and_on_update() {
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(dir.path().to_path_buf()));
+        let chief = super::super::ensure_main().unwrap();
+        interviewing();
+        let s = secret();
+        let (text, _) = tool_call(
+            &s,
+            "propose_agent",
+            &json!({
+                "name": "Ledger", "instructions": "Track invoices (fictional).",
+                "routines": [
+                    {"when": "every monday at 08:15", "what": "Check overdue invoices"},
+                    {"when": "on the 1st of every month at 09:00", "what": "Budget summary"}
+                ]
+            }),
+            &chief.name,
+        )
+        .unwrap();
+        assert!(
+            text.contains("can't be scheduled here: \"on the 1st of every month at 09:00\""),
+            "{text}"
+        );
+        assert!(
+            text.contains("nothing monthly or yearly") && text.contains("don't ask again"),
+            "{text}"
+        );
+        assert!(
+            !text.contains("every monday at 08:15"),
+            "the readable one isn't named: {text}"
+        );
+        // Rewording it doesn't make it schedulable, and the update says so
+        // rather than "Updated" alone.
+        let (text, _) = tool_call(
+            &s,
+            "update_proposal",
+            &json!({
+                "name": "Ledger",
+                "routines": [{"when": "monthly on day 1 at 09:00", "what": "Budget summary"}]
+            }),
+            &chief.name,
+        )
+        .unwrap();
+        assert!(
+            text.starts_with("Updated Ledger") && text.contains("can't be scheduled here"),
+            "{text}"
+        );
+        let (text, _) = tool_call(
+            &s,
+            "update_proposal",
+            &json!({
+                "name": "Ledger",
+                "routines": [{"when": "every weekday at 9:00", "what": "Budget summary"}]
+            }),
+            &chief.name,
+        )
+        .unwrap();
+        assert_eq!(text, "Updated Ledger in the draft.");
         reset_for_tests();
         store::set_root_for_tests(None);
     }

@@ -141,6 +141,10 @@ pub struct Coverage {
     /// Mentioned in passing, still to ask about.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub mentions: Vec<String>,
+    /// Mentions the other assistant was asked about on their own (one
+    /// `NEXT:` each) and answered: never chased again.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub chased: Vec<String>,
 }
 
 /// What `record_area` asks for.
@@ -160,6 +164,43 @@ fn same(a: &str, b: &str) -> bool {
     a.trim().eq_ignore_ascii_case(b.trim())
 }
 
+/// Whether `text` names `mention` (case-insensitive, whole words). Too
+/// short a mention to tell ("Al") never counts.
+fn names(text: &str, mention: &str) -> bool {
+    let m = mention.trim().to_lowercase();
+    if m.chars().count() < 3 {
+        return false;
+    }
+    let t = text.to_lowercase();
+    t.match_indices(&m).any(|(at, _)| {
+        let before = t[..at].chars().next_back();
+        let after = t[at + m.len()..].chars().next();
+        !before.is_some_and(char::is_alphanumeric) && !after.is_some_and(char::is_alphanumeric)
+    })
+}
+
+/// Whether `fact` is about `mention`: names it as its subject, before the
+/// first `:`, `(`, `,` or dash ("Fastmail: her work email"), or opens on
+/// it ("Fastmail is her work email"). "Ledger reads Fastmail" isn't.
+fn about(fact: &str, mention: &str) -> bool {
+    let f = fact.trim_start_matches(|c: char| c.is_whitespace() || "-*•\"'“‘".contains(c));
+    let end = [": ", " (", ", ", " - ", " – ", " — "]
+        .iter()
+        .filter_map(|sep| f.find(sep))
+        .min();
+    match end {
+        Some(end) => names(f[..end].trim_end_matches(':'), mention),
+        None => {
+            let m = mention.trim();
+            f.get(..m.len()).is_some_and(|head| names(head, m))
+                && !f[m.len()..]
+                    .chars()
+                    .next()
+                    .is_some_and(char::is_alphanumeric)
+        }
+    }
+}
+
 /// The next thing to ask the other assistant for.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Gap {
@@ -174,6 +215,13 @@ impl Coverage {
             .find(|(a, _)| *a == area)
             .map(|(_, n)| n.clone())
             .unwrap_or_default()
+    }
+
+    /// Something recorded already is about `mention`.
+    fn known(&self, mention: &str) -> bool {
+        self.areas
+            .iter()
+            .any(|(_, n)| n.facts.iter().any(|f| about(f, mention)))
     }
 
     fn note_mut(&mut self, area: Area) -> &mut AreaNote {
@@ -202,15 +250,35 @@ impl Coverage {
         for m in &r.resolves {
             self.mentions.retain(|x| !same(x, m));
         }
+        // Waiting from earlier calls: answered by any later fact naming it.
+        // Observed: chasing each one until it was the subject of a fact took
+        // 21 of 26 NEXTs ("Utrecht", "Paris", "M-2207") for nothing new.
+        let earlier = self.mentions.clone();
         for m in &r.mentions {
             let m = super::review::clean_line(m, 80);
-            if m.is_empty() || self.mentions.iter().any(|x| same(x, &m)) {
+            if m.is_empty()
+                || self.mentions.iter().any(|x| same(x, &m))
+                || self.chased.iter().any(|x| same(x, &m))
+            {
+                continue;
+            }
+            // The subject of a fact, now or before: its own answer, not
+            // something said in passing. Observed: "Fastmail: her work
+            // email" recorded with "Fastmail" as a mention in the same call
+            // cost an exchange of its own at the end.
+            if self.known(&m) || r.facts.iter().any(|f| about(f, &m)) {
                 continue;
             }
             if self.mentions.len() < MAX_MENTIONS {
                 self.mentions.push(m);
             }
         }
+        let answered: Vec<String> = earlier
+            .into_iter()
+            .filter(|m| r.facts.iter().any(|f| names(f, m)))
+            .collect();
+        self.mentions
+            .retain(|x| !answered.iter().any(|m| same(m, x)));
         let note = self.note_mut(area);
         // A round already happened: specifics came, or "what else" was asked.
         let had = !note.facts.is_empty() || note.status == AreaStatus::Started;
@@ -259,6 +327,24 @@ impl Coverage {
             area.label(),
             note.facts.len()
         ))
+    }
+
+    /// The other assistant answered a message whose `NEXT:` was the first
+    /// mention ("You mentioned X in passing. Tell me everything about it"):
+    /// whatever it said is its answer, so that mention is done. Observed
+    /// against a stand-in assistant: the interview never passed `resolves`,
+    /// and one mention it had answered in full led every NEXT for seven
+    /// exchanges. Returns the mention it closed.
+    pub fn answered_mention(&mut self, staged: &[(String, bool)]) -> Option<String> {
+        let gap = self.next(staged)?;
+        if gap.area.is_some() || self.mentions.is_empty() {
+            return None;
+        }
+        let m = self.mentions.remove(0);
+        if self.chased.len() < MAX_MENTIONS {
+            self.chased.push(m.clone());
+        }
+        Some(m)
     }
 
     /// The next gap, given the agents staged in full (`staged`: name, has

@@ -25,7 +25,9 @@
 //! the plumbing works; see `behaviour.rs`. `core` (opt-in too) runs the core
 //! jobs at the independence levels people pick; see `core_jobs.rs`.
 //! `adversarial` (opt-in) tries to make agents timid, lazy or leaky against
-//! a stand-in browser; see `adversarial.rs`.
+//! a stand-in browser; see `adversarial.rs`. `import` (opt-in) plays a
+//! fictional outside assistant through a whole import over Remote Access and
+//! scores what reaches the review card; see `import_muse.rs`.
 
 // A test driver: a failed unwrap is a failed run, and `pgrep`/re-exec are the point.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::disallowed_methods)]
@@ -46,6 +48,7 @@ use tauri::{AppHandle, Listener};
 mod adversarial;
 mod behaviour;
 mod core_jobs;
+mod import_muse;
 
 type Check = Result<(), String>;
 
@@ -2039,6 +2042,7 @@ fn main() {
                 "restart-a" => restart_phase_a(&h).await,
                 "behaviour" => behaviour::phase(&h, &args[2]).await,
                 "adversarial" => adversarial::phase(&h, &args[2]).await,
+                "import" => import_muse::phase(&h, &args[2]).await,
                 "quit" => quit_phase(&h).await,
                 "slots" => match slots_phase(&h).await {
                     Ok(()) => println!("OK"),
@@ -2103,6 +2107,7 @@ fn main() {
                 "session-prompt" => session_prompt(&h).await,
                 "behaviour" => behaviour::suite(&h).await,
                 "adversarial" => adversarial::suite(&h).await,
+                "import" => import_muse::suite(&h).await,
                 "core" => {
                     let mut failed = Vec::new();
                     for name in core_jobs::ALL {
