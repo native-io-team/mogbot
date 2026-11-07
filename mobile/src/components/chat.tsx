@@ -13,7 +13,7 @@ import {
   type AgentMessage,
   type ResultRef,
 } from '@shipstudio/companion-protocol';
-import { memo, useState } from 'react';
+import { memo, useEffect, useState, type ReactNode } from 'react';
 import { type LayoutChangeEvent, Pressable, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
 import { useRouter } from 'expo-router';
@@ -70,6 +70,22 @@ import { setComposer } from '../lib/drafts';
 import { getApp, useApp, useServed } from '../lib/store';
 
 const enter = FadeInDown.duration(220).springify().damping(18);
+
+/**
+ * "Sending…" only once a send is slow. On a quick link the Mac answers
+ * before it could be read, and a line that shows for a beat and goes moved
+ * the bubble down a line and the rest of the list with it.
+ */
+export const SENDING_AFTER_MS = 900;
+
+/**
+ * Around a row of yours, pending or confirmed: the send rises in once, as it
+ * goes. The confirmed copy keeps the row (same key) and this wrapper, so the
+ * Mac answering mid-rise neither restarts nor cuts it.
+ */
+export function SendRise({ rise, children }: { rise: boolean; children: ReactNode }) {
+  return <Animated.View entering={rise ? enter : undefined}>{children}</Animated.View>;
+}
 
 export const MessageRow = memo(function MessageRow({
   message,
@@ -678,8 +694,9 @@ export function PendingRow({ pending }: { pending: PendingSend }) {
   const styles = useStyles();
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
   const dim = pending.failed || pending.waiting;
+  const slow = useSlow(pending.ts);
   return (
-    <Animated.View entering={enter} style={styles.userRow}>
+    <View style={styles.userRow}>
       {!!pending.attachments?.length && (
         <View style={dim && { opacity: 0.6 }}>
           <Attachments
@@ -736,12 +753,28 @@ export function PendingRow({ pending }: { pending: PendingSend }) {
           />
         </View>
       ) : (
-        <T variant="caption" color={colors.textSecondary} style={styles.meta}>
-          Sending…
-        </T>
+        slow && (
+          <T variant="caption" color={colors.textSecondary} style={styles.meta}>
+            Sending…
+          </T>
+        )
       )}
-    </Animated.View>
+    </View>
   );
+}
+
+/** Whether `SENDING_AFTER_MS` has passed since `ts`: re-renders once, when it does. */
+function useSlow(ts: number): boolean {
+  const left = ts + SENDING_AFTER_MS - Date.now();
+  const [slow, setSlow] = useState(left <= 0);
+  useEffect(() => {
+    if (slow) return;
+    const t = setTimeout(() => setSlow(true), Math.max(0, left));
+    return () => clearTimeout(t);
+    // Once per row: `left` only shrinks.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slow, ts]);
+  return slow;
 }
 
 /** A reply being written: revealed at the display's own pace (`useReveal`). */
@@ -772,6 +805,9 @@ export function DraftRow({
  */
 function Prose({ id, text, streaming = false }: { id: string; text: string; streaming?: boolean }) {
   const shown = useReveal(id, text, streaming);
+  // A reply's first frame reveals nothing yet: hold its first line's height,
+  // or the working line goes, the list drops a line, and comes back up.
+  if (streaming && !shown) return <Markdown text={'\u200b'} />;
   return shown.length < text.length || streaming ? (
     <Markdown text={shown} streaming />
   ) : (

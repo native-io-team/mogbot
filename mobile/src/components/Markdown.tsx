@@ -94,6 +94,21 @@ export function splitStable(text: string): [string, string] {
   return [text.slice(0, boundary), text.slice(boundary)];
 }
 
+/**
+ * While streaming, what's drawn holds back what can't settle yet: a line
+ * break or space at the very end (with line breaks on, it drew an empty line
+ * for a frame, the row a line taller until the next word came), and a last
+ * line that is only the first one or two backticks (or tildes) of a fence
+ * (a line of code for a frame, the block a line taller, then gone).
+ */
+export function withoutPartialFence(text: string): string {
+  const trimmed = text.replace(/\s+$/, '');
+  const at = trimmed.lastIndexOf('\n');
+  return /^\s{0,3}(`{1,2}|~{1,2})$/.test(trimmed.slice(at + 1))
+    ? trimmed.slice(0, Math.max(0, at)).replace(/\s+$/, '')
+    : trimmed;
+}
+
 export const Markdown = memo(function Markdown({
   text,
   streaming = false,
@@ -103,7 +118,7 @@ export const Markdown = memo(function Markdown({
 }) {
   const styles = useStyles();
   if (!streaming) return <Blocks text={text} />;
-  const [done, tail] = splitStable(text);
+  const [done, tail] = splitStable(withoutPartialFence(text));
   return (
     <View style={styles.root}>
       {!!done && <Blocks text={done} />}

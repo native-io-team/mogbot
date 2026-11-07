@@ -17,6 +17,7 @@
  *   pnpm qa:web --only chat-,composer-   # shots whose name starts with chat- or composer-
  *   pnpm qa:web --phases heavy           # only these phases (fresh,live,cached,impostor,bars,heavy,importing,team-setup,live-work,engine,torture)
  *   pnpm qa:web --themes dark            # one theme
+ *   pnpm qa:web --phases send            # a send, frame by frame (not in the default run)
  *   pnpm qa:web --out /tmp/shots
  *   pnpm qa:web --web-port 8098 --mock-port 47498 --cdp-port 9681
  *   QA_WEB_PORT=… QA_MOCK_PORT=… QA_CDP_PORT=… pnpm qa:web
@@ -221,6 +222,8 @@ class Page {
   #id = 0;
   #pending = new Map();
   errors = [];
+  /** Called with every CDP event (the send phase's screencast). */
+  listeners = new Set();
 
   static async attach(wsUrl) {
     const page = new Page();
@@ -243,6 +246,7 @@ class Page {
       msg.error ? reject(new Error(msg.error.message)) : resolve(msg.result);
       return;
     }
+    if (msg.method) for (const fn of this.listeners) fn(msg);
     if (msg.method === 'Runtime.exceptionThrown') {
       const d = msg.params.exceptionDetails;
       this.errors.push(`exception: ${(d.exception?.description ?? d.text).split('\n')[0]}`);
@@ -1671,7 +1675,8 @@ const tapChip = (page) =>
   );
 const closeSheet = (page) => page.eval('history.back()').then(() => sleep(900));
 // The chip is in the card's row: words that wrap make the card.
-const LONG_ASK = 'Can you pull last week’s numbers together for the Monday review, and flag anything that moved more than ten percent?';
+const LONG_ASK =
+  'Can you pull last week’s numbers together for the Monday review, and flag anything that moved more than ten percent?';
 const openControls = async (page) => {
   await clearField(page);
   await page.type(LONG_ASK);
@@ -1700,7 +1705,9 @@ const ENGINE = [
     route: '/chat/design',
     ready: 'Designer',
     act: async (page) => {
-      await page.type('Can you pull last week’s numbers together for the Monday review, and flag anything that moved more than ten percent?');
+      await page.type(
+        'Can you pull last week’s numbers together for the Monday review, and flag anything that moved more than ten percent?'
+      );
       await sleep(700);
     },
     check:
@@ -1950,6 +1957,117 @@ function report(meta) {
 
 // ---- Main ---------------------------------------------------------------------------
 
+/**
+ * One send, frame by frame: from the press of Send to the agent's first
+ * words. A recorder in the page reads, every animation frame, where the sent
+ * bubble is, how many copies of it are drawn, whether its DOM node was
+ * replaced, whether "Sending…" shows, and where the composer and the row
+ * before it sit; a screencast keeps the pictures. Any jump the eye calls
+ * "it tweaks" is a line in `send-<theme>/frames.md`.
+ */
+async function sendFrames(page, theme) {
+  const dir = path.join(OUT, `send-${theme}`);
+  rmSync(dir, { recursive: true, force: true });
+  await mkdir(dir, { recursive: true });
+  const text = `Can you tighten the spacing on the pricing cards and check the hover states on phones too? (${theme})`;
+  await page.goto(`${WEB}/chat/design`);
+  await page.waitFor(`document.body.innerText.includes('Designer')`, 20_000, 'Designer');
+  await sleep(2500);
+  await page.type(text, 'textarea');
+  await sleep(800);
+  // The row that was newest before the send: its text, to follow it.
+  await page.eval(`(() => {
+    const field = document.querySelector('textarea').getBoundingClientRect().top;
+    const rows = [...document.querySelectorAll('[dir="auto"]')]
+      .filter((e) => e.innerText?.trim().length > 12 && !e.closest('textarea'))
+      .map((e) => ({ e, r: e.getBoundingClientRect() }))
+      .filter(({ r }) => r.height && r.bottom < field - 40 && r.top > 80);
+    rows.sort((a, b) => b.r.bottom - a.r.bottom);
+    window.__qaAnchor = rows[0]?.e ?? null;
+  })()`);
+  const frames = [];
+  const onFrame = (msg) => {
+    if (msg.method !== 'Page.screencastFrame') return;
+    frames.push({ t: Date.now(), data: msg.params.data });
+    page.send('Page.screencastFrameAck', { sessionId: msg.params.sessionId }).catch(() => {});
+  };
+  page.listeners.add(onFrame);
+  await page.send('Page.startScreencast', { format: 'png', everyNthFrame: 1 });
+  await page.eval(`(() => {
+    const sent = ${JSON.stringify(text)};
+    const ids = new WeakMap(); let next = 1;
+    const id = (n) => { if (!ids.has(n)) ids.set(n, next++); return ids.get(n); };
+    const log = (window.__qaLog = []);
+    const t0 = performance.now();
+    const tick = () => {
+      const field = document.querySelector('textarea');
+      const bubbles = [...document.querySelectorAll('[dir="auto"]')].filter(
+        (e) => e.innerText?.trim() === sent && !e.closest('textarea')
+      );
+      const texts = document.body.innerText;
+      const a = window.__qaAnchor;
+      log.push({
+        t: Math.round(performance.now() - t0),
+        n: bubbles.length,
+        y: bubbles.map((b) => Math.round(b.getBoundingClientRect().top)),
+        node: bubbles.map(id),
+        sending: texts.includes('Sending…'),
+        queued: texts.includes('Queued ·'),
+        field: field ? Math.round(field.getBoundingClientRect().top) : null,
+        anchor: a && a.isConnected ? Math.round(a.getBoundingClientRect().top) : null,
+      });
+      if (performance.now() - t0 < 4000) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  })()`);
+  const t0 = Date.now();
+  await sleep(150);
+  await page.clickLabel('Send');
+  await sleep(4200);
+  await page.send('Page.stopScreencast');
+  page.listeners.delete(onFrame);
+  const rec = await page.eval('window.__qaLog');
+  // Changes only: a row per frame where anything moved or appeared.
+  const lines = [];
+  let prev = null;
+  for (const f of rec) {
+    const key = JSON.stringify({ ...f, t: 0 });
+    if (key === prev) continue;
+    prev = key;
+    lines.push(
+      `| ${f.t} | ${f.n} | ${f.y.join(', ')} | ${f.node.join(', ')} | ${f.sending ? 'yes' : ''} | ${f.queued ? 'yes' : ''} | ${f.field ?? ''} | ${f.anchor ?? ''} |`
+    );
+  }
+  for (const [i, f] of frames.entries()) {
+    await writeFile(
+      path.join(dir, `f${String(i).padStart(3, '0')}-${f.t - t0}ms.png`),
+      Buffer.from(f.data, 'base64')
+    );
+  }
+  await writeFile(
+    path.join(dir, 'frames.md'),
+    [
+      `# One send, frame by frame (${theme})`,
+      '',
+      `Recorder from 150 ms before Send for 4 s; a row for each frame where something changed. ${frames.length} screencast frames saved beside this file.`,
+      '',
+      '| ms | copies | bubble top | node | Sending… | Queued | field top | row before |',
+      '|---|---|---|---|---|---|---|---|',
+      ...lines,
+      '',
+    ].join('\n')
+  );
+  shots.push({
+    name: `send-${theme}`,
+    route: '/chat/design',
+    theme,
+    check: `One send, frame by frame: see send-${theme}/frames.md. One copy of the bubble throughout, one node, no jump back down`,
+    errors: [...new Set(page.errors)],
+    clipped: [],
+  });
+  page.errors = [];
+  log(`send frames ${theme}: ${frames.length} pictures, ${lines.length} changes`);
+}
 async function main() {
   for (const p of [WEB_PORT, MOCK_PORT, CDP_PORT]) {
     if (!(await portFree(p)))
@@ -2095,6 +2213,16 @@ async function main() {
     await page.goto(`${WEB}/agents`);
     await sleep(4000);
     await each(ENGINE);
+  }
+
+  if (phase('send')) {
+    await startMock();
+    await page.goto(`${WEB}/agents`);
+    await sleep(4000);
+    for (const theme of THEMES) {
+      await setTheme(page, theme);
+      await sendFrames(page, theme);
+    }
   }
 
   if (phase('torture')) {
