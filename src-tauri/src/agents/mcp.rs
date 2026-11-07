@@ -2527,6 +2527,31 @@ pub(super) async fn decide(
     decision
 }
 
+/// Whether this call goes out under the user's name while they hold sends
+/// for the exact text's OK (`outward`): then no level, rule or plan without
+/// the words answers it, and its card shows the words.
+fn holds_for_exact_text(caller: &store::Agent, tool: &str, input: &Value) -> bool {
+    super::outward::required(caller) && super::outward::sends_as_user(caller, tool, input)
+}
+
+/// The card's words about the exact text going out, when it is held for it.
+fn exact_text_block(caller: &store::Agent, tool: &str, input: &Value) -> Option<String> {
+    if !holds_for_exact_text(caller, tool, input) {
+        return None;
+    }
+    let ctx = super::autoallow::Ctx::for_agent(caller);
+    let typed = super::browser_gate::typed_for(&caller.id, tool);
+    let texts = super::outward::texts(tool, input, ctx.as_ref(), &typed);
+    Some(super::outward::card_block(&texts))
+}
+
+fn with_exact_text(summary: Option<String>, block: Option<String>) -> Option<String> {
+    match (summary, block) {
+        (Some(s), Some(b)) => Some(format!("{b}\n\n{s}")),
+        (s, b) => s.or(b),
+    }
+}
+
 /// A step in the agents' browser the browser gate said asks: a card in the
 /// agents' browser's words. Never the independence level (the gate already
 /// applied it) and never a standing "Always allow" rule: a rule is for a
@@ -2540,7 +2565,10 @@ async fn agents_browser_card(
     let page = super::browser_gate::page_of(&super::browser_gate::agents_key(&caller.id));
     let (title, said) = super::browser_gate::describe_agents(tool, input, &page);
     let (_, detail) = describe_request(tool, input);
-    let summary = Some(said).filter(|s| !s.trim().is_empty());
+    let summary = with_exact_text(
+        Some(said).filter(|s| !s.trim().is_empty()),
+        exact_text_block(caller, tool, input),
+    );
     match ask(app, caller, title, summary, detail, Some((tool, input))).await {
         Answer::Allowed => Decision::Allow,
         Answer::Denied(note) => Decision::Deny(denied(note)),
@@ -2644,9 +2672,13 @@ async fn decide_inner(
     if tool.starts_with(super::browser_gate::AGENTS_SERVER) {
         return agents_browser_card(app, caller, tool, input).await;
     }
+    // "Nothing goes out under my name unless I OK the exact text"
+    // (`outward`): a send waits for a card showing its words, at every
+    // level; no standing rule and no level answers it.
+    let exact = holds_for_exact_text(caller, tool, input);
     // Never for a browser step the gate said asks: a tool-wide rule doesn't
     // override its send/pay/delete call (`permissions::is_scopable_tool`).
-    if !browser_asks && always_allowed(caller, tool, input) {
+    if !browser_asks && !exact && always_allowed(caller, tool, input) {
         // Nothing happens invisibly: each one leaves a quiet line in the chat.
         let line = format!("{} · always allowed", one_line(tool, input));
         let _ = runner::record_in_turn(
@@ -2669,6 +2701,7 @@ async fn decide_inner(
     // stays, but asks only for data leaving and new packages.
     let direct = level.goes_hard() && !outside && runner::answering_user(&caller.id);
     let guarded = browser_asks
+        || exact
         || super::exposure::read_outside(&caller.id)
             && super::autoallow::Ctx::for_agent(caller).is_none_or(|ctx| {
                 super::autoallow::outside_mark_asks(tool, input, &ctx, full_send, direct)
@@ -2682,8 +2715,9 @@ async fn decide_inner(
                     .is_none()
             });
         let line = if sent {
-            let (verb, place) = super::full_send::describe(tool, input);
-            super::full_send::note(&caller.id, verb, &place);
+            let ctx = super::autoallow::Ctx::for_agent(caller);
+            let (what, place) = super::full_send::describe(tool, input, ctx.as_ref());
+            super::full_send::note(&caller.id, &what, &place);
             format!("{SENT_LINE} · {}", one_line(tool, input))
         } else {
             auto_line(level, tool, input)
@@ -2719,6 +2753,7 @@ async fn decide_inner(
     } else {
         (title, super::admin::summary_for(tool, input, why))
     };
+    let summary = with_exact_text(summary, exact_text_block(caller, tool, input));
     match ask(app, caller, title, summary, detail, Some((tool, input))).await {
         Answer::Allowed => {
             // A new package it installs asks once per project (`installs`).
@@ -2751,6 +2786,10 @@ fn under_plan(
         || tool.starts_with(super::browser_gate::AGENTS_SERVER))
     .then(|| super::browser_gate::plan_step(caller, tool, input))
     .flatten();
+    // Exact text: a command is judged part by part (`plan_grant`); anything
+    // else when it sends as the user.
+    let exact = super::outward::required(caller)
+        && (tool == "Bash" || super::outward::sends_as_user(caller, tool, input));
     let turn = super::plan_grant::Turn {
         holder: &caller.id,
         ctx: &ctx,
@@ -2758,6 +2797,8 @@ fn under_plan(
         exposed: super::exposure::read_outside(&caller.id),
         browser,
         now,
+        exact,
+        typed: super::browser_gate::typed_for(&caller.id, tool),
     };
     let Some(lines) = super::plan_grant::cover(tool, input, &turn) else {
         return false;
@@ -2852,6 +2893,10 @@ pub fn sweep_auto_allowed(app: &AppHandle) -> usize {
             let (Some(tool), Some(input)) = (&card.tool, &card.input) else {
                 continue;
             };
+            // A send held for its exact text is the user's to answer.
+            if holds_for_exact_text(&agent, tool, input) {
+                continue;
+            }
             let level = receipt_level(chosen, !inside);
             let Ok(Some(updated)) =
                 store::set_approval_status(&agent.id, &card.request_id, ApprovalStatus::Allowed)

@@ -1859,6 +1859,7 @@ export const agentsPolicy = {
       }
     ],
     "independence": "judgement",
+    "outwardTextNeedsOk": false,
     "own": [
       "folders",
       "browser",
@@ -1918,6 +1919,13 @@ export const agentsPolicy = {
       "label": "Admin",
       "team": true,
       "value": "No"
+    },
+    {
+      "enforced": "app",
+      "key": "outward_text",
+      "label": "Sent under your name",
+      "team": true,
+      "value": "As its independence allows"
     },
     {
       "enforced": "prompt",

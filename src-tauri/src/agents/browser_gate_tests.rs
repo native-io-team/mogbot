@@ -932,3 +932,40 @@ fn asking_the_users_own_grok_runs_at_go_hard() {
     assert!(!assistant_chat(Some("https://notgrok.com/")));
     assert!(!assistant_chat(Some("https://x.com/compose/post")));
 }
+
+/// With the exact-text switch on (`outward`), what counts as going out
+/// under the user's name in the browser, and the words its card shows.
+#[test]
+fn a_send_click_is_outward_and_its_card_knows_what_was_typed() {
+    let mut p = page();
+    let a = agent();
+    let send = json!({ "action": "left_click", "ref": "ref_4", "tabId": 7 });
+    let enter = json!({ "action": "key", "text": "Return", "tabId": 7 });
+    assert!(outward_step_on(&a, "computer", &send, &p));
+    // Typing, filling and looking don't send.
+    let fill = json!({ "ref": "ref_3", "value": "Thanks, see you Friday.", "tabId": 7 });
+    assert!(!outward_step_on(&a, "form_input", &fill, &p));
+    assert!(!outward_step_on(
+        &a,
+        "get_page_text",
+        &json!({ "tabId": 7 }),
+        &p
+    ));
+    assert!(!outward_step_on(
+        &a,
+        "navigate",
+        &json!({ "url": "https://mail.google.com/" }),
+        &p
+    ));
+    // What it typed is remembered for the send card, and a new page starts over.
+    on_call(&mut p, "form_input", &fill);
+    assert_eq!(p.typed, vec!["Thanks, see you Friday.".to_string()]);
+    p.last_target = Some("textbox \"Message Body\"".into());
+    assert!(outward_step_on(&a, "computer", &enter, &p));
+    on_call(
+        &mut p,
+        "navigate",
+        &json!({ "url": "https://mail.google.com/mail/u/0/#inbox", "tabId": 7 }),
+    );
+    assert!(p.typed.is_empty());
+}

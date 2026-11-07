@@ -39,13 +39,23 @@ export interface PolicyEffective {
   admin: boolean;
   teamRules: string[];
   ownRules: string[];
+  /** Sends under the user's name wait for their OK on the exact text, at every level. */
+  outwardTextNeedsOk: boolean;
   /** The dimensions it has its own value for. */
   own: string[];
 }
 
 /** One line of "What it can do". */
 export interface PolicyLine {
-  key: 'projects' | 'folders' | 'apps' | 'browser' | 'independence' | 'admin' | 'rules';
+  key:
+    | 'projects'
+    | 'folders'
+    | 'apps'
+    | 'browser'
+    | 'independence'
+    | 'admin'
+    | 'outward_text'
+    | 'rules';
   label: string;
   value: string;
   /** `app`: the app stops it. `prompt`: instructions the agent is given. */
@@ -78,6 +88,7 @@ export interface TeamPolicyView {
     apps: PolicyApps;
     browser: boolean;
     rules: string[];
+    outwardTextNeedsOk: boolean;
   };
   /** Names of agents with settings of their own. */
   ownSettings: string[];
@@ -104,6 +115,8 @@ export interface PolicyChange {
   admin?: boolean;
   addRules?: string[];
   removeRules?: string[];
+  /** Hold sends under the user's name for their OK on the exact text. */
+  outwardTextNeedsOk?: boolean;
 }
 
 export type PolicyTarget =

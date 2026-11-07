@@ -30,6 +30,7 @@ export const BALANCED_LINES: PolicyLine[] = [
   line('browser', 'Your browser', 'Yes'),
   line('independence', 'Independence', 'Use good judgement', 'prompt'),
   line('admin', 'Admin', 'No'),
+  line('outward_text', 'Sent under your name', 'As its independence allows'),
   line('rules', 'Rules', 'None', 'prompt'),
 ];
 
@@ -47,6 +48,7 @@ export const BALANCED_VIEW: AgentPolicyView = {
     admin: false,
     teamRules: [],
     ownRules: [],
+    outwardTextNeedsOk: false,
     own: [],
   },
 };
@@ -79,6 +81,7 @@ export const BALANCED_TEAM: TeamPolicyView = {
     apps: { mode: 'all' },
     browser: true,
     rules: [],
+    outwardTextNeedsOk: false,
   },
   ownSettings: [],
 };

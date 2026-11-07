@@ -593,6 +593,8 @@ pub async fn dispatch(
                     }
                 }
             }
+            // What it types, for a later send card's exact words.
+            browser_gate::note_typed_agents(agent_id, &name, &args);
             let a = agent_id.to_string();
             let done = tokio::task::spawn_blocking(move || run(&a, &name, &args)).await;
             match done {

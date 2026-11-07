@@ -108,6 +108,7 @@ pub mod narration;
 pub mod notify;
 pub mod oauth;
 pub mod other_app;
+pub mod outward;
 pub mod paste;
 pub mod permissions;
 pub mod phone_signin;

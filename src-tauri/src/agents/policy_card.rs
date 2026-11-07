@@ -170,6 +170,7 @@ pub fn schema() -> Value {
                     "browser": { "type": "boolean", "description": "May use the user's signed-in browser." },
                     "independence": { "type": "string", "enum": ["often", "judgement", "go_hard", "full_send", "team"], "description": "How much it does on its own, for the agents named (each may have its own; \"team\" puts one back on the team's level). Name the agent for one (\"put Social Posts on Full send\": agents [\"Social Posts\"]), \"team\" for everyone's default. full_send (\"Full send — let it rip\"): when the user says \"go full send\", \"let it rip\" or \"stop asking me\". Raising needs the user's card; lowering (\"make Finance check with me often\": often) applies at once." },
                     "admin": { "type": "boolean", "description": "Admins may propose changes for other agents." },
+                    "outward_text_needs_ok": { "type": "boolean", "description": "Nothing goes out under the user's name (message, post, comment, email, issue, pull request) until they OK its exact text on a card, at every level including Full send. On when the user says \"nothing goes out unless I approve the exact text\" or \"word for word\": the app enforces it, unlike a rule. On applies at once." },
                     "fix_previews": { "type": "boolean", "description": "This Mac's \"Fix stopped previews\" switch, on its own (no agents): agents fix a preview that stopped by itself. Off applies at once." },
                     "rules": {
                         "type": "object",
@@ -186,7 +187,7 @@ pub fn schema() -> Value {
     })
 }
 
-pub const DESCRIPTION: &str = "Propose a change to what an agent may do (projects and how it works in them, folders on this Mac, apps, the user's browser, independence, admin, rules), to the team's defaults, or to this Mac's “Fix stopped previews” switch. Use it whenever the user says an agent should or shouldn't be able to do something, or asks to reset settings or make one agent like another. The user gets a card showing the change in plain words and applies it with Allow; nothing changes before. It returns at once: say in one line what you proposed and stop; you're told when they answer. Never tell the user to go to Settings.";
+pub const DESCRIPTION: &str = "Propose a change to what an agent may do (projects and how it works in them, folders on this Mac, apps, the user's browser, independence, admin, rules, whether sends wait for the exact text's OK), to the team's defaults, or to this Mac's “Fix stopped previews” switch. Use it whenever the user says an agent should or shouldn't be able to do something, or asks to reset settings or make one agent like another. The user gets a card showing the change in plain words and applies it with Allow; nothing changes before. It returns at once: say in one line what you proposed and stop; you're told when they answer. Never tell the user to go to Settings.";
 
 fn text(message: impl Into<String>) -> Value {
     json!({ "content": [{ "type": "text", "text": message.into() }] })
@@ -248,6 +249,7 @@ pub async fn parse_change(c: &Value) -> Result<Change, String> {
             .unwrap_or(false),
         browser: c.get("browser").and_then(Value::as_bool),
         admin: c.get("admin").and_then(Value::as_bool),
+        outward_text_needs_ok: c.get("outward_text_needs_ok").and_then(Value::as_bool),
         independence: c
             .get("independence")
             .and_then(Value::as_str)
@@ -498,7 +500,11 @@ pub fn build(
     if gs.is_empty() {
         return Err("That's already how it is: nothing would change.".into());
     }
-    let has_rules = !change.add_rules.is_empty();
+    // The exact-text rule is enforced (`outward`), so it isn't "only words".
+    let has_rules = change
+        .add_rules
+        .iter()
+        .any(|r| !policy::states_exact_text(r));
     Ok(Proposal {
         targets,
         change,
@@ -585,7 +591,7 @@ fn offer(app: &AppHandle, caller: &Agent, proposal: Proposal, agents: &[Agent]) 
     };
     if lowers {
         return match apply_proposal(&proposal) {
-            Ok(()) => {
+            Ok(applied) => {
                 let lines = summary(&proposal.groups);
                 let _ = runner::record(
                     app,
@@ -595,7 +601,7 @@ fn offer(app: &AppHandle, caller: &Agent, proposal: Proposal, agents: &[Agent]) 
                         format!("Settings changed: {}", lines.replace('\n', " ")),
                     ),
                 );
-                note_targets(app, &caller.id, &proposal);
+                note_targets(app, &caller.id, &proposal, applied.as_ref());
                 let _ = app.emit(runner::EVENT_REGISTRY, ());
                 let _ = app.emit(EVENT, ());
                 text(format!(
@@ -649,21 +655,38 @@ pub fn lowers_only(
     level: Level,
     new_level: Level,
 ) -> bool {
-    if before.team != after.team || new_level.rank() > level.rank() {
+    // Turning the exact-text rule on only has agents do less on their own;
+    // turning it off never applies without the card.
+    let (bt, at) = (
+        before.team.outward_text_needs_ok,
+        after.team.outward_text_needs_ok,
+    );
+    if bt && !at {
         return false;
     }
-    let mut lowered = new_level.rank() < level.rank();
+    let team_rest = policy::Team {
+        outward_text_needs_ok: bt,
+        ..after.team.clone()
+    };
+    if before.team != team_rest || new_level.rank() > level.rank() {
+        return false;
+    }
+    let mut lowered = new_level.rank() < level.rank() || (!bt && at);
     for a in agents {
         let b = policy::resolve(before, a, level);
         let mut x = policy::resolve(after, a, new_level);
         if b == x {
             continue;
         }
-        if x.independence.rank() > b.independence.rank() {
+        if x.independence.rank() > b.independence.rank()
+            || (b.outward_text_needs_ok && !x.outward_text_needs_ok)
+        {
             return false;
         }
-        lowered |= x.independence.rank() < b.independence.rank();
+        lowered |= x.independence.rank() < b.independence.rank()
+            || (!b.outward_text_needs_ok && x.outward_text_needs_ok);
         x.independence = b.independence;
+        x.outward_text_needs_ok = b.outward_text_needs_ok;
         x.own = b.own.clone();
         if b != x {
             return false;
@@ -718,11 +741,11 @@ pub fn answer_card(
     }
     let applied = apply_proposal(p);
     match applied {
-        Ok(()) => {
+        Ok(changed) => {
             let updated =
                 store::set_approval_status(agent_id, request_id, ApprovalStatus::Allowed)?;
             finish(app, agent_id, updated);
-            note_targets(app, agent_id, p);
+            note_targets(app, agent_id, p, changed.as_ref());
             // A level raised: open cards it now answers are answered.
             if p.change.independence.is_some() || p.change.preset.is_some() {
                 super::mcp::sweep_auto_allowed(app);
@@ -752,14 +775,17 @@ pub fn answer_card(
     }
 }
 
-/// Apply what a card showed, or say why it can't be any more.
-pub fn apply_proposal(p: &Proposal) -> Result<(), String> {
+/// Apply what a card showed, or say why it can't be any more. The policy
+/// before and after, for who is told ([`notes_for`]); `None` for this Mac's
+/// switches.
+pub fn apply_proposal(p: &Proposal) -> Result<Option<(Saved, Saved)>, String> {
     if let Some(m) = &p.mac {
-        return apply_mac(m);
+        return apply_mac(m).map(|()| None);
     }
     let level = super::independence::level();
     let agents = store::list().unwrap_or_default();
     let mut new_level = level;
+    let mut changed = None;
     policy::modify(|saved| {
         if saved.version != p.version {
             return Err("The settings changed after this was proposed.".to_string());
@@ -773,6 +799,7 @@ pub fn apply_proposal(p: &Proposal) -> Result<(), String> {
                 }
             }
         }
+        changed = Some((saved.clone(), after.clone()));
         *saved = after;
         new_level = l;
         Ok(())
@@ -782,7 +809,7 @@ pub fn apply_proposal(p: &Proposal) -> Result<(), String> {
         super::independence::set_level(new_level, store::now_ms()).map_err(|e| e.to_string())?;
         policy::sync();
     }
-    Ok(())
+    Ok(changed)
 }
 
 fn finish(app: &AppHandle, agent_id: &str, updated: Option<store::AgentMessage>) {
@@ -798,25 +825,69 @@ fn finish(app: &AppHandle, agent_id: &str, updated: Option<store::AgentMessage>)
 /// Fired when any policy changes.
 pub const EVENT: &str = "agents://policy";
 
-/// A quiet line in each changed agent's own chat (the proposer's has the card).
-fn note_targets(app: &AppHandle, proposer: &str, p: &Proposal) {
+/// Who is told about an applied change, and the line each gets: one note in
+/// the Chief's chat for anything team-wide, and a quiet line for each agent
+/// whose *own* settings changed (named on the card, or an own setting the
+/// change reset). A team rule or a team default is the Chief's note only:
+/// once, a team change put the same "Settings changed: New rule…" in every
+/// agent's chat in the same minute. `skip`: whose chat already shows it
+/// (the proposer's card or note). Pure, for tests.
+pub fn notes_for(
+    before: &Saved,
+    after: &Saved,
+    groups: &[Group],
+    agents: &[Agent],
+    skip: Option<&str>,
+    prefix: &str,
+) -> Vec<(String, String)> {
+    let mut out: Vec<(String, String)> = Vec::new();
+    let mut team_wide = groups.iter().any(|g| g.agent_ids.is_empty());
+    for g in groups {
+        for id in &g.agent_ids {
+            if before.agents.get(id) == after.agents.get(id) {
+                // Changed only through the team's defaults.
+                team_wide = true;
+                continue;
+            }
+            if Some(id.as_str()) == skip || out.iter().any(|(x, _)| x == id) {
+                continue;
+            }
+            out.push((id.clone(), format!("{prefix}{}", g.changes.join(" · "))));
+        }
+    }
+    if team_wide {
+        if let Some(chief) = agents.iter().find(|a| a.is_main) {
+            if Some(chief.id.as_str()) != skip {
+                let line = format!("{prefix}{}", summary(groups).replace('\n', " "));
+                out.retain(|(id, _)| *id != chief.id);
+                out.insert(0, (chief.id.clone(), line));
+            }
+        }
+    }
+    out
+}
+
+/// The notes for a change a card applied (the proposer's chat has the card).
+fn note_targets(app: &AppHandle, proposer: &str, p: &Proposal, applied: Option<&(Saved, Saved)>) {
+    let Some((before, after)) = applied else {
+        return;
+    };
     let by = store::get(proposer).ok().map(|a| AgentRef {
         id: a.id.clone(),
         name: a.name.clone(),
     });
-    for g in &p.groups {
-        for id in &g.agent_ids {
-            if id == proposer {
-                continue;
-            }
-            let mut line = runner::new_message(
-                id,
-                MessageKind::Note,
-                format!("Settings changed: {}", g.changes.join(" · ")),
-            );
-            line.peer = by.clone();
-            let _ = runner::record(app, line);
-        }
+    let agents = store::list().unwrap_or_default();
+    for (id, text) in notes_for(
+        before,
+        after,
+        &p.groups,
+        &agents,
+        Some(proposer),
+        "Settings changed: ",
+    ) {
+        let mut line = runner::new_message(&id, MessageKind::Note, text);
+        line.peer = by.clone();
+        let _ = runner::record(app, line);
     }
 }
 
