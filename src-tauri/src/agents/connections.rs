@@ -478,6 +478,47 @@ pub fn grant(
     })?
 }
 
+/// Exactly this access for `agent_id`, or none: the user's Allow on a
+/// settings card (`policy_card`), so unlike [`grant`] it can narrow one.
+/// Refused when its access isn't `before` any more: what the card showed is
+/// what's applied.
+pub fn set_access(
+    connection_id: &str,
+    agent_id: &str,
+    before: Option<Access>,
+    access: Option<Access>,
+) -> Result<(), CommandError> {
+    change(|r| {
+        let c = r
+            .connections
+            .iter_mut()
+            .find(|c| c.id == connection_id)
+            .ok_or_else(|| CommandError::expected("That connection is gone."))?;
+        let now = c
+            .grants
+            .iter()
+            .find(|g| g.agent_id == agent_id)
+            .map(|g| g.access);
+        if now != before {
+            return Err(CommandError::expected(
+                "Its access to that app changed after this was proposed.",
+            ));
+        }
+        match access {
+            None => c.grants.retain(|g| g.agent_id != agent_id),
+            Some(a) => match c.grants.iter_mut().find(|g| g.agent_id == agent_id) {
+                Some(g) => g.access = a,
+                None => c.grants.push(Grant {
+                    agent_id: agent_id.to_string(),
+                    access: a,
+                    granted_at: store::now_ms(),
+                }),
+            },
+        }
+        Ok(())
+    })?
+}
+
 /// Stop `agent_id` using it. The connection stays for the others.
 pub fn revoke(connection_id: &str, agent_id: &str) -> Result<(), CommandError> {
     change(|r| {

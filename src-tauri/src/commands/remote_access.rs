@@ -386,7 +386,7 @@ pub struct StayOn {
     pub open_at_login_available: bool,
 }
 
-fn stay_on_now() -> StayOn {
+pub(crate) fn stay_on_now() -> StayOn {
     StayOn {
         supported: cfg!(target_os = "macos"),
         keep_awake: power::keep_awake_active(),
@@ -411,6 +411,18 @@ pub fn set_stay_on(
     keep_running: Option<bool>,
     open_at_login: Option<bool>,
 ) -> Result<StayOn, CommandError> {
+    write_stay_on(keep_awake, keep_running, open_at_login)?;
+    Ok(sync_stay_on(&app, keep_running.is_some()))
+}
+
+/// The writes behind [`set_stay_on`], with no window to tell: the Chief's
+/// settings card applies them too (`policy_card`), then calls
+/// [`sync_stay_on`].
+pub(crate) fn write_stay_on(
+    keep_awake: Option<bool>,
+    keep_running: Option<bool>,
+    open_at_login: Option<bool>,
+) -> Result<(), CommandError> {
     if keep_awake.is_some() || keep_running.is_some() {
         let mut state = crate::commands::setup::read_app_state();
         if keep_awake.is_some() {
@@ -427,13 +439,18 @@ pub fn set_stay_on(
     if let Some(enabled) = open_at_login {
         power::set_open_at_login(enabled)?;
     }
-    if keep_running.is_some() {
+    Ok(())
+}
+
+/// After a change: the menu bar, quick entry and every view of these.
+pub(crate) fn sync_stay_on(app: &tauri::AppHandle, keep_running_changed: bool) -> StayOn {
+    if keep_running_changed {
         // Quick entry follows this unless set on its own; so does the icon (below).
-        let _ = crate::agents::quick_entry::apply(&app);
+        let _ = crate::agents::quick_entry::apply(app);
     }
-    crate::agents::tray::sync(&app);
+    crate::agents::tray::sync(app);
     let now = stay_on_now();
     // Every place that shows these (Agents' note, the menu bar) shows the same.
-    let _ = tauri::Emitter::emit(&app, crate::agents::tray::EVENT_STAY_ON, now.clone());
-    Ok(now)
+    let _ = tauri::Emitter::emit(app, crate::agents::tray::EVENT_STAY_ON, now.clone());
+    now
 }

@@ -138,8 +138,22 @@ export interface SettingsProposal {
   why?: string;
   /** Some of it is a rule: words, not something the app stops. */
   hasRules?: boolean;
-  /** A switch for this whole Mac instead of agents' settings ("Fix stopped previews"). */
-  mac?: { fixPreviews?: boolean };
+  /** Switches for this whole Mac instead of agents' settings ("Fix stopped previews", keep awake, keep running, open at login). */
+  mac?: {
+    fixPreviews?: boolean;
+    keepAwake?: boolean;
+    keepRunning?: boolean;
+    openAtLogin?: boolean;
+  };
+  /** Apps already connected on this Mac, given to or taken from agents; each `line` is also in `groups`. */
+  grants?: {
+    agentId: string;
+    connectionId: string;
+    before?: 'read' | 'full';
+    /** Absent: taken away. */
+    access?: 'read' | 'full';
+    line: string;
+  }[];
 }
 
 export const PRESET_LABEL: Record<PolicyPreset, string> = {
