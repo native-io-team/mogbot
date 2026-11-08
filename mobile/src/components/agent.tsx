@@ -93,7 +93,7 @@ function lookFromTeam(team: string, id: string): Required<AgentLook> | null {
 }
 
 /** The look to draw: given, else the registry's for `id`, else one from the name. */
-function useLook(
+export function useLook(
   id: string | undefined,
   name: string,
   given: AgentLook | undefined
@@ -238,7 +238,7 @@ function Layer({ size, children }: { size: number; children: ReactNode }) {
  * Light on the top rim and shade on the bottom one, inside the shape only
  * (the desk's `RimFilter`, primitive for primitive).
  */
-function RimFilter({
+export function RimFilter({
   id,
   depth,
   paint,
@@ -279,7 +279,7 @@ function RimFilter({
 }
 
 /** The face on the top: drawn on in the ink, or pressed in as wells with a light lip. */
-function Face({
+export function Face({
   look,
   name,
   px,

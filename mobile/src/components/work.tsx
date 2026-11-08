@@ -361,7 +361,7 @@ export function LiveStep({
   agentId: string;
   /** Under a speaker's name (a room): the name's key cap leads, the line starts on the prose's edge. */
   bare?: boolean;
-  /** Who leads the line, on its typing key (`AgentKey`); without one, the typing dots. */
+  /** Who leads the line, as a key (`AgentKey`); without one, the typing dots. */
   agent?: { name: string; color: string };
   work: TurnWork | undefined;
   /** The call the line is saying (`liveCallShown`), if it is saying one. */
@@ -541,11 +541,11 @@ const useStyles = makeStyles((colors) => ({
   step: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   // The steps' icon column: the typing key's width, so the live line, its
   // steps and the folded "Worked" line share one grid.
-  icon: { width: TYPING_KEY.width, alignItems: 'center' },
+  icon: { width: TYPING_KEY.size, alignItems: 'center' },
   label: { flex: 1 },
   note: { fontStyle: 'italic' as const },
   count: { fontVariant: ['tabular-nums'] },
-  indent: { paddingLeft: TYPING_KEY.width + space.sm },
+  indent: { paddingLeft: TYPING_KEY.size + space.sm },
   output: {
     marginTop: space.xs,
     padding: space.sm,
@@ -563,7 +563,7 @@ const useStyles = makeStyles((colors) => ({
   meta: { flexShrink: 0 },
   headInline: { gap: space.xs },
   // Under the line, on the words' edge.
-  liveIndent: { paddingLeft: TYPING_KEY.width + space.sm, gap: space.xs },
+  liveIndent: { paddingLeft: TYPING_KEY.size + space.sm, gap: space.xs },
   // Quiet actions at the right edge, a row of their own on a phone's line.
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: space.lg },
   bare: { paddingLeft: 0 },

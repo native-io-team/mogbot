@@ -609,8 +609,8 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   On a Mac without the method the choice shows but isn't tappable. Existing
   agents keep theirs ([agents.md](agents.md), "Defaults for new agents").
 - **What it's doing right now** (`LiveStep` in `components/work.tsx`): the
-  working row is the desk's one line: the agent on its typing key (`AgentKey`,
-  the desk's key, pressed by `lib/typingKey.ts` on the UI thread),
+  working row is the desk's one line: the agent as a key (`AgentKey`,
+  the desk's: its avatar raised, pressed by `lib/typingKey.ts` on the UI thread),
   what it's doing in plain words (gently breathing while it's live,
   `Shimmer`), then muted "· 5 steps · 6:02" (the turn's time). Tapping the
   line opens the steps so far under it, ending on the call it's on (the

@@ -465,86 +465,115 @@ export function avatarPaint(color: string, theme: AvatarTheme, selected = false)
 // ------------------------------------------------------------ the typing key
 
 /**
- * While an agent works, its avatar sits on a key (docs/internal/avatars.md,
- * "On a key"): a wide cap in the site's language (a lit top on a darker
- * side, a hairline ring, a soft drop), faintly tinted with the agent's hue,
- * that presses and rebounds as if it were being typed on. The avatar on it
- * is the solid (selected) one: you are looking at that agent, and the solid
- * colour is what stays clear of a near-white cap and a dark one alike.
+ * While an agent works, its avatar is a key being typed on
+ * (docs/internal/avatars.md, "On a key"): the avatar itself, bigger, raised
+ * in the site's key language. The shape's own silhouette is the top, lit
+ * along its upper edge and shaded along its lower one; the same silhouette
+ * set down by `travel`, darker, is the side under it; a soft drop sits
+ * under that. A press moves the top (and the face on it) down into the
+ * side, so the side shrinks to nothing at the bottom of a tap, and the drop
+ * tightens; then it springs back up.
  *
- * Sizes are px; both clients draw the same box. The whole key is one line
- * high (`top + travel` fits the working line), and the cap is the steps'
- * icon column wide, so the live line and the finished one share their grid.
+ * Sizes are px; both clients draw the same box: `size` wide (the steps'
+ * icon column, so the live line and the finished one share a grid) and
+ * `size + travel` tall. The drawing is on the avatar's 32-unit grid, with
+ * `TYPING_KEY_UNITS.travel` more units under it for the side.
  */
 export const TYPING_KEY = {
-  width: 24,
-  top: 18,
+  size: 24,
   /** The side showing under the top at rest, and how far a full press goes. */
   travel: 3,
-  radius: 6,
-  /** The avatar on the cap. */
-  avatar: 14,
+  /** The drop's opacity at the bottom of a press (1 at rest): it tightens under the key. */
+  pressedDrop: 0.45,
   /**
    * The rhythm: a tap, a lighter second tap, then a rest, like a key being
-   * typed on. [time 0–1, depth 0–1 of `travel`]; a small rebound above rest
-   * after each tap. Segments ease in and out.
+   * typed on. [time 0–1, depth 0–1 of `travel`]; a quick press, then a
+   * small rebound above rest as it springs back. Segments ease in and out.
    */
   ms: 2400,
   press: [
     [0, 0],
-    [0.06, 1],
-    [0.15, -0.15],
-    [0.21, 0],
-    [0.28, 0.7],
-    [0.36, -0.1],
-    [0.42, 0],
+    [0.04, 1],
+    [0.12, -0.15],
+    [0.18, 0],
+    [0.26, 0.75],
+    [0.33, -0.1],
+    [0.38, 0],
     [1, 0],
   ] as readonly ValueKey[],
 } as const;
 
-/** The cap's roles, per theme: [lightness, chroma] at the agent's hue. */
-export const TYPING_KEY_ROLES = {
-  /** The top's gradient, lit edge to bottom edge. */
-  topHigh: { dark: [0.4, 0.022], light: [0.995, 0.008] },
-  topLow: { dark: [0.34, 0.022], light: [0.955, 0.014] },
-  /** The side under it. */
-  side: { dark: [0.255, 0.018], light: [0.855, 0.022] },
-} as const satisfies Record<string, Record<AvatarTheme, readonly [number, number]>>;
-
-/** The typing key's light, as white and black at these opacities. */
-export const TYPING_KEY_LIGHT = {
-  /** The lit top edge (an inset line of white). */
-  highlight: { dark: 0.14, light: 0.9 },
-  /** The hairline ring around the whole key. */
-  ring: { dark: 0.55, light: 0.07 },
-  /** The soft drop under it. */
-  shadow: { dark: 0.45, light: 0.14 },
+/** The key's drawing, in the avatar's grid units. */
+export const TYPING_KEY_UNITS = {
+  /** The side's depth under the top. */
+  travel: (TYPING_KEY.travel * AVATAR_GRID) / TYPING_KEY.size,
+  /** The drop: the shape set down this far past the side, and blurred. */
+  drop: { dy: 1.6, blur: 1.4 },
+  /** The hairline round the top and the side: a stroke under the fill, so half of it shows. */
+  ring: 1.2,
 } as const;
 
-export interface TypingKeyPaint {
-  topHigh: string;
-  topLow: string;
-  side: string;
-  highlight: number;
+/** The box the drawing is on: the grid, and the side under it. */
+export const TYPING_KEY_VIEWBOX = `0 0 ${AVATAR_GRID} ${AVATAR_GRID + TYPING_KEY_UNITS.travel}`;
+
+/** The key's roles, per theme: [lightness, chroma] at the agent's hue. */
+export const TYPING_KEY_ROLES = {
+  /** The top, mid-gradient: the agent's own colour, a pastel like the site's faces. */
+  top: { dark: [0.74, 0.11], light: [0.82, 0.09] },
+  /** The side under it, a step darker, so the key reads raised. */
+  side: { dark: [0.55, 0.1], light: [0.66, 0.1] },
+  /** The face, drawn dark on the top in both themes (the site's faces). */
+  ink: { dark: [0.27, 0.05], light: [0.27, 0.05] },
+  /** A pressed-in feature's well. */
+  well: { dark: [0.52, 0.1], light: [0.6, 0.1] },
+} as const satisfies Record<string, Record<AvatarTheme, readonly [number, number]>>;
+
+/**
+ * Each neutral's lift over the roles: white is the site's white key (a near
+ * white top on a light-gray side), a step apart from gray.
+ */
+const TYPING_KEY_LIFT: Record<string, Record<AvatarTheme, number>> = {
+  white: { dark: 0.2, light: 0.155 },
+};
+
+/** The key's light, as white and black at these opacities. */
+export const TYPING_KEY_LIGHT = {
+  rimLight: { dark: 0.45, light: 0.85 },
+  rimShade: { dark: 0.22, light: 0.12 },
+  /** The drop under the key at rest. */
+  shadow: { dark: 0.6, light: 0.22 },
+  /** The hairline round the top. */
+  ring: { dark: 0.45, light: 0.08 },
+  lip: { dark: 0.35, light: 0.7 },
+} as const;
+
+/** What to paint an agent's key with: an avatar's paint, plus its ring. */
+export interface TypingKeyPaint extends AvatarPaint {
+  ink: string;
   ring: number;
-  shadow: number;
 }
 
 /** What to paint an agent's typing key with (sRGB hex; light and shade as opacities). */
 export function typingKeyPaint(color: string, theme: AvatarTheme): TypingKeyPaint {
   const tone = AVATAR_TONES[color] ?? AVATAR_TONES.gray;
-  const at = (role: keyof typeof TYPING_KEY_ROLES) => {
+  const lift = TYPING_KEY_LIFT[color]?.[theme] ?? 0;
+  const at = (role: keyof typeof TYPING_KEY_ROLES, dl: number) => {
     // Indexed, not destructured: the phone's Babel would need a runtime helper.
     const lc = TYPING_KEY_ROLES[role][theme];
-    return oklchHex(lc[0], Math.min(lc[1], tone.maxChroma ?? lc[1]), tone.hue);
+    return oklchHex(lc[0] + dl, Math.min(lc[1], tone.maxChroma ?? lc[1]), tone.hue);
   };
   return {
-    topHigh: at('topHigh'),
-    topLow: at('topLow'),
-    side: at('side'),
-    highlight: TYPING_KEY_LIGHT.highlight[theme],
-    ring: TYPING_KEY_LIGHT.ring[theme],
+    fill: at('top', lift),
+    topHigh: at('top', lift + 0.045),
+    topLow: at('top', lift - 0.03),
+    side: at('side', lift),
+    ink: at('ink', 0),
+    well: at('well', lift),
+    rimLight: TYPING_KEY_LIGHT.rimLight[theme],
+    rimShade: TYPING_KEY_LIGHT.rimShade[theme],
     shadow: TYPING_KEY_LIGHT.shadow[theme],
+    lip: TYPING_KEY_LIGHT.lip[theme],
+    ring: TYPING_KEY_LIGHT.ring[theme],
   };
 }
 

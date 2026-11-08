@@ -1,6 +1,6 @@
 /**
  * The working line under the last message while an agent works. One line,
- * no bubble: the agent on a key, being typed on (`AgentKey`), then what it's doing in
+ * no bubble: the agent as a key being typed on (`AgentKey`), then what it's doing in
  * calm text with a soft shimmer while it's live, and muted at the end how
  * many steps so far and how long the turn has run:
  *
@@ -28,7 +28,7 @@ import { TypingDots } from '../primitives/TypingDots';
 import { useSteadyLine } from '../../hooks/useSteadyLine';
 import type { Agent, TurnWork } from '../../lib/agents';
 import { formatElapsed } from '../../../packages/companion-protocol/src/work';
-import { AgentKey } from './AgentKey';
+import { AgentKey } from './AgentAvatar';
 import { useLiveStep } from './AgentLiveStep';
 import { WorkMenu } from './AgentTakeover';
 import { useLiveWork } from './AgentWork';
@@ -69,6 +69,10 @@ export function WorkingIndicator({
   const step = useLiveStep({ agent, work, activity, leaving });
   const live = useLiveWork({ work, agent, activity, leaving, current: step.current });
   const [frozen, setFrozen] = useState<string | null>(null);
+  // Once it has opened it stops clipping (the open clips its height, and the
+  // key leading the line reaches a little past it).
+  const [opened, setOpened] = useState(false);
+  if (!entering && opened) setOpened(false);
 
   const words = step.text ?? shown;
   const steps = work && work.stepCount > 0 ? plural(work.stepCount) : null;
@@ -105,10 +109,12 @@ export function WorkingIndicator({
       className="agent-chat__row agent-chat__row--agent agent-chat__row--working"
       data-work={work ? true : undefined}
       data-open={live.open || undefined}
-      data-entering={entering || undefined}
+      data-entering={(entering && !opened) || undefined}
       data-leaving={leaving || undefined}
       onAnimationEnd={(e) => {
-        if (leaving && e.target === e.currentTarget) onExited?.();
+        if (e.target !== e.currentTarget) return;
+        if (leaving) onExited?.();
+        else if (entering) setOpened(true);
       }}
       aria-live="polite"
     >

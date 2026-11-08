@@ -115,27 +115,37 @@ Rules:
 
 ## On a key
 
-While an agent works, the working line leads with the agent on a key (`AgentKey` on desk and
-phone), in the marketing site's key language: a wide cap (24×18px, `TYPING_KEY`) with a lit top
-edge, a darker side showing 3px under it, a hairline ring and a soft drop, faintly tinted with the
-agent's hue (`typingKeyPaint`, equal OKLCH per theme like the rest of the palette). The avatar on
-it is the solid (selected) one at 14px: you are looking at that agent, and the solid colour stays
-clear of a near-white cap and a dark one alike (a test holds it to 1.8:1 against both ends of the
-cap's gradient, every colour, both themes; the pastel clay on a white cap didn't, white least of
-all).
+While an agent works, the working line leads with the agent as a key (`AgentKey` on desk and
+phone): not the avatar sitting on a key cap, but the avatar itself, bigger (24px, `TYPING_KEY.size`,
+the steps' icon column) and raised in the marketing site's key language. Its own silhouette is the
+top, a gradient lit along its upper edge and shaded along its lower one, with a hairline round it;
+the same silhouette set down by the travel (3px), a step darker, is the side; a soft drop sits
+under that. It is always a raised key, whatever finish the agent chose for its avatar, and it wears
+the agent's own face. Colour is `typingKeyPaint`: the agent's hue at one pastel lightness per theme
+(like the site's faces), with a dark face in both themes; white is the site's white key. Tests hold
+the face to 4:1 on the top, the side darker than the top, and the key clear of the app's surface,
+every colour, both themes.
 
-While the line is live the key is typed on: a tap, a lighter tap, each with a small rebound, then
-a rest (`TYPING_KEY.press`, 2.4s). Only the top moves: it presses into the side and at the bottom
-of a tap covers it exactly, so the side reads as the key's depth, never as a lip above it.
-Stalled ("No progress for 5 min") or finishing, it rests. Desk: CSS keyframes on one layer
-(`agents-key-press`, checked against the spec by `agentKeyMotion.test.ts`), paused with the
-window hidden. Phone: one clock on the UI thread read by the `keyDepth` worklet (checked as the
-UI runtime runs it). Reduce Motion: still, on both. The steps' icon column is the key's width, so
-the live line, its steps and the folded "Worked" line keep one grid.
+While the line is live the key clicks: the top (and the face on it) goes down into the side and
+springs back a hair past rest, a full tap then a lighter one, then a rest (`TYPING_KEY.press`,
+2.4s). The side is exactly the top's outline moved down, so at the bottom of a tap the top covers it
+and nothing peeks above; the drop tightens with each press (`pressedDrop`). Stalled ("No progress
+for 5 min") or finishing, it rests. Desk: CSS keyframes on two layers, a transform and an opacity
+(`agents-key-press`, `agents-key-drop`, checked against the spec by `agentKeyMotion.test.ts`),
+paused off-screen and with the window hidden. It is drawn in `AgentAvatar.tsx`, the one dynamic
+SVG. Phone: one clock on the UI thread read by the `keyDepth` and `keyDrop` worklets (checked as
+the UI runtime runs them). Reduce Motion: still, on both.
+
+The key is a little taller than the line (27px against 20 on the desk). On the desk the line keeps
+its height and the key overflows it evenly, so nothing moves when the line hands off to the reply;
+the working row opts out of the history's `content-visibility`, whose paint containment would clip
+it, and stops clipping once its open animation ends. On the phone the row is the key's height. The
+steps' icon column is the key's width, so the live line, its steps and the folded "Worked" line
+keep one grid.
 
 ## Sizes
 
-Desk: `key` 14 (on the typing key), `xs` 16, `mini` 18, `row` 24 (sidebar), `field` 30 (24 beside a text field), `md` 40,
+Desk: `xs` 16, `mini` 18, `row` 24 (sidebar), `field` 30 (24 beside a text field), `md` 40,
 `hero` 46, `lg` 48, `xl` 96 (picker preview). Phone: 24, 28, 48 and 56.
 
 ## Changing it

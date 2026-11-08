@@ -12,7 +12,7 @@
 .agent-work {
   /* The typing key's width: the folded line's chevron and every step's icon
      sit in the column the key held while it worked. */
-  --agents-work-icon: var(--agents-key-width);
+  --agents-work-icon: var(--agents-key-size);
   --agents-work-shot: 200px; /* css-ok: a screenshot thumbnail in a step */
 
   flex: 0 0 100%;
@@ -174,8 +174,15 @@
    starts on the words' edge. So the live line, its opened steps and the
    finished "› Worked 6 min · 5 steps" share one grid and nothing jumps. */
 .agent-chat__row--working {
-  --agents-work-icon: var(--agents-key-width);
+  --agents-work-icon: var(--agents-key-size);
   --agents-work-indent: calc(var(--agents-work-icon) + var(--spacing-sm));
+}
+
+/* Always the newest line and on screen, so it skips the history's
+   content-visibility (agents-chat-history.css), whose paint containment
+   would clip the key where it reaches past the line. */
+.agent-chat__messages > .agent-chat__row--working {
+  content-visibility: visible;
 }
 
 .agent-chat__row--working[data-work] {
@@ -204,92 +211,117 @@
   align-items: center;
   justify-content: center;
   min-width: var(--agents-work-icon);
-  /* The key reaches a hair past the line, never taller than it. */
+  /* The line's height, whatever leads it: the key overflows it evenly. */
   max-height: var(--agents-motion-working-height);
   color: var(--text-muted);
 }
 
-/* components/agents/AgentKey.tsx: the agent on a key. The box is the key at
-   rest: the side, the top's shape set down by the key's travel, showing under
-   it; the top over it is one layer that presses into the side and springs
-   back, a transform and nothing else, so at the bottom of a press it covers
-   the side exactly. The drop sits on the side, so a press never repaints it.
-   Sized from TYPING_KEY; the keyframes are its press, value for value
-   (agentKeyMotion.test.ts). */
+/* AgentKey (components/agents/AgentAvatar.tsx): the agent as a key being
+   typed on. The avatar itself is the key: its silhouette is the top, the
+   same silhouette set down by the travel is the side under it, and a soft
+   drop sits under that. The box is the key at rest, a little taller than
+   the line; the lead holds the line's height and the key overflows it
+   evenly, so nothing moves when the line hands off. Pressing, the top (and
+   the face on it) moves down into the side, a transform and nothing else,
+   so at the bottom of a tap it covers the side exactly; the drop, its own
+   layer, tightens (opacity). Sized from TYPING_KEY; the keyframes are its
+   press, value for value (agentKeyMotion.test.ts). */
 .agent-key {
   position: relative;
   display: inline-flex;
   flex: 0 0 auto;
-  width: var(--agents-key-width);
-  height: calc(var(--agents-key-top) + var(--agents-key-travel));
+  width: var(--agents-key-size);
+  height: calc(var(--agents-key-size) + var(--agents-key-travel));
 }
 
-.agent-key::before {
-  position: absolute;
-  inset: var(--agents-key-travel) 0 0;
-  content: '';
-  background: var(--agent-key-side);
-  border-radius: var(--agents-key-radius);
-  box-shadow:
-    0 0 0 var(--agents-key-ring) var(--agent-key-ring),
-    0 var(--agents-key-travel) calc(var(--agents-key-travel) * 2)
-      calc(var(--agents-key-travel) * -1) var(--agent-key-shadow);
-}
-
+.agent-key__drop,
 .agent-key__top {
   position: absolute;
-  inset: 0 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  height: var(--agents-key-top);
-  background: linear-gradient(var(--agent-key-top-high), var(--agent-key-top-low));
-  border-radius: var(--agents-key-radius);
-  box-shadow:
-    inset 0 var(--agents-key-highlight) 0 var(--agent-key-highlight),
-    0 0 0 var(--agents-key-ring) var(--agent-key-ring);
+  inset: 0;
+  display: block;
 }
 
 .agent-key[data-pressing] .agent-key__top {
   animation: agents-key-press var(--agents-key-period) ease-in-out infinite;
 }
 
-:root[data-avatars-hidden] .agent-key__top {
+.agent-key[data-pressing] .agent-key__drop {
+  animation: agents-key-drop var(--agents-key-period) ease-in-out infinite;
+}
+
+.agent-key[data-offscreen] *,
+:root[data-avatars-hidden] .agent-key * {
   animation-play-state: paused;
 }
 
-/* TYPING_KEY.press: a tap, a lighter tap with a rebound after each, then rest. */
+/* TYPING_KEY.press: a quick tap, a lighter one, each springing back a hair
+   past rest, then a rest. */
 @keyframes agents-key-press {
   0% {
     transform: translateY(0);
   }
 
-  6% {
+  4% {
     transform: translateY(calc(1 * var(--agents-key-travel)));
   }
 
-  15% {
+  12% {
     transform: translateY(calc(-0.15 * var(--agents-key-travel)));
   }
 
-  21% {
+  18% {
     transform: translateY(0);
   }
 
-  28% {
-    transform: translateY(calc(0.7 * var(--agents-key-travel)));
+  26% {
+    transform: translateY(calc(0.75 * var(--agents-key-travel)));
   }
 
-  36% {
+  33% {
     transform: translateY(calc(-0.1 * var(--agents-key-travel)));
   }
 
-  42% {
+  38% {
     transform: translateY(0);
   }
 
   100% {
     transform: translateY(0);
+  }
+}
+
+/* The drop under it: 1 at rest, TYPING_KEY.pressedDrop at the bottom of a tap. */
+@keyframes agents-key-drop {
+  0% {
+    opacity: 1;
+  }
+
+  4% {
+    opacity: 0.45;
+  }
+
+  12% {
+    opacity: 1;
+  }
+
+  18% {
+    opacity: 1;
+  }
+
+  26% {
+    opacity: 0.5875;
+  }
+
+  33% {
+    opacity: 1;
+  }
+
+  38% {
+    opacity: 1;
+  }
+
+  100% {
+    opacity: 1;
   }
 }
 
@@ -431,7 +463,8 @@
     transition: none;
   }
 
-  .agent-key[data-pressing] .agent-key__top {
+  .agent-key[data-pressing] .agent-key__top,
+  .agent-key[data-pressing] .agent-key__drop {
     animation: none;
   }
 

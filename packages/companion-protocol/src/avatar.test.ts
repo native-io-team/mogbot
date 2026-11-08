@@ -18,7 +18,10 @@ import {
   SHAPE_PATHS,
   SHAPE_POINTS,
   SMALL_MOTION,
+  LIT_MIN_PX,
   TYPING_KEY,
+  TYPING_KEY_UNITS,
+  TYPING_KEY_VIEWBOX,
   avatarPaint,
   typingKeyPaint,
   defaultLook,
@@ -319,42 +322,72 @@ describe('the palette', () => {
 
 describe('the typing key', () => {
   const themes: AvatarTheme[] = ['dark', 'light'];
+  /** Where the working line sits: the app's surface (`--surface-app`; the phone's `surfaceApp`). */
+  const surface: Record<AvatarTheme, string> = { dark: '#141414', light: '#ffffff' };
 
-  it('sets the solid avatar clear of its cap, every colour, both themes', () => {
+  it('keeps the face legible on the key, every colour, both themes', () => {
     for (const theme of themes) {
       for (const color of Object.keys(AVATAR_TONES)) {
         const k = typingKeyPaint(color, theme);
-        const solid = avatarPaint(color, theme, true).fill;
-        expect(contrast(solid, k.topHigh), `${theme} ${color}`).toBeGreaterThan(1.8);
-        expect(contrast(solid, k.topLow), `${theme} ${color}`).toBeGreaterThan(1.8);
-        // A side a step darker than the top, so the key reads raised.
-        expect(luminance(k.side), `${theme} ${color}`).toBeLessThan(luminance(k.topLow));
-        expect(luminance(k.topLow)).toBeLessThan(luminance(k.topHigh));
+        expect(contrast(k.ink, k.topLow), `${theme} ${color}`).toBeGreaterThan(4);
+        expect(contrast(k.ink, k.topHigh), `${theme} ${color}`).toBeGreaterThan(4);
       }
     }
   });
 
-  it('tints every hue at one lightness (equal OKLCH)', () => {
+  it('reads raised and stands off the page, every colour, both themes', () => {
+    for (const theme of themes) {
+      for (const color of Object.keys(AVATAR_TONES)) {
+        const k = typingKeyPaint(color, theme);
+        // A side a step darker than the top, a top lit from above.
+        expect(contrast(k.side, k.topLow), `${theme} ${color}`).toBeGreaterThan(1.3);
+        expect(luminance(k.side)).toBeLessThan(luminance(k.topLow));
+        expect(luminance(k.topLow)).toBeLessThan(luminance(k.topHigh));
+        // The key (its side at least: a white top on a white page is the
+        // site's white key, set off by its side, ring and drop) is clear of the page.
+        const off = Math.max(contrast(k.side, surface[theme]), contrast(k.fill, surface[theme]));
+        expect(off, `${theme} ${color}`).toBeGreaterThan(1.5);
+      }
+    }
+  });
+
+  it('paints every hue at one lightness (equal OKLCH)', () => {
     const hues = Object.keys(AVATAR_TONES).filter((k) => AVATAR_TONES[k].maxChroma === undefined);
     for (const theme of themes) {
-      for (const role of ['topHigh', 'topLow', 'side'] as const) {
+      for (const role of ['topHigh', 'topLow', 'side', 'ink'] as const) {
         const ls = hues.map((h) => hexToOklab(typingKeyPaint(h, theme)[role])[0]);
         expect(Math.max(...ls) - Math.min(...ls), `${theme} ${role}`).toBeLessThan(0.006);
       }
     }
   });
 
-  it('fits one line, holds the avatar, and presses within its travel', () => {
-    expect(TYPING_KEY.top + TYPING_KEY.travel).toBeLessThanOrEqual(21);
-    expect(TYPING_KEY.avatar).toBeLessThan(TYPING_KEY.top);
+  it('is the steps’ column wide, travels a few px, and fits its drawing', () => {
+    expect(TYPING_KEY.size).toBeGreaterThanOrEqual(LIT_MIN_PX);
+    expect(TYPING_KEY.travel).toBeGreaterThanOrEqual(2);
+    expect(TYPING_KEY.travel).toBeLessThanOrEqual(4);
+    expect(TYPING_KEY_UNITS.travel).toBeCloseTo((TYPING_KEY.travel / TYPING_KEY.size) * 32, 6);
+    expect(TYPING_KEY_VIEWBOX).toBe(`0 0 32 ${32 + TYPING_KEY_UNITS.travel}`);
+    // The side, set down by the travel, stays inside the box.
+    for (const shape of AVATAR_SHAPES) {
+      const bottom = Math.max(...SHAPE_POINTS[shape].map((p) => p[1]));
+      expect(bottom + TYPING_KEY_UNITS.travel, shape).toBeLessThanOrEqual(
+        32 + TYPING_KEY_UNITS.travel
+      );
+    }
+    expect(TYPING_KEY.pressedDrop).toBeGreaterThan(0);
+    expect(TYPING_KEY.pressedDrop).toBeLessThan(1);
+  });
+
+  it('presses within its travel, in a calm rhythm', () => {
     const press = TYPING_KEY.press;
     expect(press[0]).toEqual([0, 0]);
     expect(press[press.length - 1]).toEqual([1, 0]);
     for (let i = 1; i < press.length; i++) expect(press[i][0]).toBeGreaterThan(press[i - 1][0]);
     for (const [, d] of press) expect(Math.abs(d)).toBeLessThanOrEqual(1);
+    // A full press reaches the bottom: the side is gone for a moment.
+    expect(Math.max(...press.map((k) => k[1]))).toBe(1);
     // Most of the loop is rest: a calm rhythm, not a buzz.
-    const lastMove = press[press.length - 2][0];
-    expect(lastMove).toBeLessThan(0.5);
+    expect(press[press.length - 2][0]).toBeLessThan(0.5);
   });
 });
 

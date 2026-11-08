@@ -2550,15 +2550,7 @@
       "consumerCount": 5
     },
     {
-      "name": "--agents-key-width",
-      "definitionFile": "src/styles/global/tokens-components.css",
-      "layer": "components",
-      "owner": "global/component",
-      "status": "canonical",
-      "consumerCount": 1
-    },
-    {
-      "name": "--agents-key-top",
+      "name": "--agents-key-size",
       "definitionFile": "src/styles/global/tokens-components.css",
       "layer": "components",
       "owner": "global/component",
@@ -2571,39 +2563,7 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "consumerCount": 9
-    },
-    {
-      "name": "--agents-key-radius",
-      "definitionFile": "src/styles/global/tokens-components.css",
-      "layer": "components",
-      "owner": "global/component",
-      "status": "canonical",
-      "consumerCount": 2
-    },
-    {
-      "name": "--agents-key-ring",
-      "definitionFile": "src/styles/global/tokens-components.css",
-      "layer": "components",
-      "owner": "global/component",
-      "status": "canonical",
-      "consumerCount": 2
-    },
-    {
-      "name": "--agents-key-highlight",
-      "definitionFile": "src/styles/global/tokens-components.css",
-      "layer": "components",
-      "owner": "global/component",
-      "status": "canonical",
-      "consumerCount": 1
-    },
-    {
-      "name": "--agents-key-avatar",
-      "definitionFile": "src/styles/global/tokens-components.css",
-      "layer": "components",
-      "owner": "global/component",
-      "status": "canonical",
-      "consumerCount": 0
+      "consumerCount": 5
     },
     {
       "name": "--agents-key-period",
@@ -2611,7 +2571,7 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "consumerCount": 1
+      "consumerCount": 2
     },
     {
       "name": "--agents-motion-edge-fade",

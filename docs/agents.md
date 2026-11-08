@@ -719,8 +719,8 @@ steps has no line.
 - **Live**: while the turn runs, the status carries `work` (the newest 12
   steps and the counts; no file names) plus `doing`, the running call's
   working-line words. The working line (`AgentWorkingIndicator`) is one
-  line, no bubble: the agent on its typing key (`AgentKey`: its avatar
-  on a key cap in the site's style, typed on while it's live) in the steps'
+  line, no bubble: the agent as a key (`AgentKey`: its avatar, raised in
+  the site's key style, clicking down and up while it's live) in the steps'
   icon column, what it's doing with a soft shimmer while it's live, then muted
   "· 5 steps · 6:02" (the turn's time). The line is the toggle: it opens
   the steps so far under it, in the column the finished timeline uses,

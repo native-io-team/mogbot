@@ -46,7 +46,8 @@ const calls: Record<string, unknown[][]> = {
   dotLevel: [[0], [0.25], [0.6]],
   dotOpacity: [[0], [1], [0.5]],
   // typingKey.ts
-  keyDepth: [[0], [0.03], [0.06], [0.1], [0.15], [0.3], [0.42], [0.9], [1], [1.5], [-0.25]],
+  keyDepth: [[0], [0.02], [0.04], [0.1], [0.15], [0.3], [0.38], [0.9], [1], [1.5], [-0.25]],
+  keyDrop: [[0], [0.5], [1], [-0.15], [2]],
 };
 
 const modules: Record<string, Record<string, unknown>> = { waveform, typingDots, typingKey };
@@ -59,7 +60,7 @@ const call = (fn: Worklet, args: unknown[]) => (fn as (...a: unknown[]) => unkno
 
 describe('lib worklets on the UI runtime', () => {
   it('are found, and all exercised here', () => {
-    expect(worklets.length).toBeGreaterThanOrEqual(8);
+    expect(worklets.length).toBeGreaterThanOrEqual(9);
     for (const [label, name] of worklets) {
       expect({ label, covered: name in calls }).toEqual({ label, covered: true });
     }
