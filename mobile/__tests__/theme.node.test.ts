@@ -15,6 +15,7 @@ import {
   luminance,
   palettes,
   radius,
+  speakerInk,
   type Palette,
 } from '../src/lib/theme';
 
@@ -272,5 +273,22 @@ describe('the scale', () => {
     expect(avatarSize).toEqual({ line: 16, group: 24, header: 28, list: 48, sheet: 56 });
     // A well's corner is tighter than its card's, so the two read as nested.
     expect(radius.inner).toBeLessThan(radius.card);
+  });
+});
+
+describe('a speaker’s name in its agent’s colour', () => {
+  it.each(APPEARANCES)('clears AA on the app and a panel for every agent colour (%s)', (a) => {
+    const c = palettes[a];
+    for (const [key, tint] of Object.entries(agentTints[a])) {
+      for (const bg of READ_ON) {
+        const ink = speakerInk(tint, c.textPrimary, c[bg]);
+        expect([key, bg, contrast(ink, c[bg]) >= 4.5]).toEqual([key, bg, true]);
+      }
+    }
+  });
+
+  it('falls back toward the text colour when the raw tint is too pale', () => {
+    const ink = speakerInk('#fff2a0', '#111111', '#ffffff');
+    expect(contrast(ink, '#ffffff')).toBeGreaterThanOrEqual(4.5);
   });
 });

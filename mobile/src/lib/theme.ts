@@ -562,6 +562,20 @@ export function contrast(a: string, b: string): number {
   return (hi + 0.05) / (lo + 0.05);
 }
 
+/**
+ * A speaker's name in its agent's colour: the tint pulled 30% toward the text
+ * colour (the desk's `color-mix` on `.agent-room__speaker-name`). If that
+ * still falls under 4.5:1 on `on`, it moves toward the text until it clears,
+ * so a name is always words you can read, never a pale hue.
+ */
+export function speakerInk(tint: string, text: string, on: string): string {
+  for (let share = 0.7; share >= 0; share -= 0.1) {
+    const ink = mix(tint, text, share);
+    if (contrast(ink, on) >= 4.5) return ink;
+  }
+  return text;
+}
+
 /** `rgba()` of a hex colour, for tints and glows. */
 export function alpha(hex: string, a: number): string {
   const [r, g, b] = parseHex(hex);

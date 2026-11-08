@@ -459,3 +459,36 @@ describe('scrims', () => {
     expect(modal).toBeLessThanOrEqual(0.32);
   });
 });
+
+describe('a speaker’s name in its agent’s colour', () => {
+  // `.agent-room__speaker-name`: the tint mixed toward the text colour. The
+  // share is read from the stylesheet, so the test holds what is drawn.
+  const rooms = readFileSync(resolve('src/styles/features/agents-rooms.css'), 'utf8');
+  const agents = readFileSync(resolve('src/styles/features/agents.css'), 'utf8');
+  const share = (theme: 'dark' | 'light') => {
+    const name = theme === 'light' ? '--agents-name-tint-light' : '--agents-name-tint';
+    const m = new RegExp(`${name}:\\s*(\\d+)%`).exec(rooms);
+    if (!m) throw new Error(`${name} is not set in agents-rooms.css`);
+    return Number(m[1]) / 100;
+  };
+  const tintOf = (key: string, theme: 'dark' | 'light') => {
+    const light = /:root\[data-theme='light'\]\s*\{([^}]*)\}/.exec(agents)?.[1] ?? '';
+    const own =
+      theme === 'light'
+        ? new RegExp(`--agents-tint-${key}:\\s*(#[0-9a-f]{6})`, 'i').exec(light)
+        : null;
+    const base = new RegExp(`--agents-tint-${key}:\\s*(#[0-9a-f]{6})`, 'i').exec(agents);
+    return (own?.[1] ?? base![1]).toLowerCase();
+  };
+
+  it.each(['dark', 'light'] as const)('clears AA on the app and a panel (%s)', (theme) => {
+    const text = resolveHex('--text-primary', theme);
+    for (const key of [...AGENT_COLORS]) {
+      const ink = mixHex(tintOf(key, theme), text, 1 - share(theme));
+      for (const bg of ['--surface-app', '--surface-panel']) {
+        const r = contrastRatio(parseHex(ink)!, parseHex(resolveHex(bg, theme))!);
+        expect([key, bg, r >= AA_TEXT]).toEqual([key, bg, true]);
+      }
+    }
+  });
+});

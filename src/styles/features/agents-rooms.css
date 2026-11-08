@@ -117,13 +117,25 @@
   margin-top: var(--spacing-md);
 }
 
+/* How much of the agent's colour the name keeps; the rest is the text colour.
+   Light takes less because its tints are the dark theme's (theme.test.ts holds
+   both to AA on the app and a panel). */
+.agent-room__speaker {
+  --agents-name-tint: 70%;
+  --agents-name-tint-light: 40%;
+}
+
 .agent-room__speaker-name {
   display: inline-flex;
   align-items: center;
   gap: var(--spacing-xs);
   font-size: var(--font-size-body-sm);
   font-weight: var(--font-weight-label);
-  color: color-mix(in srgb, var(--agents-tint, var(--text-secondary)) 70%, var(--text-primary));
+  color: color-mix(
+    in srgb,
+    var(--agents-tint, var(--text-secondary)) var(--agents-name-tint),
+    var(--text-primary)
+  );
 }
 
 .agent-room__speaker > .agent-note {
@@ -425,4 +437,12 @@
 /* The working rows' first speaker carries the thread's gap; the group adds none. */
 .agent-chat__messages > .agent-room__working {
   margin-top: 0;
+}
+
+:root[data-theme='light'] .agent-room__speaker-name {
+  color: color-mix(
+    in srgb,
+    var(--agents-tint, var(--text-secondary)) var(--agents-name-tint-light),
+    var(--text-primary)
+  );
 }

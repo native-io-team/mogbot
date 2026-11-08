@@ -183,6 +183,23 @@
   text-overflow: ellipsis;
 }
 
+/* The role: muted, beside the name, one line. It shrinks first (the name keeps
+   its room) and is gone when the agent has none. */
+.agents-list__role {
+  min-width: 0;
+  flex: 0 4 auto;
+  overflow: hidden;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-regular);
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agents-list__role:empty {
+  display: none;
+}
+
 .agents-list__row.is-current .agents-list__name {
   color: var(--text-primary);
 }
