@@ -12,12 +12,21 @@ import {
 } from '@shipstudio/companion-protocol';
 
 /**
- * The fixed order, top to bottom. The link first: while the Mac is out of
+ * The fixed order, top to bottom. The demo above everything: a sample chat
+ * must never be read as a real one. Then the link: while the Mac is out of
  * reach everything under it is the saved copy, and that is the one thing to
  * know before reading the rest. Then the Mac being driven, an import, the
  * message being written, and what the engine can't do.
  */
-export const BAR_ORDER = ['connection', 'driven', 'import', 'setup', 'revising', 'engine'] as const;
+export const BAR_ORDER = [
+  'demo',
+  'connection',
+  'driven',
+  'import',
+  'setup',
+  'revising',
+  'engine',
+] as const;
 export type BarId = (typeof BAR_ORDER)[number];
 
 /** How many bars show before the rest fold into "N more". */

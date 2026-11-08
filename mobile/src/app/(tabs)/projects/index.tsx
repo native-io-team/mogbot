@@ -28,6 +28,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-n
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { Spinner } from '../../../components/agent';
 import { ConnectionNotice, LinkProblem, useNow } from '../../../components/ConnectionPill';
+import { DemoCard } from '../../../components/DemoCard';
 import { SessionState, useTaskName } from '../../../components/session';
 import { choose } from '../../../components/menu';
 import { Button, Icon, useRipple, T } from '../../../components/ui';
@@ -94,6 +95,7 @@ export default function Projects() {
         }
       >
         <RefreshStatus outcome={outcome} onRetry={onRefresh} onDismiss={dismiss} />
+        <DemoCard />
         <ConnectionNotice />
         {/* The link first: a Mac that's away isn't one that needs updating. */}
         {!live ? (

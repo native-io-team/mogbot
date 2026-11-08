@@ -10,6 +10,7 @@ import { useEffect, useState } from 'react';
 import { engineCantAskBar } from '../lib/agents';
 import { drivenBar, importBar, revisingBar } from '../lib/bars';
 import { setupBar } from '../lib/teamSetup';
+import { DEMO_BAR, isDemo } from '../lib/demo';
 import { pill } from '../lib/connection';
 import { useApp } from '../lib/store';
 import { BANNER_GRACE_MS, useLinkState, useNow } from './ConnectionPill';
@@ -66,7 +67,9 @@ export function ConversationBars({
   const engines = useApp((s) => s.overview?.engines);
   const cantAsk = engineCantAskBar(agent, engines);
   const connection = useConnectionBar();
+  const demo = useDemoBar();
   const bars: BarSpec[] = [];
+  if (demo) bars.push(demo);
   if (connection) bars.push(connection);
   const driven = drivenBar(agent);
   // Only known live: while the Mac is away it's what was last seen, said so.
@@ -100,6 +103,13 @@ export function ConversationBars({
   }
   if (cantAsk) bars.push({ id: 'engine', tone: 'info', ...cantAsk });
   return <BarStack bars={bars} />;
+}
+
+/** In the demo, always: a sample chat is never to be read as a real one. */
+function useDemoBar(): BarSpec | null {
+  const demo = useApp((s) => isDemo(s.credentials));
+  if (!demo) return null;
+  return { id: 'demo', tone: 'info', icon: 'info.circle', ...DEMO_BAR };
 }
 
 /** A room's bar stack: only the link, since a room has no engine, driver or import of its own. */

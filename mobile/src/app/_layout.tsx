@@ -18,7 +18,8 @@ import {
   syncQuickActions,
   type QuickTarget,
 } from '../lib/quickActions';
-import { boot, watchLifecycle } from '../lib/session';
+import { boot, startDemo, watchLifecycle } from '../lib/session';
+import { screenshotRoute } from '../lib/screenshots';
 import { useApp } from '../lib/store';
 import { sheet, useStackOptions } from '../lib/navigation';
 import { RootAccent, useAccent } from '../lib/accent';
@@ -69,6 +70,7 @@ function Screens() {
             <Stack screenOptions={stackOptions}>
               <Stack.Screen name="index" options={{ headerShown: false }} />
               <Stack.Screen name="pair" options={{ headerShown: false, gestureEnabled: false }} />
+              <Stack.Screen name="demo" options={{ headerShown: false, animation: 'none' }} />
               <Stack.Screen
                 name="scan"
                 options={{ presentation: 'fullScreenModal', headerShown: false }}
@@ -191,6 +193,18 @@ export default function RootLayout() {
   }, []);
 
   const ready = fontsLoaded && credentialsRead;
+
+  // A screenshots build only (lib/screenshots.ts): the demo, at the screen asked for.
+  useEffect(() => {
+    if (!ready) return;
+    const route = screenshotRoute();
+    if (!route || !startDemo()) return;
+    const frame = requestAnimationFrame(() => {
+      router.replace('/agents');
+      if (route !== '/agents') setTimeout(() => router.push(route as never), 300);
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [ready, router]);
   useEffect(() => {
     if (!ready || !tapped) return;
     // After the launch redirect has placed Home underneath. One chat on top,

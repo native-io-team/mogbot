@@ -11,7 +11,9 @@ infrastructure where a good one exists.
    service; building with Xcode becomes the advanced path. **Needs the
    owner**: TestFlight needs the owner's Apple developer account, and
    approval to publish. Until then the install cards say "Not available
-   yet" (see [mobile.md](mobile.md)).
+   yet" (see [mobile.md](mobile.md)). The store build, a demo for App
+   Review, the review notes, listing drafts and the owner's remaining steps
+   are ready in [app-store.md](app-store.md).
 2. **Phone: real-device verification.** The share extension, dictation's
    real recognizer, notification click-through and Android hardware have
    only been tried in tests or the simulator ([mobile.md](mobile.md), "Not

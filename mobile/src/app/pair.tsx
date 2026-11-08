@@ -34,6 +34,7 @@ import {
   type PairPlan,
 } from '../lib/pairing';
 import { adopt, enableAlerts } from '../lib/session';
+import { isDemo } from '../lib/demo';
 import { useApp } from '../lib/store';
 import { PAIRING_SCHEME } from '@shipstudio/companion-protocol';
 import { haptic } from '../lib/haptics';
@@ -109,7 +110,9 @@ export default function Pair() {
   const review = useCallback(
     (link: PairingLink) => {
       abort.current?.abort();
-      setPhase({ kind: 'confirm', link, plan: pairPlan(link, current ?? null) });
+      // The demo is no Mac: pairing one simply ends it.
+      const real = current && !isDemo(current) ? current : null;
+      setPhase({ kind: 'confirm', link, plan: pairPlan(link, real) });
     },
     [current]
   );
@@ -457,6 +460,26 @@ function BeforeYouScan({ onNext }: { onNext: () => void }) {
         onPress={() => void openTailscale()}
       />
       <Button title="It’s on — next" variant="primary" size="large" onPress={onNext} />
+      <TryDemo />
+    </View>
+  );
+}
+
+/**
+ * No Mac to pair yet: a look around with sample agents (lib/demo.ts), said
+ * plainly to be samples. Not while a real Mac is paired.
+ */
+function TryDemo() {
+  const colors = useColors();
+  const router = useRouter();
+  const paired = useApp((s) => !!s.credentials && !isDemo(s.credentials));
+  if (paired) return null;
+  return (
+    <View style={{ gap: space.xs, marginTop: space.md }} testID="pair-demo">
+      <Button title="Try the demo" variant="ghost" onPress={() => router.replace('/demo')} />
+      <T variant="small" color={colors.textMuted} style={{ textAlign: 'center' }}>
+        No Mac nearby? Look around with sample agents. Nothing is sent anywhere.
+      </T>
     </View>
   );
 }

@@ -64,11 +64,12 @@ import { registerPush } from './push';
 import { sendSecret } from './secrets';
 export { secretRouteProblem } from './secrets';
 import { DirectTransport, WireFailure } from './transport';
+import { DemoTransport, demoCredentials, isDemo } from './demo';
 import { newChallenge, PAIR_AGAIN } from './identity';
 import { forgetSettledBy, withForget, withoutForget } from './forgets';
 
 const PAGE = 50;
-let transport: DirectTransport | null = null;
+let transport: DirectTransport | DemoTransport | null = null;
 
 export const currentTransport = () => transport;
 
@@ -111,7 +112,32 @@ function refuseUnpinned() {
   });
 }
 
+/**
+ * "Try the demo" on the welcome screen: sample agents from `DemoTransport`,
+ * in memory only (never the keychain, the offline copy or drafts), so a
+ * relaunch is back on the welcome screen. Never over a real pairing.
+ */
+export function startDemo(): boolean {
+  const current = getApp().credentials;
+  if (current && !isDemo(current)) return false;
+  const credentials = demoCredentials();
+  setApp({
+    ...emptySync(),
+    credentials,
+    refusal: null,
+    welcome: null,
+    served: null,
+    composer: {},
+    push: null,
+    teamSetup: null,
+  });
+  connect(credentials);
+  return true;
+}
+
 export async function adopt(credentials: Credentials) {
+  // A real Mac replaces the demo: nothing of the demo's is on disk to clear.
+  if (isDemo(getApp().credentials)) transport?.close();
   await saveCredentials(credentials);
   setApp({
     ...emptySync(),
@@ -155,7 +181,9 @@ function connect(c: Credentials) {
   if (!c.fingerprint) return refuseUnpinned();
   // The store is in memory, so a cold start has no cursor and gets a
   // snapshot; within a run, every reconnect resumes where it left off.
-  const t = transportFor({ ...c, fingerprint: c.fingerprint }, () => getApp().cursor);
+  const t = isDemo(c)
+    ? new DemoTransport()
+    : transportFor({ ...c, fingerprint: c.fingerprint }, () => getApp().cursor);
   t.onState((link) => {
     // "As of" for everything shown while it's away: the moment it stopped being live.
     const was = getApp().link.kind;
@@ -802,6 +830,24 @@ export const pressSessionKey = (sessionId: string, key: string) =>
  */
 export async function unpair(): Promise<'removed' | 'queued'> {
   const credentials = getApp().credentials;
+  // Leaving the demo: nothing was saved, and there's no Mac to tell.
+  if (isDemo(credentials)) {
+    transport?.close();
+    transport = null;
+    setApp({
+      ...emptySync(),
+      credentials: null,
+      welcome: null,
+      served: null,
+      refusal: null,
+      openChat: null,
+      push: null,
+      composer: {},
+      teamSetup: null,
+      link: { kind: 'connecting', attempt: 0 },
+    });
+    return 'removed';
+  }
   let removed = false;
   if (transport?.state.kind === 'connected') {
     removed = await call('devices.unpairSelf', {}).then(
@@ -956,7 +1002,9 @@ function watchAttention() {
   useApp.subscribe((s, prev) => {
     if (s.overview === prev.overview && s.link === prev.link) return;
     const refused = s.link.kind === 'refused';
-    void setBadge(refused || !s.overview ? 0 : badgeCount(s.overview.agents));
+    // The demo's count is samples; the icon outlives it, so it never shows one.
+    const demo = isDemo(s.credentials);
+    void setBadge(refused || demo || !s.overview ? 0 : badgeCount(s.overview.agents));
     if (!s.overview || !prev.overview) return;
     for (const a of s.overview.agents) {
       const was = prev.overview.agents.find((b) => b.id === a.id);

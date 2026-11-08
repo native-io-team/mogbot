@@ -47,6 +47,11 @@ Things to try against it: send a message (a streamed reply), send "deploy"
 (an approval card first), Stop while it streams, open Chief of Staff and scroll
 up (paging).
 
+No Mac and no mock at all: **Try the demo** on the welcome screen (or open
+`<scheme>://demo`) shows sample agents with no network (docs/mobile.md, "The
+demo"). The App Store build is `COMPANION_STORE_BUILD=1`
+([docs/app-store.md](../docs/app-store.md)).
+
 ## Run it on your phone
 
 Build a development client onto a plugged-in iPhone (`pnpm ios --device`), or a

@@ -968,6 +968,22 @@ after that it is **Not sent · Send · Discard** and never sent on its own,
 because a message landing hours later with no one watching is worse than one
 that waits. A refusal is final. Forgetting a Mac wipes its files.
 
+### The demo
+
+**Try the demo** on the welcome screen (or `<scheme>://demo`) opens sample
+agents for a fictional café with no Mac at all, for App Review and anyone
+without a Mac to pair (`lib/demo.ts`). `DemoTransport` has the transport's
+shape and no socket: it answers a short list of methods (`DEMO_METHODS`, so
+every other screen hides itself as for an older Mac) and refuses the rest
+with "That isn't in the demo". Nothing is kept (credentials are never saved,
+and the offline copy, drafts, outbox, badge and quick actions skip it), so a
+relaunch is back at the welcome screen. It says what it is everywhere: the
+Mac is "Demo Mac", the lists open on "This is the demo" with Pair your Mac,
+every chat has the `demo` bar first (`BAR_ORDER`), a send is answered "This
+is the demo, so I can't do real work…", and Settings has Leave the demo in
+place of Forget this Mac. It never replaces a pairing, and pairing ends it.
+Tests: `demo.node.test.ts`; screens: `pnpm qa:web --phases demo`.
+
 ### Feel and access
 
 A conversation reads at 17 on a 26 line (`type.read`, `READ_LINE`), with a
@@ -1055,7 +1071,9 @@ is 0. Settings says plainly what arrives when.
 
 ## Installing the app
 
-There is no App Store listing. `TESTFLIGHT_URL` and `ANDROID_APK_URL` in
+There is no App Store listing yet. The store build (`COMPANION_STORE_BUILD=1`),
+what was checked, the review notes, listing drafts and what only the owner
+can do are in [app-store.md](app-store.md). `TESTFLIGHT_URL` and `ANDROID_APK_URL` in
 `src/lib/companionInstall.ts` are unset, so those cards say "Not available
 yet"; when set, maintainers ship through EAS (`eas.json` profiles map to
 `expo-updates` channels), with a build at least every 60 days because

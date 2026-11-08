@@ -14,6 +14,7 @@
  */
 
 import type { AgentMessage, Cursor } from '@shipstudio/companion-protocol';
+import { isDemo } from './demo';
 import { restorePending } from './outbox';
 import { debounced, readJson, removeJson, writeJson } from './persist';
 import { getApp, setApp, useApp, type Served } from './store';
@@ -96,12 +97,17 @@ export function fromCache(c: Cached): (Partial<SyncState> & { served?: Served | 
 
 const fileFor = (serverId: string) => `cache-${serverId}.json`;
 const outboxFor = (serverId: string) => `outbox-${serverId}.json`;
+/** The Mac whose copy is kept: none for the demo, which keeps nothing on disk. */
+const savedId = () => {
+  const c = getApp().credentials;
+  return c && !isDemo(c) ? c.serverId : null;
+};
 const saver = debounced(async () => {
-  const id = getApp().credentials?.serverId;
+  const id = savedId();
   if (id) await writeJson(fileFor(id), toCache(getApp()));
 }, 1000);
 const outboxSaver = debounced(async () => {
-  const id = getApp().credentials?.serverId;
+  const id = savedId();
   if (id) await writeJson(outboxFor(id), toOutbox(getApp()));
 }, 400);
 

@@ -6,6 +6,7 @@
  * nothing either).
  */
 
+import { isDemo } from './demo';
 import type { AgentRef, ResultRef } from '@shipstudio/companion-protocol';
 import { debounced, readJson, removeJson, writeJson } from './persist';
 import { getApp, setApp, useApp } from './store';
@@ -74,8 +75,9 @@ const fileFor = (serverId: string) => `drafts-${serverId}.json`;
  */
 export const DRAFT_SAVE_MS = 300;
 const saver = debounced(async () => {
-  const id = getApp().credentials?.serverId;
-  if (id) await writeJson(fileFor(id), getApp().composer);
+  const c = getApp().credentials;
+  // The demo keeps nothing on disk.
+  if (c && !isDemo(c)) await writeJson(fileFor(c.serverId), getApp().composer);
 }, DRAFT_SAVE_MS);
 
 /** Chats whose draft came back from disk this launch, until the chat has said so. */

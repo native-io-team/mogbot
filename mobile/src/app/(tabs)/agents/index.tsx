@@ -11,7 +11,7 @@
 import { shareStructure } from '../../../lib/structure';
 import type { Agent, RoomView } from '@shipstudio/companion-protocol';
 import { Stack, useRouter } from 'expo-router';
-import { type ReactNode, useCallback, useEffect, useMemo, useState } from 'react';
+import { type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { takeExitNotice } from '../../../lib/crash';
 import {
   Platform,
@@ -23,6 +23,7 @@ import {
 } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { HeaderHeightContext } from 'expo-router/react-navigation';
 import { useShallow } from 'zustand/react/shallow';
 import { AgentRow } from '../../../components/AgentRow';
 import { ImportChoiceCard } from '../../../components/ImportChoiceCard';
@@ -33,6 +34,7 @@ import { QuotaLines } from '../../../components/QuotaLines';
 import { useQuotaLines } from '../../../lib/quota';
 import { AgentAccent } from '../../../lib/accent';
 import { ConnectionNotice, LinkProblem, useNow } from '../../../components/ConnectionPill';
+import { DemoCard } from '../../../components/DemoCard';
 import { Button, Icon, IconButton, useRipple, T, tap } from '../../../components/ui';
 import { toggleFor, type AgentAction } from '../../../lib/actions';
 import { formatAgo, needsYou, pendingApproval } from '../../../lib/agents';
@@ -101,6 +103,8 @@ export default function Agents() {
   const router = useRouter();
   const { width, height } = useWindowDimensions();
   const insets = useSafeAreaInsets();
+  // The context, not useHeaderHeight: that throws where there's no header (a test).
+  const headerHeight = useContext(HeaderHeightContext) ?? 0;
   const split = width >= SPLIT_AT && height >= SPLIT_MIN_HEIGHT;
   const overview = useApp((s) => s.overview);
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
@@ -313,6 +317,7 @@ export default function Agents() {
       ListHeaderComponent={
         <>
           <RefreshStatus outcome={outcome} onRetry={onRefresh} onDismiss={dismiss} />
+          <DemoCard />
           <ConnectionNotice />
           <Refused />
           <ImportChoiceCard />
@@ -377,7 +382,11 @@ export default function Agents() {
           <View style={[styles.splitList, { paddingLeft: insets.left, width: 360 + insets.left }]}>
             {list}
           </View>
-          <View style={[styles.splitChat, { paddingRight: insets.right }]}>
+          {/* Under the translucent bar (and iPad's tab bar in it): padded by the
+              header's height, as the list is by its own inset (lib/navigation.ts). */}
+          <View
+            style={[styles.splitChat, { paddingRight: insets.right, paddingTop: headerHeight }]}
+          >
             {shown ? (
               <AgentAccent agentId={shown}>
                 <ChatView key={shown} id={shown} embedded />
