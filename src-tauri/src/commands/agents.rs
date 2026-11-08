@@ -2225,6 +2225,22 @@ pub async fn quick_entry_resize(app: AppHandle, height: f64) -> Result<(), Comma
     Ok(())
 }
 
+/// Settings → Agents, "Disk space": free space and every large agent home (`agents::disk`).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_disk_overview() -> Result<agents::disk::Overview, CommandError> {
+    blocking(|| Ok(agents::disk::overview())).await
+}
+
+/// "Free up space": an agent home's dependency and build folders, regenerable ones only.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_disk_free_up(agent_id: String) -> Result<agents::disk::Freed, CommandError> {
+    let id = agent_id.clone();
+    blocking(move || agents::store::get(&id).map(|_| ())).await?;
+    Ok(agents::disk::free_up(&agent_id).await)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

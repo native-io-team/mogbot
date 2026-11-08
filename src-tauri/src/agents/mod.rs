@@ -14,6 +14,7 @@
 //! - [`codex`]: Codex's command line and JSONL, mapped onto the same turn steps
 //! - [`codex_app`]: Codex's app-server: streaming, approval cards, interrupt
 //! - [`context`]: how full a conversation is, only as its engine reports it
+//! - [`disk`]: free disk space: notes and cards when low, stale dependency folders pruned from agent homes
 //! - [`tidy`]: compaction on for every turn, and the app's own tidy between turns
 //! - [`mcp`]: the tools agents get (team, projects, management, approvals)
 //! - [`permissions`]: "Always allow" rules and how narrowly they match
@@ -81,6 +82,7 @@ pub mod declined;
 pub mod defaults;
 pub mod describe;
 pub mod dev_servers;
+pub mod disk;
 pub mod driver;
 pub mod e2e_alias;
 pub mod egress;

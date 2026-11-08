@@ -24,6 +24,8 @@
  *   (`AgentsUsage`, `agents/inventory.rs`).
  * - **Accounts**: each engine's accounts, in the order turns try them when
  *   one runs out of usage (`AgentAccounts`, `agents/wallet.rs`).
+ * - **Disk space**: free space when low, and each large agent home with
+ *   "Free up space" (`AgentsDiskSettings`, `agents/disk.rs`).
  * - **Notifications**: what notifies, and where to mute one agent.
  * - **Phone and other assistants**: the way into each.
  *
@@ -39,6 +41,7 @@ import { AgentAccounts } from './AgentAccounts';
 import { AgentUsageSettings } from './AgentsUsage';
 import { AgentIndependenceSettings } from './AgentIndependenceSettings';
 import { DeclinedAppsSettings } from './DeclinedAppsSettings';
+import { AgentsDiskSettings } from './AgentsDiskSettings';
 import { AgentAdminSettings } from './AgentAdmin';
 import { Row, Toggle } from './AgentSettingsRows';
 import { AgentTeamPolicySettings } from './AgentTeamPolicySettings';
@@ -133,6 +136,8 @@ export function AgentsSettings({
       {engines.some((e) => e.installed) && <AgentAccounts engines={engines} />}
 
       <DeclinedAppsSettings />
+
+      <AgentsDiskSettings />
 
       <section className="settings-group" aria-labelledby="agents-settings-notify">
         <h3 className="settings-group__title" id="agents-settings-notify">

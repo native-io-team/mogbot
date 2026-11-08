@@ -2830,9 +2830,12 @@ async fn decide_inner(
     // (`outward`): a send waits for a card showing its words, at every
     // level; no standing rule and no level answers it.
     let exact = holds_for_exact_text(caller, tool, input);
+    // Disk nearly full (`disk`): installs and clones ask at every level,
+    // and no standing rule answers them.
+    let disk_floor = super::disk::floor_asks(tool, input);
     // Never for a browser step the gate said asks: a tool-wide rule doesn't
     // override its send/pay/delete call (`permissions::is_scopable_tool`).
-    if !browser_asks && !exact && always_allowed(caller, tool, input) {
+    if !browser_asks && !exact && !disk_floor && always_allowed(caller, tool, input) {
         // Nothing happens invisibly: each one leaves a quiet line in the chat.
         let line = format!("{} · always allowed", one_line(tool, input));
         let _ = runner::record_in_turn(
@@ -2856,6 +2859,7 @@ async fn decide_inner(
     let direct = level.goes_hard() && !outside && runner::answering_user(&caller.id);
     let guarded = browser_asks
         || exact
+        || disk_floor
         || super::exposure::read_outside(&caller.id)
             && super::autoallow::Ctx::for_agent(caller).is_none_or(|ctx| {
                 super::autoallow::outside_mark_asks(tool, input, &ctx, full_send, direct)
@@ -2908,6 +2912,11 @@ async fn decide_inner(
         (title, super::admin::summary_for(tool, input, why))
     };
     let summary = with_exact_text(summary, exact_text_block(caller, tool, input));
+    // Why a card at all, when the disk is why.
+    let summary = match (summary, disk_floor.then(super::disk::card_line)) {
+        (Some(s), Some(d)) => Some(format!("{s}\n\n{d}")),
+        (s, d) => s.or(d),
+    };
     match ask(app, caller, title, summary, detail, Some((tool, input))).await {
         Answer::Allowed => {
             // A new package it installs asks once per project (`installs`).
