@@ -12,6 +12,7 @@
  *   the one control open while a turn runs.
  * - Usage: the team's mode, read-only (there's no per-agent budget), and a
  *   way to the usage sheet.
+ * - Apps: "Apps your agents can use", opened for it (`agents.apps`).
  * - More about it: the agent sheet.
  *
  * Model and effort apply from its next message; the Mac writes one quiet
@@ -58,6 +59,7 @@ export function AgentControls({ agentId }: { agentId: string }) {
   const router = useRouter();
   const agent = useApp((s) => s.overview?.agents.find((a) => a.id === agentId));
   const engines = useApp((s) => s.overview?.engines);
+  const servesApps = useServed('agents.apps');
   const team = useApp((s) => s.overview?.independence ?? null);
   const live = useApp((s) => s.link.kind === 'connected');
   const welcome = useApp((s) => s.welcome);
@@ -155,7 +157,10 @@ export function AgentControls({ agentId }: { agentId: string }) {
       )}
 
       {efforts && (
-        <Section title="Effort" footer="How hard it thinks before it answers. Its routines keep the engine’s default.">
+        <Section
+          title="Effort"
+          footer="How hard it thinks before it answers. Its routines keep the engine’s default."
+        >
           {effortRows().map((e, i, all) => (
             <Choice
               key={e.value || 'default'}
@@ -184,6 +189,13 @@ export function AgentControls({ agentId }: { agentId: string }) {
           }
           onPress={() => router.push({ pathname: '/usage', params: { id: agent.id } })}
         />
+        {servesApps && (
+          <Row
+            label="Apps"
+            detail={`Which apps ${agent.name} can use, and connecting new ones.`}
+            onPress={() => router.push({ pathname: '/apps', params: { agentId: agent.id } })}
+          />
+        )}
         <Row
           label={`More about ${agent.name}`}
           onPress={() => router.push({ pathname: '/agent/[id]', params: { id: agent.id } })}

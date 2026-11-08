@@ -157,6 +157,11 @@ inside it.
   `agents.loginNotNeeded|loginsNotNeeded|loginsUndecline` (shown only when the Mac lists them),
   `agents.reach`'s `declined` (each with "Turn back on"), and `agents.loginsRecheck` when the app
   comes back while claude.ai is being connected here
+- "Apps your agents can use" (docs/agents.md, "Connecting before anyone asks"): `agents.apps`
+  (read-only; never a token), `agents.appsConnect|appsPhoneBegin|appsCancel` (connect on the Mac's
+  browser or this phone's sign-in sheet, finished by `agents.loginPhoneFinish`),
+  `agents.appsSetGrants` (the user's own answer: narrows or widens, as on the desk) and
+  `agents.appsRemove`; shown only when the Mac lists them
 - `agents.update` (`pinned`, `muted`, `hidden`, `instructions`, and from a Mac listing the
   `agents.engine` feature, `engine` and `model`: the desk's own `agents_update` checks the engine is
   ready and starts a new session that carries the conversation over as a recap),

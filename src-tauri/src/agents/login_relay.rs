@@ -122,6 +122,10 @@ impl<T> Table<T> {
             .collect()
     }
 
+    pub fn contains(&self, flow_id: &str) -> bool {
+        self.map.contains_key(flow_id)
+    }
+
     /// Expired sign-ins, removed.
     pub fn expire(&mut self, now: Instant) -> Vec<T> {
         let ids: Vec<String> = self
@@ -248,7 +252,7 @@ pub struct PhoneBegin {
     pub redirect_uri: String,
 }
 
-fn new_flow_id() -> String {
+pub(crate) fn new_flow_id() -> String {
     use base64::Engine as _;
     let mut buf = [0u8; 24];
     getrandom::getrandom(&mut buf).expect("the OS random source");
@@ -389,6 +393,10 @@ pub async fn begin(
 /// The sheet's answer, from the phone: the code is exchanged here, with the
 /// verifier only this Mac has, and the token goes into its Keychain.
 pub async fn finish(device_id: &str, flow_id: &str, callback: &str) -> Result<(), CommandError> {
+    // A sign-in from the phone's apps screen has no card: its own table, the same rules.
+    if !table().contains(flow_id) && super::app_connect::is_phone_flow(flow_id) {
+        return super::app_connect::phone_finish(device_id, flow_id, callback).await;
+    }
     let taken = table().take(flow_id, device_id, callback, Instant::now());
     let (sign_in, code) = match taken {
         Ok(ok) => ok,

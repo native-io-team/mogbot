@@ -47,6 +47,12 @@ pub const METHODS: &[&str] = &[
     "agents.loginsRecheck",
     "agents.loginPhoneBegin",
     "agents.loginPhoneFinish",
+    "agents.apps",
+    "agents.appsConnect",
+    "agents.appsPhoneBegin",
+    "agents.appsCancel",
+    "agents.appsSetGrants",
+    "agents.appsRemove",
     "agents.signinBegin",
     "agents.signinFrame",
     "agents.signinInput",
@@ -121,6 +127,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.reach",
     "agents.policy",
     "agents.loginsTeam",
+    "agents.apps",
     "agents.usage",
     "agents.quota",
     "agents.accounts",
@@ -651,6 +658,38 @@ pub trait Backend: Send + Sync + 'static {
     async fn logins_undecline(&self, keys: Vec<String>) -> Result<Value, CommandError>;
     /// `agents_logins_recheck`: the user is back; check claude.ai connectors now.
     async fn logins_recheck(&self) -> Result<(), CommandError>;
+    /// "Apps your agents can use" (`agents_app_connections`), as the phone
+    /// sees it (`app_connect::phone_overview`): no token, no Mac-only page.
+    async fn apps(&self) -> Result<Value, CommandError>;
+    /// `agents_app_connect`: sign in to one of our apps in this Mac's
+    /// browser, for exactly the agents ticked.
+    async fn apps_connect(
+        &self,
+        service: &str,
+        grants: Vec<crate::agents::app_connect::GrantInput>,
+        again: Option<String>,
+    ) -> Result<(), CommandError>;
+    /// `app_connect::phone_begin`: the same sign-in in the phone's sheet;
+    /// the verifier and `state` kept here, bound to `device_id`. Finished
+    /// by `agents.loginPhoneFinish`.
+    async fn apps_phone_begin(
+        &self,
+        device_id: &str,
+        service: &str,
+        grants: Vec<crate::agents::app_connect::GrantInput>,
+        again: Option<String>,
+    ) -> Result<Value, CommandError>;
+    /// `agents_app_connect_cancel`: Stop.
+    async fn apps_cancel(&self, service: &str) -> Result<(), CommandError>;
+    /// `agents_connection_set_grants`: exactly these agents, each as ticked.
+    /// The user's own answer, as on the desk, so it can narrow or widen.
+    async fn apps_set_grants(
+        &self,
+        connection_id: &str,
+        grants: Vec<crate::agents::app_connect::GrantInput>,
+    ) -> Result<Value, CommandError>;
+    /// `agents_connection_delete`: the connection and its Keychain token.
+    async fn apps_remove(&self, connection_id: &str) -> Result<(), CommandError>;
     /// `agents_change_diff`: one file of a change card.
     async fn change_diff(
         &self,
@@ -1032,6 +1071,53 @@ struct PhoneFinishParams {
     callback_url: String,
 }
 
+/// The most agents one connection's grants can name: more than any team.
+const MAX_GRANTS: usize = 200;
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct AppsConnectParams {
+    service: String,
+    #[serde(default)]
+    grants: Vec<crate::agents::app_connect::GrantInput>,
+    /// The connection to sign in again (it needs it).
+    #[serde(default)]
+    again: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct AppsServiceParams {
+    service: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct AppsGrantsParams {
+    connection_id: String,
+    grants: Vec<crate::agents::app_connect::GrantInput>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct AppsConnectionParams {
+    connection_id: String,
+}
+
+fn checked_connect(p: &AppsConnectParams) -> Result<(), WireError> {
+    if p.service.is_empty() || p.service.len() > 100 {
+        return Err(bad_params("Which app?"));
+    }
+    if p.grants.len() > MAX_GRANTS
+        || p.again
+            .as_ref()
+            .is_some_and(|a| a.is_empty() || a.len() > 200)
+    {
+        return Err(bad_params("Which agents, and which connection?"));
+    }
+    Ok(())
+}
+
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct TeamParams {
@@ -1177,6 +1263,31 @@ struct ApprovalParams {
     always: Option<bool>,
     note: Option<String>,
     choice: Option<usize>,
+}
+
+/// "rex (read), chief (full)", or "nobody yet": who an apps change names.
+fn grants_audit(params: &Value) -> String {
+    let named: Vec<String> = params
+        .get("grants")
+        .and_then(Value::as_array)
+        .map(|g| {
+            g.iter()
+                .take(20)
+                .map(|g| {
+                    format!(
+                        "{} ({})",
+                        g.get("agentId").and_then(Value::as_str).unwrap_or(""),
+                        g.get("access").and_then(Value::as_str).unwrap_or("")
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    if named.is_empty() {
+        "nobody yet".into()
+    } else {
+        named.join(", ")
+    }
 }
 
 /// Never echoed: a parse error could quote a value, so a malformed request
@@ -1329,6 +1440,23 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             }
         ),
         "agents.loginPhoneFinish" => "finished signing in on the phone".into(),
+        "agents.appsConnect" => format!(
+            "connected {} on the Mac for {}",
+            field("service"),
+            grants_audit(params)
+        ),
+        "agents.appsPhoneBegin" => format!(
+            "started signing in to {} on the phone for {}",
+            field("service"),
+            grants_audit(params)
+        ),
+        "agents.appsCancel" => format!("stopped signing in to {}", field("service")),
+        "agents.appsSetGrants" => format!(
+            "who can use {}: {}",
+            field("connectionId"),
+            grants_audit(params)
+        ),
+        "agents.appsRemove" => format!("removed the connection {}", field("connectionId")),
         // Never read: what's typed there is a password.
         m if SELF_AUDITED_METHODS.contains(&m) => "phone sign-in".into(),
         // Never the value.
@@ -2015,6 +2143,47 @@ async fn run(
             let p: AgentParam = parse(params)?;
             Ok(b.reach(&p.agent_id).await?)
         }
+        "agents.apps" => Ok(b.apps().await?),
+        "agents.appsConnect" => {
+            let p: AppsConnectParams = parse(params)?;
+            checked_connect(&p)?;
+            b.apps_connect(&p.service, p.grants, p.again).await?;
+            Ok(Value::Null)
+        }
+        "agents.appsPhoneBegin" => {
+            let p: AppsConnectParams = parse(params)?;
+            checked_connect(&p)?;
+            Ok(
+                b.apps_phone_begin(&caller.device_id, &p.service, p.grants, p.again)
+                    .await?,
+            )
+        }
+        "agents.appsCancel" => {
+            let p: AppsServiceParams = parse(params)?;
+            if p.service.is_empty() || p.service.len() > 100 {
+                return Err(bad_params("Which app?"));
+            }
+            b.apps_cancel(&p.service).await?;
+            Ok(Value::Null)
+        }
+        "agents.appsSetGrants" => {
+            let p: AppsGrantsParams = parse(params)?;
+            if p.connection_id.is_empty()
+                || p.connection_id.len() > 200
+                || p.grants.len() > MAX_GRANTS
+            {
+                return Err(bad_params("Which connection, and which agents?"));
+            }
+            Ok(b.apps_set_grants(&p.connection_id, p.grants).await?)
+        }
+        "agents.appsRemove" => {
+            let p: AppsConnectionParams = parse(params)?;
+            if p.connection_id.is_empty() || p.connection_id.len() > 200 {
+                return Err(bad_params("Which connection?"));
+            }
+            b.apps_remove(&p.connection_id).await?;
+            Ok(Value::Null)
+        }
         "agents.policy" => {
             let p: AgentParam = parse(params)?;
             Ok(b.policy(&p.agent_id).await?)
@@ -2653,6 +2822,200 @@ mod tests {
                 "{detail}"
             );
         }
+    }
+
+    /// "Apps your agents can use" from the phone: the list is a read (never
+    /// audited) with no token or Mac-only page in it; connecting, who can use
+    /// it and Remove reach the desk's own commands, are audited without the
+    /// sign-in's URL or code, and a sheet is begun for the caller's device.
+    #[tokio::test]
+    async fn the_phone_apps_screen_reaches_the_desks_commands_and_no_token() {
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let list = dispatch(&c, &me, "agents.apps", json!({})).await.unwrap();
+        let text = list.to_string();
+        assert!(list["apps"].as_array().is_some_and(|a| !a.is_empty()));
+        assert_eq!(list["connections"][1]["kind"], "oauth");
+        assert_eq!(list["connections"][1]["grants"][0]["access"], "full");
+        for never in [
+            "accessToken",
+            "refreshToken",
+            "serverUrl",
+            "serverKey",
+            "serverName",
+            "notion.com/authorize",
+        ] {
+            assert!(!text.contains(never), "{never} in {text}");
+        }
+        // The phone's own sheet keeps its URL: that's what it opens.
+        assert!(list["flows"][1]["flow"]["url"].is_string());
+
+        let grants = json!([{ "agentId": AGENT, "access": "full" }, { "agentId": "chief", "access": "read" }]);
+        dispatch(
+            &c,
+            &me,
+            "agents.appsConnect",
+            json!({ "service": "linear", "grants": grants }),
+        )
+        .await
+        .unwrap();
+        let begun = dispatch(
+            &c,
+            &me,
+            "agents.appsPhoneBegin",
+            json!({ "service": "notion", "grants": [], "again": "c9" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(begun["redirectUri"], "dashbot-companion://oauth");
+        let code = "SplxlOBeZQQYbYS6WxSbIA";
+        dispatch(
+            &c,
+            &me,
+            "agents.loginPhoneFinish",
+            json!({ "flowId": begun["flowId"],
+                    "callbackUrl": format!("dashbot-companion://oauth?code={code}&state=s") }),
+        )
+        .await
+        .unwrap();
+        dispatch(&c, &me, "agents.appsCancel", json!({ "service": "notion" }))
+            .await
+            .unwrap();
+        // Narrowing to nobody is the user's answer too.
+        let changed = dispatch(
+            &c,
+            &me,
+            "agents.appsSetGrants",
+            json!({ "connectionId": "c2", "grants": [] }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(changed["grants"], json!([]));
+        dispatch(
+            &c,
+            &me,
+            "agents.appsRemove",
+            json!({ "connectionId": "c2" }),
+        )
+        .await
+        .unwrap();
+        let gone = dispatch(
+            &c,
+            &me,
+            "agents.appsRemove",
+            json!({ "connectionId": "gone" }),
+        )
+        .await;
+        assert!(gone.is_err());
+        assert_eq!(
+            stub.logins.lock().unwrap().as_slice(),
+            [
+                "apps connect linear for a1:full,chief:read",
+                "apps sheet notion for nobody by dev_a",
+                "finish flow2 by dev_a",
+                "apps cancel notion",
+                "apps grants c2 nobody",
+                "apps remove c2",
+            ]
+        );
+        let audited = stub.audited();
+        let methods: Vec<&str> = audited.iter().map(|(_, m, _, _)| m.as_str()).collect();
+        assert!(!methods.contains(&"agents.apps"), "{methods:?}");
+        for m in [
+            "agents.appsConnect",
+            "agents.appsPhoneBegin",
+            "agents.appsSetGrants",
+            "agents.appsRemove",
+        ] {
+            assert!(methods.contains(&m), "{m} not audited: {methods:?}");
+        }
+        let connect = audited
+            .iter()
+            .find(|(_, m, _, _)| m == "agents.appsConnect")
+            .unwrap();
+        assert!(
+            connect.2.contains("linear") && connect.2.contains("a1 (full)"),
+            "{}",
+            connect.2
+        );
+        let refused = audited
+            .iter()
+            .find(|(_, m, _, ok)| m == "agents.appsRemove" && !ok);
+        assert!(refused.is_some());
+        for (_, _, detail, _) in audited {
+            assert!(
+                !detail.contains(code) && !detail.contains("state=") && !detail.contains("://"),
+                "{detail}"
+            );
+        }
+    }
+
+    #[tokio::test]
+    async fn the_apps_methods_refuse_what_isnt_a_connect_or_a_grant() {
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let many: Vec<Value> = (0..201)
+            .map(|i| json!({ "agentId": format!("a{i}"), "access": "read" }))
+            .collect();
+        for (method, bad) in [
+            ("agents.appsConnect", json!({ "service": "" })),
+            (
+                "agents.appsConnect",
+                json!({ "service": "linear", "grants": many.clone() }),
+            ),
+            (
+                "agents.appsConnect",
+                json!({ "service": "linear", "again": "" }),
+            ),
+            (
+                "agents.appsConnect",
+                json!({ "service": "linear", "token": "x" }),
+            ),
+            (
+                "agents.appsPhoneBegin",
+                json!({ "service": "linear", "grants": [{ "agentId": AGENT, "access": "admin" }] }),
+            ),
+            ("agents.appsCancel", json!({})),
+            ("agents.appsSetGrants", json!({ "connectionId": "c2" })),
+            (
+                "agents.appsSetGrants",
+                json!({ "connectionId": "", "grants": [] }),
+            ),
+            (
+                "agents.appsSetGrants",
+                json!({ "connectionId": "c2", "grants": many.clone() }),
+            ),
+            ("agents.appsRemove", json!({ "connectionId": "" })),
+        ] {
+            let e = dispatch(&c, &me, method, bad.clone()).await;
+            assert!(e.is_err(), "{method} {bad}");
+        }
+        assert!(stub.logins.lock().unwrap().is_empty());
+    }
+
+    /// The apps screen counts against the same per-device limit as everything else.
+    #[tokio::test]
+    async fn the_apps_screen_is_rate_limited_like_every_request() {
+        use crate::companion::testkit::Stub;
+        let (c, _) = Stub::companion();
+        let me = caller("dev_a");
+        let mut limited = false;
+        for _ in 0..(crate::companion::MAX_REQUESTS_PER_MINUTE + 5) {
+            if let Err(e) = dispatch(
+                &c,
+                &me,
+                "agents.appsRemove",
+                json!({ "connectionId": "c2" }),
+            )
+            .await
+            {
+                limited = e.summary().contains("Too many requests");
+                break;
+            }
+        }
+        assert!(limited);
     }
 
     #[tokio::test]

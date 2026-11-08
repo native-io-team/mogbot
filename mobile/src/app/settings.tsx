@@ -66,6 +66,7 @@ export default function Settings() {
   const colors = useColors();
   const router = useRouter();
   const servesTeam = useServed('agents.loginsTeam', MAC_FEATURES.logins);
+  const servesApps = useServed('agents.apps');
   const canImport = useApp((s) => canCall('agents.import.status', s.welcome));
   const credentials = useApp((s) => s.credentials);
   const connected = useApp((s) => s.link.kind === 'connected');
@@ -197,12 +198,21 @@ export default function Settings() {
 
       <IndependenceSetting />
       <NewAgentDefaults />
-      {servesTeam && (
+      {(servesTeam || servesApps) && (
         <Section
           title="Logins"
-          footer="The apps your agents asked for, one row each. Sign in from here, or on your Mac."
+          footer="The apps your agents asked for, one row each, and every app connected with who can use it. Sign in from here, or on your Mac."
         >
-          <Row label="What your team needs" onPress={() => router.push('/logins')} last />
+          {servesTeam && (
+            <Row
+              label="What your team needs"
+              onPress={() => router.push('/logins')}
+              last={!servesApps}
+            />
+          )}
+          {servesApps && (
+            <Row label="Apps your agents can use" onPress={() => router.push('/apps')} last />
+          )}
         </Section>
       )}
       {canImport && (

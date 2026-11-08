@@ -1554,6 +1554,85 @@ impl Backend for Stub {
         Ok(())
     }
 
+    async fn apps(&self) -> Result<Value, CommandError> {
+        Ok(apps_fixture())
+    }
+
+    async fn apps_connect(
+        &self,
+        service: &str,
+        grants: Vec<crate::agents::app_connect::GrantInput>,
+        again: Option<String>,
+    ) -> Result<(), CommandError> {
+        self.logins.lock().unwrap().push(format!(
+            "apps connect {service} for {}{}",
+            grants_line(&grants),
+            again.map(|a| format!(" again {a}")).unwrap_or_default()
+        ));
+        Ok(())
+    }
+
+    async fn apps_phone_begin(
+        &self,
+        device_id: &str,
+        service: &str,
+        grants: Vec<crate::agents::app_connect::GrantInput>,
+        _again: Option<String>,
+    ) -> Result<Value, CommandError> {
+        self.logins.lock().unwrap().push(format!(
+            "apps sheet {service} for {} by {device_id}",
+            grants_line(&grants)
+        ));
+        serde_json::to_value(crate::agents::app_connect::PhoneBegin {
+            flow_id: "flow2".into(),
+            service: service.into(),
+            url: "https://linear.app/oauth/authorize?client_id=c&code_challenge=x&state=s".into(),
+            redirect_uri: "dashbot-companion://oauth".into(),
+        })
+        .map_err(|e| CommandError::expected(e.to_string()))
+    }
+
+    async fn apps_cancel(&self, service: &str) -> Result<(), CommandError> {
+        self.logins
+            .lock()
+            .unwrap()
+            .push(format!("apps cancel {service}"));
+        Ok(())
+    }
+
+    async fn apps_set_grants(
+        &self,
+        connection_id: &str,
+        grants: Vec<crate::agents::app_connect::GrantInput>,
+    ) -> Result<Value, CommandError> {
+        self.logins.lock().unwrap().push(format!(
+            "apps grants {connection_id} {}",
+            grants_line(&grants)
+        ));
+        let mut c = fixture_connection();
+        c.grants = grants
+            .iter()
+            .map(|g| crate::agents::connections::Grant {
+                agent_id: g.agent_id.clone(),
+                access: g.access,
+                granted_at: 0,
+            })
+            .collect();
+        serde_json::to_value(crate::agents::app_connect::phone_connection(&c))
+            .map_err(|e| CommandError::expected(e.to_string()))
+    }
+
+    async fn apps_remove(&self, connection_id: &str) -> Result<(), CommandError> {
+        if connection_id == "gone" {
+            return Err(CommandError::expected("That connection is gone."));
+        }
+        self.logins
+            .lock()
+            .unwrap()
+            .push(format!("apps remove {connection_id}"));
+        Ok(())
+    }
+
     async fn usage_plan(&self) -> Result<Value, CommandError> {
         use crate::agents::engine::Engine;
         use crate::agents::forecast::PerRun;
@@ -2028,6 +2107,100 @@ pub fn reach_fixture() -> Value {
         "secrets": [{ "secretId": "s1", "name": "x_key", "purpose": "Post to X", "variables": ["$X_KEY"] }],
         "blockedApps": []
     })
+}
+
+fn grants_line(grants: &[crate::agents::app_connect::GrantInput]) -> String {
+    if grants.is_empty() {
+        return "nobody".into();
+    }
+    grants
+        .iter()
+        .map(|g| {
+            let access = match g.access {
+                crate::agents::connections::Access::Read => "read",
+                crate::agents::connections::Access::Full => "full",
+            };
+            format!("{}:{access}", g.agent_id)
+        })
+        .collect::<Vec<_>>()
+        .join(",")
+}
+
+/// A Linear connection two agents can use, one to read and one to change.
+pub fn fixture_connection() -> crate::agents::connections::Connection {
+    serde_json::from_value(json!({
+        "id": "c2", "service": "linear", "title": "Linear", "account": "sam@acme.com",
+        "kind": {"type": "oauth", "serverUrl": "https://mcp.linear.app/mcp"},
+        "serverKey": "linear", "createdAt": 0,
+        "grants": [
+            {"agentId": AGENT, "access": "full", "grantedAt": 0},
+            {"agentId": "chief", "access": "read", "grantedAt": 0}
+        ],
+        "needsSignIn": true, "lastUsedAt": 1_760_000_000_000_i64
+    }))
+    .unwrap()
+}
+
+/// "Apps your agents can use", as the phone gets it: built from the real
+/// types. Every kind of connection, and a sign-in under way on each device.
+pub fn apps_fixture() -> Value {
+    use crate::agents::app_connect::{self, AppFlow, Connected, PhoneApps};
+    use crate::agents::logins::{Flow, FlowState};
+    let claude: crate::agents::connections::Connection = serde_json::from_value(json!({
+        "id": "c1", "service": "gmail", "title": "Gmail", "account": "work@acme.com",
+        "kind": {"type": "claude_ai", "serverName": "claude.ai Gmail"},
+        "serverKey": "gmail", "createdAt": 0, "grants": []
+    }))
+    .unwrap();
+    let gh: crate::agents::connections::Connection = serde_json::from_value(json!({
+        "id": "c3", "service": "github", "title": "GitHub", "account": "sam",
+        "kind": {"type": "gh"}, "serverKey": "github", "createdAt": 0,
+        "grants": [{"agentId": AGENT, "access": "read", "grantedAt": 0}]
+    }))
+    .unwrap();
+    let waiting = |on_phone: bool, message: &str| Flow {
+        state: FlowState::Waiting,
+        option: "oauth".into(),
+        message: Some(message.into()),
+        started_at: 1_762_290_000_000,
+        from_phone: on_phone,
+        on_phone,
+        url: Some(if on_phone {
+            "https://www.figma.com/oauth?state=s".into()
+        } else {
+            "https://notion.com/authorize?state=s".into()
+        }),
+        opened_at: Some(1_762_290_000_000),
+        ..Default::default()
+    };
+    let view = PhoneApps {
+        apps: app_connect::catalogue(),
+        connections: [claude, fixture_connection(), gh]
+            .iter()
+            .map(app_connect::phone_connection)
+            .collect(),
+        flows: vec![
+            app_connect::phone_flow(AppFlow {
+                service: "notion".into(),
+                flow: Some(waiting(false, "Notion's sign-in opened in your browser.")),
+                connected: None,
+            }),
+            app_connect::phone_flow(AppFlow {
+                service: "figma".into(),
+                flow: Some(waiting(true, "Figma's sign-in is open on your phone.")),
+                connected: None,
+            }),
+            AppFlow {
+                service: "linear".into(),
+                flow: None,
+                connected: Some(Connected {
+                    connection_id: "c2".into(),
+                    line: "Connected as sam@acme.com".into(),
+                }),
+            },
+        ],
+    };
+    serde_json::to_value(view).unwrap()
 }
 
 /// "What it can do", as `agents_policy` serializes it: an agent with its own

@@ -12,6 +12,10 @@ import type { AgentPolicyView } from './policy';
 import type {
   AgentMessage,
   AgentReach,
+  AppConnection,
+  AppGrant,
+  AppPhoneBegin,
+  AppsOverview,
   LoginPhoneBegin,
   DeclineReceipt,
   SigninBegun,
@@ -231,6 +235,43 @@ export interface Methods {
     params: { agentId: string; requestId: string; value: string };
     result: AgentSecret;
   };
+  /**
+   * "Apps your agents can use" (desktop `agents_app_connections`): the apps
+   * the Mac signs in to itself, every connection and who can use it, and any
+   * connect under way. Never a token.
+   */
+  'agents.apps': { params: Record<string, never>; result: AppsOverview };
+  /**
+   * `agents_app_connect`: sign in to one of those apps in the Mac's browser,
+   * for exactly these agents (none: kept for a later card's "Use <account>").
+   * `again`: a connection that needs signing in again, kept as that one.
+   */
+  'agents.appsConnect': {
+    params: { service: string; grants: AppGrant[]; again?: string };
+    result: null;
+  };
+  /**
+   * The same sign-in on this phone's sign-in sheet, as a card's
+   * (`agents.loginPhoneBegin`): the Mac keeps the PKCE verifier and `state`;
+   * the sheet's answer goes back with `agents.loginPhoneFinish`.
+   */
+  'agents.appsPhoneBegin': {
+    params: { service: string; grants: AppGrant[]; again?: string };
+    result: AppPhoneBegin;
+  };
+  /** Stop a connect under way. */
+  'agents.appsCancel': { params: { service: string }; result: null };
+  /**
+   * `agents_connection_set_grants`: exactly these agents may use it, each as
+   * given. The user's own answer, as on the desk: it can narrow or widen
+   * (a full grant still asks on a card before each change).
+   */
+  'agents.appsSetGrants': {
+    params: { connectionId: string; grants: AppGrant[] };
+    result: AppConnection;
+  };
+  /** `agents_connection_delete`: the connection, and its token from the Mac's Keychain. */
+  'agents.appsRemove': { params: { connectionId: string }; result: null };
   /** What an agent can reach: connections, browser, secrets. Read-only. */
   'agents.reach': { params: { agentId: string }; result: AgentReach };
   /** "What it can do" (`agents/policy.rs`): its settings in plain words. Read-only; changed in chat. */
@@ -565,6 +606,7 @@ export const READ_ONLY_METHODS = [
   'agents.reach',
   'agents.policy',
   'agents.loginsTeam',
+  'agents.apps',
   'agents.usage',
   'agents.quota',
   'agents.accounts',

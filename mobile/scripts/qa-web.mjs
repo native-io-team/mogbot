@@ -590,6 +590,13 @@ async function clearField(page) {
   await sleep(800);
 }
 
+/** Click the element reading exactly `text` inside the one with `data-testid` `testId`. */
+const clickIn = (page, testId, text) =>
+  page.clickWhere(
+    `() => [...document.querySelectorAll('[data-testid=${JSON.stringify(testId)}] *')].filter((e) => e.innerText?.trim() === ${JSON.stringify(text)} && e.getBoundingClientRect().width).pop()`,
+    `${testId} ${text}`
+  ).then(() => sleep(700));
+
 const scrollToText = (text) => async (page) => {
   await page.eval(FIND_SCROLLER);
   for (let i = 0; i < 16; i++) {
@@ -1164,6 +1171,59 @@ const LIVE = [
     pages: 2,
     check:
       'One row per service: Google · Gmail + Calendar used by Finance and QA 2 (one signing in on the Mac), LinkedIn browser-only; progress line; Not needed per agent',
+  },
+  {
+    name: 'apps',
+    route: '/apps',
+    ready: 'Apps your agents can use',
+    pages: 2,
+    check:
+      'Apps your agents can use: Connected (Linear · sam@acme.com, Signed in on this Mac · who can read and change; Gmail on claude.ai; Sentry with Needs sign-in and Sign in again), each with Who can use it and Remove as quiet words; Connect an app rows with one neutral Connect each, Notion saying Finish signing in on your Mac with Stop; Through claude.ai with Open claude.ai',
+  },
+  {
+    name: 'apps-who',
+    route: '/apps',
+    ready: 'Apps your agents can use',
+    act: (page) => clickIn(page, 'connection-c_linear', 'Who can use it'),
+    check:
+      'Linear’s row open on Which agents can use it?: every agent with a tick box (Chief of Staff and QA 2 ticked), Read only / Read and change with Read and change on, “Every change asks you on a card first.”, Cancel and Save (neutral)',
+  },
+  {
+    name: 'apps-connect',
+    route: '/apps?agentId=qa',
+    ready: 'Apps your agents can use',
+    act: async (page) => {
+      await scrollToText('Stripe')(page);
+      await clickIn(page, 'app-stripe', 'Connect');
+      await scrollToText('Sign in to Stripe')(page);
+    },
+    check:
+      'Stripe’s row open with only QA 2 ticked (opened for it), Read only on, where the sign-in opens, Cancel and Sign in to Stripe (neutral)',
+  },
+  {
+    name: 'apps-remove',
+    route: '/apps',
+    ready: 'Apps your agents can use',
+    act: async (page) => {
+      await clickIn(page, 'connection-c_linear', 'Remove');
+      await sleep(800);
+    },
+    check:
+      'A sheet over the list: “Remove Linear?”, that no agent can use it and its sign-in leaves the Mac’s Keychain, Remove in red and Cancel',
+  },
+  {
+    name: 'controls-apps',
+    route: '/controls?id=qa',
+    ready: 'QA 2',
+    act: scrollToText('Apps'),
+    check: 'Agent controls: an Apps row (“Which apps QA 2 can use, and connecting new ones.”) above More about QA 2',
+  },
+  {
+    name: 'settings-apps',
+    route: '/settings',
+    ready: 'Settings',
+    act: scrollToText('Apps your agents can use'),
+    check: 'Settings → Logins: What your team needs, then Apps your agents can use, and the footer naming both',
   },
   {
     name: 'reach',
