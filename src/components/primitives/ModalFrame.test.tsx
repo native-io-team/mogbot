@@ -37,7 +37,7 @@ describe('ModalFrame', () => {
     expect(screen.getByRole('dialog', { name: 'Issue report' })).toContainElement(header);
   });
 
-  it('labels the dialog, focuses its first control, and restores the opener', () => {
+  it('labels the dialog, focuses the dialog (no pre-selected control), and restores the opener', () => {
     const onClose = vi.fn();
     const { rerender } = render(
       <>
@@ -64,7 +64,8 @@ describe('ModalFrame', () => {
     const titleId = dialog.getAttribute('aria-labelledby');
     expect(titleId).toBeTruthy();
     expect(document.getElementById(titleId ?? '')).toHaveTextContent('Example dialog');
-    expect(screen.getByRole('button', { name: 'Continue' })).toHaveFocus();
+    expect(dialog).toHaveFocus();
+    expect(screen.getByRole('button', { name: 'Continue' })).not.toHaveFocus();
 
     rerender(
       <>
@@ -100,7 +101,7 @@ describe('ModalFrame', () => {
     expect(screen.getByRole('button', { name: /close/i })).not.toHaveFocus();
   });
 
-  it('skips the header close button when nothing asked for focus', () => {
+  it('focuses the dialog, not its first body control, when nothing asked for focus', () => {
     const { rerender } = render(
       <ModalFrame isOpen={false} onClose={vi.fn()} title="Help" showCloseButton>
         <button type="button">Shortcuts</button>
@@ -111,7 +112,7 @@ describe('ModalFrame', () => {
         <button type="button">Shortcuts</button>
       </ModalFrame>
     );
-    expect(screen.getByRole('button', { name: 'Shortcuts' })).toHaveFocus();
+    expect(screen.getByRole('dialog')).toHaveFocus();
   });
 
   it('focuses the dialog, not the selected tab, when it opens on tabs', () => {
@@ -418,7 +419,7 @@ describe('ModalFrame', () => {
     expect(parentDialog).toBeDefined();
     expect(parentDialog).toHaveAttribute('aria-hidden', 'true');
     expect(parentDialog?.parentElement).toHaveAttribute('inert');
-    expect(screen.getByRole('button', { name: 'Child action' })).toHaveFocus();
+    expect(childDialog).toHaveFocus();
 
     fireEvent.keyDown(childDialog, { key: 'Escape' });
 

@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { act, render, screen } from '@testing-library/react';
 import type { AgentMessage, Approval } from '../../lib/agents';
 import { WaitingForYouBar, waitingOn } from './WaitingForYouBar';
 
@@ -76,5 +76,52 @@ describe('WaitingForYouBar', () => {
   it('shows nothing while the agent works', () => {
     const { container } = render(<WaitingForYouBar agent={idle as never} messages={[msg({})]} />);
     expect(container.textContent).toBe('');
+  });
+});
+
+describe('WaitingForYouBar visibility', () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    document.body.innerHTML = '';
+  });
+
+  function stubObserver() {
+    let cb: IntersectionObserverCallback = () => {};
+    class IO {
+      constructor(c: IntersectionObserverCallback) {
+        cb = c;
+      }
+      observe() {}
+      disconnect() {}
+    }
+    vi.stubGlobal('IntersectionObserver', IO);
+    return (ratio: number) =>
+      act(() =>
+        cb(
+          [{ isIntersecting: ratio > 0, intersectionRatio: ratio }] as never,
+          {} as IntersectionObserver
+        )
+      );
+  }
+
+  it('hides while its card is in view in the open chat, and returns when scrolled away', async () => {
+    const el = document.createElement('div');
+    el.setAttribute('data-message-ids', 'r1');
+    document.body.appendChild(el);
+    const emit = stubObserver();
+    render(<WaitingForYouBar agent={waiting as never} messages={[msg({ requestId: 'r1' })]} />);
+    await act(async () => {
+      await new Promise((r) => requestAnimationFrame(() => r(null)));
+    });
+    emit(1);
+    expect(screen.queryByTestId('agent-waiting-bar')).toBeNull();
+    emit(0);
+    expect(screen.getByTestId('agent-waiting-bar')).toBeTruthy();
+  });
+
+  it('stays when the card is not in this chat', () => {
+    stubObserver();
+    render(<WaitingForYouBar agent={waiting as never} messages={[msg({ requestId: 'r1' })]} />);
+    expect(screen.getByTestId('agent-waiting-bar')).toBeTruthy();
   });
 });
