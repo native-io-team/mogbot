@@ -133,11 +133,12 @@
   transform: rotate(90deg);
 }
 
-/* A Needs you row and its Open chat, side by side. */
+/* A Needs you row and its Open chat, side by side. Far enough apart that the
+   row's fold chevron reads as the row's, not as an arrow into "Open chat". */
 .agents-team__head {
   display: flex;
   align-items: center;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-xl);
 }
 
 .agents-team__head .agents-team__row {

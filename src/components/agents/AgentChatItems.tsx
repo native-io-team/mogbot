@@ -450,6 +450,7 @@ export const ErrorLine = memo(function ErrorLine({
       onKeyDown={onKeyDown}
       className="agent-chat__row agent-chat__row--agent agent-chat__row--card"
       data-limit={limited || undefined}
+      data-failed={!limited || undefined}
       data-arrived={arrived || undefined}
       data-work={message.work && agent ? true : undefined}
       data-message-ids={message.id}

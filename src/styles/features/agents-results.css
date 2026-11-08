@@ -92,7 +92,15 @@
   list-style: disc;
 }
 
+/* One size for both lists (as on the phone): the box and the title already
+   set "Not verified" apart, so its lines needn't outsize the summary's. */
+.agent-result__unverified li,
+.agent-result__checked li {
+  line-height: var(--line-height-compact);
+}
+
 .agent-result__unverified li {
+  font-size: var(--font-size-body-sm);
   color: var(--text-primary);
   -webkit-user-select: text;
   user-select: text;

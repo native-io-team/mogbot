@@ -17,6 +17,8 @@
 .agents-usage__muted,
 .agents-usage__state {
   font-size: var(--font-size-body-sm);
+  /* These wrap (the mode's note, a forecast); the body's line height is 1. */
+  line-height: var(--line-height-compact);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }

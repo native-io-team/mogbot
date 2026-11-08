@@ -153,6 +153,18 @@
    the right of the words while both fit on one line, and wrap under them
    (still right-aligned) once the words need the width: a one-line failure
    never leaves Retry alone on a row of its own. */
+/* Copy and the time go under the card, out of flow, as under a reply: beside
+   it they took a column of their own, and the failure ended short of the
+   composer's (and every other card's) right edge. */
+.agent-chat__row--card[data-failed] {
+  position: relative;
+}
+
+.agent-chat__messages > .agent-chat__row--card[data-failed] > .agent-message__actions {
+  position: absolute;
+  top: 100%;
+}
+
 .agent-card.agent-bubble--error {
   flex-direction: row;
   flex-wrap: wrap;
@@ -218,8 +230,13 @@
   line-clamp: 2;
 }
 
-.agent-approval__show-all {
+/* Details / Review under a card's prose: set apart from the prose it follows
+   (same colour, same size, it read as one more sentence), at the weight of the
+   phone's text actions. */
+.text-button.button.agent-approval__show-all {
   align-self: flex-start;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
 }
 
 /* ------------------------------------------------------ sending, focus */
