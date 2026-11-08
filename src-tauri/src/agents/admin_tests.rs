@@ -607,3 +607,41 @@ fn an_existing_chief_is_told_once_and_a_new_one_never() {
     assert!(!note_upgrade(&store::get(&fresh.id).unwrap()));
     store::set_root_for_tests(None);
 }
+
+#[test]
+fn a_noop_or_assignment_never_names_the_command() {
+    assert_eq!(
+        command_summary(": # check\nls ~/Kite"),
+        "Look inside your Kite folder"
+    );
+    assert_eq!(
+        command_summary("MSG=\"hello there\"\n: \ngit status"),
+        "Check what's changed in the project"
+    );
+}
+
+#[test]
+fn quoted_text_never_becomes_a_command() {
+    // A quoted newline and a quoted `;` stay inside their word.
+    assert_eq!(
+        command_summary("git commit -m \"Fix nav\n🤖 Generated; with Kite\""),
+        "Save a commit in the project"
+    );
+    assert_eq!(
+        command_summary("gh pr create --title 'a && b' --body \"x\n\ny\""),
+        "Open a pull request on GitHub"
+    );
+}
+
+#[test]
+fn a_heredoc_body_is_data_and_a_script_lists_its_commands() {
+    let script = "git add -A\ngit commit -m \"$(cat <<'EOF'\n🤖 notes line\nrm -rf /\nEOF\n)\"\ngh pr create --title t --body b";
+    assert_eq!(
+        command_summary(script),
+        "Run a script: git add, git commit, gh pr create"
+    );
+    assert_eq!(
+        command_summary("cat > notes.txt <<'EOF'\nrm -rf /\nEOF"),
+        "Write notes.txt"
+    );
+}

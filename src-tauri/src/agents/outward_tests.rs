@@ -202,3 +202,41 @@ fn a_plans_text_covers_only_those_words() {
     };
     assert!(!approved_covers("x", &unread));
 }
+
+#[test]
+fn a_variable_set_in_the_command_shows_its_words() {
+    let t = texts(
+        "Bash",
+        &bash("F=\"Shipped the Kite fix\"\ngh pr comment 4 --body \"$F\""),
+        None,
+        &[],
+    );
+    assert_eq!(t.pieces, vec!["Shipped the Kite fix".to_string()]);
+    assert!(t.unread.is_empty());
+    let t = texts(
+        "Bash",
+        &bash("F=$(cat <<'EOF'\nThe nav is fixed.\nEOF\n)\ngh pr comment 4 --body \"$F\""),
+        None,
+        &[],
+    );
+    assert_eq!(t.pieces, vec!["The nav is fixed.".to_string()]);
+    assert!(t.unread.is_empty());
+}
+
+#[test]
+fn a_variable_it_cannot_fill_is_said_not_shown() {
+    let t = texts("Bash", &bash("gh pr comment 4 --body \"$F\""), None, &[]);
+    assert!(t.pieces.is_empty());
+    assert!(!t.complete());
+    let card = card_block(&t);
+    assert!(!card.contains("exactly:"));
+    assert!(card.contains("can't read"), "{card}");
+    // Built from a command's output: not resolved either.
+    let t = texts(
+        "Bash",
+        &bash("F=$(date)\ngh pr comment 4 --body \"$F\""),
+        None,
+        &[],
+    );
+    assert!(!t.complete());
+}
