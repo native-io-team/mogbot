@@ -1046,16 +1046,86 @@ pub fn gate(agent: &Agent, tool: &str, input: &Value, outside: bool) -> Gate {
         return refused;
     }
     let level = super::independence::for_turn(super::policy::chosen_level(agent), outside);
-    let g = gate_with(
-        team_enabled(),
-        level,
-        agent,
-        tool,
-        input,
-        outside,
-        &page_of(&agent.id),
-    );
-    held_for_exact_text(g, agent, tool, input)
+    let page = page_of(&agent.id);
+    let g = gate_with(team_enabled(), level, agent, tool, input, outside, &page);
+    let g = held_for_exact_text(g, agent, tool, input);
+    let name = tool.strip_prefix(SERVER).unwrap_or(tool);
+    if g == Gate::Ask
+        && only_unlabelled_enter(
+            level,
+            agent,
+            super::outward::required(agent),
+            name,
+            input,
+            &page,
+        )
+        && first_try(&agent.id, input)
+    {
+        return Gate::Refuse(UNLABELLED_ENTER.into());
+    }
+    g
+}
+
+/// What an agent is told when Enter would press into a box it never named.
+pub const UNLABELLED_ENTER: &str = "Nothing ran: this presses Enter in a box clicked by position, and the app can't tell a search box from a message box, so it would have put a \"goes out under your name\" card to the user. Find the box first (find \"search box\", or read_page) and click it by its ref: Enter in a search box then runs on its own, and in a message box it asks with the exact words. If the box has no ref, send the same steps again and they go to the user on a card.";
+
+/// Whether the only thing a call would ask about is Enter pressed after a
+/// click (or no click) the page memory has no label for. Observed
+/// (2026-11-08): a read-only search in a team chat's web app, typed into
+/// the search box clicked by position, raised "Goes out under your name,
+/// exactly: “<the search words>”" at Full send. Nobody answered, it
+/// expired, and the check stopped there. Asking the agent to name the box
+/// costs one call and answers the question the card couldn't. Pure.
+pub fn only_unlabelled_enter(
+    level: Level,
+    agent: &Agent,
+    exact_text: bool,
+    name: &str,
+    input: &Value,
+    page: &Page,
+) -> bool {
+    let steps = if name == "browser_batch" {
+        match batch_steps(input) {
+            Some(s) if !s.is_empty() => s,
+            _ => return false,
+        }
+    } else {
+        vec![(name.to_string(), input.clone())]
+    };
+    let mut page = page.clone();
+    let mut found = false;
+    for (n, i) in &steps {
+        let enter = n == "computer"
+            && i.get("action").and_then(Value::as_str) == Some("key")
+            && i.get("text")
+                .or_else(|| i.get("key"))
+                .and_then(Value::as_str)
+                .is_some_and(is_enter);
+        if enter && page.last_target.is_none() && !money_page(url_for(&page, i).as_deref()) {
+            found = true;
+        } else if n == "browser_batch"
+            || decide(level, agent, n, i, &page) != Gate::Allow
+            || (exact_text && outward_step_on(agent, n, i, &page))
+        {
+            return false;
+        }
+        on_call(&mut page, n, i);
+    }
+    found
+}
+
+static REDIRECTED: Mutex<Option<std::collections::HashSet<String>>> = Mutex::new(None);
+
+/// The first time an agent sends these exact steps: later, the same steps
+/// go to the user on a card, so an agent that can't name the box isn't stuck.
+fn first_try(agent_id: &str, input: &Value) -> bool {
+    let key = format!("{agent_id}\u{1f}{input}");
+    let mut guard = REDIRECTED.lock().unwrap_or_else(|e| e.into_inner());
+    let seen = guard.get_or_insert_with(Default::default);
+    if seen.len() > 500 {
+        seen.clear();
+    }
+    seen.insert(key)
 }
 
 /// With "nothing goes out under my name unless I OK the exact text" on

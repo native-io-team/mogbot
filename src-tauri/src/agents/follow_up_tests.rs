@@ -38,6 +38,12 @@ fn questions_waits_later_times_and_report_backs_are_not_promises() {
         // An earlier promise the reply then moved past isn't its ending.
         "I'll check the logs. They show a timeout in the importer. The fix is in the PR, and the tests pass. Nothing else is open.",
         "Done: the report is in your folder.",
+        // Offers waiting on the user's go-ahead (observed 2026-11-08).
+        "The fix is committed locally. Say the word and I'll run it next.",
+        "I'll deploy it with your OK.",
+        "Happy to, I'll run the sweep whenever you want.",
+        "If you'd like, I'll draft the reply.",
+        "I'll check the other inbox if so.",
     ] {
         assert_eq!(promise(text), None, "{text}");
     }

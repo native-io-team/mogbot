@@ -13,12 +13,35 @@
 //!   withdrawn. When the turn ends with it still held, it was the final word,
 //!   and it goes into the chat as the reply. Nothing is ever lost: every
 //!   folded line is in the timeline, in the agent's words.
-//! - **Only what can't matter on its own.** A question, a list, code, a link
-//!   or anything long is never folded: it might be the thing the user needs,
-//!   so it is recorded as it always was.
+//! - **Only what can't matter on its own.** A question, a list, a code
+//!   block, a link, anything long, a wait on the user or a setback told to
+//!   them is never folded: it might be the thing the user needs, so it is
+//!   recorded as it always was. Inline code and a setback the agent works
+//!   past ("can't read the logs here, so reading the code") are narration.
 
-/// Longest line that can be folded, in characters.
-pub const MAX_CHARS: usize = 240;
+/// Longest line that can be folded, in characters. Observed (2026-11-08): a
+/// debugging turn's step-by-step lines (what it found in a file, what it
+/// would check next) ran to 350 characters, named files in inline code, and
+/// mentioned the error it was chasing. Seventeen of them reached the chat
+/// as separate messages.
+pub const MAX_CHARS: usize = 420;
+
+/// Words that put a line to the user even mid-turn: a card, or a wait on them.
+const MUST_READ: [&str; 8] = [
+    "waiting on you",
+    "allow it",
+    "on the card",
+    "needs you",
+    "need you",
+    "your ok",
+    "your word",
+    "your pin",
+];
+
+/// A setback is news only when it is told to the user ("you'll need to…").
+/// Said on the way ("no credentials here, so I can't read the logs; reading
+/// the code instead") and followed by more work, it is the working line.
+const SETBACKS: [&str; 5] = ["couldn't", "can't", "failed", "error", "blocked"];
 
 /// Whether a reply could be mid-turn narration (decided by what follows).
 pub fn foldable(text: &str) -> bool {
@@ -26,10 +49,11 @@ pub fn foldable(text: &str) -> bool {
     if t.is_empty() || t.chars().count() > MAX_CHARS {
         return false;
     }
-    // Two paragraphs, a list, code, a link, a table: content, not narration.
+    // Two paragraphs, a list, a code block, a link, a table: content, not
+    // narration. Inline code (`config.ts`) is how agents name what they're
+    // looking at, so it doesn't count.
     if t.contains("\n\n")
         || t.contains("```")
-        || t.contains('`')
         || t.contains("](")
         || t.contains("http://")
         || t.contains("https://")
@@ -46,18 +70,14 @@ pub fn foldable(text: &str) -> bool {
     if t.contains('?') {
         return false;
     }
-    let lower = t.to_lowercase();
-    const MUST_READ: [&str; 8] = [
-        "waiting on you",
-        "allow it",
-        "on the card",
-        "couldn't",
-        "can't",
-        "failed",
-        "error",
-        "blocked",
-    ];
-    !MUST_READ.iter().any(|w| lower.contains(w))
+    let lower = t.to_lowercase().replace('’', "'");
+    if MUST_READ.iter().any(|w| lower.contains(w)) {
+        return false;
+    }
+    let to_user = lower
+        .split(|c: char| !c.is_alphanumeric() && c != '\'')
+        .any(|w| matches!(w, "you" | "your" | "you'll" | "you're" | "you've"));
+    !(to_user && SETBACKS.iter().any(|w| lower.contains(w)))
 }
 
 /// The note's label in the timeline: the line itself, on one line.

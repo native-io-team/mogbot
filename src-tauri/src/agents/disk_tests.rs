@@ -83,6 +83,27 @@ fn each_crossing_is_said_once_until_space_comes_back() {
     assert_eq!(step(&mut said, GB), None);
 }
 
+/// Observed (2026-11-08): six relaunches in an afternoon, the disk hovering
+/// at 11–15 GB, six identical lines in the Chief's chat. What was said
+/// survives a relaunch; space coming back still re-arms it.
+#[test]
+fn a_relaunch_is_not_a_new_crossing() {
+    let dir = tempfile::tempdir().unwrap();
+    let kept = dir.path().join(SAID_FILE);
+    assert_eq!(step_kept(&kept, 13 * GB), Some(Crossing::Low));
+    // Each reading below is a fresh launch: only the file carries over.
+    for free in [14 * GB, 14 * GB, 11 * GB, 14 * GB] {
+        assert_eq!(step_kept(&kept, free), None, "{free}");
+    }
+    assert_eq!(step_kept(&kept, 4 * GB), Some(Crossing::Floor));
+    assert_eq!(step_kept(&kept, 3 * GB), None);
+    assert_eq!(step_kept(&kept, 30 * GB), None);
+    assert_eq!(step_kept(&kept, 12 * GB), Some(Crossing::Low));
+    // A file it can't read is a fresh start, never a panic.
+    std::fs::write(&kept, "not json").unwrap();
+    assert_eq!(step_kept(&kept, 12 * GB), Some(Crossing::Low));
+}
+
 #[test]
 fn installs_and_clones_are_recognised() {
     for cmd in [
