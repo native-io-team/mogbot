@@ -1881,6 +1881,7 @@ impl Backend for Stub {
                     retry: None,
                     watch: None,
                     usage: Default::default(),
+                    follow_up: false,
                     extra: Default::default(),
                 })
                 .unwrap()

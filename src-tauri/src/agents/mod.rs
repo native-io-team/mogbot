@@ -44,6 +44,9 @@
 //! - [`connections`]: accounts connected through them, per-agent grants, what a turn gets
 //! - [`oauth`]: signing in to a remote MCP server ourselves (PKCE, loopback)
 //! - [`team_setup`]: "Setting up your team" after an import: one checklist, quiet agents, the fan-out cap
+//! - [`team_reach`]: who on the team can reach an app, from what the app knows (`who_can_reach`)
+//! - [`follow_up`]: a reply that promised work and stopped gets run as a follow-up
+//! - [`quiet`]: the team's quiet hours: scheduled work waits, notifications are held
 //! - [`templates`]: ready-made agents (role templates) the Chief and the New agent dialog offer
 //! - [`stream`]: a reply while it is being written (drafts)
 //! - [`usage`]: tokens and cost per agent, from each turn's `result` event
@@ -55,8 +58,8 @@ pub mod access_chain;
 pub mod access_check;
 pub mod admin;
 pub mod agency;
-pub mod approval_claim;
 pub mod app_connect;
+pub mod approval_claim;
 pub mod apps;
 pub mod arrival;
 pub mod attachments;
@@ -89,6 +92,7 @@ pub mod expiry;
 pub mod exposure;
 pub mod failure;
 pub mod files;
+pub mod follow_up;
 pub mod forecast;
 pub mod full_send;
 pub mod go_hard;
@@ -125,6 +129,7 @@ pub mod project;
 pub mod project_tools;
 pub mod prompts;
 pub mod quick_entry;
+pub mod quiet;
 pub mod quota;
 pub mod reach;
 pub mod remember;
@@ -143,6 +148,7 @@ pub mod store;
 pub mod stream;
 pub mod takeover;
 pub mod task;
+pub mod team_reach;
 pub mod team_setup;
 pub mod templates;
 pub mod tidy;

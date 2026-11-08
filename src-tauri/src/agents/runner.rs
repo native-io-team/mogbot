@@ -1786,6 +1786,15 @@ pub fn enqueue_user(
     text: String,
     typed: Option<String>,
 ) {
+    // They're up: quiet hours hold nothing for a while (`quiet`).
+    if typed.is_some() {
+        super::quiet::user_wrote(store::now_ms());
+        // A follow-up not run yet goes into their turn instead (`follow_up`).
+        if let Some(note) = super::follow_up::fold_into_user_turn(agent_id) {
+            add_nudge(agent_id, &note);
+            let _ = app.emit(EVENT_REGISTRY, ());
+        }
+    }
     push(app, agent_id, user_inbound(message_id, text, typed));
 }
 
@@ -3582,7 +3591,15 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
             }
             Ok(Ended::Finished) => {
                 if room_ref.is_none() {
+                    // Read before `return_results` takes what it owes.
+                    let eligible = follow_up_eligible(&agent_id);
                     leave_labels_only_note(&agent_id, &user_said, since);
+                    // "I'll run it next" and nothing ran: a follow-up (`follow_up`).
+                    if let Some(note) =
+                        super::follow_up::after_turn(&app, &agent_id, since, eligible)
+                    {
+                        add_nudge(&agent_id, &note);
+                    }
                 }
                 return_results(&app, &agent_id, since, None)
             }
@@ -3855,6 +3872,28 @@ fn set_labels_only_note(agent_id: &str, user_said: &str, replies: &[AgentMessage
     }
     let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
     runtimes.entry(agent_id.to_string()).or_default().nudge = Some(note);
+}
+
+/// The turn in progress may leave a follow-up (`follow_up`): it answered
+/// the user or an agent's reply in its own chat, not a scheduled run (a
+/// routine, a check-in, a follow-up: no loops), a room, outside text, or
+/// another agent's request (its answer goes back to them).
+fn follow_up_eligible(agent_id: &str) -> bool {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .is_some_and(|r| {
+            r.tickets.is_empty() && !r.outside && r.room.is_none() && r.owed.is_empty()
+        })
+}
+
+/// Add a hidden note for the agent's next turn in its own chat, after any
+/// already waiting.
+fn add_nudge(agent_id: &str, note: &str) {
+    let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
+    let r = runtimes.entry(agent_id.to_string()).or_default();
+    r.nudge = Some(r.nudge.take().unwrap_or_default() + note);
 }
 
 fn take_owed(agent_id: &str) -> Vec<AgentRef> {

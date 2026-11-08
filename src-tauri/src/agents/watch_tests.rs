@@ -116,6 +116,7 @@ fn watch_check_in(source: Source) -> CheckIn {
         retry: None,
         watch: Some(Watch::new(source, 10)),
         usage: Default::default(),
+        follow_up: false,
         extra: Default::default(),
     }
 }

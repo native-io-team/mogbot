@@ -1504,7 +1504,12 @@ fn program(prog: &str, args: &[&str], ctx: &Ctx, outside: bool, known: bool) -> 
                 .any(|a| a.contains('=') || a.contains(":="))
                 || has(args, &["-f", "--form"]);
             let local = pos.iter().any(|a| a.starts_with(':') || local_host(a));
-            (method_write || body) && (outside || !local)
+            // A search or query endpoint that only reads (`read_only_post`).
+            let reads = pos
+                .iter()
+                .find(|a| a.contains("://"))
+                .is_some_and(|u| read_only_post(u, &[]));
+            (method_write || body) && !reads && (outside || !local)
         }
         "rm" => {
             let recursive = args.iter().any(|a| {
@@ -1639,6 +1644,28 @@ fn gh(args: &[&str]) -> bool {
                 }
                 i += 1;
             }
+            // `gh api graphql -f query='query { … }'` asks, it doesn't change.
+            let graphql_read = pos.get(1) == Some(&"graphql") && {
+                let fields: Vec<&str> = args
+                    .windows(2)
+                    .filter(|w| matches!(w[0], "-f" | "-F" | "--field" | "--raw-field"))
+                    .map(|w| w[1])
+                    .collect();
+                fields.iter().any(|f| f.starts_with("query="))
+                    && fields.iter().all(|f| {
+                        let v = f
+                            .split_once('=')
+                            .map_or("", |(_, v)| v)
+                            .to_ascii_lowercase();
+                        !v.starts_with('@') && !v.contains("mutation")
+                    })
+                    && !args
+                        .iter()
+                        .any(|a| *a == "--input" || a.starts_with("--field="))
+            };
+            if graphql_read {
+                return false;
+            }
             // `gh api … -X GET -f q=…` reads.
             let get = args
                 .windows(2)
@@ -1690,25 +1717,38 @@ fn all_local(args: &[&str]) -> bool {
 
 fn curl(args: &[&str], outside: bool) -> bool {
     let mut write = false;
+    // A method named outright (`-X POST`), a file or form going up, `-G`
+    // (the data goes in the address: a read), and the inline bodies.
+    let mut method_write = false;
+    let mut upload = false;
+    let mut get = false;
+    let mut bodies: Vec<Option<&str>> = Vec::new();
     let mut i = 0;
     while i < args.len() {
         let a = args[i];
         if a == "-X" || a == "--request" {
             if let Some(m) = args.get(i + 1) {
-                write |= !matches!(m.to_ascii_uppercase().as_str(), "GET" | "HEAD" | "OPTIONS");
+                let w = !matches!(m.to_ascii_uppercase().as_str(), "GET" | "HEAD" | "OPTIONS");
+                write |= w;
+                method_write |= w;
             }
             i += 2;
             continue;
         }
+        if a == "--get" {
+            get = true;
+        }
         if let Some(m) = a.strip_prefix("--request=") {
-            write |= !matches!(m.to_ascii_uppercase().as_str(), "GET" | "HEAD" | "OPTIONS");
-        } else if a.starts_with("--data")
-            || a.starts_with("--form")
-            || a.starts_with("--json")
-            || a.starts_with("--upload-file")
-            || a == "-T"
-        {
+            let w = !matches!(m.to_ascii_uppercase().as_str(), "GET" | "HEAD" | "OPTIONS");
+            write |= w;
+            method_write |= w;
+        } else if a.starts_with("--data") || a.starts_with("--json") {
             write = true;
+            let inline = a.split_once('=').map(|(_, v)| v);
+            bodies.push(inline.or_else(|| args.get(i + 1).copied()));
+        } else if a.starts_with("--form") || a.starts_with("--upload-file") || a == "-T" {
+            write = true;
+            upload = true;
         } else if a.starts_with('-') && !a.starts_with("--") {
             let flags = &a[1..];
             if let Some(pos) = flags.find('X') {
@@ -1718,12 +1758,27 @@ fn curl(args: &[&str], outside: bool) -> bool {
                 } else {
                     m
                 };
-                write |= !matches!(m.to_ascii_uppercase().as_str(), "GET" | "HEAD" | "OPTIONS");
+                let w = !matches!(m.to_ascii_uppercase().as_str(), "GET" | "HEAD" | "OPTIONS");
+                write |= w;
+                method_write |= w;
             }
             // Short flags that take a value end the cluster; d, F, T send a body.
-            for ch in flags.chars() {
+            for (n, ch) in flags.char_indices() {
+                if ch == 'G' {
+                    get = true;
+                }
                 if matches!(ch, 'd' | 'F' | 'T') {
                     write = true;
+                    if ch == 'd' {
+                        let rest = &flags[n + 1..];
+                        bodies.push(if rest.is_empty() {
+                            args.get(i + 1).copied()
+                        } else {
+                            Some(rest)
+                        });
+                    } else {
+                        upload = true;
+                    }
                     break;
                 }
                 if matches!(
@@ -1753,7 +1808,102 @@ fn curl(args: &[&str], outside: bool) -> bool {
         }
         i += 1;
     }
+    // Reads are reads: `-G` puts the data in the address, and a search or
+    // query endpoint that only reads takes its question as a POST body.
+    if write && !upload {
+        let urls: Vec<&str> = args.iter().copied().filter(|a| a.contains("://")).collect();
+        if (get && !method_write)
+            || (!urls.is_empty() && urls.iter().all(|u| read_only_post(u, &bodies)))
+        {
+            write = false;
+        }
+    }
     write && (outside || !all_local(args))
+}
+
+/// API hosts with endpoints that read through a POST: a search, a query,
+/// a report. Only these: a POST anywhere else is a write.
+const READ_POST_HOSTS: &[&str] = &[
+    "slack.com",
+    "api.notion.com",
+    "api.github.com",
+    "api.linear.app",
+    "googleapis.com",
+    "api.hubapi.com",
+    "api.airtable.com",
+    "gitlab.com",
+];
+
+/// A POST to `url` that only reads, by the API's own definition of that
+/// endpoint: Slack's `search.*` and `*.list` / `*.info` / `*.history` /
+/// `*.replies` methods, Notion's search and database queries, a Google
+/// API's `:search` / `:query` / `:runReport` / `:batchGet`, HubSpot's
+/// `/search`, Airtable's `listRecords`, or a GraphQL `query` (never a
+/// `mutation`, and never a body read from a file it can't see). On one of
+/// [`READ_POST_HOSTS`] only. `bodies`: the request's bodies (`None` for one
+/// whose value wasn't on the line).
+pub(super) fn read_only_post(url: &str, bodies: &[Option<&str>]) -> bool {
+    let Some(host) = super::browser_gate::host_of(url) else {
+        return false;
+    };
+    let host = host.to_ascii_lowercase();
+    let on = |h: &str| host == h || host.ends_with(&format!(".{h}"));
+    if !READ_POST_HOSTS.iter().any(|h| on(h)) {
+        return false;
+    }
+    let rest = url.split_once("://").map_or(url, |(_, r)| r);
+    let path = rest
+        .split_once('/')
+        .map_or("", |(_, p)| p)
+        .split(['?', '#'])
+        .next()
+        .unwrap_or("")
+        .trim_end_matches('/')
+        .to_ascii_lowercase();
+    let last = path.rsplit('/').next().unwrap_or("");
+    if path.ends_with("graphql") {
+        // Every body is on the line, asks a question and changes nothing.
+        return !bodies.is_empty()
+            && bodies.iter().all(|b| {
+                b.is_some_and(|b| {
+                    let b = b.to_ascii_lowercase();
+                    !b.starts_with('@') && b.contains("query") && !b.contains("mutation")
+                })
+            });
+    }
+    if on("slack.com") {
+        let Some(method) = path.strip_prefix("api/") else {
+            return false;
+        };
+        return method.starts_with("search.")
+            || [".list", ".info", ".history", ".replies", ".members", ".get"]
+                .iter()
+                .any(|s| method.ends_with(s));
+    }
+    if on("api.notion.com") {
+        return path == "v1/search"
+            || ((path.starts_with("v1/databases/") || path.starts_with("v1/data_sources/"))
+                && last == "query");
+    }
+    if on("googleapis.com") {
+        return [
+            ":search",
+            ":query",
+            ":runreport",
+            ":runrealtimereport",
+            ":batchget",
+        ]
+        .iter()
+        .any(|s| last.ends_with(s))
+            || last == "query";
+    }
+    if on("api.hubapi.com") {
+        return last == "search";
+    }
+    if on("api.airtable.com") {
+        return last == "listrecords";
+    }
+    false
 }
 
 /* ------------------------------------------------------------ Full send */
@@ -2236,7 +2386,39 @@ pub fn script_sends(input: &Value, level: super::independence::Level) -> bool {
     if !clicks && !keys {
         return false;
     }
-    string_literals(&code).iter().any(|l| {
+    // What a script searches for isn't a control it presses: "is:unread
+    // needs reply" typed into a mail search names no Reply button.
+    // Observed: a Gmail read script whose search strings said "reply" got
+    // a "Goes out under your name" card.
+    let literals: Vec<String> = string_literals(&code)
+        .into_iter()
+        .filter(|l| !search_query(l))
+        .collect();
+    // Enter in a search box runs the search; in a message box it sends.
+    let lower_lits: Vec<String> = literals.iter().map(|l| l.to_ascii_lowercase()).collect();
+    let search_box = lower_lits.iter().any(|l| {
+        l.contains("search")
+            || l.contains("name=q")
+            || l.contains("name=\"q\"")
+            || l.contains("name='q'")
+    });
+    let message_box = lower_lits.iter().any(|l| {
+        [
+            "compose",
+            "message",
+            "reply",
+            "comment",
+            "contenteditable",
+            "textbox",
+            "editor",
+            "post",
+            "chat",
+        ]
+        .iter()
+        .any(|w| l.contains(w))
+    });
+    let enter_sends = !(search_box && !message_box);
+    literals.iter().any(|l| {
         let l = l.to_ascii_lowercase();
         let spaced: String = l
             .chars()
@@ -2249,8 +2431,48 @@ pub fn script_sends(input: &Value, level: super::independence::Level) -> bool {
                 .collect::<Vec<_>>()
                 .windows(2)
                 .any(|w| w == ["type", "submit"])
-            || (keys && matches!(l.trim(), "enter" | "return"))
+            || (keys && enter_sends && matches!(l.trim(), "enter" | "return"))
     })
+}
+
+/// A string in a script that is a search query, not a control's name: it
+/// uses a mail or search operator (`in:inbox`, `is:unread`, `from:`,
+/// `subject:`, `label:`, `newer_than:`…), or is a phrase longer than any
+/// button's label.
+fn search_query(literal: &str) -> bool {
+    const OPERATORS: &[&str] = &[
+        "in:",
+        "is:",
+        "from:",
+        "to:",
+        "subject:",
+        "label:",
+        "has:",
+        "newer_than:",
+        "older_than:",
+        "after:",
+        "before:",
+        "category:",
+        "filename:",
+        "cc:",
+        "bcc:",
+    ];
+    let lower = literal.to_ascii_lowercase();
+    // A selector (`button[aria-label="Reply"]`, `.submit-button`) is never one.
+    if lower.contains('[')
+        || lower.contains('=')
+        || lower.starts_with('.')
+        || lower.starts_with('#')
+    {
+        return false;
+    }
+    let words: Vec<&str> = lower.split_whitespace().collect();
+    words.iter().any(|w| {
+        let w = w.trim_start_matches(['-', '(', '"']);
+        OPERATORS
+            .iter()
+            .any(|o| w.len() > o.len() && w.starts_with(o))
+    }) || words.len() > 5
 }
 
 /// The quoted strings in a script ('…', "…", `…`).

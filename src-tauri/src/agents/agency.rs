@@ -224,7 +224,7 @@ const FLOOR: &[&str] = &[
 
 /// The sentences of `text` (split on `.`, `!`, `?` and newlines, keeping the
 /// mark), trimmed.
-fn sentences(text: &str) -> Vec<String> {
+pub(super) fn sentences(text: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();
     for c in text.chars() {
