@@ -1804,6 +1804,13 @@ pub fn spawn(app: AppHandle) {
     });
 }
 
+/// One tick, now. For the end-to-end suite (`examples/agents_e2e`), which
+/// can't wait a minute between ticks; the app only ever ticks from [`spawn`].
+#[doc(hidden)]
+pub fn tick_once(app: &AppHandle) -> Result<(), CommandError> {
+    tick(app)
+}
+
 fn tick(app: &AppHandle) -> Result<(), CommandError> {
     let tz = chrono::Local;
     let now = store::now_ms();

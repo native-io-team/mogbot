@@ -5,6 +5,9 @@
 #   scripts/agents-e2e.sh                  # every scenario
 #   scripts/agents-e2e.sh memory burst     # some
 #   AGENTS_E2E_KEEP=1 scripts/agents-e2e.sh   # keep the temp HOME to inspect
+#   scripts/agents-e2e.sh newfeat          # drafting, routine steps, follow-ups, quiet
+#                                          # hours, monthly (each a capped child;
+#                                          # AGENTS_NF_TIMEOUT_SECS)
 set -euo pipefail
 cd "$(dirname "$0")/../src-tauri"
 export CARGO_TARGET_DIR="${CARGO_TARGET_DIR:-$PWD/target}"

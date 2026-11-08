@@ -27,7 +27,9 @@
 //! `adversarial` (opt-in) tries to make agents timid, lazy or leaky against
 //! a stand-in browser; see `adversarial.rs`. `import` (opt-in) plays a
 //! fictional outside assistant through a whole import over Remote Access and
-//! scores what reaches the review card; see `import_muse.rs`.
+//! scores what reaches the review card; see `import_muse.rs`. `newfeat`
+//! (opt-in) runs drafting, routines in steps, follow-ups, quiet hours and
+//! monthly routines live, each in its own capped child; see `new_features.rs`.
 
 // A test driver: a failed unwrap is a failed run, and `pgrep`/re-exec are the point.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::disallowed_methods)]
@@ -49,6 +51,7 @@ mod adversarial;
 mod behaviour;
 mod core_jobs;
 mod import_muse;
+mod new_features;
 
 type Check = Result<(), String>;
 
@@ -2043,6 +2046,7 @@ fn main() {
                 "behaviour" => behaviour::phase(&h, &args[2]).await,
                 "adversarial" => adversarial::phase(&h, &args[2]).await,
                 "import" => import_muse::phase(&h, &args[2]).await,
+                "newfeat" => new_features::phase(&h, &args[2]).await,
                 "quit" => quit_phase(&h).await,
                 "slots" => match slots_phase(&h).await {
                     Ok(()) => println!("OK"),
@@ -2122,6 +2126,8 @@ fn main() {
                     }
                 }
                 n if n.starts_with("core-") => core_jobs::run(&h, n).await,
+                "newfeat" => new_features::suite(&h, &[]).await,
+                n if n.starts_with("nf-") => new_features::suite(&h, &[n]).await,
                 other => Err(format!("unknown scenario {other}")),
             };
             let took = t.elapsed().as_secs();
