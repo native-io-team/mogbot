@@ -322,6 +322,11 @@ fn json_texts(out: &mut Texts, v: &Value, depth: u8) {
 
 /// The bodies of a command line's here-documents.
 fn heredoc_bodies(command: &str) -> Vec<String> {
+    heredocs(command).into_iter().map(|(_, b)| b).collect()
+}
+
+/// Each here-document body, with the line its `<<` is on.
+fn heredocs(command: &str) -> Vec<(usize, String)> {
     let lines: Vec<&str> = command.lines().collect();
     let mut out = Vec::new();
     let mut i = 0;
@@ -346,6 +351,7 @@ fn heredoc_bodies(command: &str) -> Vec<String> {
             }
             rest = after;
         }
+        let at = i;
         i += 1;
         for end in ends {
             let mut body = Vec::new();
@@ -354,10 +360,80 @@ fn heredoc_bodies(command: &str) -> Vec<String> {
                 i += 1;
             }
             i += 1;
-            out.push(body.join("\n"));
+            out.push((at, body.join("\n")));
         }
     }
     out
+}
+
+/// Variables the command itself sets to plain words or a here-document
+/// (`F="Shipped"`, `F=$(cat <<'EOF' … EOF)`), so `$F` can be shown as the
+/// words it holds. A value built any other way (a command's output, another
+/// variable) is not here: it can't be read without running it.
+fn assigned_vars(command: &str) -> std::collections::HashMap<String, String> {
+    let mut vars = std::collections::HashMap::new();
+    let docs = heredocs(command);
+    for (n, line) in command.lines().enumerate() {
+        let t = line.trim_start();
+        let t = t.strip_prefix("export ").unwrap_or(t).trim_start();
+        let Some((name, rest)) = t.split_once('=') else {
+            continue;
+        };
+        if name.is_empty()
+            || !name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+            || name.starts_with(|c: char| c.is_ascii_digit())
+        {
+            continue;
+        }
+        let r = rest.trim_start_matches('"');
+        if r.starts_with("$(cat <<") || r.starts_with("$(cat<<") {
+            if let Some((_, body)) = docs.iter().find(|(at, _)| *at == n) {
+                vars.insert(name.to_string(), body.clone());
+            }
+        } else if !rest.contains("$(") && !rest.contains('`') && !rest.contains('$') {
+            if let Some(v) = super::admin::shell_words(rest).into_iter().next() {
+                vars.insert(name.to_string(), v);
+            }
+        }
+    }
+    vars
+}
+
+/// `text` with `$NAME` / `${NAME}` replaced from `vars`; the names it
+/// couldn't fill are returned.
+fn expand_vars(
+    text: &str,
+    vars: &std::collections::HashMap<String, String>,
+) -> (String, Vec<String>) {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = String::new();
+    let mut missing = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        if chars[i] == '$' {
+            let braced = chars.get(i + 1) == Some(&'{');
+            let start = i + 1 + usize::from(braced);
+            let mut j = start;
+            while j < chars.len() && (chars[j].is_ascii_alphanumeric() || chars[j] == '_') {
+                j += 1;
+            }
+            let name: String = chars[start..j].iter().collect();
+            let ok = !name.is_empty()
+                && !name.starts_with(|c: char| c.is_ascii_digit())
+                && (!braced || chars.get(j) == Some(&'}'));
+            if ok {
+                match vars.get(&name) {
+                    Some(v) => out.push_str(v),
+                    None => missing.push(format!("${name}")),
+                }
+                i = j + usize::from(braced);
+                continue;
+            }
+        }
+        out.push(chars[i]);
+        i += 1;
+    }
+    (out, missing)
 }
 
 /// The text a call sends, as far as it can be read from the call. `page`:
@@ -489,6 +565,22 @@ fn command_texts(out: &mut Texts, command: &str, ctx: Option<&Ctx>) {
             }
         }
     }
+    // `$F` is the words the command itself put in F; one it can't fill is
+    // said plainly rather than shown as `$F`.
+    let vars = assigned_vars(command);
+    let found = std::mem::take(&mut out.pieces);
+    for piece in found {
+        let (text, missing) = expand_vars(&piece, &vars);
+        if missing.is_empty() {
+            push(out, &text);
+        } else {
+            for m in missing {
+                if !out.unread.contains(&m) {
+                    out.unread.push(m);
+                }
+            }
+        }
+    }
     for body in heredoc_bodies(command) {
         push(out, &body);
     }
@@ -509,9 +601,15 @@ pub fn card_block(t: &Texts) -> String {
         }
     }
     for f in &t.unread {
-        out.push_str(&format!(
-            "\nIt also sends what's in {f}, which the app couldn't read: allowing sends whatever that file holds."
-        ));
+        if f.starts_with('$') {
+            out.push_str(&format!(
+                "\nSome of the words come from {f}, which this app can't read from the request: check them under Details before you allow."
+            ));
+        } else {
+            out.push_str(&format!(
+                "\nIt also sends what's in {f}, which the app couldn't read: allowing sends whatever that file holds."
+            ));
+        }
     }
     out
 }

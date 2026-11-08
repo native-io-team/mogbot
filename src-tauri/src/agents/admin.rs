@@ -288,15 +288,29 @@ fn local_command(command: &str) -> Result<(), &'static str> {
 
 /// A shell line split into words, honouring simple quotes. Only for words
 /// on a card: nothing is decided from this.
-fn shell_words(s: &str) -> Vec<String> {
+pub(super) fn shell_words(s: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut cur = String::new();
     let mut quote: Option<char> = None;
     let mut any = false;
-    for c in s.chars() {
+    let mut chars = s.chars();
+    while let Some(c) = chars.next() {
         match quote {
             Some(q) if c == q => quote = None,
+            Some('"') if c == '\\' => match chars.next() {
+                Some(n @ ('"' | '\\' | '$' | '`')) => cur.push(n),
+                Some(n) => {
+                    cur.push('\\');
+                    cur.push(n);
+                }
+                None => cur.push('\\'),
+            },
             Some(_) => cur.push(c),
+            None if c == '\\' => {
+                if let Some(n) = chars.next() {
+                    cur.push(n);
+                }
+            }
             None if c == '\'' || c == '"' => {
                 quote = Some(c);
                 any = true;
@@ -516,38 +530,244 @@ fn step(words: &[String], cwd: Option<&str>) -> String {
     }
 }
 
+/// A command line cut into its simple commands, honouring quotes (a quoted
+/// newline or `;` does not split), `$( )`, here-documents (the body is data,
+/// not commands) and `#` comments. A pipe keeps only its first command: the
+/// later ones filter what it made.
+pub(super) fn simple_commands(src: &str) -> Vec<String> {
+    let chars: Vec<char> = src.chars().collect();
+    let mut out: Vec<String> = Vec::new();
+    let mut cur = String::new();
+    let mut quote: Option<char> = None;
+    let mut depth = 0usize;
+    let mut pending: Vec<String> = Vec::new();
+    let mut piped = false;
+    let mut i = 0;
+    fn flush(cur: &mut String, out: &mut Vec<String>, piped: &mut bool) {
+        if !*piped && !cur.trim().is_empty() {
+            out.push(cur.trim().to_string());
+        }
+        cur.clear();
+        *piped = false;
+    }
+    while i < chars.len() {
+        let c = chars[i];
+        let prev = if i > 0 { chars[i - 1] } else { ' ' };
+        let next = chars.get(i + 1).copied().unwrap_or(' ');
+        match quote {
+            Some(q) => {
+                cur.push(c);
+                if c == '\\' && q == '"' {
+                    if let Some(n) = chars.get(i + 1) {
+                        cur.push(*n);
+                        i += 1;
+                    }
+                } else if c == q {
+                    quote = None;
+                }
+            }
+            None => match c {
+                '\\' => {
+                    cur.push(c);
+                    if let Some(n) = chars.get(i + 1) {
+                        cur.push(*n);
+                        i += 1;
+                    }
+                }
+                '\'' | '"' => {
+                    quote = Some(c);
+                    cur.push(c);
+                }
+                '#' if depth == 0 && (cur.is_empty() || prev.is_whitespace() || prev == ';') => {
+                    while i < chars.len() && chars[i] != '\n' {
+                        i += 1;
+                    }
+                    continue;
+                }
+                '$' if next == '(' => {
+                    depth += 1;
+                    cur.push_str("$(");
+                    i += 1;
+                }
+                ')' if depth > 0 => {
+                    depth -= 1;
+                    cur.push(c);
+                }
+                '<' if next == '<' && chars.get(i + 2) != Some(&'<') => {
+                    let mut j = i + 2;
+                    if chars.get(j) == Some(&'-') {
+                        j += 1;
+                    }
+                    while chars.get(j).is_some_and(|c| *c == ' ' || *c == '\t') {
+                        j += 1;
+                    }
+                    let mut tag = String::new();
+                    while let Some(&t) = chars.get(j) {
+                        if t.is_alphanumeric() || t == '_' {
+                            tag.push(t);
+                        } else if !((t == '\'' || t == '"') && tag.is_empty()) {
+                            break;
+                        }
+                        j += 1;
+                    }
+                    if !tag.is_empty() {
+                        pending.push(tag);
+                    }
+                    cur.push_str("<<");
+                    i += 1;
+                }
+                '\n' if !pending.is_empty() => {
+                    // Skip each here-document body up to its end line.
+                    let mut j = i + 1;
+                    for tag in pending.drain(..) {
+                        while j < chars.len() {
+                            let end = chars[j..]
+                                .iter()
+                                .position(|c| *c == '\n')
+                                .map(|p| j + p)
+                                .unwrap_or(chars.len());
+                            let line: String = chars[j..end].iter().collect();
+                            j = (end + 1).min(chars.len());
+                            if line.trim() == tag {
+                                break;
+                            }
+                        }
+                    }
+                    if depth == 0 {
+                        flush(&mut cur, &mut out, &mut piped);
+                    } else {
+                        cur.push('\n');
+                    }
+                    i = j;
+                    continue;
+                }
+                '\n' if depth == 0 => flush(&mut cur, &mut out, &mut piped),
+                ';' if depth == 0 => flush(&mut cur, &mut out, &mut piped),
+                '&' if depth == 0 && next == '&' => {
+                    flush(&mut cur, &mut out, &mut piped);
+                    i += 1;
+                }
+                '&' if depth == 0 && prev != '>' && prev != '<' && next != '>' => {
+                    flush(&mut cur, &mut out, &mut piped);
+                }
+                '|' if depth == 0 && next == '|' => {
+                    flush(&mut cur, &mut out, &mut piped);
+                    i += 1;
+                }
+                '|' if depth == 0 => {
+                    if !piped && !cur.trim().is_empty() {
+                        out.push(cur.trim().to_string());
+                    }
+                    cur.clear();
+                    piped = true;
+                }
+                _ => cur.push(c),
+            },
+        }
+        i += 1;
+    }
+    flush(&mut cur, &mut out, &mut piped);
+    out
+}
+
+fn is_assignment(w: &str) -> bool {
+    match w.split_once('=') {
+        Some((name, _)) => {
+            let mut c = name.chars();
+            c.next()
+                .is_some_and(|f| f.is_ascii_alphabetic() || f == '_')
+                && c.all(|c| c.is_ascii_alphanumeric() || c == '_')
+        }
+        None => false,
+    }
+}
+
+/// Words that do nothing worth telling the user about.
+const NO_OPS: &[&str] = &[
+    ":", "true", "false", "set", "unset", "export", "local", "declare", "readonly", "shopt",
+    "trap", "wait", "exit", "return", "test", "[", "[[",
+];
+
+/// The real commands of a command line, as words: assignments, comments and
+/// no-ops left out, a pipe cut to its first command.
+fn real_commands(command: &str) -> Vec<Vec<String>> {
+    simple_commands(command)
+        .iter()
+        .filter_map(|part| {
+            let mut words = shell_words(part);
+            while words.first().is_some_and(|w| is_assignment(w)) {
+                words.remove(0);
+            }
+            let first = words.first()?;
+            (!NO_OPS.contains(&first.as_str())).then_some(words)
+        })
+        .collect()
+}
+
+/// A command as a short name for a script's list: "git commit", "gh pr create".
+fn short_name(words: &[String]) -> String {
+    let program = words[0].rsplit('/').next().unwrap_or(&words[0]).to_string();
+    match program.as_str() {
+        "git" | "gh" | "npm" | "pnpm" | "yarn" | "cargo" | "brew" => {
+            let subs: Vec<&str> = words[1..]
+                .iter()
+                .map(String::as_str)
+                .filter(|w| !w.starts_with('-'))
+                .take(if program == "gh" { 2 } else { 1 })
+                .filter(|w| {
+                    w.chars()
+                        .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+                })
+                .collect();
+            format!("{program} {}", subs.join(" ")).trim().to_string()
+        }
+        _ => program,
+    }
+}
+
 /// A command line in words: each step (`cd` sets where), then "and N more".
+/// A multi-line script is "Run a script: git commit, gh pr create".
 pub fn command_summary(command: &str) -> String {
     let mut cwd: Option<String> = None;
     let mut said = Vec::new();
-    for part in command
-        .split("&&")
-        .flat_map(|p| p.split("||"))
-        .flat_map(|p| p.split([';', '\n']))
-    {
-        // A pipe's later parts only filter what the first one made.
-        let first = part.split('|').next().unwrap_or("");
-        let mut words = shell_words(first);
-        while words
-            .first()
-            .is_some_and(|w| w.contains('=') && !w.starts_with('-'))
-        {
-            words.remove(0);
-        }
-        if words.is_empty() {
-            continue;
-        }
+    let mut names: Vec<String> = Vec::new();
+    for words in real_commands(command) {
         if words[0] == "cd" {
             cwd = words.get(1).cloned();
             continue;
         }
-        said.push(step(&words, cwd.as_deref()));
+        let name = short_name(&words);
+        if !names.contains(&name) {
+            names.push(name);
+        }
+        // `cat > f <<'EOF'`: writing a file, whatever the program.
+        let target = words
+            .iter()
+            .position(|w| w == ">" || w == ">>")
+            .and_then(|at| words.get(at + 1));
+        match target {
+            Some(t) if !t.starts_with('&') && t != "/dev/null" => {
+                said.push(format!("Write {}", file(t)))
+            }
+            _ => said.push(step(&words, cwd.as_deref())),
+        }
     }
+    let script = command.trim().contains('\n');
     match said.len() {
         0 => cwd
             .map(|c| format!("Go to {}", folder(&c)))
             .unwrap_or_else(|| "Run a command".into()),
         1 => said.remove(0),
+        _ if script => {
+            let shown: Vec<&str> = names.iter().take(4).map(String::as_str).collect();
+            let more = names.len().saturating_sub(4);
+            let tail = if more > 0 {
+                format!(" and {more} more")
+            } else {
+                String::new()
+            };
+            format!("Run a script: {}{tail}", shown.join(", "))
+        }
         n => format!(
             "{}, then {} more step{}",
             said[0],
