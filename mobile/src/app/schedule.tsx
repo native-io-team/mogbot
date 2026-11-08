@@ -27,6 +27,7 @@ import {
   routineWhenPhrase,
   zoneDiffers,
   type CheckInRun,
+  type MonthDay,
   type SchedulePreview,
 } from '@shipstudio/companion-protocol';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -35,6 +36,7 @@ import { Platform, ScrollView, StyleSheet, TextInput, View } from 'react-native'
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useNow } from '../components/ConnectionPill';
 import { Chip, ChipRow } from '../components/pickers';
+import { choose } from '../components/menu';
 import { Button, T, SheetPage } from '../components/ui';
 import { SheetTitle } from '../components/SheetTitle';
 import { describeError, schedule } from '../lib/session';
@@ -46,9 +48,17 @@ import {
   CADENCES,
   INTERVALS,
   intervalLabel,
+  MONTH_INTERVALS,
+  MONTH_KINDS,
+  monthKindOf,
+  monthsLabel,
+  monthWhichChoices,
+  monthWhichOf,
   newPicker,
   onceDays,
   pickerOf,
+  setMonthKind,
+  setMonthWhich,
   toggleDay,
   WEEK,
   whenOf,
@@ -110,6 +120,15 @@ function Schedule() {
   const intervals = useMemo(
     () => (INTERVALS.includes(picker.minutes) ? INTERVALS : [...INTERVALS, picker.minutes]),
     // Only the opening value adds a chip; tapping the offered ones doesn't.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+  const monthIntervals = useMemo(
+    () =>
+      MONTH_INTERVALS.includes(picker.months)
+        ? MONTH_INTERVALS
+        : [...MONTH_INTERVALS, picker.months],
+    // As above: only the opening value adds a chip.
     // eslint-disable-next-line react-hooks/exhaustive-deps
     []
   );
@@ -206,6 +225,21 @@ function Schedule() {
                   />
                 ))}
               </ChipRow>
+            </Animated.View>
+          )}
+          {picker.cadence === 'monthly' && (
+            <Animated.View entering={FadeIn.duration(150)} style={styles.group}>
+              <ChipRow label="How many months">
+                {monthIntervals.map((m) => (
+                  <Chip
+                    key={m}
+                    label={monthsLabel(m)}
+                    selected={picker.months === m}
+                    onPress={() => change({ months: m })}
+                  />
+                ))}
+              </ChipRow>
+              <MonthDayRow on={picker.monthDay} onChange={(monthDay) => change({ monthDay })} />
             </Animated.View>
           )}
           {picker.cadence === 'hours' && (
@@ -376,6 +410,56 @@ function TimeRow({
   );
 }
 
+/**
+ * Which day of the month, as the desk says it: "On the [15th] [day]", "On
+ * the [last] [Friday]". Each part opens the system's list of choices.
+ */
+function MonthDayRow({ on, onChange }: { on: MonthDay; onChange: (on: MonthDay) => void }) {
+  const colors = useColors();
+  const styles = useStyles();
+  const kind = monthKindOf(on);
+  const choices = monthWhichChoices(kind);
+  const which = choices.find((c) => c.value === monthWhichOf(on))?.label ?? '';
+  const of = MONTH_KINDS.find((k) => k.value === kind)?.label ?? '';
+  return (
+    <View style={styles.timeRow}>
+      <T variant="subhead" color={colors.textPrimary} maxFontSizeMultiplier={chromeScale}>
+        On the
+      </T>
+      <View style={styles.monthParts}>
+        <Button
+          title={which}
+          size="compact"
+          onPress={() =>
+            choose(
+              'On the',
+              choices.map((c) => ({
+                label: c.label,
+                run: () => onChange(setMonthWhich(on, c.value)),
+              }))
+            )
+          }
+          accessibilityLabel={`Which, ${which}. Change`}
+        />
+        <Button
+          title={of}
+          size="compact"
+          onPress={() =>
+            choose(
+              `On the ${which}`,
+              MONTH_KINDS.map((k) => ({
+                label: k.value === 'day' ? 'day of the month' : k.label,
+                run: () => onChange(setMonthKind(on, k.value)),
+              }))
+            )
+          }
+          accessibilityLabel={`${kind === 'day' ? 'Day of the month' : of}. Change`}
+        />
+      </View>
+    </View>
+  );
+}
+
 /** Its last runs, newest first: when, and what came of it, in the desk's words. */
 function RunHistory({ runs }: { runs: CheckInRun[] }) {
   const colors = useColors();
@@ -444,6 +528,7 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: radius.inner,
     backgroundColor: colors.surfaceGroup,
   },
+  monthParts: { flexDirection: 'row', gap: space.xs },
   echo: {
     gap: space.xs,
     padding: space.md,

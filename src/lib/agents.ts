@@ -10,7 +10,7 @@ import type { FileDiff } from './git';
 import type { AgentSecret, SecretRequest } from './agentSecrets';
 import type { LocalLink, Watch, WatchSource } from '../../packages/companion-protocol/src/model';
 import type { SettingsProposal } from '../../packages/companion-protocol/src/policy';
-import type { PlanCard } from '../../packages/companion-protocol/src/model';
+import type { PlanCard, Repeat } from '../../packages/companion-protocol/src/model';
 import {
   moodOf,
   type AgentLook,
@@ -256,10 +256,8 @@ export interface Failure {
   resetsAt?: number;
 }
 
-/** How a routine repeats; mirrors `schedule::Repeat`. Days are 0 = Sunday. */
-export type Repeat =
-  | { kind: 'days'; days: number[]; hour: number; minute: number }
-  | { kind: 'every'; minutes: number };
+/** How a routine repeats; mirrors `schedule::Repeat`. Days are 0 = Sunday. Shared with the phone. */
+export type { MonthDay, Repeat } from '../../packages/companion-protocol/src/model';
 
 /** A check-in (one-time) or routine (repeats); mirrors `schedule::CheckIn`. */
 export interface CheckIn {
@@ -1821,12 +1819,21 @@ export {
   CADENCES,
   INTERVALS,
   intervalLabel,
+  MONTH_INTERVALS,
+  MONTH_KINDS,
+  monthKindOf,
+  monthsLabel,
+  monthWhichChoices,
+  monthWhichOf,
   newPicker,
   onceDays,
   pickerOf,
+  setMonthKind,
+  setMonthWhich,
   toggleDay,
   WEEK,
   whenOf,
+  type MonthKind,
   type PickerState,
 } from '../../packages/companion-protocol/src/routinePicker';
 

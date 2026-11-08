@@ -52,6 +52,64 @@
     {
       "when": { "kind": "once", "date": "2027-03-14", "hour": 12, "minute": 0 },
       "phrase": "2027-03-14 12:00"
+    },
+    {
+      "when": { "kind": "monthly", "months": 1, "on": { "day": 1 }, "hour": 9, "minute": 0 },
+      "phrase": "every month on the 1st at 09:00"
+    },
+    {
+      "when": { "kind": "monthly", "months": 1, "on": { "day": 31 }, "hour": 8, "minute": 0 },
+      "phrase": "every month on the 31st at 08:00"
+    },
+    {
+      "when": { "kind": "monthly", "months": 1, "on": { "day": -1 }, "hour": 17, "minute": 30 },
+      "phrase": "every month on the last day at 17:30"
+    },
+    {
+      "when": {
+        "kind": "monthly",
+        "months": 1,
+        "on": { "nth": -1, "weekday": 5 },
+        "hour": 16,
+        "minute": 0
+      },
+      "phrase": "every month on the last friday at 16:00"
+    },
+    {
+      "when": {
+        "kind": "monthly",
+        "months": 1,
+        "on": { "nth": 2, "weekday": 2 },
+        "hour": 9,
+        "minute": 0
+      },
+      "phrase": "every month on the second tuesday at 09:00"
+    },
+    {
+      "when": { "kind": "monthly", "months": 3, "on": { "day": 15 }, "hour": 9, "minute": 0 },
+      "phrase": "every 3 months on the 15th at 09:00"
+    },
+    {
+      "when": {
+        "kind": "monthly",
+        "months": 3,
+        "on": { "day": 15 },
+        "hour": 9,
+        "minute": 0,
+        "start": 1
+      },
+      "phrase": "every 3 months on the 15th at 09:00 starting january"
+    },
+    {
+      "when": {
+        "kind": "monthly",
+        "months": 6,
+        "on": { "nth": 1, "weekday": 1 },
+        "hour": 10,
+        "minute": 0,
+        "start": 3
+      },
+      "phrase": "every 6 months on the first monday at 10:00 starting march"
     }
   ]
 }

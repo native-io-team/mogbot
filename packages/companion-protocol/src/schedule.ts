@@ -5,7 +5,7 @@
  * (which re-exports them) so both clients word a schedule the same way.
  */
 
-import type { CheckIn, CheckInRun, Repeat, Watch, WatchSource } from './model';
+import type { CheckIn, CheckInRun, MonthDay, Repeat, Watch, WatchSource } from './model';
 
 /** What a scheduled run came to, in a few words. */
 export function describeRun(run: CheckInRun, now = Date.now()): string {
@@ -61,8 +61,83 @@ const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Frid
 const clockText = (hour: number, minute: number) =>
   CLOCK.format(new Date(2000, 0, 1, hour, minute));
 
+export const MONTH_NAMES = [
+  'January',
+  'February',
+  'March',
+  'April',
+  'May',
+  'June',
+  'July',
+  'August',
+  'September',
+  'October',
+  'November',
+  'December',
+];
+
+/** "1st", "22nd", "13th": `schedule::ordinal_text`. */
+export function ordinalText(n: number): string {
+  const tens = n % 100;
+  const ones = n % 10;
+  const suffix =
+    tens >= 11 && tens <= 13
+      ? 'th'
+      : ones === 1
+        ? 'st'
+        : ones === 2
+          ? 'nd'
+          : ones === 3
+            ? 'rd'
+            : 'th';
+  return `${n}${suffix}`;
+}
+
+/** first … fourth, and last (-1): which of a weekday in a month. */
+export const NTH_WORDS: Record<number, string> = {
+  1: 'first',
+  2: 'second',
+  3: 'third',
+  4: 'fourth',
+  [-1]: 'last',
+};
+
+/** "the 1st", "the last day", "the second Tuesday", "the last Friday". */
+export function describeMonthDay(on: MonthDay): string {
+  if ('nth' in on) return `the ${NTH_WORDS[on.nth] ?? 'last'} ${DAY_NAMES[on.weekday % 7]}`;
+  return on.day < 0 ? 'the last day' : `the ${ordinalText(on.day)}`;
+}
+
+interface Monthly {
+  months: number;
+  on: MonthDay;
+  hour: number;
+  minute: number;
+}
+
+/** "Every month on the 1st at 9:00 AM", "Every 3 months on the last Friday at 4:00 PM". */
+function describeMonthly(m: Monthly): string {
+  const every = m.months > 1 ? `${m.months} months` : 'month';
+  return `Every ${every} on ${describeMonthDay(m.on)} at ${clockText(m.hour, m.minute)}`;
+}
+
+/**
+ * The grammar's words for a monthly routine: "every month on the 1st at
+ * 09:00", "every 3 months on the last friday at 16:00 starting january".
+ * `start` (1–12) is the month its next run is in, so an edit keeps it to
+ * the same months; without one the Mac counts from the next run.
+ */
+function monthlyPhrase(m: Monthly & { start?: number }): string {
+  const every = m.months > 1 ? `${m.months} months` : 'month';
+  const on = describeMonthDay(m.on).toLowerCase();
+  const start =
+    m.months > 1 && m.start ? ` starting ${MONTH_NAMES[(m.start - 1) % 12].toLowerCase()}` : '';
+  return `every ${every} on ${on} at ${pad2(m.hour)}:${pad2(m.minute)}${start}`;
+}
+
 /** "Every weekday at 9:00 AM", "Every 2 hours" — `schedule::describe`'s words, locale times. */
 export function describeRepeat(repeat: Repeat): string {
+  if (repeat.kind === 'monthly') return describeMonthly(repeat);
   if (repeat.kind === 'every') {
     const { minutes } = repeat;
     if (minutes % 60 !== 0) return `Every ${minutes} minutes`;
@@ -138,6 +213,10 @@ export function scheduleWhenPhrase(c: Pick<CheckIn, 'repeat' | 'nextAt'>): strin
     if (r.minutes % 60 !== 0) return `every ${r.minutes} minutes`;
     return r.minutes === 60 ? 'every hour' : `every ${r.minutes / 60} hours`;
   }
+  if (r.kind === 'monthly') {
+    const start = c.nextAt > 0 ? new Date(c.nextAt).getMonth() + 1 : undefined;
+    return monthlyPhrase({ ...r, start });
+  }
   const days = [...r.days].sort((a, b) => a - b);
   const key = days.join(',');
   const named =
@@ -184,11 +263,22 @@ export function sortCheckIns(checkIns: CheckIn[]): CheckIn[] {
  * - `days`: on those weekdays (0 = Sunday) at a time: every day, weekdays,
  *   or every Monday and Thursday;
  * - `every`: every so many minutes, from now;
+ * - `monthly`: on a day of the month at a time, every month or every few;
+ *   `start` (1–12) is the month its next run is in, kept by an edit so
+ *   "every 3 months" stays on the same months;
  * - `once`: on a local date (`YYYY-MM-DD`) at a time.
  */
 export type RoutineWhen =
   | { kind: 'days'; days: number[]; hour: number; minute: number }
   | { kind: 'every'; minutes: number }
+  | {
+      kind: 'monthly';
+      months: number;
+      on: MonthDay;
+      hour: number;
+      minute: number;
+      start?: number;
+    }
   | { kind: 'once'; date: string; hour: number; minute: number };
 
 /**
@@ -336,6 +426,7 @@ export function nextDate(date: string, days: number): string {
 export function routineWhenPhrase(w: RoutineWhen): string {
   if (w.kind === 'once') return `${w.date} ${pad2(w.hour)}:${pad2(w.minute)}`;
   if (w.kind === 'every') return scheduleWhenPhrase({ repeat: w, nextAt: 0 });
+  if (w.kind === 'monthly') return monthlyPhrase(w);
   const days = [...new Set(w.days)].sort((a, b) => a - b);
   return scheduleWhenPhrase({ repeat: { ...w, days }, nextAt: 0 });
 }
@@ -347,6 +438,12 @@ export function routineWhenOf(
 ): RoutineWhen {
   const r = c.repeat;
   if (r?.kind === 'every') return { kind: 'every', minutes: r.minutes };
+  if (r?.kind === 'monthly') {
+    const start = r.months > 1 ? wallClock(c.nextAt, timeZone).month : undefined;
+    const on: MonthDay =
+      'nth' in r.on ? { nth: r.on.nth, weekday: r.on.weekday } : { day: r.on.day };
+    return { kind: 'monthly', months: r.months, on, hour: r.hour, minute: r.minute, start };
+  }
   if (r) return { kind: 'days', days: [...r.days], hour: r.hour, minute: r.minute };
   const w = wallClock(c.nextAt, timeZone);
   return { kind: 'once', date: localDate(c.nextAt, timeZone), hour: w.hour, minute: w.minute };
@@ -360,6 +457,7 @@ export function routineWhenOf(
 export function describeRoutineWhen(w: RoutineWhen, now = Date.now(), timeZone?: string): string {
   if (w.kind === 'every') return describeRepeat(w);
   const note = zoneNote(timeZone, now);
+  if (w.kind === 'monthly') return `${describeMonthly(w)}${note}`;
   if (w.kind === 'once') {
     const ts = localTs(w.date, w.hour, w.minute, timeZone);
     return `Once · ${formatWhenIn(ts, now, timeZone)}${note}`;

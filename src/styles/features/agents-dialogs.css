@@ -317,6 +317,36 @@
   width: auto;
 }
 
+/* Monthly: "On the [15th] [day] of the month", one sentence. */
+.agent-schedule__monthday {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+}
+
+.agent-schedule__select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.agent-schedule__select select {
+  width: auto;
+  appearance: none;
+  padding-right: var(--spacing-xl);
+  cursor: pointer;
+}
+
+.agent-schedule__select svg {
+  position: absolute;
+  right: var(--spacing-sm);
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
 .agent-schedule__echo {
   display: flex;
   flex-direction: column;

@@ -272,9 +272,27 @@ export interface Failure {
   resetsAt?: number;
 }
 
+/**
+ * Which day of the month a monthly routine runs on; mirrors
+ * `schedule::MonthDay`. `day` is 1–31, or -1 for the last day (a date a
+ * month doesn't have runs on its last day); `nth` is 1–4, or -1 for the
+ * last, of `weekday` (0 = Sunday).
+ */
+export type MonthDay = { day: number } | { nth: number; weekday: number };
+
 export type Repeat =
   | { kind: 'days'; days: number[]; hour: number; minute: number }
-  | { kind: 'every'; minutes: number };
+  | { kind: 'every'; minutes: number }
+  | {
+      kind: 'monthly';
+      /** Every this many months, 1–12 (3 is quarterly). */
+      months: number;
+      on: MonthDay;
+      hour: number;
+      minute: number;
+      /** With `months` over 1: a month it runs in, `year * 12 + month - 1`. */
+      from?: number;
+    };
 
 export interface CheckIn {
   id: string;

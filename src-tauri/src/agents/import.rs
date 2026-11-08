@@ -99,7 +99,7 @@ impl ImportSummary {
                 .map(|r| format!("{}: \"{}\" ({})", r.agent, r.when, r.detail))
                 .collect();
             parts.push(format!("Routines NOT set: {}.", refused.join("; ")));
-            next.push_str(" List every routine that was NOT set, word for word, and offer to resend it with a time the schedule understands (\"every weekday at 9:00\", \"every monday at 8am\", \"every 2 hours\", \"friday at 14:30\"); importing again is safe.");
+            next.push_str(" List every routine that was NOT set, word for word, and offer to resend it with a time the schedule understands (\"every weekday at 9:00\", \"every monday at 8am\", \"every 2 hours\", \"every month on the 1st at 9:00\", \"friday at 14:30\"); importing again is safe.");
         }
         next.push_str(" Connections your platform had (email, calendar and so on) don't come across: here, agents use whatever this computer and Claude Code are connected to.");
         format!(
@@ -500,6 +500,43 @@ mod tests {
         let md = std::fs::read_to_string(store::agent_home(&made.id).unwrap().join("CLAUDE.md"))
             .unwrap();
         assert_eq!(md.matches("### Imported from Grok").count(), 1);
+        store::set_root_for_tests(None);
+    }
+
+    /// A monthly routine from another assistant arrives as a routine, not a
+    /// note to set up by hand.
+    #[test]
+    fn a_monthly_routine_imports_as_a_routine() {
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(dir.path().to_path_buf()));
+        let mut agent = incoming("Ledger", false);
+        agent.routines = vec![
+            routine("on the 1st of every month at 09:00", "Budget summary."),
+            routine(
+                "every last friday of the month at 16:00",
+                "Close the books.",
+            ),
+            routine("quarterly on the 15th at 9am", "Estimated taxes."),
+        ];
+        let summary = import_with(vec![agent], "Grok", false).unwrap();
+        assert!(summary.routines_refused.is_empty(), "{summary:?}");
+        let made = store::find("Ledger").unwrap().unwrap();
+        assert_eq!(made.check_ins.len(), 3);
+        assert!(made
+            .check_ins
+            .iter()
+            .all(|c| matches!(c.repeat, Some(schedule::Repeat::Monthly { .. }))));
+        let said: Vec<&str> = summary
+            .routines_set
+            .iter()
+            .map(|o| o.detail.as_str())
+            .collect();
+        assert!(
+            said.contains(&"every month on the last Friday at 16:00")
+                && said.contains(&"every 3 months on the 15th at 09:00 (Jan, Apr, Jul and Oct)"),
+            "{said:?}"
+        );
         store::set_root_for_tests(None);
     }
 

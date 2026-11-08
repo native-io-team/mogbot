@@ -284,7 +284,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "schedule_check_in",
-        description: "Have the app wake you later with a note to yourself: use it whenever you tell the user you'll check back, follow up or remind them, so that actually happens. Once (\"tomorrow at 9:00\", \"in 2 hours\", \"friday 14:30\") or as a routine (\"every weekday at 9:00\", \"every monday at 8am\", \"every 2 hours\"), in the user's local time. It only fires while the app is open; the answer says exactly when and what happens if it's closed. Tell the user that time. To the user these are routines (a one-time one is \"scheduled\"): never say \"check-in\" or a tool's name.",
+        description: "Have the app wake you later with a note to yourself: use it whenever you tell the user you'll check back, follow up or remind them, so that actually happens. Once (\"tomorrow at 9:00\", \"in 2 hours\", \"friday 14:30\") or as a routine (\"every weekday at 9:00\", \"every monday at 8am\", \"every 2 hours\", \"every month on the 1st at 9:00\", \"every month on the last friday at 16:00\", \"every 3 months on the 15th at 9:00\"), in the user's local time. It only fires while the app is open; the answer says exactly when and what happens if it's closed. Tell the user that time. To the user these are routines (a one-time one is \"scheduled\"): never say \"check-in\" or a tool's name.",
         main_only: false,
         schema: || json!({
             "type": "object",
