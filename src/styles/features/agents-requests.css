@@ -12,6 +12,13 @@
   position: relative;
 }
 
+/* One shadow for the whole shape: a filter on the wrapper follows the combined
+   outline of the panel and the bar, so there is no seam where one ends. Closed,
+   the bar has none. */
+.agent-requests[data-open] {
+  filter: var(--shadow-window-filter);
+}
+
 /* One height whatever the count: the title and detail never wrap. */
 .agent-requests .agent-bar__title,
 .agent-requests .agent-bar__detail {
@@ -34,9 +41,6 @@
   /* The seam with the bar: a hairline inside one surface, not an edge. */
   border-bottom-color: var(--border-subtle);
   border-radius: var(--radius-card) var(--radius-card) 0 0;
-  box-shadow: var(--shadow-window);
-  /* The shadow stops at the seam so it never falls across the bar below. */
-  clip-path: inset(calc(var(--spacing-2xl) * -2) calc(var(--spacing-2xl) * -2) 0);
   animation: agents-motion-swap-in var(--agents-motion-enter) backwards;
 }
 
