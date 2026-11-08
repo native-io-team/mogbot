@@ -315,6 +315,37 @@ or exact text the user wants to see). The level's own section says the same
 (`independence::NO_ASKING`): a yes they gave covers every step, a rule they
 set ends when they lift it, and a CLAUDE.md written for their other tools
 (Claude Code loads `~/.claude/CLAUDE.md` into every turn) adds no asks.
+
+**Promises kept** (`agents/follow_up.rs`). A reply that ends on an explicit
+commitment to act now or next ("I'll check Slack for that thread next", "Let
+me run the audit") with no tool call after it, and nothing it waits on (no
+`message_agent` this turn, no check-in it scheduled, no open card), gets a
+**follow-up**: a one-time check-in a minute out, marked `followUp`, under
+"Scheduled next" in What's in flight as "Said it would: “…”". It fires like
+any check-in (retries, quiet hours, take-over) with a wake that quotes the
+reply and says to do it now, or answer `[nothing new]` if done or no longer
+wanted. Not a promise: a question, anything waiting on someone else ("once
+you send it", "when Finance replies"), a stated later time (that's
+`schedule_check_in`), "I'll let you know". Bounded: only after a turn that
+answered the user or an agent's reply in the agent's own chat (never a
+routine's, check-in's or follow-up's own turn, a room, outside text, or a
+request it owes another agent), one waiting per agent, three a day. The user
+writing first folds it into their turn as a hidden note. "Save my limits":
+nothing runs on its own; a quiet line says so and the next turn is told.
+Observed: a Slack check promised one evening hadn't started the next day.
+
+**"Can't" checked against what the app knows** (`agents/team_reach.rs`).
+`who_can_reach` answers, for the caller and then the team, from the app's
+own facts: connectors the engine listed at the agent's last turn, connections
+granted to it, and whether its turns get the user's Chrome or the agents'
+browser for the service's site. A reply saying "I can't read Gmail" (first
+person or the team's, about reading or reaching a service the catalogue
+knows) while any of those says otherwise gets the same follow-up, naming who
+can ("Said “…”, but the app knows a way in: Inbox: the Gmail connector…"), so
+the agent corrects it by doing it or handing it over. "What you can do here"
+says a missing line isn't "can't". Observed: the Chief said it couldn't read
+Gmail while another agent was reading it.
+
 **Stop** ends the turn and drops the queue; it leaves a quiet
 "Stopped" note (your doing, not a failure). A turn is capped at 3 hours.
 
@@ -3228,6 +3259,19 @@ as the same schedule; a Rust test holds `describe` to that) and Return saves
 it in place: same id, paused stays paused, `when` re-read from now. It can't be
 edited into a copy of another row. Esc leaves the edit, not the popover.
 
+**Quiet hours** (`agents/quiet.rs`). The team's quiet hours are the app's
+own (`quiet-hours.json`), set from chat with `set_quiet_hours` ("quiet hours
+10pm to 7am"; never from outside text). Inside them nothing scheduled fires
+(check-ins, follow-ups, interval routines such as a sweep), except a routine
+on days whose own time is inside the window, which the user chose; what
+waited fires once when they end, its wake saying it waited for quiet hours.
+Every notification but an approval (desk banner and phone push) is held and,
+at the end, one notification says who posted. The chat still gets its lines.
+The user writing to an agent counts as being up: nothing is held for 30
+minutes. A check-in whose agent remembers quiet hours the app doesn't have is
+told to set them. Observed: quiet hours kept only in memory, so a sweep
+posted at 06:33 and a turn started by another agent's answer never looked.
+
 **Nothing new posts nothing.** A check-in whose turn answers only scheduled
 runs may reply with exactly `[nothing new]` (`schedule::NOTHING_NEW`), or
 open or end with it after a line explaining the silence ("quiet hours, so
@@ -4307,7 +4351,16 @@ steps type counts as typed (in the same batch or an earlier one), and it goes
 out only when one of its steps does, never because a look or a navigation in
 it would ask (observed: a Gmail search, whose link named the account in
 `authuser`, carded "Goes out under your name"; `authuser` and email-address
-values are no credentials to `egress` now).
+values are no credentials to `egress` now). Reads are reads: a browser
+script's search strings ("is:unread needs reply", anything with a mail search
+operator or longer than a label) name no control, and Enter in a search box
+runs a search, not a send (`go_hard::script_sends`); a `curl -G` and a POST to
+an endpoint that only reads (Slack `search.*` and `*.list/.info/.history`,
+Notion search and database queries, a Google API's `:search`/`:query`/
+`:runReport`, HubSpot search, Airtable `listRecords`, a GraphQL `query` on a
+known API host, `gh api graphql` without a mutation) are no network write, so
+neither the exact-text rule nor the outside-content rule asks for them
+(`go_hard::read_only_post`). A POST anywhere else still writes.
 
 **Who hears about a change** (`policy_card::notes_for`). One note in the
 Chief's chat for anything team-wide (the proposer's card, when it is the

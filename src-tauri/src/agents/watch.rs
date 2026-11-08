@@ -1953,6 +1953,7 @@ pub(crate) fn create_in(
         retry: None,
         watch: Some(Watch::new(source.clone(), every)),
         usage: Default::default(),
+        follow_up: false,
         extra: Default::default(),
     };
     let mut refused: Option<Refused> = None;

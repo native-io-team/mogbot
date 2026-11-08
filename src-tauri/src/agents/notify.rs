@@ -130,6 +130,7 @@ fn pending() -> std::sync::MutexGuard<'static, Coalescer> {
 pub fn set_showing(window: &str, agent_id: Option<String>) {
     if let Some(id) = &agent_id {
         pending().seen(id);
+        super::quiet::seen(id);
     }
     let mut showing = SHOWING.lock().unwrap_or_else(|e| e.into_inner());
     match agent_id {
@@ -249,6 +250,15 @@ pub fn alert_user(app: &AppHandle, agent_id: &str, body: &str) {
 }
 
 fn post(app: &AppHandle, alert: &Alert, kind: PushKind) {
+    // Quiet hours: anything but an approval waits for them to end (`quiet`).
+    if kind != PushKind::NeedsYou && super::quiet::holding_now() {
+        super::quiet::hold(super::quiet::Held {
+            agent_id: alert.agent_id.clone(),
+            title: alert.title.clone(),
+            body: alert.body.clone(),
+        });
+        return;
+    }
     // A paired phone that can't see it gets a content-free push (companion/push.rs).
     crate::companion::push::raise(&alert.agent_id, kind);
     // The real end-to-end suite (debug builds only): never a banner or a
@@ -280,6 +290,24 @@ fn post(app: &AppHandle, alert: &Alert, kind: PushKind) {
     if let Err(e) = builder.show() {
         tracing::warn!("[Agents] notification failed: {e}");
     }
+}
+
+/// Quiet hours ended (or the user is up): what they held, as one
+/// notification. Called every minute by the check-in tick.
+pub fn release_quiet(app: &AppHandle) {
+    let Some(held) = super::quiet::take_release() else {
+        return;
+    };
+    if on_screen(app, &held.agent_id) {
+        return;
+    }
+    let alert = Alert {
+        agent_id: held.agent_id,
+        title: held.title,
+        body: held.body,
+        sound: false,
+    };
+    post(app, &alert, PushKind::Message);
 }
 
 /// Clicking a notification: bring a window forward and open that agent.

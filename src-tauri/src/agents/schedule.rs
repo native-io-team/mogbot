@@ -141,6 +141,11 @@ pub struct CheckIn {
     /// nothing but this routine (`runs::turn_ended`).
     #[serde(default, skip_serializing_if = "super::usage::AgentUsage::is_empty")]
     pub usage: super::usage::AgentUsage,
+    /// The app recorded it, not the agent: a reply promised work ("I'll
+    /// check Slack next") and the turn ended without doing it
+    /// (`follow_up`). Its wake says so, and its turn never records another.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub follow_up: bool,
     /// Fields a newer Ship Studio wrote that this build doesn't know: kept
     /// and written back as they were, so running an older build never
     /// strips what a newer one saved.
@@ -211,7 +216,7 @@ fn weekday(word: &str) -> Option<u8> {
 }
 
 /// `9`, `9:30`, `09:30`, `9am`, `9:30 pm`, `17:00`, `noon`, `midnight`.
-fn clock(raw: &str) -> Option<(u32, u32)> {
+pub(super) fn clock(raw: &str) -> Option<(u32, u32)> {
     let s = raw.trim().replace('.', "");
     match s.as_str() {
         "noon" => return Some((12, 0)),
@@ -1092,6 +1097,9 @@ pub struct Firing {
     pub manual: bool,
     /// Trying a failed run again: how it has gone so far.
     pub retry: Option<runs::Retry>,
+    /// It was due inside the user's quiet hours and waited for them to end
+    /// (`quiet`): late for that reason, not because the app was closed.
+    pub waited: bool,
 }
 
 impl Firing {
@@ -1102,9 +1110,21 @@ impl Firing {
 }
 
 pub fn plan<Tz: TimeZone>(tz: &Tz, agents: &[store::Agent], now: i64) -> Plan {
+    plan_with(tz, agents, now, &|_| false)
+}
+
+/// [`plan`], leaving out the check-ins `waits` holds back (inside quiet
+/// hours, `quiet::fires_anyway` says which don't): they stay due, and fire
+/// once when it lets them.
+pub fn plan_with<Tz: TimeZone>(
+    tz: &Tz,
+    agents: &[store::Agent],
+    now: i64,
+    waits: &dyn Fn(&CheckIn) -> bool,
+) -> Plan {
     let mut plan = Plan::default();
     for agent in agents {
-        for check_in in &agent.check_ins {
+        for check_in in agent.check_ins.iter().filter(|c| !waits(c)) {
             match due(tz, check_in, now) {
                 None => {}
                 Some(Due::Retry) => {
@@ -1119,6 +1139,7 @@ pub fn plan<Tz: TimeZone>(tz: &Tz, agents: &[store::Agent], now: i64) -> Plan {
                             also: Vec::new(),
                             manual: false,
                             retry,
+                            waited: false,
                         });
                     }
                 }
@@ -1135,7 +1156,7 @@ pub fn plan<Tz: TimeZone>(tz: &Tz, agents: &[store::Agent], now: i64) -> Plan {
                                 .filter(|c| {
                                     c.id != check_in.id && c.repeat.is_none() && c.watch.is_none()
                                 })
-                                .filter(|c| !c.paused && c.retry.is_none())
+                                .filter(|c| !c.paused && c.retry.is_none() && !waits(c))
                                 .filter(|c| now - c.next_at > LATE_AFTER_MS)
                                 .cloned()
                                 .collect()
@@ -1150,6 +1171,7 @@ pub fn plan<Tz: TimeZone>(tz: &Tz, agents: &[store::Agent], now: i64) -> Plan {
                             also,
                             manual: false,
                             retry: None,
+                            waited: false,
                         });
                     }
                 }
@@ -1238,6 +1260,11 @@ where
             format_time(tz, r.due_at),
             r.attempts + 1
         )
+    } else if firing.waited {
+        format!(
+            " It was due {}, inside the user's quiet hours, so it waited until they ended.",
+            format_time(tz, c.next_at)
+        )
     } else if firing.late {
         format!(
             " It was due {}, but the app wasn't running then, so it's late.",
@@ -1272,6 +1299,13 @@ where
             qs.iter().map(|q| format!("“{q}”")).collect::<Vec<_>>().join(", ")
         ),
     };
+    if c.follow_up {
+        return format!(
+            "[A follow-up the app recorded, not the user: your reply said {}, and the turn ended without doing it.]{waiting}\n\n[It's now {}.{late} Do it now, in full, then tell the user in a few lines what you found or did. If it's already done or no longer wanted, reply with exactly {NOTHING_NEW} and nothing else.]",
+            c.note,
+            format_time(tz, now)
+        );
+    }
     format!(
         "[Scheduled check-in you set: {}]{also}{waiting}\n\n[It's now {}.{late}{repeats} Do what the note says. {SWEEP} Then tell the user in a few lines what you did and what's left. If nothing changed since your last check-in and nothing needs them, reply with exactly {NOTHING_NEW} and nothing else: no post goes in their chat.]",
         c.note,
@@ -1403,6 +1437,7 @@ where
         retry: None,
         watch: None,
         usage: Default::default(),
+        follow_up: false,
         extra: Default::default(),
     };
     let mut refused: Option<Refused> = None;
@@ -1568,6 +1603,7 @@ fn manual_firing(agent: &store::Agent, id: &str) -> Result<Firing, CommandError>
         also: Vec::new(),
         manual: true,
         retry: None,
+        waited: false,
     })
 }
 
@@ -1677,7 +1713,16 @@ fn tick(app: &AppHandle) -> Result<(), CommandError> {
     let tz = chrono::Local;
     let now = store::now_ms();
     let agents = store::list()?;
-    let plan = plan(&tz, &agents, now);
+    // Quiet hours: scheduled work waits for them to end, unless the user
+    // set its time inside them (`quiet`). What they held is released here.
+    let quiet = super::quiet::get();
+    let holding = super::quiet::holding_now();
+    let waits = |c: &CheckIn| super::quiet::waits(c, quiet.as_ref(), holding);
+    let mut plan = plan_with(&tz, &agents, now, &waits);
+    if let (Some(f), Some(w)) = (plan.fire.as_mut(), quiet.as_ref()) {
+        f.waited = f.late && f.retry.is_none() && w.contains(&tz, f.check_in.next_at);
+    }
+    super::notify::release_quiet(app);
     let changed = plan.fire.is_some();
 
     if let Some(firing) = plan.fire.filter(|f| !skip_while_driven(app, f)) {
@@ -1804,7 +1849,15 @@ where
     let open = store::messages(&firing.agent_id, 40)
         .map(|log| open_questions(&log))
         .unwrap_or_default();
-    let prompt = wake_prompt_with(tz, firing, now, &open);
+    let mut prompt = wake_prompt_with(tz, firing, now, &open);
+    // It remembers quiet hours the app doesn't have: it sets them (`quiet`).
+    let memory = store::agent_home(&firing.agent_id)
+        .ok()
+        .and_then(|h| std::fs::read_to_string(h.join("CLAUDE.md")).ok())
+        .unwrap_or_default();
+    if let Some(hint) = super::quiet::memory_hint(&memory, super::quiet::get().as_ref()) {
+        prompt.push_str(hint);
+    }
     // Before the wake, so even the quickest turn finds its ticket.
     let ticket = store::new_id();
     runs::issue(runs::Ticket {
@@ -2128,6 +2181,7 @@ mod tests {
             retry: None,
             watch: None,
             usage: Default::default(),
+            follow_up: false,
             extra: Default::default(),
         }
     }
@@ -2313,6 +2367,7 @@ mod tests {
             also: vec![check_in("x2", due_at + 3_600_000, None)],
             manual: false,
             retry: None,
+            waited: false,
         };
         let prompt = wake_prompt(&Eastern, &firing, at(2026, 11, 3, 15, 0));
         assert!(prompt.starts_with("[Scheduled check-in you set: note x1]"));
@@ -2369,6 +2424,7 @@ mod tests {
             also: vec![],
             manual: false,
             retry: None,
+            waited: false,
         };
         let p = wake_prompt_with(&Eastern, &firing, due_at, &open_questions(&log));
         assert!(p.contains(
@@ -2394,6 +2450,7 @@ mod tests {
             also: vec![],
             manual: false,
             retry: None,
+            waited: false,
         };
         let p = wake_prompt(&Eastern, &firing, due_at);
         assert!(p.contains(SWEEP));

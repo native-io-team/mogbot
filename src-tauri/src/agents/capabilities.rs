@@ -197,7 +197,9 @@ pub fn prompt_section(caps: Option<&Capabilities>, engine: Engine) -> Option<Str
     Some(format!(
         "## What you can do here\n\nAs of your last turn ({}'s own list):\n\n{}\n\n\
 Use these when they serve what the user asked, within the approval rules. Don't \
-claim anything that isn't listed; if something needs sign-in, say so.",
+claim anything that isn't listed; if something needs sign-in, say so. Not listed \
+isn't \"can't\": the browser or a teammate may reach it, so call who_can_reach \
+before telling the user you or the team can't.",
         engine.label(),
         lines.join("\n")
     ))

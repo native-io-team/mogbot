@@ -297,6 +297,18 @@ const TOOLS: &[Tool] = &[
         }),
     },
     Tool {
+        name: super::quiet::TOOL,
+        description: super::quiet::DESCRIPTION,
+        main_only: false,
+        schema: super::quiet::schema,
+    },
+    Tool {
+        name: super::team_reach::TOOL,
+        description: super::team_reach::DESCRIPTION,
+        main_only: false,
+        schema: super::team_reach::schema,
+    },
+    Tool {
         name: "list_check_ins",
         description: "Your scheduled check-ins and routines, with ids and next times.",
         main_only: false,
@@ -680,6 +692,25 @@ async fn call(
         "schedule_check_in" | "list_check_ins" | "cancel_check_in" | "watch_for" => {
             check_ins(app, caller, turn, name, args).await
         }
+        super::quiet::TOOL => {
+            let outside = runner::from_outside(&caller.id);
+            match super::quiet::call(args, outside, store::now_ms()) {
+                Ok(t) => {
+                    let line = runner::new_message(
+                        &caller.id,
+                        store::MessageKind::Note,
+                        super::quiet::describe(super::quiet::get().as_ref()),
+                    );
+                    let _ = runner::record(app, line);
+                    text(t)
+                }
+                Err(e) => error(e),
+            }
+        }
+        super::team_reach::TOOL => match super::team_reach::call(caller, args) {
+            Ok(t) => text(t),
+            Err(e) => error(e),
+        },
         "request_secret" => request_secret(app, caller, args),
         "request_login" => request_login(app, caller, args).await,
         "remember_browser_account" => {

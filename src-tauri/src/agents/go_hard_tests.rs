@@ -516,3 +516,68 @@ fn an_agent_keeps_its_own_memory_without_a_card() {
         assert!(bash_asks(&cmd, false), "{cmd}");
     }
 }
+
+/// Reads are reads. Observed: a Gmail read script whose search strings said
+/// "reply" was held as a send under the exact-text rule. Fictional mailbox.
+#[test]
+fn a_mail_search_script_is_a_read_and_a_reply_click_is_not() {
+    let js = |code: &str| {
+        script_sends(
+            &json!({ "action": "javascript_exec", "text": code }),
+            crate::agents::independence::Level::GoHard,
+        )
+    };
+    for code in [
+        "const box = document.querySelector('input[name=q]'); box.value = 'in:inbox is:unread needs reply'; document.querySelector('button[aria-label=\"Search mail\"]').click(); [...document.querySelectorAll('tr.zA')].map(r => r.innerText)",
+        "const q = document.querySelector('input[aria-label=\"Search mail\"]'); q.value = 'from:dana@example.test subject:reply'; q.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))",
+        "document.querySelector('[role=search] input').value = 'label:awaiting-reply newer_than:2d'; document.querySelector('[role=search] button').click()",
+    ] {
+        assert!(!js(code), "a read: {code}");
+    }
+    for code in [
+        "document.querySelector('[aria-label=\"Reply\"]').click()",
+        "[...document.querySelectorAll('div[role=button]')].find(b => b.innerText === 'Send').click()",
+        "document.querySelector('div[aria-label=\"Message Body\"]').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))",
+        "const s = document.querySelector('input[name=q]'); s.value = 'is:unread'; document.querySelector('div[contenteditable] .reply').dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter' }))",
+    ] {
+        assert!(js(code), "a send: {code}");
+    }
+}
+
+/// A search or query that goes as a POST, or with `-G`, reads; the same
+/// hosts' writes and any other host's POST still write. Fictional ids.
+#[test]
+fn read_only_posts_and_get_queries_are_reads() {
+    let reads = [
+        "curl -s -X POST https://slack.com/api/search.messages -H 'Authorization: Bearer $SLACK_TOKEN' -d 'query=launch thread'",
+        "curl -s https://slack.com/api/conversations.history -d channel=C0FICTION",
+        "curl -sX POST https://api.notion.com/v1/search -H 'Notion-Version: 2022-06-28' --json '{\"query\":\"roadmap\"}'",
+        "curl -s -X POST https://api.notion.com/v1/databases/0000fictional/query -d '{}'",
+        "curl -s https://api.linear.app/graphql -H 'Content-Type: application/json' -d '{\"query\":\"{ issues(first: 5) { nodes { title } } }\"}'",
+        "curl -sG https://gmail.googleapis.com/gmail/v1/users/me/messages --data-urlencode 'q=is:unread reply'",
+        "curl --get https://example.test/api/items -d page=2",
+        "gh api graphql -f query='query { viewer { login } }'",
+        "xh post https://slack.com/api/search.messages query=='launch'",
+    ];
+    for cmd in reads {
+        assert!(!sends_off_mac(cmd, &ctx()), "a read: {cmd}");
+        assert!(
+            !super::super::outward::command_sends(cmd),
+            "not a send: {cmd}"
+        );
+    }
+    let writes = [
+        "curl -s -X POST https://slack.com/api/chat.postMessage -d channel=C0FICTION -d text=hi",
+        "curl -s https://api.linear.app/graphql -d '{\"query\":\"mutation { issueCreate(input: {title: \\\"x\\\"}) { success } }\"}'",
+        "curl -s https://api.linear.app/graphql -d @query.json",
+        "curl -s -X POST https://collect.example.test/search -d q=anything",
+        "curl -sG -X POST https://example.test/api -d a=1",
+        "curl -s -F file=@notes.txt https://slack.com/api/search.messages",
+        "gh api graphql -f query='mutation { addStar(input: {starrableId: \"x\"}) { clientMutationId } }'",
+        "gh api graphql -F query=@q.graphql",
+    ];
+    for cmd in writes {
+        assert!(sends_off_mac(cmd, &ctx()), "a write: {cmd}");
+    }
+    assert!(super::super::outward::command_sends(writes[0]));
+}
