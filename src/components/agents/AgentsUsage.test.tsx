@@ -35,37 +35,36 @@ describe('Settings → Agents → Usage', () => {
     expect(
       await screen.findByText('How agents use your limits', { selector: 'span' })
     ).toBeInTheDocument();
-    // Every account at once, from readings only.
-    expect(
-      screen.getByText(
-        /^Room now on Claude · This Mac and Codex · ChatGPT Plus\. Claude · Work has room again /
-      )
-    ).toBeInTheDocument();
-    expect(screen.getByText('4 accounts · Claude 3, Codex 1 · 1 not read')).toBeInTheDocument();
-    expect(screen.getByText(/^2 of 2 have room · soonest reset /)).toBeInTheDocument();
-    expect(screen.getByText(/^1 of 2 has room · soonest reset /)).toBeInTheDocument();
-    // Each account once, most room first, its bars side by side.
-    const rows = screen.getAllByRole('listitem').filter((li) => li.matches('.agents-compute__row'));
+    // Every account at once, from readings only: one short headline, no counts.
+    expect(screen.getByText('Room now on 2 of 3 accounts')).toBeInTheDocument();
+    expect(document.querySelector('.agents-compute')?.textContent).not.toMatch(
+      /not read|have room ·|has room again/
+    );
+    // Each account with a reading a card, most room first, a row per limit.
+    const rows = [...document.querySelectorAll('.agents-compute__row')];
     expect(rows.map((r) => r.querySelector('.agents-compute__name')?.textContent)).toEqual([
       'Claude · This Mac',
       'Codex · ChatGPT Plus',
-      'Claude · Personal',
-      'Claude · Work',
     ]);
     expect(rows[0].querySelectorAll('[role="meter"]')).toHaveLength(2);
     expect(rows[0].textContent).toContain('Used next');
     expect(rows[0].textContent).not.toContain('Next turn');
-    expect(rows[0].textContent).toMatch(/Weekly: At this pace you’ll hit the limit/);
-    // The bar the pace line is about agrees with it.
-    const tones = [...rows[0].querySelectorAll('.agents-compute__meter')].map((m) =>
-      m.getAttribute('data-tone')
-    );
-    expect(tones).toEqual(['calm', 'warning']);
+    // The pace line sits under the bar it is about, which agrees with it.
+    const meters = [...rows[0].querySelectorAll('.agents-compute__meter')];
+    expect(meters.map((m) => m.getAttribute('data-tone'))).toEqual(['calm', 'warning']);
+    expect(meters[0].textContent).not.toMatch(/At this pace/);
+    expect(meters[1].textContent).toMatch(/At this pace it runs out .+Estimate from 14 readings/);
     expect(rows[1].textContent).toContain('Plus plan');
-    expect(rows[2].textContent).toContain('Can’t read its limits between turns');
-    expect(rows[2].textContent).not.toMatch(/runs to measure/);
-    expect(rows[3].textContent).toMatch(/Out of usage until /);
-    expect(rows[3].querySelectorAll('[role="meter"]')).toHaveLength(0);
+    // No bar to draw: compact and quiet, each with its line.
+    const quiet = [...document.querySelectorAll('.agents-compute__quiet-row')];
+    expect(quiet.map((r) => r.querySelector('.agents-compute__quiet-name')?.textContent)).toEqual([
+      'Claude · Personal',
+      'Claude · Work',
+    ]);
+    expect(quiet[0].textContent).toContain('Can’t read its limits between turns');
+    expect(quiet[0].textContent).not.toMatch(/runs to measure/);
+    expect(quiet[1].textContent).toMatch(/Out of usage until /);
+    expect(quiet[1].querySelectorAll('[role="meter"]')).toHaveLength(0);
     expect(
       screen.getByText('Claude Code: About 48k tokens a turn · estimate from 212 past runs')
     ).toBeInTheDocument();
@@ -82,7 +81,7 @@ describe('Settings → Agents → Usage', () => {
     serve(EMPTY_INVENTORY);
     const { container } = render(<AgentUsageSettings />);
     expect(await screen.findByText('Not checked yet')).toBeInTheDocument();
-    expect(screen.getByText('No limits read yet.')).toBeInTheDocument();
+    expect(screen.getByText('No limits read yet')).toBeInTheDocument();
     expect(container.querySelectorAll('[role="meter"]')).toHaveLength(0);
     expect(container.textContent).not.toMatch(/estimate|tokens a turn|unused/);
     expect(container.textContent).not.toContain('Codex');
@@ -113,30 +112,29 @@ describe('Settings → Agents → Usage: two Claude accounts, Codex signed out',
   it('names the account with room, and never counts signed out as not read', async () => {
     serve(TWO_CLAUDE_INVENTORY);
     const { container } = render(<AgentUsageSettings />);
-    expect(
-      await screen.findByText(/^Room now on Claude · This Mac\. Claude · Personal has room again /)
-    ).toBeInTheDocument();
-    expect(screen.getByText('3 accounts · Claude 2, Codex 1')).toBeInTheDocument();
-    // Only the weekly limit was read on two accounts.
-    expect(container.querySelectorAll('.agents-compute__window')).toHaveLength(1);
+    expect(await screen.findByText('Room now on Claude · This Mac')).toBeInTheDocument();
+    // The out account's own line says when; the headline doesn't repeat it.
+    expect(container.textContent).not.toMatch(/has room again|3 accounts/);
+    expect(screen.getByText(/^Out of usage until /)).toBeInTheDocument();
     expect(screen.getByText('Not signed in')).toBeInTheDocument();
   });
 
-  it('with one account read, says its estimate once, up top, and drops the aggregates', async () => {
+  it('with one account read, says its estimate once, under its weekly bar', async () => {
     serve(ONE_READ_INVENTORY);
     const { container } = render(<AgentUsageSettings />);
-    const headline = await screen.findByText(/^Room now on Claude · This Mac\./);
-    expect(headline.textContent).toMatch(
-      /At this pace the weekly limit runs out .+, before it resets /
-    );
+    const headline = await screen.findByText('Room now on Claude · This Mac');
+    expect(headline.textContent).not.toMatch(/At this pace/);
+    expect(screen.getAllByText(/^At this pace/)).toHaveLength(1);
     expect(screen.getByText('Estimate from 200 readings over 10 hours')).toBeInTheDocument();
-    expect(container.querySelectorAll('.agents-compute__window')).toHaveLength(0);
     const rows = [...container.querySelectorAll('.agents-compute__row')];
-    expect(rows[0].textContent).not.toMatch(/At this pace|Used next/);
-    expect(rows[0].querySelectorAll('.agents-compute__meter')[1].getAttribute('data-tone')).toBe(
-      'warning'
+    expect(rows).toHaveLength(1);
+    expect(rows[0].textContent).not.toMatch(/Used next/);
+    const weekly = rows[0].querySelectorAll('.agents-compute__meter')[1];
+    expect(weekly.getAttribute('data-tone')).toBe('warning');
+    expect(weekly.textContent).toMatch(/At this pace it runs out /);
+    expect(container.querySelector('.agents-compute__quiet')?.textContent).toContain(
+      'with the token it was added with'
     );
-    expect(rows[1].textContent).toContain('with the token it was added with');
   });
 });
 
@@ -144,7 +142,7 @@ describe('Settings → Agents → Usage: running out everywhere', () => {
   it('says the estimate across accounts with what it rests on', async () => {
     serve(RUNOUT_INVENTORY);
     render(<AgentUsageSettings />);
-    expect(await screen.findByText(/^Room now on all 3 accounts\./)).toBeInTheDocument();
+    expect(await screen.findByText('Room now on all 3 accounts')).toBeInTheDocument();
     expect(
       screen.getByText(
         /At this pace you’ll run out of Claude on every account in about 3 hours; Codex has room\./

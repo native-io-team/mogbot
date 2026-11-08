@@ -1,11 +1,12 @@
 /**
  * Total compute: every account at once, as the usage popover's and Settings
- * → Usage's top. One sentence on what there is room on, naming the accounts
- * read ("Room now on Claude · This Mac."), the run-out estimate right after
- * it in the warning ink with what it rests on, and, only with two or more
- * accounts read, how many there are and each kind of limit across them.
- * Then each account as one compact row, most room first; the bar a pace
- * line is about is tinted to match it.
+ * → Usage's top. Read top-down: one short headline on whether agents can
+ * keep working (and, with no room, when they can again), the Mac's estimate
+ * across accounts when it sent one, then each account with a reading as its
+ * own card, one row per limit: name and %, its bar, when it resets, and that
+ * limit's pace estimate right under the bar it is about. Accounts with
+ * nothing to draw (out of usage, not signed in, not read) follow in one
+ * quiet list.
  *
  * The words are the phone's (`companion-protocol/usageSheet.ts`
  * `computeView`), so the two never disagree. Room is only what a reading
@@ -23,71 +24,52 @@ export function ComputeTotal({ view }: { view: ComputeView }) {
       <div className="agents-compute__top">
         <p className="agents-compute__headline" data-tone={view.tone}>
           {view.headline}
-          {view.estimate && (
-            <span className="agents-compute__pace-text"> {view.estimate.text}</span>
-          )}
         </p>
-        {view.estimate && <p className="agents-compute__muted">{view.estimate.basis}</p>}
-        {view.summary && <p className="agents-compute__muted">{view.summary}</p>}
+        {view.detail && <p className="agents-compute__detail">{view.detail}</p>}
+        {view.estimate && <Pace pace={view.estimate} />}
       </div>
-      {view.windows.length > 0 && (
-        <dl className="agents-compute__windows">
-          {view.windows.map((w) => (
-            <div className="agents-compute__window" key={w.key} data-tone={w.tone}>
-              <dt className="agents-compute__window-name">{w.label}</dt>
-              <dd className="agents-compute__window-room">{w.text}</dd>
-            </div>
+      {view.rows.length > 0 && (
+        <ul className="agents-compute__cards" aria-label="Accounts">
+          {view.rows.map((r) => (
+            <AccountCard key={r.key} row={r} />
           ))}
-        </dl>
+        </ul>
       )}
-      <ul className="agents-compute__rows" aria-label="Accounts">
-        {view.rows.map((r) => (
-          <AccountRow key={r.key} row={r} />
-        ))}
-      </ul>
+      {view.quiet.length > 0 && (
+        <ul className="agents-compute__quiet" aria-label="Accounts without room or a reading">
+          {view.quiet.map((r) => (
+            <li className="agents-compute__quiet-row" key={r.key}>
+              <span className="agents-compute__quiet-name">{r.title}</span>
+              {r.state && <span className="agents-compute__quiet-state">{r.state}</span>}
+            </li>
+          ))}
+        </ul>
+      )}
     </div>
   );
 }
 
-function AccountRow({ row: r }: { row: ComputeRow }) {
-  const meters = [r.session, r.weekly].filter((m): m is UsageMeter => m !== null);
+function AccountCard({ row: r }: { row: ComputeRow }) {
+  const meters = [r.session, r.weekly, ...r.extra].filter((m): m is UsageMeter => m !== null);
   return (
     <li className="agents-compute__row" data-next={r.next || undefined}>
       <div className="agents-compute__row-head">
         <span className="agents-compute__name">{r.title}</span>
-        {r.tags.length > 0 && <span className="agents-compute__muted">{r.tags.join(' · ')}</span>}
+        {r.tags.length > 0 && <span className="agents-compute__tags">{r.tags.join(' · ')}</span>}
       </div>
-      {r.state && (
-        <span className="agents-compute__state" data-tone={r.tone}>
-          {r.state}
-        </span>
-      )}
-      {meters.length > 0 && (
-        <div className="agents-compute__meters">
-          {meters.map((m) => (
-            <Bar key={m.key} meter={m} />
-          ))}
-        </div>
-      )}
-      {r.extra.map((m) => (
+      {meters.map((m) => (
         <Bar key={m.key} meter={m} />
       ))}
-      {r.pace && (
-        <span className="agents-compute__pace" title={r.pace.basis}>
-          <span className="agents-compute__pace-text">{r.pace.text}</span>
-          <span className="agents-compute__muted">{r.pace.basis}</span>
-        </span>
-      )}
     </li>
   );
 }
 
-/** "5-hour  38%", a thin bar, "Resets at 3:20 PM". */
+/** "5-hour  38%", its bar, "Resets at 3:20 PM", then its pace when there is one. */
 function Bar({ meter }: { meter: UsageMeter }) {
   return (
     <div className="agents-compute__meter" data-tone={meter.tone}>
       <div className="agents-compute__meter-head">
-        <span>{meter.label}</span>
+        <span className="agents-compute__meter-name">{meter.label}</span>
         <span className="agents-compute__figure">{meter.percent}%</span>
       </div>
       <div
@@ -103,7 +85,18 @@ function Bar({ meter }: { meter: UsageMeter }) {
           style={{ '--agents-compute-fill': `${meter.percent}%` } as CSSProperties}
         />
       </div>
-      <span className="agents-compute__muted">{meter.detail}</span>
+      <span className="agents-compute__reset">{meter.detail}</span>
+      {meter.pace && <Pace pace={meter.pace} />}
     </div>
+  );
+}
+
+/** An estimate, said as one: the line in the warning ink, what it rests on quietly under it. */
+function Pace({ pace }: { pace: NonNullable<UsageMeter['pace']> }) {
+  return (
+    <span className="agents-compute__pace">
+      <span className="agents-compute__pace-text">{pace.text}</span>
+      <span className="agents-compute__basis">{pace.basis}</span>
+    </span>
   );
 }

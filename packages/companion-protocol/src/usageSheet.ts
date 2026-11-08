@@ -31,7 +31,6 @@ import {
   QUOTA_STALE_MS,
   QUOTA_WARN_PERCENT,
   readDay,
-  resetDay,
   resetPhrase,
   retryPhrase,
   windowName,
@@ -386,42 +385,38 @@ export function usageSheet(
 
 /**
  * Every account at once, for the top of the usage popover, Settings → Usage
- * and the phone's Usage sheet: one sentence on what there is room on now
- * (readings only, naming the accounts), the soonest run-out estimate when
- * there is one (said as an estimate, with what it rests on), each kind of
- * limit across accounts only when two or more were read, then each account
- * as a compact row, most room first. Null from a Mac that doesn't serve totals.
+ * and the phone's Usage sheet. Built to be read top-down in one glance:
+ *
+ * 1. One short headline: can agents keep working ("Room now on Claude · This
+ *    Mac", "Room now on 2 of 3 accounts", "No room right now"), and, only
+ *    when there is no room, when there is again.
+ * 2. The Mac's estimate across accounts, when it sent one.
+ * 3. Each account with a reading, as its own card: a row per limit (name,
+ *    %, its bar, when it resets) and, under the bar it is about, that
+ *    limit's own pace estimate, said as one.
+ * 4. Accounts with no bar to draw (out of usage, not signed in, not read),
+ *    compact and quiet, each with its one line.
+ *
+ * Nothing is said twice: the cards say which accounts have room and when
+ * each limit resets, so the headline doesn't count or list them again.
+ * Null from a Mac that doesn't serve totals.
  */
 export interface ComputeView {
-  /** What there is room on now: "Room now on Claude · This Mac." */
+  /** "Room now on Claude · This Mac", "No room right now". One line where it fits. */
   headline: string;
+  /** Only with no room: "Claude · Work has room again at 3:20 PM". */
+  detail: string | null;
   /** `limited` with no room on any account read; else calm. */
   tone: UsageTone;
-  /**
-   * The estimate said right after the headline, in the warning ink, with
-   * what it rests on: across accounts when the Mac sent one, else the one
-   * read account's own ("At this pace the weekly limit runs out tomorrow
-   * night, before it resets Mon 4:00 PM." · "Estimate from 200 readings over
-   * 10 hours"). Null without one.
-   */
+  /** The Mac's estimate across accounts, with what it rests on; null without one. */
   estimate: PaceLine | null;
-  /** With two or more accounts read: "3 accounts · Claude 2, Codex 1 · 1 not read". */
-  summary: string | null;
-  /** "5-hour · 2 of 3 have room · soonest reset 3:20 PM"; only with 2+ accounts read. */
-  windows: ComputeWindowLine[];
+  /** Accounts with at least one bar, most room first. */
   rows: ComputeRow[];
+  /** Accounts with nothing to draw: out of usage, not signed in, not read. */
+  quiet: ComputeRow[];
 }
 
-export interface ComputeWindowLine {
-  key: 'session' | 'weekly';
-  /** "5-hour", "Weekly". */
-  label: string;
-  /** "2 of 3 have room · soonest reset 3:20 PM". */
-  text: string;
-  tone: UsageTone;
-}
-
-/** One account, compact: its 5-hour and weekly bars side by side. */
+/** One account: each of its limits a bar of its own. */
 export interface ComputeRow {
   key: string;
   engine: AgentEngine;
@@ -431,7 +426,7 @@ export interface ComputeRow {
   next: boolean;
   /** "Max plan" only when the engine said; "Used next" only when its engine has a choice. */
   tags: string[];
-  /** Tinted `warning` when its pace line is about this limit. */
+  /** Carries its own pace line (`pace`), tinted `warning` with it. */
   session: UsageMeter | null;
   weekly: UsageMeter | null;
   /** A per-model weekly limit, only when it's nearly or wholly used. */
@@ -439,11 +434,6 @@ export interface ComputeRow {
   /** When there's no bar to draw: "Not signed in", "Out of usage until …", why it can't be read. */
   state: string | null;
   tone: UsageTone;
-  /**
-   * Its soonest pace estimate: "Weekly: At this pace you'll hit the limit …".
-   * Null when the headline already says it.
-   */
-  pace: PaceLine | null;
 }
 
 const isWeeklyAll = (w: Pick<QuotaWindow, 'kind' | 'windowMinutes'>) =>
@@ -486,29 +476,18 @@ function rank(a: UsageAccountLine, now: number): number {
 const accountName = (engine: AgentEngine, name: string) =>
   `${ENGINE_NAME[engine] ?? engine} · ${name}`;
 
-type Family = 'session' | 'weekly';
-
-/** An account's soonest pace estimate, with the limit it's about. */
-function soonestPace(
-  a: UsageAccountLine,
-  now: number
-): { pace: UsagePace; line: PaceLine; family: Family } | null {
-  if (a.out || !a.signedIn) return null;
-  const found = (a.pace ?? [])
-    .map((pace) => {
-      const line = paceLine(pace, now);
-      const w = a.windows.find((x) => x.kind === pace.kind && live(x, now));
-      if (!line || !w || !(isSession(w) || isWeeklyAll(w))) return null;
-      return { pace, line, family: (isSession(w) ? 'session' : 'weekly') as Family };
-    })
-    .filter((p): p is { pace: UsagePace; line: PaceLine; family: Family } => p !== null)
-    .sort((x, y) => x.pace.reachesAt - y.pace.reachesAt);
-  return found[0] ?? null;
+/**
+ * A limit's pace, said under its own bar, so short: the bar already says
+ * which limit and when it resets ("At this pace it runs out tomorrow night"
+ * · "Estimate from 6 readings over 2 hours"). Null when `paceLine` would be.
+ */
+export function barPace(p: UsagePace | undefined, now = Date.now()): PaceLine | null {
+  const line = paceLine(p, now);
+  if (!line || !p) return null;
+  return { text: `At this pace it runs out ${roughWhen(p.reachesAt, now)}`, basis: line.basis };
 }
 
-const FAMILY_LABEL: Record<Family, string> = { session: '5-hour', weekly: 'Weekly' };
-
-/** The compact rows, most room first (the next account first among equals). */
+/** The accounts, most room first (the next account first among equals). */
 export function computeRows(
   inventory: UsageInventory | null | undefined,
   now = Date.now()
@@ -524,22 +503,24 @@ export function computeRows(
   const choice = (e: AgentEngine) =>
     all.filter((a) => a.engine === e && roomOf(a, now) !== null).length > 1;
   return accounts.map((a) => {
-    const windows = a.out ? [] : a.windows.filter((w) => live(w, now));
-    const soonest = soonestPace(a, now);
-    const meter = (
-      w: QuotaWindow | undefined,
-      label: string,
-      family?: Family
-    ): UsageMeter | null => {
+    const windows = a.out || !a.signedIn ? [] : a.windows.filter((w) => live(w, now));
+    const meter = (w: QuotaWindow | undefined, label: string): UsageMeter | null => {
       const m = w ? meterOf(`${a.engine}:${a.id}:${w.kind}`, label, w, now) : null;
-      if (!m) return null;
+      if (!m || !w) return null;
+      const pace = m.percent < 100 ? barPace(paceFor(a.pace, w), now) : null;
       // The bar its pace line is about says so in its colour, so the two agree.
-      const tone = m.tone === 'calm' && family && soonest?.family === family ? 'warning' : m.tone;
-      // The row says its one pace line itself; a bar never repeats it.
-      return { key: m.key, label: m.label, percent: m.percent, detail: m.detail, tone };
+      const tone = pace && m.tone === 'calm' ? 'warning' : m.tone;
+      return {
+        key: m.key,
+        label: m.label,
+        percent: m.percent,
+        detail: m.detail,
+        tone,
+        ...(pace ? { pace } : {}),
+      };
     };
-    const session = meter(windows.find(isSession), '5-hour', 'session');
-    const weekly = meter(windows.find(isWeeklyAll), 'Weekly', 'weekly');
+    const session = meter(windows.find(isSession), '5-hour');
+    const weekly = meter(windows.find(isWeeklyAll), 'Weekly');
     const extra = windows
       .filter((w) => !isSession(w) && !isWeeklyAll(w) && usedOf(w) >= QUOTA_WARN_PERCENT)
       .map((w) => meter(w, `Weekly · ${weeklyLabel(w)}`))
@@ -562,12 +543,6 @@ export function computeRows(
       extra,
       state,
       tone: a.signedIn ? usage.tone : 'calm',
-      pace: soonest
-        ? {
-            text: `${FAMILY_LABEL[soonest.family]}: ${soonest.line.text}`,
-            basis: soonest.line.basis,
-          }
-        : null,
     };
   });
 }
@@ -605,12 +580,6 @@ export function computeForecast(
   };
 }
 
-/** "A", "A and B", "A, B and C". */
-const listed = (names: string[]) =>
-  names.length <= 1
-    ? (names[0] ?? '')
-    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
-
 /** Total compute, or null from a Mac that doesn't serve it. */
 export function computeView(
   inventory: UsageInventory | null | undefined,
@@ -621,77 +590,36 @@ export function computeView(
   const accounts = inventory.accounts;
   // Only accounts with a reading are spoken for; the rest say why in their row.
   const read = accounts.filter((a) => roomOf(a, now) !== null);
-  const roomy = read
-    .filter((a) => (roomOf(a, now) ?? 0) > 0)
-    .sort((a, b) => (roomOf(b, now) ?? 0) - (roomOf(a, now) ?? 0));
+  const roomy = read.filter((a) => (roomOf(a, now) ?? 0) > 0);
   const back = t.nextRoom && t.nextRoom.at > now ? t.nextRoom : undefined;
-  const backWho = back ? accountName(back.engine, back.accountName) : '';
   let tone: UsageTone = 'calm';
-  let room: string;
+  let headline: string;
+  let detail: string | null = null;
   if (read.length === 0) {
-    room = accounts.some((a) => a.signedIn) ? 'No limits read yet.' : 'No account is signed in.';
+    headline = accounts.some((a) => a.signedIn) ? 'No limits read yet' : 'No account is signed in';
   } else if (roomy.length === 0) {
     tone = 'limited';
-    room = `No room right now.${back ? ` ${backWho} has room again ${retryPhrase(back.at, now)}.` : ''}`;
+    headline = 'No room right now';
+    detail = back
+      ? `${accountName(back.engine, back.accountName)} has room again ${retryPhrase(back.at, now)}`
+      : null;
+  } else if (roomy.length === 1) {
+    headline = `Room now on ${accountName(roomy[0].engine, roomy[0].name)}`;
+  } else if (roomy.length === read.length) {
+    headline =
+      roomy.length === 2 ? 'Room now on both accounts' : `Room now on all ${roomy.length} accounts`;
   } else {
-    const who =
-      roomy.length <= 2
-        ? listed(roomy.map((a) => accountName(a.engine, a.name)))
-        : roomy.length === read.length
-          ? `all ${roomy.length} accounts`
-          : plural(roomy.length, 'account');
-    room = `Room now on ${who}.${back ? ` ${backWho} has room again ${retryPhrase(back.at, now)}.` : ''}`;
+    headline = `Room now on ${roomy.length} of ${read.length} accounts`;
   }
 
-  // The estimate the headline carries: across accounts when the Mac sent one,
-  // else the one read account's own. Several accounts' own stay in their rows.
-  let rows = computeRows(inventory, now);
-  let estimate: PaceLine | null = computeForecast(inventory, now);
-  if (!estimate && read.length === 1) {
-    const own = soonestPace(read[0], now);
-    if (own) {
-      estimate = {
-        text: `At this pace the ${FAMILY_LABEL[own.family].toLowerCase()} limit runs out ${roughWhen(own.pace.reachesAt, now)}, before it resets ${retryPhrase(own.pace.resetsAt, now)}.`,
-        basis: own.line.basis,
-      };
-      const key = `${read[0].engine}:${read[0].id}`;
-      rows = rows.map((r) => (r.key === key ? { ...r, pace: null } : r));
-    }
-  }
-
-  const several = read.length >= 2;
-  const unread = Math.max(0, (t.signedIn ?? accounts.filter((a) => a.signedIn).length) - t.read);
-  const counts = several
-    ? [
-        plural(t.accounts, 'account'),
-        t.engines.map((e) => `${ENGINE_NAME[e.engine] ?? e.engine} ${e.accounts}`).join(', '),
-        unread > 0 ? `${unread} not read` : null,
-      ]
-        .filter(Boolean)
-        .join(' · ')
-    : null;
-
-  const windows: ComputeWindowLine[] = several
-    ? t.windows
-        .filter((w) => w.read >= 2)
-        .map((w) => {
-          const r = w.soonestReset && w.soonestReset.at > now ? w.soonestReset : undefined;
-          const has = `${w.room} of ${w.read} ${w.room === 1 ? 'has' : 'have'} room`;
-          return {
-            key: w.family,
-            label: w.family === 'session' ? '5-hour' : 'Weekly',
-            text: r ? `${has} · soonest reset ${resetDay(r.at, now)}` : has,
-            tone: w.room === 0 ? 'limited' : 'calm',
-          };
-        })
-    : [];
-
+  const all = computeRows(inventory, now);
+  const drawn = (r: ComputeRow) => r.session !== null || r.weekly !== null || r.extra.length > 0;
   return {
-    headline: room,
+    headline,
+    detail,
     tone,
-    estimate,
-    summary: counts,
-    windows,
-    rows,
+    estimate: computeForecast(inventory, now),
+    rows: all.filter(drawn),
+    quiet: all.filter((r) => !drawn(r)),
   };
 }

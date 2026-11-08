@@ -5,7 +5,7 @@
  * lib/usageSheet.ts; colours from the palette, light and dark.
  */
 
-import { Pressable, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { makeStyles, useColors } from '../lib/appearance';
 import type { ComputeRow, ComputeView, UsageMeter, UsageTone } from '../lib/usageSheet';
@@ -133,141 +133,109 @@ export function MeterRow({ meter, title }: { meter: UsageMeter; title?: string }
 }
 
 /**
- * Total compute's top: one sentence on what there is room on, the estimate
- * right after it in the warning ink with what it rests on, and, with two or
- * more accounts read, how many and each kind of limit across them.
+ * Total compute's top: one short headline on whether agents can keep
+ * working, when there's room again only when there's none now, and the
+ * Mac's estimate across accounts when it sent one.
  */
 export function ComputeSummary({ view }: { view: ComputeView }) {
   const colors = useColors();
   const styles = useStyles();
   return (
     <View style={styles.summary}>
-      <View style={styles.tight}>
-        {/* Medium, not semibold: the desk's weight for this sentence, a step under a card's title. */}
-        <T
-          variant="subhead"
-          color={view.tone === 'limited' ? colors.accentWarning : colors.textStrong}
-        >
-          {view.headline}
-          {view.estimate && (
-            <T variant="subhead" color={colors.accentWarning}>
-              {` ${view.estimate.text}`}
-            </T>
-          )}
+      <T
+        variant="title"
+        color={view.tone === 'limited' ? colors.accentWarning : colors.textStrong}
+        accessibilityRole="header"
+      >
+        {view.headline}
+      </T>
+      {view.detail && (
+        <T variant="small" color={colors.textSecondary}>
+          {view.detail}
         </T>
-        {view.estimate && (
+      )}
+      {view.estimate && (
+        <View style={styles.pace}>
+          <T variant="small" color={colors.accentWarning}>
+            {view.estimate.text}
+          </T>
           <T variant="small" color={colors.textMuted}>
             {view.estimate.basis}
           </T>
-        )}
-        {view.summary && (
-          <T variant="small" color={colors.textMuted}>
-            {view.summary}
-          </T>
-        )}
-      </View>
-      {view.windows.map((w) => (
-        <View key={w.key} style={styles.windowLine}>
-          <T variant="small" color={colors.textSecondary} style={styles.windowName}>
-            {w.label}
-          </T>
-          <T
-            variant="small"
-            color={w.tone === 'limited' ? colors.accentWarning : colors.textStrong}
-            style={styles.grow}
-          >
-            {w.text}
-          </T>
         </View>
-      ))}
+      )}
     </View>
   );
 }
 
-/** One bar of a compact row: "5-hour  38%", the bar, "Resets at 3:20 PM". */
-function MiniMeter({ meter }: { meter: UsageMeter }) {
-  const colors = useColors();
-  const styles = useStyles();
-  return (
-    <View style={styles.mini}>
-      <View style={styles.meterHead}>
-        <T variant="small" color={colors.textSecondary} style={styles.grow}>
-          {meter.label}
-        </T>
-        <T
-          variant="small"
-          color={meter.tone === 'calm' ? colors.textSecondary : inkOf(colors, meter.tone)}
-        >
-          {`${meter.percent}%`}
-        </T>
-      </View>
-      <UsageBar percent={meter.percent} tone={meter.tone} />
-      <T variant="small" color={colors.textMuted} numberOfLines={1}>
-        {meter.detail}
-      </T>
-    </View>
-  );
-}
-
-/** One account, compact: its name, the 5-hour and weekly bars side by side, its pace. */
+/** One account with a reading: its name, then each limit a row of its own. */
 export function ComputeAccount({ row: r }: { row: ComputeRow }) {
   const colors = useColors();
   const styles = useStyles();
-  const meters = [r.session, r.weekly].filter((m): m is UsageMeter => m !== null);
+  const meters = [r.session, r.weekly, ...r.extra].filter((m): m is UsageMeter => m !== null);
   return (
-    <View style={styles.row}>
-      <View style={styles.rowHead}>
-        <View style={styles.grow}>
-          <T variant="body" color={colors.textStrong} numberOfLines={1}>
-            {r.title}
+    <View style={styles.card}>
+      <View style={styles.cardHead}>
+        <T variant="headline" color={colors.textStrong} numberOfLines={1}>
+          {r.title}
+        </T>
+        {r.tags.length > 0 && (
+          <T variant="small" color={colors.textMuted}>
+            {r.tags.join(' · ')}
           </T>
-          {r.tags.length > 0 && (
-            <T variant="small" color={colors.textMuted}>
-              {r.tags.join(' · ')}
-            </T>
-          )}
-        </View>
+        )}
       </View>
       {r.state && (
-        <T variant="small" color={r.tone === 'calm' ? colors.textMuted : colors.accentWarning}>
+        <T variant="small" color={colors.textMuted}>
           {r.state}
         </T>
       )}
-      {meters.length > 0 && (
-        <View style={styles.meters}>
-          {meters.map((m) => (
-            <MiniMeter key={m.key} meter={m} />
-          ))}
-          {/* One bar keeps half the row, as on the desk: bars line up account to account. */}
-          {meters.length === 1 && <View style={styles.mini} />}
-        </View>
-      )}
-      {r.extra.map((m) => (
-        <MiniMeter key={m.key} meter={m} />
+      {meters.map((m) => (
+        <MeterRow key={m.key} meter={m} />
       ))}
-      {r.pace && (
-        <View style={styles.pace}>
-          <T variant="small" color={colors.accentWarning}>
-            {r.pace.text}
+    </View>
+  );
+}
+
+/** Accounts with nothing to draw (out of usage, not signed in, not read): compact and quiet. */
+export function ComputeQuiet({ rows }: { rows: ComputeRow[] }) {
+  const colors = useColors();
+  const styles = useStyles();
+  return (
+    <View style={styles.quiet}>
+      {rows.map((r, i) => (
+        <View
+          key={r.key}
+          style={[styles.quietRow, i > 0 && styles.divided]}
+          accessible
+          accessibilityLabel={`${r.title}: ${r.state ?? ''}`}
+        >
+          <T variant="small" color={colors.textSecondary} numberOfLines={1}>
+            {r.title}
           </T>
-          <T variant="small" color={colors.textMuted}>
-            {r.pace.basis}
-          </T>
+          {r.state && (
+            <T variant="small" color={colors.textMuted}>
+              {r.state}
+            </T>
+          )}
         </View>
-      )}
+      ))}
     </View>
   );
 }
 
 const useStyles = makeStyles((colors) => ({
-  summary: { gap: space.md, padding: space.lg },
-  tight: { gap: space['2xs'] },
-  windowLine: { flexDirection: 'row', gap: space.sm },
-  windowName: { minWidth: space['2xl'] + space.xl },
-  row: { gap: space.sm, padding: space.lg },
-  rowHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  meters: { flexDirection: 'row', gap: space.md },
-  mini: { flex: 1, gap: space.xs, minWidth: 0 },
+  summary: { gap: space.xs, paddingHorizontal: space.lg, paddingBottom: space.xs },
+  card: {
+    gap: space.lg,
+    padding: space.lg,
+    backgroundColor: colors.surfaceGroup,
+    borderRadius: radius.card,
+  },
+  cardHead: { gap: space['2xs'] },
+  quiet: { backgroundColor: colors.surfaceGroup, borderRadius: radius.card, overflow: 'hidden' },
+  quietRow: { gap: space['2xs'], paddingHorizontal: space.lg, paddingVertical: space.md },
+  divided: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderDefault },
   ring: { alignItems: 'center', justifyContent: 'center', padding: space['3xs'] },
   track: {
     height: space.tight,

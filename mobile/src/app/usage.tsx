@@ -14,8 +14,8 @@ import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Spinner } from '../components/agent';
 import { SheetTitle } from '../components/SheetTitle';
-import { ComputeAccount, ComputeSummary, MeterRow } from '../components/usage';
-import { IconButton, Section, SheetPage, T } from '../components/ui';
+import { ComputeAccount, ComputeQuiet, ComputeSummary, MeterRow } from '../components/usage';
+import { IconButton, Section, SectionTitle, SheetPage, T } from '../components/ui';
 import { engineName } from '../lib/agents';
 import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
@@ -112,14 +112,16 @@ export default function Usage() {
         )}
 
         {total && (
-          <Section title="All accounts">
+          // Each account its own card, not one long group: the headline
+          // answers first, then every card reads on its own.
+          <View style={styles.accounts}>
+            <SectionTitle title="All accounts" />
             <ComputeSummary view={total} />
             {total.rows.map((r) => (
-              <View key={r.key} style={styles.divided}>
-                <ComputeAccount row={r} />
-              </View>
+              <ComputeAccount key={r.key} row={r} />
             ))}
-          </Section>
+            {total.quiet.length > 0 && <ComputeQuiet rows={total.quiet} />}
+          </View>
         )}
 
         {!total && active && agent && (
@@ -202,6 +204,7 @@ const useStyles = makeStyles((colors) => ({
   block: { gap: space.md, padding: space.lg },
   divided: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderDefault },
   accountHead: { gap: space['2xs'] },
+  accounts: { gap: space.md, marginBottom: space.xl },
   spin: { padding: space.sm },
 }));
 
