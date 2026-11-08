@@ -294,7 +294,21 @@ function focusInitialElement(
   // enters from there. Focusing the first control (a link, a button) painted
   // a focus ring on it as if it were pre-selected (Apps: "Open claude.ai"),
   // and ringed a tab like a selection box when opened from the keyboard.
-  if (focusElement(marked)) return;
+  // A field to type in is still where the user is headed: its caret is not a
+  // selection. Buttons, links and tabs never take focus on open.
+  const firstField =
+    getFocusableElements(content).find(
+      (element) =>
+        element.tabIndex >= 0 &&
+        !element.closest('.modal-frame-header') &&
+        (element instanceof HTMLTextAreaElement ||
+          element.isContentEditable ||
+          (element instanceof HTMLInputElement &&
+            !['checkbox', 'radio', 'button', 'submit', 'reset', 'range', 'color', 'file'].includes(
+              element.type
+            )))
+    ) ?? null;
+  if (focusElement(marked) || focusElement(firstField)) return;
   content.focus({ preventScroll: true });
 }
 
