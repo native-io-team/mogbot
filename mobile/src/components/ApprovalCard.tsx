@@ -6,6 +6,7 @@
  */
 
 import type { Agent, AgentMessage, Approval, ImportProposal } from '@shipstudio/companion-protocol';
+import { GATE_ALLOW, GATE_DENY } from '@shipstudio/companion-protocol';
 import {
   Children,
   createContext,
@@ -42,6 +43,7 @@ import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { choose } from './menu';
 import { SettingsChange } from './settingsChange';
 import { PlanList } from './planList';
+import { GateBody } from './gateBody';
 import { ShowAll } from './ShowAll';
 import { Card, Line, OFFLINE_NOTE, TextAction, useActionShare } from './surfaces';
 import { Button, Icon, T } from './ui';
@@ -255,13 +257,17 @@ export function ApprovalCard({
   // "<source> sent what it knows": Ignore / Save to memory, nothing else.
   const handoff = !!approval.handoff;
   const consentCard = approval.connector?.kind === 'consent' || !!approval.front || handoff;
+  // "OK to go on?" between a routine's steps: Stop here / Go ahead, nothing broader.
+  const gate = approval.gate;
   const [denyWord, allowWord] = approval.front
     ? ['Not now', 'Check again']
     : handoff
       ? ['Ignore', 'Save to memory']
-      : ['Deny', 'Allow'];
+      : gate
+        ? [GATE_DENY, GATE_ALLOW]
+        : ['Deny', 'Allow'];
   // Deny and Allow share the row beside ⋯ while both say their word whole.
-  const share = useActionShare([denyWord, allowWord], consentCard ? 0 : 44);
+  const share = useActionShare([denyWord, allowWord], consentCard || gate ? 0 : 44);
 
   if (!pending) {
     return (
@@ -306,7 +312,7 @@ export function ApprovalCard({
         deliberate second step, with what it covers spelled out. A consent
         request has nothing to say instead: just Deny.
       */}
-      {!consent && (
+      {!consent && !gate && (
         <MoreAnswers
           disabled={off || !armed}
           onPress={() => choose(approval.title, more, scope ?? undefined)}
@@ -341,14 +347,18 @@ export function ApprovalCard({
           ? 'square.and.arrow.down'
           : approval.settings
             ? 'slider.horizontal.3'
-            : 'checkmark.shield'
+            : gate
+              ? 'arrow.trianglehead.2.clockwise'
+              : 'checkmark.shield'
       }
       title={approval.title}
       // Whose and where, as its sibling import card says it.
       source={
         consent && approval.connector
           ? `From ${approval.connector.source} · over Remote access`
-          : undefined
+          : gate
+            ? `${gate.routine} · step ${gate.done} of ${gate.total} done`
+            : undefined
       }
       // The pin above the chat shows the question while this can't fit whole.
       hideHead={fit.pinned}
@@ -357,9 +367,11 @@ export function ApprovalCard({
       note={
         !connected
           ? OFFLINE_NOTE
-          : paused && !fit.pinned && !consent && !approval.settings
-            ? 'It paused here for you. Allow it and it picks up where it left off.'
-            : undefined
+          : gate
+            ? 'It waits for you, and closes if the routine runs again first.'
+            : paused && !fit.pinned && !consent && !approval.settings
+              ? 'It paused here for you. Allow it and it picks up where it left off.'
+              : undefined
       }
       actions={answers ? actions : undefined}
     >
@@ -368,6 +380,8 @@ export function ApprovalCard({
           {consent ? (
             // Consent asks in sentences, not a command: prose that wraps.
             <T color={colors.textBody}>{approval.detail}</T>
+          ) : gate ? (
+            <GateBody approval={approval} />
           ) : (
             <Summarized approval={approval} lines={large ? DETAIL_LINES_LARGE : DETAIL_LINES} />
           )}

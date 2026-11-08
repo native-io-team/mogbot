@@ -1,5 +1,7 @@
 /**
- * Create a new agent, or edit one. Creating starts with "Start from": blank,
+ * Create a new agent, or edit one. Creating opens on "Describe the agent you
+ * want" (`AgentDescribe`): a few sentences and Draft it fill every field
+ * below, plus the routines to keep, for one review before Create. Or "Start from": blank,
  * or a ready-made agent (`lib/agentTemplates`) that fills in the fields below
  * with its briefing, which stays editable. Up front: a name, what it should do and
  * what it should know; the avatar beside the name opens its look (shape,
@@ -45,6 +47,7 @@ import {
   formatUsage,
   getAgentInstructions,
   getAgentUsage,
+  keptRoutines,
   modelChoices,
   onClaudePlan,
   revokePermission,
@@ -53,6 +56,7 @@ import {
   sumTotals,
   updateAgent,
   type Agent,
+  type AgentDraft,
   type PermissionRule,
   type UsageSummary,
   type UsageTotals,
@@ -69,6 +73,7 @@ import {
   templateInstructions,
   type RoleTemplate,
 } from '../../lib/agentTemplates';
+import { AgentDescribe, AgentDrafted, AgentDraftRoutines } from './AgentDescribe';
 
 /**
  * This week and all time, as its engine reported them; nothing before any
@@ -265,6 +270,25 @@ export function AgentEditorModal({
   const [showLook, setShowLook] = useState(false);
   const [role, setRole] = useState(agent?.role ?? first?.role ?? '');
   const [instructions, setInstructions] = useState(first ? templateInstructions(first) : '');
+  // "Describe the agent you want": what came back, and which routines stay ticked.
+  const [draft, setDraft] = useState<AgentDraft | null>(null);
+  const [kept, setKept] = useState<boolean[]>([]);
+  const takeDraft = (d: AgentDraft) => {
+    setDraft(d);
+    setTemplate(null);
+    setName(d.name);
+    setRole(d.role);
+    setInstructions(d.instructions);
+    if (!(takenColors ?? []).includes(d.color)) setColor(d.color);
+    setKept(d.routines.map((r) => !r.problem));
+  };
+  const startOver = () => {
+    setDraft(null);
+    setKept([]);
+    setName('');
+    setRole('');
+    setInstructions('');
+  };
 
   /**
    * Another starting point. A field still showing what the last one put
@@ -356,6 +380,7 @@ export function AgentEditorModal({
           model,
           project,
           ...(template ? { template: template.id } : {}),
+          ...(draft ? { routines: keptRoutines(draft, kept) } : {}),
         });
         if (project && workDirectly) await updateAgent(created.id, { workDirectly });
         onSaved(created.id);
@@ -408,9 +433,15 @@ export function AgentEditorModal({
         e.currentTarget.requestSubmit();
       }}
     >
-      {!editing && (
+      {!editing &&
+        (draft ? (
+          <AgentDrafted onStartOver={startOver} />
+        ) : (
+          <AgentDescribe autoFocus={!first} onDrafted={(d) => takeDraft(d)} />
+        ))}
+      {!editing && !draft && (
         <div className="agent-editor__label" role="group" aria-label="Start from">
-          Start from
+          Or start from
           <SegmentedControl
             value={template?.id ?? ''}
             options={[
@@ -452,7 +483,7 @@ export function AgentEditorModal({
           onChange={(e) => setName(e.target.value)}
           aria-label="Agent name"
           maxLength={40}
-          autoFocus
+          autoFocus={editing || !!first}
         />
       </div>
       {showLook && (
@@ -483,12 +514,20 @@ export function AgentEditorModal({
           onChange={(e) => setInstructions(e.target.value)}
         />
       </label>
+      {!editing && draft && (
+        <AgentDraftRoutines
+          draft={draft}
+          kept={kept}
+          onKept={(i, on) => setKept((k) => k.map((v, j) => (j === i ? on : v)))}
+        />
+      )}
       {editing ? (
         <p className="agent-editor__hint">
           What it remembers is kept separately, under Memory, and isn't changed here.
         </p>
       ) : (
-        onAskChief && (
+        onAskChief &&
+        !draft && (
           <p className="agent-editor__hint agent-editor__ask-chief">
             Not sure what to write?{' '}
             <TextButton tabIndex={0} variant="primary" onClick={onAskChief}>

@@ -1386,6 +1386,36 @@ const LIVE = [
   },
   { name: 'new-agent', route: '/new-agent', check: 'New agent' },
   {
+    name: 'new-agent-drafted',
+    route: '/new-agent',
+    ready: 'Draft the rest',
+    act: async (page) => {
+      await page.type(
+        'Every Friday at 4, write my weekly report from my notes and post it to #team once I OK it.'
+      );
+      await sleep(300);
+      await page.clickText('Draft the rest');
+      await sleep(1200);
+    },
+    check:
+      'After Draft the rest: the drafted role in the field, “Drafted from what you wrote” with Start over, the name and colour filled; then “What it knows” (the briefing, editable), Routines as one group with a switch per routine (steps numbered, “After your OK: Post the brief…”), and one muted line on the apps it will ask for. Create says the name.',
+  },
+  {
+    name: 'schedule-steps',
+    route: '/schedule?agentId=chief&id=ci_weekly',
+    ready: 'Your OK first',
+    check:
+      'Editing a routine in steps: What, then step 2 as a row (a muted 2, its words, ✕) with “Your OK first” and its switch on; “Add a step”; the echo says “2 steps · your OK before step 2”.',
+  },
+  {
+    name: 'gate-card',
+    route: '/chat/fixtures',
+    ready: 'Fixtures',
+    act: scrollToText('OK to go on?'),
+    check:
+      'One “OK to go on?” card with the routine glyph, “Draft the weekly report… · step 1 of 2 done” under the title, “Next, step 2 of 2” over “Post it to #team on Slack”, a quiet well “What step 1 made” with the report; Stop here outlined and Go ahead the neutral answer; no ⋯.',
+  },
+  {
     name: 'import',
     route: '/import',
     ready: 'Import agents',

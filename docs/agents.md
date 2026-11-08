@@ -180,6 +180,52 @@ Not verified: a real turn on each template (briefing quality is untested
 against live models; `scripts/agents-e2e.sh behaviour` doesn't cover it yet),
 and Inbox against a live Gmail connector.
 
+### Describe the agent you want (`agents/draft.rs`)
+
+The New agent dialog opens on one field, **Describe the agent you want**,
+with a specific example as its placeholder (⌘K → "Describe a new agent…"
+opens it too). **Draft it** (or ⌘Enter there) asks the engine new agents
+start on for the whole agent (`agents_draft`): a name, a colour, a one-line
+role, a briefing, up to four routines and the apps it will need. The draft
+fills the dialog's own fields, all editable, and adds one review list,
+**Routines**, each ticked; Create makes the agent with the routines still
+ticked (`agents_create`'s `routines`). "Start over" puts the one prompt back.
+Nothing is made before Create.
+
+- **One sealed call, no tools.** Claude Code with `--tools ""`, no MCP
+  servers, `--setting-sources ""`, no slash commands, no session kept, in the
+  temp folder; Codex in `exec --sandbox read-only`. The description is fenced
+  and called data in the prompt; the answer is parsed as the last JSON object
+  and checked field by field (name ≤ 40, one-line role, a colour the app draws
+  and nobody wears, else the first free one).
+- **Only what the app can stand behind.** Each routine's `when` is read by
+  the routine grammar (`schedule::check`) and shown as it read it ("Every
+  Friday at 16:00"); one it can't read comes back with `problem`, shown, and
+  can't be ticked: never guessed into a time. Steps are checked as a
+  routine's steps; the draft is told to split "draft, then post" into two,
+  the second `askFirst`. Apps are named only as what it will ask for ("Uses
+  Slack. It asks you to connect it the first time it needs it."), never as
+  connected. Each routine that can't be set at Create leaves a line in the
+  new agent's chat saying which and why.
+- **The Chief does the same in chat.** `create_agent`'s description: an agent described
+  in one message is drafted in one short reply (name, role, briefing,
+  routines with times, the apps) with "Make it?"; on yes, one `create_agent`
+  with `routines`.
+- **Phone.** On a Mac listing `MAC_FEATURES.draft` (`agents.draft`), "What
+  should it do?" takes a sentence or two and **Draft the rest** asks the Mac;
+  the draft fills the name and colour, and a review below ("What it knows",
+  editable; Routines with a switch each; the apps line) feeds
+  `agents.create`'s `instructions` and `routines`. A draft counts toward the
+  phone's new-agent limit, since it spends the user's plan.
+
+The idea (one prompt, a reviewed draft, then save) is OpenBot's
+(openbot.run, studied from its README and docs only, PolyForm Noncommercial:
+no code, copy or assets taken); the design, the grammar check, the sealed
+call and the review are this app's.
+
+Not verified: drafting against a live Claude Code or Codex account (the
+prompt, the parse and the review are unit-tested on recorded shapes).
+
 ## What an agent is
 
 | Piece | Where | Notes |
@@ -3315,6 +3361,70 @@ That line goes through `runner::record` as a `MessageKind::wants_user()` kind,
 the same predicate as replies, and is recorded after the wake starts, so it
 falls inside the turn. Notifications use the same predicate, so a check-in
 and its answer post one notification per turn.
+
+### Routines in steps, with your OK in the middle (`src-tauri/src/agents/routine_steps.rs`)
+
+"Every Friday at 4pm: draft the weekly report, wait for my OK, then post it
+to #team." A time routine's `note` is step 1; `then` holds up to four more
+(`Step { text, askFirst }`), each run as its own turn once the one before
+ended without an error. Step 1's wake says there are more and to do only it,
+ending with what it made in the reply; a later step's wake names the step,
+what comes after it, and that earlier steps' output is just above.
+
+- **A step marked `askFirst` waits for the user.** When the step before it
+  ends, one card goes in the agent's chat, **"OK to go on?"**: the routine and
+  "step 1 of 2 done" as its meta, "Next, step 2 of 2" over that step's exact
+  words, then what step 1 made (the agent's newest reply since the step
+  started, at most 4,000 characters) in a quiet well, folded past a few
+  lines. **Go ahead** runs the next step; **Stop here** ends the run there
+  ("Stopped “…” after step 1 · you said no"). Neutral answers, no ⋯, no
+  Always allow. Older clients see a plain Allow / Deny over the same summary
+  and detail (`Approval::gate`).
+- **The card is the user's.** It carries no tool call, so no independence
+  level, rule, admin or plan answers it (`admin::classify_in` → Yours,
+  `mcp::sweepable`), and it doesn't expire after ten minutes
+  (`expiry::verdict`): nothing is blocked on it. It closes only when answered,
+  or when the routine's next run starts first ("The routine ran again before
+  you answered, so this one closed."; its run recorded as not answered). It
+  survives a restart: the card is in the log and `waiting` is on the routine.
+  Answering checks the card is still the one `waiting` names and that the
+  next step's words are still what the card showed; an edited step is not
+  run blind.
+- **Go ahead is exactly as wide as the card.** It is kept as the user's yes
+  to what the card showed (`plan_grant::note_chat_yes`, with the card's
+  summary and detail), and the step's wake is marked as one the user OK'd
+  (`runner::approve_ticket`), so that turn counts as answering them. The step
+  is told to list its outward actions with `ask_plan`: a plan whose every
+  target and exact text the card named is granted without a second card.
+  Anything else still asks; the floor (money, credentials, deleting, force
+  pushes…) is never covered; a turn on outside text never gets a plan.
+- **No retries past step one.** A temporary failure of step 1 retries as any
+  routine's run does; a later step that fails says so once and the run ends
+  (re-running "post it" alone is how a post goes out twice).
+- **History.** One row per run, as before; it carries `step` and two new
+  outcomes: `waiting` ("Waiting for your OK after step 1", amber) and
+  `declined` ("Stopped after step 1"). The row says "Waiting for your OK in
+  the chat" while a card is open.
+- **Time routines only.** "When…" routines refuse `then`: their runs carry
+  outside text, and a longer run of it isn't a safer one.
+- **Where it's set.** The routine editor (desk popover and phone sheet) has
+  **Then…** under What: one row per step, its words, "Your OK first" (on by
+  default for a new step, since the usual second step sends what the first
+  drafted) and ✕; the echo adds "2 steps · your OK before step 2". Agents and
+  the Chief set them with `schedule_check_in`'s `then`, and `create_agent`'s
+  `routines`. The phone sends `then` only to a Mac listing
+  `MAC_FEATURES.steps` (`routines.steps`).
+
+The idea of an approval step inside an automated run comes from OpenBot's
+Workflows (an approval node in a graph; studied from its docs only, no code,
+copy or assets taken). Here it is deliberately smaller: a routine's own
+steps, in a line, one card, and the plan-grant rules rather than a canvas.
+
+Not verified: a live run end to end on a real engine (draft, card, Go ahead,
+a post through a connector under the card's yes); the pieces are unit- and
+UI-tested, and the card, popover and editor are captured in the harness
+(`agents-gate-card`, `agents-steps-popover`, `agents-steps-editor`) and qa:web
+(`gate-card`, `schedule-steps`).
 
 ### "When…" routines (`src-tauri/src/agents/watch.rs`)
 

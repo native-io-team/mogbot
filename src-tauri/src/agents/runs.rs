@@ -61,6 +61,12 @@ pub enum Outcome {
     Failed,
     /// Its time came while the user was driving the agent (`takeover`).
     Skipped,
+    /// A routine in steps, waiting for the user's OK before its next one
+    /// (`routine_steps`).
+    Waiting,
+    /// A routine in steps the user stopped between two steps, or whose OK
+    /// never came before its next run.
+    Declined,
     /// Written by a newer build.
     #[serde(other)]
     Unknown,
@@ -86,6 +92,14 @@ pub struct Run {
     /// Run now, from the popover.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub manual: bool,
+    /// A routine in steps: the step it reached, counting from 1. 0 for a
+    /// routine of one step.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub step: u32,
+}
+
+fn is_zero(n: &u32) -> bool {
+    *n == 0
 }
 
 fn first() -> u32 {
@@ -166,6 +180,11 @@ pub struct Ticket {
     pub first_failed_at: Option<i64>,
     pub due_at: i64,
     pub manual: bool,
+    /// Which step of a routine in steps it runs, counting from 1
+    /// (`routine_steps`); 1 for any other firing.
+    pub step: usize,
+    /// The history row it settles: when its run first fired.
+    pub row_at: i64,
 }
 
 /// How a ticket settled.
@@ -208,14 +227,16 @@ pub fn settle(
     next_regular: Option<i64>,
     when: impl Fn(i64) -> String,
 ) -> Settled {
+    let in_steps = ticket.check_ins.first().is_some_and(|c| !c.then.is_empty());
     let mut run = Run {
-        at: ticket.fired_at,
+        at: ticket.row_at,
         outcome: Outcome::Ran,
         attempt: ticket.attempt,
         detail: None,
         retry_at: None,
         sign_in: sign_in.to_vec(),
         manual: ticket.manual,
+        step: if in_steps { ticket.step as u32 } else { 0 },
     };
     let Some((detail, failure)) = failed else {
         return Settled {
@@ -235,7 +256,8 @@ pub fn settle(
         };
     }
     let first_failed_at = ticket.first_failed_at.unwrap_or(now);
-    let retry_at = if failure::is_temporary(detail, failure) {
+    // A later step isn't tried again on its own: "post it" twice is two posts.
+    let retry_at = if ticket.step <= 1 && failure::is_temporary(detail, failure) {
         next_retry(
             ticket.attempt,
             first_failed_at,
@@ -388,6 +410,29 @@ pub fn turn_ended(
             next_regular,
             |at| failure::clock_phrase(&tz, at, now),
         );
+        // A routine in steps that ended a step well goes on (or asks first).
+        let mut settled = settled;
+        if settled.run.outcome == Outcome::Ran {
+            let current = store::get(agent_id)
+                .ok()
+                .and_then(|a| a.check_ins.into_iter().find(|c| c.id == fired.id));
+            if let Some(c) = current.filter(|c| !c.then.is_empty()) {
+                if let Some(outcome) = super::routine_steps::after_step(
+                    app,
+                    agent_id,
+                    &c,
+                    ticket.step,
+                    ticket.row_at,
+                    ticket.fired_at,
+                ) {
+                    settled.run.outcome = outcome;
+                    if outcome == Outcome::Running {
+                        // The next step's own ticket settles this row.
+                        settled.run.step = ticket.step as u32 + 1;
+                    }
+                }
+            }
+        }
         let _ = store::update(agent_id, |agent| {
             for snapshot in &ticket.check_ins {
                 match agent.check_ins.iter_mut().find(|c| c.id == snapshot.id) {
@@ -630,6 +675,8 @@ mod tests {
             first_failed_at: (attempt > 1).then_some(NOW - 10 * MIN),
             due_at: NOW - 10 * MIN,
             manual: false,
+            step: 1,
+            row_at: NOW,
         }
     }
 
@@ -740,6 +787,7 @@ mod tests {
                     retry_at: None,
                     sign_in: vec![],
                     manual: false,
+                    step: 0,
                 },
             );
         }
@@ -764,6 +812,7 @@ mod tests {
                 retry_at: Some(NOW - 190 * MIN),
                 sign_in: vec![],
                 manual: false,
+                step: 0,
             },
             Run {
                 at: NOW - 5 * MIN,
@@ -773,6 +822,7 @@ mod tests {
                 retry_at: None,
                 sign_in: vec![],
                 manual: false,
+                step: 0,
             },
         ];
         c.retry = Some(Retry {

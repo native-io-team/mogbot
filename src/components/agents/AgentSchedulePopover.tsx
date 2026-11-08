@@ -20,6 +20,11 @@
  * starts when something happens (`AgentWhenRoutine`). Its row says what it
  * waits for, what it does, and what its last check found; Run now is Check now.
  *
+ * "Then…" under What adds steps after it (`AgentStepsEditor`,
+ * `agents/routine_steps.rs`): each its own turn, and one marked "Your OK
+ * first" waits on a card in the chat showing what the step before made. A
+ * routine in steps lists them under its row, and says so while a run waits.
+ *
  * A routine that ran on its own this week says what it cost, as its engine
  * reported it: dollars "at API prices" when every run was priced and Claude
  * reported no plan, else tokens (on a Pro or Max plan the price isn't the
@@ -38,8 +43,12 @@ import { TextField } from '../primitives/TextField';
 import { SegmentedControl } from '../primitives/SegmentedControl';
 import { ToggleButton } from '../primitives/ToggleButton';
 import { WhenComposer } from './AgentWhenRoutine';
+import { AgentStepsEditor, AgentStepsList } from './AgentRoutineSteps';
 import {
   CADENCES,
+  cleanSteps,
+  stepsLine,
+  type RoutineStep,
   cancelCheckIn,
   checkWatchNow,
   COST_BASIS_NOTE,
@@ -284,10 +293,10 @@ function ScheduleBody({
           busy={busy}
           error={error}
           onCancel={items.length > 0 || editing ? close : undefined}
-          onSave={(phrase, note) =>
+          onSave={(phrase, note, then) =>
             void run(async () => {
-              if (editing) await updateCheckIn(agent.id, editing.id, phrase, note);
-              else await createCheckIn(agent.id, phrase, note);
+              if (editing) await updateCheckIn(agent.id, editing.id, phrase, note, then);
+              else await createCheckIn(agent.id, phrase, note, then);
             }).then((ok) => ok && setComposing(null))
           }
         />
@@ -355,8 +364,8 @@ function RoutinePicker({
   error: string | null;
   /** Absent when there's nothing else to show (no routines yet). */
   onCancel?: () => void;
-  /** `phrase` is empty for an edit that left When as it was. */
-  onSave: (phrase: string, note: string) => void;
+  /** `phrase` is empty for an edit that left When as it was; `then` is every step after What. */
+  onSave: (phrase: string, note: string, then: RoutineStep[]) => void;
 }) {
   const [picker, setPicker] = useState<PickerState>(() =>
     editing ? pickerOf(routineWhenOf(editing)) : newPicker()
@@ -365,6 +374,8 @@ function RoutinePicker({
   // "every 2 hours" isn't re-anchored to now by editing the note.
   const [openedAs] = useState(() => (editing ? routineWhenPhrase(routineWhenOf(editing)) : null));
   const [note, setNote] = useState(() => editing?.note ?? '');
+  const [then, setThen] = useState<RoutineStep[]>(() => editing?.then ?? []);
+  const steps = cleanSteps(then);
   const [answer, setAnswer] = useState<{ phrase: string; reading: Reading } | null>(null);
   const noteRef = useRef<HTMLInputElement>(null);
   const change = (patch: Partial<PickerState>) => setPicker((p) => ({ ...p, ...patch }));
@@ -411,7 +422,7 @@ function RoutinePicker({
   const ready = reading.kind === 'ok' && note.trim().length > 0 && !busy;
   const save = () => {
     if (!ready) return;
-    onSave(editing && phrase === openedAs ? '' : phrase, note.trim());
+    onSave(editing && phrase === openedAs ? '' : phrase, note.trim(), steps);
   };
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Escape' && onCancel) {
@@ -551,10 +562,14 @@ function RoutinePicker({
           aria-label={`What ${agent.name} should do`}
           maxLength={600}
         />
+        <AgentStepsEditor steps={then} onChange={setThen} onKeyDown={onKeyDown} />
       </div>
 
       <div className="agent-schedule__echo" aria-live="polite">
         {when && <p className="agent-schedule__echo-line">{routineEcho(when, note || '…')}</p>}
+        {steps.length > 0 && (
+          <p className="agent-schedule__readback">{stepsLine({ note, then: steps })}</p>
+        )}
         <p
           className="agent-schedule__readback"
           data-invalid={reading.kind === 'bad' || error ? true : undefined}
@@ -711,6 +726,10 @@ function ScheduleRow({
               {describeCheckInTime(item)}
             </span>
           </>
+        )}
+        {!watch && <AgentStepsList item={item} afterNote />}
+        {item.waiting && (
+          <span className="agent-schedule__waiting">Waiting for your OK in the chat</span>
         )}
         {spent && (
           <span className="agent-schedule__spent" title={priced ? COST_BASIS_NOTE : undefined}>

@@ -150,6 +150,13 @@ fn frames() -> Vec<ServerFrame> {
             },
         ),
         (
+            Some(1),
+            // "OK to go on?" between a routine's steps (`routine_steps`).
+            Event::Message {
+                message: serde_json::to_value(testkit::gate_card()).unwrap(),
+            },
+        ),
+        (
             Some(2),
             Event::Status {
                 agent_id: AGENT.into(),
@@ -786,6 +793,15 @@ async fn generate() -> String {
         .await,
     );
     out += &entry(
+        "scheduleCreateSteps",
+        "Result<'agents.schedule.create'>",
+        call(
+            "agents.schedule.create",
+            json!({ "agentId": AGENT, "when": "every friday at 4pm", "note": "Draft the weekly report", "then": [{ "text": "Post it to #team on Slack", "askFirst": true }] }),
+        )
+        .await,
+    );
+    out += &entry(
         "scheduleUpdate",
         "Result<'agents.schedule.update'>",
         call(
@@ -836,6 +852,15 @@ async fn generate() -> String {
         call(
             "agents.create",
             json!({ "input": { "name": "Inbox", "role": "Keeps my inbox down to what matters", "color": "teal" }, "clientId": "n_1" }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsDraft",
+        "Result<'agents.draft'>",
+        call(
+            "agents.draft",
+            json!({ "description": "Someone who reads my newsletters and sends me five lines every weekday at 8" }),
         )
         .await,
     );

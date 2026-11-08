@@ -10,6 +10,7 @@
 
 import {
   describeCheckInTime,
+  stepsLine,
   describeWatchStatus,
   describeWatchTitle,
   isAdmin,
@@ -441,7 +442,13 @@ function CheckInRow({
         </T>
         <T variant="caption" color={colors.textSecondary}>
           {describeCheckInTime(c, now)}
+          {stepsLine(c) ? ` · ${stepsLine(c)}` : ''}
         </T>
+        {c.waiting && (
+          <T variant="caption" color={colors.accentWarning}>
+            Waiting for your OK in the chat
+          </T>
+        )}
         {!!spent && (
           <T variant="caption" color={colors.textMuted}>
             {spent}

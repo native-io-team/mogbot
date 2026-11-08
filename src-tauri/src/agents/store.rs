@@ -573,6 +573,12 @@ pub struct Approval {
     /// clients show a plain Allow / Deny over the same summary and detail.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub handoff: Option<super::handoff::Handoff>,
+    /// "OK to go on?" between two steps of a routine
+    /// (`agents/routine_steps.rs`): which routine, what's done, what's next.
+    /// Go ahead (Allow) runs the next step; Stop here (Deny) ends the run.
+    /// Older clients show a plain Allow / Deny over the same summary and detail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub gate: Option<super::routine_steps::Gate>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -2490,6 +2496,7 @@ mod tests {
                         settings: None,
                         plan: None,
                         handoff: None,
+                        gate: None,
                     });
                 }
                 append_message(&line).unwrap();
@@ -2700,6 +2707,7 @@ mod tests {
                     settings: None,
                     plan: None,
                     handoff: None,
+                    gate: None,
                 }),
                 attachments: Vec::new(),
                 check_in: None,
@@ -2821,6 +2829,7 @@ mod tests {
                 settings: None,
                 plan: None,
                 handoff: None,
+                gate: None,
             });
             append_message(&card).unwrap();
             let raw = std::fs::read(log_path(&a.id).unwrap()).unwrap();

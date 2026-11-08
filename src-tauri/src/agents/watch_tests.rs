@@ -117,6 +117,8 @@ fn watch_check_in(source: Source) -> CheckIn {
         watch: Some(Watch::new(source, 10)),
         usage: Default::default(),
         follow_up: false,
+        then: Vec::new(),
+        waiting: None,
         extra: Default::default(),
     }
 }
@@ -242,6 +244,7 @@ fn run(outcome: runs::Outcome, manual: bool) -> runs::Run {
         retry_at: None,
         sign_in: vec![],
         manual,
+        step: 0,
     }
 }
 
@@ -1167,6 +1170,7 @@ fn review_9_no_run_is_ever_left_running() {
         retry_at: Some(NOW + MIN),
         sign_in: vec![],
         manual: false,
+        step: 0,
     });
     c.retry = Some(runs::Retry {
         at: NOW + MIN,

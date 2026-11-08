@@ -8,6 +8,14 @@
  * ready-made agents: one fills in what it does, its name and colour, and the
  * Mac gives it that template's briefing.
  *
+ * On a Mac that drafts (`MAC_FEATURES.draft`), "What should it do?" takes a
+ * sentence or two and **Draft the rest** asks the Mac for the whole agent:
+ * name, colour, briefing, routines (each as the Mac's grammar read it) and
+ * the apps it will need. The draft fills the same fields, and one review
+ * below them (`DraftReview`) shows the briefing to edit and each routine to
+ * keep or leave; Create makes it with what's kept. "Start over" puts your
+ * words back.
+ *
  * Or hand it to the Chief of Staff: your request goes into the Chief's
  * composer, for you to read and send. That's also all an older Mac offers,
  * since it can't create agents for a phone.
@@ -17,8 +25,10 @@ import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
 import {
   freeLook,
+  keptRoutines,
   lookFor,
   MAC_FEATURES,
+  type AgentDraft,
   type AgentLook,
   type NewAgentDefaults,
   type RoleTemplateSummary,
@@ -26,6 +36,7 @@ import {
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, TextInput, View } from 'react-native';
 import { AgentAvatar } from '../components/agent';
+import { DraftReview } from '../components/draftReview';
 import { Chip, ChipRow, ColorSwatches, LookChoices } from '../components/pickers';
 import { Button, SheetPage, T } from '../components/ui';
 import { SheetTitle } from '../components/SheetTitle';
@@ -90,6 +101,47 @@ export default function NewAgent() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const clientId = useRef(Crypto.randomUUID());
+  // "Describe the agent you want": the Mac drafts the rest, for review here.
+  const canDraft = useApp((s) => !!s.welcome?.features?.includes(MAC_FEATURES.draft));
+  const [draft, setDraft] = useState<AgentDraft | null>(null);
+  const [described, setDescribed] = useState('');
+  const [instructions, setInstructions] = useState('');
+  const [kept, setKept] = useState<boolean[]>([]);
+  const [drafting, setDrafting] = useState(false);
+
+  const draftIt = () => {
+    const words = role.trim();
+    if (!words || drafting || !connected) return;
+    setDrafting(true);
+    setError(null);
+    haptic.light();
+    call('agents.draft', { description: words })
+      .then((d) => {
+        haptic.success();
+        setDescribed(words);
+        setDraft(d);
+        setRole(d.role);
+        setName(d.name);
+        setColor(d.color);
+        setInstructions(d.instructions);
+        setKept(d.routines.map((r) => !r.problem));
+        setTemplate(null);
+      })
+      .catch((e: unknown) => {
+        haptic.error();
+        setError(describeError(e));
+      })
+      .finally(() => setDrafting(false));
+  };
+
+  const startOver = () => {
+    setRole(described);
+    setName('');
+    setDraft(null);
+    setInstructions('');
+    setKept([]);
+    haptic.select();
+  };
 
   /** Another starting point: fields still showing the last one's words (or nothing) take its. */
   const startFrom = (next: RoleTemplateSummary | null) => {
@@ -121,6 +173,12 @@ export default function NewAgent() {
         color,
         ...(template ? { template: template.id } : {}),
         ...(looks ? { avatar: look } : {}),
+        ...(draft
+          ? {
+              instructions: instructions.trim(),
+              routines: keptRoutines(draft, kept),
+            }
+          : {}),
       },
       clientId.current
     )
@@ -156,7 +214,7 @@ export default function NewAgent() {
             Staff can set one up for you.
           </T>
         )}
-        {canCreate && templates.length > 0 && (
+        {canCreate && templates.length > 0 && !draft && (
           <View style={styles.field}>
             <T variant="subhead" color={colors.textPrimary}>
               Start from
@@ -192,7 +250,11 @@ export default function NewAgent() {
             value={role}
             onChangeText={(t) => setRole(t.replace(/\n/g, ' '))}
             maxLength={MAX_ROLE}
-            placeholder="Keeps my inbox down to what matters"
+            placeholder={
+              canDraft && canCreate
+                ? 'Describe it: what it does, when, and where its work goes'
+                : 'Keeps my inbox down to what matters'
+            }
             placeholderTextColor={colors.textMuted}
             style={[styles.input, styles.roleInput]}
             selectionColor={accent.accent}
@@ -202,6 +264,30 @@ export default function NewAgent() {
             accessibilityLabelledBy="role-label"
             accessibilityLabel="What should it do?"
           />
+          {canDraft && canCreate && !draft && (
+            <View style={styles.draftRow}>
+              <Button
+                title={drafting ? 'Drafting…' : 'Draft the rest'}
+                variant="outline"
+                size="compact"
+                busy={drafting}
+                disabled={!role.trim() || !connected || drafting}
+                onPress={draftIt}
+                accessibilityHint={`${macName} drafts its name, briefing and routines for you to check`}
+              />
+              <T variant="caption" color={colors.textMuted} style={styles.draftHint}>
+                Name, briefing and routines, for you to check.
+              </T>
+            </View>
+          )}
+          {draft && (
+            <View style={styles.draftRow}>
+              <T variant="caption" color={colors.textMuted} style={styles.draftHint}>
+                Drafted from what you wrote. Check it, then create.
+              </T>
+              <Button title="Start over" variant="ghost" size="compact" onPress={startOver} />
+            </View>
+          )}
         </View>
 
         {canCreate && (
@@ -234,6 +320,15 @@ export default function NewAgent() {
             <ColorSwatches value={color} onChange={setColor} />
             {looks && (
               <LookChoices name={finalName || '?'} color={color} look={look} onChange={setLook} />
+            )}
+            {draft && (
+              <DraftReview
+                draft={draft}
+                instructions={instructions}
+                onInstructions={setInstructions}
+                kept={kept}
+                onKept={(i, on) => setKept((k) => k.map((v, j) => (j === i ? on : v)))}
+              />
             )}
             {engine && (
               <T variant="caption" color={colors.textMuted}>
@@ -318,6 +413,8 @@ const useStyles = makeStyles((colors) => ({
   nameInput: { flex: 1, minHeight: 48 },
   identity: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   actions: { gap: space.sm },
+  draftRow: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  draftHint: { flex: 1 },
 }));
 
 /** A throw while drawing stays on this screen, with the way back. */

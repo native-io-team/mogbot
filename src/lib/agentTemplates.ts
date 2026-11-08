@@ -59,3 +59,9 @@ export function needsLine(template: RoleTemplate, engine: Agent['engine']): stri
     ? 'It reads your email through an app you’ve connected in Codex, such as Gmail.'
     : 'It reads your email through an app you connect, such as Gmail.';
 }
+
+/**
+ * The New agent dialog's own starting point that isn't a template: open on
+ * "Describe the agent you want" (`agents_draft`), the cursor in it.
+ */
+export const DESCRIBE_START = 'describe';

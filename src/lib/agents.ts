@@ -10,7 +10,15 @@ import type { FileDiff } from './git';
 import type { AgentSecret, SecretRequest } from './agentSecrets';
 import type { LocalLink, Watch, WatchSource } from '../../packages/companion-protocol/src/model';
 import type { SettingsProposal } from '../../packages/companion-protocol/src/policy';
-import type { PlanCard, Repeat } from '../../packages/companion-protocol/src/model';
+import type {
+  AgentDraft,
+  NewRoutine,
+  PlanCard,
+  Repeat,
+  RoutineGate,
+  RoutineStep,
+  RoutineWaiting,
+} from '../../packages/companion-protocol/src/model';
 import {
   moodOf,
   type AgentLook,
@@ -274,12 +282,46 @@ export interface CheckIn {
   retry?: CheckInRetry;
   /** A "When…" routine: it runs when something happens; `nextAt` is its next check. */
   watch?: Watch;
+  /** Steps after the first (`note`), each its own turn (`agents/routine_steps.rs`). */
+  then?: RoutineStep[];
+  /** A run waiting for the user's OK between two steps, with its card. */
+  waiting?: RoutineWaiting;
 }
+
+/** Routines in steps and drafted agents; shared with the phone. */
+export type {
+  AgentDraft,
+  DraftRoutine,
+  NewRoutine,
+  RoutineGate,
+  RoutineStep,
+  RoutineWaiting,
+} from '../../packages/companion-protocol/src/model';
+export {
+  cleanSteps,
+  DESCRIBE_PLACEHOLDER,
+  draftAppsLine,
+  GATE_ALLOW,
+  GATE_DENY,
+  keptRoutines,
+  MAX_THEN,
+  routineSteps,
+  stepsLine,
+  whenLabel,
+} from '../../packages/companion-protocol/src/steps';
 
 /** One scheduled run and what came of it; mirrors `runs::Run`. */
 export interface CheckInRun {
   at: number;
-  outcome: 'running' | 'ran' | 'retrying' | 'failed' | 'skipped' | 'unknown';
+  outcome:
+    | 'running'
+    | 'ran'
+    | 'retrying'
+    | 'failed'
+    | 'skipped'
+    | 'waiting'
+    | 'declined'
+    | 'unknown';
   /** 1 for the run itself, 2 for its first retry. */
   attempt: number;
   /** Why it failed, as the chat said it. */
@@ -289,6 +331,8 @@ export interface CheckInRun {
   signIn?: string[];
   /** Run now, from the popover. */
   manual?: boolean;
+  /** A routine in steps: the step it reached, from 1. */
+  step?: number;
 }
 
 /** Mirrors `runs::Retry`. */
@@ -522,6 +566,8 @@ export interface Approval {
   plan?: PlanCard;
   /** "<source> sent what it knows": Allow saves it to memory (a turn the user authorised), Deny ignores it. Its parts are `detail`. */
   handoff?: HandoffCard;
+  /** "OK to go on?" between a routine's steps: Allow is Go ahead, Deny is Stop here. */
+  gate?: RoutineGate;
   /**
    * "Bring your work Chrome window to the front so I can use it": answered
    * with Check again (allow) or Not now, never a login.
@@ -834,6 +880,8 @@ export interface NewAgentInput {
   project?: string;
   /** The ready-made agent it starts from; the instructions sent are what was shown. */
   template?: string;
+  /** Routines to set up with it (the ones kept from a draft). */
+  routines?: NewRoutine[];
 }
 
 export interface UpdateAgentInput {
@@ -1232,6 +1280,9 @@ export const setNewAgentDefaults = (change: NewAgentDefaultsChange) =>
   invoke<NewAgentDefaults>('agents_set_defaults', { change });
 export const createAgent = (input: NewAgentInput) =>
   invoke<Omit<Agent, 'status' | 'home'>>('agents_create', { input });
+/** "Describe the agent you want": a draft to check; nothing is created (`agents/draft.rs`). */
+export const draftAgent = (description: string) =>
+  invoke<AgentDraft>('agents_draft', { description });
 export const updateAgent = (agentId: string, input: UpdateAgentInput) =>
   invoke<Omit<Agent, 'status' | 'home'>>('agents_update', { agentId, input });
 export const getAgentInstructions = (agentId: string) =>
@@ -1726,14 +1777,32 @@ export const importFromOtherApp = (options: { keepRules: boolean } = { keepRules
 
 export const previewSchedule = (when: string) =>
   invoke<SchedulePreview>('agents_schedule_preview', { when });
-export const createCheckIn = (agentId: string, when: string, note: string) =>
-  invoke<CheckIn>('agents_schedule_create', { agentId, when, note });
+export const createCheckIn = (agentId: string, when: string, note: string, then?: RoutineStep[]) =>
+  invoke<CheckIn>('agents_schedule_create', {
+    agentId,
+    when,
+    note,
+    ...(then && then.length ? { then } : {}),
+  });
 export const cancelCheckIn = (agentId: string, id: string) =>
   invoke<void>('agents_schedule_cancel', { agentId, id });
 export const pauseCheckIn = (agentId: string, id: string, paused: boolean) =>
   invoke<void>('agents_schedule_pause', { agentId, id, paused });
-export const updateCheckIn = (agentId: string, id: string, when: string, note: string) =>
-  invoke<CheckIn>('agents_schedule_update', { agentId, id, when, note });
+/** `then` replaces its steps; leave it out to keep them. */
+export const updateCheckIn = (
+  agentId: string,
+  id: string,
+  when: string,
+  note: string,
+  then?: RoutineStep[]
+) =>
+  invoke<CheckIn>('agents_schedule_update', {
+    agentId,
+    id,
+    when,
+    note,
+    ...(then ? { then } : {}),
+  });
 /** Fire it now as a normal wake; its next time doesn't move. */
 export const runCheckInNow = (agentId: string, id: string) =>
   invoke<void>('agents_schedule_run_now', { agentId, id });
