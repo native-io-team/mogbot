@@ -429,7 +429,13 @@ fn the_users_own_request_for_a_declined_app_lifts_the_no() {
 
         let no = seen(&other, "slack", ApprovalStatus::Denied, None);
         assert!(matches!(
-            decide(&social, &r, &none, &Here::default(), std::slice::from_ref(&no)),
+            decide(
+                &social,
+                &r,
+                &none,
+                &Here::default(),
+                std::slice::from_ref(&no)
+            ),
             Step::AlreadyDeclined { .. }
         ));
         let asked = Here {
@@ -531,7 +537,12 @@ fn gmail_goes_straight_to_the_users_chrome() {
             decide(&chief, &r, &none, &both, &[plain]),
             Step::AlreadyDeclined { .. }
         ));
-        let mut worded = seen(&recruiter, "gmail", ApprovalStatus::Denied, Some("Not my inbox"));
+        let mut worded = seen(
+            &recruiter,
+            "gmail",
+            ApprovalStatus::Denied,
+            Some("Not my inbox"),
+        );
         worded.login.quiet = true;
         assert!(matches!(
             decide(&chief, &r, &none, &both, &[worded]),
@@ -561,4 +572,92 @@ fn which_browser_showed_the_sign_in_is_read_from_the_call() {
     assert!(t.signed_out && !t.in_chrome);
     let t = Tried::from_args(&serde_json::json!({"signed_out": true}));
     assert!(!t.in_chrome);
+}
+
+fn chief() -> Agent {
+    let a = store::create(store::NewAgent {
+        name: "Chief of Staff".into(),
+        role: String::new(),
+        instructions: String::new(),
+        shape: None,
+        avatar: None,
+        color: None,
+        is_main: true,
+    })
+    .unwrap();
+    store::update(&a.id, |x| x.engine = Engine::Claude).unwrap()
+}
+
+/// Seen live on Haiku: "can you read my email?" got a sign-in card from the
+/// Chief while Mailroom had Gmail connected. Now the chain hands it over.
+#[test]
+fn the_chief_hands_work_to_a_teammate_who_has_it_instead_of_asking() {
+    with_root(|| {
+        let boss = chief();
+        let mail = agent("Mailroom");
+        let other = agent("Writer");
+        connections::add_and_grant(
+            "gmail",
+            "Gmail",
+            "sam@example.test",
+            Kind::Oauth {
+                server_url: "https://mail.example.test/mcp".into(),
+            },
+            &mail.id,
+            Access::Read,
+        )
+        .unwrap();
+        let gmail = logins::service("gmail").unwrap();
+        // Who holds it: never the caller, and only as far as the grant goes.
+        let rows = super::super::team_reach::holders(&boss, gmail, Access::Read);
+        assert_eq!(
+            rows,
+            vec![(
+                "Mailroom".to_string(),
+                "connected: Gmail (sam@example.test)".to_string()
+            )]
+        );
+        assert!(super::super::team_reach::holders(&boss, gmail, Access::Full).is_empty());
+        assert!(super::super::team_reach::holders(&mail, gmail, Access::Read).is_empty());
+
+        let r = logins::build(&boss, &ask("gmail")).unwrap();
+        let out = Tried {
+            signed_out: true,
+            ..Default::default()
+        };
+        let here = Here {
+            agents_browser: true,
+            teammates: rows.clone(),
+            ..Default::default()
+        };
+        let step = decide(&boss, &r, &out, &here, &[]);
+        assert!(
+            matches!(&step, Step::Teammate { name, .. } if name == "Mailroom"),
+            "{step:?}"
+        );
+        let said = reply(&step);
+        assert!(
+            said.contains("message_agent") && said.contains("Mailroom"),
+            "{said}"
+        );
+        // A browser that works still comes first: nothing is asked either way.
+        assert!(matches!(
+            decide(&boss, &r, &Tried::default(), &here, &[]),
+            Step::AgentsBrowser { .. }
+        ));
+        // Not for outside text, and not for an agent whose own job needs it.
+        let outside = Here {
+            outside: true,
+            ..here.clone()
+        };
+        assert_eq!(decide(&boss, &r, &out, &outside, &[]), Step::Ask);
+        let r2 = logins::build(&other, &ask("gmail")).unwrap();
+        assert_eq!(decide(&other, &r2, &out, &here, &[]), Step::Ask);
+        // An earlier no still wins.
+        let no = [seen(&other, "gmail", ApprovalStatus::Denied, Some("No"))];
+        assert!(matches!(
+            decide(&boss, &r, &out, &here, &no),
+            Step::AlreadyDeclined { .. }
+        ));
+    });
 }

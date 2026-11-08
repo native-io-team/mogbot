@@ -28,8 +28,10 @@
 //! a stand-in browser; see `adversarial.rs`. `import` (opt-in) plays a
 //! fictional outside assistant through a whole import over Remote Access and
 //! scores what reaches the review card; see `import_muse.rs`. `newfeat`
-//! (opt-in) runs drafting, routines in steps, follow-ups, quiet hours and
-//! monthly routines live, each in its own capped child; see `new_features.rs`.
+//! (opt-in) runs drafting, routines in steps, follow-ups, quiet hours,
+//! monthly routines, the Chief's draft-then-make, who can reach an app, disk
+//! hygiene and a paused routine across a restart live, each in its own
+//! capped child; see `new_features.rs`.
 
 // A test driver: a failed unwrap is a failed run, and `pgrep`/re-exec are the point.
 #![allow(clippy::unwrap_used, clippy::expect_used, clippy::disallowed_methods)]

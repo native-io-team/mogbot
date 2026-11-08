@@ -22,6 +22,12 @@
 //!    (`signed_out` in the user's Chrome, `browser: "chrome"`, or with no
 //!    Chrome) does it get a card, which offers "Sign in from here" first.
 //!    A plain Deny on an import's quiet card doesn't stop the user's Chrome.
+//! 4b. **A teammate already has it** through the app (a working connection
+//!    granted to them, or its connector in their engine;
+//!    `team_reach::holders`): the Chief is told to hand the work to them
+//!    with `message_agent`, and no card is raised. Only the Chief, whose job
+//!    is delegating; another agent needs it for its own work and gets the
+//!    card. Never for outside text.
 //! 5. **Someone already asked** for it and the card is waiting: this agent is
 //!    added to that card instead of raising its own ([`Waiters`]), and woken
 //!    with the same answer when the user gives it. One ask per service,
@@ -117,6 +123,12 @@ pub enum Step {
         request_id: String,
         title: String,
     },
+    /// A teammate already holds it (`team_reach::holders`): hand it over.
+    Teammate {
+        name: String,
+        way: String,
+        title: String,
+    },
     /// Its own sign-in card is still waiting for something else.
     OneAtATime { title: String },
     /// Raise a card.
@@ -182,6 +194,9 @@ pub struct Here {
     /// The user's own words in this turn name the service ([`names_service`]):
     /// an earlier no (a Deny, "Not needed") is set aside for this request.
     pub user_named: bool,
+    /// Teammates who already hold the service through the app, and how
+    /// (`team_reach::holders`).
+    pub teammates: Vec<(String, String)>,
 }
 
 /// Whether `words` (the user's own message) name the service `r` asks for:
@@ -241,12 +256,14 @@ pub fn decide(agent: &Agent, r: &LoginRequest, tried: &Tried, here: &Here, team:
     // 1a. "Not needed" on the setup checklist counts as a no. Unless the
     // user's own message in this turn asks for it again.
     let key = super::access_check::key_of(&r.service, &r.title);
-    if !here.user_named && here.not_needed.iter().any(|k| {
-        k == &key
-            || (r.service == "other"
-                && k.strip_prefix("other:")
-                    .is_some_and(|t| same_title(t, &r.title)))
-    }) {
+    if !here.user_named
+        && here.not_needed.iter().any(|k| {
+            k == &key
+                || (r.service == "other"
+                    && k.strip_prefix("other:")
+                        .is_some_and(|t| same_title(t, &r.title)))
+        })
+    {
         return Step::AlreadyDeclined {
             title: r.title.clone(),
             said: "Not needed".into(),
@@ -310,6 +327,25 @@ pub fn decide(agent: &Agent, r: &LoginRequest, tried: &Tried, here: &Here, team:
     // page in the user's Chrome (or with no Chrome to try) is a card.
     if let Some(step) = browser_step(r, tried, here) {
         return step;
+    }
+    // 4b. A teammate already holds it through the app: the work goes to
+    // them, not a card to the user. Observed (2026-11-08, live on Haiku):
+    // asked "can you read my email?", the Chief found Gmail signed out in
+    // the agents' browser and raised a sign-in card, while another agent
+    // had Gmail connected; the open card then kept the follow-up that
+    // checks a "can't" (`follow_up`) from running. Only the Chief, whose
+    // job is handing work out; not for outside text, whose asks stay on
+    // cards the user sees.
+    if let Some((name, way)) = here
+        .teammates
+        .first()
+        .filter(|_| agent.is_main && !here.outside)
+    {
+        return Step::Teammate {
+            name: name.clone(),
+            way: way.clone(),
+            title: r.title.clone(),
+        };
     }
     // 5. Someone's card for it is waiting: join it. Outside text doesn't
     // join (the answer would grant it unseen); it raises its own card.
@@ -378,6 +414,9 @@ pub fn reply(step: &Step) -> String {
         Step::Join { agent_name, title, .. } => format!(
             "The user is already being asked about {title} (for {agent_name}). You're on that same card: you'll be woken when they answer. Don't ask again; stop here or carry on with what doesn't need it."
         ),
+        Step::Teammate { name, way, title } => format!(
+            "{name} on the team already has {title} ({way}). Nothing to ask the user: hand this to {name} with message_agent, saying exactly what you need, and never tell the user it can't be done."
+        ),
         Step::OneAtATime { title } => format!(
             "You already have a sign-in waiting on the user ({title}). One at a time: wait for that answer before asking for anything else, and carry on with what you can do meanwhile."
         ),
@@ -413,13 +452,26 @@ pub async fn request(
         outside,
         turned_on: super::declined::turned_on(),
         user_named: !outside && names_service(&super::runner::users_words(&agent.id), &r),
+        teammates: logins::service(&r.service)
+            .filter(|_| agent.is_main)
+            .map(|s| super::team_reach::holders(agent, s, r.access()))
+            .unwrap_or_default(),
     };
     let team = seen();
     let step = decide(agent, &r, tried, &here, &team);
     // The user asked for it again: say so, once, where they are.
     let lifted = here.user_named
         && matches!(
-            decide(agent, &r, tried, &Here { user_named: false, ..here.clone() }, &team),
+            decide(
+                agent,
+                &r,
+                tried,
+                &Here {
+                    user_named: false,
+                    ..here.clone()
+                },
+                &team
+            ),
             Step::AlreadyDeclined { .. }
         );
     if lifted {

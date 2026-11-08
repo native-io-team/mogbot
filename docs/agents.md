@@ -483,7 +483,7 @@ characters, a Codex agent's 12,619, the Chief's 16,003 before its team list
 (budgets 12,500 / 13,100 / 16,600). The agents' browser in "Getting access"
 took them to 12,697 / 13,262 / 16,646 after trims elsewhere (the repeated
 "don't mention servers or ports", the password paragraph the Secrets section
-already says), and the budgets to 12,800 / 13,400 / 16,800, then 13,100 / 13,700 / 17,100 for running projects from chat, and 13,250 / 13,850 / 17,250 for remembered permissions and reading artifacts. Grok, the team-wide search and the Chief's tone rules went in within those budgets (13,209 / 13,794 / 17,246) by trimming the rooms, import and agent-editing bullets, "Look before you scale" and a dev-server line. The bulk-work cleanup line (`disk`) went in within them too (13,211 / 13,796 / 17,248), by trimming "Showing your work" and the plumbing example. Measured with Claude Code (Haiku 5.5,
+already says), and the budgets to 12,800 / 13,400 / 16,800, then 13,100 / 13,700 / 17,100 for running projects from chat, and 13,250 / 13,850 / 17,250 for remembered permissions and reading artifacts. Grok, the team-wide search and the Chief's tone rules went in within those budgets (13,209 / 13,794 / 17,246) by trimming the rooms, import and agent-editing bullets, "Look before you scale" and a dev-server line. The bulk-work cleanup line (`disk`) went in within them too (13,211 / 13,796 / 17,248), by trimming "Showing your work" and the plumbing example. The Chief's draft-first line ("Asked to make one? Draft it in one reply ending “Make it?”") went in within the Chief’s (17,245 of 17,250) by trimming its delegate, `project` and `read_agent` bullets: live on Haiku, the tool description alone didn't hold against "do it, don't ask", and a first message asking for an agent was built at once. Measured with Claude Code (Haiku 5.5,
 `--append-system-prompt-file`, input tokens over a bare run): on the base
 this work started from, 3,347 tokens before and 3,269 after for a plain agent
 (4,583 → 4,505 for the Chief), while gaining the paragraph above; with
@@ -1941,6 +1941,15 @@ signed-in browser and say which account it's in, and ask only if both fail.
    open it in a new tab and say "I'm in Figma as …" from what the page shows,
    never a guess. A sign-in page sends it back with `signed_out: true`
    (and `browser`): one in the agents' browser moves it to the user's Chrome.
+4b. **A teammate already has it** (the Chief only): another agent holds the
+   service through the app (a working connection granted to it, or its
+   connector in its engine; `team_reach::holders`). The Chief is told to hand
+   the work to that agent with `message_agent`, and no card is raised. Seen
+   live on Haiku: asked "can you read my email?", the Chief found Gmail signed
+   out in the agents' browser and raised a sign-in card while another agent
+   had Gmail connected, and the open card kept the "can't" follow-up from
+   running. Other agents still get the one-tap "Use \<account>" card below:
+   it's their own job that needs it. Never for outside text.
 5. **Someone's card for it is waiting**: the agent joins that card
    (`login-waiters.json`; the card shows "Also for …") and gets the same
    answer, never more access than the card allowed.
