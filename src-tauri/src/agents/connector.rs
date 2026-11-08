@@ -1286,7 +1286,7 @@ fn tool_defs() -> serde_json::Value {
         "items": {
             "type": "object",
             "properties": {
-                "when": { "type": "string", "description": "Plain words: \"every weekday at 9am\", \"every 2 hours\"." },
+                "when": { "type": "string", "description": "Plain words: \"every weekday at 9am\", \"every 2 hours\", \"every month on the 1st at 9am\"." },
                 "what": { "type": "string" }
             },
             "required": ["when", "what"]
@@ -1639,9 +1639,11 @@ pub(crate) fn tool_call(
 /// What the interview is told about routine times the app can't schedule,
 /// or nothing. Observed against a stand-in assistant: told only "ask for a
 /// plain time", the interview spent an exchange asking for one that was
-/// already exact ("on the 1st of every month at 09:00", which no wording
-/// can schedule here), then told the assistant it had fixed it when the
-/// update was refused just the same.
+/// already exact ("on the 1st of every month at 09:00", which then had no
+/// wording here), then told the assistant it had fixed it when the update
+/// was refused just the same. Monthly routines are scheduled now; what's
+/// left is a time that can't be (more often than every 30 minutes, a
+/// working day of the month) or two in one ("the 1st and 15th").
 pub(crate) fn refused_routines(p: &Proposal) -> String {
     let refused: Vec<String> = p
         .routines
@@ -1656,7 +1658,7 @@ pub(crate) fn refused_routines(p: &Proposal) -> String {
         return String::new();
     }
     format!(
-        " These routine times can't be scheduled here: {}. Routines run every so many minutes or hours (\"every 2 hours\"), or on named days at a time (\"every weekday at 9:00\", \"every monday and thursday at 7:30\"); nothing monthly or yearly. If one fits, use update_proposal with that wording. If the time was already exact and just doesn't fit, don't ask again: keep it as it is (the user sees on the card that it needs setting up by hand), record it under routines, and carry on. Never tell the other assistant it's scheduled.",
+        " These routine times can't be scheduled here: {}. Routines run every so many minutes or hours (\"every 2 hours\", 30 minutes at the most often), on named days at a time (\"every weekday at 9:00\", \"every monday and thursday at 7:30\"), or on a day of the month (\"every month on the 1st at 9:00\", \"every month on the last friday at 16:00\", \"every 3 months on the 15th at 9:00 starting january\", \"every 12 months on the 3rd at 9:00 starting march\" for once a year). Two days in one (\"the 1st and 15th\") are two routines. If one fits, use update_proposal with that wording. If the time was already exact and just doesn't fit, don't ask again: keep it as it is (the user sees on the card that it wasn't set), record it under routines, and carry on. Never tell the other assistant it's scheduled.",
         refused.join(", ")
     )
 }
@@ -2377,26 +2379,42 @@ mod tests {
                 "name": "Ledger", "instructions": "Track invoices (fictional).",
                 "routines": [
                     {"when": "every monday at 08:15", "what": "Check overdue invoices"},
-                    {"when": "on the 1st of every month at 09:00", "what": "Budget summary"}
+                    {"when": "on the 1st of every month at 09:00", "what": "Budget summary"},
+                    {"when": "every 10 minutes", "what": "Check the inbox"}
                 ]
             }),
             &chief.name,
         )
         .unwrap();
         assert!(
-            text.contains("can't be scheduled here: \"on the 1st of every month at 09:00\""),
+            text.contains("can't be scheduled here: \"every 10 minutes\""),
             "{text}"
         );
         assert!(
-            text.contains("nothing monthly or yearly") && text.contains("don't ask again"),
+            text.contains("every month on the 1st at 9:00") && text.contains("don't ask again"),
             "{text}"
         );
+        // A monthly one is scheduled as it was sent: nothing to set by hand.
         assert!(
-            !text.contains("every monday at 08:15"),
-            "the readable one isn't named: {text}"
+            !text.contains("every monday at 08:15") && !text.contains("on the 1st of every month"),
+            "the readable ones aren't named: {text}"
         );
         // Rewording it doesn't make it schedulable, and the update says so
         // rather than "Updated" alone.
+        let (text, _) = tool_call(
+            &s,
+            "update_proposal",
+            &json!({
+                "name": "Ledger",
+                "routines": [{"when": "every 5 minutes", "what": "Check the inbox"}]
+            }),
+            &chief.name,
+        )
+        .unwrap();
+        assert!(
+            text.starts_with("Updated Ledger") && text.contains("can't be scheduled here"),
+            "{text}"
+        );
         let (text, _) = tool_call(
             &s,
             "update_proposal",
@@ -2407,10 +2425,7 @@ mod tests {
             &chief.name,
         )
         .unwrap();
-        assert!(
-            text.starts_with("Updated Ledger") && text.contains("can't be scheduled here"),
-            "{text}"
-        );
+        assert_eq!(text, "Updated Ledger in the draft.");
         let (text, _) = tool_call(
             &s,
             "update_proposal",

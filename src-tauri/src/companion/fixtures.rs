@@ -722,6 +722,11 @@ async fn generate() -> String {
         ("schedulePreviewOnce", "in 2 hours"),
         ("schedulePreviewDays", "every weekday at 9am"),
         ("schedulePreviewEvery", "every 30 minutes"),
+        (
+            "schedulePreviewMonthly",
+            "every month on the last friday at 4pm",
+        ),
+        ("schedulePreviewQuarterly", "quarterly on the 15th at 9am"),
     ] {
         out += &entry(
             name,

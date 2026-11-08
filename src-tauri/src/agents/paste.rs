@@ -47,7 +47,7 @@ Reply with one ```json code block in exactly this shape:
 Rules:
 - Include every agent. Set "is_main": true on the one that manages the others (at most one), false on the rest.
 - Copy instructions and memory in full, word for word. Don't summarize, shorten or paraphrase them. Long is fine.
-- "routines": everything the agent does on its own on a schedule (routines, automations, reminders, recurring check-ins), one entry each. Write "when" in plain words, like "every weekday at 9am", "every monday at 8:30am", "every day at 7pm", "every 2 hours" or, for a one-off, "friday at 2pm". Start repeating ones with "every". Write "what" so the agent knows exactly what to do when it fires. Use [] if it has none.
+- "routines": everything the agent does on its own on a schedule (routines, automations, reminders, recurring check-ins), one entry each. Write "when" in plain words, like "every weekday at 9am", "every monday at 8:30am", "every day at 7pm", "every 2 hours", "every month on the 1st at 9am", "every month on the last friday at 4pm" or, for a one-off, "friday at 2pm". Start repeating ones with "every". Write "what" so the agent knows exactly what to do when it fires. Use [] if it has none.
 - "color" is optional: if the agent has one, use the closest of white, brown, red, orange, amber, green, teal, blue, purple, pink, gray. Otherwise leave it out.
 - Never include passwords, API keys, tokens, card numbers or any other credentials. If an instruction or memory contains one, write [removed] in its place.
 - Valid JSON only: straight double quotes, line breaks written as \n inside strings, no comments, no trailing commas.

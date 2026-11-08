@@ -10,9 +10,17 @@
  * reads the picker's words on its own clock, so "Today" is its today.
  */
 
-import { localDate, nextDate, wallClock, type RoutineWhen } from './schedule';
+import type { MonthDay } from './model';
+import {
+  localDate,
+  nextDate,
+  NTH_WORDS,
+  ordinalText,
+  wallClock,
+  type RoutineWhen,
+} from './schedule';
 
-export type Cadence = 'daily' | 'weekdays' | 'weekly' | 'hours' | 'once';
+export type Cadence = 'daily' | 'weekdays' | 'weekly' | 'monthly' | 'hours' | 'once';
 
 export interface PickerState {
   cadence: Cadence;
@@ -22,6 +30,15 @@ export interface PickerState {
   minutes: number;
   /** Once: the local date, `YYYY-MM-DD`. */
   date: string;
+  /** Monthly: every this many months, and which day of the month. */
+  months: number;
+  monthDay: MonthDay;
+  /**
+   * Monthly, from an edit: the month (1–12) its next run is in, so a
+   * routine every 3 months stays on the same months when its day or time
+   * changes. A new one counts from its first run.
+   */
+  monthStart?: number;
   hour: number;
   minute: number;
 }
@@ -30,6 +47,7 @@ export const CADENCES: { value: Cadence; label: string }[] = [
   { value: 'daily', label: 'Every day' },
   { value: 'weekdays', label: 'Weekdays' },
   { value: 'weekly', label: 'Weekly' },
+  { value: 'monthly', label: 'Monthly' },
   { value: 'hours', label: 'Every few hours' },
   { value: 'once', label: 'Once' },
 ];
@@ -55,6 +73,59 @@ export const intervalLabel = (minutes: number) =>
       ? 'Every hour'
       : `Every ${minutes / 60} hours`;
 
+/** How many months apart a monthly routine can be offered as; an edited one keeps its own too. */
+export const MONTH_INTERVALS = [1, 3];
+
+export const monthsLabel = (months: number) =>
+  months === 1 ? 'Every month' : `Every ${months} months`;
+
+/**
+ * Monthly reads as a sentence, "On the [15th] [day]" or "On the [last]
+ * [Friday]": which one, then of what. `'day'` is a date in the month.
+ */
+export type MonthKind = 'day' | number;
+
+/** What "of what" offers: a date, or one of the weekdays (Monday first). */
+export const MONTH_KINDS: { value: MonthKind; label: string }[] = [
+  { value: 'day', label: 'day' },
+  ...[1, 2, 3, 4, 5, 6, 0].map((day) => ({
+    value: day,
+    label: ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'][day],
+  })),
+];
+
+export const monthKindOf = (on: MonthDay): MonthKind => ('nth' in on ? on.weekday : 'day');
+
+/** Which one: 1–31 or -1 for a date, 1–4 or -1 for a weekday. */
+export const monthWhichOf = (on: MonthDay): number => ('nth' in on ? on.nth : on.day);
+
+/** "Which one" for this kind: the 1st to the 31st and the last day, or the first to the last weekday. */
+export function monthWhichChoices(kind: MonthKind): { value: number; label: string }[] {
+  if (kind === 'day') {
+    return [
+      ...Array.from({ length: 31 }, (_, i) => ({ value: i + 1, label: ordinalText(i + 1) })),
+      { value: -1, label: 'last' },
+    ];
+  }
+  return [1, 2, 3, 4, -1].map((n) => ({ value: n, label: NTH_WORDS[n] }));
+}
+
+/** Another "which one", keeping the kind. */
+export function setMonthWhich(on: MonthDay, which: number): MonthDay {
+  return 'nth' in on ? { nth: which, weekday: on.weekday } : { day: which };
+}
+
+/**
+ * Another kind, keeping "which" where it still means something: the 2nd →
+ * the second Tuesday, the last day → the last Friday; the 20th, which no
+ * weekday has, → the first.
+ */
+export function setMonthKind(on: MonthDay, kind: MonthKind): MonthDay {
+  const which = monthWhichOf(on);
+  if (kind === 'day') return { day: which };
+  return { nth: which === -1 || (which >= 1 && which <= 4) ? which : 1, weekday: kind };
+}
+
 const ALL = [0, 1, 2, 3, 4, 5, 6];
 const WORK = [1, 2, 3, 4, 5];
 const same = (a: number[], b: number[]) =>
@@ -67,6 +138,8 @@ export function newPicker(now = Date.now(), timeZone?: string): PickerState {
     days: [wallClock(now, timeZone).weekday],
     minutes: 60,
     date: localDate(now, timeZone),
+    months: 1,
+    monthDay: { day: 1 },
     hour: 9,
     minute: 0,
   };
@@ -78,6 +151,17 @@ export function pickerOf(w: RoutineWhen, now = Date.now(), timeZone?: string): P
   if (w.kind === 'every') return { ...base, cadence: 'hours', minutes: w.minutes };
   if (w.kind === 'once') {
     return { ...base, cadence: 'once', date: w.date, hour: w.hour, minute: w.minute };
+  }
+  if (w.kind === 'monthly') {
+    return {
+      ...base,
+      cadence: 'monthly',
+      months: w.months,
+      monthDay: w.on,
+      monthStart: w.start,
+      hour: w.hour,
+      minute: w.minute,
+    };
   }
   const cadence: Cadence = same(w.days, ALL) ? 'daily' : same(w.days, WORK) ? 'weekdays' : 'weekly';
   return { ...base, cadence, days: [...w.days], hour: w.hour, minute: w.minute };
@@ -95,6 +179,14 @@ export function whenOf(s: PickerState): RoutineWhen | null {
       return s.days.length
         ? { kind: 'days', days: [...new Set(s.days)].sort((a, b) => a - b), ...at }
         : null;
+    case 'monthly':
+      return {
+        kind: 'monthly',
+        months: s.months,
+        on: s.monthDay,
+        ...at,
+        start: s.months > 1 ? s.monthStart : undefined,
+      };
     case 'hours':
       return { kind: 'every', minutes: s.minutes };
     case 'once':

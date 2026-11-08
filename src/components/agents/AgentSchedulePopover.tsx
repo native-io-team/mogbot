@@ -4,11 +4,12 @@
  *
  * The trigger reads "N scheduled", or is a quiet clock when there's nothing.
  * Adding or editing is the phone's picker, not a grammar: When is a few
- * chips (Every day / Weekdays / Weekly + days / Every few hours / Once with a
- * date) and a time, What is one line, and above Schedule it says back what it
- * will make ("Every weekday at 9:00 AM — Draft my day") with the first run as
- * the backend resolved it, so what you save is what will fire. The picker
- * writes the same `when` words the backend's grammar reads
+ * chips (Every day / Weekdays / Weekly + days / Monthly + "On the [15th]
+ * [day]" / Every few hours / Once with a date) and a time, What is one
+ * line, and above Schedule it says back what it will make ("Every weekday
+ * at 9:00 AM — Draft my day") with the first run as the backend resolved
+ * it, so what you save is what will fire. The picker writes the same
+ * `when` words the backend's grammar reads
  * (`routineWhenPhrase`, packages/companion-protocol/src/routine-phrases.json),
  * so a desk-made routine is a phone-made one.
  *
@@ -28,7 +29,7 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { HistoryIcon, PlusIcon } from '@/components/icons';
+import { ChevronIcon, HistoryIcon, PlusIcon } from '@/components/icons';
 import { Dropdown } from '../primitives/Dropdown';
 import { IconButton } from '../primitives/IconButton';
 import { Button } from '../primitives/Button';
@@ -54,6 +55,12 @@ import {
   getAgentUsage,
   INTERVALS,
   intervalLabel,
+  MONTH_INTERVALS,
+  MONTH_KINDS,
+  monthKindOf,
+  monthsLabel,
+  monthWhichChoices,
+  monthWhichOf,
   newPicker,
   onClaudePlan,
   onceDays,
@@ -66,6 +73,8 @@ import {
   routineWhenOf,
   routineWhenPhrase,
   runCheckInNow,
+  setMonthKind,
+  setMonthWhich,
   sortCheckIns,
   toggleDay,
   updateCheckIn,
@@ -74,6 +83,7 @@ import {
   type Agent,
   type CheckIn,
   type CheckInRun,
+  type MonthDay,
   type PickerState,
   type SchedulePreview,
   type UsageSummary,
@@ -372,6 +382,9 @@ function RoutinePicker({
   const [intervals] = useState(() =>
     INTERVALS.includes(picker.minutes) ? INTERVALS : [...INTERVALS, picker.minutes]
   );
+  const [monthIntervals] = useState(() =>
+    MONTH_INTERVALS.includes(picker.months) ? MONTH_INTERVALS : [...MONTH_INTERVALS, picker.months]
+  );
 
   // The backend reads the words back: the first run, or why it can't.
   useEffect(() => {
@@ -454,6 +467,25 @@ function RoutinePicker({
               </ToggleButton>
             ))}
           </div>
+        )}
+        {picker.cadence === 'monthly' && (
+          <>
+            <div className="agent-schedule__chips" role="group" aria-label="How many months">
+              {monthIntervals.map((m) => (
+                <ToggleButton
+                  key={m}
+                  tabIndex={0}
+                  size="compact"
+                  variant="secondary"
+                  pressed={picker.months === m}
+                  onClick={() => change({ months: m })}
+                >
+                  {monthsLabel(m)}
+                </ToggleButton>
+              ))}
+            </div>
+            <MonthDayFields on={picker.monthDay} onChange={(monthDay) => change({ monthDay })} />
+          </>
         )}
         {picker.cadence === 'hours' && (
           <div className="agent-schedule__chips" role="group" aria-label="Every">
@@ -546,6 +578,53 @@ function RoutinePicker({
           {editing ? 'Save' : 'Schedule'}
         </Button>
       </div>
+    </div>
+  );
+}
+
+/**
+ * Which day of the month, as a sentence: "On the [15th] [day] of the
+ * month", "On the [last] [Friday] of the month". Native selects, so a list
+ * of 32 dates opens as the system's menu inside the popover.
+ */
+function MonthDayFields({ on, onChange }: { on: MonthDay; onChange: (on: MonthDay) => void }) {
+  const kind = monthKindOf(on);
+  return (
+    <div className="agent-schedule__monthday" role="group" aria-label="On">
+      <span>On the</span>
+      <span className="agent-schedule__select">
+        <select
+          className="ss-text-field ss-text-field--compact"
+          aria-label="Which"
+          value={monthWhichOf(on)}
+          onChange={(e) => onChange(setMonthWhich(on, Number(e.target.value)))}
+        >
+          {monthWhichChoices(kind).map((c) => (
+            <option key={c.value} value={c.value}>
+              {c.label}
+            </option>
+          ))}
+        </select>
+        <ChevronIcon size={10} aria-hidden />
+      </span>
+      <span className="agent-schedule__select">
+        <select
+          className="ss-text-field ss-text-field--compact"
+          aria-label="Day or weekday"
+          value={String(kind)}
+          onChange={(e) =>
+            onChange(setMonthKind(on, e.target.value === 'day' ? 'day' : Number(e.target.value)))
+          }
+        >
+          {MONTH_KINDS.map((k) => (
+            <option key={String(k.value)} value={String(k.value)}>
+              {k.label}
+            </option>
+          ))}
+        </select>
+        <ChevronIcon size={10} aria-hidden />
+      </span>
+      <span>of the month</span>
     </div>
   );
 }

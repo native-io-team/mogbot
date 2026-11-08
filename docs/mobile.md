@@ -737,15 +737,19 @@ The phone can start work as well as answer it. Each piece is gated by
   draft ("Can you set up a new agent? What it's for: …") for you to read and
   send. On a Mac without `agents.create`, that is all the sheet offers.
 - **Routines** (`app/schedule.tsx`). A picker instead of the "when: what"
-  line: When is chips (Every day, Weekdays, Weekly with day chips, Every few
-  hours, Once with Today / Tomorrow / the next five days) and the platform's
+  line: When is chips (Every day, Weekdays, Weekly with day chips, Monthly
+  with Every month / Every 3 months and one "On the [15th] [day]" row whose
+  two parts open the system's list, Every few hours, Once with Today /
+  Tomorrow / the next five days) and the platform's
   own time picker; What is one line. Above Save it echoes the routine
   ("Every weekday at 9:00 AM — Draft my day", `routineEcho`) and the Mac's
   parser confirms the first run. The picker writes the grammar's own words
   (`routineWhenPhrase`: "every monday and thursday at 08:30",
   "2026-11-20 09:00"), so it uses the existing `agents.schedule.*` methods
   and makes exactly what the desk's composer would. Edit opens a check-in on
-  the chips that made it. `packages/companion-protocol/src/routine-phrases.json`
+  the chips that made it; a routine every few months is re-sent "starting
+  <month of its next run>" so an edit keeps it on its months.
+  `packages/companion-protocol/src/routine-phrases.json`
   lists every kind of phrase the picker writes; the mobile tests check the
   picker writes them and a Rust test (`agents::schedule`) checks the Mac's
   grammar reads each back as the same schedule.

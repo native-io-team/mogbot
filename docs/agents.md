@@ -2828,8 +2828,8 @@ the full threat model in docs/remote-access.md):
    until `resolves`, a later fact names it, or the other assistant has
    answered one `NEXT:` asking about it alone (then never again); one that a
    fact recorded with it is already about ("Fastmail: her work email") isn't
-   chased at all. A routine time that can't be scheduled here (anything
-   monthly) is said so on staging and on update, and the interview is told
+   chased at all. A routine time that can't be scheduled here (more often
+   than every 30 minutes, a working day of the month) is said so on staging and on update, and the interview is told
    not to ask again for a time that was already exact. An area closes only after a round of its own: specifics
    first, then, asked "what else in it haven't you sent?", "nothing more"
    (or "none" for an empty one); a general "that's everything" closes
@@ -3149,9 +3149,45 @@ is listed, not guessed at.
 An agent that says "I'll check back tomorrow" can: `schedule_check_in {when,
 note}` (with `list_check_ins` and `cancel_check_in`) takes a plain-language
 time in the user's zone, once ("tomorrow 9am") or repeating ("every weekday
-9am", "every 2 hours"). A phrase it can't read is refused, never guessed. The
-Chief of Staff can schedule for another agent. They are stored on the agent's
-registry entry.
+9am", "every 2 hours", "every month on the 1st at 9:00"). A phrase it can't
+read is refused, never guessed. The Chief of Staff can schedule for another
+agent. They are stored on the agent's registry entry.
+
+**Monthly** (`Repeat::Monthly { months, on, hour, minute, from }`). `on` is a
+date (`{day: 1..31}`, or `-1` for the last day) or a weekday of the month
+(`{nth: 1..4 or -1, weekday}`: "the second Tuesday", "the last Friday");
+`months` is 1 to 12 apart, so quarterly is 3 and once a year is 12 (the
+grammar refuses "yearly" and says so). Phrases it reads: "every month on the
+1st at 09:00", "on the 1st of every month at 9am", "monthly on day 15 at 9:00",
+"every last friday of the month at 16:00", "on the last day of every month at
+17:00", "every 3 months on the 15th at 09:00 starting january", "quarterly on
+the 1st at 9:00", and `describe`'s own "every 3 months on the 15th at 09:00
+(Jan, Apr, Jul and Oct)". The rules, each held by a test in
+`schedule_monthly_tests.rs`:
+
+- **A date a month doesn't have runs on its last day.** "The 31st" runs on 30
+  November and 28 February, then 31 March: never skipped, never spilling into
+  the next month. "The 29th" is 28 February except in a leap year. ("The last
+  day" is its own choice and means the same thing for the 31st.)
+- **No fifth weekday**: "the 5th friday" is refused with "say the last friday";
+  not every month has one. Nor a working day of the month, nor two days in one
+  phrase ("the 1st and 15th" are two routines).
+- **Every few months keeps to the same months.** `from` is a month it runs in
+  (`year * 12 + month - 1`). With no month named, the first run is the next one
+  and the step counts from it; "starting january" puts the first run in that
+  month; "quarterly" is the calendar's quarters (Jan, Apr, Jul, Oct). Editing
+  sends "starting <month of its next run>" so changing its day or time doesn't
+  shift its months.
+- **DST**: each month's time is read on its own date (`resolve`), so 09:00
+  stays 09:00 across a change; a time in the spring gap runs an hour on, one in
+  the autumn overlap runs at the first of the two.
+- Missed while the app was closed: one late run, no backfill, as for any routine.
+
+Imports read the same grammar, so a monthly routine from another assistant
+arrives as a routine. What still can't be scheduled (more often than every 30
+minutes, a working day of the month, two days in one) is said so on staging and
+on the review card, and the interview is told not to ask again for a time that
+was already exact.
 
 The user sees them in a popover on the chat header ("N scheduled", or a clock
 when there are none; Cmd+K → "Schedule a check-in for <agent>…"). Each row

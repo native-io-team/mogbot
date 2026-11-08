@@ -127,7 +127,7 @@ const TOOLS: &[ToolDef] = &[
                                 "items": {
                                     "type": "object",
                                     "properties": {
-                                        "when": { "type": "string", "description": "Plain words: \"every weekday at 9am\", \"every 2 hours\", \"friday at 2pm\"." },
+                                        "when": { "type": "string", "description": "Plain words: \"every weekday at 9am\", \"every 2 hours\", \"every month on the last friday at 4pm\", \"friday at 2pm\"." },
                                         "what": { "type": "string", "description": "What the agent does when it fires." }
                                     },
                                     "required": ["when", "what"]

@@ -1205,6 +1205,17 @@ const LIVE = [
     route: '/schedule?agentId=site',
     check: 'Routine picker; the summary has no literal ellipsis',
   },
+  {
+    name: 'schedule-monthly',
+    route: '/schedule?agentId=site',
+    ready: 'Monthly',
+    act: async (page) => {
+      await page.clickText('Monthly');
+      await sleep(600);
+    },
+    check:
+      'Monthly picked: one more chip in How often, then Every month / Every 3 months and one “On the [1st] [day]” row like the time row; the echo says “Every month on the 1st at 9:00 AM”, and the Mac confirms the first run',
+  },
   { name: 'new-agent', route: '/new-agent', check: 'New agent' },
   {
     name: 'import',

@@ -2240,6 +2240,32 @@ export const schedulePreviewEvery = {
     "minutes": 30
   }
 } satisfies Result<'agents.schedule.preview'>;
+export const schedulePreviewMonthly = {
+  "nextAt": 1764345600000,
+  "repeat": {
+    "hour": 16,
+    "kind": "monthly",
+    "minute": 0,
+    "months": 1,
+    "on": {
+      "nth": -1,
+      "weekday": 5
+    }
+  }
+} satisfies Result<'agents.schedule.preview'>;
+export const schedulePreviewQuarterly = {
+  "nextAt": 1768467600000,
+  "repeat": {
+    "from": 24312,
+    "hour": 9,
+    "kind": "monthly",
+    "minute": 0,
+    "months": 3,
+    "on": {
+      "day": 15
+    }
+  }
+} satisfies Result<'agents.schedule.preview'>;
 export const scheduleCreate = {
   "createdAt": 1762290000000,
   "id": "c9",

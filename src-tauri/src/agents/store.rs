@@ -2937,8 +2937,8 @@ mod tests {
             // A whole entry this build can't read (a repeat it has no word for).
             let mut newer = future["agents"][3].clone();
             newer["id"] = serde_json::json!("c0ffee00-0000-4000-8000-000000000005");
-            newer["name"] = serde_json::json!("Monthly");
-            newer["checkIns"] = serde_json::json!([{ "id": "x", "note": "n", "repeat": { "kind": "monthly", "day": 1 }, "nextAt": 1, "createdAt": 1 }]);
+            newer["name"] = serde_json::json!("Yearly");
+            newer["checkIns"] = serde_json::json!([{ "id": "x", "note": "n", "repeat": { "kind": "yearly", "month": 3, "day": 1 }, "nextAt": 1, "createdAt": 1 }]);
             future["agents"].as_array_mut().unwrap().push(newer);
             std::fs::create_dir_all(agents_root().unwrap()).unwrap();
             std::fs::write(registry_path().unwrap(), future.to_string()).unwrap();

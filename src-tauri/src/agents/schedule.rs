@@ -73,7 +73,40 @@ pub enum Repeat {
     },
     /// A fixed interval, measured in real minutes (DST doesn't stretch it).
     Every { minutes: u32 },
+    /// On a day of the month at a local time, every month or every few (3
+    /// for quarterly). A date a month doesn't have ("the 31st" in April,
+    /// "the 29th" in a February of 28 days) runs on that month's last day,
+    /// so a routine set for a date never skips a month.
+    Monthly {
+        /// Every this many months, 1 to 12.
+        #[serde(default = "one_month")]
+        months: u32,
+        on: MonthDay,
+        hour: u32,
+        minute: u32,
+        /// With `months` over 1: a month it runs in (`year * 12 + month - 1`),
+        /// so "every 3 months" keeps to the same months. Absent for every month.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        from: Option<i32>,
+    },
 }
+
+fn one_month() -> u32 {
+    1
+}
+
+/// Which day of the month a monthly routine runs on.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum MonthDay {
+    /// The `nth` (1 to 4, or -1 for the last) `weekday` (0 = Sunday) of the month.
+    Weekday { nth: i8, weekday: u8 },
+    /// A date, 1 to 31, or -1 for the month's last day.
+    Date { day: i8 },
+}
+
+/// The most months a routine can be apart: a year.
+pub const MAX_EVERY_MONTHS: u32 = 12;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -143,7 +176,31 @@ const WEEKDAYS: [&str; 7] = [
     "saturday",
 ];
 
-const EXAMPLES: &str = "Examples: \"in 2 hours\", \"tomorrow at 9:00\", \"friday at 14:30\", \"2026-11-20 09:00\", \"every weekday at 9:00\", \"every monday at 8am\", \"every 2 hours\".";
+const EXAMPLES: &str = "Examples: \"in 2 hours\", \"tomorrow at 9:00\", \"friday at 14:30\", \"2026-11-20 09:00\", \"every weekday at 9:00\", \"every monday at 8am\", \"every 2 hours\", \"every month on the 1st at 9:00\", \"every month on the last friday at 16:00\", \"every 3 months on the 15th at 9:00\".";
+
+const MONTHS: [&str; 12] = [
+    "january",
+    "february",
+    "march",
+    "april",
+    "may",
+    "june",
+    "july",
+    "august",
+    "september",
+    "october",
+    "november",
+    "december",
+];
+
+/// `march`, `mar`, `sept`: 0 = January.
+fn month_name(word: &str) -> Option<u32> {
+    let word = word.trim_end_matches('.');
+    MONTHS
+        .iter()
+        .position(|m| *m == word || (word.len() >= 3 && m.starts_with(word)))
+        .map(|i| i as u32)
+}
 
 fn weekday(word: &str) -> Option<u8> {
     let word = word.trim().trim_end_matches('s');
@@ -259,6 +316,66 @@ pub fn next_on_days<Tz: TimeZone>(
     None
 }
 
+/// A month as one number, `year * 12 + month - 1`, so months add and compare.
+fn month_index(date: NaiveDate) -> i32 {
+    date.year() * 12 + date.month0() as i32
+}
+
+/// The date `on` names in the month `index` ([`month_index`]). A date the
+/// month doesn't have is its last day; a value no writer here makes (a 0th,
+/// a 5th Monday) is read as the nearest one that exists, never a panic.
+pub fn month_day(index: i32, on: &MonthDay) -> Option<NaiveDate> {
+    let (year, month) = (index.div_euclid(12), index.rem_euclid(12) as u32 + 1);
+    let first = NaiveDate::from_ymd_opt(year, month, 1)?;
+    let last = first
+        .checked_add_months(chrono::Months::new(1))?
+        .pred_opt()?;
+    match *on {
+        MonthDay::Date { day } => {
+            let day = if day < 0 { 31 } else { day.max(1) as u32 };
+            first.with_day(day.min(last.day()))
+        }
+        MonthDay::Weekday { nth, weekday } => {
+            let want = (weekday % 7) as i64;
+            if !(0..=4).contains(&nth) {
+                let back = (last.weekday().num_days_from_sunday() as i64 - want).rem_euclid(7);
+                return Some(last - Span::days(back));
+            }
+            let ahead = (want - first.weekday().num_days_from_sunday() as i64).rem_euclid(7);
+            Some(first + Span::days(ahead + 7 * (nth.max(1) as i64 - 1)))
+        }
+    }
+}
+
+/// The first time strictly after `after` that a monthly routine runs: in a
+/// month `months` apart from `from` (any month without one), on `on`, at
+/// `hour:minute` local. Each month's time is read on its own date, so a
+/// routine at 09:00 stays at 09:00 across a DST change.
+pub fn next_monthly<Tz: TimeZone>(
+    tz: &Tz,
+    months: u32,
+    on: &MonthDay,
+    hour: u32,
+    minute: u32,
+    from: Option<i32>,
+    after: i64,
+) -> Option<i64> {
+    let step = months.clamp(1, MAX_EVERY_MONTHS) as i32;
+    let here = month_index(local(tz, after)?.date_naive());
+    let phase = from.unwrap_or(here);
+    let mut index = here + (phase - here).rem_euclid(step);
+    // This month's may have gone; the next one in step never has.
+    for _ in 0..3 {
+        if let Some(at) = month_day(index, on).and_then(|d| resolve(tz, d, hour, minute)) {
+            if at > after {
+                return Some(at);
+            }
+        }
+        index += step;
+    }
+    None
+}
+
 /// The next time a routine fires after it was due at `due`, skipping every
 /// occurrence up to `now` — that is the "no backfill" rule.
 pub fn advance<Tz: TimeZone>(tz: &Tz, repeat: &Repeat, due: i64, now: i64) -> Option<i64> {
@@ -273,6 +390,13 @@ pub fn advance<Tz: TimeZone>(tz: &Tz, repeat: &Repeat, due: i64, now: i64) -> Op
             Some(due + behind * step)
         }
         Repeat::Days { days, hour, minute } => next_on_days(tz, days, *hour, *minute, now),
+        Repeat::Monthly {
+            months,
+            on,
+            hour,
+            minute,
+            from,
+        } => next_monthly(tz, *months, on, *hour, *minute, *from, now),
     }
 }
 
@@ -293,6 +417,17 @@ pub fn parse<Tz: TimeZone>(when: &str, tz: &Tz, now: i64) -> Result<(Option<Repe
         return fail("`when` is empty.");
     }
 
+    if s.split(' ')
+        .any(|w| matches!(w, "year" | "years" | "yearly" | "annually" | "annual"))
+        && !s.starts_with("in ")
+    {
+        return fail("Routines don't repeat by the year, but every 12 months does the same: \"every 12 months on the 3rd at 9:00 starting march\".");
+    }
+    if let Some(monthly) = parse_monthly(&s, tz, now) {
+        let (repeat, next) = monthly.map_err(|why| format!("{why} {EXAMPLES}"))?;
+        return Ok((Some(repeat), next));
+    }
+
     let recurring = s
         .strip_prefix("every ")
         .map(str::to_string)
@@ -301,7 +436,7 @@ pub fn parse<Tz: TimeZone>(when: &str, tz: &Tz, now: i64) -> Result<(Option<Repe
         let repeat = parse_repeat(&rest)?;
         let next = match &repeat {
             Repeat::Every { minutes } => now + *minutes as i64 * MINUTE_MS,
-            Repeat::Days { days, hour, minute } => next_on_days(tz, days, *hour, *minute, now)
+            other => advance(tz, other, now, now)
                 .ok_or_else(|| "That time doesn't exist.".to_string())?,
         };
         return Ok((Some(repeat), next));
@@ -395,6 +530,302 @@ fn parse_repeat(rest: &str) -> Result<Repeat, String> {
         return fail("Name the days.");
     }
     Ok(Repeat::Days { days, hour, minute })
+}
+
+/// The words of a monthly routine: they say "month" (or "monthly",
+/// "quarter", "quarterly") and aren't a one-off ("in 3 months").
+fn says_monthly(s: &str) -> bool {
+    !s.starts_with("in ")
+        && s.split([' ', ','])
+            .any(|w| matches!(w, "month" | "months" | "monthly" | "quarter" | "quarterly"))
+}
+
+/// `1st`, `15th`, `22`, `first`, `last`: which one (-1 = the last).
+fn ordinal(word: &str) -> Option<i8> {
+    match word {
+        "first" => return Some(1),
+        "second" => return Some(2),
+        "third" => return Some(3),
+        "fourth" => return Some(4),
+        "fifth" => return Some(5),
+        "last" | "final" => return Some(-1),
+        _ => {}
+    }
+    let digits = word.trim_end_matches(|c: char| c.is_ascii_alphabetic());
+    if digits.is_empty()
+        || !digits.chars().all(|c| c.is_ascii_digit())
+        || !matches!(&word[digits.len()..], "" | "st" | "nd" | "rd" | "th")
+    {
+        return None;
+    }
+    let n: u32 = digits.parse().ok()?;
+    i8::try_from(n.min(99)).ok()
+}
+
+/// `two` … `twelve`, for "every three months".
+fn small_number(word: &str) -> Option<u32> {
+    if let Ok(n) = word.parse() {
+        return Some(n);
+    }
+    [
+        "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten", "eleven",
+        "twelve",
+    ]
+    .iter()
+    .position(|w| *w == word)
+    .map(|i| i as u32 + 1)
+}
+
+/// A monthly routine, or `None` when the words aren't about months at all:
+/// "every month on the 1st at 09:00", "on the 1st of every month at 9am",
+/// "monthly on day 15 at 9:00", "every last friday of the month at 16:00",
+/// "every 3 months on the 15th at 09:00 starting january", "quarterly on
+/// the 1st at 9:00" (quarterly keeps to calendar quarters: January, April,
+/// July and October).
+fn parse_monthly<Tz: TimeZone>(
+    s: &str,
+    tz: &Tz,
+    now: i64,
+) -> Option<Result<(Repeat, i64), String>> {
+    says_monthly(s).then(|| read_monthly(s, tz, now))
+}
+
+fn read_monthly<Tz: TimeZone>(s: &str, tz: &Tz, now: i64) -> Result<(Repeat, i64), String> {
+    let mut words: Vec<&str> = s
+        .split([' ', ',', '(', ')'])
+        .filter(|w| !w.is_empty())
+        .collect();
+
+    // "starting january", "from march 2027", "beginning in april": the month
+    // its first run is in, wherever it is said.
+    let mut start: Option<(u32, Option<i32>)> = None;
+    let mut i = 0;
+    while i < words.len() {
+        if matches!(words[i], "starting" | "from" | "beginning") {
+            let at = i + 1 + usize::from(words.get(i + 1) == Some(&"in"));
+            if let Some(m) = words.get(at).and_then(|w| month_name(w)) {
+                let year = words
+                    .get(at + 1)
+                    .filter(|w| w.len() == 4)
+                    .and_then(|w| w.parse::<i32>().ok());
+                start = Some((m, year));
+                words.drain(i..=at + usize::from(year.is_some()));
+                continue;
+            }
+        }
+        i += 1;
+    }
+
+    // The time: "at 9:00" / "at 9 am" anywhere, else a clock at the end
+    // ("9am", "17:00"); a bare "15" at the end is a day, not 15:00.
+    let mut time: Option<(u32, u32)> = None;
+    for i in (0..words.len()).rev() {
+        if words[i] != "at" {
+            continue;
+        }
+        for take in [2, 1] {
+            let end = i + 1 + take;
+            if end <= words.len() {
+                if let Some(t) = clock(&words[i + 1..end].join(" ")) {
+                    time = Some(t);
+                    words.drain(i..end);
+                    break;
+                }
+            }
+        }
+        if time.is_some() {
+            break;
+        }
+    }
+    if time.is_none() {
+        for take in [2, 1] {
+            if words.len() >= take {
+                let tail = words[words.len() - take..].join(" ");
+                let clockish = tail.contains(':')
+                    || tail.ends_with("am")
+                    || tail.ends_with("pm")
+                    || tail == "noon"
+                    || tail == "midnight";
+                if let Some(t) = clock(&tail).filter(|_| clockish) {
+                    time = Some(t);
+                    words.truncate(words.len() - take);
+                    break;
+                }
+            }
+        }
+    }
+    let Some((hour, minute)) = time else {
+        return Err(
+            "Give the routine a time of day, e.g. \"every month on the 1st at 9:00\".".into(),
+        );
+    };
+
+    let mut months: Option<u32> = None;
+    let mut quarterly = false;
+    let mut nth: Option<i8> = None;
+    let mut day_of: Option<u8> = None;
+    let mut listed: Vec<u32> = Vec::new();
+    let mut k = 0;
+    while k < words.len() {
+        let word = words[k];
+        match word {
+            "on" | "the" | "of" | "each" | "a" | "an" | "and" | "in" | "per" | "at" | "once"
+            | "day" | "date" => {
+                // "day 15": the number after it is the date.
+                if word == "day" {
+                    if let Some(n) = words.get(k + 1).and_then(|w| w.parse::<u32>().ok()) {
+                        nth = Some(i8::try_from(n.min(99)).unwrap_or(99));
+                        k += 1;
+                    }
+                }
+            }
+            "month" | "months" | "monthly" => {
+                months.get_or_insert(1);
+            }
+            "quarter" | "quarterly" | "quarters" => {
+                months = Some(3);
+                quarterly = true;
+            }
+            "every" | "other" => {
+                let next = words.get(k + 1).copied();
+                let unit = words.get(k + 2).copied();
+                if word == "every" && next == Some("other") && unit == Some("month") {
+                    months = Some(2);
+                    k += 2;
+                } else if let (Some(n), Some("month" | "months")) =
+                    (next.and_then(small_number), unit)
+                {
+                    months = Some(n);
+                    k += 2;
+                }
+            }
+            "end" => nth = Some(-1),
+            "weekday" | "workday" | "business" | "working" => {
+                return Err("A working day of the month can't be scheduled; name a weekday (\"the last friday\") or a date (\"the 1st\").".into());
+            }
+            _ => {
+                if let Some(d) = weekday(word) {
+                    if day_of.is_some_and(|x| x != d) {
+                        return Err("Name one weekday for a monthly routine.".into());
+                    }
+                    day_of = Some(d);
+                } else if let Some(n) = ordinal(word) {
+                    if nth.is_some_and(|x| x != n) {
+                        return Err("Name one day of the month (two days are two routines).".into());
+                    }
+                    nth = Some(n);
+                } else if let Some(m) = month_name(word) {
+                    listed.push(m);
+                } else {
+                    return Err(format!(
+                        "\"{word}\" isn't something I can read in a monthly routine."
+                    ));
+                }
+            }
+        }
+        k += 1;
+    }
+
+    let months = months.unwrap_or(1);
+    if months == 0 {
+        return Err(
+            "Say how many months apart, e.g. \"every 3 months on the 15th at 9:00\".".into(),
+        );
+    }
+    if months > MAX_EVERY_MONTHS {
+        return Err("That's too far apart for a routine: every 12 months at most.".into());
+    }
+    let on = match (nth, day_of) {
+        (Some(n @ (1..=4 | -1)), Some(d)) => MonthDay::Weekday { nth: n, weekday: d },
+        (Some(5), Some(d)) => {
+            return Err(format!(
+                "Not every month has a fifth {}; say \"the last {}\".",
+                day_name(d),
+                WEEKDAYS[d as usize]
+            ))
+        }
+        (_, Some(d)) => {
+            return Err(format!(
+                "Say which {} of the month: the first, second, third, fourth or last.",
+                day_name(d)
+            ))
+        }
+        (Some(n @ (1..=31 | -1)), None) => MonthDay::Date { day: n },
+        (Some(_), None) => return Err("A month has at most 31 days.".into()),
+        (None, None) => {
+            return Err(
+                "Say which day of the month, e.g. \"every month on the 1st at 9:00\" or \"every month on the last friday at 16:00\"."
+                    .into(),
+            )
+        }
+    };
+
+    let unreadable = || "The clock is unreadable.".to_string();
+    let here = month_index(local(tz, now).ok_or_else(unreadable)?.date_naive());
+    let step = months as i32;
+    // The months it runs in, named ("(jan, apr, jul and oct)", as `describe`
+    // writes them): they must be `months` apart. Quarterly with none named
+    // is the calendar's quarters.
+    if let Some(&first) = listed.first() {
+        if months > 1
+            && listed
+                .iter()
+                .any(|m| (*m as i32 - first as i32) % step != 0)
+        {
+            return Err(format!("Those months aren't {months} months apart."));
+        }
+    }
+    let phase = listed
+        .first()
+        .copied()
+        .or(quarterly.then_some(0))
+        .map(|m| here - here.rem_euclid(12) + m as i32);
+    let first = match (start, phase) {
+        (_, _) if months == 1 => next_monthly(tz, 1, &on, hour, minute, None, now),
+        // "starting january": its first run is in that month (this one, if
+        // it's this month), however many months off.
+        (Some((m, year)), _) => {
+            let mut begin = match year {
+                Some(y) => y * 12 + m as i32,
+                None => here + (m as i32 - here.rem_euclid(12)).rem_euclid(12),
+            };
+            // A month gone by keeps its step: "from march 2025" in step from then.
+            if begin < here {
+                begin += (here - begin + step - 1) / step * step;
+            }
+            let after = if begin > here {
+                let first_day =
+                    month_day(begin, &MonthDay::Date { day: 1 }).ok_or_else(unreadable)?;
+                resolve(tz, first_day, 0, 0).ok_or_else(unreadable)? - 1
+            } else {
+                now
+            };
+            next_monthly(tz, months, &on, hour, minute, Some(begin), after.max(now))
+        }
+        (None, Some(phase)) => next_monthly(tz, months, &on, hour, minute, Some(phase), now),
+        // No month named: the first is the next one, and the step counts from it.
+        (None, None) => next_monthly(tz, 1, &on, hour, minute, None, now),
+    }
+    .ok_or_else(|| "That time doesn't exist.".to_string())?;
+    let from = (months > 1)
+        .then(|| local(tz, first).map(|t| month_index(t.date_naive())))
+        .flatten();
+    Ok((
+        Repeat::Monthly {
+            months,
+            on,
+            hour,
+            minute,
+            from,
+        },
+        first,
+    ))
+}
+
+/// "Friday".
+fn day_name(d: u8) -> String {
+    let n = WEEKDAYS[d as usize % 7];
+    n[..1].to_uppercase() + &n[1..]
 }
 
 fn parse_once<Tz: TimeZone>(s: &str, tz: &Tz, now: i64) -> Result<i64, String> {
@@ -503,6 +934,82 @@ pub fn describe(repeat: &Repeat) -> String {
                 }
             };
             format!("every {named} at {at}")
+        }
+        Repeat::Monthly {
+            months,
+            on,
+            hour,
+            minute,
+            from,
+        } => {
+            let every = match months {
+                0 | 1 => "every month".to_string(),
+                n => format!("every {n} months"),
+            };
+            // Which months, when it isn't all of them: "(Jan, Apr, Jul and Oct)".
+            let which = match (from, *months) {
+                (Some(from), n) if n > 1 && MAX_EVERY_MONTHS.is_multiple_of(n) => {
+                    // In the calendar's order.
+                    let mut in_year: Vec<usize> = (0..12 / n)
+                        .map(|i| (from + (i * n) as i32).rem_euclid(12) as usize)
+                        .collect();
+                    in_year.sort_unstable();
+                    let names: Vec<String> = in_year
+                        .into_iter()
+                        .map(|m| MONTHS[m][..1].to_uppercase() + &MONTHS[m][1..3])
+                        .collect();
+                    match names.split_last() {
+                        Some((last, [])) => format!(" ({last})"),
+                        Some((last, rest)) => format!(" ({} and {last})", rest.join(", ")),
+                        None => String::new(),
+                    }
+                }
+                (Some(from), n) if n > 1 => {
+                    let m = MONTHS[from.rem_euclid(12) as usize];
+                    format!(
+                        ", from {}{} {}",
+                        m[..1].to_uppercase(),
+                        &m[1..3],
+                        from.div_euclid(12)
+                    )
+                }
+                _ => String::new(),
+            };
+            format!(
+                "{every} on {} at {}{which}",
+                describe_month_day(on),
+                clock_text(*hour, *minute)
+            )
+        }
+    }
+}
+
+/// "1st", "22nd", "13th".
+pub fn ordinal_text(n: u32) -> String {
+    let suffix = match (n % 10, n % 100) {
+        (_, 11..=13) => "th",
+        (1, _) => "st",
+        (2, _) => "nd",
+        (3, _) => "rd",
+        _ => "th",
+    };
+    format!("{n}{suffix}")
+}
+
+/// "the 1st", "the last day", "the second Tuesday", "the last Friday".
+fn describe_month_day(on: &MonthDay) -> String {
+    match *on {
+        MonthDay::Date { day } if day < 0 => "the last day".to_string(),
+        MonthDay::Date { day } => format!("the {}", ordinal_text(day.max(1) as u32)),
+        MonthDay::Weekday { nth, weekday } => {
+            let which = match nth {
+                1 => "first",
+                2 => "second",
+                3 => "third",
+                4 => "fourth",
+                _ => "last",
+            };
+            format!("the {which} {}", day_name(weekday))
         }
     }
 }
@@ -1350,7 +1857,7 @@ mod tests {
     /// US Eastern for 2026, by hand (chrono has no tz database here):
     /// EDT (UTC-4) from Sun 8 Mar 02:00 local to Sun 1 Nov 02:00 local.
     #[derive(Debug, Clone, Copy)]
-    struct Eastern;
+    pub(super) struct Eastern;
 
     fn est() -> FixedOffset {
         FixedOffset::west_opt(5 * 3600).unwrap()
@@ -1403,10 +1910,10 @@ mod tests {
         }
     }
 
-    fn at(y: i32, mo: u32, d: u32, h: u32, mi: u32) -> i64 {
+    pub(super) fn at(y: i32, mo: u32, d: u32, h: u32, mi: u32) -> i64 {
         resolve(&Eastern, NaiveDate::from_ymd_opt(y, mo, d).unwrap(), h, mi).unwrap()
     }
-    fn show(ms: i64) -> String {
+    pub(super) fn show(ms: i64) -> String {
         Eastern
             .timestamp_millis_opt(ms)
             .unwrap()
@@ -1414,7 +1921,7 @@ mod tests {
             .to_string()
     }
     /// Tue 3 Nov 2026, 15:00 Eastern.
-    fn now() -> i64 {
+    pub(super) fn now() -> i64 {
         at(2026, 11, 3, 15, 0)
     }
     fn once(when: &str) -> String {
@@ -2041,6 +2548,15 @@ mod tests {
                 hour: u32,
                 minute: u32,
             },
+            Monthly {
+                months: u32,
+                on: MonthDay,
+                hour: u32,
+                minute: u32,
+                /// The month its first run is in, 1 to 12.
+                #[serde(default)]
+                start: Option<u32>,
+            },
         }
         #[derive(serde::Deserialize)]
         struct Case {
@@ -2079,6 +2595,31 @@ mod tests {
                     let d = NaiveDate::parse_from_str(&date, "%Y-%m-%d").unwrap();
                     let want = resolve(&Eastern, d, hour, minute).unwrap();
                     assert_eq!(show(next_at), show(want), "{}", case.phrase);
+                }
+                When::Monthly {
+                    months,
+                    on,
+                    hour,
+                    minute,
+                    start,
+                } => {
+                    let Some(Repeat::Monthly {
+                        months: m,
+                        on: o,
+                        hour: h,
+                        minute: mi,
+                        from,
+                    }) = repeat
+                    else {
+                        panic!("{} isn't monthly: {repeat:?}", case.phrase);
+                    };
+                    assert_eq!((m, o, h, mi), (months, on, hour, minute), "{}", case.phrase);
+                    // Its first run is in the month the picker named.
+                    if let Some(start) = start {
+                        assert_eq!(from.map(|f| f.rem_euclid(12) + 1), Some(start as i32));
+                        let first = Eastern.timestamp_millis_opt(next_at).unwrap();
+                        assert_eq!(first.month(), start, "{}", case.phrase);
+                    }
                 }
             }
         }
@@ -2297,3 +2838,9 @@ mod tests {
         assert!(!serde_json::to_string(&agent).unwrap().contains("checkIns"));
     }
 }
+
+/// Monthly routines: the grammar, the next-run maths across month lengths
+/// and DST, and what they are called.
+#[cfg(test)]
+#[path = "schedule_monthly_tests.rs"]
+mod monthly_tests;

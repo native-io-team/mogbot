@@ -20,6 +20,26 @@ const tomorrowAt = (hour: number, minute = 0) => {
   return d.getTime();
 };
 
+/** The last Friday of the month `ahead` months from now, at a local time. */
+const lastFridayAt = (ahead: number, hour: number, minute = 0) => {
+  const d = new Date(now);
+  d.setDate(1);
+  d.setMonth(d.getMonth() + ahead + 1, 0);
+  d.setDate(d.getDate() - ((d.getDay() - 5 + 7) % 7));
+  d.setHours(hour, minute, 0, 0);
+  return d.getTime();
+};
+
+/** A monthly routine, as `schedule::Repeat::Monthly` stores one. */
+const MONTHLY_CLOSE = {
+  id: 'ci4',
+  note: 'Close the month: chase anything unpaid and send me the totals.',
+  repeat: { kind: 'monthly', months: 1, on: { nth: -1, weekday: 5 }, hour: 16, minute: 0 },
+  nextAt: lastFridayAt(now < lastFridayAt(0, 16) ? 0 : 1, 16),
+  createdAt: now - 40 * 24 * 60 * 60_000,
+  paused: false,
+};
+
 /** The way into import while it's undecided: the one-time card at the top of the Chief's chat. */
 const IMPORT_STARTER = '[data-import-choice-bring]';
 
@@ -1004,6 +1024,21 @@ const schedulePreview = (args: Record<string, unknown>) => {
   if (once) {
     const [, y, m, d, h, min] = once.map(Number);
     return { nextAt: new Date(y, m - 1, d, h, min).getTime(), repeat: null };
+  }
+  // "every 3 months on the last friday at 09:00": the last Friday of next month, as a stand-in.
+  const monthly = /^every (?:month|(\d+) months) on (.+) at (\d{2}):(\d{2})/.exec(when);
+  if (monthly) {
+    const months = Number(monthly[1] ?? 1);
+    const [hour, minute] = [Number(monthly[3]), Number(monthly[4])];
+    const on = monthly[2].includes('last friday')
+      ? { nth: -1, weekday: 5 }
+      : monthly[2].includes('last day')
+        ? { day: -1 }
+        : { day: parseInt(monthly[2].replace(/\D/g, ''), 10) || 1 };
+    return {
+      nextAt: lastFridayAt(1, hour, minute),
+      repeat: { kind: 'monthly', months, on, hour, minute },
+    };
   }
   if (when.startsWith('every'))
     return {
@@ -2168,6 +2203,31 @@ export const agentsScenarios: Scenario[] = [
     },
   },
   {
+    id: 'agents-schedule-monthly',
+    title: 'Agents — a monthly routine in the schedule popover',
+    looksRightWhen:
+      'Finance’s popover lists only a monthly routine, “Close the month: chase anything unpaid…”, with “Every month on the last Friday at 4:00 PM” and its Next line. “New routine” opens the picker with one more When chip, Monthly, pressed; under it two chips, Every month / Every 3 months (pressed), then one sentence “On the [last ▾] [Friday ▾] of the month” in two compact selects, then At 09:00. The echo reads “Every 3 months on the last Friday at 9:00 AM — Send the quarterly numbers” with the first run under it. Calm: nothing else appears.',
+    requires: '.agent-schedule__monthday',
+    openSelector: AGENTS_TAB,
+    steps: [
+      { click: '[data-agent-id="finance"]' },
+      { click: '.agent-chat__scheduled' },
+      { click: '.agent-schedule__add button' },
+      { click: '.agent-schedule__field .agent-schedule__chips:first-of-type button:nth-child(4)' },
+      { click: '.agent-schedule__chips[aria-label="How many months"] button:nth-child(2)' },
+      { select: '[aria-label="Day or weekday"]', value: '5' },
+      { select: '[aria-label="Which"]', value: '-1' },
+      { fill: '#agent-schedule-what', value: 'Send the quarterly numbers' },
+    ],
+    commands: {
+      agents_overview: overview(
+        TEAM.map((a) => (a.id === 'finance' ? { ...a, checkIns: [MONTHLY_CLOSE] } : a))
+      ),
+      agents_messages: messagesFor,
+      agents_schedule_preview: schedulePreview,
+    },
+  },
+  {
     id: 'agents-model-menu',
     title: 'Agents — model menu, with what routines run on',
     looksRightWhen:
@@ -2291,7 +2351,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-when-routines',
     title: 'Agents — “When…” routines in the schedule popover',
     looksRightWhen:
-      'Lead Gen’s “4 scheduled” opens a popover listing four “When…” rows: “When someone mentions you on GitHub” with what it does under it, “Checks every 10 min · checked 4 min ago · last found 2 …” and its week in tokens; “When a new email from billing@northwind.com” with “46 checks · $0.19 at API prices this week” (one cost line, from the routine’s usage: checks are not turns); the assigned-on-GitHub one saying it covers the newest 300 of 412; and the paused folder one, muted and last, saying it paused itself after 5 failed checks and why. Below, after “New routine”, “At a time / When…” with When… pressed and the composer: five plain sources (Linear among them, since Linear is set up in Claude Code itself, not only as a claude.ai connector), each with how it’s checked and its cost; a “Then what?” field; Check every 5/10/30 min/every hour; and the cost sentence. Readable in light and dark.',
+      'Lead Gen’s  opens a popover listing four “When…” rows: “When someone mentions you on GitHub” with what it does under it, “Checks every 10 min · checked 4 min ago · last found 2 …” and its week in tokens; “When a new email from billing@northwind.com” with “46 checks · $0.19 at API prices this week” (one cost line, from the routine’s usage: checks are not turns); the assigned-on-GitHub one saying it covers the newest 300 of 412; and the paused folder one, muted and last, saying it paused itself after 5 failed checks and why. Below, after “New routine”, “At a time / When…” with When… pressed and the composer: five plain sources (Linear among them, since Linear is set up in Claude Code itself, not only as a claude.ai connector), each with how it’s checked and its cost; a “Then what?” field; Check every 5/10/30 min/every hour; and the cost sentence. Readable in light and dark.',
     requires: '.agent-when__sources',
     openSelector: AGENTS_TAB,
     steps: [

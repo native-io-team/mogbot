@@ -27,7 +27,18 @@ import { WebSocket } from 'ws';
 import { createMockServer } from '../dev/mock-server';
 import { until, provenBy } from './helpers';
 import { chiefRequest, freeColor, suggestAgentName, templateColor } from '../src/lib/newAgent';
-import { newPicker, onceDays, pickerOf, toggleDay, whenOf } from '../src/lib/routine';
+import {
+  CADENCES,
+  monthsLabel,
+  monthWhichChoices,
+  newPicker,
+  onceDays,
+  pickerOf,
+  setMonthKind,
+  setMonthWhich,
+  toggleDay,
+  whenOf,
+} from '../src/lib/routine';
 import {
   describeShare,
   fromLinkParams,
@@ -156,6 +167,77 @@ describe('the routine picker', () => {
       false
     );
     expect(whenOf({ ...newPicker(now), cadence: 'weekly', days: [] })).toBeNull();
+  });
+
+  it('makes a monthly routine: a date or a weekday, every month or every few', () => {
+    const base = { ...newPicker(now), cadence: 'monthly' as const };
+    expect(CADENCES.map((c) => c.label)).toEqual([
+      'Every day',
+      'Weekdays',
+      'Weekly',
+      'Monthly',
+      'Every few hours',
+      'Once',
+    ]);
+    // The 1st, every month, by default.
+    expect(routineWhenPhrase(whenOf(base)!)).toBe('every month on the 1st at 09:00');
+    expect(routineEcho(whenOf(base)!, 'Budget', now)).toMatch(
+      /^Every month on the 1st at 9:00\s?AM — Budget$/
+    );
+    // The 2nd becomes the second Tuesday; the 20th, which no weekday has, the first.
+    expect(setMonthKind({ day: 2 }, 2)).toEqual({ nth: 2, weekday: 2 });
+    expect(setMonthKind({ day: 20 }, 5)).toEqual({ nth: 1, weekday: 5 });
+    expect(setMonthKind({ day: -1 }, 5)).toEqual({ nth: -1, weekday: 5 });
+    expect(setMonthKind({ nth: -1, weekday: 5 }, 'day')).toEqual({ day: -1 });
+    expect(setMonthWhich({ nth: 1, weekday: 5 }, 3)).toEqual({ nth: 3, weekday: 5 });
+    expect(monthWhichChoices('day')).toHaveLength(32);
+    expect(monthWhichChoices('day').at(-1)).toEqual({ value: -1, label: 'last' });
+    expect(monthWhichChoices(1).map((c) => c.label)).toEqual([
+      'first',
+      'second',
+      'third',
+      'fourth',
+      'last',
+    ]);
+    const lastFriday = { ...base, months: 3, monthDay: setMonthKind({ day: -1 }, 5), hour: 16 };
+    expect(routineWhenPhrase(whenOf(lastFriday)!)).toBe(
+      'every 3 months on the last friday at 16:00'
+    );
+    expect(describeRoutineWhen(whenOf(lastFriday)!)).toMatch(
+      /^Every 3 months on the last Friday at 4:00\s?PM$/
+    );
+    expect(monthsLabel(1)).toBe('Every month');
+    expect(monthsLabel(3)).toBe('Every 3 months');
+  });
+
+  it('opens a monthly one on its own months, so an edit keeps them', () => {
+    const quarterly = {
+      repeat: {
+        kind: 'monthly' as const,
+        months: 3,
+        on: { day: 15 },
+        ...at9,
+        from: 2027 * 12,
+      },
+      nextAt: new Date(2027, 0, 15, 9, 0).getTime(),
+    };
+    const picker = pickerOf(routineWhenOf(quarterly), now);
+    expect(picker).toMatchObject({
+      cadence: 'monthly',
+      months: 3,
+      monthDay: { day: 15 },
+      monthStart: 1,
+    });
+    expect(routineWhenPhrase(whenOf(picker)!)).toBe(
+      'every 3 months on the 15th at 09:00 starting january'
+    );
+    // Another day keeps the months; every month needs none.
+    expect(routineWhenPhrase(whenOf({ ...picker, monthDay: { day: 1 } })!)).toBe(
+      'every 3 months on the 1st at 09:00 starting january'
+    );
+    expect(routineWhenPhrase(whenOf({ ...picker, months: 1 })!)).toBe(
+      'every month on the 15th at 09:00'
+    );
   });
 });
 
@@ -405,6 +487,9 @@ describe('starting things on the mock Mac', () => {
       { ...base, cadence: 'daily' as const },
       { ...base, cadence: 'weekly' as const, days: [1, 4] },
       { ...base, cadence: 'hours' as const, minutes: 240 },
+      { ...base, cadence: 'monthly' as const },
+      { ...base, cadence: 'monthly' as const, monthDay: { nth: -1, weekday: 5 } },
+      { ...base, cadence: 'monthly' as const, months: 3, monthDay: { day: 31 }, monthStart: 1 },
     ]) {
       const when = routineWhenPhrase(whenOf(s)!);
       const preview = await t.request('agents.schedule.preview', { when });

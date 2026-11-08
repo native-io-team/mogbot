@@ -39,6 +39,7 @@ import {
   type BlobRef,
   type CheckIn,
   type ProjectSummary,
+  type MonthDay,
   type Repeat,
   type RoomView,
   type SearchHit,
@@ -4389,6 +4390,55 @@ function nextDaily(days: number[], hour: number, minute: number, from: number): 
   return d.getTime();
 }
 
+const MONTH_WORDS = [
+  'january',
+  'february',
+  'march',
+  'april',
+  'may',
+  'june',
+  'july',
+  'august',
+  'september',
+  'october',
+  'november',
+  'december',
+];
+const NTH: Record<string, number> = { first: 1, second: 2, third: 3, fourth: 4, last: -1 };
+
+/** The date `on` names in a month (`schedule::month_day`): a date it lacks is its last day. */
+function monthDayIn(year: number, month0: number, on: MonthDay): Date {
+  const last = new Date(year, month0 + 1, 0).getDate();
+  if ('day' in on) return new Date(year, month0, on.day < 0 ? last : Math.min(on.day, last));
+  if (on.nth < 0) {
+    const end = new Date(year, month0, last);
+    return new Date(year, month0, last - ((end.getDay() - on.weekday + 7) % 7));
+  }
+  const first = new Date(year, month0, 1).getDay();
+  return new Date(year, month0, 1 + ((on.weekday - first + 7) % 7) + 7 * (on.nth - 1));
+}
+
+/** `schedule::next_monthly`, on this machine's clock: the first run after `from`. */
+function nextMonthly(
+  months: number,
+  on: MonthDay,
+  hour: number,
+  minute: number,
+  from: number,
+  start?: number
+): number {
+  const now = new Date(from);
+  let index = now.getFullYear() * 12 + now.getMonth();
+  if (start !== undefined) index += (start - now.getMonth() + 12) % 12;
+  const step = start === undefined ? 1 : months;
+  for (let i = 0; i < 3; i++, index += step) {
+    const d = monthDayIn(Math.floor(index / 12), index % 12, on);
+    d.setHours(hour, minute, 0, 0);
+    if (d.getTime() > from) return d.getTime();
+  }
+  return from;
+}
+
 function clock(text: string): [number, number] | null {
   const m = /^(\d{1,2})(?::(\d{2}))?\s*(am|pm)?$/.exec(text.trim());
   if (!m) return null;
@@ -4434,6 +4484,29 @@ function parseWhen(
     return {
       nextAt: nextDaily(days, t[0], t[1], now),
       repeat: { kind: 'days', days, hour: t[0], minute: t[1] },
+    };
+  }
+  // "every 3 months on the last friday at 16:00 starting january", as the picker writes it.
+  m =
+    /^every (month|(\d+) months) on the (?:(\d+)(?:st|nd|rd|th)|(last) day|(first|second|third|fourth|last) ([a-z]+day)) at (\d{1,2}):(\d{2})(?: starting ([a-z]+))?$/.exec(
+      s
+    );
+  if (m) {
+    const months = m[2] ? Number(m[2]) : 1;
+    if (months > 12) return fail('That’s too far apart for a routine: every 12 months at most.');
+    const on: MonthDay = m[6]
+      ? { nth: NTH[m[5]], weekday: DAYS.indexOf(m[6]) }
+      : { day: m[4] ? -1 : Number(m[3]) };
+    if ('day' in on && on.day > 31) return fail('A month has at most 31 days.');
+    if ('weekday' in on && on.weekday === -1) return fail(`"${m[6]}" isn't a day I know.`);
+    const start = m[9] ? MONTH_WORDS.indexOf(m[9]) : undefined;
+    const [hour, minute] = [Number(m[7]), Number(m[8])];
+    const nextAt = nextMonthly(months, on, hour, minute, now, start === -1 ? undefined : start);
+    const first = new Date(nextAt);
+    const from = months > 1 ? first.getFullYear() * 12 + first.getMonth() : undefined;
+    return {
+      nextAt,
+      repeat: { kind: 'monthly', months, on, hour, minute, ...(from !== undefined && { from }) },
     };
   }
   // "2026-11-20 09:00", local: a once on a date, as the picker writes it.
