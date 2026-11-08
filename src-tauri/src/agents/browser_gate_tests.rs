@@ -1021,3 +1021,106 @@ fn a_batch_is_outward_only_for_its_send_and_its_card_knows_what_it_typed() {
         Some("textbox \"Message Body\"")
     );
 }
+
+/// Observed (2026-11-08), fictionalised: a read-only search in a chat web
+/// app, clicked by position, typed and sent with Return, raised "Goes out
+/// under your name" at Full send and expired unanswered. Now the agent is
+/// told to name the box first; a labelled search box runs, a labelled
+/// message box still asks, and the same steps sent again reach the card.
+#[test]
+fn enter_after_a_click_by_position_asks_the_agent_to_name_the_box() {
+    let a = agent();
+    let mut p = Page::default();
+    p.tabs
+        .insert(3, "https://chat.example.com/client/T1/C2".into());
+    let by_position = json!({ "actions": [
+        { "name": "computer", "input": { "action": "left_click", "coordinate": [700, 20], "tabId": 3 } },
+        { "name": "computer", "input": { "action": "type", "text": "Northwind", "tabId": 3 } },
+        { "name": "computer", "input": { "action": "key", "text": "Return", "tabId": 3 } },
+        { "name": "computer", "input": { "action": "screenshot", "tabId": 3 } }
+    ]});
+    for (level, exact) in [
+        (Level::FullSend, true),
+        (Level::GoHard, false),
+        (Level::GoHard, true),
+        (Level::Judgement, false),
+    ] {
+        assert!(
+            only_unlabelled_enter(level, &a, exact, "browser_batch", &by_position, &p),
+            "{level:?} {exact}"
+        );
+    }
+    // A lone Enter with nothing clicked: the same.
+    let enter = json!({ "action": "key", "text": "Return", "tabId": 3 });
+    assert!(only_unlabelled_enter(
+        Level::GoHard,
+        &a,
+        false,
+        "computer",
+        &enter,
+        &p
+    ));
+    // At "Check with me often" the click asks anyway: not this case.
+    assert!(!only_unlabelled_enter(
+        Level::Often,
+        &a,
+        false,
+        "browser_batch",
+        &by_position,
+        &p
+    ));
+
+    // Named by ref: a search box runs, a message box is a real send.
+    on_answer(
+        &mut p,
+        "combobox \"Search Northwind\" [ref_1]\ntextbox \"Message #general\" [ref_2]",
+    );
+    let named = |r: &str| {
+        json!({ "actions": [
+            { "name": "computer", "input": { "action": "left_click", "ref": r, "tabId": 3 } },
+            { "name": "computer", "input": { "action": "type", "text": "Northwind", "tabId": 3 } },
+            { "name": "computer", "input": { "action": "key", "text": "Return", "tabId": 3 } }
+        ]})
+    };
+    assert_eq!(
+        gate_with(
+            true,
+            Level::GoHard,
+            &a,
+            &t("browser_batch"),
+            &named("ref_1"),
+            false,
+            &p
+        ),
+        Gate::Allow
+    );
+    assert!(outward_step_on(&a, "browser_batch", &named("ref_2"), &p));
+    assert!(!only_unlabelled_enter(
+        Level::GoHard,
+        &a,
+        true,
+        "browser_batch",
+        &named("ref_2"),
+        &p
+    ));
+    // A send click in the same batch is its own reason to ask.
+    let mut q = p.clone();
+    on_answer(&mut q, "button \"Send now\" [ref_9]");
+    let with_send = json!({ "actions": [
+        { "name": "computer", "input": { "action": "left_click", "ref": "ref_9", "tabId": 3 } },
+        { "name": "computer", "input": { "action": "key", "text": "Return", "tabId": 3 } }
+    ]});
+    assert!(!only_unlabelled_enter(
+        Level::GoHard,
+        &a,
+        false,
+        "browser_batch",
+        &with_send,
+        &q
+    ));
+
+    // Redirected once; the same steps again go to the card.
+    let id = "enter-redirect-test";
+    assert!(first_try(id, &by_position));
+    assert!(!first_try(id, &by_position));
+}

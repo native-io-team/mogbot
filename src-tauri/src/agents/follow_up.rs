@@ -224,6 +224,21 @@ const NOT_NOW: &[&str] = &[
     "hold off",
     "leave it",
     "stop",
+    // An offer waiting on the user's go-ahead. Observed (2026-11-08): "Say
+    // the word and I'll run it next." became a follow-up, and the agent ran
+    // a check nobody had said yes to.
+    "say the word",
+    "your word",
+    "your go",
+    "your ok",
+    "you'd like",
+    "you want",
+    "want me to",
+    "happy to",
+    "say so",
+    "say yes",
+    "give me the",
+    "if so",
 ];
 
 /// The sentence of `text` that promises work it then didn't start, from the

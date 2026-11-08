@@ -13,13 +13,32 @@ fn progress_lines_can_fold_and_content_cannot() {
     for line in [
         "Which page should I start with?",
         "Waiting on you: allow the push on the card.",
-        "The build failed on Hero.tsx.",
+        "The build failed on Hero.tsx, so you'll need to rerun it once the key is back.",
+        "Deploying needs your word.",
         "Done. See [the PR](https://github.com/acme/site/pull/4).",
+        "```\nnpm test\n```",
         "- one\n- two",
         "First paragraph.\n\nSecond paragraph.",
         &"x".repeat(MAX_CHARS + 1),
     ] {
         assert!(!foldable(line), "{line}");
+    }
+}
+
+/// Observed (2026-11-08), fictionalised: a debugging turn wrote a line before
+/// each step, naming files in inline code, running long, and mentioning the
+/// error it chased. Each reached the chat as its own message.
+#[test]
+fn debugging_steps_with_inline_code_and_setbacks_fold() {
+    for line in [
+        "The handler looks clean, so I'll check the failing test in `orders.test.ts`, which also fails on main.",
+        "That failure is a date-dependent assertion, not the real error. The server hides the message, so I'll trace `Orders.save`.",
+        "No production credentials are on this Mac, so I can't read the logs. I'll read the code paths that only run when rows are added.",
+        "Found it. `totals()` reads the whole events table, and `snapshot` calls it once per day for up to a month, so one refresh with a week-old row does about eight full scans. Checking how the earlier fix tested read counts, so I can test mine the same way:",
+        "Running the typecheck and the order tests:",
+    ] {
+        assert!(line.chars().count() <= MAX_CHARS, "{line}");
+        assert!(foldable(line), "{line}");
     }
 }
 

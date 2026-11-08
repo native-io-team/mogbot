@@ -2017,6 +2017,13 @@ place the independence level changes an approval, and only for the browser:
   through except on those pages: **an accepted gap**, as is a navigation
   carrying data in its own URL to a site the agent chose. At "Check with me
   often" every interaction asks.
+- **Enter into a box nobody named goes back to the agent first**
+  (`browser_gate::only_unlabelled_enter`): when the only thing a call would
+  ask about is Enter after a click by position (or no click), the agent is
+  told to find the box and click it by ref, so a search runs on its own and a
+  message asks with its exact words. The same steps sent again reach the
+  card. A search typed into a chat app's search box by position had raised
+  "Goes out under your name" at Full send, expired, and stopped the check.
 - **Always a card** below Go hard: `javascript_tool`, `file_upload`,
   `upload_image`, `shortcuts_execute`, a GIF export and any tool this build
   doesn't know.
@@ -5169,7 +5176,10 @@ nothing in their own `CLAUDE.md` touched.
   "Partway through"; the same turn's next `share_result` becomes its next
   version (`results::continue_checkpoint`), so a turn still ends on one card.
 - **Narration folds into the timeline.** A short reply (no question, link,
-  list, code or blocker; ≤240 chars) is held. If the turn writes again or
+  list, code block, wait on the user or setback told to them; one paragraph,
+  ≤420 chars) is held. Inline code and a setback the agent works past ("can't
+  read the logs here, so reading the code") don't stop it: a debugging turn
+  put seventeen such lines in the chat. If the turn writes again or
   calls a tool, it becomes a `note` step and its streamed draft is withdrawn
   (an empty draft event). If the turn ends on it, it is the reply; a turn
   that only narrated still ends on its last line. Nothing goes silent.

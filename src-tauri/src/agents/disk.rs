@@ -11,7 +11,9 @@
 //!   line. Below [`FLOOR_BYTES`], package installs and clones by agents ask
 //!   on a card at every level ([`floor_asks`], wired in `mcp::decide_inner`)
 //!   and the user gets one notification. Each is said once per crossing,
-//!   again only after space came back ([`REARM_BYTES`] above the line).
+//!   again only after space came back ([`REARM_BYTES`] above the line);
+//!   what was said is kept on disk ([`SAID_FILE`]), so relaunching the app
+//!   isn't a new crossing.
 //! - **Cleanup by default.** When an agent goes idle its home's regenerable
 //!   folders ([`REGENERABLE`]: `node_modules`, `.next`, `.turbo`, `target`)
 //!   untouched for [`PRUNE_AFTER`] ([`PRUNE_AFTER_LOW`] while disk is low)
@@ -250,11 +252,36 @@ fn card_line_for(free: Option<u64>) -> String {
 
 /* -------------------------------------------------------- crossings */
 
-/// What has been said for the current dip.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+/// What has been said for the current dip. Kept beside the agents
+/// ([`SAID_FILE`]) so a relaunch doesn't count as a new crossing. Observed
+/// (2026-11-08): the app was reopened six times in an afternoon with the
+/// disk just under the line, and the Chief's chat got the same low-disk
+/// line each time.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Serialize, serde::Deserialize)]
 pub struct Said {
+    #[serde(default)]
     pub low: bool,
+    #[serde(default)]
     pub floor: bool,
+}
+
+/// Where [`Said`] is kept, in the agents folder.
+pub const SAID_FILE: &str = "disk-said.json";
+
+/// [`step`] against what an earlier launch said, kept at `path`.
+pub fn step_kept(path: &Path, free: u64) -> Option<Crossing> {
+    let before: Said = std::fs::read(path)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default();
+    let mut said = before;
+    let crossing = step(&mut said, free);
+    if said != before {
+        if let Ok(json) = serde_json::to_vec(&said) {
+            let _ = store::write_atomic(path, &json);
+        }
+    }
+    crossing
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -296,17 +323,16 @@ pub fn chief_line(c: Crossing, free: u64) -> String {
     }
 }
 
-static SAID: Mutex<Said> = Mutex::new(Said {
-    low: false,
-    floor: false,
-});
-
 /// Read free space and say what a crossing needs: a quiet line in the
 /// Chief's chat, and at the floor one notification.
 fn check(app: &AppHandle) {
     let Some(free) = free_now() else { return };
-    let crossing = step(&mut SAID.lock().unwrap_or_else(|e| e.into_inner()), free);
-    let Some(crossing) = crossing else { return };
+    let Ok(root) = store::agents_root() else {
+        return;
+    };
+    let Some(crossing) = step_kept(&root.join(SAID_FILE), free) else {
+        return;
+    };
     tracing::warn!("[Agents] disk {crossing:?}: {} free", gb(free));
     let Some(chief) = store::list()
         .ok()
