@@ -59,6 +59,9 @@ const TIMEOUT_NOTE: &str = "Stopped after 3 hours. Send a message to pick it bac
 const THINKING: &str = "Thinking";
 /// A command's process ended but the engine never moved on (`work::pulse`).
 const HUNG_NOTE: &str = "Stopped: the command it was running had ended, but it never moved on. Send a message to pick it back up.";
+/// Its engine no longer had the conversation, so the turn started a new one
+/// with a recap of the chat (its memory is in its instructions either way).
+const FRESH_SESSION_NOTE: &str = "Its earlier conversation couldn't be found, so it started a new one with a recap of this chat.";
 /// How often a running turn is looked at for signs of life (`work::pulse`).
 const PULSE_EVERY: Duration = Duration::from_secs(15);
 /// How often what a running command printed is sent on, at most.
@@ -2637,6 +2640,18 @@ fn take_interrupt(agent_id: &str) -> bool {
     true
 }
 
+/// An interruption that came after the turn's reply was complete: nothing
+/// was cut off, so the next turn isn't told it was.
+fn forget_interrupt(agent_id: &str) {
+    if let Some(r) = RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get_mut(agent_id)
+    {
+        r.interrupt = false;
+    }
+}
+
 /// Forget what [`take_interrupt`] left for the next turn.
 fn clear_interrupted(agent_id: &str) {
     if let Some(r) = RUNTIMES
@@ -3589,6 +3604,19 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
         if let Some(copy) = &made {
             super::task::drop_if_unused(&app, &agent_id, copy).await;
         }
+        // A turn that finished without a word (or left helpers behind) ends
+        // on one line saying so, its timeline under it: never silence.
+        let left = super::turn_end::take(&agent_id);
+        if let (Some(left), Ok(Ended::Finished)) = (left, &result) {
+            if let Some(line) = super::turn_end::closing_line(left, showed_since(&agent_id, since))
+            {
+                if let Ok(line) =
+                    record_in_turn(&app, new_message(&agent_id, MessageKind::Note, line))
+                {
+                    super::work::anchor_on(&line);
+                }
+            }
+        }
         // The error line (below) is the last thing a failed turn leaves, so
         // its timeline hangs under that; anything else's is settled now.
         if result.is_ok() {
@@ -3873,6 +3901,23 @@ fn tell_couldnt_finish(app: &AppHandle, agent_id: &str, to: &AgentRef, why: &str
 /// The same for a reply that gave up instead of doing ("I have no Slack
 /// tool", "they'd need to say yes", plumbing in the user's words): its next
 /// turn is told what to do instead (`agency`).
+/// Whether the turn that began at `since` put something in front of the
+/// user other than notes: a reply, a result or change card, a card to
+/// answer, an error, a message it sent.
+fn showed_since(agent_id: &str, since: i64) -> bool {
+    store::messages(agent_id, 40)
+        .unwrap_or_default()
+        .iter()
+        .any(|m| m.ts >= since && shows_user(m.kind))
+}
+
+fn shows_user(kind: MessageKind) -> bool {
+    !matches!(
+        kind,
+        MessageKind::User | MessageKind::Note | MessageKind::FromAgent
+    )
+}
+
 fn leave_labels_only_note(agent_id: &str, user_said: &str, since: i64) {
     let replies: Vec<AgentMessage> = store::messages(agent_id, 40)
         .unwrap_or_default()
@@ -5032,6 +5077,8 @@ async fn run_turn(
 
     let mut lines = BufReader::new(stdout).lines();
     let mut saw_result = false;
+    // Whether that result really ended it, and the helpers still out (`turn_end`).
+    let mut turn_end = super::turn_end::TurnEnd::default();
     let mut said_anything = false;
     let mut result_error: Option<String> = None;
     // What the engine said along the way, for a turn that ends without a result.
@@ -5101,13 +5148,12 @@ async fn run_turn(
                 // running: alive, but not progress.
                 super::work::on_sign(agent_id, last_word, kind != Some("tool_progress"));
                 // A `result` can answer something queued ahead of the user's
-                // message (resumed after a Stop, Claude Code first answers the
-                // killed background task's notification, then the message):
-                // the model still talking means the turn isn't over, and the
-                // row that went idle at that `result` is working again.
-                if driver == Driver::ClaudePrint && saw_result && matches!(kind, Some("stream_event" | "assistant")) {
-                    drain_rest.as_mut().reset(tokio::time::Instant::now() + Duration::from_secs(3));
-                    if status_of(agent_id).state == "idle" {
+                // message, or a helper reporting back: anything it does after
+                // one means the turn isn't over until the next (`turn_end`),
+                // and the row that went idle at that `result` is working again.
+                if driver == Driver::ClaudePrint && turn_end.on_line(&value) {
+                    let now = status_of(agent_id);
+                    if now.state == "idle" || now.activity.as_deref().is_some_and(super::turn_end::is_waiting_line) {
                         set_status(app, agent_id, Status { state: "working", activity: None, since: Some(started), work: None, room: None });
                     }
                 }
@@ -5301,6 +5347,7 @@ async fn run_turn(
                         Step::Detail(text) => last_detail = Some(text),
                         Step::Done => {
                             saw_result = true;
+                            turn_end.on_done();
                             timing.mark_result();
                             // The turn's last word, if it was held back.
                             settle_narration(app, agent_id, narration.end(said_anything), &mut said_anything).await;
@@ -5308,9 +5355,20 @@ async fn run_turn(
                             if let Some(pid) = pid {
                                 note_engine_tree(agent_id, pid).await;
                             }
-                            // Its reply is complete: no "working" while the CLI exits.
-                            set_status(app, agent_id, Status::idle());
-                            drain_rest.as_mut().reset(tokio::time::Instant::now() + Duration::from_secs(3));
+                            // Its reply is complete: no "working" while the CLI
+                            // exits, unless helpers it started are still out.
+                            let helpers = turn_end.waiting_on();
+                            if helpers == 0 {
+                                set_status(app, agent_id, Status::idle());
+                            } else {
+                                set_status(app, agent_id, Status { state: "working", activity: Some(super::turn_end::waiting_line(helpers)), since: Some(started), work: None, room: None });
+                            }
+                            // Codex ends its turn once; only Claude Code's can reopen.
+                            let grace = match driver {
+                                Driver::ClaudePrint => turn_end.grace(),
+                                _ => Duration::from_secs(3),
+                            };
+                            drain_rest.as_mut().reset(tokio::time::Instant::now() + grace);
                         }
                     }
                 }
@@ -5328,8 +5386,17 @@ async fn run_turn(
                 exited = Some(status);
                 drain_rest.as_mut().reset(tokio::time::Instant::now() + Duration::from_secs(2));
             }
-            _ = &mut drain_rest, if exited.is_some() || saw_result => break,
-            _ = cancel.notified() => { stopped = Some(None); break; }
+            _ = &mut drain_rest, if exited.is_some() || turn_end.over() => break,
+            _ = cancel.notified() => {
+                // Its reply was complete and nothing is still out: a new
+                // message (or Stop) just ends the wait, not the turn's work.
+                if turn_end.over() && turn_end.waiting_on() == 0 {
+                    forget_interrupt(agent_id);
+                    break;
+                }
+                stopped = Some(None);
+                break;
+            }
             _ = &mut deadline => { stopped = Some(Some(TIMEOUT_NOTE)); break; }
             _ = peek_tick.tick() => {
                 if std::mem::take(&mut progress_dirty) {
@@ -5364,7 +5431,8 @@ async fn run_turn(
             _ = quiet_tick.tick() => {
                 let now = status_of(agent_id);
                 let tool_open = super::work::live(agent_id).is_some_and(|w| w.doing.is_some());
-                if now.state == "working" {
+                // Waiting on its helpers is quiet by design, not stuck.
+                if now.state == "working" && !turn_end.over() {
                     if let Some(line) = quiet_line(engine.label(), last_word, store::now_ms(), tool_open) {
                         if now.activity.as_deref() != Some(line.as_str()) {
                             set_status(app, agent_id, Status { state: "working", activity: Some(line), since: Some(started), work: None, room: None });
@@ -5460,6 +5528,12 @@ async fn run_turn(
     });
 
     if let Some(note) = stopped {
+        // Helpers it started went with it: said, so nobody waits on them.
+        if let Some(line) = super::turn_end::stopped_helpers_line(turn_end.waiting_on()) {
+            if !quiet {
+                let _ = record_in_turn(app, new_message(agent_id, MessageKind::Note, line));
+            }
+        }
         if note.is_none() && take_interrupt(agent_id) {
             // The app's own turn gave way: nothing was cut off for the next to hear.
             if quiet {
@@ -5506,7 +5580,11 @@ async fn run_turn(
             a.context = None;
         });
         // The new session starts blank. Hand it the conversation the user
-        // can see, so the agent doesn't greet them like a stranger.
+        // can see, so the agent doesn't greet them like a stranger, and say so.
+        let _ = record_in_turn(
+            app,
+            new_message(agent_id, MessageKind::Note, FRESH_SESSION_NOTE),
+        );
         let prompt = with_recap(agent_id, &prompt);
         return Box::pin(run_turn(app, agent_id, &prompt, routine, false, account)).await;
     }
@@ -5533,7 +5611,18 @@ async fn run_turn(
         return Err(CommandError::expected(text));
     }
     if !said_anything {
-        tracing::debug!("[Agents] {agent_id} finished a turn without a reply");
+        tracing::info!("[Agents] {agent_id} finished a turn without a reply");
+    }
+    // Never silent: the worker says so once the turn's cards are in, and
+    // names helpers that stopped with it (`turn_end`).
+    if !quiet {
+        super::turn_end::leave(
+            agent_id,
+            super::turn_end::Left {
+                silent: !said_anything,
+                helpers: turn_end.waiting_on(),
+            },
+        );
     }
     Ok(Ended::Finished)
 }
@@ -5626,6 +5715,24 @@ mod tests {
             outside: false,
             resume: 0,
             typed: None,
+        }
+    }
+
+    #[test]
+    fn only_notes_and_what_others_said_leave_a_turn_silent() {
+        for kind in [
+            MessageKind::Agent,
+            MessageKind::Approval,
+            MessageKind::Error,
+            MessageKind::Changes,
+            MessageKind::Session,
+            MessageKind::SentToAgent,
+            MessageKind::CheckIn,
+        ] {
+            assert!(shows_user(kind), "{kind:?} is the turn's word");
+        }
+        for kind in [MessageKind::User, MessageKind::Note, MessageKind::FromAgent] {
+            assert!(!shows_user(kind), "{kind:?} isn't");
         }
     }
 
