@@ -109,6 +109,9 @@ pub fn gb(bytes: u64) -> String {
 /// Bytes free on the volume holding the user's home (where agent homes,
 /// projects and package caches live). `None` when it can't be read.
 pub fn free_now() -> Option<u64> {
+    if let Some(pretend) = *PRETEND.lock().unwrap_or_else(|e| e.into_inner()) {
+        return pretend;
+    }
     // Tests never depend on this Mac's own disk.
     #[cfg(test)]
     {
@@ -118,6 +121,17 @@ pub fn free_now() -> Option<u64> {
     {
         super::task::free_bytes(&dirs::home_dir()?)
     }
+}
+
+/// A reading [`free_now`] answers instead of the disk's, for the whole
+/// process; `None` puts the disk back. Only the end-to-end suite sets it
+/// (`examples/agents_e2e`), to see a low disk without filling one; nothing
+/// in the app calls it.
+static PRETEND: Mutex<Option<Option<u64>>> = Mutex::new(None);
+
+#[doc(hidden)]
+pub fn pretend_free(reading: Option<Option<u64>>) {
+    *PRETEND.lock().unwrap_or_else(|e| e.into_inner()) = reading;
 }
 
 pub fn level_now() -> Level {

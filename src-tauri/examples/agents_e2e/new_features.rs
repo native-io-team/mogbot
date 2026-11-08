@@ -13,6 +13,19 @@
 //!   when they end, its wake saying it waited
 //! - `nf-monthly`: an agent sets "every month on the 31st at 9:00" through
 //!   its tool, and the next run is the app's own reading of the calendar
+//! - `nf-chief-draft`: "make me an agent that summarises my inbox every
+//!   weekday at 8": the Chief drafts in one reply and asks "Make it?"; on
+//!   "yes" `create_agent` makes it with its routine
+//! - `nf-reach`: one agent granted a fictional Gmail connection, the Chief
+//!   not; "can you read my email?" is answered from `who_can_reach`, naming
+//!   the agent that can, not "I can't"
+//! - `nf-disk`: a pretended low-disk reading (`disk::pretend_free`): the
+//!   turn's prompt carries the note; below the floor `npm install` asks on a
+//!   card even at Full send; going idle prunes a stale `node_modules` in the
+//!   agent's home and keeps one git tracks
+//! - `nf-restart`: a routine paused at its OK card, the app restarted (a
+//!   second process on the same data, through the launch steps); Go ahead
+//!   then runs step 2 once
 //!
 //! Each scenario runs as its own child process in its own throwaway HOME
 //! (quiet hours and the follow-up cap are process-wide), under a hard limit
@@ -33,13 +46,27 @@ use store::{ApprovalStatus, MessageKind};
 
 use super::{approvals, ensure, log, no_errors, of_kind, Check, H};
 
-pub const SCENARIOS: [&str; 5] = [
+pub const SCENARIOS: [&str; 9] = [
     "nf-draft",
     "nf-steps",
     "nf-follow-up",
     "nf-quiet",
     "nf-monthly",
+    "nf-chief-draft",
+    "nf-reach",
+    "nf-disk",
+    "nf-restart",
 ];
+
+/// The processes a scenario runs as, in order, on the same data: a restart
+/// is two.
+fn parts(name: &str) -> Vec<String> {
+    if name == "nf-restart" {
+        vec!["nf-restart-a".into(), "nf-restart-b".into()]
+    } else {
+        vec![name.to_string()]
+    }
+}
 
 const MARK: &str = "NEWFEAT ";
 
@@ -118,12 +145,43 @@ pub async fn suite(h: &H, only: &[&str]) -> Check {
         let home = h.home.join("newfeat").join(name);
         std::fs::create_dir_all(&home).unwrap();
         let started = Instant::now();
-        let (stdout, timed_out) = run_child(&exe, name, &home).await;
+        let mut pass = true;
+        let mut details = Vec::new();
+        // Each part reads the same store, so the last reading is the total.
+        let mut cost = 0.0;
+        for part in parts(name) {
+            let (p, d, c) = run_part(&exe, &part, &home).await;
+            pass &= p;
+            details.push(d);
+            cost = f64::max(cost, c);
+            if !p {
+                break;
+            }
+        }
+        let detail = details.join(" | ");
+        total += cost;
+        println!(
+            "  {} {name:<15} {:>4}s  ${cost:.3}  {detail}",
+            if pass { "PASS" } else { "FAIL" },
+            started.elapsed().as_secs()
+        );
+        if !pass {
+            failed.push(name.to_string());
+        }
+    }
+    println!("  newfeat total reported by Claude Code: ${total:.3}");
+    ensure(failed.is_empty(), format!("failed: {}", failed.join(", ")))
+}
+
+/// One process of a scenario: (pass, detail, cost so far).
+async fn run_part(exe: &Path, name: &str, home: &Path) -> (bool, String, f64) {
+    {
+        let (stdout, timed_out) = run_child(exe, name, home).await;
         let result = stdout
             .lines()
             .find_map(|l| l.strip_prefix(MARK))
             .and_then(|j| serde_json::from_str::<Value>(j).ok());
-        let (pass, detail, cost) = match result {
+        match result {
             Some(v) => (
                 v["pass"].as_bool().unwrap_or(false),
                 v["detail"].as_str().unwrap_or("").to_string(),
@@ -145,21 +203,10 @@ pub async fn suite(h: &H, only: &[&str]) -> Check {
                 } else {
                     "no result line".into()
                 };
-                (false, format!("{why}; stderr: {tail}"), 0.0)
+                (false, format!("{name}: {why}; stderr: {tail}"), 0.0)
             }
-        };
-        total += cost;
-        println!(
-            "  {} {name:<13} {:>4}s  ${cost:.3}  {detail}",
-            if pass { "PASS" } else { "FAIL" },
-            started.elapsed().as_secs()
-        );
-        if !pass {
-            failed.push(name.to_string());
         }
     }
-    println!("  newfeat total reported by Claude Code: ${total:.3}");
-    ensure(failed.is_empty(), format!("failed: {}", failed.join(", ")))
 }
 
 /* ------------------------------------------------------------- the child */
@@ -174,6 +221,11 @@ pub async fn phase(h: &H, name: &str) {
             "nf-follow-up" => follow_up(h).await,
             "nf-quiet" => quiet_hours(h).await,
             "nf-monthly" => monthly(h).await,
+            "nf-chief-draft" => chief_draft(h).await,
+            "nf-reach" => reach(h).await,
+            "nf-disk" => disk_hygiene(h).await,
+            "nf-restart-a" => restart_a(h).await,
+            "nf-restart-b" => restart_b(h).await,
             other => Err(format!("unknown scenario {other}")),
         }
     })
@@ -786,4 +838,413 @@ async fn monthly(h: &H) -> Detail {
         show(after),
         show(fri.check_in.next_at)
     ))
+}
+
+/* ------------------------------------------------- the Chief, reach, disk */
+
+/// Every agent but these stops: what a scenario's own agents started
+/// (a first task, a delegation) isn't what it checks, and costs.
+fn stop_others(h: &H, keep: &[&str]) {
+    for a in store::list().unwrap_or_default() {
+        if !keep.contains(&a.id.as_str()) {
+            runner::stop(&h.app, &a.id);
+        }
+    }
+}
+
+async fn haiku_defaults() -> Check {
+    defaults::set(defaults::Change {
+        engine: Some("claude".into()),
+        claude_model: Some("haiku".into()),
+        codex_model: None,
+    })
+    .await
+    .map(|_| ())
+    .map_err(|e| format!("defaults: {e}"))
+}
+
+/// (f) The Chief drafts an agent in one reply, asks "Make it?", and on yes
+/// makes it with its routine.
+async fn chief_draft(h: &H) -> Detail {
+    haiku_defaults().await?;
+    let chief = h.chief();
+    let others = || {
+        store::list()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|a| !a.is_main)
+            .count()
+    };
+    let before = others();
+    let replies_before = of_kind(&chief.id, MessageKind::Agent).len();
+    h.send(
+        &chief.id,
+        "make me an agent that summarises my inbox every weekday at 8",
+    )
+    .await?;
+    h.turn(&chief.id).await?;
+    let replies: Vec<String> = of_kind(&chief.id, MessageKind::Agent)
+        .into_iter()
+        .skip(replies_before)
+        .map(|m| m.text)
+        .collect();
+    let draft = replies.join("\n");
+    ensure(
+        others() == before,
+        format!("an agent was made before the yes: {draft:?}"),
+    )?;
+    ensure(
+        draft.to_lowercase().contains("make it?"),
+        format!("the draft doesn't ask \"Make it?\": {draft:?}"),
+    )?;
+    ensure(
+        draft.contains('8'),
+        format!("the draft doesn't show its time: {draft:?}"),
+    )?;
+    ensure(
+        store::get(&chief.id).unwrap().usage.all_time.turns == 1,
+        "the draft took more than one turn",
+    )?;
+    h.send(&chief.id, "yes").await?;
+    h.until("the agent to exist", Duration::from_secs(150), || {
+        others() > before
+    })
+    .await?;
+    // Its first task, if the Chief gave one, isn't what this checks.
+    h.turn(&chief.id).await?;
+    stop_others(h, &[&chief.id]);
+    let made: Vec<store::Agent> = store::list()
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|a| !a.is_main)
+        .collect();
+    ensure(
+        made.len() == before + 1,
+        format!("{} agents made", made.len() - before),
+    )?;
+    let a = &made[0];
+    let weekdays = a.check_ins.iter().find(|c| {
+        matches!(
+            &c.repeat,
+            Some(Repeat::Days { days, hour: 8, minute: 0 }) if days.as_slice() == [1, 2, 3, 4, 5]
+        )
+    });
+    ensure(
+        weekdays.is_some(),
+        format!(
+            "{} has no weekday 8:00 routine: {:?}",
+            a.name,
+            a.check_ins.iter().map(|c| &c.repeat).collect::<Vec<_>>()
+        ),
+    )?;
+    ensure(
+        a.model.as_deref() == Some("haiku"),
+        format!("{} runs on {:?}, not the default", a.name, a.model),
+    )?;
+    no_errors(&chief.id)?;
+    Ok(format!(
+        "{} with a weekday 8:00 routine; draft: {:?}",
+        a.name,
+        draft.chars().take(160).collect::<String>()
+    ))
+}
+
+/// (g) Only Mailroom has mail; the Chief asked "can you read my email?"
+/// answers from `who_can_reach`, naming it.
+async fn reach(h: &H) -> Detail {
+    use app_lib::agents::connections::{self, Access, Kind};
+    let chief = h.chief();
+    // A neutral role: the only way to know it reads mail is the app's.
+    let mail = h.agent(
+        "Mailroom",
+        "Runs errands",
+        "Keep every reply to one short line.",
+    );
+    // Fictional: no token anywhere, so nothing real can be reached by it.
+    connections::add_and_grant(
+        "gmail",
+        "Gmail",
+        "sam@example.test",
+        Kind::Oauth {
+            server_url: "https://mail.example.test/mcp".into(),
+        },
+        &mail.id,
+        Access::Read,
+    )
+    .map_err(|e| format!("grant: {e}"))?;
+    ensure(
+        connections::granted_to(&chief.id).is_empty(),
+        "the Chief was granted it too",
+    )?;
+    let before = of_kind(&chief.id, MessageKind::Agent).len();
+    h.send(&chief.id, "can you read my email?").await?;
+    h.turn(&chief.id).await?;
+    // A hand-off to Mailroom isn't what this checks.
+    stop_others(h, &[&chief.id]);
+    let said: String = of_kind(&chief.id, MessageKind::Agent)
+        .into_iter()
+        .skip(before)
+        .map(|m| m.text)
+        .collect::<Vec<_>>()
+        .join("\n");
+    // The app's knowledge reached the turn: `who_can_reach`'s answer, or
+    // `request_login`'s chain handing it to the teammate.
+    let asked = transcripts_contain(&h.home, "On the team: Mailroom");
+    let chain = transcripts_contain(&h.home, "Mailroom on the team already has Gmail");
+    ensure(
+        asked || chain,
+        format!("the app's knowledge never reached the turn; it said {said:?}"),
+    )?;
+    let cards = store::pending_approvals(&chief.id).unwrap_or_default();
+    ensure(
+        cards.iter().all(|c| c.login.is_none()),
+        format!("a sign-in card went up anyway: {cards:?}"),
+    )?;
+    ensure(
+        said.contains("Mailroom"),
+        format!("the answer doesn't name Mailroom: {said:?}"),
+    )?;
+    no_errors(&chief.id)?;
+    Ok(format!(
+        "via {}: {:?}",
+        if asked {
+            "who_can_reach"
+        } else {
+            "request_login"
+        },
+        said.chars().take(400).collect::<String>()
+    ))
+}
+
+fn sh(dir: &Path, script: &str) -> Check {
+    let out = std::process::Command::new("sh")
+        .args(["-c", script])
+        .current_dir(dir)
+        .env("GIT_AUTHOR_NAME", "E2E")
+        .env("GIT_AUTHOR_EMAIL", "e2e@example.test")
+        .env("GIT_COMMITTER_NAME", "E2E")
+        .env("GIT_COMMITTER_EMAIL", "e2e@example.test")
+        .output()
+        .map_err(|e| e.to_string())?;
+    ensure(
+        out.status.success(),
+        format!(
+            "`{script}` failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        ),
+    )
+}
+
+/// (h) A low disk, pretended: the note opens the turn; going idle prunes a
+/// stale `node_modules` and keeps a tracked one; below the floor an install
+/// asks on a card even at Full send.
+async fn disk_hygiene(h: &H) -> Detail {
+    use app_lib::agents::disk;
+    use app_lib::agents::independence::{self, Level};
+    const GB: u64 = 1_000_000_000;
+    independence::set_level(Level::FullSend, 0).map_err(|e| e.to_string())?;
+    let a = h.agent(
+        "Builder",
+        "Builds small things",
+        "Do exactly what the user asks. When asked to run a command, run it with your Bash tool, exactly as given. Keep replies to one short line.",
+    );
+    let home = store::agent_home(&a.id).map_err(|e| e.to_string())?;
+    // A stale one, regenerable (package.json beside it), and one git tracks.
+    sh(
+        &home,
+        "mkdir -p stale/node_modules/x tracked/node_modules/y \
+         && echo '{}' > stale/package.json && echo x > stale/node_modules/x/index.js \
+         && echo '{}' > tracked/package.json && echo y > tracked/node_modules/y/index.js \
+         && cd tracked && git init -q && git add -f . && git commit -qm fixture \
+         && cd .. && touch -t 202001010000 stale/node_modules tracked/node_modules",
+    )?;
+
+    disk::pretend_free(Some(Some(10 * GB)));
+    h.send(&a.id, "Reply with exactly DISK-OK.").await?;
+    h.turn(&a.id).await?;
+    ensure(
+        transcripts_contain(&h.home, "this Mac's disk is low: 10 GB free"),
+        "the turn's prompt has no low-disk note",
+    )?;
+    ensure(
+        !transcripts_contain(&h.home, "Installing packages and cloning now ask"),
+        "the low note says installs ask, above the floor",
+    )?;
+    h.until("the idle prune", Duration::from_secs(30), || {
+        !home.join("stale/node_modules").exists()
+    })
+    .await?;
+    ensure(
+        home.join("tracked/node_modules/y/index.js").exists(),
+        "the tracked node_modules was removed",
+    )?;
+    ensure(
+        home.join("stale/package.json").exists(),
+        "the package.json went with it",
+    )?;
+
+    disk::pretend_free(Some(Some(2 * GB)));
+    let seen = store::pending_approvals(&a.id).unwrap_or_default().len();
+    h.send(
+        &a.id,
+        "Run this exact command with your Bash tool, in your current folder: npm install --no-audit --no-fund left-pad\nThen say in one line what happened.",
+    )
+    .await?;
+    h.until("the install's card", Duration::from_secs(150), || {
+        store::pending_approvals(&a.id).unwrap_or_default().len() > seen
+    })
+    .await?;
+    let card = store::pending_approvals(&a.id)
+        .unwrap_or_default()
+        .pop()
+        .unwrap();
+    ensure(
+        card.input
+            .as_ref()
+            .and_then(|i| i["command"].as_str())
+            .is_some_and(|c| c.contains("npm install")),
+        format!("the card isn't the install: {:?}", card.input),
+    )?;
+    ensure(
+        card.summary
+            .as_deref()
+            .is_some_and(|s| s.contains("under the 5.0 GB floor")),
+        format!("the card doesn't say the disk is why: {:?}", card.summary),
+    )?;
+    cmd::agents_answer_approval(
+        h.app.clone(),
+        a.id.clone(),
+        card.request_id.clone(),
+        false,
+        None,
+        None,
+        None,
+    )
+    .await
+    .map_err(|e| format!("deny: {e}"))?;
+    h.turn(&a.id).await?;
+    disk::pretend_free(None);
+    ensure(
+        transcripts_contain(&h.home, "Installing packages and cloning now ask"),
+        "the floor note never opened a turn",
+    )?;
+    ensure(
+        !home.join("node_modules/left-pad").exists(),
+        "left-pad was installed anyway",
+    )?;
+    let cards = store::pending_approvals(&a.id).unwrap_or_default();
+    ensure(cards.is_empty(), format!("cards left open: {cards:?}"))?;
+    no_errors(&a.id)?;
+    Ok(format!(
+        "pruned stale/node_modules, kept tracked; floor card: {:?}",
+        card.summary.unwrap_or_default()
+    ))
+}
+
+const RESTART_AGENT: &str = "Courier";
+
+/// (i), first process: a two-step routine runs to its OK card, then this
+/// process ends (the parent kills it after its result line).
+async fn restart_a(h: &H) -> Detail {
+    let a = h.agent(
+        RESTART_AGENT,
+        "Drafts team notes",
+        "Keep every reply to one short line. Don't use tools.",
+    );
+    let created = schedule::create_with_steps(
+        &a.id,
+        "every day at 9:00",
+        "Draft a one-line hello for the team. Reply with only the draft.",
+        &[Step {
+            text: "Reply with exactly AFTER-RESTART-DONE and nothing else.".into(),
+            ask_first: true,
+        }],
+    )
+    .map_err(|e| format!("create: {e}"))?;
+    let rid = created.check_in.id.clone();
+    schedule::run_now(&h.app, &a.id, &rid).map_err(|e| format!("run now: {e}"))?;
+    h.until("the OK card", Duration::from_secs(150), || {
+        !pending_gates(&a.id).is_empty()
+    })
+    .await?;
+    h.turn(&a.id).await?;
+    ensure(
+        routine(&a.id, &rid)?.waiting.is_some(),
+        "the routine isn't waiting on its card",
+    )?;
+    Ok("paused at its OK".into())
+}
+
+/// (i), second process on the same data: the launch steps, then Go ahead
+/// (twice) runs step 2 once.
+async fn restart_b(h: &H) -> Detail {
+    use app_lib::agents::{expiry, mcp};
+    // What the app does at launch, in its order (`lib.rs`).
+    runner::prepare_recovery();
+    expiry::sweep_all(&h.app, expiry::Moment::Launch);
+    runner::recover_after_restart(&h.app).await;
+    mcp::sweep_auto_allowed(&h.app);
+    for _ in 0..2 {
+        schedule::tick_once(&h.app).map_err(|e| e.to_string())?;
+    }
+    let a = store::find(RESTART_AGENT)
+        .map_err(|e| e.to_string())?
+        .ok_or("the agent is gone after the restart")?;
+    let rid = a
+        .check_ins
+        .iter()
+        .find(|c| c.then.len() == 1)
+        .map(|c| c.id.clone())
+        .ok_or("the routine is gone after the restart")?;
+    let c = routine(&a.id, &rid)?;
+    let w = c
+        .waiting
+        .clone()
+        .ok_or("the routine stopped waiting at the restart")?;
+    let card = pending_gates(&a.id)
+        .pop()
+        .ok_or("the OK card closed at the restart")?;
+    ensure(
+        card.request_id == w.request_id,
+        "the open card isn't the one the routine waits on",
+    )?;
+    ensure(
+        !runner::in_turn(&a.id) && replies_with(&a.id, "AFTER-RESTART-DONE") == 0,
+        "step 2 ran at launch",
+    )?;
+    let turns_before = store::get(&a.id).unwrap().usage.all_time.turns;
+    let go = |app: tauri::AppHandle, agent: String, req: String| async move {
+        cmd::agents_answer_approval(app, agent, req, true, None, None, None).await
+    };
+    let (first, second) = tokio::join!(
+        go(h.app.clone(), a.id.clone(), card.request_id.clone()),
+        go(h.app.clone(), a.id.clone(), card.request_id.clone())
+    );
+    ensure(
+        first.is_ok() != second.is_ok(),
+        format!("Go ahead twice: {first:?} / {second:?}"),
+    )?;
+    h.until("step 2's turn", Duration::from_secs(30), || {
+        runner::in_turn(&a.id) || replies_with(&a.id, "AFTER-RESTART-DONE") > 0
+    })
+    .await?;
+    h.turn(&a.id).await?;
+    tokio::time::sleep(Duration::from_secs(4)).await;
+    ensure(!runner::in_turn(&a.id), "a third turn started")?;
+    let done = replies_with(&a.id, "AFTER-RESTART-DONE");
+    ensure(done == 1, format!("step 2 replied {done} times"))?;
+    let turns = store::get(&a.id).unwrap().usage.all_time.turns;
+    ensure(
+        turns == turns_before + 1,
+        format!("turns {turns_before} → {turns}"),
+    )?;
+    let c = routine(&a.id, &rid)?;
+    ensure(c.waiting.is_none(), "still waiting after step 2")?;
+    let last = c.runs.last().cloned().ok_or("no run recorded")?;
+    ensure(
+        last.outcome == runs::Outcome::Ran && last.step == 2 && c.runs.len() == 1,
+        format!("runs after the restart: {:?}", c.runs),
+    )?;
+    no_errors(&a.id)?;
+    Ok(format!("step 2 ran once after the restart ({turns} turns)"))
 }

@@ -12,6 +12,7 @@
 //! answers and what `follow_up` checks a "can't" against.
 
 use super::capabilities::Capabilities;
+use super::connections::Access;
 use super::logins::{self, Connector, Service};
 use super::store::Agent;
 
@@ -125,6 +126,45 @@ pub fn team(caller: &Agent, service: &Service) -> Vec<(String, Vec<String>)> {
         .iter()
         .map(|a| (a.name.clone(), ways(&facts(a, service), service)))
         .filter(|(_, w)| !w.is_empty())
+        .collect()
+}
+
+/// Teammates (never `caller`) who already hold `service` through the app
+/// itself, able to do what `access` needs: a working connection granted to
+/// them, or its connector in their engine. (name, the way), first found
+/// first. Browser ways don't count: those are the team's, and the caller
+/// asking has just found its own wanting. `request_login` hands the work
+/// to one of these instead of raising a card (`access_chain`).
+pub fn holders(caller: &Agent, service: &Service, access: Access) -> Vec<(String, String)> {
+    let mut agents = super::store::list().unwrap_or_default();
+    agents.retain(|a| !a.hidden && a.id != caller.id);
+    agents
+        .iter()
+        .filter_map(|a| {
+            let connected = super::connections::granted_to(&a.id)
+                .into_iter()
+                .find(|(c, granted)| {
+                    c.service == service.id
+                        && !c.needs_sign_in
+                        && (access == Access::Read || *granted == Access::Full)
+                })
+                .map(|(c, _)| {
+                    if c.account.is_empty() {
+                        format!("connected: {}", c.title)
+                    } else {
+                        format!("connected: {} ({})", c.title, c.account)
+                    }
+                });
+            let way = connected.or_else(|| {
+                (connector_seen(
+                    a.capabilities.as_ref(),
+                    connector_name(service),
+                    &a.reach.blocked_apps,
+                ) == Some(true))
+                .then(|| format!("the {} connector in its engine", service.title))
+            })?;
+            Some((a.name.clone(), way))
+        })
         .collect()
 }
 
