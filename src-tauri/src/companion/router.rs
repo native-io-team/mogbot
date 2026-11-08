@@ -63,6 +63,7 @@ pub const METHODS: &[&str] = &[
     "agents.markUnread",
     "agents.startFresh",
     "agents.create",
+    "agents.draft",
     "agents.templates",
     "agents.update",
     "agents.setDefaults",
@@ -202,12 +203,16 @@ pub enum ScheduleOp {
         agent_id: String,
         when: String,
         note: String,
+        /// Steps after the first, from a Mac listing `MAC_FEATURE_STEPS`.
+        then: Option<Vec<crate::agents::routine_steps::Step>>,
     },
     Update {
         agent_id: String,
         id: String,
         when: String,
         note: String,
+        /// `None` keeps its steps as they are.
+        then: Option<Vec<crate::agents::routine_steps::Step>>,
     },
     Pause {
         agent_id: String,
@@ -291,6 +296,13 @@ pub struct PhoneNewAgent {
     /// An id from `agents.templates`.
     #[serde(default)]
     pub template: Option<String>,
+    /// Its briefing, as reviewed after `agents.draft` (a Mac listing
+    /// `MAC_FEATURE_DRAFT`). With a template too, this wins.
+    #[serde(default)]
+    pub instructions: Option<String>,
+    /// Routines to set up with it, the ones the user kept from a draft.
+    #[serde(default)]
+    pub routines: Vec<crate::agents::draft::NewRoutine>,
 }
 
 /// "What should it do?" is one line, as the desk's field is.
@@ -375,12 +387,39 @@ fn check_new_agent(input: PhoneNewAgent) -> Result<PhoneNewAgent, WireError> {
             }
         },
     };
+    let instructions = match input.instructions.as_deref().map(str::trim) {
+        None | Some("") => None,
+        Some(text) => {
+            refuse_unsafe_text(text, "Its instructions")?;
+            if text.chars().count() > MAX_INSTRUCTIONS {
+                return Err(bad_params(format!(
+                    "Keep its instructions under {MAX_INSTRUCTIONS} characters."
+                )));
+            }
+            Some(text.to_string())
+        }
+    };
+    if input.routines.len() > crate::agents::draft::MAX_ROUTINES {
+        return Err(bad_params(format!(
+            "At most {} routines with a new agent.",
+            crate::agents::draft::MAX_ROUTINES
+        )));
+    }
+    // A routine's words are prompts sent later with nobody watching.
+    for r in &input.routines {
+        refuse_unsafe_text(&r.note, "A routine's note")?;
+        for step in &r.then {
+            refuse_unsafe_text(&step.text, "A routine's step")?;
+        }
+    }
     Ok(PhoneNewAgent {
         name,
         role,
         color,
         avatar: check_look(input.avatar)?,
         template,
+        instructions,
+        routines: input.routines,
     })
 }
 
@@ -491,6 +530,9 @@ pub trait Backend: Send + Sync + 'static {
     /// would pick (`engine::default_for`) and a free colour when none was
     /// picked. Returns the stored agent.
     async fn create_agent(&self, input: PhoneNewAgent) -> Result<Value, CommandError>;
+    /// `agents_draft`: "Describe the agent you want", drafted for review.
+    /// Nothing is created.
+    async fn draft_agent(&self, description: String) -> Result<Value, CommandError>;
     /// `agents_update` with only the toggles set; returns the stored agent.
     async fn update_agent(
         &self,
@@ -956,6 +998,12 @@ struct QueryParams {
 }
 
 #[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct DraftParams {
+    description: String,
+}
+
+#[derive(Deserialize)]
 struct WhenParams {
     when: String,
 }
@@ -972,6 +1020,8 @@ struct ScheduleParams {
     note: String,
     #[serde(default)]
     paused: bool,
+    #[serde(default)]
+    then: Option<Vec<crate::agents::routine_steps::Step>>,
 }
 
 #[derive(Deserialize)]
@@ -1504,6 +1554,7 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
         "agents.schedule.create" | "agents.schedule.update" => {
             preview(&format!("{} — {}", field("when"), field("note")))
         }
+        "agents.draft" => preview(&format!("draft: {}", field("description"))),
         "agents.schedule.pause" => {
             let paused = params.get("paused").and_then(Value::as_bool) == Some(true);
             format!(
@@ -2271,6 +2322,24 @@ async fn run(
             let blob = c.blobs.produce(&caller.device_id, &source, now_ms())?;
             Ok(to_value(&blob.as_ref()))
         }
+        "agents.draft" => {
+            let p: DraftParams = parse(params)?;
+            refuse_unsafe_text(&p.description, "A description")?;
+            if p.description.chars().count() > crate::agents::draft::MAX_DESCRIPTION {
+                return Err(bad_params(format!(
+                    "Keep the description under {} characters.",
+                    crate::agents::draft::MAX_DESCRIPTION
+                )));
+            }
+            // A draft spends the user's plan: counted as a new agent is.
+            if !c.allow_create(&caller.device_id, now_ms()) {
+                return Err(WireError::protocol(
+                    ProtocolCode::RateLimited,
+                    "That's a lot of drafts in a minute. Try again in a minute.",
+                ));
+            }
+            Ok(b.draft_agent(p.description).await?)
+        }
         "agents.search" => {
             let p: QueryParams = parse(params)?;
             Ok(super::wire::search_for_app(
@@ -2295,17 +2364,22 @@ async fn run(
             // The note is the prompt the routine sends later, with nobody
             // watching: the same rules as a message typed now.
             refuse_unsafe_text(&p.note, "A routine's note")?;
+            for step in p.then.iter().flatten() {
+                refuse_unsafe_text(&step.text, "A routine's step")?;
+            }
             let op = match method {
                 "agents.schedule.create" => ScheduleOp::Create {
                     agent_id: p.agent_id,
                     when: p.when,
                     note: p.note,
+                    then: p.then,
                 },
                 "agents.schedule.update" => ScheduleOp::Update {
                     agent_id: p.agent_id,
                     id: p.id,
                     when: p.when,
                     note: p.note,
+                    then: p.then,
                 },
                 "agents.schedule.pause" => ScheduleOp::Pause {
                     agent_id: p.agent_id,
@@ -3138,6 +3212,61 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_phone_drafts_then_creates_with_what_it_reviewed() {
+        use crate::companion::testkit::Stub;
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let draft = dispatch(
+            &c,
+            &me,
+            "agents.draft",
+            json!({ "description": "Reads my newsletters and sends me five lines at 8" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(draft["name"], "Morning Brief");
+        assert_eq!(draft["routines"][0]["then"][0]["askFirst"], true);
+        assert!(super::METHODS.contains(&"agents.draft"));
+        assert!(!super::READ_ONLY_METHODS.contains(&"agents.draft"));
+        // A control character in what would be sent later, unwatched: refused.
+        let bad = dispatch(
+            &c,
+            &me,
+            "agents.create",
+            json!({ "input": { "name": "Brief", "routines": [
+                { "when": "every weekday at 8:00", "note": "Read\u{1b}[2J", "then": [] }
+            ] } }),
+        )
+        .await;
+        assert!(bad.is_err());
+        dispatch(
+            &c,
+            &me,
+            "agents.create",
+            json!({ "input": {
+                "name": "Brief",
+                "role": "Five lines every weekday",
+                "instructions": "You read the newsletters.",
+                "routines": [{ "when": "every weekday at 8:00", "note": "Draft the brief",
+                    "then": [{ "text": "Post it to #team", "askFirst": true }] }]
+            } }),
+        )
+        .await
+        .unwrap();
+        let made = stub.created.lock().unwrap().last().cloned().unwrap();
+        assert_eq!(
+            made.instructions.as_deref(),
+            Some("You read the newsletters.")
+        );
+        assert_eq!(made.routines.len(), 1);
+        assert!(made.routines[0].then[0].ask_first);
+        let audited = stub.audited();
+        assert!(audited
+            .iter()
+            .any(|a| a.1 == "agents.draft" && a.2.starts_with("draft: ")));
+    }
+
+    #[tokio::test]
     async fn a_phone_made_agent_takes_only_a_name_role_and_colour() {
         use crate::companion::testkit::Stub;
         let (c, stub) = Stub::companion();
@@ -3148,7 +3277,7 @@ mod tests {
             json!({ "name": "Ops", "engine": "codex" }),
             json!({ "name": "Ops", "model": "opus" }),
             json!({ "name": "Ops", "project": "/etc" }),
-            json!({ "name": "Ops", "instructions": "x" }),
+            json!({ "name": "Ops", "routines": "daily" }),
         ] {
             let refused = create(extra).await.unwrap_err();
             assert!(refused.summary().contains("name, what it should do"));

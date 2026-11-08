@@ -2429,6 +2429,27 @@ export const scheduleCreate = {
     "minute": 0
   }
 } satisfies Result<'agents.schedule.create'>;
+export const scheduleCreateSteps = {
+  "createdAt": 1762290000000,
+  "id": "c9",
+  "nextAt": 1762531200000,
+  "note": "Draft the weekly report",
+  "paused": false,
+  "repeat": {
+    "days": [
+      5
+    ],
+    "hour": 16,
+    "kind": "days",
+    "minute": 0
+  },
+  "then": [
+    {
+      "askFirst": true,
+      "text": "Post it to #team on Slack"
+    }
+  ]
+} satisfies Result<'agents.schedule.create'>;
 export const scheduleUpdate = {
   "createdAt": 1762200000000,
   "id": "c1",
@@ -3038,6 +3059,29 @@ export const agentsCreate = {
   "unread": 0,
   "workDirectly": true
 } satisfies Result<'agents.create'>;
+export const agentsDraft = {
+  "apps": [
+    "Gmail",
+    "Slack"
+  ],
+  "color": "teal",
+  "instructions": "You read the newsletters the user follows each weekday morning and write them one short brief.",
+  "name": "Morning Brief",
+  "role": "Reads the newsletters I follow and sends me five lines every weekday.",
+  "routines": [
+    {
+      "note": "Read today's newsletters and draft the brief.",
+      "readsAs": "every weekday at 08:00",
+      "then": [
+        {
+          "askFirst": true,
+          "text": "Post the brief to #team on Slack."
+        }
+      ],
+      "when": "every weekday at 8:00"
+    }
+  ]
+} satisfies Result<'agents.draft'>;
 export const agentsTemplates = [
   {
     "color": "blue",
@@ -3135,6 +3179,7 @@ export const frames = [
       "agents.markUnread",
       "agents.startFresh",
       "agents.create",
+      "agents.draft",
       "agents.templates",
       "agents.update",
       "agents.setDefaults",
@@ -3199,7 +3244,9 @@ export const frames = [
       "signin.phone",
       "watch.links",
       "agents.engine",
-      "agents.effort"
+      "agents.effort",
+      "agents.draft",
+      "routines.steps"
     ]
   },
   {
@@ -3597,6 +3644,35 @@ export const frames = [
         "kind": "approval",
         "text": "",
         "ts": 1762290200000
+      }
+    }
+  },
+  {
+    "t": "evt",
+    "seq": 1,
+    "event": {
+      "type": "agents.message",
+      "message": {
+        "agentId": "a1",
+        "approval": {
+          "detail": "**Weekly report · 3–7 Nov**\n\n- Invoices: 14 sent, 2 overdue (Acme, Moss & Co.)\n- Hiring: two interviews booked for Tuesday\n- Site: the pricing page shipped Thursday",
+          "gate": {
+            "checkInId": "c7",
+            "done": 1,
+            "next": "Post it to #team on Slack",
+            "routine": "Draft the weekly report from this week's notes",
+            "runAt": 1762290000000,
+            "total": 2
+          },
+          "requestId": "q15",
+          "status": "pending",
+          "summary": "“Draft the weekly report from this week's notes” · step 1 of 2 is done. Next, step 2: Post it to #team on Slack",
+          "title": "OK to go on?"
+        },
+        "id": "m43",
+        "kind": "approval",
+        "text": "",
+        "ts": 1762290300000
       }
     }
   },

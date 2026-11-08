@@ -700,6 +700,7 @@ mod tests {
             settings: None,
             plan: None,
             handoff: None,
+            gate: None,
         });
         store::append_message(&card).unwrap();
         (request_id, request)

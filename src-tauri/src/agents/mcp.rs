@@ -183,7 +183,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "create_agent",
-        description: "Create a new agent with a standing responsibility. It appears in the user's sidebar immediately. Optionally hand it a first task. With `template`, it starts from one of the ready-made agents: its role, briefing and colour, which `role` and `color` override and `instructions` adds to.",
+        description: "Create a new agent with a standing responsibility. It appears in the user's sidebar immediately. Optionally hand it a first task. When the user describes an agent in one message, draft it first in one short reply (name, one-line role, the briefing in a few lines, each routine with its time, a draft-then-post routine as two steps with the second `ask_first`, the apps it will need), ask \"Make it?\", and on yes create it in one call with `routines`. With `template`, it starts from one of the ready-made agents: its role, briefing and colour, which `role` and `color` override and `instructions` adds to.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -195,7 +195,20 @@ const TOOLS: &[Tool] = &[
                 "color": { "type": "string", "enum": store::COLORS },
                 "project": { "type": "string", "description": "Optional: bind it to one of the user's projects (name or path from project_list), so its own turns run inside that project. Usually unnecessary: any agent can work on any project through sessions." },
                 "engine": { "type": "string", "enum": ["claude", "codex"], "description": "Optional: what it runs on. `claude` (Claude Code) or `codex` (Codex, on the user's ChatGPT plan). Left out, it goes on the user's default engine and model for new agents (Settings → Agents), or on whichever engine is set up when that one isn't. Only when the user asks for it; it must be installed and signed in." },
-                "first_task": { "type": "string", "description": "Optional message to start it on right away." }
+                "first_task": { "type": "string", "description": "Optional message to start it on right away." },
+                "routines": {
+                    "type": "array",
+                    "description": "Optional: its routines, set up with it (at most 4). Each `when` uses schedule_check_in's shapes; `note` is the first step; `then` holds later steps, each `{text, ask_first}`: put an outward step (posting, sending) after a draft with `ask_first: true`, so the user OKs the draft on a card first.",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "when": { "type": "string" },
+                            "note": { "type": "string" },
+                            "then": { "type": "array", "items": { "type": "object", "properties": { "text": { "type": "string" }, "ask_first": { "type": "boolean" } }, "required": ["text"] } }
+                        },
+                        "required": ["when", "note"]
+                    }
+                }
             },
             "required": ["name"]
         }),
@@ -290,7 +303,8 @@ const TOOLS: &[Tool] = &[
             "type": "object",
             "properties": {
                 "when": { "type": "string", "description": "When, in plain words. See the description for shapes that work." },
-                "note": { "type": "string", "description": "What to do when it fires, written to your future self: specific enough to act on with no other context." },
+                "note": { "type": "string", "description": "What to do when it fires, written to your future self: specific enough to act on with no other context. With `then`, this is step 1." },
+                "then": { "type": "array", "description": "Optional, routines only: later steps, each run as its own turn after the one before ends well (at most 4). `ask_first: true` waits for the user's OK on a card before that step, showing them what the step before produced: use it before anything outward (posting, sending, publishing) that follows a draft.", "items": { "type": "object", "properties": { "text": { "type": "string" }, "ask_first": { "type": "boolean" } }, "required": ["text"] } },
                 "agent": { "type": "string", "description": "Chief of Staff only: schedule it for another agent (name or id). Omit to schedule for yourself." }
             },
             "required": ["when", "note"]
@@ -943,10 +957,11 @@ async fn check_ins(
         }
     };
     let result = match name {
-        "schedule_check_in" => schedule::create(
+        "schedule_check_in" => schedule::create_with_steps(
             &target.id,
             arg(args, "when").unwrap_or(""),
             arg(args, "note").unwrap_or(""),
+            &super::draft::steps_arg(args.get("then")),
         )
         .map(|c| {
             created_routine_line(app, &target.id, &c.check_in);
@@ -1688,6 +1703,10 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         None => defaults.starts_on,
     };
     let model = defaults.model_for(engine);
+    let routines = match super::draft::routines_arg(args) {
+        Ok(r) => r,
+        Err(e) => return error(e),
+    };
     let created = store::create(store::NewAgent {
         name: name.to_string(),
         role,
@@ -1714,6 +1733,14 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
             for note in create_notes(caller, &agent, &on) {
                 let _ = runner::record(app, note);
             }
+            let set = super::draft::add_routines(app, &agent.id, &routines);
+            let routines_said = match (routines.len(), set) {
+                (0, _) => String::new(),
+                (n, s) if s == n => format!(" with {s} routine{}", if s == 1 { "" } else { "s" }),
+                (n, s) => format!(
+                    " with {s} of {n} routines (its chat says which couldn't be set and why)"
+                ),
+            };
             let mut started = String::new();
             let first_task = arg(args, "first_task");
             // The first task is a request like `message_agent`'s: it travels one
@@ -1743,7 +1770,7 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
                     " and started it on its first task; its answer comes back to you".to_string();
             }
             text(format!(
-                "Created {} {on}{started}. It's in the user's sidebar now.",
+                "Created {} {on}{routines_said}{started}. It's in the user's sidebar now.",
                 agent.name
             ))
         }
@@ -2379,6 +2406,7 @@ pub(crate) fn new_card(
         settings: None,
         plan: None,
         handoff: None,
+        gate: None,
     }
 }
 
@@ -3192,6 +3220,27 @@ async fn approve(app: &AppHandle, caller: &store::Agent, turn: Option<u64>, args
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// "Describe the agent you want" in chat: the Chief drafts, asks, then
+    /// makes it with its routines in one call (`agents/draft.rs`).
+    #[test]
+    fn the_chief_drafts_a_described_agent_before_making_it() {
+        let tool = TOOLS.iter().find(|t| t.name == "create_agent").unwrap();
+        assert!(tool
+            .description
+            .contains("draft it first in one short reply"));
+        assert!(tool.description.contains("`ask_first`"));
+        assert!(tool
+            .description
+            .contains("create it in one call with `routines`"));
+        let schema = (tool.schema)();
+        assert!(schema["properties"]["routines"]["items"]["properties"]["then"].is_object());
+        let check_in = TOOLS
+            .iter()
+            .find(|t| t.name == "schedule_check_in")
+            .unwrap();
+        assert!((check_in.schema)()["properties"]["then"].is_object());
+    }
 
     fn named(id: &str, name: &str) -> store::Agent {
         serde_json::from_value(json!({

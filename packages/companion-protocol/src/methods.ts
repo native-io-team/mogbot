@@ -10,6 +10,8 @@
 import type { Cursor } from './frames';
 import type { AgentPolicyView } from './policy';
 import type {
+  AgentDraft,
+  RoutineStep,
   AgentMessage,
   AgentReach,
   AppConnection,
@@ -339,11 +341,23 @@ export interface Methods {
    */
   'agents.create': {
     params: {
-      input: Pick<NewAgentInput, 'name' | 'role' | 'color' | 'template' | 'avatar'>;
+      /** `instructions` and `routines`: a Mac listing `MAC_FEATURES.draft`. */
+      input: Pick<
+        NewAgentInput,
+        'name' | 'role' | 'color' | 'template' | 'avatar' | 'instructions' | 'routines'
+      >;
       clientId?: string;
     };
     result: StoredAgent;
   };
+  /**
+   * "Describe the agent you want": a draft (name, role, colour, briefing,
+   * routines as the Mac's grammar read them, apps it will need), on the
+   * engine new agents start on. Nothing is created; `agents.create` makes it
+   * from what the user kept. Counts toward the phone's new-agent limit.
+   * A Mac listing `MAC_FEATURES.draft`.
+   */
+  'agents.draft': { params: { description: string }; result: AgentDraft };
   /**
    * From the phone, only the row's toggles (`pinned`, `muted`, `hidden`)
    * and `instructions` (at most 20,000 characters), and from a Mac listing
@@ -467,7 +481,8 @@ export interface Methods {
 
   'agents.schedule.preview': { params: { when: string }; result: SchedulePreview };
   'agents.schedule.create': {
-    params: { agentId: string; when: string; note: string };
+    /** `then`: steps after the first, on a Mac listing `MAC_FEATURES.steps`. */
+    params: { agentId: string; when: string; note: string; then?: RoutineStep[] };
     result: CheckIn;
   };
   'agents.schedule.update': {
@@ -475,7 +490,7 @@ export interface Methods {
      * An empty `when` keeps the schedule and changes only the note, on a Mac
      * whose welcome has `timeZone`; an older one refuses it.
      */
-    params: { agentId: string; id: string; when: string; note: string };
+    params: { agentId: string; id: string; when: string; note: string; then?: RoutineStep[] };
     result: CheckIn;
   };
   'agents.schedule.pause': {

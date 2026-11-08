@@ -155,6 +155,12 @@ pub fn verdict(a: &Approval, age_ms: i64, waited_on: bool, moment: Moment) -> Op
     if a.handoff.is_some() {
         return None;
     }
+    // A routine's "OK to go on?" waits for the user however long they take:
+    // nothing blocks on it, and its routine's next run closes it
+    // (`agents/routine_steps.rs`).
+    if a.gate.is_some() {
+        return None;
+    }
     if let Some(s) = &a.secret {
         // An import's old-style secure input (before sign-in cards, which
         // replaced it): nothing raises these any more and nothing waits on

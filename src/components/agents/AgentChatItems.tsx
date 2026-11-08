@@ -49,6 +49,7 @@ import { SecretCard } from './AgentSecretCard';
 import { LoginCard } from './AgentLoginCard';
 import { AgentSettingsChange } from './AgentSettingsChange';
 import { AgentPlanList } from './AgentPlanList';
+import { AgentGateBody } from './AgentRoutineSteps';
 import { AgentCard } from './AgentCard';
 import { ImportReviewCard } from './ImportReviewCard';
 import { ImportPlaybackCard } from './ImportPlaybackCard';
@@ -62,6 +63,8 @@ import { useCardGuard } from './useCardGuard';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import {
   connectorTextParts,
+  GATE_ALLOW,
+  GATE_DENY,
   CONTEXT_SUGGEST_AT,
   contextPercent,
   describeScope,
@@ -982,6 +985,12 @@ function outcomeText(approval: Approval, agentName: string, compact: boolean): R
   if (approval.handoff && approval.status === 'denied') {
     return 'Ignored · nothing was saved';
   }
+  if (approval.gate && approval.status === 'allowed') {
+    return `Going ahead · step ${approval.gate.done + 1} of ${approval.gate.total} is running`;
+  }
+  if (approval.gate && approval.status === 'denied') {
+    return `Stopped after step ${approval.gate.done} · the rest didn’t run`;
+  }
   if (approval.choice && approval.status !== 'expired') {
     return `${STATUS_LABEL[approval.status as 'allowed' | 'denied']} · ${approval.choice}`;
   }
@@ -1078,7 +1087,9 @@ export const ApprovalCard = memo(function ApprovalCard({
   const front = !!approval.front;
   // "<source> sent what it knows": Ignore / Save to memory, nothing else.
   const handoff = !!approval.handoff;
-  const plainDeny = approval.connector?.kind === 'consent' || front || handoff;
+  // "OK to go on?" between a routine's steps: Stop here / Go ahead, nothing broader.
+  const gate = approval.gate;
+  const plainDeny = approval.connector?.kind === 'consent' || front || handoff || !!gate;
   const pending = approval.status === 'pending';
   const fields = approvalFields(approval.tool, approval.input);
   const answer = async (allow: boolean, always = false, why?: string) => {
@@ -1104,6 +1115,8 @@ export const ApprovalCard = memo(function ApprovalCard({
             <GlobeIcon size={14} />
           ) : handoff ? (
             <DownloadIcon size={14} />
+          ) : gate ? (
+            <HistoryIcon size={14} />
           ) : plainDeny ? (
             <DownloadIcon size={14} />
           ) : approval.settings ? (
@@ -1114,16 +1127,20 @@ export const ApprovalCard = memo(function ApprovalCard({
         }
         title={approval.title}
         meta={
-          series && series.total > 1
-            ? `${series.index} of ${series.total} similar requests`
-            : undefined
+          gate
+            ? `${gate.routine} · step ${gate.done} of ${gate.total} done`
+            : series && series.total > 1
+              ? `${series.index} of ${series.total} similar requests`
+              : undefined
         }
         note={
-          pending && paused && !plainDeny && !approval.settings
-            ? 'It paused here for you. Allow it and it picks up where it left off.'
-            : approval.status === 'expired'
-              ? approval.setAside
-              : undefined
+          pending && gate
+            ? 'It waits for you, and closes if the routine runs again first.'
+            : pending && paused && !plainDeny && !approval.settings
+              ? 'It paused here for you. Allow it and it picks up where it left off.'
+              : approval.status === 'expired'
+                ? approval.setAside
+                : undefined
         }
         actions={
           pending && !noting ? (
@@ -1178,7 +1195,7 @@ export const ApprovalCard = memo(function ApprovalCard({
                 disabled={busy}
                 onClick={() => void answer(false)}
               >
-                {front ? 'Not now' : handoff ? 'Ignore' : 'Deny'}
+                {front ? 'Not now' : handoff ? 'Ignore' : gate ? GATE_DENY : 'Deny'}
               </Button>
               <Button
                 tabIndex={0}
@@ -1188,7 +1205,7 @@ export const ApprovalCard = memo(function ApprovalCard({
                 {...keyProps}
                 onClick={guard(() => void answer(true))}
               >
-                {front ? 'Check again' : handoff ? 'Save to memory' : 'Allow'}
+                {front ? 'Check again' : handoff ? 'Save to memory' : gate ? GATE_ALLOW : 'Allow'}
               </Button>
             </>
           ) : undefined
@@ -1199,6 +1216,8 @@ export const ApprovalCard = memo(function ApprovalCard({
       >
         {approval.settings ? (
           <AgentSettingsChange proposal={approval.settings} />
+        ) : gate ? (
+          <AgentGateBody gate={gate} produced={approval.detail} />
         ) : approval.plan ? (
           <AgentPlanList plan={approval.plan} />
         ) : fields ? (

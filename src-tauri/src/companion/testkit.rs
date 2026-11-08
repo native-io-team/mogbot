@@ -1079,6 +1079,29 @@ impl Backend for Stub {
         Ok(serde_json::to_value(agent).unwrap())
     }
 
+    async fn draft_agent(&self, description: String) -> Result<Value, CommandError> {
+        if description.trim().chars().count() < 8 {
+            return Err(crate::agents::err_invalid(
+                "description",
+                "Say a little more about what it should do.",
+            ));
+        }
+        // What `agents::draft::parse` returns for a morning brief.
+        Ok(serde_json::json!({
+            "name": "Morning Brief",
+            "role": "Reads the newsletters I follow and sends me five lines every weekday.",
+            "color": "teal",
+            "instructions": "You read the newsletters the user follows each weekday morning and write them one short brief.",
+            "routines": [{
+                "when": "every weekday at 8:00",
+                "note": "Read today's newsletters and draft the brief.",
+                "then": [{ "text": "Post the brief to #team on Slack.", "askFirst": true }],
+                "readsAs": "every weekday at 08:00"
+            }],
+            "apps": ["Gmail", "Slack"]
+        }))
+    }
+
     async fn create_agent(&self, input: PhoneNewAgent) -> Result<Value, CommandError> {
         if input.name.eq_ignore_ascii_case("Finance") {
             return Err(CommandError::expected(
@@ -1946,7 +1969,9 @@ impl Backend for Stub {
                 serde_json::to_value(crate::commands::agents::SchedulePreview { next_at, repeat })
                     .unwrap()
             }
-            ScheduleOp::Create { when, note, .. } => {
+            ScheduleOp::Create {
+                when, note, then, ..
+            } => {
                 let (repeat, next_at) = parse(&when)?;
                 serde_json::to_value(schedule::CheckIn {
                     id: "c9".into(),
@@ -1961,6 +1986,8 @@ impl Backend for Stub {
                     watch: None,
                     usage: Default::default(),
                     follow_up: false,
+                    then: then.unwrap_or_default(),
+                    waiting: None,
                     extra: Default::default(),
                 })
                 .unwrap()
@@ -2299,6 +2326,7 @@ pub fn settings_card() -> crate::agents::store::AgentMessage {
         settings: Some(proposal),
         plan: None,
         handoff: None,
+        gate: None,
     });
     m
 }
@@ -2348,6 +2376,32 @@ pub fn plan_card() -> crate::agents::store::AgentMessage {
     m
 }
 
+/// "OK to go on?" between a weekly report's draft and its post
+/// (`routine_steps::card`): what step 1 produced, and step 2's words.
+pub fn gate_card() -> crate::agents::store::AgentMessage {
+    use crate::agents::routine_steps::{self, Step};
+    use crate::agents::store::MessageKind;
+    let mut m = crate::agents::runner::new_message(AGENT, MessageKind::Approval, "");
+    m.id = "m43".into();
+    m.ts = 1_762_290_300_000;
+    let mut c = stored_agent().check_ins.remove(0);
+    c.id = "c7".into();
+    c.note = "Draft the weekly report from this week's notes".into();
+    c.then = vec![Step {
+        text: "Post it to #team on Slack".into(),
+        ask_first: true,
+    }];
+    let mut approval = routine_steps::card(
+        &c,
+        1,
+        "**Weekly report · 3–7 Nov**\n\n- Invoices: 14 sent, 2 overdue (Acme, Moss & Co.)\n- Hiring: two interviews booked for Tuesday\n- Site: the pricing page shipped Thursday",
+        1_762_290_000_000,
+    );
+    approval.request_id = "q15".into();
+    m.approval = Some(approval);
+    m
+}
+
 /// A login card as `request_login` raises it, with every way in, a sign-in
 /// under way (started from the phone) and a key field: the real Rust types,
 /// so the fixture is what the Mac sends.
@@ -2385,6 +2439,7 @@ pub fn login_card() -> crate::agents::store::AgentMessage {
         settings: None,
         plan: None,
         handoff: None,
+        gate: None,
         from_outside: None,
         login: Some(LoginRequest {
             service: "gmail".into(),

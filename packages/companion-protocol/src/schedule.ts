@@ -23,6 +23,10 @@ export function describeRun(run: CheckInRun, now = Date.now()): string {
     case 'skipped':
       // Its time came while you drove the agent's session (the detail says so).
       return 'Skipped';
+    case 'waiting':
+      return run.step ? `Waiting for your OK after step ${run.step}` : 'Waiting for your OK';
+    case 'declined':
+      return run.step ? `Stopped after step ${run.step}` : 'Stopped';
     default:
       return 'Unknown';
   }

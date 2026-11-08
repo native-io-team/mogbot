@@ -307,6 +307,64 @@ export interface CheckIn {
   retry?: CheckInRetry;
   /** A "When…" routine: it runs when something happens; `nextAt` is its next check. */
   watch?: Watch;
+  /** Steps after the first (`note`), each its own turn (`routine_steps::Step`). Macs with `MAC_FEATURES.steps`. */
+  then?: RoutineStep[];
+  /** A run waiting for the user's OK between two steps, with its card. */
+  waiting?: RoutineWaiting;
+}
+
+/** A step after a routine's first; mirrors `routine_steps::Step`. */
+export interface RoutineStep {
+  text: string;
+  /** Wait for the user's OK (an "OK to go on?" card) before running it. */
+  askFirst?: boolean;
+}
+
+/** Mirrors `routine_steps::Waiting`. */
+export interface RoutineWaiting {
+  runAt: number;
+  /** The step it waits to run, counting the first as 1. */
+  step: number;
+  requestId: string;
+  askedAt: number;
+}
+
+/** "OK to go on?" between two steps of a routine; mirrors `routine_steps::Gate`. */
+export interface RoutineGate {
+  checkInId: string;
+  routine: string;
+  /** The step that just ended, from 1. */
+  done: number;
+  total: number;
+  /** The next step's words, exactly. */
+  next: string;
+  runAt: number;
+}
+
+/** A routine set up with a new agent; mirrors `draft::NewRoutine`. */
+export interface NewRoutine {
+  when: string;
+  note: string;
+  then?: RoutineStep[];
+}
+
+/** One drafted routine, as the Mac's grammar read it; mirrors `draft::DraftRoutine`. */
+export interface DraftRoutine extends NewRoutine {
+  /** "every weekday at 08:00", when the grammar could read `when`. */
+  readsAs?: string;
+  /** Why it can't be set up as drafted. */
+  problem?: string;
+}
+
+/** "Describe the agent you want", drafted for review; mirrors `draft::Draft`. Nothing is created. */
+export interface AgentDraft {
+  name: string;
+  role: string;
+  color: string;
+  instructions: string;
+  routines: DraftRoutine[];
+  /** Apps it will ask to connect when it first needs them. Never a claim that one is connected. */
+  apps: string[];
 }
 
 /** What a "When…" routine waits for; mirrors `watch::Source`. */
@@ -359,7 +417,15 @@ export interface Watch {
 /** One scheduled run and what came of it; mirrors `runs::Run`. */
 export interface CheckInRun {
   at: number;
-  outcome: 'running' | 'ran' | 'retrying' | 'failed' | 'skipped' | 'unknown';
+  outcome:
+    | 'running'
+    | 'ran'
+    | 'retrying'
+    | 'failed'
+    | 'skipped'
+    | 'waiting'
+    | 'declined'
+    | 'unknown';
   /** 1 for the run itself, 2 for its first retry. */
   attempt: number;
   /** Why it failed, as the chat said it. */
@@ -369,6 +435,8 @@ export interface CheckInRun {
   signIn?: string[];
   /** Run now, from the popover. */
   manual?: boolean;
+  /** A routine in steps: the step it reached, from 1. */
+  step?: number;
 }
 
 /** Mirrors `runs::Retry`. */
@@ -541,6 +609,8 @@ export interface Approval {
   plan?: PlanCard;
   /** "<source> sent what it knows": Allow saves it to memory (a turn the user authorised), Deny ignores it. Its parts are `detail`. */
   handoff?: HandoffCard;
+  /** "OK to go on?" between a routine's steps: Allow is Go ahead, Deny is Stop here. */
+  gate?: RoutineGate;
   /**
    * "Bring your work Chrome window to the front so I can use it": Allow means
    * Check again, Deny means Not now. Never a login.
@@ -1424,6 +1494,8 @@ export interface NewAgentInput {
   model?: string;
   project?: string;
   template?: string;
+  /** Routines to set up with it (the ones kept from a draft). */
+  routines?: NewRoutine[];
 }
 
 /** A ready-made agent, as `agents.templates` offers it (its briefing stays on the Mac). */

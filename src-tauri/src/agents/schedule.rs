@@ -146,6 +146,13 @@ pub struct CheckIn {
     /// (`follow_up`). Its wake says so, and its turn never records another.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub follow_up: bool,
+    /// Steps after the first (`note`), each its own turn, some waiting for
+    /// the user's OK (`agents::routine_steps`). Time routines only.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub then: Vec<super::routine_steps::Step>,
+    /// A run waiting for the user's OK between two steps, with its card.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub waiting: Option<super::routine_steps::Waiting>,
     /// Fields a newer Ship Studio wrote that this build doesn't know: kept
     /// and written back as they were, so running an older build never
     /// strips what a newer one saved.
@@ -1306,6 +1313,15 @@ where
             format_time(tz, now)
         );
     }
+    if !c.then.is_empty() {
+        // A routine in steps: the first only, and always something to show.
+        return format!(
+            "[Scheduled routine you set, step 1: {}]{also}{waiting}\n\n[It's now {}.{late}{repeats} Do what the note says. {SWEEP}]{}",
+            c.note,
+            format_time(tz, now),
+            super::routine_steps::first_step_context(c)
+        );
+    }
     format!(
         "[Scheduled check-in you set: {}]{also}{waiting}\n\n[It's now {}.{late}{repeats} Do what the note says. {SWEEP} Then tell the user in a few lines what you did and what's left. If nothing changed since your last check-in and nothing needs them, reply with exactly {NOTHING_NEW} and nothing else: no post goes in their chat.]",
         c.note,
@@ -1411,7 +1427,42 @@ where
 /// Add a check-in to an agent. The returned summary is what the tool says
 /// back: the exact resolved time, so the agent tells the user something true.
 pub fn create(agent_id: &str, when: &str, note: &str) -> Result<Created, CommandError> {
-    create_in(&chrono::Local, agent_id, when, note, store::now_ms()).map_err(Refused::into_error)
+    create_with_steps(agent_id, when, note, &[])
+}
+
+/// [`create`], with steps after the first (`agents::routine_steps`).
+pub fn create_with_steps(
+    agent_id: &str,
+    when: &str,
+    note: &str,
+    then: &[super::routine_steps::Step],
+) -> Result<Created, CommandError> {
+    let then = super::routine_steps::check(then).map_err(|why| super::err_invalid("then", why))?;
+    let mut created = create_in(&chrono::Local, agent_id, when, note, store::now_ms())
+        .map_err(Refused::into_error)?;
+    if then.is_empty() {
+        return Ok(created);
+    }
+    let id = created.check_in.id.clone();
+    store::update(agent_id, |a| {
+        if let Some(c) = a.check_ins.iter_mut().find(|c| c.id == id) {
+            c.then = then.clone();
+        }
+    })?;
+    created.check_in.then = then.clone();
+    let steps = super::routine_steps::total(&created.check_in);
+    let asks = then.iter().filter(|s| s.ask_first).count();
+    created.summary.push_str(&format!(
+        " It runs in {steps} steps, one turn each{}.",
+        match asks {
+            0 => String::new(),
+            1 => ", and waits for the user's OK on a card before the step marked so".to_string(),
+            n => format!(
+                ", and waits for the user's OK on a card before each of the {n} steps marked so"
+            ),
+        }
+    ));
+    Ok(created)
 }
 
 pub(crate) fn create_in<Tz: TimeZone>(
@@ -1438,6 +1489,8 @@ where
         watch: None,
         usage: Default::default(),
         follow_up: false,
+        then: Vec::new(),
+        waiting: None,
         extra: Default::default(),
     };
     let mut refused: Option<Refused> = None;
@@ -1485,6 +1538,43 @@ pub(crate) fn same_schedule(a: &CheckIn, b: &CheckIn) -> bool {
 /// re-read from now, so an edited routine's next time is its next one.
 pub fn edit(agent_id: &str, id: &str, when: &str, note: &str) -> Result<CheckIn, CommandError> {
     edit_in(&chrono::Local, agent_id, id, when, note, store::now_ms())
+}
+
+/// [`edit`], and its steps after the first: `None` keeps them as they are.
+pub fn edit_with_steps(
+    agent_id: &str,
+    id: &str,
+    when: &str,
+    note: &str,
+    then: Option<&[super::routine_steps::Step]>,
+) -> Result<CheckIn, CommandError> {
+    let then = then
+        .map(super::routine_steps::check)
+        .transpose()
+        .map_err(|why| super::err_invalid("then", why))?;
+    if let Some(steps) = then.as_ref().filter(|s| !s.is_empty()) {
+        let agent = store::get(agent_id)?;
+        if agent
+            .check_ins
+            .iter()
+            .any(|c| c.id == id && c.watch.is_some())
+        {
+            return Err(CommandError::expected(
+                "A “When…” routine runs in one step. Make the rest a routine of its own.",
+            ));
+        }
+        let _ = steps;
+    }
+    let mut edited = edit_in(&chrono::Local, agent_id, id, when, note, store::now_ms())?;
+    if let Some(steps) = then {
+        store::update(agent_id, |a| {
+            if let Some(c) = a.check_ins.iter_mut().find(|c| c.id == id) {
+                c.then = steps.clone();
+            }
+        })?;
+        edited.then = steps;
+    }
+    Ok(edited)
 }
 
 /// An empty `when` keeps the schedule as it is and changes only the note:
@@ -1585,6 +1675,11 @@ fn running(firing: &Firing, now: i64) -> runs::Run {
         retry_at: None,
         sign_in: Vec::new(),
         manual: firing.manual,
+        step: if firing.check_in.then.is_empty() {
+            0
+        } else {
+            1
+        },
     }
 }
 
@@ -1825,6 +1920,10 @@ fn wake<Tz: TimeZone>(
 where
     Tz::Offset: std::fmt::Display,
 {
+    // A run still waiting on the user's OK closes: this run replaces it.
+    if firing.check_in.waiting.is_some() {
+        super::routine_steps::superseded(app, &firing.agent_id, &firing.check_in.id);
+    }
     let note = std::iter::once(&firing.check_in)
         .chain(&firing.also)
         .map(|c| c.note.as_str())
@@ -1876,6 +1975,8 @@ where
             .as_ref()
             .map_or(firing.check_in.next_at, |r| r.due_at),
         manual: firing.manual,
+        step: 1,
+        row_at: now,
     });
     let routine = firing.check_in.repeat.is_some();
     runner::enqueue_scheduled(app, &firing.agent_id, prompt, routine, ticket);
@@ -2182,6 +2283,8 @@ mod tests {
             watch: None,
             usage: Default::default(),
             follow_up: false,
+            then: Vec::new(),
+            waiting: None,
             extra: Default::default(),
         }
     }
@@ -2881,6 +2984,7 @@ mod tests {
                 retry_at: Some(2),
                 sign_in: vec!["Gmail".into()],
                 manual: false,
+                step: 0,
             },
         );
         c.retry = Some(runs::Retry {

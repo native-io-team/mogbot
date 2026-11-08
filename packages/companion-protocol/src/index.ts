@@ -33,3 +33,4 @@ export * from './gallery';
 export * from './preview';
 export * from './steady';
 export * from './apps';
+export * from './steps';

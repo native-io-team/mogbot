@@ -13,7 +13,7 @@
 //! update the "working" line under the agent's name.
 
 use serde::Serialize;
-use std::collections::{HashMap, VecDeque};
+use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, LazyLock, Mutex};
@@ -1845,6 +1845,28 @@ pub fn typed_input(agent_id: &str) -> Option<String> {
         .and_then(|r| r.typed.clone())
 }
 
+/// Scheduled wakes the user OK'd themselves, on a card (`routine_steps`):
+/// the turn answering one counts as answering them, as a typed message
+/// does. Kept in memory: a wake resumed after a restart no longer counts.
+static APPROVED_TICKETS: LazyLock<Mutex<HashSet<String>>> =
+    LazyLock::new(|| Mutex::new(HashSet::new()));
+
+/// The user pressed Go ahead for the wake carrying `ticket`.
+pub fn approve_ticket(ticket: &str) {
+    let mut set = APPROVED_TICKETS.lock().unwrap_or_else(|e| e.into_inner());
+    if set.len() > 200 {
+        set.clear();
+    }
+    set.insert(ticket.to_string());
+}
+
+fn approved_ticket(ticket: &str) -> bool {
+    APPROVED_TICKETS
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .contains(ticket)
+}
+
 /// Queue the turn a check-in wakes the agent for: one of its routines
 /// (`routine`), or a one-time check-in. `ticket` is the scheduled run it
 /// answers (`runs::issue`), settled however the turn ends.
@@ -2865,8 +2887,8 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     let users = batch.iter().any(|m| {
         matches!(m.from, From::User)
             && m.room.is_none()
-            && m.ticket.is_none()
-            && !m.routine
+            && (m.ticket.is_none() || m.ticket.as_deref().is_some_and(approved_ticket))
+            && (!m.routine || m.ticket.as_deref().is_some_and(approved_ticket))
             && !m.outside
             && m.resume == 0
     });
@@ -6285,6 +6307,7 @@ mod tests {
                 settings: None,
                 plan: None,
                 handoff: None,
+                gate: None,
             });
             store::append_message(&card).unwrap();
             let err = begin_fresh(&a.id).unwrap_err().to_string();

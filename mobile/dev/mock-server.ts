@@ -868,7 +868,9 @@ export function createMockServer(opts: MockOptions = {}) {
       ...real.frames.flatMap((f) =>
         f.t === 'evt' &&
         f.event.type === 'agents.message' &&
-        (f.event.message.approval?.settings || f.event.message.approval?.plan)
+        (f.event.message.approval?.settings ||
+          f.event.message.approval?.plan ||
+          f.event.message.approval?.gate)
           ? [structuredClone(f.event.message) as AgentMessage]
           : []
       ),
@@ -1244,6 +1246,21 @@ export function createMockServer(opts: MockOptions = {}) {
           },
           { at: at - 86_400_000, outcome: 'ran', attempt: 2 },
           { at: at - 2 * 3_600_000, outcome: 'ran', attempt: 1, manual: true },
+        ],
+      },
+      {
+        id: 'ci_weekly',
+        note: 'Draft the weekly report from this week’s notes',
+        repeat: { kind: 'days', days: [5], hour: 16, minute: 0 },
+        nextAt: nextDaily([5], 16, 0, at),
+        createdAt: at - 20 * 86_400_000,
+        paused: false,
+        // A routine in steps (`routine_steps`), its last run waiting for the OK.
+        then: [{ text: 'Post it to #team on Slack', askFirst: true }],
+        waiting: { runAt: at - 3_600_000, step: 2, requestId: 'q15', askedAt: at - 3_000_000 },
+        runs: [
+          { at: at - 7 * 86_400_000, outcome: 'ran', attempt: 1, step: 2 },
+          { at: at - 3_600_000, outcome: 'waiting', attempt: 1, step: 1 },
         ],
       },
       {
@@ -2712,6 +2729,7 @@ export function createMockServer(opts: MockOptions = {}) {
       if (!String(p.note).trim()) {
         return fail({ type: 'Validation', field: 'note', reason: 'Say what to do then.' });
       }
+      const then = Array.isArray(p.then) ? (p.then as CheckIn['then']) : undefined;
       const created: CheckIn = {
         id: `ci_${randomUUID().slice(0, 6)}`,
         note: String(p.note).trim(),
@@ -2719,6 +2737,7 @@ export function createMockServer(opts: MockOptions = {}) {
         nextAt: parsed.nextAt,
         createdAt: Date.now(),
         paused: false,
+        ...(then && then.length ? { then } : {}),
       };
       a.checkIns = [...(a.checkIns ?? []), created];
       emit({ type: 'agents.registry', overview: overview() });
@@ -3025,11 +3044,25 @@ export function createMockServer(opts: MockOptions = {}) {
       chiefNotes: false,
       routinesRefused: [],
     }),
-    // The router's rules (router.rs `check_new_agent`): a name, a role, a colour and a template only.
+    // "Describe the agent you want" (router.rs `agents.draft`): the fixture's draft.
+    'agents.draft': (p) => {
+      if (String(p.description ?? '').trim().length < 8)
+        return fail({
+          type: 'Validation',
+          field: 'description',
+          reason: 'Say a little more about what it should do.',
+        });
+      return real.agentsDraft;
+    },
+    // The router's rules (router.rs `check_new_agent`): a name, a role, a colour, a template,
+    // and from a draft its instructions and routines.
     'agents.create': (p, c) => {
       const input = (p.input ?? {}) as Record<string, unknown>;
       if (
-        Object.keys(input).some((k) => !['name', 'role', 'color', 'template', 'avatar'].includes(k))
+        Object.keys(input).some(
+          (k) =>
+            !['name', 'role', 'color', 'template', 'avatar', 'instructions', 'routines'].includes(k)
+        )
       ) {
         return fail({
           type: 'Protocol',

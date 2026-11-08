@@ -23,7 +23,7 @@ import { setStayOn, type StayOnChange } from '../lib/remoteAccess';
 import { useAgentsSelector, type AgentsState } from '../lib/agentsStore';
 import type { AppView } from '../lib/types';
 import { AGENT_EVENTS, OTHER_APP_NAME, otherAppExists, TEAM_ID } from '../lib/agents';
-import { ROLE_TEMPLATES } from '../lib/agentTemplates';
+import { DESCRIBE_START, ROLE_TEMPLATES } from '../lib/agentTemplates';
 import {
   checkTeamReach,
   resumeTeamSetup,
@@ -208,6 +208,18 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         ],
         run: () => {
           requestAgentsIntent({ kind: 'ideas' });
+          setView('agents');
+        },
+      },
+      // One prompt: the New agent dialog with the cursor in "Describe the agent you want".
+      {
+        id: 'agents.describe',
+        title: 'Describe a new agent…',
+        icon: <PlusIcon size={14} />,
+        category: 'navigation' as const,
+        keywords: ['agents', 'create', 'draft', 'prompt', 'describe', 'one prompt', 'routine'],
+        run: () => {
+          requestAgentsIntent({ kind: 'new', template: DESCRIBE_START });
           setView('agents');
         },
       },

@@ -369,6 +369,15 @@ pub const MAC_FEATURE_ENGINE: &str = "agents.engine";
 /// `high`, or empty for the engine's default), and agents carry theirs.
 pub const MAC_FEATURE_EFFORT: &str = "agents.effort";
 
+/// `welcome.features`: `agents.draft` ("Describe the agent you want"), and
+/// `agents.create` takes `instructions` and `routines` (`agents/draft.rs`).
+pub const MAC_FEATURE_DRAFT: &str = "agents.draft";
+
+/// `welcome.features`: routines in steps (`agents/routine_steps.rs`):
+/// `agents.schedule.create|update` take `then`, routines carry `then` and
+/// `waiting`, and "OK to go on?" cards carry `gate`.
+pub const MAC_FEATURE_STEPS: &str = "routines.steps";
+
 /// Everything `welcome.features` lists.
 pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_REVISE_RESULTS,
@@ -382,6 +391,8 @@ pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_WATCH_LINKS,
     MAC_FEATURE_ENGINE,
     MAC_FEATURE_EFFORT,
+    MAC_FEATURE_DRAFT,
+    MAC_FEATURE_STEPS,
 ];
 
 /// What one connected app said it shows (`hello.features`).

@@ -419,11 +419,16 @@ impl Backend for DesktopBackend {
             avatar: input.avatar,
             color: Some(color),
             role: input.role,
-            instructions: template.map(|t| t.instructions()).unwrap_or_default(),
+            // What the user reviewed after a draft, else the template's briefing.
+            instructions: match input.instructions {
+                Some(text) => text,
+                None => template.map(|t| t.instructions()).unwrap_or_default(),
+            },
             engine: None,
             model: None,
             project: None,
             template: template.map(|t| t.id.clone()),
+            routines: input.routines,
         };
         // Read before, as `agents_create` reads it, so its first line can say
         // where it went and, on a fallback, why: the header's badge leaves
@@ -437,6 +442,10 @@ impl Backend for DesktopBackend {
         );
         let _ = runner::record(&self.app, note);
         json(agent)
+    }
+
+    async fn draft_agent(&self, description: String) -> Result<Value, CommandError> {
+        json(cmd::agents_draft(description).await?)
     }
 
     async fn update_agent(
@@ -929,13 +938,15 @@ impl Backend for DesktopBackend {
                 agent_id,
                 when,
                 note,
-            } => json(cmd::agents_schedule_create(app, agent_id, when, note).await?),
+                then,
+            } => json(cmd::agents_schedule_create(app, agent_id, when, note, then).await?),
             ScheduleOp::Update {
                 agent_id,
                 id,
                 when,
                 note,
-            } => json(cmd::agents_schedule_update(app, agent_id, id, when, note).await?),
+                then,
+            } => json(cmd::agents_schedule_update(app, agent_id, id, when, note, then).await?),
             ScheduleOp::Pause {
                 agent_id,
                 id,

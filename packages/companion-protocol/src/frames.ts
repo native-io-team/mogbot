@@ -206,6 +206,16 @@ export const MAC_FEATURES = {
    * turns think, from its next message.
    */
   effort: 'agents.effort',
+  /**
+   * `agents.draft` ("Describe the agent you want") and `agents.create` taking
+   * `instructions` and `routines`.
+   */
+  draft: 'agents.draft',
+  /**
+   * Routines in steps: `agents.schedule.create|update` take `then`, routines
+   * carry `then` and `waiting`, and "OK to go on?" cards carry `gate`.
+   */
+  steps: 'routines.steps',
 } as const;
 export type MacFeature = (typeof MAC_FEATURES)[keyof typeof MAC_FEATURES];
 

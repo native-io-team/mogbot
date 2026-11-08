@@ -1,0 +1,220 @@
+/* Routines in steps (`AgentRoutineSteps.tsx`) and "Describe the agent you
+   want" (`AgentDescribe.tsx`). Quiet by design: muted numbers in their own
+   column, a step that waits for the user marked in words, one tint for a
+   well of agent-written text, and no accent anywhere: these are content,
+   not actions. */
+
+/* ---------------------------------------------------- steps: the editor */
+
+.agent-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.agent-steps__row {
+  display: grid;
+  grid-template-columns: var(--spacing-lg) minmax(0, 1fr) auto auto;
+  align-items: center;
+  column-gap: var(--spacing-xs);
+}
+
+.agent-steps__number {
+  color: var(--text-muted);
+  font-size: var(--font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  padding-right: var(--spacing-2xs);
+}
+
+.agent-steps__field {
+  min-width: 0;
+}
+
+.agent-steps__ask {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.agent-steps__add {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-sm);
+  padding-left: calc(var(--spacing-lg) + var(--spacing-xs));
+}
+
+.agent-steps__hint {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+/* ----------------------------------------------- steps: under a routine */
+
+.agent-steps__list {
+  margin: var(--spacing-2xs) 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+}
+
+.agent-steps__item {
+  display: grid;
+  grid-template-columns: var(--spacing-md) minmax(0, 1fr);
+  column-gap: var(--spacing-xs);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-compact);
+  color: var(--text-secondary);
+}
+
+.agent-steps__item .agent-steps__number {
+  text-align: left;
+  padding-right: 0;
+}
+
+.agent-steps__text {
+  overflow-wrap: anywhere;
+}
+
+/* The step that waits: said in words, in the muted ink, never a colour. */
+.agent-steps__gate {
+  color: var(--text-muted);
+}
+
+.agent-schedule__waiting {
+  font-size: var(--font-size-body-sm);
+  color: var(--accent-warning);
+}
+
+/* ------------------------------------------- "OK to go on?": the body */
+
+.agent-gate {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+.agent-gate__next {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+}
+
+.agent-gate__label {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-gate__step {
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-compact);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+/* What the step before made, as the agent wrote it: a quiet well. */
+.agent-gate__made {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--radius-control);
+  background: var(--tint-subtle);
+}
+
+.agent-gate__prose {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.agent-gate__more {
+  align-self: flex-start;
+}
+
+/* ------------------------------------- "Describe the agent you want" */
+
+.agent-describe {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.agent-describe__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.agent-describe__hint {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+  line-height: var(--line-height-help);
+}
+
+.agent-describe__drafted {
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-draft__routines {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-control);
+}
+
+.agent-draft__routine {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: var(--spacing-sm);
+  align-items: start;
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-weight: var(--font-weight-body);
+}
+
+.agent-draft__routine + .agent-draft__routine {
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-draft__routine[data-off] .agent-draft__routine-text {
+  opacity: var(--button-disabled-opacity);
+}
+
+.agent-draft__routine-text {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+  min-width: 0;
+}
+
+.agent-draft__when {
+  font-size: var(--font-size-body-md);
+  color: var(--text-primary);
+}
+
+.agent-draft__note {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+.agent-draft__problem {
+  font-size: var(--font-size-body-sm);
+  color: var(--accent-warning);
+}
+
+.agent-draft__apps {
+  margin-top: var(--spacing-xs);
+}

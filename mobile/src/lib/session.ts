@@ -17,6 +17,7 @@ import type {
   AgentEffort,
   AgentEngine,
   AgentLook,
+  RoutineStep,
 } from '@shipstudio/companion-protocol';
 import NetInfo from '@react-native-community/netinfo';
 import { AccessibilityInfo, AppState, Platform } from 'react-native';
@@ -645,7 +646,7 @@ export async function setAgentEngine(
  * the first tap made instead of a second one.
  */
 export async function createAgent(
-  input: { name: string; role: string; color?: string; template?: string },
+  input: Params<'agents.create'>['input'],
   clientId: string = Crypto.randomUUID()
 ) {
   const stored = await call('agents.create', { input, clientId });
@@ -756,10 +757,11 @@ export async function loadUntil(agentId: string, messageId: string, maxPages = 4
 
 export const schedule = {
   preview: (when: string) => call('agents.schedule.preview', { when }),
-  create: (agentId: string, when: string, note: string) =>
-    call('agents.schedule.create', { agentId, when, note }),
-  update: (agentId: string, id: string, when: string, note: string) =>
-    call('agents.schedule.update', { agentId, id, when, note }),
+  /** `then`: steps after the first, only to a Mac listing `MAC_FEATURES.steps`. */
+  create: (agentId: string, when: string, note: string, then?: RoutineStep[]) =>
+    call('agents.schedule.create', { agentId, when, note, ...(then ? { then } : {}) }),
+  update: (agentId: string, id: string, when: string, note: string, then?: RoutineStep[]) =>
+    call('agents.schedule.update', { agentId, id, when, note, ...(then ? { then } : {}) }),
   pause: (agentId: string, id: string, paused: boolean) =>
     call('agents.schedule.pause', { agentId, id, paused }),
   cancel: (agentId: string, id: string) => call('agents.schedule.cancel', { agentId, id }),

@@ -36,6 +36,17 @@ reply to a single message.
 
 ## Done
 
+- **Describe the agent you want** — one prompt drafts the whole agent (name,
+  colour, briefing, routines read by the app's grammar, apps it will need) for
+  one review before Create; desk, phone and the Chief
+  ([agents.md](agents.md), "Describe the agent you want"). Not yet tried on a
+  live engine.
+- **Routines in steps, with your OK in the middle** — "draft, wait for my OK,
+  post": an "OK to go on?" card shows what step 1 made and step 2's words; Go
+  ahead is a yes exactly as wide as the card (`ask_plan` covers what it
+  named); desk and phone editors ([agents.md](agents.md), "Routines in
+  steps"). Not yet run end to end on a live engine.
+
 - **Defaults for new agents** — Settings → Agents sets the engine (Claude
   Code or Codex, only when ready) and a model per engine, from only the
   models each engine lists; the New agent dialog, the Chief's

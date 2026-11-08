@@ -203,6 +203,7 @@ fn the_thread_reads_back_with_each_members_card_answers() {
             settings: None,
             plan: None,
             handoff: None,
+            gate: None,
             summary: None,
         });
         // The member's own log has the card, the room a copy.

@@ -1463,6 +1463,8 @@ pub fn ticket_for(
         first_failed_at,
         due_at,
         manual: false,
+        step: 1,
+        row_at: now,
     }
 }
 
@@ -1475,6 +1477,7 @@ fn running(now: i64, attempt: u32) -> runs::Run {
         retry_at: None,
         sign_in: Vec::new(),
         manual: false,
+        step: 0,
     }
 }
 
@@ -1954,6 +1957,8 @@ pub(crate) fn create_in(
         watch: Some(Watch::new(source.clone(), every)),
         usage: Default::default(),
         follow_up: false,
+        then: Vec::new(),
+        waiting: None,
         extra: Default::default(),
     };
     let mut refused: Option<Refused> = None;

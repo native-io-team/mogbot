@@ -491,6 +491,7 @@ mod tests {
             settings: None,
             plan: None,
             handoff: None,
+            gate: None,
         });
         message
     }

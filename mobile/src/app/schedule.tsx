@@ -11,6 +11,10 @@
  * works in `welcome.timeZone` and says "Mac time" when that isn't the
  * phone's. An edit that leaves the When alone sends no `when`, so the
  * schedule stays exactly as it was (on a Mac that reports its zone).
+ *
+ * On a Mac that runs routines in steps (`MAC_FEATURES.steps`), "Then…" under
+ * What adds steps after it (`StepsEditor`), each optionally waiting for your
+ * OK on a card first; the echo says how many steps and where it asks.
  */
 
 import DateTimePicker, {
@@ -18,8 +22,12 @@ import DateTimePicker, {
   type DateTimePickerEvent,
 } from '@react-native-community/datetimepicker';
 import {
+  cleanSteps,
   describeRun,
   formatWhen,
+  MAC_FEATURES,
+  stepsLine,
+  type RoutineStep,
   formatWhenIn,
   routineEcho,
   routineInPast,
@@ -36,6 +44,7 @@ import { Platform, ScrollView, StyleSheet, TextInput, View } from 'react-native'
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useNow } from '../components/ConnectionPill';
 import { Chip, ChipRow } from '../components/pickers';
+import { StepsEditor } from '../components/stepsEditor';
 import { choose } from '../components/menu';
 import { Button, T, SheetPage } from '../components/ui';
 import { SheetTitle } from '../components/SheetTitle';
@@ -105,6 +114,10 @@ function Schedule() {
     editing ? routineWhenPhrase(routineWhenOf(editing, timeZone)) : null
   );
   const [note, setNote] = useState(() => editing?.note ?? '');
+  // Steps after the first: a Mac that runs them, and not a "When…" routine.
+  const servesSteps = useApp((s) => !!s.welcome?.features?.includes(MAC_FEATURES.steps));
+  const [then, setThen] = useState<RoutineStep[]>(() => editing?.then ?? []);
+  const steps = cleanSteps(then);
   const [answer, setAnswer] = useState<{ phrase: string; reading: Reading } | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -174,8 +187,20 @@ function Schedule() {
       if (editing) {
         // Left as it was: no `when`, so "every 2 hours" isn't re-anchored to now.
         const keep = phrase === openedAs && timeZone !== undefined;
-        await schedule.update(agentId, editing.id, keep ? '' : phrase, note.trim());
-      } else await schedule.create(agentId, phrase, note.trim());
+        await schedule.update(
+          agentId,
+          editing.id,
+          keep ? '' : phrase,
+          note.trim(),
+          servesSteps ? steps : undefined
+        );
+      } else
+        await schedule.create(
+          agentId,
+          phrase,
+          note.trim(),
+          servesSteps && steps.length ? steps : undefined
+        );
       router.back();
     } catch (e) {
       setError(describeError(e));
@@ -301,12 +326,18 @@ function Schedule() {
             accessibilityLabel={`What ${agent?.name ?? 'the agent'} should do`}
             accessibilityLabelledBy="what-label"
           />
+          {servesSteps && <StepsEditor steps={then} onChange={setThen} />}
         </View>
 
         <View style={styles.echo} accessibilityLiveRegion="polite">
           {when && (
             <T variant="subhead" color={colors.textStrong} maxFontSizeMultiplier={2}>
               {routineEcho(when, note, now, timeZone)}
+            </T>
+          )}
+          {steps.length > 0 && (
+            <T variant="caption" color={colors.textSecondary}>
+              {stepsLine({ note, then: steps })}
             </T>
           )}
           {reading.kind === 'ok' ? (
@@ -481,6 +512,7 @@ function RunHistory({ runs }: { runs: CheckInRun[] }) {
             .filter(Boolean)
             .join(' · ');
           const failed = run.outcome === 'failed' || run.outcome === 'retrying';
+          const waiting = run.outcome === 'waiting';
           return (
             <View key={`${run.at}-${run.attempt}`} style={[styles.run, i > 0 && styles.divider]}>
               <T variant="small" color={colors.textPrimary}>
@@ -488,7 +520,13 @@ function RunHistory({ runs }: { runs: CheckInRun[] }) {
               </T>
               <T
                 variant="caption"
-                color={failed ? colors.accentErrorLight : colors.textSecondary}
+                color={
+                  failed
+                    ? colors.accentErrorLight
+                    : waiting
+                      ? colors.accentWarning
+                      : colors.textSecondary
+                }
                 numberOfLines={3}
               >
                 {outcome}

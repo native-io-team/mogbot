@@ -442,6 +442,18 @@ pub struct CreateAgentInput {
     /// caller sends the instructions it showed; this only marks the agent.
     #[serde(default)]
     pub template: Option<String>,
+    /// Routines to set up with it ("Describe the agent you want" drafts
+    /// them; the user keeps the ones they ticked).
+    #[serde(default)]
+    pub routines: Vec<agents::draft::NewRoutine>,
+}
+
+/// "Describe the agent you want": a draft to check, nothing created
+/// (`agents/draft.rs`).
+#[tauri::command]
+#[tracing::instrument(skip(description))]
+pub async fn agents_draft(description: String) -> Result<agents::draft::Draft, CommandError> {
+    agents::draft::draft(&description).await
 }
 
 #[tauri::command]
@@ -508,6 +520,10 @@ pub async fn agents_create(
     } else {
         agent
     };
+    if !input.routines.is_empty() {
+        agents::draft::add_routines(&app, &agent.id, &input.routines);
+    }
+    let agent = store::get(&agent.id).unwrap_or(agent);
     emit_registry(&app);
     Ok(agent)
 }
@@ -1348,6 +1364,11 @@ pub(crate) fn answer_card(
     if approval.handoff.is_some() {
         return agents::handoff::answer_card(app, agent_id, &approval, allow);
     }
+    // "OK to go on?" between a routine's steps: Go ahead runs the next one
+    // as the user's yes to what the card showed; Stop here ends the run.
+    if approval.gate.is_some() {
+        return agents::routine_steps::answer_card(app, agent_id, &approval, allow);
+    }
     // "Do these under your name?": Allow is the user's OK for each listed
     // action, here and only here (`plan_grant`).
     if let (true, Some(plan)) = (allow, &approval.plan) {
@@ -1817,8 +1838,10 @@ pub async fn agents_schedule_create(
     agent_id: String,
     when: String,
     note: String,
+    then: Option<Vec<agents::routine_steps::Step>>,
 ) -> Result<schedule::CheckIn, CommandError> {
-    let created = schedule::create(&agent_id, &when, &note)?;
+    let created =
+        schedule::create_with_steps(&agent_id, &when, &note, then.as_deref().unwrap_or(&[]))?;
     agents::mcp::created_routine_line(&app, &agent_id, &created.check_in);
     emit_registry(&app);
     Ok(created.check_in)
@@ -1858,8 +1881,9 @@ pub async fn agents_schedule_update(
     id: String,
     when: String,
     note: String,
+    then: Option<Vec<agents::routine_steps::Step>>,
 ) -> Result<schedule::CheckIn, CommandError> {
-    let edited = schedule::edit(&agent_id, &id, &when, &note)?;
+    let edited = schedule::edit_with_steps(&agent_id, &id, &when, &note, then.as_deref())?;
     emit_registry(&app);
     Ok(edited)
 }

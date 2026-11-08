@@ -730,7 +730,16 @@ The phone can start work as well as answer it. Each piece is gated by
   nobody wears, as the desk's editor does. `agents.create` calls the desk's
   own `agents_create` with no engine or model, so it starts on the defaults
   for new agents (Settings → Agents, falling back to the first ready engine
-  when the chosen one isn't); the phone can't set the engine, model,
+  when the chosen one isn't). On a Mac listing `MAC_FEATURES.draft`, **Draft
+  the rest** under "What should it do?" asks the Mac to draft the agent
+  (`agents.draft`, see docs/agents.md, "Describe the agent you want"): the
+  draft fills the name and colour and adds a review (`components/draftReview.tsx`:
+  "What it knows" to edit, a switch per routine, the apps line), and Create
+  sends the reviewed `instructions` and kept `routines`; "Start over" puts
+  your words back. The routine sheet's **Then…** adds steps
+  (`components/stepsEditor.tsx`) on a Mac listing `MAC_FEATURES.steps`, and an
+  "OK to go on?" card answers Stop here / Go ahead (`components/gateBody.tsx`).
+  Otherwise the phone can't set the engine, model,
   project or instructions at creation (refused with `bad_params`): the
   instructions are edited afterwards from the agent sheet, on either side,
   and the engine, model and project at the desk. The name and role are one
