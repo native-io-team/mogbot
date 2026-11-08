@@ -504,6 +504,18 @@ export function useAppCommands({
         },
       },
       {
+        id: 'agents.disk',
+        title: 'Disk space used by agents…',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: ['disk', 'storage', 'space', 'free up', 'node_modules', 'clean up', 'full'],
+        run: () => {
+          requestSettingsTabOnOpen('agents');
+          requestSettingsSectionOnOpen('agent-disk');
+          openModal('settings');
+        },
+      },
+      {
         id: 'agents.addClaudeAccount',
         title: 'Add a Claude Code account…',
         icon: <SettingsIcon size={14} />,

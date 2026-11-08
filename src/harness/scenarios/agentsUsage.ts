@@ -531,6 +531,22 @@ const TEAM_WITH_CONTEXT = TEAM.map((a) =>
     : a
 );
 
+const DISK_FLOOR = {
+  freeBytes: 1_800_000_000,
+  level: 'floor',
+  lowBytes: 15_000_000_000,
+  floorBytes: 5_000_000_000,
+  homes: [
+    {
+      agentId: 'devops',
+      name: 'Security & DevOps',
+      bytes: 39_400_000_000,
+      regenerableBytes: 37_200_000_000,
+    },
+    { agentId: 'research', name: 'Research', bytes: 1_400_000_000, regenerableBytes: 0 },
+  ],
+};
+
 export const agentsUsageScenarios: Scenario[] = [
   {
     id: 'agents-chat-usage',
@@ -645,6 +661,20 @@ export const agentsUsageScenarios: Scenario[] = [
       agents_overview: overview(),
       agents_messages: messagesFor,
       agents_usage_overview: FULL_INVENTORY,
+    },
+  },
+  {
+    id: 'settings-agents-disk-floor',
+    title: 'Settings — Agents → Disk space: nearly full, one agent home at 39 GB',
+    looksRightWhen:
+      'A “Disk space” group. “On this Mac”: “This Mac has 1.8 GB free. Agents ask before installing packages or cloning.” Then Security & DevOps: “Its folder uses 39 GB, 37 GB of it in dependency and build folders.” with a secondary “Free up space”; Research: “Its folder uses 1.4 GB.” with no button (nothing regenerable). Neutral buttons, nothing accent-coloured, readable in both themes.',
+    command: 'agents.disk',
+    requires: '.agents-disk [data-disk-home]',
+    clipSelector: '.agents-disk',
+    commands: {
+      agents_overview: overview(),
+      agents_desktop_settings: DESKTOP_SETTINGS,
+      agents_disk_overview: DISK_FLOOR,
     },
   },
 ];

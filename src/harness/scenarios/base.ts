@@ -235,6 +235,15 @@ export const baseCommands: CommandMap = {
   },
   agents_logins_team: { needs: [], done: 0, total: 0 },
   agents_logins_declined: [],
+  // Settings → Agents, "Disk space": plenty free, no large home (hidden).
+  agents_disk_overview: {
+    freeBytes: 210_000_000_000,
+    level: 'fine',
+    lowBytes: 15_000_000_000,
+    floorBytes: 5_000_000_000,
+    homes: [],
+  },
+  agents_disk_free_up: { bytes: 0, removed: 0, kept: 0, busy: false },
   agents_logins_recheck: null,
   agents_login_reopen: null,
   agents_logins_undecline: 0,

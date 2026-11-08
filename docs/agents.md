@@ -406,7 +406,7 @@ characters, a Codex agent's 12,619, the Chief's 16,003 before its team list
 (budgets 12,500 / 13,100 / 16,600). The agents' browser in "Getting access"
 took them to 12,697 / 13,262 / 16,646 after trims elsewhere (the repeated
 "don't mention servers or ports", the password paragraph the Secrets section
-already says), and the budgets to 12,800 / 13,400 / 16,800, then 13,100 / 13,700 / 17,100 for running projects from chat, and 13,250 / 13,850 / 17,250 for remembered permissions and reading artifacts. Grok, the team-wide search and the Chief's tone rules went in within those budgets (13,209 / 13,794 / 17,246) by trimming the rooms, import and agent-editing bullets, "Look before you scale" and a dev-server line. Measured with Claude Code (Haiku 5.5,
+already says), and the budgets to 12,800 / 13,400 / 16,800, then 13,100 / 13,700 / 17,100 for running projects from chat, and 13,250 / 13,850 / 17,250 for remembered permissions and reading artifacts. Grok, the team-wide search and the Chief's tone rules went in within those budgets (13,209 / 13,794 / 17,246) by trimming the rooms, import and agent-editing bullets, "Look before you scale" and a dev-server line. The bulk-work cleanup line (`disk`) went in within them too (13,211 / 13,796 / 17,248), by trimming "Showing your work" and the plumbing example. Measured with Claude Code (Haiku 5.5,
 `--append-system-prompt-file`, input tokens over a bare run): on the base
 this work started from, 3,347 tokens before and 3,269 after for a plain agent
 (4,583 → 4,505 for the Chief), while gaining the paragraph above; with
@@ -4975,6 +4975,72 @@ Watch live on a server the turn left (outside a preview proxy).
   its log), or idle.
 - In the receiving chat, the brief that started the turn in progress is open
   until the turn ends (or you toggle it).
+
+## Disk space (`agents/disk.rs`)
+
+Observed 2026-11-07: an agent's dependency sweep cloned ~40 repos into its home
+(`sweep-<date>/{clones,wt}`) and ran `npm ci` in many copies at once. Its home
+reached 39 GB, plus the npm cache, and the Mac fell to 1–2 GB free overnight.
+Nothing warned anyone or stopped it. Three things now do.
+
+**Awareness.** Free space on the volume holding the user's home is one
+`statvfs` call: read every 2 minutes while the app is open, and fresh for every
+turn and approval. Two lines, in decimal GB as Finder counts:
+
+- **Below 15 GB (low):** every turn opens with a note from the app, in the
+  turn's prompt, never the system prompt, so the cache holds ("this Mac's disk
+  is low: N GB free. Clean up before installing or cloning…"). The Chief's chat
+  gets one quiet line.
+- **Below 5 GB (the floor):** a Bash call that installs packages or clones
+  (`disk::fetches`: npm/pnpm/yarn/bun installs, pip/uv/poetry, cargo
+  build/test/run/fetch, go get/build/mod download, brew install, `git clone`,
+  `gh repo clone`, also inside `bash -c` and loops) asks on a card at every
+  level, Full send included. No "Always allow" rule answers it; a plan the user
+  allowed (`ask_plan`) still covers what it lists. The card says why ("This Mac
+  has N GB free, under the 5 GB floor…"), and the turn's note says installs now
+  ask. The Chief's chat gets a line and the user gets one notification.
+
+Each line is said once per dip, and again only after space came back 2 GB above
+that line. That state is in memory: a relaunch while low says it once more. A
+reading that fails counts as fine, never as low.
+
+**Cleanup by default.** The prompt's Work section tells agents doing bulk work
+to install in a few copies at a time and, done with each, delete its
+`node_modules` and build folders, keeping reports and unpushed commits. The app
+also tidies after them: when an agent goes idle (its queue drained), its home's
+regenerable folders untouched for 6 hours (1 hour while disk is low) are
+removed. A folder is removed only when all of these hold:
+
+- its name is `node_modules`, `.next`, `.turbo` or `target`, and the file that
+  rebuilds it is beside it (`package.json`; for `.next` also `next.config.*`;
+  for `.turbo` also `turbo.json`; `Cargo.toml` for `target`). A `target` folder
+  of notes is not a build folder;
+- it is a real folder inside the agent's home, found without following a link
+  or entering a `.git` folder, and it holds no `.git` of its own;
+- inside a working copy, git ignores it (`check-ignore`) and tracks nothing in
+  it (`ls-files`), so removing it changes nothing git would call a change. Any
+  doubt (git missing, an error, a timeout) keeps it;
+- the agent hasn't started working again (checked before each removal).
+
+Only agent homes: never a project, an agent's copy of one (those live under
+`<projects root>/.worktrees/` and go with Keep/Discard), or the user's folders.
+`.git` folders, reports and unpushed commits are never touched. The search stops
+at 8 levels and 200,000 entries.
+
+**Settings → Agents → Disk space** (`AgentsDiskSettings`, ⌘K "Disk space used
+by agents…") is hidden while disk is fine and no home is 1 GB or more.
+Otherwise it shows free space when low, and each home of 1 GB or more: its
+size, how much of it is in regenerable folders, and **Free up space**, which
+runs the same prune with no age limit (refused while the agent is working). Its
+line then says what it did ("Freed 37 GB."), and how many it left because git
+doesn't ignore them. Sizes are on-disk blocks, measured on demand and kept for 5
+minutes.
+
+Not covered: package-manager caches outside the home (`~/.npm`,
+`~/Library/Caches/pnpm`) still grow; installs in a project or a project copy
+aren't pruned (only the floor's card stops them); a room turn doesn't get the
+low-disk note. The card wiring in `mcp::decide_inner` is covered by
+`disk::floor_asks` unit tests, not by an end-to-end approval test.
 
 ## Known limits / next
 

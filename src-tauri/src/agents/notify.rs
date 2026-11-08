@@ -236,6 +236,18 @@ pub fn turn_ended(app: &AppHandle, agent_id: &str) {
     post(app, &alert, PushKind::Finished);
 }
 
+/// Something about this Mac the user must hear even with no chat open (the
+/// disk nearly full, `disk`): one notification, in `agent_id`'s name.
+pub fn alert_user(app: &AppHandle, agent_id: &str, body: &str) {
+    let alert = Alert {
+        agent_id: agent_id.to_string(),
+        title: store::get(agent_id).map(|a| a.name).unwrap_or_default(),
+        body: body.to_string(),
+        sound: false,
+    };
+    post(app, &alert, PushKind::Message);
+}
+
 fn post(app: &AppHandle, alert: &Alert, kind: PushKind) {
     // A paired phone that can't see it gets a content-free push (companion/push.rs).
     crate::companion::push::raise(&alert.agent_id, kind);

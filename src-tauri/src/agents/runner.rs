@@ -2987,7 +2987,9 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
         String::new()
     };
     let room = runtime.room.clone();
-    let prompt = format!("{nudge}{preamble}{prompt}");
+    // Disk low: every turn opens with it, wherever it answers (`disk`).
+    let disk = super::disk::turn_note();
+    let prompt = format!("{nudge}{disk}{preamble}{prompt}");
     Some(Batch {
         prompt,
         routine,
@@ -3431,6 +3433,8 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
     loop {
         if let Some(idle) = finish_if_idle(&agent_id) {
             set_status(&app, &agent_id, Status::idle());
+            // Stale dependency and build folders in its home go (`disk`).
+            super::disk::after_idle(&agent_id);
             // An interrupted turn whose replacement never ran (stopped).
             for to in &idle.owed {
                 tell_couldnt_finish(
