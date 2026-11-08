@@ -51,6 +51,9 @@ import {
   type IdentityRequest,
   type IdentityResponse,
   type Cursor,
+  type AppConnectFlow,
+  type AppConnection,
+  type AppGrant,
   type Device,
   type JournaledEvent,
   type MacStatus,
@@ -1716,6 +1719,92 @@ export function createMockServer(opts: MockOptions = {}) {
 
   const loginTimers = new Map<string, ReturnType<typeof setTimeout>>();
   const phoneFlows = new Map<string, { agentId: string; requestId: string; state: string }>();
+  // "Apps your agents can use": the Mac's connections, its catalogue, and
+  // connects under way (one per app), as `agents.apps` serves them.
+  const appCatalogue = structuredClone(real.agentsApps.apps);
+  const appConnections: AppConnection[] = [
+    {
+      connectionId: 'c_linear',
+      service: 'linear',
+      title: 'Linear',
+      account: 'sam@acme.com',
+      kind: 'oauth',
+      grants: [
+        { agentId: 'chief', access: 'read' },
+        { agentId: 'qa', access: 'full' },
+      ],
+      lastUsedAt: Date.now() - 3_600_000,
+    },
+    {
+      connectionId: 'c_gmail',
+      service: 'gmail',
+      title: 'Gmail',
+      account: 'work@acme.com',
+      kind: 'claude_ai',
+      grants: [{ agentId: 'fin', access: 'read' }],
+    },
+    {
+      connectionId: 'c_sentry',
+      service: 'sentry',
+      title: 'Sentry',
+      account: 'Sentry',
+      kind: 'oauth',
+      grants: [],
+      needsSignIn: true,
+    },
+  ];
+  const appFlows = new Map<string, AppConnectFlow>([
+    [
+      'notion',
+      {
+        service: 'notion',
+        flow: {
+          state: 'waiting',
+          option: 'oauth',
+          message: 'Notion’s sign-in opened in your browser.',
+          startedAt: Date.now() - 30_000,
+          openedAt: Date.now() - 30_000,
+        },
+      },
+    ],
+  ]);
+  const appSheets = new Map<
+    string,
+    { service: string; grants: AppGrant[]; again?: string; state: string }
+  >();
+  const appGrantsOf = (p: Record<string, unknown>): AppGrant[] =>
+    Array.isArray(p.grants)
+      ? p.grants.map((g: { agentId: string; access: 'read' | 'full' }) => ({
+          agentId: String(g.agentId),
+          access: g.access === 'full' ? 'full' : 'read',
+        }))
+      : [];
+  const connectApp = (service: string, grants: AppGrant[], again?: string) => {
+    const app = appCatalogue.find((a) => a.service === service)!;
+    const existing = again
+      ? appConnections.find((c) => c.connectionId === again)
+      : appConnections.find((c) => c.service === service);
+    let id: string;
+    if (existing) {
+      existing.needsSignIn = undefined;
+      existing.grants = grants;
+      id = existing.connectionId;
+    } else {
+      id = `c_${service}`;
+      appConnections.push({
+        connectionId: id,
+        service,
+        title: app.title,
+        account: 'sam@acme.com',
+        kind: 'oauth',
+        grants,
+      });
+    }
+    appFlows.set(service, {
+      service,
+      connected: { connectionId: id, line: 'Connected as sam@acme.com' },
+    });
+  };
   /** Signing in on the Mac's Chrome from the phone: one at a time. Nothing typed is kept. */
   const signins = new Map<
     string,
@@ -2328,6 +2417,28 @@ export function createMockServer(opts: MockOptions = {}) {
       return null;
     },
     'agents.loginPhoneFinish': (p) => {
+      const sheet = appSheets.get(String(p.flowId));
+      if (sheet) {
+        appSheets.delete(String(p.flowId));
+        const url = typeof p.callbackUrl === 'string' ? p.callbackUrl : '';
+        if (!url.startsWith('dashbot-companion://oauth?') || !url.includes(`state=${sheet.state}`)) {
+          appFlows.set(sheet.service, {
+            service: sheet.service,
+            flow: {
+              state: 'failed',
+              option: 'oauth',
+              message: 'That isn’t this sign-in’s answer, so it was stopped. Try again.',
+              startedAt: Date.now(),
+            },
+          });
+          return fail({
+            type: 'Other',
+            message: 'That isn’t this sign-in’s answer, so it was stopped. Try again.',
+          });
+        }
+        connectApp(sheet.service, sheet.grants, sheet.again);
+        return null;
+      }
       const flow = phoneFlows.get(String(p.flowId));
       phoneFlows.delete(String(p.flowId));
       if (!flow)
@@ -2440,6 +2551,88 @@ export function createMockServer(opts: MockOptions = {}) {
       return secret;
     },
     'agents.reach': (p) => reachOf(String(p.agentId)),
+    'agents.apps': () =>
+      structuredClone({
+        apps: appCatalogue,
+        connections: appConnections,
+        flows: [...appFlows.values()],
+      }),
+    'agents.appsConnect': (p) => {
+      const service = String(p.service);
+      if (!appCatalogue.some((a) => a.service === service))
+        return fail({ type: 'Other', message: 'That app isn’t on the list.' });
+      const grants = appGrantsOf(p);
+      const again = typeof p.again === 'string' ? p.again : undefined;
+      appFlows.set(service, {
+        service,
+        flow: {
+          state: 'waiting',
+          option: 'oauth',
+          message: 'Its sign-in opened in your browser.',
+          startedAt: Date.now(),
+          fromPhone: true,
+          openedAt: Date.now(),
+        },
+      });
+      setTimeout(() => connectApp(service, grants, again), opts.loginAfterMs ?? 4000);
+      return null;
+    },
+    'agents.appsPhoneBegin': (p) => {
+      const service = String(p.service);
+      const app = appCatalogue.find((a) => a.service === service);
+      if (!app) return fail({ type: 'Other', message: 'That app isn’t on the list.' });
+      const flowId = `appflow_${randomUUID().slice(0, 8)}`;
+      const state = randomUUID();
+      appSheets.set(flowId, {
+        service,
+        grants: appGrantsOf(p),
+        again: typeof p.again === 'string' ? p.again : undefined,
+        state,
+      });
+      appFlows.set(service, {
+        service,
+        flow: {
+          state: 'waiting',
+          option: 'oauth',
+          message: `${app.title}’s sign-in is open on your phone.`,
+          startedAt: Date.now(),
+          fromPhone: true,
+          onPhone: true,
+        },
+      });
+      return {
+        flowId,
+        service,
+        url: `https://${app.host}/authorize?state=${state}`,
+        redirectUri: 'dashbot-companion://oauth',
+      };
+    },
+    'agents.appsCancel': (p) => {
+      const service = String(p.service);
+      for (const [id, sh] of appSheets) if (sh.service === service) appSheets.delete(id);
+      appFlows.set(service, {
+        service,
+        flow: {
+          state: 'cancelled',
+          option: 'oauth',
+          message: 'Stopped. Connect again when you’re ready.',
+          startedAt: Date.now(),
+        },
+      });
+      return null;
+    },
+    'agents.appsSetGrants': (p) => {
+      const c = appConnections.find((x) => x.connectionId === p.connectionId);
+      if (!c) return fail({ type: 'Other', message: 'That connection is gone.' });
+      c.grants = appGrantsOf(p);
+      return structuredClone(c);
+    },
+    'agents.appsRemove': (p) => {
+      const i = appConnections.findIndex((x) => x.connectionId === p.connectionId);
+      if (i < 0) return fail({ type: 'Other', message: 'That connection is gone.' });
+      appConnections.splice(i, 1);
+      return null;
+    },
     'agents.policy': (p) => ({ ...structuredClone(real.agentsPolicy), agentId: String(p.agentId) }),
     'agents.loginsTeam': (p) => teamLogins(typeof p.since === 'number' ? p.since : undefined),
     'agents.loginsConnect': (p) => {

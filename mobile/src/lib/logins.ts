@@ -100,6 +100,9 @@ function webBrowser(): WebBrowserModule | null {
 
 export const hasSignInSheet = () => webBrowser() !== null;
 
+/** The sheet's module, for another screen that signs in here (the apps screen). */
+export const webBrowserModule = webBrowser;
+
 /** Open a page on this phone (claude.ai, GitHub's device page), in the app if it can. */
 export async function openHere(url: string): Promise<void> {
   const wb = webBrowser();

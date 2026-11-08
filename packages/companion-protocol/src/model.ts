@@ -819,6 +819,66 @@ export interface DeclineReceipt {
   closed: number;
 }
 
+/** One of the apps the Mac signs in to itself (desktop `app_connect::CatalogueApp`). */
+export interface ConnectableApp {
+  /** The catalogue's id: "linear". */
+  service: string;
+  title: string;
+  /** What reading lets an agent do. */
+  read: string;
+  /** What a full grant adds (each time, on a card). */
+  write: string;
+  /** The connector's host. */
+  host: string;
+}
+
+/** Who may use a connection, and how. */
+export interface AppGrant {
+  agentId: string;
+  access: 'read' | 'full';
+}
+
+/** Where a connection's sign-in is kept: this Mac's Keychain, the GitHub CLI, or claude.ai. */
+export type AppConnectionKind = 'oauth' | 'gh' | 'claude_ai';
+
+/** A connection as the phone sees it (`app_connect::PhoneConnection`). Never a token. */
+export interface AppConnection {
+  connectionId: string;
+  service: string;
+  title: string;
+  account: string;
+  kind: AppConnectionKind;
+  grants: AppGrant[];
+  /** The last sign-in stopped working: it needs signing in again. */
+  needsSignIn?: boolean;
+  lastUsedAt?: number;
+}
+
+/** A connect from the apps screen, under way, failed or stopped, or just done. */
+export interface AppConnectFlow {
+  service: string;
+  /** On a phone, `url` only for its own sheet, never the Mac browser's page. */
+  flow?: LoginFlow;
+  connected?: { connectionId: string; line: string };
+}
+
+/** `agents.apps`: "Apps your agents can use". */
+export interface AppsOverview {
+  apps: ConnectableApp[];
+  connections: AppConnection[];
+  flows: AppConnectFlow[];
+}
+
+/** `agents.appsPhoneBegin`: what the phone opens. No secret: the PKCE verifier stays on the Mac. */
+export interface AppPhoneBegin {
+  flowId: string;
+  service: string;
+  /** The provider's authorization URL, for the system sign-in sheet. */
+  url: string;
+  /** The companion app's own redirect, which the sheet hands back. */
+  redirectUri: string;
+}
+
 /**
  * An import over the connector (desktop `agents/review.rs`). On the phone a
  * consent card is Allow / Deny. A review card can't be answered there: it

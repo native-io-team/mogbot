@@ -746,6 +746,58 @@ impl Backend for DesktopBackend {
         cmd::agents_logins_recheck().await
     }
 
+    async fn apps(&self) -> Result<Value, CommandError> {
+        let view = tokio::task::spawn_blocking(crate::agents::app_connect::phone_overview)
+            .await
+            .map_err(crate::agents::err_other)??;
+        json(view)
+    }
+
+    async fn apps_connect(
+        &self,
+        service: &str,
+        grants: Vec<crate::agents::app_connect::GrantInput>,
+        again: Option<String>,
+    ) -> Result<(), CommandError> {
+        cmd::agents_app_connect(self.app.clone(), service.to_string(), grants, again).await
+    }
+
+    async fn apps_phone_begin(
+        &self,
+        device_id: &str,
+        service: &str,
+        grants: Vec<crate::agents::app_connect::GrantInput>,
+        again: Option<String>,
+    ) -> Result<Value, CommandError> {
+        json(
+            crate::agents::app_connect::phone_begin(
+                &self.app,
+                device_id,
+                service,
+                &grants,
+                again.as_deref(),
+            )
+            .await?,
+        )
+    }
+
+    async fn apps_cancel(&self, service: &str) -> Result<(), CommandError> {
+        cmd::agents_app_connect_cancel(self.app.clone(), service.to_string()).await
+    }
+
+    async fn apps_set_grants(
+        &self,
+        connection_id: &str,
+        grants: Vec<crate::agents::app_connect::GrantInput>,
+    ) -> Result<Value, CommandError> {
+        let c = cmd::agents_connection_set_grants(connection_id.to_string(), grants).await?;
+        json(crate::agents::app_connect::phone_connection(&c))
+    }
+
+    async fn apps_remove(&self, connection_id: &str) -> Result<(), CommandError> {
+        cmd::agents_connection_delete(self.app.clone(), connection_id.to_string()).await
+    }
+
     async fn team_setup(
         &self,
         action: super::router::TeamSetupAction,

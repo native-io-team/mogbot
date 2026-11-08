@@ -12,6 +12,7 @@ import type { FileDiff as DesktopFileDiff } from '../../../src/lib/git';
 import type { CommandError as DesktopCommandError } from '../../../src/lib/errors';
 import type * as DesktopSecrets from '../../../src/lib/agentSecrets';
 import type * as DesktopLogins from '../../../src/lib/agentLogins';
+import type * as DesktopApps from '../../../src/lib/agentApps';
 import type * as Wire from './model';
 import type { CommandError } from './frames';
 
@@ -47,6 +48,9 @@ export type Conformance = [
   Assert<Same<Wire.LoginRequest, DesktopLogins.LoginRequest>>,
   Assert<Same<Wire.TeamLogins, DesktopLogins.TeamLogins>>,
   Assert<Same<Wire.AgentReach, DesktopLogins.Reach>>,
+  Assert<Same<Wire.ConnectableApp, DesktopApps.ConnectableApp>>,
+  Assert<Same<Wire.AppConnectFlow, DesktopApps.AppConnectFlow>>,
+  Assert<Same<Wire.AppGrant, DesktopApps.GrantChoice>>,
   Assert<Same<Wire.AgentReachSettings, DesktopLogins.AgentReachSettings>>,
   Assert<Same<Wire.MemoryView, Desktop.MemoryView>>,
   Assert<Same<Wire.MemoryChange, Desktop.MemoryChange>>,

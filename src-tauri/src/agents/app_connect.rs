@@ -24,6 +24,7 @@ use std::sync::{LazyLock, Mutex};
 use tauri::{AppHandle, Emitter};
 
 use super::connections::{self, Access, Connection, Kind};
+use super::login_relay;
 use super::logins::{self, Connector, Flow, FlowState, Service};
 use super::store;
 use crate::errors::CommandError;
@@ -228,16 +229,17 @@ fn set(app: &AppHandle, service: &str, f: Flow) {
     );
 }
 
-/// Sign in to `service` in this Mac's browser and let `grants` use it.
-/// `again`: the connection to sign in again (it needs it), kept as the same
-/// one whatever account the sign-in reports. Returns at once; the dialog
-/// follows [`EVENT`].
-pub async fn start(
-    app: &AppHandle,
-    service: &str,
-    grants: &[GrantInput],
-    again: Option<&str>,
-) -> Result<(), CommandError> {
+/// A connect, checked before anything starts: one of ours, the ticks are
+/// agents that exist, the connection signed in again is still there, and
+/// nothing is signing in to it already.
+struct Ask {
+    svc: &'static Service,
+    url: &'static str,
+    grants: Vec<(String, Access)>,
+    again_account: Option<String>,
+}
+
+fn ask(service: &str, grants: &[GrantInput], again: Option<&str>) -> Result<Ask, CommandError> {
     let (svc, url) = oauth_service(service)?;
     let grants = checked_grants(grants, &known_agents())?;
     let again_account = match again {
@@ -252,6 +254,30 @@ pub async fn start(
     if under_way(service) {
         return Err(CommandError::expected("It's already signing in."));
     }
+    Ok(Ask {
+        svc,
+        url,
+        grants,
+        again_account,
+    })
+}
+
+/// Sign in to `service` in this Mac's browser and let `grants` use it.
+/// `again`: the connection to sign in again (it needs it), kept as the same
+/// one whatever account the sign-in reports. Returns at once; the dialog
+/// follows [`EVENT`].
+pub async fn start(
+    app: &AppHandle,
+    service: &str,
+    grants: &[GrantInput],
+    again: Option<&str>,
+) -> Result<(), CommandError> {
+    let Ask {
+        svc,
+        url,
+        grants,
+        again_account,
+    } = ask(service, grants, again)?;
     set(app, service, flow(FlowState::Starting, None));
     let app2 = app.clone();
     let task = tokio::spawn(async move {
@@ -273,43 +299,9 @@ pub async fn start(
             pending.finish().await
         }
         .await;
-        let made = outcome.and_then(|done| {
-            let account = again_account
-                .clone()
-                .or_else(|| done.email.clone())
-                .unwrap_or_default();
-            let c = connections::add_for(
-                svc.id,
-                svc.title,
-                &account,
-                Kind::Oauth {
-                    server_url: url.to_string(),
-                },
-                &grants,
-            )?;
-            connections::store_tokens(&c.id, &done.tokens)?;
-            Ok(c)
-        });
-        match made {
-            Ok(c) => {
-                tracing::info!(
-                    service = svc.id,
-                    agents = c.grants.len(),
-                    "connected an app from the apps dialog"
-                );
-                logins::answer_waiting_with(&app2, &c);
-                put(
-                    &app2,
-                    AppFlow {
-                        service: svc.id.to_string(),
-                        flow: None,
-                        connected: Some(Connected {
-                            connection_id: c.id.clone(),
-                            line: connected_line(&c),
-                        }),
-                    },
-                    None,
-                );
+        match outcome {
+            Ok(done) => {
+                let _ = complete(&app2, svc, url, again_account, &grants, done);
             }
             Err(e) => {
                 // A cancel already said so.
@@ -332,6 +324,62 @@ pub async fn start(
     Ok(())
 }
 
+/// A sign-in came back (in this Mac's browser, or the phone's sheet): keep
+/// the connection and its token, give it to the agents ticked, answer their
+/// waiting cards, and say so on the row. A failure is said on the row too.
+fn complete(
+    app: &AppHandle,
+    svc: &'static Service,
+    url: &'static str,
+    again_account: Option<String>,
+    grants: &[(String, Access)],
+    done: super::oauth::Finished,
+) -> Result<Connection, CommandError> {
+    let account = again_account
+        .or_else(|| done.email.clone())
+        .unwrap_or_default();
+    let made = connections::add_for(
+        svc.id,
+        svc.title,
+        &account,
+        Kind::Oauth {
+            server_url: url.to_string(),
+        },
+        grants,
+    )
+    .and_then(|c| {
+        connections::store_tokens(&c.id, &done.tokens)?;
+        Ok(c)
+    });
+    match made {
+        Ok(c) => {
+            tracing::info!(
+                service = svc.id,
+                agents = c.grants.len(),
+                "connected an app from the apps dialog"
+            );
+            logins::answer_waiting_with(app, &c);
+            put(
+                app,
+                AppFlow {
+                    service: svc.id.to_string(),
+                    flow: None,
+                    connected: Some(Connected {
+                        connection_id: c.id.clone(),
+                        line: connected_line(&c),
+                    }),
+                },
+                None,
+            );
+            Ok(c)
+        }
+        Err(e) => {
+            set(app, svc.id, flow(FlowState::Failed, Some(e.to_string())));
+            Err(e)
+        }
+    }
+}
+
 /// Stop a sign-in under way.
 pub fn cancel(app: &AppHandle, service: &str) -> Result<(), CommandError> {
     let task = FLOWS
@@ -342,6 +390,7 @@ pub fn cancel(app: &AppHandle, service: &str) -> Result<(), CommandError> {
     if let Some(t) = task {
         t.abort();
     }
+    let _ = sheets().forget_request(&sheet_key(service));
     set(
         app,
         service,
@@ -375,6 +424,248 @@ pub fn reopen(app: &AppHandle, service: &str) -> Result<(), CommandError> {
 pub fn set_grants(connection_id: &str, grants: &[GrantInput]) -> Result<Connection, CommandError> {
     let grants = checked_grants(grants, &known_agents())?;
     connections::set_grants(connection_id, &grants)
+}
+
+/* ---------------------------------------------------------------- phone */
+
+/// "Apps your agents can use" on the phone (`agents.apps`): the same list,
+/// without anything a phone has no use for. No token is ever in it (those
+/// are only in this Mac's Keychain), nor the page this Mac's browser was
+/// asked to open, which only this Mac's browser can finish.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PhoneApps {
+    pub apps: Vec<CatalogueApp>,
+    pub connections: Vec<PhoneConnection>,
+    pub flows: Vec<AppFlow>,
+}
+
+/// One connection, as the phone shows it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PhoneConnection {
+    pub connection_id: String,
+    pub service: String,
+    pub title: String,
+    pub account: String,
+    /// Where its sign-in is kept: `oauth` (this Mac), `gh`, `claude_ai`.
+    pub kind: &'static str,
+    pub grants: Vec<PhoneGrant>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub needs_sign_in: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_used_at: Option<i64>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct PhoneGrant {
+    pub agent_id: String,
+    pub access: Access,
+}
+
+pub fn phone_connection(c: &Connection) -> PhoneConnection {
+    PhoneConnection {
+        connection_id: c.id.clone(),
+        service: c.service.clone(),
+        title: c.title.clone(),
+        account: c.account.clone(),
+        kind: match c.kind {
+            Kind::Oauth { .. } => "oauth",
+            Kind::Gh => "gh",
+            Kind::ClaudeAi { .. } => "claude_ai",
+        },
+        grants: c
+            .grants
+            .iter()
+            .map(|g| PhoneGrant {
+                agent_id: g.agent_id.clone(),
+                access: g.access,
+            })
+            .collect(),
+        needs_sign_in: c.needs_sign_in,
+        last_used_at: c.last_used_at,
+    }
+}
+
+/// A flow as the phone sees it: the Mac browser's page left out.
+pub fn phone_flow(mut f: AppFlow) -> AppFlow {
+    if let Some(flow) = f.flow.as_mut() {
+        if !flow.on_phone {
+            flow.url = None;
+        }
+    }
+    f
+}
+
+pub fn phone_overview() -> Result<PhoneApps, CommandError> {
+    let o = overview()?;
+    Ok(PhoneApps {
+        apps: o.apps,
+        connections: o.connections.iter().map(phone_connection).collect(),
+        flows: o.flows.into_iter().map(phone_flow).collect(),
+    })
+}
+
+/// What the phone opens in its sign-in sheet. No secret: the PKCE verifier
+/// and `state` stay here.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PhoneBegin {
+    pub flow_id: String,
+    pub service: String,
+    pub url: String,
+    pub redirect_uri: String,
+}
+
+/// A phone sign-in waiting for its code (never sent anywhere).
+struct Sheet {
+    app: AppHandle,
+    svc: &'static Service,
+    url: &'static str,
+    grants: Vec<(String, Access)>,
+    again_account: Option<String>,
+    prepared: super::oauth::Prepared,
+}
+
+static SHEETS: LazyLock<Mutex<login_relay::Table<Sheet>>> = LazyLock::new(Default::default);
+
+fn sheets() -> std::sync::MutexGuard<'static, login_relay::Table<Sheet>> {
+    SHEETS.lock().unwrap_or_else(|e| e.into_inner())
+}
+
+/// The relay keeps one sign-in per card; with no card, one per app.
+fn sheet_key(service: &str) -> String {
+    format!("app:{service}")
+}
+
+/// Whether `flow_id` is a phone sign-in started from the apps screen.
+pub fn is_phone_flow(flow_id: &str) -> bool {
+    sheets().contains(flow_id)
+}
+
+const TOO_LONG: &str = "Sign-in took too long, so it was stopped. Try again.";
+
+/// Get a phone sign-in ready, as a card's is (`login_relay::begin`): this
+/// Mac does discovery, registers the companion app's redirect and makes the
+/// PKCE verifier and `state`, which never leave it. The phone gets only the
+/// authorization URL. The row follows it on both devices.
+pub async fn phone_begin(
+    app: &AppHandle,
+    device_id: &str,
+    service: &str,
+    grants: &[GrantInput],
+    again: Option<&str>,
+) -> Result<PhoneBegin, CommandError> {
+    let Ask {
+        svc,
+        url,
+        grants,
+        again_account,
+    } = ask(service, grants, again)?;
+    let on_phone = |mut f: Flow| {
+        f.from_phone = true;
+        f.on_phone = true;
+        f
+    };
+    set(app, svc.id, on_phone(flow(FlowState::Starting, None)));
+    let redirect = login_relay::redirect_uri();
+    let prepared = match super::oauth::prepare(url, &redirect).await {
+        Ok(p) => p,
+        Err(e) => {
+            let said = format!(
+                "{} {} won't sign in from a phone, so connect it on your Mac.",
+                e, svc.title
+            );
+            set(app, svc.id, flow(FlowState::Failed, Some(said.clone())));
+            return Err(CommandError::expected(said));
+        }
+    };
+    let flow_id = login_relay::new_flow_id();
+    let sheet_url = prepared.url.clone();
+    let state = prepared.state.clone();
+    set(
+        app,
+        svc.id,
+        on_phone(flow(
+            FlowState::Waiting,
+            Some(format!("{}'s sign-in is open on your phone.", svc.title)),
+        )),
+    );
+    sheets().insert(
+        &flow_id,
+        device_id,
+        &sheet_key(svc.id),
+        &state,
+        &redirect,
+        std::time::Instant::now() + login_relay::SHEET_TIMEOUT,
+        Sheet {
+            app: app.clone(),
+            svc,
+            url,
+            grants,
+            again_account,
+            prepared,
+        },
+    );
+    // Give up on it when its time is up, and say so on the row.
+    tokio::spawn(async move {
+        tokio::time::sleep(login_relay::SHEET_TIMEOUT + std::time::Duration::from_secs(1)).await;
+        let due = sheets().expire(std::time::Instant::now());
+        for s in due {
+            set(
+                &s.app,
+                s.svc.id,
+                flow(FlowState::Failed, Some(TOO_LONG.into())),
+            );
+        }
+    });
+    Ok(PhoneBegin {
+        flow_id,
+        service: svc.id.to_string(),
+        url: sheet_url,
+        redirect_uri: redirect,
+    })
+}
+
+/// The sheet's answer, from the phone (`agents.loginPhoneFinish`): taken by
+/// the relay's own rules (`Table::take`: once, in time, from the device that
+/// began it, on the registered redirect with this Mac's `state`), exchanged
+/// here with the verifier, the token into this Mac's Keychain.
+pub async fn phone_finish(
+    device_id: &str,
+    flow_id: &str,
+    callback: &str,
+) -> Result<(), CommandError> {
+    let taken = sheets().take(flow_id, device_id, callback, std::time::Instant::now());
+    let (sheet, code) = match taken {
+        Ok(ok) => ok,
+        Err(login_relay::Refusal { spent, error }) => {
+            if let Some(s) = spent {
+                set(
+                    &s.app,
+                    s.svc.id,
+                    flow(FlowState::Failed, Some(error.to_string())),
+                );
+            }
+            return Err(error);
+        }
+    };
+    let Sheet {
+        app,
+        svc,
+        url,
+        grants,
+        again_account,
+        prepared,
+    } = sheet;
+    match prepared.exchange(&code).await {
+        Ok(done) => complete(&app, svc, url, again_account, &grants, done).map(|_| ()),
+        Err(e) => {
+            set(&app, svc.id, flow(FlowState::Failed, Some(e.to_string())));
+            Err(e)
+        }
+    }
 }
 
 #[cfg(test)]

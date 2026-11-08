@@ -35,6 +35,7 @@ import { useAsyncState } from '../../hooks/useAsyncState';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { deleteConnection, flowLine, type Access, type Connection } from '../../lib/agentLogins';
 import {
+  ACCESS_CHOICES,
   APP_CONNECT_EVENT,
   appConnections,
   appManagedWhere,
@@ -45,10 +46,13 @@ import {
   connectApp,
   connectionAccount,
   defaultGrantees,
+  grantNote,
   grantsLine,
+  keptWhere,
   listAgentApps,
   openClaudeConnectors,
   ourAppFor,
+  pickerAccess,
   removeAgentApp,
   reopenAppConnect,
   setConnectionGrants,
@@ -338,16 +342,10 @@ function GrantPicker({
         aria-label="What they can do"
         value={access}
         onValueChange={onAccess}
-        options={[
-          { value: 'read', label: 'Read only' },
-          { value: 'full', label: 'Read and change' },
-        ]}
+        options={ACCESS_CHOICES.map((c) => ({ value: c.value, label: c.label }))}
       />
       <span className="agent-apps__meta agent-apps__meta--wrap">
-        {access === 'full'
-          ? 'Every change asks you on a card first.'
-          : 'Anything that changes something is refused; they can ask you for more.'}
-        {picked.length === 0 && ' No agent ticked: it’s kept for later, and nobody uses it yet.'}
+        {grantNote(access, picked.length === 0)}
       </span>
     </div>
   );
@@ -489,17 +487,10 @@ function ConnectionRow({
   const [editing, setEditing] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [picked, setPicked] = useState<string[]>(() => c.grants.map((g) => g.agentId));
-  const [access, setAccess] = useState<Access>(() =>
-    c.grants.some((g) => g.access === 'full') ? 'full' : 'read'
-  );
+  const [access, setAccess] = useState<Access>(() => pickerAccess(c.grants));
   const account = connectionAccount(c);
   const justNow = flow?.connected?.connectionId === c.id ? flow.connected.line : null;
-  const kept =
-    c.kind.type === 'oauth'
-      ? 'Signed in on this Mac'
-      : c.kind.type === 'gh'
-        ? 'GitHub CLI on this Mac'
-        : 'Connected on claude.ai';
+  const kept = keptWhere(c.kind.type);
 
   const save = () => {
     onError(null);

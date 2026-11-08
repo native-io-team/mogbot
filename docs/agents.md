@@ -1750,8 +1750,26 @@ claude.ai's connectors, and Claude Code's own servers listed as such
 (Claude Code agents only); a Claude Code server that is one of ours points
 at Connect instead of `/mcp`. It used to `claude mcp add` the app and send
 the user to a raw `claude` terminal to type `/mcp`, which first showed
-Claude Code's folder-trust prompt. No phone equivalent: on the phone, an
-agent's login card (and its sign-in sheet, `login_relay.rs`) is the way in.
+Claude Code's folder-trust prompt.
+
+**On the phone** (`mobile/src/app/apps.tsx`, from Settings → Logins and an
+agent's controls, which opens it for that agent): the same list and words
+(the shared ones are `packages/companion-protocol/src/apps.ts`: "Who can use
+it", Read only / Read and change, where it's kept, who uses it), through
+`agents.apps` (read-only, `app_connect::phone_overview`: never a token, nor
+the page the Mac's browser was asked to open), `agents.appsConnect` (the
+Mac's browser), `agents.appsPhoneBegin` (the phone's sign-in sheet, as a
+card's: the Mac keeps the PKCE verifier and `state` in its own relay table
+under the same `Table::take` rules, and the answer comes back on
+`agents.loginPhoneFinish`, which hands it to `app_connect::phone_finish`
+when the flow isn't a card's), `agents.appsCancel`, `agents.appsSetGrants`
+and `agents.appsRemove` (asks first on the phone). Who can use it is the
+user's own answer there too, so it narrows or widens at once, as on the desk;
+a full grant still asks on a card before each change. Each write is audited
+with the agents and access named, never the sign-in's URL or code, and
+counts against the phone's per-device request limit. claude.ai's connectors
+are opened on the phone (Customize → Connectors); Claude Code's own servers
+aren't listed there (they're this Mac's Claude Code setup).
 
 ### Where claude.ai connectors are added (verified 2026-11-05)
 

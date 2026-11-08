@@ -623,6 +623,48 @@ async fn generate() -> String {
         .await,
     );
     out += &entry(
+        "agentsApps",
+        "Result<'agents.apps'>",
+        call("agents.apps", json!({})).await,
+    );
+    out += &entry(
+        "agentsAppsConnect",
+        "Result<'agents.appsConnect'>",
+        call(
+            "agents.appsConnect",
+            json!({ "service": "linear", "grants": [{ "agentId": AGENT, "access": "read" }] }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsAppsPhoneBegin",
+        "Result<'agents.appsPhoneBegin'>",
+        call(
+            "agents.appsPhoneBegin",
+            json!({ "service": "linear", "grants": [{ "agentId": AGENT, "access": "full" }], "again": "c2" }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsAppsCancel",
+        "Result<'agents.appsCancel'>",
+        call("agents.appsCancel", json!({ "service": "linear" })).await,
+    );
+    out += &entry(
+        "agentsAppsSetGrants",
+        "Result<'agents.appsSetGrants'>",
+        call(
+            "agents.appsSetGrants",
+            json!({ "connectionId": "c2", "grants": [{ "agentId": AGENT, "access": "read" }] }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsAppsRemove",
+        "Result<'agents.appsRemove'>",
+        call("agents.appsRemove", json!({ "connectionId": "c2" })).await,
+    );
+    out += &entry(
         "agentsSigninBegin",
         "Result<'agents.signinBegin'>",
         call(

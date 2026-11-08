@@ -81,6 +81,7 @@ function Screens() {
               <Stack.Screen name="new-agent" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen name="import" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen name="logins" options={sheet(colors, [0.75, 1])} />
+              <Stack.Screen name="apps" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen name="share" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen name="files/[id]" options={{ title: 'Files' }} />
               <Stack.Screen name="diff" options={sheet(colors, [0.75, 1])} />

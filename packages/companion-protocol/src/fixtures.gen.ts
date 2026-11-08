@@ -2065,6 +2065,150 @@ export const agentsLoginPhoneBegin = {
   "requestId": "q12",
   "url": "https://auth.linear.app/authorize?client_id=c&code_challenge=x&state=s"
 } satisfies Result<'agents.loginPhoneBegin'>;
+export const agentsApps = {
+  "apps": [
+    {
+      "host": "mcp.linear.app",
+      "read": "Read issues and projects",
+      "service": "linear",
+      "title": "Linear",
+      "write": "Create and update issues"
+    },
+    {
+      "host": "mcp.notion.com",
+      "read": "Read pages and databases",
+      "service": "notion",
+      "title": "Notion",
+      "write": "Create and edit pages"
+    },
+    {
+      "host": "mcp.figma.com",
+      "read": "Read designs and comments",
+      "service": "figma",
+      "title": "Figma",
+      "write": "Comment and change designs"
+    },
+    {
+      "host": "mcp.stripe.com",
+      "read": "Read customers, payments and invoices",
+      "service": "stripe",
+      "title": "Stripe",
+      "write": "Create invoices, refunds and payments"
+    },
+    {
+      "host": "mcp.vercel.com",
+      "read": "Read projects, deployments and logs",
+      "service": "vercel",
+      "title": "Vercel",
+      "write": "Change projects and deploy"
+    },
+    {
+      "host": "mcp.sentry.dev",
+      "read": "Read errors, issues and their stack traces",
+      "service": "sentry",
+      "title": "Sentry",
+      "write": "Resolve, assign and change issues"
+    }
+  ],
+  "connections": [
+    {
+      "account": "work@acme.com",
+      "connectionId": "c1",
+      "grants": [],
+      "kind": "claude_ai",
+      "service": "gmail",
+      "title": "Gmail"
+    },
+    {
+      "account": "sam@acme.com",
+      "connectionId": "c2",
+      "grants": [
+        {
+          "access": "full",
+          "agentId": "a1"
+        },
+        {
+          "access": "read",
+          "agentId": "chief"
+        }
+      ],
+      "kind": "oauth",
+      "lastUsedAt": 1760000000000,
+      "needsSignIn": true,
+      "service": "linear",
+      "title": "Linear"
+    },
+    {
+      "account": "sam",
+      "connectionId": "c3",
+      "grants": [
+        {
+          "access": "read",
+          "agentId": "a1"
+        }
+      ],
+      "kind": "gh",
+      "service": "github",
+      "title": "GitHub"
+    }
+  ],
+  "flows": [
+    {
+      "flow": {
+        "message": "Notion's sign-in opened in your browser.",
+        "openedAt": 1762290000000,
+        "option": "oauth",
+        "startedAt": 1762290000000,
+        "state": "waiting"
+      },
+      "service": "notion"
+    },
+    {
+      "flow": {
+        "fromPhone": true,
+        "message": "Figma's sign-in is open on your phone.",
+        "onPhone": true,
+        "openedAt": 1762290000000,
+        "option": "oauth",
+        "startedAt": 1762290000000,
+        "state": "waiting",
+        "url": "https://www.figma.com/oauth?state=s"
+      },
+      "service": "figma"
+    },
+    {
+      "connected": {
+        "connectionId": "c2",
+        "line": "Connected as sam@acme.com"
+      },
+      "service": "linear"
+    }
+  ]
+} satisfies Result<'agents.apps'>;
+export const agentsAppsConnect = null satisfies Result<'agents.appsConnect'>;
+export const agentsAppsPhoneBegin = {
+  "flowId": "flow2",
+  "redirectUri": "dashbot-companion://oauth",
+  "service": "linear",
+  "url": "https://linear.app/oauth/authorize?client_id=c&code_challenge=x&state=s"
+} satisfies Result<'agents.appsPhoneBegin'>;
+export const agentsAppsCancel = null satisfies Result<'agents.appsCancel'>;
+export const agentsAppsSetGrants = {
+  "account": "sam@acme.com",
+  "connectionId": "c2",
+  "grants": [
+    {
+      "access": "read",
+      "agentId": "a1"
+    }
+  ],
+  "kind": "oauth",
+  "lastUsedAt": 1760000000000,
+  "needsSignIn": true,
+  "service": "linear",
+  "title": "Linear"
+} satisfies Result<'agents.appsSetGrants'>;
+export const agentsAppsRemove = null satisfies Result<'agents.appsRemove'>;
 export const agentsSigninBegin = {
   "domain": "figma.com",
   "frameGapMs": 30,
@@ -2975,6 +3119,12 @@ export const frames = [
       "agents.loginsRecheck",
       "agents.loginPhoneBegin",
       "agents.loginPhoneFinish",
+      "agents.apps",
+      "agents.appsConnect",
+      "agents.appsPhoneBegin",
+      "agents.appsCancel",
+      "agents.appsSetGrants",
+      "agents.appsRemove",
       "agents.signinBegin",
       "agents.signinFrame",
       "agents.signinInput",
