@@ -1,7 +1,8 @@
 /**
- * The agent on its typing key (components/AgentKey.tsx): the key's box is
- * the spec's, the avatar on it is the solid one, and only while it's live
- * (and allowed to move) does the clock run; at rest the top sits at rest.
+ * The agent as its typing key (components/AgentKey.tsx): the box is the
+ * spec's (the avatar's size, the travel under it), the face is the agent's
+ * own, and only while it's live (and allowed to move) does the clock run; at
+ * rest the top sits at rest.
  */
 
 import { TYPING_KEY } from '@shipstudio/companion-protocol';
@@ -21,32 +22,37 @@ jest.mock('../src/lib/moving', () => ({ useMoving: (still: boolean) => mockMovin
 jest.mock('../src/components/agent', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
   return {
-    AgentAvatar: (p: { selected?: boolean; mood?: string; size?: number }) => (
-      <View testID="avatar" accessibilityLabel={`${p.selected}:${p.mood}:${p.size}`} />
+    useLook: () => ({ shape: 'hexagon', face: 'smile', finish: 'embossed' }),
+    RimFilter: () => null,
+    Face: (p: { px: number; selected: boolean; look: { face: string } }) => (
+      <View testID="face" accessibilityLabel={`${p.look.face}:${p.px}:${p.selected}`} />
     ),
   };
 });
 
+// The key is hidden from accessibility (the line speaks for it).
+const hidden = { includeHiddenElements: true };
+
 beforeEach(() => mockRepeat.mockClear());
 
 describe('the typing key', () => {
-  it('is the spec’s box, with the solid avatar on it', async () => {
+  it('is the avatar itself, the spec’s size, with its side under it', async () => {
     await render(<AgentKey id="qa" name="QA" color="green" pressing />);
-    expect(StyleSheet.flatten(screen.getByTestId('agent-key').props.style)).toMatchObject({
-      width: TYPING_KEY.width,
-      height: TYPING_KEY.top + TYPING_KEY.travel,
+    expect(StyleSheet.flatten(screen.getByTestId('agent-key', hidden).props.style)).toMatchObject({
+      width: TYPING_KEY.size,
+      height: TYPING_KEY.size + TYPING_KEY.travel,
     });
-    expect(screen.getByTestId('avatar').props.accessibilityLabel).toBe(
-      `true:working:${TYPING_KEY.avatar}`
+    // Its own face, drawn at the key's size, not the solid "selected" one.
+    expect(screen.getByTestId('face', hidden).props.accessibilityLabel).toBe(
+      `smile:${TYPING_KEY.size}:false`
     );
     expect(mockRepeat).toHaveBeenCalled();
   });
 
   it('rests while it isn’t being typed on', async () => {
     await render(<AgentKey id="qa" name="QA" color="green" pressing={false} />);
-    expect(screen.getByTestId('avatar').props.accessibilityLabel).toBe(
-      `true:idle:${TYPING_KEY.avatar}`
-    );
     expect(mockRepeat).not.toHaveBeenCalled();
+    const top = StyleSheet.flatten(screen.getByTestId('agent-key-top', hidden).props.style);
+    expect(top.transform).toEqual([{ translateY: 0 }]);
   });
 });

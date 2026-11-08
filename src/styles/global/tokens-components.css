@@ -361,18 +361,12 @@
      reading line. A reply's first streamed line holds this height so the line
      hands off in place. */
   --agents-motion-working-height: calc(var(--font-size-subhead) * 1.4);
-  /* The working line's typing key (AgentKey.tsx; TYPING_KEY in
-     packages/companion-protocol/src/avatar.ts, value for value): a cap the
-     steps' icon column wide, one line high (its top and the side under it),
-     with the agent's avatar on it. */
-  --agents-key-width: calc(var(--spacing-lg) + var(--spacing-sm)); /* 24px */
-  --agents-key-top: calc(var(--spacing-lg) + var(--spacing-2xs)); /* 18px */
+  /* The working line's typing key (AgentKey in AgentAvatar.tsx; TYPING_KEY in
+     packages/companion-protocol/src/avatar.ts, value for value): the agent's
+     avatar as a key, the steps' icon column wide, with its side the travel
+     deep under it. */
+  --agents-key-size: calc(var(--spacing-lg) + var(--spacing-sm)); /* 24px */
   --agents-key-travel: calc(var(--spacing-2xs) + var(--space-01)); /* 3px */
-  --agents-key-radius: var(--space-06);
-  /* The hairline ring round it and the lit line along its top edge. */
-  --agents-key-ring: var(--stroke-hairline);
-  --agents-key-highlight: var(--stroke-1);
-  --agents-key-avatar: calc(var(--spacing-md) + var(--spacing-2xs)); /* 14px */
   --agents-key-period: calc(var(--duration-loader-standard) * 2); /* 2.4s */
   /* The soft fade at the transcript's top and bottom edges. */
   --agents-motion-edge-fade: var(--spacing-xl);

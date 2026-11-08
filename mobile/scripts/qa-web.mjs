@@ -1671,6 +1671,47 @@ const dotFrames =
     log('frames', name, theme);
   };
 
+/**
+ * A close-up sequence of the working line's key: `count` frames `gapMs`
+ * apart (about one period of TYPING_KEY's tap, tap, rest), plus how far the
+ * top sits down in each, so "it clicks down and springs back" is a number as
+ * well as a picture.
+ */
+const keyFrames =
+  (name, count = 24, gapMs = 100) =>
+  async (page, theme) => {
+    const sel = '[data-testid="agent-key"]';
+    const box = await page.eval(`(() => {
+    const el = document.querySelector(${JSON.stringify(sel)});
+    if (!el) return null;
+    const r = el.getBoundingClientRect();
+    return { x: r.x - 8, y: r.y - 8, width: r.width + 16, height: r.height + 16, scale: 4 };
+  })()`);
+    if (!box) throw new Error('no typing key on screen');
+    const readings = [];
+    for (let f = 0; f < count; f++) {
+      const file = `${name}-${theme}-key${String(f).padStart(2, '0')}`;
+      await page.screenshot(path.join(OUT, `${file}.png`), box);
+      readings.push(
+        await page.eval(`(() => {
+          const key = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect();
+          const top = document.querySelector('[data-testid="agent-key-top"]').getBoundingClientRect();
+          return (top.y - key.y).toFixed(1);
+        })()`)
+      );
+      await sleep(gapMs);
+    }
+    shots.push({
+      name: `${name}-${theme}-key`,
+      route: '(in place)',
+      theme,
+      check: `The agent as a key, ${count} frames ${gapMs} ms apart (key00…key${count - 1}); the top's drop in px per frame: ${readings.join(' ')}. It must go down to the travel and back, twice, then rest.`,
+      errors: [],
+      clipped: [],
+    });
+    log('frames', `${name} key`, theme);
+  };
+
 /** `--live-work`: what agents are doing, live (QA 2 on Cypress, Finance gone quiet). */
 const LIVE_WORK = [
   {
@@ -1723,7 +1764,7 @@ const LIVE_WORK = [
     ready: 'Finance',
     settle: 2500,
     check:
-      'The working line reads “No progress for 5 min · Building the project” with Finance’s key cap still and the words not breathing, “Last activity …” under it on the words’ edge, then quiet text actions “Check on it” and “Stop” at the right edge',
+      'The working line reads “No progress for 5 min · Building the project” with Finance’s key at rest (its side showing, not pressed) and the words not breathing, “Last activity …” under it on the words’ edge, then quiet text actions “Check on it” and “Stop” at the right edge',
   },
   {
     name: 'live-check',
@@ -1746,7 +1787,8 @@ const IMPORTING = [
     ready: 'Designer',
     settle: 2500,
     check:
-      'Under the last message, one line: Designer’s small key cap looking around, then “Checking the button tokens” breathing gently and a muted count and time. No dots: the key cap says it’s working',
+      'Under the last message, one line: Designer as a key (its avatar, raised, a darker side under it) clicking down and springing back, then “Checking the button tokens” breathing gently and a muted count and time. No dots: the key says it’s working',
+    frames: keyFrames('typing'),
   },
   {
     name: 'import-live',

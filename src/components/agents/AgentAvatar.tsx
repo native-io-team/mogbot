@@ -38,7 +38,11 @@ import {
   MOUTH_MIN_PX,
   SHAPE_PATHS,
   TOP_TRANSFORM,
+  TYPING_KEY,
+  TYPING_KEY_UNITS,
+  TYPING_KEY_VIEWBOX,
   avatarPaint,
+  typingKeyPaint,
   eyeAt,
   faceWeight,
   idlePhase,
@@ -122,7 +126,6 @@ function lookFromTeam(team: string, id: string): Required<AgentLook> | null {
 
 /** Each size step's width, for the weight and whether the key is lit (the CSS owns the box). */
 const SIZE_PX = {
-  key: 14,
   xs: 16,
   mini: 18,
   row: 24,
@@ -143,7 +146,7 @@ interface AgentAvatarProps {
   /** An explicit look (the picker's preview, a proposed change). */
   look?: AgentLook;
   /**
-   * `key` sits on the working line's typing key (14px, `AgentKey`), `xs` sits in a line of text (16px), `mini` leads a menu item or a
+   * `xs` sits in a line of text (16px), `mini` leads a menu item or a
    * mention (18px), `row` is the sidebar's
    * (a project badge's size, 24px), `field` sits beside a text field, `hero`
    * heads an empty chat (`md` is 40px), `xl` is the picker's preview (96px).
@@ -272,13 +275,115 @@ export function AgentAvatar({
   );
 }
 
-/** One layer of the drawing, on the 32-unit grid. */
-function Layer({ className, children }: { className?: string; children: ReactNode }) {
+/**
+ * The agent as a key being typed on: what leads the working line while it
+ * works (docs/internal/avatars.md, "On a key"). Its avatar, bigger
+ * (`TYPING_KEY.size`) and raised in the site's key language: the shape's
+ * own silhouette is the top, lit along its upper edge, with a hairline
+ * round it; the same silhouette set down by the key's travel, darker, is
+ * the side; a soft drop sits under that. Always a raised key, whatever
+ * finish the agent chose for its avatar: here the avatar is the key.
+ *
+ * While it's live the top (and the face on it) presses down into the side
+ * and springs back, in the spec's tap, tap, rest; the drop tightens with
+ * each press. Stalled or finishing, it rests. CSS keyframes on two layers,
+ * a transform and an opacity (agents-work.css); still with Reduce Motion,
+ * off-screen and while the window is hidden.
+ */
+export function AgentKey({
+  id,
+  name,
+  color,
+  pressing,
+}: {
+  id: string;
+  name: string;
+  color: string;
+  /** Being typed on (the line is live); otherwise it rests. */
+  pressing: boolean;
+}) {
+  const team = useSyncExternalStore(subscribeAgents, teamLooks);
+  const look = useMemo(() => lookFromTeam(team, id) ?? lookFor({ id }), [team, id]);
+  const theme = useResolvedTheme();
+  const ref = useOffscreen<HTMLSpanElement>(true);
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
+  const paint = typingKeyPaint(color, theme);
+  const shape = SHAPE_PATHS[look.shape];
+  const t = TYPING_KEY_UNITS.travel;
+  const ids = { grad: `${uid}g`, rim: `${uid}r`, drop: `${uid}d` };
+  const ring = `rgba(0, 0, 0, ${paint.ring})`;
+  return (
+    <span
+      ref={ref}
+      className="agent-key"
+      data-pressing={pressing || undefined}
+      data-shape={look.shape}
+      data-face={look.face}
+      aria-hidden
+    >
+      {/* The drop, its own layer: it tightens as the key goes down. */}
+      <span className="agent-key__drop">
+        <Layer viewBox={TYPING_KEY_VIEWBOX}>
+          <defs>
+            <filter id={ids.drop} x="-30%" y="-30%" width="160%" height="170%">
+              <feGaussianBlur stdDeviation={TYPING_KEY_UNITS.drop.blur} />
+            </filter>
+          </defs>
+          <path
+            d={shape}
+            transform={`translate(0 ${t + TYPING_KEY_UNITS.drop.dy})`}
+            fill="black"
+            opacity={paint.shadow}
+            filter={`url(#${ids.drop})`}
+          />
+        </Layer>
+      </span>
+      {/* The side: the silhouette set down by the travel, with the top's
+          hairline. Exactly the top's outline moved, so at the bottom of a
+          press the top covers it and nothing peeks above. */}
+      <Layer viewBox={TYPING_KEY_VIEWBOX}>
+        <path
+          d={shape}
+          transform={`translate(0 ${t})`}
+          fill="none"
+          stroke={ring}
+          strokeWidth={TYPING_KEY_UNITS.ring}
+        />
+        <path d={shape} transform={`translate(0 ${t})`} fill={paint.side} />
+      </Layer>
+      <span className="agent-key__top">
+        <Layer viewBox={TYPING_KEY_VIEWBOX}>
+          <defs>
+            <linearGradient id={ids.grad} x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor={paint.topHigh} />
+              <stop offset="1" stopColor={paint.topLow} />
+            </linearGradient>
+            <RimFilter id={ids.rim} depth={KEY.capRim} paint={paint} />
+          </defs>
+          <path d={shape} fill="none" stroke={ring} strokeWidth={TYPING_KEY_UNITS.ring} />
+          <path d={shape} fill={`url(#${ids.grad})`} filter={`url(#${ids.rim})`} />
+          <Face look={look} name={name} px={TYPING_KEY.size} paint={paint} selected={false} />
+        </Layer>
+      </span>
+    </span>
+  );
+}
+
+/** One layer of the drawing, on the 32-unit grid (the typing key's has its side under it). */
+function Layer({
+  className,
+  viewBox = '0 0 32 32',
+  children,
+}: {
+  className?: string;
+  viewBox?: string;
+  children: ReactNode;
+}) {
   return (
     <svg
       data-dynamic-svg="agent-avatar"
       className={`agent-avatar__art${className ? ` ${className}` : ''}`}
-      viewBox="0 0 32 32"
+      viewBox={viewBox}
       focusable="false"
     >
       {children}

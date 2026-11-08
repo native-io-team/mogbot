@@ -1,19 +1,29 @@
 /**
- * The agent, on a key: what leads the working line while it works (the
- * desk's `AgentKey`; docs/internal/avatars.md, "On a key"). A wide key cap
- * in the site's language, a lit top on a darker side with a hairline ring
- * and a soft drop, faintly tinted with the agent's hue, its avatar on the
- * cap (the solid one: you're looking at that agent). While it's live the cap
- * is typed on: a tap, a lighter tap, a rest. Stalled or finishing, it rests.
+ * The agent as a key being typed on: what leads the working line while it
+ * works (the desk's `AgentKey`; docs/internal/avatars.md, "On a key"). Its
+ * avatar, bigger (`TYPING_KEY.size`) and raised in the site's key language:
+ * the shape's own silhouette is the top, lit along its upper edge with a
+ * hairline round it; the same silhouette set down by the travel, darker, is
+ * the side; a soft drop sits under that. Always a raised key, whatever
+ * finish the agent chose: here the avatar is the key.
  *
- * Geometry and colour are the shared spec's (`TYPING_KEY`, `typingKeyPaint`);
- * the press is one shared clock on the UI thread read by `keyDepth`, moving
- * only the top's transform. Still with Reduce Motion, in the background and
- * on a screen that isn't showing.
+ * While it's live the top (and the face on it) presses down into the side
+ * and springs back, tap, tap, rest, and the drop tightens with each press:
+ * one shared clock on the UI thread read by `keyDepth` and `keyDrop`, moving
+ * only a transform and an opacity. Still with Reduce Motion, in the
+ * background and on a screen that isn't showing.
  */
 
-import { TYPING_KEY, typingKeyPaint } from '@shipstudio/companion-protocol';
-import { useEffect } from 'react';
+import {
+  AVATAR_GRID,
+  KEY,
+  SHAPE_PATHS,
+  TYPING_KEY,
+  TYPING_KEY_UNITS,
+  TYPING_KEY_VIEWBOX,
+  typingKeyPaint,
+} from '@shipstudio/companion-protocol';
+import { useEffect, useId, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Animated, {
   Easing,
@@ -23,14 +33,19 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Defs, LinearGradient, Rect, Stop } from 'react-native-svg';
+import Svg, { Defs, FeGaussianBlur, Filter, LinearGradient, Path, Stop } from 'react-native-svg';
 import { useAppearance } from '../lib/appearance';
-import { alpha, keyLight, radius } from '../lib/theme';
-import { TYPING_KEY_PERIOD_MS, keyDepth } from '../lib/typingKey';
+import { alpha, keyLight } from '../lib/theme';
+import { TYPING_KEY_PERIOD_MS, keyDepth, keyDrop } from '../lib/typingKey';
 import { useMoving } from '../lib/moving';
-import { AgentAvatar } from './agent';
+import { Face, RimFilter, useLook } from './agent';
 
 const K = TYPING_KEY;
+const U = TYPING_KEY_UNITS;
+const HEIGHT = K.size + K.travel;
+/** The drop reaches past the key's box: its layer is drawn this many grid units taller. */
+// Three blur radii hold all of a Gaussian that shows.
+const DROP_ROOM = U.drop.dy + U.drop.blur * 3;
 
 export function AgentKey({
   id,
@@ -46,6 +61,7 @@ export function AgentKey({
 }) {
   const appearance = useAppearance();
   const paint = typingKeyPaint(color, appearance);
+  const look = useLook(id, name, undefined);
   const moving = useMoving(!pressing);
   const clock = useSharedValue(0);
   useEffect(() => {
@@ -60,78 +76,91 @@ export function AgentKey({
     );
     return () => cancelAnimation(clock);
   }, [clock, moving]);
-  const pressed = useAnimatedStyle(() => ({
+  const top = useAnimatedStyle(() => ({
     transform: [{ translateY: keyDepth(clock.get()) * K.travel }],
   }));
+  const drop = useAnimatedStyle(() => ({ opacity: keyDrop(keyDepth(clock.get())) }));
+  const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
+  const shape = SHAPE_PATHS[look.shape];
   const ring = alpha(keyLight.shade, paint.ring);
-  const gradient = `key-${id.replace(/[^a-zA-Z0-9]/g, '')}`;
+  const dropUnits = AVATAR_GRID + U.travel + DROP_ROOM;
+  const dropHeight = (dropUnits * K.size) / AVATAR_GRID;
   return (
-    <View style={styles.key} testID="agent-key" accessible={false}>
-      {/* The side: the top's shape set down by the travel, showing under it. */}
-      <View
-        style={[
-          styles.side,
-          {
-            backgroundColor: paint.side,
-            borderColor: ring,
-            shadowColor: keyLight.shade,
-            shadowOpacity: paint.shadow,
-          },
-        ]}
-      />
-      <Animated.View style={[styles.top, { borderColor: ring }, pressed]}>
-        <Svg width={K.width} height={K.top} style={StyleSheet.absoluteFill}>
+    <View
+      style={styles.key}
+      testID="agent-key"
+      accessible={false}
+      importantForAccessibility="no-hide-descendants"
+    >
+      {/* The drop, its own layer: it tightens as the key goes down. */}
+      <Animated.View style={[styles.drop, { height: dropHeight }, drop]}>
+        <Svg width={K.size} height={dropHeight} viewBox={`0 0 ${AVATAR_GRID} ${dropUnits}`}>
           <Defs>
-            <LinearGradient id={gradient} x1="0" y1="0" x2="0" y2="1">
+            <Filter id={`${uid}d`} x="-30%" y="-30%" width="160%" height="170%">
+              <FeGaussianBlur stdDeviation={U.drop.blur} />
+            </Filter>
+          </Defs>
+          <Path
+            d={shape}
+            transform={`translate(0 ${U.travel + U.drop.dy})`}
+            fill={keyLight.shade}
+            opacity={paint.shadow}
+            filter={`url(#${uid}d)`}
+          />
+        </Svg>
+      </Animated.View>
+      {/* The side: the top's outline set down by the travel, so at the bottom
+          of a press the top covers it and nothing peeks above. */}
+      <Layer>
+        <Path
+          d={shape}
+          transform={`translate(0 ${U.travel})`}
+          fill="none"
+          stroke={ring}
+          strokeWidth={U.ring}
+        />
+        <Path d={shape} transform={`translate(0 ${U.travel})`} fill={paint.side} />
+      </Layer>
+      <Animated.View style={[StyleSheet.absoluteFill, top]} testID="agent-key-top">
+        <Layer>
+          <Defs>
+            <LinearGradient id={`${uid}g`} x1="0" y1="0" x2="0" y2="1">
               <Stop offset="0" stopColor={paint.topHigh} />
               <Stop offset="1" stopColor={paint.topLow} />
             </LinearGradient>
+            <RimFilter id={`${uid}r`} depth={KEY.capRim} paint={paint} />
           </Defs>
-          <Rect width={K.width} height={K.top} fill={`url(#${gradient})`} />
-          {/* The lit top edge. */}
-          <Rect
-            x={K.radius / 2}
-            width={K.width - K.radius}
-            height={1}
-            fill={alpha(keyLight.light, paint.highlight)}
+          <Path d={shape} fill="none" stroke={ring} strokeWidth={U.ring} />
+          <Path d={shape} fill={`url(#${uid}g)`} filter={`url(#${uid}r)`} />
+          <Face
+            look={look}
+            name={name}
+            px={K.size}
+            paint={paint}
+            ink={paint.ink}
+            selected={false}
           />
-        </Svg>
-        <AgentAvatar
-          id={id}
-          name={name}
-          color={color}
-          size={K.avatar}
-          selected
-          mood={pressing ? 'working' : 'idle'}
-        />
+        </Layer>
       </Animated.View>
     </View>
   );
 }
 
+/** One layer of the key, on the avatar's grid with the side under it. */
+function Layer({ children }: { children: ReactNode }) {
+  return (
+    <Svg
+      width={K.size}
+      height={HEIGHT}
+      viewBox={TYPING_KEY_VIEWBOX}
+      style={StyleSheet.absoluteFill}
+    >
+      {children}
+    </Svg>
+  );
+}
+
 const styles = StyleSheet.create({
-  key: { width: K.width, height: K.top + K.travel },
-  side: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: K.travel,
-    height: K.top,
-    borderRadius: radius.key,
-    borderWidth: StyleSheet.hairlineWidth,
-    shadowOffset: { width: 0, height: K.travel },
-    shadowRadius: K.travel,
-  },
-  top: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    top: 0,
-    height: K.top,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: radius.key,
-    borderWidth: StyleSheet.hairlineWidth,
-    overflow: 'hidden',
-  },
+  key: { width: K.size, height: HEIGHT },
+  drop: { position: 'absolute', left: 0, right: 0, top: 0 },
 });
