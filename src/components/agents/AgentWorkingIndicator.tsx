@@ -1,6 +1,6 @@
 /**
  * The working line under the last message while an agent works. One line,
- * no bubble: the agent's key cap looking around, then what it's doing in
+ * no bubble: the agent on a key, being typed on (`AgentKey`), then what it's doing in
  * calm text with a soft shimmer while it's live, and muted at the end how
  * many steps so far and how long the turn has run:
  *
@@ -28,7 +28,7 @@ import { TypingDots } from '../primitives/TypingDots';
 import { useSteadyLine } from '../../hooks/useSteadyLine';
 import type { Agent, TurnWork } from '../../lib/agents';
 import { formatElapsed } from '../../../packages/companion-protocol/src/work';
-import { AgentAvatar } from './AgentAvatar';
+import { AgentKey } from './AgentKey';
 import { useLiveStep } from './AgentLiveStep';
 import { WorkMenu } from './AgentTakeover';
 import { useLiveWork } from './AgentWork';
@@ -115,12 +115,11 @@ export function WorkingIndicator({
       <div className="agent-working__line" data-quiet={step.quiet || undefined}>
         <span className="agent-working__lead" aria-hidden>
           {agent ? (
-            <AgentAvatar
+            <AgentKey
               id={agent.id}
               name={agent.name}
               color={agent.color}
-              size="xs"
-              mood={step.quiet ? 'idle' : 'working'}
+              pressing={!step.quiet && !leaving}
             />
           ) : (
             <TypingDots />

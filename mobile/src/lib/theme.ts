@@ -304,7 +304,16 @@ export const space = {
  * - `card`: every card, group, chip, thumbnail, toast and summary bar.
  * - `sheet`: sheets, native and our own menu.
  */
-export const radius = { sm: 4, inner: 10, control: 12, card: 16, sheet: 24, pill: 999 } as const;
+export const radius = {
+  sm: 4,
+  /** The working line's typing key (`TYPING_KEY.radius`; the desk's `--agents-key-radius`). */
+  key: 6,
+  inner: 10,
+  control: 12,
+  card: 16,
+  sheet: 24,
+  pill: 999,
+} as const;
 
 /** An avatar's or logo's corner: one squircle proportion at every size. */
 export const squircle = (size: number) => Math.round(size * 0.28);

@@ -29,9 +29,13 @@ jest.mock('../src/components/attachments', () => ({ Attachments: () => null }));
 jest.mock('../src/components/Shimmer', () => ({
   Shimmer: ({ children }: { children: React.ReactNode }) => children,
 }));
-jest.mock('../src/components/agent', () => {
+jest.mock('../src/components/AgentKey', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
-  return { AgentAvatar: () => <View testID="key-cap" /> };
+  return {
+    AgentKey: ({ pressing }: { pressing: boolean }) => (
+      <View testID="key-cap" accessibilityState={{ busy: pressing }} />
+    ),
+  };
 });
 jest.mock('expo-haptics', () => ({}));
 jest.mock('../src/lib/haptics', () => ({
@@ -199,7 +203,8 @@ describe('the live step', () => {
     expect(screen.queryByText('5:00')).toBeNull();
     expect(screen.queryByText('Show output')).toBeNull();
     expect(screen.queryByTestId('typing-dots')).toBeNull();
-    expect(screen.getByTestId('key-cap')).toBeTruthy();
+    // Gone quiet, the key rests rather than being typed on.
+    expect(screen.getByTestId('key-cap').props.accessibilityState).toEqual({ busy: false });
     await fireEvent.press(screen.getByText('Check on it'));
     expect(
       await screen.findByText('Still going: running the Cypress tests is using the CPU right now.')

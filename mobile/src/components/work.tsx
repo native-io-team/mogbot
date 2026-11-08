@@ -15,6 +15,7 @@ import {
   quietLine,
   slowHint,
   stepLine,
+  TYPING_KEY,
 } from '@shipstudio/companion-protocol';
 import { useState, type ReactNode } from 'react';
 import { Pressable, View } from 'react-native';
@@ -23,7 +24,7 @@ import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
 import { call, describeError, stop } from '../lib/session';
 import { useServed } from '../lib/store';
-import { avatarSize, fonts, iconSize, radius, space, PRESSED } from '../lib/theme';
+import { fonts, iconSize, radius, space, PRESSED } from '../lib/theme';
 import {
   earlierSteps,
   liveSteps,
@@ -32,7 +33,7 @@ import {
   stepSymbol,
   workSummary,
 } from '../lib/work';
-import { AgentAvatar } from './agent';
+import { AgentKey } from './AgentKey';
 import { Attachments } from './attachments';
 import { Shimmer } from './Shimmer';
 import { TypingDots } from './TypingDots';
@@ -360,7 +361,7 @@ export function LiveStep({
   agentId: string;
   /** Under a speaker's name (a room): the name's key cap leads, the line starts on the prose's edge. */
   bare?: boolean;
-  /** Whose key cap leads the line; without one, the typing dots. */
+  /** Who leads the line, on its typing key (`AgentKey`); without one, the typing dots. */
   agent?: { name: string; color: string };
   work: TurnWork | undefined;
   /** The call the line is saying (`liveCallShown`), if it is saying one. */
@@ -441,13 +442,7 @@ export function LiveStep({
         {!bare && (
           <View style={styles.icon}>
             {agent ? (
-              <AgentAvatar
-                id={agentId}
-                name={agent.name}
-                color={agent.color}
-                size={avatarSize.line}
-                mood={quiet ? 'idle' : 'working'}
-              />
+              <AgentKey id={agentId} name={agent.name} color={agent.color} pressing={!quiet} />
             ) : (
               <TypingDots />
             )}
@@ -544,11 +539,13 @@ const useStyles = makeStyles((colors) => ({
   steps: { gap: space.sm },
   stepBlock: { gap: space.xs },
   step: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
-  icon: { width: iconSize.body, alignItems: 'center' },
+  // The steps' icon column: the typing key's width, so the live line, its
+  // steps and the folded "Worked" line share one grid.
+  icon: { width: TYPING_KEY.width, alignItems: 'center' },
   label: { flex: 1 },
   note: { fontStyle: 'italic' as const },
   count: { fontVariant: ['tabular-nums'] },
-  indent: { paddingLeft: iconSize.body + space.sm },
+  indent: { paddingLeft: TYPING_KEY.width + space.sm },
   output: {
     marginTop: space.xs,
     padding: space.sm,
@@ -566,7 +563,7 @@ const useStyles = makeStyles((colors) => ({
   meta: { flexShrink: 0 },
   headInline: { gap: space.xs },
   // Under the line, on the words' edge.
-  liveIndent: { paddingLeft: iconSize.body + space.sm, gap: space.xs },
+  liveIndent: { paddingLeft: TYPING_KEY.width + space.sm, gap: space.xs },
   // Quiet actions at the right edge, a row of their own on a phone's line.
   actions: { flexDirection: 'row', justifyContent: 'flex-end', gap: space.lg },
   bare: { paddingLeft: 0 },

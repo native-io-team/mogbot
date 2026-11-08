@@ -7,6 +7,7 @@
  */
 
 import * as typingDots from '../src/lib/typingDots';
+import * as typingKey from '../src/lib/typingKey';
 import * as waveform from '../src/lib/waveform';
 import { isWorklet, onUiRuntime, type Worklet } from './uiRuntime';
 
@@ -44,9 +45,11 @@ const calls: Record<string, unknown[][]> = {
   ],
   dotLevel: [[0], [0.25], [0.6]],
   dotOpacity: [[0], [1], [0.5]],
+  // typingKey.ts
+  keyDepth: [[0], [0.03], [0.06], [0.1], [0.15], [0.3], [0.42], [0.9], [1], [1.5], [-0.25]],
 };
 
-const modules: Record<string, Record<string, unknown>> = { waveform, typingDots };
+const modules: Record<string, Record<string, unknown>> = { waveform, typingDots, typingKey };
 const worklets = Object.entries(modules).flatMap(([mod, exports]) =>
   Object.entries(exports)
     .filter((entry): entry is [string, Worklet] => isWorklet(entry[1]))
@@ -56,7 +59,7 @@ const call = (fn: Worklet, args: unknown[]) => (fn as (...a: unknown[]) => unkno
 
 describe('lib worklets on the UI runtime', () => {
   it('are found, and all exercised here', () => {
-    expect(worklets.length).toBeGreaterThanOrEqual(7);
+    expect(worklets.length).toBeGreaterThanOrEqual(8);
     for (const [label, name] of worklets) {
       expect({ label, covered: name in calls }).toEqual({ label, covered: true });
     }
