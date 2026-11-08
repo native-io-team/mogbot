@@ -487,3 +487,32 @@ fn code_hosts_and_databases_ask_for_writes_and_run_reads() {
         assert!(!asks(tool, &json!({}), &c, false), "should run: {tool}");
     }
 }
+
+/// Observed: agents keep memory with `sed -i` on their own CLAUDE.md, and
+/// at Full send each one raised a card; one went unanswered and the agent
+/// told the owner it couldn't save the rule they had just given it. Its own
+/// turn now edits its own instructions however it likes; a turn answering
+/// outside text still asks, the chat log always does, and another agent's
+/// home still asks.
+#[test]
+fn an_agent_keeps_its_own_memory_without_a_card() {
+    let own = format!("{HOME}/Library/Application Support/FictionalApp/agents/a1");
+    let saves = [
+        format!("cd \"{own}\" && sed -i '' 's/^- In progress: x$/- Done: x/' CLAUDE.md && grep -c Done CLAUDE.md"),
+        format!("echo '- Prefers drafts before PRs' >> \"{own}/CLAUDE.md\""),
+        format!("cd \"{own}/notes\" && sed -i '' 's/a/b/' ../CLAUDE.md"),
+    ];
+    for cmd in &saves {
+        assert!(!bash_asks(cmd, false), "own turn: {cmd}");
+        assert!(bash_asks(cmd, true), "outside text: {cmd}");
+    }
+    let edit = json!({ "file_path": format!("{own}/CLAUDE.md") });
+    assert!(!asks("Edit", &edit, &ctx(), false));
+    assert!(asks("Edit", &edit, &ctx(), true));
+    for cmd in [
+        format!("echo '{{}}' >> \"{own}/messages.jsonl\""),
+        format!("sed -i '' 's/a/b/' \"{HOME}/Library/Application Support/FictionalApp/agents/b2/CLAUDE.md\""),
+    ] {
+        assert!(bash_asks(&cmd, false), "{cmd}");
+    }
+}

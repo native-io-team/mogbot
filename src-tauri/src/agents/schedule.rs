@@ -657,13 +657,16 @@ pub fn plan<Tz: TimeZone>(tz: &Tz, agents: &[store::Agent], now: i64) -> Plan {
 /// hour that buries what the agent is actually waiting on.
 pub const NOTHING_NEW: &str = "[nothing new]";
 
-/// Whether a reply is [`NOTHING_NEW`] (any case, a stray period or quotes).
+/// Whether a reply is [`NOTHING_NEW`] (any case, a stray period or quotes),
+/// or opens or ends with the bracketed marker: the words around it only
+/// explain the silence. Observed: "It's 23:33, inside quiet hours, so I'm
+/// sending nothing. … [nothing new]" posted in the owner's chat at night.
 pub fn is_nothing_new(text: &str) -> bool {
     let t = text
         .trim()
         .trim_matches(|c: char| c == '.' || c == '`' || c == '"' || c.is_whitespace())
         .to_ascii_lowercase();
-    t == NOTHING_NEW || t == "nothing new"
+    t == NOTHING_NEW || t == "nothing new" || t.ends_with(NOTHING_NEW) || t.starts_with(NOTHING_NEW)
 }
 
 /// The questions the agent put to the user that are still unanswered: its
@@ -1820,6 +1823,16 @@ mod tests {
         assert!(is_nothing_new("Nothing new"));
         assert!(!is_nothing_new(
             "Nothing new in the inbox, but the invoice bounced."
+        ));
+        // The marker with an explanation around it still posts nothing.
+        assert!(is_nothing_new(
+            "It's 23:40, inside quiet hours, so I'm sending nothing. The invoice question stays open until morning. [nothing new]"
+        ));
+        assert!(is_nothing_new(
+            "[Nothing new] Quiet hours, holding until 7."
+        ));
+        assert!(!is_nothing_new(
+            "The invoice bounced; [nothing new] otherwise, but this needs you."
         ));
 
         let said = |kind, text: &str| crate::agents::runner::new_message("a", kind, text);

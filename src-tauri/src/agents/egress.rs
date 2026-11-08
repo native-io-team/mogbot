@@ -69,6 +69,13 @@ pub fn secret_name(name: &str) -> bool {
         "authorization",
         "cookie",
     ];
+    // Starts with "auth" but names no credential: Google's account picker
+    // (`authuser=you@example.com` on every Gmail and Drive link) and the
+    // like. Observed: a Gmail search link turned a read-only look into a card.
+    const NOT_SECRET: &[&str] = &["authuser", "author", "authors", "authority", "authored"];
+    if NOT_SECRET.contains(&n.as_str()) {
+        return false;
+    }
     EXACT.contains(&n.as_str())
         || PARTS.iter().any(|p| n.contains(p))
         || n.ends_with("key") && n.len() > 3 && !n.ends_with("monkey")
@@ -99,7 +106,17 @@ pub fn carries_secret(address: &str, known: &[String]) -> bool {
         return true;
     }
     url.query_pairs()
-        .any(|(name, value)| secret_name(&name) && value.trim().chars().count() >= 6)
+        .any(|(name, value)| secret_name(&name) && credential_value(&value))
+}
+
+/// A query value that could be a credential: long enough, and not an email
+/// address or a plain number (an account picker's `?auth=1`, `?u=you@x.com`).
+fn credential_value(value: &str) -> bool {
+    let v = value.trim();
+    let email = !v.contains(char::is_whitespace)
+        && v.split_once('@')
+            .is_some_and(|(user, host)| !user.is_empty() && host.contains('.'));
+    v.chars().count() >= 6 && !email && !v.chars().all(|c| c.is_ascii_digit())
 }
 
 /// A request header (`Name: value`) that sends a credential.
@@ -248,8 +265,32 @@ mod tests {
         ] {
             assert!(secret_name(n), "{n}");
         }
-        for n in ["PATH", "LANG", "q", "id", "monkey", "page", "lang"] {
+        for n in [
+            "PATH", "LANG", "q", "id", "monkey", "page", "lang", "authuser", "author",
+        ] {
             assert!(!secret_name(n), "{n}");
         }
+    }
+
+    /// Fictional accounts. Gmail and Drive links name the account in
+    /// `authuser`: no credential, and reading the inbox is no send.
+    #[test]
+    fn an_account_picker_in_a_link_is_not_a_secret() {
+        for url in [
+            "https://mail.google.com/mail/?authuser=sam@example.test#search/garage",
+            "https://drive.google.com/drive/u/0/?authuser=1",
+            "https://example.test/cb?auth=sam@example.test",
+        ] {
+            assert!(!carries_secret(url, &known()), "{url}");
+        }
+        // A credential-shaped value in an auth-named field still counts.
+        assert!(carries_secret(
+            "https://example.test/cb?auth=f8Kq2LmZp0",
+            &known()
+        ));
+        assert!(carries_secret(
+            "https://example.test/cb?access_token=abc123xyz",
+            &known()
+        ));
     }
 }

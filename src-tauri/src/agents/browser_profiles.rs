@@ -325,7 +325,7 @@ pub fn guidance(
                     browsers.iter().map(|b| format!("\"{}\"", b.name)).collect::<Vec<_>>().join(", ")
                 ),
                 Pick::BringToFront { remembered } => format!(
-                    "No browser is connected right now. Call ask_bring_browser_to_front for {site}{} and stop.",
+                    "No browser is connected right now. Call ask_bring_browser_to_front for {site}{} and do what it says.",
                     remembered.map(|r| as_account(&r)).unwrap_or_default()
                 ),
             };
@@ -410,6 +410,104 @@ fn same_front(a: &Front, b: &Front) -> bool {
             == b.account.as_deref().map(str::to_ascii_lowercase)
 }
 
+/* ----------------------------------- bringing it forward ourselves */
+
+/// Per agent and site: how many times the app brought Chrome forward, how
+/// many windows it had then, and when. Forgotten after a quiet while.
+static FRONTED: Mutex<BTreeMap<String, (usize, usize, i64)>> = Mutex::new(BTreeMap::new());
+const FRONTED_FOR_MS: i64 = 15 * 60 * 1000;
+
+/// What the app does before a front card, given how many times it already
+/// tried (`tried`) and how many windows Chrome had (`windows`): `Some(false)`
+/// brings Chrome forward (opening it if it's closed), `Some(true)` also
+/// brings its backmost window to the front, so `windows` tries visit each
+/// window once; `None` once every window was tried: then the card.
+/// Observed: an agent asked the owner to bring Chrome forward, and the
+/// owner had to tell it to open Chrome itself, which then worked.
+pub fn front_step(tried: usize, windows: usize) -> Option<bool> {
+    match tried {
+        0 => Some(false),
+        n if n < windows => Some(true),
+        _ => None,
+    }
+}
+
+/// Chrome brought forward (and rotated a window, `rotate`): how many
+/// windows it has. `None`: it couldn't (not installed, no permission).
+#[cfg(all(target_os = "macos", not(test)))]
+async fn raise_chrome(rotate: bool) -> Option<usize> {
+    let script = format!(
+        "tell application \"Google Chrome\"\nactivate\nset n to count of windows\nif {rotate} and n > 1 then set index of window n to 1\nreturn n\nend tell"
+    );
+    let mut cmd = crate::utils::create_command("osascript");
+    cmd.args(["-e", &script]);
+    let out = crate::external_command::run_with_timeout(
+        tokio::process::Command::from(cmd),
+        "osascript bring Chrome forward",
+        8,
+    )
+    .await
+    .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    String::from_utf8_lossy(&out.stdout).trim().parse().ok()
+}
+
+#[cfg(any(not(target_os = "macos"), test))]
+async fn raise_chrome(_rotate: bool) -> Option<usize> {
+    None
+}
+
+/// Before a front card: bring Chrome forward, one window per call, and
+/// tell the agent what is connected now. `None`: nothing left to try.
+async fn front_ourselves(agent: &Agent, site: &str, ruled_out: &[String]) -> Option<String> {
+    let key = format!("{}\n{}", agent.id, site_key(site));
+    let now = store::now_ms();
+    let (tried, windows) = {
+        let map = FRONTED.lock().unwrap_or_else(|e| e.into_inner());
+        match map.get(&key) {
+            Some(&(t, w, at)) if now - at < FRONTED_FOR_MS => (t, w),
+            _ => (0, 0),
+        }
+    };
+    let rotate = front_step(tried, windows)?;
+    let windows = raise_chrome(rotate).await?;
+    FRONTED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(key, (tried + 1, windows, now));
+    // The extension reconnects to the profile now in front.
+    tokio::time::sleep(std::time::Duration::from_millis(1500)).await;
+    let which = if rotate {
+        format!("another Chrome window (try {} of {windows})", tried + 1)
+    } else {
+        "Chrome".to_string()
+    };
+    let again = format!(
+        "Open {site}, check the account on the page, and if it's still wrong call ask_bring_browser_to_front again with looked_in."
+    );
+    Some(match connected().await {
+        Some(list) if !list.is_empty() => match pick(&list, None, ruled_out) {
+            Pick::Use { browser, .. } => format!(
+                "The app brought {which} to the front; \"{}\" is connected now: select_browser it. {again}",
+                browser.name
+            ),
+            Pick::TryEach { browsers, .. } => format!(
+                "The app brought {which} to the front; connected now: {}. {again}",
+                browsers.iter().map(|b| format!("\"{}\"", b.name)).collect::<Vec<_>>().join(", ")
+            ),
+            // The same name as before may be another profile now.
+            Pick::BringToFront { .. } => format!(
+                "The app brought {which} to the front. Call list_connected_browsers and select the one connected. {again}"
+            ),
+        },
+        _ => format!(
+            "The app brought {which} to the front. Call list_connected_browsers; if none is connected yet, call ask_bring_browser_to_front again."
+        ),
+    })
+}
+
 /// `ask_bring_browser_to_front`: no other connected profile has the right
 /// account. Another connected one now? It's named instead. Otherwise one
 /// card, joined by anyone else who needs the same.
@@ -453,6 +551,10 @@ pub async fn bring_to_front(
                 ))
             }
         }
+    }
+    // Bring Chrome forward ourselves before asking the user to.
+    if let Some(told) = front_ourselves(agent, &site, &ruled_out).await {
+        return Ok(told);
     }
     // One card team-wide: join one that's waiting for the same.
     for other in store::list().unwrap_or_default() {

@@ -197,3 +197,19 @@ fn the_card_names_the_account_and_is_one_per_site_and_account() {
         }
     ));
 }
+
+/// Before the card, the app brings Chrome forward itself: first Chrome
+/// (opening it if it's closed), then each of its other windows once; the
+/// card comes only after every window was tried.
+#[test]
+fn the_app_tries_each_chrome_window_before_the_card() {
+    assert_eq!(front_step(0, 0), Some(false));
+    // One window, already brought forward: the card.
+    assert_eq!(front_step(1, 1), None);
+    // Three windows: two more tries, each bringing another one forward.
+    assert_eq!(front_step(1, 3), Some(true));
+    assert_eq!(front_step(2, 3), Some(true));
+    assert_eq!(front_step(3, 3), None);
+    // Chrome had no window open: nothing to rotate.
+    assert_eq!(front_step(1, 0), None);
+}

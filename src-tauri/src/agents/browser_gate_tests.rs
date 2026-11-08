@@ -969,3 +969,55 @@ fn a_send_click_is_outward_and_its_card_knows_what_was_typed() {
     );
     assert!(p.typed.is_empty());
 }
+
+/// Observed: a batch that closed a menu, opened a Gmail search (the link
+/// naming the account in `authuser`) and read the page got a "Goes out under
+/// your name" card at Full send, and a message typed in one batch then sent
+/// with Return reached its card as "can't read the exact words". Fictional
+/// account and message.
+#[test]
+fn a_batch_is_outward_only_for_its_send_and_its_card_knows_what_it_typed() {
+    let a = agent();
+    let p = page();
+    let look = json!({ "actions": [
+        { "name": "computer", "input": { "action": "key", "text": "Escape", "tabId": 7 } },
+        { "name": "navigate", "input": { "tabId": 7,
+            "url": "https://mail.google.com/mail/?authuser=sam@example.test#search/garage" } },
+        { "name": "computer", "input": { "action": "wait", "duration": 3, "tabId": 7 } },
+        { "name": "get_page_text", "input": { "tabId": 7 } }
+    ]});
+    assert!(!outward_step_on(&a, "browser_batch", &look, &p));
+    for level in [Level::GoHard, Level::FullSend] {
+        assert_eq!(
+            at(level, "browser_batch", look.clone()),
+            Gate::Allow,
+            "{level:?}"
+        );
+    }
+    // Typing then Return in one batch: outward, and the words are known.
+    let send = json!({ "actions": [
+        { "name": "computer", "input": { "action": "left_click", "ref": "ref_3", "tabId": 7 } },
+        { "name": "computer", "input": { "action": "type", "text": "Running ten minutes late", "tabId": 7 } },
+        { "name": "computer", "input": { "action": "key", "text": "Return", "tabId": 7 } }
+    ]});
+    assert!(outward_step_on(&a, "browser_batch", &send, &p));
+    assert_eq!(
+        typed_through(p.clone(), &t("browser_batch"), &send),
+        vec!["Running ten minutes late".to_string()]
+    );
+    // Typed in an earlier batch: the page remembers it for the next send.
+    let mut later = p.clone();
+    on_call(
+        &mut later,
+        "browser_batch",
+        &json!({ "actions": [
+            { "name": "computer", "input": { "action": "left_click", "ref": "ref_3", "tabId": 7 } },
+            { "name": "computer", "input": { "action": "type", "text": "Running ten minutes late", "tabId": 7 } }
+        ]}),
+    );
+    assert_eq!(later.typed, vec!["Running ten minutes late".to_string()]);
+    assert_eq!(
+        later.last_target.as_deref(),
+        Some("textbox \"Message Body\"")
+    );
+}
