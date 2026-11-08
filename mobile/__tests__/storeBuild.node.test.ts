@@ -35,6 +35,8 @@ describe('the store build', () => {
       expect(c.ios?.bundleIdentifier).toBe(brand.companion.bundleId);
       expect(c.ios?.buildNumber).toBe('7');
       expect(c.extra?.official).toBe(true);
+      // The screenshots hook (lib/screenshots.ts) is never in a build that ships.
+      expect(c.extra?.screenshots).toBe(false);
       expect(c.ios?.infoPlist?.NSAppTransportSecurity).toEqual({ NSAllowsArbitraryLoads: false });
       expect(c.ios?.infoPlist?.ITSAppUsesNonExemptEncryption).toBe(false);
     }));

@@ -244,6 +244,8 @@ export default (): ExpoConfig => {
     extra: {
       brand,
       official: Boolean(projectId) || storeBuild(),
+      // Only for taking store screenshots on a simulator (lib/screenshots.ts); never uploaded.
+      screenshots: process.env.COMPANION_SCREENSHOTS === '1',
       // Read by src/lib/shareIntent.tsx: only a build with the extension runs its hook.
       shareExtension,
       ...(projectId ? { eas: { projectId } } : {}),

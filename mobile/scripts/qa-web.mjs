@@ -602,6 +602,24 @@ async function demoShots(page) {
         check: 'The morning brief: a routine line, then two things that need you',
         theme,
       });
+    await open('/projects');
+    await page.waitFor(has('northwind-site'), 20_000, 'Projects');
+    await sleep(800);
+    if (wanted(`demo-projects-${theme}`))
+      await capture(page, `demo-projects-${theme}`, {
+        route: '(demo) Projects',
+        check: '“This is the demo” card, then the sample project',
+        theme,
+      });
+    await open('/settings');
+    await page.waitFor(has('Leave the demo'), 20_000, 'Settings');
+    await sleep(800);
+    if (wanted(`demo-settings-${theme}`))
+      await capture(page, `demo-settings-${theme}`, {
+        route: '(demo) Settings',
+        check: 'A Demo section with “Leave the demo and pair your Mac”, no Forget this Mac',
+        theme,
+      });
   }
 }
 

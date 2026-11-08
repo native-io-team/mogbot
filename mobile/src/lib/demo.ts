@@ -441,7 +441,6 @@ export class DemoTransport {
       engines: [
         { id: 'claude', label: 'Claude Code', installed: true, signedIn: true, models: [] },
       ],
-      independence: 'judgement',
     };
   }
 
