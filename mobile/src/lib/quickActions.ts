@@ -7,6 +7,7 @@
 
 import * as QuickActions from 'expo-quick-actions';
 import { attentionCounts, nextNeedsYou } from './agents';
+import { isDemo } from './demo';
 import { quietAgentIds } from './home';
 import type { Target } from './notify';
 import { getApp, useApp } from './store';
@@ -17,7 +18,8 @@ let signature = '';
 
 function items(): QuickActions.Action[] {
   const s = getApp();
-  if (!s.credentials || !s.overview) return [];
+  // None for the demo: the icon's menu outlives the app, and the demo doesn't.
+  if (!s.credentials || isDemo(s.credentials) || !s.overview) return [];
   const chief = s.overview.agents.find((a) => a.isMain);
   const { needYou } = attentionCounts(s.overview.agents, s.teamSetup);
   return [

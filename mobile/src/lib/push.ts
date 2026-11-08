@@ -24,7 +24,7 @@ import { getApp, setApp } from './store';
 export const ALERTS_WHILE_OPEN =
   'Alerts arrive while this app is open on your phone. Your Mac still notifies you at the desk.';
 
-/** Built by the official EAS project (TestFlight, the App Store). */
+/** The App Store build (or an official EAS build): `extra.official` in app.config.ts. */
 export const isOfficialBuild = () => Boolean(Constants.expoConfig?.extra?.official);
 
 /** What Settings says about push, from what is known. Null: say nothing yet. */
@@ -36,7 +36,7 @@ export function pushLine(
     return {
       value: 'Needs the official build',
       footer:
-        'Push needs the official app from TestFlight or the App Store. This app was built on your Mac, and Apple doesn’t let it receive push.',
+        'Push needs the app from the App Store. This copy was built on your Mac, and Apple doesn’t let it receive push.',
     };
   }
   switch (status) {

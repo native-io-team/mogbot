@@ -15,7 +15,7 @@
  *
  *   pnpm qa:web                          # everything, into qa-shots/
  *   pnpm qa:web --only chat-,composer-   # shots whose name starts with chat- or composer-
- *   pnpm qa:web --phases heavy           # only these phases (fresh,live,cached,impostor,bars,heavy,importing,team-setup,live-work,engine,torture)
+ *   pnpm qa:web --phases heavy           # only these phases (demo,fresh,live,cached,impostor,bars,heavy,importing,team-setup,live-work,engine,torture)
  *   pnpm qa:web --themes dark            # one theme
  *   pnpm qa:web --phases send            # a send, frame by frame (not in the default run)
  *   pnpm qa:web --out /tmp/shots
@@ -53,7 +53,7 @@ const MAX_MS = Number(opt('--max-ms', 'QA_MAX_MS', 30 * 60 * 1000));
 const PHASES = opt(
   '--phases',
   'QA_PHASES',
-  'fresh,live,cached,impostor,bars,usage-accounts,heavy,importing,team-setup,live-work,engine,torture'
+  'demo,fresh,live,cached,impostor,bars,usage-accounts,heavy,importing,team-setup,live-work,engine,torture'
 ).split(',');
 const phase = (name) => PHASES.includes(name);
 // Ports other tools in this repo own: the desktop app, its harness, the phone's Metro.
@@ -519,6 +519,92 @@ async function prePairShots(page, d) {
   }
 }
 
+/**
+ * "Try the demo" from the welcome screen, with no Mac at all (the mock
+ * isn't involved): the sample agents, a chat with a card waiting, a result,
+ * a reply to something sent, and Settings. The demo lives in memory, so it
+ * is walked by tapping, never by loading a route (a reload ends it).
+ */
+async function demoShots(page) {
+  const back = () => page.eval('history.back()');
+  // In-app navigation without a reload (which would end the demo): the
+  // router follows the browser's history.
+  const open = (route) =>
+    page.eval(
+      `history.pushState(null, '', ${JSON.stringify(route)}); dispatchEvent(new PopStateEvent('popstate'))`
+    );
+  const has = (text) => `document.body.innerText.includes(${JSON.stringify(text)})`;
+  for (const theme of THEMES) {
+    await setTheme(page, theme);
+    await page.goto(`${WEB}/pair`);
+    await page.waitFor(has('Try the demo'), 180_000, 'the welcome');
+    await sleep(500);
+    if (wanted(`demo-welcome-${theme}`))
+      await capture(page, `demo-welcome-${theme}`, {
+        route: '/pair',
+        check: '“Try the demo” under the Tailscale step, with “No Mac nearby?…” under it',
+        theme,
+      });
+    await page.clickText('Try the demo');
+    await page.waitFor(has('This is the demo'), 20_000, 'the demo');
+    await sleep(1200);
+    if (wanted(`demo-agents-${theme}`))
+      await capture(page, `demo-agents-${theme}`, {
+        route: '/pair → Try the demo',
+        check:
+          '“This is the demo” card first, with Pair your Mac; five sample agents: Inbox waiting on you, Books working',
+        theme,
+      });
+    await open('/chat/inbox');
+    await page.waitFor(has('Send an email as you'), 20_000, 'the Inbox chat');
+    await sleep(1200);
+    if (wanted(`demo-approval-${theme}`))
+      await capture(page, `demo-approval-${theme}`, {
+        route: '(demo) Inbox',
+        check: 'The bar “Demo · sample agents” over the composer; the reply to Dana and its card',
+        theme,
+      });
+    await back();
+    await sleep(800);
+    await open('/chat/site');
+    await page.waitFor(has('Winter menu page'), 20_000, 'the Website chat');
+    await sleep(1200);
+    if (wanted(`demo-result-${theme}`))
+      await capture(page, `demo-result-${theme}`, {
+        route: '(demo) Website',
+        check: 'The result card: what it checked and what it didn’t',
+        theme,
+      });
+    await back();
+    await sleep(800);
+    await open('/chat/research');
+    await page.waitFor(has('Copper Kettle'), 20_000, 'the Research chat');
+    await page.type('Ask Hillside for a sample');
+    await page.clickLabel('Send').catch(() => {});
+    await page
+      .waitFor(has('This is the demo, so I can’t'), 10_000, 'the demo’s reply')
+      .catch((e) => page.errors.push(e.message));
+    await sleep(800);
+    if (wanted(`demo-reply-${theme}`))
+      await capture(page, `demo-reply-${theme}`, {
+        route: '(demo) Research, after a send',
+        check: 'The table, the message sent, and the demo’s reply saying it can’t do real work',
+        theme,
+      });
+    await back();
+    await sleep(800);
+    await open('/chat/chief');
+    await page.waitFor(has('Two things need you'), 20_000, 'the Chief');
+    await sleep(1200);
+    if (wanted(`demo-chief-${theme}`))
+      await capture(page, `demo-chief-${theme}`, {
+        route: '(demo) Chief of Staff',
+        check: 'The morning brief: a routine line, then two things that need you',
+        theme,
+      });
+  }
+}
+
 async function capture(page, name, { route, check, theme }) {
   const file = path.join(OUT, `${name}.png`);
   await page.screenshot(file);
@@ -592,10 +678,12 @@ async function clearField(page) {
 
 /** Click the element reading exactly `text` inside the one with `data-testid` `testId`. */
 const clickIn = (page, testId, text) =>
-  page.clickWhere(
-    `() => [...document.querySelectorAll('[data-testid=${JSON.stringify(testId)}] *')].filter((e) => e.innerText?.trim() === ${JSON.stringify(text)} && e.getBoundingClientRect().width).pop()`,
-    `${testId} ${text}`
-  ).then(() => sleep(700));
+  page
+    .clickWhere(
+      `() => [...document.querySelectorAll('[data-testid=${JSON.stringify(testId)}] *')].filter((e) => e.innerText?.trim() === ${JSON.stringify(text)} && e.getBoundingClientRect().width).pop()`,
+      `${testId} ${text}`
+    )
+    .then(() => sleep(700));
 
 const scrollToText = (text) => async (page) => {
   await page.eval(FIND_SCROLLER);
@@ -1216,14 +1304,16 @@ const LIVE = [
     route: '/controls?id=qa',
     ready: 'QA 2',
     act: scrollToText('Apps'),
-    check: 'Agent controls: an Apps row (“Which apps QA 2 can use, and connecting new ones.”) above More about QA 2',
+    check:
+      'Agent controls: an Apps row (“Which apps QA 2 can use, and connecting new ones.”) above More about QA 2',
   },
   {
     name: 'settings-apps',
     route: '/settings',
     ready: 'Settings',
     act: scrollToText('Apps your agents can use'),
-    check: 'Settings → Logins: What your team needs, then Apps your agents can use, and the footer naming both',
+    check:
+      'Settings → Logins: What your team needs, then Apps your agents can use, and the footer naming both',
   },
   {
     name: 'reach',
@@ -2171,6 +2261,7 @@ async function main() {
   const link = await (await fetch(`${MOCK}/dev/link`)).text();
   const d = new URL(link.replace(/^[^:]+:\/\//, 'http://x/')).searchParams.get('d');
   await prePairShots(page, d);
+  if (phase('demo')) await demoShots(page);
 
   // Pair through the real confirm screen.
   await page.goto(`${WEB}/pair?d=${d}`);

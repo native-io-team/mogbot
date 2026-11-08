@@ -69,6 +69,7 @@ function Screens() {
             <Stack screenOptions={stackOptions}>
               <Stack.Screen name="index" options={{ headerShown: false }} />
               <Stack.Screen name="pair" options={{ headerShown: false, gestureEnabled: false }} />
+              <Stack.Screen name="demo" options={{ headerShown: false, animation: 'none' }} />
               <Stack.Screen
                 name="scan"
                 options={{ presentation: 'fullScreenModal', headerShown: false }}

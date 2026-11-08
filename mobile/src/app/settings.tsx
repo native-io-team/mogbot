@@ -13,6 +13,7 @@ import { useQuotaLines } from '../lib/quota';
 import { useAccountLines } from '../lib/accounts';
 import { useUsageRows } from '../lib/usagePlan';
 import { appInfo } from '../lib/pairing';
+import { isDemo } from '../lib/demo';
 import { setPref } from '../lib/prefs';
 import { ALERTS_WHILE_OPEN, isOfficialBuild, pushLine } from '../lib/push';
 import { canCall, enableAlerts, unpair } from '../lib/session';
@@ -69,6 +70,7 @@ export default function Settings() {
   const servesApps = useServed('agents.apps');
   const canImport = useApp((s) => canCall('agents.import.status', s.welcome));
   const credentials = useApp((s) => s.credentials);
+  const demo = isDemo(credentials);
   const connected = useApp((s) => s.link.kind === 'connected');
   // The route in use now, never assumed: nothing while it isn't connected.
   const route = useApp((s) => (s.link.kind === 'connected' ? s.link.route : null));
@@ -155,16 +157,29 @@ export default function Settings() {
 
   return (
     <ScrollView contentContainerStyle={styles.page}>
-      <Section title="Paired Mac">
-        <Row
-          label={credentials?.name ?? 'None'}
-          // The state, not the route: which network it goes over is on Connection details.
-          value={route ? 'Connected' : undefined}
-        />
-        {credentials && <Row label="Paired" value={formatDate(credentials.pairedAt)} />}
-        <Row label="Connection details" onPress={() => router.push('/connection')} />
-        <Row label="Forget this Mac" destructive onPress={confirmUnpair} last />
-      </Section>
+      {demo ? (
+        <Section
+          title="Demo"
+          footer="Sample agents with made-up work. Nothing here reaches a Mac, and nothing is kept."
+        >
+          <Row
+            label="Leave the demo and pair your Mac"
+            onPress={() => void unpair().then(() => router.replace('/pair'))}
+            last
+          />
+        </Section>
+      ) : (
+        <Section title="Paired Mac">
+          <Row
+            label={credentials?.name ?? 'None'}
+            // The state, not the route: which network it goes over is on Connection details.
+            value={route ? 'Connected' : undefined}
+          />
+          {credentials && <Row label="Paired" value={formatDate(credentials.pairedAt)} />}
+          <Row label="Connection details" onPress={() => router.push('/connection')} />
+          <Row label="Forget this Mac" destructive onPress={confirmUnpair} last />
+        </Section>
+      )}
 
       {quota.length > 0 && (
         <Section title="Plan usage">

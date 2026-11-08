@@ -33,6 +33,7 @@ import { QuotaLines } from '../../../components/QuotaLines';
 import { useQuotaLines } from '../../../lib/quota';
 import { AgentAccent } from '../../../lib/accent';
 import { ConnectionNotice, LinkProblem, useNow } from '../../../components/ConnectionPill';
+import { DemoCard } from '../../../components/DemoCard';
 import { Button, Icon, IconButton, useRipple, T, tap } from '../../../components/ui';
 import { toggleFor, type AgentAction } from '../../../lib/actions';
 import { formatAgo, needsYou, pendingApproval } from '../../../lib/agents';
@@ -313,6 +314,7 @@ export default function Agents() {
       ListHeaderComponent={
         <>
           <RefreshStatus outcome={outcome} onRetry={onRefresh} onDismiss={dismiss} />
+          <DemoCard />
           <ConnectionNotice />
           <Refused />
           <ImportChoiceCard />
