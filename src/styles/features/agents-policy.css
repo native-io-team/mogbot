@@ -59,11 +59,15 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
+  /* No side inset: content starts on the heading's edge, like every other
+     group in Settings → Agents. */
+  padding: 0;
 }
 
+/* Wrapped help lines need air: the body's line height is 1. */
 .agent-team-policy__lead {
   font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
   color: var(--text-muted);
 }
 
@@ -117,6 +121,7 @@
 
 .agent-team-policy__preset-detail {
   font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
   color: var(--text-muted);
 }
 
@@ -130,8 +135,9 @@
   display: grid;
   grid-template-columns: minmax(0, 9rem) minmax(0, 1fr); /* css-ok: label column */
   gap: var(--spacing-sm);
-  padding: var(--spacing-3xs) 0;
+  padding: var(--spacing-2xs) 0;
   font-size: var(--font-size-body-md);
+  line-height: var(--line-height-compact);
 }
 
 .agent-team-policy__line dt {
@@ -189,37 +195,54 @@
   color: var(--text-muted);
 }
 
-/* "Do these under your name?" (`ask_plan`): the plan, numbered. */
+/* "Do these under your name?" (`ask_plan`): the plan, numbered. The number
+   hangs in its own muted column (as on the phone), so each action's target
+   and words line up under the action rather than under "1.". */
 .agent-plan {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-md);
 }
 
 .agent-plan__actions {
   margin: 0;
-  padding-left: var(--spacing-lg);
+  padding: 0;
+  list-style: none;
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-3xs);
+  gap: var(--spacing-sm);
   font-size: var(--font-size-body-md);
+  line-height: var(--line-height-compact);
   color: var(--text-primary);
 }
 
 .agent-plan__action {
+  display: grid;
+  /* Wide enough for "10." so a long plan's numbers line up with its first. */
+  grid-template-columns: var(--spacing-lg) minmax(0, 1fr);
+  column-gap: var(--spacing-xs);
+  row-gap: var(--spacing-3xs);
   overflow-wrap: anywhere;
 }
 
+.agent-plan__number {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-plan__summary,
+.agent-plan__target,
+.agent-plan__text {
+  grid-column: 2;
+}
+
 .agent-plan__target {
-  margin-left: var(--spacing-xs);
   font-size: var(--font-size-body-sm);
   color: var(--text-muted);
 }
 
 /* The exact words an action sends, word for word. */
 .agent-plan__text {
-  display: block;
-  margin-top: var(--spacing-3xs);
   font-size: var(--font-size-body-sm);
   color: var(--text-secondary);
   white-space: pre-wrap;
@@ -227,6 +250,7 @@
 
 .agent-plan__why {
   margin: 0;
+  line-height: var(--line-height-compact);
   font-size: var(--font-size-body-sm);
   color: var(--text-muted);
 }

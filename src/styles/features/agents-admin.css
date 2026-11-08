@@ -9,6 +9,17 @@
   gap: var(--spacing-md);
 }
 
+/* One switch per agent is a list, not a stack of settings: the rows sit at
+   a list's rhythm instead of the section's gap plus each row's padding,
+   which spread seven agents over most of a screen. */
+.agent-admin-settings > .settings-section:first-of-type {
+  gap: 0;
+}
+
+.agent-admin-settings > .settings-section:first-of-type > .settings-row {
+  padding: var(--spacing-sm) 0;
+}
+
 .agent-admin-settings__heading {
   margin: var(--spacing-md) 0 var(--spacing-xs);
   font-size: var(--font-size-label);
