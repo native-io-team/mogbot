@@ -3745,23 +3745,26 @@ never slow down for limits unless the user chose that.
   known time) or running out before its reset by its own pace, and none
   back before the last runs out; else nothing. Said on the desk (the usage
   popover's "All accounts", Settings → Usage's "What you have") and the
-  phone's Usage sheet by `computeView` in `usageSheet.ts`. One sentence
-  naming what there is room on, from read accounts only ("Room now on
-  Claude · This Mac. Claude · Personal has room again Mon 4:00 PM."), then
-  in the warning ink the estimate, if any: across accounts when the Mac
-  sent one ("At this pace you'll run out of Claude on every account by Mon
-  afternoon; Codex has room"), else, with one account read, that account's
-  own ("At this pace the weekly limit runs out tomorrow night, before it
-  resets …"), over its basis ("Estimate from 200 readings over 10 hours").
-  Only with two or more accounts read: "3 accounts · Claude 2, Codex 1 · 1
-  not read" (an account not signed in is never "not read") and one quiet
-  line per kind of limit read on two or more ("Weekly 1 of 2 has room ·
-  soonest reset Mon"). Then one compact row per account (5-hour and weekly
-  bars side by side; the bar its soonest pace line is about tinted with the
-  warning role so the two agree; that line, unless the headline already
-  says it; a muted "Used next" only beside another read account of its
-  engine), most room first, then not read, then without room, then a quiet
-  "Not signed in". Each reading
+  phone's Usage sheet by `computeView` in `usageSheet.ts`, read top-down
+  in one glance. First one short headline, from read accounts only:
+  "Room now on Claude · This Mac" (one account with room), "Room now on
+  both accounts" / "all 3 accounts", "Room now on 2 of 3 accounts", or "No
+  room right now" with, under it, who has room again first ("Claude ·
+  Work has room again at 3:20 PM"). It never counts or lists the accounts
+  again: the cards below say which and when. Then, in the warning ink, the
+  Mac's estimate across accounts when it sent one ("At this pace you'll
+  run out of Claude on every account by Mon afternoon; Codex has room"),
+  over its basis. Then each account with a reading as its own card, most
+  room first: its name, "Max plan" and a muted "Used next" (only beside
+  another read account of its engine), and a row per limit: name left,
+  % right, the bar, "Resets …" under it, and that limit's own pace
+  estimate right under its bar, short ("At this pace it runs out tomorrow
+  night") over a muted basis ("Estimate from 200 readings over 10 hours");
+  that bar is tinted with the warning role so the two agree (as is any
+  limit at 90% or more, and the error role at its limit). Accounts with
+  nothing to draw follow compact and muted, one line each: not read (why,
+  in the Mac's words), out ("Out of usage until …"), "Not signed in". Each
+  reading
   shows once: the popover no longer draws the next account's meters above
   the list. `usage_overview` heads its answer with the same TOTAL COMPUTE
   lines, and the run-out under ESTIMATES. A Mac that serves no totals gets

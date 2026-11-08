@@ -51,7 +51,6 @@ export {
   contextMeter,
   type ComputeRow,
   type ComputeView,
-  type ComputeWindowLine,
   paceLine,
   planUsage,
   ringPercent,

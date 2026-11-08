@@ -2242,8 +2242,8 @@ async function main() {
           act: scrollToText('ALL ACCOUNTS'),
           check:
             variant === 'two-claude'
-              ? 'All accounts: "Room now on Claude · This Mac. Claude · Personal has room again …", "3 accounts · Claude 2, Codex 1", one Weekly line; This Mac (Max plan · Used next) with an amber weekly bar and its pace line; Personal out until its reset; Codex · This Mac a quiet "Not signed in"'
-              : 'All accounts: "Room now on Claude · This Mac." then the amber estimate and its basis; no aggregate lines; This Mac (Max plan, no "Used next") with an amber weekly bar and no repeated pace line; Personal says why it can’t be read; Codex a quiet "Not signed in"',
+              ? 'All accounts: one short headline "Room now on Claude · This Mac", no counts or Weekly summary line; This Mac its own card (Max plan · Used next) with a 5-hour row and a Weekly row, the weekly bar amber with "At this pace it runs out …" and its basis under it; then a compact muted card: Personal "Out of usage until …", Codex · This Mac "Not signed in"'
+              : 'All accounts: "Room now on Claude · This Mac", nothing under it; This Mac its own card (Max plan, no "Used next"), the weekly bar amber with its pace line and basis under it, said once; then a compact muted card: Personal says why it can’t be read, Codex "Not signed in"',
         },
       ]);
     }

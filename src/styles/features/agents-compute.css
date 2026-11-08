@@ -1,28 +1,34 @@
 /* Total compute (AgentsCompute): every account at once, in the usage popover
    and Settings → Usage. Readings and labelled estimates only; status colours
-   for near and at a limit, never the accent. */
+   for near and at a limit, never the accent.
+
+   Rhythm: lg between the headline, the cards and the quiet list; sm between
+   cards; md between a card's limits; 2xs inside a limit (name and %, bar,
+   reset). The phone's Usage sheet keeps the same order and steps. */
 
 .agents-compute {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-md);
+  gap: var(--spacing-lg);
   align-self: stretch;
 }
 
-.agents-compute p {
+.agents-compute p,
+.agents-compute ul {
   margin: 0;
 }
 
+/* The answer first: one short line, then (only without room) when there is again. */
 .agents-compute__top {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-3xs);
+  gap: var(--spacing-xs);
 }
 
 .agents-compute__headline {
-  font-size: var(--font-size-body-md);
+  font-size: var(--font-size-subhead);
   font-weight: var(--font-weight-label);
-  line-height: var(--line-height-help);
+  line-height: var(--line-height-heading);
   color: var(--text-primary);
 }
 
@@ -30,94 +36,29 @@
   color: var(--accent-warning);
 }
 
-.agents-compute__muted,
-.agents-compute__state {
-  font-size: var(--font-size-body-sm);
+.agents-compute__detail {
+  font-size: var(--font-size-body-md);
   line-height: var(--line-height-help);
-  color: var(--text-muted);
-  font-variant-numeric: tabular-nums;
-}
-
-.agents-compute__state:is([data-tone='warning'], [data-tone='limited']) {
-  color: var(--accent-warning);
-}
-
-/* Each kind of limit across accounts: one quiet line each. */
-.agents-compute__windows {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2xs);
-  margin: 0;
-}
-
-.agents-compute__window {
-  display: grid;
-  grid-template-columns: 4.5em minmax(0, 1fr); /* css-ok: a column wide enough for "5-hour" and "Weekly" */
-  align-items: baseline;
-  column-gap: var(--spacing-sm);
-}
-
-.agents-compute__window dd {
-  grid-column: 2;
-}
-
-.agents-compute__window dd {
-  margin: 0;
-}
-
-.agents-compute__window-name {
-  font-size: var(--font-size-body-sm);
   color: var(--text-secondary);
-}
-
-.agents-compute__window-room {
-  font-size: var(--font-size-body-sm);
-  color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
 
-.agents-compute__window[data-tone='limited'] .agents-compute__window-room {
-  color: var(--accent-warning);
-}
-
-/* An estimate, said as one: amber words, then what it rests on. */
-.agents-compute__pace {
+/* Each account with a reading: a card of its own. */
+.agents-compute__cards {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-3xs);
-}
-
-.agents-compute__pace-text {
-  font-size: var(--font-size-body-sm);
-  line-height: var(--line-height-help);
-  color: var(--accent-warning);
-}
-
-/* The estimate said right after the headline: the headline's size, amber. */
-.agents-compute__headline .agents-compute__pace-text {
-  font-size: inherit;
-  line-height: inherit;
-}
-
-.agents-compute__rows {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
+  gap: var(--spacing-sm);
   padding: 0;
   list-style: none;
-  border: var(--border-width-default) solid var(--border-subtle);
-  border-radius: var(--radius-card);
 }
 
 .agents-compute__row {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) var(--spacing-md);
-}
-
-.agents-compute__row + .agents-compute__row {
-  border-top: var(--border-width-default) solid var(--border-subtle);
+  gap: var(--spacing-md);
+  padding: var(--spacing-md);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-card);
 }
 
 .agents-compute__row-head {
@@ -128,24 +69,23 @@
 }
 
 .agents-compute__name {
-  font-size: var(--font-size-body-md);
+  font-size: var(--font-size-body-lg);
   font-weight: var(--font-weight-label);
   color: var(--text-primary);
   overflow-wrap: anywhere;
 }
 
-/* The 5-hour and weekly bars side by side. */
-.agents-compute__meters {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: var(--spacing-md);
+.agents-compute__tags {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
 }
 
+/* One limit: name and % on a line, the bar, when it resets, its pace. */
 .agents-compute__meter {
   --agents-compute-ink: var(--text-secondary);
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-3xs);
+  gap: var(--spacing-xs);
   min-width: 0;
 }
 
@@ -160,12 +100,14 @@
 .agents-compute__meter-head {
   display: flex;
   justify-content: space-between;
-  gap: var(--spacing-xs);
-  font-size: var(--font-size-body-sm);
-  color: var(--text-secondary);
+  align-items: baseline;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-body-md);
+  color: var(--text-primary);
 }
 
 .agents-compute__figure {
+  color: var(--text-secondary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -188,8 +130,55 @@
   background: var(--agents-compute-ink);
 }
 
-.agents-compute__meter .agents-compute__muted {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+.agents-compute__reset,
+.agents-compute__basis {
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* An estimate, said as one: a short amber line, what it rests on quietly under it. */
+.agents-compute__pace {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+}
+
+.agents-compute__meter .agents-compute__pace {
+  padding-top: var(--spacing-2xs);
+}
+
+.agents-compute__pace-text {
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
+  color: var(--accent-warning);
+}
+
+/* Nothing to draw (out of usage, not signed in, not read): compact and quiet. */
+.agents-compute__quiet {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  padding: 0;
+  list-style: none;
+}
+
+.agents-compute__quiet-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  column-gap: var(--spacing-md);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+}
+
+.agents-compute__quiet-name {
+  color: var(--text-secondary);
+}
+
+.agents-compute__quiet-state {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
 }

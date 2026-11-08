@@ -552,7 +552,7 @@ export const agentsUsageScenarios: Scenario[] = [
     id: 'agents-chat-usage',
     title: 'Agents — the chat header’s usage ring and its popover',
     looksRightWhen:
-      'Finance’s chat. In the header, left of the clock, a small ring about a third filled (38% of the 5-hour window), in the muted ink, not the accent. Its popover: “Usage”; Context — “Finance’s conversation” 64% used with a bar and “128.4K of 200K tokens”; All accounts — “Room now on Claude · This Mac and Codex · ChatGPT Plus. Claude · Work has room again at <time>.”, a muted “4 accounts · Claude 3, Codex 1 · 1 not read”, then two quiet lines: “5-hour 2 of 2 have room · soonest reset <time>” and “Weekly 1 of 2 has room · soonest reset <time>”. Then one list, most room first: Claude · This Mac with a muted “Used next”, its 5-hour (38%) bar and its Weekly (61%) bar in amber side by side, and an amber “Weekly: At this pace you’ll hit the limit …” with “Estimate from 14 readings over 23 hours”; Codex · ChatGPT Plus (Plus plan) with its 5-hour bar at 92% in amber; Claude · Personal says why it can’t be read between turns; Claude · Work in amber “Out of usage until …”. No separate “Plan usage” block: each account’s bars appear once. A muted footnote that use elsewhere counts too. Readable in both themes.',
+      'Finance’s chat. In the header, left of the clock, a small ring about a third filled (38% of the 5-hour window), in the muted ink, not the accent. Its popover: “Usage”; Context — “Finance’s conversation” 64% used with a bar and “128.4K of 200K tokens”; All accounts — one short headline “Room now on 2 of 3 accounts”, no counts or per-limit summary lines. Then a card per account with a reading, spaced apart: Claude · This Mac with a muted “Used next”, a 5-hour row (38%, bar, “Resets at <time>”) and a Weekly row (61% and its bar in amber, “Resets <day> <time>”, then the amber “At this pace it runs out <day> <part of day>” over a muted “Estimate from 14 readings over 23 hours”); Codex · ChatGPT Plus (Plus plan) with its 5-hour row at 92% in amber. Then two compact muted lines: Claude · Personal saying why it can’t be read between turns, and Claude · Work “Out of usage until …”. A muted footnote that use elsewhere counts too. Readable in both themes.',
     openSelector: AGENTS_TAB,
     requires: '.agent-usage .agents-compute__pace',
     clipSelector: '.agent-usage',
@@ -598,7 +598,7 @@ export const agentsUsageScenarios: Scenario[] = [
     id: 'settings-agents-usage-runout',
     title: 'Settings — Agents → Usage: Claude runs out on every account at this pace',
     looksRightWhen:
-      '“What you have”: “Room now on all 3 accounts.” followed in amber by “At this pace you’ll run out of Claude on every account in about 3 hours; Codex has room.”, a muted “Estimate from 13 readings across 2 accounts”, “3 accounts · Claude 2, Codex 1”, the 5-hour and Weekly lines (3 of 3 have room). The list: Codex · ChatGPT Plus first (most room), then Claude · This Mac (Max plan · Used next) and Claude · Work, each with both bars (the 5-hour one amber) and its own amber 5-hour pace line. Nothing accent-coloured.',
+      '“What you have”: the headline “Room now on all 3 accounts”, then in amber “At this pace you’ll run out of Claude on every account in about 3 hours; Codex has room.” over a muted “Estimate from 13 readings across 2 accounts”. No counts or per-limit summary lines. Cards: Codex · ChatGPT Plus first (most room), then Claude · This Mac (Max plan · Used next) and Claude · Work, each with a 5-hour row and a Weekly row; each Claude 5-hour bar amber with its own short amber pace line and basis right under it. Nothing accent-coloured.',
     command: 'agents.usage',
     requires: '.agents-usage .agents-compute__pace',
     clipSelector: '.agents-usage',
@@ -612,7 +612,7 @@ export const agentsUsageScenarios: Scenario[] = [
     id: 'settings-agents-usage-two-claude',
     title: 'Settings — Agents → Usage: two Claude accounts read, Codex not signed in',
     looksRightWhen:
-      '“What you have”: “Room now on Claude · This Mac. Claude · Personal has room again <day> <time>.”, a muted “3 accounts · Claude 2, Codex 1” (signed out is not “not read”), one quiet “Weekly 1 of 2 has room · soonest reset <day>” line, no 5-hour aggregate (only one account reported it). Then: Claude · This Mac (“Max plan · Used next”, muted, no pill), 5-hour 7% in the muted ink and Weekly 71% in amber, with the amber “Weekly: At this pace you’ll hit the limit tomorrow night, before it resets …” and its estimate basis; Claude · Personal in amber “Out of usage until …”; Codex · This Mac a quiet muted “Not signed in”. Nothing accent-coloured.',
+      '“What you have”: one short headline “Room now on Claude · This Mac” (no “has room again”, no counts, no Weekly summary line). Then one card: Claude · This Mac (“Max plan · Used next”, muted, no pill), a 5-hour row at 7% in the muted ink, and a Weekly row at 71% in amber with “At this pace it runs out tomorrow night” right under its reset line, over its muted estimate basis. Then two compact muted lines: Claude · Personal “Out of usage until …” and Codex · This Mac “Not signed in”. Nothing accent-coloured.',
     command: 'agents.usage',
     requires: '.agents-usage .agents-compute__row',
     clipSelector: '.agents-usage',
@@ -626,7 +626,7 @@ export const agentsUsageScenarios: Scenario[] = [
     id: 'settings-agents-usage-one-read',
     title: 'Settings — Agents → Usage: one account read, one that can’t be',
     looksRightWhen:
-      '“What you have”: “Room now on Claude · This Mac.” followed in amber by “At this pace the weekly limit runs out <when>, before it resets …”, then a muted “Estimate from 200 readings over 10 hours”. No counts line and no 5-hour/Weekly aggregate lines. Claude · This Mac (“Max plan”, no “Used next”) with 5-hour 7% muted and Weekly 71% in amber, and no repeated pace line; Claude · Personal says in muted words why it can’t be read between turns and that its limits show after a turn runs on it; Codex · This Mac a quiet “Not signed in”.',
+      '“What you have”: “Room now on Claude · This Mac” on one line, nothing under it. One card: Claude · This Mac (“Max plan”, no “Used next”) with a 5-hour row at 7% muted and a Weekly row at 71% in amber, the amber “At this pace it runs out <when>” and a muted “Estimate from 200 readings over 10 hours” under that bar, said once. Then two compact muted lines: Claude · Personal saying why it can’t be read between turns and that its limits show after a turn runs on it; Codex · This Mac “Not signed in”.',
     command: 'agents.usage',
     requires: '.agents-usage .agents-compute__row',
     clipSelector: '.agents-usage',
@@ -640,9 +640,9 @@ export const agentsUsageScenarios: Scenario[] = [
     id: 'settings-agents-usage-empty',
     title: 'Settings — Agents → Usage with no reading and no history',
     looksRightWhen:
-      'The Usage group with Normal pressed and its line (“Agents never slow down for limits…”). “What you have”: “No limits read yet.”, no counts or limit lines, and one row: Claude · This Mac and a muted “Not checked yet” — no bars, no estimate line at all, never a made-up figure. No “Other compute” group. The spare-capacity list shows only its sentence and the field.',
+      'The Usage group with Normal pressed and its line (“Agents never slow down for limits…”). “What you have”: “No limits read yet”, no cards, and one compact muted line: Claude · This Mac “Not checked yet” — no bars, no estimate line at all, never a made-up figure. No “Other compute” group. The spare-capacity list shows only its sentence and the field.',
     command: 'agents.usage',
-    requires: '.agents-usage .agents-compute__row',
+    requires: '.agents-usage .agents-compute__quiet-row',
     clipSelector: '.agents-usage',
     commands: {
       agents_overview: overview(),
