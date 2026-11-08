@@ -113,9 +113,29 @@ Rules:
   background (AppState), on a screen that isn't showing (`useIsFocused`), and in the look picker.
 - **Reduce Motion:** static, on both.
 
+## On a key
+
+While an agent works, the working line leads with the agent on a key (`AgentKey` on desk and
+phone), in the marketing site's key language: a wide cap (24×18px, `TYPING_KEY`) with a lit top
+edge, a darker side showing 3px under it, a hairline ring and a soft drop, faintly tinted with the
+agent's hue (`typingKeyPaint`, equal OKLCH per theme like the rest of the palette). The avatar on
+it is the solid (selected) one at 14px: you are looking at that agent, and the solid colour stays
+clear of a near-white cap and a dark one alike (a test holds it to 1.8:1 against both ends of the
+cap's gradient, every colour, both themes; the pastel clay on a white cap didn't, white least of
+all).
+
+While the line is live the key is typed on: a tap, a lighter tap, each with a small rebound, then
+a rest (`TYPING_KEY.press`, 2.4s). Only the top moves: it presses into the side and at the bottom
+of a tap covers it exactly, so the side reads as the key's depth, never as a lip above it.
+Stalled ("No progress for 5 min") or finishing, it rests. Desk: CSS keyframes on one layer
+(`agents-key-press`, checked against the spec by `agentKeyMotion.test.ts`), paused with the
+window hidden. Phone: one clock on the UI thread read by the `keyDepth` worklet (checked as the
+UI runtime runs it). Reduce Motion: still, on both. The steps' icon column is the key's width, so
+the live line, its steps and the folded "Worked" line keep one grid.
+
 ## Sizes
 
-Desk: `xs` 16, `mini` 18, `row` 24 (sidebar), `field` 30 (24 beside a text field), `md` 40,
+Desk: `key` 14 (on the typing key), `xs` 16, `mini` 18, `row` 24 (sidebar), `field` 30 (24 beside a text field), `md` 40,
 `hero` 46, `lg` 48, `xl` 96 (picker preview). Phone: 24, 28, 48 and 56.
 
 ## Changing it

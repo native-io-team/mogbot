@@ -121,7 +121,17 @@ function lookFromTeam(team: string, id: string): Required<AgentLook> | null {
 }
 
 /** Each size step's width, for the weight and whether the key is lit (the CSS owns the box). */
-const SIZE_PX = { xs: 16, mini: 18, row: 24, field: 24, md: 40, hero: 46, lg: 48, xl: 96 } as const;
+const SIZE_PX = {
+  key: 14,
+  xs: 16,
+  mini: 18,
+  row: 24,
+  field: 24,
+  md: 40,
+  hero: 46,
+  lg: 48,
+  xl: 96,
+} as const;
 export type AgentAvatarSize = keyof typeof SIZE_PX;
 
 interface AgentAvatarProps {
@@ -133,7 +143,7 @@ interface AgentAvatarProps {
   /** An explicit look (the picker's preview, a proposed change). */
   look?: AgentLook;
   /**
-   * `xs` sits in a line of text (16px), `mini` leads a menu item or a
+   * `key` sits on the working line's typing key (14px, `AgentKey`), `xs` sits in a line of text (16px), `mini` leads a menu item or a
    * mention (18px), `row` is the sidebar's
    * (a project badge's size, 24px), `field` sits beside a text field, `hero`
    * heads an empty chat (`md` is 40px), `xl` is the picker's preview (96px).

@@ -697,8 +697,9 @@ steps has no line.
 - **Live**: while the turn runs, the status carries `work` (the newest 12
   steps and the counts; no file names) plus `doing`, the running call's
   working-line words. The working line (`AgentWorkingIndicator`) is one
-  line, no bubble: the agent's key cap looking around in the steps' icon
-  column, what it's doing with a soft shimmer while it's live, then muted
+  line, no bubble: the agent on its typing key (`AgentKey`: its avatar
+  on a key cap in the site's style, typed on while it's live) in the steps'
+  icon column, what it's doing with a soft shimmer while it's live, then muted
   "· 5 steps · 6:02" (the turn's time). The line is the toggle: it opens
   the steps so far under it, in the column the finished timeline uses,
   ending on the step it's on (its own words, timer and output); the newest
@@ -708,7 +709,7 @@ steps has no line.
   (Stop this step, Check on it, Stop, the ⋯ with Open project and **Take
   over**) are quiet text at its right end. When the turn ends the line
   gives way to "› Worked 6 min · 5 steps" in the same place, its chevron in
-  the column the key cap held. Taking over a browser tab the agent drives
+  the column the key held. Taking over a browser tab the agent drives
   is not built.
 - **The step it's on right now** (`work::LiveCall`, `AgentLiveStep`): from
   the moment a call starts, the status's `work.current` carries its words,

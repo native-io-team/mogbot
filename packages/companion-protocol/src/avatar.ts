@@ -462,6 +462,92 @@ export function avatarPaint(color: string, theme: AvatarTheme, selected = false)
   };
 }
 
+// ------------------------------------------------------------ the typing key
+
+/**
+ * While an agent works, its avatar sits on a key (docs/internal/avatars.md,
+ * "On a key"): a wide cap in the site's language (a lit top on a darker
+ * side, a hairline ring, a soft drop), faintly tinted with the agent's hue,
+ * that presses and rebounds as if it were being typed on. The avatar on it
+ * is the solid (selected) one: you are looking at that agent, and the solid
+ * colour is what stays clear of a near-white cap and a dark one alike.
+ *
+ * Sizes are px; both clients draw the same box. The whole key is one line
+ * high (`top + travel` fits the working line), and the cap is the steps'
+ * icon column wide, so the live line and the finished one share their grid.
+ */
+export const TYPING_KEY = {
+  width: 24,
+  top: 18,
+  /** The side showing under the top at rest, and how far a full press goes. */
+  travel: 3,
+  radius: 6,
+  /** The avatar on the cap. */
+  avatar: 14,
+  /**
+   * The rhythm: a tap, a lighter second tap, then a rest, like a key being
+   * typed on. [time 0–1, depth 0–1 of `travel`]; a small rebound above rest
+   * after each tap. Segments ease in and out.
+   */
+  ms: 2400,
+  press: [
+    [0, 0],
+    [0.06, 1],
+    [0.15, -0.15],
+    [0.21, 0],
+    [0.28, 0.7],
+    [0.36, -0.1],
+    [0.42, 0],
+    [1, 0],
+  ] as readonly ValueKey[],
+} as const;
+
+/** The cap's roles, per theme: [lightness, chroma] at the agent's hue. */
+export const TYPING_KEY_ROLES = {
+  /** The top's gradient, lit edge to bottom edge. */
+  topHigh: { dark: [0.4, 0.022], light: [0.995, 0.008] },
+  topLow: { dark: [0.34, 0.022], light: [0.955, 0.014] },
+  /** The side under it. */
+  side: { dark: [0.255, 0.018], light: [0.855, 0.022] },
+} as const satisfies Record<string, Record<AvatarTheme, readonly [number, number]>>;
+
+/** The typing key's light, as white and black at these opacities. */
+export const TYPING_KEY_LIGHT = {
+  /** The lit top edge (an inset line of white). */
+  highlight: { dark: 0.14, light: 0.9 },
+  /** The hairline ring around the whole key. */
+  ring: { dark: 0.55, light: 0.07 },
+  /** The soft drop under it. */
+  shadow: { dark: 0.45, light: 0.14 },
+} as const;
+
+export interface TypingKeyPaint {
+  topHigh: string;
+  topLow: string;
+  side: string;
+  highlight: number;
+  ring: number;
+  shadow: number;
+}
+
+/** What to paint an agent's typing key with (sRGB hex; light and shade as opacities). */
+export function typingKeyPaint(color: string, theme: AvatarTheme): TypingKeyPaint {
+  const tone = AVATAR_TONES[color] ?? AVATAR_TONES.gray;
+  const at = (role: keyof typeof TYPING_KEY_ROLES) => {
+    // Indexed, not destructured: the phone's Babel would need a runtime helper.
+    const lc = TYPING_KEY_ROLES[role][theme];
+    return oklchHex(lc[0], Math.min(lc[1], tone.maxChroma ?? lc[1]), tone.hue);
+  };
+  return {
+    topHigh: at('topHigh'),
+    topLow: at('topLow'),
+    side: at('side'),
+    highlight: TYPING_KEY_LIGHT.highlight[theme],
+    ring: TYPING_KEY_LIGHT.ring[theme],
+    shadow: TYPING_KEY_LIGHT.shadow[theme],
+  };
+}
+
 /** OKLab → linear sRGB, then gamma. */
 function oklchToRgb(l: number, c: number, h: number): [number, number, number] {
   const a = c * Math.cos((h * Math.PI) / 180);

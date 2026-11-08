@@ -549,8 +549,8 @@ inherits that button's ink. The track stays `var(--border)`.
 ### TypingDots — [TypingDots.tsx](../src/components/primitives/TypingDots.tsx)
 
 An agent at work: three `currentColor` dots in one even wave (the running blue in a live bar).
-The working line under a reply no longer uses them: there the agent's own key cap moves and the
-words shimmer (`AgentWorkingIndicator`). Use it for "someone is doing this now"; use `Spinner` for loading.
+The working line under a reply no longer uses them: there the agent sits on its typing key (`AgentKey`), which is
+typed on while it's live, and the words shimmer (`AgentWorkingIndicator`). Use it for "someone is doing this now"; use `Spinner` for loading.
 
 ```tsx
 <TypingDots />

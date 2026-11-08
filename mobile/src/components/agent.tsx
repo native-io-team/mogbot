@@ -31,9 +31,8 @@ import {
   type FaceKey,
   type ValueKey,
 } from '@shipstudio/companion-protocol';
-import { useIsFocused } from 'expo-router';
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
-import { AppState, StyleSheet, View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import Svg, {
   Defs,
   Ellipse,
@@ -54,7 +53,6 @@ import Animated, {
   Easing,
   cancelAnimation,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withDelay,
   withRepeat,
@@ -66,6 +64,7 @@ import { failedTurn, needsYou, waitingForSlot } from '../lib/agents';
 import { useApp } from '../lib/store';
 import { alpha, avatarSize, fonts, iconSize, keyLight } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
+import { useMoving } from '../lib/moving';
 import { Dot } from './ui';
 
 /**
@@ -347,27 +346,6 @@ function Face({
       {mouth && stroke(mouth, fill, 0)}
     </>
   );
-}
-
-/** False with Reduce Motion, in the background, on a screen that isn't showing, or `still`. */
-function useMoving(still: boolean): boolean {
-  const reduced = useReducedMotion();
-  const [active, setActive] = useState(AppState.currentState === 'active');
-  useEffect(() => {
-    const sub = AppState.addEventListener('change', (s) => setActive(s === 'active'));
-    return () => sub.remove();
-  }, []);
-  let focused = true;
-  try {
-    // Outside a navigator (a test, a preview), there's no screen to leave and
-    // the hook throws. It's called on every render all the same: the try only
-    // catches that throw (`@react-navigation/native`'s context isn't ours to import).
-    // eslint-disable-next-line react-hooks/rules-of-hooks
-    focused = useIsFocused();
-  } catch {
-    focused = true;
-  }
-  return !still && !reduced && active && focused;
 }
 
 /** The mood given, except that working then idle is done, for one press. */

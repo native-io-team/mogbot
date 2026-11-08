@@ -18,7 +18,9 @@ import {
   SHAPE_PATHS,
   SHAPE_POINTS,
   SMALL_MOTION,
+  TYPING_KEY,
   avatarPaint,
+  typingKeyPaint,
   defaultLook,
   describeLook,
   eyeAt,
@@ -312,6 +314,47 @@ describe('the palette', () => {
 
   it('falls back to gray for a colour it does not know', () => {
     expect(avatarPaint('neon', 'dark')).toEqual(avatarPaint('gray', 'dark'));
+  });
+});
+
+describe('the typing key', () => {
+  const themes: AvatarTheme[] = ['dark', 'light'];
+
+  it('sets the solid avatar clear of its cap, every colour, both themes', () => {
+    for (const theme of themes) {
+      for (const color of Object.keys(AVATAR_TONES)) {
+        const k = typingKeyPaint(color, theme);
+        const solid = avatarPaint(color, theme, true).fill;
+        expect(contrast(solid, k.topHigh), `${theme} ${color}`).toBeGreaterThan(1.8);
+        expect(contrast(solid, k.topLow), `${theme} ${color}`).toBeGreaterThan(1.8);
+        // A side a step darker than the top, so the key reads raised.
+        expect(luminance(k.side), `${theme} ${color}`).toBeLessThan(luminance(k.topLow));
+        expect(luminance(k.topLow)).toBeLessThan(luminance(k.topHigh));
+      }
+    }
+  });
+
+  it('tints every hue at one lightness (equal OKLCH)', () => {
+    const hues = Object.keys(AVATAR_TONES).filter((k) => AVATAR_TONES[k].maxChroma === undefined);
+    for (const theme of themes) {
+      for (const role of ['topHigh', 'topLow', 'side'] as const) {
+        const ls = hues.map((h) => hexToOklab(typingKeyPaint(h, theme)[role])[0]);
+        expect(Math.max(...ls) - Math.min(...ls), `${theme} ${role}`).toBeLessThan(0.006);
+      }
+    }
+  });
+
+  it('fits one line, holds the avatar, and presses within its travel', () => {
+    expect(TYPING_KEY.top + TYPING_KEY.travel).toBeLessThanOrEqual(21);
+    expect(TYPING_KEY.avatar).toBeLessThan(TYPING_KEY.top);
+    const press = TYPING_KEY.press;
+    expect(press[0]).toEqual([0, 0]);
+    expect(press[press.length - 1]).toEqual([1, 0]);
+    for (let i = 1; i < press.length; i++) expect(press[i][0]).toBeGreaterThan(press[i - 1][0]);
+    for (const [, d] of press) expect(Math.abs(d)).toBeLessThanOrEqual(1);
+    // Most of the loop is rest: a calm rhythm, not a buzz.
+    const lastMove = press[press.length - 2][0];
+    expect(lastMove).toBeLessThan(0.5);
   });
 });
 

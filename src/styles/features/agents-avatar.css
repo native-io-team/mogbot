@@ -95,6 +95,10 @@
 
 /* ---------------------------------------------------------------- sizes */
 
+.agent-avatar--key {
+  --agent-avatar-size: var(--agents-key-avatar);
+}
+
 .agent-avatar--xs {
   --agent-avatar-size: var(--spacing-lg);
 }
