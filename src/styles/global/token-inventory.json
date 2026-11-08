@@ -5147,7 +5147,15 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 6
+      "consumerCount": 5
+    },
+    {
+      "name": "--shadow-window-filter",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "consumerCount": 1
     },
     {
       "name": "--shadow-input-inset",
@@ -5259,7 +5267,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 64
+      "consumerCount": 62
     },
     {
       "name": "--spacing-tight",
@@ -6059,7 +6067,15 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 6
+      "consumerCount": 5
+    },
+    {
+      "name": "--shadow-window-filter",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "consumerCount": 1
     },
     {
       "name": "--shadow-input-inset",
