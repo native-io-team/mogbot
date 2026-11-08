@@ -192,7 +192,7 @@
   flex: 1 1 0;
   overflow: hidden;
   font-size: var(--font-size-body-sm);
-  font-weight: var(--font-weight-regular);
+  font-weight: var(--font-weight-body);
   color: var(--text-muted);
   white-space: nowrap;
   text-overflow: ellipsis;
