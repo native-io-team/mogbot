@@ -51,6 +51,7 @@ import {
   failedTurn,
   failureLine,
   needsYou,
+  roleWithoutPath,
   type Agent,
   type AgentMessage,
   type SearchHit,
@@ -102,7 +103,7 @@ function subtitle(agent: Agent): ReactNode {
   if (agent.status.state === 'working') return <AgentWorkingLine agent={agent} />;
   const failure = failedTurn(agent);
   if (failure) return failureLine(failure, previewText(agent.preview));
-  return previewText(agent.preview) ?? agent.role ?? '';
+  return previewText(agent.preview) ?? '';
 }
 
 /**
@@ -387,6 +388,8 @@ const AgentRow = memo(function AgentRow({
           <span className="agents-list__text">
             <span className="agents-list__name">
               <span className="agents-list__name-text">{agent.name}</span>
+              {/* Its role, muted, one line: it gives way before the name does. */}
+              <span className="agents-list__role">{roleWithoutPath(agent.role ?? '')}</span>
               {/* Marks, not controls: small, faint, and not a target (the menu toggles them). */}
               {agent.pinned && (
                 <PinIcon size={10} className="agents-list__pin" aria-label="Pinned" />

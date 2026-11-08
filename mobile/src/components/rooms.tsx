@@ -48,7 +48,7 @@ import {
 } from '../lib/rooms';
 import { describeError, loadLatest, loadOlder, sendToRoom, setOpenChat } from '../lib/session';
 import { getApp, useApp } from '../lib/store';
-import { avatarSize, chromeScale, fonts, iconSize, mix, radius, space } from '../lib/theme';
+import { avatarSize, chromeScale, fonts, iconSize, radius, space, speakerInk } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { AgentAvatar, Spinner } from './agent';
 import { DaySeparator, DraftRow, MessageRow, PendingRow, SendRise, WorkingRow } from './chat';
@@ -65,7 +65,7 @@ const NONE: never[] = [];
 function useNameColor(color: string) {
   const colors = useColors();
   const appearance = useAppearance();
-  return mix(agentTint(color, appearance), colors.textPrimary, 0.7);
+  return speakerInk(agentTint(color, appearance), colors.textPrimary, colors.surfaceApp);
 }
 
 /** A member's name and badge over the first of its lines in a run. */
@@ -152,9 +152,9 @@ function RoomChat({ id }: { id: string }) {
     () =>
       members.map((m) => ({
         name: m.name,
-        color: mix(agentTint(m.color, appearance), colors.textPrimary, 0.7),
+        color: speakerInk(agentTint(m.color, appearance), colors.textPrimary, colors.surfaceApp),
       })),
-    [members, appearance, colors.textPrimary]
+    [members, appearance, colors.textPrimary, colors.surfaceApp]
   );
   // As in each member's own chat: the newest card for its open copy offers
   // Keep / Discard, and each result's newest version is drawn in full.

@@ -161,7 +161,18 @@ export function subtitle(agent: Agent, now = Date.now()): string {
   }
   const failure = failedTurn(agent);
   if (failure) return failureLine(failure, previewText(agent.preview), engineName(agent));
-  return previewText(agent.preview) ?? agent.role ?? '';
+  return previewText(agent.preview) ?? '';
+}
+
+/** An agent's role for a list row: one line, no folder path in it. '' when it has none. */
+export function roleLabel(role: string | undefined): string {
+  const path = String.raw`(?:~|\/(?:Users|home|Volumes|private)\b)[^\s,;]*?(?=\.?(?:\s|$|[,;]))`;
+  return (role ?? '')
+    .replace(new RegExp(String.raw`\s+(?:in|at|from|under|inside)\s+` + path, 'g'), '')
+    .replace(new RegExp(path, 'g'), '')
+    .replace(/\s+([.,;])/g, '$1')
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 /**

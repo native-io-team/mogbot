@@ -178,9 +178,28 @@
 /* The text ellipsises; the pin beside it never gets pushed out. */
 .agents-list__name-text {
   min-width: 0;
+  flex: 0 1 auto;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+/* The role: muted, beside the name, one line. It shrinks first (the name keeps
+   its room) and is gone when the agent has none. */
+.agents-list__role {
+  min-width: 0;
+  /* Basis zero: only the room the name leaves over, never taken from it. */
+  flex: 1 1 0;
+  overflow: hidden;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-body);
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agents-list__role:empty {
+  display: none;
 }
 
 .agents-list__row.is-current .agents-list__name {

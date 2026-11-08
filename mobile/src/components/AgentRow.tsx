@@ -23,6 +23,7 @@ import {
   lineState,
   needsLine,
   needsYou,
+  roleLabel,
   subtitle,
   waitingForSlot,
   waitingOnMac,
@@ -302,6 +303,7 @@ function RowBody({
         ? needsLine(agent, s.chats[agent.id]?.messages)
         : subtitle(agent, now)
   );
+  const role = roleLabel(agent.role);
   const tinted = !!state && live && (state === 'waiting' || state === 'failed');
   const cut = line.indexOf(' · ');
   // Steadied while it works, so step → "Thinking" → step doesn't flicker.
@@ -367,6 +369,20 @@ function RowBody({
           >
             {agent.name}
           </T>
+          {/* Its role, muted, one line: it gives way before the name does. */}
+          {role ? (
+            <T
+              variant="caption"
+              color={colors.textMuted}
+              numberOfLines={1}
+              maxFontSizeMultiplier={NAME_SCALE}
+              style={styles.role}
+            >
+              {role}
+            </T>
+          ) : (
+            <View style={styles.role} />
+          )}
           {agent.pinned && <Icon name="pin.fill" size={iconSize.inline} color={colors.textMuted} />}
           {agent.muted && (
             <Icon name="bell.slash.fill" size={iconSize.inline} color={colors.textMuted} />
@@ -442,7 +458,9 @@ const useStyles = makeStyles((colors) => ({
   text: { flex: 1, gap: space['2xs'] },
   nameLine: { flexDirection: 'row', alignItems: 'center', gap: space.tight },
   // The name wins the line: it shrinks last, and the time never takes more than it needs.
-  name: { flexShrink: 1, flexGrow: 1 },
+  name: { flexShrink: 0, maxWidth: '60%' },
+  // Takes what the name leaves; the pin, level and time stay at the right.
+  role: { flexShrink: 1, flexGrow: 1, minWidth: 0 },
   time: { flexShrink: 0, marginLeft: space.sm },
   timeAfterLevel: { marginLeft: 0 },
   // A label, not a status: quiet, and it never pushes the name off the line.
