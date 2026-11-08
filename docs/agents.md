@@ -631,6 +631,28 @@ meanwhile is refused and its sender told), and waits up to 3 s for its
 turn to end; a write for an agent no longer registered is refused, so its
 folder never comes back.
 
+**When a Claude Code turn is over** (`agents/turn_end.rs`). `claude --print`
+can send more than one `result` in a turn: resumed, it first answers what was
+queued in the conversation (a "your background helpers were stopped"
+notification) and then the user's message; with helpers it started (the Agent
+tool runs them in the background by default) still out, it stays up and each
+one that reports back starts another round with its own `result`. So a
+`result` ends the turn only if nothing follows it for 15 s (an exit ends it at
+once): its model streaming, a tool call or a tool's result reopens the turn
+until the next `result`. While a helper it launched hasn't reported back, a
+finished reply waits for it (up to 30 min of quiet; the working line says
+"Waiting for the 2 helpers it started to report back") rather than stopping
+the tree under it. A new message or Stop after the reply was complete just
+ends that wait, and the next turn isn't told it was interrupted. Observed
+2026-11-08 (Claude Code 2.1.319): the old rule (the first `result`, then 3 s
+of streamed output to prove otherwise) cut three turns in a row mid-tool-call,
+killed the helpers each had just started and said nothing, and each next turn
+opened on another "helpers stopped" notification. A finished turn that
+recorded no reply and showed no card, question or error ends on "Finished
+without a reply…", with its timeline under it; helpers that stopped with a
+turn (finished, stopped or interrupted) are named in a line. A resume whose
+conversation is gone, retried fresh with a recap, says so.
+
 **Damaged files and newer builds.** `agents.json` is written atomically and
 again as `agents.json.bak`. It is read and written losslessly: fields this
 build doesn't know (on an agent, a check-in, a rule), unknown top-level keys,
