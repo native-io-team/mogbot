@@ -27,7 +27,8 @@
 //!   app's own data (another agent's home); `crontab`, `security`, `launchctl`,
 //!   disk and system tools; `defaults write` / `delete` / `import`
 //! - reading the app's own data, except that an admin (the Chief) reads the
-//!   agents folder (every agent's home) and an agent its own home
+//!   agents folder (every agent's home) and an agent its own home; listing
+//!   it (`ls`) shows only names and runs
 //! - connector tools whose name sends, publishes, pushes, uploads, spends or
 //!   deletes (send, post, push, upload, pay, delete…); records in the user's
 //!   own tools (create, update) run. On a code host or a database
@@ -56,7 +57,11 @@
 //!
 //! Parsing is deliberately forgiving: a command line is split into every
 //! command it runs, including those inside quotes (`bash -c "…"`), and each
-//! is checked against the list. A here-document's body is data unless a
+//! is checked against the list. Quoted words given to `echo` / `printf` or
+//! kept in a variable are still split into commands, but their `<` and `>`
+//! are text, not redirects (HTML is not a write into `/head`), unless the
+//! line hands text to a shell (`| sh`, `eval`, `bash -c`); `$(…)` inside
+//! them runs. A here-document's body is data unless a
 //! shell (or `ssh`, `osascript`) runs it, or it is a script that starts
 //! processes, whose strings are then checked. Something it can't read runs, because "Go
 //! hard" is allow-by-default; the list is what has to be right.
@@ -329,7 +334,124 @@ fn repo_of(p: &Path) -> Option<PathBuf> {
 /// follows `$(` or a backtick.
 pub(super) fn commands(src: &str) -> Vec<Vec<String>> {
     let mut out = Vec::new();
-    lex_into(&without_heredoc_data(src), &mut out, 0);
+    lex_into(&without_heredoc_data(src), &mut out, 0, Text::Shell);
+    out
+}
+
+/// How a piece of text is read by [`lex_into`].
+#[derive(Clone, Copy, PartialEq)]
+enum Text {
+    /// A shell (or a program that runs it as code) reads it: `>` and `<`
+    /// redirect.
+    Shell,
+    /// Words handed to `echo` / `printf` or kept in a variable: still split
+    /// into commands (`X='git push'; $X` runs `git push`), but `<` and `>`
+    /// are characters, not redirects. A shell never parses a variable's
+    /// value or `echo`'s output for redirects, so `</head>` there is HTML,
+    /// not a write into `/head`. Observed (2026-11-08): at "Full send",
+    /// `echo "<style>$(cat a.css)</style></head>"` building a local page
+    /// raised a card on every render, as a write outside the home.
+    Data,
+}
+
+/// Programs whose quoted arguments are data, not code.
+const DATA_TAKERS: &[&str] = &["echo", "printf"];
+
+/// Builtins that set a variable (`export X='…'`).
+const SETTERS: &[&str] = &["export", "local", "declare", "readonly", "typeset"];
+
+/// The end of the quote opening at `open` (its index, or the text's
+/// length): in double quotes a backslash escapes, and `$(…)` / a backtick
+/// may hold quotes of its own.
+fn quote_end(chars: &[char], open: usize) -> usize {
+    let q = chars[open];
+    let mut j = open + 1;
+    while j < chars.len() {
+        match chars[j] {
+            c if c == q => return j,
+            '\\' if q == '"' => j += 2,
+            '$' if q == '"' && chars.get(j + 1) == Some(&'(') => {
+                j = paren_end(chars, j + 1) + 1;
+            }
+            '`' if q == '"' => {
+                j = chars[j + 1..]
+                    .iter()
+                    .position(|&c| c == '`')
+                    .map_or(chars.len(), |n| j + 1 + n + 1);
+            }
+            _ => j += 1,
+        }
+    }
+    chars.len()
+}
+
+/// The `)` that closes the `(` at `open` (or the text's last index).
+fn paren_end(chars: &[char], open: usize) -> usize {
+    let mut depth = 0usize;
+    let mut j = open;
+    while j < chars.len() {
+        match chars[j] {
+            '\\' => j += 1,
+            '(' => depth += 1,
+            ')' => {
+                depth = depth.saturating_sub(1);
+                if depth == 0 {
+                    return j;
+                }
+            }
+            _ => {}
+        }
+        j += 1;
+    }
+    chars.len().saturating_sub(1)
+}
+
+/// What `$(…)` and backticks in double-quoted text run: commands, wherever
+/// the text goes.
+fn substitutions(text: &str) -> Vec<String> {
+    let chars: Vec<char> = text.chars().collect();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        match chars[i] {
+            '\\' => i += 1,
+            '$' if chars.get(i + 1) == Some(&'(') => {
+                let end = paren_end(&chars, i + 1);
+                out.push(chars[(i + 2).min(end)..end].iter().collect());
+                i = end;
+            }
+            '`' => {
+                let end = chars[i + 1..]
+                    .iter()
+                    .position(|&c| c == '`')
+                    .map_or(chars.len(), |n| i + 1 + n);
+                out.push(chars[i + 1..end].iter().collect());
+                i = end;
+            }
+            _ => {}
+        }
+        i += 1;
+    }
+    out
+}
+
+/// Double-quoted text as the word it makes: `\"`, `\\`, `\$` and `` \` ``
+/// unescaped.
+fn unescape_double(inner: &str) -> String {
+    let mut out = String::with_capacity(inner.len());
+    let mut chars = inner.chars().peekable();
+    while let Some(c) = chars.next() {
+        if c == '\\' {
+            if let Some(&n) = chars.peek() {
+                if matches!(n, '"' | '\\' | '$' | '`') {
+                    out.push(n);
+                    chars.next();
+                    continue;
+                }
+            }
+        }
+        out.push(c);
+    }
     out
 }
 
@@ -527,12 +649,16 @@ fn pattern_text(words: &[String], inner: &str) -> bool {
     }
 }
 
-fn lex_into(src: &str, out: &mut Vec<Vec<String>>, depth: u8) {
+fn lex_into(src: &str, out: &mut Vec<Vec<String>>, depth: u8, text: Text) {
     let chars: Vec<char> = src.chars().collect();
+    let start = out.len();
     let mut words: Vec<String> = Vec::new();
     let mut word = String::new();
     let mut started = false;
     let mut nested: Vec<String> = Vec::new();
+    // Quoted text given to `echo` / `printf` or put in a variable: data,
+    // unless this line hands text to a shell (decided once it is read).
+    let mut data: Vec<String> = Vec::new();
     let flush_word = |word: &mut String, started: &mut bool, words: &mut Vec<String>| {
         if *started {
             words.push(std::mem::take(word));
@@ -550,20 +676,40 @@ fn lex_into(src: &str, out: &mut Vec<Vec<String>>, depth: u8) {
                 continue;
             }
             '\'' | '"' => {
-                let close = chars[i + 1..].iter().position(|&x| x == c);
-                let end = close.map(|n| i + 1 + n).unwrap_or(chars.len());
-                let inner: String = chars[i + 1..end].iter().collect();
-                word.push_str(&inner);
+                let end = quote_end(&chars, i);
+                let inner: String = chars[i + 1..end.min(chars.len())].iter().collect();
+                let double = c == '"';
+                if double {
+                    word.push_str(&unescape_double(&inner));
+                } else {
+                    word.push_str(&inner);
+                }
                 started = true;
-                // A `sed` or `grep` pattern is text, not commands it runs
-                // (`'/<script src="/old.js">/d'` isn't a redirect into `/d`),
-                // and so is a `perl` script that starts nothing.
-                if !pattern_text(&words, &inner) {
+                // Who gets the text: `echo`/`printf`, or a variable.
+                let lead = words
+                    .iter()
+                    .map(String::as_str)
+                    .find(|w| !is_assignment(w) && !KEYWORDS.contains(w));
+                let assigning = is_assignment(&word) && lead.is_none_or(|l| SETTERS.contains(&l));
+                let is_data = text == Text::Data
+                    || assigning
+                    || lead.is_some_and(|l| DATA_TAKERS.contains(&base(l)));
+                if is_data {
+                    // `$(…)` in double quotes runs, wherever its output goes.
+                    if double {
+                        nested.extend(substitutions(&inner));
+                    }
+                    data.push(inner);
+                } else if !pattern_text(&words, &inner) {
+                    // A `sed` or `grep` pattern is text, not commands it runs
+                    // (`'/<script src="/old.js">/d'` isn't a redirect into
+                    // `/d`), and so is a `perl` script that starts nothing.
                     nested.push(inner);
                 }
                 i = end + 1;
                 continue;
             }
+            '<' | '>' if text == Text::Data => flush_word(&mut word, &mut started, &mut words),
             ' ' | '\t' => flush_word(&mut word, &mut started, &mut words),
             ';' | '&' | '|' | '\n' | '(' | ')' | '`' | '{' | '}' => {
                 flush_word(&mut word, &mut started, &mut words);
@@ -616,10 +762,40 @@ fn lex_into(src: &str, out: &mut Vec<Vec<String>>, depth: u8) {
     if !words.is_empty() {
         out.push(words);
     }
+    // A line that hands text to a shell (`echo "…" | sh`, `eval "$X"`,
+    // `ssh box "$CMD"`): its data may be parsed as commands after all.
+    let to_shell = text == Text::Shell
+        && out[start..].iter().any(|w| {
+            // The program and the wrappers in front of it (`eval`, `env`…).
+            w.iter()
+                .map(String::as_str)
+                .skip_while(|w| is_assignment(w) || KEYWORDS.contains(w))
+                .take_while(|w| {
+                    WRAPPERS.contains(&base(w)) || w.starts_with('-') || is_assignment(w)
+                })
+                .chain(
+                    w.iter()
+                        .map(String::as_str)
+                        .skip_while(|w| {
+                            is_assignment(w)
+                                || KEYWORDS.contains(w)
+                                || WRAPPERS.contains(&base(w))
+                                || w.starts_with('-')
+                        })
+                        .take(1),
+                )
+                .any(|p| RUNS_ITS_INPUT.contains(&base(p)) || p == ".")
+        });
+    let data_text = if to_shell { Text::Shell } else { Text::Data };
     if depth < 3 {
         for n in nested {
             if n.chars().any(char::is_whitespace) {
-                lex_into(&n, out, depth + 1);
+                lex_into(&n, out, depth + 1, Text::Shell);
+            }
+        }
+        for n in data {
+            if n.chars().any(char::is_whitespace) {
+                lex_into(&n, out, depth + 1, data_text);
             }
         }
     }
@@ -770,14 +946,17 @@ fn simple_asks(words: &[String], ctx: &Ctx, outside: bool, known: bool) -> bool 
     let mut words: Vec<&str> = words.iter().map(String::as_str).collect();
     // Redirect targets: writing into a protected file asks.
     let mut targets = Vec::new();
+    // An operator is only `<`, `>` and `&` ([`lex_into`] splits it from its
+    // target); a quoted word that starts with one (`'<b>x</b>'`) is text.
+    let op = |w: &str| w.chars().all(|c| matches!(c, '<' | '>' | '&'));
     let mut i = 0;
     while i < words.len() {
-        if words[i].starts_with('>') {
+        if words[i].starts_with('>') && op(words[i]) {
             if let Some(t) = words.get(i + 1) {
                 targets.push(*t);
             }
             words.drain(i..(i + 2).min(words.len()));
-        } else if words[i].starts_with('<') {
+        } else if words[i].starts_with('<') && op(words[i]) {
             words.drain(i..(i + 2).min(words.len()));
         } else {
             i += 1;
@@ -794,11 +973,16 @@ fn simple_asks(words: &[String], ctx: &Ctx, outside: bool, known: bool) -> bool 
     let Some((&prog, args)) = rest.split_first() else {
         return false;
     };
-    // Any program reading or writing a credential store asks.
-    if args
-        .iter()
-        .filter(|a| !a.starts_with('-'))
-        .any(|a| resolve_known(a, ctx, known).is_some_and(|p| secret_to_read(&p, ctx)))
+    // Any program reading or writing a credential store asks. Listing one
+    // (`ls`) shows names, never what is in them: observed
+    // (2026-11-08), `gh repo list …; ls -la "~/Library/Application
+    // Support/<app>"` raised a card at "Full send" that led with the `gh`
+    // read, so the owner couldn't tell why it asked.
+    if base(prog) != "ls"
+        && args
+            .iter()
+            .filter(|a| !a.starts_with('-'))
+            .any(|a| resolve_known(a, ctx, known).is_some_and(|p| secret_to_read(&p, ctx)))
     {
         return true;
     }
@@ -1566,6 +1750,13 @@ fn git(args: &[&str]) -> bool {
         }
     }
     matches!(args.get(i), Some(&"push") | Some(&"send-email"))
+}
+
+/// Whether `gh …` (its arguments) writes as the user: what "Go hard" asks
+/// for. `gh api` with `-X GET` (fields become the query) or a GraphQL
+/// query only reads.
+pub(super) fn gh_writes(args: &[&str]) -> bool {
+    gh(args)
 }
 
 fn gh(args: &[&str]) -> bool {

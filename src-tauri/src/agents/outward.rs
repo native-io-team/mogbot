@@ -141,18 +141,18 @@ pub fn words_send(words: &[String]) -> bool {
                 "discussion" => matches!(action, "create" | "comment"),
                 "api" => {
                     let path = go_hard::gh_api_path(args).to_ascii_lowercase();
-                    let writes = args.iter().any(|a| {
-                        matches!(*a, "-f" | "-F" | "--field" | "--raw-field" | "--input")
-                            || a.starts_with("--field=")
-                            || a.starts_with("--raw-field=")
-                    }) || args.windows(2).any(|p| {
-                        matches!(p[0], "-X" | "--method")
-                            && matches!(
-                                p[1].to_ascii_uppercase().as_str(),
-                                "POST" | "PATCH" | "PUT"
-                            )
+                    // A read (`-X GET -f q=…`, a GraphQL query) sends
+                    // nothing, whatever it reads: `gh api -X GET
+                    // search/issues -f q=…` was held for "exact text".
+                    // Deleting carries no words of the user's.
+                    let deletes = args.windows(2).any(|p| {
+                        matches!(p[0], "-X" | "--method") && p[1].eq_ignore_ascii_case("DELETE")
+                    }) || args.iter().any(|a| {
+                        a.eq_ignore_ascii_case("-XDELETE")
+                            || a.eq_ignore_ascii_case("--method=DELETE")
                     });
-                    writes
+                    go_hard::gh_writes(args)
+                        && !deletes
                         && [
                             "comments",
                             "issues",
