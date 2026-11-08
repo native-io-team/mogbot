@@ -1966,7 +1966,12 @@ chain hands an agent the browser, the app lists the connected browsers itself
 start: the profile this site was last found in, the only one, or each in
 turn. The agent opens the site, reads which account it shows, and moves with
 `select_browser` / `switch_browser` (looks, no card) when it's the wrong one.
-With no other profile connected it calls `ask_bring_browser_to_front`: one
+With no other profile connected it calls `ask_bring_browser_to_front`. The
+app first brings Chrome forward itself (opening it if closed), then one more
+of its windows per call, and tells the agent what is connected now
+(`browser_profiles::front_step`; AppleScript, macOS only; *not verified* in a
+real turn that the extension follows the window brought forward). Only once
+every window was tried does it raise one
 plain card, "Bring your sam@work Chrome window to the front so I can use it",
 Check again / Not now, never a login ask, joined team-wide like a login card.
 `remember_browser_account` keeps site → profile and account in app data
@@ -3170,8 +3175,9 @@ it in place: same id, paused stays paused, `when` re-read from now. It can't be
 edited into a copy of another row. Esc leaves the edit, not the popover.
 
 **Nothing new posts nothing.** A check-in whose turn answers only scheduled
-runs may reply with exactly `[nothing new]` (`schedule::NOTHING_NEW`): the
-reply isn't posted, the notification is dropped, the unread its firing line
+runs may reply with exactly `[nothing new]` (`schedule::NOTHING_NEW`), or
+open or end with it after a line explaining the silence ("quiet hours, so
+I'm sending nothing"): the reply isn't posted, the notification is dropped, the unread its firing line
 added is taken back, and one quiet line says it ran ("Checked · nothing new",
 `runner::nothing_new`). An hourly sweep used to post a line every hour, which
 pinged the user and buried the question the agent was waiting on. The wake
@@ -3266,6 +3272,10 @@ Claude Code its edit tools are denied for that file (`--disallowedTools
 Edit(//<home>/CLAUDE.md),…`), and for any engine a change to it is put back
 when the turn ends, with a note in the chat, unless the app itself wrote it
 meanwhile (`runner::MemorySeal`). Bash still asks through `approve` as always.
+In the agent's own turns, at Go hard and Full send, a Bash edit of its own
+CLAUDE.md (`sed -i`, `>>`) is local work (`go_hard::protected`); its chat log
+always asks. Observed: an unanswered card for such a `sed` left an owner's new
+rule unsaved.
 *Not verified:* that Claude Code 2.1.318 honours the `Edit(//path)` deny rule
 in a real turn; the put-back covers it either way.
 
@@ -4238,7 +4248,12 @@ word", "approve … text") turns it on, once, on load (`policy::migrate_exact_te
 or when added; the rule's words stay. Presets keep it. Limits: words the app
 can't read (a file it can't open, a page it didn't see typed) are said so on
 the card rather than shown; text an agent typed in a browser step the app
-never observed isn't known.
+never observed isn't known. A `browser_batch` is read step by step: what its
+steps type counts as typed (in the same batch or an earlier one), and it goes
+out only when one of its steps does, never because a look or a navigation in
+it would ask (observed: a Gmail search, whose link named the account in
+`authuser`, carded "Goes out under your name"; `authuser` and email-address
+values are no credentials to `egress` now).
 
 **Who hears about a change** (`policy_card::notes_for`). One note in the
 Chief's chat for anything team-wide (the proposer's card, when it is the

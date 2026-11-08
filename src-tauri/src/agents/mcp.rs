@@ -404,7 +404,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "ask_bring_browser_to_front",
-        description: "The account a task needs isn't in any connected Chrome profile you've looked in, and no other profile is connected: ask the user, once, to bring the right Chrome window to the front. One plain card (Check again / Not now), never a login. If another profile is connected that you haven't looked in, it says so instead. When a card was raised, stop; you're woken when they answer.",
+        description: "The account a task needs isn't in any connected Chrome profile you've looked in, and no other profile is connected: the app first brings Chrome and each of its windows forward itself, one per call, and says what is connected; once every window was tried it asks the user with one plain card (Check again / Not now), never a login. If another profile is connected that you haven't looked in, it says so instead. When a card was raised, stop; you're woken when they answer.",
         main_only: false,
         schema: || json!({
             "type": "object",
@@ -2694,7 +2694,7 @@ fn exact_text_block(caller: &store::Agent, tool: &str, input: &Value) -> Option<
         return None;
     }
     let ctx = super::autoallow::Ctx::for_agent(caller);
-    let typed = super::browser_gate::typed_for(&caller.id, tool);
+    let typed = super::browser_gate::typed_for(&caller.id, tool, input);
     let texts = super::outward::texts(tool, input, ctx.as_ref(), &typed);
     Some(super::outward::card_block(&texts))
 }
@@ -2952,7 +2952,7 @@ fn under_plan(
         browser,
         now,
         exact,
-        typed: super::browser_gate::typed_for(&caller.id, tool),
+        typed: super::browser_gate::typed_for(&caller.id, tool, input),
     };
     let Some(lines) = super::plan_grant::cover(tool, input, &turn) else {
         return false;

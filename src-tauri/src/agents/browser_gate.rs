@@ -356,6 +356,17 @@ pub fn observe(agent_id: &str, value: &Value) {
 }
 
 fn on_call(page: &mut Page, name: &str, input: &Value) {
+    // A batch's steps type, click and navigate like single calls do.
+    // Observed: a message typed inside a batch, then sent with Return,
+    // reached the exact-text card as "can't read the exact words".
+    if name == "browser_batch" {
+        for (n, i) in batch_steps(input).unwrap_or_default() {
+            if n != "browser_batch" {
+                on_call(page, &n, &i);
+            }
+        }
+        return;
+    }
     on_typed(page, name, input);
     match name {
         "navigate" | "tabs_create_mcp" => {
@@ -883,7 +894,10 @@ fn batch_unnamed(input: &Value) -> bool {
         .is_some_and(|list| {
             !list.is_empty()
                 && list.iter().any(|s| {
-                    s.get("tool").or_else(|| s.get("name")).and_then(Value::as_str).is_none()
+                    s.get("tool")
+                        .or_else(|| s.get("name"))
+                        .and_then(Value::as_str)
+                        .is_none()
                 })
         })
 }
@@ -1072,6 +1086,23 @@ pub fn outward_step(agent: &Agent, tool: &str, input: &Value) -> bool {
 
 /// [`outward_step`] on a known page, for tests.
 pub fn outward_step_on(agent: &Agent, name: &str, input: &Value, page: &Page) -> bool {
+    // A batch goes out only when one of its steps does: a navigation the
+    // gate asks about, or a look, isn't a send. Observed: a batch that
+    // closed a menu, opened a Gmail search and read the page got a "Goes
+    // out under your name" card.
+    if name == "browser_batch" {
+        let Some(steps) = batch_steps(input).filter(|s| !s.is_empty()) else {
+            return !batch_unnamed(input);
+        };
+        let mut page = page.clone();
+        for (n, i) in &steps {
+            if n == "browser_batch" || outward_step_on(agent, n, i, &page) {
+                return true;
+            }
+            on_call(&mut page, n, i);
+        }
+        return false;
+    }
     if matches!(
         name,
         "navigate" | "tabs_create_mcp" | "gif_creator" | "file_upload" | "upload_image"
@@ -1083,12 +1114,21 @@ pub fn outward_step_on(agent: &Agent, name: &str, input: &Value, page: &Page) ->
 }
 
 /// What was typed on the page a browser call acts on (`outward`'s card).
-pub fn typed_for(agent_id: &str, tool: &str) -> Vec<String> {
+pub fn typed_for(agent_id: &str, tool: &str, input: &Value) -> Vec<String> {
     if tool.starts_with(AGENTS_SERVER) {
         page_of(&agents_key(agent_id)).typed
     } else {
-        page_of(agent_id).typed
+        typed_through(page_of(agent_id), tool, input)
     }
+}
+
+/// What was typed by the time a call sends: the page's, plus what a batch
+/// types in its own steps before the send.
+pub fn typed_through(mut page: Page, tool: &str, input: &Value) -> Vec<String> {
+    if tool.strip_prefix(SERVER) == Some("browser_batch") {
+        on_call(&mut page, "browser_batch", input);
+    }
+    page.typed
 }
 
 /// A browser step "Full send" let through that "Go hard" would have asked

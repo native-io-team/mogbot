@@ -72,8 +72,8 @@ pub fn asks(tool: &str, input: &Value, ctx: &Ctx, outside: bool) -> bool {
     let field = |k: &str| input.get(k).and_then(Value::as_str).unwrap_or("").trim();
     match tool {
         "Bash" => command_asks(field("command"), ctx, outside),
-        "Write" | "Edit" | "MultiEdit" => write_asks(field("file_path"), ctx),
-        "NotebookEdit" => write_asks(field("notebook_path"), ctx),
+        "Write" | "Edit" | "MultiEdit" => write_asks(field("file_path"), ctx, outside),
+        "NotebookEdit" => write_asks(field("notebook_path"), ctx, outside),
         "Read" | "Glob" | "Grep" | "LS" => {
             let raw = if field("file_path").is_empty() {
                 field("path")
@@ -208,8 +208,9 @@ fn secret_to_read(p: &Path, ctx: &Ctx) -> bool {
     credential_store(p, ctx) && !team_file(p, ctx)
 }
 
-/// Writing here changes what runs next, or who can get in.
-fn protected(p: &Path, ctx: &Ctx) -> bool {
+/// Writing here changes what runs next, or who can get in. `outside`: the
+/// turn answers outside text, which may not change its own instructions.
+fn protected(p: &Path, ctx: &Ctx, outside: bool) -> bool {
     const PROFILES: &[&str] = &[
         ".zshrc",
         ".zshenv",
@@ -228,10 +229,14 @@ fn protected(p: &Path, ctx: &Ctx) -> bool {
     if credential_store(p, ctx) || PROFILES.iter().any(|s| p.starts_with(ctx.home.join(s))) {
         return true;
     }
-    // The app's own files in the agent's home: its log and instructions.
+    // The app's own files in the agent's home: its log always, and its
+    // instructions in a turn answering outside text. Its own turn keeps its
+    // memory however it edits the file: observed, a `sed -i` saving the
+    // owner's new rule raised a card at Full send, went unanswered, and the
+    // agent told them it couldn't save it.
     if p.parent() == Some(ctx.own_home.as_path()) {
         if let Some(n) = p.file_name().and_then(|n| n.to_str()) {
-            if n.ends_with(".jsonl") || matches!(n, "CLAUDE.md" | "AGENTS.md") {
+            if n.ends_with(".jsonl") || outside && matches!(n, "CLAUDE.md" | "AGENTS.md") {
                 return true;
             }
         }
@@ -240,9 +245,9 @@ fn protected(p: &Path, ctx: &Ctx) -> bool {
     !p.starts_with(&ctx.home) && !in_temp(p) && !p.starts_with("/dev")
 }
 
-fn write_asks(raw: &str, ctx: &Ctx) -> bool {
+fn write_asks(raw: &str, ctx: &Ctx, outside: bool) -> bool {
     match resolve(raw, ctx) {
-        Some(p) => protected(&p, ctx),
+        Some(p) => protected(&p, ctx, outside),
         None => true,
     }
 }
@@ -780,7 +785,7 @@ fn simple_asks(words: &[String], ctx: &Ctx, outside: bool, known: bool) -> bool 
     }
     if targets
         .iter()
-        .any(|t| resolve_known(t, ctx, known).is_some_and(|p| protected(&p, ctx)))
+        .any(|t| resolve_known(t, ctx, known).is_some_and(|p| protected(&p, ctx, outside)))
     {
         return true;
     }
@@ -1380,14 +1385,14 @@ fn program(prog: &str, args: &[&str], ctx: &Ctx, outside: bool, known: bool) -> 
         && edits_in_place
         && targets
             .iter()
-            .any(|a| resolve_known(a, ctx, known).is_some_and(|p| protected(&p, ctx)))
+            .any(|a| resolve_known(a, ctx, known).is_some_and(|p| protected(&p, ctx, outside)))
     {
         // Copying *from* the Mac's own files into the home is fine; only a
         // protected destination or a credential source asks.
         let dest_or_secret = targets.iter().enumerate().any(|(n, a)| {
             resolve_known(a, ctx, known).is_some_and(|p| {
                 secret_to_read(&p, ctx)
-                    || (protected(&p, ctx)
+                    || (protected(&p, ctx, outside)
                         && (n + 1 == targets.len()
                             || !matches!(prog, "cp" | "rsync" | "ditto" | "ln" | "install")))
             })
