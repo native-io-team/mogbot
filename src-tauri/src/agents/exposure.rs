@@ -26,6 +26,11 @@
 //! tidy all carry it. It is kept in the agent's home (`outside.json`), tied
 //! to the conversation it was made in, and ends with that conversation:
 //! Start fresh ([`forget`]), or a turn that starts a new one ([`begin`]).
+//! It is deliberately not cut to the turn: the next turn resumes the same
+//! context, so an instruction planted in what was read can still steer a
+//! routine or another agent's request there. What it asks for is narrow
+//! enough to carry: local work, renders and `gh` reads never ask
+//! (`go_hard_hardening_tests.rs`).
 //!
 //! This is much narrower than a turn answering outside text
 //! (`runner::from_outside`, a "When…" routine's items), which is capped at

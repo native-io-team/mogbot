@@ -159,10 +159,12 @@ these without updating that doc.
 - **"Go hard" hardening.** No request goes through on its own with a secret in its address, query
   or headers (`agents/egress.rs`). After a turn reads outside content (web pages and search
   results, issue/PR comments, mail and chat through connections, other sites in the browser),
-  network writes to another host and packages new to the project ask for the rest of that turn
+  network writes to another host and packages new to the project ask for the rest of that
+  conversation, since what it read stays in the engine's context on the next turn
   (`agents/exposure.rs`, `agents/installs.rs`; a new package is remembered once allowed). Network
-  reads, local work, builds, project installs, dev servers and here-document scripts carry on
-  without a card (`go_hard_hardening_tests.rs`)
+  reads, `gh` reads, local work and scripts (renders, headless Chrome on `file://`), builds,
+  project installs, dev servers and here-document scripts carry on without a card
+  (`go_hard_hardening_tests.rs`)
 - **Agents never hold an app's token.** A connection made on a login card is reached through the
   bridge's relay (`agents/conn_relay.rs`), which adds the Keychain token and enforces the grant
   for every engine ([docs/agents.md](docs/agents.md), "Grants, read vs send, and turns")

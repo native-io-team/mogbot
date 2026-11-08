@@ -1219,7 +1219,8 @@ below; it asks only for:
 - writes to `~/.ssh`, Keychains, shell profiles, `~/Library/LaunchAgents`,
   the app's own data (another agent's home, this agent's log and
   instructions), or outside the home and temporary folders; reading a
-  credential store (`~/.ssh`, Keychains, `~/.gnupg`) or the app's own data:
+  credential store (`~/.ssh`, Keychains, `~/.gnupg`) or the app's own data
+  (listing one with `ls` shows names only and runs):
   its tokens, and the agents folder's account files (`wallet.json`,
   `connections.json`). The Chief and admins read the rest of the agents
   folder (every agent's `CLAUDE.md`, chat log, timeline) without a card;
@@ -1255,7 +1256,13 @@ rebase, stash), builds, installs, dev servers, backgrounding, `pkill` /
 `kill`, copying `.env` files between projects, network reads, localhost
 requests (writes included), file work in the home. Command lines are split
 into every command they run, including quoted ones (`bash -c "git push"`) and
-those after `do`/`then`; `cd` is followed through the line. Relative paths
+those after `do`/`then`; `cd` is followed through the line. Quoted words
+given to `echo` / `printf` or kept in a variable are split too, but their
+`<` and `>` are text, not redirects, unless the line hands text to a shell
+(`| sh`, `eval`, `bash -c`); a `$(…)` inside them still runs and is judged.
+Before, `echo "<style>$(cat a.css)</style></head>"` building a local page
+read `</head>` as a write into `/head` and asked at Full send on every
+render. Relative paths
 are only judged for `rm -r` (against the turn's folder), because the engine's
 shell keeps its folder between calls. What it can't parse runs: the list is
 what has to be right, and `go_hard_tests.rs` holds every item on it and the
@@ -1389,7 +1396,10 @@ judgement. Marks come from every call `mcp::decide` lets through, every call
 through the connection relay, and every tool call in the engine's stream
 (calls it runs without asking). The mark lasts **the conversation**, not the
 turn (`outside.json` in the agent's home, tied to the engine session; cleared
-by Start fresh or a new conversation), since the outside text stays in it.
+by Start fresh or a new conversation), since the outside text stays in it:
+the next turn resumes the same context, and a routine or another agent's
+request in it could act on an instruction planted in what was read. Only
+sends and new packages ask; local work, `gh` reads and renders never do.
 
 **The rule for the owner's own requests.** The mark never raises cards for
 the owner's own direct request at Go hard or Full send: in a turn answering
