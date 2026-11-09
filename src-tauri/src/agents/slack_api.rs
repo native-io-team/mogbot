@@ -183,6 +183,15 @@ pub struct Identity {
     pub team: String,
 }
 
+/// Sign the token out at Slack (`auth.revoke`): it stops working anywhere,
+/// not just here. A token Slack already refuses is as good as revoked.
+pub async fn revoke(api: &dyn Api) -> Result<(), ApiError> {
+    match api.call("auth.revoke", &[]).await {
+        Ok(_) | Err(ApiError::SignIn(_)) => Ok(()),
+        Err(e) => Err(e),
+    }
+}
+
 pub async fn identity(api: &dyn Api) -> Result<Identity, ApiError> {
     let v = api.call("auth.test", &[]).await?;
     let s = |k: &str| v.get(k).and_then(Value::as_str).unwrap_or("").to_string();

@@ -187,7 +187,13 @@ function Connected({ status, run, busy }: { status: SlackStatus; run: Run; busy:
   const [draft, setDraft] = useState<string | null>(null);
   const trigger = draft ?? status.trigger;
   const [choosing, setChoosing] = useState(false);
+  const { showToast } = useOptionalToast();
   const update = (patch: SlackPatch) => void run({ kind: 'update', patch });
+  // Whether Slack signed the token out too, or only this Mac forgot it.
+  const disconnect = async () => {
+    const after = await run({ kind: 'disconnect' });
+    if (after?.disconnected) showToast(after.disconnected, 'info');
+  };
   const saveTrigger = () => {
     const t = trigger.trim();
     if (t && t !== status.trigger) update({ trigger: t });
@@ -255,8 +261,11 @@ function Connected({ status, run, busy }: { status: SlackStatus; run: Run; busy:
         label="Replies"
         description="Posted in the thread under your name after you OK the exact words. Only at Unleashed, with exact-text OK off, does a reply to your own message go by itself."
       />
-      <Row label="Disconnect" description="Removes the token from this Mac. Slack keeps the app.">
-        <Button variant="secondary" onClick={() => void run({ kind: 'disconnect' })}>
+      <Row
+        label="Disconnect"
+        description="Signs the token out with Slack and removes it from this Mac. Slack keeps the app."
+      >
+        <Button variant="secondary" onClick={() => void disconnect()}>
           Disconnect
         </Button>
       </Row>

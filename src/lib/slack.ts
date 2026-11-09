@@ -44,6 +44,8 @@ export interface SlackStatus {
   waiting: number;
   /** Slack's "create an app from a manifest" page, prefilled. */
   setupUrl: string;
+  /** Only on Disconnect's answer: whether Slack signed the token out too. */
+  disconnected?: string | null;
 }
 
 export interface SlackPatch {

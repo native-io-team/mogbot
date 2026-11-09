@@ -3791,8 +3791,12 @@ client registration, so `oauth.rs` can't sign in to it). Instead:
 An app installed only in its own workspace is internal, so the 2025 limits
 on `conversations.history`/`.replies` for unlisted distributed apps don't
 apply. A user token both reads as the user and posts as the user: that is
-what "under your name" means here. Disconnect deletes the Keychain item;
-Slack keeps the app (the user removes it there).
+what "under your name" means here. Disconnect first signs the token out at
+Slack (`auth.revoke`, at most 5 s; a token Slack already refuses counts as
+signed out), then deletes the Keychain item whatever Slack said, and the
+answer's line says which: "Slack signed the token out", or that only this Mac
+forgot it and the user should remove the app in Slack to be sure. Slack keeps
+the app either way (the user removes it there).
 
 **Listening.** Every 30 s while connected and on (a 5 s tick also settles
 replies), this Mac reads each chosen conversation (at most 20):

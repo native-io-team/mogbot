@@ -1275,6 +1275,10 @@ pub struct Status {
     pub waiting: usize,
     /// The page that creates the user's Slack app, prefilled.
     pub setup_url: String,
+    /// Only on Disconnect's answer: whether Slack signed the token out too
+    /// ([`disconnect_with`]), in one line for the UI.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub disconnected: Option<String>,
 }
 
 pub fn status() -> Status {
@@ -1296,6 +1300,7 @@ pub fn status() -> Status {
         last_error: s.last_error,
         waiting: s.pending.len(),
         setup_url: slack_api::manifest_url(),
+        disconnected: None,
     }
 }
 
@@ -1474,6 +1479,55 @@ pub fn update(p: Patch) -> Result<Status, CommandError> {
         Ok(())
     })??;
     Ok(status())
+}
+
+/// How long Disconnect waits for Slack to sign the token out.
+pub const REVOKE_WAIT: std::time::Duration = std::time::Duration::from_secs(5);
+
+/// Disconnect's line when Slack signed the token out.
+pub const REVOKED: &str = "Disconnected. Slack signed the token out, and it's gone from this Mac.";
+
+/// Disconnect's line when Slack couldn't sign it out (`why`, in the UI's
+/// words): it's gone from here all the same.
+pub fn not_revoked(why: &str) -> String {
+    format!(
+        "Disconnected on this Mac, but Slack couldn't sign the token out ({}). Remove the app in Slack to be sure it's off.",
+        why.trim_end_matches('.')
+    )
+}
+
+/// Sign the token out at Slack (`auth.revoke`), waiting at most `wait`:
+/// the line saying how it went, or `None` with no token to sign out.
+pub async fn sign_out(api: Option<&dyn Api>, wait: std::time::Duration) -> Option<String> {
+    let api = api?;
+    Some(
+        match tokio::time::timeout(wait, slack_api::revoke(api)).await {
+            Ok(Ok(())) => REVOKED.to_string(),
+            Ok(Err(ApiError::Network(_))) => not_revoked("this Mac couldn't reach it"),
+            Ok(Err(ApiError::RateLimited(_))) => not_revoked("it asked to wait"),
+            Ok(Err(ApiError::Scope(s) | ApiError::Slack(s))) => {
+                not_revoked(&format!("it said “{s}”"))
+            }
+            // `revoke` counts a refused token as signed out already.
+            Ok(Err(ApiError::SignIn(_))) => REVOKED.to_string(),
+            Err(_) => not_revoked("it didn't answer in time"),
+        },
+    )
+}
+
+/// Disconnect: the token is signed out at Slack first (best effort,
+/// `wait` at most), then forgotten here whatever Slack said. The answer
+/// says which (`Status::disconnected`).
+pub async fn disconnect_with(
+    api: Option<&dyn Api>,
+    wait: std::time::Duration,
+) -> Result<Status, CommandError> {
+    let said = sign_out(api, wait).await;
+    let mut status = tokio::task::spawn_blocking(disconnect)
+        .await
+        .map_err(super::err_other)??;
+    status.disconnected = said;
+    Ok(status)
 }
 
 /// Forget the connection: the token leaves the Keychain, the settings go.
