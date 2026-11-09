@@ -703,6 +703,7 @@ mod tests {
             gate: None,
             step_in: None,
             crossover: None,
+            account_switch: None,
         });
         store::append_message(&card).unwrap();
         (request_id, request)

@@ -1521,6 +1521,10 @@ pub(crate) fn answer_card(
     if approval.crossover.is_some() {
         return runner::answer_crossover(app, agent_id, &approval, allow, always == Some(true));
     }
+    // "Run turns on “Personal” first?": Allow makes the switch.
+    if approval.account_switch.is_some() {
+        return agents::usage_tools::answer_switch(app, agent_id, &approval, allow);
+    }
     // "Do these under your name?": Allow is the user's OK for each listed
     // action, here and only here (`plan_grant`).
     if let (true, Some(plan)) = (allow, &approval.plan) {

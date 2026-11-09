@@ -167,6 +167,11 @@ pub fn verdict(a: &Approval, age_ms: i64, waited_on: bool, moment: Moment) -> Op
     if a.crossover.is_some() {
         return None;
     }
+    // "Run turns on “Personal” first?": nothing waits on it, and the user
+    // asked for the switch, so it stays until answered (`usage_tools`).
+    if a.account_switch.is_some() {
+        return None;
+    }
     if let Some(s) = &a.secret {
         // An import's old-style secure input (before sign-in cards, which
         // replaced it): nothing raises these any more and nothing waits on

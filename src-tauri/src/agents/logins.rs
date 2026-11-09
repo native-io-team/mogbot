@@ -1944,6 +1944,7 @@ fn card_message(agent: &Agent, r: LoginRequest) -> AgentMessage {
         gate: None,
         step_in: None,
         crossover: None,
+        account_switch: None,
     });
     card
 }
@@ -2062,6 +2063,7 @@ pub fn migrate_pending(app: Option<&AppHandle>) -> usize {
                 gate: None,
                 step_in: None,
                 crossover: None,
+                account_switch: None,
             });
             let new = match app {
                 Some(app) => runner::record_own(app, card).map(|_| ()),
@@ -2953,6 +2955,7 @@ mod tests {
             gate: None,
             step_in: None,
             crossover: None,
+            account_switch: None,
         });
         // Written the way an older build wrote it: no `login` key at all.
         let line = serde_json::to_string(&card).unwrap();
@@ -3202,6 +3205,7 @@ mod tests {
             gate: None,
             step_in: None,
             crossover: None,
+            account_switch: None,
         });
         store::append_message(&card).unwrap();
         store::refresh_pending(&a.id);
