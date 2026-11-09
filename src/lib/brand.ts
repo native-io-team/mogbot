@@ -44,6 +44,8 @@ export interface Brand {
   repository: string | null;
   companion: { scheme: string; bundleId: string; tailnetPort: number };
   links: BrandLinks;
+  /** The app's Chrome extension: its Web Store id once listed, else null. */
+  chromeExtension?: { webStoreId: string | null };
   telemetry: {
     posthogKey: string | null;
     posthogHost: string | null;

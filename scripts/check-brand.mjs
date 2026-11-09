@@ -211,6 +211,29 @@ else if (read(GEN_PATH) !== gen)
   }
 }
 
+// --- checked: the Chrome extension (user_chrome) ----------------------------
+// It can't read brand.json: its name and the native host it asks Chrome for
+// are copies. The host name is the identifier, lowercased, + ".chrome_link"
+// (src-tauri/src/user_chrome/install.rs, host_name()).
+{
+  const manifest = JSON.parse(read('chrome-extension/extension/manifest.json'));
+  if (manifest.name !== `${brand.name} for Chrome`) {
+    fail(`chrome-extension manifest name must be "${brand.name} for Chrome"`);
+  }
+  if (manifest.short_name !== brand.name || manifest.action?.default_title !== brand.name) {
+    fail(`chrome-extension manifest short_name and action.default_title must be "${brand.name}"`);
+  }
+  const host = `${brand.identifier.toLowerCase().replace(/[^a-z0-9.]/g, '_')}.chrome_link`;
+  const protocolJs = read('chrome-extension/extension/src/protocol.js');
+  if (!protocolJs.includes(`export const HOST_NAME = '${host}';`)) {
+    fail(`chrome-extension/extension/src/protocol.js HOST_NAME must be '${host}'`);
+  }
+  const storeId = brand.chromeExtension?.webStoreId ?? null;
+  if (storeId !== null && !/^[a-p]{32}$/.test(storeId)) {
+    fail('brand.json: "chromeExtension.webStoreId" must be a 32-letter extension id or null');
+  }
+}
+
 if (problems.length) {
   console.error(`Brand drift (${problems.length}):\n  - ${problems.join('\n  - ')}`);
   process.exit(1);

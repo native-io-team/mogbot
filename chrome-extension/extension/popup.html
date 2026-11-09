@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Agents</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <main>
+      <h1 id="name"></h1>
+      <p id="state" role="status">Checking…</p>
+      <p id="detail" class="muted"></p>
+      <label for="label">This Chrome profile is</label>
+      <div class="row">
+        <input id="label" type="text" maxlength="60" placeholder="e.g. Work, or sam@example.com" />
+        <button id="save" type="button">Save</button>
+      </div>
+      <p class="muted">So your agents know which profile they're in when you have more than one.</p>
+      <button id="reconnect" type="button">Try again</button>
+      <p class="muted small">
+        Agents open their own tabs here, in a group with their name, and see only those. Anything
+        that sends, posts, pays or deletes asks you in the app first.
+      </p>
+    </main>
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>
