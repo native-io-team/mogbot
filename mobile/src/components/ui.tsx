@@ -547,8 +547,15 @@ export function Row({
   const long = value != null && value.length > LONG_VALUE;
   return (
     <Pressable
-      disabled={!action}
-      onPress={onPress}
+      // Only a disabled action is dimmed. A row that is just a fact (Paired ·
+      // Nov 9) isn't "dimmed" to VoiceOver, which `disabled` on every row
+      // without an onPress made it on iOS.
+      disabled={disabled || undefined}
+      onPress={action ? onPress : undefined}
+      // A row holding its own control (a Switch) with nothing to do itself is
+      // not one element: grouped, iOS read "Haptics, Haptics, dimmed" and
+      // VoiceOver could never reach the switch to change it.
+      accessible={trailing && !action && !disabled ? false : undefined}
       accessibilityRole={action || disabled ? 'button' : undefined}
       accessibilityState={
         disabled ? { disabled: true } : selected != null ? { selected } : undefined
@@ -556,7 +563,7 @@ export function Row({
       android_ripple={action ? ripple : undefined}
       style={({ pressed }) => [
         styles.row,
-        pressed && { backgroundColor: colors.surfaceGroupPressed },
+        pressed && action && { backgroundColor: colors.surfaceGroupPressed },
       ]}
     >
       {disabled && leading ? <View style={{ opacity: 0.4 }}>{leading}</View> : leading}
