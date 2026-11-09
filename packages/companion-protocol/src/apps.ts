@@ -23,6 +23,7 @@ export function grantNote(access: 'read' | 'full', nobody: boolean): string {
 export function keptWhere(kind: string): string {
   if (kind === 'oauth') return 'Signed in on this Mac';
   if (kind === 'gh') return 'GitHub CLI on this Mac';
+  if (kind === 'mac_app') return 'This Mac’s own app';
   return 'Connected on claude.ai';
 }
 

@@ -86,6 +86,10 @@ pub enum Kind {
     ClaudeAi { server_name: String },
     /// The GitHub CLI's own sign-in.
     Gh,
+    /// One of this Mac's own apps (Calendar, Reminders, Contacts, Notes,
+    /// Messages), reached through the agent bridge's own tools
+    /// (`agents/mac_apps.rs`). No sign-in at all: macOS's own permission.
+    MacApp,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -132,6 +136,9 @@ impl Connection {
             Kind::Oauth { .. } => "Signed in on this Mac; the token is in its Keychain",
             Kind::ClaudeAi { .. } => "Connected on claude.ai; the sign-in is held there",
             Kind::Gh => "GitHub CLI sign-in on this Mac",
+            Kind::MacApp => {
+                "This Mac's own app; macOS asks once, in System Settings → Privacy & Security"
+            }
         }
     }
 }
@@ -414,6 +421,8 @@ fn find_or_add(r: &mut Registry, service: &str, title: &str, account: &str, kind
     let taken: Vec<String> = r.connections.iter().map(|c| c.server_key.clone()).collect();
     let server_key = match &kind {
         Kind::ClaudeAi { server_name } => claude_tool_key(server_name),
+        // The name `mcp::decide` judges its writes by (`mac_apps::Def::judged_as`).
+        Kind::MacApp => service.to_string(),
         _ => server_key_for(service, account, &taken),
     };
     let account = if account.is_empty() {
@@ -818,6 +827,11 @@ pub async fn for_turn(agent: &store::Agent, port: u16, outside: bool) -> TurnAcc
                 c.account,
                 g.access.label()
             )),
+            (Kind::MacApp, Some(g)) => {
+                if let Some(app) = super::mac_apps::App::from_service(&c.service) {
+                    lines.push(super::mac_apps::turn_line(app, g.access));
+                }
+            }
             (Kind::Oauth { .. }, Some(g)) => {
                 if c.needs_sign_in {
                     lines.push(format!(

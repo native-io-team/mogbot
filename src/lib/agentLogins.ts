@@ -203,7 +203,9 @@ export interface Connection {
   kind:
     | { type: 'oauth'; serverUrl: string }
     | { type: 'claude_ai'; serverName: string }
-    | { type: 'gh' };
+    | { type: 'gh' }
+    /** One of this Mac's own apps (`agents/mac_apps.rs`): macOS's permission, no sign-in. */
+    | { type: 'mac_app' };
   serverKey: string;
   createdAt: number;
   grants: { agentId: string; access: Access; grantedAt: number }[];

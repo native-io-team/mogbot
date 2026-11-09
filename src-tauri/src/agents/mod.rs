@@ -37,6 +37,7 @@
 //! - [`rooms`]: group conversations of 2–6 agents, @one or @everyone
 //! - [`search`]: find a message across every conversation
 //! - [`secrets`]: credentials an agent asked for, kept in the Keychain, never shown to it
+//! - [`mac_apps`]: this Mac's Calendar, Reminders, Contacts, Notes and Messages as tools, one Allow per app
 //! - [`logins`]: login cards (`request_login`), the team's list, what an agent can reach
 //! - [`browser`]: the team's signed-in Chrome (Claude in Chrome), set up once, per agent, never for outside text
 //! - [`chrome_health`]: whether Claude in Chrome answers, per turn, so a turn uses the way into Chrome that works
@@ -121,6 +122,7 @@ pub mod level_hint;
 pub mod local_links;
 pub mod login_relay;
 pub mod logins;
+pub mod mac_apps;
 pub mod mcp;
 pub mod memory;
 pub mod narration;

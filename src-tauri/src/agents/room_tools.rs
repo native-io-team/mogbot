@@ -399,7 +399,21 @@ pub async fn call(
     args: &Value,
 ) -> Value {
     let outside = runner::from_outside(&caller.id) && super::broker::is_live(&caller.id, turn);
-    let plan = match gate(caller, outside, tool.name, args) {
+    // A turn that read one of this Mac's apps asks too, saying so.
+    let read_private = !outside && super::mac_apps::read_in_turn(&caller.id, turn);
+    let gated = gate(caller, outside || read_private, tool.name, args).map(|g| match g {
+        Gate::Ask {
+            title,
+            detail,
+            plan,
+        } if read_private => Gate::Ask {
+            title,
+            detail: detail.replace(super::mcp::OUTSIDE_WHY, super::mac_apps::READ_WHY),
+            plan,
+        },
+        g => g,
+    });
+    let plan = match gated {
         Ok(Gate::Go(plan)) => plan,
         Ok(Gate::Ask {
             title,
