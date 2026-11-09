@@ -82,8 +82,9 @@ jest.mock('../src/lib/persist', () => ({
   removeJson: () => Promise.resolve(),
   debounced: () => ({ schedule: () => {}, flush: () => Promise.resolve() }),
 }));
-// Badges animate on Reanimated's native half; the room needs only names.
-jest.mock('../src/components/agent', () => ({ AgentAvatar: () => null, Spinner: () => null }));
+// Keys pulse on Reanimated's native half; the room needs only names.
+jest.mock('../src/components/agent', () => ({ Spinner: () => null }));
+jest.mock('../src/components/AgentKey', () => ({ AgentKey: () => null }));
 jest.mock('../src/components/ConversationBars', () => ({ RoomBars: () => null }));
 
 const room = real.roomsList[0] as RoomView;

@@ -1,7 +1,7 @@
 /**
  * The desktop's list rules, so the phone orders and labels agents exactly as
  * the Agents view does. Copied from src/lib/agents.ts and
- * src/components/agents/AgentAvatar.tsx; they are pure and belong in
+ * src/components/agents/AgentKey.tsx; they are pure and belong in
  * @shipstudio/companion-protocol next to the quote helpers (P2 moves them).
  */
 
@@ -9,8 +9,8 @@ import type {
   Agent,
   AgentMessage,
   Approval,
-  AvatarMood,
   EngineInfo,
+  KeyState,
   Failure,
   PermissionScope,
   TeamSetupView,
@@ -18,7 +18,7 @@ import type {
 } from '@shipstudio/companion-protocol';
 import {
   apiPrice,
-  moodOf,
+  keyStateOf,
   needsYouCount,
   resetPhrase,
   secretTitle,
@@ -48,19 +48,24 @@ export const failedTurn = (agent: Agent): Failure | null =>
 
 export const needsAttention = (agent: Agent) => needsYou(agent) || failedTurn(agent) !== null;
 
+/** Stopped by a usage limit: paused until it resets, not waiting on you. */
+export const usageLimited = (agent: Agent) =>
+  !needsYou(agent) && failedTurn(agent)?.kind === 'usage_limit';
+
 /**
- * What its avatar shows (`moodOf` in avatar.ts), from what a row knows. A
- * usage limit heals by itself: not a failure the avatar mourns.
+ * What its key shows (the desk's `agentKeyState`): Needs your OK when a card
+ * waits, Paused while a usage limit stops it, Working while a turn runs,
+ * Live while you drive its session at the desk (Take over).
  */
-export function agentMood(
+export function agentKeyState(
   agent: Agent,
-  working = agent.status.state === 'working'
-): Exclude<AvatarMood, 'done'> {
-  const failure = failedTurn(agent);
-  return moodOf({
-    needsYou: needsYou(agent),
+  working = agent.status.state === 'working' && !agent.takeover
+): KeyState {
+  return keyStateOf({
+    needsOk: needsYou(agent),
+    paused: usageLimited(agent),
     working,
-    failed: failure !== null && failure.kind !== 'usage_limit',
+    live: Boolean(agent.takeover),
   });
 }
 

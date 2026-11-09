@@ -15,7 +15,7 @@ import {
   describeWatchStatus,
   describeWatchTitle,
   isAdmin,
-  lookFor,
+  keyLookFor,
   MAC_FEATURES,
   onClaudePlan,
   routineWeekLine,
@@ -30,7 +30,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, Pressable, ScrollView, Switch, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
-import { AgentAvatar, Spinner } from '../../components/agent';
+import { Spinner } from '../../components/agent';
+import { AgentKey } from '../../components/AgentKey';
 import { announce } from '../../lib/a11y';
 import { useQuotaLines } from '../../lib/quota';
 import { useNow } from '../../components/ConnectionPill';
@@ -39,7 +40,7 @@ import { TextAction } from '../../components/surfaces';
 import { WhatItCanReach } from '../../components/reach';
 import { WhatItCanDo } from '../../components/policy';
 import { AgentLevelRow } from '../../components/IndependenceSetting';
-import { ColorSwatches, LookChoices } from '../../components/pickers';
+import { ColorSwatches, KeyChoices } from '../../components/pickers';
 import { Button, Icon, InsetDivider, Row, SectionTitle, SheetPage, T } from '../../components/ui';
 import { SheetTitle } from '../../components/SheetTitle';
 import {
@@ -54,7 +55,7 @@ import {
   folderName,
   modelName,
   usageLine,
-  agentMood,
+  agentKeyState,
 } from '../../lib/agents';
 import { haptic } from '../../lib/haptics';
 import {
@@ -70,11 +71,12 @@ import {
 import { useApp } from '../../lib/store';
 import { useSwitchColors } from '../../lib/accent';
 import { withAgentAccent } from '../../lib/accentScreen';
-import { avatarSize, iconSize, radius, space } from '../../lib/theme';
+import { iconSize, keySize, radius, space } from '../../lib/theme';
 import { makeStyles, useColors } from '../../lib/appearance';
 
-// Its look (shape, face and colour, which is also its chat's accent) changes here
-// only on a Mac that draws key caps (MAC_FEATURES.keycaps; AgentToggles in companion/router.rs).
+// Its key (colourway, which also moves its chat's accent, legend and bound key)
+// changes here only on a Mac that keeps keys (MAC_FEATURES.agentKeys); an older one
+// that keeps looks (MAC_FEATURES.keycaps) takes its colour (AgentToggles in companion/router.rs).
 export default withAgentAccent(AgentSheet);
 
 function AgentSheet() {
@@ -94,8 +96,15 @@ function AgentSheet() {
     if (text) announce(text, true);
   }, []);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
-  const looks = !!welcome?.features?.includes(MAC_FEATURES.keycaps);
+  const keys = !!welcome?.features?.includes(MAC_FEATURES.agentKeys);
+  const looks = keys || !!welcome?.features?.includes(MAC_FEATURES.keycaps);
   const [showLook, setShowLook] = useState(false);
+  const taken = useApp((s) =>
+    (s.overview?.agents ?? [])
+      .filter((a) => a.id !== id && a.boundKey)
+      .map((a) => a.boundKey)
+      .join('')
+  );
   const servesUsage = canCall('agents.usage', welcome);
   useEffect(() => {
     if (!servesUsage || !live) return;
@@ -126,7 +135,7 @@ function AgentSheet() {
     <SheetPage>
       <ScrollView contentContainerStyle={styles.content}>
         <View style={styles.who}>
-          {/* A Mac that keeps looks: the avatar opens its shape, face and colour. */}
+          {/* A Mac that keeps keys: the key opens its colour, icon and keyboard key. */}
           <Pressable
             disabled={!looks}
             onPress={() => setShowLook((open) => !open)}
@@ -134,12 +143,12 @@ function AgentSheet() {
             accessibilityLabel={looks ? 'Change how it looks' : undefined}
             accessibilityState={looks ? { expanded: showLook } : undefined}
           >
-            <AgentAvatar
+            <AgentKey
               id={agent.id}
               name={agent.name}
               color={agent.color}
-              size={avatarSize.sheet}
-              mood={agentMood(agent)}
+              state={agentKeyState(agent)}
+              size={keySize.xl}
             />
           </Pressable>
           <View style={{ flex: 1, gap: space['2xs'] }}>
@@ -159,24 +168,37 @@ function AgentSheet() {
 
         {looks && showLook && (
           <Animated.View entering={FadeIn.duration(150)} style={styles.look}>
-            <LookChoices
-              name={agent.name}
-              color={agent.color}
-              look={lookFor(agent)}
-              onChange={(avatar) =>
-                setAgentToggles(agent.id, { avatar }).catch((e: unknown) =>
-                  setError(describeError(e))
-                )
-              }
-            />
-            <ColorSwatches
-              value={agent.color}
-              onChange={(color) =>
-                setAgentToggles(agent.id, { color }).catch((e: unknown) =>
-                  setError(describeError(e))
-                )
-              }
-            />
+            {keys ? (
+              <KeyChoices
+                name={agent.name}
+                {...keyLookFor(agent)}
+                taken={[...taken]}
+                onColorway={(colorway) =>
+                  setAgentToggles(agent.id, { colorway }).catch((e: unknown) =>
+                    setError(describeError(e))
+                  )
+                }
+                onIcon={(icon) =>
+                  setAgentToggles(agent.id, { icon }).catch((e: unknown) =>
+                    setError(describeError(e))
+                  )
+                }
+                onBoundKey={(boundKey) =>
+                  setAgentToggles(agent.id, { boundKey }).catch((e: unknown) =>
+                    setError(describeError(e))
+                  )
+                }
+              />
+            ) : (
+              <ColorSwatches
+                value={agent.color}
+                onChange={(color) =>
+                  setAgentToggles(agent.id, { color }).catch((e: unknown) =>
+                    setError(describeError(e))
+                  )
+                }
+              />
+            )}
           </Animated.View>
         )}
 

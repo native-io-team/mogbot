@@ -33,16 +33,7 @@ import {
   send,
 } from '../lib/session';
 import type { PendingSend } from '../lib/sync';
-import {
-  avatarSize,
-  composer,
-  fonts,
-  iconSize,
-  lineHeight,
-  space,
-  type,
-  PRESSED,
-} from '../lib/theme';
+import { keySize, composer, fonts, iconSize, lineHeight, space, type, PRESSED } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { Attachments } from './attachments';
 import { LocalLinks } from './localLinks';
@@ -50,7 +41,7 @@ import { useReveal } from '../lib/reveal';
 import { Markdown } from './Markdown';
 import { Card, Line, TextAction } from './surfaces';
 import { Button, Icon, T } from './ui';
-import { AgentAvatar } from './agent';
+import { AgentKey } from './AgentKey';
 import { TypingDots } from './TypingDots';
 import {
   ApprovalCard,
@@ -665,7 +656,7 @@ function PeerRow({ message }: { message: AgentMessage }) {
       style={({ pressed }) => [styles.peer, pressed && PRESSED]}
       testID="peer-row"
     >
-      <AgentAvatar id={peer.id} name={peer.name} color={color} size={avatarSize.group} />
+      <AgentKey id={peer.id} name={peer.name} color={color} size={keySize.sm} />
       <View style={styles.peerBody}>
         <View style={styles.peerHead}>
           <Icon

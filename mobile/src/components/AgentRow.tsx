@@ -25,7 +25,7 @@ import ReanimatedSwipeable, {
 import Animated, { interpolate, useAnimatedStyle, type SharedValue } from 'react-native-reanimated';
 import { agentActions, type Action, type AgentAction, type AgentCaps } from '../lib/actions';
 import {
-  agentMood,
+  agentKeyState,
   formatAgo,
   lineState,
   needsLine,
@@ -42,9 +42,10 @@ import { useApp } from '../lib/store';
 import { useAgentLevelLabel } from './IndependenceSetting';
 import { haptic } from '../lib/haptics';
 import { roleCutPastReading } from '../lib/accountsView';
-import { avatarSize, chromeScale, iconSize, radius, space, type } from '../lib/theme';
+import { keySize, chromeScale, iconSize, radius, space, type } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
-import { AgentAvatar, StatusMark } from './agent';
+import { StatusMark } from './agent';
+import { AgentKey } from './AgentKey';
 import { showActions } from './menu';
 import { Icon, StatusPill, useRipple, T } from './ui';
 
@@ -284,8 +285,7 @@ function RowBody({
   // Its own level, only when it differs from the team's ("Unleashed").
   const level = useAgentLevelLabel(agent);
   // Running (not queued for a slot): the line says what and how long, on a
-  // clock that ticks only while it works (the avatar holds still; it bobs
-  // once when the turn ends).
+  // clock that ticks only while it works (the key is pressed meanwhile).
   const running = live && !quiet && agent.status.state === 'working' && !waitingForSlot(agent);
   const now = useClock(running);
   // Waiting on you: say what for, when the saved chat knows.
@@ -346,15 +346,15 @@ function RowBody({
         if (id) onAction(id);
       }}
     >
-      {/* The avatar says what it's doing by how it looks around (never a ring,
-          never closed eyes); the line says what. Last known: it holds still. */}
-      <View style={styles.avatar}>
-        <AgentAvatar
+      {/* The key says what it's doing by how it sits (pressed, lit, proud, a
+          socket); the line says what. Last known: it rests. */}
+      <View style={styles.key}>
+        <AgentKey
           id={agent.id}
           name={agent.name}
           color={agent.color}
-          size={avatarSize.list}
-          mood={live ? agentMood(agent, running) : 'idle'}
+          state={live ? agentKeyState(agent, running) : 'idle'}
+          size={keySize.lg}
         />
       </View>
       <View style={styles.text}>
@@ -443,7 +443,7 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.surfaceApp,
   },
   selected: { backgroundColor: colors.surfaceControl },
-  avatar: { width: avatarSize.list, height: avatarSize.list },
+  key: { width: keySize.lg },
   text: { flex: 1, gap: space['2xs'] },
   nameLine: { flexDirection: 'row', alignItems: 'center', gap: space.tight },
   // The name wins the line: it shrinks last, and the time never takes more than it needs.

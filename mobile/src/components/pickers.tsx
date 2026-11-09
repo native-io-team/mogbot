@@ -1,6 +1,6 @@
 /**
  * Small choosers for the sheets that start things: chips (one or several of
- * a few words) and the agent colour swatches. Each is a 44pt target whatever
+ * a few words), the agent colour swatches and its key's choices. Each is a 44pt target whatever
  * it draws, and reads its colours from the palette in force.
  */
 
@@ -10,18 +10,18 @@ import Animated, { FadeIn } from 'react-native-reanimated';
 import { agentTint } from '../lib/accent';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { AGENT_COLORS } from '../lib/newAgent';
-import { agentColorNames, chromeScale, fonts, iconSize, radius, space } from '../lib/theme';
-import { Icon, T, tap, useRipple } from './ui';
-import { AgentAvatar } from './agent';
 import {
-  AVATAR_FACES,
-  AVATAR_FINISHES,
-  AVATAR_SHAPES,
-  FACE_NAMES,
-  FINISH_NAMES,
-  SHAPE_NAMES,
-  type AgentLook,
-} from '@shipstudio/companion-protocol';
+  agentColorNames,
+  chromeScale,
+  fonts,
+  iconSize,
+  keySize,
+  radius,
+  space,
+} from '../lib/theme';
+import { Icon, T, tap, useRipple } from './ui';
+import { AgentKey } from './AgentKey';
+import { COLORWAYS, KEY_CHARS, KEY_ICONS } from '@shipstudio/companion-protocol';
 
 /** Chips fit 36pt; their slop makes the target 44. */
 const CHIP = 36;
@@ -153,58 +153,79 @@ export function ColorSwatches({
 }
 
 /**
- * How an agent looks: a row of shapes, a row of faces and a row of finishes
- * (a key cap or embossed), each drawn with the current pick's other parts
- * and colour, so what a button shows is what you'd get. The same choices as
- * the desk's editor (`AgentLookPicker`). The choices hold still.
+ * How an agent looks: its key's colourway, its legend and the keyboard key
+ * it's bound to (docs/internal/agent-keys.md), the desk's `AgentKeyPicker`
+ * for a thumb. Each colour and legend is drawn as the key it would make; the
+ * bound key is picked from the letters and digits nobody else has.
  */
-export function LookChoices({
+export function KeyChoices({
   name,
-  color,
-  look,
-  onChange,
+  colorway,
+  icon,
+  boundKey,
+  taken,
+  onColorway,
+  onIcon,
+  onBoundKey,
 }: {
   name: string;
-  color: string;
-  look: AgentLook;
-  onChange: (look: AgentLook) => void;
+  colorway: string;
+  icon: string;
+  boundKey: string | null;
+  /** Keys the rest of the team is bound to: not offered. */
+  taken: readonly string[];
+  onColorway: (colorway: string) => void;
+  onIcon: (icon: string) => void;
+  onBoundKey: (key: string) => void;
 }) {
+  const colors = useColors();
   const styles = useStyles();
+  const free = [...KEY_CHARS].filter((k) => k === boundKey || !taken.includes(k));
   return (
     <View style={styles.look}>
-      <View style={styles.swatches} accessibilityRole="radiogroup" accessibilityLabel="Shape">
-        {AVATAR_SHAPES.map((shape) => (
+      <T variant="caption" color={colors.textSecondary}>
+        Colour
+      </T>
+      <View style={styles.swatches} accessibilityRole="radiogroup" accessibilityLabel="Colour">
+        {COLORWAYS.map((c) => (
           <LookChoice
-            key={shape}
-            label={SHAPE_NAMES[shape]}
-            on={shape === look.shape}
-            onPress={() => onChange({ ...look, shape })}
+            key={c.id}
+            label={c.name}
+            on={c.id === colorway}
+            onPress={() => onColorway(c.id)}
           >
-            <AgentAvatar name={name} color={color} look={{ ...look, shape }} size={SWATCH} still />
+            <AgentKey name={name} colorway={c.id} icon={icon} size={keySize.md} />
           </LookChoice>
         ))}
       </View>
-      <View style={styles.swatches} accessibilityRole="radiogroup" accessibilityLabel="Face">
-        {AVATAR_FACES.map((face) => (
-          <LookChoice
-            key={face}
-            label={FACE_NAMES[face]}
-            on={face === look.face}
-            onPress={() => onChange({ ...look, face })}
-          >
-            <AgentAvatar name={name} color={color} look={{ ...look, face }} size={SWATCH} still />
+      <T variant="caption" color={colors.textSecondary}>
+        Icon
+      </T>
+      <View style={styles.swatches} accessibilityRole="radiogroup" accessibilityLabel="Icon">
+        {KEY_ICONS.map((i) => (
+          <LookChoice key={i.id} label={i.name} on={i.id === icon} onPress={() => onIcon(i.id)}>
+            <AgentKey name={name} colorway={colorway} icon={i.id} size={keySize.md} />
           </LookChoice>
         ))}
       </View>
-      <View style={styles.swatches} accessibilityRole="radiogroup" accessibilityLabel="Finish">
-        {AVATAR_FINISHES.map((finish) => (
-          <LookChoice
-            key={finish}
-            label={FINISH_NAMES[finish]}
-            on={finish === (look.finish ?? 'keycap')}
-            onPress={() => onChange({ ...look, finish })}
-          >
-            <AgentAvatar name={name} color={color} look={{ ...look, finish }} size={SWATCH} still />
+      <T variant="caption" color={colors.textSecondary}>
+        Key
+      </T>
+      <View
+        style={styles.swatches}
+        accessibilityRole="radiogroup"
+        accessibilityLabel="Keyboard key"
+      >
+        {free.map((k) => (
+          <LookChoice key={k} label={`Key ${k}`} on={k === boundKey} onPress={() => onBoundKey(k)}>
+            <T
+              variant="subhead"
+              color={k === boundKey ? colors.textStrong : colors.textSecondary}
+              style={{ fontFamily: fonts.mono }}
+              maxFontSizeMultiplier={chromeScale}
+            >
+              {k}
+            </T>
           </LookChoice>
         ))}
       </View>
@@ -244,6 +265,8 @@ function LookChoice({
 
 const SWATCH = 28;
 const RING = SWATCH + 8;
+/** A key choice's ring: the small key and its depth, with room round it. */
+const KEY_RING = keySize.md + 10;
 
 const useStyles = makeStyles((colors) => ({
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
@@ -263,8 +286,8 @@ const useStyles = makeStyles((colors) => ({
   swatchTarget: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   look: { gap: space.xs },
   lookRing: {
-    width: RING,
-    height: RING,
+    width: KEY_RING,
+    height: KEY_RING,
     borderRadius: radius.control,
     borderWidth: 2,
     borderColor: 'transparent',

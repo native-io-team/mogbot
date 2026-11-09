@@ -1,32 +1,32 @@
 /**
- * The agent as a key being typed on: what leads the working line while it
- * works (the desk's `AgentKey`; docs/internal/avatars.md, "On a key"). Its
- * avatar, bigger (`TYPING_KEY.size`) and raised in the site's key language:
- * the shape's own silhouette is the top, lit along its upper edge with a
- * hairline round it; the same silhouette set down by the travel, darker, is
- * the side; a soft drop sits under that. Always a raised key, whatever
- * finish the agent chose: here the avatar is the key.
+ * An agent's key (docs/internal/agent-keys.md): a keycap in its colourway
+ * with one legend on its face, the keyboard key it's bound to as a small
+ * sublegend and its independence as pips on the front edge (big keys only).
+ * The desk's `AgentKey`, drawn with Views: the skirt, the inset face and a
+ * solid hard-edged depth under them, one soft ambient shadow; the legend is
+ * react-native-svg, from the icon registry shared with the desk
+ * (`agentKeyIcons.ts`).
  *
- * While it's live the top (and the face on it) presses down into the side
- * and springs back, tap, tap, rest, and the drop tightens with each press:
- * one shared clock on the UI thread read by `keyDepth` and `keyDrop`, moving
- * only a transform and an opacity. Still with Reduce Motion, in the
- * background and on a screen that isn't showing.
+ * States are physical (`keyPose`): pressed while it works, the legend lit
+ * while it's live, lit and proud and slowly pulsing while it needs your OK,
+ * a socket with the cap off when it's paused or new. Cheap by design: no
+ * timers, and the only animation is the pulse, mounted only on a key that
+ * needs your OK and still with Reduce Motion, in the background and on a
+ * screen that isn't showing.
  */
 
 import {
-  AVATAR_GRID,
-  FACE_SPECS,
-  blinks,
-  KEY,
-  SHAPE_PATHS,
-  TYPING_KEY,
-  TYPING_KEY_UNITS,
-  TYPING_KEY_VIEWBOX,
-  typingKeyPaint,
+  KEY_ICON_GRID,
+  KEY_PIP_COUNT,
+  colorwayOf,
+  iconDrawing,
+  keyLookFor,
+  pipsFor,
+  type AgentIndependence,
+  type KeyState,
 } from '@shipstudio/companion-protocol';
-import { useEffect, useId, type ReactNode } from 'react';
-import { StyleSheet, View } from 'react-native';
+import { useEffect, useMemo, type ReactNode } from 'react';
+import { StyleSheet, Text, View } from 'react-native';
 import Animated, {
   Easing,
   cancelAnimation,
@@ -35,156 +35,370 @@ import Animated, {
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
-import Svg, { Defs, FeGaussianBlur, Filter, LinearGradient, Path, Stop } from 'react-native-svg';
+import Svg, { Circle, Path } from 'react-native-svg';
 import { useAppearance } from '../lib/appearance';
-import { alpha, keyLight } from '../lib/theme';
-import { TYPING_KEY_PERIOD_MS, keyDepth, keyDrop } from '../lib/typingKey';
-import { useEyeBlink } from '../lib/avatarBlink';
+import {
+  KEY_PULSE_LOW,
+  KEY_PULSE_MS,
+  keyGeometry,
+  keyPose,
+  type KeyGeometry,
+} from '../lib/agentKey';
 import { useMoving } from '../lib/moving';
-import { Face, RimFilter, useLook } from './agent';
+import { useApp } from '../lib/store';
+import { fonts, keyColorways, keyLit, keyNeutrals, keySize, type KeyColors } from '../lib/theme';
 
-const K = TYPING_KEY;
-const U = TYPING_KEY_UNITS;
-const HEIGHT = K.size + K.travel;
-/** The drop reaches past the key's box: its layer is drawn this many grid units taller. */
-// Three blur radii hold all of a Gaussian that shows.
-const DROP_ROOM = U.drop.dy + U.drop.blur * 3;
+/**
+ * Every agent's key and independence as one string, so a streaming reply
+ * (which updates the store every few frames) never re-renders a key.
+ */
+const useTeamKeys = () =>
+  useApp(
+    (s) =>
+      `${s.overview?.independence ?? ''}\n` +
+      (s.overview?.agents ?? [])
+        .map((a) => {
+          const k = keyLookFor(a);
+          return `${a.id}\t${k.colorway}\t${k.icon}\t${k.boundKey ?? ''}\t${a.independence ?? ''}`;
+        })
+        .join('\n')
+  );
+
+function keyFromTeam(team: string, id: string) {
+  const [teamLevel, ...lines] = team.split('\n');
+  for (const line of lines) {
+    const [lineId, colorway, icon, boundKey, level] = line.split('\t');
+    if (lineId !== id) continue;
+    return {
+      colorway,
+      icon,
+      boundKey: boundKey || null,
+      level: ((level || teamLevel) as AgentIndependence) || null,
+    };
+  }
+  return null;
+}
+
+export interface AgentKeyProps {
+  /** Its id: what isn't given comes from the registry. */
+  id?: string;
+  /** Seeds a key for an agent that isn't in the registry (a draft, a preview). */
+  name?: string;
+  role?: string;
+  /** An old avatar colour key: its nearest colourway, when none is given. */
+  color?: string;
+  isMain?: boolean;
+  colorway?: string;
+  icon?: string;
+  /** The sublegend (big keys only); `null` shows none. */
+  boundKey?: string | null;
+  size?: number;
+  state?: KeyState;
+  /** Its independence, for the pips (big keys only); defaults to the registry's. */
+  level?: AgentIndependence | null;
+}
 
 export function AgentKey({
   id,
-  name,
+  name = '',
+  role,
   color,
-  pressing,
-}: {
-  id: string;
-  name: string;
-  color: string;
-  /** Being typed on (the line is live); otherwise it rests. */
-  pressing: boolean;
-}) {
+  isMain,
+  colorway,
+  icon,
+  boundKey,
+  size = keySize.md,
+  state = 'idle',
+  level,
+}: AgentKeyProps) {
   const appearance = useAppearance();
-  const paint = typingKeyPaint(color, appearance);
-  const look = useLook(id, name, undefined);
-  const moving = useMoving(!pressing);
-  // The eyes blink while the line is live, a rest or not: the key itself only presses when typed on.
-  const blinking = blinks(look.face, K.size);
-  const eyeY = (FACE_SPECS[look.face].eyes[0].cy * K.size) / AVATAR_GRID;
-  const live = useMoving(false);
-  const blink = useEyeBlink(blinking && live, HEIGHT, eyeY);
-  const clock = useSharedValue(0);
-  useEffect(() => {
-    if (!moving) {
-      cancelAnimation(clock);
-      clock.set(0);
-      return;
-    }
-    clock.set(0);
-    clock.set(
-      withRepeat(withTiming(1, { duration: TYPING_KEY_PERIOD_MS, easing: Easing.linear }), -1)
+  const team = useTeamKeys();
+  const look = useMemo(() => {
+    const saved = id ? keyFromTeam(team, id) : null;
+    const fallback = keyLookFor({ name, role, color, isMain });
+    return {
+      colorway: colorway ?? saved?.colorway ?? fallback.colorway,
+      icon: icon ?? saved?.icon ?? fallback.icon,
+      boundKey: boundKey !== undefined ? boundKey : (saved?.boundKey ?? null),
+      level: level !== undefined ? level : (saved?.level ?? null),
+    };
+  }, [team, id, name, role, color, isMain, colorway, icon, boundKey, level]);
+  const way = colorwayOf(look.colorway);
+  const paint = keyColorways[way.id] ?? keyColorways.blue;
+  const g = keyGeometry(size);
+  const neutrals = keyNeutrals[appearance];
+  const box = { width: size, height: size + g.rest };
+  if (state === 'paused' || state === 'new') {
+    return (
+      <View
+        style={box}
+        accessible={false}
+        importantForAccessibility="no-hide-descendants"
+        testID="agent-key"
+      >
+        <View
+          testID={`agent-key-socket-${state}`}
+          style={{
+            position: 'absolute',
+            top: g.rest,
+            width: size,
+            height: size,
+            borderRadius: g.corner,
+            backgroundColor: neutrals.socket,
+            borderWidth: 1,
+            borderColor: neutrals.socketRim,
+            borderTopWidth: Math.max(1, g.rest / 2),
+            borderTopColor: neutrals.socketShade,
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <View
+            style={{
+              width: g.housing,
+              height: g.housing,
+              borderRadius: g.housingCorner,
+              backgroundColor: neutrals.housing,
+              borderTopWidth: Math.max(1, g.stemDrop),
+              borderTopColor: neutrals.housingShade,
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <Stem
+              g={g}
+              fill={state === 'paused' ? paint.face : neutrals.stem}
+              shadow={state === 'paused' ? paint.depth : neutrals.stemDepth}
+            />
+          </View>
+        </View>
+      </View>
     );
-    return () => cancelAnimation(clock);
-  }, [clock, moving]);
-  const top = useAnimatedStyle(() => ({
-    transform: [{ translateY: keyDepth(clock.get()) * K.travel }],
-  }));
-  const drop = useAnimatedStyle(() => ({ opacity: keyDrop(keyDepth(clock.get())) }));
-  const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
-  const shape = SHAPE_PATHS[look.shape];
-  const ring = alpha(keyLight.shade, paint.ring);
-  const dropUnits = AVATAR_GRID + U.travel + DROP_ROOM;
-  const dropHeight = (dropUnits * K.size) / AVATAR_GRID;
+  }
+  const pose = keyPose(g, state, way.light);
+  const pips = g.details ? pipsFor(look.level) : 0;
+  const legend = <Legend icon={look.icon} g={g} paint={paint} lit={pose.lit} />;
   return (
     <View
-      style={styles.key}
-      testID="agent-key"
+      style={box}
       accessible={false}
       importantForAccessibility="no-hide-descendants"
+      testID="agent-key"
     >
-      {/* The drop, its own layer: it tightens as the key goes down. */}
-      <Animated.View style={[styles.drop, { height: dropHeight }, drop]}>
-        <Svg width={K.size} height={dropHeight} viewBox={`0 0 ${AVATAR_GRID} ${dropUnits}`}>
-          <Defs>
-            <Filter id={`${uid}d`} x="-30%" y="-30%" width="160%" height="170%">
-              <FeGaussianBlur stdDeviation={U.drop.blur} />
-            </Filter>
-          </Defs>
-          <Path
-            d={shape}
-            transform={`translate(0 ${U.travel + U.drop.dy})`}
-            fill={keyLight.shade}
-            opacity={paint.shadow}
-            filter={`url(#${uid}d)`}
-          />
-        </Svg>
-      </Animated.View>
-      {/* The side: the top's outline set down by the travel, so at the bottom
-          of a press the top covers it and nothing peeks above. */}
-      <Layer>
-        <Path
-          d={shape}
-          transform={`translate(0 ${U.travel})`}
-          fill="none"
-          stroke={ring}
-          strokeWidth={U.ring}
-        />
-        <Path d={shape} transform={`translate(0 ${U.travel})`} fill={paint.side} />
-      </Layer>
-      <Animated.View style={[StyleSheet.absoluteFill, top]} testID="agent-key-top">
-        <Layer>
-          <Defs>
-            <LinearGradient id={`${uid}g`} x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor={paint.topHigh} />
-              <Stop offset="1" stopColor={paint.topLow} />
-            </LinearGradient>
-            <RimFilter id={`${uid}r`} depth={KEY.capRim} paint={paint} />
-          </Defs>
-          <Path d={shape} fill="none" stroke={ring} strokeWidth={U.ring} />
-          <Path d={shape} fill={`url(#${uid}g)`} filter={`url(#${uid}r)`} />
-          <Face
-            look={look}
-            name={name}
-            px={K.size}
-            paint={paint}
-            ink={paint.ink}
-            selected={false}
-            part={blinking ? 'rest' : 'all'}
-          />
-        </Layer>
-        {blinking && (
-          <Animated.View style={[StyleSheet.absoluteFill, blink]} testID="agent-key-eyes">
-            <Layer>
-              <Face
-                look={look}
-                name={name}
-                px={K.size}
-                paint={paint}
-                ink={paint.ink}
-                selected={false}
-                part="eyes"
+      {/* The depth: the cap's own shape, solid, set down under it; the soft ambient under that. */}
+      <View
+        testID="agent-key-depth"
+        style={{
+          position: 'absolute',
+          top: pose.down + pose.depth,
+          width: size,
+          height: size,
+          borderRadius: g.corner,
+          backgroundColor: paint.depth,
+          shadowColor: neutrals.ambient,
+          shadowOpacity: neutrals.ambientOpacity,
+          shadowRadius: g.ambientBlur / 2,
+          shadowOffset: { width: 0, height: g.ambientY },
+        }}
+      />
+      <View
+        testID={`agent-key-cap-${state}`}
+        style={{
+          position: 'absolute',
+          top: pose.down,
+          width: size,
+          height: size,
+          borderRadius: g.corner,
+          backgroundColor: paint.skirt,
+        }}
+      >
+        <View
+          style={{
+            position: 'absolute',
+            top: g.insetTop,
+            left: g.insetX,
+            right: g.insetX,
+            bottom: g.insetBottom,
+            borderRadius: g.faceCorner,
+            backgroundColor: paint.face,
+            overflow: 'hidden',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+          <View style={[styles.shine, { backgroundColor: keyLit.shine }]} />
+          {pose.shade > 0 && (
+            <View
+              testID="agent-key-shade"
+              style={[
+                StyleSheet.absoluteFill,
+                { backgroundColor: keyLit.shade, opacity: pose.shade },
+              ]}
+            />
+          )}
+          {state === 'needsOk' ? <Pulse>{legend}</Pulse> : legend}
+          {g.details && look.boundKey && (
+            <Text
+              testID="agent-key-sub"
+              allowFontScaling={false}
+              style={{
+                position: 'absolute',
+                right: g.sub.right,
+                bottom: g.sub.bottom,
+                fontFamily: fonts.mono,
+                fontSize: g.sub.size,
+                lineHeight: g.sub.size,
+                color: pose.lit ? keyLit.legend : paint.legend,
+                opacity: pose.lit ? 0.95 : 0.72,
+              }}
+            >
+              {look.boundKey}
+            </Text>
+          )}
+        </View>
+        {pips > 0 && (
+          <View style={[styles.pips, { bottom: g.pips.bottom, gap: g.pips.gap }]}>
+            {Array.from({ length: KEY_PIP_COUNT }, (_, i) => (
+              <View
+                key={i}
+                testID={i < pips ? 'agent-key-pip-on' : 'agent-key-pip'}
+                style={{
+                  width: g.pips.width,
+                  height: g.pips.height,
+                  borderRadius: g.pips.height / 2,
+                  backgroundColor: i < pips ? paint.legend : paint.depth,
+                  opacity: i < pips ? 0.9 : 1,
+                }}
               />
-            </Layer>
-          </Animated.View>
+            ))}
+          </View>
         )}
-      </Animated.View>
+      </View>
     </View>
   );
 }
 
-/** One layer of the key, on the avatar's grid with the side under it. */
-function Layer({ children }: { children: ReactNode }) {
+/** The legend: one icon, centred; lit, warm white with a tight glow round the icon only. */
+function Legend({
+  icon,
+  g,
+  paint,
+  lit,
+}: {
+  icon: string;
+  g: KeyGeometry;
+  paint: KeyColors;
+  lit: boolean;
+}) {
+  const drawing = iconDrawing(icon);
+  const strokes = (stroke: string, width: number, opacity = 1) => (
+    <>
+      {drawing.paths.map((d) => (
+        <Path
+          key={d}
+          d={d}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={width}
+          strokeOpacity={opacity}
+          strokeLinecap="square"
+          strokeLinejoin="miter"
+        />
+      ))}
+      {drawing.circles?.map(([cx, cy, r]) => (
+        <Circle
+          key={`${cx},${cy}`}
+          cx={cx}
+          cy={cy}
+          r={r}
+          fill="none"
+          stroke={stroke}
+          strokeWidth={width}
+          strokeOpacity={opacity}
+        />
+      ))}
+    </>
+  );
   return (
     <Svg
-      width={K.size}
-      height={HEIGHT}
-      viewBox={TYPING_KEY_VIEWBOX}
-      style={StyleSheet.absoluteFill}
+      width={g.icon}
+      height={g.icon}
+      viewBox={`0 0 ${KEY_ICON_GRID} ${KEY_ICON_GRID}`}
+      testID={lit ? 'agent-key-legend-lit' : 'agent-key-legend'}
+      style={styles.legend}
     >
-      {children}
+      {lit && strokes(keyLit.glow, g.stroke * (g.small ? 1.8 : 2.4), g.small ? 0.3 : 0.35)}
+      {strokes(lit ? keyLit.legend : paint.legend, g.stroke)}
     </Svg>
   );
 }
 
+/** The slow breath of a key that needs your OK, on the UI thread; still when nothing should move. */
+function Pulse({ children }: { children: ReactNode }) {
+  const moving = useMoving(false);
+  const glow = useSharedValue(1);
+  useEffect(() => {
+    if (!moving) {
+      cancelAnimation(glow);
+      glow.set(1);
+      return;
+    }
+    glow.set(
+      withRepeat(
+        withTiming(KEY_PULSE_LOW, {
+          duration: KEY_PULSE_MS / 2,
+          easing: Easing.inOut(Easing.quad),
+        }),
+        -1,
+        true
+      )
+    );
+    return () => cancelAnimation(glow);
+  }, [glow, moving]);
+  const style = useAnimatedStyle(() => ({ opacity: glow.value }));
+  return (
+    <Animated.View testID="agent-key-pulse" style={style}>
+      {children}
+    </Animated.View>
+  );
+}
+
+/** The switch stem left when the cap is off: a cross with a hard drop under it. */
+function Stem({ g, fill, shadow }: { g: KeyGeometry; fill: string; shadow: string }) {
+  const bar = (color: string, dy: number) => (
+    <>
+      <View
+        style={{
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: (g.stem - g.arm) / 2 + dy,
+          height: g.arm,
+          backgroundColor: color,
+        }}
+      />
+      <View
+        style={{
+          position: 'absolute',
+          top: dy,
+          bottom: -dy,
+          left: (g.stem - g.arm) / 2,
+          width: g.arm,
+          backgroundColor: color,
+        }}
+      />
+    </>
+  );
+  return (
+    <View testID="agent-key-stem" style={{ width: g.stem, height: g.stem }}>
+      {bar(shadow, g.stemDrop)}
+      {bar(fill, 0)}
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
-  key: { width: K.size, height: HEIGHT },
-  drop: { position: 'absolute', left: 0, right: 0, top: 0 },
+  shine: { position: 'absolute', top: 0, left: 0, right: 0, height: StyleSheet.hairlineWidth },
+  legend: { overflow: 'visible' },
+  pips: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'center' },
 });

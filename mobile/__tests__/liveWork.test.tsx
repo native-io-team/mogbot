@@ -32,8 +32,8 @@ jest.mock('../src/components/Shimmer', () => ({
 jest.mock('../src/components/AgentKey', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
   return {
-    AgentKey: ({ pressing }: { pressing: boolean }) => (
-      <View testID="key-cap" accessibilityState={{ busy: pressing }} />
+    AgentKey: ({ state }: { state: string }) => (
+      <View testID="key-cap" accessibilityState={{ busy: state === 'working' }} />
     ),
   };
 });
@@ -203,7 +203,7 @@ describe('the live step', () => {
     expect(screen.queryByText('5:00')).toBeNull();
     expect(screen.queryByText('Show output')).toBeNull();
     expect(screen.queryByTestId('typing-dots')).toBeNull();
-    // Gone quiet, the key rests rather than being typed on.
+    // Gone quiet, the key rests rather than staying pressed.
     expect(screen.getByTestId('key-cap').props.accessibilityState).toEqual({ busy: false });
     await fireEvent.press(screen.getByText('Check on it'));
     expect(

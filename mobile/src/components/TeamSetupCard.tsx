@@ -46,8 +46,9 @@ import {
   stepHint,
   stepTitle,
 } from '../lib/teamSetup';
-import { iconSize, space, PRESSED } from '../lib/theme';
-import { AgentAvatar, Spinner } from './agent';
+import { iconSize, keySize, space, PRESSED } from '../lib/theme';
+import { Spinner } from './agent';
+import { AgentKey } from './AgentKey';
 import { Card, CardActions, Line } from './surfaces';
 import { Button, Icon, T } from './ui';
 import { NeedRow, TeamLoginsList } from './teamLogins';
@@ -319,7 +320,7 @@ function StepItems({
             const word = helloWord(a);
             return (
               <View key={a.agentId} style={styles.item} testID={`hello-${a.state}`}>
-                <AgentAvatar id={a.agentId} name={a.agentName} color={a.color} />
+                <AgentKey id={a.agentId} name={a.agentName} color={a.color} size={keySize.sm} />
                 <T variant="small" color={colors.textStrong} style={{ flex: 1 }}>
                   {a.agentName}
                 </T>

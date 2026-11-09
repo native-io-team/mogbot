@@ -9,13 +9,7 @@
  */
 
 import { shareStructure } from '../../../lib/structure';
-import {
-  CHIEF_LOOK,
-  teamLine,
-  workingCount,
-  type Agent,
-  type RoomView,
-} from '@shipstudio/companion-protocol';
+import { teamLine, workingCount, type Agent, type RoomView } from '@shipstudio/companion-protocol';
 import { Stack, useRouter } from 'expo-router';
 import { type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { takeExitNotice } from '../../../lib/crash';
@@ -33,7 +27,7 @@ import { useArrivedKeys } from '../../../lib/arrivals';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HeaderHeightContext } from 'expo-router/react-navigation';
 import { useShallow } from 'zustand/react/shallow';
-import { AgentAvatar } from '../../../components/agent';
+import { AgentKey } from '../../../components/AgentKey';
 import { AgentRow } from '../../../components/AgentRow';
 import { ImportChoiceCard } from '../../../components/ImportChoiceCard';
 import { RoomRow } from '../../../components/RoomRow';
@@ -66,8 +60,7 @@ import { useRefresh } from '../../../lib/refresh';
 import { RefreshStatus } from '../../../components/RefreshStatus';
 import { largeTitle } from '../../../lib/navigation';
 import {
-  agentColorKeys,
-  avatarSize,
+  keySize,
   chromeScale,
   depthOf,
   iconSize,
@@ -641,12 +634,7 @@ function Empty({ hasOverview, macName }: { hasOverview: boolean; macName: string
       <Animated.View entering={FadeIn.duration(200)} style={styles.emptyCentered}>
         {/* The brand's key, blank and waiting: the first one is yours to make. */}
         <View style={styles.emptyMark}>
-          <AgentAvatar
-            name=""
-            color={agentColorKeys.all[0]}
-            look={CHIEF_LOOK}
-            size={avatarSize.sheet}
-          />
+          <AgentKey state="new" size={keySize.xl} />
         </View>
         <T variant="title" color={colors.textStrong} style={styles.centerText}>
           No agents yet

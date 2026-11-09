@@ -1399,7 +1399,7 @@ const LIVE = [
       await sleep(500);
     },
     check:
-      'The avatar tapped: a row of eight shapes and a row of ten faces, each a small avatar in its colour, the current one ringed in a neutral grey; the colour swatches under them',
+      'The key tapped: a row of eight small keys, one per colourway, a row of the icons on keys in its colourway, and a row of free keyboard keys (its own ringed); the current choice in each ringed in a neutral grey. The big key at the top shows its sublegend and pips',
   },
   {
     name: 'agent-sheet-level',
@@ -1536,7 +1536,8 @@ const LIVE = [
       await page.clickLabel('Read only').catch(() => {});
       await sleep(800);
     },
-    check: 'After Read only on Gmail: the Gmail row is gone (the Mac answered with the narrowed view); everything else as before',
+    check:
+      'After Read only on Gmail: the Gmail row is gone (the Mac answered with the narrowed view); everything else as before',
   },
   {
     name: 'on-its-own-team',
@@ -1550,7 +1551,8 @@ const LIVE = [
     name: 'agent-sheet-on-its-own-row',
     route: '/agent/fin',
     ready: 'Finance',
-    check: 'Finance’s sheet: “What it does on its own” with a shield, among Instructions, Memory and Files',
+    check:
+      'Finance’s sheet: “What it does on its own” with a shield, among Instructions, Memory and Files',
   },
   {
     name: 'settings-apps',
@@ -1992,45 +1994,34 @@ const dotFrames =
   };
 
 /**
- * A close-up sequence of the working line's key: `count` frames `gapMs`
- * apart (about one period of TYPING_KEY's tap, tap, rest), plus how far the
- * top sits down in each, so "it clicks down and springs back" is a number as
- * well as a picture.
+ * A close-up of the working line's key: the agent's own key, pressed (down
+ * and on a shallow depth) while it works, and how far its cap sits below
+ * its box's top, so "it's pressed" is a number as well as a picture.
  */
-const keyFrames =
-  (name, count = 24, gapMs = 100) =>
-  async (page, theme) => {
-    const sel = '[data-testid="agent-key"]';
-    const box = await page.eval(`(() => {
-    const el = document.querySelector(${JSON.stringify(sel)});
+const keyFrames = (name) => async (page, theme) => {
+  const box = await page.eval(`(() => {
+    const el = document.querySelector('[data-testid="agent-key-cap-working"]')?.parentElement;
     if (!el) return null;
     const r = el.getBoundingClientRect();
     return { x: r.x - 8, y: r.y - 8, width: r.width + 16, height: r.height + 16, scale: 4 };
   })()`);
-    if (!box) throw new Error('no typing key on screen');
-    const readings = [];
-    for (let f = 0; f < count; f++) {
-      const file = `${name}-${theme}-key${String(f).padStart(2, '0')}`;
-      await page.screenshot(path.join(OUT, `${file}.png`), box);
-      readings.push(
-        await page.eval(`(() => {
-          const key = document.querySelector(${JSON.stringify(sel)}).getBoundingClientRect();
-          const top = document.querySelector('[data-testid="agent-key-top"]').getBoundingClientRect();
-          return (top.y - key.y).toFixed(1);
-        })()`)
-      );
-      await sleep(gapMs);
-    }
-    shots.push({
-      name: `${name}-${theme}-key`,
-      route: '(in place)',
-      theme,
-      check: `The agent as a key, ${count} frames ${gapMs} ms apart (key00…key${count - 1}); the top's drop in px per frame: ${readings.join(' ')}. It must go down to the travel and back, twice, then rest.`,
-      errors: [],
-      clipped: [],
-    });
-    log('frames', `${name} key`, theme);
-  };
+  if (!box) throw new Error('no working key on screen');
+  const file = `${name}-${theme}-key`;
+  await page.screenshot(path.join(OUT, `${file}.png`), box);
+  const down = await page.eval(`(() => {
+    const cap = document.querySelector('[data-testid="agent-key-cap-working"]');
+    return (cap.getBoundingClientRect().y - cap.parentElement.getBoundingClientRect().y).toFixed(1);
+  })()`);
+  shots.push({
+    name: file,
+    route: '(in place)',
+    theme,
+    check: `The agent's key on the working line, pressed: its cap sits ${down}px down in its box (the small key's press, 2 of 30), on a thin depth, in its own colourway and legend. Nothing moves.`,
+    errors: [],
+    clipped: [],
+  });
+  log('frames', `${name} key`, theme);
+};
 
 /** `--live-work`: what agents are doing, live (QA 2 on Cypress, Finance gone quiet). */
 const LIVE_WORK = [
@@ -2040,7 +2031,7 @@ const LIVE_WORK = [
     ready: 'QA 2',
     settle: 2500,
     check:
-      'QA 2: a slowly breathing ring in its colour around the avatar, “Running the Cypress tests · 5m”; Finance: ring, “No progress for 5 min”; no spinner beside either',
+      'QA 2: its key pressed (working), “Running the Cypress tests · 5m”; Finance: pressed, “No progress for 5 min”; no spinner beside either',
   },
   {
     name: 'live-step',
@@ -2107,7 +2098,7 @@ const IMPORTING = [
     ready: 'Designer',
     settle: 2500,
     check:
-      'Under the last message, one line: Designer as a key (its avatar, raised, a darker side under it) clicking down and springing back, then “Checking the button tokens” breathing gently and a muted count and time. No dots: the key says it’s working',
+      'Under the last message, one line: Designer’s key, pressed (down on a thin depth), then “Checking the button tokens” breathing gently and a muted count and time. No dots: the key says it’s working',
     frames: keyFrames('typing'),
   },
   {

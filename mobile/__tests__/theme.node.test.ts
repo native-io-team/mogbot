@@ -5,11 +5,14 @@
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { COLORWAYS } from '@shipstudio/companion-protocol';
 import { join, relative } from 'node:path';
 import {
   agentTints,
   APPEARANCES,
-  avatarSize,
+  keyColorways,
+  keyNeutrals,
+  keySize,
   contrast,
   iconSize,
   luminance,
@@ -238,6 +241,8 @@ describe('the scale', () => {
       /^[\w.]+ \/ 2$/,
       /^squircle\([\w.]+\)$/,
       /^composer\.(corner|fieldCorner)$/,
+      // An agent key's corners: its geometry, the desk's (lib/agentKey.ts).
+      /^g\.(corner|faceCorner|housingCorner)$/,
     ];
     const found: string[] = [];
     for (const { at, line } of sourceLines()) {
@@ -268,11 +273,46 @@ describe('the scale', () => {
     expect(found).toEqual([]);
   });
 
-  it('has the four icon sizes and one exception, and the avatar sizes, as the spec sets them', () => {
+  it('has the four icon sizes and one exception, and the desk’s key sizes, as the spec sets them', () => {
     expect(iconSize).toEqual({ micro: 10, inline: 12, body: 16, button: 20, hero: 28 });
-    expect(avatarSize).toEqual({ line: 16, group: 24, header: 28, list: 48, sheet: 56 });
+    // agent-key.css: --agent-key-size-xs … -xl.
+    expect(keySize).toEqual({ xs: 16, sm: 20, md: 30, lg: 44, xl: 112 });
     // A well's corner is tighter than its card's, so the two read as nested.
     expect(radius.inner).toBeLessThan(radius.card);
+  });
+});
+
+describe('agent keys', () => {
+  it('draw the shared colourways value for value (agent-keys.json)', () => {
+    expect(Object.keys(keyColorways)).toEqual(COLORWAYS.map((c) => c.id));
+    for (const c of COLORWAYS) {
+      expect([c.id, keyColorways[c.id]]).toEqual([
+        c.id,
+        {
+          face: c.face.toLowerCase(),
+          skirt: c.skirt.toLowerCase(),
+          depth: c.depth.toLowerCase(),
+          legend: c.legend.toLowerCase(),
+        },
+      ]);
+    }
+  });
+
+  it('print each legend at 4.5:1 or better on its face', () => {
+    for (const [id, k] of Object.entries(keyColorways)) {
+      expect([id, contrast(k.legend, k.face) >= 4.5]).toEqual([id, true]);
+    }
+  });
+
+  it('give the socket and shadow under a key in both appearances', () => {
+    expect(Object.keys(keyNeutrals.light).sort()).toEqual(Object.keys(keyNeutrals.dark).sort());
+    for (const appearance of APPEARANCES) {
+      for (const [role, value] of Object.entries(keyNeutrals[appearance])) {
+        if (typeof value === 'number') continue;
+        expect([role, COLOUR.test(value)]).toEqual([role, true]);
+      }
+    }
+    expect(luminance(keyNeutrals.light.socket)).toBeGreaterThan(luminance(keyNeutrals.dark.socket));
   });
 });
 

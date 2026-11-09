@@ -35,8 +35,8 @@ jest.mock('../src/lib/persist', () => ({
   removeJson: () => Promise.resolve(),
   debounced: () => ({ schedule: () => {}, flush: () => Promise.resolve() }),
 }));
-// The avatar animates on Reanimated's native half; a row needs only its name.
-jest.mock('../src/components/agent', () => ({ AgentAvatar: () => null }));
+// A key pulses on Reanimated's native half; a row needs only its name.
+jest.mock('../src/components/AgentKey', () => ({ AgentKey: () => null }));
 
 const inbox = agent({ id: 'inbox', name: 'Inbox', hidden: false });
 

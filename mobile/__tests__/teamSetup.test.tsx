@@ -29,9 +29,10 @@ jest.mock('../src/lib/session', () => ({
     hello: (...a: unknown[]) => (calls.push(['hello', ...a]), Promise.resolve({})),
     missing: () => (calls.push(['missing']), Promise.resolve({})),
     dismiss: () => (calls.push(['dismiss']), Promise.resolve(null)),
-    later: (...a: unknown[]) =>
-      (calls.push(['later', ...a]),
-      Promise.resolve(a[1] === 'connect' ? { agentId: 'finance', requestId: 'q9' } : null)),
+    later: (...a: unknown[]) => (
+      calls.push(['later', ...a]),
+      Promise.resolve(a[1] === 'connect' ? { agentId: 'finance', requestId: 'q9' } : null)
+    ),
     check: () => (calls.push(['check']), Promise.resolve(2)),
   },
 }));
@@ -40,8 +41,9 @@ jest.mock('../src/lib/haptics', () => ({
 }));
 jest.mock('../src/components/agent', () => {
   const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
-  return { AgentAvatar: () => null, Spinner: () => <Text>spinner</Text> };
+  return { Spinner: () => <Text>spinner</Text> };
 });
+jest.mock('../src/components/AgentKey', () => ({ AgentKey: () => null }));
 
 // The Mac's own answer, as `cargo test --lib companion::fixtures` serialized it:
 // logins open, routines skipped, missing done, hello open with every state.
@@ -140,7 +142,9 @@ describe('Setting up your team', () => {
 describe('what the team can already reach', () => {
   it('leaves only what the Mac could not reach, each with one button and Not needed', async () => {
     await show(view());
-    expect(screen.getByText('Your team is ready. 2 things I couldn’t reach on this Mac:')).toBeTruthy();
+    expect(
+      screen.getByText('Your team is ready. 2 things I couldn’t reach on this Mac:')
+    ).toBeTruthy();
     expect(screen.getByTestId('reach-open-linkedin')).toBeTruthy();
     expect(screen.getByTestId('reach-open-other:bankline')).toBeTruthy();
     expect(screen.queryByTestId('reach-open-figma')).toBeNull();
