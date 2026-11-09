@@ -328,3 +328,50 @@ fn a_settings_card_waits_for_the_user() {
         }
     }
 }
+
+/// "Do these under your name?" is often the user's own ask, typed from the
+/// phone just before it went away: it stays up through its turn ending,
+/// any number of looks and a restart, until they answer it.
+#[test]
+fn a_plan_card_stays_up_until_it_is_answered() {
+    with_root(|| {
+        let a = agent();
+        let now = store::now_ms();
+        let plan = crate::agents::plan_grant::parse(&json!({
+            "actions": [
+                { "kind": "pull_request", "target": "acme/site", "summary": "Open the pricing PR" }
+            ]
+        }))
+        .unwrap();
+        let mut card = super::super::mcp::new_card(
+            "p1".into(),
+            crate::agents::plan_grant::TITLE.into(),
+            crate::agents::plan_grant::card_detail(&plan),
+            None,
+        );
+        card.plan = Some(plan);
+        assert!(stays_open(&card));
+        post(&a.id, card, now);
+        let much_later = now + 10 * (CARD_EXPIRY_SECS as i64) * 1000;
+        for moment in [Moment::TurnEnded, Moment::Tick, Moment::Launch] {
+            assert!(sweep_store(&a.id, moment, much_later, &|_| false).is_empty());
+        }
+        assert_eq!(status(&a.id, "p1"), (ApprovalStatus::Pending, None));
+        assert_eq!(store::get(&a.id).unwrap().pending_approvals, 1);
+        // Nothing about it is remembered as expired: asking again is allowed.
+        let key = key_for(&store::find_approval(&a.id, "p1").unwrap().unwrap());
+        assert!(!already_expired(&a.id, &key));
+        // The same plan asked again while it's up finds it (no second card).
+        assert!(super::super::mcp::open_card_for(&a.id, &key));
+        assert!(!super::super::mcp::open_card_for(
+            &a.id,
+            "ask:another plan\n1. x"
+        ));
+        // An ordinary card beside it still closes.
+        post(&a.id, bash_card("r1", "npm test"), now);
+        assert_eq!(
+            sweep_store(&a.id, Moment::TurnEnded, now, &|_| true).len(),
+            1
+        );
+    });
+}
