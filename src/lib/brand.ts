@@ -43,6 +43,16 @@ export interface Brand {
   appDirName: string;
   repository: string | null;
   companion: { scheme: string; bundleId: string; tailnetPort: number };
+  /**
+   * The app's identity before its last rename, read only by the Rust-side
+   * one-time migration that carries old state over. Never shown.
+   */
+  previous?: {
+    name: string | null;
+    slug: string | null;
+    identifier: string | null;
+    appDirName: string | null;
+  };
   links: BrandLinks;
   /** The app's Chrome extension: its Web Store id once listed, else null. */
   chromeExtension?: { webStoreId: string | null };

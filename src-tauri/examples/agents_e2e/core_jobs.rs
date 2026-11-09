@@ -122,7 +122,7 @@ async fn delegate(h: &H) -> Check {
     no_errors(&filer.id)
 }
 
-const CHAIN: &str = "mkdir -p work/logs && printf 'alpha\\n' > work/a.txt && ls work && for i in 1 2 3; do echo \"line $i\" >> work/n.txt; done && echo chain-ok > \"${TMPDIR:-/tmp}/dashbot-e2e-chain.log\" && cat work/n.txt";
+const CHAIN: &str = "mkdir -p work/logs && printf 'alpha\\n' > work/a.txt && ls work && for i in 1 2 3; do echo \"line $i\" >> work/n.txt; done && echo chain-ok > \"${TMPDIR:-/tmp}/mogbot-e2e-chain.log\" && cat work/n.txt";
 
 /// (b) and (c) A local command chain: none of it asks at Go hard; at "Check
 /// with me often" it does (each card is allowed, so it still finishes).

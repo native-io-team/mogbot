@@ -16,7 +16,7 @@ import { FLOW_STORAGE_KEY, type FlowStep } from '../../lib/onboardingFlow';
 
 const DNS = 'studio-mac.tail1234.ts.net';
 const LOGIN = 'sam@example.com';
-const MASKED = `https://${DNS}/dashbot/mcp/3f9c••••••••`;
+const MASKED = `https://${DNS}/mogbot/mcp/3f9c••••••••`;
 const MIN = 60_000;
 
 const at = (step: FlowStep) => ({
@@ -344,7 +344,7 @@ export const onboardingFlowScenarios: Scenario[] = [
     'onboarding-phone-app',
     'phoneApp',
     '4c. Get the phone app',
-    '"Your phone · 3 of 4". "Get the Dashbot app on your phone", one line that this Mac builds it (no App Store yet), two big answers "iPhone" and "Android", and a quiet "I already have the app".',
+    '"Your phone · 3 of 4". "Get the Mogbot app on your phone", one line that this Mac builds it (no App Store yet), two big answers "iPhone" and "Android", and a quiet "I already have the app".',
     {}
   ),
   flow(
@@ -491,7 +491,7 @@ export const onboardingFlowScenarios: Scenario[] = [
     'onboarding-import-connect',
     'importConnect',
     '5b. Add the link to your assistant',
-    '"Ready · 2 of 3". "Add the link to your assistant", one line (a custom connector named Dashbot), a note that the link is a key and never shown, a spinner "Waiting for you to copy the link…", and a big "Copy link".',
+    '"Ready · 2 of 3". "Add the link to your assistant", one line (a custom connector named Mogbot), a note that the link is a key and never shown, a spinner "Waiting for you to copy the link…", and a big "Copy link".',
     {
       get_remote_access_status: remoteStatus({
         enabled: true,

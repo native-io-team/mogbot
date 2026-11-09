@@ -144,7 +144,7 @@ describe('a tested card on the phone', () => {
   it('opens the one-time tailnet link the Mac hands back', async () => {
     welcome(['agents.watchLive']);
     mockWatchLive.mockResolvedValue({
-      url: 'https://mac.example.ts.net:47464/__dashbot-watch/t',
+      url: 'https://mac.example.ts.net:47464/__mogbot-watch/t',
       expiresAt: 9,
     });
     await show();
@@ -152,7 +152,7 @@ describe('a tested card on the phone', () => {
       fireEvent.press(screen.getByText('Watch live'));
     });
     expect(mockWatchLive).toHaveBeenCalledWith(agent().id, 'run1');
-    expect(mockOpenHere).toHaveBeenCalledWith('https://mac.example.ts.net:47464/__dashbot-watch/t');
+    expect(mockOpenHere).toHaveBeenCalledWith('https://mac.example.ts.net:47464/__mogbot-watch/t');
   });
 
   it('says why when the site isn’t running on the Mac', async () => {

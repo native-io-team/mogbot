@@ -9,7 +9,7 @@ export const PROTOCOL = 1;
  * The native host Chrome starts for this extension: the app's own binary.
  * Must match `install::host_name()` (checked by `pnpm check:brand`).
  */
-export const HOST_NAME = 'io.native.dashbot.chrome_link';
+export const HOST_NAME = 'io.native.mogbot.chrome_link';
 
 /** Every op the app may ask for. */
 export const OPS = [

@@ -440,10 +440,10 @@ fn the_host_relays_both_ways_unchanged_and_tells_chrome_when_the_app_is_away() {
     drop(app_side);
 
     // The host refuses to start for anyone but the extension.
-    assert_eq!(host::run(&["dashbot".into()]), 1);
+    assert_eq!(host::run(&["mogbot".into()]), 1);
     assert_eq!(
         host::run(&[
-            "dashbot".into(),
+            "mogbot".into(),
             "chrome-extension://fcoeoabgfenejglbffodgkkbkcdhcgfn/".into()
         ]),
         1
@@ -542,4 +542,44 @@ fn the_extensions_copy_of_the_protocol_matches() {
             "protocol.js doesn't send {code}"
         );
     }
+}
+
+#[test]
+fn the_extension_connects_to_the_host_name_the_app_installs() {
+    let js = std::fs::read_to_string(
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../chrome-extension/extension/src/protocol.js"),
+    )
+    .unwrap();
+    assert!(
+        js.contains(&format!(
+            "export const HOST_NAME = '{}';",
+            install::host_name()
+        )),
+        "protocol.js names another native host"
+    );
+}
+
+#[test]
+fn installing_the_host_removes_the_previous_names_manifest() {
+    let Some(old) = install::previous_host_name() else {
+        return;
+    };
+    let chrome = tempfile::tempdir().unwrap();
+    let hosts = chrome.path().join("NativeMessagingHosts");
+    std::fs::create_dir_all(&hosts).unwrap();
+    let stale = hosts.join(format!("{old}.json"));
+    std::fs::write(&stale, "{}").unwrap();
+    let theirs = hosts.join("com.example.other.json");
+    std::fs::write(&theirs, "{}").unwrap();
+
+    let path = install::install_host(
+        chrome.path(),
+        std::path::Path::new("/Applications/X.app/Contents/MacOS/x"),
+    )
+    .unwrap();
+    assert!(path.is_file());
+    assert_ne!(path, stale);
+    assert!(!stale.exists(), "the previous name's manifest is removed");
+    assert!(theirs.is_file(), "nobody else's is touched");
 }

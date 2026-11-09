@@ -3,7 +3,7 @@
 // (`src-tauri/src/agent_browser/page.rs`, `METHODS` and `EXPRESSIONS`; a
 // Rust test holds this file to that list).
 //
-// While the extension drives any tab Chrome shows its own bar, "Dashbot
+// While the extension drives any tab Chrome shows its own bar, "Mogbot
 // started debugging this browser". Pressing Cancel there stops every
 // agent's driving for a while (`PAUSE_MS`): the user said stop.
 

@@ -543,7 +543,7 @@ pub(crate) async fn gh_device(run: &Run) -> Result<String, CommandError> {
 mod tests {
     use super::*;
 
-    const R: &str = "dashbot-companion://oauth";
+    const R: &str = "mogbot-companion://oauth";
 
     fn table_with(flow: &str, device: &str, ttl: Duration) -> (Table<&'static str>, Instant) {
         let mut t = Table::default();

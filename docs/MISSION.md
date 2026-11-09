@@ -16,7 +16,7 @@ This is an open-source tool for professionals, on desktop and on mobile. It
 should feel like the answer to what knowledge workers need today — and it
 will keep evolving to be exactly what matters as the times change.
 
-The working name is **Dashbot** (set in `brand.json`; real branding comes
+The working name is **Mogbot** (set in `brand.json`; real branding comes
 later — never hardcode the name, and never make it prominent in the UI).
 
 ## North star: extremely complex tasks, made extremely easy
@@ -132,7 +132,7 @@ Act like it.
 - **Compatible with Ship Studio, both directions.** Either app opens
   projects made by the other: the in-project `.shipstudio/` format and the
   projects folder are shared. App state (settings, agents, Remote Access,
-  logs, keychain) is Dashbot's own, so both apps run side by side.
+  logs, keychain) is Mogbot's own, so both apps run side by side.
 - **Monochrome, coloured by your agents.** Black and white, no brand green.
   Your Chief of Staff's colour is the app's accent; open another agent and
   everything there takes that agent's colour, like Grok Bot. Semantic

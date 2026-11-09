@@ -699,7 +699,10 @@ pub async fn bring_up(app: tauri::AppHandle) -> Result<tailscale::FunnelOutcome,
     let port = start_server(app).await?;
     power::start_keep_awake()?;
     let outcome = match tailscale::status().await {
-        tailscale::TailscaleState::Connected { .. } => tailscale::enable_funnel(port).await,
+        tailscale::TailscaleState::Connected { .. } => {
+            tailscale::remove_previous_mount().await;
+            tailscale::enable_funnel(port).await
+        }
         tailscale::TailscaleState::NotInstalled => tailscale::FunnelOutcome::Failed {
             detail: "Tailscale isn't installed.".to_string(),
         },

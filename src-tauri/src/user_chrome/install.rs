@@ -24,7 +24,19 @@ use super::auth;
 /// The native host's name: reverse-DNS from the app's identifier, which is
 /// what Chrome allows (lowercase letters, digits, dots, underscores).
 pub fn host_name() -> String {
-    let base: String = crate::brand::IDENTIFIER
+    host_name_for(crate::brand::IDENTIFIER)
+}
+
+/// The host's name under the app's previous identifier (`brand.json`
+/// `previous.identifier`), whose manifest an install removes.
+pub fn previous_host_name() -> Option<String> {
+    crate::brand::previous::IDENTIFIER
+        .map(host_name_for)
+        .filter(|old| *old != host_name())
+}
+
+fn host_name_for(identifier: &str) -> String {
+    let base: String = identifier
         .to_ascii_lowercase()
         .chars()
         .map(|c| {
@@ -90,12 +102,26 @@ pub fn install_host(user_data_dir: &Path, exe: &Path) -> std::io::Result<PathBuf
     let tmp = path.with_extension("json.tmp");
     std::fs::write(&tmp, body)?;
     std::fs::rename(&tmp, &path)?;
+    remove_previous_host(user_data_dir);
     Ok(path)
 }
 
 /// Remove the host manifest (the switch turned off for good).
 pub fn remove_host(user_data_dir: &Path) {
     let _ = std::fs::remove_file(host_manifest_path(user_data_dir));
+    remove_previous_host(user_data_dir);
+}
+
+/// The manifest under the app's previous name: it names a binary that no
+/// longer answers to that name, and only ever ours.
+fn remove_previous_host(user_data_dir: &Path) {
+    if let Some(old) = previous_host_name() {
+        let _ = std::fs::remove_file(
+            user_data_dir
+                .join("NativeMessagingHosts")
+                .join(format!("{old}.json")),
+        );
+    }
 }
 
 /// The app's binary, as the host manifest names it.

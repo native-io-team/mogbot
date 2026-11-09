@@ -15,7 +15,7 @@ fn read(path: &Path) -> Value {
 fn fixture() -> (tempfile::TempDir, std::path::PathBuf, std::path::PathBuf) {
     let home = tempfile::tempdir().unwrap();
     let native = home.path().join(".claude.json");
-    let dir = home.path().join(".dashbot/accounts/acct1/claude");
+    let dir = home.path().join(".mogbot/accounts/acct1/claude");
     std::fs::create_dir_all(&dir).unwrap();
     write(
         &native,

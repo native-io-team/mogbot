@@ -24,6 +24,7 @@ import { getFullSetupStatus, type SetupItem } from './setup';
 import { getMissingOptionalTools, getMissingRequiredTools } from './agentOnboarding';
 import { useOpenModal } from '../contexts/ModalContext';
 import { logger } from './logger';
+import { BRAND } from './brand';
 
 /** Which way a project was being started, for the spinner on that button. */
 export type ProjectStart = 'create' | 'import' | 'local';
@@ -81,7 +82,11 @@ export function resetProjectToolsForTests() {
   checking = null;
 }
 
-const WITHOUT_GITHUB_KEY = 'dashbot.projectTools.withoutGitHub';
+const WITHOUT_GITHUB_KEY = `${BRAND.slug}.projectTools.withoutGitHub`;
+/** The same choice saved under the app's previous name, before a rename. */
+const PREVIOUS_WITHOUT_GITHUB_KEY = BRAND.previous?.slug
+  ? `${BRAND.previous.slug}.projectTools.withoutGitHub`
+  : null;
 
 /** The user chose "Continue without" GitHub: don't offer it on every project. */
 export function declineGitHub() {
@@ -94,7 +99,11 @@ export function declineGitHub() {
 
 function gitHubDeclined(): boolean {
   try {
-    return localStorage.getItem(WITHOUT_GITHUB_KEY) === '1';
+    if (localStorage.getItem(WITHOUT_GITHUB_KEY) === '1') return true;
+    return (
+      PREVIOUS_WITHOUT_GITHUB_KEY !== null &&
+      localStorage.getItem(PREVIOUS_WITHOUT_GITHUB_KEY) === '1'
+    );
   } catch {
     return false;
   }

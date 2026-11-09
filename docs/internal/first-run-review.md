@@ -40,7 +40,7 @@ tool, which is the opposite of OpenBot's "describe what you want" and Cowork's
 | 5 | Phone intro | "over your own Tailscale" with no word on what Tailscale is | jargon |
 | 6 | Phone | "Skip for now" here, "Skip phone setup" on every other phone screen | inconsistent word |
 | 7 | Tailscale on this Mac | Arrives showing an amber "Not done yet" before you did anything | alarming (not changed: the flow's rule is that every check says Done or Not done yet) |
-| 8 | Phone app | "Get the Dashbot app", "Build the Dashbot app" | name prominent (kept: it is the home-screen name you have to find) |
+| 8 | Phone app | "Get the Mogbot app", "Build the Mogbot app" | name prominent (kept: it is the home-screen name you have to find) |
 | 9 | Phone app, build | The embedded build panel is 520px inside a 720px column, so the agent's card wraps one word per line | broken layout |
 | 10 | Phone app, build | No Back at the top (every other screen has one); the inner back link says "Routes" | dead end, jargon |
 | 11 | Phone app, build | Xcode, CocoaPods, Command Line Tools, "Release build… bundler" | developer jargon (not changed: it is the guided build until TestFlight exists) |

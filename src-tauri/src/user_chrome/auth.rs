@@ -62,7 +62,7 @@ pub fn link_dir() -> PathBuf {
 /// Debug builds only: run the link somewhere else (the end-to-end check runs
 /// it in a scratch folder, never the app's own). Release builds ignore it,
 /// so nothing in Chrome's environment can point a real host elsewhere.
-pub const DIR_ENV: &str = "DASHBOT_CHROME_LINK_DIR";
+pub const DIR_ENV: &str = "MOGBOT_CHROME_LINK_DIR";
 
 pub fn socket_path(dir: &Path) -> PathBuf {
     dir.join("link.sock")
@@ -155,8 +155,8 @@ pub fn nonce() -> String {
     random_hex(16)
 }
 
-const APP_LABEL: &[u8] = b"dashbot-chrome-link/app/v1";
-const HOST_LABEL: &[u8] = b"dashbot-chrome-link/host/v1";
+const APP_LABEL: &[u8] = b"mogbot-chrome-link/app/v1";
+const HOST_LABEL: &[u8] = b"mogbot-chrome-link/host/v1";
 
 fn mac(token: &str, label: &[u8], first: &str, second: &str) -> HmacSha256 {
     // HMAC takes a key of any length; `new_from_slice` can't fail for it.

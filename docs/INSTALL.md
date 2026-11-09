@@ -192,7 +192,7 @@ git -C REPO rev-parse --show-toplevel && ls REPO/brand.json
 **Run**
 
 ```bash
-git clone <the repo URL you were given> dashbot && cd dashbot
+git clone <the repo URL you were given> mogbot && cd mogbot
 ```
 
 If it's a private repo and the clone asks for a password, **HUMAN:** *"The
@@ -235,10 +235,10 @@ Rust warnings during the build are expected.
 **Check**
 
 ```bash
-ls -d src-tauri/target/release/bundle/macos/Dashbot.app && plutil -extract CFBundleIdentifier raw src-tauri/target/release/bundle/macos/Dashbot.app/Contents/Info.plist
+ls -d src-tauri/target/release/bundle/macos/Mogbot.app && plutil -extract CFBundleIdentifier raw src-tauri/target/release/bundle/macos/Mogbot.app/Contents/Info.plist
 ```
 
-Expected: the path, then `io.native.dashbot`. The name comes from
+Expected: the path, then `io.native.mogbot`. The name comes from
 `brand.json`. If it has changed, look in `src-tauri/target/release/bundle/macos/`
 for the one `.app` there. If `CARGO_TARGET_DIR` is set, the bundle is under
 `$CARGO_TARGET_DIR/release/bundle/` instead.
@@ -256,7 +256,7 @@ for the one `.app` there. If `CARGO_TARGET_DIR` is set, the bundle is under
 **Run**
 
 ```bash
-osascript -e 'quit app "Dashbot"' 2>/dev/null; rm -rf /Applications/Dashbot.app && cp -R src-tauri/target/release/bundle/macos/Dashbot.app /Applications/ && codesign --force --deep --sign - /Applications/Dashbot.app && codesign --verify --deep --strict /Applications/Dashbot.app && echo SIGNATURE_OK && open /Applications/Dashbot.app
+osascript -e 'quit app "Mogbot"' 2>/dev/null; rm -rf /Applications/Mogbot.app && cp -R src-tauri/target/release/bundle/macos/Mogbot.app /Applications/ && codesign --force --deep --sign - /Applications/Mogbot.app && codesign --verify --deep --strict /Applications/Mogbot.app && echo SIGNATURE_OK && open /Applications/Mogbot.app
 ```
 
 The build signs only the program inside the bundle, so `codesign --verify`
@@ -268,7 +268,7 @@ for its phone key and secrets) sees one app. Expected: `SIGNATURE_OK`.
 **Check**
 
 ```bash
-sleep 5; pgrep -fl "Dashbot.app/Contents/MacOS" && echo RUNNING
+sleep 5; pgrep -fl "Mogbot.app/Contents/MacOS" && echo RUNNING
 ```
 
 Expected: a process line and `RUNNING`.
@@ -484,8 +484,8 @@ see 'Scan the code on your Mac'."*
 **This terminal must stay open.** In Expo Go the phone app loads its code from
 the Mac every time it starts. Tell the human: *"Leave this terminal window
 open. If you close it, the phone app stops loading. To start it again later,
-open Terminal in the dashbot folder and run `cd mobile && npx expo start --go
---lan`, then open Expo Go and tap Dashbot under Recently opened."*
+open Terminal in the mogbot folder and run `cd mobile && npx expo start --go
+--lan`, then open Expo Go and tap Mogbot under Recently opened."*
 
 What's missing in Expo Go: [What doesn't work in Expo Go](#what-doesnt-work-in-expo-go).
 
@@ -572,14 +572,14 @@ Development certificate yet, the first `xcodebuild` with
 TEAM=$(security find-certificate -c "Apple Development" -p | openssl x509 -noout -subject | sed -n 's/.*OU *= *\([A-Z0-9]*\).*/\1/p')
 echo "$TEAM"
 UDID=<the hardware UDID from xctrace above>
-export COMPANION_BUNDLE_ID=io.native.dashbot.companion.$(printf %s "$TEAM" | shasum -a 256 | cut -c1-6) APPLE_TEAM_ID=$TEAM
+export COMPANION_BUNDLE_ID=io.native.mogbot.companion.$(printf %s "$TEAM" | shasum -a 256 | cut -c1-6) APPLE_TEAM_ID=$TEAM
 cd mobile && pnpm install
 npx expo prebuild -p ios --clean
 cd ios
-xcodebuild -workspace Dashbot.xcworkspace -scheme Dashbot -configuration Release \
+xcodebuild -workspace Mogbot.xcworkspace -scheme Mogbot -configuration Release \
   -destination id=$UDID -allowProvisioningUpdates -derivedDataPath build \
   DEVELOPMENT_TEAM=$TEAM CODE_SIGN_STYLE=Automatic build
-xcrun devicectl device install app --device $UDID build/Build/Products/Release-iphoneos/Dashbot.app
+xcrun devicectl device install app --device $UDID build/Build/Products/Release-iphoneos/Mogbot.app
 ```
 
 (The bundle id is the one the desktop app looks for: `companion.bundleId` from
@@ -590,12 +590,12 @@ a free Apple ID's build can't create its provisioning profile. If signing
 still names the Push Notifications capability, the `ios/` folder is from an
 older prebuild: run the prebuild again (it has `--clean`).
 
-**Check:** `xcrun devicectl device info apps --device $UDID | grep -i dashbot`
+**Check:** `xcrun devicectl device info apps --device $UDID | grep -i mogbot`
 lists the app.
 
 **HUMAN** after it installs: *"On the iPhone, open **Settings → General → VPN &
 Device Management**, tap your Apple ID under Developer App, and tap **Trust**.
-Then open the Dashbot app. Tell me when you see 'Scan the code on your Mac'."*
+Then open the Mogbot app. Tell me when you see 'Scan the code on your Mac'."*
 Until then, opening it says "Untrusted Developer". Developer Mode must stay on.
 
 **A free Apple ID's build stops opening after 7 days.** Tell the human: *"With
@@ -604,7 +604,7 @@ a free Apple ID this build stops opening after 7 days. When it does, ask me
 of docs/INSTALL.md'; you stay paired."* A paid Apple Developer account makes
 it last a year. Push still doesn't arrive on a self-build.
 
-Android: `COMPANION_BUNDLE_ID=io.native.dashbot.companion.self npx expo prebuild -p android --clean`,
+Android: `COMPANION_BUNDLE_ID=io.native.mogbot.companion.self npx expo prebuild -p android --clean`,
 then `npx expo run:android --variant release` with the phone on adb. It
 doesn't expire. Not verified on Android hardware.
 
@@ -614,7 +614,7 @@ doesn't expire. Not verified on Android hardware.
 Step 12's check says `Running`, and Step 14's check shows the phone, not
 `offline`.
 
-**HUMAN:** *"On the Mac, the app's **Get the Dashbot app on your phone**
+**HUMAN:** *"On the Mac, the app's **Get the Mogbot app on your phone**
 screen: press **I already have the app** (we just installed it). The next
 screen, **Scan this code**, turns on phone access by itself and shows a QR
 code. (Skipped the phone earlier? Settings → Agents → Phone → Pair a phone
@@ -695,7 +695,7 @@ from Grok, ChatGPT or another assistant, or start fresh?'** To bring them:
 by itself and ticks when the internet can reach this Mac (if Tailscale needs
 Funnel approved, it says so, with the page and Check again). **Add the link
 to your assistant**: press **Copy link**, and in your other assistant add a
-custom connector named Dashbot with that link; it ticks when your assistant
+custom connector named Mogbot with that link; it ticks when your assistant
 connects. **Send your assistant this message**: copy it, send it in a new
 chat, and press **Open your Chief of Staff**. The Chief asks you first:
 click **Allow**.
@@ -732,7 +732,7 @@ Expo's bundled module list, and how each one is guarded in `mobile/src/lib/`):
 | "Send to agent…" in the share sheet | No | A native share extension (`expo-share-intent`), and only in builds made with `SHIPSTUDIO_SHARE_EXTENSION=1` by a paid Apple team. Not built or tried on a device yet |
 | Dictation's on-phone recognizer | No | `expo-speech-recognition` isn't in Expo Go. The mic button points to the keyboard's own dictation instead (`src/lib/dictation.ts`) |
 | Home Screen quick actions (long-press the icon) | No | `expo-quick-actions` isn't in Expo Go. Silently off (`src/lib/quickActions.ts`) |
-| Opening pairing links from the Camera app or a message | No | Expo Go can't receive the app's own `dashbot-companion://` scheme. Scan from inside the app instead |
+| Opening pairing links from the Camera app or a message | No | Expo Go can't receive the app's own `mogbot-companion://` scheme. Scan from inside the app instead |
 | App name and icon on the Home Screen | No | It lives inside Expo Go |
 | Over-the-air updates, "Restart to update" | No | `expo-updates` is off in Expo Go. Pulling the repo updates it |
 | Working without the Mac's dev server | No | Expo Go loads the code from `expo start` on the Mac each time |
@@ -770,7 +770,7 @@ pairing), so don't run both at once.
 ### Sharing the build
 
 `pnpm tauri build` (without `--bundles app`) also makes
-`src-tauri/target/release/bundle/dmg/Dashbot_<version>_<arch>.dmg`. It's
+`src-tauri/target/release/bundle/dmg/Mogbot_<version>_<arch>.dmg`. It's
 **unsigned** (ad-hoc signed only), so on another Mac Gatekeeper blocks it.
 On macOS 15 and later, right-click → Open no longer gets around it; the other
 person has to use System Settings (below). Better: have them build it
@@ -824,7 +824,7 @@ closed, Vite crashed, or it's on a different port. Check the dev terminal for
 errors, and `curl -s http://127.0.0.1:1420 | head -3`. Restart
 `pnpm tauri dev`. In a built `.app` it shouldn't happen: quit it (⌘Q) and open
 it again; if it persists, rebuild (Step 8) and report it as a bug with
-`~/Library/Logs/Dashbot/`.
+`~/Library/Logs/Mogbot/`.
 
 In Expo Go, the phone's version of this is a red error screen or "Could not
 connect to the server": the Expo terminal (Step 15A) was closed. Start it
@@ -887,7 +887,7 @@ the human before deleting anything outside this repo:
 | pnpm's store | `pnpm store prune` | Only packages no project uses |
 | This repo's build output | Delete `src-tauri/target` and `mobile/ios/build` | The next build takes the full time again |
 
-Never delete `~/Library/Application Support/Dashbot/` or `~/ShipStudio/`:
+Never delete `~/Library/Application Support/Mogbot/` or `~/ShipStudio/`:
 those are the human's agents and projects. Beyond that, **System Settings →
 General → Storage** shows what else is large (often Photos, Messages
 attachments, old downloads); that's the human's call.
@@ -921,11 +921,11 @@ attachments, old downloads); that's the human's call.
 
 A copy built on this Mac shouldn't show this. A `.app` or `.dmg` copied from
 someone else will. Open **System Settings → Privacy & Security**, scroll to
-the message about Dashbot, click **Open Anyway**, and confirm with your
+the message about Mogbot, click **Open Anyway**, and confirm with your
 password. Or, if you trust where it came from:
 
 ```bash
-xattr -dr com.apple.quarantine /Applications/Dashbot.app
+xattr -dr com.apple.quarantine /Applications/Mogbot.app
 ```
 
 ### Agents don't answer / "no engine"
@@ -935,11 +935,11 @@ with `claude` or `codex login`, then quit and reopen the app. If the human's onl
 agent CLI is something else (Opencode, Cursor), Agents shows a "no engine"
 panel: install Claude Code or Codex.
 
-### "Dashbot wants to use your confidential information stored in … keychain"
+### "Mogbot wants to use your confidential information stored in … keychain"
 
 The app keeps its phone-pairing key and agent secrets in the Keychain. A
 locally built app has no developer signature, so after each rebuild macOS asks
-again. **HUMAN:** *"macOS is asking whether Dashbot can use the Keychain.
+again. **HUMAN:** *"macOS is asking whether Mogbot can use the Keychain.
 Please type your Mac password and click Always Allow."* If you click Deny, the
 Phone panel won't offer a pairing code ("unlock your Mac").
 
@@ -950,5 +950,5 @@ app stops agents too.
 
 ### Where the logs are
 
-`~/Library/Logs/Dashbot/`. App data: `~/Library/Application Support/Dashbot/`.
+`~/Library/Logs/Mogbot/`. App data: `~/Library/Application Support/Mogbot/`.
 Projects: `~/ShipStudio/` (shared with Ship Studio).

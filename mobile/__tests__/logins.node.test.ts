@@ -338,7 +338,7 @@ describe('login cards against the mock Mac', () => {
       requestId: 'req_login_linear',
       optionId: 'oauth',
     });
-    expect(begun.redirectUri).toBe('dashbot-companion://oauth');
+    expect(begun.redirectUri).toBe('mogbot-companion://oauth');
     expect((await card('design', 'req_login_linear')).approval!.login!.flow).toMatchObject({
       onPhone: true,
     });
@@ -353,7 +353,7 @@ describe('login cards against the mock Mac', () => {
     await expect(
       t.request('agents.loginPhoneFinish', {
         flowId: begun.flowId,
-        callbackUrl: `dashbot-companion://oauth?code=c&state=${state}`,
+        callbackUrl: `mogbot-companion://oauth?code=c&state=${state}`,
       })
     ).rejects.toBeTruthy();
     const again = await t.request('agents.loginPhoneBegin', {
@@ -364,7 +364,7 @@ describe('login cards against the mock Mac', () => {
     const s2 = new URL(again.url).searchParams.get('state');
     await t.request('agents.loginPhoneFinish', {
       flowId: again.flowId,
-      callbackUrl: `dashbot-companion://oauth?code=c&state=${s2}`,
+      callbackUrl: `mogbot-companion://oauth?code=c&state=${s2}`,
     });
     expect((await card('design', 'req_login_linear')).approval!.choice).toMatch(
       /^Connected · Linear/

@@ -100,7 +100,7 @@ fn the_preamble_names_home_paths_imports_projects_logins_and_tools() {
     let tools = tools("confirm_push and x_search");
     let text = preamble(&Arrival {
         source: GROK,
-        home: Path::new("/Users/j/Library/Application Support/Dashbot/agents/abc"),
+        home: Path::new("/Users/j/Library/Application Support/Mogbot/agents/abc"),
         imported: Some("imported/grok-bot/".into()),
         paths: &paths,
         tools: &tools,
@@ -109,7 +109,7 @@ fn the_preamble_names_home_paths_imports_projects_logins_and_tools() {
     for want in [
         "on Claude Code or Codex",
         "not in Grok Bot's sandbox",
-        "`/Users/j/Library/Application Support/Dashbot/agents/abc`",
+        "`/Users/j/Library/Application Support/Mogbot/agents/abc`",
         "/workspace/garden-redesign/ is `garden-redesign/` there",
         "none of them on this Mac: `/workspace/garden-redesign/`",
         "`imported/grok-bot/`",

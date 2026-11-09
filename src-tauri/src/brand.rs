@@ -52,13 +52,13 @@ pub fn logs_dir() -> PathBuf {
     base.unwrap_or_else(|| std::env::temp_dir().join(format!("{SLUG}-logs")))
 }
 
-/// The rolling log file prefix (`dashbot.log.2026-11-04`).
+/// The rolling log file prefix (`mogbot.log.2026-11-04`).
 pub fn log_file_prefix() -> String {
     format!("{SLUG}.log")
 }
 
 /// The prefix of every keychain service this app writes
-/// (`dashbot-account-<id>`, `dashbot-agent-<id>`).
+/// (`mogbot-account-<id>`, `mogbot-agent-<id>`).
 pub fn keychain_prefix(kind: &str) -> String {
     format!("{SLUG}-{kind}-")
 }
@@ -76,7 +76,7 @@ pub fn scoped(what: &str) -> String {
 }
 
 /// The name the preview bridge is registered under in the user's agent
-/// configs (`dashbot-preview`). Mirrored by `PREVIEW_MCP_SERVER_NAME` in
+/// configs (`mogbot-preview`). Mirrored by `PREVIEW_MCP_SERVER_NAME` in
 /// `src/lib/agentBridge.ts`.
 pub fn preview_mcp_name() -> String {
     scoped("preview")

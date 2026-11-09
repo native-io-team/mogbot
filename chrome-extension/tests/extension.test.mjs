@@ -192,7 +192,7 @@ test('the link says hello, answers requests, and reports its state', async () =>
   const { l } = link(chrome, async (op) => ({ echo: op.kind }));
   await l.connect();
   const port = chrome.runtime.ports[0];
-  assert.equal(port.name, 'io.native.dashbot.chrome_link');
+  assert.equal(port.name, 'io.native.mogbot.chrome_link');
   assert.deepEqual(port.posted[0], {
     t: 'hello',
     v: PROTOCOL,

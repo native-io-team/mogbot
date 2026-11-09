@@ -2453,7 +2453,7 @@ function reachOf(agentId: string): AgentReach {
         agentId,
         requestId,
         url: `https://linear.app/oauth/authorize?state=${phoneFlows.get(flowId)!.state}`,
-        redirectUri: 'dashbot-companion://oauth',
+        redirectUri: 'mogbot-companion://oauth',
       };
     },
     'agents.signinBegin': (p) => {
@@ -2540,7 +2540,7 @@ function reachOf(agentId: string): AgentReach {
         appSheets.delete(String(p.flowId));
         const url = typeof p.callbackUrl === 'string' ? p.callbackUrl : '';
         if (
-          !url.startsWith('dashbot-companion://oauth?') ||
+          !url.startsWith('mogbot-companion://oauth?') ||
           !url.includes(`state=${sheet.state}`)
         ) {
           appFlows.set(sheet.service, {
@@ -2568,7 +2568,7 @@ function reachOf(agentId: string): AgentReach {
           message: 'That sign-in has finished or expired. Start again from the card.',
         });
       const url = typeof p.callbackUrl === 'string' ? p.callbackUrl : '';
-      if (!url.startsWith('dashbot-companion://oauth?') || !url.includes(`state=${flow.state}`)) {
+      if (!url.startsWith('mogbot-companion://oauth?') || !url.includes(`state=${flow.state}`)) {
         return fail({
           type: 'Other',
           message: 'That isn’t this sign-in’s answer, so it was stopped. Try again.',
@@ -2725,7 +2725,7 @@ function reachOf(agentId: string): AgentReach {
         flowId,
         service,
         url: `https://${app.host}/authorize?state=${state}`,
-        redirectUri: 'dashbot-companion://oauth',
+        redirectUri: 'mogbot-companion://oauth',
       };
     },
     'agents.appsCancel': (p) => {
@@ -3502,7 +3502,7 @@ function reachOf(agentId: string): AgentReach {
           expected: true,
         });
       return {
-        url: `https://mac.example.ts.net:47464/__dashbot-watch/${'0'.repeat(64)}`,
+        url: `https://mac.example.ts.net:47464/__mogbot-watch/${'0'.repeat(64)}`,
         expiresAt: Date.now() + 60_000,
       };
     },

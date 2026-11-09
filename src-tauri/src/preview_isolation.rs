@@ -4,7 +4,7 @@
 //! ours as [`crate::brand::preview_mcp_name`], Ship Studio's as
 //! `shipstudio-preview`. Codex, Opencode and Cursor registrations are global
 //! and Claude Code's local-scope entries persist per project, so an agent
-//! started by either app sees *both*: a Dashbot agent could drive the preview
+//! started by either app sees *both*: one of our agents could drive the preview
 //! Ship Studio has focused (possibly another project), or wait on Ship
 //! Studio's server when Ship Studio is closed.
 //!
@@ -25,6 +25,10 @@
 //!   start ("invalid transport in `mcp_servers.…`").
 //! - **Opencode / Cursor:** no per-launch switch exists; their agents still see
 //!   both servers.
+//!
+//! The same goes for our own registration under the app's previous name
+//! (`<previous slug>-preview`, from `brand.json` `previous`): it names a
+//! bridge that no longer answers to that name, so our agents ignore it too.
 
 use std::path::{Path, PathBuf};
 
@@ -32,26 +36,49 @@ use std::path::{Path, PathBuf};
 /// ours: we only ever read it, never add or remove it.
 pub const SHIP_STUDIO_PREVIEW_MCP: &str = "shipstudio-preview";
 
-/// The Claude Code flag that hides Ship Studio's preview tools.
-pub fn claude_flag() -> String {
-    format!("--disallowedTools=mcp__{SHIP_STUDIO_PREVIEW_MCP}")
+/// Preview servers in shared agent configs that our agents must ignore:
+/// Ship Studio's, and ours under the app's previous name.
+pub fn foreign_servers() -> Vec<String> {
+    let mut out = vec![SHIP_STUDIO_PREVIEW_MCP.to_string()];
+    if let Some(slug) = crate::brand::previous::SLUG {
+        let old = format!("{slug}-preview");
+        if old != crate::brand::preview_mcp_name() && old != SHIP_STUDIO_PREVIEW_MCP {
+            out.push(old);
+        }
+    }
+    out
 }
 
-/// The Codex `-c` value that disables Ship Studio's preview server, when the
-/// Codex config at `codex_home` (or the project's `.codex/config.toml`)
-/// actually declares it.
-pub fn codex_override(codex_home: Option<&Path>, project: Option<&Path>) -> Option<String> {
-    let declared = |path: PathBuf| {
-        std::fs::read_to_string(path)
-            .map(|text| declares_server(&text, SHIP_STUDIO_PREVIEW_MCP))
-            .unwrap_or(false)
-    };
+/// The Claude Code flag that hides those servers' tools (one flag, the
+/// names comma-separated, which Claude Code accepts).
+pub fn claude_flag() -> String {
+    let tools: Vec<String> = foreign_servers()
+        .iter()
+        .map(|name| format!("mcp__{name}"))
+        .collect();
+    format!("--disallowedTools={}", tools.join(","))
+}
+
+/// The Codex `-c` values that disable each of [`foreign_servers`], for those
+/// the Codex config at `codex_home` (or the project's `.codex/config.toml`)
+/// actually declares.
+pub fn codex_overrides(codex_home: Option<&Path>, project: Option<&Path>) -> Vec<String> {
     let home = codex_home
         .map(Path::to_path_buf)
         .or_else(crate::agents::codex::codex_home);
-    let in_home = home.is_some_and(|h| declared(h.join("config.toml")));
-    let in_project = project.is_some_and(|p| declared(p.join(".codex").join("config.toml")));
-    (in_home || in_project).then(|| format!("mcp_servers.{SHIP_STUDIO_PREVIEW_MCP}.enabled=false"))
+    let texts: Vec<String> = [
+        home.map(|h| h.join("config.toml")),
+        project.map(|p| p.join(".codex").join("config.toml")),
+    ]
+    .into_iter()
+    .flatten()
+    .filter_map(|path: PathBuf| std::fs::read_to_string(path).ok())
+    .collect();
+    foreign_servers()
+        .into_iter()
+        .filter(|name| texts.iter().any(|t| declares_server(t, name)))
+        .map(|name| format!("mcp_servers.{name}.enabled=false"))
+        .collect()
 }
 
 /// Arguments to put in front of an agent CLI's own, by our agent id.
@@ -67,9 +94,10 @@ pub fn spawn_args(
     }
     match agent_id {
         "claude-code" => vec![claude_flag()],
-        "codex" => codex_override(codex_home, project)
-            .map(|value| vec!["-c".to_string(), value])
-            .unwrap_or_default(),
+        "codex" => codex_overrides(codex_home, project)
+            .into_iter()
+            .flat_map(|value| ["-c".to_string(), value])
+            .collect(),
         _ => Vec::new(),
     }
 }
@@ -120,7 +148,7 @@ mod tests {
     #[test]
     fn ignores_lookalikes_and_comments() {
         for toml in [
-            "[mcp_servers.dashbot-preview]\nurl = \"x\"",
+            "[mcp_servers.someone-preview]\nurl = \"x\"",
             "# [mcp_servers.shipstudio-preview]",
             "[mcp_servers.shipstudio-preview.env]\nA = \"b\"",
             "[mcp_servers.shipstudio-preview-old]",
@@ -150,6 +178,28 @@ mod tests {
     }
 
     #[test]
+    fn our_registration_under_the_previous_name_is_ignored_too() {
+        let Some(slug) = crate::brand::previous::SLUG else {
+            return;
+        };
+        let old = format!("{slug}-preview");
+        assert!(foreign_servers().contains(&old));
+        assert!(!foreign_servers().contains(&crate::brand::preview_mcp_name()));
+        assert!(claude_flag().contains(&format!(",mcp__{old}")));
+
+        let home = tempfile::tempdir().unwrap();
+        std::fs::write(
+            home.path().join("config.toml"),
+            format!("[mcp_servers.{old}]\nurl = \"http://127.0.0.1:1\"\n"),
+        )
+        .unwrap();
+        assert_eq!(
+            codex_overrides(Some(home.path()), None),
+            vec![format!("mcp_servers.{old}.enabled=false")]
+        );
+    }
+
+    #[test]
     fn a_project_level_codex_config_counts() {
         let home = tempfile::tempdir().unwrap();
         let project = tempfile::tempdir().unwrap();
@@ -168,7 +218,9 @@ mod tests {
     #[test]
     fn claude_always_gets_the_deny_in_equals_form() {
         let args = spawn_args("claude-code", None, None);
-        assert_eq!(args, vec!["--disallowedTools=mcp__shipstudio-preview"]);
+        assert_eq!(args, vec![claude_flag()]);
+        assert!(claude_flag().starts_with("--disallowedTools=mcp__shipstudio-preview"));
+        assert!(!claude_flag().contains(' '), "one argument, no spaces");
         assert!(spawn_args("opencode", None, None).is_empty());
         assert!(spawn_args("terminal", None, None).is_empty());
     }

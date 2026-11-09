@@ -1,4 +1,4 @@
-# Dashbot Development Guidelines
+# Mogbot Development Guidelines
 
 > **Setting this up for a user?** Follow [docs/INSTALL.md](docs/INSTALL.md) step by step: every
 > step has a command, a check and what to tell the human. Don't improvise the setup.
@@ -11,7 +11,7 @@
 > or publishing as them, pushing, deleting their data, or touching credentials. When they go
 > somewhere it is clear where and as whom. Every setting is changeable from chat. Judge every
 > change by: does this make a hard task easier, with less of the user's attention?
-> Dashbot is the working name (it lives only in `brand.json`; see "Brand and identity"). It is
+> Mogbot is the app's name (it lives only in `brand.json`; see "Brand and identity"). It is
 > the evolution of Ship Studio: an open-source app for running your own team of AI agents, on
 > desktop and phone. Grok Bot's experience, on Claude Code and Codex on your own machine, with
 > Ship Studio's project workspace underneath. Not a coding tool. Much of the codebase (and the
@@ -36,7 +36,7 @@ Chief of Staff (see "Agents Flow", [docs/agents.md](docs/agents.md)):
 - **Usage awareness** - Every account's limits are read without a turn every 10 minutes (`agents/usage_read.rs`) and shown as total compute across accounts (room now, soonest reset, a labelled run-out estimate; `agents/compute.rs`); agents read them, other compute on this Mac, and *labelled* estimates from past runs (`usage_overview`, `forecast_usage`); the user picks Normal, Save my limits or Use it all before reset, which spends expiring capacity on a spare-capacity list (see docs/agents.md, "Usage awareness")
 - **Routines** - On a schedule (one picker on desk and phone), or **"When…"** something happens: GitHub mentions/assignments, new files in a folder, or a connector check that runs sealed (read-only tools, no shell or files), with caps and an approval before it changes the team. A time routine can run **in steps** (`agents/routine_steps.rs`): a step marked "your OK first" waits on an "OK to go on?" card showing what the step before made; Go ahead is a yes exactly as wide as that card
 - **Nothing goes silent** - A panicked, stopped or cut-off turn always ends in a line saying so, and delegators are told
-- **Slack** - Start an agent from a Slack message (`dashbot:` …) and get the answer in the thread, polled from this Mac with the user's own Slack app's token (Keychain); only the user's own messages are instructions, anyone else's is sealed outside text, and every reply waits on a "Reply in Slack?" card with the exact words unless Unleashed + the user's own message + no outside text + exact-text off (`agents/slack.rs`; docs/agents.md, "Slack")
+- **Slack** - Start an agent from a Slack message (`mogbot:` …) and get the answer in the thread, polled from this Mac with the user's own Slack app's token (Keychain); only the user's own messages are instructions, anyone else's is sealed outside text, and every reply waits on a "Reply in Slack?" card with the exact words unless Unleashed + the user's own message + no outside text + exact-text off (`agents/slack.rs`; docs/agents.md, "Slack")
 - **Phone** - The companion app (`mobile/`, [docs/mobile.md](docs/mobile.md)) is the primary way in away from the desk: chats, approvals, result cards, the timeline, and starting things (new agents, routines, dictation, Send to agent). It pairs by QR and talks to this Mac over the user's own Tailscale
 - **Import** - From Ship Studio on this Mac (a preview, then a copy), or from Grok Bot or any other assistant over Remote Access: a sealed interview that ends on one review card in the Chief's chat
 - **Settings → Agents** - The first tab: keeping this Mac on, which engine new agents start on, notifications, phone and other assistants
@@ -91,6 +91,16 @@ Chief of Staff (see "Agents Flow", [docs/agents.md](docs/agents.md)):
 - Every link is nullable. Null turns the feature off and the UI hides it (issue reporting,
   template gallery, community CTAs, updates, version rewind, phone install, PR footer,
   telemetry). Telemetry keys/DSN are compile-time: null means nothing is sent
+- **Renaming** (`previous` in `brand.json`: the name, slug, identifier and appDirName before the
+  last rename; Mogbot was Dashbot). On first launch under the new name
+  `brand_migration::run_at_startup` (first thing in `lib.rs`, before logging) moves the old
+  app-support, log, `~/.<slug>` and webview folders and the reopen-at-login item, leaves links at
+  the old app-support and `~/.<slug>` paths, rewrites old absolute paths in `agents/*.json` and
+  agents' `CLAUDE.md`, and writes a marker; never while the old app runs, never over a non-empty
+  new folder. Keychain items are carried on first read (`keychain`, "Carrying secrets over a
+  rename"); the old Funnel mount, Chrome host manifest, bundled-skill copies, preview MCP name and
+  Slack trigger are each handled where they live. Rename by changing `brand.json` and moving the
+  old values into `previous`; never hardcode an old name
 - **Ours** (derived from the brand, so this app and Ship Studio run side by side): app-support dir
   (app state, pins, agents, companion build, remote access, bridge token), logs, keychain
   prefixes, `~/.<slug>/` account homes, deep-link + pairing schemes, companion tailnet port,
@@ -106,8 +116,8 @@ Chief of Staff (see "Agents Flow", [docs/agents.md](docs/agents.md)):
   - `folders.json`, `external-projects.json`, `attached-libraries.json` — one dashboard
     organisation, whichever app you open
   - `workflows-state.json` — run history, inbox, and the `last_run_at` both schedulers decide from.
-    Giving each app its own copy made every armed workflow run twice, and Dashbot's first launch
-    fire every daily workflow Ship Studio had already run. Dashbot additionally takes a per-slot
+    Giving each app its own copy made every armed workflow run twice, and Mogbot's first launch
+    fire every daily workflow Ship Studio had already run. Mogbot additionally takes a per-slot
     claim (`workflow-claims/`, atomic create, stale after 30 min) before a scheduled run; Ship
     Studio doesn't, so a slot it is mid-way through can still be started here before it records
     the run (`commands/workflows/slot_claim.rs`)

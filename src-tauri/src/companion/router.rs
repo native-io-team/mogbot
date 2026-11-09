@@ -3079,7 +3079,7 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(begun["redirectUri"], "dashbot-companion://oauth");
+        assert_eq!(begun["redirectUri"], "mogbot-companion://oauth");
         dispatch(
             &c,
             &me,
@@ -3104,7 +3104,7 @@ mod tests {
             &me,
             "agents.loginPhoneFinish",
             json!({ "flowId": "flow1",
-                    "callbackUrl": format!("dashbot-companion://oauth?code={code}&state=s") }),
+                    "callbackUrl": format!("mogbot-companion://oauth?code={code}&state=s") }),
         )
         .await
         .unwrap();
@@ -3178,14 +3178,14 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(begun["redirectUri"], "dashbot-companion://oauth");
+        assert_eq!(begun["redirectUri"], "mogbot-companion://oauth");
         let code = "SplxlOBeZQQYbYS6WxSbIA";
         dispatch(
             &c,
             &me,
             "agents.loginPhoneFinish",
             json!({ "flowId": begun["flowId"],
-                    "callbackUrl": format!("dashbot-companion://oauth?code={code}&state=s") }),
+                    "callbackUrl": format!("mogbot-companion://oauth?code={code}&state=s") }),
         )
         .await
         .unwrap();

@@ -52,8 +52,8 @@ use super::engine::Engine;
 use super::stream::{self, Step};
 
 /// The MCP server's key in the interview's config: its tools are
-/// `mcp__dashbot_import__<name>`.
-pub const SERVER_KEY: &str = "dashbot_import";
+/// `mcp__mogbot_import__<name>`.
+pub const SERVER_KEY: &str = "mogbot_import";
 /// What the interview may call, and nothing else.
 pub const TOOLS: [&str; 5] = [
     "propose_agent",
@@ -427,7 +427,7 @@ mod tests {
         let allowed = value_after(&a, "--allowedTools").unwrap();
         assert_eq!(
             allowed,
-            "mcp__dashbot_import__propose_agent,mcp__dashbot_import__update_proposal,mcp__dashbot_import__list_agents,mcp__dashbot_import__record_area,mcp__dashbot_import__finish"
+            "mcp__mogbot_import__propose_agent,mcp__mogbot_import__update_proposal,mcp__mogbot_import__list_agents,mcp__mogbot_import__record_area,mcp__mogbot_import__finish"
         );
         // A file's path: its secret never reaches the command line.
         assert_eq!(

@@ -5,7 +5,7 @@ what has been checked. Nothing here has been uploaded or submitted; every
 step that reaches Apple is in the **Owner checklist** at the end, because it
 needs the owner's Apple account and is published under their name.
 
-The app's name is **Dashbot**, a working name (it lives only in
+The app's name is **Mogbot**, a working name (it lives only in
 `brand.json`). Whatever the final name is, change `brand.json` and run
 `pnpm check:brand --write`; the store listing below uses `<Name>` where it
 names the app.
@@ -19,7 +19,7 @@ each held by `mobile/__tests__/storeBuild.node.test.ts`:
 
 | | Store build | Self-build |
 | --- | --- | --- |
-| Bundle id | `brand.json` `companion.bundleId` (`io.native.dashbot.companion`); any `COMPANION_BUNDLE_ID` that differs **throws** | `<bundleId>.<6 hex>` (iOS) / `.self` (Android) |
+| Bundle id | `brand.json` `companion.bundleId` (`io.native.mogbot.companion`); any `COMPANION_BUNDLE_ID` that differs **throws** | `<bundleId>.<6 hex>` (iOS) / `.self` (Android) |
 | `extra.official` | true: the Mac is told `build: official`, Settings offers push | false: "Push needs the app from the App Store" |
 | Push entitlement | `aps-environment` (Xcode's App Store export makes it `production`) | none (a free team can't sign it) |
 | App Transport Security | `NSAllowsArbitraryLoads: false`, no exceptions | Expo's dev default (the mock on `localhost`) |
@@ -45,11 +45,11 @@ cd mobile
 COMPANION_STORE_BUILD=1 npx expo prebuild --platform ios --clean
 cd ios && COMPANION_STORE_BUILD=1 pod install
 COMPANION_STORE_BUILD=1 xcodebuild archive \
-  -workspace Dashbot.xcworkspace -scheme Dashbot -configuration Release \
-  -destination 'generic/platform=iOS' -archivePath /tmp/Dashbot.xcarchive \
+  -workspace Mogbot.xcworkspace -scheme Mogbot -configuration Release \
+  -destination 'generic/platform=iOS' -archivePath /tmp/Mogbot.xcarchive \
   -allowProvisioningUpdates DEVELOPMENT_TEAM=H8NN6DM6G6 CODE_SIGN_STYLE=Automatic \
   CURRENT_PROJECT_VERSION=<build number>
-xcodebuild -exportArchive -archivePath /tmp/Dashbot.xcarchive \
+xcodebuild -exportArchive -archivePath /tmp/Mogbot.xcarchive \
   -exportOptionsPlist ExportOptions.plist -exportPath /tmp/export -allowProvisioningUpdates
 ```
 
@@ -58,9 +58,9 @@ xcodebuild -exportArchive -archivePath /tmp/Dashbot.xcarchive \
 `automatic`. Then check the exported app:
 
 ```bash
-unzip -q /tmp/export/Dashbot.ipa -d /tmp/ipa
-codesign -d --entitlements :- /tmp/ipa/Payload/Dashbot.app   # aps-environment = production
-xcrun altool --validate-app -f /tmp/export/Dashbot.ipa -t ios --apiKey <key> --apiIssuer <issuer>
+unzip -q /tmp/export/Mogbot.ipa -d /tmp/ipa
+codesign -d --entitlements :- /tmp/ipa/Payload/Mogbot.app   # aps-environment = production
+xcrun altool --validate-app -f /tmp/export/Mogbot.ipa -t ios --apiKey <key> --apiIssuer <issuer>
 ```
 
 The build number must go up with every upload of 1.0.0; the marketing
@@ -81,7 +81,7 @@ certificates and profiles in the team, which is the owner's to do).
 archive -configuration Release` with signing off, on Xcode 27.2 / iOS SDK
 27.2: **ARCHIVE SUCCEEDED** (52 MB app). What the archived app holds:
 
-- `CFBundleIdentifier` `io.native.dashbot.companion`, version `1.0.0` (1),
+- `CFBundleIdentifier` `io.native.mogbot.companion`, version `1.0.0` (1),
   minimum iOS 16.4, `ITSAppUsesNonExemptEncryption` false,
   `NSAllowsArbitraryLoads` false with no exceptions.
 - No `NSFaceIDUsageDescription`, `NSBonjourServices` or
@@ -256,13 +256,13 @@ companion app.
 | 2.5.1 Public APIs | Expo SDK 58 / React Native 0.88, public frameworks only (Speech, AVFoundation, PhotosUI, UserNotifications, Security). Nothing private found in the archive's linked frameworks (see Release build). |
 | 2.5.4 Background modes | None declared. |
 | Push | `aps-environment` is in the store build. The App ID needs the Push Notifications capability (automatic signing adds it). Push stays dormant until the relay is deployed: the app asks for notification permission only when the user turns on alerts, and the Mac reports push as unavailable. |
-| Associated domains / universal links | None. Pairing uses the custom scheme `dashbot-companion://`. |
+| Associated domains / universal links | None. Pairing uses the custom scheme `mogbot-companion://`. |
 | 2.3.7 / 5.2 Trademarks | Keep "Claude", "Claude Code", "Codex", "OpenAI", "Anthropic" and "Tailscale" out of the name, subtitle and keywords; naming them as compatible software in the description is fine. |
 | 4.0 Design | The icon is placeholder art (a white ring on black, unbranded): acceptable to Apple, but the owner may want the real mark before launch. |
 
 ## Store listing (drafts, not published)
 
-**Name** (30): `<Name>`. "Dashbot" is a working name: confirm the final one,
+**Name** (30): `<Name>`. "Mogbot" is a working name: confirm the final one,
 and that it's free in App Store Connect, before creating the record.
 
 **Subtitle** (30): `Your AI agents, on your phone` (29)
@@ -345,7 +345,7 @@ a real paired Mac with fictional agents, or crop the bar.
 To take them again: build the store config for the simulator with
 `COMPANION_SCREENSHOTS=1` (only that build reads the launch argument;
 `lib/screenshots.ts`), install it, then for each screen
-`xcrun simctl launch <device> io.native.dashbot.companion -screenshotRoute /chat/inbox`
+`xcrun simctl launch <device> io.native.mogbot.companion -screenshotRoute /chat/inbox`
 and `xcrun simctl io <device> screenshot`. A link (`simctl openurl
 …://demo`) raises an "Open in …?" prompt the simulator can't tap, which is
 why the launch argument exists. Never upload a `COMPANION_SCREENSHOTS=1`
@@ -355,10 +355,10 @@ build.
 
 Only the owner can do these; each reaches Apple or speaks for the business.
 
-1. **Final name.** Confirm "Dashbot" or set the real one in `brand.json`
+1. **Final name.** Confirm "Mogbot" or set the real one in `brand.json`
    (`pnpm check:brand --write`), and check it's available in App Store
    Connect.
-2. **Bundle id.** Register `io.native.dashbot.companion` (or the final
+2. **Bundle id.** Register `io.native.mogbot.companion` (or the final
    `companion.bundleId`) in the Apple Developer account of team H8NN6DM6G6,
    with the Push Notifications capability. Automatic signing does this on
    the first `-allowProvisioningUpdates` archive.

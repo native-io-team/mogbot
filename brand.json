@@ -1,14 +1,20 @@
 {
-  "name": "Dashbot",
-  "slug": "dashbot",
-  "identifier": "io.native.dashbot",
-  "urlScheme": "dashbot",
-  "appDirName": "Dashbot",
-  "repository": "https://github.com/native-io-team/dashbot",
+  "name": "Mogbot",
+  "slug": "mogbot",
+  "identifier": "io.native.mogbot",
+  "urlScheme": "mogbot",
+  "appDirName": "Mogbot",
+  "repository": "https://github.com/native-io-team/mogbot",
   "companion": {
-    "scheme": "dashbot-companion",
-    "bundleId": "io.native.dashbot.companion",
+    "scheme": "mogbot-companion",
+    "bundleId": "io.native.mogbot.companion",
     "tailnetPort": 47463
+  },
+  "previous": {
+    "name": "Dashbot",
+    "slug": "dashbot",
+    "identifier": "io.native.dashbot",
+    "appDirName": "Dashbot"
   },
   "links": {
     "issueRepo": null,

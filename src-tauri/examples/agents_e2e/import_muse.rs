@@ -29,8 +29,8 @@ use serde_json::json;
 
 const PERSONA: &str = include_str!("../../../scripts/agents-import/muse-persona.md");
 const FACTS: &str = include_str!("../../../scripts/agents-import/muse-facts.json");
-/// Muse's MCP server name: its tools are `mcp__dashbot__<name>`.
-const SERVER: &str = "dashbot";
+/// Muse's MCP server name: its tools are `mcp__mogbot__<name>`.
+const SERVER: &str = "mogbot";
 /// A user would say "keep going" a few times, not forever.
 const MAX_NUDGES: u32 = 4;
 

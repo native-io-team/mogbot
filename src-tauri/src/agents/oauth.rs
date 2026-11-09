@@ -720,9 +720,9 @@ mod tests {
 
     #[test]
     fn a_phone_redirect_is_read_only_against_the_registered_one() {
-        let want = "dashbot-companion://oauth";
+        let want = "mogbot-companion://oauth";
         assert_eq!(
-            parse_redirect("dashbot-companion://oauth?code=c1&state=s1", want),
+            parse_redirect("mogbot-companion://oauth?code=c1&state=s1", want),
             Callback::Code {
                 code: "c1".into(),
                 state: "s1".into()
@@ -730,7 +730,7 @@ mod tests {
         );
         assert_eq!(
             parse_redirect(
-                "dashbot-companion://oauth?error=access_denied&state=s1",
+                "mogbot-companion://oauth?error=access_denied&state=s1",
                 want
             ),
             Callback::Error {
@@ -741,8 +741,8 @@ mod tests {
         // Another scheme, host or path is never read for a code.
         for other in [
             "https://evil.test/oauth?code=c1&state=s1",
-            "dashbot-companion://pair?code=c1&state=s1",
-            "dashbot-companion://oauth/elsewhere?code=c1&state=s1",
+            "mogbot-companion://pair?code=c1&state=s1",
+            "mogbot-companion://oauth/elsewhere?code=c1&state=s1",
             "other-app://oauth?code=c1&state=s1",
             "not a url",
         ] {
@@ -770,14 +770,14 @@ mod tests {
             found,
             client,
             "https://mcp.example.com",
-            "dashbot-companion://oauth",
+            "mogbot-companion://oauth",
         )
         .unwrap();
         assert!(!p.url.contains(&p.verifier));
         assert!(p.url.contains(&challenge(&p.verifier)));
         assert!(p
             .url
-            .contains("redirect_uri=dashbot-companion%3A%2F%2Foauth"));
+            .contains("redirect_uri=mogbot-companion%3A%2F%2Foauth"));
         assert!(p.url.contains(&format!("state={}", p.state)));
         assert!(!format!("{p:?}").contains(&p.verifier));
     }

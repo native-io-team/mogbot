@@ -3164,7 +3164,7 @@ export const agentsLoginStart = null satisfies Result<'agents.loginStart'>;
 export const agentsLoginPhoneBegin = {
   "agentId": "a1",
   "flowId": "flow1",
-  "redirectUri": "dashbot-companion://oauth",
+  "redirectUri": "mogbot-companion://oauth",
   "requestId": "q12",
   "url": "https://auth.linear.app/authorize?client_id=c&code_challenge=x&state=s"
 } satisfies Result<'agents.loginPhoneBegin'>;
@@ -3291,7 +3291,7 @@ export const agentsApps = {
 export const agentsAppsConnect = null satisfies Result<'agents.appsConnect'>;
 export const agentsAppsPhoneBegin = {
   "flowId": "flow2",
-  "redirectUri": "dashbot-companion://oauth",
+  "redirectUri": "mogbot-companion://oauth",
   "service": "linear",
   "url": "https://linear.app/oauth/authorize?client_id=c&code_challenge=x&state=s"
 } satisfies Result<'agents.appsPhoneBegin'>;

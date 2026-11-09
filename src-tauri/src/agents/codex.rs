@@ -196,7 +196,7 @@ pub(super) fn shared_config(
         ])
         // Ship Studio's preview server, off for this turn when it's registered:
         // an agent here drives our preview, never theirs.
-        .chain(crate::preview_isolation::codex_override(None, None))
+        .chain(crate::preview_isolation::codex_overrides(None, None))
         .chain(extra_config())
         .collect()
 }

@@ -1400,7 +1400,7 @@ impl Backend for Stub {
         Ok(
             json!({ "flowId": "flow1", "agentId": AGENT, "requestId": "q12",
                    "url": "https://auth.linear.app/authorize?client_id=c&code_challenge=x&state=s",
-                   "redirectUri": "dashbot-companion://oauth" }),
+                   "redirectUri": "mogbot-companion://oauth" }),
         )
     }
 
@@ -1656,7 +1656,7 @@ impl Backend for Stub {
             flow_id: "flow2".into(),
             service: service.into(),
             url: "https://linear.app/oauth/authorize?client_id=c&code_challenge=x&state=s".into(),
-            redirect_uri: "dashbot-companion://oauth".into(),
+            redirect_uri: "mogbot-companion://oauth".into(),
         })
         .map_err(|e| CommandError::expected(e.to_string()))
     }

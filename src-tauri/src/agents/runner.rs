@@ -6704,18 +6704,22 @@ mod tests {
             "Edit(//u/ShipStudio/**/.shipstudio/**)",
             "Edit(//ext/site/**/.git/**)",
             "Edit(//ext/site/**/.shipstudio/**)",
-            "--disallowedTools=mcp__shipstudio-preview",
+            "PREVIEW_ISOLATION",
             "--disallowedTools=SendMessage,ListAgents",
             "--model",
             "opus",
         ]
         .map(String::from)
         .to_vec();
+        let mut expected = expected;
+        for a in expected.iter_mut().filter(|a| *a == "PREVIEW_ISOLATION") {
+            *a = crate::preview_isolation::claude_flag();
+        }
         // The shell deny rules follow the file-tool ones, in the same list.
         let mut expected = expected;
         let at = expected
             .iter()
-            .position(|a| a == "--disallowedTools=mcp__shipstudio-preview")
+            .position(|a| *a == crate::preview_isolation::claude_flag())
             .unwrap();
         expected.splice(at..at, super::super::reach::claude_bash_deny_rules());
         assert_eq!(args, expected);

@@ -8,7 +8,7 @@
 //!   `--remote-debugging-pipe` with `--enable-unsafe-extension-debugging`.
 //! - The native host manifest goes into that scratch profile's own
 //!   `NativeMessagingHosts`, naming the `user_chrome_host` example.
-//! - The link runs in a scratch folder (`DASHBOT_CHROME_LINK_DIR`, honoured
+//! - The link runs in a scratch folder (`MOGBOT_CHROME_LINK_DIR`, honoured
 //!   by debug builds only), and the app's data under a scratch `HOME`.
 //!
 //! Then, through the same MCP dispatch the agent bridge's
@@ -31,7 +31,7 @@ use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
-const PAGE: &str = r#"<!doctype html><html><head><title>Dashbot e2e</title></head><body>
+const PAGE: &str = r#"<!doctype html><html><head><title>Mogbot e2e</title></head><body>
 <h1>Hello from the e2e page</h1>
 <input aria-label="Search" id="q">
 <input type="password" aria-label="Password" id="pw">
@@ -104,8 +104,7 @@ fn main() {
         home.starts_with(&scratch),
         "run with HOME inside the scratch folder, so the app's data is throwaway"
     );
-    let link_dir =
-        PathBuf::from(std::env::var(auth::DIR_ENV).expect("set DASHBOT_CHROME_LINK_DIR"));
+    let link_dir = PathBuf::from(std::env::var(auth::DIR_ENV).expect("set MOGBOT_CHROME_LINK_DIR"));
     let udd = scratch.join("chrome-profile");
     let _ = std::fs::remove_dir_all(&udd);
     std::fs::create_dir_all(&udd).unwrap();
@@ -328,7 +327,7 @@ fn main() {
     let r = call("tabs", json!({}));
     check("tabs: none yet", text(&r).contains("No tabs open"));
     let r = call("open", json!({ "url": url }));
-    if !text(&r).contains("Dashbot e2e") {
+    if !text(&r).contains("Mogbot e2e") {
         let targets = browser
             .call("Target.getTargets", json!({}), None, Duration::from_secs(5))
             .unwrap_or_default();
@@ -364,10 +363,10 @@ fn main() {
     }
     check(
         "open: lands on the page",
-        !is_error(&r) && text(&r).contains("Dashbot e2e"),
+        !is_error(&r) && text(&r).contains("Mogbot e2e"),
     );
     let r = call("tabs", json!({}));
-    check("tabs: lists it", text(&r).contains("Dashbot e2e"));
+    check("tabs: lists it", text(&r).contains("Mogbot e2e"));
     let r = call("get_text", json!({}));
     check(
         "get_text: reads the page",
@@ -735,7 +734,7 @@ fn main() {
         !user_chrome::registry().conns().is_empty(),
     );
     let r = call("open", json!({ "url": url }));
-    check("and works again", text(&r).contains("Dashbot e2e"));
+    check("and works again", text(&r).contains("Mogbot e2e"));
 
     // --- Chrome goes away: the link notices
     browser.close();
@@ -891,7 +890,7 @@ fn sw_state(browser: &cdp::Browser) {
         let session = a["sessionId"].as_str().unwrap_or("").to_string();
         let r = browser.call(
             "Runtime.evaluate",
-            json!({ "expression": "JSON.stringify({state: globalThis.dashbotLink && dashbotLink.state, err: globalThis.dashbotLink && dashbotLink.lastError})", "returnByValue": true }),
+            json!({ "expression": "JSON.stringify({state: globalThis.mogbotLink && mogbotLink.state, err: globalThis.mogbotLink && mogbotLink.lastError})", "returnByValue": true }),
             Some(&session),
             t,
         );

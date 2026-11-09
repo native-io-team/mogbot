@@ -86,7 +86,7 @@ permissions, no content scripts.
   token.
 - **Never on the network**: a Unix socket, not a port. No web page can reach
   it (no DNS rebinding, no `fetch` to localhost). Debug builds may move it
-  with `DASHBOT_CHROME_LINK_DIR`; release builds ignore that variable, so
+  with `MOGBOT_CHROME_LINK_DIR`; release builds ignore that variable, so
   nothing in Chrome's environment can point a real host elsewhere.
 - **Per turn**: the bridge's route takes the turn's bearer secret as every
   other agent route does (`agents/reach.rs`), and answers 404 while the

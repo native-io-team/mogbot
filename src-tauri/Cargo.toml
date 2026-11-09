@@ -1,11 +1,11 @@
 [package]
-name = "dashbot"
+name = "mogbot"
 version = "0.1.0"
 description = "A desktop app for running your own team of AI agents."
 authors = ["Julian Galluzzo", "Ship Studio contributors"]
 license = "MIT"
-repository = "https://github.com/native-io-team/dashbot"
-homepage = "https://github.com/native-io-team/dashbot"
+repository = "https://github.com/native-io-team/mogbot"
+homepage = "https://github.com/native-io-team/mogbot"
 edition = "2021"
 
 # Pattern enforcement lints — see also src-tauri/clippy.toml for disallowed-methods.

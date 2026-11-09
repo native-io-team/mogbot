@@ -64,6 +64,21 @@ fn generate_brand() {
         .expect("brand.json: companion.tailnetPort must be a port number");
     writeln!(out, "pub const COMPANION_TAILNET_PORT: u16 = {port};").ok();
 
+    // The app's previous identity (`previous` in brand.json, all null for a
+    // brand that was never renamed): where `brand_migration` looks for
+    // state to carry over on the first launch under the new name.
+    writeln!(out, "pub mod previous {{").ok();
+    for (name, key) in [
+        ("NAME", "name"),
+        ("SLUG", "slug"),
+        ("IDENTIFIER", "identifier"),
+        ("APP_DIR_NAME", "appDirName"),
+    ] {
+        let value = opt(&format!("/previous/{key}"));
+        writeln!(out, "    pub const {name}: Option<&str> = {value:?};").ok();
+    }
+    writeln!(out, "}}").ok();
+
     writeln!(out, "pub mod links {{").ok();
     for (name, key) in [
         ("ISSUE_REPO", "issueRepo"),

@@ -16,8 +16,8 @@
 $ErrorActionPreference = 'Stop'
 
 # --- brand (generated from brand.json by `node scripts/check-brand.mjs --write`) ---
-$BrandName       = 'Dashbot'
-$BrandAppDirName = 'Dashbot'
+$BrandName       = 'Mogbot'
+$BrandAppDirName = 'Mogbot'
 $BrandReleases   = ''
 # --- end brand ---
 

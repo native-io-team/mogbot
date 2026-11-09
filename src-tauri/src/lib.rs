@@ -17,6 +17,7 @@ pub mod agent_bridge;
 pub mod agent_browser;
 pub mod agents;
 pub mod brand;
+pub mod brand_migration;
 pub mod cache;
 pub mod commands;
 pub mod companion;
@@ -113,6 +114,11 @@ pub(crate) fn main_webview_url() -> Result<tauri::WebviewUrl, String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    // Before anything reads or creates a folder of ours (the log folder
+    // included): carry state over from the app's previous name, once
+    // (`brand.json` `previous`). Logged below, once logging is up.
+    let renamed = brand_migration::run_at_startup();
+
     // Sentry must init before the tracing subscriber so its layer can attach.
     logging::init_sentry();
 
@@ -126,6 +132,9 @@ pub fn run() {
     }
 
     tracing::info!("{} starting up", brand::NAME);
+    for line in &renamed {
+        tracing::info!("{line}");
+    }
     // Whether agents get a browser of their own, and if not why: a build
     // without it once sent every agent to the user's Chrome unnoticed.
     match agent_browser::unavailable_reason() {

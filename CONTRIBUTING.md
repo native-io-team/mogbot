@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in contributing. This app (working name Dashbot, set in `brand.json`) is the evolution of Ship Studio; read [docs/MISSION.md](docs/MISSION.md) first, then [docs/ROADMAP.md](docs/ROADMAP.md). This guide will help you get started.
+Thanks for your interest in contributing. This app (working name Mogbot, set in `brand.json`) is the evolution of Ship Studio; read [docs/MISSION.md](docs/MISSION.md) first, then [docs/ROADMAP.md](docs/ROADMAP.md). This guide will help you get started.
 
 > **Before you start**
 >
@@ -24,8 +24,8 @@ Thanks for your interest in contributing. This app (working name Dashbot, set in
 
 ```bash
 # Clone the repo
-git clone https://github.com/native-io-team/dashbot.git   # `repository` in brand.json
-cd dashbot
+git clone https://github.com/native-io-team/mogbot.git   # `repository` in brand.json
+cd mogbot
 
 # Install dependencies
 pnpm install
@@ -366,21 +366,21 @@ For anything that affects user-visible state or data integrity, propagate the er
 
 ### Log files
 
-The app writes structured logs (via the `tracing` crate) to a folder named by `appDirName` in `brand.json` (`Dashbot` today):
+The app writes structured logs (via the `tracing` crate) to a folder named by `appDirName` in `brand.json` (`Mogbot` today):
 
 ```
-macOS:    ~/Library/Logs/Dashbot/
-Windows:  %LOCALAPPDATA%\Dashbot\logs\
+macOS:    ~/Library/Logs/Mogbot/
+Windows:  %LOCALAPPDATA%\Mogbot\logs\
 ```
 
 Rotated daily. Tail the latest with:
 
 ```bash
 # macOS / Linux
-tail -f ~/Library/Logs/Dashbot/dashbot.log.*
+tail -f ~/Library/Logs/Mogbot/mogbot.log.*
 
 # Windows (PowerShell)
-Get-Content -Wait (Get-ChildItem $env:LOCALAPPDATA\Dashbot\logs\dashbot.log.* | Select -Last 1)
+Get-Content -Wait (Get-ChildItem $env:LOCALAPPDATA\Mogbot\logs\mogbot.log.* | Select -Last 1)
 ```
 
 ### Rust backtraces

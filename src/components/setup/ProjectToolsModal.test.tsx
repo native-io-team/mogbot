@@ -96,7 +96,7 @@ describe('ProjectToolsModal', () => {
     expect(await screen.findByText('Connect GitHub?')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Continue without' }));
     expect(action).toHaveBeenCalledTimes(1);
-    expect(localStorage.getItem('dashbot.projectTools.withoutGitHub')).toBe('1');
+    expect(localStorage.getItem('mogbot.projectTools.withoutGitHub')).toBe('1');
   });
 
   it('with nothing missing, Continue carries on', async () => {

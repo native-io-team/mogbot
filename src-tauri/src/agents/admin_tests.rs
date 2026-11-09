@@ -201,13 +201,13 @@ fn a_request_from_tainted_work_is_always_the_users() {
 #[test]
 fn with_its_context_local_work_is_exactly_what_go_hard_answers() {
     let home = std::path::PathBuf::from("/Users/sam");
-    let own = home.join("Library/Application Support/Dashbot/agents/ledger");
+    let own = home.join("Library/Application Support/Mogbot/agents/ledger");
     let ctx = crate::agents::autoallow::Ctx {
         home: home.clone(),
         own_home: own.clone(),
         cwd: own.clone(),
         scratch: vec![own.clone()],
-        app_data: vec![home.join("Library/Application Support/Dashbot")],
+        app_data: vec![home.join("Library/Application Support/Mogbot")],
         ..Default::default()
     };
     let local = |c: &Approval| classify_in(c, false, Some(&ctx)).0;

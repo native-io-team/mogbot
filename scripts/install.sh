@@ -21,7 +21,7 @@
 set -euo pipefail
 
 # --- brand (generated from brand.json by `node scripts/check-brand.mjs --write`) ---
-BRAND_NAME="Dashbot"
+BRAND_NAME="Mogbot"
 BRAND_RELEASES=""
 # --- end brand ---
 

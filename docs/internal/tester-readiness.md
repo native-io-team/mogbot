@@ -1,6 +1,6 @@
 # Tester readiness (dry run, 2026-11-05)
 
-A fresh clone of `dashbot/foundation`, followed the way a tester's agent would:
+A fresh clone of `mogbot/foundation`, followed the way a tester's agent would:
 README → WELCOME → INSTALL, every runnable step taken literally.
 
 ## Verdict: ready for a small group, with one step unverified

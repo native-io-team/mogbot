@@ -162,7 +162,7 @@ impl Store for Arc<Fake> {
     }
 }
 
-const S: &str = "dashbot-account-w1";
+const S: &str = "mogbot-account-w1";
 const K: &str = "vercel_token";
 
 fn launch(fake: &Arc<Fake>, mode: Mode) -> Vault<Arc<Fake>> {
@@ -509,4 +509,161 @@ fn the_suffix_cannot_collide_with_a_legacy_service() {
     // Every id that names a service is alphanumeric and `-`.
     assert!(crate::commands::accounts::validate_account_id("w1#v2").is_err());
     assert!(!uuid::Uuid::new_v4().simple().to_string().contains('#'));
+}
+
+/* ---------------------------------------------------- carried over a rename */
+
+const NEW: &str = "newbrand-account-w1";
+const OLD: &str = "oldbrand-account-w1";
+
+#[test]
+fn the_previous_name_is_the_same_service_under_the_old_slug() {
+    assert_eq!(
+        previous_service_for("newbrand-account-w1", "newbrand", Some("oldbrand")).as_deref(),
+        Some("oldbrand-account-w1")
+    );
+    assert_eq!(
+        previous_service_for("newbrand-slack", "newbrand", Some("oldbrand")).as_deref(),
+        Some("oldbrand-slack")
+    );
+    // Not ours, no previous name, or a previous name that is the current one.
+    assert_eq!(
+        previous_service_for("shipstudio-x", "newbrand", Some("oldbrand")),
+        None
+    );
+    assert_eq!(
+        previous_service_for("newbrandx-y", "newbrand", Some("oldbrand")),
+        None
+    );
+    assert_eq!(previous_service_for("newbrand-x", "newbrand", None), None);
+    assert_eq!(
+        previous_service_for("newbrand-x", "newbrand", Some("newbrand")),
+        None
+    );
+    // The live brand: every service of ours maps to one under the old slug.
+    if let Some(old) = crate::brand::previous::SLUG {
+        let s = format!("{}identity", crate::brand::keychain_prefix("companion"));
+        assert_eq!(
+            previous_service(&s),
+            Some(format!("{old}-companion-identity"))
+        );
+    }
+}
+
+#[test]
+fn a_secret_under_the_old_name_is_copied_verified_and_the_old_kept_until_a_later_launch() {
+    for mode in [Mode::Legacy, Mode::Owned] {
+        let fake = Arc::new(Fake::default());
+        fake.legacy(OLD, K, "tok-123");
+
+        let one = launch(&fake, mode);
+        assert_eq!(
+            one.read_carrying(NEW, K, Some(OLD)),
+            Read::Found("tok-123".into())
+        );
+        let copied = match mode {
+            Mode::Legacy => fake.value(NEW, K),
+            Mode::Owned => fake.value(&v2(NEW), K),
+        };
+        assert_eq!(copied.as_deref(), Some("tok-123"), "{mode:?}");
+        assert_eq!(
+            fake.value(OLD, K).as_deref(),
+            Some("tok-123"),
+            "kept this launch"
+        );
+        // Read again this launch: still kept.
+        assert_eq!(
+            one.read_carrying(NEW, K, Some(OLD)),
+            Read::Found("tok-123".into())
+        );
+        assert!(fake.get(OLD, K).is_some());
+
+        // A later launch reads the new one and the old goes.
+        let two = launch(&fake, mode);
+        assert_eq!(
+            two.read_carrying(NEW, K, Some(OLD)),
+            Read::Found("tok-123".into())
+        );
+        assert!(
+            fake.get(OLD, K).is_none(),
+            "{mode:?}: removed in a later launch"
+        );
+        assert_eq!(fake.prompts.load(Ordering::SeqCst), 0);
+    }
+}
+
+#[test]
+fn an_old_secret_that_cant_be_read_is_kept_and_never_reads_as_absent() {
+    let fake = Arc::new(Fake::default());
+    fake.legacy(OLD, K, "tok-123");
+    fake.faults.lock().unwrap().cli_get_fails = true;
+    let one = launch(&fake, Mode::Legacy);
+    assert!(matches!(
+        one.read_carrying(NEW, K, Some(OLD)),
+        Read::Error(_)
+    ));
+    assert_eq!(fake.value(OLD, K).as_deref(), Some("tok-123"));
+    assert!(fake.get(NEW, K).is_none());
+
+    // The prompt is allowed next time: carried over then.
+    fake.faults.lock().unwrap().cli_get_fails = false;
+    let two = launch(&fake, Mode::Legacy);
+    assert_eq!(
+        two.read_carrying(NEW, K, Some(OLD)),
+        Read::Found("tok-123".into())
+    );
+    assert_eq!(fake.value(NEW, K).as_deref(), Some("tok-123"));
+}
+
+#[test]
+fn a_copy_that_fails_still_answers_with_the_old_value_and_keeps_it() {
+    let fake = Arc::new(Fake::default());
+    fake.legacy(OLD, K, "tok-123");
+    fake.faults.lock().unwrap().put_ok_budget = Some(0);
+    let one = launch(&fake, Mode::Owned);
+    assert_eq!(
+        one.read_carrying(NEW, K, Some(OLD)),
+        Read::Found("tok-123".into())
+    );
+    assert_eq!(fake.value(OLD, K).as_deref(), Some("tok-123"));
+    assert!(fake.get(&v2(NEW), K).is_none());
+}
+
+#[test]
+fn the_new_name_wins_and_nothing_is_copied_over_it() {
+    let fake = Arc::new(Fake::default());
+    fake.legacy(OLD, K, "stale");
+    fake.legacy(NEW, K, "fresh");
+    let one = launch(&fake, Mode::Legacy);
+    assert_eq!(
+        one.read_carrying(NEW, K, Some(OLD)),
+        Read::Found("fresh".into())
+    );
+    assert_eq!(fake.value(NEW, K).as_deref(), Some("fresh"));
+    // Not copied this launch, so the stale old copy is cleaned at once.
+    assert!(fake.get(OLD, K).is_none());
+}
+
+#[test]
+fn deleting_a_secret_removes_its_old_name_too() {
+    let fake = Arc::new(Fake::default());
+    fake.legacy(OLD, K, "tok-123");
+    let one = launch(&fake, Mode::Legacy);
+    assert_eq!(
+        one.read_carrying(NEW, K, Some(OLD)),
+        Read::Found("tok-123".into())
+    );
+    one.delete_carrying(NEW, K, Some(OLD)).unwrap();
+    assert!(fake.get(OLD, K).is_none());
+    assert!(fake.get(NEW, K).is_none());
+    let two = launch(&fake, Mode::Legacy);
+    assert_eq!(two.read_carrying(NEW, K, Some(OLD)), Read::NotFound);
+}
+
+#[test]
+fn nothing_under_either_name_is_not_found() {
+    let fake = Arc::new(Fake::default());
+    let one = launch(&fake, Mode::Owned);
+    assert_eq!(one.read_carrying(NEW, K, Some(OLD)), Read::NotFound);
+    assert_eq!(one.read_carrying(NEW, K, None), Read::NotFound);
 }

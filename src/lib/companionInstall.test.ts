@@ -39,7 +39,7 @@ const thisMac: IosInstallStatus = {
   signing: {
     teamId: 'TEAM000001',
     identity: 'Apple Development: me',
-    bundleId: 'io.native.dashbot.companion.87be70',
+    bundleId: 'io.native.mogbot.companion.87be70',
   },
   source,
 };
@@ -119,7 +119,7 @@ describe('androidSteps', () => {
     jdk: false,
     node: 'v24',
     devices: [],
-    package: 'io.native.dashbot.companion.self',
+    package: 'io.native.mogbot.companion.self',
     source,
   };
 
@@ -148,11 +148,11 @@ describe('the build', () => {
   it('builds Release with xcodebuild for the phone’s hardware UDID, then installs', () => {
     const cmd = iosBuildCommand(thisMac, iphone)!;
     expect(cmd).toContain("cd '/Users/me/ShipStudio/.companion-build/mobile'");
-    expect(cmd).toContain('COMPANION_BUNDLE_ID=io.native.dashbot.companion.87be70');
+    expect(cmd).toContain('COMPANION_BUNDLE_ID=io.native.mogbot.companion.87be70');
     expect(cmd).toContain('APPLE_TEAM_ID=TEAM000001');
     const name = iosProjectName();
     expect(cmd).toContain(
-      `npx expo prebuild -p ios --clean && cd ios && COMPANION_BUNDLE_ID=io.native.dashbot.companion.87be70 APPLE_TEAM_ID=TEAM000001 xcodebuild -workspace ${name}.xcworkspace -scheme ${name} -configuration Release -destination id=00008140-001 -allowProvisioningUpdates -derivedDataPath build DEVELOPMENT_TEAM=TEAM000001 CODE_SIGN_STYLE=Automatic build`
+      `npx expo prebuild -p ios --clean && cd ios && COMPANION_BUNDLE_ID=io.native.mogbot.companion.87be70 APPLE_TEAM_ID=TEAM000001 xcodebuild -workspace ${name}.xcworkspace -scheme ${name} -configuration Release -destination id=00008140-001 -allowProvisioningUpdates -derivedDataPath build DEVELOPMENT_TEAM=TEAM000001 CODE_SIGN_STYLE=Automatic build`
     );
     expect(cmd).toMatch(
       new RegExp(
@@ -178,7 +178,7 @@ describe('the build', () => {
   });
 
   it('names the workspace the way expo prebuild does', () => {
-    expect(iosProjectName('Dashbot')).toBe('Dashbot');
+    expect(iosProjectName('Mogbot')).toBe('Mogbot');
     expect(iosProjectName('Ship Studio')).toBe('ShipStudio');
     expect(iosProjectName('my_app-2')).toBe('myapp2');
     expect(iosProjectName('!!!')).toBe('app');

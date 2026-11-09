@@ -14,7 +14,7 @@ account or a decision), **work** (needs code or config changes).
 | Apple Developer Program membership | owner | Pending. Everything below waits on it |
 | Developer ID Application certificate (.p12) | owner | Steps in RELEASING.md, "Setting up the Apple secrets" |
 | App Store Connect API key for `notarytool` | owner | Same section. `xcrun notarytool history` checks it |
-| Bundle identifier | ready | `io.native.dashbot` (brand.json → tauri.conf.json, checked by `pnpm check:brand`). Changing it later moves every user's app data, so settle it before the first public build |
+| Bundle identifier | ready | `io.native.mogbot` (brand.json → tauri.conf.json, checked by `pnpm check:brand`). Changing it later moves every user's app data, so settle it before the first public build |
 | Hardened runtime | ready | Tauri 2 turns it on by default (`bundle.macOS.hardenedRuntime`), and `tauri.conf.json` doesn't turn it off |
 | Entitlements | ready | `src-tauri/Entitlements.plist`: `automation.apple-events` (Spotify widget) and `device.audio-input` (dictation). No sandbox. Matching usage strings are in `src-tauri/Info.plist`. Both only show up as broken in a notarized build, so test both there |
 | Signing identity in config | ready | Not hardcoded. `APPLE_SIGNING_IDENTITY` / `APPLE_CERTIFICATE` env vars, and `scripts/build-notarized.sh` checks for them |
@@ -30,7 +30,7 @@ account or a decision), **work** (needs code or config changes).
 
 | Item | Status | Notes |
 | --- | --- | --- |
-| Bundle id | owner | `companion.bundleId` = `io.native.dashbot.companion` in brand.json. `app.config.ts` marks it a placeholder until the App Store Connect record exists. Register the id, then keep brand.json the source (`COMPANION_BUNDLE_ID` overrides it per build) |
+| Bundle id | owner | `companion.bundleId` = `io.native.mogbot.companion` in brand.json. `app.config.ts` marks it a placeholder until the App Store Connect record exists. Register the id, then keep brand.json the source (`COMPANION_BUNDLE_ID` overrides it per build) |
 | App Store Connect app record | owner | Gives the `ascAppId` |
 | EAS project | owner | `eas init` gives `EAS_PROJECT_ID`. Without it `app.config.ts` turns OTA updates off and `extra.official` is false, so push says "Needs the official build". Set it in EAS env, not in the repo |
 | `eas.json` submit block | work | `ascAppId`, `ascApiKeyIssuerId`, `ascApiKeyId` are `PLACEHOLDER_*`. `ascApiKeyPath` points at `./credentials/asc-api-key.p8`, which is now gitignored (`mobile/credentials/`). Better to use EAS-stored credentials and drop the path |
@@ -63,7 +63,7 @@ Every null link turns its feature off and the UI hides it.
 | `links.pushRelay` | No push | The deployed relay URL |
 | `telemetry.posthogKey` / `posthogHost` / `sentryDsn` | Nothing sent (compile-time) | Keys. Only with a privacy note to match, and the App Store answers change |
 | `links.starterRepoBase` | **Set** to `https://github.com/ship-studio`: project templates still clone from Ship Studio's org | Leave it (shared compat), or fork the starters |
-| `repository` | Set to `https://github.com/native-io-team/dashbot` | Make sure that's the repo testers get |
+| `repository` | Set to `https://github.com/native-io-team/mogbot` | Make sure that's the repo testers get |
 
 ## (d) Licence and attribution
 

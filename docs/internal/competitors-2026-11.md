@@ -37,7 +37,7 @@ Research note, 2026-11-08. Read-only desk research; no product was installed or 
 - **Read:** a coding agent that borrows the "many harnesses in one app" shell. Closest on layout, furthest on audience: it is for engineers.
 
 ### OpenBot (Nightly Labs, openbot.run)
-- **Positioning:** "one persistent workspace" for a team of AI agents on your computer; closest match to Dashbot's description. [V]
+- **Positioning:** "one persistent workspace" for a team of AI agents on your computer; closest match to Mogbot's description. [V]
 - **Features [V]:** each agent has a name, instructions and workspace; agents message each other, hand off tasks and share files; **Workflows** chain agents, models and approval steps; multiplayer channels with teammates; an agent can switch provider without losing workspace or conversation; built-in browser; iPhone and Android apps connect to your computer; queue of messages while an agent is busy.
 - **Providers:** Codex and Claude Code via the user's plans; page also lists Gemini and Grok; directories add OpenCode, Cursor, Cline, Ollama/LM Studio. [V partial, rest C]
 - **Onboarding:** download, connect a provider, describe the agent you want in one prompt, review the instructions, save, send work. [V] (This is our "Describe the agent you want".)
@@ -106,7 +106,7 @@ Research note, 2026-11-08. Read-only desk research; no product was installed or 
 
 ---
 
-## 3. Ranked gap list for Dashbot
+## 3. Ranked gap list for Mogbot
 
 Ranked by how much each closes "extremely complex tasks, made extremely easy" per unit of the user's attention. Effort: S under a week, M one to three weeks, L over a month or needs the owner. "Land" paths are best guesses from `CLAUDE.md` and `docs/agents.md` headings plus a directory listing; confirm before building.
 

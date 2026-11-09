@@ -273,7 +273,7 @@ const remote = (over: Partial<RemoteAccessStatus> = {}): RemoteAccessStatus => (
   funnelOn: true,
   funnelApprovalUrl: null,
   funnelError: null,
-  linkMasked: 'https://mac.t.ts.net/dashbot/••••',
+  linkMasked: 'https://mac.t.ts.net/mogbot/••••',
   reachability: { state: 'reachable' },
   publish: { sinceMs: null, autoRetried: false, gaveUp: false },
   power: { hasBattery: false, onAc: true, batteryPercent: null, charging: null },

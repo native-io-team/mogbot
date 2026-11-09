@@ -43,6 +43,25 @@
 //! if one ever happens, happens once per item per launch rather than on
 //! every git command.
 //!
+//! ## Carrying secrets over a rename
+//!
+//! Every service name starts with the brand's slug (`brand::keychain_prefix`,
+//! `brand::scoped`), so renaming the app moves every secret's name. A read
+//! that finds nothing under the new name looks under the previous one
+//! (`brand.json` `previous.slug`, [`previous_service`]) and, when it finds
+//! the secret there, writes it under the new name through the usual
+//! verified write and returns it. Copy, verify, keep, as above:
+//!
+//! - The old item is never deleted in the launch that copied it. A later
+//!   launch removes it once it has read the new one.
+//! - A copy that fails leaves the old item alone, and the value read from it
+//!   is still used; the next launch tries again.
+//! - A read of the old item that fails (a Keychain prompt denied, a locked
+//!   Keychain) is "couldn't check", never "not there", so nothing is lost
+//!   and nothing reads as disconnected for good.
+//! - Deleting a secret deletes its old-name copy too, or the next read would
+//!   carry it back.
+//!
 //! ## Errors are not absence
 //!
 //! [`Read`] keeps "there is no such secret" apart from "the Keychain didn't
@@ -145,6 +164,11 @@ struct LaunchState {
     written_this_launch: HashSet<ItemKey>,
     /// Items whose legacy cleanup has already been considered this launch.
     cleanup_checked: HashSet<ItemKey>,
+    /// Items under the previous name this launch copied to the new one:
+    /// they stay until a later launch has read the copy.
+    renamed_this_launch: HashSet<ItemKey>,
+    /// Items under the previous name whose removal was considered this launch.
+    rename_cleanup_checked: HashSet<ItemKey>,
 }
 
 /// The policy over a [`Store`]. One per process ("launch").
@@ -401,6 +425,12 @@ impl<S: Store> Vault<S> {
     }
 
     pub fn write(&self, service: &str, account: &str, value: &str) -> Result<(), String> {
+        let carry = self.carry_lock(service, account);
+        let _carrying = carry.lock().unwrap_or_else(|e| e.into_inner());
+        self.write_unlocked(service, account, value)
+    }
+
+    fn write_unlocked(&self, service: &str, account: &str, value: &str) -> Result<(), String> {
         let lock = self.item_lock(service, account);
         let _held = lock.lock().unwrap_or_else(|e| e.into_inner());
         let key: ItemKey = (service.to_string(), account.to_string());
@@ -437,6 +467,12 @@ impl<S: Store> Vault<S> {
     /// development build, only the legacy one: touching an app-owned item
     /// from there could prompt).
     pub fn delete(&self, service: &str, account: &str) -> Result<(), String> {
+        let carry = self.carry_lock(service, account);
+        let _carrying = carry.lock().unwrap_or_else(|e| e.into_inner());
+        self.delete_unlocked(service, account)
+    }
+
+    fn delete_unlocked(&self, service: &str, account: &str) -> Result<(), String> {
         let lock = self.item_lock(service, account);
         let _held = lock.lock().unwrap_or_else(|e| e.into_inner());
         let key: ItemKey = (service.to_string(), account.to_string());
@@ -452,6 +488,109 @@ impl<S: Store> Vault<S> {
         }
         first_err.map_or(Ok(()), Err)
     }
+
+    /// Whether any item, of either kind, is under `service`. Attributes only:
+    /// never prompts.
+    fn exists(&self, service: &str, account: &str) -> Result<bool, String> {
+        Ok(self.store.find(service, account)?.is_some()
+            || self.store.find(&v2(service), account)?.is_some())
+    }
+
+    /// [`Vault::read`], for a secret that may still be under the app's
+    /// previous name (`old_service`, the same item under the old brand
+    /// prefix). See "Carrying secrets over a rename" above.
+    pub fn read_carrying(&self, service: &str, account: &str, old_service: Option<&str>) -> Read {
+        let Some(old) = old_service.filter(|o| *o != service) else {
+            return self.read(service, account);
+        };
+        let carry = self.carry_lock(service, account);
+        let _carrying = carry.lock().unwrap_or_else(|e| e.into_inner());
+        let old_key: ItemKey = (old.to_string(), account.to_string());
+        match self.read(service, account) {
+            Read::Found(v) => {
+                self.maybe_clean_renamed(service, account, &old_key);
+                Read::Found(v)
+            }
+            Read::Error(e) => Read::Error(e),
+            Read::NotFound => match self.read(old, account) {
+                Read::Found(v) => {
+                    match self.write_unlocked(service, account, &v) {
+                        Ok(()) => {
+                            self.state().renamed_this_launch.insert(old_key);
+                            tracing::info!(
+                                service,
+                                "[Keychain] carried a secret over from the previous name"
+                            );
+                        }
+                        Err(e) => {
+                            tracing::warn!(service, error = %e, "[Keychain] couldn't carry a secret over from the previous name; it stays where it is");
+                        }
+                    }
+                    Read::Found(v)
+                }
+                other => other,
+            },
+        }
+    }
+
+    /// In a launch after the one that copied a secret to its new name, and
+    /// having just read the new one: the item under the previous name goes.
+    fn maybe_clean_renamed(&self, service: &str, account: &str, old_key: &ItemKey) {
+        {
+            let mut st = self.state();
+            if st.renamed_this_launch.contains(old_key)
+                || !st.rename_cleanup_checked.insert(old_key.clone())
+            {
+                return;
+            }
+        }
+        match self.exists(&old_key.0, account) {
+            Ok(true) => {
+                if let Err(e) = self.delete_unlocked(&old_key.0, account) {
+                    tracing::warn!(service, error = %e, "[Keychain] couldn't remove a secret's copy under the previous name");
+                }
+            }
+            Ok(false) => {}
+            Err(e) => {
+                tracing::warn!(service, error = %e, "[Keychain] couldn't check for a copy under the previous name");
+            }
+        }
+    }
+
+    /// [`Vault::delete`] of a secret and of its copy under the previous name,
+    /// which would otherwise be carried back on the next read.
+    pub fn delete_carrying(
+        &self,
+        service: &str,
+        account: &str,
+        old_service: Option<&str>,
+    ) -> Result<(), String> {
+        let carry = self.carry_lock(service, account);
+        let _carrying = carry.lock().unwrap_or_else(|e| e.into_inner());
+        let new = self.delete_unlocked(service, account);
+        let old = match old_service.filter(|o| *o != service) {
+            Some(old) => self.delete_unlocked(old, account),
+            None => Ok(()),
+        };
+        new.and(old)
+    }
+
+    fn carry_lock(&self, service: &str, account: &str) -> Arc<Mutex<()>> {
+        self.item_lock(&format!("{service}\u{0}carry"), account)
+    }
+}
+
+/// The name `service` had under the app's previous brand: the same name with
+/// the previous slug in front (`<slug>-account-x` → `<previous slug>-account-x`).
+/// `None` without a previous name, or for a service that isn't ours.
+pub fn previous_service(service: &str) -> Option<String> {
+    previous_service_for(service, crate::brand::SLUG, crate::brand::previous::SLUG)
+}
+
+fn previous_service_for(service: &str, slug: &str, previous: Option<&str>) -> Option<String> {
+    let previous = previous.filter(|p| !p.is_empty() && *p != slug)?;
+    let rest = service.strip_prefix(slug)?.strip_prefix('-')?;
+    Some(format!("{previous}-{rest}"))
 }
 
 /* ------------------------------------------------------------- process */
@@ -496,7 +635,7 @@ pub fn read(service: &str, account: &str) -> Read {
             None => Read::NotFound,
         };
     }
-    VAULT.read(service, account)
+    VAULT.read_carrying(service, account, previous_service(service).as_deref())
 }
 
 #[cfg(target_os = "macos")]
@@ -517,7 +656,7 @@ pub fn delete(service: &str, account: &str) -> Result<(), String> {
         m.remove(&(service.to_string(), account.to_string()));
         return Ok(());
     }
-    VAULT.delete(service, account)
+    VAULT.delete_carrying(service, account, previous_service(service).as_deref())
 }
 
 #[cfg(target_os = "macos")]

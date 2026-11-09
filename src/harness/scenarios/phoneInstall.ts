@@ -31,7 +31,7 @@ export const THIS_MAC = {
   signing: {
     teamId: 'TEAM000001',
     identity: 'Apple Development: julian@example.com (CERT000001)',
-    bundleId: 'io.native.dashbot.companion.87be70',
+    bundleId: 'io.native.mogbot.companion.87be70',
   },
   source,
 };
@@ -56,7 +56,7 @@ export const ANDROID_THIS_MAC = {
   jdk: true,
   node: 'v24.17.0',
   devices: [],
-  package: 'io.native.dashbot.companion.self',
+  package: 'io.native.mogbot.companion.self',
   source,
 };
 

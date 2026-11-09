@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Dashbot",
+  "productName": "Mogbot",
   "version": "../package.json",
-  "identifier": "io.native.dashbot",
+  "identifier": "io.native.mogbot",
   "build": {
     "beforeDevCommand": "pnpm dev",
     "devUrl": "http://127.0.0.1:1420",
@@ -66,7 +66,7 @@
     "deep-link": {
       "desktop": {
         "schemes": [
-          "dashbot"
+          "mogbot"
         ]
       }
     }

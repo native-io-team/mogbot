@@ -59,6 +59,22 @@ if (typeof companion.bundleId !== 'string' || !companion.bundleId) {
 if (!Number.isInteger(companion.tailnetPort) || companion.tailnetPort < 1) {
   fail('brand.json: "companion.tailnetPort" must be a port number');
 }
+// `previous`: the identity before the last rename, which the app's one-time
+// migration (src-tauri/src/brand_migration.rs) carries state over from.
+// Optional; every field a string or null, and never the current identity.
+if (brand.previous !== undefined) {
+  const prev = brand.previous;
+  if (!prev || typeof prev !== 'object') fail('brand.json: "previous" must be an object');
+  else {
+    for (const [k, v] of Object.entries(prev)) {
+      if (v !== null && typeof v !== 'string')
+        fail(`brand.json: "previous.${k}" must be a string or null`);
+    }
+    if (prev.slug && prev.slug === brand.slug) fail('brand.json: "previous.slug" is the current slug');
+    if (prev.appDirName && prev.appDirName === brand.appDirName)
+      fail('brand.json: "previous.appDirName" is the current appDirName');
+  }
+}
 for (const [group, value] of Object.entries({ links: brand.links, telemetry: brand.telemetry })) {
   if (!value || typeof value !== 'object') {
     fail(`brand.json: "${group}" must be an object`);

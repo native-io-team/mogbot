@@ -3937,7 +3937,9 @@ still delivers what the conversations before it found (`Checked::stopped`):
 their cursors have moved past it, so it would otherwise be lost. Default listening place: the user's DM to themself.
 
 **The trigger.** A message counts only when it starts with the trigger
-(`<slug>:`, so `dashbot:`, changeable, 2–24 characters, not `/ @ # ! <`),
+(`<slug>:`, so `mogbot:`, changeable, 2–24 characters, not `/ @ # ! <`;
+while it is the default, the previous name's `<previous slug>:` from `brand.json`
+counts too, and a reply starting with either is refused),
 case aside: ordinary chatter never starts a turn. Someone else's counts only
 when the user turned on **Let others start it** (off by default), and then
 only when it @-mentions the user first, then the trigger; in a DM to the

@@ -389,6 +389,61 @@ async fn run_until_settled(args: &[&str]) -> FunnelOutcome {
     }
 }
 
+/// The mount this app used under its previous name (`brand.json`
+/// `previous.slug`), when that differs from today's.
+pub fn previous_mount_path() -> Option<String> {
+    crate::brand::previous::SLUG
+        .map(|slug| format!("/{slug}"))
+        .filter(|p| p != MOUNT_PATH && p != "/shipstudio")
+}
+
+/// Does the Funnel config have the previous name's mount at all?
+pub fn has_mount(config: &Value, path: &str) -> bool {
+    config
+        .get("Web")
+        .and_then(Value::as_object)
+        .is_some_and(|hosts| {
+            hosts
+                .values()
+                .any(|h| h.pointer("/Handlers").and_then(|hs| hs.get(path)).is_some())
+        })
+}
+
+/// Remove the mount the app published under its previous name, if it is
+/// still there: it is ours, and nothing answers on it any more. Anything
+/// else the user serves is left alone. Best effort.
+pub async fn remove_previous_mount() {
+    let Some(path) = previous_mount_path() else {
+        return;
+    };
+    let Ok(output) = run_cli(&["funnel", "status", "--json"], 8).await else {
+        return;
+    };
+    let present = serde_json::from_slice::<Value>(&output.stdout)
+        .map(|config| has_mount(&config, &path))
+        .unwrap_or(false);
+    if !present {
+        return;
+    }
+    let set_path = format!("--set-path={path}");
+    match run_cli(&["funnel", "--https=443", &set_path, "off"], 10).await {
+        Ok(o) if o.status.success() => {
+            tracing::info!(
+                path,
+                "[Remote] removed the Funnel mount from the app's previous name"
+            );
+        }
+        Ok(o) => tracing::warn!(
+            path,
+            stderr = %String::from_utf8_lossy(&o.stderr).trim(),
+            "[Remote] couldn't remove the previous name's Funnel mount"
+        ),
+        Err(e) => {
+            tracing::warn!(path, error = %e, "[Remote] couldn't remove the previous name's Funnel mount")
+        }
+    }
+}
+
 /// Remove our mount from the Funnel. Leaves anything else the user serves.
 pub async fn disable_funnel() -> Result<(), CommandError> {
     let set_path = format!("--set-path={MOUNT_PATH}");
@@ -773,6 +828,23 @@ mod tests {
             parse_status(&json!({ "BackendState": "Running", "Self": {} })),
             TailscaleState::Unknown { .. }
         ));
+    }
+
+    #[test]
+    fn the_previous_names_mount_is_found_and_is_never_ours_or_ship_studios() {
+        let config = serde_json::json!({
+            "Web": { "m.t.ts.net:443": { "Handlers": {
+                "/oldbot": { "Proxy": "http://127.0.0.1:4321" },
+                "/shipstudio": { "Proxy": "http://127.0.0.1:9" }
+            } } }
+        });
+        assert!(has_mount(&config, "/oldbot"));
+        assert!(!has_mount(&config, "/elsewhere"));
+        assert!(!has_mount(&serde_json::json!({}), "/oldbot"));
+        if let Some(prev) = previous_mount_path() {
+            assert_ne!(prev, MOUNT_PATH);
+            assert_ne!(prev, "/shipstudio");
+        }
     }
 
     #[test]

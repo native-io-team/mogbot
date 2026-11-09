@@ -338,7 +338,7 @@ mod tests {
             home: PathBuf::from("/Users/sam"),
             roots: vec![PathBuf::from("/Users/sam/ShipStudio")],
             app_data: vec![
-                PathBuf::from("/Users/sam/Library/Application Support/Dashbot"),
+                PathBuf::from("/Users/sam/Library/Application Support/Mogbot"),
                 PathBuf::from("/Users/sam/ShipStudio/.shipstudio/agents"),
             ],
         }

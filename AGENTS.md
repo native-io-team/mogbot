@@ -4,7 +4,7 @@
 > step has a command, a check and what to tell the human. Don't improvise the setup.
 
 > **Start with [docs/MISSION.md](docs/MISSION.md), then [docs/ROADMAP.md](docs/ROADMAP.md).**
-> This app (working name Dashbot, set in `brand.json`) is the evolution of Ship Studio: an
+> This app (working name Mogbot, set in `brand.json`) is the evolution of Ship Studio: an
 > open-source app for running your own team of AI agents on desktop and phone. You open it and
 > talk to your Chief of Staff, which creates and delegates to named agents running on Claude Code
 > or Codex on your own machine; consequential actions arrive as Allow / Deny cards; the phone

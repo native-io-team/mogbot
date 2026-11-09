@@ -280,7 +280,7 @@ CA and no trust-on-first-use.
 
 1. **Mac:** Phone panel → **Pair a phone** (or Cmd+K). A one-time code
    (128-bit, 5 minutes, single use) is shown as a QR code of
-   `<companion.scheme>://pair?d=…` (`dashbot-companion` today) carrying the code, server id, Mac name,
+   `<companion.scheme>://pair?d=…` (`mogbot-companion` today) carrying the code, server id, Mac name,
    **exactly one route** and the **fingerprint of the Mac's identity key**,
    and no long-lived secret (`PairingLink`). No code is shown unless that
    key is kept in the Keychain: a phone must never pin a key the Mac is

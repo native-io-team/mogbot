@@ -22,11 +22,11 @@ fn this_mac(engine: Engine) -> Account {
 #[test]
 fn claude_codes_keychain_item_is_named_as_claude_code_names_it() {
     assert_eq!(claude_service(None), "Claude Code-credentials");
-    // sha256("/Users/someone/.dashbot/accounts/abc/claude") starts c5533c0f.
-    let dir = Path::new("/Users/someone/.dashbot/accounts/abc/claude");
+    // sha256("/Users/someone/.mogbot/accounts/abc/claude") starts 9bd8717c.
+    let dir = Path::new("/Users/someone/.mogbot/accounts/abc/claude");
     assert_eq!(
         claude_service(Some(dir)),
-        "Claude Code-credentials-c5533c0f"
+        "Claude Code-credentials-9bd8717c"
     );
 }
 

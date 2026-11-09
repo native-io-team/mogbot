@@ -47,7 +47,7 @@ const link = new Link(chrome, {
 });
 
 // For a look from DevTools (the service worker's console): the link's state.
-globalThis.dashbotLink = link;
+globalThis.mogbotLink = link;
 
 tabs.listen((msg) => link.event(msg));
 cdp.listen((msg) => link.event(msg));

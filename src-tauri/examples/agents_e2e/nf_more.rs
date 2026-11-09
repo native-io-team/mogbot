@@ -16,7 +16,7 @@
 //!   set to the out account stops with the Note and never runs; one on Any
 //!   account runs on this Mac's own sign-in
 //! - `nf-slack`: a fake Slack Web API served on 127.0.0.1: the owner's
-//!   "dashbot: what's 2+2" starts a turn and the reply card carries the
+//!   "mogbot: what's 2+2" starts a turn and the reply card carries the
 //!   exact words, which Allow posts; another person's message, with others
 //!   not let in, starts nothing
 //! - `nf-crossover`: every Claude Code account marked out and a fake Codex

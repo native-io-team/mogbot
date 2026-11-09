@@ -14,7 +14,7 @@ as you, or changes what other people see waits for your **Allow**. A phone app
 lets you chat, approve and review from anywhere, talking only to your own Mac
 over your own Tailscale. Nothing goes through our servers.
 
-Dashbot is a working name.
+Mogbot is a working name.
 
 ## What to expect
 
@@ -74,6 +74,6 @@ and what happened instead. Screenshots help.
 - Stuck during setup? Ask your agent to *"write up what failed, with the
   error, for the person who invited me"*. Check what it wrote before you send
   it: logs can include names of your files and projects.
-- Logs live in `~/Library/Logs/Dashbot/`.
+- Logs live in `~/Library/Logs/Mogbot/`.
 
 Common problems and fixes: [INSTALL.md, Troubleshooting](INSTALL.md#troubleshooting).

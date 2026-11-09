@@ -1,4 +1,4 @@
-# Dashbot
+# Mogbot
 
 > Working name. It lives in one file, [`brand.json`](brand.json); the app itself
 > avoids saying it.

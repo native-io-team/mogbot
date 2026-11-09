@@ -65,7 +65,7 @@ pub const BUNDLED_SKILLS: &[BundledSkill] = &[
 ];
 
 impl BundledSkill {
-    /// `<slug>-<name>` (`dashbot-workflows`): ours, from brand.json. Ship
+    /// `<slug>-<name>` (`mogbot-workflows`): ours, from brand.json. Ship
     /// Studio installs its own `shipstudio-*` copies into the same shared
     /// skills directories; this app never writes or removes those.
     pub fn dir_name(&self) -> String {
@@ -551,6 +551,24 @@ fn ship_studio_copy(ours: &std::path::Path, name: &str) -> Option<PathBuf> {
     theirs.join("SKILL.md").is_file().then_some(theirs)
 }
 
+/// The copy this app installed under its previous name (`brand.json`
+/// `previous.slug`), beside where ours goes: the same skill twice in one
+/// skills folder. Removed only when it carries this app's version stamp,
+/// which nobody else writes into a `<previous slug>-*` folder.
+fn remove_previous_brand_copy(ours: &std::path::Path, name: &str) {
+    let Some(slug) = crate::brand::previous::SLUG.filter(|s| *s != crate::brand::SLUG) else {
+        return;
+    };
+    let Some(old) = ours.parent().map(|p| p.join(format!("{slug}-{name}"))) else {
+        return;
+    };
+    if old != ours && old.join(VERSION_STAMP).is_file() && old.join("SKILL.md").is_file() {
+        if let Err(err) = std::fs::remove_dir_all(&old) {
+            warn!(skill = %old.display(), error = %err, "could not remove the previous name's copy of a skill");
+        }
+    }
+}
+
 /// Write every bundled skill for every agent that supports one.
 ///
 /// Except where Ship Studio's own copy of the same skill is already
@@ -566,6 +584,7 @@ pub fn install_bundled_skills() -> Vec<BundledSkillStatus> {
         let body = branded_body(&(skill.body)());
         let dir_name = skill.dir_name();
         for (agent_id, dir) in skill_dirs(&dir_name) {
+            remove_previous_brand_copy(&dir, skill.name);
             if let Some(theirs) = ship_studio_copy(&dir, skill.name) {
                 if dir != theirs && dir.join("SKILL.md").is_file() {
                     if let Err(err) = std::fs::remove_dir_all(&dir) {

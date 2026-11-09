@@ -10,7 +10,7 @@ import { HOST_NAME, PROTOCOL, fail, hello, ok, parseRequest } from './protocol.j
 
 /** Waits between reconnects while the worker is awake, then the alarm. */
 export const BACKOFF_MS = [1000, 2000, 5000, 10000, 30000];
-export const ALARM = 'dashbot-link';
+export const ALARM = 'mogbot-link';
 
 /**
  * What the link is doing, for the popup and the badge.

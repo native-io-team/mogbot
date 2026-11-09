@@ -13,7 +13,7 @@
 //!   internet. The first read of a conversation is a baseline: nothing
 //!   already there ever starts anything.
 //! - **The trigger.** A message counts only when it starts with the trigger
-//!   word (`dashbot:` unless the user picks another), so ordinary chatter
+//!   word (`mogbot:` unless the user picks another), so ordinary chatter
 //!   never starts a turn. Someone else's counts only if the user let others
 //!   in, and then only when it @-mentions the user first (in a DM, the
 //!   trigger alone).
@@ -183,11 +183,31 @@ impl Settings {
     pub fn trigger(&self) -> String {
         self.trigger.clone().unwrap_or_else(default_trigger)
     }
+
+    /// Every word a message may start with: the trigger, and while it is
+    /// the default, the app's previous name's too (`brand.json`
+    /// `previous.slug`), so asks typed out of habit after the rename still
+    /// land. A trigger the user picked is the only one.
+    pub fn triggers(&self) -> Vec<String> {
+        let mut out = vec![self.trigger()];
+        if self.trigger.is_none() {
+            out.extend(previous_trigger());
+        }
+        out
+    }
 }
 
-/// `dashbot:`: the app's short name, from `brand.json`.
+/// `mogbot:`: the app's short name, from `brand.json`.
 pub fn default_trigger() -> String {
     format!("{}:", crate::brand::SLUG.to_ascii_lowercase())
+}
+
+/// The default trigger under the app's previous name, accepted alongside the
+/// default for a transition. `None` without a previous name.
+pub fn previous_trigger() -> Option<String> {
+    crate::brand::previous::SLUG
+        .filter(|old| !old.eq_ignore_ascii_case(crate::brand::SLUG))
+        .map(|old| format!("{}:", old.to_ascii_lowercase()))
 }
 
 static LOCK: LazyLock<Mutex<()>> = LazyLock::new(Default::default);
@@ -319,7 +339,7 @@ pub fn check_trigger(raw: &str) -> Result<String, String> {
     let t = raw.trim();
     let n = t.chars().count();
     if !(2..=24).contains(&n) {
-        return Err("Pick a trigger of 2 to 24 characters, like “dashbot:”.".into());
+        return Err("Pick a trigger of 2 to 24 characters, like “mogbot:”.".into());
     }
     if t.contains(['\n', '\r']) || t.starts_with(['/', '<', '@', '#', '!']) {
         return Err("The trigger can't start with / @ # ! or < (Slack uses those).".into());
@@ -343,7 +363,7 @@ fn newer(a: &str, b: &str) -> bool {
 /// The ask in a message, without the trigger (and, for someone else's, the
 /// mention before it), or `None` when it isn't one.
 ///
-/// - The user's own: the trigger first, case aside (`dashbot: draft the reply`).
+/// - The user's own: the trigger first, case aside (`mogbot: draft the reply`).
 /// - Someone else's: `<@USER>` (the connected user) first, then the trigger;
 ///   in a DM to the user, the trigger alone is enough.
 pub fn ask_in(text: &str, trigger: &str, user_id: &str, own: bool, dm: bool) -> Option<String> {
@@ -370,6 +390,29 @@ pub fn ask_in(text: &str, trigger: &str, user_id: &str, own: bool, dm: bool) -> 
     }
     let ask = rest[n..].trim();
     (!ask.is_empty()).then(|| ask.to_string())
+}
+
+/// [`ask_in`] for the first of `triggers` the message starts with.
+pub fn ask_in_any(
+    text: &str,
+    triggers: &[String],
+    user_id: &str,
+    own: bool,
+    dm: bool,
+) -> Option<String> {
+    triggers
+        .iter()
+        .find_map(|t| ask_in(text, t, user_id, own, dm))
+}
+
+/// [`prepare`] against every accepted trigger: a reply that starts with any
+/// of them would read as the user's own ask.
+pub fn prepare_any(full: &str, triggers: &[String], known: &[String]) -> Result<String, String> {
+    let mut out = Err("There's no trigger to check the reply against.".to_string());
+    for trigger in triggers {
+        out = Ok(prepare(full, trigger, known)?);
+    }
+    out
 }
 
 /// User ids mentioned in raw Slack text (`<@U123>`, `<@U123|sam>`).
@@ -460,7 +503,7 @@ pub async fn check_once(api: &dyn Api, s: &mut Settings, now_ms: i64) -> Checked
     let Some(account) = s.account.clone() else {
         return Checked::default();
     };
-    let trigger = s.trigger();
+    let triggers = s.triggers();
     let mut out = Checked::default();
     let conversations: Vec<Conversation> = s
         .conversations
@@ -543,7 +586,8 @@ pub async fn check_once(api: &dyn Api, s: &mut Settings, now_ms: i64) -> Checked
             if !own && !s.others_can_start {
                 continue;
             }
-            let Some(raw) = ask_in(&m.text, &trigger, &account.user_id, own, conv.is_dm()) else {
+            let Some(raw) = ask_in_any(&m.text, &triggers, &account.user_id, own, conv.is_dm())
+            else {
                 continue;
             };
             if own {
@@ -1124,7 +1168,7 @@ async fn settle(app: &AppHandle) {
             continue;
         };
         let saved = load();
-        let text = match prepare(&text, &saved.trigger(), &known) {
+        let text = match prepare_any(&text, &saved.triggers(), &known) {
             Ok(t) => t,
             Err(why) => {
                 note(app, &agent.id, why);
