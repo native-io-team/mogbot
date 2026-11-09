@@ -2369,6 +2369,8 @@ export const agentsScenarios: Scenario[] = [
       agents_messages: messagesFor,
       agents_apps_list: agentApps(CONNECTED_APPS),
       agents_usage: WHEN_USAGE,
+      // The "At a time" composer previews its phrase before When… is pressed.
+      agents_schedule_preview: schedulePreview,
     },
   },
   {
