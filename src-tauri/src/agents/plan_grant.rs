@@ -659,7 +659,7 @@ fn cover_in(grants: &mut [Grant], tool: &str, input: &Value, turn: &Turn) -> Opt
         return allowed.then(|| commit(grants, &picked, made));
     }
     let call = if tool.starts_with(super::browser_gate::SERVER)
-        || tool.starts_with(super::browser_gate::AGENTS_SERVER)
+        || super::browser_gate::is_own_browser(tool)
     {
         let (verb, host) = turn.browser.clone()?;
         Call {

@@ -356,7 +356,7 @@ fn arg(args: &Value, k: &str) -> Option<String> {
 }
 
 fn usable(agent: &Agent, outside: bool) -> Result<(), String> {
-    if !super::browser::for_turn(agent, outside) {
+    if !super::browser::claude_in_chrome_for_turn(agent, outside) {
         return Err(if outside {
             "Your browser isn't available while you answer text from outside.".into()
         } else {

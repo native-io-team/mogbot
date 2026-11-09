@@ -1037,6 +1037,33 @@ pub fn gate(agent: &Agent, tool: &str, input: &Value, outside: bool) -> Gate {
         );
         return held_for_exact_text(g, agent, tool, input);
     }
+    if let Some(name) = tool.strip_prefix(USER_CHROME_SERVER) {
+        // The user's own Chrome, through the app's extension: the same
+        // Chrome a phone sign-in drives, so it waits for that too.
+        if let Some(refused) = while_phone_signs_in(super::phone_signin::live()) {
+            return refused;
+        }
+        let level = super::independence::for_turn(super::policy::chosen_level(agent), outside);
+        let page = page_of(&user_chrome_key(&agent.id));
+        let g = gate_user_chrome_with(
+            crate::user_chrome::settings::enabled(),
+            level,
+            agent,
+            name,
+            input,
+            outside,
+            &page,
+        );
+        let g = held_for_exact_text(g, agent, tool, input);
+        let (n, i) = agents_equivalent(name, input);
+        if g == Gate::Ask
+            && only_unlabelled_enter(level, agent, super::outward::required(agent), &n, &i, &page)
+            && first_try(&agent.id, input)
+        {
+            return Gate::Refuse(UNLABELLED_ENTER.into());
+        }
+        return g;
+    }
     if !tool.starts_with(SERVER) {
         return Gate::NotBrowser;
     }
@@ -1143,9 +1170,8 @@ fn held_for_exact_text(g: Gate, agent: &Agent, tool: &str, input: &Value) -> Gat
 /// "Go hard" asks for (a send click, Enter in a message box, a script that
 /// submits), other than opening a page or uploading a file.
 pub fn outward_step(agent: &Agent, tool: &str, input: &Value) -> bool {
-    let (page, name, input) = if let Some(name) = tool.strip_prefix(AGENTS_SERVER) {
-        let (n, i) = agents_equivalent(name, input);
-        (page_of(&agents_key(&agent.id)), n, i)
+    let (page, name, input) = if let Some(own) = own_call(&agent.id, tool, input) {
+        own
     } else if let Some(name) = tool.strip_prefix(SERVER) {
         (page_of(&agent.id), name.to_string(), input.clone())
     } else {
@@ -1185,8 +1211,8 @@ pub fn outward_step_on(agent: &Agent, name: &str, input: &Value, page: &Page) ->
 
 /// What was typed on the page a browser call acts on (`outward`'s card).
 pub fn typed_for(agent_id: &str, tool: &str, input: &Value) -> Vec<String> {
-    if tool.starts_with(AGENTS_SERVER) {
-        page_of(&agents_key(agent_id)).typed
+    if let Some(key) = own_page_key(agent_id, tool) {
+        page_of(&key).typed
     } else {
         typed_through(page_of(agent_id), tool, input)
     }
@@ -1214,9 +1240,8 @@ pub fn sent_at_full_send(
     if level != Level::FullSend {
         return None;
     }
-    let (page, name, input) = if let Some(name) = tool.strip_prefix(AGENTS_SERVER) {
-        let (n, i) = agents_equivalent(name, input);
-        (page_of(&agents_key(&agent.id)), n, i)
+    let (page, name, input) = if let Some(own) = own_call(&agent.id, tool, input) {
+        own
     } else {
         let name = tool.strip_prefix(SERVER)?;
         (page_of(&agent.id), name.to_string(), input.clone())
@@ -1247,9 +1272,8 @@ pub fn sent_at_full_send(
 /// "Full send" still asks for (paying, passwords, uploads of secrets), never
 /// a script or an upload, and never a step with no known site.
 pub fn plan_step(agent: &Agent, tool: &str, input: &Value) -> Option<(&'static str, String)> {
-    let (page, name, input) = if let Some(name) = tool.strip_prefix(AGENTS_SERVER) {
-        let (n, i) = agents_equivalent(name, input);
-        (page_of(&agents_key(&agent.id)), n, i)
+    let (page, name, input) = if let Some(own) = own_call(&agent.id, tool, input) {
+        own
     } else {
         let name = tool.strip_prefix(SERVER)?;
         (page_of(&agent.id), name.to_string(), input.clone())
@@ -1314,6 +1338,15 @@ pub fn agents_equivalent(name: &str, input: &Value) -> (String, Value) {
         "find" => ("find".into(), i),
         "get_text" => ("get_page_text".into(), i),
         "close_tab" => ("tabs_close_mcp".into(), i),
+        "browsers" => ("list_connected_browsers".into(), i),
+        "use_browser" => ("select_browser".into(), i),
+        "hover" => {
+            let mut extra = vec![("action", json!("hover"))];
+            if let (Some(x), Some(y)) = (input.get("x"), input.get("y")) {
+                extra.push(("coordinate", json!([x, y])));
+            }
+            ("computer".into(), with(json!({}), &extra))
+        }
         "screenshot" => (
             "computer".into(),
             with(json!({}), &[("action", json!("screenshot"))]),
@@ -1368,6 +1401,89 @@ pub fn agents_equivalent(name: &str, input: &Value) -> (String, Value) {
 /// its browser waits.
 pub const AGENTS_SIGNIN_REFUSAL: &str = "The user is signing in to a site in the agents' browser right now. Don't use the browser until they're done: carry on with what doesn't need it, or wait a few minutes and try again.";
 
+/* ------------------------------------- the user's Chrome, our extension */
+
+/// The user's own Chrome through the app's extension (`user_chrome`), as its
+/// tools are named in a turn. Same tool names and shapes as the agents'
+/// browser ([`AGENTS_SERVER`]), so prompts and these rules carry over.
+pub const USER_CHROME_SERVER: &str = "mcp__user_chrome__";
+
+/// Where an agent's page memory for the user's Chrome is kept.
+pub fn user_chrome_key(agent_id: &str) -> String {
+    format!("chrome:{agent_id}")
+}
+
+/// Change an agent's page memory for the user's Chrome (the server knows
+/// what each ref is, as for the agents' browser).
+pub fn note_user_chrome_page(agent_id: &str, f: impl FnOnce(&mut Page)) {
+    with_pages(|p| f(p.entry(user_chrome_key(agent_id)).or_default()));
+}
+
+/// A user's-Chrome call about to run: what it types, for the send card.
+pub fn note_typed_user_chrome(agent_id: &str, name: &str, input: &Value) {
+    let (n, i) = agents_equivalent(name, input);
+    note_user_chrome_page(agent_id, |p| on_typed(p, &n, &i));
+}
+
+/// One of the app's own browser servers: the agents' browser, or the
+/// user's Chrome through the app's extension. Both answer the same tools.
+pub fn is_own_browser(tool: &str) -> bool {
+    tool.starts_with(AGENTS_SERVER) || tool.starts_with(USER_CHROME_SERVER)
+}
+
+/// The page memory an own-browser tool reads.
+pub fn own_page_key(agent_id: &str, tool: &str) -> Option<String> {
+    if tool.starts_with(AGENTS_SERVER) {
+        Some(agents_key(agent_id))
+    } else if tool.starts_with(USER_CHROME_SERVER) {
+        Some(user_chrome_key(agent_id))
+    } else {
+        None
+    }
+}
+
+/// An own-browser call as the Claude in Chrome call it amounts to, with
+/// the page memory it is judged on.
+fn own_call(agent_id: &str, tool: &str, input: &Value) -> Option<(Page, String, Value)> {
+    let key = own_page_key(agent_id, tool)?;
+    let name = tool
+        .strip_prefix(AGENTS_SERVER)
+        .or_else(|| tool.strip_prefix(USER_CHROME_SERVER))?;
+    let (n, i) = agents_equivalent(name, input);
+    Some((page_of(&key), n, i))
+}
+
+/// Decide a call into the user's own Chrome through the app's extension.
+/// `enabled`: Settings → Agents → "Your Chrome". Any engine may use it (it
+/// isn't tied to a Claude account), but never in a turn answering outside
+/// text, never for an agent whose browser is off, and every rule that
+/// decides a Claude in Chrome call decides this one. Pure but for `page`.
+pub fn gate_user_chrome_with(
+    enabled: bool,
+    level: Level,
+    agent: &Agent,
+    name: &str,
+    input: &Value,
+    outside: bool,
+    page: &Page,
+) -> Gate {
+    if !enabled {
+        return Gate::Refuse(
+            "Your Chrome isn't connected for agents (Settings → Agents → Your Chrome). If the task needs a signed-in site, ask with request_login for it.".into(),
+        );
+    }
+    if outside {
+        return Gate::Refuse("Your browser isn't available while you answer text from outside (a routine's items, or a message that carried them). Do this from the user's own request.".into());
+    }
+    if agent.reach.browser_off {
+        return Gate::Refuse(
+            "The user's browser isn't on for you. If the task needs a signed-in site, ask with request_login for it.".into(),
+        );
+    }
+    let (n, i) = agents_equivalent(name, input);
+    decide(level, agent, &n, &i, page)
+}
+
 /// Decide an agents' browser call. `enabled`: the Settings switch; the
 /// agent's own "browser" setting and outside text apply as for Claude in
 /// Chrome, but any engine may use it. Pure but for `page`.
@@ -1400,6 +1516,11 @@ pub fn gate_agents_with(
 /// [`describe`] for the agents' browser: the same plain words, about the
 /// agents' browser rather than the user's own Chrome.
 pub fn describe_agents(tool: &str, input: &Value, page: &Page) -> (String, String) {
+    if let Some(name) = tool.strip_prefix(USER_CHROME_SERVER) {
+        // The user's own Chrome: Claude in Chrome's words are already right.
+        let (n, i) = agents_equivalent(name, input);
+        return describe(&format!("{SERVER}{n}"), &i, page);
+    }
     let name = tool.strip_prefix(AGENTS_SERVER).unwrap_or(tool);
     let (n, i) = agents_equivalent(name, input);
     let (title, said) = describe(&format!("{SERVER}{n}"), &i, page);

@@ -473,6 +473,16 @@ async fn handle_http(
             };
             return handle_browser_http(app, caller.agent_id, caller.turn, req).await;
         }
+        Some(SecretRoute::UserChrome) => {
+            // The user's own Chrome through the app's extension: answered
+            // only while the user has it on (off by default), else the same
+            // bare 404 as a wrong path.
+            let caller = bearer_of(&req).and_then(|s| crate::agents::broker::caller(&s));
+            let Some(caller) = caller.filter(|_| crate::user_chrome::settings::enabled()) else {
+                return Ok(plain_response(StatusCode::NOT_FOUND, "Not found"));
+            };
+            return handle_user_chrome_http(app, caller.agent_id, caller.turn, req).await;
+        }
         Some(SecretRoute::Connection(key)) => {
             // A connection the turn was granted: the relay adds the app's
             // token, which the turn never holds (`agents::conn_relay`).
@@ -590,6 +600,8 @@ enum SecretRoute {
     Import,
     /// `/mcp/browser`: the agents' browser.
     Browser,
+    /// `/mcp/user-chrome`: the user's Chrome through the app's extension.
+    UserChrome,
     /// `/mcp/conn/<serverKey>`: the connection relay.
     Connection(String),
 }
@@ -600,6 +612,7 @@ fn route_secret_path(path: &str) -> Option<SecretRoute> {
         crate::agents::reach::AGENT_PATH => Some(SecretRoute::Agent),
         crate::agents::reach::IMPORT_PATH => Some(SecretRoute::Import),
         crate::agent_browser::tools::PATH => Some(SecretRoute::Browser),
+        crate::user_chrome::tools::PATH => Some(SecretRoute::UserChrome),
         p => p
             .strip_prefix(crate::agents::reach::CONN_PATH)
             .filter(|k| {
@@ -652,6 +665,49 @@ async fn handle_import_http(
             }
             Ok(json_response(
                 crate::agents::connector::handle_rpc(&app, &secret, &message).await,
+            ))
+        }
+        Method::DELETE => Ok(plain_response(StatusCode::OK, "")),
+        _ => Ok(plain_response(
+            StatusCode::METHOD_NOT_ALLOWED,
+            "Method not allowed",
+        )),
+    }
+}
+
+async fn handle_user_chrome_http(
+    app: tauri::AppHandle,
+    agent_id: String,
+    turn: Option<u64>,
+    req: Request<Incoming>,
+) -> Result<Response<ServerBody>, hyper::Error> {
+    match *req.method() {
+        Method::POST => {
+            let body = req.into_body().collect().await?.to_bytes();
+            if body.len() > MAX_BODY_BYTES {
+                return Ok(plain_response(
+                    StatusCode::PAYLOAD_TOO_LARGE,
+                    "Payload too large",
+                ));
+            }
+            let message: Value = match serde_json::from_slice::<Value>(&body) {
+                Ok(v) if v.is_object() => v,
+                _ => {
+                    return Ok(json_response(error_response(
+                        Value::Null,
+                        -32700,
+                        "Parse error",
+                    )))
+                }
+            };
+            if message.get("id").is_none_or(Value::is_null) {
+                return Ok(Response::builder()
+                    .status(StatusCode::ACCEPTED)
+                    .body(full_body(Bytes::new()))
+                    .unwrap());
+            }
+            Ok(json_response(
+                crate::user_chrome::tools::handle_rpc(&app, &agent_id, turn, &message).await,
             ))
         }
         Method::DELETE => Ok(plain_response(StatusCode::OK, "")),
@@ -1252,6 +1308,11 @@ mod tests {
             Some(SecretRoute::Browser)
         );
         assert_eq!(route_secret_path("/mcp/browser/x"), None);
+        assert_eq!(
+            route_secret_path("/mcp/user-chrome"),
+            Some(SecretRoute::UserChrome)
+        );
+        assert_eq!(route_secret_path("/mcp/user-chrome/x"), None);
         assert_eq!(
             route_secret_path("/mcp/conn/linear_work"),
             Some(SecretRoute::Connection("linear_work".into()))

@@ -2620,6 +2620,78 @@ pub async fn agents_agent_browser_status() -> Result<crate::agent_browser::Statu
         .map_err(agents::err_other)
 }
 
+/// Settings → Agents → "Your Chrome": the switch, the host, the extension
+/// and the connected profiles, read back from the Mac.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_user_chrome_status() -> Result<crate::user_chrome::Status, CommandError> {
+    tokio::task::spawn_blocking(crate::user_chrome::status)
+        .await
+        .map_err(agents::err_other)
+}
+
+/// Turn "Your Chrome" on (listen, set up the host, stage the extension) or
+/// off (stop listening; every connected Chrome hears so).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_user_chrome_set_enabled(
+    on: bool,
+) -> Result<crate::user_chrome::Status, CommandError> {
+    crate::user_chrome::set_enabled(on).await
+}
+
+/// Show the extension's folder in Finder, for Chrome's "Load unpacked".
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_user_chrome_show_extension() -> Result<(), CommandError> {
+    let dir = crate::user_chrome::install::staged_extension_dir();
+    if !dir.join("manifest.json").is_file() {
+        return Err(CommandError::expected(
+            "The extension's files aren't set up yet. Turn Your Chrome on first.",
+        ));
+    }
+    let mut cmd = tokio::process::Command::new("open");
+    cmd.arg("-R").arg(dir.join("manifest.json"));
+    crate::external_command::run_with_timeout(cmd, "open -R", 10)
+        .await
+        .map(|_| ())
+}
+
+/// Open Chrome's extensions page (where Developer mode and Load unpacked are).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_user_chrome_open_extensions_page() -> Result<(), CommandError> {
+    let mut cmd = tokio::process::Command::new("open");
+    cmd.args(["-a", "Google Chrome", "chrome://extensions/"]);
+    crate::external_command::run_with_timeout(cmd, "open chrome://extensions", 10)
+        .await
+        .map(|_| ())
+}
+
+/// Once the Web Store listing exists: ask Chrome to offer it (External
+/// Extensions, "Enable" on Chrome's next start) and open its page.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_user_chrome_add_from_store() -> Result<(), CommandError> {
+    let (Some(id), Some(url)) = (
+        crate::brand::chrome::WEB_STORE_ID,
+        crate::user_chrome::install::web_store_url(),
+    ) else {
+        return Err(CommandError::expected(
+            "The extension isn't on the Chrome Web Store yet: add it with Load unpacked.",
+        ));
+    };
+    if let Some(udd) = crate::user_chrome::install::chrome_user_data_dir() {
+        crate::user_chrome::install::write_external_extension(&udd, id)
+            .map_err(agents::err_other)?;
+    }
+    let mut cmd = tokio::process::Command::new("open");
+    cmd.arg(&url);
+    crate::external_command::run_with_timeout(cmd, "open the Web Store", 10)
+        .await
+        .map(|_| ())
+}
+
 /// The switch. Off closes the agents' Chrome.
 #[tauri::command]
 #[tracing::instrument]

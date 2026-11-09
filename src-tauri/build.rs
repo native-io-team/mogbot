@@ -81,6 +81,19 @@ fn generate_brand() {
     }
     writeln!(out, "}}").ok();
 
+    // The app's Chrome extension (`user_chrome`): its Web Store id once
+    // the listing exists. Null keeps it to the unpacked (dev) id only.
+    writeln!(out, "pub mod chrome {{").ok();
+    let store = opt("/chromeExtension/webStoreId");
+    if let Some(id) = &store {
+        assert!(
+            id.len() == 32 && id.chars().all(|c| ('a'..='p').contains(&c)),
+            "brand.json: chromeExtension.webStoreId must be a 32-letter Chrome extension id"
+        );
+    }
+    writeln!(out, "    pub const WEB_STORE_ID: Option<&str> = {store:?};").ok();
+    writeln!(out, "}}").ok();
+
     writeln!(out, "pub mod telemetry {{").ok();
     for (name, key) in [
         ("POSTHOG_KEY", "posthogKey"),

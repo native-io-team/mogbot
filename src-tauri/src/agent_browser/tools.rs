@@ -44,7 +44,7 @@ const MAX_TEXT: usize = 20_000;
 pub struct ToolDef {
     pub name: &'static str,
     pub description: &'static str,
-    schema: fn() -> Value,
+    pub schema: fn() -> Value,
 }
 
 fn tab_prop() -> Value {

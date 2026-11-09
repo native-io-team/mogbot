@@ -53,7 +53,8 @@
     ],
     "resources": {
       "fonts/*": "fonts/",
-      "resources/scrcpy-server.jar": "scrcpy-server.jar"
+      "resources/scrcpy-server.jar": "scrcpy-server.jar",
+      "../chrome-extension/extension/": "chrome-extension/"
     },
     "createUpdaterArtifacts": false,
     "macOS": {

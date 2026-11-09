@@ -29,9 +29,12 @@ pub mod navigation_guard;
 pub mod preview_isolation;
 pub mod proxy;
 pub mod remote_access;
+// "Your Chrome": the user's Chrome through the app's own extension
+// (docs/internal/own-browser-layer.md).
 pub mod state;
 pub mod static_server;
 pub mod types;
+pub mod user_chrome;
 pub mod utils;
 pub mod webview_scripts;
 pub mod workflow_scheduler;
@@ -337,6 +340,12 @@ pub fn run() {
                         commands::mobile::set_bundled_scrcpy_jar(jar);
                     }
                 }
+                // "Your Chrome": the extension's files ship as a resource.
+                if let Ok(dir) = _app.path().resource_dir() {
+                    user_chrome::install::set_resource_dir(dir);
+                }
+                // Listening only when the user turned it on (off by default).
+                tauri::async_runtime::spawn(user_chrome::start());
             }
 
             // Build the main window programmatically so we can attach an
@@ -757,6 +766,11 @@ pub fn run() {
             commands::agents::agents_browser_live_frame,
             commands::agents::agents_browser_live_stop,
             commands::agents::agents_agent_browser_set_enabled,
+            commands::agents::agents_user_chrome_status,
+            commands::agents::agents_user_chrome_set_enabled,
+            commands::agents::agents_user_chrome_show_extension,
+            commands::agents::agents_user_chrome_open_extensions_page,
+            commands::agents::agents_user_chrome_add_from_store,
             commands::agents::agents_agent_browser_permission,
             commands::agents::agents_browser_open_install,
             commands::agents::agents_access_check,
@@ -1342,6 +1356,8 @@ pub fn run() {
                 // The agents' Chrome quits with the app (it saves its
                 // profile on Browser.close).
                 agent_browser::service::shutdown();
+                // The user's Chrome hears that the app is gone.
+                user_chrome::stop("quit");
                 tracing::info!(
                     ptys,
                     sessions,

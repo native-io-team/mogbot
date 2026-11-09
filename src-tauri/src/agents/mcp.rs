@@ -2601,6 +2601,25 @@ const TOOL_VERBS: [&str; 44] = [
 /// nouns ("computer", "javascript_tool", "tabs_context_mcp"), which the verb
 /// rule turned into "Javascript a tool" and "Tabs a context".
 fn browser_tool_title(server: &str, name: &str) -> Option<&'static str> {
+    // The user's own Chrome through the app's extension (`user_chrome`).
+    if server == crate::user_chrome::tools::SERVER_KEY {
+        return Some(match name {
+            "open" => "Open a page in your Chrome",
+            "navigate" => "Go to a page in your Chrome",
+            "read_page" | "find" | "get_text" => "Read the page",
+            "screenshot" => "Look at the page",
+            "click" => "Click on the page",
+            "hover" => "Point at something on the page",
+            "type" => "Type on the page",
+            "press" => "Press a key on the page",
+            "scroll" => "Scroll the page",
+            "wait_for" => "Wait for the page",
+            "tabs" => "See its tabs in your Chrome",
+            "browsers" | "use_browser" => "Pick a Chrome profile",
+            "close_tab" => "Close a tab",
+            _ => return None,
+        });
+    }
     // The agents' browser (`agent_browser::tools`).
     if server == crate::agent_browser::tools::SERVER_KEY {
         return Some(match name {
@@ -2731,11 +2750,15 @@ pub(super) async fn decide(
     // about (one it lets through needs no pass, and a pass left over would
     // wait for a later call that does ask).
     if decision == Decision::Allow
-        && tool.starts_with(super::browser_gate::AGENTS_SERVER)
+        && super::browser_gate::is_own_browser(tool)
         && super::browser_gate::gate(caller, tool, input, runner::from_outside(&caller.id))
             == super::browser_gate::Gate::Ask
     {
-        crate::agent_browser::tools::note_cleared(&caller.id, tool, input);
+        if tool.starts_with(super::browser_gate::USER_CHROME_SERVER) {
+            crate::user_chrome::tools::note_cleared(&caller.id, tool, input);
+        } else {
+            crate::agent_browser::tools::note_cleared(&caller.id, tool, input);
+        }
     }
     decision
 }
@@ -2775,7 +2798,9 @@ async fn agents_browser_card(
     tool: &str,
     input: &Value,
 ) -> Decision {
-    let page = super::browser_gate::page_of(&super::browser_gate::agents_key(&caller.id));
+    let key = super::browser_gate::own_page_key(&caller.id, tool)
+        .unwrap_or_else(|| super::browser_gate::agents_key(&caller.id));
+    let page = super::browser_gate::page_of(&key);
     let (title, said) = super::browser_gate::describe_agents(tool, input, &page);
     let (_, detail) = describe_request(tool, input);
     let summary = with_exact_text(
@@ -2882,7 +2907,7 @@ async fn decide_inner(
         return Decision::Allow;
     }
     // The agents' browser has its own card words ("in the agents' browser").
-    if tool.starts_with(super::browser_gate::AGENTS_SERVER) {
+    if super::browser_gate::is_own_browser(tool) {
         return agents_browser_card(app, caller, tool, input).await;
     }
     // "Nothing goes out under my name unless I OK the exact text"
@@ -3005,7 +3030,7 @@ fn under_plan(
         return false;
     };
     let browser = (tool.starts_with(super::browser_gate::SERVER)
-        || tool.starts_with(super::browser_gate::AGENTS_SERVER))
+        || super::browser_gate::is_own_browser(tool))
     .then(|| super::browser_gate::plan_step(caller, tool, input))
     .flatten();
     // Exact text: a command is judged part by part (`plan_grant`); anything

@@ -50,9 +50,36 @@ pub const TEXT_JS: &str = "document.body ? document.body.innerText : ''";
 /// Whether the document has finished loading.
 pub const READY_JS: &str = "document.readyState";
 
+/// One scroll step of the page itself, by direction. A wheel event waits
+/// for the page to paint, which a window Chrome thinks is hidden (behind
+/// others, on another Space) never does; scrolling the document doesn't.
+pub const SCROLL_UP_JS: &str = "window.scrollBy(0, -120)";
+pub const SCROLL_DOWN_JS: &str = "window.scrollBy(0, 120)";
+pub const SCROLL_LEFT_JS: &str = "window.scrollBy(-120, 0)";
+pub const SCROLL_RIGHT_JS: &str = "window.scrollBy(120, 0)";
+
+/// The step for a direction.
+pub fn scroll_step_js(direction: &str) -> Option<&'static str> {
+    Some(match direction {
+        "up" => SCROLL_UP_JS,
+        "down" => SCROLL_DOWN_JS,
+        "left" => SCROLL_LEFT_JS,
+        "right" => SCROLL_RIGHT_JS,
+        _ => return None,
+    })
+}
+
 /// Every expression the app evaluates in a page. The extension holds a copy
 /// and refuses anything else (`chrome-extension/src/cdp.js`).
-pub const EXPRESSIONS: &[&str] = &[FOCUSED_FIELD_JS, TEXT_JS, READY_JS];
+pub const EXPRESSIONS: &[&str] = &[
+    FOCUSED_FIELD_JS,
+    TEXT_JS,
+    READY_JS,
+    SCROLL_UP_JS,
+    SCROLL_DOWN_JS,
+    SCROLL_LEFT_JS,
+    SCROLL_RIGHT_JS,
+];
 
 /// Every CDP method the page logic sends. The extension relays these and
 /// nothing else.
