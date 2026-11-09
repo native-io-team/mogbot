@@ -36,6 +36,8 @@
   background: var(--surface-panel);
   border: var(--border-width-default) solid var(--border-default);
   border-radius: var(--radius-lg);
+  /* Lifted a hair off the canvas, like the site's composer. */
+  box-shadow: var(--shadow-sm);
 }
 
 /* Anything above the text row (mention menu, quotes, attachments, hints). */
