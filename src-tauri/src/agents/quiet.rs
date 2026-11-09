@@ -296,17 +296,7 @@ pub fn call(args: &serde_json::Value, outside: bool, now: i64) -> Result<String,
     if outside {
         return Err("Not while answering what a \u{201c}When\u{2026}\u{201d} routine found: that text came from outside this app. Tell the user instead.".into());
     }
-    let s = |k: &str| {
-        args.get(k)
-            .and_then(serde_json::Value::as_str)
-            .unwrap_or("")
-    };
-    let off = args.get("off").and_then(serde_json::Value::as_bool) == Some(true);
-    let window = if off {
-        None
-    } else {
-        Some(parse(s("from"), s("to"))?)
-    };
+    let window = wanted(args)?;
     set(window, now).map_err(|e| e.to_string())?;
     Ok(match window {
         Some(w) => format!(
@@ -316,6 +306,38 @@ pub fn call(args: &serde_json::Value, outside: bool, now: i64) -> Result<String,
         ),
         None => "Quiet hours are off. Tell the user in one line.".into(),
     })
+}
+
+/// The window `set_quiet_hours`'s arguments ask for: `None` for `off: true`.
+pub fn wanted(args: &serde_json::Value) -> Result<Option<Window>, String> {
+    let s = |k: &str| {
+        args.get(k)
+            .and_then(serde_json::Value::as_str)
+            .unwrap_or("")
+    };
+    if args.get("off").and_then(serde_json::Value::as_bool) == Some(true) {
+        return Ok(None);
+    }
+    Ok(Some(parse(s("from"), s("to"))?))
+}
+
+/// Whether going from `now` to `next` holds back less: some minute quiet
+/// now isn't quiet after. Setting hours where there were none, or widening
+/// them, holds back more. Pure.
+pub fn holds_less(now: Option<Window>, next: Option<Window>) -> bool {
+    let Some(now) = now else { return false };
+    (0..DAY_MINUTES).any(|m| now.contains_minute(m) && !next.is_some_and(|n| n.contains_minute(m)))
+}
+
+/// The card's line for a change of quiet hours. Pure.
+pub fn change_line(now: Option<Window>, next: Option<Window>) -> String {
+    let was = now.map(|w| w.label()).unwrap_or_else(|| "none".into());
+    match next {
+        Some(w) => format!("Quiet hours {was} → {}", w.label()),
+        None => {
+            format!("Quiet hours {was} → off: routines run and notifications arrive at any hour")
+        }
+    }
 }
 
 /// A line for a check-in's wake, when the agent remembers quiet hours the

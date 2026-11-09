@@ -288,6 +288,10 @@ struct Runtime {
     /// A note the app queued (`From::App`) is among what the turn in
     /// progress answers: it isn't a quiet check-in, though nobody asked.
     noted: bool,
+    /// Another agent's message is among what the turn in progress answers
+    /// (or the one it replaced): its words ride in the same prompt as the
+    /// user's, so the turn is not the user's alone ([`users_own_ask`]).
+    agent_in: bool,
 }
 
 /// Why a take-over can't start now.
@@ -414,6 +418,22 @@ pub fn answering_user(agent_id: &str) -> bool {
         .unwrap_or_else(|e| e.into_inner())
         .get(agent_id)
         .is_some_and(|r| r.running && r.user_asked && !r.outside)
+}
+
+/// The turn in progress answers the user's own message *and nothing else*:
+/// no other agent's request or note from the app rides in the same prompt,
+/// no outside text, and nothing its conversation read came from outside
+/// (`exposure::read_outside`: a web page, a search result, mail or chat
+/// through a connection). What a setting from chat applies without a card
+/// needs: words planted in what was read, or passed on by another agent,
+/// read to the engine exactly like the user's own.
+pub fn users_own_ask(agent_id: &str) -> bool {
+    let alone = RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .is_some_and(|r| r.running && r.user_asked && !r.outside && !r.noted && !r.agent_in);
+    alone && !super::exposure::read_outside(agent_id)
 }
 
 /// The Chief (or an admin) passing on the user's own request, "try again":
@@ -3008,6 +3028,8 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     // An app note, like the user, starts the chain over: it owes no agent.
     runtime.noted = batch.iter().any(|m| matches!(m.from, From::App))
         || (runtime.interrupted.is_some() && runtime.noted);
+    runtime.agent_in = batch.iter().any(|m| matches!(m.from, From::Agent { .. }))
+        || (runtime.interrupted.is_some() && runtime.agent_in);
     runtime.origin = if batch.iter().any(|m| m.from.here()) {
         None
     } else {
@@ -3153,6 +3175,7 @@ fn finish_if_idle(agent_id: &str) -> Option<Idle> {
     runtime.typed = None;
     runtime.user_asked = false;
     runtime.noted = false;
+    runtime.agent_in = false;
     runtime.user_text.clear();
     Some(Idle {
         owed: std::mem::take(&mut runtime.owed),
@@ -3278,6 +3301,7 @@ fn reset_after_panic(agent_id: &str, progressed: bool) -> PanicReset {
     runtime.typed = None;
     runtime.user_asked = false;
     runtime.noted = false;
+    runtime.agent_in = false;
     runtime.user_text.clear();
     // What is recorded from now on is the agent's own, not the dead turn's room's.
     let room = runtime.room.take().map(|r| r.room_id);
