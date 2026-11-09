@@ -909,6 +909,25 @@ const LIVE = [
   },
   { name: 'search', route: '/search', check: 'Empty search' },
   {
+    name: 'needs-you',
+    route: '/needs',
+    ready: 'Needs you',
+    act: () => sleep(1500),
+    check:
+      'Needs you: every waiting card across agents, newest first; short ones Deny · Allow (neutral), long ones Review, keys/logins their own action',
+  },
+  {
+    name: 'request-full',
+    route: '/needs',
+    ready: 'Needs you',
+    act: async (page) => {
+      await sleep(1500);
+      await page.clickLabel('Review');
+      await sleep(1200);
+    },
+    check: 'Request: the whole card, nothing capped, Deny · Allow pinned at the bottom',
+  },
+  {
     name: 'catchup-first',
     route: '/catch-up',
     ready: 'Catch up',
