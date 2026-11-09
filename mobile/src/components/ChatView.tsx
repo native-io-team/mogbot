@@ -8,7 +8,7 @@
  * (`embedded`), where it draws its own header instead of the stack's.
  */
 
-import { headerSubtitle, headerSubtitleParts } from '../lib/accountsView';
+import { headerSubtitle, headerSubtitleParts, roleCutPastReading } from '../lib/accountsView';
 import {
   newestResults,
   foldResultReplies,
@@ -86,6 +86,7 @@ import {
   iconSize,
   radius,
   space,
+  type,
   PRESSED,
 } from '../lib/theme';
 import {
@@ -965,9 +966,15 @@ const HEADER_RESERVED = 200;
 function Header({ agent }: { agent: Agent }) {
   const colors = useColors();
   const styles = useStyles();
-  const { width } = useWindowDimensions();
-  const subtitle = headerSubtitle(agent);
-  const parts = headerSubtitleParts(agent);
+  const { width, fontScale } = useWindowDimensions();
+  const whole = headerSubtitleParts(agent);
+  // A role cut to "Desig…" is dropped for the account alone, until the role,
+  // the account or the room changes.
+  const fit = `${whole.role}|${whole.on}|${width}|${fontScale}|${type.caption}`;
+  const [cutAt, setCutAt] = useState<string | null>(null);
+  const roleCut = cutAt === fit;
+  const parts = roleCut ? headerSubtitleParts({ role: '', ranOn: agent.ranOn }) : whole;
+  const subtitle = roleCut ? headerSubtitle({ role: '', ranOn: agent.ranOn }) : headerSubtitle(agent);
   return (
     <View style={[styles.header, { maxWidth: Math.min(260, width - HEADER_RESERVED) }]}>
       <AgentAvatar
@@ -996,6 +1003,15 @@ function Header({ agent }: { agent: Agent }) {
                 numberOfLines={1}
                 maxFontSizeMultiplier={chromeScale}
                 style={styles.subtitleRole}
+                onLayout={
+                  parts.on
+                    ? (e: LayoutChangeEvent) => {
+                        const size = type.caption * Math.min(fontScale, chromeScale);
+                        if (roleCutPastReading(e.nativeEvent.layout.width, parts.role, size))
+                          setCutAt(fit);
+                      }
+                    : undefined
+                }
               >
                 {parts.role}
               </T>

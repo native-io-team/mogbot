@@ -16,7 +16,7 @@ import * as Clipboard from 'expo-clipboard';
 import { columnAlign } from '@shipstudio/companion-protocol';
 import { Lexer, type Token, type Tokens } from 'marked';
 import { createContext, memo, useContext, useMemo, useState, type ReactNode } from 'react';
-import { Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Linking, Pressable, StyleSheet, Text, View } from 'react-native';
 import { haptic } from '../lib/haptics';
 import { splitMentions } from '../lib/rooms';
 import { makeStyles, useColors } from '../lib/appearance';
@@ -32,6 +32,7 @@ import {
   type Palette,
   PRESSED,
 } from '../lib/theme';
+import { SideScroll } from './SideScroll';
 import { T } from './ui';
 
 /** Opens a path written in a reply; absent where paths can't be opened. */
@@ -108,6 +109,12 @@ export function withoutPartialFence(text: string): string {
     ? trimmed.slice(0, Math.max(0, at)).replace(/\s+$/, '')
     : trimmed;
 }
+
+/**
+ * What the words sit on, when it isn't the chat's own background (a step's
+ * well, a card): a wide table's far edge fades into it.
+ */
+export const MarkdownSurface = createContext<string | null>(null);
 
 export const Markdown = memo(function Markdown({
   text,
@@ -349,6 +356,8 @@ function List({ list, depth = 0 }: { list: Tokens.List; depth?: number }) {
 
 function Table({ table }: { table: Tokens.Table }) {
   const styles = useStyles();
+  const colors = useColors();
+  const surface = useContext(MarkdownSurface) ?? colors.surfaceApp;
   // Columns sized from their longest cell, so every row lines up.
   const widths = table.header.map((h, c) => {
     const longest = Math.max(h.text.length, ...table.rows.map((r) => r[c]?.text.length ?? 0));
@@ -387,9 +396,10 @@ function Table({ table }: { table: Tokens.Table }) {
     </View>
   );
   return (
-    <ScrollView
-      horizontal
-      showsHorizontalScrollIndicator={false}
+    <SideScroll
+      indicator={false}
+      testID="table-scroll"
+      fade={surface}
       style={styles.tableScroll}
       contentContainerStyle={styles.tableFill}
     >
@@ -397,7 +407,7 @@ function Table({ table }: { table: Tokens.Table }) {
         {row(table.header, true, -1)}
         {table.rows.map((r, i) => row(r, false, i))}
       </View>
-    </ScrollView>
+    </SideScroll>
   );
 }
 
@@ -432,15 +442,16 @@ function CodeBlock({ code, lang }: { code: string; lang?: string }) {
           </T>
         </Pressable>
       </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
+      <SideScroll
+        testID="code-scroll"
+        indicator={false}
+        fade={colors.surfacePanel}
         contentContainerStyle={styles.codeBody}
       >
         <Text maxFontSizeMultiplier={READ_MAX_SCALE} style={styles.codeText}>
           {code}
         </Text>
-      </ScrollView>
+      </SideScroll>
     </View>
   );
 }

@@ -111,6 +111,7 @@ export function MenuHost() {
             <Pressable
               style={[StyleSheet.absoluteFill, styles.scrim]}
               onPress={() => set(null)}
+              accessibilityRole="button"
               accessibilityLabel="Close menu"
             />
           </Animated.View>

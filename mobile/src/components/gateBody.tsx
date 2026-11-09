@@ -10,7 +10,7 @@ import { useState } from 'react';
 import { View } from 'react-native';
 import { makeStyles, useColors } from '../lib/appearance';
 import { radius, space } from '../lib/theme';
-import { Markdown } from './Markdown';
+import { Markdown, MarkdownSurface } from './Markdown';
 import { ShowAll } from './ShowAll';
 import { T } from './ui';
 
@@ -40,7 +40,9 @@ export function GateBody({ approval }: { approval: Approval }) {
             What step {gate.done} made
           </T>
           <View style={styles.wellBody}>
-            <Markdown text={shown} />
+            <MarkdownSurface.Provider value={colors.surfaceGroup}>
+              <Markdown text={shown} />
+            </MarkdownSurface.Provider>
           </View>
           {long && <ShowAll open={open} onPress={() => setOpen((v) => !v)} />}
         </View>

@@ -33,6 +33,8 @@ jest.mock('../src/lib/session', () => ({
   describeError: String,
 }));
 
+// The fade is drawn for the eye only: hidden from assistive tech.
+const HIDDEN = { includeHiddenElements: true };
 const lines = (n: number) => Array.from({ length: n }, (_, i) => `line ${i + 1}`).join('\n');
 
 describe('capFields', () => {
@@ -89,6 +91,26 @@ describe('the expander', () => {
   it('offers nothing for a command that fits', async () => {
     await render(<Command text={lines(3)} lines={DETAIL_LINES} />);
     expect(screen.queryByText(/Show all/)).toBeNull();
+  });
+
+  it('fades the far edge while a long line runs past it, until scrolled to the end', async () => {
+    await render(<Command text="cp -r export/icons ~/ShipStudio/acme-site/public" lines={4} />);
+    const scroll = screen.getByTestId('command-scroll');
+    expect(screen.queryByTestId('command-scroll-more', HIDDEN)).toBeNull();
+    await fireEvent(scroll, 'layout', { nativeEvent: { layout: { width: 300, height: 40 } } });
+    await fireEvent(scroll, 'contentSizeChange', 520, 40);
+    expect(screen.getByTestId('command-scroll-more', HIDDEN)).toBeTruthy();
+    expect(scroll.props.accessibilityHint).toMatch(/scroll sideways/);
+    await fireEvent.scroll(scroll, { nativeEvent: { contentOffset: { x: 220, y: 0 } } });
+    expect(screen.queryByTestId('command-scroll-more', HIDDEN)).toBeNull();
+  });
+
+  it('draws no fade on a line that fits', async () => {
+    await render(<Command text="ls" lines={4} />);
+    const scroll = screen.getByTestId('command-scroll');
+    await fireEvent(scroll, 'layout', { nativeEvent: { layout: { width: 300, height: 40 } } });
+    await fireEvent(scroll, 'contentSizeChange', 40, 40);
+    expect(screen.queryByTestId('command-scroll-more', HIDDEN)).toBeNull();
   });
 
   it('caps fields and opens them whole', async () => {

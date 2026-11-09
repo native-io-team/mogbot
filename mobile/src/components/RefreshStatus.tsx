@@ -76,6 +76,7 @@ export function RefreshStatus({
       >
         {said === 'failed' ? (
           <Pressable
+            accessibilityRole="button"
             accessibilityHint="Hides this"
             onPress={onDismiss}
             disabled={outcome !== 'failed'}

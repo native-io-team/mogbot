@@ -10,8 +10,15 @@
 
 import type { Agent } from '@shipstudio/companion-protocol';
 import { Link, type Href } from 'expo-router';
-import { memo, useRef } from 'react';
-import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
+import { memo, useRef, useState } from 'react';
+import {
+  type LayoutChangeEvent,
+  Platform,
+  Pressable,
+  StyleSheet,
+  useWindowDimensions,
+  View,
+} from 'react-native';
 import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
@@ -34,7 +41,8 @@ import { useSteadyLine } from '../lib/steady';
 import { useApp } from '../lib/store';
 import { useAgentLevelLabel } from './IndependenceSetting';
 import { haptic } from '../lib/haptics';
-import { avatarSize, chromeScale, iconSize, radius, space } from '../lib/theme';
+import { roleCutPastReading } from '../lib/accountsView';
+import { avatarSize, chromeScale, iconSize, radius, space, type } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { AgentAvatar, StatusMark } from './agent';
 import { showActions } from './menu';
@@ -261,7 +269,7 @@ function RowBody({
   const colors = useColors();
   const styles = useStyles();
   const ripple = useRipple();
-  const { fontScale } = useWindowDimensions();
+  const { fontScale, width } = useWindowDimensions();
   // At the largest sizes the time moves under the subtitle so the name keeps its room.
   const stacked = fontScale >= 1.6;
   // Waiting only on the Mac (an import to review): said plainly, not in amber.
@@ -289,6 +297,11 @@ function RowBody({
         : subtitle(agent, now)
   );
   const role = roleLabel(agent.role);
+  // A role squeezed to "Invo…" says nothing: dropped until what shares its
+  // line (the name, pin, level, time) or the row's width changes.
+  const fit = `${agent.name}|${role}|${width}|${fontScale}|${type.caption}|${agent.pinned}|${agent.muted}|${level}|${formatAgo(agent.lastActivityAt)}`;
+  const [cutAt, setCutAt] = useState<string | null>(null);
+  const roleShown = cutAt === fit ? '' : role;
   // Waiting on you, a turn that didn't finish, or out of usage: the state as
   // a pill, the rest in the line's own ink (one coloured thing per row).
   const pill = state && live ? rowPill(agent, line) : null;
@@ -357,15 +370,19 @@ function RowBody({
             {agent.name}
           </T>
           {/* Its role, muted, one line: it gives way before the name does. */}
-          {role ? (
+          {roleShown ? (
             <T
               variant="caption"
               color={colors.textMuted}
               numberOfLines={1}
               maxFontSizeMultiplier={NAME_SCALE}
               style={styles.role}
+              onLayout={(e: LayoutChangeEvent) => {
+                const size = type.caption * Math.min(fontScale, NAME_SCALE);
+                if (roleCutPastReading(e.nativeEvent.layout.width, roleShown, size)) setCutAt(fit);
+              }}
             >
-              {role}
+              {roleShown}
             </T>
           ) : (
             <View style={styles.role} />
