@@ -321,6 +321,37 @@ fn the_tools_drive_a_fake_chrome() {
     super::super::step_in::release("tool_agent", "req_tools");
     run("tool_agent", "get_text", &json!({ "tab": held_tab.id })).unwrap();
 
+    // Review: a `wait_for` already waiting when the user steps in kept
+    // reading the page they were in (and answered whether a text the agent
+    // chose, a code, was on it). It stops at the hold.
+    let target = held_tab.target_id.clone();
+    let id = held_tab.id;
+    let stepper = std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(500));
+        super::super::step_in::hold(
+            "tool_agent",
+            super::super::step_in::Held {
+                request_id: "req_wait".into(),
+                tab: id,
+                target_id: target,
+                since_ms: 0,
+                before: crate::agents::browser::Landed {
+                    url: String::new(),
+                    title: String::new(),
+                },
+            },
+        )
+        .unwrap();
+    });
+    let waited = run(
+        "tool_agent",
+        "wait_for",
+        &json!({ "tab": held_tab.id, "text": "never on the page 123456", "seconds": 4 }),
+    );
+    stepper.join().unwrap();
+    assert_eq!(waited.unwrap_err(), super::super::step_in::REFUSAL);
+    super::super::step_in::release("tool_agent", "req_wait");
+
     close_agent("tool_agent");
     assert!(svc.tabs_of(&Owner::Agent("tool_agent".into())).is_empty());
 }

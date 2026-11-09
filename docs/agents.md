@@ -2458,7 +2458,10 @@ sign-in on a site it's signed out of is still `request_login` with
   card ("Handed back"), leaves a line ("You handed Finance its browser back
   after 4 min · billing.acme.example") and wakes the agent with
   `step_in::resume_note`: the tab, the reason, how long, and where the page
-  was and is (address and title only), never anything typed.
+  was and is (the address without its query, fragment or credentials),
+  never anything typed nor the page's title: the note is queued as from the
+  user, the site writes its title, and a sign-in leaves codes in the query.
+  A `wait_for` already waiting when the user steps in stops at the hold.
 - **By itself**: the tab closing ("The tab closed while you were in …"), or
   15 minutes with no hand-back (the card reads "Handed back by itself after
   15 min", and the agent is told the user may not have finished and not to

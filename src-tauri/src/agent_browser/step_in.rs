@@ -12,7 +12,7 @@
 //!   screen) reaches the agent. Its other tabs still work.
 //! - **Nothing typed is seen.** Keys go from the keyboard to Chrome; the app
 //!   never reads them. The agent is told only where the page ended up (its
-//!   address and title, [`resume_note`]).
+//!   address, without query or fragment, [`resume_note`]).
 //! - **Ends** by Hand back, by the tab closing, or after [`LIMIT`]
 //!   ([`ended_by`]): always with a line in the chat and the agent woken.
 //!
@@ -150,13 +150,28 @@ pub fn minutes(since_ms: i64, now_ms: i64) -> i64 {
     ((now_ms.saturating_sub(since_ms)) / 60_000).max(1)
 }
 
-fn page_words(l: &Landed) -> String {
-    let title = l.title.trim();
-    if title.is_empty() {
-        l.url.clone()
-    } else {
-        format!("\"{}\" · {}", clip(title, 120), l.url)
+/// Where a page is, for the note: scheme, host and path only. The note is
+/// queued as from the user, so nothing the site writes goes in it (its
+/// title), and nothing a sign-in or a form leaves in an address (a query's
+/// one-time code, a fragment's token, credentials before the host). The
+/// agent reads the page itself, through its tools, for the rest.
+pub fn address(url: &str) -> String {
+    match url::Url::parse(url.trim()) {
+        Ok(u) if matches!(u.scheme(), "http" | "https") && u.host_str().is_some() => {
+            let port = u.port().map(|p| format!(":{p}")).unwrap_or_default();
+            format!(
+                "{}://{}{port}{}",
+                u.scheme(),
+                u.host_str().unwrap_or_default(),
+                clip(u.path(), 200)
+            )
+        }
+        _ => "a page that isn't a web address".to_string(),
     }
+}
+
+fn page_words(l: &Landed) -> String {
+    address(&l.url)
 }
 
 fn clip(s: &str, n: usize) -> String {
@@ -168,7 +183,8 @@ fn clip(s: &str, n: usize) -> String {
 }
 
 /// What the agent is woken with: where the page was, where it is, and how
-/// it ended. Only the address and title: never anything typed.
+/// it ended. Only the address, without its query or fragment ([`address`]):
+/// never anything typed, nor the page's own words.
 pub fn resume_note(reason: &str, e: &Ended) -> String {
     let tab = e.held.tab;
     let took = match e.minutes {
@@ -189,7 +205,7 @@ pub fn resume_note(reason: &str, e: &Ended) -> String {
     };
     let place = match &e.after {
         None => " That tab is gone: open the page again if you still need it.".to_string(),
-        Some(a) if a.url == e.held.before.url => format!(
+        Some(a) if address(&a.url) == address(&e.held.before.url) => format!(
             " The page is where it was: {}. Read it to see what changed.",
             page_words(a)
         ),
