@@ -42,3 +42,18 @@ export function headerSubtitle(agent: Pick<Agent, 'role' | 'ranOn'>): string {
   if (!agent.role) return on ? on.charAt(0).toUpperCase() + on.slice(1) : '';
   return on ? `${agent.role} · ${on}` : agent.role;
 }
+
+/**
+ * The subtitle in two parts, so the header can let the role give way
+ * first: the account is the news, and "Design system · on sam@ex…" hid it.
+ */
+export function headerSubtitleParts(agent: Pick<Agent, 'role' | 'ranOn'>): {
+  role: string;
+  on: string;
+} {
+  const whole = headerSubtitle(agent);
+  if (!agent.ranOn || !agent.role)
+    return { role: agent.ranOn ? '' : whole, on: agent.ranOn ? whole : '' };
+  const on = ` · on ${agent.ranOn.name}`;
+  return { role: whole.slice(0, whole.length - on.length), on };
+}

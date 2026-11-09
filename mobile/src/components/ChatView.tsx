@@ -8,7 +8,7 @@
  * (`embedded`), where it draws its own header instead of the stack's.
  */
 
-import { headerSubtitle } from '../lib/accountsView';
+import { headerSubtitle, headerSubtitleParts } from '../lib/accountsView';
 import { newestResults, type Agent, type AgentMessage } from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
@@ -935,6 +935,7 @@ function Header({ agent }: { agent: Agent }) {
   const styles = useStyles();
   const { width } = useWindowDimensions();
   const subtitle = headerSubtitle(agent);
+  const parts = headerSubtitleParts(agent);
   return (
     <View style={[styles.header, { maxWidth: Math.min(260, width - HEADER_RESERVED) }]}>
       <AgentAvatar
@@ -954,14 +955,31 @@ function Header({ agent }: { agent: Agent }) {
           {agent.name}
         </T>
         {!!subtitle && (
-          <T
-            variant="caption"
-            color={colors.textSecondary}
-            numberOfLines={1}
-            maxFontSizeMultiplier={chromeScale}
-          >
-            {subtitle}
-          </T>
+          // The role gives way before the account its last turn ran on.
+          <View style={styles.subtitle} accessible accessibilityLabel={subtitle}>
+            {!!parts.role && (
+              <T
+                variant="caption"
+                color={colors.textSecondary}
+                numberOfLines={1}
+                maxFontSizeMultiplier={chromeScale}
+                style={styles.subtitleRole}
+              >
+                {parts.role}
+              </T>
+            )}
+            {!!parts.on && (
+              <T
+                variant="caption"
+                color={colors.textSecondary}
+                numberOfLines={1}
+                maxFontSizeMultiplier={chromeScale}
+                style={styles.subtitleOn}
+              >
+                {parts.on}
+              </T>
+            )}
+          </View>
         )}
       </View>
     </View>
@@ -1072,6 +1090,10 @@ const useStyles = makeStyles((colors) => ({
   start: { alignItems: 'center', paddingVertical: space.xl },
   header: { flexDirection: 'row', alignItems: 'center', gap: space.sm, maxWidth: 260 },
   headerRight: { flexDirection: 'row', alignItems: 'center', gap: space.xs },
+  subtitle: { flexDirection: 'row', minWidth: 0 },
+  // Shrinks ten times faster than the account beside it.
+  subtitleRole: { flexShrink: 10 },
+  subtitleOn: { flexShrink: 1 },
   embeddedHeader: {
     flexDirection: 'row',
     alignItems: 'center',
