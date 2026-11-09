@@ -8,6 +8,7 @@ import {
   idsOf,
   reordered,
   runsOnChoices,
+  runsOnDetail,
 } from '../src/lib/accountsView';
 import * as real from '../../packages/companion-protocol/src/fixtures.gen';
 
@@ -115,6 +116,12 @@ describe('usage accounts, on the phone', () => {
     expect(runsOnChoices([mac, work, codex], 'claude').map((a) => a.id)).toEqual(['default', 'w1']);
     expect(runsOnChoices([mac, work, codex], 'codex')).toEqual([]);
     expect(runsOnChoices(null, 'claude')).toEqual([]);
+    // Pinning to one that can't run now says why.
+    expect(runsOnDetail({ signedIn: false, out: false })).toBe('Not signed in');
+    expect(runsOnDetail({ signedIn: true, out: true })).toBe(
+      'Only this one, never another · out of usage now'
+    );
+    expect(runsOnDetail({ signedIn: true, out: false })).toBe('Only this one, never another');
   });
 
   it('the chat header names the account its last turn ran on, quietly', () => {
@@ -127,7 +134,7 @@ describe('usage accounts, on the phone', () => {
     // In two parts, so the role gives way before the account.
     expect(
       headerSubtitleParts({ role: 'Design system', ranOn: { id: 'w1', name: 'Work' } })
-    ).toEqual({ role: 'Design system', on: ' · on Work' });
+    ).toEqual({ role: 'Design system', on: '\u00a0· on Work' });
     expect(headerSubtitleParts({ role: '', ranOn: { id: 'w1', name: 'Work' } })).toEqual({
       role: '',
       on: 'On Work',

@@ -33,6 +33,12 @@ export function runsOnChoices(
   return mine.length > 1 ? mine : [];
 }
 
+/** Under an account in "Runs on": what pinning to it means, and why it can't run now. */
+export function runsOnDetail(a: Pick<UsageAccount, 'signedIn' | 'out'>): string {
+  if (!a.signedIn) return 'Not signed in';
+  return a.out ? 'Only this one, never another · out of usage now' : 'Only this one, never another';
+}
+
 /**
  * Under the name: its role, and the account its last turn ran on (only
  * while its engine has more than one, as the Mac sends `ranOn`).
@@ -54,6 +60,7 @@ export function headerSubtitleParts(agent: Pick<Agent, 'role' | 'ranOn'>): {
   const whole = headerSubtitle(agent);
   if (!agent.ranOn || !agent.role)
     return { role: agent.ranOn ? '' : whole, on: agent.ranOn ? whole : '' };
-  const on = ` · on ${agent.ranOn.name}`;
-  return { role: whole.slice(0, whole.length - on.length), on };
+  // A no-break space: a leading plain one is dropped where the two parts meet.
+  const on = `\u00a0· on ${agent.ranOn.name}`;
+  return { role: agent.role, on };
 }

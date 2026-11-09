@@ -51,7 +51,7 @@ import { engineName } from '../lib/agents';
 import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
 import { modelOptions } from '../lib/newAgentDefaults';
-import { runsOnChoices } from '../lib/accountsView';
+import { runsOnChoices, runsOnDetail } from '../lib/accountsView';
 import { call, canCall, describeError, setAgentAccount, setAgentEngine } from '../lib/session';
 import { useApp, useServed } from '../lib/store';
 import { iconSize, space } from '../lib/theme';
@@ -296,7 +296,7 @@ function RunsOn({
     ...choices.map((a) => ({
       id: a.id,
       label: a.name,
-      detail: a.signedIn ? 'Only this one, never another' : 'Not signed in',
+      detail: runsOnDetail(a),
     })),
   ];
   return (

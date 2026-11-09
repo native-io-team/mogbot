@@ -784,7 +784,7 @@ const PROBE = [
   {
     name: 'probe-stale-card',
     route: '/chat/stale',
-    ready: 'pnpm run deploy',
+    ready: 'Ship the price fix',
     act: desk('desk-answer'),
     check:
       'Answered on the desk while open here: the card is a receipt (“Allowed”), no buttons, and Deploys is working',
@@ -817,7 +817,7 @@ const PROBE = [
     ready: 'Builder',
     act: scrollToText('RUNS ON'),
     check:
-      'Runs on: Any account, then the three Claude accounts, Work ticked; Personal says “Not signed in”',
+      'Runs on: Any account, then the three Claude accounts, Work ticked and “out of usage now”; Personal says “Not signed in”',
   },
   {
     name: 'probe-quiet-hours',

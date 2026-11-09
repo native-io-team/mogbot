@@ -304,6 +304,7 @@ export function addProbeAccount(
         text: 'Morning sweep (it waited for quiet hours to end): two orders asking about delivery, nothing urgent.',
       }
     );
+    chief.sort((a, b) => a.ts - b.ts);
   }
 
   // Up to fifty, the rest plain.
