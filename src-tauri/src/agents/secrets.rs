@@ -462,6 +462,9 @@ pub fn save(
     request_id: &str,
     values: &[String],
 ) -> Result<(Secret, Option<AgentMessage>), CommandError> {
+    // One answer per card (`answer_gate`): Save on the desk and the phone at
+    // once stores it once and wakes the agent once.
+    let _claim = super::answer_gate::claim(agent_id, request_id, "Saved")?;
     let approval = store::find_approval(agent_id, request_id)?
         .ok_or_else(|| CommandError::expected("That request no longer exists."))?;
     let Some(request) = approval.secret.as_ref() else {
@@ -470,7 +473,7 @@ pub fn save(
         ));
     };
     if approval.status != ApprovalStatus::Pending {
-        return Err(CommandError::expected("That request was already answered."));
+        return Err(super::answer_gate::lost(agent_id, request_id));
     }
     let secret = put(agent_id, request, values)?;
     let card = store::set_approval_status(agent_id, request_id, ApprovalStatus::Allowed)?;

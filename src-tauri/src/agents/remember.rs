@@ -415,6 +415,11 @@ pub async fn call(app: &AppHandle, caller: &Agent, turn: Option<u64>, args: &Val
             let Some(card) = open.iter().find(|a| a.request_id == id) else {
                 continue;
             };
+            // The user answering it right now keeps their answer.
+            let Some(_claim) = super::answer_gate::try_claim(&caller.id, &id, "Always allowed")
+            else {
+                continue;
+            };
             match store::allow_always(&caller.id, &id, &plan.scope) {
                 Ok(Some(message)) => {
                     let _ = app.emit(runner::EVENT_MESSAGE, &message);

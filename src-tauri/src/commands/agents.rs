@@ -1482,10 +1482,18 @@ pub(crate) fn answer_card(
     } else {
         store::ApprovalStatus::Denied
     };
+    // One answer per card (`answer_gate`): the desk, the phone, a typed yes
+    // and an admin agent racing on this card, exactly one gets past here;
+    // the others are told what it answered, and nothing of theirs runs.
+    let _claim = agents::answer_gate::claim(
+        agent_id,
+        request_id,
+        &agents::answer_gate::said(allow, always == Some(true), None),
+    )?;
     let approval = store::find_approval(agent_id, request_id)?
         .ok_or_else(|| CommandError::expected("That request no longer exists."))?;
     if approval.status != store::ApprovalStatus::Pending {
-        return Err(CommandError::expected("That request was already answered."));
+        return Err(agents::answer_gate::lost(agent_id, request_id));
     }
     // "Needs you in its browser": Step in is the desk's button and Not now
     // its own answer (`agents_answer_approval`), never a plain Allow here
@@ -1529,11 +1537,6 @@ pub(crate) fn answer_card(
     if approval.slack_reply.is_some() {
         return agents::slack::answer_card(app, agent_id, &approval, allow);
     }
-    // "Do these under your name?": Allow is the user's OK for each listed
-    // action, here and only here (`plan_grant`).
-    if let (true, Some(plan)) = (allow, &approval.plan) {
-        agents::plan_grant::grant(agent_id, plan, store::now_ms());
-    }
     if let Some(request) = &approval.secret {
         if allow {
             return Err(CommandError::expected(
@@ -1542,22 +1545,35 @@ pub(crate) fn answer_card(
         }
         return decline_secret(app, agent_id, request_id, request, note.as_deref());
     }
-    let rule = if allow && always == Some(true) {
-        Some(mcp::always_allow(agent_id, &approval)?)
+    let scope = if allow && always == Some(true) {
+        Some(approval.always.clone().ok_or_else(|| {
+            CommandError::expected("This one can't be always allowed. Allow it once instead.")
+        })?)
     } else {
         None
     };
-    // Write the decision before waking the waiter, so the card can't be
-    // overwritten by the waiter's own cleanup.
-    let updated = if let Some(scope) = &rule {
+    // Write the decision first: only the answer that closed the card grants
+    // a plan, keeps a rule or wakes the waiter (and the waiter's own cleanup
+    // can't overwrite it).
+    let updated = if let Some(scope) = &scope {
         store::allow_always(agent_id, request_id, scope)?
     } else if let Some(note) = &note {
         store::deny_with_note(agent_id, request_id, note)?
     } else {
         store::set_approval_status(agent_id, request_id, status)?
     };
-    if let Some(message) = updated {
-        let _ = app.emit(runner::EVENT_MESSAGE, &message);
+    let Some(message) = updated else {
+        return Err(agents::answer_gate::lost(agent_id, request_id));
+    };
+    let _ = app.emit(runner::EVENT_MESSAGE, &message);
+    let rule = match scope {
+        Some(_) => Some(mcp::always_allow(agent_id, &approval)?),
+        None => None,
+    };
+    // "Do these under your name?": Allow is the user's OK for each listed
+    // action, here and only here (`plan_grant`).
+    if let (true, Some(plan)) = (allow, &approval.plan) {
+        agents::plan_grant::grant(agent_id, plan, store::now_ms());
     }
     emit_registry(app);
     notify::refresh_badge(app);
@@ -1570,9 +1586,15 @@ pub(crate) fn answer_card(
             let Some(card) = open.iter().find(|a| a.request_id == id) else {
                 continue;
             };
-            if let Some(message) = store::allow_always(agent_id, &id, &scope)? {
-                let _ = app.emit(runner::EVENT_MESSAGE, &message);
-            }
+            // Someone answering it has it.
+            let Some(_covered) = agents::answer_gate::try_claim(agent_id, &id, "Always allowed")
+            else {
+                continue;
+            };
+            let Some(message) = store::allow_always(agent_id, &id, &scope)? else {
+                continue;
+            };
+            let _ = app.emit(runner::EVENT_MESSAGE, &message);
             if let Err(e) = wake(app, agent_id, card, true, None) {
                 tracing::warn!(request_id = %id, error = %e, "covered card could not wake its agent");
             }
@@ -1864,8 +1886,12 @@ pub async fn agents_import_playback_answer(
     request_id: String,
     addition: Option<String>,
 ) -> Result<(), CommandError> {
-    blocking(move || agents::connector::answer_playback(&app, &agent_id, &request_id, addition))
-        .await
+    blocking(move || {
+        // One answer per card (`answer_gate`), as on every other card.
+        let _claim = agents::answer_gate::claim(&agent_id, &request_id, "Answered")?;
+        agents::connector::answer_playback(&app, &agent_id, &request_id, addition)
+    })
+    .await
 }
 
 /// A review card as it should show now: each clash read again against the

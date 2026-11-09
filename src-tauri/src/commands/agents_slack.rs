@@ -73,10 +73,17 @@ pub async fn agents_slack_check_now(app: AppHandle) -> Result<slack::Status, Com
     blocking(slack::status).await
 }
 
+/// Sign the token out at Slack (best effort, a few seconds at most), then
+/// forget it here whatever Slack said; the answer's line says which.
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn agents_slack_disconnect(app: AppHandle) -> Result<slack::Status, CommandError> {
-    let status = blocking(slack::disconnect).await??;
+    let api = blocking(slack::token).await?.map(slack_api::HttpApi::new);
+    let status = slack::disconnect_with(
+        api.as_ref().map(|a| a as &dyn slack_api::Api),
+        slack::REVOKE_WAIT,
+    )
+    .await?;
     changed(&app);
     Ok(status)
 }

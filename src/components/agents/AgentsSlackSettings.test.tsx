@@ -11,6 +11,8 @@ vi.mock('@tauri-apps/api/core', async (importOriginal) => ({
 }));
 vi.mock('@tauri-apps/api/event', () => ({ listen: vi.fn(() => Promise.resolve(() => {})) }));
 vi.mock('@tauri-apps/plugin-opener', () => ({ openUrl }));
+const showToast = vi.hoisted(() => vi.fn());
+vi.mock('../../contexts/ToastContext', () => ({ useOptionalToast: () => ({ showToast }) }));
 
 // A fictional workspace.
 const status = (over: Partial<SlackStatus> = {}): SlackStatus => ({
@@ -48,6 +50,7 @@ describe('AgentsSlackSettings', () => {
   beforeEach(() => {
     invoke.mockReset();
     openUrl.mockClear();
+    showToast.mockClear();
   });
 
   it('walks through the three steps and sends the token only on Connect', async () => {
@@ -106,6 +109,24 @@ describe('AgentsSlackSettings', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
     await waitFor(() => expect(calls('agents_slack_disconnect').length).toBe(1));
     expect(await screen.findByText('1. Create the Slack app')).toBeTruthy();
+  });
+
+  it('says whether Slack signed the token out on Disconnect', async () => {
+    const line =
+      "Disconnected on this Mac, but Slack couldn't sign the token out (this Mac couldn't reach it). Remove the app in Slack to be sure it's off.";
+    invoke.mockImplementation((cmd: string) =>
+      Promise.resolve(
+        cmd === 'agents_slack_disconnect' ? status({ disconnected: line }) : connected()
+      )
+    );
+    render(<AgentsSlackSettings />);
+    expect(
+      await screen.findByText(
+        'Signs the token out with Slack and removes it from this Mac. Slack keeps the app.'
+      )
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Disconnect' }));
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith(line, 'info'));
   });
 
   it('a refused sign-in asks for a new token, keeping the settings', async () => {

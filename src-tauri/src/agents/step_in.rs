@@ -241,14 +241,21 @@ fn emit_card(app: &AppHandle, agent_id: &str, request_id: &str) {
     let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
 }
 
-fn pending_card(agent_id: &str, request_id: &str) -> Result<StepIn, CommandError> {
+/// The open step-in card, held for this answer (`answer_gate`): Step in,
+/// Hand back and Not now from the desk, the phone and the watcher never
+/// act on it at once.
+fn pending_card(
+    agent_id: &str,
+    request_id: &str,
+    said: &str,
+) -> Result<(super::answer_gate::Claim, StepIn), CommandError> {
+    let claim = super::answer_gate::claim(agent_id, request_id, said)?;
     let card = store::find_approval(agent_id, request_id)?
         .ok_or_else(|| CommandError::expected("That request no longer exists."))?;
-    if card.status != ApprovalStatus::Pending {
-        return Err(CommandError::expected("That request was already answered."));
-    }
-    card.step_in
-        .ok_or_else(|| CommandError::expected("That isn't a step-in card."))
+    let step_in = card
+        .step_in
+        .ok_or_else(|| CommandError::expected("That isn't a step-in card."))?;
+    Ok((claim, step_in))
 }
 
 /* ---------------------------------------------------------- step in */
@@ -259,7 +266,7 @@ pub async fn step_in(
     agent_id: &str,
     request_id: &str,
 ) -> Result<(), CommandError> {
-    let card = pending_card(agent_id, request_id)?;
+    let (_claim, card) = pending_card(agent_id, request_id, "Stepped in")?;
     store::get(agent_id)?;
     let (a, r, url) = (
         agent_id.to_string(),
@@ -294,7 +301,7 @@ pub async fn hand_back(
     request_id: &str,
     how: How,
 ) -> Result<(), CommandError> {
-    let card = pending_card(agent_id, request_id)?;
+    let (_claim, card) = pending_card(agent_id, request_id, "Handed back")?;
     let agent = store::get(agent_id)?;
     let (a, r) = (agent_id.to_string(), request_id.to_string());
     let ended = tokio::task::spawn_blocking(move || hold::end(&a, &r, how, store::now_ms()))
@@ -307,10 +314,15 @@ pub async fn hand_back(
 
 fn finish(app: &AppHandle, agent: &store::Agent, request_id: &str, card: &StepIn, e: &hold::Ended) {
     tracing::info!(agent = %agent.id, how = ?e.how, minutes = e.minutes, "[StepIn] handed back");
-    let _ = match e.how {
+    let closed = match e.how {
         How::TimedOut => store::set_aside(&agent.id, request_id, TIMED_OUT_ASIDE),
         _ => store::set_approval_status(&agent.id, request_id, ApprovalStatus::Allowed),
     };
+    // Something else closed it first: that answer stands, nobody woken twice.
+    if !matches!(closed, Ok(Some(_))) {
+        emit_card(app, &agent.id, request_id);
+        return;
+    }
     store::refresh_pending(&agent.id);
     super::notify::refresh_badge(app);
     let _ = runner::record(
@@ -332,7 +344,7 @@ pub async fn decline(
     agent_id: &str,
     request_id: &str,
 ) -> Result<(), CommandError> {
-    let card = pending_card(agent_id, request_id)?;
+    let (_claim, card) = pending_card(agent_id, request_id, "Not now")?;
     let (a, r) = (agent_id.to_string(), request_id.to_string());
     let _ =
         tokio::task::spawn_blocking(move || hold::end(&a, &r, How::HandedBack, store::now_ms()))
@@ -340,7 +352,7 @@ pub async fn decline(
     // Hand back (or the watcher ending it) answered it meanwhile: that
     // answer stands, and the agent isn't woken twice.
     if store::set_approval_status(agent_id, request_id, ApprovalStatus::Denied)?.is_none() {
-        return Err(CommandError::expected("That request was already answered."));
+        return Err(super::answer_gate::lost(agent_id, request_id));
     }
     note_not_now(agent_id, &card.site, store::now_ms());
     store::refresh_pending(agent_id);

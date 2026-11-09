@@ -325,9 +325,6 @@ pub async fn begin(
     else {
         return Err(CommandError::expected("That app has no connector."));
     };
-    if logins::busy(&request_id) {
-        return Err(CommandError::expected("It's already signing in."));
-    }
     let run = Run {
         app: app.clone(),
         agent_id: agent_id.clone(),
@@ -335,7 +332,15 @@ pub async fn begin(
         option: option.id.clone(),
         origin: Origin::phone(true),
     };
-    run.set(FlowState::Starting, None);
+    {
+        // Checked and marked as one step under the card's claim
+        // (`answer_gate`), so the desk's Connect can't start one alongside.
+        let _claim = super::answer_gate::claim(&agent_id, &request_id, "Signing in")?;
+        if logins::busy(&request_id) {
+            return Err(CommandError::expected("It's already signing in."));
+        }
+        run.set(FlowState::Starting, None);
+    }
     let redirect = redirect_uri();
     let prepared = match oauth::prepare(server_url, &redirect).await {
         Ok(p) => p,

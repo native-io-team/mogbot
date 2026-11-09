@@ -132,6 +132,7 @@ impl Api for Fake {
                 *n += 1;
                 json!({"ok": true, "ts": format!("1800000000.{:06}", *n)})
             }
+            "auth.revoke" => json!({"ok": true, "revoked": true}),
             _ => json!({"ok": false, "error": "unknown_method"}),
         })
     }
@@ -1043,6 +1044,82 @@ fn connecting_checks_the_token_keeps_it_in_the_keychain_and_listens_in_the_own_d
 
 fn token_now() -> Option<String> {
     token()
+}
+
+/// Slack that never answers.
+struct Silent;
+
+#[async_trait]
+impl Api for Silent {
+    async fn call(&self, _: &str, _: &[(&str, String)]) -> Result<Value, ApiError> {
+        std::future::pending().await
+    }
+}
+
+fn connected(fake: &Fake) {
+    block(connect_with(
+        fake,
+        "xoxp-1111111111-2222222222-abcdefabcdef",
+        NOW,
+    ))
+    .unwrap();
+    assert!(token_now().is_some());
+}
+
+#[test]
+fn disconnect_signs_the_token_out_at_slack_before_forgetting_it() {
+    with_root(|| {
+        let fake = Fake::default();
+        connected(&fake);
+        let st = block(disconnect_with(Some(&fake), REVOKE_WAIT)).unwrap();
+        assert_eq!(fake.called("auth.revoke"), 1);
+        assert!(!st.connected);
+        assert_eq!(token_now(), None);
+        assert_eq!(st.disconnected.as_deref(), Some(REVOKED));
+        // A token Slack already refuses is signed out as far as it goes.
+        connected(&fake);
+        fake.fail_on("auth.revoke", ApiError::SignIn("token_revoked".into()));
+        let st = block(disconnect_with(Some(&fake), REVOKE_WAIT)).unwrap();
+        assert_eq!(st.disconnected.as_deref(), Some(REVOKED));
+        assert_eq!(token_now(), None);
+    });
+}
+
+#[test]
+fn disconnect_still_forgets_the_token_here_when_slack_cant_sign_it_out_and_says_so() {
+    with_root(|| {
+        let fake = Fake::default();
+        for (e, why) in [
+            (ApiError::Network("offline".into()), "couldn't reach it"),
+            (ApiError::RateLimited(30), "asked to wait"),
+            (ApiError::Slack("fatal_error".into()), "“fatal_error”"),
+        ] {
+            connected(&fake);
+            fake.fail_on("auth.revoke", e);
+            let st = block(disconnect_with(Some(&fake), REVOKE_WAIT)).unwrap();
+            assert!(!st.connected);
+            assert_eq!(token_now(), None, "gone from this Mac anyway");
+            let line = st.disconnected.unwrap();
+            assert!(
+                line.starts_with("Disconnected on this Mac, but Slack couldn't sign the token out"),
+                "{line}"
+            );
+            assert!(line.contains(why), "{line}");
+            assert!(line.contains("Remove the app in Slack"), "{line}");
+        }
+        // Slack that never answers: given up on after the wait, never a hang.
+        connected(&fake);
+        let st = block(disconnect_with(
+            Some(&Silent),
+            std::time::Duration::from_millis(50),
+        ))
+        .unwrap();
+        assert_eq!(token_now(), None);
+        assert!(st.disconnected.unwrap().contains("didn't answer in time"));
+        // Nothing to sign out: no call, no line.
+        let st = block(disconnect_with(None, REVOKE_WAIT)).unwrap();
+        assert_eq!(st.disconnected, None);
+    });
 }
 
 #[test]
