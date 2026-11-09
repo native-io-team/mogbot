@@ -209,6 +209,40 @@ export function addProbeAccount(
     ]
   );
 
+  // A long plain request: Review on its row and its notification, read in full first.
+  put(
+    base('script', 'Shop Scripts', 'Nightly shop maintenance', 'green', {
+      pendingApprovals: 1,
+      status: { state: 'waiting', activity: null, since: now - 30 * MIN },
+      lastActivityAt: now - 30 * MIN,
+      preview: 'Needs your OK',
+    }),
+    [
+      { ts: now - 32 * MIN, kind: 'user', text: 'Tidy last month’s orders before the export.' },
+      {
+        ts: now - 30 * MIN,
+        kind: 'approval',
+        text: '',
+        approval: {
+          requestId: 'req_script',
+          title: 'Run a command',
+          detail: [
+            'set -e',
+            'cd ~/Shop/orders',
+            ...Array.from(
+              { length: 16 },
+              (_, i) =>
+                `mv 2026-10-${String(i + 1).padStart(2, '0')}-*.csv archive/2026-10/ && echo "moved day ${i + 1}"`
+            ),
+            'node scripts/rebuild-index.mjs --month 2026-10 --write',
+          ].join('\n'),
+          status: 'pending',
+          tool: 'Bash',
+        },
+      },
+    ]
+  );
+
   // An agent the desk will delete while its card is open on the phone.
   put(
     base('doomed', 'Temp Helper', 'One-off clean-up', 'gray', {

@@ -92,6 +92,57 @@ export async function post(alert: Alert) {
   }).catch(() => {});
 }
 
+/**
+ * An approval's own notification (`actionable.ts`): its words, its buttons,
+ * ids only in its data. Replaces the same card's earlier one.
+ */
+export async function postNotice(notice: {
+  identifier: string;
+  title: string;
+  subtitle?: string;
+  body: string;
+  categoryIdentifier: string;
+  data: Record<string, string>;
+}) {
+  const { granted } = await Notifications.getPermissionsAsync().catch(() => ({ granted: false }));
+  if (!granted) return false;
+  await Notifications.scheduleNotificationAsync({
+    identifier: notice.identifier,
+    content: {
+      title: notice.title,
+      ...(notice.subtitle ? { subtitle: notice.subtitle } : {}),
+      body: notice.body,
+      threadIdentifier: notice.data.agentId,
+      categoryIdentifier: notice.categoryIdentifier,
+      data: notice.data,
+    },
+    trigger: Platform.OS === 'android' ? { channelId: CHANNEL.needsYou } : null,
+  }).catch(() => {});
+  return true;
+}
+
+/** A line about an answer that didn't land, opening the card it was about. */
+export async function postNote(target: Target, title: string, body: string) {
+  const { granted } = await Notifications.getPermissionsAsync().catch(() => ({ granted: false }));
+  if (!granted) return;
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title,
+      body,
+      threadIdentifier: target.agentId,
+      data: { agentId: target.agentId, messageId: target.messageId ?? null, kind: 'approval' },
+    },
+    trigger: Platform.OS === 'android' ? { channelId: CHANNEL.needsYou } : null,
+  }).catch(() => {});
+}
+
+/**
+ * The relay's content-free "<Agent> needs you", once this phone has posted
+ * the card's own notification for it: one banner, the one with the words.
+ */
+export const dismissPushFor = (agentId: string) =>
+  dismissWhere((t) => t.agentId === agentId && t.kind === 'needs_you' && !t.messageId);
+
 async function dismissWhere(match: (t: Target) => boolean) {
   const shown = await Notifications.getPresentedNotificationsAsync().catch(() => []);
   await Promise.all(

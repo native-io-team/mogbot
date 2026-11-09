@@ -19,7 +19,7 @@
  * Pure, so the rules are tested without a screen (`__tests__/catchUp.test.ts`).
  */
 
-import { agentNeedsYou, setupHold } from '@shipstudio/companion-protocol';
+import { GATE_ALLOW, GATE_DENY, agentNeedsYou, setupHold } from '@shipstudio/companion-protocol';
 import type { Agent, AgentMessage, TeamSetupView } from '@shipstudio/companion-protocol';
 import { answerableHere, failedTurn } from './agents';
 import { shows } from './teamSetup';
@@ -200,6 +200,9 @@ export function askAction(m: AgentMessage | undefined): AskAction {
     return { kind: 'open', label: 'Review' };
   }
   if (a.front) return { kind: 'answer', allow: 'Check again', deny: 'Not now' };
+  // Its card's own words: Stop here · Go ahead, Ignore · Save to memory.
+  if (a.gate) return { kind: 'answer', allow: GATE_ALLOW, deny: GATE_DENY };
+  if (a.handoff) return { kind: 'answer', allow: 'Save to memory', deny: 'Ignore' };
   // Step in happens at the Mac: open the card, which says so.
   if (a.stepIn) return { kind: 'open', label: 'Open' };
   // Three answers (Wait, Just this time, Always): the card in its chat has them.

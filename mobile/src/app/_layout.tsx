@@ -18,7 +18,8 @@ import {
   syncQuickActions,
   type QuickTarget,
 } from '../lib/quickActions';
-import { boot, startDemo, watchLifecycle } from '../lib/session';
+import { answerFromNotification, boot, startDemo, watchLifecycle } from '../lib/session';
+import { answerOf, requestIdOf } from '../lib/actionable';
 import { screenshotRoute } from '../lib/screenshots';
 import { useApp } from '../lib/store';
 import { sheet, useStackOptions } from '../lib/navigation';
@@ -114,6 +115,7 @@ function Screens() {
               {/* Every sheet and grouped screen: panel behind, groups on surfaceGroup. */}
               <Stack.Screen name="connection" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen name="catch-up" options={{ headerShown: false }} />
+              <Stack.Screen name="request" options={{ headerShown: false }} />
               <Stack.Screen name="usage" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen name="controls" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen
@@ -170,6 +172,13 @@ export default function RootLayout() {
         response && `${response.notification.request.identifier}@${response.notification.date}`;
       if (!target || !key || seen.current.has(key)) return;
       seen.current.add(key);
+      // Allow / Deny on the notification: answered without opening anything.
+      const allow = answerOf(response.actionIdentifier);
+      if (allow !== null) {
+        const requestId = requestIdOf(response.notification.request);
+        void answerFromNotification({ ...target, ...(requestId ? { requestId } : {}) }, allow);
+        return;
+      }
       setTapped(target);
     };
     take(Notifications.getLastNotificationResponse());
@@ -215,6 +224,15 @@ export default function RootLayout() {
       // Unpaired by now (or never): the pair screen is where it belongs.
       if (!paired) return;
       if (tapped === 'home') return router.navigate('/agents');
+      // A card: open it in full, its answers under the thumb. A push names
+      // only the agent, so it opens everything that needs you.
+      if (tapped.kind === 'approval' && tapped.messageId) {
+        return router.navigate({
+          pathname: '/request',
+          params: { agent: tapped.agentId, id: tapped.messageId },
+        });
+      }
+      if (tapped.kind === 'needs_you' && !tapped.messageId) return router.navigate('/needs');
       const href = {
         pathname: '/chat/[id]' as const,
         params: {

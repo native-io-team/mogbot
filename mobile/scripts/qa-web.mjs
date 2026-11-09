@@ -769,6 +769,24 @@ const scrollToIncludes = (text) => async (page) => {
 /** The states the other phases miss (`--probe`, dev/mock-probe.ts). */
 const PROBE = [
   {
+    name: 'probe-needs-you',
+    route: '/needs',
+    ready: 'Needs you',
+    act: () => sleep(1500),
+    pages: 2,
+    check:
+      'Needs you: short plain requests (Deploys, Temp Helper) answered on the row with Deny · Allow; the 19-line script says Review; step-in and crossover open',
+  },
+  {
+    name: 'probe-request-long',
+    route: '/request?agent=script&id=script_001',
+    ready: 'Request',
+    act: () => sleep(1200),
+    pages: 2,
+    check:
+      'Request in full: every one of the 19 lines (no “Show all”), Deny · Allow pinned at the bottom',
+  },
+  {
     name: 'probe-fifty',
     route: '/agents',
     ready: 'Chief of Staff',
@@ -908,6 +926,14 @@ const LIVE = [
     check: 'Project list, sessions per project',
   },
   { name: 'search', route: '/search', check: 'Empty search' },
+  {
+    name: 'needs-you',
+    route: '/needs',
+    ready: 'Needs you',
+    act: () => sleep(1500),
+    check:
+      'Needs you: every waiting card across agents, newest first; short ones Deny · Allow (neutral), long ones Review, keys/logins their own action',
+  },
   {
     name: 'catchup-first',
     route: '/catch-up',

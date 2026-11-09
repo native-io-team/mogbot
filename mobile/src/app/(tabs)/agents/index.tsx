@@ -554,7 +554,8 @@ function AttentionBar({ bar, onOpenChief }: { bar: HomeBar; onOpenChief: (id: st
     <Pressable
       onPress={() => {
         haptic.select();
-        if (bar.kind === 'needs') router.push('/catch-up');
+        // Everything waiting lives in one place: the Needs you tab.
+        if (bar.kind === 'needs') router.navigate('/needs');
         else if (chief) onOpenChief(chief.id);
       }}
       android_ripple={ripple}

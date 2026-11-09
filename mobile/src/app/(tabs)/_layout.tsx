@@ -1,6 +1,6 @@
 /**
- * The three places you go from home: your agents, the projects they work
- * in, and search across every conversation. Native tabs, so the bar is the
+ * The places you go from home: what needs you, your agents, the projects
+ * they work in, and search across every conversation. Native tabs, so the bar is the
  * system's own (Liquid Glass on iOS 26) and search is the system search tab.
  */
 
@@ -15,7 +15,8 @@ export default function TabsLayout() {
   // is live news, so it shows only while the Mac is answering: offline the
   // rows say "as of …", and a red number would claim more than is known.
   const live = useApp((s) => s.link.kind === 'connected');
-  // The same number as Home's "N agents need your OK" and every count on the desk.
+  // The same number as Home's "N agents need your OK" and every count on the
+  // desk, on the tab that lists them.
   const waiting = useApp((s) =>
     s.overview ? attentionCounts(s.overview.agents, s.teamSetup).needYou : 0
   );
@@ -28,6 +29,17 @@ export default function TabsLayout() {
   );
   return (
     <NativeTabs tintColor={colors.textStrong} iconColor={{ default: colors.textMuted }}>
+      {/* First: every card waiting on you, across all agents, with the one count. */}
+      <NativeTabs.Trigger name="needs">
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'bell', selected: 'bell.fill' }}
+          md="notifications"
+        />
+        <NativeTabs.Trigger.Label>Needs you</NativeTabs.Trigger.Label>
+        {live && waiting > 0 && (
+          <NativeTabs.Trigger.Badge>{String(waiting)}</NativeTabs.Trigger.Badge>
+        )}
+      </NativeTabs.Trigger>
       <NativeTabs.Trigger name="agents">
         <NativeTabs.Trigger.Icon
           sf={{
@@ -37,9 +49,6 @@ export default function TabsLayout() {
           md="forum"
         />
         <NativeTabs.Trigger.Label>Agents</NativeTabs.Trigger.Label>
-        {live && waiting > 0 && (
-          <NativeTabs.Trigger.Badge>{String(waiting)}</NativeTabs.Trigger.Badge>
-        )}
       </NativeTabs.Trigger>
       <NativeTabs.Trigger name="projects">
         <NativeTabs.Trigger.Icon sf={{ default: 'folder', selected: 'folder.fill' }} md="folder" />

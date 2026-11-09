@@ -31,11 +31,16 @@ import {
   badgeCount,
   clearAll,
   dismissApproval,
+  dismissPushFor,
   dismissRead,
   post,
+  postNote,
+  postNotice,
   setBadge,
   setupChannels,
+  type Target,
 } from './notify';
+import { answerFromAlert, approvalNotice, setupCategories, type AnswerOutcome } from './actionable';
 import {
   appInfo,
   asCredentials,
@@ -107,6 +112,7 @@ export async function boot() {
   watchCache();
   watchAttention();
   void setupChannels();
+  void setupCategories();
   void finishForgets();
   if (credentials) connect(credentials);
 }
@@ -222,7 +228,10 @@ function connect(c: Credentials) {
   t.onEvent((event, cursor) => {
     if (event.type === 'agents.message') {
       const m = asMessage(event.message);
-      if (m) noticeMessage(m);
+      if (m) {
+        noticeMessage(m);
+        alertApproval(m);
+      }
     }
     update((s) => applyEvent(s, event, cursor));
     if (event.type === 'alert') void notify(event.alert);
@@ -1041,6 +1050,73 @@ Notifications.setNotificationHandler({
 async function notify(alert: Alert) {
   if (getApp().openChat === alert.agentId && AppState.currentState === 'active') return;
   await post(alert);
+}
+
+/** How long after posting a card's own notification the relay's duplicate is looked for again. */
+const PUSH_DEDUPE_MS = 4000;
+
+/**
+ * The live notifier: a new card arrives over the socket while the app is
+ * in the background (it keeps its connection for a while there), so this
+ * phone posts it itself, with its words and, when it fits, Allow / Deny
+ * (`actionable.ts`). Replayed history is never news; in front, the app
+ * shows it. Runs before the message is stored, so "new" is knowable.
+ */
+function alertApproval(m: AgentMessage) {
+  if (!caughtUp || AppState.currentState === 'active') return;
+  if (m.kind !== 'approval' || m.approval?.status !== 'pending') return;
+  const s = getApp();
+  if (isDemo(s.credentials)) return;
+  if (s.chats[m.agentId]?.messages.some((x) => x.id === m.id)) return;
+  const agent = s.overview?.agents.find((a) => a.id === m.agentId);
+  const notice = agent && approvalNotice(agent, m);
+  if (!notice) return;
+  void postNotice(notice).then((posted) => {
+    if (!posted) return;
+    // The relay's "needs you" for the same card may land just after: keep the one with words.
+    void dismissPushFor(m.agentId);
+    setTimeout(() => void dismissPushFor(m.agentId), PUSH_DEDUPE_MS);
+  });
+}
+
+/** How long an answer from a notification waits for the Mac. */
+const ANSWER_WAIT_MS = 20_000;
+
+/** Resolves once the Mac is answering, or false after `ms`. */
+export function waitLive(ms = ANSWER_WAIT_MS): Promise<boolean> {
+  if (getApp().link.kind === 'connected') return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const done = (ok: boolean) => {
+      clearTimeout(timer);
+      stop();
+      resolve(ok);
+    };
+    const timer = setTimeout(() => done(false), ms);
+    const stop = useApp.subscribe((st) => {
+      if (st.link.kind === 'connected') done(true);
+      else if (st.link.kind === 'refused') done(false);
+    });
+    // Woken from the background: don't wait out a backoff.
+    transport?.retryNow();
+  });
+}
+
+/**
+ * Allow or Deny tapped on a notification. The same request as the card in
+ * the app, so the Mac's one-answer-per-card claim decides; what didn't land
+ * is said in a notification of its own.
+ */
+export function answerFromNotification(
+  target: { agentId: string; messageId?: string; requestId?: string },
+  allow: boolean
+): Promise<AnswerOutcome> {
+  return answerFromAlert(target, allow, {
+    waitLive: () => waitLive(),
+    answer: (agentId, requestId, yes) => answerApproval(agentId, requestId, yes, false),
+    describe: describeError,
+    tell: (back: Target, body: string) => postNote(back, 'Not answered', body),
+    dismiss: dismissApproval,
+  });
 }
 
 /**

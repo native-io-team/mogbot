@@ -456,8 +456,9 @@ server), and every link must carry a fingerprint.
 
 ### Screens
 
-**Navigation:** native tabs for Agents, Projects and Search; chat, the agent
-sheet, files, a session, the diff and the photo viewer push over them. At
+**Navigation:** native tabs for Needs you, Agents, Projects and Search (the
+app still opens on Agents); chat, the agent sheet, files, a session, a
+request, the diff and the photo viewer push over them. At
 700 pt and wider (iPad, landscape) the Agents list and a chat sit side by side.
 
 - **Agents (home).** Needs you (approvals, signed out, usage limit) first,
@@ -469,6 +470,28 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   from the other tabs. Every other state keeps its mark. Swipe to mute, hide (with Undo) or pin; hold for the
   context menu. Quick actions on the icon: "Needs you" and "New message to
   Chief of Staff".
+- **Needs you** (`app/(tabs)/needs/index.tsx`, `lib/needsYou.ts`), the first
+  tab and the phone's one place for everything waiting on you, across every
+  agent; the tab carries the one count (the same number as the desk's and
+  Home's). Each row is the agent, what it asks and when: approvals, plans,
+  "OK to go on?", keys, logins, a session's question, changes in a task copy
+  waiting on Keep or Discard, a turn only you can fix, setting up your team,
+  and an import only the Mac can review. What blocks an agent first, then the
+  rest; newest first within each. A short plain request is answered on its
+  row (Deny · Allow, the same 400 ms arming); anything that doesn't fit whole
+  (`fitsWhole`: over 160 characters or 3 lines, a plan over 3 steps) has
+  **Review**, which opens it in full first; the rest open where they're
+  answered. Answered cards leave by themselves, here or at the desk. The
+  chats the cards live in are loaded as the tab opens. **One at a time**
+  (with two or more) opens Catch up. Home's "N agents need your OK" bar and a
+  pushed "needs you" open this tab.
+- **Request** (`app/request.tsx`, `/request?agent=&id=`): one card in full,
+  from a feed row, a tapped approval notification or Review on the Lock
+  Screen. Nothing capped (`ApprovalCard`'s `full`): a long command line by
+  line, every step of a plan, an email's whole body, details open; the page
+  scrolls and Deny · Allow stay pinned at the bottom. A key, a login or a
+  question has its one action, which opens it in its chat. Answered or
+  expired while open: it says so, with Open chat and Done.
 - **Usage** (`app/usage.tsx`, `lib/usageSheet.ts`): a small ring left of ⓘ
   in a chat's header shows the agent's engine's current 5-hour window, only
   once the engine has reported one (`agents.quota`). Tapping it opens the
@@ -481,8 +504,8 @@ sheet, files, a session, the diff and the photo viewer push over them. At
   ↻ reads it all again.
   No pace warning: the Mac serves no forecast of when a window runs out,
   and the phone doesn't guess one.
-- **Catch up** (`app/catch-up.tsx`, `lib/catchUp.ts`), from Home's "N agents
-  need your OK" bar, in place of the old list: everything waiting, one card
+- **Catch up** (`app/catch-up.tsx`, `lib/catchUp.ts`), from the Needs you
+  tab's **One at a time**: everything waiting, one card
   at a time, full screen. Setting up your team first, then every request
   this phone can answer (oldest first), then each agent with something new
   to read or a turn that needs you. A card is the agent, what it said since
@@ -1100,8 +1123,47 @@ panel, and **built but not deployed**: design, threat model and deploy steps
 are in [push-relay.md](push-relay.md).
 
 The socket can also carry an `alert` event, which the phone posts as a local
-notification, but no live-socket notifier sends one yet, so `LIVE_WINDOW_MS`
-is 0. Settings says plainly what arrives when.
+notification, but the Mac sends none yet, so `LIVE_WINDOW_MS` is 0.
+Settings says plainly what arrives when.
+
+**Answering from the Lock Screen** (`lib/actionable.ts`). The phone is its
+own live notifier: while it's in the background with its socket still open,
+a new card arriving over it (`agents.message`, after catch-up, not muted or
+hidden) is posted as a local notification with the card's words. A card
+whose whole content fits and has a plain pair of answers gets them as
+buttons (Deny · Allow, or its own words: Stop here · Go ahead, Not now ·
+Check again, Ignore · Save to memory); everything else gets **Review**,
+which opens it in full: keys, logins, a session's question, step-in,
+three-way and import cards always, and any card where something was
+redacted. Rules:
+
+- **Allow needs the phone unlocked.** Every card that reaches the phone is
+  above the user's independence level (the rest were answered for them), so
+  Allow is `isAuthenticationRequired` on iOS; Android actions can't ask for
+  that, so there Allow opens the app (unlocking it) and answers. Deny works
+  locked and never opens the app.
+- **No secret on a Lock Screen.** The words go through `redact` (known key
+  and token shapes, `Bearer`, `user:pass@`, `password=`/`token=`-style pairs,
+  private keys, long random runs); a key or login card says only what it
+  wants. The data is ids only: agent, message, request.
+- **The Mac decides.** Allow / Deny is `agents.answerApproval`, the same
+  request as the card in the app, so the card's claim (`answer_gate.rs`)
+  takes exactly one answer. The phone waits up to 20 s for the Mac
+  (`waitLive`); if it isn't reached, or the Mac refuses ("already
+  answered"), a "Not answered" notification says so and opens the card.
+- **One banner.** The card's notification replaces the relay's content-free
+  "needs you" for the same agent (`dismissPushFor`, at once and after 4 s).
+  A push itself has no buttons: it carries no words, so there's nothing to
+  agree to; tapping it opens Needs you, and a tapped approval opens the
+  request in full.
+
+Verified in jest and on the web build only. On a device: whether iOS keeps
+the socket long enough after backgrounding to hear a card (it suspends apps
+within seconds unless they hold a background task), and whether a button
+pressed after iOS has ended the app reaches it (Expo delivers a
+non-foreground action to a killed app's listener only on some versions). A
+self-built app gets the same local notifications; it just has no push
+behind them.
 
 ## Installing the app
 
@@ -1270,7 +1332,8 @@ the share extension, the camera, real keyboard behaviour).
 
 - The LAN route and its pinned-transport module; Bonjour discovery; more than
   one Mac at a time.
-- The live-socket notifier, and background refresh.
+- A live-socket notifier on the Mac (the phone posts cards it hears itself),
+  buttons on a pushed alert, and background refresh.
 - Paste import, deleting agents from the phone, and setting a new agent's
   engine, model or project there.
 - Pushing to git from the phone: Remote Access gates it behind a PIN, and the
