@@ -983,12 +983,23 @@ pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), CommandError
     if let Some(dir) = path.parent() {
         ensure_private_dir(dir).map_err(|e| super::err_io(e.to_string()))?;
     }
+    // A name of its own per write: with one shared `<name>.tmp`, two writers
+    // truncated and renamed each other's file, so a half-written one could
+    // land in place and the other write failed. And nothing left behind when
+    // the write fails (a full disk): a stray copy only fills it further.
     let mut tmp = path.as_os_str().to_owned();
-    tmp.push(".tmp");
+    tmp.push(format!(".{}.{}.tmp", std::process::id(), new_id()));
     let tmp = PathBuf::from(tmp);
-    write_private(&tmp, bytes).map_err(|e| super::err_io(e.to_string()))?;
-    std::fs::rename(&tmp, path).map_err(|e| super::err_io(e.to_string()))
+    let written = write_private(&tmp, bytes).and_then(|()| std::fs::rename(&tmp, path));
+    if written.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    written.map_err(|e| super::err_io(e.to_string()))
 }
+
+#[cfg(test)]
+#[path = "store_write_tests.rs"]
+mod write_tests;
 
 /* ------------------------------------------------------- permissions */
 

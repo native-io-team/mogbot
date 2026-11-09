@@ -122,7 +122,14 @@ pub fn sync_servers(native: &Path, target: &Path) -> std::io::Result<Synced> {
             done.removed.push(name.clone());
         }
     }
-    let now: BTreeSet<String> = from.keys().cloned().collect();
+    // Only what this sync put there is its own to take away later: a server
+    // the account already had under that name stays the account's, so this
+    // Mac dropping it never removes it from the account.
+    let now: BTreeSet<String> = from
+        .keys()
+        .filter(|n| before.contains(*n) || done.added.contains(n))
+        .cloned()
+        .collect();
     if done.changed() {
         config.insert("mcpServers".into(), Value::Object(servers));
         let bytes = serde_json::to_vec_pretty(&Value::Object(config))

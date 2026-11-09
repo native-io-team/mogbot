@@ -780,6 +780,8 @@ enum Ended {
     Lagged,
     Shutdown,
     SendFailed,
+    /// A newer socket from the same phone took its place.
+    Replaced,
 }
 
 /// The zone `chrono::Local` (the schedule grammar's) reads times in. chrono
@@ -1088,6 +1090,12 @@ where
             return Some(Ended::Revoked);
         }
         HubItem::Revoked { .. } => return None,
+        // The same phone came back on a newer socket: this one is spent.
+        HubItem::Replaced { conn } if conn == conn_of(&caller.label) => {
+            let _ = ws.send(Message::Close(None)).await;
+            return Some(Ended::Replaced);
+        }
+        HubItem::Replaced { .. } => return None,
         HubItem::Shutdown => {
             let _ = ws.send(Message::Close(None)).await;
             return Some(Ended::Shutdown);

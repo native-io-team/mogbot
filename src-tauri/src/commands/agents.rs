@@ -281,6 +281,19 @@ pub(crate) async fn send_as(
         return Err(agents::err_invalid("text", "Type a message first."));
     }
     let recipient = store::get(&agent_id)?;
+    // The phone sends again under the same id when it never heard back. The
+    // companion remembers ids in memory only, so a send that landed just as
+    // the app quit or crashed was posted, and run, a second time after the
+    // relaunch. The log remembers: the message already sent is the answer.
+    if let Some(client_id) = client_id.clone().filter(|c| !c.is_empty()) {
+        let of = agent_id.clone();
+        let sent = tokio::task::spawn_blocking(move || already_sent(&of, &client_id))
+            .await
+            .map_err(agents::err_other)?;
+        if let Some(sent) = sent {
+            return Ok(sent);
+        }
+    }
     let says_yes = agents::typed_answer::approves(&text);
     let home = store::agent_home(&agent_id)?;
     let mut message = runner::new_message(&agent_id, store::MessageKind::User, text.clone());
@@ -396,6 +409,20 @@ pub(crate) async fn send_as(
     runner::enqueue_user(&app, &agent_id, &message.id, prompt, typed);
     agents::tray::mark_used(&app);
     Ok(message)
+}
+
+/// How far back a resent message is looked for: far more than a phone can
+/// send in the ten minutes it retries for.
+const RESENT_SCAN: usize = 200;
+
+/// The user's message already in `agent_id`'s chat under the phone's send id
+/// `client_id`, if it is among the latest [`RESENT_SCAN`].
+fn already_sent(agent_id: &str, client_id: &str) -> Option<store::AgentMessage> {
+    store::messages(agent_id, RESENT_SCAN)
+        .ok()?
+        .into_iter()
+        .rev()
+        .find(|m| m.kind == store::MessageKind::User && m.client_id.as_deref() == Some(client_id))
 }
 
 /// Name, type and size for files about to be attached, refusing folders and
@@ -2643,6 +2670,33 @@ mod tests {
         let out = f(&chief.id);
         store::set_root_for_tests(None);
         out
+    }
+
+    /// The phone sent, the app quit before it answered, and after the
+    /// relaunch the phone sends again under the same id. The companion's
+    /// memory of ids went with the quit; the log still has the message, so
+    /// the send is answered with it instead of being posted and run twice.
+    #[test]
+    fn a_phone_send_repeated_after_a_relaunch_is_found_in_the_log() {
+        with_chief(|id| {
+            let mut sent =
+                runner::new_message(id, store::MessageKind::User, "Book the venue".to_string());
+            sent.client_id = Some("phone-send-1".into());
+            store::append_message(&sent).unwrap();
+            // Later lines, as a turn would leave.
+            for n in 0..30 {
+                let reply = runner::new_message(id, store::MessageKind::Agent, format!("step {n}"));
+                store::append_message(&reply).unwrap();
+            }
+            let found = already_sent(id, "phone-send-1").expect("found by its send id");
+            assert_eq!(found.id, sent.id);
+            assert!(already_sent(id, "phone-send-2").is_none());
+            // Only the user's own messages count.
+            let mut echo = runner::new_message(id, store::MessageKind::Agent, "x".to_string());
+            echo.client_id = Some("phone-send-3".into());
+            store::append_message(&echo).unwrap();
+            assert!(already_sent(id, "phone-send-3").is_none());
+        });
     }
 
     #[test]

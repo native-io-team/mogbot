@@ -707,10 +707,28 @@ impl Companion {
     }
 
     /// Admit a socket for `device_id`, within the per-device and total caps.
+    ///
+    /// A phone at its own cap gets in, and its oldest socket goes. A phone
+    /// that changes network (Wi-Fi to cellular, a lift, a tunnel) leaves
+    /// sockets the Mac can't tell are dead: writes into a vanished TCP peer
+    /// succeed for minutes. After four such hops the phone was refused with
+    /// "Too many connections from this phone. Close the app and try again",
+    /// which closing the app couldn't fix, until the dead ones timed out.
+    /// The token proved it is the same phone, and its newest socket is the
+    /// one it is using; the cap still bounds what one phone can hold.
     pub fn open_conn(&self, device_id: &str, foreground: bool) -> Option<u64> {
         let mut conns = self.conns();
-        let mine = conns.values().filter(|c| c.device_id == device_id).count();
-        if mine >= MAX_SOCKETS_PER_DEVICE || conns.len() >= MAX_SOCKETS {
+        let mine: Vec<u64> = conns
+            .iter()
+            .filter(|(_, c)| c.device_id == device_id)
+            .map(|(id, _)| *id)
+            .collect();
+        if mine.len() >= MAX_SOCKETS_PER_DEVICE {
+            // Ids only grow: the smallest is the oldest.
+            let oldest = mine.into_iter().min()?;
+            conns.remove(&oldest);
+            self.hub.signal(hub::HubItem::Replaced { conn: oldest });
+        } else if conns.len() >= MAX_SOCKETS {
             return None;
         }
         let id = self.next_conn.fetch_add(1, Ordering::Relaxed);

@@ -120,7 +120,9 @@ phone says "Waiting for the app on your Mac" for up to 2 minutes.
 **Limits:** 600 requests a minute per device, socket and HTTP together,
 of which at most 10 may create an agent (`MAX_AGENTS_CREATED_PER_MINUTE`;
 a retry answered from the `clientId` cache doesn't count); 4 sockets per
-device, 16 in all; 1 MB frames; 25 MB a file and 10 files a message
+device (a fifth from the same phone closes its oldest, since a phone that
+changes network leaves sockets the Mac can't yet tell are dead), 16 in all;
+1 MB frames; 25 MB a file and 10 files a message
 (`MAX_ATTACHMENT*`); 30 staged files or 300 MB per device, held before an
 upload's first byte is read; 3 uploads at once per device; a 10 s wait for
 each of `challenge` and `hello`. Before any of that (`limits.rs`): at most

@@ -1153,24 +1153,36 @@ pub fn carry_codex(roots: &[PathBuf], target: &Path, thread: &str) -> std::io::R
 }
 
 /// Copy keeping the source's modified time, so "newest" stays comparable.
+/// A copy that can't finish (a full disk) leaves nothing beside `to`: a
+/// conversation is often megabytes, and a stray part of one only fills the
+/// disk further. Each copy is written under a name of its own, so two
+/// agents carrying the same conversation can't truncate each other's.
 pub(super) fn copy_replacing(from: &Path, to: &Path) -> std::io::Result<()> {
     let mut tmp = to.as_os_str().to_owned();
-    tmp.push(".carry");
+    tmp.push(format!(".{}.carry", super::store::new_id()));
     let tmp = PathBuf::from(tmp);
-    std::fs::copy(from, &tmp)?;
+    let copied = copy_into(from, &tmp).and_then(|()| std::fs::rename(&tmp, to));
+    if copied.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    copied
+}
+
+fn copy_into(from: &Path, tmp: &Path) -> std::io::Result<()> {
+    std::fs::copy(from, tmp)?;
     // A conversation is the user's own: readable by them only, whatever
     // the source's mode was.
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&tmp, std::fs::Permissions::from_mode(0o600))?;
+        std::fs::set_permissions(tmp, std::fs::Permissions::from_mode(0o600))?;
     }
     if let Some(at) = modified(from) {
-        if let Ok(f) = std::fs::File::options().write(true).open(&tmp) {
+        if let Ok(f) = std::fs::File::options().write(true).open(tmp) {
             let _ = f.set_modified(at);
         }
     }
-    std::fs::rename(&tmp, to)
+    Ok(())
 }
 
 pub(super) fn copy_dir(from: &Path, to: &Path) -> std::io::Result<()> {
@@ -1422,6 +1434,34 @@ pub async fn views() -> Vec<AccountView> {
 mod tests {
     use super::*;
     use chrono::{TimeZone, Utc};
+
+    /// Carrying a conversation to another account that can't finish (a
+    /// full disk; here, a folder where the file goes) leaves no part-copy
+    /// beside it: it used to stay as `<session>.jsonl.carry`, megabytes
+    /// that only filled the disk further.
+    #[test]
+    fn a_carry_that_fails_leaves_no_part_copy() {
+        let dir = tempfile::tempdir().unwrap();
+        let from = dir.path().join("from.jsonl");
+        std::fs::write(&from, vec![b'x'; 64 * 1024]).unwrap();
+        let to_dir = dir.path().join("to");
+        std::fs::create_dir(&to_dir).unwrap();
+        let to = to_dir.join("s.jsonl");
+        std::fs::create_dir(&to).unwrap();
+        std::fs::write(to.join("keep"), b"x").unwrap();
+        assert!(copy_replacing(&from, &to).is_err());
+        let names: Vec<String> = std::fs::read_dir(&to_dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, vec!["s.jsonl".to_string()]);
+        // And one that can finish lands whole, with nothing beside it.
+        let ok = to_dir.join("t.jsonl");
+        copy_replacing(&from, &ok).unwrap();
+        assert_eq!(std::fs::read(&ok).unwrap().len(), 64 * 1024);
+        assert_eq!(std::fs::read_dir(&to_dir).unwrap().count(), 2);
+    }
 
     /// Any file can be in Codex's sessions folder: a name where the last 36
     /// bytes start inside a character is skipped, never a panic.

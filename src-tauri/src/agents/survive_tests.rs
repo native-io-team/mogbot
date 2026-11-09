@@ -116,6 +116,38 @@ fn a_truncated_file_is_set_aside_once_and_said() {
     });
 }
 
+/// Two readers found the same damaged file. The first set it aside and the
+/// default was saved in its place; the second, still holding the damaged
+/// bytes, used to move that good new file aside as well (and say so again).
+#[test]
+fn a_second_reader_of_a_damaged_file_leaves_the_new_one_alone() {
+    with_root(|root| {
+        let path = root.join("race.json");
+        let damaged = br#"{"accounts": ["#.to_vec();
+        std::fs::write(&path, &damaged).unwrap();
+        // The first reader.
+        let first: Option<serde_json::Value> = read_kept(&path, "The race thing");
+        assert!(first.is_none());
+        assert_eq!(said("The race thing couldn't be read").len(), 1);
+        // Its change is saved over the gap.
+        std::fs::write(&path, br#"{"accounts": []}"#).unwrap();
+        // The second reader, late with what it had read before.
+        set_aside_if_still(&path, &damaged, "The race thing", "EOF");
+        assert_eq!(
+            std::fs::read(&path).unwrap(),
+            br#"{"accounts": []}"#,
+            "the new file stays"
+        );
+        assert_eq!(kept(root, "race.json.corrupt-").len(), 1);
+        assert!(said("The race thing").is_empty(), "said once");
+        // The same, with nothing written back yet: no second line either.
+        std::fs::write(&path, &damaged).unwrap();
+        set_aside(&path, "The race thing", "EOF");
+        set_aside(&path, "The race thing", "EOF");
+        assert_eq!(said("The race thing").len(), 1);
+    });
+}
+
 #[test]
 fn a_good_or_missing_file_is_left_alone() {
     with_root(|root| {

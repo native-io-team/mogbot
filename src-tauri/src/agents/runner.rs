@@ -2205,6 +2205,58 @@ pub fn enqueue_reply_from(
     );
 }
 
+/// How an answer owed to an agent that asked reaches it, sent on behalf of
+/// a turn at `hop`: as a turn one hop further, or, past [`MAX_HOPS`], shown
+/// in its chat without a turn (with a line saying why).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AnswerWay {
+    Turn(u8),
+    ShowOnly,
+}
+
+fn answer_way(hop: u8) -> AnswerWay {
+    reply_hop(hop).map_or(AnswerWay::ShowOnly, AnswerWay::Turn)
+}
+
+/// The line under an answer that came too far down a chain to start a turn.
+fn chain_end_line(asker: &str, sender: &str) -> String {
+    format!(
+        "{sender}'s answer came at the end of a long chain of agents asking each other, so {asker} wasn't started on it. Message {asker} to carry on from here."
+    )
+}
+
+/// Give an agent that asked the answer it is owed. Within the hop cap it is
+/// queued as a turn, as ever. Past it, the answer used to be dropped
+/// without a word: the deepest agent in a 6-hop chain did the work and the
+/// one that asked never heard. It is now shown in the asker's chat with a
+/// line saying the chain stopped there, still without a turn (an answer can
+/// start a further answer, and a chain of them could otherwise loop).
+fn give_answer(
+    app: &AppHandle,
+    to: &AgentRef,
+    sender: &AgentRef,
+    text: String,
+    hop: u8,
+    outside: bool,
+) {
+    if store::get(&to.id).is_err() {
+        return;
+    }
+    let mut line = new_message(&to.id, MessageKind::FromAgent, text.clone());
+    line.peer = Some(sender.clone());
+    let _ = record(app, line);
+    match answer_way(hop) {
+        AnswerWay::Turn(next) => {
+            enqueue_reply_from(app, &to.id, text, sender.clone(), next, outside)
+        }
+        AnswerWay::ShowOnly => {
+            tracing::info!(to = %to.id, from = %sender.id, "[Agents] answer past the hop cap shown, not run");
+            let note = chain_end_line(&to.name, &sender.name);
+            let _ = record(app, new_message(&to.id, MessageKind::Note, note));
+        }
+    }
+}
+
 /// A request from another agent (`message_agent`), carrying the outside
 /// taint of the sender's turn, as a room's @mention does.
 pub fn enqueue_request(
@@ -2545,14 +2597,7 @@ fn tell_dropped(app: &AppHandle, agent_id: &str, dropped: Vec<Inbound>, why: Dro
         name: me.name.clone(),
     };
     for (to, hop) in askers {
-        let Some(hop) = reply_hop(hop) else { continue };
-        if store::get(&to.id).is_err() {
-            continue;
-        }
-        let mut line = new_message(&to.id, MessageKind::FromAgent, text.clone());
-        line.peer = Some(sender.clone());
-        let _ = record(app, line);
-        enqueue_reply(app, &to.id, text.clone(), sender.clone(), hop);
+        give_answer(app, &to, &sender, text.clone(), hop, false);
     }
 }
 
@@ -4011,20 +4056,13 @@ fn add_turn_usage(agent_id: &str, turn: &super::usage::UsageTotals) {
 /// Tell one agent that delegated to `agent_id` that it couldn't finish.
 /// `hop` is the turn's, read before its runtime was reset.
 fn tell_couldnt_finish(app: &AppHandle, agent_id: &str, to: &AgentRef, why: &str, hop: u8) {
-    let Some(hop) = reply_hop(hop) else { return };
     let Ok(me) = store::get(agent_id) else { return };
-    if store::get(&to.id).is_err() {
-        return;
-    }
     let text = format!("{} couldn't finish: {why}", me.name);
     let sender = AgentRef {
         id: me.id.clone(),
         name: me.name.clone(),
     };
-    let mut line = new_message(&to.id, MessageKind::FromAgent, text.clone());
-    line.peer = Some(sender.clone());
-    let _ = record(app, line);
-    enqueue_reply(app, &to.id, text, sender, hop);
+    give_answer(app, to, &sender, text, hop, false);
 }
 
 /// The user asked for text and the turn that just finished sent only files
@@ -4115,7 +4153,7 @@ fn return_results(app: &AppHandle, agent_id: &str, since: i64, error: Option<Str
     if owed.is_empty() {
         return;
     }
-    let hop = current_hop(agent_id).saturating_add(1);
+    let hop = current_hop(agent_id);
     // A turn answering outside text passes the taint to whoever it answers.
     let outside = from_outside(agent_id);
     let Ok(me) = store::get(agent_id) else { return };
@@ -4139,13 +4177,7 @@ fn return_results(app: &AppHandle, agent_id: &str, since: i64, error: Option<Str
         name: me.name.clone(),
     };
     for to in owed {
-        if hop > MAX_HOPS || store::get(&to.id).is_err() {
-            continue;
-        }
-        let mut line = new_message(&to.id, MessageKind::FromAgent, text.clone());
-        line.peer = Some(sender.clone());
-        let _ = record(app, line);
-        enqueue_reply_from(app, &to.id, text.clone(), sender.clone(), hop, outside);
+        give_answer(app, &to, &sender, text.clone(), hop, outside);
     }
 }
 
@@ -7396,3 +7428,7 @@ mod relay_runner_tests;
 #[cfg(test)]
 #[path = "app_note_runner_tests.rs"]
 mod app_note_runner_tests;
+
+#[cfg(test)]
+#[path = "breaks_runner_tests.rs"]
+mod breaks_runner_tests;
