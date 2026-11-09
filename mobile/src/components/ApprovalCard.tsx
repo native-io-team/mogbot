@@ -58,6 +58,7 @@ import { SettingsChange } from './settingsChange';
 import { PlanList } from './planList';
 import { GateBody } from './gateBody';
 import { ShowAll } from './ShowAll';
+import { SideScroll } from './SideScroll';
 import { Card, Line, OFFLINE_NOTE, TextAction, useActionShare } from './surfaces';
 import { Button, Icon, T } from './ui';
 
@@ -1085,16 +1086,15 @@ export function Command({ text, lines }: { text: string; lines: number }) {
   const over = long && !all;
   return (
     <View style={cardStyles.cardDetail}>
-      <ScrollView
-        horizontal
-        // Visible, so a line that runs off the edge reads as one to scroll.
-        showsHorizontalScrollIndicator
+      <SideScroll
+        testID="command-scroll"
+        fade={colors.surfaceApp}
         contentContainerStyle={cardStyles.cardDetailInner}
       >
         <T variant="mono" color={colors.textPrimary} selectable maxFontSizeMultiplier={1.5}>
           {over ? rows.slice(0, lines).join('\n') : text}
         </T>
-      </ScrollView>
+      </SideScroll>
       {long && (
         <ShowAll
           open={all}

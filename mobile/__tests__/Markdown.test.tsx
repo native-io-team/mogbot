@@ -36,6 +36,21 @@ describe('Markdown', () => {
     expect(await screen.findByText('Copied')).toBeTruthy();
   });
 
+  it('fades a code line or a table that runs past the edge, until scrolled to the end', async () => {
+    const hidden = { includeHiddenElements: true };
+    await render(<Markdown text={reply} />);
+    for (const id of ['code-scroll', 'table-scroll']) {
+      const scroll = screen.getByTestId(id);
+      await fireEvent(scroll, 'layout', { nativeEvent: { layout: { width: 320, height: 60 } } });
+      await fireEvent(scroll, 'contentSizeChange', 300, 60);
+      expect(screen.queryByTestId(`${id}-more`, hidden)).toBeNull();
+      await fireEvent(scroll, 'contentSizeChange', 700, 60);
+      expect(screen.getByTestId(`${id}-more`, hidden)).toBeTruthy();
+      await fireEvent.scroll(scroll, { nativeEvent: { contentOffset: { x: 380, y: 0 } } });
+      expect(screen.queryByTestId(`${id}-more`, hidden)).toBeNull();
+    }
+  });
+
   it('shows entities as characters', async () => {
     await render(<Markdown text={'Use `a < b && c > d`'} />);
     expect(screen.getByText('a < b && c > d')).toBeTruthy();

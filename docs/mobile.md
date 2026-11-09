@@ -1026,6 +1026,11 @@ the approval card folds its explanation so the answers stay on screen.
 `prefs.json`: `type` reads the size in force and `makeStyles` rebuilds each
 sheet per appearance and size, so anything sized from `type` follows it. VoiceOver and TalkBack hear
 replies, approvals, failures and toasts (`lib/a11y.ts`, not during replay).
+A command, code block, table or diff that runs past the edge scrolls sideways
+and says so: its far edge fades into the well while there's more, and the
+indicator flashes once (`SideScroll`), so a cut-off command never reads as the
+whole one. A role squeezed to a stub ("Desig…") beside a name or an account is
+dropped instead (`roleCutPastReading`).
 Haptics only for send, stop, approvals (after the Mac confirms), failures and
 toggles, and can be turned off. Android gets Material symbols, ripples and
 predictive back.

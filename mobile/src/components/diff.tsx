@@ -4,11 +4,12 @@
  */
 
 import { useState } from 'react';
-import { ScrollView, View } from 'react-native';
+import { View } from 'react-native';
 import { makeStyles, useColors } from '../lib/appearance';
 import { diffLineKind, type DiffLineKind } from '../lib/diff';
 import { radius, space, type Palette } from '../lib/theme';
 import { ShowAll } from './ShowAll';
+import { SideScroll } from './SideScroll';
 import { T } from './ui';
 
 /** A line's ink and band, from the palette's own diff roles (tuned per appearance). */
@@ -45,7 +46,7 @@ export function DiffLines({
       onLayout={(e) => setWidth(e.nativeEvent.layout.width)}
     >
       {/* The indicator shows, so a line running off the edge reads as one to scroll. */}
-      <ScrollView horizontal showsHorizontalScrollIndicator contentContainerStyle={styles.content}>
+      <SideScroll testID="diff-scroll" fade={colors.surfaceApp} contentContainerStyle={styles.content}>
         <View style={[styles.inner, width > 0 && { minWidth: width }]}>
           {lines.map((line, i) => {
             const t = tint[diffLineKind(line)];
@@ -63,7 +64,7 @@ export function DiffLines({
             );
           })}
         </View>
-      </ScrollView>
+      </SideScroll>
       {long && (
         <ShowAll
           open={open}

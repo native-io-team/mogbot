@@ -242,8 +242,9 @@ export function StagedTile({
       <Pressable
         disabled={!error}
         onPress={onRetry}
+        accessibilityRole={error ? 'button' : 'image'}
         accessibilityLabel={error ? `${file.name} didn’t upload. Tap to try again` : file.name}
-        style={styles.tileBody}
+        style={({ pressed }) => [styles.tileBody, pressed && PRESSED]}
       >
         {isPreviewableImage(file.mime) ? (
           <Image source={{ uri: file.uri }} style={StyleSheet.absoluteFill} contentFit="cover" />

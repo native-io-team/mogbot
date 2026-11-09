@@ -61,3 +61,16 @@ export function headerSubtitleParts(agent: Pick<Agent, 'role' | 'ranOn'>): {
   const on = `\u00a0· on ${agent.ranOn.name}`;
   return { role: agent.role, on };
 }
+
+/**
+ * Whether the role, laid out at `width` beside the account, is cut past
+ * reading: "Desig…" or "D…" says less than nothing, so the header drops the
+ * role and the account reads whole ("On sam@…"). Judged against the role's
+ * rough natural width (half an em a character), so a short role laid out
+ * whole is never taken for a cut one.
+ */
+export function roleCutPastReading(width: number, role: string, fontSize: number): boolean {
+  if (!(width > 0) || role.length <= 3) return false;
+  const natural = role.length * fontSize * 0.5;
+  return width < natural * 0.7 && width < fontSize * 6;
+}
