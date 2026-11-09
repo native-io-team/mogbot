@@ -27,9 +27,11 @@ use chrono::NaiveDate;
 use super::compute;
 use super::engine::{Engine, EngineInfo};
 use super::forecast::{self, PerRun, Unit, WindowShare};
+use super::identity::Identity;
 use super::quota::{Quota, QuotaWindow};
 use super::store::Agent;
 use super::usage_plan::{self, AccountReading, Mode, Spare, SpareItem};
+use super::usage_story;
 use super::wallet::{self, Account, Candidate, Choice};
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -80,6 +82,22 @@ pub struct AccountLine {
     /// How its last check without a turn went (`usage_read`), when there was one.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub check: Option<usage_plan::Check>,
+    /// The name of an account earlier in the order that this one is a
+    /// second sign-in of: the same Claude organization or the same ChatGPT
+    /// user and workspace, as the engines' own records say (`same_as`). It
+    /// adds no room: its limits are that account's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub same_as: Option<String>,
+    /// The organization's name, when the engine recorded it.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub org_name: Option<String>,
+    /// Who used it in the last 7 days, from the turns this app ran on it.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub spent: Vec<usage_story::ChangeRun>,
+    /// "Where did my usage go": each recent rise in its 5-hour and weekly
+    /// meters and what this app ran on it then (`usage_story`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub changes: Vec<usage_story::UsageChange>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -157,9 +175,79 @@ pub struct Parts {
     pub agents: Vec<Agent>,
     pub local: Vec<LocalCompute>,
     pub backlog: Vec<SpareItem>,
+    /// Who each signed-in account is, from its engine's own files (`account_key`).
+    pub identities: std::collections::BTreeMap<String, Identity>,
+    /// Turn records and what each token answered for (`usage_plan::records`).
+    pub records: usage_plan::Records,
     pub today: NaiveDate,
     pub now: i64,
 }
+
+/// Which account `id` is, to compare: its engine's own record, else the
+/// organization its token answered for.
+fn org_of(parts: &Parts, key: &str) -> Option<String> {
+    parts
+        .identities
+        .get(key)
+        .and_then(|i| i.org.clone())
+        .or_else(|| parts.records.orgs.get(key).cloned())
+}
+
+/// A plan where one organization holds many people's seats, each with its
+/// own limits: the same organization there is not the same account.
+fn shared_org_plan(plan: Option<&str>) -> bool {
+    plan.is_some_and(|p| {
+        let p = p.to_ascii_lowercase();
+        p.contains("team")
+            || p.contains("enterprise")
+            || p.contains("business")
+            || p.contains("edu")
+    })
+}
+
+/// For each of an engine's accounts in order, the earlier one it is a
+/// second sign-in of, if any: the same organization (Claude) or the same
+/// user in the same workspace (Codex), as recorded, on a plan that isn't
+/// shared by seats. Never guessed from figures that look alike.
+pub fn same_as(accounts: &[(String, bool, Option<String>, Option<String>)]) -> Vec<Option<usize>> {
+    // (key, signed in, org, plan)
+    let mut out = vec![None; accounts.len()];
+    for (i, (_, signed_in, org, plan)) in accounts.iter().enumerate() {
+        let Some(org) = org.as_ref().filter(|_| *signed_in) else {
+            continue;
+        };
+        if shared_org_plan(plan.as_deref()) {
+            continue;
+        }
+        out[i] = accounts[..i].iter().position(|(_, s, o, p)| {
+            *s && o.as_ref() == Some(org) && !shared_org_plan(p.as_deref())
+        });
+    }
+    out
+}
+
+struct TeamNames<'a>(&'a [Agent]);
+
+impl usage_story::Names for TeamNames<'_> {
+    fn agent(&self, id: &str) -> Option<String> {
+        self.0.iter().find(|a| a.id == id).map(|a| a.name.clone())
+    }
+    fn routine(&self, agent: &str, id: &str) -> Option<String> {
+        let a = self.0.iter().find(|a| a.id == agent)?;
+        let c = a.check_ins.iter().find(|c| c.id == id)?;
+        let line: String = c
+            .note
+            .lines()
+            .next()
+            .unwrap_or("")
+            .chars()
+            .take(80)
+            .collect();
+        (!line.trim().is_empty()).then_some(line)
+    }
+}
+
+const WEEK_MS: i64 = 7 * 24 * 60 * 60 * 1000;
 
 fn current(q: &Quota, now: i64) -> Option<Quota> {
     super::quota::shown(std::slice::from_ref(q), now).pop()
@@ -239,7 +327,26 @@ pub fn build(parts: Parts) -> Inventory {
         if !info.installed {
             continue;
         }
-        for c in &mine {
+        let keys: Vec<String> = mine
+            .iter()
+            .map(|c| usage_plan::account_key(info.id, &c.account.id))
+            .collect();
+        let twins = same_as(
+            &mine
+                .iter()
+                .zip(&keys)
+                .map(|(c, key)| {
+                    let plan = parts
+                        .identities
+                        .get(key)
+                        .and_then(|i| i.plan.clone())
+                        .or_else(|| reading_for(&parts, &c.account).and_then(|q| q.plan));
+                    (key.clone(), c.signed_in, org_of(&parts, key), plan)
+                })
+                .collect::<Vec<_>>(),
+        );
+        let names = TeamNames(&parts.agents);
+        for (i, c) in mine.iter().enumerate() {
             let reading = reading_for(&parts, &c.account);
             let key = usage_plan::account_key(info.id, &c.account.id);
             let learned = reading
@@ -262,6 +369,37 @@ pub fn build(parts: Parts) -> Inventory {
                 _ => Vec::new(),
             };
             let out = c.account.out(now);
+            // One account signed in twice is one meter: either's turns explain it.
+            let root = twins[i].unwrap_or(i);
+            let pooled: Vec<&usage_plan::TurnRecord> = (0..mine.len())
+                .filter(|j| twins[*j].unwrap_or(*j) == root)
+                .filter_map(|j| parts.records.turns.get(&keys[j]))
+                .flatten()
+                .collect();
+            let changes = match (&reading, parts.samples.get(&key)) {
+                (Some(q), Some(samples)) if c.signed_in => q
+                    .windows
+                    .iter()
+                    .filter(|w| compute::family(w).is_some())
+                    .flat_map(|w| {
+                        usage_story::changes(
+                            w,
+                            samples,
+                            &pooled,
+                            parts.records.tracked_since,
+                            &names,
+                        )
+                    })
+                    .collect(),
+                _ => Vec::new(),
+            };
+            let own: Vec<&usage_plan::TurnRecord> = parts
+                .records
+                .turns
+                .get(&key)
+                .into_iter()
+                .flatten()
+                .collect();
             accounts.push(AccountLine {
                 engine: info.id,
                 id: c.account.id.clone(),
@@ -277,6 +415,10 @@ pub fn build(parts: Parts) -> Inventory {
                 // An account that's out has nothing left to run out of.
                 pace: if out.is_some() { Vec::new() } else { pace },
                 check: parts.checks.get(&key).cloned(),
+                same_as: twins[i].map(|j| mine[j].account.name.clone()),
+                org_name: parts.identities.get(&key).and_then(|i| i.org_name.clone()),
+                spent: usage_story::spent_by(&own, now - WEEK_MS, &names),
+                changes,
             });
         }
     }
@@ -435,6 +577,17 @@ pub async fn read() -> Inventory {
     let now = super::store::now_ms();
     tokio::task::spawn_blocking(move || {
         let (archived, samples) = usage_plan::readings();
+        // Who each signed-in account is, from its engine's own files.
+        let identities = candidates
+            .iter()
+            .filter(|c| c.signed_in)
+            .map(|c| {
+                (
+                    usage_plan::account_key(c.account.engine, &c.account.id),
+                    wallet::identity_of(&c.account),
+                )
+            })
+            .collect();
         build(Parts {
             mode: usage_plan::mode(),
             engines,
@@ -450,6 +603,8 @@ pub async fn read() -> Inventory {
             agents: super::store::list().unwrap_or_default(),
             local,
             backlog: usage_plan::backlog(),
+            identities,
+            records: usage_plan::records(),
             today: super::usage::today(),
             now,
         })
@@ -1015,9 +1170,75 @@ mod tests {
             agents: Vec::new(),
             local: Vec::new(),
             backlog: Vec::new(),
+            identities: Default::default(),
+            records: Default::default(),
             today: NaiveDate::from_ymd_opt(2026, 11, 5).unwrap(),
             now: NOW,
         }
+    }
+
+    fn who(org: &str, plan: Option<&str>) -> Identity {
+        Identity {
+            email: Some("sam@example.com".into()),
+            plan: plan.map(str::to_string),
+            org: Some(org.into()),
+            org_name: None,
+        }
+    }
+
+    /// The owner's case: This Mac's sign-in and a setup-token "Personal
+    /// Account" that is the same Claude account. Its org is known from the
+    /// header its read answered with; it counts once.
+    #[test]
+    fn a_second_sign_in_of_the_same_account_is_named_and_counted_once() {
+        let mut p = parts();
+        p.identities
+            .insert("claude:default".into(), who("claude-org:o1", Some("Max")));
+        p.records
+            .orgs
+            .insert("claude:w1".into(), "claude-org:o1".into());
+        let inv = build(p);
+        assert_eq!(inv.accounts[0].same_as, None);
+        assert_eq!(inv.accounts[1].same_as.as_deref(), Some("This Mac"));
+        // Only This Mac counts toward what there is.
+        assert_eq!(inv.totals.accounts, 1);
+    }
+
+    #[test]
+    fn same_organization_on_a_team_plan_is_not_the_same_account() {
+        let row = |key: &str, org: Option<&str>, plan: Option<&str>| {
+            (
+                key.to_string(),
+                true,
+                org.map(str::to_string),
+                plan.map(str::to_string),
+            )
+        };
+        assert_eq!(
+            same_as(&[row("a", Some("o"), Some("Team")), row("b", Some("o"), None),]),
+            vec![None, None]
+        );
+        // A different org, or none known: two accounts.
+        assert_eq!(
+            same_as(&[
+                row("a", Some("o"), None),
+                row("b", Some("p"), None),
+                row("c", None, None)
+            ]),
+            vec![None, None, None]
+        );
+        // Not signed in: nothing to compare.
+        let mut out = row("b", Some("o"), None);
+        out.1 = false;
+        assert_eq!(same_as(&[row("a", Some("o"), None), out]), vec![None, None]);
+        assert_eq!(
+            same_as(&[
+                row("a", Some("o"), Some("max")),
+                row("b", Some("o"), None),
+                row("c", Some("o"), None)
+            ]),
+            vec![None, Some(0), Some(0)]
+        );
     }
 
     #[test]

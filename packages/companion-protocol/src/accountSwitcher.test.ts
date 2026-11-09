@@ -130,7 +130,7 @@ describe('which account is working', () => {
       { now: NOW }
     )[0];
     expect(out.allOut).toBe(true);
-    expect(workingLine(out)?.room).toBe('All out');
+    expect(workingLine(out)?.room).toBe('Out of usage');
 
     const unread = switcherView([mac], null, { now: NOW })[0];
     expect(workingLine(unread)?.room).toBeUndefined();

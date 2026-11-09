@@ -214,7 +214,14 @@ fn run_out(engine: Engine, accounts: &[&AccountLine], now: i64) -> Option<RunOut
         })
 }
 
-pub fn totals(accounts: &[AccountLine], now: i64) -> Totals {
+pub fn totals(all: &[AccountLine], now: i64) -> Totals {
+    // A second sign-in of one account adds no room: counted once.
+    let once: Vec<AccountLine> = all
+        .iter()
+        .filter(|a| a.same_as.is_none())
+        .cloned()
+        .collect();
+    let accounts = once.as_slice();
     let mut engines: Vec<EngineCount> = Vec::new();
     for a in accounts {
         let i = match engines.iter().position(|e| e.engine == a.engine) {

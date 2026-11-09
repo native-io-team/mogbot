@@ -162,8 +162,8 @@
 @import './features/agents-takeover.css';
 @import './features/agents-quota.css';
 @import './features/agents-usage-ring.css';
-@import './features/account-switcher.css';
 @import './features/agents-compute.css';
+@import './features/usage-view.css';
 @import './features/agents-usage.css';
 @import './features/agents-import.css';
 @import './features/agents-ideas.css';

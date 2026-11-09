@@ -1384,7 +1384,7 @@ pub struct AccountView {
 /// Who `account` is signed in as, from its engine's own files; for an added
 /// Claude Code account, the email captured at its sign-in comes first (its
 /// folder's settings file may not name one).
-fn identity_of(account: &Account) -> super::identity::Identity {
+pub fn identity_of(account: &Account) -> super::identity::Identity {
     use super::identity;
     match account.engine {
         Engine::Claude => {

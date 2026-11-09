@@ -89,3 +89,27 @@ export const removeSpareItem = (id: string) => invoke<void>('agents_spare_remove
 
 export const onUsagePlanChanged = (fn: () => void): Promise<UnlistenFn> =>
   listen(USAGE_PLAN_EVENT, fn);
+
+/**
+ * "Give agents something to do": the Chief starts the spare-capacity list
+ * now on a window near its reset with room left (`agents_spare_spend_now`).
+ * Answers the line to show.
+ */
+export const spendSpareNow = () => invoke<string>('agents_spare_spend_now');
+
+// The stack of accounts, at a glance and in full (the sidebar meter and Usage view).
+export {
+  LOW_LEFT,
+  OUT_OF_USAGE,
+  elsewhereLine,
+  relativeIn,
+  usageGlance,
+  type ChangeLine,
+  type KeyLimit,
+  type KeyState,
+  type LowBar,
+  type SpareNudge,
+  type StackEngine,
+  type StackKey,
+  type UsageGlance,
+} from '../../packages/companion-protocol/src/usageGlance';

@@ -1794,6 +1794,31 @@ impl Backend for Stub {
                     why: None,
                     via: None,
                 }),
+                same_as: None,
+                org_name: Some("Example".into()),
+                spent: vec![crate::agents::usage_story::ChangeRun {
+                    agent_id: "a1".into(),
+                    name: "Riley".into(),
+                    routine: None,
+                    turns: 4,
+                    tokens: 182_000,
+                }],
+                changes: vec![crate::agents::usage_story::UsageChange {
+                    kind: "five_hour".into(),
+                    window_minutes: None,
+                    from: 20.0,
+                    to: 38.0,
+                    since: 1_762_280_000_000,
+                    until: 1_762_290_000_000,
+                    runs: vec![crate::agents::usage_story::ChangeRun {
+                        agent_id: "a1".into(),
+                        name: "Riley".into(),
+                        routine: Some("Morning brief".into()),
+                        turns: 2,
+                        tokens: 90_000,
+                    }],
+                    nothing_here: false,
+                }],
             },
             AccountLine {
                 engine: Engine::Claude,
@@ -1820,6 +1845,10 @@ impl Backend for Stub {
                     span_minutes: 70,
                 }],
                 check: None,
+                same_as: None,
+                org_name: None,
+                spent: Vec::new(),
+                changes: Vec::new(),
             },
             AccountLine {
                 engine: Engine::Codex,
@@ -1847,6 +1876,10 @@ impl Backend for Stub {
                     why: Some("Codex didn't answer in time".into()),
                     via: None,
                 }),
+                same_as: None,
+                org_name: None,
+                spent: Vec::new(),
+                changes: Vec::new(),
             },
         ];
         // Totals as the Mac works them out, from these accounts: every field

@@ -27,6 +27,13 @@ use serde_json::Value;
 pub struct Identity {
     pub email: Option<String>,
     pub plan: Option<String>,
+    /// Which account this is, as the engine's own file names it: Claude
+    /// Code's `oauthAccount.accountUuid` / `organizationUuid`, Codex's
+    /// token's user and ChatGPT account. Never shown; only compared, so two
+    /// sign-ins of one account are known to be one (`inventory::same_as`).
+    pub org: Option<String>,
+    /// The organization's name, as the engine recorded it ("Northwind").
+    pub org_name: Option<String>,
 }
 
 /// A non-empty string field, trimmed.
@@ -51,6 +58,8 @@ pub fn claude(raw: &str) -> Identity {
     Identity {
         email: email(account.get("emailAddress")),
         plan: text(account.get("planDisplayName")),
+        org: text(account.get("organizationUuid")).map(|o| format!("claude-org:{o}")),
+        org_name: text(account.get("organizationName")),
     }
 }
 
@@ -65,13 +74,24 @@ pub fn codex(raw: &str) -> Identity {
     let Some(claims) = jwt_claims(token) else {
         return Identity::default();
     };
+    let auth = claims.get("https://api.openai.com/auth");
+    // One person in one ChatGPT workspace is one pool of limits: the same
+    // user in a team workspace and a personal one are two.
+    let org = match (
+        text(auth.and_then(|a| a.get("chatgpt_account_id"))),
+        text(
+            auth.and_then(|a| a.get("chatgpt_user_id"))
+                .or_else(|| claims.get("sub")),
+        ),
+    ) {
+        (Some(account), Some(user)) => Some(format!("chatgpt:{account}:{user}")),
+        _ => None,
+    };
     Identity {
         email: email(claims.get("email")),
-        plan: text(
-            claims
-                .get("https://api.openai.com/auth")
-                .and_then(|a| a.get("chatgpt_plan_type")),
-        ),
+        plan: text(auth.and_then(|a| a.get("chatgpt_plan_type"))),
+        org,
+        org_name: None,
     }
 }
 
@@ -109,12 +129,14 @@ mod tests {
 
     #[test]
     fn claude_reads_the_signed_in_email_and_plan() {
-        let raw = r#"{"numStartups":3,"oauthAccount":{"accountUuid":"x","emailAddress":"sam@example.com","organizationName":"Example","billingType":"stripe_subscription","planDisplayName":"Max"},"projects":{}}"#;
+        let raw = r#"{"numStartups":3,"oauthAccount":{"accountUuid":"x","emailAddress":"sam@example.com","organizationUuid":"org-1","organizationName":"Example","billingType":"stripe_subscription","planDisplayName":"Max"},"projects":{}}"#;
         assert_eq!(
             claude(raw),
             Identity {
                 email: Some("sam@example.com".into()),
                 plan: Some("Max".into()),
+                org: Some("claude-org:org-1".into()),
+                org_name: Some("Example".into()),
             }
         );
     }
@@ -126,7 +148,7 @@ mod tests {
         assert_eq!(claude(r#"{"oauthAccount":null}"#), Identity::default());
         // No email, or not an email: none is invented.
         assert_eq!(
-            claude(r#"{"oauthAccount":{"emailAddress":"","organizationName":"Example"}}"#),
+            claude(r#"{"oauthAccount":{"emailAddress":""}}"#),
             Identity::default()
         );
         assert_eq!(
@@ -138,7 +160,7 @@ mod tests {
             claude(r#"{"oauthAccount":{"emailAddress":"sam@example.com"}}"#),
             Identity {
                 email: Some("sam@example.com".into()),
-                plan: None,
+                ..Identity::default()
             }
         );
         assert_eq!(claude("not json"), Identity::default());
@@ -148,7 +170,7 @@ mod tests {
     #[test]
     fn codex_reads_its_id_token() {
         let token = jwt(
-            r#"{"email":"sam@example.org","https://api.openai.com/auth":{"chatgpt_plan_type":"plus"}}"#,
+            r#"{"email":"sam@example.org","sub":"u-1","https://api.openai.com/auth":{"chatgpt_plan_type":"plus","chatgpt_account_id":"ws-1"}}"#,
         );
         let raw = format!(r#"{{"OPENAI_API_KEY":null,"tokens":{{"id_token":"{token}"}}}}"#);
         assert_eq!(
@@ -156,6 +178,8 @@ mod tests {
             Identity {
                 email: Some("sam@example.org".into()),
                 plan: Some("plus".into()),
+                org: Some("chatgpt:ws-1:u-1".into()),
+                org_name: None,
             }
         );
     }

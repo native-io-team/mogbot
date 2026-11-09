@@ -287,7 +287,7 @@
     .agents-list__row.is-current,
     .agents-search__hit.is-current,
     .agent-bubble--user,
-    .account-switcher__row[aria-expanded='true']
+    .account-switcher__row[aria-current='page']
   ) {
   --text-secondary: var(--color-gray-300);
   --text-muted: var(--color-gray-300);

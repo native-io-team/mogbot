@@ -30,6 +30,10 @@ fn acct(engine: Engine, id: &str, windows: Vec<QuotaWindow>) -> AccountLine {
         learned: Vec::new(),
         pace: Vec::new(),
         check: None,
+        same_as: None,
+        org_name: None,
+        spent: Vec::new(),
+        changes: Vec::new(),
     }
 }
 

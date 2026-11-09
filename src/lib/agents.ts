@@ -2279,9 +2279,7 @@ export function failureLine(
   engine: AgentEngine = 'claude'
 ): string {
   if (failure.kind === 'usage_limit') {
-    return failure.resetsAt
-      ? `Usage limit · resets ${resetWords(failure.resetsAt)}`
-      : 'Usage limit reached';
+    return failure.resetsAt ? `Out of usage until ${resetWords(failure.resetsAt)}` : 'Out of usage';
   }
   if (failure.kind === 'signed_out') return `${ENGINE_LABEL[engine]} is signed out`;
   if (failure.kind === 'interrupted') return 'Interrupted · Continue to pick it up';

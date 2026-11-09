@@ -348,8 +348,8 @@ From the stream:
   (`signed_out`). Anything else is shown as it came. The agent's registry entry
   carries the tag while the error is the newest line (`Agent.failure`, cleared
   by anything said after it), so the sidebar shows "<reason> · didn't finish"
-  (the reason first, over up to two lines) with a red dot, or "Usage limit ·
-  resets 3:00 PM" quietly with no dot at all (amber means needs you, only), and
+  (the reason first, over up to two lines) with a red dot, or "Out of usage until
+  3:00 PM" quietly with no dot at all (amber means needs you, only), and
   What's in flight lists it under Needs you with its remedy.
 
 **A conversation survives its engine's copy.** After every turn the app keeps
@@ -4209,7 +4209,7 @@ a known plan window, never e.g. `overage`.
 
 The sidebar foot, the foot of What's in flight, and the phone's agent list
 and Settings show "Claude usage 85% · resets Sat" for the fullest window,
-amber from 90% (Settings' rows too), and "Claude usage limit · resets Sat"
+amber from 90% (Settings' rows too), and "Claude out of usage until Sat"
 for a used-up one. A figure stands until its reset even when no turn has run
 since, and use elsewhere isn't in it, so a reading's age is said: the tooltip
 names its day when it isn't today ("reported it Tue at 3:00 PM"), and once it
@@ -4221,9 +4221,9 @@ used-up window needs no age, since it stays used up until the reset it names.
 A usage-limit failure whose message gave no reset takes the engine's reported
 one (`failure::with_reported_reset`). Every reset is said by one rule for the
 day: today a clock time, then "tomorrow", the weekday within the week, the
-date beyond it. The chat's sentence ("It resets Sat at 2:00 PM.",
+date beyond it. The chat's sentence ("Claude Code is out of usage until Sat at 2:00 PM.",
 `failure::clock_phrase`), the button ("Retry Sat 2:00 PM"), the sidebar row
-("Usage limit · resets Sat 2:00 PM") and the foot ("resets Sat") all name
+("Out of usage until Sat 2:00 PM") and the foot ("resets Sat") all name
 the same day. The wording lives once, in
 `packages/companion-protocol/src/quota.ts`, for the desk and the phone, and
 in `clock_phrase` for the Mac's own sentences.
@@ -4242,17 +4242,77 @@ removed. Until the user names it, it is shown as who it is signed in as
 Mac's own sign-in" (`wallet::shown_name`, `line_name`); "This Mac" read as
 a place, not an account, so it is never shown as a name.
 
-**Which account is working, always in sight** (`AccountSwitcher`, words
-shared with the phone in `companion-protocol/src/accountSwitcher.ts`): a
-row at the sidebar's foot names the account the team's next turn starts on
-and its tighter room ("Work · 39% left", "All out", "Not signed in"),
-without asking for a reading itself (`agents_usage_overview` with `look:
-false`). It opens one popover with every account: name, who and plan,
-"In use" (a neutral check), its 5-hour and weekly room with resets, who is
-set to it, and per row "Use this one now", the order arrows, Rename, Sign
-in again, Remove, plus "+ Add account" (name, then the engine's own sign-in
-in a terminal). Onboarding offers the same right after the engine's
-sign-in ("Add another account?", skippable).
+**Usage at a glance, always in sight** (`AccountSwitcher`; words shared
+with the phone in `companion-protocol/src/usageGlance.ts`): the row at the
+sidebar's foot answers in one line ("Plenty of room", "Room to work",
+"Work is low · Personal is next", "Nearly out on every account", "Out of
+usage until 3:20 PM", or the Mac's run-out estimate "Runs out ~Thu
+afternoon, 2 days before reset", marked "est."), draws the whole stack as
+one segmented meter (each account a segment in the order turns try them,
+filled to what its tighter limit has left; the account in use in full ink;
+an account with no reading an empty dashed slot, never full), and says the
+count and the soonest reset. It never asks for a reading itself
+(`agents_usage_overview` with `look: false`).
+
+**The Usage view** (`AgentsUsageView`, `USAGE_ID`; opened by that row, ⌘K
+"Usage and accounts…", "Switch account…", "Add an account…", and a chat's
+account chip): the answer as a hero (headline, the big stack meter with each
+account named and its room, the next reset relative and absolute); then
+"Get the most from your limits" (the mode, and when a window on the account
+in use resets soon with at least 25% left, a nudge: "62% of Work's week
+resets in 9 h", the first waiting items of the spare-capacity list, and
+"Give agents something to do", which wakes the Chief with that list now:
+`agents_spare_spend_now` → `usage_tools::spend_now`, the same prompt "Use it
+all" sends, changing no approval); a calm bar when every account is nearly
+out (add an account, carry on with the other engine when it has room, or
+"Wait until …"); then each engine's accounts as keys in order (`UsageKey`):
+a numbered keycap, name, plan, organization and who, a state pill (In use,
+Next, Ready, "Out of usage until …", Not signed in, "Same account as …", No
+reading yet), its 5-hour and weekly limits with "Resets in 3 h · 3:20 PM"
+and the Mac's pace estimate, who used it this week, the one fix for a
+sign-in problem, "Use this one now", Rename, Sign in again, Remove, and
+"Where did my usage go". Keys are dragged to reorder (`DragSortScope`; the
+handle moves with the keyboard too, `agents_account_reorder`). Adding is one
+click per engine ("Add a Claude Code account": a free name, then its
+sign-in). The crossover choice, the spare-capacity list and other compute
+follow. Onboarding offers adding right after the engine's sign-in ("Add
+another account?", skippable). The phone's Usage sheet and Settings →
+Accounts draw the same glance and keys (`mobile/src/components/usageStack.tsx`).
+
+**One account signed in twice** (`inventory::same_as`). A Claude account
+added here signs in with `claude setup-token` in the user's browser, which
+signs in as whoever claude.ai is already signed in as, so "adding" an account
+can add the same one again; the email shown for it was typed by the user,
+not read. Observed on the owner's Mac (2026-11-09): This Mac's sign-in and
+"Personal Account" read 23% of the same weekly window resetting the same
+second, and moved in lockstep for days though no turn ran on Personal: one
+account counted twice. So an account's identity is compared, never its
+figures: Claude Code's `.claude.json` `oauthAccount.organizationUuid`
+(`identity.rs`), else the `anthropic-organization-id` header its one-token
+read answered with (`usage_read::ORG_HEADER`, kept per account in
+`usage-readings.json` `orgs`, forgotten on a new sign-in); Codex's
+`chatgpt_account_id` and user. A later account with the same organization
+on a plan that isn't shared by seats (not Team, Enterprise, Business, Edu)
+is `sameAs` the first: it counts once in totals (`compute::totals`), its
+segment is hatched and holds nothing, and its key says "Same account as …"
+with the fix (sign in again with another account, signing out of claude.ai
+first, or remove it). The header is in Claude Code's own code but was not
+yet observed on a setup token's answer here; without it nothing is marked.
+
+**Where did my usage go** (`agents/usage_story.rs`). Each turn's tokens are
+recorded per account with its agent, and its routine when it ran one alone
+(`usage_plan::add_turn`, `tag_routine`; kept 8 days). For each rise of at
+least 2 points in an account's 5-hour or weekly meter (consecutive readings
+of one window instance, joined while less than 45 minutes apart), the key
+lists what ran on that account (or on another sign-in of the same account)
+in that time, by agent and routine, with turns and tokens. Points are never
+split between runs: nothing says how a turn's tokens map to a window's
+percentage. A rise with nothing run says so plainly: "Nothing these agents
+ran explains this. It was used somewhere else: a Claude Code terminal,
+claude.ai, the Claude app, or another computer." That is said only for a
+rise that began after this Mac started recording turns
+(`usage_plan::start_tracking`); an older rise is left out rather than
+called unexplained.
 
 **"Use this one now"** (`agents_account_use` → `wallet::use_first`; the
 phone's `agents.accounts.use`, audited) puts the account first in its
@@ -5116,7 +5176,7 @@ forces approvals to "never"), and the prompt says so instead
 
 Capabilities come from what we serve it, its built-ins and `codex mcp list
 --json`, read before each turn (Codex announces no tools). Failures read as
-"Codex's usage limit is reached. It resets at 7:18 PM." (from its "try again
+"Codex is out of usage until 7:18 PM." (from its "try again
 at 7:18 PM", this Mac's time) and "Codex is signed out." (checked before the
 turn, which otherwise spends 20s retrying a 401), with "Sign in to Codex"
 running `codex login`. A vanished thread (`thread/resume` → "no rollout

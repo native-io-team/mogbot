@@ -128,7 +128,13 @@ export function AgentsSpareNote() {
   );
 }
 
-function SpareList({ inventory, onChanged }: { inventory: UsageInventory; onChanged: () => void }) {
+export function SpareList({
+  inventory,
+  onChanged,
+}: {
+  inventory: UsageInventory;
+  onChanged: () => void;
+}) {
   const { showToast } = useOptionalToast();
   const [text, setText] = useState('');
   const [busy, setBusy] = useState(false);

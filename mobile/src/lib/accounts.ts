@@ -37,6 +37,8 @@ export interface AccountsState {
   /** The Mac serves `agents.accounts`: there is something to show. */
   serves: boolean;
   accounts: UsageAccount[] | null;
+  /** Each account's readings (`agents.usagePlan`), when the Mac serves them. */
+  inventory?: UsageInventory | null;
   view: SwitcherEngine[];
   /** The Mac takes "Use this one now" / the arrows from here. */
   canSwap: boolean;
@@ -142,5 +144,5 @@ export function useAccounts({ room = true }: { room?: boolean } = {}): AccountsS
     [accounts, canReorder, change]
   );
 
-  return { serves, accounts, view, canSwap, canReorder, error, busy, swapTo, move };
+  return { serves, accounts, inventory, view, canSwap, canReorder, error, busy, swapTo, move };
 }

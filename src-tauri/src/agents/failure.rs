@@ -74,9 +74,9 @@ where
     match (failure.kind, failure.resets_at, reported) {
         (FailureKind::UsageLimit, None, Some(at)) if at > now => (
             format!(
-                "{}'s usage limit is reached. It resets {}.",
+                "{} is out of usage until {}.",
                 engine.label(),
-                clock_phrase(tz, at, now)
+                until_phrase(&clock_phrase(tz, at, now))
             ),
             Failure {
                 kind: FailureKind::UsageLimit,
@@ -111,16 +111,25 @@ where
             }
             next_clock_time(tz, words, now)
         });
-        let when = match (resets_at, &reset) {
-            (Some(at), _) => format!("It resets {}.", clock_phrase(tz, at, now)),
+        // One phrase for it everywhere: "out of usage until …".
+        let text = match (resets_at, &reset) {
+            (Some(at), _) => format!(
+                "{who} is out of usage until {}.",
+                until_phrase(&clock_phrase(tz, at, now))
+            ),
             (None, Some((words, zone))) => match zone {
-                Some(_) => format!("{who} says it resets {}.", original_case(detail, words)),
-                None => format!("{who} says it resets at {words}."),
+                Some(_) => format!(
+                    "{who} is out of usage. {who} says it resets {}.",
+                    original_case(detail, words)
+                ),
+                None => format!("{who} is out of usage. {who} says it resets at {words}."),
             },
-            (None, None) => "It resets on its own; try again later.".to_string(),
+            (None, None) => {
+                format!("{who} is out of usage. It resets on its own; try again later.")
+            }
         };
         return (
-            format!("{who}'s usage limit is reached. {when}"),
+            text,
             Failure {
                 kind: FailureKind::UsageLimit,
                 resets_at,
@@ -411,6 +420,11 @@ fn next_clock_time<Tz: TimeZone>(tz: &Tz, words: &str, now: i64) -> Option<i64> 
 /// reset is said (`resetPhrase` in the companion protocol's quota.ts: the
 /// Retry button, the sidebar), so the chat's sentence and the button beside
 /// it never disagree about the day.
+/// "at 3:00 PM" reads "until 3:00 PM"; "tomorrow at …", "Sat at …" stay.
+pub fn until_phrase(phrase: &str) -> String {
+    phrase.strip_prefix("at ").unwrap_or(phrase).to_string()
+}
+
 pub fn clock_phrase<Tz: TimeZone>(tz: &Tz, at: i64, now: i64) -> String
 where
     Tz::Offset: std::fmt::Display,
@@ -461,7 +475,7 @@ mod tests {
             "stream error: Quota exceeded for this account. Try again at 7:18 PM.",
         );
         assert_eq!(f.kind, FailureKind::UsageLimit);
-        assert!(text.contains("usage limit is reached"), "{text}");
+        assert!(text.contains("is out of usage"), "{text}");
         assert!(is_temporary(&text, &f));
         let (_, f) = turn_failure(Engine::Claude, "Error: quota exceeded");
         assert_eq!(f.kind, FailureKind::UsageLimit);
@@ -513,7 +527,7 @@ mod tests {
             with_reported_reset(Engine::Claude, bare.clone(), Some(at), &Utc, NOW);
         assert_eq!(failure.resets_at, Some(at));
         assert!(
-            text.starts_with("Claude Code's usage limit is reached. It resets "),
+            text.starts_with("Claude Code is out of usage until "),
             "{text}"
         );
         // A time the message gave wins; a reported reset already past is no help.
@@ -610,10 +624,7 @@ mod tests {
         assert_eq!(failure.kind, FailureKind::UsageLimit);
         let at = failure.resets_at.expect("placed on the clock");
         assert_eq!(at, NOW + (6 * 60 + 40) * 60_000);
-        assert_eq!(
-            text,
-            "Claude Code's usage limit is reached. It resets at 4:40 PM."
-        );
+        assert_eq!(text, "Claude Code is out of usage until 4:40 PM.");
     }
 
     #[test]
@@ -626,7 +637,10 @@ mod tests {
             NOW,
         );
         assert_eq!(failure.resets_at, Some(NOW + 23 * 60 * 60_000));
-        assert!(text.ends_with("It resets tomorrow at 9:00 AM."), "{text}");
+        assert!(
+            text.ends_with("out of usage until tomorrow at 9:00 AM."),
+            "{text}"
+        );
     }
 
     #[test]
@@ -709,10 +723,7 @@ mod tests {
         let (text, failure) = describe(Engine::Codex, limit, &Utc, None, NOW);
         assert_eq!(failure.kind, FailureKind::UsageLimit);
         assert_eq!(failure.resets_at, Some(NOW + (9 * 60 + 18) * 60_000));
-        assert_eq!(
-            text,
-            "Codex's usage limit is reached. It resets at 7:18 PM."
-        );
+        assert_eq!(text, "Codex is out of usage until 7:18 PM.");
         let signed_out = "unexpected status 401 Unauthorized: Missing bearer or basic authentication in header, url: https://api.openai.com/v1/responses";
         let (text, failure) = describe(Engine::Codex, signed_out, &Utc, None, NOW);
         assert_eq!(failure.kind, FailureKind::SignedOut);

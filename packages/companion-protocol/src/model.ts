@@ -1835,6 +1835,51 @@ export interface UsageAccountLine {
    * the first check, and from Macs that predate it.
    */
   check?: UsageCheck;
+  /**
+   * The name of an account earlier in the order that this one is a second
+   * sign-in of (the same Claude organization, or the same ChatGPT user and
+   * workspace, as the engines recorded it). It adds no room. Absent from
+   * Macs that predate it, and whenever that isn't known.
+   */
+  sameAs?: string;
+  /** The organization's name, when the engine recorded it. */
+  orgName?: string;
+  /** Who used it in the last 7 days, from the turns this app ran on it. */
+  spent?: UsageRun[];
+  /**
+   * "Where did my usage go": each recent rise in its 5-hour and weekly
+   * meters, newest first, with the turns this app ran on it in that time.
+   */
+  changes?: UsageChange[];
+}
+
+/** Turns one agent (or one routine of it) ran on an account (`agents::usage_story`). */
+export interface UsageRun {
+  agentId: string;
+  /** The agent's name now; "An agent since deleted" when it is gone. */
+  name: string;
+  /** The routine's first line, when these turns each ran it alone. */
+  routine?: string;
+  turns: number;
+  /** As the engines reported them. */
+  tokens: number;
+}
+
+/**
+ * One rise in a window's meter and what this app ran on the account while
+ * it rose. Points are never split between runs: only their tokens are
+ * known. `nothingHere`: nothing this app ran explains it (said only once
+ * the Mac was recording turns), so it was used elsewhere.
+ */
+export interface UsageChange {
+  kind: string;
+  windowMinutes?: number;
+  from: number;
+  to: number;
+  since: number;
+  until: number;
+  runs: UsageRun[];
+  nothingHere: boolean;
 }
 
 /** One check of an account's limits without a turn. */

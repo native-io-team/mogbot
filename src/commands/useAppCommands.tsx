@@ -589,7 +589,7 @@ export function useAppCommands({
       },
       {
         id: 'agents.usage',
-        title: 'Usage limits and spare capacity…',
+        title: 'Usage and accounts…',
         icon: <SettingsIcon size={14} />,
         category: 'settings',
         keywords: [
@@ -603,8 +603,13 @@ export function useAppCommands({
           'backlog',
           'opencode',
           'ollama',
+          'accounts',
+          'where did my usage go',
+          'stacking',
         ],
+        // The Usage view when Agents shows it; else Settings → Agents → Usage.
         run: () => {
+          if (requestSwitcher('open')) return;
           requestSettingsTabOnOpen('agents');
           requestSettingsSectionOnOpen('agent-usage');
           openModal('settings');
@@ -638,7 +643,7 @@ export function useAppCommands({
           'codex',
           'chatgpt',
         ],
-        // The sidebar's account row when Agents shows it; else Settings.
+        // The Usage view when Agents shows it; else Settings.
         run: () => {
           if (requestSwitcher('open')) return;
           requestAccountsOnOpen('show');

@@ -71,8 +71,8 @@ export function agentMood(
 export function failureLine(failure: Failure, preview: string | null, engine?: string): string {
   if (failure.kind === 'usage_limit') {
     return failure.resetsAt
-      ? `Usage limit · resets ${resetPhrase(failure.resetsAt)}`
-      : 'Usage limit reached';
+      ? `Out of usage until ${resetPhrase(failure.resetsAt)}`
+      : 'Out of usage';
   }
   if (failure.kind === 'signed_out') return `${engine ?? 'Its engine'} is signed out`;
   if (failure.kind === 'interrupted') return 'Interrupted · Continue to pick it up';

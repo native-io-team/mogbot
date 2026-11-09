@@ -181,7 +181,7 @@ describe('ErrorLine', () => {
       agentId: 'acme',
       ts: Date.now(),
       kind: 'error',
-      text: 'Usage limit reached',
+      text: 'Out of usage',
       failure: { kind: 'usage_limit', resetsAt: Date.now() + 3_600_000 },
     };
     render(<ErrorLine message={message} onRetry={vi.fn()} onRetryAt={onRetryAt} />);
@@ -207,7 +207,7 @@ describe('ErrorLine', () => {
       agentId: 'acme',
       ts: Date.now(),
       kind: 'error',
-      text: 'Usage limit reached',
+      text: 'Out of usage',
       failure: { kind: 'usage_limit', resetsAt: Date.now() + 3_600_000 },
     };
     render(<ErrorLine message={message} onRetry={onRetry} onRetryAt={vi.fn()} />);
