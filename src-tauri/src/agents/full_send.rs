@@ -149,6 +149,10 @@ fn describe_command(command: &str, ctx: Option<&Ctx>) -> (String, String) {
     let mut cwd: Option<PathBuf> = ctx.map(|c| c.cwd.clone());
     let mut fallback: Option<Vec<String>> = None;
     let mut first: Option<Vec<String>> = None;
+    // A part it can name that "Go hard" wouldn't have asked about (a
+    // `gh api` read beside the `pkill` that asked): named only when nothing
+    // that asked is found, so the line says what actually went out.
+    let mut quiet: Option<(String, String)> = None;
     for words in go_hard::commands(command) {
         if words.first().map(String::as_str) == Some("cd") {
             if let (Some(c), Some(d)) = (ctx, words.get(1)) {
@@ -168,13 +172,6 @@ fn describe_command(command: &str, ctx: Option<&Ctx>) -> (String, String) {
             continue;
         };
         let prog = go_hard::base(prog);
-        if let Some(d) = command_words(prog, args, cwd.as_deref()) {
-            return d;
-        }
-        let shown: Vec<String> = rest.iter().map(|s| s.to_string()).collect();
-        if first.is_none() {
-            first = Some(shown.clone());
-        }
         let asks = ctx.is_some_and(|c| {
             let here = Ctx {
                 cwd: cwd.clone().unwrap_or_else(|| c.cwd.clone()),
@@ -182,8 +179,24 @@ fn describe_command(command: &str, ctx: Option<&Ctx>) -> (String, String) {
             };
             go_hard::words_ask_at_go_hard(&words, &here)
         });
+        if let Some(d) = command_words(prog, args, cwd.as_deref()) {
+            if asks || ctx.is_none() {
+                return d;
+            }
+            quiet.get_or_insert(d);
+            continue;
+        }
+        let shown: Vec<String> = rest.iter().map(|s| s.to_string()).collect();
+        if first.is_none() {
+            first = Some(shown.clone());
+        }
         if fallback.is_none() && asks {
             fallback = Some(shown);
+        }
+    }
+    if fallback.is_none() {
+        if let Some(d) = quiet {
+            return d;
         }
     }
     let words = fallback.or(first).unwrap_or_else(|| {
@@ -389,9 +402,20 @@ fn gh_words(args: &[&str]) -> (String, String) {
         },
         ("api", _) => {
             let path = go_hard::gh_api_path(args);
+            // A GET unless it carries fields (then gh sends a POST).
+            let fields = args.iter().any(|a| {
+                matches!(*a, "-f" | "-F" | "--field" | "--raw-field" | "--input")
+                    || a.starts_with("--field=")
+                    || a.starts_with("--raw-field=")
+                    || a.starts_with("--input=")
+            });
             let method = flag_value(args, &["-X", "--method"])
+                .or_else(|| {
+                    args.iter()
+                        .find_map(|a| a.strip_prefix("-X").filter(|m| !m.is_empty()))
+                })
                 .map(str::to_ascii_uppercase)
-                .unwrap_or_else(|| "POST".into());
+                .unwrap_or_else(|| if fields { "POST" } else { "GET" }.into());
             return (
                 format!("called GitHub's API ({method} {})", clip(path, 80)),
                 String::new(),
@@ -589,6 +613,56 @@ mod tests {
             "ran “fictional-cli broadcast --all”"
         );
         assert!(!said("anything").contains("a command that sends"));
+    }
+
+    /// Observed: `gh api …/comments -q '.[].body'` (a read) was summed up as
+    /// "called GitHub's API (POST …/comments)", and the Chief told the owner
+    /// an agent had posted a comment without asking.
+    #[test]
+    fn a_gh_api_read_is_never_called_a_post() {
+        assert_eq!(
+            said("gh api repos/fictional/site/issues/7/comments -q '.[].body'"),
+            "called GitHub's API (GET repos/fictional/site/issues/7/comments)"
+        );
+        assert_eq!(
+            said("gh api repos/fictional/site/issues/7/comments -f body=Thanks"),
+            "called GitHub's API (POST repos/fictional/site/issues/7/comments)"
+        );
+        assert_eq!(
+            said("gh api -XPATCH repos/fictional/site -f description=x"),
+            "called GitHub's API (PATCH repos/fictional/site)"
+        );
+        assert_eq!(
+            said("gh api --method=DELETE repos/fictional/site/labels/old"),
+            "called GitHub's API (DELETE repos/fictional/site/labels/old)"
+        );
+    }
+
+    /// With the turn's folders known, the line names the part "Go hard"
+    /// would have asked about, not a read that ran beside it.
+    #[test]
+    fn the_summary_names_the_part_that_asked() {
+        let home = "/Users/fictional-tester";
+        let own = format!("{home}/Library/Application Support/FictionalApp/agents/a1");
+        let ctx = Ctx {
+            home: home.into(),
+            own_home: own.clone().into(),
+            cwd: own.clone().into(),
+            scratch: vec![own.into()],
+            ..Default::default()
+        };
+        let command =
+            "gh api repos/fictional/site/issues/7/comments -q '.[].body'; sudo shutdown -h now";
+        let (what, _) = describe("Bash", &json!({ "command": command }), Some(&ctx));
+        assert_eq!(what, "ran “sudo shutdown -h”");
+        // A send is still named by what it did.
+        let command =
+            "gh api repos/fictional/site/pulls -q '.[0].number'; gh pr comment 12 --body 'Fixed'";
+        let (what, place) = describe("Bash", &json!({ "command": command }), Some(&ctx));
+        assert_eq!(
+            format!("{what} {place}"),
+            "commented on pull request #12 on GitHub"
+        );
     }
 
     #[test]
