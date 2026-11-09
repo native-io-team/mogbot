@@ -88,7 +88,7 @@
 
 /* ---------------------------------------------------------------- badge */
 
-/* The avatar itself (shape, face, sizes, motion) is agents-avatar.css. */
+/* The key itself (colourway, legend, states) is agent-key.css. */
 
 /* A colour where letters would be too small to read (the peer line, menus). */
 .agent-dot {

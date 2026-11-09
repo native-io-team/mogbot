@@ -12,7 +12,7 @@ import { CheckIcon, ChevronIcon, HomeIcon } from '@/components/icons';
 import { Dropdown, DropdownDivider, DropdownItem } from '../primitives/Dropdown';
 import { MenuButton } from '../primitives/MenuButton';
 import { PixelLoaderRings } from '../workspace/PixelLoaderRings';
-import { AgentAvatar } from './AgentAvatar';
+import { AgentKey } from './AgentKey';
 import { failedTurn, needsYou, sortAgents, type Agent } from '../../lib/agents';
 
 interface AgentSwitcherProps {
@@ -76,7 +76,7 @@ export function AgentSwitcher({
         .map((a) => (
           <DropdownItem
             key={a.id}
-            icon={<AgentAvatar id={a.id} name={a.name} color={a.color} size="mini" />}
+            icon={<AgentKey id={a.id} name={a.name} color={a.color} size="sm" />}
             onSelect={() => onOpenAgent(a.id)}
           >
             <span className="agent-model-menu__label">{a.name}</span>

@@ -3,7 +3,6 @@ import { renderHook } from '@testing-library/react';
 import { appActivity, appQuiet, onAppActivity, resetAppActivityForTests } from './appActivity';
 import { ExponentialPoller } from './polling';
 import { usePolling } from '../hooks/usePolling';
-import { blinkClock, startBlinking } from './avatarBlink';
 
 /** Make the window hidden or visible, as WebKit reports it. */
 function setHidden(hidden: boolean) {
@@ -151,63 +150,5 @@ describe('polling while hidden', () => {
     await vi.advanceTimersByTimeAsync(3000);
     expect(fn.mock.calls.length).toBeGreaterThanOrEqual(3);
     unmount();
-  });
-});
-
-describe('the shared blink clock', () => {
-  const avatars = (n: number) => Array.from({ length: n }, () => document.createElement('span'));
-
-  it('is one timer for every avatar, and none while hidden or in the background', async () => {
-    vi.useFakeTimers();
-    vi.stubGlobal('matchMedia', () => ({ matches: false }));
-    let seed = 0;
-    const stops = avatars(12).map((el) =>
-      startBlinking(el, { rand: () => (seed = (seed * 9301 + 49297) % 233280) / 233280 })
-    );
-    expect(vi.getTimerCount()).toBe(1);
-
-    await setBackground(true);
-    expect(vi.getTimerCount()).toBe(0);
-    const before = blinkClock.wakeups;
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(blinkClock.wakeups).toBe(before);
-
-    await setBackground(false);
-    expect(vi.getTimerCount()).toBe(1);
-    setHidden(true);
-    expect(vi.getTimerCount()).toBe(0);
-    setHidden(false);
-
-    // Twelve avatars blink about every 5s each, two wake-ups a blink at most.
-    const start = blinkClock.wakeups;
-    await vi.advanceTimersByTimeAsync(60_000);
-    expect(blinkClock.wakeups - start).toBeLessThanOrEqual(12 * (60 / 3) * 2);
-    for (const s of stops) s();
-    expect(vi.getTimerCount()).toBe(0);
-    vi.unstubAllGlobals();
-  });
-
-  it('leaves off-screen avatars out: no wake-ups for them at all', async () => {
-    vi.useFakeTimers();
-    const els = avatars(5);
-    for (const el of els) el.setAttribute('data-offscreen', '');
-    const stops = els.map((el) => startBlinking(el, { rand: () => 0.5, paused: () => false }));
-    expect(vi.getTimerCount()).toBe(0);
-    const before = blinkClock.wakeups;
-    await vi.advanceTimersByTimeAsync(30_000);
-    expect(blinkClock.wakeups).toBe(before);
-    for (const s of stops) s();
-  });
-
-  it('wakes once for blinks due together', async () => {
-    vi.useFakeTimers();
-    // Same draws: all five due at the same moment.
-    const stops = avatars(5).map((el) =>
-      startBlinking(el, { rand: () => 0.5, paused: () => false })
-    );
-    const before = blinkClock.wakeups;
-    await vi.advanceTimersByTimeAsync(5000);
-    expect(blinkClock.wakeups - before).toBe(1);
-    for (const s of stops) s();
   });
 });

@@ -18,7 +18,8 @@ import {
 } from '../primitives/ContextMenu';
 import { TextButton } from '../primitives/TextButton';
 import { PixelLoaderRings } from '../workspace/PixelLoaderRings';
-import { AgentAvatar, agentInitials } from './AgentAvatar';
+import { agentInitials } from '../../lib/agentInitials';
+import { AgentKey } from './AgentKey';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import { needsYou, type Agent, type AgentMessage } from '../../lib/agents';
 import { listNames, roomActivity, roomKey, roomMembers, type Room } from '../../lib/agentRooms';
@@ -37,7 +38,7 @@ export function RoomAvatars({ members }: { members: Pick<Agent, 'id' | 'name' | 
   return (
     <span className="agent-room-avatars" aria-hidden>
       {shown.map((m) => (
-        <AgentAvatar key={m.id} id={m.id} name={m.name} color={m.color} size="mini" />
+        <AgentKey key={m.id} id={m.id} name={m.name} color={m.color} size="sm" />
       ))}
       {more > 0 && <span className="agent-room-avatars__more">+{more}</span>}
     </span>

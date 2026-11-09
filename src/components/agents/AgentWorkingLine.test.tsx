@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { act, cleanup, render, screen } from '@testing-library/react';
 import { AgentWorkingLine } from './AgentWorkingLine';
-import { AgentAvatar } from './AgentAvatar';
+import { AgentKey } from './AgentKey';
 import type { Agent } from '../../lib/agents';
 
 const T0 = 1_762_290_000_000;
@@ -67,8 +67,8 @@ describe('a working agent in a list', () => {
     expect(step()).toBe('Running the tests');
   });
 
-  it('marks a working avatar, which holds still under Reduce Motion (CSS)', () => {
-    const { container } = render(<AgentAvatar name="Acme Site" color="green" working />);
-    expect(container.querySelector('.agent-avatar[data-mood="working"]')).not.toBeNull();
+  it('presses a working key (the state is CSS; it never animates)', () => {
+    const { container } = render(<AgentKey name="Acme Site" color="green" state="working" />);
+    expect(container.querySelector('.agent-key[data-state="working"]')).not.toBeNull();
   });
 });

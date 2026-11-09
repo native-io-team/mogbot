@@ -192,7 +192,9 @@ const TOOLS: &[Tool] = &[
                 "template": { "type": "string", "enum": super::templates::ids(), "description": "Optional: a ready-made agent to start from." },
                 "role": { "type": "string", "description": "One line: what this agent is responsible for. Required unless you use a template." },
                 "instructions": { "type": "string", "description": "A briefing, as if for a new hire: context, standing rules, who's who, where things live. Required unless you use a template; with one, what you know about the user, added to its briefing." },
-                "color": { "type": "string", "enum": store::COLORS },
+                "colorway": { "type": "string", "enum": super::keys::colorways(), "description": "Optional: its key's colour. Left out, the one fewest on the team wear." },
+                "icon": { "type": "string", "enum": super::keys::icons(), "description": "Optional: the legend on its key. Left out, one read from its name and role." },
+                "key": { "type": "string", "description": "Optional: the keyboard key (one letter or digit) that jumps to it. Left out, the first free letter of its name." },
                 "project": { "type": "string", "description": "Optional: bind it to one of the user's projects (name or path from project_list), so its own turns run inside that project. Usually unnecessary: any agent can work on any project through sessions." },
                 "engine": { "type": "string", "enum": ["claude", "codex"], "description": "Optional: what it runs on. `claude` (Claude Code) or `codex` (Codex, on the user's ChatGPT plan). Left out, it goes on the user's default engine and model for new agents (Settings → Agents), or on whichever engine is set up when that one isn't. Only when the user asks for it; it must be installed and signed in." },
                 "first_task": { "type": "string", "description": "Optional message to start it on right away." },
@@ -215,7 +217,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "update_agent",
-        description: "Change an agent's name, role, instructions, project, engine, model, effort, routines' model, notifications or look. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude` or `codex`) switches what it runs on from its next turn: a new session, handed the recent conversation; its model goes back to the engine's default unless `model` comes with it. `model` (Claude Code: opus, sonnet, haiku; Codex: one it lists), `effort` (low, medium, high) and `routine_model` (\"auto\", \"same\" as its chats, or a model) take \"default\" for the engine's own and apply from its next message with no card: \"put Research on Opus\", \"have Finance think harder\". `muted: true` stops its notifications (\"stop pinging me about Social\"); unread and the badge still count it. `account` is its Runs on: one of its engine's accounts by the name usage_overview lists (\"run Finance only on Work\"), or \"any\" to run on whichever has room; no card. `shape`, `face`, `finish` (`keycap`, the default, or `embossed`) and `color` change how it looks (\"give Hiring a hexagon with dot eyes\"); give only what changes. A look applies at once, with no card: it isn't a setting. What an agent may do (apps, projects, browser, independence) is propose_settings_change.",
+        description: "Change an agent's name, role, instructions, project, engine, model, effort, routines' model, notifications or look. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude` or `codex`) switches what it runs on from its next turn: a new session, handed the recent conversation; its model goes back to the engine's default unless `model` comes with it. `model` (Claude Code: opus, sonnet, haiku; Codex: one it lists), `effort` (low, medium, high) and `routine_model` (\"auto\", \"same\" as its chats, or a model) take \"default\" for the engine's own and apply from its next message with no card: \"put Research on Opus\", \"have Finance think harder\". `muted: true` stops its notifications (\"stop pinging me about Social\"); unread and the badge still count it. `account` is its Runs on: one of its engine's accounts by the name usage_overview lists (\"run Finance only on Work\"), or \"any\" to run on whichever has room; no card. Its key: `colorway`, `icon` (the legend) and `key` (the keyboard key, one letter or digit, that jumps to it; unique on the team) change how it looks (\"make Hiring teal with the people icon\", \"put Finance on F\"); give only what changes. A look applies at once, with no card: it isn't a setting. What an agent may do (apps, projects, browser, independence) is propose_settings_change.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -231,10 +233,9 @@ const TOOLS: &[Tool] = &[
                 "routine_model": { "type": "string" },
                 "muted": { "type": "boolean" },
                 "account": { "type": "string", "description": "Runs on: an account's name or id, or \"any\"." },
-                "shape": { "type": "string", "enum": store::AVATAR_SHAPES },
-                "face": { "type": "string", "enum": store::AVATAR_FACES },
-                "finish": { "type": "string", "enum": store::AVATAR_FINISHES },
-                "color": { "type": "string", "enum": store::COLORS }
+                "colorway": { "type": "string", "enum": super::keys::colorways() },
+                "icon": { "type": "string", "enum": super::keys::icons() },
+                "key": { "type": "string", "description": "One letter or digit." }
             },
             "required": ["agent"]
         }),
@@ -1792,6 +1793,18 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         Ok(r) => r,
         Err(e) => return error(e),
     };
+    // Its key as asked, checked before anything is made.
+    let team = store::list().unwrap_or_default();
+    let key = match super::keys::KeyChange::checked(
+        None,
+        &team,
+        arg(args, "colorway"),
+        arg(args, "icon"),
+        arg(args, "key"),
+    ) {
+        Ok(k) => k,
+        Err(e) => return error(e),
+    };
     let created = store::create(store::NewAgent {
         name: name.to_string(),
         role,
@@ -1800,6 +1813,13 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         avatar: None,
         color,
         is_main: false,
+    });
+    let created = created.and_then(|agent| {
+        if key.is_empty() {
+            Ok(agent)
+        } else {
+            store::update(&agent.id, |a| key.apply(a))
+        }
     });
     let plain = project.is_none() && engine == Engine::default() && model.is_none();
     let created = created.and_then(|agent| match (plain, template) {
@@ -1898,7 +1918,8 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         Some(Err(e)) => return error(e.to_string()),
         _ => None,
     };
-    let look = match look_args(&agent, args) {
+    let team = store::list().unwrap_or_default();
+    let look = match look_args(&agent, &team, args) {
         Ok(l) => l,
         Err(e) => return error(e),
     };
@@ -1999,6 +2020,7 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         if let Some(avatar) = look.avatar.clone() {
             a.avatar = Some(avatar);
         }
+        look.key.apply(a);
         if let Some(c) = look.color.clone() {
             a.color = c;
         }
@@ -2240,14 +2262,26 @@ pub(super) struct LookUpdate {
     /// Its whole new look, when the shape, face or finish changes.
     pub avatar: Option<store::AgentLook>,
     pub color: Option<String>,
+    /// Its key's colourway, legend and bound key (`keys`).
+    pub key: super::keys::KeyChange,
     shape_changed: bool,
     face_changed: bool,
     finish_changed: bool,
 }
 
 impl LookUpdate {
-    /// "now a hexagon with dot eyes, in blue", for the tool's reply.
+    /// "now a hexagon with dot eyes, in blue" and "now Teal, on key Q", for the tool's reply.
     pub fn line(&self) -> Option<String> {
+        // A colour asked for moves the colourway too: said once, as the colour.
+        let mut key = self.key.clone();
+        if self.color.is_some() {
+            key.colorway = None;
+        }
+        let parts: Vec<String> = self.avatar_line().into_iter().chain(key.line()).collect();
+        (!parts.is_empty()).then(|| parts.join(", "))
+    }
+
+    fn avatar_line(&self) -> Option<String> {
         let a = self.avatar.as_ref();
         // Back to a key cap: said in words, since a key cap is otherwise unsaid.
         let to_keycap = self.finish_changed && a.is_some_and(|l| l.finish.is_none());
@@ -2277,7 +2311,11 @@ impl LookUpdate {
     }
 }
 
-pub(super) fn look_args(agent: &store::Agent, args: &Value) -> Result<LookUpdate, String> {
+pub(super) fn look_args(
+    agent: &store::Agent,
+    team: &[store::Agent],
+    args: &Value,
+) -> Result<LookUpdate, String> {
     let key = |k: &str| {
         args.get(k)
             .and_then(Value::as_str)
@@ -2311,6 +2349,15 @@ pub(super) fn look_args(agent: &store::Agent, args: &Value) -> Result<LookUpdate
             out.color = Some(c);
         }
     }
+    let colorway =
+        key("colorway").or_else(|| out.color.as_deref().map(super::keys::colorway_for_color));
+    out.key = super::keys::KeyChange::checked(
+        Some(agent),
+        team,
+        colorway.as_deref(),
+        key("icon").as_deref(),
+        args.get("key").and_then(Value::as_str),
+    )?;
     Ok(out)
 }
 
@@ -3976,6 +4023,9 @@ mod tests {
             shape: 0,
             avatar: None,
             color: "red".into(),
+            colorway: None,
+            icon: None,
+            bound_key: None,
             is_main: false,
             pinned: false,
             hidden: false,

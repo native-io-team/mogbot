@@ -39,3 +39,12 @@ Four pips on the front edge (the skirt band under the face), filled from the lef
 
 ## Shortcuts
 Each agent is bound to a real keyboard key, shown as the sublegend. Pressing it (when no text field is focused) jumps to that agent. Rebindable per agent; the sublegend updates. Unique per team.
+
+## Where it lives
+- **Data (both clients and the Mac):** `packages/companion-protocol/src/agent-keys.json` (colourways, icon ids, old colour → colourway, the name/role heuristics, the key alphabet, pips), read by `agentKeys.ts` and `src-tauri/src/agents/keys.rs`; `agent-key-cases.json` holds both to the same answers.
+- **Legends:** `packages/companion-protocol/src/agentKeyIcons.ts`, the one registry to swap for the designer's set.
+- **Registry:** each agent stores `colorway`, `icon`, `boundKey`. An agent saved before keys gets them on read (`keys::fill`: its colour's nearest colourway, an icon from its name then role, the first free letter of its name, the Chief first); a duplicate key gets a free one. The old `color` follows the colourway for clients that only read colours.
+- **Changing it:** the editor (colour, icon, press-to-bind), the Chief's `update_agent` / `create_agent` (`colorway`, `icon`, `key`; a key someone has is refused naming whose), the phone over `agents.create|update` on a Mac listing `agents.keys`.
+- **Desk:** `src/components/agents/AgentKey.tsx` + `src/styles/features/agent-key.css`; the board in What's in flight (`AgentsBoard.tsx`); the picker (`AgentKeyPicker.tsx`); the shortcut (`hooks/useAgentKeyShortcuts.ts`, Agents only, never in a field, terminal, dialog or menu; ⌘K shows each agent's key).
+- **States from an agent:** `agentKeyState` (lib/agents.ts): Needs your OK when a card waits; Paused while a usage limit stops it; Working while a turn runs; Live while you drive its session (Take over).
+- **Harness:** `harness-keys.html?theme=light|dark` (the reference's layout) and the `agents-keys-*` scenarios.

@@ -48,7 +48,7 @@ import {
   type TeamSetupView,
 } from '../../lib/teamSetup';
 import { AgentCard, AgentLine } from './AgentCard';
-import { AgentAvatar } from './AgentAvatar';
+import { AgentKey } from './AgentKey';
 import { ApprovalCard } from './AgentChatItems';
 import { SetupReach } from './TeamSetupReach';
 import { TeamLogins } from './TeamLogins';
@@ -309,7 +309,7 @@ function StepBody({
               const key = `hello:${a.agentId}`;
               return (
                 <li key={a.agentId} className="team-setup__item" data-hello={a.state}>
-                  <AgentAvatar id={a.agentId} name={a.agentName} color={a.color} size="mini" />
+                  <AgentKey id={a.agentId} name={a.agentName} color={a.color} size="sm" />
                   <span className="team-setup__item-title">{a.agentName}</span>
                   {a.state === 'quiet' ? (
                     <Button

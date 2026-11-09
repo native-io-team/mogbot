@@ -69,6 +69,9 @@ pub(super) fn from_homes(root: &Path) -> Registry {
             } else {
                 color_for(None, index)
             },
+            colorway: None,
+            icon: None,
+            bound_key: None,
             is_main,
             pinned: is_main,
             hidden: false,

@@ -270,6 +270,14 @@ pub struct AgentToggles {
     pub avatar: Option<crate::agents::store::AgentLook>,
     #[serde(default)]
     pub color: Option<String>,
+    /// Its key, from a phone that saw
+    /// [`MAC_FEATURE_AGENT_KEYS`](super::wire::MAC_FEATURE_AGENT_KEYS).
+    #[serde(default)]
+    pub colorway: Option<String>,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default, rename = "boundKey")]
+    pub bound_key: Option<String>,
     /// `claude` or `codex`, from a Mac that lists
     /// [`MAC_FEATURE_ENGINE`](super::wire::MAC_FEATURE_ENGINE). The desk's own
     /// `agents_update` checks it is ready and starts a new session that
@@ -309,6 +317,13 @@ pub struct PhoneNewAgent {
     /// Its shape and face, as the phone's preview showed them.
     #[serde(default)]
     pub avatar: Option<crate::agents::store::AgentLook>,
+    /// Its key, as the phone's preview showed it (`MAC_FEATURE_AGENT_KEYS`).
+    #[serde(default)]
+    pub colorway: Option<String>,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub bound_key: Option<String>,
     /// An id from `agents.templates`.
     #[serde(default)]
     pub template: Option<String>,
@@ -433,6 +448,9 @@ fn check_new_agent(input: PhoneNewAgent) -> Result<PhoneNewAgent, WireError> {
         role,
         color,
         avatar: check_look(input.avatar)?,
+        colorway: input.colorway,
+        icon: input.icon,
+        bound_key: input.bound_key,
         template,
         instructions,
         routines: input.routines,

@@ -435,6 +435,9 @@ impl Backend for DesktopBackend {
             shape: None,
             avatar: input.avatar,
             color: Some(color),
+            colorway: input.colorway,
+            icon: input.icon,
+            bound_key: input.bound_key,
             role: input.role,
             // What the user reviewed after a draft, else the template's briefing.
             instructions: match input.instructions {
@@ -475,6 +478,9 @@ impl Backend for DesktopBackend {
             shape: None,
             avatar: toggles.avatar,
             color: toggles.color.map(|c| c.trim().to_string()),
+            colorway: toggles.colorway,
+            icon: toggles.icon,
+            bound_key: toggles.bound_key,
             role: None,
             instructions: toggles.instructions,
             pinned: toggles.pinned,

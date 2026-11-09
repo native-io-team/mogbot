@@ -48,7 +48,7 @@ import {
 import { ChevronRightIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
-import { AgentAvatar } from './AgentAvatar';
+import { AgentKey } from './AgentKey';
 import { ConversationBar } from './AgentCard';
 import { ApprovalCard } from './AgentChatItems';
 import {
@@ -520,7 +520,7 @@ function Group({
           aria-controls={expanded ? cardsId : undefined}
           onClick={onToggle}
         >
-          <AgentAvatar id={agent.id} name={agent.name} color={agent.color} />
+          <AgentKey id={agent.id} name={agent.name} color={agent.color} size="md" />
           <span className="agent-requests-panel__text">
             <span className="agent-requests-panel__name">{agent.name}</span>
             <span className="agent-requests-panel__line" data-state={waiting ? 'waiting' : 'done'}>

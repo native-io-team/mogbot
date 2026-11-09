@@ -1,6 +1,6 @@
 /**
  * The working line under the last message while an agent works. One line,
- * no bubble: the agent as a key being typed on (`AgentKey`), then what it's doing in
+ * no bubble: the agent's key (`AgentKey`), pressed while it works, then what it's doing in
  * calm text with a soft shimmer while it's live, and muted at the end how
  * many steps so far and how long the turn has run:
  *
@@ -14,7 +14,7 @@
  * found, the live browser card) sits on the text's left edge; actions are
  * quiet text buttons at the line's right end. When the turn ends the line
  * gives way to "› Worked 6 min · 5 steps" in the same place, its chevron in
- * the column the key cap held.
+ * the column the key held.
  *
  * The words are steadied (`useSteadyLine`), so they don't flicker step to
  * step; the time sits in tabular figures at the end, so ticking moves nothing.
@@ -28,7 +28,7 @@ import { TypingDots } from '../primitives/TypingDots';
 import { useSteadyLine } from '../../hooks/useSteadyLine';
 import type { Agent, TurnWork } from '../../lib/agents';
 import { formatElapsed } from '../../../packages/companion-protocol/src/work';
-import { AgentKey } from './AgentAvatar';
+import { AgentKey } from './AgentKey';
 import { useLiveStep } from './AgentLiveStep';
 import { WorkMenu } from './AgentTakeover';
 import { useLiveWork } from './AgentWork';
@@ -125,7 +125,8 @@ export function WorkingIndicator({
               id={agent.id}
               name={agent.name}
               color={agent.color}
-              pressing={!step.quiet && !leaving}
+              state={!step.quiet && !leaving ? 'working' : 'idle'}
+              size="sm"
             />
           ) : (
             <TypingDots />

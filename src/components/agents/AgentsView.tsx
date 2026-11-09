@@ -79,6 +79,7 @@ import { ROLE_TEMPLATES } from '../../lib/agentTemplates';
 import type { ChiefIdea } from '../../lib/chiefIdeas';
 import { useAgentsIntents } from '../../commands/useAgentsCommands';
 import { useCommands } from '../../commands/useCommands';
+import { useAgentKeyShortcuts } from '../../hooks/useAgentKeyShortcuts';
 import {
   AgentsModeIcon,
   BellIcon,
@@ -419,6 +420,8 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     onLogins: openLogins,
     onBrowser: openBrowser,
   });
+  // Each agent's bound key opens it (outside text fields, dialogs and menus).
+  useAgentKeyShortcuts(agents, openAgent);
 
   // The order you see in the sidebar, for previous / next.
   const order = sortAgents(agents).filter((a) => !a.hidden || showHidden || a.id === selected?.id);
@@ -978,6 +981,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
             ) : teamOpen ? (
               <AgentsTeamView
                 onOpenAgent={openAgent}
+                onNewAgent={openNew}
                 onOpenMessage={openMessage}
                 onSignIn={signIn}
                 compact={

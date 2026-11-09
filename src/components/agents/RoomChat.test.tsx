@@ -203,8 +203,10 @@ describe('RoomChat', () => {
     const options = screen.getAllByRole('option').map((o) => o.textContent);
     expect(options.some((t) => t?.includes('Finance'))).toBe(true);
     expect(options.some((t) => t?.includes('Everyone'))).toBe(true);
-    // The whole room, not an agent: a glyph, never "EV" initials.
-    expect(document.querySelector('.agent-mention-menu__group')).toBeTruthy();
+    // The whole room, not an agent: a neutral key with the people legend, never "EV" initials.
+    expect(
+      document.querySelector('.agent-key[data-colorway="putty"][data-icon="people"]')
+    ).toBeTruthy();
     expect(options.some((t) => t?.includes('EV'))).toBe(false);
     // The foot line stays quiet while a name is being picked.
     expect(document.querySelector('.agent-room__address')?.textContent).toBe('');
@@ -286,8 +288,7 @@ describe('an agent’s own chat while it answers in a room', () => {
 });
 
 describe('the room’s draft', () => {
-  const box = () =>
-    screen.getByRole('textbox', { name: 'Message Month end' }) as HTMLTextAreaElement;
+  const box = () => screen.getByRole<HTMLTextAreaElement>('textbox', { name: 'Message Month end' });
 
   it('is held in the per-room draft store, kept across a reopen, and cleared by sending', async () => {
     await open(room());

@@ -25,11 +25,8 @@ import type {
   RoutineStep,
   RoutineWaiting,
 } from '../../packages/companion-protocol/src/model';
-import {
-  moodOf,
-  type AgentLook,
-  type AvatarMood,
-} from '../../packages/companion-protocol/src/avatar';
+import type { AgentLook } from '../../packages/companion-protocol/src/avatar';
+import { keyStateOf, type KeyState } from '../../packages/companion-protocol/src/agentKeys';
 
 export type { Watch, WatchEvent, WatchSource } from '../../packages/companion-protocol/src/model';
 
@@ -180,6 +177,14 @@ export interface Agent {
   shape: number;
   /** Its chosen shape and face. Absent: derived from its id (`lookFor` in avatar.ts). */
   avatar?: AgentLook;
+  /**
+   * Its key (docs/internal/agent-keys.md): a colourway, a legend and the
+   * keyboard key it's bound to. Older Macs omit them: `keyLookFor` draws
+   * one from `color`, the name and the role.
+   */
+  colorway?: string;
+  icon?: string;
+  boundKey?: string;
   /** One of AGENT_COLORS; typed loosely because the registry is a file. */
   color: string;
   isMain: boolean;
@@ -918,6 +923,10 @@ export interface NewAgentInput {
   shape?: number;
   avatar?: AgentLook;
   color?: string;
+  /** Its key's colourway, legend and bound key (agentKeys.ts); older Macs ignore them. */
+  colorway?: string;
+  icon?: string;
+  boundKey?: string;
   role?: string;
   instructions?: string;
   engine?: AgentEngine;
@@ -935,6 +944,10 @@ export interface UpdateAgentInput {
   shape?: number;
   avatar?: AgentLook;
   color?: string;
+  /** Its key's colourway, legend and bound key (agentKeys.ts); older Macs ignore them. */
+  colorway?: string;
+  icon?: string;
+  boundKey?: string;
   role?: string;
   instructions?: string;
   pinned?: boolean;
@@ -2165,18 +2178,19 @@ export function failedTurn(agent: Agent): Failure | null {
 }
 
 /**
- * What its avatar shows (`moodOf` in avatar.ts), from what its row knows. A
- * usage limit heals by itself, so it isn't a failure the avatar mourns.
+ * The state its key shows (`keyStateOf` in agentKeys.ts), from what its row
+ * knows: needs your OK, pressed while it works, the cap off while a usage
+ * limit stops it (it heals by itself), lit while you drive its session.
  */
-export function avatarMood(
+export function agentKeyState(
   agent: Agent,
   working = agent.status.state === 'working' && !agent.takeover
-): Exclude<AvatarMood, 'done'> {
-  const failure = failedTurn(agent);
-  return moodOf({
-    needsYou: needsYou(agent),
+): KeyState {
+  return keyStateOf({
+    needsOk: needsYou(agent),
+    paused: usageLimited(agent),
     working,
-    failed: failure !== null && failure.kind !== 'usage_limit',
+    live: Boolean(agent.takeover),
   });
 }
 

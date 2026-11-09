@@ -216,117 +216,6 @@
   color: var(--text-muted);
 }
 
-/* AgentKey (components/agents/AgentAvatar.tsx): the agent as a key being
-   typed on. The avatar itself is the key: its silhouette is the top, the
-   same silhouette set down by the travel is the side under it, and a soft
-   drop sits under that. The box is the key at rest, a little taller than
-   the line; the lead holds the line's height and the key overflows it
-   evenly, so nothing moves when the line hands off. Pressing, the top (and
-   the face on it) moves down into the side, a transform and nothing else,
-   so at the bottom of a tap it covers the side exactly; the drop, its own
-   layer, tightens (opacity). Sized from TYPING_KEY; the keyframes are its
-   press, value for value (agentKeyMotion.test.ts). */
-.agent-key {
-  position: relative;
-  display: inline-flex;
-  flex: 0 0 auto;
-  width: var(--agents-key-size);
-  height: calc(var(--agents-key-size) + var(--agents-key-travel));
-}
-
-.agent-key__drop,
-.agent-key__top {
-  position: absolute;
-  inset: 0;
-  display: block;
-}
-
-.agent-key[data-pressing] .agent-key__top {
-  animation: agents-key-press var(--agents-key-period) ease-in-out infinite;
-}
-
-.agent-key[data-pressing] .agent-key__drop {
-  animation: agents-key-drop var(--agents-key-period) ease-in-out infinite;
-}
-
-/* Off-screen or hidden: hold still. !important for the same reason as the
-   avatar's (agents-avatar.css): the press shorthand above out-ranks it. */
-.agent-key[data-offscreen] *,
-:root[data-app-hidden] .agent-key * {
-  animation-play-state: paused !important; /* css-ok: beats the press shorthand */
-}
-
-/* TYPING_KEY.press: a quick tap, a lighter one, each springing back a hair
-   past rest, then a rest. */
-@keyframes agents-key-press {
-  0% {
-    transform: translateY(0);
-  }
-
-  4% {
-    transform: translateY(calc(1 * var(--agents-key-travel)));
-  }
-
-  12% {
-    transform: translateY(calc(-0.15 * var(--agents-key-travel)));
-  }
-
-  18% {
-    transform: translateY(0);
-  }
-
-  26% {
-    transform: translateY(calc(0.75 * var(--agents-key-travel)));
-  }
-
-  33% {
-    transform: translateY(calc(-0.1 * var(--agents-key-travel)));
-  }
-
-  38% {
-    transform: translateY(0);
-  }
-
-  100% {
-    transform: translateY(0);
-  }
-}
-
-/* The drop under it: 1 at rest, TYPING_KEY.pressedDrop at the bottom of a tap. */
-@keyframes agents-key-drop {
-  0% {
-    opacity: 1;
-  }
-
-  4% {
-    opacity: 0.45;
-  }
-
-  12% {
-    opacity: 1;
-  }
-
-  18% {
-    opacity: 1;
-  }
-
-  26% {
-    opacity: 0.5875;
-  }
-
-  33% {
-    opacity: 1;
-  }
-
-  38% {
-    opacity: 1;
-  }
-
-  100% {
-    opacity: 1;
-  }
-}
-
 .agent-working__place {
   flex-shrink: 0;
   white-space: nowrap;
@@ -471,11 +360,6 @@
   .agent-work__body,
   .agent-working__meta {
     transition: none;
-  }
-
-  .agent-key[data-pressing] .agent-key__top,
-  .agent-key[data-pressing] .agent-key__drop {
-    animation: none;
   }
 
   .agent-working__activity[data-live],

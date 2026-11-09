@@ -23,12 +23,13 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ChevronRightIcon, CollaboratorsIcon } from '@/components/icons';
+import { ChevronRightIcon } from '@/components/icons';
 import { TextButton } from '../primitives/TextButton';
 import { StatusPill } from '../primitives/StatusPill';
 import { CompactModeToggle } from '../workspace/ModeToggle';
 import { PixelLoaderRings } from '../workspace/PixelLoaderRings';
-import { AgentAvatar } from './AgentAvatar';
+import { AgentKey } from './AgentKey';
+import { AgentsBoard } from './AgentsBoard';
 import { AgentWorkingLine } from './AgentWorkingLine';
 import { AgentEngineBadge } from './AgentEngine';
 import { ApprovalCard, ErrorLine } from './AgentChatItems';
@@ -55,7 +56,7 @@ import {
   type Agent,
   type AgentEngine,
   type AgentMessage,
-  avatarMood,
+  agentKeyState,
 } from '../../lib/agents';
 import { refreshAgents, upsertMessage, useAgentsSelector } from '../../lib/agentsStore';
 import { getRoomMessages, roomKey, type Room } from '../../lib/agentRooms';
@@ -227,11 +228,12 @@ function Row({ agent, place, line, meta, state, working, onOpen, fold, pill, arr
       aria-expanded={fold?.expanded}
       aria-controls={fold?.expanded ? fold.controls : undefined}
     >
-      <AgentAvatar
+      <AgentKey
         id={agent.id}
         name={agent.name}
         color={agent.color}
-        mood={avatarMood(agent, Boolean(working))}
+        state={agentKeyState(agent, Boolean(working))}
+        size="md"
       />
       <span className="agents-team__text">
         <span className="agents-team__name">
@@ -294,6 +296,8 @@ interface AgentsTeamViewProps {
   onSignIn: (engine: AgentEngine) => void;
   /** Below the compact breakpoint there's no sidebar; the header switches agents. */
   compact?: { agents: Agent[]; onGoHome: () => void; onGoProjects: () => void };
+  /** The board's empty socket: make a new agent. */
+  onNewAgent?: () => void;
 }
 
 export function AgentsTeamView({
@@ -301,6 +305,7 @@ export function AgentsTeamView({
   onOpenMessage,
   onSignIn,
   compact,
+  onNewAgent,
 }: AgentsTeamViewProps) {
   const agents = useAgentsSelector((s) => s.agents);
   const rooms = useAgentsSelector((s) => s.rooms);
@@ -478,9 +483,7 @@ export function AgentsTeamView({
 
   const title = (
     <>
-      <span className="agent-avatar agent-avatar--row agent-avatar--tile agent-avatar--selected agents-team__badge">
-        <CollaboratorsIcon size={14} />
-      </span>
+      <AgentKey name="Everyone" colorway="putty" icon="people" size="md" />
       <h2 className="agent-chat__name">What’s in flight</h2>
     </>
   );
@@ -516,6 +519,7 @@ export function AgentsTeamView({
         aria-label="Everything in flight, by agent"
       >
         <div className="agents-team__column" ref={columnRef}>
+          <AgentsBoard agents={agents} onOpenAgent={onOpenAgent} onNewAgent={onNewAgent} />
           {setup && chief && (
             <button
               type="button"
@@ -528,7 +532,7 @@ export function AgentsTeamView({
                   .catch(toastError);
               }}
             >
-              <AgentAvatar id={chief.id} name={chief.name} color={chief.color} />
+              <AgentKey id={chief.id} name={chief.name} color={chief.color} size="md" />
               <span className="agents-team__text">
                 <span className="agents-team__name">
                   <span className="agents-team__name-text">{SETUP_TITLE}</span>

@@ -8,7 +8,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '../../primitives/Button';
 import { Spinner } from '../../primitives/Spinner';
-import { AgentAvatar } from '../../agents/AgentAvatar';
+import { AgentKey } from '../../agents/AgentKey';
 import { IndependenceSlider } from '../../agents/IndependenceSlider';
 import { FlowShell } from './FlowParts';
 import {
@@ -21,14 +21,14 @@ import {
 import { asCommandError, formatCommandError } from '../../../lib/errors';
 import { useAgentsSelector } from '../../../lib/agentsStore';
 import type { Agent } from '../../../lib/agents';
-import { CHIEF_LOOK } from '../../../../packages/companion-protocol/src/avatar';
+import { CHIEF_ICON } from '../../../../packages/companion-protocol/src/agentKeys';
 
 export function WelcomeStep({ onNext }: { onNext: () => void }) {
   return (
     <FlowShell
       step="welcome"
       mark={
-        <AgentAvatar look={CHIEF_LOOK} name="Chief of Staff" color="white" size="hero" selected />
+        <AgentKey icon={CHIEF_ICON} name="Chief of Staff" colorway="blue" size="xl" boundKey="C" />
       }
       title="Your own team of AI agents"
       lede="They run on this Mac, on your own Claude or ChatGPT plan. You talk to one, your Chief of Staff, and anything risky waits for your OK."
@@ -180,13 +180,12 @@ export function ReadyStep({
       }
     >
       <div className="flow-ready-avatar">
-        <AgentAvatar
+        <AgentKey
           id={chief.id}
-          look={chief.id ? undefined : CHIEF_LOOK}
+          icon={chief.id ? undefined : CHIEF_ICON}
           name={chief.name}
           color={chief.color}
-          size="hero"
-          selected
+          size="xl"
         />
       </div>
     </FlowShell>

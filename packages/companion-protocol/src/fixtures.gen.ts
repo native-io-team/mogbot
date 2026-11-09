@@ -4355,6 +4355,7 @@ export const frames = [
       "logins.phone",
       "agents.looks",
       "agents.keycaps",
+      "agents.keys",
       "signin.phone",
       "watch.links",
       "agents.engine",

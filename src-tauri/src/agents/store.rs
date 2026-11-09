@@ -257,7 +257,18 @@ pub struct Agent {
     /// Its avatar's shape and face (`AgentLook`). Absent: derived from its id.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub avatar: Option<AgentLook>,
+    /// The old avatar colour key, kept beside its key's colourway (nearest)
+    /// for clients that only read this.
     pub color: String,
+    /// Its key (docs/internal/agent-keys.md, `keys`): a colourway, a legend
+    /// and the keyboard key it's bound to. Filled in on read for an agent
+    /// saved before keys (`keys::fill`), so never absent once loaded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub colorway: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub icon: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bound_key: Option<String>,
     /// The Chief of Staff: exactly one, created on first open, can't be deleted.
     #[serde(default)]
     pub is_main: bool,
@@ -770,6 +781,8 @@ impl Registry {
                 }
             }
         }
+        // Agents saved before keys get one; written back on the next save.
+        super::keys::fill(&mut registry.agents);
         Some(registry)
     }
 
@@ -1302,7 +1315,10 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         return Err(CommandError::expected("There's already a Chief of Staff."));
     }
     let index = registry.agents.len();
+    // Its colour as before (one asked for, else spread across the palette,
+    // which import previews predict), and its key's colourway the nearest.
     let color = color_for(new.color.as_deref(), index);
+    let colorway = super::keys::colorway_for_color(&color);
     let shape = new
         .shape
         .filter(|s| *s < SHAPE_COUNT)
@@ -1315,6 +1331,9 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         shape,
         avatar: new.avatar.and_then(AgentLook::normalized),
         color,
+        colorway: Some(colorway),
+        icon: None,
+        bound_key: None,
         is_main: new.is_main,
         // The one agent you're told to talk to stays put at the top; unpinnable.
         pinned: new.is_main,
@@ -1350,7 +1369,10 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
     let home = agents_root()?.join(&agent.id);
     ensure_private_dir(&home).map_err(|e| super::err_io(e.to_string()))?;
     write_instructions(&home, &agent, &new.instructions)?;
-    registry.agents.push(agent.clone());
+    registry.agents.push(agent);
+    // Its icon and key, or a free key when its own is taken by now.
+    super::keys::fill(&mut registry.agents);
+    let agent = registry.agents.last().cloned().expect("just pushed");
     write_registry(&registry)?;
     Ok(agent)
 }
@@ -1464,7 +1486,10 @@ pub fn insert_imported(mut agent: Agent) -> Result<Agent, CommandError> {
     if agent.is_main {
         return Err(CommandError::expected("There's already a Chief of Staff."));
     }
-    registry.agents.push(agent.clone());
+    registry.agents.push(agent);
+    // Its icon and key, or a free key when its own is taken by now.
+    super::keys::fill(&mut registry.agents);
+    let agent = registry.agents.last().cloned().expect("just pushed");
     write_registry(&registry)?;
     Ok(agent)
 }
@@ -1633,7 +1658,10 @@ pub fn restore(id: &str) -> Result<Agent, CommandError> {
     if kept.exists() && !home.exists() {
         std::fs::rename(&kept, &home).map_err(|e| super::err_io(e.to_string()))?;
     }
-    registry.agents.push(agent.clone());
+    registry.agents.push(agent);
+    // Its icon and key, or a free key when its own is taken by now.
+    super::keys::fill(&mut registry.agents);
+    let agent = registry.agents.last().cloned().expect("just pushed");
     write_registry(&registry)?;
     items.remove(index);
     write_trash(&items)?;

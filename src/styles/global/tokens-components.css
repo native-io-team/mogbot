@@ -389,13 +389,9 @@
      reading line. A reply's first streamed line holds this height so the line
      hands off in place. */
   --agents-motion-working-height: calc(var(--font-size-subhead) * 1.4);
-  /* The working line's typing key (AgentKey in AgentAvatar.tsx; TYPING_KEY in
-     packages/companion-protocol/src/avatar.ts, value for value): the agent's
-     avatar as a key, the steps' icon column wide, with its side the travel
-     deep under it. */
+  /* The working line's lead column (and the steps' icon column): the agent's
+     key (AgentKey, size sm) sits in it, pressed while it works. */
   --agents-key-size: calc(var(--spacing-lg) + var(--spacing-sm)); /* 24px */
-  --agents-key-travel: calc(var(--spacing-2xs) + var(--space-01)); /* 3px */
-  --agents-key-period: calc(var(--duration-loader-standard) * 2); /* 2.4s */
   /* The soft fade at the transcript's top and bottom edges. */
   --agents-motion-edge-fade: var(--spacing-xl);
 

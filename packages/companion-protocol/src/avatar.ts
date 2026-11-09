@@ -1,4 +1,7 @@
 /**
+ * Superseded on the desk by agent keys (agentKeys.ts, docs/internal/agent-keys.md);
+ * the phone still draws these until it moves to keys.
+ *
  * An agent's avatar: a key cap. One of four even shapes (one construction,
  * one area, so none reads bigger), raised like a key on a keyboard: a darker
  * side, a lit top set up off it, and a soft shadow under the lot. A face sits

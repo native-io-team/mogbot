@@ -2,14 +2,57 @@
 
 /* ---------------------------------------------------------------- team */
 
-/* The team's badge: an agent badge's tile, neutral, with an icon. */
-.agents-team__badge {
-  color: var(--text-secondary);
+/* The board (AgentsBoard.tsx): every agent as a full-size key on a plate,
+   its name and state under it. */
+.agents-board__plate {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg) var(--spacing-xl) var(--spacing-xl);
+  background: linear-gradient(var(--agent-key-plate-top), var(--agent-key-plate-bottom));
+  border-radius: var(--radius-lg);
+  box-shadow: inset 0 2px 6px var(--agent-key-plate-shade);
 }
 
-.agents-team__badge.agent-avatar--selected {
-  color: var(--surface-app);
-  background: var(--text-primary);
+.agents-board__key {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-2xs);
+  width: var(--agent-key-size-xl);
+  padding: var(--spacing-xs) 0 0;
+  color: var(--text-primary);
+  background: none;
+  border: none;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+}
+
+.agents-board__key:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--spacing-2xs);
+}
+
+.agents-board__key .agent-key {
+  margin-bottom: calc(var(--spacing-xs) + var(--agent-key-rest-depth));
+}
+
+.agents-board__name {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+.agents-board__state {
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+}
+
+.agents-board__state[data-state='needsOk'] {
+  color: var(--accent-warning);
 }
 
 /* The conversation's column and rhythm, as four quiet sections. */

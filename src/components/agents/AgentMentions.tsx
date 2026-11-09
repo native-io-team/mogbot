@@ -12,8 +12,7 @@
  */
 
 import { useCallback, useState, type KeyboardEvent, type RefObject } from 'react';
-import { CollaboratorsIcon } from '@/components/icons';
-import { AgentAvatar } from './AgentAvatar';
+import { AgentKey } from './AgentKey';
 import { EVERYONE_ID } from '../../lib/agentRooms';
 import {
   mentionAt,
@@ -125,16 +124,11 @@ function MentionMenu({ candidates, active, onHover, onPick }: MentionMenuProps) 
           onClick={() => onPick(agent)}
         >
           {agent.id === EVERYONE_ID ? (
-            // A room's @everyone is the whole room, not an agent: a group
-            // glyph on a neutral tile, never someone's initials.
-            <span
-              className="agent-avatar agent-avatar--mini agent-avatar--tile agent-mention-menu__group"
-              aria-hidden
-            >
-              <CollaboratorsIcon size={10} />
-            </span>
+            // A room's @everyone is the whole room, not an agent: a neutral
+            // key with the people legend, never someone's.
+            <AgentKey name="Everyone" colorway="putty" icon="people" size="sm" />
           ) : (
-            <AgentAvatar id={agent.id} name={agent.name} color={agent.color} size="mini" />
+            <AgentKey id={agent.id} name={agent.name} color={agent.color} size="sm" />
           )}
           <span className="agent-mention-menu__name">
             {agent.id === EVERYONE_ID ? 'Everyone' : agent.name}

@@ -22,7 +22,7 @@ import { ArrowUpIcon, CameraIcon, CheckIcon, MicrophoneIcon } from '@/components
 import { IconButton } from '../primitives/IconButton';
 import { TextButton } from '../primitives/TextButton';
 import { TextArea } from '../primitives/TextField';
-import { AgentAvatar } from './AgentAvatar';
+import { AgentKey } from './AgentKey';
 import { ComposerAttachments } from './AgentAttachments';
 import { useMentionPicker } from './AgentMentions';
 import { useDictation } from './useDictation';
@@ -229,7 +229,7 @@ export function QuickEntry() {
           <span className="quick-entry__to-label">To</span>
           {to ? (
             <>
-              <AgentAvatar id={to.id} name={to.name} color={to.color} size="mini" />
+              <AgentKey id={to.id} name={to.name} color={to.color} size="sm" />
               <span className="quick-entry__to-name">{to.name}</span>
             </>
           ) : (

@@ -10,7 +10,7 @@
  */
 
 import type { AtWorkLine } from './useProjectAgents';
-import { AgentAvatar } from '../agents/AgentAvatar';
+import { AgentKey } from '../agents/AgentKey';
 
 export const AT_WORK_STACK_MAX = 3;
 
@@ -25,14 +25,14 @@ export function ProjectAtWork({ lines }: { lines: AtWorkLine[] }) {
       aria-label={`At work here: ${lines.map((l) => l.name).join(', ')}`}
     >
       {shown.map((line) => (
-        <AgentAvatar
+        <AgentKey
           key={line.agentId}
           id={line.agentId}
           name={line.name}
           color={line.color}
-          size="xs"
-          working={!line.waiting}
+          state={!line.waiting ? 'working' : 'idle'}
           className="sidebar-project-at-work__avatar"
+          size="xs"
         />
       ))}
       {more > 0 && <span className="sidebar-project-at-work__more">+{more}</span>}

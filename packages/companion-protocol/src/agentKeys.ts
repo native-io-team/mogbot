@@ -1,0 +1,233 @@
+/**
+ * Agent keys: every agent is a keycap (docs/internal/agent-keys.md). A
+ * colourway, a legend (an icon) and the keyboard key it's bound to, shown in
+ * one of six physical states, with its independence as pips on the front
+ * edge. The one spec the desk's `AgentKey` and the phone draw from, so the
+ * same agent is the same key everywhere.
+ *
+ * The data (colourways, icon ids, the old colours' nearest colourway, the
+ * name heuristics and the key alphabet) is `agent-keys.json`, which the Mac
+ * reads too (`agents::keys`), so a migration on the Mac and a fallback here
+ * land on the same key. The drawings are `agentKeyIcons.ts`.
+ *
+ * The registry stores ids (`colorway`, `icon`, `boundKey`), never colours.
+ * An agent from a Mac that doesn't send them yet is drawn from what it has:
+ * its old colour's nearest colourway, an icon read from its name and role.
+ */
+
+import data from './agent-keys.json';
+import { KEY_ICON_DRAWINGS, type KeyIconDrawing } from './agentKeyIcons';
+import type { AgentIndependence } from './model';
+
+export { KEY_ICON_DRAWINGS, KEY_ICON_GRID, type KeyIconDrawing } from './agentKeyIcons';
+
+export interface Colorway {
+  id: string;
+  /** What the picker calls it. */
+  name: string;
+  /** The top face, the skirt round it and the hard depth shadow: three shades of one hue. */
+  face: string;
+  skirt: string;
+  depth: string;
+  /** The legend's ink: at least 4.5:1 on the face. */
+  legend: string;
+  /** A pale face: lit, it darkens more so the lit legend reads (`LIVE_DARKEN`). */
+  light: boolean;
+  /** The old avatar colour key nearest it, written beside it for older clients. */
+  legacy: string;
+}
+
+export const COLORWAYS: readonly Colorway[] = data.colorways;
+export const COLORWAY_IDS: readonly string[] = COLORWAYS.map((c) => c.id);
+export type ColorwayId = string;
+
+export const KEY_ICONS: readonly { id: string; name: string }[] = data.icons;
+export const KEY_ICON_IDS: readonly string[] = KEY_ICONS.map((i) => i.id);
+
+/** The Chief's legend, and the one an agent gets when nothing in its name says otherwise. */
+export const CHIEF_ICON: string = data.chiefIcon;
+export const DEFAULT_ICON: string = data.defaultIcon;
+
+/** Every key an agent can be bound to: letters, then digits. No modifiers. */
+export const KEY_CHARS: string = data.keyChars;
+
+/** The old avatar colours, each to its nearest colourway. */
+export const LEGACY_COLORWAYS: Readonly<Record<string, string>> = data.legacyColors;
+
+/** Words in a name or role, each rule in order: the first that matches picks the icon. */
+export const ICON_RULES: readonly { icon: string; words: string[] }[] = data.iconRules;
+
+/** The six states a key shows (docs/internal/agent-keys.md, "States"). */
+export const KEY_STATES = ['idle', 'working', 'live', 'needsOk', 'paused', 'new'] as const;
+export type KeyState = (typeof KEY_STATES)[number];
+
+/** The words beside a key, where there's room. */
+export const KEY_STATE_LABEL: Record<KeyState, string> = {
+  idle: 'Idle',
+  working: 'Working',
+  live: 'Live',
+  needsOk: 'Needs your OK',
+  paused: 'Paused',
+  new: 'New agent',
+};
+
+/** Pips lit on the front edge for each independence level: Careful 1 … Unleashed 4. */
+export const KEY_PIPS: Record<AgentIndependence, number> = data.pips as Record<
+  AgentIndependence,
+  number
+>;
+export const KEY_PIP_COUNT = 4;
+
+export const isColorway = (v: unknown): v is string =>
+  typeof v === 'string' && COLORWAY_IDS.includes(v);
+export const isKeyIcon = (v: unknown): v is string =>
+  typeof v === 'string' && KEY_ICON_IDS.includes(v);
+
+export function colorwayOf(id: string | null | undefined): Colorway {
+  return COLORWAYS.find((c) => c.id === id) ?? COLORWAYS[0];
+}
+
+export function iconDrawing(id: string | null | undefined): KeyIconDrawing {
+  return KEY_ICON_DRAWINGS[id ?? ''] ?? KEY_ICON_DRAWINGS[DEFAULT_ICON];
+}
+
+export const iconName = (id: string) => KEY_ICONS.find((i) => i.id === id)?.name ?? id;
+export const colorwayName = (id: string) => COLORWAYS.find((c) => c.id === id)?.name ?? id;
+
+/** The nearest colourway to an old avatar colour key (blue for one it doesn't know). */
+export function colorwayForColor(color: string | null | undefined): string {
+  const key = (color ?? '').trim().toLowerCase();
+  if (isColorway(key)) return key;
+  return Object.prototype.hasOwnProperty.call(LEGACY_COLORWAYS, key)
+    ? LEGACY_COLORWAYS[key]
+    : COLORWAYS[0].id;
+}
+
+/** The old colour key written beside a colourway, so a client that only knows colours stays close. */
+export const legacyColorFor = (colorway: string) => colorwayOf(colorway).legacy;
+
+/** The lower-case words of a name or role: "Security & DevOps" → security, devops. */
+function words(text: string): string[] {
+  return text
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
+}
+
+/**
+ * An icon read from what the agent is called and what it's for: the name
+ * first, then the role, each against the rules in order. The Chief's is the
+ * star. Matches `agents::keys::icon_for` exactly (agentKeys.test.ts and
+ * keys_tests.rs hold the same table).
+ */
+export function iconFor(name: string, role = '', isMain = false): string {
+  if (isMain) return CHIEF_ICON;
+  for (const text of [name, role]) {
+    const ws = words(text);
+    for (const rule of ICON_RULES) {
+      if (ws.some((w) => rule.words.includes(w))) return rule.icon;
+    }
+  }
+  return DEFAULT_ICON;
+}
+
+/** One typed key as a bound key: a letter or digit, upper-case; anything else is none. */
+export function normalizeBoundKey(key: string | null | undefined): string | null {
+  const k = (key ?? '').trim().toUpperCase();
+  return k.length === 1 && KEY_CHARS.includes(k) ? k : null;
+}
+
+/**
+ * The first key free for an agent called `name`: its letters in order (the
+ * first letter first), then every other key. `null` only when all 36 are
+ * taken.
+ */
+export function boundKeyFor(name: string, taken: Iterable<string>): string | null {
+  const used = new Set([...taken].map((k) => k.toUpperCase()));
+  const own = [...name.toUpperCase()].filter((c) => KEY_CHARS.includes(c));
+  for (const c of [...own, ...KEY_CHARS]) if (!used.has(c)) return c;
+  return null;
+}
+
+/** The colourway nobody (or fewest) on the team wears yet, in palette order. */
+export function freshColorway(worn: Iterable<string>): string {
+  const counts = new Map(COLORWAY_IDS.map((id) => [id, 0]));
+  for (const w of worn) if (counts.has(w)) counts.set(w, (counts.get(w) ?? 0) + 1);
+  let best = COLORWAY_IDS[0];
+  for (const id of COLORWAY_IDS) if ((counts.get(id) ?? 0) < (counts.get(best) ?? 0)) best = id;
+  return best;
+}
+
+/** What an agent is drawn as. */
+export interface AgentKeyLook {
+  colorway: string;
+  icon: string;
+  /** Absent when the Mac didn't send one (an older Mac). */
+  boundKey: string | null;
+}
+
+/**
+ * An agent's key: what it chose, else what an older Mac's fields say (its
+ * colour's nearest colourway, an icon from its name and role).
+ */
+export function keyLookFor(agent: {
+  name: string;
+  role?: string;
+  color?: string | null;
+  isMain?: boolean;
+  colorway?: string | null;
+  icon?: string | null;
+  boundKey?: string | null;
+}): AgentKeyLook {
+  return {
+    colorway: isColorway(agent.colorway) ? agent.colorway : colorwayForColor(agent.color),
+    icon: isKeyIcon(agent.icon)
+      ? agent.icon
+      : iconFor(agent.name, agent.role ?? '', Boolean(agent.isMain)),
+    boundKey: normalizeBoundKey(agent.boundKey),
+  };
+}
+
+/**
+ * The state a key shows. Needs your OK outranks everything (a turn waiting
+ * on a card is also working); a paused agent shows its socket; working is
+ * pressed; live (you're driving its session) is lit.
+ */
+export function keyStateOf(s: {
+  needsOk?: boolean;
+  paused?: boolean;
+  working?: boolean;
+  live?: boolean;
+}): KeyState {
+  if (s.needsOk) return 'needsOk';
+  if (s.paused) return 'paused';
+  if (s.working) return 'working';
+  if (s.live) return 'live';
+  return 'idle';
+}
+
+export const pipsFor = (level: AgentIndependence | null | undefined): number =>
+  level ? (KEY_PIPS[level] ?? 0) : 0;
+
+/**
+ * Geometry at 112px (the reference size), in px; every size scales it by
+ * `size / 112`, except the small key (`KEY_SMALL`), which is its own.
+ */
+export const KEY_GEOMETRY = {
+  size: 112,
+  radius: 16,
+  face: { left: 10, right: 10, top: 5, bottom: 17, radius: 11 },
+  depth: 8,
+  icon: 40,
+  stroke: 2,
+  sublegend: { right: 8, bottom: 5, size: 12 },
+  pips: { bottom: 6, width: 9, height: 4, gap: 4 },
+  working: { down: 6, depth: 2, darken: 0.08 },
+  live: { darken: 0.2, darkenLight: 0.35, legend: '#FFF6DC' },
+  needsOk: { up: 5, depth: 13, pulseMs: 1600 },
+} as const;
+
+/** At or below this size a key drops its sublegend and pips and thickens its legend. */
+export const KEY_SMALL_MAX = 36;
+/** At or above this size a key shows its pips. */
+export const KEY_PIPS_MIN = 64;

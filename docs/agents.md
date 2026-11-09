@@ -230,7 +230,7 @@ prompt, the parse and the review are unit-tested on recorded shapes).
 
 | Piece | Where | Notes |
 | --- | --- | --- |
-| Identity | `<projects root>/.shipstudio/agents/agents.json` | name, role, colour key, `avatar` (a shape and a face; absent, derived from the id: see docs/internal/avatars.md), pinned/hidden, unread, Claude session id |
+| Identity | `<projects root>/.shipstudio/agents/agents.json` | name, role, its key (`colorway`, `icon`, `boundKey`: docs/internal/agent-keys.md; filled in on read for agents saved before keys, `agents/keys.rs`), the old colour key and `avatar` (kept for phones that still draw avatars), pinned/hidden, unread, Claude session id |
 | Home | `<projects root>/.shipstudio/agents/<id>/` | the agent's working directory |
 | Instructions + memory | `<home>/CLAUDE.md` | Claude Code loads it every turn. Instructions on top, `## Memory` below, which the agent maintains itself. Editing instructions never touches memory. |
 | Conversation | `<home>/messages.jsonl` | what *you* were shown: your messages, its replies, agent-to-agent lines, approval cards, errors. Append-only |
@@ -4678,10 +4678,10 @@ timers firing; in the background, only status loops (loaders, the key).
   `usePolling` holds (catching up on its own cadence when seen; `whileHidden`
   for the two polls with an effect outside the window), the workflows poll
   skips. **In the background** (`data-app-background`, another app focused):
-  the avatars' drift and blinks and the working line's shimmer pause; status
-  loops keep going. **Off-screen** (`lib/offscreen.ts`): avatars, the key and
-  the working loader hold still. Blinks run on one shared clock with no timer
-  while nothing can blink (`lib/avatarBlink.ts`).
+  the working line's shimmer and a key's Needs-your-OK pulse pause; status
+  loops keep going. **Off-screen** (`lib/offscreen.ts`): the working loader
+  holds still. Agent keys have no timers at all: a state is a data attribute,
+  and the only animation is that pulse, in CSS.
 - **Phone**: the spinner, typing dots, shimmer, avatar and key loop only
   while the app is in front and their screen is showing (`lib/moving.ts`);
   live-view polling and "2 min ago" clocks have no timer in the background.

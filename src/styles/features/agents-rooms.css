@@ -260,7 +260,7 @@
   gap: var(--spacing-xs);
 }
 
-.agent-room__ask-choices .agent-avatar {
+.agent-room__ask-choices .agent-key {
   margin-right: var(--spacing-2xs);
 }
 
@@ -268,10 +268,6 @@
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-.agent-room__empty .agent-room-avatars .agent-avatar {
-  --agent-avatar-size: var(--control-height-standard);
 }
 
 .agent-room__empty .agent-room-avatars__more {
@@ -415,12 +411,6 @@
 }
 
 /* ------------------------------------------------------------ elsewhere */
-
-/* @everyone in a room's mention menu: the whole room, a group glyph on a
-   neutral tile, never someone's initials. */
-.agent-mention-menu__group {
-  color: var(--text-secondary);
-}
 
 /* What's in flight: "in Pricing launch" after the name, when it was said in
    a room. Quiet; the row opens the room. */

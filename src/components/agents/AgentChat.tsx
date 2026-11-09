@@ -42,7 +42,7 @@ import { TextButton } from '../primitives/TextButton';
 import { AgentComposer, LiveSecretHint } from './AgentComposer';
 import { AgentModelItems } from './AgentModelMenu';
 import { AgentRequestsBar } from './AgentRequests';
-import { AgentAvatar } from './AgentAvatar';
+import { AgentKey } from './AgentKey';
 import { AgentActionItems, type AgentActions } from './AgentActions';
 import { TakeoverBanner, TakeoverTerminal } from './AgentTakeover';
 import { StepInBar } from './AgentStepIn';
@@ -129,7 +129,7 @@ import {
   engineCantAsk,
   engineIsReady,
   roleWithoutPath,
-  avatarMood,
+  agentKeyState,
 } from '../../lib/agents';
 import {
   agentIn,
@@ -1305,12 +1305,12 @@ export const AgentChat = memo(function AgentChat({
   const role = agent.role ? roleWithoutPath(agent.role) : '';
   const title = (
     <>
-      <AgentAvatar
+      <AgentKey
         id={agent.id}
         name={agent.name}
         color={agent.color}
-        selected
-        mood={avatarMood(agent)}
+        state={agentKeyState(agent)}
+        size="md"
       />
       <h2 className="agent-chat__name">{agent.name}</h2>
       {role && (
@@ -1678,13 +1678,7 @@ export const AgentChat = memo(function AgentChat({
               {agent.isMain && engineReady && <ImportChoiceCard onImport={onImport} />}
               {items.length === 0 ? (
                 <div className="agent-chat__empty">
-                  <AgentAvatar
-                    id={agent.id}
-                    name={agent.name}
-                    color={agent.color}
-                    size="hero"
-                    selected
-                  />
+                  <AgentKey id={agent.id} name={agent.name} color={agent.color} size="lg" />
                   <p className="agent-chat__empty-name">{agent.name}</p>
                   {agent.isMain ? (
                     <>

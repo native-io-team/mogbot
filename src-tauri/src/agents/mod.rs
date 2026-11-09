@@ -114,6 +114,7 @@ pub mod independence;
 pub mod installs;
 pub mod interview;
 pub mod inventory;
+pub mod keys;
 pub mod level_hint;
 pub mod local_links;
 pub mod login_relay;
@@ -450,5 +451,7 @@ mod audit_tests;
 mod avatar_tests;
 #[cfg(test)]
 mod brand_copy_tests;
+#[cfg(test)]
+mod keys_tests;
 #[cfg(test)]
 mod long_chat_tests;
