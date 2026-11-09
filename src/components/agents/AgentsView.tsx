@@ -853,6 +853,8 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
   const signInShown = useCallback(() => {
     if (shownEngine) signIn(shownEngine);
   }, [shownEngine, signIn]);
+  const shownKey = shown?.id;
+  const openShownApps = useCallback(() => openApps(shownKey), [openApps, shownKey]);
   const { onGoHome, onGoProjects } = sidebarProps;
   // The preview pane beside the chat (Preview on a card), for its agent.
   const previewCtx = useAgentPreview();
@@ -1000,7 +1002,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                 onSetUpEngine={setUpShownEngine}
                 onSignIn={signInShown}
                 onImport={openImport}
-                onOpenApps={() => openApps(shown.id)}
+                onOpenApps={openShownApps}
                 onMoreIdeas={shown.isMain ? openIdeas : undefined}
                 onEscape={escapeSearch}
                 compact={chatCompact}
