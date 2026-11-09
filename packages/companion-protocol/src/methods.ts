@@ -382,7 +382,16 @@ export interface Methods {
       /** `instructions` and `routines`: a Mac listing `MAC_FEATURES.draft`. */
       input: Pick<
         NewAgentInput,
-        'name' | 'role' | 'color' | 'template' | 'avatar' | 'instructions' | 'routines'
+        | 'name'
+        | 'role'
+        | 'color'
+        | 'template'
+        | 'avatar'
+        | 'instructions'
+        | 'routines'
+        | 'colorway'
+        | 'icon'
+        | 'boundKey'
       >;
       clientId?: string;
     };
@@ -399,7 +408,9 @@ export interface Methods {
   /**
    * From the phone, only the row's toggles (`pinned`, `muted`, `hidden`)
    * and `instructions` (at most 20,000 characters), and from a Mac listing
-   * `MAC_FEATURES.looks`, `avatar` and `color`; any other field is refused
+   * `MAC_FEATURES.looks`, `avatar` and `color`, and from one listing
+   * `MAC_FEATURES.agentKeys`, `colorway`, `icon` and `boundKey` (a key
+   * someone else has is refused, naming whose); any other field is refused
    * with `bad_params`. The name, role, model and project stay the desk's.
    */
   'agents.update': { params: { agentId: string; input: UpdateAgentInput }; result: StoredAgent };

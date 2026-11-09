@@ -174,7 +174,7 @@ fn an_agent_without_a_look_reads_and_writes_as_before() {
 }
 
 fn look(a: &Agent, args: serde_json::Value) -> Result<LookUpdate, String> {
-    look_args(a, &args)
+    look_args(a, &[], &args)
 }
 
 #[test]

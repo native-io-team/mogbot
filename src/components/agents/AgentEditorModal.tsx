@@ -13,7 +13,7 @@
  * @module components/agents/AgentEditorModal
  */
 
-import { Fragment, useEffect, useRef, useState } from 'react';
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import { ErrorIcon } from '@/components/icons';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
@@ -23,9 +23,16 @@ import { SegmentedControl } from '../primitives/SegmentedControl';
 import { Tabs, TabsList, TabsPanel, TabsTab } from '../primitives/Tabs';
 import { AgentProjectField } from './AgentProject';
 import { AgentMemory } from './AgentMemory';
-import { AgentAvatar } from './AgentAvatar';
-import { AgentLookPicker } from './AgentLookPicker';
-import { freeLook, lookFor, type AgentLook } from '../../../packages/companion-protocol/src/avatar';
+import { AgentKey } from './AgentKey';
+import { AgentKeyPicker } from './AgentKeyPicker';
+import {
+  boundKeyFor,
+  colorwayForColor,
+  freshColorway,
+  iconFor,
+  keyLookFor,
+  legacyColorFor,
+} from '../../../packages/companion-protocol/src/agentKeys';
 import { AgentReach } from './AgentReach';
 import { AgentPolicy } from './AgentPolicy';
 import { AgentLevelPicker } from './AgentLevelPicker';
@@ -33,7 +40,6 @@ import { AgentEngineField, AgentEngineMore } from './AgentEngine';
 import { useQuotaLines } from './AgentsQuota';
 import { ChevronRightIcon } from '@/components/icons';
 import {
-  AGENT_COLORS,
   COST_BASIS_NOTE,
   type AgentEngine,
   createAgent,
@@ -225,11 +231,6 @@ function templateColor(template: RoleTemplate | null, taken: string[] = []): str
   return template && !taken.includes(template.color) ? template.color : null;
 }
 
-/** The first colour nobody has yet; white and gray are left for the user to pick. */
-function freeColor(taken: string[] = []): string {
-  return AGENT_COLORS.find((c) => c !== 'white' && c !== 'gray' && !taken.includes(c)) ?? 'purple';
-}
-
 export function AgentEditorModal({
   isOpen,
   onClose,
@@ -250,26 +251,54 @@ export function AgentEditorModal({
   const first = agent ? null : findTemplate(initialTemplate);
   const [template, setTemplate] = useState<RoleTemplate | null>(first);
   const [name, setName] = useState(agent?.name ?? first?.name ?? '');
+  // Its key (docs/internal/agent-keys.md). Editing: what it wears now.
+  // Creating: a template's colour, else the colourway fewest wear; a legend
+  // read from its name and role and the first free letter of its name, both
+  // following what's typed until one is picked. The old colour field (and
+  // the accent, for the Chief) follows the colourway.
+  const others = useMemo(
+    () => getAgentsSnapshot().agents.filter((a) => a.id !== agent?.id),
+    [agent?.id]
+  );
+  const saved = agent ? keyLookFor(agent) : null;
+  const [colorway, setColorwayState] = useState<string>(() => {
+    if (saved) return saved.colorway;
+    const fromTemplate = templateColor(first, takenColors);
+    return fromTemplate
+      ? colorwayForColor(fromTemplate)
+      : freshColorway(others.map((a) => keyLookFor(a).colorway));
+  });
   const [color, setColor] = useState<string>(
-    () => agent?.color ?? templateColor(first, takenColors) ?? freeColor(takenColors)
+    () => agent?.color ?? templateColor(first, takenColors) ?? legacyColorFor(colorway)
   );
-  // Editing: what it wears now. Creating: a shape nobody else wears yet, so
-  // the preview is exactly what the new agent gets.
-  const [initialLook] = useState<AgentLook>(() =>
-    agent
-      ? lookFor(agent)
-      : freeLook(
-          getAgentsSnapshot().agents.map((a) => lookFor(a)),
-          String(Date.now())
-        )
-  );
-  const [look, setLook] = useState<AgentLook>(initialLook);
-  const lookChanged =
-    look.shape !== initialLook.shape ||
-    look.face !== initialLook.face ||
-    (look.finish ?? 'keycap') !== (initialLook.finish ?? 'keycap');
-  const [showLook, setShowLook] = useState(false);
+  const setColorway = (c: string) => {
+    setColorwayState(c);
+    setColor(legacyColorFor(c));
+  };
+  const [pickedIcon, setIcon] = useState<string | null>(saved?.icon ?? null);
+  const [pickedKey, setBoundKey] = useState<string | null>(saved?.boundKey ?? null);
+  const [showLook, setShowLook] = useState(!agent);
   const [role, setRole] = useState(agent?.role ?? first?.role ?? '');
+  const icon = pickedIcon ?? iconFor(name, role);
+  const taken = useMemo(
+    () =>
+      others.flatMap((a) => {
+        const k = keyLookFor(a).boundKey;
+        return k ? [{ key: k, name: a.name }] : [];
+      }),
+    [others]
+  );
+  const boundKey =
+    pickedKey ??
+    boundKeyFor(
+      name,
+      taken.map((t) => t.key)
+    );
+  const keyChanged = {
+    ...(colorway !== saved?.colorway ? { colorway } : {}),
+    ...(icon !== saved?.icon ? { icon } : {}),
+    ...(boundKey && boundKey !== saved?.boundKey ? { boundKey } : {}),
+  };
   const [instructions, setInstructions] = useState(first ? templateInstructions(first) : '');
   // "Describe the agent you want": what came back, and which routines stay ticked.
   const [draft, setDraft] = useState<AgentDraft | null>(null);
@@ -280,7 +309,10 @@ export function AgentEditorModal({
     setName(d.name);
     setRole(d.role);
     setInstructions(d.instructions);
-    if (!(takenColors ?? []).includes(d.color)) setColor(d.color);
+    if (!(takenColors ?? []).includes(d.color)) {
+      setColorwayState(colorwayForColor(d.color));
+      setColor(d.color);
+    }
     setKept(d.routines.map((r) => !r.problem));
   };
   const startOver = () => {
@@ -304,10 +336,15 @@ export function AgentEditorModal({
     if (untouched(instructions, templateInstructions)) {
       setInstructions(next ? templateInstructions(next) : '');
     }
-    if (next) setColor(templateColor(next, takenColors) ?? color);
+    const nextColor = next ? templateColor(next, takenColors) : null;
+    if (nextColor) {
+      setColorwayState(colorwayForColor(nextColor));
+      setColor(nextColor);
+    }
     setTemplate(next);
   };
   const engines = useAgentsSelector((s) => s.engines);
+  const teamLevel = useAgentsSelector((s) => s.independence);
   const defaults = useAgentsSelector((s) => s.defaults);
   // Until someone picks, a new agent goes where Settings → Agents says new
   // agents start (or, before the overview says, the first engine that can
@@ -373,7 +410,7 @@ export function AgentEditorModal({
         await updateAgent(agent.id, {
           name,
           color,
-          ...(lookChanged ? { avatar: look } : {}),
+          ...keyChanged,
           role,
           instructions,
           engine,
@@ -386,7 +423,9 @@ export function AgentEditorModal({
         const created = await createAgent({
           name,
           color,
-          avatar: look,
+          colorway,
+          icon,
+          ...(boundKey ? { boundKey } : {}),
           role,
           instructions,
           engine,
@@ -535,7 +574,7 @@ export function AgentEditorModal({
           aria-expanded={showLook}
           onClick={() => setShowLook((open) => !open)}
         >
-          <AgentAvatar name={name} color={color} look={look} size="field" />
+          <AgentKey name={name} colorway={colorway} icon={icon} size="md" />
         </button>
         <TextField
           placeholder="Name"
@@ -547,12 +586,16 @@ export function AgentEditorModal({
         />
       </div>
       {showLook && (
-        <AgentLookPicker
+        <AgentKeyPicker
           name={name}
-          color={color}
-          look={look}
-          onLookChange={setLook}
-          onColorChange={setColor}
+          colorway={colorway}
+          icon={icon}
+          boundKey={boundKey}
+          level={agent?.independence ?? teamLevel}
+          taken={taken}
+          onColorwayChange={setColorway}
+          onIconChange={setIcon}
+          onBoundKeyChange={setBoundKey}
         />
       )}
 

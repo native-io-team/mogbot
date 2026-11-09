@@ -5,6 +5,7 @@
  * @module commands/useAgentsCommands
  */
 
+import { keyLookFor } from '../../packages/companion-protocol/src/agentKeys';
 import { useEffect, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import {
@@ -444,13 +445,15 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
           }
         },
       })),
-      // One per agent, so typing its name in ⌘K opens it.
+      // One per agent, so typing its name in ⌘K opens it; its bound key
+      // (which opens it from anywhere in Agents) shown as the shortcut.
       ...agents.map((agent) => ({
         id: `agents.open.${agent.id}`,
         title: `Open ${agent.name}`,
         icon: <AgentsIcon size={14} />,
         category: 'navigation' as const,
-        keywords: ['agent', 'chat', ...(agent.role ? [agent.role] : [])],
+        shortcut: keyLookFor(agent).boundKey ?? undefined,
+        keywords: ['agent', 'chat', 'key', ...(agent.role ? [agent.role] : [])],
         run: () => {
           requestAgentsIntent({ kind: 'open', agentId: agent.id });
           setView('agents');

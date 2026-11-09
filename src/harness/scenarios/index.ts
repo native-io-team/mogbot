@@ -30,7 +30,7 @@ import { agentsCrossoverScenarios } from './agentsCrossover';
 import { agentsTeamSetupScenarios } from './agentsTeamSetup';
 import { agentsHeaderScenarios } from './agentsHeader';
 import { agentsAccountsScenarios } from './agentsAccounts';
-import { agentsAvatarsScenarios } from './agentsAvatars';
+import { agentsKeysScenarios } from './agentsKeys';
 import { appScenarios } from './app';
 import { onboardingFlowScenarios } from './onboardingFlow';
 import { featureScenarios } from './features';
@@ -48,7 +48,7 @@ import { projectsAtWorkScenarios } from './projectsAtWork';
 
 export const scenarios: Scenario[] = [
   ...agentsScenarios,
-  ...agentsAvatarsScenarios,
+  ...agentsKeysScenarios,
   ...agentsDesktopScenarios,
   ...agentsProjectScenarios,
   ...agentsWorkScenarios,

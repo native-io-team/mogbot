@@ -1,0 +1,102 @@
+/* Layout for harness-keys.html only (the reference render's layout). */
+
+body {
+  margin: 0;
+  background: var(--surface-app);
+}
+
+.key-gallery {
+  display: flex;
+  flex-direction: column;
+  width: calc(var(--spacing-lg) * 80);
+  padding: var(--spacing-2xl) calc(var(--spacing-2xl) * 1.5);
+  color: var(--text-primary);
+  font-family: var(--font-family-geist);
+}
+
+.key-gallery h1 {
+  margin: 0;
+  font-size: var(--font-size-h2);
+}
+
+.key-gallery h2 {
+  margin: var(--spacing-2xl) 0 var(--spacing-lg);
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+  font-weight: var(--font-weight-label);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.key-gallery__sub {
+  margin: var(--spacing-xs) 0 0;
+  color: var(--text-secondary);
+}
+
+.key-gallery__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: var(--spacing-2xl);
+}
+
+.key-gallery__row--tight {
+  gap: var(--spacing-lg);
+  margin-top: var(--spacing-lg);
+}
+
+.key-gallery__cell {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
+  min-width: var(--agent-key-size-xl);
+}
+
+.key-gallery__cell--sm {
+  min-width: calc(var(--spacing-lg) * 4.5);
+  gap: var(--spacing-sm);
+}
+
+.key-gallery__label {
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+  text-align: center;
+}
+
+.key-gallery__label small {
+  display: block;
+  color: var(--text-secondary);
+  font-weight: var(--font-weight-body);
+}
+
+.key-gallery__listrow {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-width: calc(var(--spacing-lg) * 14);
+  padding: var(--spacing-xs) var(--spacing-md) var(--spacing-sm) var(--spacing-sm);
+  background: var(--surface-control);
+  border-radius: var(--radius-lg);
+}
+
+.key-gallery__n {
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+}
+
+.key-gallery__s {
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+}
+
+.key-gallery__board {
+  display: inline-flex;
+  align-self: flex-start;
+}
+
+.key-gallery__icons {
+  display: grid;
+  grid-template-columns: repeat(11, max-content);
+  gap: var(--spacing-lg) var(--spacing-md);
+}

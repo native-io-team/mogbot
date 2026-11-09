@@ -57,10 +57,6 @@
   outline-offset: var(--focus-ring-offset);
 }
 
-.agent-editor__identity .agent-avatar--field {
-  --agent-avatar-size: var(--text-field-height);
-}
-
 .agent-editor__more {
   align-self: flex-start;
 }

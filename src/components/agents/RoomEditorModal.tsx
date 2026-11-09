@@ -16,7 +16,7 @@ import { SegmentedControl } from '../primitives/SegmentedControl';
 import { Dropdown, DropdownItem } from '../primitives/Dropdown';
 import { MenuButton } from '../primitives/MenuButton';
 import { CheckIcon, ChevronIcon } from '@/components/icons';
-import { AgentAvatar } from './AgentAvatar';
+import { AgentKey } from './AgentKey';
 import { sortAgents, type Agent } from '../../lib/agents';
 import {
   createRoom,
@@ -139,7 +139,7 @@ export function RoomEditorModal({ isOpen, room, agents, onClose, onSaved }: Room
                     label={`${agent.name} in this room`}
                     onChange={(checked) => toggle(agent.id, checked)}
                   />
-                  <AgentAvatar id={agent.id} name={agent.name} color={agent.color} size="mini" />
+                  <AgentKey id={agent.id} name={agent.name} color={agent.color} size="sm" />
                   <span className="agent-room-editor__member-name">{agent.name}</span>
                   {agent.role && (
                     <span className="agent-room-editor__member-role">{agent.role}</span>

@@ -667,7 +667,7 @@ request, the diff and the photo viewer push over them. At
   and Stop. Finished steps read "Ran the Cypress tests · 6m 12s
   · 42 passed, 3 failed", and a long or failed command keeps "Show output".
   On the list a working agent's avatar (a shape and a face, drawn with
-  react-native-svg from the spec the desk uses: docs/internal/avatars.md;
+  react-native-svg from the shared avatar spec: docs/internal/avatars.md; the desk now draws agent keys, docs/internal/agent-keys.md;
   the agent sheet changes it on a Mac listing `agents.looks`) holds still
   in place of the spinner (no blink, never a ring around it), and
   its line says the step and how long ("Running the Cypress tests · 5m");

@@ -1,6 +1,7 @@
-/* Agents mode: how an agent looks (AgentLookPicker.tsx), in the editor.
- * The avatar large on a quiet band, then three rows of choices: each a
- * small avatar (or a swatch) on a button that rings when it's the pick. */
+/* Agents mode: how an agent looks (AgentKeyPicker.tsx), in the editor.
+ * Its key at full size on a quiet plate, then the choices: colourways and
+ * legends as small keys on buttons that ring when they're the pick, and the
+ * press-to-bind field for its shortcut key. */
 
 .agent-look {
   display: flex;
@@ -11,7 +12,7 @@
 .agent-look__preview {
   display: flex;
   justify-content: center;
-  padding: var(--spacing-lg) 0;
+  padding: var(--spacing-lg) 0 var(--spacing-md);
   background: var(--surface-control);
   border-radius: var(--radius-lg);
 }
@@ -41,9 +42,9 @@
 
 .agent-look__choice {
   display: inline-flex;
-  align-items: center;
+  align-items: flex-start;
   justify-content: center;
-  padding: var(--spacing-2xs);
+  padding: var(--spacing-2xs) var(--spacing-2xs) 0;
   color: inherit;
   background: none;
   border: none;
@@ -69,14 +70,40 @@
   box-shadow: inset 0 0 0 var(--focus-ring-width) var(--border-strong);
 }
 
-.agent-look__choice .agent-avatar--field {
-  --agent-avatar-size: var(--size-sidebar-project-shortcut);
+.agent-look__bind {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
 }
 
-.agent-look__swatch {
-  display: block;
-  width: var(--size-sidebar-project-shortcut);
-  height: var(--size-sidebar-project-shortcut);
-  background: var(--agents-tint);
-  border-radius: var(--radius-pill);
+/* The shortcut key: a key-sized field you press a key into. */
+.agent-look__bind-field {
+  min-width: calc(var(--spacing-lg) * 2.5);
+  height: var(--control-height-standard);
+  padding: 0 var(--spacing-sm);
+  font-family: var(--font-code);
+  font-weight: var(--font-weight-heading);
+  color: var(--text-primary);
+  background: var(--surface-control);
+  border: none;
+  border-radius: var(--radius-control);
+  box-shadow: inset 0 0 0 1px var(--border-default);
+  cursor: pointer;
+}
+
+.agent-look__bind-field[data-listening] {
+  font-family: inherit;
+  font-weight: var(--font-weight-body);
+  color: var(--text-secondary);
+  box-shadow: inset 0 0 0 var(--focus-ring-width) var(--border-strong);
+}
+
+.agent-look__bind-field:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: 0;
+}
+
+.agent-look__hint {
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
 }

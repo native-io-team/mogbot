@@ -293,10 +293,6 @@
     transform var(--agents-motion-settle);
 }
 
-.agent-avatar {
-  transition: color var(--transition-interaction-fast);
-}
-
 /* Working → needs you → unread: each status swaps in instead of cutting. */
 .agents-list__status > * {
   animation: agents-motion-pop-in var(--agents-motion-enter) backwards;

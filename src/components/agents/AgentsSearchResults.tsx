@@ -21,7 +21,7 @@ import {
   type SearchHit,
 } from '../../lib/agents';
 import { asCommandError, formatCommandError } from '../../lib/errors';
-import { AgentAvatar } from './AgentAvatar';
+import { AgentKey } from './AgentKey';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import type { Agent } from '../../lib/agents';
 
@@ -114,7 +114,7 @@ export function AgentsSearchResults({
             className="agents-search__hit agents-search__name-hit"
             onClick={() => onOpenAgent?.(agent.id)}
           >
-            <AgentAvatar id={agent.id} name={agent.name} color={agent.color} />
+            <AgentKey id={agent.id} name={agent.name} color={agent.color} size="md" />
             <span className="agents-search__agent-name">
               {highlightRuns(agent.name, trimmed).map((run, i) =>
                 run.match ? <mark key={i}>{run.text}</mark> : run.text
@@ -144,7 +144,7 @@ export function AgentsSearchResults({
       {groupHits(results.hits).map(({ agentId, hits }) => (
         <div key={agentId} className="agents-search__group" role="listitem">
           <div className="agents-search__agent">
-            <AgentAvatar id={agentId} name={hits[0].agentName} color={hits[0].agentColor} />
+            <AgentKey id={agentId} name={hits[0].agentName} color={hits[0].agentColor} size="md" />
             <span className="agents-search__agent-name">{hits[0].agentName}</span>
           </div>
           {hits.map((hit) => {

@@ -44,7 +44,7 @@ import { TextArea } from '../primitives/TextField';
 import { Dropdown, DropdownDivider, DropdownItem } from '../primitives/Dropdown';
 import { BellIcon, BellOffIcon, CloseIcon, EditIcon, TrashIcon } from '@/components/icons';
 import { CompactModeToggle } from '../workspace/ModeToggle';
-import { AgentAvatar } from './AgentAvatar';
+import { AgentKey } from './AgentKey';
 import { RoomAvatars, type RoomActions } from './AgentRoomParts';
 import { ConversationBar, ConversationBars } from './AgentCard';
 import { tintMentionsIn, useMentionPicker } from './AgentMentions';
@@ -935,11 +935,11 @@ function SpeakerBlock({
     <div className="agent-room__speaker" data-continued={!showName || undefined} {...scope}>
       {showName && (
         <div className="agent-room__speaker-name" data-color={speaker?.color ?? 'gray'}>
-          <AgentAvatar
+          <AgentKey
             id={speaker?.id}
             name={speaker?.name ?? '?'}
             color={speaker?.color ?? 'gray'}
-            size="mini"
+            size="sm"
           />
           <span>{speaker?.name ?? 'A former member'}</span>
         </div>
@@ -1174,7 +1174,7 @@ function WorkingFor({
     <div className="agent-room__speaker" {...scope}>
       <div className="agent-room__speaker-name" data-color={agent.color}>
         {/* Its key cap looks around here; the line under it doesn't repeat it. */}
-        <AgentAvatar id={agent.id} name={agent.name} color={agent.color} size="mini" working />
+        <AgentKey id={agent.id} name={agent.name} color={agent.color} state="working" size="sm" />
         <span>{agent.name}</span>
       </div>
       <WorkingIndicator
@@ -1211,7 +1211,7 @@ function WhoShouldAnswer({
             variant="secondary"
             onClick={() => onPick({ kind: 'named', ids: [m.id] })}
           >
-            <AgentAvatar id={m.id} name={m.name} color={m.color} size="mini" />
+            <AgentKey id={m.id} name={m.name} color={m.color} size="sm" />
             {m.name}
           </Button>
         ))}

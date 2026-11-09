@@ -1,0 +1,34 @@
+{
+  "$comment": "Held by agentKeys.test.ts and src-tauri/src/agents/keys_tests.rs: the Mac's migration and the clients' fallback agree.",
+  "icons": [
+    { "name": "Chief of Staff", "role": "", "isMain": true, "icon": "star" },
+    { "name": "Finance", "role": "", "isMain": false, "icon": "money" },
+    { "name": "Slack Watch", "role": "", "isMain": false, "icon": "chat" },
+    { "name": "Site QA", "role": "", "isMain": false, "icon": "check" },
+    { "name": "Hiring", "role": "", "isMain": false, "icon": "people" },
+    { "name": "Voice", "role": "", "isMain": false, "icon": "mic" },
+    { "name": "Social Posts", "role": "", "isMain": false, "icon": "megaphone" },
+    { "name": "Security & DevOps", "role": "", "isMain": false, "icon": "shield" },
+    { "name": "Car", "role": "", "isMain": false, "icon": "car" },
+    { "name": "Move", "role": "", "isMain": false, "icon": "box" },
+    { "name": "Kite", "role": "Answers my email", "isMain": false, "icon": "inbox" },
+    { "name": "Acme Site", "role": "", "isMain": false, "icon": "globe" },
+    { "name": "Ledger", "role": "Keeps the books", "isMain": false, "icon": "money" },
+    { "name": "Nova", "role": "", "isMain": false, "icon": "grid" }
+  ],
+  "boundKeys": [
+    { "name": "Chief of Staff", "taken": "", "key": "C" },
+    { "name": "Client Sites", "taken": "C", "key": "L" },
+    { "name": "Finance", "taken": "CL", "key": "F" },
+    { "name": "Fin", "taken": "FIN", "key": "A" },
+    { "name": "Agent 3", "taken": "AGENT", "key": "3" },
+    { "name": "???", "taken": "", "key": "A" }
+  ],
+  "colors": [
+    { "color": "white", "colorway": "putty" },
+    { "color": "purple", "colorway": "blue" },
+    { "color": "gray", "colorway": "graphite" },
+    { "color": "sage", "colorway": "sage" },
+    { "color": "mauve", "colorway": "blue" }
+  ]
+}

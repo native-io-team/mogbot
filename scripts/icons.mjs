@@ -216,18 +216,18 @@ function validateDeclarations(
 /**
  * The marked dynamic SVG exceptions: SVG assembled from data at runtime, one
  * root each, carrying its marker. The branch graph draws a repository's
- * history; the agent avatar draws a shape and face from the spec it shares
- * with the phone (packages/companion-protocol/src/avatar.ts).
+ * history; the agent key draws its legend from the icon registry it shares
+ * with the phone (packages/companion-protocol/src/agentKeyIcons.ts).
  */
 function validateDynamicSvg({
   sourceDirectory = sourceRoot,
   branchFile = path.join(sourceRoot, 'components', 'branches', 'BranchGraph.tsx'),
-  avatarFile = path.join(sourceRoot, 'components', 'agents', 'AgentAvatar.tsx'),
+  keyFile = path.join(sourceRoot, 'components', 'agents', 'AgentKey.tsx'),
 } = {}) {
   const errors = [];
   const marked = new Map([
     [branchFile, 'branch-graph'],
-    [avatarFile, 'agent-avatar'],
+    [keyFile, 'agent-key'],
   ]);
   const tsxFiles = walkFiles(sourceDirectory).filter((file) => file.endsWith('.tsx'));
   for (const file of tsxFiles) {

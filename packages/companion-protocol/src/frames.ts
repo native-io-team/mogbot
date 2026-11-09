@@ -185,6 +185,12 @@ export const MAC_FEATURES = {
    */
   keycaps: 'agents.keycaps',
   /**
+   * Agents carry their key (`colorway`, `icon`, `boundKey`; agentKeys.ts), and
+   * `agents.create` / `agents.update` take them. A bound key someone else has
+   * is refused, naming whose it is.
+   */
+  agentKeys: 'agents.keys',
+  /**
    * Signing in to a site in the Mac's own Chrome from the phone: the
    * `agents.signin*` methods, one tab shown live here and driven from here.
    */

@@ -2,7 +2,7 @@
  * Marks an element `data-offscreen` while none of it is in view, so its CSS
  * loops can hold still (`[data-offscreen] * { animation-play-state: paused }`).
  * One IntersectionObserver for every element watched, app-wide: a sidebar of
- * avatars and working loaders scrolled out of sight costs nothing.
+ * working loaders scrolled out of sight costs nothing.
  *
  * @module lib/offscreen
  */

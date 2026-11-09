@@ -1,0 +1,472 @@
+/* An agent's key (AgentKey.tsx; the spec is docs/internal/agent-keys.md, the
+ * data packages/companion-protocol/src/agent-keys.json, the approved render
+ * docs/internal/agent-keys-reference.html, whose geometry this copies).
+ *
+ * Pure CSS shapes: a skirt (the key's base), an inset top face, a solid
+ * hard-edged depth shadow and one soft ambient shadow; one SVG legend on the
+ * face. Every length is a multiple of one unit, the key's size over 112 (the
+ * reference size), except the small key (36px and under), which is its own
+ * drawing on a 30px unit: face, skirt, 3px depth, a heavier legend, no
+ * sublegend or pips.
+ *
+ * States are physical, never glows round the key or badge dots: pressed
+ * while it works, the legend lit like a backlit cap while it's live, lit,
+ * proud and slowly pulsing while it needs your OK (the only animation; none
+ * with Reduce Motion), and a socket with the cap off when it's paused or new.
+ * Keys keep their colours in both themes; only the socket and the shadows
+ * under them follow the theme.
+ */
+
+:root {
+  /* The eight colourways (agent-keys.json, value for value; agentKey.test.ts
+     reads both and compares): face, skirt, depth, legend. */
+  --agent-key-blue-face: #3f6fd8;
+  --agent-key-blue-skirt: #3159b4;
+  --agent-key-blue-depth: #223f85;
+  --agent-key-blue-legend: #ffffff;
+  --agent-key-orange-face: #ec6a2e;
+  --agent-key-orange-skirt: #c9521c;
+  --agent-key-orange-depth: #8f3810;
+  --agent-key-orange-legend: #1f1005;
+  --agent-key-putty-face: #e6decc;
+  --agent-key-putty-skirt: #cbc1ab;
+  --agent-key-putty-depth: #a0967f;
+  --agent-key-putty-legend: #2a2722;
+  --agent-key-teal-face: #6fc2b6;
+  --agent-key-teal-skirt: #52a398;
+  --agent-key-teal-depth: #33756c;
+  --agent-key-teal-legend: #0c2421;
+  --agent-key-graphite-face: #4a4e55;
+  --agent-key-graphite-skirt: #34373c;
+  --agent-key-graphite-depth: #131417;
+  --agent-key-graphite-legend: #f2eee4;
+  --agent-key-mustard-face: #e8b93f;
+  --agent-key-mustard-skirt: #c99a26;
+  --agent-key-mustard-depth: #8e6b12;
+  --agent-key-mustard-legend: #2a1e05;
+  --agent-key-pink-face: #efa9a2;
+  --agent-key-pink-skirt: #d48a83;
+  --agent-key-pink-depth: #9c5c56;
+  --agent-key-pink-legend: #2b0e0c;
+  --agent-key-sage-face: #a9ba78;
+  --agent-key-sage-skirt: #8c9d5c;
+  --agent-key-sage-depth: #5f6e38;
+  --agent-key-sage-legend: #1a2108;
+
+  /* The lit legend: a backlit shine-through cap. */
+  --agent-key-lit: #fff6dc;
+  --agent-key-lit-glow: #ffe2a0;
+  --agent-key-lit-halo: rgba(255, 210, 130, 0.75);
+  --agent-key-lit-halo-low: rgba(255, 210, 130, 0.3);
+  --agent-key-lit-text: rgba(255, 210, 130, 0.8);
+  --agent-key-face-shine: rgba(255, 255, 255, 0.22);
+  --agent-key-press-shade: #000000;
+  --agent-key-pip-off-shade: rgba(0, 0, 0, 0.18);
+
+  /* Theme neutrals (dark, the default): the ambient shadow under a key and
+     the socket a removed cap leaves. */
+  --agent-key-ambient: rgba(0, 0, 0, 0.45);
+  --agent-key-socket: #1d1c1a;
+  --agent-key-socket-shade: rgba(0, 0, 0, 0.55);
+  --agent-key-socket-rim: rgba(255, 255, 255, 0.06);
+  --agent-key-housing: #2a2926;
+  --agent-key-housing-shade: rgba(0, 0, 0, 0.5);
+  --agent-key-stem: #5b5850;
+  --agent-key-stem-depth: #3a3833;
+  /* The board the keys sit on (AgentsBoard): a warm neutral plate. */
+  --agent-key-plate-top: #26241f;
+  --agent-key-plate-bottom: #211f1b;
+  --agent-key-plate-shade: rgba(0, 0, 0, 0.4);
+
+  /* The sizes (AgentKey's `size`): the picker's preview, a header, a list row,
+     a menu item, a line of text. */
+  --agent-key-size-xl: calc(var(--spacing-lg) * 7);
+  --agent-key-size-lg: calc(var(--spacing-lg) * 2.75);
+  --agent-key-size-md: calc(var(--spacing-lg) * 1.875);
+  --agent-key-size-sm: calc(var(--spacing-lg) * 1.25);
+  --agent-key-size-xs: var(--spacing-lg);
+  --agent-key-pulse: calc(var(--duration-loader-standard) * 4 / 3);
+}
+
+:root[data-theme='light'] {
+  --agent-key-ambient: rgba(60, 44, 20, 0.3);
+  --agent-key-socket: #d9d1c0;
+  --agent-key-socket-shade: rgba(70, 55, 30, 0.3);
+  --agent-key-socket-rim: rgba(70, 55, 30, 0.1);
+  --agent-key-housing: #cbc2af;
+  --agent-key-housing-shade: rgba(70, 55, 30, 0.28);
+  --agent-key-stem: #b3aa96;
+  --agent-key-stem-depth: #9c937f;
+  --agent-key-plate-top: #e2dbcb;
+  --agent-key-plate-bottom: #ddd5c4;
+  --agent-key-plate-shade: rgba(70, 55, 30, 0.18);
+}
+
+/* ── colourways ──────────────────────────── */
+.agent-key[data-colorway='blue'] {
+  --agent-key-face: var(--agent-key-blue-face);
+  --agent-key-skirt: var(--agent-key-blue-skirt);
+  --agent-key-depth: var(--agent-key-blue-depth);
+  --agent-key-legend: var(--agent-key-blue-legend);
+}
+.agent-key[data-colorway='orange'] {
+  --agent-key-face: var(--agent-key-orange-face);
+  --agent-key-skirt: var(--agent-key-orange-skirt);
+  --agent-key-depth: var(--agent-key-orange-depth);
+  --agent-key-legend: var(--agent-key-orange-legend);
+}
+.agent-key[data-colorway='putty'] {
+  --agent-key-face: var(--agent-key-putty-face);
+  --agent-key-skirt: var(--agent-key-putty-skirt);
+  --agent-key-depth: var(--agent-key-putty-depth);
+  --agent-key-legend: var(--agent-key-putty-legend);
+}
+.agent-key[data-colorway='teal'] {
+  --agent-key-face: var(--agent-key-teal-face);
+  --agent-key-skirt: var(--agent-key-teal-skirt);
+  --agent-key-depth: var(--agent-key-teal-depth);
+  --agent-key-legend: var(--agent-key-teal-legend);
+}
+.agent-key[data-colorway='graphite'] {
+  --agent-key-face: var(--agent-key-graphite-face);
+  --agent-key-skirt: var(--agent-key-graphite-skirt);
+  --agent-key-depth: var(--agent-key-graphite-depth);
+  --agent-key-legend: var(--agent-key-graphite-legend);
+}
+.agent-key[data-colorway='mustard'] {
+  --agent-key-face: var(--agent-key-mustard-face);
+  --agent-key-skirt: var(--agent-key-mustard-skirt);
+  --agent-key-depth: var(--agent-key-mustard-depth);
+  --agent-key-legend: var(--agent-key-mustard-legend);
+}
+.agent-key[data-colorway='pink'] {
+  --agent-key-face: var(--agent-key-pink-face);
+  --agent-key-skirt: var(--agent-key-pink-skirt);
+  --agent-key-depth: var(--agent-key-pink-depth);
+  --agent-key-legend: var(--agent-key-pink-legend);
+}
+.agent-key[data-colorway='sage'] {
+  --agent-key-face: var(--agent-key-sage-face);
+  --agent-key-skirt: var(--agent-key-sage-skirt);
+  --agent-key-depth: var(--agent-key-sage-depth);
+  --agent-key-legend: var(--agent-key-sage-legend);
+}
+
+/* ── the key ─────────────────────────────── */
+.agent-key {
+  --agent-key-face: var(--agent-key-blue-face);
+  --agent-key-skirt: var(--agent-key-blue-skirt);
+  --agent-key-depth: var(--agent-key-blue-depth);
+  --agent-key-legend: var(--agent-key-blue-legend);
+  --agent-key-s: var(--agent-key-size-md);
+  /* One unit: the reference's px at this size. */
+  --agent-key-u: calc(var(--agent-key-s) / 112);
+  /* The geometry, in units; the small key replaces these. */
+  --agent-key-radius: calc(16 * var(--agent-key-u));
+  --agent-key-inset-x: calc(10 * var(--agent-key-u));
+  --agent-key-inset-top: calc(5 * var(--agent-key-u));
+  --agent-key-inset-bottom: calc(17 * var(--agent-key-u));
+  --agent-key-face-radius: calc(11 * var(--agent-key-u));
+  --agent-key-rest-depth: calc(8 * var(--agent-key-u));
+  --agent-key-icon: calc(40 * var(--agent-key-u));
+  --agent-key-stroke: 2;
+  --agent-key-ambient-y: calc(6 * var(--agent-key-u));
+  --agent-key-ambient-blur: calc(16 * var(--agent-key-u));
+  --agent-key-ambient-spread: calc(-4 * var(--agent-key-u));
+  /* What the state moves: how far down (or up) and how deep the shadow. */
+  --agent-key-d: var(--agent-key-rest-depth);
+  --agent-key-ty: 0px; /* css-ok: a zero length that calc() can add to */
+  --agent-key-shade: 0;
+
+  position: relative;
+  display: inline-block;
+  flex: 0 0 auto;
+  box-sizing: border-box;
+  width: var(--agent-key-s);
+  height: var(--agent-key-s);
+  margin-bottom: var(--agent-key-rest-depth);
+  border-radius: var(--agent-key-radius);
+  background: var(--agent-key-skirt);
+  transform: translateY(var(--agent-key-ty));
+  box-shadow:
+    0 var(--agent-key-d) 0 var(--agent-key-depth),
+    0 calc(var(--agent-key-d) + var(--agent-key-ambient-y)) var(--agent-key-ambient-blur)
+      var(--agent-key-ambient-spread) var(--agent-key-ambient);
+  transition:
+    transform var(--transition-interaction-fast),
+    box-shadow var(--transition-interaction-fast);
+  user-select: none;
+  vertical-align: middle;
+}
+
+.agent-key--xl {
+  --agent-key-s: var(--agent-key-size-xl);
+}
+.agent-key--lg {
+  --agent-key-s: var(--agent-key-size-lg);
+  --agent-key-stroke: 2.3;
+}
+.agent-key--md {
+  --agent-key-s: var(--agent-key-size-md);
+}
+.agent-key--sm {
+  --agent-key-s: var(--agent-key-size-sm);
+}
+.agent-key--xs {
+  --agent-key-s: var(--agent-key-size-xs);
+}
+
+/* Small: its own drawing on a 30px unit (the reference's list key). */
+.agent-key:is(.agent-key--md, .agent-key--sm, .agent-key--xs) {
+  --agent-key-v: calc(var(--agent-key-s) / 30);
+  --agent-key-inset-x: calc(3 * var(--agent-key-v));
+  --agent-key-inset-top: calc(1.5 * var(--agent-key-v));
+  --agent-key-inset-bottom: calc(5 * var(--agent-key-v));
+  --agent-key-face-radius: calc(4 * var(--agent-key-v));
+  --agent-key-rest-depth: calc(3 * var(--agent-key-v));
+  --agent-key-icon: calc(15 * var(--agent-key-v));
+  --agent-key-stroke: 2.6;
+  --agent-key-ambient-y: calc(1 * var(--agent-key-v));
+  --agent-key-ambient-blur: calc(6 * var(--agent-key-v));
+  --agent-key-ambient-spread: calc(-2 * var(--agent-key-v));
+}
+.agent-key:is(.agent-key--sm, .agent-key--xs) {
+  --agent-key-stroke: 2.9;
+}
+
+.agent-key__face {
+  position: absolute;
+  inset: var(--agent-key-inset-top) var(--agent-key-inset-x) var(--agent-key-inset-bottom);
+  display: grid;
+  place-items: center;
+  border-radius: var(--agent-key-face-radius);
+  background: var(--agent-key-face);
+  box-shadow: inset 0 1px 0 var(--agent-key-face-shine);
+}
+
+/* The face darkening (pressed, lit): a black wash, so no colour is computed. */
+.agent-key__face::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  background: var(--agent-key-press-shade);
+  opacity: var(--agent-key-shade);
+  transition: opacity var(--transition-interaction-fast);
+}
+
+.agent-key__legend {
+  position: relative;
+  width: var(--agent-key-icon);
+  height: var(--agent-key-icon);
+  overflow: visible;
+  fill: none;
+  stroke: var(--agent-key-legend);
+  stroke-width: var(--agent-key-stroke);
+  stroke-linecap: square;
+  stroke-linejoin: miter;
+  transition: stroke var(--transition-interaction-fast);
+}
+
+/* The bound key, small, bottom right of the face: big keys only. */
+.agent-key__sub {
+  position: absolute;
+  right: calc(8 * var(--agent-key-u));
+  bottom: calc(5 * var(--agent-key-u));
+  font-family: var(--font-code);
+  font-size: calc(12 * var(--agent-key-u));
+  font-weight: var(--font-weight-heading);
+  line-height: 1;
+  color: var(--agent-key-legend);
+  opacity: 0.72;
+}
+
+/* Independence: four pips on the front edge, filled from the left. */
+.agent-key__pips {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(6 * var(--agent-key-u));
+  display: flex;
+  justify-content: center;
+  gap: calc(4 * var(--agent-key-u));
+}
+
+.agent-key__pip {
+  width: calc(9 * var(--agent-key-u));
+  height: calc(4 * var(--agent-key-u));
+  border-radius: calc(2 * var(--agent-key-u));
+  background: var(--agent-key-depth);
+  box-shadow: inset 0 1px 0 var(--agent-key-pip-off-shade);
+}
+
+.agent-key__pip[data-on] {
+  background: var(--agent-key-legend);
+  box-shadow: none;
+  opacity: 0.9;
+}
+
+/* ── states ──────────────────────────────── */
+
+/* Working: pressed. Down 6, its depth 2, the face 8% darker. */
+.agent-key[data-state='working'] {
+  --agent-key-ty: calc(6 * var(--agent-key-u));
+  --agent-key-d: calc(2 * var(--agent-key-u));
+  --agent-key-shade: 0.08;
+}
+
+/* Live: the legend lit; the face darkens so it reads (more on a pale one). */
+.agent-key:is([data-state='live'], [data-state='needsOk']) {
+  --agent-key-shade: 0.2;
+}
+.agent-key[data-light]:is([data-state='live'], [data-state='needsOk']) {
+  --agent-key-shade: 0.35;
+}
+.agent-key:is([data-state='live'], [data-state='needsOk']) .agent-key__legend {
+  stroke: var(--agent-key-lit);
+  filter: drop-shadow(0 0 1.5px var(--agent-key-lit-glow))
+    drop-shadow(0 0 4px var(--agent-key-lit-halo));
+}
+.agent-key:is([data-state='live'], [data-state='needsOk']) .agent-key__sub {
+  color: var(--agent-key-lit);
+  opacity: 0.95;
+  text-shadow: 0 0 3px var(--agent-key-lit-text);
+}
+
+/* Needs your OK: lit, proud (up 5, depth 13) and slowly pulsing. */
+.agent-key[data-state='needsOk'] {
+  --agent-key-ty: calc(-5 * var(--agent-key-u));
+  --agent-key-d: calc(13 * var(--agent-key-u));
+}
+.agent-key[data-state='needsOk'] .agent-key__legend {
+  animation: agent-key-lit var(--agent-key-pulse) ease-in-out infinite;
+}
+
+/* The small key's travel, from its own unit. */
+.agent-key:is(.agent-key--md, .agent-key--sm, .agent-key--xs)[data-state='working'] {
+  --agent-key-ty: calc(2 * var(--agent-key-v));
+  --agent-key-d: calc(1 * var(--agent-key-v));
+}
+.agent-key:is(.agent-key--md, .agent-key--sm, .agent-key--xs)[data-state='needsOk'] {
+  --agent-key-ty: calc(-2 * var(--agent-key-v));
+  --agent-key-d: calc(5 * var(--agent-key-v));
+}
+.agent-key:is(.agent-key--sm, .agent-key--xs):is([data-state='live'], [data-state='needsOk'])
+  .agent-key__legend {
+  filter: drop-shadow(0 0 1px var(--agent-key-lit-halo));
+}
+
+@keyframes agent-key-lit {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+/* ── the socket: the cap off (paused) or none yet (new) ── */
+.agent-key[data-state='paused'],
+.agent-key[data-state='new'] {
+  --agent-key-ty: 0px; /* css-ok: a zero length */
+  display: inline-grid;
+  place-items: center;
+  margin-top: var(--agent-key-rest-depth);
+  margin-bottom: 0;
+  background: var(--agent-key-socket);
+  box-shadow:
+    inset 0 calc(4 * var(--agent-key-u)) calc(8 * var(--agent-key-u)) var(--agent-key-socket-shade),
+    inset 0 0 0 1px var(--agent-key-socket-rim);
+}
+
+.agent-key__housing {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: calc(48 * var(--agent-key-u));
+  height: calc(48 * var(--agent-key-u));
+  border-radius: calc(9 * var(--agent-key-u));
+  background: var(--agent-key-housing);
+  box-shadow: inset 0 calc(2 * var(--agent-key-u)) calc(4 * var(--agent-key-u))
+    var(--agent-key-housing-shade);
+}
+
+/* The switch stem: a cross, in the agent's colour while paused. */
+.agent-key__stem {
+  --agent-key-stem-arm: calc(8 * var(--agent-key-u));
+  position: relative;
+  width: calc(26 * var(--agent-key-u));
+  height: calc(26 * var(--agent-key-u));
+  filter: drop-shadow(0 calc(2 * var(--agent-key-u)) 0 var(--agent-key-stem-shadow));
+  --agent-key-stem-fill: var(--agent-key-stem);
+  --agent-key-stem-shadow: var(--agent-key-stem-depth);
+}
+.agent-key[data-state='paused'] .agent-key__stem {
+  --agent-key-stem-fill: var(--agent-key-face);
+  --agent-key-stem-shadow: var(--agent-key-depth);
+}
+.agent-key__stem::before,
+.agent-key__stem::after {
+  content: '';
+  position: absolute;
+  border-radius: 1px;
+  background: var(--agent-key-stem-fill);
+}
+.agent-key__stem::before {
+  left: 0;
+  right: 0;
+  top: calc(50% - var(--agent-key-stem-arm) / 2);
+  height: var(--agent-key-stem-arm);
+}
+.agent-key__stem::after {
+  top: 0;
+  bottom: 0;
+  left: calc(50% - var(--agent-key-stem-arm) / 2);
+  width: var(--agent-key-stem-arm);
+}
+
+/* The small socket, from its own unit. */
+.agent-key:is(.agent-key--md, .agent-key--sm, .agent-key--xs) .agent-key__housing {
+  width: calc(16 * var(--agent-key-v));
+  height: calc(16 * var(--agent-key-v));
+  border-radius: calc(3.5 * var(--agent-key-v));
+}
+.agent-key:is(.agent-key--md, .agent-key--sm, .agent-key--xs) .agent-key__stem {
+  --agent-key-stem-arm: calc(3 * var(--agent-key-v));
+  width: calc(10 * var(--agent-key-v));
+  height: calc(10 * var(--agent-key-v));
+  filter: drop-shadow(0 1px 0 var(--agent-key-stem-shadow));
+}
+
+/* A key that answers a click (a picker's swatch, a board's key). */
+button.agent-key-button {
+  display: inline-flex;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  border-radius: var(--radius-control);
+}
+button.agent-key-button:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-key,
+  .agent-key__face::before,
+  .agent-key__legend {
+    transition: none;
+  }
+  .agent-key[data-state='needsOk'] .agent-key__legend {
+    animation: none;
+  }
+}
+
+/* A hidden window, or one behind another app, holds the pulse still. */
+:root:is([data-app-hidden], [data-app-background])
+  .agent-key[data-state='needsOk']
+  .agent-key__legend {
+  animation-play-state: paused;
+}

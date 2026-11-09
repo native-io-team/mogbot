@@ -37,7 +37,7 @@ import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '../primitiv
 import { Button } from '../primitives/Button';
 import { IconButton } from '../primitives/IconButton';
 import { StatusPill } from '../primitives/StatusPill';
-import { AgentAvatar } from './AgentAvatar';
+import { AgentKey } from './AgentKey';
 import { AgentWorkingLine } from './AgentWorkingLine';
 import { AgentEngineBadge } from './AgentEngine';
 import { AgentLevelBadge } from './AgentLevelPicker';
@@ -50,7 +50,7 @@ import { useFlipReorder, useNewKeys } from './useAgentMotion';
 import { useSteadyList } from './useAttentionOrder';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import {
-  avatarMood,
+  agentKeyState,
   failedTurn,
   failureLine,
   failurePill,
@@ -437,12 +437,12 @@ const AgentRow = memo(function AgentRow({
           onPointerEnter={tooltipIfTruncated}
           onClick={() => onSelect(agent.id)}
         >
-          <AgentAvatar
+          <AgentKey
             id={agent.id}
             name={agent.name}
             color={agent.color}
-            selected={current}
-            mood={avatarMood(agent)}
+            state={agentKeyState(agent)}
+            size="md"
           />
           <span className="agents-list__text">
             <span className="agents-list__name">

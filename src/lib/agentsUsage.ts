@@ -106,7 +106,7 @@ export {
   usageGlance,
   type ChangeLine,
   type KeyLimit,
-  type KeyState,
+  type AccountKeyState,
   type LowBar,
   type SpareNudge,
   type StackEngine,

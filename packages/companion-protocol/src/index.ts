@@ -28,6 +28,7 @@ export * from './work';
 export * from './secretName';
 export * from './loginNames';
 export * from './avatar';
+export * from './agentKeys';
 export * from './attention';
 export * from './tables';
 export * from './gallery';

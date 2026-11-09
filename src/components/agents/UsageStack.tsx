@@ -30,7 +30,7 @@ import { StatusPill, type StatusTone } from '../primitives/StatusPill';
 import { Dropdown, DropdownDivider, DropdownItem } from '../primitives/Dropdown';
 import { DragSortHandle } from '../primitives/DragSort';
 import type { AgentEngine } from '../../lib/agents';
-import type { KeyLimit, KeyState, StackKey } from '../../lib/agentsUsage';
+import type { KeyLimit, AccountKeyState, StackKey } from '../../lib/agentsUsage';
 import { USE_THIS_ONE_NOW } from '../../../packages/companion-protocol/src/cardWords';
 import { pinnedLine } from '../../../packages/companion-protocol/src/accountSwitcher';
 
@@ -99,7 +99,7 @@ export function StackMeter({
   );
 }
 
-const PILL: Record<KeyState, StatusTone> = {
+const PILL: Record<AccountKeyState, StatusTone> = {
   in_use: 'done',
   next: 'idle',
   ready: 'idle',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { agentInitials, distinctInitials } from '../components/agents/AgentAvatar';
+import { agentInitials, distinctInitials } from './agentInitials';
 import {
   routineModelChoices,
   routineModelOf,

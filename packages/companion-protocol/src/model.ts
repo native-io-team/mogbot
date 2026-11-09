@@ -181,6 +181,14 @@ export interface Agent {
   shape: number;
   /** Its chosen shape and face. Absent: derived from its id (`lookFor` in avatar.ts). */
   avatar?: AgentLook;
+  /**
+   * Its key (docs/internal/agent-keys.md): a colourway, a legend and the
+   * keyboard key it's bound to. Older Macs omit them: `keyLookFor` draws
+   * one from `color`, the name and the role.
+   */
+  colorway?: string;
+  icon?: string;
+  boundKey?: string;
   color: string;
   isMain: boolean;
   /**
@@ -1624,6 +1632,10 @@ export interface NewAgentInput {
   shape?: number;
   avatar?: AgentLook;
   color?: string;
+  /** Its key's colourway, legend and bound key (agentKeys.ts); older Macs ignore them. */
+  colorway?: string;
+  icon?: string;
+  boundKey?: string;
   role?: string;
   instructions?: string;
   engine?: AgentEngine;
@@ -1656,6 +1668,10 @@ export interface UpdateAgentInput {
   shape?: number;
   avatar?: AgentLook;
   color?: string;
+  /** Its key's colourway, legend and bound key (agentKeys.ts); older Macs ignore them. */
+  colorway?: string;
+  icon?: string;
+  boundKey?: string;
   role?: string;
   instructions?: string;
   pinned?: boolean;

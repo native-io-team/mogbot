@@ -19,7 +19,7 @@ import type {
   PasteImportAgent,
   PasteImportPreview,
 } from '../../lib/agents';
-import { AgentAvatar } from './AgentAvatar';
+import { AgentKey } from './AgentKey';
 
 export const plural = (n: number, word: string) =>
   `${n.toLocaleString()} ${word}${n === 1 ? '' : 's'}`;
@@ -175,7 +175,7 @@ export function ImportAgentRow({
           aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
         >
-          <AgentAvatar name={avatarName ?? name} color={color} />
+          <AgentKey name={avatarName ?? name} color={color} size="md" />
           <span className="agents-import-agent__text">
             <span className="agents-import-agent__name">
               <span className="agents-import-agent__name-text">{name}</span>
@@ -555,7 +555,7 @@ export function ImportDone({ summary, agents, extra }: ImportDoneProps) {
             const name = a.isMain ? mainName : a.name;
             return (
               <li key={`${a.isMain}-${a.name}`}>
-                <AgentAvatar name={name} color={a.color ?? 'gray'} size="mini" />
+                <AgentKey name={name} color={a.color ?? 'gray'} size="sm" />
                 {name}
               </li>
             );

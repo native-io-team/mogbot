@@ -133,7 +133,7 @@
 @import './features/workflow-templates.css';
 @import './features/inbox.css';
 @import './features/agents.css';
-@import './features/agents-avatar.css';
+@import './features/agent-key.css';
 @import './features/agents-look.css';
 @import './features/agents-chat.css';
 @import './features/agents-composer.css';

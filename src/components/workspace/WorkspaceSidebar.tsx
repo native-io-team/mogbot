@@ -52,7 +52,7 @@ import {
   type AtWorkLine,
 } from './useProjectAgents';
 import { ProjectAtWork } from './ProjectAtWork';
-import { AgentAvatar } from '../agents/AgentAvatar';
+import { AgentKey } from '../agents/AgentKey';
 import { useSteadyLine } from '../../lib/steady';
 import { useNow } from '../../hooks/useNow';
 import { useMoreBelow } from '../../hooks/useMoreBelow';
@@ -2823,7 +2823,13 @@ function agentWorkItems(
       detail: l.text,
       dotState: l.waiting ? ('waiting' as const) : ('active' as const),
       leading: (
-        <AgentAvatar id={l.agentId} name={l.name} color={l.color} size="xs" working={!l.waiting} />
+        <AgentKey
+          id={l.agentId}
+          name={l.name}
+          color={l.color}
+          state={!l.waiting ? 'working' : 'idle'}
+          size="xs"
+        />
       ),
       onSelect: openAgent ? () => openAgent(l.agentId) : undefined,
     }));

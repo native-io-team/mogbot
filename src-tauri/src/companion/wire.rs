@@ -354,6 +354,12 @@ pub const MAC_FEATURE_LOOKS: &str = "agents.looks";
 /// older Mac a key it would refuse.
 pub const MAC_FEATURE_KEYCAPS: &str = "agents.keycaps";
 
+/// `welcome.features`: agents carry their key (`colorway`, `icon`,
+/// `boundKey`; docs/internal/agent-keys.md), and `agents.create` /
+/// `agents.update` take them from the phone. A bound key someone else has
+/// is refused with a line saying whose it is.
+pub const MAC_FEATURE_AGENT_KEYS: &str = "agents.keys";
+
 /// `welcome.features`: signing in to a site in this Mac's Chrome from the
 /// phone, the tab shown live there (`agents.signin*`; `agents/phone_signin.rs`).
 pub const MAC_FEATURE_SIGNIN_PHONE: &str = "signin.phone";
@@ -390,6 +396,7 @@ pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_LOGINS_PHONE,
     MAC_FEATURE_LOOKS,
     MAC_FEATURE_KEYCAPS,
+    MAC_FEATURE_AGENT_KEYS,
     MAC_FEATURE_SIGNIN_PHONE,
     MAC_FEATURE_WATCH_LINKS,
     MAC_FEATURE_ENGINE,

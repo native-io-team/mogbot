@@ -517,6 +517,14 @@ pub struct CreateAgentInput {
     #[serde(default)]
     pub avatar: Option<store::AgentLook>,
     pub color: Option<String>,
+    /// Its key's colourway, legend and bound key (`agents::keys`); a bound
+    /// key someone else has is refused.
+    #[serde(default)]
+    pub colorway: Option<String>,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub bound_key: Option<String>,
     #[serde(default)]
     pub role: String,
     #[serde(default)]
@@ -602,6 +610,14 @@ pub async fn agents_create(
         color: input.color,
         is_main: false,
     })?;
+    // The key chosen in the dialog; the defaults `create` gave stand otherwise.
+    let agent = set_key(
+        &agent,
+        input.colorway.as_deref(),
+        input.icon.as_deref(),
+        input.bound_key.as_deref(),
+    )?
+    .unwrap_or(agent);
     let agent = if model.is_some()
         || project.is_some()
         || template.is_some()
@@ -634,6 +650,14 @@ pub struct UpdateAgentInput {
     #[serde(default)]
     pub avatar: Option<store::AgentLook>,
     pub color: Option<String>,
+    /// Its key's colourway, legend and bound key (`agents::keys`); a bound
+    /// key someone else has is refused.
+    #[serde(default)]
+    pub colorway: Option<String>,
+    #[serde(default)]
+    pub icon: Option<String>,
+    #[serde(default)]
+    pub bound_key: Option<String>,
     pub role: Option<String>,
     pub instructions: Option<String>,
     pub pinned: Option<bool>,
@@ -689,6 +713,19 @@ pub async fn agents_update(
     let avatar = input.avatar.and_then(store::AgentLook::normalized);
     let role = input.role.clone();
     let current = store::get(&agent_id)?;
+    // A colour alone (a client that only knows colours) moves the colourway to its nearest.
+    let colorway = input
+        .colorway
+        .clone()
+        .or_else(|| color.as_deref().map(agents::keys::colorway_for_color));
+    let key = agents::keys::KeyChange::checked(
+        Some(&current),
+        &store::list()?,
+        colorway.as_deref(),
+        input.icon.as_deref(),
+        input.bound_key.as_deref(),
+    )
+    .map_err(|e| agents::err_invalid("key", e))?;
     let engine = match input.engine.as_deref().map(Engine::parse).transpose()? {
         Some(engine) if engine != current.engine => {
             // The terminal is in this engine's session; switching would
@@ -754,6 +791,8 @@ pub async fn agents_update(
         if let Some(n) = name {
             a.name = n;
         }
+        key.apply(a);
+        // After the key: a colour asked for exactly is kept as asked.
         if let Some(c) = color {
             a.color = c;
         }
@@ -831,6 +870,26 @@ pub async fn agents_update(
         notify::refresh_badge(&app);
     }
     Ok(updated)
+}
+
+/// Sets a new agent's key as chosen, checked like any change. `None` when
+/// nothing was chosen or nothing differs.
+fn set_key(
+    agent: &store::Agent,
+    colorway: Option<&str>,
+    icon: Option<&str>,
+    bound_key: Option<&str>,
+) -> Result<Option<store::Agent>, CommandError> {
+    if colorway.is_none() && icon.is_none() && bound_key.is_none() {
+        return Ok(None);
+    }
+    let change =
+        agents::keys::KeyChange::checked(Some(agent), &store::list()?, colorway, icon, bound_key)
+            .map_err(|e| agents::err_invalid("key", e))?;
+    if change.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(store::update(&agent.id, |a| change.apply(a))?))
 }
 
 /// The one quiet line in its chat when what its next message runs on

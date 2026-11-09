@@ -9,8 +9,8 @@
  *   (`usePolling`) and every loop holds still.
  * - **background**: visible, but another app (or another of our windows) has
  *   focus. The window still updates (someone may be watching it on a second
- *   screen), but purely decorative motion holds still: the avatars' drift and
- *   blinks, and the working line's shimmer.
+ *   screen), but purely decorative motion holds still: the working line's
+ *   shimmer.
  *
  * Mirrored onto the root element as `data-app-hidden` and `data-app-background`
  * so the CSS can pause loops without any JavaScript per element.

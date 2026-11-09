@@ -44,7 +44,7 @@ export const PLENTY_LEFT = 50;
 /** "Out of usage": the one phrase for an account at its limit, everywhere. */
 export const OUT_OF_USAGE = 'Out of usage';
 
-export type KeyState = 'in_use' | 'next' | 'ready' | 'out' | 'off' | 'same' | 'unread';
+export type AccountKeyState = 'in_use' | 'next' | 'ready' | 'out' | 'off' | 'same' | 'unread';
 export type KeyTone = 'calm' | 'warning' | 'limited' | 'quiet';
 
 /** One limit of an account, as its card draws it. */
@@ -86,7 +86,7 @@ export interface StackKey {
   position: number;
   /** What tells it apart: plan, organization, who it's signed in as, this Mac's own. */
   detail: string[];
-  state: KeyState;
+  state: AccountKeyState;
   /** "In use", "Next", "Ready", "Out of usage until Sat 10:00 AM", "Not signed in", "Same account as …", "No reading yet". */
   stateLabel: string;
   /** Left of its tighter limit, 0–100; null with no reading (or adding no room). */
@@ -285,7 +285,7 @@ function keyOf(
         : read
           ? Math.min(...limits.map((l) => l.left))
           : null;
-  let state: KeyState;
+  let state: AccountKeyState;
   let stateLabel: string;
   if (!row.signedIn) {
     state = 'off';
