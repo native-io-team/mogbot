@@ -32,6 +32,7 @@ export const CODES = {
   attachFailed: 'attach_failed',
   cdp: 'cdp',
   protected: 'protected',
+  busy: 'busy',
   internal: 'internal',
 };
 

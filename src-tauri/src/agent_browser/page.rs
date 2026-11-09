@@ -49,6 +49,10 @@ pub const FOCUSED_FIELD_JS: &str = "(() => { let e = document.activeElement; for
 pub const TEXT_JS: &str = "document.body ? document.body.innerText : ''";
 /// Whether the document has finished loading.
 pub const READY_JS: &str = "document.readyState";
+/// Whether Chrome is painting the page: "hidden" in a background tab or a
+/// minimised (or fully covered) window. A pointer move waits for a frame,
+/// so one sent there waits out Chrome's 5 s input timeout.
+pub const VISIBILITY_JS: &str = "document.visibilityState";
 
 /// One scroll step of the page itself, by direction. A wheel event waits
 /// for the page to paint, which a window Chrome thinks is hidden (behind
@@ -69,12 +73,42 @@ pub fn scroll_step_js(direction: &str) -> Option<&'static str> {
     })
 }
 
+/// Scroll the box a node is in: the node itself or its nearest ancestor that
+/// scrolls that way (through shadow roots), by `dx`, `dy` CSS pixels, at
+/// once (never smooth: a page Chrome isn't painting never animates). Says
+/// `moved`, `end` (it scrolls, but is already at that end) or `none`
+/// (nothing around the node scrolls that way).
+///
+/// Run on the node with `Runtime.callFunctionOn`, never a wheel: a wheel
+/// event waits for a frame, and a tab Chrome isn't painting (a background
+/// tab, an unfocused window behind others, a minimised one) never makes
+/// one, so the wheel waited out the whole 20 s and left the tab's input
+/// queue stuck behind it.
+pub const SCROLL_WITHIN_FN: &str = "function (dx, dy) { let e = this && this.nodeType === 1 ? this : this && this.parentElement; for (let i = 0; e && i < 64; i++) { if (e.nodeType === 1 && e !== document.body && e !== document.documentElement) { const s = getComputedStyle(e); const y = dy !== 0 && /(auto|scroll|overlay)/.test(s.overflowY) && e.scrollHeight > e.clientHeight; const x = dx !== 0 && /(auto|scroll|overlay)/.test(s.overflowX) && e.scrollWidth > e.clientWidth; if (x || y) { const t = e.scrollTop, l = e.scrollLeft; e.scrollBy({ left: dx, top: dy, behavior: 'instant' }); return e.scrollTop !== t || e.scrollLeft !== l ? 'moved' : 'end'; } } const r = e.getRootNode && e.getRootNode(); e = e.parentElement || (r && r.host) || null; } return 'none'; }";
+
+/// Every function the app calls on a page's node (`Runtime.callFunctionOn`,
+/// numbers as its only arguments). The extension holds a copy and refuses
+/// anything else.
+pub const FUNCTIONS: &[&str] = &[SCROLL_WITHIN_FN];
+
+/// What [`PageCdp::scroll_within`] did.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Scrolled {
+    /// The box around the node moved.
+    Moved,
+    /// It scrolls, but is already at that end.
+    AtEnd,
+    /// Nothing around the node scrolls that way.
+    Nothing,
+}
+
 /// Every expression the app evaluates in a page. The extension holds a copy
 /// and refuses anything else (`chrome-extension/src/cdp.js`).
 pub const EXPRESSIONS: &[&str] = &[
     FOCUSED_FIELD_JS,
     TEXT_JS,
     READY_JS,
+    VISIBILITY_JS,
     SCROLL_UP_JS,
     SCROLL_DOWN_JS,
     SCROLL_LEFT_JS,
@@ -87,6 +121,7 @@ pub const METHODS: &[&str] = &[
     "Accessibility.getFullAXTree",
     "DOM.describeNode",
     "DOM.getBoxModel",
+    "DOM.resolveNode",
     "DOM.scrollIntoViewIfNeeded",
     "Input.dispatchKeyEvent",
     "Input.dispatchMouseEvent",
@@ -96,6 +131,7 @@ pub const METHODS: &[&str] = &[
     "Page.getNavigationHistory",
     "Page.navigate",
     "Page.navigateToHistoryEntry",
+    "Runtime.callFunctionOn",
     "Runtime.evaluate",
 ];
 
@@ -222,6 +258,22 @@ pub trait PageCdp {
             "Input.dispatchMouseEvent",
             json!({ "type": "mouseMoved", "x": x, "y": y }),
         )?;
+        self.press_at(x, y)
+    }
+
+    /// Whether Chrome is painting the page ([`VISIBILITY_JS`]). No answer
+    /// counts as painted: the caller then does what it always did.
+    fn painted(&self) -> bool {
+        self.eval(VISIBILITY_JS)
+            .ok()
+            .and_then(|v| v.as_str().map(str::to_string))
+            .is_none_or(|v| v != "hidden")
+    }
+
+    /// Press and release at a point, with no move first: for a page Chrome
+    /// isn't painting, where a move waits for a frame that never comes (a
+    /// press carries its own position, so the click lands the same).
+    fn press_at(&self, x: f64, y: f64) -> Result<(), String> {
         for t in ["mousePressed", "mouseReleased"] {
             self.cdp(
                 "Input.dispatchMouseEvent",
@@ -251,6 +303,40 @@ pub trait PageCdp {
         self.cdp("Input.dispatchKeyEvent", down)?;
         self.cdp("Input.dispatchKeyEvent", up)?;
         Ok(())
+    }
+
+    /// Scroll the box `backend_node_id` is in by `dx`, `dy` CSS pixels
+    /// ([`SCROLL_WITHIN_FN`]): works whether or not Chrome paints the tab.
+    fn scroll_within(&self, backend_node_id: i64, dx: f64, dy: f64) -> Result<Scrolled, String> {
+        let gone = "That control isn't on the page any more. Read the page again.";
+        let node = self
+            .cdp(
+                "DOM.resolveNode",
+                json!({ "backendNodeId": backend_node_id }),
+            )
+            .map_err(|_| gone.to_string())?;
+        let object = node["object"]["objectId"]
+            .as_str()
+            .ok_or_else(|| gone.to_string())?
+            .to_string();
+        let r = self.cdp(
+            "Runtime.callFunctionOn",
+            json!({
+                "objectId": object,
+                "functionDeclaration": SCROLL_WITHIN_FN,
+                "arguments": [{ "value": dx }, { "value": dy }],
+                "returnByValue": true,
+                "silent": true,
+            }),
+        )?;
+        if r.get("exceptionDetails").is_some() {
+            return Err("The page didn't answer.".into());
+        }
+        Ok(match r["result"]["value"].as_str() {
+            Some("moved") => Scrolled::Moved,
+            Some("end") => Scrolled::AtEnd,
+            _ => Scrolled::Nothing,
+        })
     }
 
     fn wheel(&self, x: f64, y: f64, dx: f64, dy: f64) -> Result<(), String> {
@@ -388,6 +474,7 @@ mod tests {
         let _ = f.key(Key::Enter);
         let _ = f.insert_text("hi");
         let _ = f.wheel(1.0, 1.0, 0.0, 120.0);
+        let _ = f.scroll_within(5, 0.0, 120.0);
         let _ = f.viewport();
         let _ = f.text(10);
         let _ = f.focused_field();
@@ -401,7 +488,55 @@ mod tests {
                 let e = p["expression"].as_str().unwrap();
                 assert!(EXPRESSIONS.contains(&e), "an unlisted expression: {e}");
             }
+            if m == "Runtime.callFunctionOn" {
+                let d = p["functionDeclaration"].as_str().unwrap();
+                assert!(FUNCTIONS.contains(&d), "an unlisted function: {d}");
+                assert!(p["arguments"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .all(|a| a["value"].is_number()));
+            }
         }
+    }
+
+    #[test]
+    fn scrolling_inside_a_control_is_a_script_on_the_node_never_a_wheel() {
+        let f = fake(|m, _| {
+            Ok(match m {
+                "DOM.resolveNode" => json!({ "object": { "objectId": "obj-1" } }),
+                "Runtime.callFunctionOn" => json!({ "result": { "value": "moved" } }),
+                _ => json!({}),
+            })
+        });
+        assert_eq!(f.scroll_within(9, 0.0, 120.0).unwrap(), Scrolled::Moved);
+        let sent = f.sent.borrow();
+        assert!(sent.iter().all(|(m, _)| m != "Input.dispatchMouseEvent"));
+        assert_eq!(sent[0].1["backendNodeId"], 9);
+        assert_eq!(sent[1].1["objectId"], "obj-1");
+        assert_eq!(sent[1].1["arguments"][1]["value"], 120.0);
+        drop(sent);
+        let f = fake(|m, _| {
+            Ok(match m {
+                "DOM.resolveNode" => json!({ "object": { "objectId": "o" } }),
+                _ => json!({ "result": { "value": "end" } }),
+            })
+        });
+        assert_eq!(f.scroll_within(1, 0.0, -120.0).unwrap(), Scrolled::AtEnd);
+        let f = fake(|m, _| {
+            Ok(match m {
+                "DOM.resolveNode" => json!({ "object": { "objectId": "o" } }),
+                _ => json!({ "result": { "value": "none" } }),
+            })
+        });
+        assert_eq!(f.scroll_within(1, 0.0, 120.0).unwrap(), Scrolled::Nothing);
+        let f = fake(|_, _| Err("No node with given id found".into()));
+        assert!(f
+            .scroll_within(1, 0.0, 120.0)
+            .unwrap_err()
+            .contains("Read the page again"));
+        // Never smooth: a tab Chrome isn't painting never animates.
+        assert!(SCROLL_WITHIN_FN.contains("behavior: 'instant'"));
     }
 
     #[test]

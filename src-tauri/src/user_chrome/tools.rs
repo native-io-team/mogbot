@@ -31,7 +31,7 @@ use super::link::{CallError, Conn};
 use super::protocol::{ExtEvent, Op, TabInfo};
 use crate::agent_browser::axtree::{self, RefTarget};
 use crate::agent_browser::keys::Key;
-use crate::agent_browser::page::{scroll_step_js, Focus, PageCdp};
+use crate::agent_browser::page::{scroll_step_js, Focus, PageCdp, Scrolled};
 use crate::agents::browser_gate::{self, Gate, USER_CHROME_SERVER};
 
 /// The server's name in a turn's MCP config (tools are `mcp__user_chrome__*`).
@@ -324,10 +324,16 @@ fn conn_for(agent: &str) -> Result<Arc<Conn>, String> {
 fn tab_for(agent: &str, conn: &Conn, id: Option<i64>) -> Result<Owned, String> {
     with(|s| {
         let mine = s.tabs.get(agent).cloned().unwrap_or_default();
-        let want = id.or_else(|| s.active.get(agent).copied());
-        let found = match want {
+        // The one named; else the one used last, if it's still open; else
+        // the newest.
+        let found = match id {
             Some(id) => mine.iter().find(|t| t.tab_id == id).cloned(),
-            None => mine.last().cloned(),
+            None => s
+                .active
+                .get(agent)
+                .and_then(|a| mine.iter().find(|t| t.tab_id == *a))
+                .or(mine.last())
+                .cloned(),
         };
         match found {
             Some(t) if t.profile == conn.profile_id => Ok(t),
@@ -337,6 +343,36 @@ fn tab_for(agent: &str, conn: &Conn, id: Option<i64>) -> Result<Owned, String> {
         }
     })
 }
+
+/// Make the tab the shown one of its window before a click or a key. Chrome
+/// paints only that tab, and input to a tab it isn't painting waits for a
+/// frame: a pointer move to an agent's tab behind another agent's waited
+/// out Chrome's 5 s input timeout every time.
+fn to_front(conn: &Conn, agent: &str, tab: &Owned) -> Result<(), String> {
+    conn.call(
+        Op::TabFocus {
+            agent: agent.into(),
+            tab_id: tab.tab_id,
+        },
+        T,
+    )
+    .map(|_| ())
+    .map_err(line_of)
+}
+
+/// A click, made so it lands at once whether or not Chrome is painting the
+/// tab: the pointer moves first only where Chrome paints (a move waits for
+/// a frame; a press carries its own position).
+fn click(p: &ExtPage, x: f64, y: f64) -> Result<(), String> {
+    if p.painted() {
+        p.click(x, y)
+    } else {
+        p.press_at(x, y)
+    }
+}
+
+/// Hover where Chrome isn't painting: a move would wait for a frame.
+const NOT_PAINTED_HOVER: &str = "Chrome isn't showing the agents' window right now (it's minimised, or covered by other windows), and pointing at something only works where Chrome paints. Click instead, or ask the user to bring that Chrome window back.";
 
 fn page(conn: &Arc<Conn>, agent: &str, tab: &Owned) -> ExtPage {
     with(|s| s.active.insert(agent.to_string(), tab.tab_id));
@@ -676,6 +712,7 @@ pub fn run(agent: &str, label: &str, name: &str, args: &Value) -> Result<Vec<Val
         }
         "click" | "hover" => {
             let tab = tab_for(agent, &conn, tab_arg(args))?;
+            to_front(&conn, agent, &tab)?;
             let p = page(&conn, agent, &tab);
             let (x, y) = match args.get("ref").and_then(Value::as_str) {
                 Some(r) => p.center_of(ref_of(agent, tab.tab_id, r)?.backend_node_id)?,
@@ -686,12 +723,15 @@ pub fn run(agent: &str, label: &str, name: &str, args: &Value) -> Result<Vec<Val
                 })?,
             };
             if name == "hover" {
+                if !p.painted() {
+                    return Err(NOT_PAINTED_HOVER.into());
+                }
                 p.hover(x, y)?;
                 return Ok(vec![text(
                     "Pointed. Read the page again to see what opened.",
                 )]);
             }
-            p.click(x, y)?;
+            click(&p, x, y)?;
             p.settle(Duration::from_secs(5));
             clear_refs(agent, tab.tab_id);
             let tab = refreshed(&conn, agent, &tab);
@@ -707,6 +747,7 @@ pub fn run(agent: &str, label: &str, name: &str, args: &Value) -> Result<Vec<Val
                 return Err(format!("Type at most {MAX_TYPE} characters at a time."));
             }
             let tab = tab_for(agent, &conn, tab_arg(args))?;
+            to_front(&conn, agent, &tab)?;
             let p = page(&conn, agent, &tab);
             if let Some(r) = args.get("ref").and_then(Value::as_str) {
                 let node = ref_of(agent, tab.tab_id, r)?;
@@ -714,7 +755,7 @@ pub fn run(agent: &str, label: &str, name: &str, args: &Value) -> Result<Vec<Val
                     return Err(crate::agent_browser::tools::NO_PASSWORDS.into());
                 }
                 let (x, y) = p.center_of(node.backend_node_id)?;
-                p.click(x, y)?;
+                click(&p, x, y)?;
             }
             match p.focused_field() {
                 Focus::Plain => {}
@@ -728,6 +769,7 @@ pub fn run(agent: &str, label: &str, name: &str, args: &Value) -> Result<Vec<Val
             let k = args.get("key").and_then(Value::as_str).unwrap_or("");
             let key = Key::parse(k).ok_or_else(|| format!("\"{k}\" isn't a key this browser presses. One of: Enter, Tab, Escape, Backspace, Delete, Space, the arrows, PageUp, PageDown, Home, End."))?;
             let tab = tab_for(agent, &conn, tab_arg(args))?;
+            to_front(&conn, agent, &tab)?;
             let p = page(&conn, agent, &tab);
             p.key(key)?;
             if key == Key::Enter {
@@ -750,11 +792,14 @@ pub fn run(agent: &str, label: &str, name: &str, args: &Value) -> Result<Vec<Val
             let direction = args.get("direction").and_then(Value::as_str).unwrap_or("");
             let step_js = scroll_step_js(direction).ok_or("Scroll up, down, left or right.")?;
             match args.get("ref").and_then(Value::as_str) {
-                // Inside a control (a list, a pane): the wheel, over it.
-                // Chrome answers a wheel only once the page paints, so a
-                // window it thinks is hidden waits; said so if it does.
+                // Inside a control (a list, a pane): the box around it,
+                // scrolled by a script on the node. Never the wheel: Chrome
+                // answers a wheel only once the tab paints, and the agents'
+                // tabs are often not painted (behind another tab, in an
+                // unfocused or minimised window), so it waited the full 20 s
+                // and held every later click behind it.
                 Some(r) => {
-                    let (x, y) = p.center_of(ref_of(agent, tab.tab_id, r)?.backend_node_id)?;
+                    let node = ref_of(agent, tab.tab_id, r)?.backend_node_id;
                     let step = 120.0 * amount as f64;
                     let (dx, dy) = match direction {
                         "up" => (0.0, -step),
@@ -762,10 +807,29 @@ pub fn run(agent: &str, label: &str, name: &str, args: &Value) -> Result<Vec<Val
                         "left" => (-step, 0.0),
                         _ => (step, 0.0),
                     };
-                    p.wheel(x, y, dx, dy).map_err(|e| {
-                        format!("{e} (Chrome may be keeping that window from painting: it's hidden behind others or on another Space. Scroll the page without a ref instead.)")
-                    })?;
-                    std::thread::sleep(Duration::from_millis(250));
+                    match p.scroll_within(node, dx, dy)? {
+                        Scrolled::Moved => {}
+                        Scrolled::AtEnd => {
+                            return Ok(vec![text(format!(
+                                "It's already at the {} there: nothing moved.",
+                                match direction {
+                                    "up" => "top",
+                                    "down" => "bottom",
+                                    "left" => "left edge",
+                                    _ => "right edge",
+                                }
+                            ))]);
+                        }
+                        Scrolled::Nothing => {
+                            for _ in 0..amount {
+                                p.eval(step_js)?;
+                            }
+                            clear_refs(agent, tab.tab_id);
+                            return Ok(vec![text(
+                                "Nothing around that control scrolls that way, so the page itself scrolled. Read the page again to see what's there now.",
+                            )]);
+                        }
+                    }
                 }
                 // The page itself: scrolled directly, which works whether
                 // or not Chrome is painting the window.
@@ -826,6 +890,10 @@ pub fn run(agent: &str, label: &str, name: &str, args: &Value) -> Result<Vec<Val
             with(|s| {
                 if let Some(v) = s.tabs.get_mut(agent) {
                     v.retain(|t| t.tab_id != tab.tab_id);
+                }
+                // The next call without a tab goes to one still open.
+                if s.active.get(agent) == Some(&tab.tab_id) {
+                    s.active.remove(agent);
                 }
             });
             note_where(agent, None);

@@ -5,7 +5,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 
-import { Cdp, METHODS, vet } from '../extension/src/cdp.js';
+import { Cdp, FUNCTIONS, METHODS, vet } from '../extension/src/cdp.js';
 import { BACKOFF_MS, Link } from '../extension/src/link.js';
 import { handle } from '../extension/src/ops.js';
 import {
@@ -268,4 +268,115 @@ test('a stale port (replaced) is ignored', async () => {
   port.onMessage.fire({ t: 'req', id: 1, op: { kind: 'ping' } });
   await tick();
   assert.equal(port.posted.length, 1, 'only the hello: nothing answered on a stale port');
+});
+
+test('a node function runs only if it is the app’s own, with numbers only', () => {
+  const [fn] = FUNCTIONS;
+  assert.ok(fn.includes("behavior: 'instant'"));
+  const clean = vet('Runtime.callFunctionOn', {
+    objectId: 'o-1',
+    functionDeclaration: fn,
+    arguments: [{ value: 0 }, { value: 120 }],
+    awaitPromise: true,
+    userGesture: true,
+  });
+  assert.deepEqual(clean, {
+    objectId: 'o-1',
+    functionDeclaration: fn,
+    arguments: [{ value: 0 }, { value: 120 }],
+    returnByValue: true,
+    silent: true,
+  });
+  for (const bad of [
+    { objectId: 'o', functionDeclaration: 'function () { return document.cookie }' },
+    { objectId: 'o', functionDeclaration: fn, arguments: [{ value: 'x' }] },
+    { objectId: 'o', functionDeclaration: fn, arguments: [{ objectId: 'other' }] },
+    { functionDeclaration: fn, arguments: [] },
+    { executionContextId: 1, functionDeclaration: fn, arguments: [] },
+  ]) {
+    assert.throws(
+      () => vet('Runtime.callFunctionOn', bad),
+      (e) => e.code === CODES.notAllowed,
+      JSON.stringify(bad).slice(0, 80)
+    );
+  }
+  assert.deepEqual(vet('DOM.resolveNode', { backendNodeId: 4, objectGroup: 'x' }), {
+    backendNodeId: 4,
+  });
+  assert.throws(
+    () => vet('DOM.resolveNode', { nodeId: 4 }),
+    (e) => e.code === CODES.notAllowed
+  );
+});
+
+test('input to a tab that hasn’t answered the last input is refused, not queued', async () => {
+  const { chrome, sent } = fakeChrome();
+  const tabs = new Tabs(chrome);
+  tabs.listen(() => {});
+  const cdp = new Cdp(chrome, tabs);
+  cdp.listen(() => {});
+  const t = await tabs.open('ana', 'Ana', 'https://example.com/');
+  // Chrome holds a pointer move until the tab paints.
+  let release;
+  const plain = chrome.debugger.sendCommand;
+  chrome.debugger.sendCommand = async (target, method, params) => {
+    if (method === 'Input.dispatchMouseEvent' && params.type === 'mouseMoved') {
+      sent.push({ method, params });
+      await new Promise((r) => (release = r));
+      return {};
+    }
+    return plain(target, method, params);
+  };
+  const move = cdp.send('ana', t.tab_id, 'Input.dispatchMouseEvent', {
+    type: 'mouseMoved',
+    x: 1,
+    y: 1,
+  });
+  await tick();
+  await tick();
+  const before = sent.length;
+  // The click behind it is refused at once, and never sent.
+  await assert.rejects(
+    cdp.send('ana', t.tab_id, 'Input.dispatchMouseEvent', {
+      type: 'mousePressed',
+      x: 1,
+      y: 1,
+      button: 'left',
+      clickCount: 1,
+    }),
+    (e) => e.code === CODES.busy
+  );
+  assert.equal(sent.length, before, 'nothing was queued behind it');
+  // Reading still works meanwhile.
+  await cdp.send('ana', t.tab_id, 'Page.getLayoutMetrics', {});
+  release();
+  await move;
+  // Once Chrome answered, input goes again.
+  await cdp.send('ana', t.tab_id, 'Input.dispatchKeyEvent', { type: 'keyDown', key: 'Tab' });
+  assert.equal(sent.at(-1).method, 'Input.dispatchKeyEvent');
+});
+
+test('a request answered after its port dropped never goes to the new port', async () => {
+  const { chrome } = fakeChrome();
+  let finish;
+  const { l } = link(chrome, (op) =>
+    op.kind === 'tabs_list' ? new Promise((r) => (finish = r)) : Promise.resolve({})
+  );
+  await l.connect();
+  const first = chrome.runtime.ports[0];
+  first.onMessage.fire({ t: 'welcome', v: PROTOCOL });
+  await tick();
+  first.onMessage.fire({ t: 'req', id: 4, op: { kind: 'tabs_list' } });
+  await tick();
+  // The port drops while the request runs; the link opens a new one.
+  first.onDisconnect.fire();
+  l.wake();
+  await tick();
+  const second = chrome.runtime.ports[1];
+  second.onMessage.fire({ t: 'welcome', v: PROTOCOL });
+  await tick();
+  finish([]);
+  await tick();
+  // The app already told the agent the step may not have happened.
+  assert.ok(!second.posted.some((m) => m.t === 'res'), 'the late answer went nowhere');
 });

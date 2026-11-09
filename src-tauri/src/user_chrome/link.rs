@@ -31,10 +31,14 @@ pub const HANDSHAKE_WAIT: Duration = Duration::from_secs(10);
 /// Why a call didn't get an answer.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CallError {
-    /// The link closed (Chrome quit, the extension was turned off or
-    /// reloaded, the app stopped the link).
+    /// The link was already closed (Chrome quit, the extension was turned
+    /// off or reloaded, the app stopped the link): nothing was sent.
     Gone,
-    /// No answer in time.
+    /// The link closed while the request was out (the extension's service
+    /// worker stopped or restarted, Chrome quit): it may or may not have
+    /// been carried out, and it is never sent again on its own.
+    Interrupted,
+    /// No answer in time. The request may still be carried out.
     Timeout,
     /// The extension answered with an error.
     Ext(ExtError),
@@ -47,7 +51,8 @@ impl CallError {
     pub fn line(&self) -> String {
         match self {
             CallError::Gone => "Chrome stopped answering (it was closed, or the extension was turned off). Ask the user to open Chrome, then try again.".into(),
-            CallError::Timeout => "Chrome didn't answer in time. Try again; if it keeps happening, the page may be stuck.".into(),
+            CallError::Interrupted => "The link to Chrome dropped while that step was running (Chrome or the app's extension restarted), so it may or may not have happened. Read the page before you try it again, and don't repeat anything that sends or posts without checking.".into(),
+            CallError::Timeout => "Chrome didn't answer in time, and the step may still happen. Read the page before you try it again; if it keeps happening, the tab may be stuck.".into(),
             CallError::TooBig => "That was too much to send to Chrome at once.".into(),
             CallError::Ext(e) => match e.code {
                 ErrorCode::NotOwned => "That tab isn't one you opened. Use `tabs` to see yours, or `open` a new one.".into(),
@@ -55,6 +60,7 @@ impl CallError {
                 ErrorCode::AttachFailed => format!("Chrome wouldn't let the app drive that tab ({}). If DevTools is open on it, it has to be closed first.", e.message),
                 ErrorCode::Protected => "Chrome doesn't let extensions use that page (Chrome's own pages and the Web Store). Use another page.".into(),
                 ErrorCode::NotAllowed => format!("The extension refused that ({}).", e.message),
+                ErrorCode::Busy => "Chrome hasn't finished your last click or key on that tab yet (it may not be painting the tab), so nothing more was sent. Read the page to see where it got to, then try again.".into(),
                 _ => format!("Chrome said: {}", e.message),
             },
         }
@@ -118,7 +124,8 @@ impl Conn {
             Ok(Ok(v)) => Ok(v),
             Ok(Err(e)) => Err(CallError::Ext(e)),
             Err(mpsc::RecvTimeoutError::Timeout) => Err(CallError::Timeout),
-            Err(mpsc::RecvTimeoutError::Disconnected) => Err(CallError::Gone),
+            // Sent, and the link closed before an answer came back.
+            Err(mpsc::RecvTimeoutError::Disconnected) => Err(CallError::Interrupted),
         }
     }
 

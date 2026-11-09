@@ -129,6 +129,9 @@ pub enum ErrorCode {
     Cdp,
     /// The page is one extensions may not touch (`chrome://`, the Web Store).
     Protected,
+    /// The tab hasn't answered the last input event yet, so no other is
+    /// sent to it (one sent now would wait behind it and land late).
+    Busy,
     /// Anything else.
     Internal,
     /// A code from a newer extension this build doesn't know.
