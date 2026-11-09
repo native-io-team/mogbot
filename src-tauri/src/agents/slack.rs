@@ -369,6 +369,10 @@ pub struct Checked {
     pub dropped: usize,
     /// A conversation that couldn't be read, in words (the rest still were).
     pub warning: Option<String>,
+    /// What ended the check early (a refused sign-in, a rate limit, no
+    /// network). `found` still holds what the conversations read before it
+    /// started: their cursors have moved past it, so it is delivered or lost.
+    pub stopped: Option<ApiError>,
 }
 
 fn remember(list: &mut Vec<String>, key: String, cap: usize) {
@@ -399,13 +403,14 @@ async fn name_of(api: &dyn Api, s: &mut Settings, id: &str) -> Option<String> {
 }
 
 /// Read every chosen conversation once, keeping `s`'s cursors, seen and
-/// names up to date, and return what starts a turn. A sign-in, scope,
-/// network or rate-limit error ends the check (nothing it read is lost: the
-/// cursors only move past what was looked at); a conversation Slack won't
-/// show any more is skipped with a warning.
-pub async fn check_once(api: &dyn Api, s: &mut Settings, now_ms: i64) -> Result<Checked, ApiError> {
+/// names up to date, and return what starts a turn. A sign-in, network or
+/// rate-limit error ends the check (`stopped`), keeping what the
+/// conversations before it found: the cursors only move past a conversation
+/// read in full, and nothing it found is lost. A conversation Slack won't
+/// show, or the app lacks a permission for, is skipped with a warning.
+pub async fn check_once(api: &dyn Api, s: &mut Settings, now_ms: i64) -> Checked {
     let Some(account) = s.account.clone() else {
-        return Ok(Checked::default());
+        return Checked::default();
     };
     let trigger = s.trigger();
     let mut out = Checked::default();
@@ -422,7 +427,14 @@ pub async fn check_once(api: &dyn Api, s: &mut Settings, now_ms: i64) -> Result<
                 out.warning = Some(format!("Couldn't read {}: Slack said “{e}”.", conv.name));
                 continue;
             }
-            Err(e) => return Err(e),
+            Err(e @ ApiError::Scope(_)) => {
+                out.warning = Some(format!("Couldn't read {}: {}", conv.name, e.words()));
+                continue;
+            }
+            Err(e) => {
+                out.stopped = Some(e);
+                return out;
+            }
         };
         let Some(cursor) = s.cursors.get(&conv.id).cloned() else {
             // The first look is a baseline: what's already there is history.
@@ -447,8 +459,11 @@ pub async fn check_once(api: &dyn Api, s: &mut Settings, now_ms: i64) -> Result<
         }) {
             match slack_api::replies(api, &conv.id, &parent.ts, &cursor).await {
                 Ok(r) => candidates.extend(r.into_iter().filter(|m| newer(&m.ts, &cursor))),
-                Err(ApiError::Slack(_)) => {}
-                Err(e) => return Err(e),
+                Err(ApiError::Slack(_) | ApiError::Scope(_)) => {}
+                Err(e) => {
+                    out.stopped = Some(e);
+                    return out;
+                }
             }
         }
         candidates.sort_by_key(|m| ts_key(&m.ts));
@@ -515,7 +530,7 @@ pub async fn check_once(api: &dyn Api, s: &mut Settings, now_ms: i64) -> Result<
         }
         s.cursors.insert(conv.id.clone(), newest);
     }
-    Ok(out)
+    out
 }
 
 /// Where a reply goes, in words: "#launch", "your own DM", "your DM with Sam".
@@ -1029,7 +1044,7 @@ async fn settle(app: &AppHandle) {
 
 /// Merge what a check learnt into the saved settings, leaving anything the
 /// user changed meanwhile alone.
-fn save_check(checked: &Settings, result: &Result<Checked, ApiError>, now: i64) {
+fn save_check(checked: &Settings, result: &Checked, now: i64) {
     let _ = change(|s| {
         if s.account.as_ref().map(|a| &a.user_id) != checked.account.as_ref().map(|a| &a.user_id) {
             return; // disconnected or reconnected meanwhile
@@ -1041,22 +1056,22 @@ fn save_check(checked: &Settings, result: &Result<Checked, ApiError>, now: i64) 
         }
         s.seen = checked.seen.clone();
         s.names = checked.names.clone();
-        match result {
-            Ok(r) => {
+        match &result.stopped {
+            None => {
                 s.failures = 0;
                 s.last_check_at = Some(now);
-                s.last_error = r.warning.clone();
+                s.last_error = result.warning.clone();
                 s.next_check_at = now + POLL_EVERY_MS;
             }
-            Err(ApiError::SignIn(_)) => {
+            Some(ApiError::SignIn(_)) => {
                 s.needs_sign_in = true;
                 s.last_error = Some(ApiError::SignIn(String::new()).words());
             }
-            Err(ApiError::RateLimited(secs)) => {
+            Some(ApiError::RateLimited(secs)) => {
                 s.last_error = Some(ApiError::RateLimited(*secs).words());
                 s.next_check_at = now + (*secs as i64) * 1000;
             }
-            Err(e) => {
+            Some(e) => {
                 s.failures = s.failures.saturating_add(1);
                 s.last_error = Some(e.words());
                 let wait = POLL_EVERY_MS
@@ -1095,25 +1110,30 @@ pub async fn check(app: &AppHandle, force: bool) {
     let api = slack_api::HttpApi::new(token);
     let result = check_once(&api, &mut s, now).await;
     save_check(&s, &result, now);
-    if let Ok(r) = &result {
-        if let Some(agent) = answering_agent(&s) {
-            let mut added = Vec::new();
-            for f in &r.found {
-                if let Some(p) = deliver(app, &agent, f) {
-                    added.push(p);
-                }
+    // Even when the check stopped early: what it found before is past the
+    // cursors now, and would never be found again.
+    if let Some(agent) = answering_agent(&s) {
+        let r = &result;
+        let mut added = Vec::new();
+        for f in &r.found {
+            if let Some(p) = deliver(app, &agent, f) {
+                added.push(p);
             }
-            if r.dropped > 0 {
-                note(app, &agent.id, format!(
-                    "{} more Slack {} came in at once and {} left alone. Ask again if one mattered.",
-                    r.dropped,
-                    if r.dropped == 1 { "message" } else { "messages" },
-                    if r.dropped == 1 { "was" } else { "were" },
-                ));
-            }
-            if !added.is_empty() {
-                let _ = change(|s| s.pending.extend(added));
-            }
+        }
+        if r.dropped > 0 {
+            note(
+                app,
+                &agent.id,
+                format!(
+                "{} more Slack {} came in at once and {} left alone. Ask again if one mattered.",
+                r.dropped,
+                if r.dropped == 1 { "message" } else { "messages" },
+                if r.dropped == 1 { "was" } else { "were" },
+            ),
+            );
+        }
+        if !added.is_empty() {
+            let _ = change(|s| s.pending.extend(added));
         }
     }
     let _ = app.emit(EVENT, ());

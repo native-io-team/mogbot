@@ -182,7 +182,7 @@ const NOW: i64 = 1_700_000_000_000;
 /// A baseline check, so what follows is new.
 fn primed(fake: &Fake) -> Settings {
     let mut s = settings();
-    let r = block(check_once(fake, &mut s, NOW)).unwrap();
+    let r = block(check_once(fake, &mut s, NOW));
     assert!(r.found.is_empty());
     s
 }
@@ -203,10 +203,10 @@ fn the_first_look_is_a_baseline_and_nothing_old_starts_a_turn() {
     // Already there before the connection: never an ask.
     fake.say(LAUNCH, msg("1699999990.000100", ME, "dashbot: old news"));
     let mut s = settings();
-    let r = block(check_once(&fake, &mut s, NOW)).unwrap();
+    let r = block(check_once(&fake, &mut s, NOW));
     assert!(r.found.is_empty());
     assert_eq!(s.cursors.len(), 3);
-    let r = block(check_once(&fake, &mut s, NOW + 30_000)).unwrap();
+    let r = block(check_once(&fake, &mut s, NOW + 30_000));
     assert!(r.found.is_empty(), "{r:?}");
 }
 
@@ -228,7 +228,7 @@ fn only_a_message_that_starts_with_the_trigger_counts() {
             "  DashBot: draft the launch note &amp; send it to <@U0SAM>",
         ),
     );
-    let r = block(check_once(&fake, &mut s, NOW + 30_000)).unwrap();
+    let r = block(check_once(&fake, &mut s, NOW + 30_000));
     assert_eq!(r.found.len(), 1, "{r:?}");
     let f = &r.found[0];
     assert!(f.own);
@@ -236,7 +236,7 @@ fn only_a_message_that_starts_with_the_trigger_counts() {
     assert_eq!(f.thread_ts, "1700000004.000100");
     assert_eq!(f.conversation.id, LAUNCH);
     // Nothing fires twice.
-    let r = block(check_once(&fake, &mut s, NOW + 60_000)).unwrap();
+    let r = block(check_once(&fake, &mut s, NOW + 60_000));
     assert!(r.found.is_empty());
 }
 
@@ -256,7 +256,7 @@ fn someone_elses_message_never_counts_unless_the_user_let_others_in() {
         SAM_DM,
         msg("1700000002.000100", SAM, "dashbot: what's the ETA?"),
     );
-    let r = block(check_once(&fake, &mut s, NOW + 30_000)).unwrap();
+    let r = block(check_once(&fake, &mut s, NOW + 30_000));
     assert!(r.found.is_empty(), "{r:?}");
 
     let fake = Fake::default();
@@ -288,7 +288,7 @@ fn someone_elses_message_never_counts_unless_the_user_let_others_in() {
         SAM_DM,
         msg("1700000004.000100", SAM, "dashbot: what's the ETA?"),
     );
-    let r = block(check_once(&fake, &mut s, NOW + 30_000)).unwrap();
+    let r = block(check_once(&fake, &mut s, NOW + 30_000));
     let asks: Vec<(&str, bool, &str)> = r
         .found
         .iter()
@@ -320,7 +320,7 @@ fn bots_apps_edits_and_our_own_posts_are_never_asks() {
     for m in [bot, app, edit, ours, broadcast] {
         fake.say(LAUNCH, m);
     }
-    let r = block(check_once(&fake, &mut s, NOW + 30_000)).unwrap();
+    let r = block(check_once(&fake, &mut s, NOW + 30_000));
     let asks: Vec<&str> = r.found.iter().map(|f| f.ask.as_str()).collect();
     assert_eq!(asks, vec!["also sent to the channel"]);
 }
@@ -340,7 +340,7 @@ fn an_ask_in_a_thread_is_found_and_answered_in_that_thread() {
         "latest_reply": "1700000009.000100"
     });
     fake.reply(LAUNCH, parent, json!({"ts": "1700000009.000100", "user": ME, "thread_ts": parent, "text": "dashbot: turn this into a checklist"}));
-    let r = block(check_once(&fake, &mut s, NOW + 30_000)).unwrap();
+    let r = block(check_once(&fake, &mut s, NOW + 30_000));
     assert_eq!(r.found.len(), 1);
     assert_eq!(r.found[0].thread_ts, parent);
     assert_eq!(r.found[0].ts, "1700000009.000100");
@@ -361,7 +361,7 @@ fn a_burst_starts_at_most_five_turns() {
             ),
         );
     }
-    let r = block(check_once(&fake, &mut s, NOW + 30_000)).unwrap();
+    let r = block(check_once(&fake, &mut s, NOW + 30_000));
     assert_eq!(r.found.len(), MAX_ASKS_PER_CHECK);
     assert_eq!(r.dropped, 3);
     assert_eq!(r.found[0].ask, "task 1", "oldest first");
@@ -379,7 +379,7 @@ fn a_refused_sign_in_ends_the_check_and_a_missing_channel_is_only_a_warning() {
         SELF_DM,
         msg("1700000001.000100", ME, "dashbot: still heard"),
     );
-    let r = block(check_once(&fake, &mut s, NOW + 30_000)).unwrap();
+    let r = block(check_once(&fake, &mut s, NOW + 30_000));
     assert_eq!(r.found.len(), 1);
     assert!(r.warning.unwrap().contains("#launch"));
 
@@ -387,9 +387,62 @@ fn a_refused_sign_in_ends_the_check_and_a_missing_channel_is_only_a_warning() {
         "conversations.history",
         ApiError::SignIn("token_revoked".into()),
     );
-    let e = block(check_once(&fake, &mut s, NOW + 60_000)).unwrap_err();
+    let e = block(check_once(&fake, &mut s, NOW + 60_000))
+        .stopped
+        .unwrap();
     assert!(matches!(e, ApiError::SignIn(_)));
     assert!(e.words().contains("Connect Slack again"));
+}
+
+/// Robin asks in #launch; Slack rate-limits the next conversation in the
+/// same check. The #launch ask was read (its cursor moved past it), so it
+/// must come back with the stopped check, once, and never again.
+#[test]
+fn a_rate_limit_mid_check_keeps_what_was_already_found() {
+    let fake = Fake::default();
+    let mut s = primed(&fake);
+    fake.say(
+        LAUNCH,
+        msg("1700000001.000100", ME, "dashbot: book the room"),
+    );
+    fake.say(
+        SELF_DM,
+        msg("1700000002.000100", ME, "dashbot: and the snacks"),
+    );
+    fake.fail_on(
+        &format!("conversations.history:{SELF_DM}"),
+        ApiError::RateLimited(30),
+    );
+    let r = block(check_once(&fake, &mut s, NOW + 30_000));
+    assert_eq!(r.stopped, Some(ApiError::RateLimited(30)));
+    let asks: Vec<&str> = r.found.iter().map(|f| f.ask.as_str()).collect();
+    assert_eq!(asks, vec!["book the room"]);
+
+    fake.fail.lock().unwrap().clear();
+    let r = block(check_once(&fake, &mut s, NOW + 60_000));
+    assert_eq!(r.stopped, None);
+    let asks: Vec<&str> = r.found.iter().map(|f| f.ask.as_str()).collect();
+    assert_eq!(asks, vec!["and the snacks"], "nothing twice, nothing lost");
+}
+
+/// A permission the app lacks for one conversation (a group DM without
+/// `mpim:history`) doesn't stop the others being read.
+#[test]
+fn a_missing_permission_for_one_conversation_is_only_a_warning() {
+    let fake = Fake::default();
+    let mut s = primed(&fake);
+    fake.fail_on(
+        &format!("conversations.history:{LAUNCH}"),
+        ApiError::Scope("channels:history".into()),
+    );
+    fake.say(
+        SELF_DM,
+        msg("1700000001.000100", ME, "dashbot: still heard"),
+    );
+    let r = block(check_once(&fake, &mut s, NOW + 30_000));
+    assert_eq!(r.stopped, None);
+    assert_eq!(r.found.len(), 1);
+    assert!(r.warning.unwrap().contains("channels:history"));
 }
 
 #[test]
@@ -948,10 +1001,10 @@ fn what_the_app_posts_is_never_read_back_as_an_ask() {
         assert_eq!(get("thread_ts").as_deref(), Some("1700000001.000100"));
         assert_eq!(get("unfurl_links").as_deref(), Some("false"));
         let mut s = load();
-        block(check_once(&fake, &mut s, NOW)).unwrap();
+        block(check_once(&fake, &mut s, NOW));
         // Slack shows our post as the user's, starting with the trigger.
         fake.say(SELF_DM, msg(&ts, ME, "dashbot: &lt;b&gt; &amp; done"));
-        let r = block(check_once(&fake, &mut s, NOW + 30_000)).unwrap();
+        let r = block(check_once(&fake, &mut s, NOW + 30_000));
         assert!(r.found.is_empty(), "{r:?}");
     });
 }

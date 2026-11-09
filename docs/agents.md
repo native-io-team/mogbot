@@ -3782,8 +3782,10 @@ conversation is a baseline (nothing already there starts anything); a
 conversation added later starts from then. `channel:ts` of what was read is
 kept (500) so nothing fires twice. A refused token stops checks and says so
 on the row; a rate limit waits `Retry-After`; other failures back off
-(doubling, at most 15 minutes); a conversation Slack won't show is skipped
-with a warning. Default listening place: the user's DM to themself.
+(doubling, at most 15 minutes); a conversation Slack won't show, or the app
+lacks a permission for, is skipped with a warning. A check that stops early
+still delivers what the conversations before it found (`Checked::stopped`):
+their cursors have moved past it, so it would otherwise be lost. Default listening place: the user's DM to themself.
 
 **The trigger.** A message counts only when it starts with the trigger
 (`<slug>:`, so `dashbot:`, changeable, 2–24 characters, not `/ @ # ! <`),
