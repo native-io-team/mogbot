@@ -226,6 +226,18 @@ fn frames() -> Vec<ServerFrame> {
         ),
         (
             None,
+            Event::Alert {
+                alert: super::alerts::alert(
+                    AGENT,
+                    Some("m2"),
+                    "Acme Site",
+                    "Needs your OK: Run a command",
+                    super::wire::AlertKind::Approval,
+                ),
+            },
+        ),
+        (
+            None,
             Event::Snapshot {
                 cursor: cursor(5),
                 overview: testkit::overview(),
@@ -393,6 +405,7 @@ async fn generate() -> String {
         shows: super::wire::Shows {
             live_work: true,
             rooms: true,
+            ..Default::default()
         },
     };
     let call = |method: &'static str, params: Value| {

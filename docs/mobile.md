@@ -1122,14 +1122,51 @@ only (a self-built app has no push entitlement), switched on in the Phone
 panel, and **built but not deployed**: design, threat model and deploy steps
 are in [push-relay.md](push-relay.md).
 
-The socket can also carry an `alert` event, which the phone posts as a local
-notification, but the Mac sends none yet, so `LIVE_WINDOW_MS` is 0.
+**The live notifier** (`companion/alerts.rs`, `lib/liveAlerts.ts`). Every
+alert the desk decides on (`agents::notify::post`: a reply or failure at the
+end of a turn, a fired routine, and at once every card that needs you:
+approvals, plans, "OK to go on?", logins, keys) also goes as an `alert` event
+to every connected phone whose hello lists `alerts`, except the socket in
+front with that agent's chat open. The Mac has already applied mute, quiet
+hours (approvals still go), "on screen" anywhere and the per-turn coalescing;
+non-approval alerts are capped at 3 per 20 s, as on the desk. An alert carries
+ids, the agent's name and one line through `secrets::redact` and
+`work::scrub`, and the phone runs `redact` again. It is never journaled.
+
+- **Where the user is.** The desk's rule is "on screen": a focused window, or
+  a phone in front, showing that agent; then nothing notifies anywhere. On top
+  of it, **at the desk** (`notify::at_desk`: any of the app's windows has
+  focus) the desk's banner is the notification and neither the socket nor the
+  relay tells a phone. With the app in the background the Mac can't tell
+  where the user is, so desk and phone both hear it. A phone in front on
+  another screen does get the alert, as a focused desk window on another
+  chat gets a banner.
+- **On the phone.** An approval is posted as its card's own notification
+  (`approvalNotice`: Allow / Deny when it fits, else Review), whichever of the
+  card and the alert arrives first: a plain one first is replaced by the
+  card's (same identifier). Everything else posts as said. The same alert
+  twice posts once; a muted or hidden agent, or that chat open in front, posts
+  nothing. Posting one takes back the relay's content-free banner for that
+  agent. With a Mac older than `alerts` the phone keeps posting cards it hears
+  in the background itself (`alertApproval`).
+- **Taken back** when the card's new state (answered anywhere, expired)
+  arrives as `agents.message`, live or on replay after a reconnect, whether or
+  not that chat was ever loaded on the phone.
+- **Backgrounded vs killed.** iOS gives the app seconds in the background
+  (it asks for no background time), then suspends it; its socket still looks
+  open from the Mac for minutes. So the socket reaches a phone in front, or
+  one that left the screen moments ago. Suspended or killed, only the relay's
+  push reaches it, which is why `LIVE_WINDOW_MS` stays 0: a phone not in front
+  gets both, and the awake one keeps the banner with words. Until the relay is
+  deployed, a phone in the background or killed gets nothing until it opens;
+  then the badge and Needs you say what's waiting.
+
 Settings says plainly what arrives when.
 
-**Answering from the Lock Screen** (`lib/actionable.ts`). The phone is its
-own live notifier: while it's in the background with its socket still open,
-a new card arriving over it (`agents.message`, after catch-up, not muted or
-hidden) is posted as a local notification with the card's words. A card
+**Answering from the Lock Screen** (`lib/actionable.ts`). An approval the Mac
+alerts for (above), or with an older Mac a new card the phone hears in the
+background (`agents.message`, after catch-up, not muted or hidden), is posted
+as a local notification with the card's words. A card
 whose whole content fits and has a plain pair of answers gets them as
 buttons (Deny · Allow, or its own words: Stop here · Go ahead, Not now ·
 Check again, Ignore · Save to memory); everything else gets **Review**,
@@ -1332,8 +1369,11 @@ the share extension, the camera, real keyboard behaviour).
 
 - The LAN route and its pinned-transport module; Bonjour discovery; more than
   one Mac at a time.
-- A live-socket notifier on the Mac (the phone posts cards it hears itself),
-  buttons on a pushed alert, and background refresh.
+- Buttons on a pushed alert, background refresh, and withdrawing a delivered
+  push once its card is answered while the app stays suspended (it goes when
+  the app next opens). The live notifier is verified in Rust and jest only:
+  a banner and its Allow / Deny on a real iPhone, backgrounded and locked,
+  are not yet.
 - Paste import, deleting agents from the phone, and setting a new agent's
   engine, model or project there.
 - Pushing to git from the phone: Remote Access gates it behind a PIN, and the

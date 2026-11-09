@@ -2294,10 +2294,16 @@ export type PushEnvironment = 'production' | 'development';
  */
 export type PushStatus = 'on' | 'pending' | 'off' | 'unavailable' | 'self_build';
 
-/** A notification the Mac decided this device should show (see `Notifier`). */
+/**
+ * A notification the Mac decided this device should show
+ * (`companion/alerts.rs`). Ids and one plain line, already redacted.
+ */
 export interface Alert {
   agentId: string;
-  /** The message it's about, so tapping opens the chat there. */
+  /**
+   * The message it's about, so tapping opens the chat there and a second
+   * alert for it replaces the first. Absent for a line no message holds.
+   */
   messageId?: string;
   title: string;
   body: string;

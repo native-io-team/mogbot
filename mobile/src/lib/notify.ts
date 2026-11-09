@@ -136,12 +136,16 @@ export async function postNote(target: Target, title: string, body: string) {
   }).catch(() => {});
 }
 
+/** The relay's kinds (`PushKind` in companion/push.rs). */
+export type PushKind = 'needs_you' | 'finished' | 'message';
+
 /**
- * The relay's content-free "<Agent> needs you", once this phone has posted
- * the card's own notification for it: one banner, the one with the words.
+ * The relay's content-free banner for this agent ("<Agent> needs you" by
+ * default), once this phone has posted one with the words: one banner, the
+ * one that says something.
  */
-export const dismissPushFor = (agentId: string) =>
-  dismissWhere((t) => t.agentId === agentId && t.kind === 'needs_you' && !t.messageId);
+export const dismissPushFor = (agentId: string, kinds: PushKind[] = ['needs_you']) =>
+  dismissWhere((t) => t.agentId === agentId && !t.messageId && kinds.includes(t.kind as PushKind));
 
 async function dismissWhere(match: (t: Target) => boolean) {
   const shown = await Notifications.getPresentedNotificationsAsync().catch(() => []);

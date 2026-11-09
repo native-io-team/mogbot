@@ -56,7 +56,13 @@ export type EphemeralEvent =
    * by the same `id`.
    */
   | { type: 'agents.draft'; agentId: string; id: string; from: number; text: string }
-  /** Show a local notification (only sent when this device isn't showing that agent). */
+  /**
+   * Post a local notification. Only to an app whose hello listed
+   * `FEATURES.alerts`, never to the socket in front with that agent's chat
+   * open, and never while the user is at the desk (an app window focused on
+   * the Mac). Not replayed: what it was about arrives as `agents.message`,
+   * and a card's new state (answered, expired) is the cue to take it back.
+   */
   | { type: 'alert'; alert: Alert }
   /**
    * After `welcome.resume = 'snapshot'`: the state as of `cursor`. Replace the

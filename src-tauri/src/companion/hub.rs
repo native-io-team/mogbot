@@ -44,9 +44,10 @@ fn replay_key(event: &Event) -> Option<String> {
         )),
         Event::ProjectRemoved { path } => Some(format!("project:{path}")),
         // Never journaled (see `Hub::publish`); keyed so a mistake can't pile up.
-        Event::Draft { .. } | Event::Snapshot { .. } | Event::CaughtUp { .. } => {
-            Some("ephemeral".into())
-        }
+        Event::Draft { .. }
+        | Event::Alert { .. }
+        | Event::Snapshot { .. }
+        | Event::CaughtUp { .. } => Some("ephemeral".into()),
     }
 }
 
@@ -180,6 +181,12 @@ pub enum HubItem {
         agent_id: String,
         id: String,
         text: String,
+    },
+    /// A notification for phones that post them (`companion/alerts.rs`).
+    /// Never journaled: an alert replayed after a reconnect is old news, and
+    /// the card it was about arrives with the journal anyway.
+    Alert {
+        alert: super::wire::LiveAlert,
     },
     /// This device's token was revoked (or replaced by a re-pair): close.
     Revoked {

@@ -467,7 +467,7 @@ export class DirectTransport implements Transport {
       app: this.opts.app,
       ...(resume ? { resume } : {}),
       foreground: this.foreground,
-      features: [FEATURES.liveWork, FEATURES.rooms],
+      features: [FEATURES.liveWork, FEATURES.rooms, FEATURES.alerts],
     });
   }
 
