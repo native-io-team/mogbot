@@ -38,9 +38,7 @@ function approval(extra: Record<string, unknown>, status = 'pending'): AgentMess
 // that arrived empty.
 const malformed: [string, Record<string, unknown>][] = [
   ['a session question with no options', { prompt: { kind: 'permission' } }],
-  ['a secret request with nothing in it', { secret: {} }],
   ['a settings change with no changes', { settings: {} }],
-  ['a plan with no actions', { plan: {} }],
   ['an "Always allow" with no scope words', { always: {} }],
 ];
 
@@ -84,7 +82,7 @@ describe('a request card that can’t be drawn', () => {
     const onAnswer = vi.fn().mockRejectedValueOnce(new Error('offline'));
     render(
       <ApprovalCard
-        message={approval({ plan: {} })}
+        message={approval({ settings: {} })}
         agentName="Acme"
         paused={false}
         onAnswer={onAnswer}
@@ -107,29 +105,108 @@ describe('a request card that can’t be drawn', () => {
   });
 });
 
-describe('a result card that can’t be drawn', () => {
+// These are read field by field (`lib/cardShapes`): they draw, with whatever
+// was missing left out, and offer only what still makes sense.
+describe('a request card with parts missing', () => {
+  const answerless: [string, Record<string, unknown>][] = [
+    ['a secret request with nothing in it', { secret: {} }],
+    ['a secret request whose fields have no variable', { secret: { fields: [{ label: 'Key' }] } }],
+    ['a secret request whose fields are not a list', { secret: { name: 'x', fields: 'key' } }],
+    ['a plan with no actions', { plan: {} }],
+    ['a plan whose actions are not a list', { plan: { actions: 'push it' } }],
+    ['a plan whose actions have no summary', { plan: { actions: [{ target: 'repo' }, null] } }],
+  ];
+
+  it.each(answerless)('%s: draws, and offers Deny but nothing to allow', async (_, extra) => {
+    const onAnswer = vi.fn().mockResolvedValue(undefined);
+    render(
+      <ApprovalCard message={approval(extra)} agentName="Acme" paused={false} onAnswer={onAnswer} />
+    );
+    expect(screen.queryByTestId('approval-fallback')).toBeNull();
+    expect(logError).not.toHaveBeenCalled();
+    expect(screen.queryByRole('button', { name: /allow|save/i })).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getByRole('button', { name: 'Deny' }));
+      await Promise.resolve();
+    });
+    expect(onAnswer.mock.calls[0].slice(0, 2)).toEqual(['r1', false]);
+  });
+
+  it('a plan keeps its readable actions and drops the rest', () => {
+    const plan = {
+      actions: [{ summary: 'Push main', target: 'acme/site', kind: 9 }, 'junk', { target: 'x' }],
+      why: 42,
+    };
+    render(
+      <ApprovalCard
+        message={approval({ plan })}
+        agentName="Acme"
+        paused={false}
+        onAnswer={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Push main')).toBeTruthy();
+    expect(screen.getAllByRole('listitem')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Allow' })).toBeTruthy();
+  });
+
+  it('a secret keeps its readable fields and can be saved', () => {
+    const secret = { name: 'crm', fields: [{ env: 'CRM_KEY' }, { label: 'no env' }, 7] };
+    render(
+      <ApprovalCard
+        message={approval({ secret })}
+        agentName="Acme"
+        paused={false}
+        onAnswer={vi.fn()}
+      />
+    );
+    expect(screen.getAllByText('CRM_KEY')).toHaveLength(1);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeTruthy();
+  });
+});
+
+describe('a result card with parts missing or odd', () => {
   const agent = { id: 'acme', name: 'Acme', color: 'blue' } as never;
   const cards: [string, Record<string, unknown>][] = [
     ['a file item with no file', { items: [{ kind: 'file' }] }],
     ['a checked list that is not a list', { checked: 'all of it' }],
+    ['items that are not a list', { items: { kind: 'link' } }],
+    ['a test report with nonsense steps', { test: { outcome: 'x', steps: [null, 3] } }],
+    ['no title or summary', { title: null, summary: { a: 1 } }],
+    ['a version that is not a number', { version: 'two' }],
   ];
 
-  it.each(cards)('%s: one muted line, the lines around it still show', (_, extra) => {
-    vi.spyOn(console, 'error').mockImplementation(() => {});
+  it.each(cards)('%s: draws without its fallback', (_, extra) => {
     const card = { id: 'c', version: 1, title: 'Homepage', summary: 's', ...extra };
     const m = { id: 'm2', agentId: 'acme', ts: 1, kind: 'agent', text: '', result: card };
-    const rows = [
-      <p key="a">before</p>,
-      <ResultCardView
-        key="m2"
-        message={m as unknown as AgentMessage}
-        card={card as never}
-        agent={agent}
-        newest
-        onAskForChanges={vi.fn()}
-      />,
-      <p key="b">after</p>,
-    ].map(guardRow);
+    render(
+      <div>
+        {[
+          <ResultCardView
+            key="m2"
+            message={m as unknown as AgentMessage}
+            card={card as never}
+            agent={agent}
+            newest
+            onAskForChanges={vi.fn()}
+          />,
+        ].map(guardRow)}
+      </div>
+    );
+    expect(screen.queryByText("This line couldn't be shown.")).toBeNull();
+    expect(screen.getByRole('article')).toBeTruthy();
+    expect(logError).not.toHaveBeenCalled();
+  });
+});
+
+describe('a row that can’t be drawn', () => {
+  function Throws(): never {
+    throw new Error('bad row');
+  }
+
+  it('one muted line, the lines around it still show', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const rows = [<p key="a">before</p>, <Throws key="m2" />, <p key="b">after</p>].map(guardRow);
     render(<div>{rows}</div>);
     expect(screen.getByText('before')).toBeTruthy();
     expect(screen.getByText('after')).toBeTruthy();

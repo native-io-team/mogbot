@@ -17,6 +17,7 @@ import { WorkspaceNavigation, WorkspaceTitlebar } from './workspace/WorkspaceHea
 import { WorkspaceSidebar } from './workspace/WorkspaceSidebar';
 import type { WorkspaceView } from './workspace/WorkspaceView';
 import { Spinner } from './primitives/Spinner';
+import { AreaBoundary } from './primitives/AreaBoundary';
 import type { Project, WorkspaceInfo } from '../lib/project';
 import type { AppView } from '../lib/types';
 import type { AgentPreviewServer } from '../lib/agentPreview';
@@ -170,14 +171,20 @@ export function AppViewRouter({
             className={`projects-with-rail${isCompact ? ' is-compact' : ''}`}
             key="view-projects"
           >
+            {/* The sidebar and the projects in their own boundaries: one that
+                throws leaves the other (and the way back to Agents) working. */}
             {isCompact ? (
               <CompactModeToggle mode="projects" onAgents={homeSidebarProps.onGoAgents} floating />
             ) : (
-              <HomeSidebar {...homeSidebarProps} activeNav="home" />
+              <AreaBoundary where="projects:sidebar">
+                <HomeSidebar {...homeSidebarProps} activeNav="home" />
+              </AreaBoundary>
             )}
-            <Suspense fallback={null}>
-              <LazyProjectsView {...projectsViewProps} />
-            </Suspense>
+            <AreaBoundary where="projects:list">
+              <Suspense fallback={null}>
+                <LazyProjectsView {...projectsViewProps} />
+              </Suspense>
+            </AreaBoundary>
           </div>
         </div>
         {pendingMonorepoPick && (
