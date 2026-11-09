@@ -9,6 +9,7 @@
 
 import type { Cursor } from './frames';
 import type { AgentPolicyView } from './policy';
+import type { OnItsOwn, OnItsOwnNarrow, OnItsOwnTeam } from './onItsOwn';
 import type { QuietHours, QuietWindow } from './quiet';
 import type {
   AgentDraft,
@@ -301,6 +302,18 @@ export interface Methods {
   'agents.reach': { params: { agentId: string }; result: AgentReach };
   /** "What it can do" (`agents/policy.rs`): its settings in plain words. Read-only; changed in chat. */
   'agents.policy': { params: { agentId: string }; result: AgentPolicyView };
+  /** "What can it do on its own?" (`agents/on_its_own.rs`): every standing rule, in plain words. */
+  'agents.onItsOwn': { params: { agentId: string }; result: OnItsOwn };
+  /** The same for the team: its level, rules every agent shares, each agent in a line. */
+  'agents.onItsOwnTeam': { params: Record<string, never>; result: OnItsOwnTeam };
+  /**
+   * Take one thing away, at once, with a line in the agent's chat. Only a
+   * narrow the agent's current view offers applies; nothing here gives.
+   */
+  'agents.onItsOwnNarrow': {
+    params: { agentId: string; narrow: OnItsOwnNarrow };
+    result: OnItsOwn;
+  };
   /**
    * "What your team needs": every login card waiting, one row per service
    * (Gmail + Calendar as one Google row), with each agent on it; `since`
@@ -671,6 +684,8 @@ export const READ_ONLY_METHODS = [
   'agents.memory',
   'agents.reach',
   'agents.policy',
+  'agents.onItsOwn',
+  'agents.onItsOwnTeam',
   'agents.loginsTeam',
   'agents.apps',
   'agents.usage',

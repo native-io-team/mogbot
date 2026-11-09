@@ -1,6 +1,6 @@
 /**
- * What you can do to an agent: Pin, Mark as unread, Mute, Edit, Take over, Start fresh, Hide,
- * Delete. One
+ * What you can do to an agent: Pin, Mark as unread, Mute, Edit, What it does on its own, Take
+ * over, Start fresh, Hide, Delete. One
  * list, rendered as a row's right-click menu or as the conversation header's
  * … menu, so the two never drift apart.
  *
@@ -19,12 +19,14 @@ import {
   PaperclipIcon,
   PinIcon,
   ResetIcon,
+  ShieldCheckIcon,
   TerminalIcon,
   TrashIcon,
 } from '@/components/icons';
 import { ContextMenuItem, ContextMenuSeparator } from '../primitives/ContextMenu';
 import { DropdownDivider, DropdownItem } from '../primitives/Dropdown';
 import { canStartFresh, canTakeOver, contextPercent, type Agent } from '../../lib/agents';
+import { ON_ITS_OWN_MENU } from '../../lib/agentOnItsOwn';
 
 export interface AgentActions {
   onTogglePin: (agent: Agent) => void;
@@ -39,6 +41,8 @@ export interface AgentActions {
   onTakeOver?: (agent: Agent) => void;
   /** End the terminal and give the session back. */
   onHandBack?: (agent: Agent) => void;
+  /** "What can it do on its own?": its level and every standing rule. */
+  onOnItsOwn?: (agent: Agent) => void;
 }
 
 interface Item {
@@ -62,6 +66,7 @@ export function AgentActionItems({
   onStartFresh,
   onTakeOver,
   onHandBack,
+  onOnItsOwn,
   onSchedule,
   onFiles,
 }: {
@@ -89,6 +94,15 @@ export function AgentActionItems({
       ? [{ label: 'Schedule a routine…', icon: <HistoryIcon size={12} />, run: onSchedule }]
       : []),
     { label: 'Edit agent…', icon: <EditIcon size={12} />, run: () => onEdit(agent) },
+    ...(onOnItsOwn
+      ? [
+          {
+            label: ON_ITS_OWN_MENU,
+            icon: <ShieldCheckIcon size={12} />,
+            run: () => onOnItsOwn(agent),
+          },
+        ]
+      : []),
     ...takeoverItems(agent, onTakeOver, onHandBack),
     ...(canStartFresh(agent)
       ? [

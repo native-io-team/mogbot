@@ -771,6 +771,12 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
             "Checking on the team",
             "check on the team",
         ),
+        "what_it_does_on_its_own" => act(
+            StepKind::Read,
+            "Checked what it may do without asking",
+            "Checking what it may do without asking",
+            "check what it may do without asking",
+        ),
         // Real chats showed a run of "Used a tool" after "Checked on the
         // team": the Chief reading each agent's chat in turn.
         "read_agent" => {

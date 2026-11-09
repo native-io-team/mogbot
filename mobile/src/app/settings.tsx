@@ -19,7 +19,7 @@ import { isDemo } from '../lib/demo';
 import { setPref } from '../lib/prefs';
 import { ALERTS_WHILE_OPEN, isOfficialBuild, pushLine } from '../lib/push';
 import { canCall, enableAlerts, unpair } from '../lib/session';
-import { MAC_FEATURES } from '@shipstudio/companion-protocol';
+import { MAC_FEATURES, ON_ITS_OWN_TEAM_TITLE } from '@shipstudio/companion-protocol';
 import { useApp, useServed, type AppearancePref } from '../lib/store';
 import { useAccent, useSwitchColors } from '../lib/accent';
 import { brand } from '../lib/brand';
@@ -65,6 +65,7 @@ export default function Settings() {
   const colors = useColors();
   const router = useRouter();
   const servesTeam = useServed('agents.loginsTeam', MAC_FEATURES.logins);
+  const servesOnItsOwn = useServed('agents.onItsOwnTeam');
   const servesApps = useServed('agents.apps');
   const canImport = useApp((s) => canCall('agents.import.status', s.welcome));
   const credentials = useApp((s) => s.credentials);
@@ -212,6 +213,14 @@ export default function Settings() {
       )}
 
       <IndependenceSetting />
+      {servesOnItsOwn && (
+        <Section
+          title="Without asking"
+          footer="Every standing rule, plan and app, in plain words. Taking one away applies at once."
+        >
+          <Row label={ON_ITS_OWN_TEAM_TITLE} onPress={() => router.push('/on-its-own')} last />
+        </Section>
+      )}
       <NewAgentDefaults />
       {(servesTeam || servesApps) && (
         <Section

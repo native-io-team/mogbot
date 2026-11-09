@@ -498,6 +498,28 @@ export function useAppCommands({
         },
       },
       {
+        id: 'agents.onItsOwnTeam',
+        title: 'What your agents do on their own…',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: [
+          'without asking',
+          'permissions',
+          'always allow',
+          'rules',
+          'remembered',
+          'plan',
+          'grants',
+          'what can',
+          'on its own',
+        ],
+        run: () => {
+          requestSettingsTabOnOpen('agents');
+          requestSettingsSectionOnOpen('agent-on-its-own');
+          openModal('settings');
+        },
+      },
+      {
         id: 'agents.admins',
         title: 'Admins: who manages and approves for your team…',
         icon: <SettingsIcon size={14} />,

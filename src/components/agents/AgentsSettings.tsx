@@ -17,7 +17,10 @@
  *   (Careful, Steady, Bold, Unleashed), and what always asks at every stop
  *   (`AgentIndependenceSettings`, `agents/independence.rs`).
  * - **What agents can do**: the team's defaults, the presets, and "Reset
- *   everyone to …" (`AgentTeamPolicySettings`, `agents/policy.rs`). Chat is
+ *   everyone to …" (`AgentTeamPolicySettings`, `agents/policy.rs`).
+ * - What your agents do on their own: the team's level, the rules every
+ *   agent shares, each agent's standing rules (`OnItsOwnTeamSettings`,
+ *   `agents/on_its_own.rs`), narrowing only. Chat is
  *   the first way to change them; this is the second.
  * - **Engines and models**: the engine and model new agents start on, a
  *   real setting (`AgentDefaultsSettings`), and what routines run on.
@@ -53,6 +56,7 @@ import { AgentAdminSettings } from './AgentAdmin';
 import { Row, Toggle } from './AgentSettingsRows';
 import { SectionBoundary } from './AgentsErrorBoundary';
 import { AgentTeamPolicySettings } from './AgentTeamPolicySettings';
+import { OnItsOwnTeamSettings } from './AgentOnItsOwn';
 import { AgentsBrowserSettings } from './AgentsBrowserSettings';
 import { AgentsUserChromeSettings } from './AgentsUserChromeSettings';
 import { AgentsSlackSettings } from './AgentsSlackSettings';
@@ -144,6 +148,9 @@ export function AgentsSettings({
       </SectionBoundary>
       <SectionBoundary name="team-policy">
         <AgentTeamPolicySettings />
+      </SectionBoundary>
+      <SectionBoundary name="on-its-own">
+        <OnItsOwnTeamSettings />
       </SectionBoundary>
 
       {engines.length > 0 && hasDefaults && (

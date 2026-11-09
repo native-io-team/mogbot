@@ -324,6 +324,12 @@ const TOOLS: &[Tool] = &[
         schema: super::team_reach::schema,
     },
     Tool {
+        name: super::on_its_own::TOOL,
+        description: super::on_its_own::DESCRIPTION,
+        main_only: false,
+        schema: super::on_its_own::schema,
+    },
+    Tool {
         name: "list_check_ins",
         description: "Your scheduled check-ins and routines, with ids and next times.",
         main_only: false,
@@ -797,6 +803,10 @@ async fn call(
             }
         }
         super::team_reach::TOOL => match super::team_reach::call(caller, args) {
+            Ok(t) => text(t),
+            Err(e) => error(e),
+        },
+        super::on_its_own::TOOL => match super::on_its_own::call(caller, args) {
             Ok(t) => text(t),
             Err(e) => error(e),
         },

@@ -363,6 +363,7 @@ export type SettingsSectionRequest =
   | 'agent-independence'
   | 'agent-admins'
   | 'agent-policy'
+  | 'agent-on-its-own'
   | 'agent-disk'
   | 'agent-user-chrome'
   | 'agent-slack'
