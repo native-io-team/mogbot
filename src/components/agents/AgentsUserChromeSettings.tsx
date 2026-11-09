@@ -102,7 +102,7 @@ export function AgentsUserChromeSettings() {
           />
         </Row>
         {status?.enabled && (
-          <div data-testid="user-chrome-steps">
+          <div className="settings-row-steps" data-testid="user-chrome-steps">
             {!status.chromeInstalled && (
               <Row
                 label="Google Chrome"
