@@ -5259,7 +5259,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 863
+      "consumerCount": 864
     },
     {
       "name": "--spacing-md",
