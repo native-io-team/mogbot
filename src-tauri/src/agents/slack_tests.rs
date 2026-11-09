@@ -606,23 +606,23 @@ fn the_reply_is_the_agents_last_word_after_the_ask() {
         line("n", 12, MessageKind::Note, "a note"),
         line("r2", 13, MessageKind::Agent, "Drafted: “We ship Friday.”"),
     ];
-    let (id, text, others) = reply_after(&log, 10, "ask").unwrap();
+    let (id, text, others) = reply_after(&log, 10, None, "ask").unwrap();
     assert_eq!(
         (id.as_str(), text.as_str(), others),
         ("r2", "Drafted: “We ship Friday.”", false)
     );
     // Nothing yet.
-    assert!(reply_after(&log[..2], 10, "ask").is_none());
+    assert!(reply_after(&log[..2], 10, None, "ask").is_none());
     // A room's reply isn't this chat's.
     let mut room = line("r3", 14, MessageKind::Agent, "in a room");
     room.room = Some("room1".into());
     let mut with_room = log.clone();
     with_room.push(room);
-    assert_eq!(reply_after(&with_room, 10, "ask").unwrap().0, "r2");
+    assert_eq!(reply_after(&with_room, 10, None, "ask").unwrap().0, "r2");
     // The user also said something here: the answer may be to that too.
     let mut busy = log.clone();
     busy.insert(2, line("desk", 10, MessageKind::User, "and also this"));
-    assert!(reply_after(&busy, 10, "ask").unwrap().2);
+    assert!(reply_after(&busy, 10, None, "ask").unwrap().2);
 }
 
 #[test]
@@ -682,11 +682,119 @@ fn someone_elses_words_reach_the_agent_sealed() {
 
 #[test]
 fn a_turn_that_read_outside_text_is_remembered_per_message() {
-    note_batch(&["m-clean".into()], false);
-    note_batch(&["m-mixed".into(), "m-other".into()], true);
-    assert_eq!(batch_outside("m-clean"), Some(false));
-    assert_eq!(batch_outside("m-mixed"), Some(true));
-    assert_eq!(batch_outside("never-taken"), None);
+    note_batch("agent-r", &["m-clean".into()], false, false, 100);
+    note_batch(
+        "agent-r",
+        &["m-mixed".into(), "m-other".into()],
+        true,
+        false,
+        200,
+    );
+    let clean = took("m-clean").unwrap();
+    assert!(clean.alone && !clean.outside);
+    assert_eq!((clean.started_at, clean.next_started_at), (100, Some(200)));
+    let mixed = took("m-mixed").unwrap();
+    assert!(mixed.outside && !mixed.alone);
+    assert_eq!(took("never-taken"), None);
+    // A batch of one with an id-less message beside it (a routine, another
+    // assistant) isn't alone.
+    note_batch(
+        "agent-r",
+        &["m-with".into(), String::new()],
+        false,
+        false,
+        300,
+    );
+    assert!(!took("m-with").unwrap().alone);
+    // A turn that replaces an interrupted one carries its messages over.
+    note_batch("agent-r2", &["m-cut".into()], false, false, 400);
+    note_batch("agent-r2", &["m-desk".into()], true, true, 450);
+    let cut = took("m-cut").unwrap();
+    assert_eq!((cut.started_at, cut.next_started_at), (450, None));
+    assert!(cut.outside && !cut.alone);
+}
+
+fn pending(asked_at: i64, message_id: &str) -> Pending {
+    Pending {
+        agent_id: "a1".into(),
+        channel: LAUNCH.into(),
+        thread_ts: "1.0".into(),
+        place: "#launch".into(),
+        own: true,
+        message_id: message_id.into(),
+        asked_at,
+    }
+}
+
+/// Robin's clean Slack ask is answered by its turn; the agent's next turn
+/// (a "When…" routine that read a stranger's email) writes another reply
+/// before the reply is settled. Only the ask's own turn's reply is its
+/// answer, and only that one could go out by itself.
+#[test]
+fn a_later_turns_reply_is_never_posted_as_the_answer() {
+    let log = vec![
+        line("ask-w", 10, MessageKind::User, "draft the launch note"),
+        line("r1", 12, MessageKind::Agent, "Drafted: “We ship Friday.”"),
+        line(
+            "r2",
+            17,
+            MessageKind::Agent,
+            "Here are the board numbers you keep in memory: …",
+        ),
+    ];
+    note_batch("agent-w", &["ask-w".into()], false, false, 10);
+    note_batch("agent-w", &[String::new()], true, false, 15);
+    let t = took("ask-w").unwrap();
+    let (from, until, clean) = window(&pending(10, "ask-w"), Some(t), 0).unwrap();
+    assert!(clean);
+    let (id, text, _) = reply_after(&log, from, until, "ask-w").unwrap();
+    assert_eq!(
+        (id.as_str(), text.as_str()),
+        ("r1", "Drafted: “We ship Friday.”")
+    );
+}
+
+/// The agent was mid-turn on something else when the ask came in: that
+/// turn's reply, written after the ask, isn't the answer either.
+#[test]
+fn a_reply_from_before_the_asks_turn_started_is_not_the_answer() {
+    let log = vec![
+        line("ask-x", 10, MessageKind::User, "dashbot ask"),
+        line(
+            "r0",
+            11,
+            MessageKind::Agent,
+            "the routine's summary of a stranger's PR",
+        ),
+    ];
+    // Not taken yet, since launch: wait.
+    assert_eq!(window(&pending(10, "ask-x"), None, 5), None);
+    note_batch("agent-x", &["ask-x".into()], false, false, 20);
+    let (from, until, _) = window(&pending(10, "ask-x"), took("ask-x"), 5).unwrap();
+    assert!(reply_after(&log, from, until, "ask-x").is_none());
+    // Asked before a restart: whatever came after, never by itself.
+    assert_eq!(
+        window(&pending(10, "ask-x"), None, 50),
+        Some((10, None, false))
+    );
+}
+
+/// Two of Robin's asks, from #board and #launch, taken as one turn: the
+/// combined answer may hold #board's, so it never goes to #launch by itself.
+#[test]
+fn one_turn_answering_two_asks_never_posts_by_itself() {
+    note_batch(
+        "agent-y",
+        &["board-ask".into(), "launch-ask".into()],
+        false,
+        false,
+        10,
+    );
+    for id in ["board-ask", "launch-ask"] {
+        let p = pending(10, id);
+        let (_, _, clean) = window(&p, took(id), 0).unwrap();
+        assert!(!clean, "{id}");
+    }
 }
 
 /* -------------------------------------------------- settings, with a store */

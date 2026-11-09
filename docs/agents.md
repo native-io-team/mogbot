@@ -3834,8 +3834,15 @@ tool and never hold the token; a turn told "don't post to Slack yourself"
 that tries anyway goes through the usual `outward` rules (a `curl` to
 `slack.com` is a send).
 
-When one turn answers two asks, the later ask's thread gets the reply and the
-earlier gets nothing. A reply that never comes is dropped after 2 minutes of
+The reply is the one **the turn that took the ask** wrote (`slack::took`,
+`slack::window`): from that turn's start to the agent's next turn's start.
+A later turn's reply (a routine, another agent's request, a "When…" item
+that read a stranger's email) is never posted as the answer, and an ask
+still queued behind another turn waits for its own. "Read no outside text"
+also means the ask was the only thing its turn answered: when one turn
+answers two asks (say #board's and #launch's), the later ask's thread gets
+the reply **on a card**, never by itself, since it may hold the other's
+answer; the earlier gets nothing. A reply that never comes is dropped after 2 minutes of
 idleness or 6 hours of work, with a line.
 
 **Not verified** (no live Slack calls were made building this): the prefilled

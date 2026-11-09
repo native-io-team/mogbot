@@ -581,29 +581,114 @@ pub fn chat_line(agent_id: &str, f: &Found) -> AgentMessage {
 
 /* ------------------------------------------------- what the turn read */
 
-/// For each chat message a turn took, whether that turn read outside text.
-static BATCHES: LazyLock<Mutex<HashMap<String, bool>>> = LazyLock::new(Default::default);
+/// The turn that took a Slack ask's chat line, as [`took`] reports it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Took {
+    /// When that turn started: its reply is after this.
+    pub started_at: i64,
+    /// When the agent's next turn started, if one has: what that turn wrote
+    /// answers something else (a routine, another agent, outside text),
+    /// never this ask.
+    pub next_started_at: Option<i64>,
+    /// That turn read outside text.
+    pub outside: bool,
+    /// The ask was the only thing that turn answered.
+    pub alone: bool,
+}
 
-/// The runner took these messages as one turn (`runner::take_batch`).
-pub fn note_batch(ids: &[String], outside: bool) {
-    let mut map = BATCHES.lock().unwrap_or_else(|e| e.into_inner());
-    if map.len() > 1_000 {
-        map.clear();
+#[derive(Default)]
+struct Turns {
+    /// Chat message id → (agent, the turn that took it, outside, alone).
+    took: HashMap<String, (String, u64, bool, bool)>,
+    /// Per agent, its latest turns' (number, start), oldest first.
+    starts: HashMap<String, Vec<(u64, i64)>>,
+    seq: u64,
+}
+
+static TURNS: LazyLock<Mutex<Turns>> = LazyLock::new(Default::default);
+const TURNS_KEPT: usize = 50;
+
+/// The runner took these messages as one turn (`runner::take_batch`) at
+/// `now`. `carried`: the turn replaces an interrupted one and carries what
+/// that one took.
+pub fn note_batch(agent_id: &str, ids: &[String], outside: bool, carried: bool, now: i64) {
+    let mut t = TURNS.lock().unwrap_or_else(|e| e.into_inner());
+    if t.took.len() > 1_000 {
+        t.took.clear();
     }
+    t.seq += 1;
+    let seq = t.seq;
+    let starts = t.starts.entry(agent_id.to_string()).or_default();
+    let previous = starts.last().map(|(n, _)| *n);
+    starts.push((seq, now));
+    if starts.len() > TURNS_KEPT {
+        starts.remove(0);
+    }
+    if let (true, Some(prev)) = (carried, previous) {
+        for v in t.took.values_mut() {
+            if v.0 == agent_id && v.1 == prev {
+                v.1 = seq;
+                v.2 |= outside;
+                v.3 = false;
+            }
+        }
+    }
+    // Alone: the only message in the batch (one without an id, a routine's
+    // or another assistant's, still counts), with nothing carried over.
+    let alone = ids.len() == 1 && !carried;
     for id in ids.iter().filter(|i| !i.is_empty()) {
-        let was = map.get(id).copied().unwrap_or(false);
-        map.insert(id.clone(), was || outside);
+        let again = t.took.get(id).cloned();
+        let was_outside = again.as_ref().is_some_and(|v| v.2);
+        t.took.insert(
+            id.clone(),
+            (
+                agent_id.to_string(),
+                seq,
+                was_outside || outside,
+                alone && again.is_none(),
+            ),
+        );
     }
 }
 
-/// Whether the turn that took `message_id` read outside text; `None` when
-/// no turn took it since launch.
-pub fn batch_outside(message_id: &str) -> Option<bool> {
-    BATCHES
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .get(message_id)
-        .copied()
+/// The turn that took `message_id`; `None` when no turn took it since launch.
+pub fn took(message_id: &str) -> Option<Took> {
+    let t = TURNS.lock().unwrap_or_else(|e| e.into_inner());
+    let (agent, seq, outside, alone) = t.took.get(message_id)?.clone();
+    let starts = t.starts.get(&agent)?;
+    let started_at = starts.iter().find(|(n, _)| *n == seq)?.1;
+    let next_started_at = starts.iter().find(|(n, _)| *n > seq).map(|(_, at)| *at);
+    Some(Took {
+        started_at,
+        next_started_at,
+        outside,
+        alone,
+    })
+}
+
+/// When this process started: an ask made since that no turn has taken is
+/// still queued; one made before may have been taken before a restart.
+static STARTED_AT: LazyLock<i64> = LazyLock::new(store::now_ms);
+
+/// Where in the log the answer to `p` is: `None` while no turn has taken
+/// it yet; else (from, until) — the turn that took it, up to the agent's
+/// next one — and whether that turn answered only this and read no
+/// outside text. An ask taken before a restart: whatever came after, and
+/// never by itself. Pure.
+pub fn window(
+    p: &Pending,
+    took: Option<Took>,
+    started_at: i64,
+) -> Option<(i64, Option<i64>, bool)> {
+    match took {
+        Some(t) => Some((
+            p.asked_at.max(t.started_at),
+            t.next_started_at,
+            t.alone && !t.outside,
+        )),
+        None if p.asked_at >= started_at => None,
+        None => Some((p.asked_at, None, false)),
+    }
 }
 
 /* --------------------------------------------------------------- reply */
@@ -612,14 +697,18 @@ pub fn batch_outside(message_id: &str) -> Option<bool> {
 /// chat after it (`id`, words), with a result card's title when the reply
 /// is only a card. `others`: someone else's message came between, so the
 /// answer may be to that too.
+///
+/// `until`: when the agent's next turn started. What it wrote from then on
+/// answers something else, so it is never this ask's reply.
 pub fn reply_after(
     log: &[AgentMessage],
     since: i64,
+    until: Option<i64>,
     asked: &str,
 ) -> Option<(String, String, bool)> {
     let after: Vec<&AgentMessage> = log
         .iter()
-        .filter(|m| m.ts >= since && m.room.is_none())
+        .filter(|m| m.ts >= since && until.is_none_or(|u| m.ts <= u) && m.room.is_none())
         .collect();
     let reply = after.iter().rev().find(|m| {
         m.kind == MessageKind::Agent && (!m.text.trim().is_empty() || m.result.is_some())
@@ -746,7 +835,7 @@ fn deliver(app: &AppHandle, agent: &store::Agent, f: &Found) -> Option<Pending> 
         // no `remember_permission` from Slack.
         runner::enqueue_user(app, &agent.id, &line.id, own_prompt(f), None);
     } else {
-        runner::enqueue_assistant(app, &agent.id, outside_prompt(f));
+        runner::enqueue_assistant_for(app, &agent.id, &line.id, outside_prompt(f));
     }
     Some(Pending {
         agent_id: agent.id.clone(),
@@ -857,13 +946,28 @@ async fn settle(app: &AppHandle) {
             }
             continue;
         }
+        let Some((from, until, batch_clean)) = window(&p, took(&p.message_id), *STARTED_AT) else {
+            // Still queued behind another turn.
+            if now - p.asked_at > GIVE_UP_MS {
+                note(
+                    app,
+                    &p.agent_id,
+                    format!(
+                        "Nothing was posted in Slack ({}): no reply came in time.",
+                        p.place
+                    ),
+                );
+                done.push(p.message_id.clone());
+            }
+            continue;
+        };
         let agent_id = p.agent_id.clone();
         let log = tokio::task::spawn_blocking(move || store::messages(&agent_id, 80))
             .await
             .ok()
             .and_then(Result::ok)
             .unwrap_or_default();
-        let Some((reply_id, text, others)) = reply_after(&log, p.asked_at, &p.message_id) else {
+        let Some((reply_id, text, others)) = reply_after(&log, from, until, &p.message_id) else {
             if now - p.asked_at > NO_REPLY_MS {
                 done.push(p.message_id.clone());
             }
@@ -878,7 +982,7 @@ async fn settle(app: &AppHandle) {
             continue;
         };
         let text = shorten(&text);
-        let clean = !others && batch_outside(&p.message_id) == Some(false);
+        let clean = !others && batch_clean;
         let effective = super::policy::effective(&agent);
         let r = ReplyCard {
             channel: p.channel.clone(),
@@ -1004,6 +1108,7 @@ pub async fn check(app: &AppHandle, force: bool) {
 }
 
 pub fn spawn(app: AppHandle) {
+    LazyLock::force(&STARTED_AT);
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(STARTUP_GRACE).await;
         loop {
