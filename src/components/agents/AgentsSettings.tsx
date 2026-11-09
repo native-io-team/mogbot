@@ -30,6 +30,8 @@
  * - **Disk space**: free space when low, and each large agent home with
  *   "Free up space" (`AgentsDiskSettings`, `agents/disk.rs`).
  * - **Notifications**: what notifies, and where to mute one agent.
+ * - **Slack**: start agents from a Slack message, answered in the thread
+ *   (`AgentsSlackSettings`, `agents/slack.rs`).
  * - **Phone and other assistants**: the way into each.
  *
  * Every description is one line.
@@ -50,6 +52,7 @@ import { Row, Toggle } from './AgentSettingsRows';
 import { AgentTeamPolicySettings } from './AgentTeamPolicySettings';
 import { AgentsBrowserSettings } from './AgentsBrowserSettings';
 import { AgentsUserChromeSettings } from './AgentsUserChromeSettings';
+import { AgentsSlackSettings } from './AgentsSlackSettings';
 import { AgentPreviewFixSetting } from './AgentPreviewFixSetting';
 import { useStayOn } from '../../hooks/useStayOn';
 import { useAgentsSelector } from '../../lib/agentsStore';
@@ -159,6 +162,8 @@ export function AgentsSettings({
           />
         </div>
       </section>
+
+      <AgentsSlackSettings />
 
       <section className="settings-group" aria-labelledby="agents-settings-away">
         <h3 className="settings-group__title" id="agents-settings-away">

@@ -364,7 +364,8 @@ export type SettingsSectionRequest =
   | 'agent-admins'
   | 'agent-policy'
   | 'agent-disk'
-  | 'agent-user-chrome';
+  | 'agent-user-chrome'
+  | 'agent-slack';
 let settingsSectionOnOpen: SettingsSectionRequest | null = null;
 
 export function requestSettingsSectionOnOpen(section: SettingsSectionRequest) {

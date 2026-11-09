@@ -656,6 +656,12 @@ export interface Approval {
   /** "Run turns on “Personal” first?": a plain Allow / Deny; Allow makes the switch. Nothing waits on it. */
   accountSwitch?: { engine: 'claude' | 'codex'; id: string; name: string };
   /**
+   * "Reply in Slack?": the exact words and the thread they go to. A plain
+   * Allow / Deny over the same summary; Allow posts them as the user. Older
+   * Macs never send it.
+   */
+  slackReply?: { channel: string; threadTs: string; place: string; text: string };
+  /**
    * "Bring your work Chrome window to the front so I can use it": Allow means
    * Check again, Deny means Not now. Never a login.
    */
@@ -1361,6 +1367,12 @@ export interface AgentMessage {
   /** On a note: "Remembered: Lead Gen can always …", with Undo (`agents.revokePermission`) while active. */
   remembered?: RememberedRule;
   /**
+   * Came in from Slack (`agents/slack.rs`): on the user's own message, written
+   * there ("From Slack · #launch"); on a note, someone else's (`from`).
+   * Older Macs never send it.
+   */
+  via?: MessageVia;
+  /**
    * Links in the reply to a server on this Mac (`http://localhost:3400`),
    * taken out of the text by the Mac (`agents/local_links.rs`). One the Mac
    * knows serves a project offers Preview (desk) and Watch live (phone);
@@ -1388,6 +1400,21 @@ export interface LocalLink {
 }
 
 /** The rule behind a "Remembered: …" line. */
+/** Where a message came in from, when not the app itself. */
+export interface MessageVia {
+  /** `slack`. */
+  source: string;
+  place: string;
+  from?: string;
+}
+
+/** "From Slack · #launch", or null. */
+export function viaLabel(via: MessageVia | undefined | null): string | null {
+  if (!via) return null;
+  const source = via.source === 'slack' ? 'Slack' : via.source;
+  return via.place ? `From ${source} · ${via.place}` : `From ${source}`;
+}
+
 export interface RememberedRule {
   ruleId: string;
   /** For every agent, not just this one. */

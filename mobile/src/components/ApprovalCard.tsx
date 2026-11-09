@@ -382,7 +382,7 @@ export function ApprovalCard({
               : STEP_IN_ON_YOUR_MAC
             : gate
               ? 'It waits for you, and closes if the routine runs again first.'
-              : paused && !fit.pinned && !consent && !approval.settings
+              : paused && !fit.pinned && !consent && !approval.settings && !approval.slackReply
                 ? 'It paused here for you. Allow it and it picks up where it left off.'
                 : undefined
       }

@@ -589,6 +589,8 @@ export interface Approval {
   crossover?: CrossoverAsk;
   /** "Run turns on “Personal” first?": a plain Allow / Deny; Allow makes the switch. Nothing waits on it. */
   accountSwitch?: { engine: 'claude' | 'codex'; id: string; name: string };
+  /** "Reply in Slack?": the exact words and where; Allow posts them as you (`lib/slack`). Nothing waits on it. */
+  slackReply?: { channel: string; threadTs: string; place: string; text: string };
   /**
    * "Bring your work Chrome window to the front so I can use it": answered
    * with Check again (allow) or Not now, never a login.
@@ -705,6 +707,8 @@ export interface AgentMessage {
   decide?: DecideItem[];
   /** On a note: a rule the agent remembered from what you said, with Undo while it is in force. */
   remembered?: RememberedRule;
+  /** Came in from Slack (`lib/slack`): your own message there, or (with `from`) someone else's, on a note. */
+  via?: MessageVia;
   /**
    * Links in the reply to a server on this Mac, taken out of its text by the
    * Mac: one it knows serves a project offers Preview; any other is a chip.
@@ -713,6 +717,15 @@ export interface AgentMessage {
 }
 
 /** "Remembered: Lead Gen can always …": the rule behind the line (`agents/remember.rs`). */
+/** Where a message came in from, when not this app: "From Slack · #launch". */
+export interface MessageVia {
+  /** `slack`. */
+  source: string;
+  place: string;
+  /** Someone other than you wrote it. */
+  from?: string;
+}
+
 export interface RememberedRule {
   ruleId: string;
   /** For every agent, not just this one. */

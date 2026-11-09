@@ -251,6 +251,8 @@ pub fn run() {
                 let _ = tauri::async_runtime::spawn_blocking(agents::secrets::load_known).await;
                 // Connections' tokens too (`agents/connections.rs`).
                 let _ = tauri::async_runtime::spawn_blocking(agents::connections::load_known).await;
+                // The Slack token too (`agents/slack.rs`).
+                let _ = tauri::async_runtime::spawn_blocking(agents::slack::load_known).await;
                 // Secret cards an older build raised for an app with a connector
                 // or a site become login cards (`agents/logins.rs`), once.
                 {
@@ -292,6 +294,8 @@ pub fn run() {
             agents::schedule::spawn(_app.handle().clone());
             // "When…" routines: their checks, on their own minute tick.
             agents::watch::spawn(_app.handle().clone());
+            // Slack: the chosen conversations read from this Mac, replies settled.
+            agents::slack::spawn(_app.handle().clone());
             // Every account's limits, read without a turn: on open, then every 10 minutes.
             agents::usage_read::spawn(_app.handle().clone());
             agents::disk::spawn(_app.handle().clone());
@@ -775,6 +779,12 @@ pub fn run() {
             commands::agents::agents_user_chrome_show_extension,
             commands::agents::agents_user_chrome_open_extensions_page,
             commands::agents::agents_user_chrome_add_from_store,
+            commands::agents_slack::agents_slack_status,
+            commands::agents_slack::agents_slack_connect,
+            commands::agents_slack::agents_slack_conversations,
+            commands::agents_slack::agents_slack_update,
+            commands::agents_slack::agents_slack_check_now,
+            commands::agents_slack::agents_slack_disconnect,
             commands::agents::agents_agent_browser_permission,
             commands::agents::agents_browser_open_install,
             commands::agents::agents_access_check,

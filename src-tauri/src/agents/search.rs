@@ -509,6 +509,7 @@ mod tests {
             decide: Vec::new(),
             local_links: Vec::new(),
             remembered: None,
+            via: None,
         })
         .unwrap();
         id
@@ -588,6 +589,7 @@ mod tests {
                 decide: Vec::new(),
                 local_links: Vec::new(),
                 remembered: None,
+                via: None,
             })
             .unwrap();
             let found = search_in(&store::list().unwrap(), "deploy", 50).unwrap();
@@ -710,6 +712,7 @@ mod tests {
             decide: Vec::new(),
             local_links: Vec::new(),
             remembered: None,
+            via: None,
         };
         assert!(match_message(&message, &terms("müller")).is_some());
         assert!(match_message(&message, &terms("müller schmidt")).is_none());

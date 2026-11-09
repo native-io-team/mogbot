@@ -497,6 +497,7 @@ mod tests {
             step_in: None,
             crossover: None,
             account_switch: None,
+            slack_reply: None,
         });
         message
     }

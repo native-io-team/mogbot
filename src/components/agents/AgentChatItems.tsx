@@ -63,6 +63,7 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useHeightReveal } from './useAgentMotion';
 import { useCardGuard } from './useCardGuard';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
+import { viaLabel } from '../../lib/slack';
 import {
   connectorTextParts,
   GATE_ALLOW,
@@ -322,6 +323,8 @@ export const UserBubble = memo(function UserBubble({
     />
   );
   const onKeyDown = useCopyOnKey(message.text);
+  // Written in Slack, not here: "From Slack · #launch".
+  const via = viaLabel(message.via);
   return (
     <div
       tabIndex={-1}
@@ -364,6 +367,7 @@ export const UserBubble = memo(function UserBubble({
           </div>
         </div>
       )}
+      {via && <div className="agent-chat__queued">{via}</div>}
       {sending && (
         <div className="agent-chat__queued" role="status">
           Sending…
@@ -1158,7 +1162,7 @@ export const ApprovalCard = memo(function ApprovalCard({
         note={
           pending && gate
             ? 'It waits for you, and closes if the routine runs again first.'
-            : pending && paused && !plainDeny && !approval.settings
+            : pending && paused && !plainDeny && !approval.settings && !approval.slackReply
               ? 'It paused here for you. Allow it and it picks up where it left off.'
               : approval.status === 'expired'
                 ? approval.setAside
