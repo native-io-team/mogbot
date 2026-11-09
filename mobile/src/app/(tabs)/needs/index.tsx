@@ -226,7 +226,12 @@ function Row({ item, agent }: { item: FeedItem; agent: Agent }) {
   const once = useInFlight();
   const [busy, setBusy] = useState<null | 'allow' | 'deny'>(null);
   const [error, setError] = useState<string | null>(null);
-  const [title, line] = rowWords(item, agent, card, setup ? setupProgress(setup) : null);
+  const [title, said] = rowWords(item, agent, card, setup ? setupProgress(setup) : null);
+  // Answered on the row: the row shows all of what it asks (its plain line,
+  // else the exact command), never a paraphrase. Otherwise its short line,
+  // said once when it repeats the title.
+  const whole = inline ? card?.approval?.summary?.trim() || card?.approval?.detail?.trim() : '';
+  const line = whole || (said === title ? '' : said);
 
   const open = () => {
     haptic.select();
