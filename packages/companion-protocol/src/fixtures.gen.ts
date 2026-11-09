@@ -72,6 +72,7 @@ export const pushStatuses = [
 export const agentsOverview = {
   "agents": [
     {
+      "account": "a1work",
       "capabilities": {
         "lines": [
           {
@@ -223,6 +224,10 @@ export const agentsOverview = {
       "pinned": true,
       "preview": "Invoices are filed.",
       "project": "/Users/julian/ShipStudio/site",
+      "ranOn": {
+        "id": "a1work",
+        "name": "Work"
+      },
       "role": "Keeps the books",
       "routineModel": "same",
       "secrets": [
@@ -656,10 +661,13 @@ export const agentsTeamSetup = {
 } satisfies Result<'agents.teamSetup'>;
 export const agentsAccounts = [
   {
+    "email": "sam@example.com",
     "engine": "claude",
     "id": "default",
-    "name": "This Mac",
+    "name": "sam@example.com",
+    "named": false,
     "out": false,
+    "plan": "Max",
     "signedIn": true,
     "thisMac": true
   },
@@ -672,6 +680,7 @@ export const agentsAccounts = [
       "resetsAt": 1762300000000
     },
     "name": "Work",
+    "named": true,
     "out": true,
     "signedIn": true,
     "thisMac": false
@@ -679,12 +688,85 @@ export const agentsAccounts = [
   {
     "engine": "codex",
     "id": "default",
-    "name": "This Mac",
+    "name": "Signed in on this Mac",
+    "named": false,
     "out": false,
     "signedIn": false,
     "thisMac": true
   }
 ] satisfies Result<'agents.accounts'>;
+export const agentsAccountsUse = [
+  {
+    "email": "sam@example.com",
+    "engine": "claude",
+    "id": "default",
+    "name": "sam@example.com",
+    "named": false,
+    "out": false,
+    "plan": "Max",
+    "signedIn": true,
+    "thisMac": true
+  },
+  {
+    "email": "me@work.example",
+    "engine": "claude",
+    "id": "a1work",
+    "limit": {
+      "at": 1762290000000,
+      "resetsAt": 1762300000000
+    },
+    "name": "Work",
+    "named": true,
+    "out": true,
+    "signedIn": true,
+    "thisMac": false
+  },
+  {
+    "engine": "codex",
+    "id": "default",
+    "name": "Signed in on this Mac",
+    "named": false,
+    "out": false,
+    "signedIn": false,
+    "thisMac": true
+  }
+] satisfies Result<'agents.accounts.use'>;
+export const agentsAccountsReorder = [
+  {
+    "email": "sam@example.com",
+    "engine": "claude",
+    "id": "default",
+    "name": "sam@example.com",
+    "named": false,
+    "out": false,
+    "plan": "Max",
+    "signedIn": true,
+    "thisMac": true
+  },
+  {
+    "email": "me@work.example",
+    "engine": "claude",
+    "id": "a1work",
+    "limit": {
+      "at": 1762290000000,
+      "resetsAt": 1762300000000
+    },
+    "name": "Work",
+    "named": true,
+    "out": true,
+    "signedIn": true,
+    "thisMac": false
+  },
+  {
+    "engine": "codex",
+    "id": "default",
+    "name": "Signed in on this Mac",
+    "named": false,
+    "out": false,
+    "signedIn": false,
+    "thisMac": true
+  }
+] satisfies Result<'agents.accounts.reorder'>;
 export const agentsUsagePlan = {
   "accounts": [
     {
@@ -2565,6 +2647,7 @@ export const sessionsRead = {
   }
 } satisfies Result<'sessions.read'>;
 export const agentsUpdate = {
+  "account": "a1work",
   "capabilities": {
     "lines": [
       {
@@ -2800,6 +2883,7 @@ export const agentsUpdate = {
   "workDirectly": true
 } satisfies Result<'agents.update'>;
 export const agentsStartFresh = {
+  "account": "a1work",
   "capabilities": {
     "lines": [
       {
@@ -3030,6 +3114,7 @@ export const agentsStartFresh = {
   "workDirectly": true
 } satisfies Result<'agents.startFresh'>;
 export const agentsCreate = {
+  "account": "a1work",
   "color": "teal",
   "copy": {
     "base": "abc123",
@@ -3195,6 +3280,8 @@ export const frames = [
       "agents.usage",
       "agents.quota",
       "agents.accounts",
+      "agents.accounts.use",
+      "agents.accounts.reorder",
       "agents.usagePlan",
       "agents.changeDiff",
       "agents.keepCopy",
@@ -3767,6 +3854,7 @@ export const frames = [
       "overview": {
         "agents": [
           {
+            "account": "a1work",
             "capabilities": {
               "lines": [
                 {
@@ -3918,6 +4006,10 @@ export const frames = [
             "pinned": true,
             "preview": "Invoices are filed.",
             "project": "/Users/julian/ShipStudio/site",
+            "ranOn": {
+              "id": "a1work",
+              "name": "Work"
+            },
             "role": "Keeps the books",
             "routineModel": "same",
             "secrets": [
@@ -4186,6 +4278,7 @@ export const frames = [
       "overview": {
         "agents": [
           {
+            "account": "a1work",
             "capabilities": {
               "lines": [
                 {
@@ -4337,6 +4430,10 @@ export const frames = [
             "pinned": true,
             "preview": "Invoices are filed.",
             "project": "/Users/julian/ShipStudio/site",
+            "ranOn": {
+              "id": "a1work",
+              "name": "Work"
+            },
             "role": "Keeps the books",
             "routineModel": "same",
             "secrets": [

@@ -450,6 +450,7 @@ mod tests {
             new_engine: false,
             context: None,
             routine_model: None,
+            account: None,
             template: None,
             reach: Default::default(),
             muted,

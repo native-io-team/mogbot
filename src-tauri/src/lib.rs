@@ -891,6 +891,7 @@ pub fn run() {
             commands::agents::agents_account_add,
             commands::agents::agents_account_rename,
             commands::agents::agents_account_reorder,
+            commands::agents::agents_account_use,
             commands::agents::agents_account_remove,
             commands::workflows::list_all_workflows,
             commands::workflows::save_workflow_file,

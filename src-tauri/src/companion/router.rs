@@ -79,6 +79,8 @@ pub const METHODS: &[&str] = &[
     "agents.usage",
     "agents.quota",
     "agents.accounts",
+    "agents.accounts.use",
+    "agents.accounts.reorder",
     "agents.usagePlan",
     "agents.changeDiff",
     "agents.keepCopy",
@@ -271,6 +273,10 @@ pub struct AgentToggles {
     /// Mac that lists [`MAC_FEATURE_EFFORT`](super::wire::MAC_FEATURE_EFFORT).
     #[serde(default)]
     pub effort: Option<String>,
+    /// "Runs on": one of its engine's accounts, or empty for any account.
+    /// From a Mac that serves `agents.accounts.use`.
+    #[serde(default)]
+    pub account: Option<String>,
 }
 
 /// Instructions are a brief, not a document: the phone's editor stops here.
@@ -590,6 +596,13 @@ pub trait Backend: Send + Sync + 'static {
     async fn quota(&self) -> Result<Value, CommandError>;
     /// `agents_accounts`: each engine's usage accounts, read-only.
     async fn accounts(&self) -> Result<Value, CommandError>;
+    /// `agents_account_use`: "Use this one now", the account first in its
+    /// engine's order. Answers the accounts as `agents.accounts` does.
+    /// Never a token: the phone only ever names an account by its id.
+    async fn account_use(&self, engine: &str, id: &str) -> Result<Value, CommandError>;
+    /// `agents_account_reorder`: an engine's accounts in this order.
+    /// Answers the accounts as `agents.accounts` does.
+    async fn account_reorder(&self, engine: &str, ids: Vec<String>) -> Result<Value, CommandError>;
     /// `agents_usage_overview`: the capacity inventory, read-only.
     async fn usage_plan(&self) -> Result<Value, CommandError>;
     /// An import from another assistant, as the phone follows it: whether
@@ -1408,6 +1421,10 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
                     .get("effort")
                     .and_then(Value::as_str)
                     .map(|e| format!("effort {}", if e.is_empty() { "default" } else { e })),
+                input
+                    .get("account")
+                    .and_then(Value::as_str)
+                    .map(|a| format!("runs on {}", if a.is_empty() { "any account" } else { a })),
             ]
             .into_iter()
             .flatten()
@@ -1585,6 +1602,27 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             "{} independence: {}",
             field("agentId"),
             preview(field("level"))
+        ),
+        "agents.accounts.use" => format!(
+            "use {} account {} first",
+            preview(field("engine")),
+            preview(field("id"))
+        ),
+        "agents.accounts.reorder" => format!(
+            "{} accounts in order: {}",
+            preview(field("engine")),
+            preview(
+                &params
+                    .get("ids")
+                    .and_then(Value::as_array)
+                    .map(|a| {
+                        a.iter()
+                            .filter_map(Value::as_str)
+                            .collect::<Vec<_>>()
+                            .join(", ")
+                    })
+                    .unwrap_or_default()
+            )
         ),
         "agents.setAdmin" => format!(
             "{} admin {}",
@@ -2051,6 +2089,34 @@ async fn run(
             Ok(b.set_agent_independence(agent_id, level).await?)
         }
         "agents.accounts" => Ok(b.accounts().await?),
+        "agents.accounts.use" => {
+            let engine = params.get("engine").and_then(Value::as_str).unwrap_or("");
+            let id = params.get("id").and_then(Value::as_str).unwrap_or("");
+            if !matches!(engine, "claude" | "codex") || id.is_empty() || id.len() > 64 {
+                return Err(bad_params(
+                    "Using an account takes an engine (claude or codex) and the account's id.",
+                ));
+            }
+            Ok(b.account_use(engine, id).await?)
+        }
+        "agents.accounts.reorder" => {
+            let engine = params.get("engine").and_then(Value::as_str).unwrap_or("");
+            let ids: Option<Vec<String>> = params
+                .get("ids")
+                .and_then(Value::as_array)
+                .filter(|a| !a.is_empty() && a.len() <= 32)
+                .and_then(|a| {
+                    a.iter()
+                        .map(|v| v.as_str().filter(|s| s.len() <= 64).map(str::to_string))
+                        .collect()
+                });
+            let Some(ids) = ids.filter(|_| matches!(engine, "claude" | "codex")) else {
+                return Err(bad_params(
+                    "Reordering takes an engine (claude or codex) and every account id, in order.",
+                ));
+            };
+            Ok(b.account_reorder(engine, ids).await?)
+        }
         "agents.usagePlan" => Ok(b.usage_plan().await?),
         "agents.import.status" => Ok(b.import_status().await?),
         "agents.import.start" => Ok(b.import_start().await?),
@@ -3385,6 +3451,61 @@ mod tests {
             .any(|(_, m, detail, ok)| m == "agents.setIndependence"
                 && *ok
                 && detail == "independence: often"));
+    }
+
+    #[tokio::test]
+    async fn a_phone_swaps_and_reorders_accounts_audited_and_never_sees_a_token() {
+        use crate::companion::testkit::Stub;
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let swap = |params: Value| dispatch(&c, &me, "agents.accounts.use", params);
+        assert!(swap(json!({})).await.is_err());
+        assert!(swap(json!({ "engine": "gemini", "id": "a1" }))
+            .await
+            .is_err());
+        assert!(swap(json!({ "engine": "claude", "id": "" })).await.is_err());
+        let order = |params: Value| dispatch(&c, &me, "agents.accounts.reorder", params);
+        assert!(order(json!({ "engine": "claude", "ids": [] }))
+            .await
+            .is_err());
+        assert!(order(json!({ "engine": "claude", "ids": [1, 2] }))
+            .await
+            .is_err());
+        assert!(stub.account_orders.lock().unwrap().is_empty());
+
+        let accounts = swap(json!({ "engine": "claude", "id": "a1work" }))
+            .await
+            .unwrap();
+        // The accounts as the phone lists them: names, never a token.
+        let text = accounts.to_string();
+        assert!(accounts.as_array().is_some_and(|a| !a.is_empty()));
+        assert!(!text.to_lowercase().contains("token"));
+        order(json!({ "engine": "claude", "ids": ["a1work", "default"] }))
+            .await
+            .unwrap();
+        assert_eq!(
+            *stub.account_orders.lock().unwrap(),
+            vec![
+                ("claude".to_string(), vec!["a1work".to_string()]),
+                (
+                    "claude".to_string(),
+                    vec!["a1work".to_string(), "default".to_string()]
+                ),
+            ]
+        );
+        assert!(!READ_ONLY_METHODS.contains(&"agents.accounts.use"));
+        assert!(!READ_ONLY_METHODS.contains(&"agents.accounts.reorder"));
+        let audited = stub.audited();
+        assert!(audited
+            .iter()
+            .any(|(_, m, detail, ok)| m == "agents.accounts.use"
+                && *ok
+                && detail == "use claude account a1work first"));
+        assert!(audited
+            .iter()
+            .any(|(_, m, detail, ok)| m == "agents.accounts.reorder"
+                && *ok
+                && detail == "claude accounts in order: a1work, default"));
     }
 
     #[tokio::test]

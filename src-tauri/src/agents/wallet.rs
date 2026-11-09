@@ -66,6 +66,14 @@ pub const MAX_SWITCHES: usize = 4;
 /// Names of accounts are short labels.
 const NAME_MAX: usize = 40;
 
+/// What this Mac's own sign-in is called until the user names it. It is
+/// never shown as such: "This Mac" read as a place, not an account.
+pub const DEFAULT_NAME: &str = "This Mac";
+
+/// This Mac's own sign-in, unnamed, when its engine doesn't record who it
+/// is signed in as: said as what it is, never a guessed identity.
+pub const UNNAMED: &str = "Signed in on this Mac";
+
 /// What an added account's folder links to in this Mac's own one.
 const SHARED: &[(Engine, &[&str])] = &[
     (
@@ -119,6 +127,12 @@ impl Account {
         self.id == THIS_MAC
     }
 
+    /// The user gave it a name. An added account is named when it's added;
+    /// this Mac's own sign-in, once renamed.
+    pub fn named(&self) -> bool {
+        !self.is_this_mac() || self.name != DEFAULT_NAME
+    }
+
     /// Until when it is out, if it is now: the reported reset, or for a
     /// limit with none, [`UNKNOWN_OUT_MS`] after it was hit (`Some(None)`
     /// says the reset isn't known).
@@ -151,10 +165,46 @@ fn this_mac(engine: Engine) -> Account {
     Account {
         id: THIS_MAC.to_string(),
         engine,
-        name: "This Mac".to_string(),
+        name: DEFAULT_NAME.to_string(),
         added_at: 0,
         limit: None,
     }
+}
+
+/// What an account is called wherever it is shown: the name the user gave
+/// it; else, for this Mac's own sign-in, who it is signed in as (only as
+/// its engine recorded it); else [`UNNAMED`].
+pub fn shown_name(account: &Account, email: Option<&str>) -> String {
+    if account.named() {
+        return account.name.clone();
+    }
+    match email.map(str::trim).filter(|e| !e.is_empty()) {
+        Some(email) => email.to_string(),
+        None => UNNAMED.to_string(),
+    }
+}
+
+/// The name inside a sentence: [`UNNAMED`] reads "this Mac's own sign-in".
+pub fn line_name(name: &str) -> String {
+    if name == UNNAMED {
+        "this Mac's own sign-in".to_string()
+    } else {
+        name.to_string()
+    }
+}
+
+/// `account` with the name it is shown by (`shown_name`), reading who it is
+/// signed in as only when that is what names it.
+pub fn labelled(mut account: Account, signed_in: bool) -> Account {
+    if !account.named() {
+        let email = if signed_in {
+            identity_of(&account).email
+        } else {
+            None
+        };
+        account.name = shown_name(&account, email.as_deref());
+    }
+    account
 }
 
 impl WalletFile {
@@ -314,27 +364,66 @@ pub fn rename(engine: Engine, id: &str, name: &str) -> Result<Account, CommandEr
 /// Put an engine's accounts in this order. Every one of them must be named,
 /// once; anything else is refused rather than guessed at.
 pub fn reorder(engine: Engine, ids: &[String]) -> Result<Vec<Account>, CommandError> {
+    change(|file| reorder_in(file, engine, ids))
+}
+
+fn reorder_in(
+    file: &mut WalletFile,
+    engine: Engine,
+    ids: &[String],
+) -> Result<Vec<Account>, CommandError> {
+    let mut mine: Vec<Account> = file.of(engine).cloned().collect();
+    let same = ids.len() == mine.len()
+        && ids.iter().all(|id| mine.iter().any(|a| &a.id == id))
+        && ids.iter().collect::<std::collections::HashSet<_>>().len() == ids.len();
+    if !same {
+        return Err(super::err_invalid(
+            "ids",
+            "The list of accounts changed meanwhile. Try again.",
+        ));
+    }
+    mine.sort_by_key(|a| ids.iter().position(|id| id == &a.id));
+    // Keep the other engine's accounts where they are.
+    let mut placed = mine.into_iter();
+    for slot in file.accounts.iter_mut().filter(|a| a.engine == engine) {
+        if let Some(next) = placed.next() {
+            *slot = next;
+        }
+    }
+    Ok(file.of(engine).cloned().collect())
+}
+
+/// "Use this one now": `id` goes first in its engine's order, the rest keep
+/// theirs. Every turn that starts from then on tries it first (a turn
+/// already running finishes on the account it started on); an agent set to
+/// run on one account stays on it. Nothing else changes: when it runs out,
+/// turns carry on with the next, as always.
+pub fn use_first(engine: Engine, id: &str) -> Result<Vec<Account>, CommandError> {
     change(|file| {
-        let mut mine: Vec<Account> = file.of(engine).cloned().collect();
-        let same = ids.len() == mine.len()
-            && ids.iter().all(|id| mine.iter().any(|a| &a.id == id))
-            && ids.iter().collect::<std::collections::HashSet<_>>().len() == ids.len();
-        if !same {
-            return Err(super::err_invalid(
-                "ids",
-                "The list of accounts changed meanwhile. Try again.",
-            ));
-        }
-        mine.sort_by_key(|a| ids.iter().position(|id| id == &a.id));
-        // Keep the other engine's accounts where they are.
-        let mut placed = mine.into_iter();
-        for slot in file.accounts.iter_mut().filter(|a| a.engine == engine) {
-            if let Some(next) = placed.next() {
-                *slot = next;
-            }
-        }
-        Ok(file.of(engine).cloned().collect())
+        let mut ids: Vec<String> = file.of(engine).map(|a| a.id.clone()).collect();
+        let at = ids.iter().position(|a| a == id).ok_or_else(not_found)?;
+        let first = ids.remove(at);
+        ids.insert(0, first);
+        reorder_in(file, engine, &ids)
     })
+}
+
+/// The accounts a turn may run on, for an agent set to run on `pin`: only
+/// that one, while it is still in the list. No pin, or one whose account
+/// went: every account, in order.
+pub fn for_agent(candidates: Vec<Candidate>, pin: Option<&str>) -> Vec<Candidate> {
+    match pin {
+        Some(pin) if candidates.iter().any(|c| c.account.id == pin) => candidates
+            .into_iter()
+            .filter(|c| c.account.id == pin)
+            .collect(),
+        _ => candidates,
+    }
+}
+
+/// Whether `id` is one of `engine`'s accounts (an agent can be set to it).
+pub fn has(engine: Engine, id: &str) -> bool {
+    of(engine).iter().any(|a| a.id == id)
 }
 
 /// Remove an added account: from the list, and its sign-in (Keychain items
@@ -566,6 +655,8 @@ pub async fn candidates(engine: Engine) -> Vec<Candidate> {
     let mut out = Vec::new();
     for account in of(engine) {
         let signed_in = signed_in(&account).await;
+        // Named as it is shown, so every line about it says the same.
+        let account = labelled(account, signed_in);
         out.push(Candidate { account, signed_in });
     }
     out
@@ -656,6 +747,21 @@ pub fn last_account(engine: Engine, agent_id: &str) -> Account {
         .or_else(|| file.of(engine).next())
         .cloned();
     found.unwrap_or_else(|| this_mac(engine))
+}
+
+/// The account an agent's last turn ran on, when that is recorded and the
+/// account is still in the list (named as it is shown).
+pub fn last_on(agent_id: &str, engine: Engine) -> Option<Account> {
+    let file = {
+        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        read()
+    };
+    let last = file.last_used.get(agent_id)?;
+    let found = file
+        .of(engine)
+        .find(|a| key(engine, &a.id) == *last)
+        .cloned();
+    found.map(|a| labelled(a, true))
 }
 
 pub fn engine_folders(engine: Engine) -> Vec<PathBuf> {
@@ -935,15 +1041,16 @@ where
         Some(match until {
             Some(at) => format!(
                 "{} is out of usage until {}",
-                f.name,
+                line_name(&f.name),
                 strip_at(&super::failure::clock_phrase(tz, at, now))
             ),
-            None => format!("{} is out of usage", f.name),
+            None => format!("{} is out of usage", line_name(&f.name)),
         })
     });
+    let to = line_name(&to.name);
     match why {
-        Some(why) => format!("Switched to {}: {why}.", to.name),
-        None => format!("Switched to {}.", to.name),
+        Some(why) => format!("Switched to {to}: {why}."),
+        None => format!("Switched to {to}."),
     }
 }
 
@@ -1016,7 +1123,11 @@ pub fn take_all_out(agent_id: &str) -> Option<(String, Option<i64>)> {
 pub struct AccountView {
     pub id: String,
     pub engine: Engine,
+    /// As it is shown (`shown_name`): the user's name for it, else who it is
+    /// signed in as, else "Signed in on this Mac".
     pub name: String,
+    /// The user named it (renaming starts from the name shown either way).
+    pub named: bool,
     pub this_mac: bool,
     pub signed_in: bool,
     /// Who it is signed in as, as the engine recorded it (`identity`), or
@@ -1069,9 +1180,10 @@ pub async fn views() -> Vec<AccountView> {
         out.push(AccountView {
             out: account.out(now).is_some(),
             this_mac: account.is_this_mac(),
+            named: account.named(),
+            name: shown_name(&account, who.email.as_deref()),
             id: account.id,
             engine: account.engine,
-            name: account.name,
             signed_in,
             email: who.email,
             plan: who.plan,
@@ -1530,5 +1642,106 @@ mod tests {
         assert!(valid_session("85100e7a-050c-4811-a26e-55203a85d28b"));
         assert!(!valid_session("../../etc"));
         assert!(!valid_session(""));
+    }
+
+    #[test]
+    fn use_this_one_now_puts_it_first_and_keeps_the_rest_in_order() {
+        in_scratch(|| {
+            let work = add(Engine::Claude, "Work").unwrap();
+            let personal = add(Engine::Claude, "Personal").unwrap();
+            let codex = add(Engine::Codex, "Home").unwrap();
+            let ids = |e| -> Vec<String> { of(e).into_iter().map(|a| a.id).collect() };
+
+            use_first(Engine::Claude, &personal.id).unwrap();
+            assert_eq!(
+                ids(Engine::Claude),
+                [personal.id.as_str(), "default", work.id.as_str()]
+            );
+            // Already first: nothing moves.
+            use_first(Engine::Claude, &personal.id).unwrap();
+            assert_eq!(ids(Engine::Claude)[0], personal.id);
+            // Back to this Mac's own: the rest keep their order.
+            use_first(Engine::Claude, THIS_MAC).unwrap();
+            assert_eq!(
+                ids(Engine::Claude),
+                ["default", personal.id.as_str(), work.id.as_str()]
+            );
+            // The other engine's order is its own.
+            assert_eq!(ids(Engine::Codex), ["default", codex.id.as_str()]);
+            assert!(use_first(Engine::Claude, &codex.id).is_err());
+            assert!(use_first(Engine::Claude, "nope").is_err());
+
+            // The next turn starts on the one put first.
+            use_first(Engine::Claude, &work.id).unwrap();
+            let cands: Vec<Candidate> = of(Engine::Claude)
+                .into_iter()
+                .map(|account| Candidate {
+                    account,
+                    signed_in: true,
+                })
+                .collect();
+            match choose(&cands, &[], now()) {
+                Choice::Run(a) => assert_eq!(a.id, work.id),
+                other => panic!("expected a run, got {other:?}"),
+            }
+        });
+    }
+
+    #[test]
+    fn an_agent_set_to_one_account_runs_only_there() {
+        let all = vec![
+            cand("default", "This Mac", true, None),
+            cand("a1", "Work", true, None),
+            cand("a2", "Personal", true, None),
+        ];
+        // Set to Personal: only Personal, though This Mac has room.
+        let pinned = for_agent(all.clone(), Some("a2"));
+        assert_eq!(pinned.len(), 1);
+        match choose(&pinned, &[], now()) {
+            Choice::Run(a) => assert_eq!(a.id, "a2"),
+            other => panic!("expected a run, got {other:?}"),
+        }
+        // Personal runs out: there is nothing to switch to; it never spills
+        // over onto This Mac or Work.
+        assert!(!can_switch(&pinned, &["a2".to_string()], now()));
+        // Out already, alone: it still runs, and the engine says it can't.
+        let out = for_agent(
+            vec![cand("a2", "Personal", true, out_until(now() + H))],
+            Some("a2"),
+        );
+        assert!(matches!(choose(&out, &[], now()), Choice::Run(_)));
+        // Any account, or a pin whose account went: the whole list, in order.
+        assert_eq!(for_agent(all.clone(), None), all);
+        assert_eq!(for_agent(all.clone(), Some("gone")), all);
+        // The rest of the team fails over as always.
+        assert!(can_switch(&all, &["default".to_string()], now()));
+    }
+
+    #[test]
+    fn this_macs_own_sign_in_is_shown_as_who_it_is() {
+        let mac = account("default", DEFAULT_NAME, None);
+        assert!(!mac.named());
+        assert_eq!(shown_name(&mac, Some("sam@example.com")), "sam@example.com");
+        assert_eq!(shown_name(&mac, None), UNNAMED);
+        assert_eq!(shown_name(&mac, Some("  ")), UNNAMED);
+        // Renamed, it is what the user called it, whoever it's signed in as.
+        let renamed = account("default", "Personal", None);
+        assert!(renamed.named());
+        assert_eq!(shown_name(&renamed, Some("sam@example.com")), "Personal");
+        // An added account is always named.
+        let work = account("a1", "Work", None);
+        assert_eq!(shown_name(&work, Some("me@work.example")), "Work");
+        // In a sentence, the unnamed one reads as what it is.
+        assert_eq!(line_name(UNNAMED), "this Mac's own sign-in");
+        assert_eq!(line_name("Work"), "Work");
+        let unnamed = account("default", UNNAMED, out_until(now() + 2 * H));
+        assert_eq!(
+            switch_line(&work, Some(&unnamed), &Utc, now()),
+            "Switched to Work: this Mac's own sign-in is out of usage until 10:00 AM."
+        );
+        assert_eq!(
+            switch_line(&unnamed, None, &Utc, now()),
+            "Switched to this Mac's own sign-in."
+        );
     }
 }
