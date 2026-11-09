@@ -20,14 +20,14 @@ type TerminalVisualOptions = Pick<
  * variant consumes these palettes through createTerminalOptions(), and
  * followAppTheme() swaps a live terminal between them.
  *
- * Backgrounds match --surface-app in each theme (#141414 / #f5f5f5), so a
+ * Backgrounds match --surface-app in each theme (#151413 / #f4f2ee), so a
  * terminal reads as part of the window rather than a box set into it.
  */
 const DARK_TERMINAL_THEME: ITheme = {
-  background: '#141414',
-  foreground: '#bcbcbc',
+  background: '#151413',
+  foreground: '#d6d2ca',
   cursor: '#ffffff',
-  selectionBackground: '#393939',
+  selectionBackground: '#3a3835',
   black: '#000000',
   red: '#cd3131',
   green: '#0dbc79',
@@ -55,10 +55,10 @@ const DARK_TERMINAL_THEME: ITheme = {
  * anything a program draws in a colour of its own.
  */
 const LIGHT_TERMINAL_THEME: ITheme = {
-  background: '#f5f5f5',
+  background: '#f4f2ee',
   foreground: '#1c1c1c',
   cursor: '#1c1c1c',
-  cursorAccent: '#f5f5f5',
+  cursorAccent: '#f4f2ee',
   selectionBackground: '#d6dbe2',
   black: '#1c1c1c',
   red: '#cf222e',
@@ -66,7 +66,7 @@ const LIGHT_TERMINAL_THEME: ITheme = {
   yellow: '#9a6200',
   blue: '#0a63c9',
   magenta: '#8250df',
-  cyan: '#1b7c83',
+  cyan: '#18757c',
   white: '#555555',
   brightBlack: '#6b6b6b',
   brightRed: '#a40e26',
@@ -106,8 +106,8 @@ const TERMINAL_VARIANT_THEME: Record<
   Record<TerminalThemeVariant, Partial<ITheme>>
 > = {
   // Logs sit on the panel surface (--surface-panel) in both themes.
-  dark: { normal: {}, onboarding: {}, build: {}, logs: { background: '#1a1a1a' }, connection: {} },
-  light: { normal: {}, onboarding: {}, build: {}, logs: { background: '#ffffff' }, connection: {} },
+  dark: { normal: {}, onboarding: {}, build: {}, logs: { background: '#1c1b19' }, connection: {} },
+  light: { normal: {}, onboarding: {}, build: {}, logs: { background: '#fdfcfa' }, connection: {} },
 };
 
 /** The xterm palette for a variant on a theme (default: the theme currently painted). */

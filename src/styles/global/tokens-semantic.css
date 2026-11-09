@@ -102,6 +102,8 @@
 
   --font-size-h1: var(--font-size-40);
   --font-size-h2: var(--font-size-24);
+  /* The one big title of a screen (the onboarding welcome), set tight. */
+  --font-size-display: var(--font-size-32);
   --font-size-h3: var(--font-size-18);
   --font-size-h4: var(--font-size-16);
   --font-size-subhead-lg: var(--font-size-15);
@@ -121,6 +123,11 @@
 
   --tracking-control: var(--tracking-04);
   --tracking-heading: var(--tracking-display);
+  /* Tight tracking, as on the site: a name in a list, a title in a header
+     or card, and the one big title of a screen (onboarding). */
+  --tracking-name: var(--tracking-tight-1);
+  --tracking-title: var(--tracking-tight-2);
+  --tracking-hero: var(--tracking-tight-3);
 
   --font-weight-body: var(--font-weight-regular);
   --font-weight-label: var(--font-weight-medium);
@@ -173,7 +180,7 @@
   --spacing-tight: var(--space-06);
 
   --radius-control: var(--radius-6);
-  --radius-card: var(--radius-8);
+  --radius-card: var(--radius-10);
   --radius-sm: var(--radius-4);
   --radius-lg: var(--radius-12);
   --radius-pill: var(--radius-999);
@@ -226,6 +233,11 @@
   --shadow-sm: 0 2px 8px rgba(0, 0, 0, 0.25);
   --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.4);
   --shadow-lg: 0 16px 48px rgba(0, 0, 0, 0.5);
+  /* A card (approval, result, a settings group): a sheet, not a key. On
+     dark, a lit top edge and a short drop lift it off the canvas. */
+  --shadow-card:
+    inset 0 var(--stroke-1) 0 var(--color-white-o05), 0 0 0 var(--stroke-1) var(--color-black-o30),
+    0 var(--space-08) var(--space-24) calc(var(--space-12) * -1) var(--color-black-o50);
 }
 
 /*
@@ -330,6 +342,12 @@
     0 0 0 var(--stroke-hairline) var(--color-black-o08), 0 8px 24px var(--color-black-o10);
   --shadow-lg:
     0 0 0 var(--stroke-hairline) var(--color-black-o08), 0 16px 48px var(--color-black-o14);
+  /* The site's card: a hairline ring and a long soft drop pulled in under
+     the sheet, so it lifts without a grey halo. */
+  --shadow-card:
+    0 0 0 var(--stroke-1) var(--color-black-o07),
+    0 var(--space-24) var(--space-32) calc(var(--space-24) * -1) var(--color-black-o30),
+    0 var(--space-06) var(--space-12) calc(var(--space-08) * -1) var(--color-black-o15);
 
   --tint-subtle: rgba(0, 0, 0, 0.035);
   --tint-strong: rgba(0, 0, 0, 0.07);
