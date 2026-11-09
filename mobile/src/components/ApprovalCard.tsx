@@ -196,6 +196,9 @@ export function FittedDetail({
   );
 }
 
+/** The request view's cap: none a real card reaches. */
+const FULL_LINES = 100_000;
+
 /** At this text size the explanation folds away, so the answers stay in reach. */
 const LARGE_TEXT = 1.6;
 
@@ -206,6 +209,7 @@ export function ApprovalCard({
   onError,
   onAnswered,
   answers = true,
+  full = false,
 }: {
   message: AgentMessage;
   approval: Approval;
@@ -219,6 +223,11 @@ export function ApprovalCard({
    * second pair of answers.
    */
   answers?: boolean;
+  /**
+   * The request view (`app/request.tsx`): everything it asks, never capped,
+   * details open; the screen scrolls instead of the card.
+   */
+  full?: boolean;
 }) {
   const cardStyles = useCardStyles();
   const colors = useColors();
@@ -231,7 +240,7 @@ export function ApprovalCard({
   const connected = useApp((s) => s.link.kind === 'connected');
   const pending = approval.status === 'pending';
   const paused = pending && agent.status.state === 'idle';
-  const fit = useFitDetail(pending, message.id, paused);
+  const fit = useFitDetail(pending && !full, message.id, paused);
   const compact = useShortPane();
   const armed = useArmed(pending, `${compact}:${fit.pinned}`);
   const once = useInFlight();
@@ -453,7 +462,11 @@ export function ApprovalCard({
           ) : gate ? (
             <GateBody approval={approval} />
           ) : (
-            <Summarized approval={approval} lines={large ? DETAIL_LINES_LARGE : DETAIL_LINES} />
+            <Summarized
+              approval={approval}
+              lines={full ? FULL_LINES : large ? DETAIL_LINES_LARGE : DETAIL_LINES}
+              open={full}
+            />
           )}
         </FittedDetail>
       )}
@@ -1001,10 +1014,19 @@ export function MoreAnswers({ disabled, onPress }: { disabled: boolean; onPress:
  * The card's plain line first, what and why (the Mac's `summary`), with the
  * exact command folded under Details; a card without one shows its detail.
  */
-function Summarized({ approval, lines }: { approval: Approval; lines: number }) {
+function Summarized({
+  approval,
+  lines,
+  open: openAtFirst = false,
+}: {
+  approval: Approval;
+  lines: number;
+  /** Details shown from the start (the request view). */
+  open?: boolean;
+}) {
   const colors = useColors();
   const cardStyles = useCardStyles();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(openAtFirst);
   const summary = approval.summary?.trim();
   if (approval.plan) return <PlanList plan={approval.plan} />;
   if (!summary || approvalFields(approval.tool, approval.input)) {
