@@ -1002,9 +1002,22 @@ pub fn find(name_or_id: &str) -> Result<Option<Agent>, CommandError> {
     if let Some(found) = agents.iter().find(|a| a.id == needle) {
         return Ok(Some(found.clone()));
     }
-    Ok(agents
-        .into_iter()
-        .find(|a| a.name.eq_ignore_ascii_case(needle)))
+    if let Some(found) = agents.iter().find(|a| a.name.eq_ignore_ascii_case(needle)) {
+        return Ok(Some(found.clone()));
+    }
+    // The Chief can be renamed ("Dash"); notes and memories written before
+    // that still say "Chief of Staff", so its old names keep reaching it.
+    Ok(chief_alias(needle)
+        .then(|| agents.into_iter().find(|a| a.is_main))
+        .flatten())
+}
+
+/// Names that always mean the Chief, whatever it is called now.
+fn chief_alias(name: &str) -> bool {
+    let n = name.trim().trim_start_matches("the ").trim_start_matches("The ");
+    ["chief", "chief of staff", "the chief"]
+        .iter()
+        .any(|alias| n.eq_ignore_ascii_case(alias))
 }
 
 /// Read-modify-write one agent under the registry lock.
@@ -3223,5 +3236,15 @@ mod tests {
     fn rejects_path_like_ids() {
         assert!(agent_home("../etc").is_err());
         assert!(agent_home("").is_err());
+    }
+
+    #[test]
+    fn the_chiefs_old_names_still_mean_the_chief() {
+        for name in ["Chief of Staff", "chief", "the Chief", "  CHIEF OF STAFF "] {
+            assert!(super::chief_alias(name), "{name}");
+        }
+        for name in ["Chef", "Finance", "Chief Marketing", "Dash"] {
+            assert!(!super::chief_alias(name), "{name}");
+        }
     }
 }
