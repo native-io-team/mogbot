@@ -232,6 +232,22 @@ export function useProjectLifecycle({
   // Used to detect when a stale async handleSelectProject should stop modifying view state.
   const navigationVersionRef = useRef(0);
 
+  // Bumped when the user goes somewhere that isn't a project (Agents, the
+  // dashboard, Workflows, the Inbox) — see `cancelPendingOpen`. An open that
+  // has not yet shown its workspace gives up rather than pulling them back.
+  const leaveVersionRef = useRef(0);
+
+  /**
+   * The user went somewhere else while a project was opening. An open that
+   * has not yet shown its workspace stops; one that already has carries on
+   * in the background (server start, branch info) but no longer moves the
+   * window. Without this, Agents → Projects → Agents in quick succession
+   * landed back on the workspace once the open caught up.
+   */
+  const cancelPendingOpen = useCallback(() => {
+    ++leaveVersionRef.current;
+  }, []);
+
   // Send prompt to the agent terminal. Returns false when there is no terminal
   // yet — the workflow handoff retries on that.
   const sendToClaude = useCallback(
@@ -320,6 +336,10 @@ export function useProjectLifecycle({
     const windowLabel = getWindowLabel();
     const totalStart = performance.now();
     let stepStart = performance.now();
+    // Where the user was when they asked: if they leave before the workspace
+    // shows, this open must not drag them back.
+    const leaveVersion = leaveVersionRef.current;
+    const userLeft = () => leaveVersionRef.current !== leaveVersion;
 
     // Ensure external projects are registered BEFORE anything validates the
     // path. Projects outside ~/ShipStudio can enter the app via session
@@ -372,19 +392,26 @@ export function useProjectLifecycle({
       if (paused) return;
     }
 
+    if (userLeft()) {
+      logger.info(`[OpenProject] Left before it opened: ${project.name}`);
+      return;
+    }
+
+    // Guard against concurrent opens for the same project (race condition
+    // prevention). Must run before any tracking — otherwise a double-click
+    // emits project_opened twice — and before claiming a navigation version:
+    // a duplicate that claimed one superseded the open already under way and
+    // then returned itself, so a double-click opened nothing at all.
+    if (openingProjectPathRef.current === project.path) {
+      logger.info(`[OpenProject] Already opening ${project.name}, skipping duplicate call`);
+      return;
+    }
+
     // Claim a new navigation version — any prior handleSelectProject or handleBackToProjects
     // that captured an older version will know it's been superseded.
     const navVersion = ++navigationVersionRef.current;
 
     logger.info(`[OpenProject] Starting: ${project.name}`, { windowLabel });
-
-    // Guard against concurrent opens for the same project (race condition
-    // prevention). Must run before any tracking — otherwise a double-click
-    // emits project_opened twice.
-    if (openingProjectPathRef.current === project.path) {
-      logger.info(`[OpenProject] Already opening ${project.name}, skipping duplicate call`);
-      return;
-    }
     openingProjectPathRef.current = project.path;
 
     // Set the active project so every subsequent event in this session
@@ -464,7 +491,7 @@ export function useProjectLifecycle({
     // The user may have gone home (or picked another project) during that
     // read. Committing the workspace now would reopen a project they just
     // left.
-    if (navigationVersionRef.current !== navVersion) {
+    if (navigationVersionRef.current !== navVersion || userLeft()) {
       logger.info(`[OpenProject] Aborted (superseded) before showing workspace: ${project.name}`);
       openingProjectPathRef.current = null;
       return;
@@ -781,7 +808,10 @@ export function useProjectLifecycle({
       }
     }
 
-    setView('workspace');
+    // Only re-asserts the workspace for someone still on it: this runs after
+    // the dev server has started, seconds later, and the user may well have
+    // gone to Agents (or anywhere else) since.
+    setView((view) => (view === 'project-loading' ? 'workspace' : view));
     logger.info(`[OpenProject] Complete - Total: ${Math.round(performance.now() - totalStart)}ms`);
 
     // Fetch GitHub status in background (non-blocking for faster perceived load)
@@ -1206,6 +1236,7 @@ export function useProjectLifecycle({
     setShowAutoAcceptWarning,
     // Handlers
     handleSelectProject,
+    cancelPendingOpen,
     handleBackToProjects,
     handleProjectCreated,
     handleImportProject,

@@ -307,3 +307,96 @@ describe('handleSelectProject — leaving mid-open (stuck spinner)', () => {
     expect(views.slice(views.lastIndexOf('projects'))).not.toContain('workspace');
   });
 });
+
+describe('handleSelectProject — the Agents | Projects switch', () => {
+  const project = { name: 'acme', path: '/x/acme', thumbnail: null };
+
+  /** Hold `ensure_external_project_registered` (the first await) until released. */
+  function holdRegistration() {
+    let release: () => void = () => {};
+    const held = new Promise<void>((resolve) => (release = resolve));
+    vi.mocked(invoke).mockImplementation((cmd: string) =>
+      cmd === 'ensure_external_project_registered'
+        ? held.then(() => false)
+        : Promise.resolve(undefined)
+    );
+    return () => release();
+  }
+
+  const plainViews = (setView: Fn) =>
+    setView.mock.calls.map(([v]) => v as unknown).filter((v) => typeof v === 'string');
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('opens the project once when asked twice in quick succession (a double-click)', async () => {
+    const release = holdRegistration();
+    const params = createParams();
+    const { result } = renderHook(() => useProjectLifecycle(params));
+
+    await act(async () => {
+      const first = result.current.handleSelectProject(project);
+      const second = result.current.handleSelectProject(project);
+      release();
+      await Promise.all([first, second]);
+    });
+
+    // The duplicate used to claim a navigation version before noticing it was
+    // a duplicate, superseding the open under way: neither opened anything.
+    expect(params.setCurrentProject).toHaveBeenCalledWith(project);
+    expect(plainViews(params.setView as Fn)).toEqual(['workspace']);
+  });
+
+  it('does not pull the user back when they leave before the workspace shows', async () => {
+    const release = holdRegistration();
+    const params = createParams();
+    const { result } = renderHook(() => useProjectLifecycle(params));
+
+    await act(async () => {
+      const opening = result.current.handleSelectProject(project);
+      result.current.cancelPendingOpen(); // the user went to Agents
+      release();
+      await opening;
+    });
+
+    expect(params.setCurrentProject).not.toHaveBeenCalled();
+    expect(plainViews(params.setView as Fn)).toEqual([]);
+  });
+
+  it('still opens a project asked for after an earlier leave', async () => {
+    vi.mocked(invoke).mockImplementation(() => Promise.resolve(undefined));
+    const params = createParams();
+    const { result } = renderHook(() => useProjectLifecycle(params));
+    act(() => result.current.cancelPendingOpen());
+
+    await act(async () => {
+      await result.current.handleSelectProject(project);
+    });
+
+    expect(plainViews(params.setView as Fn)).toEqual(['workspace']);
+  });
+
+  it('finishing later never moves a user who has gone elsewhere', async () => {
+    vi.mocked(invoke).mockImplementation(() => Promise.resolve(undefined));
+    const params = createParams();
+    const { result } = renderHook(() => useProjectLifecycle(params));
+
+    await act(async () => {
+      await result.current.handleSelectProject(project);
+    });
+
+    // After the workspace showed, the open re-asserts it once the server has
+    // started — seconds later on a real machine. By then the user may be on
+    // Agents; that re-assertion must leave them there.
+    const updaters = (params.setView as Fn).mock.calls
+      .map(([v]) => v as unknown)
+      .filter((v): v is (prev: string) => string => typeof v === 'function');
+    expect(updaters.length).toBeGreaterThan(0);
+    for (const update of updaters) {
+      expect(update('agents')).toBe('agents');
+      expect(update('projects')).toBe('projects');
+      expect(update('workspace')).toBe('workspace');
+    }
+  });
+});

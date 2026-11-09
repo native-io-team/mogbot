@@ -437,6 +437,7 @@ function AppContents({ initialProjectPath }: AppProps) {
     showAutoAcceptWarning,
     setShowAutoAcceptWarning,
     handleSelectProject,
+    cancelPendingOpen,
     handleBackToProjects,
     handleProjectCreated,
     handleImportProject: importProjectNow,
@@ -613,13 +614,14 @@ function AppContents({ initialProjectPath }: AppProps) {
     showToast,
   });
 
-  useWorkflowCommands({ setView, showToast });
   const modeNav = useAppMode({
     view,
     setView,
     currentProjectPath: currentProject?.path ?? null,
     openProject: handleRailClick,
+    cancelPendingOpen,
   });
+  useWorkflowCommands({ setView: modeNav.navigate, showToast });
   useOrphanedWorkspaceGuard(view, currentProject !== null, setView);
 
   // Close an active session from the sidebar (dashboard, collapsed rail, or
@@ -949,11 +951,12 @@ function AppContents({ initialProjectPath }: AppProps) {
 
   const homeSidebarProps = useMemo(
     () => ({
-      onGoHome: () => setView('projects'),
-      onGoWorkflows: () => setView('workflows'),
-      onGoInbox: () => setView('inbox'),
+      onGoHome: () => modeNav.navigate('projects'),
+      onGoWorkflows: () => modeNav.navigate('workflows'),
+      onGoInbox: () => modeNav.navigate('inbox'),
       inboxUnreadCount: inboxUnread,
-      ...modeNav,
+      onGoProjects: modeNav.onGoProjects,
+      onGoAgents: modeNav.onGoAgents,
       onOpenProjectPicker: openProjectPicker,
       isSidebarHidden,
       onToggleSidebar: toggleSidebar,
