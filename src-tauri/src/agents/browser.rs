@@ -78,8 +78,7 @@ fn path() -> Result<PathBuf, CommandError> {
 pub fn load() -> Stored {
     path()
         .ok()
-        .and_then(|p| std::fs::read(p).ok())
-        .and_then(|raw| serde_json::from_slice(&raw).ok())
+        .and_then(|p| super::survive::read_kept(&p, "Your browser setting for agents"))
         .unwrap_or_else(upgraded)
 }
 

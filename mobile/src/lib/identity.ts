@@ -138,5 +138,8 @@ export const MAC_RESET =
 export const PAIR_AGAIN =
   'This pairing was made before the app checked your Mac’s identity, so it can’t be trusted any more. Pair again from your Mac: Settings → Agents → Phone → Pair a phone.';
 
+export const PAIRING_LOST =
+  'This phone’s pairing couldn’t be read, so it was removed. Your agents and their chats are still on your Mac. Pair again from it: Settings → Agents → Phone → Pair a phone.';
+
 export const UPDATE_MAC =
   'The app on your Mac is too old for this phone. Update it on the Mac, then try again.';

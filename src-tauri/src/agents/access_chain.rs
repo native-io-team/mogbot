@@ -570,8 +570,7 @@ fn waiters_path() -> Result<std::path::PathBuf, CommandError> {
 pub fn load_waiters() -> Waiters {
     waiters_path()
         .ok()
-        .and_then(|p| std::fs::read(p).ok())
-        .and_then(|raw| serde_json::from_slice(&raw).ok())
+        .and_then(|p| super::survive::read_kept(&p, "The list of agents waiting on a login"))
         .unwrap_or_default()
 }
 

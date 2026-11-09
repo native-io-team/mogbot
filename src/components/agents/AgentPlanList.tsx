@@ -13,6 +13,11 @@ import type { PlanCard } from '../../../packages/companion-protocol/src/model';
 export function AgentPlanList({ plan }: { plan: PlanCard }) {
   return (
     <div className="agent-plan">
+      {plan.actions.length === 0 && (
+        <p className="agent-plan__why">
+          No steps came through on this card, so there’s nothing to allow.
+        </p>
+      )}
       <ol className="agent-plan__actions">
         {plan.actions.map((a, i) => (
           <li key={`${i}-${a.summary}`} className="agent-plan__action">

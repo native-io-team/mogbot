@@ -61,6 +61,7 @@ import {
   unpair,
 } from '../../../lib/session';
 import { setApp, useApp } from '../../../lib/store';
+import { asOverview } from '../../../lib/wellFormed';
 import { useRefresh } from '../../../lib/refresh';
 import { RefreshStatus } from '../../../components/RefreshStatus';
 import { largeTitle } from '../../../lib/navigation';
@@ -270,8 +271,8 @@ export default function Agents() {
   const { refreshing, onRefresh, outcome, dismiss } = useRefresh(async () => {
     if (useApp.getState().link.kind !== 'connected') throw new Error('offline');
     try {
-      const fresh = await call('agents.overview', {});
-      setApp((s) => ({ overview: shareStructure(s.overview, fresh) }));
+      const fresh = asOverview(await call('agents.overview', {}));
+      if (fresh) setApp((s) => ({ overview: shareStructure(s.overview, fresh) }));
       if (roomsOffered(useApp.getState().welcome)) await refreshRooms();
     } catch (e) {
       setError(describeError(e));

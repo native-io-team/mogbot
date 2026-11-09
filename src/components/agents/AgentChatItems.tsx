@@ -52,6 +52,7 @@ import { CrossoverCard } from './AgentCrossoverCard';
 import { checkInHead } from '../../../packages/companion-protocol/src/cardWords';
 import { viaLabel } from '../../../packages/companion-protocol/src/model';
 import { AgentSettingsChange } from './AgentSettingsChange';
+import { readPlan } from '../../lib/cardShapes';
 import { AgentPlanList } from './AgentPlanList';
 import { AgentGateBody } from './AgentRoutineSteps';
 import { AgentCard } from './AgentCard';
@@ -1127,6 +1128,10 @@ const ApprovalCardBody = memo(function ApprovalCard({
   // "OK to go on?" between a routine's steps: Stop here / Go ahead, nothing broader.
   const gate = approval.gate;
   const plainDeny = approval.connector?.kind === 'consent' || front || handoff || !!gate;
+  // A plan is read field by field; one with no readable action has nothing
+  // to allow, so it offers Deny only.
+  const plan = approval.plan ? readPlan(approval.plan) : null;
+  const nothingToAllow = !!plan && plan.actions.length === 0;
   const pending = approval.status === 'pending';
   const fields = approvalFields(approval.tool, approval.input);
   const answer = async (allow: boolean, always = false, why?: string) => {
@@ -1182,7 +1187,7 @@ const ApprovalCardBody = memo(function ApprovalCard({
         actions={
           pending && !noting ? (
             <>
-              {approval.always && (
+              {approval.always && !nothingToAllow && (
                 <Tooltip content={describeScope(approval.always, agentName)}>
                   <TextButton
                     tabIndex={0}
@@ -1234,16 +1239,18 @@ const ApprovalCardBody = memo(function ApprovalCard({
               >
                 {front ? 'Not now' : handoff ? 'Ignore' : gate ? GATE_DENY : 'Deny'}
               </Button>
-              <Button
-                tabIndex={0}
-                variant="strong"
-                data-allow
-                disabled={busy}
-                {...keyProps}
-                onClick={guard(() => void answer(true))}
-              >
-                {front ? 'Check again' : handoff ? 'Save to memory' : gate ? GATE_ALLOW : 'Allow'}
-              </Button>
+              {!nothingToAllow && (
+                <Button
+                  tabIndex={0}
+                  variant="strong"
+                  data-allow
+                  disabled={busy}
+                  {...keyProps}
+                  onClick={guard(() => void answer(true))}
+                >
+                  {front ? 'Check again' : handoff ? 'Save to memory' : gate ? GATE_ALLOW : 'Allow'}
+                </Button>
+              )}
             </>
           ) : undefined
         }
@@ -1255,8 +1262,8 @@ const ApprovalCardBody = memo(function ApprovalCard({
           <AgentSettingsChange proposal={approval.settings} />
         ) : gate ? (
           <AgentGateBody gate={gate} produced={approval.detail} />
-        ) : approval.plan ? (
-          <AgentPlanList plan={approval.plan} />
+        ) : plan ? (
+          <AgentPlanList plan={plan} />
         ) : fields ? (
           <dl className="agent-approval__fields">
             {fields.map(([label, value]) => (

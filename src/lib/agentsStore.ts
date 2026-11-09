@@ -33,7 +33,7 @@ import {
 } from './agents';
 import { asCommandError, formatCommandError } from './errors';
 import { logger } from './logger';
-import { getRoomMessages, getRooms, roomKey, ROOMS_EVENT, type Room } from './agentRooms';
+import { getRoomMessages, getRooms, roomIdOf, roomKey, ROOMS_EVENT, type Room } from './agentRooms';
 
 export interface AgentsState {
   agents: Agent[];
@@ -93,7 +93,7 @@ export async function refreshAgents(): Promise<void> {
     const overview = await getAgentsOverview();
     emit({
       ...state,
-      agents: keepUnchanged(state.agents, overview.agents),
+      agents: keepUnchanged(state.agents, readableAgents(overview.agents)),
       engineReady: overview.engineReady,
       // Kept when unchanged, like the agents: a new array re-renders everything reading it.
       engines: sameJson(state.engines, overview.engines ?? [])
@@ -109,6 +109,26 @@ export async function refreshAgents(): Promise<void> {
     logger.error('[Agents] overview failed', { error: String(error) });
     emit({ ...state, loaded: true, error: formatCommandError(asCommandError(error)) });
   }
+}
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === 'object' && v !== null && !Array.isArray(v);
+
+/**
+ * The overview's agents a row can be drawn from: a list (anything else reads
+ * as none) of objects with an id. One unreadable entry is dropped and logged
+ * rather than failing the whole list.
+ */
+function readableAgents(raw: unknown): Agent[] {
+  if (!Array.isArray(raw)) {
+    logger.error('[Agents] overview had no list of agents', { got: typeof raw });
+    return [];
+  }
+  const ok = (raw as unknown[]).filter((a): a is Agent => isRecord(a) && typeof a.id === 'string');
+  if (ok.length !== raw.length) {
+    logger.error('[Agents] overview had unreadable agents', { dropped: raw.length - ok.length });
+  }
+  return ok;
 }
 
 /**
@@ -496,9 +516,87 @@ function applyHeld() {
   const events = [...held.values()];
   held.clear();
   for (const e of events) {
-    if (e.kind === 'status') patchStatus(e.agentId, e.status);
-    else updateDraft(e.agentId, e.id, e.text);
+    // One bad event mustn't keep the ones after it from applying.
+    safely(e.kind, () =>
+      e.kind === 'status' ? patchStatus(e.agentId, e.status) : updateDraft(e.agentId, e.id, e.text)
+    );
   }
+}
+
+/* ------------------------------------------------- events that don't read */
+
+/** A chat line the store can place: an object with an id, a time and a chat. */
+function readableMessage(v: unknown): v is AgentMessage {
+  return (
+    isRecord(v) &&
+    typeof v.id === 'string' &&
+    typeof v.ts === 'number' &&
+    (typeof v.agentId === 'string' || typeof v.room === 'string')
+  );
+}
+
+function readableStatus(v: unknown): v is { agentId: string; status: AgentStatus } {
+  return (
+    isRecord(v) &&
+    typeof v.agentId === 'string' &&
+    isRecord(v.status) &&
+    typeof v.status.state === 'string'
+  );
+}
+
+function readableDraft(v: unknown): v is { agentId: string; id: string; text: string } {
+  return (
+    isRecord(v) &&
+    typeof v.agentId === 'string' &&
+    typeof v.id === 'string' &&
+    typeof v.text === 'string'
+  );
+}
+
+let resyncTimer: ReturnType<typeof setTimeout> | null = null;
+const RESYNC_MS = 300;
+
+/**
+ * An event the store couldn't apply (a payload from an older or newer build,
+ * or a bug): logged, and the store reads everything again from the Mac
+ * instead of carrying on with a chat or a row that has silently gone stale.
+ * Bursts become one re-read.
+ */
+function resync(kind: string, error?: Error | string) {
+  logger.error('[Agents] an event couldn’t be applied; reading again', {
+    kind,
+    error: error === undefined ? 'unreadable payload' : String(error),
+  });
+  if (resyncTimer !== null) return;
+  resyncTimer = setTimeout(readEverythingAgain, RESYNC_MS);
+}
+
+function readEverythingAgain() {
+  resyncTimer = null;
+  void refreshAgents();
+  void refreshRooms();
+  // The chats held: their newest page again, keeping what's already there.
+  for (const key of Object.keys(state.messages)) {
+    const room = roomIdOf(key);
+    void (room !== null ? loadRoomMessages(room) : loadMessages(key));
+  }
+}
+
+/** Apply an event; a throw is caught, logged and resynced from. */
+function safely(kind: string, apply: () => void) {
+  try {
+    apply();
+  } catch (error) {
+    resync(kind, error instanceof Error ? error : 'a non-error was thrown');
+  }
+}
+
+/** For tests: run a pending resync now; false when none was due. */
+export function __flushResync(): boolean {
+  if (resyncTimer === null) return false;
+  clearTimeout(resyncTimer);
+  readEverythingAgain();
+  return true;
 }
 
 function start() {
@@ -506,21 +604,35 @@ function start() {
   void refreshAgents();
   void refreshRooms();
   void Promise.all([
-    listen<AgentMessage>(AGENT_EVENTS.message, (e) => {
-      applyHeld();
-      upsertMessage(e.payload);
-    }),
-    listen<{ agentId: string; status: AgentStatus }>(AGENT_EVENTS.status, (e) =>
-      hold({ kind: 'status', agentId: e.payload.agentId, status: e.payload.status })
+    listen<unknown>(AGENT_EVENTS.message, (e) =>
+      safely('message', () => {
+        applyHeld();
+        if (!readableMessage(e.payload)) return resync('message');
+        upsertMessage(e.payload);
+      })
     ),
-    listen(AGENT_EVENTS.registry, () => {
-      applyHeld();
-      scheduleRefresh();
-      // A deleted agent leaves its rooms; a room's row follows its members.
-      scheduleRoomsRefresh();
-    }),
-    listen<{ agentId: string; id: string; text: string }>(AGENT_EVENTS.draft, (e) =>
-      hold({ kind: 'draft', ...e.payload })
+    listen<unknown>(AGENT_EVENTS.status, (e) =>
+      readableStatus(e.payload)
+        ? hold({ kind: 'status', agentId: e.payload.agentId, status: e.payload.status })
+        : resync('status')
+    ),
+    listen(AGENT_EVENTS.registry, () =>
+      safely('registry', () => {
+        applyHeld();
+        scheduleRefresh();
+        // A deleted agent leaves its rooms; a room's row follows its members.
+        scheduleRoomsRefresh();
+      })
+    ),
+    listen<unknown>(AGENT_EVENTS.draft, (e) =>
+      readableDraft(e.payload)
+        ? hold({
+            kind: 'draft',
+            agentId: e.payload.agentId,
+            id: e.payload.id,
+            text: e.payload.text,
+          })
+        : resync('draft')
     ),
     listen(ROOMS_EVENT, () => scheduleRoomsRefresh()),
   ]).then((handles) => {
@@ -630,6 +742,8 @@ export function __resetAgentsStore() {
     rooms: [],
     roomsLoaded: false,
   };
+  if (resyncTimer !== null) clearTimeout(resyncTimer);
+  resyncTimer = null;
   loadingOlder.clear();
   loadingNewest.clear();
   arriving.clear();

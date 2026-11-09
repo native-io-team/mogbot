@@ -8,13 +8,14 @@
  * @module components/agents/AgentSecretCard
  */
 
-import { memo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { Button } from '../primitives/Button';
 import { AgentCard } from './AgentCard';
 import { TextField } from '../primitives/TextField';
 import { ErrorIcon, LockedIcon } from '@/components/icons';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { saveSecret, secretTitle, secretVars } from '../../lib/agentSecrets';
+import { readSecretRequest } from '../../lib/cardShapes';
 import type { AgentMessage } from '../../lib/agents';
 
 interface SecretCardProps {
@@ -31,14 +32,20 @@ export const SecretCard = memo(function SecretCard({
   arrived,
 }: SecretCardProps) {
   const approval = message.approval;
-  const request = approval?.secret;
+  // Read field by field: a request missing parts still draws, and one with no
+  // field to fill can only be declined.
+  const request = useMemo(
+    () => (approval?.secret ? readSecretRequest(approval.secret) : undefined),
+    [approval?.secret]
+  );
   const [values, setValues] = useState<string[]>(() => request?.fields.map(() => '') ?? []);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [openedPending] = useState(approval?.status === 'pending');
   if (!approval || !request) return null;
   const pending = approval.status === 'pending';
-  const filled = values.every((v) => v.trim().length > 0);
+  const fillable = request.fields.length > 0;
+  const filled = fillable && values.every((v) => v.trim().length > 0);
 
   const save = async () => {
     if (!filled || busy) return;
@@ -91,15 +98,17 @@ export const SecretCard = memo(function SecretCard({
               <Button tabIndex={0} variant="secondary" disabled={busy} onClick={() => void deny()}>
                 Deny
               </Button>
-              <Button
-                tabIndex={0}
-                type="submit"
-                variant="strong"
-                data-allow
-                disabled={!filled || busy}
-              >
-                Save
-              </Button>
+              {fillable && (
+                <Button
+                  tabIndex={0}
+                  type="submit"
+                  variant="strong"
+                  data-allow
+                  disabled={!filled || busy}
+                >
+                  Save
+                </Button>
+              )}
             </>
           ) : undefined
         }
@@ -117,8 +126,14 @@ export const SecretCard = memo(function SecretCard({
         outcomeTone={approval.status === 'allowed' ? 'done' : undefined}
         resolved={openedPending && !pending}
       >
-        <p className="agent-secret__purpose">{request.purpose}</p>
-        {pending && (
+        {request.purpose && <p className="agent-secret__purpose">{request.purpose}</p>}
+        {pending && !fillable && (
+          <p className="agent-card__note">
+            This request didn’t say what to fill in, so it can only be declined. {agentName} can ask
+            again.
+          </p>
+        )}
+        {pending && fillable && (
           <>
             <div className="agent-secret__fields">
               {request.fields.map((field, i) => (

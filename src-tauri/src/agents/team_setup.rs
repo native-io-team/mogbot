@@ -491,8 +491,7 @@ fn path() -> Result<std::path::PathBuf, CommandError> {
 
 /// The setup as kept, whatever its state. `None` when there's never been one.
 pub fn load() -> Option<TeamSetup> {
-    let raw = std::fs::read(path().ok()?).ok()?;
-    serde_json::from_slice(&raw).ok()
+    super::survive::read_kept(&path().ok()?, "The team set-up in progress")
 }
 
 fn save(setup: &TeamSetup) -> Result<(), CommandError> {

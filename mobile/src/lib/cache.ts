@@ -19,6 +19,7 @@ import { restorePending } from './outbox';
 import { debounced, readJson, removeJson, writeJson } from './persist';
 import { getApp, setApp, useApp, type Served } from './store';
 import type { SyncState } from './sync';
+import { asMessages, asOverview, asProjects, asRooms } from './wellFormed';
 
 export const CACHED_MESSAGES = 400;
 const VERSION = 1;
@@ -83,14 +84,18 @@ export function fromCache(c: Cached): (Partial<SyncState> & { served?: Served | 
   if (c.v !== VERSION) return null;
   return {
     ...(c.served ? { served: c.served } : {}),
-    overview: c.overview,
+    // Written by an older build, or damaged: made safe like the Mac's own.
+    overview: asOverview(c.overview),
     mac: c.mac,
-    projects: c.projects,
-    rooms: c.rooms ?? null,
+    projects: asProjects(c.projects),
+    rooms: asRooms(c.rooms),
     cursor: c.cursor,
     syncedAt: c.syncedAt,
     chats: Object.fromEntries(
-      Object.entries(c.chats).map(([id, chat]) => [id, { ...chat, loaded: false }])
+      Object.entries(c.chats && typeof c.chats === 'object' ? c.chats : {}).map(([id, chat]) => [
+        id,
+        { ...chat, messages: asMessages(chat?.messages), loaded: false },
+      ])
     ),
   };
 }

@@ -110,8 +110,7 @@ fn path() -> Result<std::path::PathBuf, CommandError> {
 fn read() -> Saved {
     path()
         .ok()
-        .and_then(|p| std::fs::read(p).ok())
-        .and_then(|b| serde_json::from_slice(&b).ok())
+        .and_then(|p| super::survive::read_kept(&p, "The list of apps you said no to"))
         .unwrap_or_default()
 }
 

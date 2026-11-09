@@ -35,6 +35,7 @@ import {
 } from '../lib/pairing';
 import { adopt, enableAlerts } from '../lib/session';
 import { isDemo } from '../lib/demo';
+import { PAIRING_LOST } from '../lib/identity';
 import { useApp } from '../lib/store';
 import { PAIRING_SCHEME } from '@shipstudio/companion-protocol';
 import { haptic } from '../lib/haptics';
@@ -67,6 +68,7 @@ export default function Pair() {
   const [startStep, setStartStep] = useState<'tailscale' | 'scan'>('tailscale');
   const abort = useRef<AbortController | null>(null);
   const current = useApp((s) => s.credentials);
+  const pairingLost = useApp((s) => s.pairingLost);
 
   const begin = useCallback(async (link: PairingLink) => {
     abort.current?.abort();
@@ -173,6 +175,14 @@ export default function Pair() {
 
       {phase.kind === 'start' && (
         <Animated.View entering={FadeIn.duration(200)} style={styles.block} key={startStep}>
+          {pairingLost && (
+            <View testID="pairing-lost">
+              <T variant="headline" color={colors.textStrong}>
+                Pair again
+              </T>
+              <T color={colors.textSecondary}>{PAIRING_LOST}</T>
+            </View>
+          )}
           {(phase.error ?? (incoming && !incomingLink ? linkProblem(incoming) : null)) && (
             <Animated.View entering={FadeInDown.duration(200)}>
               <T variant="small" color={colors.accentErrorLight}>

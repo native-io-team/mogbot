@@ -17,7 +17,7 @@
  * @module components/agents/AgentResult
  */
 
-import { memo, useEffect, useState, type ReactNode } from 'react';
+import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import {
   ChevronRightIcon,
@@ -40,6 +40,7 @@ import { CompareShot, ResultCompare } from './AgentCompare';
 import { useImageViewer } from './AgentGallery';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
+import { readResultCard } from '../../lib/cardShapes';
 import {
   CHECKED_HEADING,
   CHECKPOINT_LABEL,
@@ -238,7 +239,7 @@ interface ResultCardViewProps {
 /** One result, one card. */
 export const ResultCardView = memo(function ResultCardView({
   message,
-  card,
+  card: givenCard,
   agent,
   newest,
   onAskForChanges,
@@ -249,6 +250,9 @@ export const ResultCardView = memo(function ResultCardView({
   arrived,
   onPreview,
 }: ResultCardViewProps) {
+  // Read field by field: a part that arrived missing or odd is left out
+  // rather than throwing the whole card to its fallback.
+  const card = useMemo(() => readResultCard(givenCard), [givenCard]);
   const footer = given ?? (work && <WorkTimeline work={work} agent={agent} />);
   const [opened, setOpened] = useState(false);
   // Agents mode's pane beside the chat; elsewhere Preview opens the project.

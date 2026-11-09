@@ -21,6 +21,7 @@ import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
 import { useQuotas } from '../lib/quota';
 import { call, canCall } from '../lib/session';
+import { asOverview } from '../lib/wellFormed';
 import { setApp, useApp } from '../lib/store';
 import { iconSize, space } from '../lib/theme';
 import { usePolling } from '../lib/usePolling';
@@ -55,7 +56,10 @@ export default function Usage() {
         readQuotas(),
         readPlan(),
         // The context figure rides on the agent's row.
-        call('agents.overview', {}).then((overview) => setApp({ overview })),
+        call('agents.overview', {}).then((raw) => {
+          const overview = asOverview(raw);
+          if (overview) setApp({ overview });
+        }),
       ]);
     } catch {
       // Whatever came back is shown; the rest keeps its last reading.

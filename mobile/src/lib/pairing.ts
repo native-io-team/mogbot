@@ -129,9 +129,65 @@ const KEY = 'shipstudio.mac';
 // Excluded from backups and other devices: the token is this phone's alone.
 const STORE_OPTS = { keychainAccessible: SecureStore.WHEN_UNLOCKED_THIS_DEVICE_ONLY };
 
+const filled = (v: unknown): v is string => typeof v === 'string' && v.length > 0;
+
+/**
+ * A saved pairing read back, or null when it isn't one: every field the
+ * connection sends or checks must be there and of its type. A route that
+ * isn't one is left out; with none left there's nothing to reach.
+ */
+export function asCredentials(v: unknown): Credentials | null {
+  if (typeof v !== 'object' || v === null || Array.isArray(v)) return null;
+  const c = v as Record<string, unknown>;
+  if (!filled(c.serverId) || !filled(c.deviceId) || !filled(c.token)) return null;
+  if (!Array.isArray(c.routes)) return null;
+  const routes = c.routes.filter(
+    (r): r is Route =>
+      typeof r === 'object' && r !== null && filled(r.kind) && filled((r as Route).url)
+  );
+  if (!routes.length) return null;
+  if (c.fingerprint != null && typeof c.fingerprint !== 'string') return null;
+  return {
+    ...(c as unknown as Credentials),
+    name: filled(c.name) ? c.name : 'Your Mac',
+    routes,
+    secretKey: typeof c.secretKey === 'string' ? c.secretKey : '',
+    pairedAt: typeof c.pairedAt === 'number' && Number.isFinite(c.pairedAt) ? c.pairedAt : 0,
+  };
+}
+
+/**
+ * The keychain's pairing: `damaged` when something is saved but can't be
+ * read as one (a torn write, a build that saved another shape). It is
+ * never used, and is removed so the next launch doesn't trip on it again.
+ */
+export type SavedPairing =
+  | { kind: 'none' }
+  | { kind: 'paired'; credentials: Credentials }
+  | { kind: 'damaged' };
+
+export function readCredentials(raw: string | null): SavedPairing {
+  if (!raw) return { kind: 'none' };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { kind: 'damaged' };
+  }
+  const credentials = asCredentials(parsed);
+  return credentials ? { kind: 'paired', credentials } : { kind: 'damaged' };
+}
+
+/** The saved pairing; a damaged one is removed from the keychain here. */
+export async function loadPairing(): Promise<SavedPairing> {
+  const saved = readCredentials(await SecureStore.getItemAsync(KEY, STORE_OPTS));
+  if (saved.kind === 'damaged') await forgetCredentials().catch(() => {});
+  return saved;
+}
+
 export async function loadCredentials(): Promise<Credentials | null> {
-  const raw = await SecureStore.getItemAsync(KEY, STORE_OPTS);
-  return raw ? (JSON.parse(raw) as Credentials) : null;
+  const saved = await loadPairing();
+  return saved.kind === 'paired' ? saved.credentials : null;
 }
 
 export const saveCredentials = (c: Credentials) =>

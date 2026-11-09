@@ -20,6 +20,11 @@ import type { TextSize } from './theme';
 export interface AppState extends SyncState {
   /** Read from the keychain at launch; `undefined` until then. */
   credentials: Credentials | null | undefined;
+  /**
+   * A pairing was saved but couldn't be read at launch, so it was removed:
+   * the pairing screen says so and asks to pair again. Cleared on pairing.
+   */
+  pairingLost: boolean;
   link: LinkState;
   welcome: WelcomeFrame | null;
   /**
@@ -65,6 +70,7 @@ export const defaultPrefs: Prefs = { haptics: true, appearance: 'system', textSi
 export const useApp = create<AppState>(() => ({
   ...emptySync(),
   credentials: undefined,
+  pairingLost: false,
   link: { kind: 'connecting', attempt: 0 },
   welcome: null,
   served: null,

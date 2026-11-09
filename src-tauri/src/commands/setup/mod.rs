@@ -349,9 +349,8 @@ fn get_scenario_items(scenario: &str) -> Vec<&'static str> {
 
 /// Initialize mock state from SHIPSTUDIO_FORCE_SETUP env var
 fn initialize_mock_state() {
-    let mut initialized = MOCK_INITIALIZED
-        .lock()
-        .expect("MOCK_INITIALIZED mutex poisoned");
+    // A panic elsewhere while holding it leaves a bool behind, nothing torn.
+    let mut initialized = MOCK_INITIALIZED.lock().unwrap_or_else(|e| e.into_inner());
     if *initialized {
         return;
     }
