@@ -145,7 +145,7 @@ describe('AgentOnboardingScreen', () => {
     setIndependence.mockRejectedValueOnce({ type: 'Other', message: 'Disk full' });
     render(<AgentOnboardingScreen onComplete={vi.fn()} />);
     await heading('How much should your agents do on their own?');
-    const slider = screen.getByRole('slider', { name: 'How much it does on its own' });
+    const slider = screen.getByRole('slider', { name: 'Independence' });
     expect(slider).toHaveAttribute('aria-valuetext', expect.stringMatching(/^Steady\./));
     fireEvent.keyDown(slider, { key: 'ArrowRight' });
     expect(slider).toHaveAttribute('aria-valuetext', expect.stringMatching(/^Bold\./));

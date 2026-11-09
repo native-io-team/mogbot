@@ -579,9 +579,9 @@ pub fn schema() -> Value {
                 "type": "object",
                 "description": "Only what changes. A base first (preset, like, or same_as_team), then any field on top.",
                 "properties": {
-                    "preset": { "type": "string", "enum": ["trusted", "balanced", "locked"], "description": "trusted (\"I trust my agents\"), balanced (the default) or locked (\"Locked down\")." },
+                    "preset": { "type": "string", "enum": ["trusted", "balanced", "locked"], "description": "An independence stop together with the reach that goes with it, for when the user asks for a whole posture in words: trusted is Bold, changing projects directly, every app, the browser (\"I trust my agents\"); balanced is Steady, its own copy of projects, apps and browser (the default); locked is Careful, read-only projects, no apps, no browser (\"lock everyone down\"). Independence is the one scale the user sees (Careful, Steady, Bold, Unleashed): name the stop and what changes, never \"a preset\"." },
                     "like": { "type": "string", "description": "Make it like this other agent (name)." },
-                    "same_as_team": { "type": "boolean", "description": "Drop its own settings and use the team's." },
+                    "same_as_team": { "type": "boolean", "description": "Drop its own settings and use the team's. With agents [\"everyone\"], every agent goes back to the team's settings." },
                     "projects": {
                         "type": "object",
                         "properties": {

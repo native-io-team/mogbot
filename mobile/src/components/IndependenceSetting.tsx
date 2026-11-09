@@ -1,7 +1,8 @@
 /**
- * Settings → How much it does on its own: the same four-stop slider as the
- * desk's Settings → Agents (Careful, Steady, Bold, Unleashed), worded by the
- * protocol's `independence.ts`. Read
+ * Settings → Independence: the same four-stop slider as the desk's Settings →
+ * Independence (Careful, Steady, Bold, Unleashed), worded by the protocol's
+ * `independence.ts`. One control for it everywhere: an agent's own level on
+ * its sheet is the same slider (`AgentLevelRow`). Read
  * from the overview (`independence`), written with `agents.setIndependence`,
  * which the Mac audits. A Mac that doesn't send it shows nothing; one that
  * doesn't serve the write shows the choice, not offered.
@@ -10,9 +11,6 @@
 import {
   AGENT_INDEPENDENCE_TITLE,
   INDEPENDENCE_ALWAYS_ASKS,
-  INDEPENDENCE_DETAIL,
-  INDEPENDENCE_LABEL,
-  INDEPENDENCE_LEVELS,
   INDEPENDENCE_SHORT,
   INDEPENDENCE_TITLE,
   effectiveIndependence,
@@ -25,10 +23,11 @@ import {
   type AgentIndependence,
 } from '@shipstudio/companion-protocol';
 import { useEffect, useState } from 'react';
-import { Alert } from 'react-native';
+import { Alert, View } from 'react-native';
 import { IndependenceSlider } from './IndependenceSlider';
-import { choose } from './menu';
 import { Row, Section, tap } from './ui';
+import { makeStyles } from '../lib/appearance';
+import { space } from '../lib/theme';
 import { haptic } from '../lib/haptics';
 import { call, describeError } from '../lib/session';
 import { useApp, useServed } from '../lib/store';
@@ -81,10 +80,12 @@ export function IndependenceSetting() {
 }
 
 /**
- * The agent sheet's "How much it does on its own": "Same as team (Bold)"
- * first, then the four levels (Careful to Unleashed), in one sheet. Written with
- * `agents.setAgentIndependence` (audited on the Mac); a Mac that doesn't
- * serve it shows nothing. The user choosing it here applies at once.
+ * The agent sheet's Independence: the same slider, for this agent, with
+ * whether it follows the team ("Same as team (Bold)") beside the title.
+ * Moving it gives the agent a level of its own; "Use the team's" puts it
+ * back. Written with `agents.setAgentIndependence` (audited on the Mac); a
+ * Mac that doesn't serve it shows nothing. The user choosing it here applies
+ * at once.
  */
 export function AgentLevelRow({
   agent,
@@ -99,6 +100,7 @@ export function AgentLevelRow({
 }) {
   const team = useApp((s) => s.overview?.independence ?? null);
   const canSet = useServed('agents.setAgentIndependence');
+  const styles = useStyles();
   if (!canSet) return null;
   const own = agent.independence ?? null;
   const effective = effectiveIndependence(agent, team);
@@ -113,21 +115,32 @@ export function AgentLevelRow({
   };
 
   return (
-    <Row
-      label={AGENT_INDEPENDENCE_TITLE}
-      value={own ? INDEPENDENCE_SHORT[own] : sameAsTeamLabel(team)}
-      detail={INDEPENDENCE_DETAIL[effective]}
-      disabled={!enabled}
-      last={last}
-      onPress={() =>
-        choose(AGENT_INDEPENDENCE_TITLE, [
-          { label: sameAsTeamLabel(team), run: () => pick('team') },
-          ...INDEPENDENCE_LEVELS.map((l) => ({ label: INDEPENDENCE_LABEL[l], run: () => pick(l) })),
-        ], `What ${agent.name} does without asking you.`)
-      }
-    />
+    <View>
+      <Row
+        label={AGENT_INDEPENDENCE_TITLE}
+        value={own ? INDEPENDENCE_SHORT[own] : sameAsTeamLabel(team)}
+        disabled={!enabled}
+        last
+      />
+      <View style={[styles.slider, last && !own && styles.sliderLast]}>
+        <IndependenceSlider value={effective} onChange={(l) => pick(l)} disabled={!enabled} />
+      </View>
+      {own && (
+        <Row
+          label={`Use the team’s (${INDEPENDENCE_SHORT[independenceOf(team)]})`}
+          onPress={() => pick('team')}
+          disabled={!enabled}
+          last={last}
+        />
+      )}
+    </View>
   );
 }
+
+const useStyles = makeStyles(() => ({
+  slider: { paddingHorizontal: space.lg, paddingBottom: space.md, gap: space.sm },
+  sliderLast: { paddingBottom: space.lg },
+}));
 
 /** The tiny label on an agent's row, only when it differs from the team's. */
 export function useAgentLevelLabel(agent: Pick<Agent, 'independence'>): string | null {

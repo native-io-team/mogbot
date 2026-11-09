@@ -1,11 +1,14 @@
 /**
- * Settings → Agents → What agents can do: the team's defaults every agent
- * starts from (`agents/policy.rs`), the three presets, and "Reset everyone to
- * …". Secondary to chat: asking the Chief of Staff ("let Hiring work in the
- * client site", "lock everyone down") proposes the same changes on a card.
+ * Settings → Independence → What agents can reach: the team's defaults every
+ * agent starts from (`agents/policy.rs`): projects, folders, apps, the
+ * browser, rules, and "Reset everyone to the team's settings". Secondary to
+ * chat: asking the Chief of Staff ("let Hiring work in the client site",
+ * "lock everyone down") proposes the same changes on a card.
  *
- * Picking a preset changes the team's defaults; agents with settings of
- * their own keep them until "Reset everyone", which asks first.
+ * No presets and no level here: independence is one scale, the slider above
+ * this on the same page, so its line is left out rather than shown twice.
+ * Agents with settings of their own keep them until the reset, which asks
+ * first.
  *
  * @module components/agents/AgentTeamPolicySettings
  */
@@ -22,11 +25,9 @@ import { takeSettingsSectionRequest } from '../../lib/settings';
 import {
   ENFORCED_NOTE,
   POLICY_EVENT,
-  PRESET_LABEL,
-  resetLabel,
+  RESET_EVERYONE_LABEL,
   setPolicy,
   teamPolicy,
-  type PolicyPreset,
   type TeamPolicyView,
 } from '../../lib/agentPolicy';
 
@@ -35,7 +36,7 @@ export function AgentTeamPolicySettings() {
   const { data: view, error: loadError, execute } = useAsyncState<TeamPolicyView>(load);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [resetting, setResetting] = useState<PolicyPreset | null>(null);
+  const [resetting, setResetting] = useState(false);
   const [ref, setRef] = useState<HTMLElement | null>(null);
   useEffect(() => {
     void execute();
@@ -51,18 +52,18 @@ export function AgentTeamPolicySettings() {
     }
   }, [view, ref]);
 
-  const run = async (everyone: boolean, preset: PolicyPreset) => {
+  const resetEveryone = async () => {
     setError(null);
     setBusy(true);
     try {
-      await setPolicy({ kind: 'team', everyone }, { preset });
+      await setPolicy({ kind: 'team', everyone: true }, { sameAsTeam: true });
       await execute();
       await refreshAgents();
     } catch (err) {
       setError(formatCommandError(asCommandError(err)));
     } finally {
       setBusy(false);
-      setResetting(null);
+      setResetting(false);
     }
   };
 
@@ -75,7 +76,8 @@ export function AgentTeamPolicySettings() {
     ) : null;
   }
   const own = view.ownSettings;
-  const resetTo = view.preset ?? 'balanced';
+  // The level is the slider's, above on the same page.
+  const lines = view.lines.filter((l) => l.key !== 'independence');
 
   return (
     <section
@@ -85,34 +87,15 @@ export function AgentTeamPolicySettings() {
       ref={setRef}
     >
       <h3 className="settings-group__title" id="agents-settings-policy">
-        What agents can do
+        What agents can reach
       </h3>
       <div className="settings-section agent-team-policy__body">
         <span className="agent-team-policy__lead">
           Every agent starts from these. To change one agent, or everyone, just ask your Chief of
           Staff in chat: it shows you the change on a card first.
         </span>
-        <div className="agent-team-policy__presets" role="radiogroup" aria-label="Team defaults">
-          {view.presets.map((p) => (
-            <button
-              key={p.id}
-              type="button"
-              role="radio"
-              aria-checked={view.preset === p.id}
-              className="agent-team-policy__preset"
-              disabled={busy}
-              onClick={() => view.preset !== p.id && void run(false, p.id)}
-            >
-              <span className="agent-team-policy__preset-label">{p.label}</span>
-              <span className="agent-team-policy__preset-detail">{p.blurb}</span>
-            </button>
-          ))}
-        </div>
-        {!view.preset && (
-          <span className="agent-team-policy__lead">The team’s defaults are your own mix.</span>
-        )}
         <dl className="agent-team-policy__lines">
-          {view.lines.map((l) => (
+          {lines.map((l) => (
             <div key={l.key} className="agent-team-policy__line">
               <dt>{l.label}</dt>
               <dd>
@@ -131,14 +114,16 @@ export function AgentTeamPolicySettings() {
               ? 'No agent has settings of its own.'
               : `${own.length === 1 ? '1 agent has' : `${own.length} agents have`} settings of ${own.length === 1 ? 'its' : 'their'} own: ${own.join(', ')}.`}
           </span>
-          <Button
-            variant="secondary"
-            size="compact"
-            disabled={busy}
-            onClick={() => setResetting(resetTo)}
-          >
-            {resetLabel(resetTo)}
-          </Button>
+          {own.length > 0 && (
+            <Button
+              variant="secondary"
+              size="compact"
+              disabled={busy}
+              onClick={() => setResetting(true)}
+            >
+              {RESET_EVERYONE_LABEL}
+            </Button>
+          )}
         </div>
         {error && (
           <p className="agent-editor__error" role="alert">
@@ -149,12 +134,12 @@ export function AgentTeamPolicySettings() {
       </div>
       {resetting && (
         <ProjectActionConfirmModal
-          title={`${resetLabel(resetting)}?`}
+          title={`${RESET_EVERYONE_LABEL}?`}
           body={
             <p>
-              Every agent goes to {PRESET_LABEL[resetting]}
-              {own.length > 0 ? `, and ${own.join(', ')} lose their own settings` : ''}. Who’s an
-              admin stays as it is.
+              {own.join(', ')} {own.length === 1 ? 'loses its' : 'lose their'} own settings, level
+              included, and {own.length === 1 ? 'goes' : 'go'} back to the team’s. Who’s an admin
+              stays as it is.
             </p>
           }
           hint="It applies from each agent’s next turn."
@@ -162,8 +147,8 @@ export function AgentTeamPolicySettings() {
           confirmLabel="Reset everyone"
           loadingLabel="Resetting…"
           confirmVariant="primary"
-          onCancel={() => setResetting(null)}
-          onConfirm={() => void run(true, resetting)}
+          onCancel={() => setResetting(false)}
+          onConfirm={() => void resetEveryone()}
         />
       )}
     </section>

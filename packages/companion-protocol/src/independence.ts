@@ -1,8 +1,13 @@
 /**
- * How much the user's agents do on their own (`agents::independence`),
- * worded once for onboarding, Settings → Agents and the phone: a four-stop
- * slider from "Careful" to "Unleashed", one line for the chosen stop, and one
- * line under it that is true at every stop.
+ * Independence: how much the user's agents do on their own
+ * (`agents::independence`). One idea, one name, one control: the four-stop
+ * slider from "Careful" to "Unleashed", worded once here for onboarding,
+ * Settings → Independence, an agent's editor, the phone and the site. One line
+ * for the chosen stop, and one line under it that is true at every stop.
+ *
+ * There is no second scale. What agents can reach (projects, apps, the
+ * browser) is a list of settings of its own (`policy.ts`), changed one line at
+ * a time or from chat, never a set of presets beside the slider.
  */
 
 import type { AgentIndependence } from './model';
@@ -26,7 +31,7 @@ export const INDEPENDENCE_QUESTION = 'How much should your agents do on their ow
  * only these words are shown. Each line is checked against what the level
  * really answers (`agents::autoallow`, `agents::go_hard`).
  */
-export const INDEPENDENCE_TITLE = 'How much it does on its own';
+export const INDEPENDENCE_TITLE = 'Independence';
 
 export const INDEPENDENCE_ENDS = { low: 'Asks a lot', high: 'Just does it' } as const;
 
@@ -83,7 +88,7 @@ export const INDEPENDENCE_SHORT: Record<AgentIndependence, string> = INDEPENDENC
 /** The tiny label on an agent's row when its level differs from the team's. */
 export const INDEPENDENCE_ROW_LABEL: Record<AgentIndependence, string> = INDEPENDENCE_LABEL;
 
-/** The heading over one agent's level: the slider's own title. */
+/** The heading over one agent's level: the slider's own title, the same word everywhere. */
 export const AGENT_INDEPENDENCE_TITLE = INDEPENDENCE_TITLE;
 
 /** The picker's first option: follow the team, naming the team's level. */

@@ -429,18 +429,23 @@ describe('formatUsage', () => {
     expect(engineUnavailable(codex)).toBe('install');
     expect(engineUnavailable({ ...codex, installed: true })).toBe('sign-in');
     expect(engineUnavailable({ ...codex, installed: true, signedIn: true })).toBeNull();
-    expect(engineProtections('claude')).toMatch(/asks you first, unless you've already allowed it/);
+    // What the engine enforces, under the level: never a second answer to
+    // "what does it do on its own" (the independence slider's).
+    expect(engineProtections('claude')).toMatch(/^Claude Code enforces:/);
+    expect(engineProtections('claude')).toMatch(/decided by its independence/);
     const app = engineProtections('codex', { ...codex, installed: true, asks: true });
     expect(app).toMatch(/can't reach the internet/);
-    expect(app).toMatch(/asks you first/);
+    expect(app).toMatch(/decided by its independence/);
     expect(app).toMatch(/connected to Codex aren't limited/);
     // An old Codex can't ask: the line must not say it does, and says so plainly.
     const old = engineProtections('codex', { ...codex, installed: true, asks: false });
     expect(old).toMatch(/can't stop to ask you/);
-    expect(old).not.toMatch(/asks you first/);
+    expect(old).not.toMatch(/decided by its independence/);
     // No jargon: these are read by people who don't run terminals.
     for (const line of [engineProtections('claude'), app, old]) {
       expect(line).not.toMatch(/sandbox|app-server|exec\b|MCP/i);
+      // No "on its own" / "asks you first" claim to contradict the level.
+      expect(line).not.toMatch(/on its own|asks you first/);
     }
   });
 

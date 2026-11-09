@@ -58,6 +58,7 @@ import { call, canCall, describeError, setAgentAccount, setAgentEngine } from '.
 import { useApp, useServed } from '../lib/store';
 import { iconSize, space } from '../lib/theme';
 import { choose } from './menu';
+import { IndependenceSlider } from './IndependenceSlider';
 import { SheetTitle } from './SheetTitle';
 import { Icon, Row, Section, T } from './ui';
 
@@ -322,7 +323,7 @@ function RunsOn({
 const rank = (l: AgentIndependence) => INDEPENDENCE_LEVELS.indexOf(l);
 
 /**
- * "Same as team (Bold)" and the four levels (Careful to Unleashed). Going past the team's level
+ * "Same as team (Bold)" and the slider (Careful to Unleashed). Going past the team's level
  * asks first, saying what it then does without asking and what still asks.
  */
 function LevelChoices({
@@ -336,6 +337,7 @@ function LevelChoices({
   disabled: boolean;
   onError: (text: string | null) => void;
 }) {
+  const styles = useStyles();
   const own = agent.independence ?? null;
   const effective = effectiveIndependence(agent, team);
   const apply = (level: AgentIndependence | 'team') => {
@@ -361,25 +363,19 @@ function LevelChoices({
     }
     apply(level);
   };
-  const rows: { level: AgentIndependence | 'team'; label: string }[] = [
-    { level: 'team', label: sameAsTeamLabel(team) },
-    ...INDEPENDENCE_LEVELS.map((l) => ({ level: l, label: INDEPENDENCE_LABEL[l] })),
-  ];
+  // The one control for independence, as everywhere: the slider, and
+  // whether it follows the team.
   return (
-    <Section
-      title={AGENT_INDEPENDENCE_TITLE}
-      footer={`${INDEPENDENCE_DETAIL[effective]} From its next step, even mid-turn.`}
-    >
-      {rows.map((r, i) => (
-        <Choice
-          key={r.level}
-          label={r.label}
-          on={r.level === 'team' ? !own : r.level === own}
-          disabled={disabled}
-          onPress={() => pick(r.level)}
-          last={i === rows.length - 1}
-        />
-      ))}
+    <Section title={AGENT_INDEPENDENCE_TITLE} footer="From its next step, even mid-turn.">
+      <Choice
+        label={sameAsTeamLabel(team)}
+        on={!own}
+        disabled={disabled}
+        onPress={() => pick('team')}
+      />
+      <View style={styles.slider}>
+        <IndependenceSlider value={effective} onChange={(l) => pick(l)} disabled={disabled} />
+      </View>
     </Section>
   );
 }
@@ -405,4 +401,5 @@ const useStyles = makeStyles(() => ({
   lead: { marginBottom: space.sm },
   note: { flexDirection: 'row', alignItems: 'center', gap: space.sm, marginBottom: space.sm },
   check: { width: iconSize.body },
+  slider: { paddingHorizontal: space.lg, paddingVertical: space.md },
 }));

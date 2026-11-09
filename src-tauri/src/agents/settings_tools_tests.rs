@@ -256,3 +256,21 @@ fn the_account_card_says_what_changes() {
     }));
     assert!(detail.contains("“Side project”"), "{detail}");
 }
+
+#[test]
+fn settings_pages_are_named_and_offered() {
+    for page in SETTINGS_PAGES {
+        assert!(settings_page_title(page).is_some(), "{page} has a title");
+    }
+    assert_eq!(settings_page_title("phone"), Some("Phone"));
+    assert_eq!(settings_page_title("nowhere"), None);
+    let def = find("open_settings").expect("the Chief can open a page");
+    let schema = (def.schema)();
+    assert_eq!(
+        schema["properties"]["page"]["enum"]
+            .as_array()
+            .unwrap()
+            .len(),
+        SETTINGS_PAGES.len()
+    );
+}

@@ -1,25 +1,24 @@
 /**
- * One agent's own independence level, in its editor: "Same as team (Bold)"
- * first, then the four levels (Careful to Unleashed). Saved at once, like the Admin switch,
- * because the user is the one choosing (from chat, raising one goes through
- * the Chief's card). The row label it leads to is `AgentLevelBadge`.
+ * One agent's own independence, in its editor: the same four-stop slider as
+ * Settings → Independence and onboarding (one control everywhere), with
+ * whether it follows the team's level beside the title. Moving the slider
+ * gives it a level of its own; "Use the team's" puts it back. Saved at once,
+ * like the Admin switch, because the user is the one choosing (from chat,
+ * raising one goes through the Chief's card). The row label it leads to is
+ * `AgentLevelBadge`.
  *
  * @module components/agents/AgentLevelPicker
  */
 
 import { useState } from 'react';
-import { Dropdown, DropdownDivider, DropdownItem } from '../primitives/Dropdown';
-import { MenuButton } from '../primitives/MenuButton';
-import { ChevronIcon } from '@/components/icons';
+import { TextButton } from '../primitives/TextButton';
+import { IndependenceSlider } from './IndependenceSlider';
 import {
   AGENT_INDEPENDENCE_TITLE,
-  INDEPENDENCE_DETAIL,
-  INDEPENDENCE_LABEL,
-  INDEPENDENCE_LEVELS,
-  INDEPENDENCE_STILL_ASKS,
+  INDEPENDENCE_SHORT,
   effectiveIndependence,
+  independenceOf,
   independenceRowLabel,
-  sameAsTeamLabel,
   setAgentIndependence,
   type AgentIndependence,
 } from '../../lib/agentIndependence';
@@ -58,44 +57,20 @@ export function AgentLevelPicker({ agent }: { agent: Agent }) {
     >
       <span className="agent-level-picker__row">
         <span>{AGENT_INDEPENDENCE_TITLE}</span>
-        {/* Opens upward: the row sits low in a long dialog, and a menu cut off by the window is no menu. */}
-        <Dropdown
-          align="right"
-          side="top"
-          portal
-          menuClassName="agent-level-menu"
-          trigger={(p) => (
-            <MenuButton
-              {...p}
-              expanded={p['aria-expanded']}
-              variant="secondary"
-              size="compact"
-              disabled={picked !== null}
-              rightIcon={
-                <ChevronIcon
-                  size={10}
-                  className={p['aria-expanded'] ? 'chevron-flipped' : undefined}
-                />
-              }
-            >
-              {own ? INDEPENDENCE_LABEL[own] : sameAsTeamLabel(team)}
-            </MenuButton>
-          )}
-        >
-          <DropdownItem active={!own} onSelect={() => void choose('team')}>
-            {sameAsTeamLabel(team)}
-          </DropdownItem>
-          <DropdownDivider />
-          {INDEPENDENCE_LEVELS.map((level) => (
-            <DropdownItem key={level} active={own === level} onSelect={() => void choose(level)}>
-              {INDEPENDENCE_LABEL[level]}
-            </DropdownItem>
-          ))}
-        </Dropdown>
+        {own ? (
+          <TextButton tabIndex={0} disabled={picked !== null} onClick={() => void choose('team')}>
+            Use the team’s ({INDEPENDENCE_SHORT[independenceOf(team)]})
+          </TextButton>
+        ) : (
+          <span className="agent-level-picker__follows">Same as team</span>
+        )}
       </span>
-      <p className="agent-editor__hint">
-        {INDEPENDENCE_DETAIL[effective]} {INDEPENDENCE_STILL_ASKS[effective]}
-      </p>
+      <IndependenceSlider
+        value={effective}
+        onChange={(level) => void choose(level)}
+        disabled={picked !== null}
+        showTitle={false}
+      />
     </div>
   );
 }

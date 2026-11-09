@@ -1137,11 +1137,26 @@ never "session", in what people read; **Take over / Hand back** (no noun
 where the copy means this computer. No branch names, exit codes, tab
 numbers, "via connector" or "(import)" in anything a person reads.
 
-## How much agents do on their own
+## Independence: how much agents do on their own
+
+**One idea, one name, one control.** Independence is the only answer to "how
+much does it do without asking me": one four-stop slider, titled
+"Independence", everywhere it is set (onboarding, Settings → Independence,
+Edit agent, the phone's Settings and agent sheet, Agent controls), with the
+same one line per stop from the protocol's `independence.ts`. There is no
+second scale: the three presets ("I trust my agents", "Balanced", "Locked
+down") are gone from the desk, and what agents can *reach* (projects, apps,
+the browser) is a list of settings, not a scale (see "What each agent may
+do"). Menus and titles say "Independence…", "<Agent>'s independence" and
+"Each agent's independence". The engine's own limits are worded as what the
+engine enforces *under* the level ("Claude Code enforces: file edits go ahead
+in its project and its own folder; everything else is decided by its
+independence", `engineProtections`), low in Edit agent, never beside the
+level as a second answer.
 
 One choice for the whole team (`agents/independence.rs`), drawn on desk and
-phone as one four-stop slider titled "How much it does on its own", "Asks a
-lot" at the left end and "Just does it" at the right:
+phone as one four-stop slider titled "Independence", "Asks a lot" at the
+left end and "Just does it" at the right:
 
 | Stop | Stored id | Its line under the slider |
 | --- | --- | --- |
@@ -1169,8 +1184,8 @@ control for VoiceOver; arrows, Home and End on the desk). "Go full send" or
 "unleash it" to the Chief raises one settings card (`propose_settings_change`,
 `independence: full_send`).
 Asked once in onboarding, after the engine is ready and before the hand-off
-(Skip keeps the default); kept in Settings → Agents → Independence, ⌘K "How
-independent your agents are…", and the phone's Settings
+(Skip keeps the default); kept in Settings → Independence, ⌘K
+"Independence…", and the phone's Settings
 (`agents.setIndependence`, audited; read from the overview's `independence`).
 Saved in `agents/independence.json`.
 
@@ -1191,16 +1206,18 @@ as before (`independence::for_turn`), whatever its own level.
   back on a higher team level) is one card. Lowering only, with nothing else
   changing, applies at once with a "Settings changed: …" line in the chat and
   each changed agent's (`policy_card::lowers_only`).
-- **On the desk.** The agent editor's "How much it does on its own":
-  "Same as team (Bold)" first, then the four levels; saved at once
+- **On the desk.** The agent editor's "Independence": the same slider, with
+  "Same as team" (or "Use the team's (Bold)" when it has its own) beside the
+  title; moving it gives the agent its own level, saved at once
   (`agents_policy_set`, which also answers open cards a raise now covers).
   The sidebar row shows a tiny label ("Unleashed", "Careful") only when
-  the agent's level differs from the team's; Settings → Agents → Independence
+  the agent's level differs from the team's; Settings → Independence
   says "Agents set on their own: N" when any are.
-- **On the phone.** The same row on the agent sheet
-  (`agents.setAgentIndependence { agentId, level | "team" }`, audited; a Mac
-  that doesn't serve it shows no row), the same row label on Home, and the
-  count under Settings' choice. The overview carries each agent's own level as
+- **On the phone.** The same slider on the agent sheet and in Agent controls,
+  with "Same as team" (`agents.setAgentIndependence { agentId, level |
+  "team" }`, audited; a Mac that doesn't serve it shows no row; raising past
+  the team's asks first in Agent controls), the same row label on Home, and
+  the count under Settings' slider. The overview carries each agent's own level as
   `independence` (absent: the team's).
 
 **The Chief offers a change when you plainly want one** (`agents/level_hint.rs`).
@@ -1841,7 +1858,7 @@ phone, is `agents_revoke_permission` (`agents.revokePermission`), which also
 takes team rules back and re-emits the line as "Undone". Team rules show only
 on their line: there is no settings list for them yet.
 
-## What it does on its own (`src-tauri/src/agents/on_its_own.rs`)
+## Each agent's independence (`src-tauri/src/agents/on_its_own.rs`)
 
 "What can this agent do without asking me?", answered in one calm view from
 the app's own stores, never inferred (the gap: Grok Bot's plain-language
@@ -1867,10 +1884,11 @@ nothing here can widen; giving stays on cards and in Settings. Applied at
 once, with a line in the agent's chat ("Taken back: Run npm test. It asks
 again."); a team rule is taken back through the Chief.
 
-**Where.** The agent's … and right-click menus ("What it does on its own…"),
-⌘K "What can <agent> do on its own?" per agent and "What your agents do on
-their own…", Settings → Agents (the team's level, rules every agent shares,
-each agent opening in place), the phone's agent sheet and Settings
+**Where.** The agent's … and right-click menus ("Independence…", a view
+titled "<Agent>'s independence"), ⌘K "<Agent>'s independence" per agent and
+"Each agent's independence…", Settings → Independence (under the team's
+slider: rules every agent shares, each agent opening in place), the phone's
+agent sheet ("Without asking, beyond its level") and Settings
 (`agents.onItsOwn`, `agents.onItsOwnTeam`, `agents.onItsOwnNarrow`, the last
 audited, unknown narrow shapes refused at the router). Agents read the same
 source with `what_it_does_on_its_own` (itself always; a teammate or the
@@ -5133,11 +5151,18 @@ Chief); a quiet line in an agent's chat only when its own settings changed.
 Observed: one team rule put ~17 identical "Settings changed: New rule…" notes
 in every chat in the same minute.
 
-**Presets.** "I trust my agents" (direct, every app, browser, Bold),
-**Balanced** (exactly the old behaviour, the default), "Locked down" (read
-projects only, no apps, no browser, Careful). "Reset everyone to
-…" sets the team and clears every agent's own settings (admin role kept);
-"everyone" with one field clears only that field. "Make X like Y" copies Y's
+**Presets, from chat only.** Independence is the one scale the user sees, so
+neither the desk nor the phone offers presets. The Chief still reaches three
+bundles when the user asks for a whole posture in words, each named by the
+stop it sets: `trusted` is Bold with projects changed directly, every app and
+the browser ("I trust my agents"); `balanced` is Steady (exactly the old
+behaviour, the default); `locked` is Careful with read-only projects, no apps
+and no browser ("lock everyone down"). A preset for "everyone" sets the team
+and clears every agent's own settings (admin role kept). Settings →
+Independence's one reset, "Reset everyone to the team's settings", is
+`same_as_team` for everyone: every agent's own settings go (admin role kept),
+the team's are left as they are. "Everyone" with one field clears only that
+field. "Make X like Y" copies Y's
 own settings (not its admin role).
 
 **Upgrade, no widening.** The first load writes `access.json` from what the
@@ -5183,6 +5208,7 @@ are `agents/settings_tools.rs`. Tests: `agents/settings_chat_tests.rs`,
 | Slack: who answers, where it listens, trigger, let others, on/off | `slack_settings` (Chief) | another agent, a new conversation, letting others in or turning on yes; the rest no. Connecting is `connect: true`, which opens the masked token field on the Mac; a token never goes through chat |
 | Theme; Slow down on battery | `change_app_setting` (Chief) | no, except Slow down on battery off, which is a card unless the user's own message asked; the desk follows (`app-theme-changed`, `app-settings-changed`) |
 | Free disk space in agents' folders | `free_up_space` (Chief) | no: regenerable folders only (`disk::free_up`) |
+| Open a page of Settings ("open my phone settings") | `open_settings` (Chief): `page` is one of the window's pages (`settings_tools::SETTINGS_PAGES`, the desk's `lib/settingsPages.ts`); emits `agents-open-settings` `{ section: "page", page }` | no: it only opens the page, changes nothing |
 | Which account turns start on ("use my personal plan") | `use_account` (Chief): puts that signed-in account first in the order (`wallet::reorder`), failover unchanged | no when the user's own message asked; a card when another agent or a routine did; never for outside text |
 | Engine, model, effort, routines' model | `update_agent` (Chief) | no: what its turns run on, not what they may do; one "Now on Opus · High from its next message" line, as the editor leaves |
 | Mute an agent's notifications | `update_agent` `muted` (Chief) | no; unread and the badge still count it |
@@ -5212,9 +5238,11 @@ and "auto" are understood; anything the engine doesn't list is refused with
 the list. No card, because a model or effort changes cost, not reach; in
 "Save my limits" the Chief already asks before heavy work.
 
-**UI.** Edit agent → "What it can do" (lines with Team default / Its own /
-instructions, quick menus, "Change in chat"); Settings → Agents → "What agents
-can do" (presets, Reset everyone, ⌘K "What agents can do…"); phone: read-only
+**UI.** Edit agent → "What it can reach" (lines with Team default / Its own /
+instructions, quick menus, "Use the team's", "Change in chat"; no
+independence line, the slider above it is the one control); Settings →
+Independence → "What agents can reach" (the team's lines, "Reset everyone to
+the team's settings", ⌘K "What agents can reach…"); phone: read-only
 "What it can do" (`agents.policy`) with "Change in chat", and the card.
 
 **Residuals (not enforced).** Shell commands still go through the usual card,

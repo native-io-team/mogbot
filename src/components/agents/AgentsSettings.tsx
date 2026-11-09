@@ -1,43 +1,26 @@
 /**
- * Settings → Agents: everything about running agents, in one calm place.
+ * The agents' pages of the Settings window (`dashboard/SettingsModal.tsx`,
+ * pages listed in `lib/settingsPages.ts`). Each page is its own scroll, so
+ * nothing is twelve screens down; every group keeps its own component.
  *
- * - **On this Mac**: the menu-bar icon and quick message
- *   (`AgentsDesktopSettings`), and what keeps agents going (keep awake, keep
- *   running when closed, open at login — `useStayOn`, read back from the
- *   thing itself), whether a stopped preview wakes its agent
- *   (`AgentPreviewFixSetting`), and slowing down on battery
- *   (`AgentLowPowerSetting`, `power.rs`).
- * - **Agents' browser**: the team's own Chrome on this Mac (on by default),
- *   and the two permissions a phone sign-in to Google needs
- *   (`AgentsBrowserSettings`, `agent_browser/`).
- * - **Your Chrome**: the user's own Chrome through the app's extension, for
- *   any engine (off by default), with its guided setup
- *   (`AgentsUserChromeSettings`, `user_chrome/`).
- * - **Independence**: how much agents do on their own, a four-stop slider
- *   (Careful, Steady, Bold, Unleashed), and what always asks at every stop
- *   (`AgentIndependenceSettings`, `agents/independence.rs`).
- * - **What agents can do**: the team's defaults, the presets, and "Reset
- *   everyone to …" (`AgentTeamPolicySettings`, `agents/policy.rs`).
- * - What your agents do on their own: the team's level, the rules every
- *   agent shares, each agent's standing rules (`OnItsOwnTeamSettings`,
- *   `agents/on_its_own.rs`), narrowing only. Chat is
- *   the first way to change them; this is the second.
- * - **Engines and models**: the engine and model new agents start on, a
- *   real setting (`AgentDefaultsSettings`), and what routines run on.
- *   Existing agents keep theirs; nothing shown that wasn't read.
- * - **Usage**: how agents use the plans' limits (Normal, Save my limits,
- *   Use it all before reset), what each account last reported, estimates
- *   from past runs, other compute here, and the spare-capacity list
- *   (`AgentsUsage`, `agents/inventory.rs`).
- * - **Accounts**: each engine's accounts, in the order turns try them when
- *   one runs out of usage (`AgentAccounts`, `agents/wallet.rs`).
- * - **Disk space**: free space when low, and each large agent home with
- *   "Free up space" (`AgentsDiskSettings`, `agents/disk.rs`).
- * - **Notifications**: what notifies, quiet hours (`AgentQuietHoursSetting`,
- *   `agents/quiet.rs`), and where to mute one agent.
- * - **Slack**: start agents from a Slack message, answered in the thread
- *   (`AgentsSlackSettings`, `agents/slack.rs`).
- * - **Phone and other assistants**: the way into each.
+ * - **Agents** (`AgentsPage`): this Mac (the menu-bar icon and quick message,
+ *   `AgentsDesktopSettings`; keep awake, keep running when closed, open at
+ *   login, read back from the thing itself, `useStayOn`; whether a stopped
+ *   preview wakes its agent; slowing down on battery, `power.rs`), the
+ *   engine and model new agents start on (`AgentDefaultsSettings`), disk
+ *   space (`AgentsDiskSettings`), and importing agents.
+ * - **Independence** (`IndependencePage`): the one scale, the four-stop
+ *   slider (Careful, Steady, Bold, Unleashed; `AgentIndependenceSettings`),
+ *   what agents can reach (`AgentTeamPolicySettings`, `agents/policy.rs`),
+ *   each agent's independence beyond its level (`OnItsOwnTeamSettings`,
+ *   `agents/on_its_own.rs`), and admins (`AgentAdminSettings`).
+ * - **Accounts & usage** (`AccountsPage`): a slot for the usage and accounts
+ *   groups (`AgentsUsage`, `AgentAccounts`), whose content is their own.
+ * - **Phone** (`PhonePage`): the phone app and other assistants.
+ * - **Notifications** (`NotificationsPage`): what notifies, quiet hours
+ *   (`agents/quiet.rs`), and where to mute one agent.
+ * - **Chrome** (`ChromePage`): the agents' own browser and Your Chrome.
+ * - **Apps** (`AppsPage`): Slack (`agents/slack.rs`) and apps you said no to.
  *
  * Every description is one line.
  *
@@ -69,22 +52,14 @@ import type { EngineInfo } from '../../lib/agents';
 
 const selectEngines = (s: { engines: EngineInfo[] }) => s.engines;
 
-export function AgentsSettings({
-  onOpenPhone,
-  onOpenRemote,
-  onImport,
-}: {
-  onOpenPhone: () => void;
-  onOpenRemote: () => void;
-  /** Import agents: always here, once the first-run question is answered too. */
-  onImport: () => void;
-}) {
+/** This Mac, engines and models, disk space, and importing agents. */
+export function AgentsPage({ onImport }: { onImport: () => void }) {
   const { state: stayOn, change } = useStayOn();
   const engines = useAgentsSelector(selectEngines);
   const hasDefaults = useAgentsSelector((s) => s.defaults !== null);
 
   return (
-    <div className="settings-modal-body agents-settings">
+    <div className="agents-settings">
       <section className="settings-group" aria-labelledby="agents-settings-mac">
         <h3 className="settings-group__title" id="agents-settings-mac">
           On this Mac
@@ -132,27 +107,6 @@ export function AgentsSettings({
         </div>
       </section>
 
-      <SectionBoundary name="browser">
-        <AgentsBrowserSettings />
-      </SectionBoundary>
-      <SectionBoundary name="user-chrome">
-        <AgentsUserChromeSettings />
-      </SectionBoundary>
-
-      <SectionBoundary name="independence">
-        <AgentIndependenceSettings />
-      </SectionBoundary>
-
-      <SectionBoundary name="admin">
-        <AgentAdminSettings />
-      </SectionBoundary>
-      <SectionBoundary name="team-policy">
-        <AgentTeamPolicySettings />
-      </SectionBoundary>
-      <SectionBoundary name="on-its-own">
-        <OnItsOwnTeamSettings />
-      </SectionBoundary>
-
       {engines.length > 0 && hasDefaults && (
         <section className="settings-group" aria-labelledby="agents-settings-engines">
           <h3 className="settings-group__title" id="agents-settings-engines">
@@ -170,29 +124,118 @@ export function AgentsSettings({
         </section>
       )}
 
-      {engines.some((e) => e.installed) && (
-        <SectionBoundary name="usage">
-          <AgentUsageSettings />
-        </SectionBoundary>
-      )}
-
-      {engines.some((e) => e.installed) && (
-        <SectionBoundary name="accounts">
-          <AgentAccounts engines={engines} />
-        </SectionBoundary>
-      )}
-
-      <SectionBoundary name="declined-apps">
-        <DeclinedAppsSettings />
-      </SectionBoundary>
-
       <SectionBoundary name="disk">
         <AgentsDiskSettings />
       </SectionBoundary>
 
+      <section className="settings-group" aria-labelledby="agents-settings-import">
+        <h3 className="settings-group__title" id="agents-settings-import">
+          Bring agents in
+        </h3>
+        <div className="settings-section">
+          <Row
+            label="Import agents"
+            description="Bring the agents another assistant runs for you, with their memory and routines."
+          >
+            <Button variant="secondary" data-settings-open="import" onClick={onImport}>
+              Import…
+            </Button>
+          </Row>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+/** The one scale, what it reaches, each agent beyond its level, and admins. */
+export function IndependencePage() {
+  return (
+    <div className="agents-settings">
+      <SectionBoundary name="independence">
+        <AgentIndependenceSettings />
+      </SectionBoundary>
+      <SectionBoundary name="team-policy">
+        <AgentTeamPolicySettings />
+      </SectionBoundary>
+      <SectionBoundary name="on-its-own">
+        <OnItsOwnTeamSettings />
+      </SectionBoundary>
+      <SectionBoundary name="admin">
+        <AgentAdminSettings />
+      </SectionBoundary>
+    </div>
+  );
+}
+
+/**
+ * Usage and accounts: a slot. What's inside is the usage and accounts
+ * groups' own (`AgentsUsage`, `AgentAccounts`); this page only places them.
+ */
+export function AccountsPage() {
+  const engines = useAgentsSelector(selectEngines);
+  const loaded = useAgentsSelector((s) => s.loaded);
+  const any = engines.some((e) => e.installed);
+  return (
+    <div className="agents-settings">
+      {any && (
+        <SectionBoundary name="usage">
+          <AgentUsageSettings />
+        </SectionBoundary>
+      )}
+      {any && (
+        <SectionBoundary name="accounts">
+          <AgentAccounts engines={engines} />
+        </SectionBoundary>
+      )}
+      {loaded && !any && (
+        <p className="settings-row-description">
+          Accounts and usage show here once Claude Code or Codex is set up on this Mac.
+        </p>
+      )}
+    </div>
+  );
+}
+
+/** Away from the desk: the phone app and other assistants. */
+export function PhonePage({
+  onOpenPhone,
+  onOpenRemote,
+}: {
+  onOpenPhone: () => void;
+  onOpenRemote: () => void;
+}) {
+  return (
+    <div className="agents-settings">
+      <section className="settings-group" aria-labelledby="agents-settings-away">
+        <h3 className="settings-group__title" id="agents-settings-away">
+          Away from your desk
+        </h3>
+        <div className="settings-section">
+          <Row label="Phone" description="Talk to your agents and answer them from your phone.">
+            <Button variant="secondary" data-settings-open="phone" onClick={onOpenPhone}>
+              Open
+            </Button>
+          </Row>
+          <Row
+            label="Other assistants"
+            description="Drive your agents from ChatGPT, Claude, Grok and others."
+          >
+            <Button variant="secondary" data-settings-open="remote" onClick={onOpenRemote}>
+              Open
+            </Button>
+          </Row>
+        </div>
+      </section>
+    </div>
+  );
+}
+
+export function NotificationsPage() {
+  return (
+    <div className="agents-settings">
       <section className="settings-group" aria-labelledby="agents-settings-notify">
         <h3 className="settings-group__title" id="agents-settings-notify">
-          Notifications
+          From your agents
         </h3>
         <div className="settings-section">
           <Row
@@ -208,39 +251,32 @@ export function AgentsSettings({
           />
         </div>
       </section>
+    </div>
+  );
+}
 
+export function ChromePage() {
+  return (
+    <div className="agents-settings">
+      <SectionBoundary name="browser">
+        <AgentsBrowserSettings />
+      </SectionBoundary>
+      <SectionBoundary name="user-chrome">
+        <AgentsUserChromeSettings />
+      </SectionBoundary>
+    </div>
+  );
+}
+
+export function AppsPage() {
+  return (
+    <div className="agents-settings">
       <SectionBoundary name="slack">
         <AgentsSlackSettings />
       </SectionBoundary>
-
-      <section className="settings-group" aria-labelledby="agents-settings-away">
-        <h3 className="settings-group__title" id="agents-settings-away">
-          Away from your desk
-        </h3>
-        <div className="settings-section">
-          <Row label="Phone" description="Talk to your agents and answer them from your phone.">
-            <Button variant="secondary" data-settings-open="phone" onClick={onOpenPhone}>
-              Open
-            </Button>
-          </Row>
-          <Row
-            label="Import agents"
-            description="Bring the agents another assistant runs for you, with their memory and routines."
-          >
-            <Button variant="secondary" data-settings-open="import" onClick={onImport}>
-              Import…
-            </Button>
-          </Row>
-          <Row
-            label="Other assistants"
-            description="Drive your agents from ChatGPT, Claude, Grok and others."
-          >
-            <Button variant="secondary" data-settings-open="remote" onClick={onOpenRemote}>
-              Open
-            </Button>
-          </Row>
-        </div>
-      </section>
+      <SectionBoundary name="declined-apps">
+        <DeclinedAppsSettings />
+      </SectionBoundary>
     </div>
   );
 }

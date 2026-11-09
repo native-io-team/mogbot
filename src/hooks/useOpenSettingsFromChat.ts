@@ -1,7 +1,7 @@
 /**
- * The Chief opened a part of Settings that needs the user's own hands on the
- * Mac (`settings_tools::EVENT_OPEN_SETTINGS`): Slack's setup, where its token
- * goes into a masked field, or an engine account's sign-in. Only the main
+ * The Chief opened a part of Settings (`settings_tools::EVENT_OPEN_SETTINGS`):
+ * one page the user asked to see (`open_settings`), Slack's setup, where its
+ * token goes into a masked field, or an engine account's sign-in. Only the main
  * window answers, so two windows don't both open Settings.
  *
  * @module hooks/useOpenSettingsFromChat
@@ -11,6 +11,7 @@ import { useOpenModal } from '../contexts/ModalContext';
 import { getWindowLabel } from '../lib/window';
 import { requestSettingsSectionOnOpen, requestSettingsTabOnOpen } from '../lib/settings';
 import { requestAccountsOnOpen } from '../lib/agentAccounts';
+import { isSettingsPage } from '../lib/settingsPages';
 import {
   onOpenSettings,
   requestAccountSignIn,
@@ -19,6 +20,12 @@ import {
 
 /** What opening Settings for `request` asks of it. Exported for tests. */
 export function openSettingsFor(request: OpenSettingsRequest, open: () => void) {
+  if (request.section === 'page') {
+    // A page the Mac doesn't know (a newer Chief) opens Settings where it opens.
+    requestSettingsTabOnOpen(isSettingsPage(request.page) ? request.page : 'agents');
+    open();
+    return;
+  }
   requestSettingsTabOnOpen('agents');
   if (request.section === 'slack') {
     requestSettingsSectionOnOpen('agent-slack');

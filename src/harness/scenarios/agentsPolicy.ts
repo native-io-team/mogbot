@@ -140,16 +140,16 @@ const planChat = (status: 'pending' | 'allowed') => (args: Record<string, unknow
 export const agentsPolicyScenarios: Scenario[] = [
   {
     id: 'agents-on-its-own',
-    title: 'Agents — “What can Lead Gen do on its own?”',
+    title: 'Agents — “Lead Gen’s independence”',
     looksRightWhen:
-      'A dialog titled “What can Lead Gen do on its own?”: a quiet box “Bold · the team’s level” with Bold’s line; “Always asks” with the money, passwords and deleting line; then “Without asking, beyond its level” in sections — Rules (Run npm test; a rule from what you said with the quote; a rule for every agent), Plans you OK’d (two steps, one done, “… · 42 min left”), Apps (Gmail with Remove and Read only; Linear needing sign-in), Browser (Turn off), Team and accounts (Spends only your Work account, no button). Every button is a quiet text button, never the accent. A muted foot line: taking away applies at once; giving more is a card.',
+      'A dialog titled “Lead Gen’s independence”: a quiet box “Bold · the team’s level” with Bold’s line; “Always asks” with the money, passwords and deleting line; then “Without asking, beyond its level” in sections — Rules (Run npm test; a rule from what you said with the quote; a rule for every agent), Plans you OK’d (two steps, one done, “… · 42 min left”), Apps (Gmail with Remove and Read only; Linear needing sign-in), Browser (Turn off), Team and accounts (Spends only your Work account, no button). Every button is a quiet text button, never the accent. A muted foot line: taking away applies at once; giving more is a card.',
     openSelector: AGENTS_TAB,
     requires: '[data-testid="on-its-own"] .on-its-own__item',
     clipSelector: '.on-its-own-modal',
     steps: [
       { click: '[data-agent-id="leadgen"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
-      { click: '[role="menuitem"]', text: 'What it does on its own' },
+      { click: '[role="menuitem"]', text: 'Independence' },
     ],
     commands: {
       agents_overview: overview(TEAM),
@@ -167,7 +167,7 @@ export const agentsPolicyScenarios: Scenario[] = [
     steps: [
       { click: '[data-agent-id="acme"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
-      { click: '[role="menuitem"]', text: 'What it does on its own' },
+      { click: '[role="menuitem"]', text: 'Independence' },
     ],
     commands: {
       agents_overview: overview(TEAM),
@@ -176,9 +176,9 @@ export const agentsPolicyScenarios: Scenario[] = [
   },
   {
     id: 'settings-agents-on-its-own',
-    title: 'Settings — What your agents do on their own',
+    title: 'Settings — Each agent’s independence',
     looksRightWhen:
-      'Under its heading: the team’s level (Bold) in a quiet box with its line and the always-asks line; “Rules for every agent” with one LinkedIn rule and Remove; then one row per agent with its level and how much stands beyond it. The Chief’s row is open: Unleashed · its own level, an admin line with Turn off, Slack replies with Ask first.',
+      'On the Independence page, under the team’s slider: the heading “Each agent’s independence”, no level box (the slider above is the team’s level); “Rules for every agent” with one LinkedIn rule and Remove; then one row per agent with its level and how much stands beyond it. The Chief’s row is open: Unleashed · its own level, an admin line with Turn off, Slack replies with Ask first.',
     command: 'agents.onItsOwnTeam',
     requires: '.on-its-own__agent-body [data-testid="on-its-own"] .on-its-own__item',
     clipSelector: 'section[aria-labelledby="agents-settings-on-its-own"]',
@@ -189,16 +189,15 @@ export const agentsPolicyScenarios: Scenario[] = [
   },
   {
     id: 'agents-level-picker',
-    title: 'Agents — one agent’s own level, in Edit agent',
+    title: 'Agents — one agent’s own independence, in Edit agent',
     looksRightWhen:
-      'Editing Hiring, which follows the team: “How much it does on its own” with a menu open under its button “Same as team (Bold)”: “Same as team (Bold)” checked first, a divider, then Careful, Steady, Bold, Unleashed. Under the row a muted line for Bold and what always asks. In the sidebar, Social Posts shows a tiny “Unleashed” label and Finance “Careful”; nobody else has one.',
+      'Editing Hiring, which follows the team: “Independence” with a muted “Same as team” at the right, then the same four-stop slider as Settings and onboarding, its thumb on Bold (the team’s), Bold’s line and what always asks. No dropdown, no second scale. In the sidebar, Social Posts shows a tiny “Unleashed” label and Finance “Careful”; nobody else has one.',
     openSelector: AGENTS_TAB,
-    requires: '.agent-level-picker',
+    requires: '.agent-level-picker .independence-slider[data-level="go_hard"]',
     steps: [
       { click: '[data-agent-id="hiring"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
       { click: '[role="menuitem"]', text: 'Edit agent' },
-      { click: '.agent-level-picker button' },
     ],
     commands: {
       agents_overview: LEVELS_OVERVIEW,
@@ -211,7 +210,7 @@ export const agentsPolicyScenarios: Scenario[] = [
     id: 'settings-agents-independence-own',
     title: 'Settings — Independence, with agents set on their own',
     looksRightWhen:
-      'The team’s slider on Bold (a neutral thumb), its line and the always-asks line, and under it a muted “Agents set on their own: 2”.',
+      'On the Independence page: the team’s slider on Bold (a neutral thumb), its line and the always-asks line, and under it a muted “Agents set on their own: 2”.',
     command: 'agents.independence',
     requires: '.agent-independence-settings__own',
     clipSelector: 'section[aria-labelledby="agents-settings-independence"]',
@@ -271,12 +270,12 @@ export const agentsPolicyScenarios: Scenario[] = [
   },
   {
     id: 'agents-policy-editor',
-    title: 'Agents — What it can do, in Edit agent',
+    title: 'Agents — What it can reach, in Edit agent',
     looksRightWhen:
-      'Editing Hiring: “What it can do” with a menu button “Its own settings”, then one line each: Projects (only client-site and marketing-site, its own copy in client-site), Folders on this Mac (~/Documents/Candidates, read), Apps, Your browser “No”, Independence “Steady · Team default · instructions”, Admin “No”, Rules with “Never email candidates directly” and a Remove. Lines it has of its own say “Its own”; the rest “Team default”. Under them a muted line that the app enforces these except independence and rules, and a “Change in chat” text button.',
+      'Editing Hiring: “What it can reach” with a quiet “Use the team’s” text button (no presets menu), then one line each: Projects (only client-site and marketing-site, its own copy in client-site), Folders on this Mac (~/Documents/Candidates, read), Apps, Your browser “No”, Admin “No” (no Independence line: the slider above it is the one control), Rules with “Never email candidates directly” and a Remove. Lines it has of its own say “Its own”; the rest “Team default”. Under them a muted line that the app enforces these except independence and rules, and a “Change in chat” text button.',
     openSelector: AGENTS_TAB,
     requires: '.agent-policy__line',
-    clipSelector: '.agent-editor [role="group"][aria-label="What it can do"]',
+    clipSelector: '.agent-editor [role="group"][aria-label="What it can reach"]',
     steps: [
       { click: '[data-agent-id="hiring"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },
@@ -291,11 +290,11 @@ export const agentsPolicyScenarios: Scenario[] = [
   },
   {
     id: 'settings-agents-policy',
-    title: 'Settings — What agents can do, with presets',
+    title: 'Settings — What agents can reach',
     looksRightWhen:
-      'Opened from ⌘K “What agents can do…”: a lead that every agent starts from these and that the Chief of Staff can change them in chat; three choices (I trust my agents, Balanced selected with a neutral stronger border, Locked down) with one line each; the team’s lines; the note on what’s enforced; “1 agent has settings of its own: Hiring.” and a secondary “Reset everyone to Balanced”.',
+      'Opened from ⌘K “What agents can reach…” on the Independence page: a lead that every agent starts from these and that the Chief of Staff can change them in chat; no presets and no second scale; the team’s lines without an Independence line; the note on what’s enforced; “1 agent has settings of its own: Hiring.” and a secondary “Reset everyone to the team’s settings”.',
     command: 'agents.policyDefaults',
-    requires: '.agent-team-policy__preset[aria-checked="true"]',
+    requires: '.agent-team-policy__reset button',
     clipSelector: 'section[aria-labelledby="agents-settings-policy"]',
     commands: {
       agents_overview: { ...overview(TEAM), engines: ENGINES, defaults: DEFAULTS },

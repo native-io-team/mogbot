@@ -39,7 +39,7 @@ export {
   PRESET_LABEL,
   RULES_NOTE,
   chatDraft,
-  resetLabel,
+  RESET_EVERYONE_LABEL,
   settingsLines,
 } from '../../packages/companion-protocol/src/policy';
 

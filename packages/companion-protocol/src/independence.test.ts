@@ -38,7 +38,7 @@ describe('independence', () => {
       'Bold',
       'Unleashed',
     ]);
-    expect(INDEPENDENCE_TITLE).toBe('How much it does on its own');
+    expect(INDEPENDENCE_TITLE).toBe('Independence');
     expect(INDEPENDENCE_ENDS).toEqual({ low: 'Asks a lot', high: 'Just does it' });
     for (const level of INDEPENDENCE_LEVELS) {
       expect(INDEPENDENCE_DETAIL[level]).not.toContain('\n');
@@ -90,7 +90,9 @@ describe('independence', () => {
     expect(independenceRowLabel({ independence: 'often' }, 'go_hard')).toBe('Careful');
     expect(sameAsTeamLabel('go_hard')).toBe('Same as team (Bold)');
     expect(sameAsTeamLabel(undefined)).toBe('Same as team (Steady)');
-    expect(ownIndependenceCount([{ independence: 'often' }, {}, { independence: 'go_hard' }])).toBe(2);
+    expect(ownIndependenceCount([{ independence: 'often' }, {}, { independence: 'go_hard' }])).toBe(
+      2
+    );
     expect(ownIndependenceLine(2)).toBe('Agents set on their own: 2');
     for (const level of INDEPENDENCE_LEVELS) {
       expect(INDEPENDENCE_SHORT[level].length).toBeLessThan(20);

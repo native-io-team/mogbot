@@ -29,7 +29,7 @@ describe('AgentIndependenceSettings', () => {
     store.value = { loaded: true, independence: null };
   });
 
-  const slider = () => screen.getByRole('slider', { name: 'How much it does on its own' });
+  const slider = () => screen.getByRole('slider', { name: 'Independence' });
   const stop = (name: string) =>
     document.querySelector(`.independence-slider__stop[data-level="${name}"]`) as HTMLElement;
 

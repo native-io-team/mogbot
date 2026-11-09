@@ -1,11 +1,11 @@
 /**
  * What each agent can do, on the desk: the "Change … settings?" card's body,
- * the editor's "What it can do" (what the Mac really sends: the generated
- * fixture), and Settings → Agents → What agents can do with its presets and
- * "Reset everyone". Fictional agents throughout.
+ * the editor's "What it can reach" (what the Mac really sends: the generated
+ * fixture), and Settings → Independence → What agents can reach with
+ * "Reset everyone to the team's settings". No presets anywhere. Fictional agents throughout.
  */
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { agentsPolicy } from '../../../packages/companion-protocol/src/fixtures.gen';
 import type { AgentPolicyView, TeamPolicyView } from '../../lib/agentPolicy';
 
@@ -109,8 +109,8 @@ describe('AgentPolicy', () => {
     );
     const browser = document.querySelector('[data-key="browser"]')!;
     expect(browser).toHaveTextContent('Its own');
-    const independence = document.querySelector('[data-key="independence"]')!;
-    expect(independence).toHaveTextContent('Team default · instructions');
+    // Independence is the slider's, above it in the editor: no second line here.
+    expect(document.querySelector('[data-key="independence"]')).toBeNull();
     // Its own rule can come off here; the team's can't.
     expect(screen.getByRole('button', { name: 'Remove from Rules' })).toBeInTheDocument();
     expect(
@@ -122,56 +122,48 @@ describe('AgentPolicy', () => {
   it('“Change in chat” drafts the request instead of sending it to Settings', async () => {
     const ask = vi.fn();
     render(<AgentPolicy agent={finance} onAskInChat={ask} />);
-    await screen.findByText('What it can do');
+    await screen.findByText('What it can reach');
     fireEvent.click(await screen.findByRole('button', { name: 'Change in chat' }));
     expect(ask).toHaveBeenCalledWith('Change what Finance can do: ');
   });
 
-  it('a preset from the menu applies to this agent', async () => {
+  it('no presets: an agent with its own settings goes back to the team’s', async () => {
     render(<AgentPolicy agent={finance} />);
-    const menu = await screen.findByRole('button', { name: 'Its own settings' });
-    fireEvent.click(menu);
+    await screen.findByText('What it can reach');
+    expect(screen.queryByRole('button', { name: 'Its own settings' })).toBeNull();
     await act(async () => {
-      fireEvent.click(await screen.findByRole('menuitem', { name: 'Locked down' }));
+      fireEvent.click(await screen.findByRole('button', { name: 'Use the team’s' }));
     });
     expect(api.setPolicy).toHaveBeenCalledWith(
       { kind: 'agent', agentId: 'a1' },
-      { preset: 'locked' }
+      { sameAsTeam: true }
     );
-    await waitFor(() => expect(api.agentPolicy).toHaveBeenCalledTimes(2));
   });
 });
 
 describe('AgentTeamPolicySettings', () => {
-  it('shows the presets, the team’s lines and who has its own settings', async () => {
+  it('shows the team’s lines and who has its own settings, with no presets', async () => {
     render(<AgentTeamPolicySettings />);
-    expect(await screen.findByRole('radio', { checked: true })).toHaveTextContent('Balanced');
-    expect(screen.getByText(/1 agent has settings of its own: Hiring/)).toBeInTheDocument();
+    expect(await screen.findByText(/1 agent has settings of its own: Hiring/)).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).toBeNull();
+    expect(screen.queryByText(/I trust my agents|Locked down|Balanced/)).toBeNull();
     expect(screen.getByText(/just ask your Chief of Staff in chat/)).toBeInTheDocument();
   });
 
-  it('a preset changes the team’s defaults; Reset everyone asks first', async () => {
+  it('Reset everyone to the team’s settings asks first', async () => {
     render(<AgentTeamPolicySettings />);
-    const trusted = await screen.findByRole('radio', { name: /I trust my agents/ });
-    await act(async () => {
-      fireEvent.click(trusted);
-      await Promise.resolve();
-    });
-    expect(api.setPolicy).toHaveBeenCalledWith(
-      { kind: 'team', everyone: false },
-      { preset: 'trusted' }
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Reset everyone to the team’s settings' })
     );
-    api.setPolicy.mockClear();
-    fireEvent.click(screen.getByRole('button', { name: 'Reset everyone to Balanced' }));
     expect(api.setPolicy).not.toHaveBeenCalled();
-    expect(await screen.findByText(/Hiring lose their own settings/)).toBeInTheDocument();
+    expect(await screen.findByText(/Hiring loses its own settings/)).toBeInTheDocument();
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Reset everyone' }));
       await Promise.resolve();
     });
     expect(api.setPolicy).toHaveBeenCalledWith(
       { kind: 'team', everyone: true },
-      { preset: 'balanced' }
+      { sameAsTeam: true }
     );
   });
 });
