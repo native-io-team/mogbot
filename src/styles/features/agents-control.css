@@ -560,7 +560,8 @@
 }
 
 .agent-login__flow[data-failed] {
-  color: var(--accent-error);
+  /* The lighter red: the base one is 4.1:1 as text on a dark card. */
+  color: var(--accent-error-light);
 }
 
 .agent-login__from-phone {

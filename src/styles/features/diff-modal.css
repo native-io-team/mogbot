@@ -69,22 +69,22 @@
 
 .diff-status-modified {
   background: rgba(var(--modified-yellow-rgb), 0.2);
-  color: var(--modified-yellow);
+  color: color-mix(in srgb, var(--modified-yellow) 65%, var(--text-primary));
 }
 
 .diff-status-added {
   background: rgba(var(--accent-success-rgb), 0.2);
-  color: var(--accent-success);
+  color: color-mix(in srgb, var(--accent-success) 65%, var(--text-primary));
 }
 
 .diff-status-deleted {
   background: rgba(var(--accent-error-light-rgb), 0.2);
-  color: var(--accent-error-light);
+  color: color-mix(in srgb, var(--accent-error-light) 65%, var(--text-primary));
 }
 
 .diff-status-renamed {
   background: rgba(var(--purple-rgb), 0.2);
-  color: var(--purple);
+  color: color-mix(in srgb, var(--purple) 65%, var(--text-primary));
 }
 
 /* Stats */
@@ -163,7 +163,6 @@
   text-align: right;
   padding-right: var(--spacing-sm);
   color: var(--text-muted);
-  opacity: 0.5;
   user-select: none;
 }
 
@@ -183,8 +182,7 @@
   background: rgba(var(--accent-success-rgb), 0.15);
 }
 
-.diff-line-add .diff-line-prefix,
-.diff-line-add .diff-line-content {
+.diff-line-add .diff-line-prefix {
   color: var(--accent-success);
 }
 
@@ -192,14 +190,27 @@
   background: rgba(var(--accent-error-light-rgb), 0.15);
 }
 
-.diff-line-delete .diff-line-prefix,
-.diff-line-delete .diff-line-content {
+.diff-line-delete .diff-line-prefix {
   color: var(--accent-error-light);
+}
+
+/* The tint and the +/− say added or removed; the code itself stays in the
+   text colour, which coloured green or red on its own tint fell under AA. */
+.diff-line-add .diff-line-content,
+.diff-line-delete .diff-line-content {
+  color: var(--text-primary);
+}
+
+/* Line numbers on a tinted line take the line's own ink. */
+.diff-line-add .diff-line-number,
+.diff-line-delete .diff-line-number {
+  color: var(--text-secondary);
 }
 
 .diff-line-hunk {
   background: rgba(var(--info-rgb), 0.1);
-  color: var(--info);
+  /* The blue tint marks the hunk; blue text on it was under AA. */
+  color: var(--text-secondary);
   font-weight: 500;
   padding-top: 8px;
   padding-bottom: 8px;

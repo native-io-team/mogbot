@@ -551,7 +551,7 @@ function StoppedStatus({
   );
   const ask = (label: string) =>
     onAsk && (
-      <Button variant="strong" size="compact" onClick={onAsk}>
+      <Button variant="strong" size="medium" onClick={onAsk}>
         {label}
       </Button>
     );

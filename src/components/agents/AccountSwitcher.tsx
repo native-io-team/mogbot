@@ -457,7 +457,7 @@ function Row({
             <span className="account-switcher__spacer" />
             <span className="account-switcher__order" role="group" aria-label="Order">
               <IconButton
-                size="compact"
+                size="medium"
                 variant="ghost"
                 icon={<ArrowUpIcon size={14} />}
                 aria-label={`Try ${row.name} earlier`}
@@ -465,7 +465,7 @@ function Row({
                 onClick={() => onMove(-1)}
               />
               <IconButton
-                size="compact"
+                size="medium"
                 variant="ghost"
                 icon={<ArrowDownIcon size={14} />}
                 aria-label={`Try ${row.name} later`}
@@ -481,7 +481,7 @@ function Row({
                 <IconButton
                   {...p}
                   tabIndex={0}
-                  size="compact"
+                  size="medium"
                   variant="ghost"
                   icon={<MoreHorizontalIcon size={14} />}
                   aria-label={`More for ${row.name}`}

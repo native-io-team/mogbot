@@ -155,4 +155,12 @@ describe('AgentSchedulePopover', () => {
       })
     );
   });
+
+  it('is a named dialog, not a menu: it holds a list and buttons, not menu items', async () => {
+    mockIPC(() => null);
+    const agent = { id: 'a1', name: 'Finance', checkIns: [] } as unknown as Agent;
+    render(<AgentSchedulePopover agent={agent} open onOpenChange={vi.fn()} />);
+    expect(await screen.findByRole('dialog', { name: 'Routines for Finance' })).toBeVisible();
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
 });

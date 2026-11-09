@@ -22,13 +22,14 @@
   --text-white: var(--color-white);
   --text-primary: var(--color-gray-200);
   --text-secondary: var(--color-gray-400);
-  /* AA (4.5:1) on app and panel: gray-600 was 3.8:1 on the panel, and muted
-     carries real words (an agent's role, a routine's next run, the divider). */
-  --text-muted: var(--color-gray-500);
+  /* AA (4.5:1) on app, panel and control (a card): gray-600 was 3.8:1 on the
+     panel, and muted carries real words (an agent's role, a routine's next
+     run, a card's note). */
+  --text-muted: var(--color-gray-450);
   --text-faint: var(--color-gray-700);
   /* Between secondary and muted: dense labels that must stay quieter than
      their values (the visual editor's spacing box). */
-  --text-quiet: var(--color-gray-500);
+  --text-quiet: var(--color-gray-425);
   --text-terminal: var(--color-gray-500);
   --text-terminal-strong: var(--color-gray-300);
   --text-inverse: var(--color-white);
@@ -72,7 +73,8 @@
   --accent-success: var(--color-green-600);
   --accent-warning: var(--color-orange-600);
   --accent-error: var(--color-red-error);
-  --accent-error-light: var(--color-red-error-light);
+  /* AA as text on a dark card (#ef4444 was 3.9:1 on the control surface). */
+  --accent-error-light: var(--color-red-400);
   --accent-error-deep: var(--color-red-error-deep);
   --accent-warning-light: var(--accent-warning);
   --accent-warning-light-rgb: 232, 154, 28;
@@ -173,7 +175,7 @@
   --accent-success-rgb: 53, 211, 93;
   --accent-warning-rgb: 232, 154, 28;
   --accent-error-rgb: 244, 71, 71;
-  --accent-error-light-rgb: 239, 68, 68;
+  --accent-error-light-rgb: 255, 107, 107;
   --accent-error-deep-rgb: 220, 38, 38;
 
   --spacing-3xs: var(--space-01);

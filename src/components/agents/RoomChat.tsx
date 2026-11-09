@@ -570,7 +570,14 @@ export function RoomChat({
           </div>
         </header>
 
-        <div className="agent-chat__scroll" ref={scrollRef} onScroll={onScroll}>
+        <div
+          className="agent-chat__scroll"
+          ref={scrollRef}
+          onScroll={onScroll}
+          tabIndex={0}
+          role="region"
+          aria-label="Messages"
+        >
           <div className="agent-chat__messages" ref={messagesRef}>
             {items.length === 0 && messages !== undefined ? (
               <RoomEmpty

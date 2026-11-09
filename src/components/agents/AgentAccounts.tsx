@@ -170,7 +170,7 @@ function AccountRow({
                 <IconButton
                   {...p}
                   tabIndex={0}
-                  size="compact"
+                  size="medium"
                   variant="ghost"
                   icon={<MoreHorizontalIcon size={14} />}
                   aria-label={`More for ${account.name}`}
@@ -207,7 +207,7 @@ function AccountRow({
             </Dropdown>
             <span className="agent-account__order-controls" role="group" aria-label="Order">
               <IconButton
-                size="compact"
+                size="medium"
                 variant="ghost"
                 icon={<ArrowUpIcon size={14} />}
                 aria-label={`Try ${account.name} earlier`}
@@ -215,7 +215,7 @@ function AccountRow({
                 onClick={() => onMove(-1)}
               />
               <IconButton
-                size="compact"
+                size="medium"
                 variant="ghost"
                 icon={<ArrowDownIcon size={14} />}
                 aria-label={`Try ${account.name} later`}

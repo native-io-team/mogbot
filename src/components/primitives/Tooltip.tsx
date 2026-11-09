@@ -89,11 +89,32 @@ function tooltipAnchor(target: EventTarget | null): Element | null {
   return anchor?.closest(`#${TOOLTIP_ID}`) ? null : anchor;
 }
 
+/**
+ * A `title` is the accessible name of anything with no words of its own (an
+ * icon-only button, an iframe). Taking it away for the shared tooltip left
+ * those nameless to VoiceOver, so the words move to `aria-label` first.
+ * Anything already named, or with text inside, keeps its own name.
+ */
+function dropTitle(anchor: Element, title: string | null) {
+  if (title) {
+    const ours = anchor.hasAttribute('data-tooltip-named');
+    const named = anchor.hasAttribute('aria-label') || anchor.hasAttribute('aria-labelledby');
+    const wordless =
+      anchor.tagName === 'IFRAME' ||
+      (!(anchor.textContent ?? '').trim() && !anchor.querySelector('img[alt]:not([alt=""])'));
+    if (ours || (!named && wordless)) {
+      anchor.setAttribute('aria-label', title);
+      anchor.setAttribute('data-tooltip-named', '');
+    }
+  }
+  anchor.removeAttribute('title');
+}
+
 function readTooltipContent(anchor: Element): TooltipContent | null {
   if (anchor.closest('[data-tooltip-disabled]')) {
     // This also prevents the browser's native title tooltip when an element
     // opts out of the shared React tooltip surface.
-    anchor.removeAttribute('title');
+    dropTitle(anchor, anchor.getAttribute('title'));
     return null;
   }
 
@@ -103,14 +124,14 @@ function readTooltipContent(anchor: Element): TooltipContent | null {
   // label that loads late) is the new text, not a stale duplicate.
   if (explicit && title && title !== explicit && anchor.hasAttribute('data-tooltip-promoted')) {
     anchor.setAttribute('data-tooltip-content', title);
-    anchor.removeAttribute('title');
+    dropTitle(anchor, title);
     return { content: title, text: title };
   }
   if (explicit) {
     // React can restore a title attribute during a rerender after the custom
     // tooltip has already claimed this anchor. Always remove it, even when
     // the shared content attribute is already present.
-    if (title) anchor.removeAttribute('title');
+    if (title) dropTitle(anchor, title);
     const contentId = anchor.getAttribute('data-tooltip-content-id');
     return {
       text: explicit,
@@ -125,7 +146,7 @@ function readTooltipContent(anchor: Element): TooltipContent | null {
   anchor.setAttribute('data-tooltip-content', title);
   anchor.setAttribute('data-tooltip-promoted', '');
   anchor.setAttribute('aria-describedby', TOOLTIP_ID);
-  anchor.removeAttribute('title');
+  dropTitle(anchor, title);
   return { content: title, text: title };
 }
 

@@ -850,12 +850,6 @@
     },
     {
       "path": "src/styles/features/diff-modal.css",
-      "token": "--info",
-      "count": 1,
-      "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
-    },
-    {
-      "path": "src/styles/features/diff-modal.css",
       "token": "--info-rgb",
       "count": 1,
       "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."

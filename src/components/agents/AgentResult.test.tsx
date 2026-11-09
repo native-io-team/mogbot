@@ -99,18 +99,18 @@ describe('the result card', () => {
     );
     const card = screen.getByRole('article', { name: 'Result: October summary' });
     expect(within(card).getByText('Every invoice on one page.')).toBeTruthy();
-    const unverified = within(card).getByRole('region', { name: 'Not verified' });
+    const unverified = within(card).getByRole('group', { name: 'Not verified' });
     expect(unverified.textContent).toContain('EUR rate is today’s');
     // Before the files: it's what the eye should land on.
     const order = [...card.querySelectorAll('.agent-result__unverified, .agent-result__items')];
     expect(order[0].className).toContain('unverified');
     // The agent's claim, attributed, with a plain bullet: never a tick that
     // reads as the app having verified it.
-    const checked = within(card).getByRole('region', { name: 'It says it checked' });
+    const checked = within(card).getByRole('group', { name: 'It says it checked' });
     expect(checked.textContent).toContain('Totals match the bank');
     expect(within(checked).getByRole('heading').textContent).toBe('It says it checked');
     expect(checked.querySelector('svg')).toBeNull();
-    expect(screen.queryByRole('region', { name: 'Checked' })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Checked' })).toBeNull();
     expect(screen.queryByText(/v1/)).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: /Ask for changes/ }));
     expect(ask).toHaveBeenCalledWith({ id: 'res-1', version: 1, title: 'October summary' });
@@ -119,8 +119,8 @@ describe('the result card', () => {
   it('never invents a list the agent didn’t give', () => {
     const bare: ResultCard = { id: 'r', version: 1, title: 'Brief', summary: 'S' };
     render(<ResultCardView message={message(bare)} card={bare} agent={agent} newest />);
-    expect(screen.queryByRole('region', { name: 'Not verified' })).toBeNull();
-    expect(screen.queryByRole('region', { name: CHECKED_HEADING })).toBeNull();
+    expect(screen.queryByRole('group', { name: 'Not verified' })).toBeNull();
+    expect(screen.queryByRole('group', { name: CHECKED_HEADING })).toBeNull();
     expect(screen.queryByRole('list', { name: 'What it made' })).toBeNull();
     // No handler, no Ask for changes.
     expect(screen.queryByRole('button', { name: /Ask for changes/ })).toBeNull();

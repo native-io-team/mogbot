@@ -49,12 +49,14 @@
   color: var(--text-primary);
 }
 
+/* Accent text is the accent pulled toward the text colour: the raw accent is
+   3:1 or less as 11px text on light (a brown or green agent's chat). */
 .text-button--primary.button {
-  color: var(--accent-active);
+  color: var(--accent-text);
 }
 
 .text-button--primary.button:hover:not(:disabled) {
-  color: var(--accent-active-hover);
+  color: var(--text-primary);
 }
 
 /* The recommended inline action: the accent pulled toward the text colour,

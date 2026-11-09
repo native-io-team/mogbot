@@ -615,7 +615,10 @@ export const ImportReviewCard = memo(function ImportReviewCard({
                     : `· what ${card.source}’s managing agent knew. Off unless you tick it.`}
                 </span>
               </span>
-              <p className="agent-import-review__text agent-import-review__text--short">
+              <p
+                className="agent-import-review__text agent-import-review__text--short"
+                tabIndex={0}
+              >
                 {review.chiefNotes}
               </p>
             </div>

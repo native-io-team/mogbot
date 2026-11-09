@@ -30,7 +30,8 @@ const CodeBlock = memo(function CodeBlock({ text }: { text: string }) {
   const { copy, isCopied } = useCopyToClipboard();
   return (
     <div className="agent-code">
-      <pre>
+      {/* Focusable: a long line scrolls sideways with the keyboard too. */}
+      <pre tabIndex={0}>
         <code>{text}</code>
       </pre>
       <IconButton

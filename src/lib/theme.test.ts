@@ -232,8 +232,8 @@ describe('contrast (WCAG AA) in both themes', () => {
     }
   });
 
-  it.each(themes)('muted text clears AA on app and panel surfaces (%s)', (theme) => {
-    for (const bg of ['--surface-app', '--surface-panel']) {
+  it.each(themes)('muted text clears AA on app, panel and card surfaces (%s)', (theme) => {
+    for (const bg of ['--surface-app', '--surface-panel', '--surface-control']) {
       expect(ratio('--text-muted', bg, theme), bg).toBeGreaterThanOrEqual(AA_TEXT);
     }
   });
@@ -258,6 +258,12 @@ describe('contrast (WCAG AA) in both themes', () => {
     const lum = (name: string) => relativeLuminance(parseHex(resolveHex(name, 'light'))!);
     expect(lum('--text-secondary')).toBeLessThan(lum('--text-quiet'));
     expect(lum('--text-quiet')).toBeLessThan(lum('--text-muted'));
+  });
+
+  it('keeps secondary, quiet and muted distinct steps in dark', () => {
+    const lum = (name: string) => relativeLuminance(parseHex(resolveHex(name, 'dark'))!);
+    expect(lum('--text-secondary')).toBeGreaterThan(lum('--text-quiet'));
+    expect(lum('--text-quiet')).toBeGreaterThan(lum('--text-muted'));
   });
 
   it.each(themes)('muted text stays readable (≥ 3:1) on app and panel (%s)', (theme) => {

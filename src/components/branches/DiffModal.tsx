@@ -236,7 +236,7 @@ export function DiffModal({
                   <IconButton
                     tabIndex={0}
                     variant="ghost"
-                    size="compact"
+                    size="medium"
                     icon={<ArrowLeftIcon size={12} />}
                     aria-label="Previous file"
                     disabled={index === 0}
@@ -247,7 +247,7 @@ export function DiffModal({
                   <IconButton
                     tabIndex={0}
                     variant="ghost"
-                    size="compact"
+                    size="medium"
                     icon={<ArrowRightIcon size={12} />}
                     aria-label="Next file"
                     disabled={index === files.length - 1}

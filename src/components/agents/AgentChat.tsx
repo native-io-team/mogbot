@@ -1668,7 +1668,15 @@ export const AgentChat = memo(function AgentChat({
             </div>
           )}
 
-          <div className="agent-chat__scroll" ref={scrollRef} onScroll={onScroll}>
+          {/* Focusable, so the history scrolls with the keyboard (arrows, Page Up). */}
+          <div
+            className="agent-chat__scroll"
+            ref={scrollRef}
+            onScroll={onScroll}
+            tabIndex={0}
+            role="region"
+            aria-label="Messages"
+          >
             <div
               className="agent-chat__messages"
               ref={messagesRef}

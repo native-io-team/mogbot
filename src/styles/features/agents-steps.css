@@ -108,7 +108,8 @@
 
 .agent-gate__label {
   font-size: var(--font-size-body-sm);
-  color: var(--text-muted);
+  /* Secondary: the gate's inset fill is lighter than a card (muted was 3.8:1). */
+  color: var(--text-secondary);
 }
 
 .agent-gate__step {
@@ -188,8 +189,10 @@
   border-top: var(--border-width-default) solid var(--border-subtle);
 }
 
-.agent-draft__routine[data-off] .agent-draft__routine-text {
-  opacity: var(--button-disabled-opacity);
+/* Left out: quieter words, not a faded block. Opacity took the line under
+   AA, and the problem that says why it can't run must stay readable. */
+.agent-draft__routine[data-off] :is(.agent-draft__when, .agent-draft__note) {
+  color: var(--text-muted);
 }
 
 .agent-draft__routine-text {

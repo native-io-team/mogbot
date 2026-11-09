@@ -170,6 +170,56 @@
   scrollbar-width: none;
 }
 
+/* Small standalone text actions in a chat: each a 24px target (WCAG 2.5.8).
+   Where lines sit apart the target bleeds into the space around them, so no
+   line moves; where they stack tight (peer lines, a routine's actions) a
+   bleed would overlap the next one, so those simply take the height.
+   `:root` outranks `.text-button.button`'s own min-height. */
+:root
+  :is(
+    .agent-peer__toggle,
+    .agent-peer__name,
+    .agent-schedule__last,
+    .agent-schedule__actions > .text-button,
+    .agent-steps__add > .text-button,
+    .agent-apps__quiet > .text-button,
+    .agent-work__toggle,
+    .agent-preview__status-link
+  ) {
+  min-height: var(--size-target-min);
+  min-width: var(--size-target-min);
+  justify-content: center;
+}
+
+:root :is(.agent-work__toggle, .agent-preview__status-link, .agent-steps__add > .text-button) {
+  margin-block: calc(max(var(--size-target-min) - 1lh, 0lh) / -2);
+}
+
+/* A changed file is a whole row: it simply takes the 24px. */
+.agent-changes__file {
+  min-height: var(--size-target-min);
+}
+
+/* Scrolling regions take focus so the keyboard can scroll them; the ring is
+   the neutral one, drawn inside so the panel edge doesn't clip it. */
+.agent-chat__scroll:focus-visible,
+.agent-code pre:focus-visible,
+.agent-import-review__text:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: calc(var(--focus-ring-width) * -1);
+}
+
+.agent-chat__scroll:focus:not(:focus-visible),
+.agent-card__outcome:focus:not(:focus-visible) {
+  outline: none;
+}
+
+.agent-card__outcome:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+  border-radius: var(--radius-sm);
+}
+
 .agent-chat__scroll::-webkit-scrollbar {
   display: none;
   width: 0;

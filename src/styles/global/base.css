@@ -555,6 +555,12 @@ code,
   height: var(--button-height-compact);
 }
 
+.button--icon-only.button--size-medium {
+  width: var(--size-control-medium);
+  min-width: var(--size-control-medium);
+  height: var(--size-control-medium);
+}
+
 .button--icon-only.button--size-large {
   width: var(--control-height-large);
   min-width: var(--control-height-large);
