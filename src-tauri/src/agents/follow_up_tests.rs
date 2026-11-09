@@ -72,6 +72,55 @@ fn a_cant_about_a_known_service_is_found_and_others_are_not() {
     }
 }
 
+#[test]
+fn a_cant_passed_on_from_another_agent_is_not_this_agents_claim() {
+    for text in [
+        "The Chief also reports that the scout couldn't read Slack because your Chrome isn't connected.",
+        "Ledger told me it can't access Gmail today.",
+        "According to the Chief, we can't read Slack yet.",
+    ] {
+        assert!(cant_reach(text).is_empty(), "{text}");
+    }
+    // Its own claim still counts.
+    assert_eq!(
+        cant_reach("I can't read Slack: your Chrome isn't connected.").len(),
+        1
+    );
+}
+
+#[test]
+fn a_cant_about_the_browser_is_not_contradicted_by_a_browser_being_on() {
+    assert!(about_the_browser(
+        "I can't read Slack: your Chrome isn't connected."
+    ));
+    assert!(about_the_browser(
+        "I can't open Slack in the agents' browser, it's signed out."
+    ));
+    assert!(!about_the_browser(
+        "I don't have access to Slack in this session."
+    ));
+    let way = |f: super::super::team_reach::Facts| {
+        super::super::team_reach::ways(
+            &f,
+            super::super::team_reach::service_named("slack").unwrap(),
+        )
+    };
+    let ways = way(super::super::team_reach::Facts {
+        chrome: true,
+        agents_browser: true,
+        ..Default::default()
+    });
+    assert_eq!(ways.len(), 2);
+    assert!(ways
+        .iter()
+        .all(|w| super::super::team_reach::is_browser_way(w)));
+    let connected = way(super::super::team_reach::Facts {
+        connections: vec!["Slack (acme)".into()],
+        ..Default::default()
+    });
+    assert!(!super::super::team_reach::is_browser_way(&connected[0]));
+}
+
 fn gmail() -> &'static Service {
     super::super::team_reach::service_named("gmail").unwrap()
 }

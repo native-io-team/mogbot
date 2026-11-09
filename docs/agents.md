@@ -390,7 +390,16 @@ knows) while any of those says otherwise gets the same follow-up, naming who
 can ("Said “…”, but the app knows a way in: Inbox: the Gmail connector…"), so
 the agent corrects it by doing it or handing it over. "What you can do here"
 says a missing line isn't "can't". Observed: the Chief said it couldn't read
-Gmail while another agent was reading it.
+Gmail while another agent was reading it. Two kinds of "can't" aren't
+checked: one passed on from another agent ("the Chief reports that…", "told
+me", "according to"), and, against browser ways only, one about the browser
+itself ("your Chrome isn't connected", "signed out in the agents' browser"):
+the app knows a browser is switched on for an agent, not that it's connected
+or signed in now (`follow_up::about_the_browser`). Observed: an agent passed
+on the Chief's correct "your Chrome isn't connected", was sent back to check,
+and told the user its own line was wrong. Likewise, in "What it did" a Claude
+in Chrome call Claude Code refuses because no extension is connected reads
+as tried and failed, never "it wasn't allowed".
 
 **Stop** ends the turn and drops the queue; it leaves a quiet
 "Stopped" note (your doing, not a failure). A turn is capped at 3 hours.
@@ -1699,6 +1708,16 @@ agent, **or the Chief (or an admin) passes on the user's own request to it**
 chat, not a routine, check-in, room or outside text), since a user who talks
 only to the Chief says "try again" there. A sweep runs at launch and every
 minute.
+
+**Except a plan** (`expiry::stays_open`). Observed: the owner asked for a
+pull request from the phone and put it away; the "Do these under your name?"
+card came up seconds later, expired four minutes after that, and the agent
+could only ask to be told again in chat, which the Chief then relayed in
+every sweep and brief that morning. A plan card now stays up after its wait runs out, its
+turn ends or the app restarts, until it's answered; the agent is told it's
+waiting (`plan_grant::WAITING`: one line, then stop, no second card), and the
+same plan asked again while it's up raises nothing new. Allow then grants the
+plan where it's answered and wakes the agent to do it (`mcp::answer_late`).
 
 **A delegated agent's card is pointed to where the user is talking.** When an
 agent working on another agent's request (no user words in its turn) raises an
@@ -3576,6 +3595,17 @@ pinged the user and buried the question the agent was waiting on. The wake
 also carries **the questions still open**: the agent's lines ending in "?"
 since the user last wrote, at most three (`schedule::open_questions`), so a
 sweep keeps them in view instead of covering them.
+
+**An answer with nothing new posts nothing** (`runner::quiet_answer`). A
+turn answering only other agents' answers to this agent's own messages, and
+owing nobody an outcome (not a request, the user's words, a routine, a room
+or outside text, and not an answer to a request made on someone else's
+behalf), may reply `[nothing new]` too: it leaves one quiet line ("Read the
+answer · nothing new for you") and no post. The answer itself is already in
+the chat as a line from that agent. Observed: a weekly report sent to the
+Chief came back as two acknowledgements, and each became a post in the
+reporter's chat retelling news about a third agent the user had already read
+in two other chats; one of those posts then set off a "can't" follow-up.
 
 **When a run fails** (`agents/runs.rs`). A firing leaves a ticket with the
 exact prompt it queued; the turn that carried that prompt settles it by how it

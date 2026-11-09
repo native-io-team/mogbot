@@ -2476,6 +2476,12 @@ async fn ask_inner(
     if super::expiry::already_expired(&caller.id, &key) {
         return Answer::NotYet;
     }
+    // A plan card stays up until it's answered (`expiry::stays_open`): the
+    // same plan asked again while it's still up isn't a second card.
+    let stays = plan.is_some();
+    if stays && open_card_for(&caller.id, &key) {
+        return Answer::NotYet;
+    }
     let request_id = store::new_id();
     let (tx, rx) = oneshot::channel();
     PENDING_APPROVALS
@@ -2518,8 +2524,14 @@ async fn ask_inner(
     // An answered card was already written by the command. An unanswered
     // one expires now, into a one-line receipt, and isn't asked again in
     // this task (`agents/expiry.rs`). Closed before the waiter goes, so the
-    // sweep never reads it as abandoned.
-    if answer == Answer::NotYet {
+    // sweep never reads it as abandoned. A plan card is the exception: it
+    // stays up, and a later Allow grants the plan and wakes the agent
+    // (`answer_late`). Observed: a pull request asked for from the phone
+    // just before it was put away; the card came up seconds later, expired
+    // four minutes after that, and the PR waited hours on a typed reply.
+    if answer == Answer::NotYet && stays {
+        store::refresh_pending(&caller.id);
+    } else if answer == Answer::NotYet {
         super::expiry::remember(&caller.id, key);
         if let Ok(Some(updated)) =
             store::expire_card(&caller.id, &request_id, super::expiry::Expiry::NoAnswer)
@@ -2538,6 +2550,14 @@ async fn ask_inner(
     // ended under this one (Stop, or the user interrupted it).
     drop(wait);
     answer
+}
+
+/// Whether a card asking for `key` is still up in the agent's chat.
+pub(super) fn open_card_for(agent_id: &str, key: &str) -> bool {
+    store::pending_approvals(agent_id)
+        .unwrap_or_default()
+        .iter()
+        .any(|a| super::expiry::key_for(a) == key)
 }
 
 /// What a wait on a card came to: `None` when the wait ran out, `Some(None)`

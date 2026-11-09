@@ -343,6 +343,28 @@ const REACH_VERBS: &[&str] = &[
     "connected",
 ];
 
+/// Reported speech: the sentence passes on another agent's finding.
+/// Observed: an agent passed on the Chief's report that a third agent
+/// couldn't read a chat app because the user's Chrome wasn't connected; it
+/// was sent back to check, and told the user its own correct line was wrong.
+const REPORTED: &[&str] = &[
+    " reports that",
+    " reported that",
+    " told me",
+    "according to ",
+];
+
+/// A "can't" about the browser itself ("Chrome isn't connected", "signed out
+/// in the agents' browser"): the app knows only that a browser is switched
+/// on for the agent, not that it's connected or signed in, so its browser
+/// ways don't contradict it.
+pub fn about_the_browser(sentence: &str) -> bool {
+    let lower = norm(sentence);
+    ["chrome", "browser", "extension"]
+        .iter()
+        .any(|w| lower.contains(w))
+}
+
 /// The sentences of `text` that say this agent (or the team) can't reach a
 /// service the app knows by name, with that service. Pure.
 pub fn cant_reach(text: &str) -> Vec<(String, &'static Service)> {
@@ -353,6 +375,10 @@ pub fn cant_reach(text: &str) -> Vec<(String, &'static Service)> {
             let cant = CANT.iter().any(|c| lower.contains(c));
             let reach = REACH_VERBS.iter().any(|v| lower.contains(v));
             if !cant || !reach || lower.contains("without") || lower.contains('?') {
+                return None;
+            }
+            // Passing on what someone else found isn't this agent's claim.
+            if REPORTED.iter().any(|r| lower.contains(r)) {
                 return None;
             }
             let service = super::logins::match_service(&s)?;
@@ -471,9 +497,19 @@ pub fn after_turn(app: &AppHandle, agent_id: &str, since: i64, eligible: bool) -
     let contradicted: Vec<Contradicted> = cant_reach(&last.text)
         .into_iter()
         .filter_map(|(said, service)| {
+            let browser = about_the_browser(&said);
             let rows = super::team_reach::team(&agent, service);
             let ways: Vec<String> = rows
                 .iter()
+                .map(|(name, w)| {
+                    let w: Vec<String> = w
+                        .iter()
+                        .filter(|w| !(browser && super::team_reach::is_browser_way(w)))
+                        .cloned()
+                        .collect();
+                    (name, w)
+                })
+                .filter(|(_, w)| !w.is_empty())
                 .map(|(name, w)| {
                     if *name == agent.name {
                         format!("you: {}", w.join(", "))

@@ -10,6 +10,9 @@
 //!   [`CARD_EXPIRY_SECS`] as "Maybe later", and are never raised again on
 //!   their own.
 //!
+//! - **A plan** ("Do these under your name?") stays until answered
+//!   ([`stays_open`]); a late Allow wakes the agent to do it.
+//!
 //! An expired ask isn't raised again in the same task (until the user next
 //! writes to that agent): keyed by what it asks for ([`key_for`]).
 //! Expired cards are `expired`, so no badge, bar or sidebar counts them.
@@ -124,6 +127,15 @@ pub fn new_task(agent_id: &str) {
 
 /* -------------------------------------------------------------- the rules */
 
+/// "Do these under your name?" (`ask_plan`) stays until it's answered, after
+/// its wait runs out, its turn ends or the app restarts: it is the user's own
+/// ask more often than not (a pull request), typed from the phone just
+/// before it went back in a pocket. Allow then grants the plan where it's
+/// answered and wakes the agent to do it (`mcp::answer_late`).
+pub fn stays_open(a: &Approval) -> bool {
+    a.plan.is_some()
+}
+
 /// When the sweep looks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Moment {
@@ -174,6 +186,9 @@ pub fn verdict(a: &Approval, age_ms: i64, waited_on: bool, moment: Moment) -> Op
     }
     // "Reply in Slack?": nothing waits on it; it stays until answered.
     if a.slack_reply.is_some() {
+        return None;
+    }
+    if stays_open(a) {
         return None;
     }
     if let Some(s) = &a.secret {

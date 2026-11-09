@@ -423,12 +423,18 @@ pub async fn call(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value
         plan.clone(),
     )
     .await;
-    // Allow made the grant where it was answered (`answer_card`).
+    // Allow made the grant where it was answered (`answer_card`). No answer
+    // yet: the card stays up (`expiry::stays_open`), and a later Allow
+    // wakes this agent to do it (`mcp::answer_late`).
     match super::mcp::refused_reply(&answer, "do any of it") {
         None => text(format!("The user allowed the plan. {GO}")),
+        Some(_) if answer == super::mcp::Answer::NotYet => text(WAITING.to_string()),
         Some(why) => text(why),
     }
 }
+
+/// What the agent is told when its plan card is still up, unanswered.
+pub const WAITING: &str = "No answer yet. The card stays in the user's chat until they answer it, and when they allow it you're woken to do it: don't ask again, don't do any of it before then, and don't work around it. Tell the user in one line that it's waiting on their OK on the card, then stop.";
 
 /// The card's plain text, for clients that don't draw the list.
 pub fn plan_summary(plan: &Plan) -> String {
