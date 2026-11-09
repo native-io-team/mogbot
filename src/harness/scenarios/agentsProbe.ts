@@ -125,6 +125,19 @@ const DISK_LINE = msg(
   2
 );
 
+/** `agents/chrome_health.rs`: Claude in Chrome answered no browser, Your Chrome isn't set up. */
+const CHROME_DOWN_LINE = msg(
+  'note',
+  'Chrome isn’t reachable through Claude’s extension. Set up Your Chrome once (Settings → Agents → Your Chrome) so this can’t happen again. Until then, agents use their own browser for sites signed in there.',
+  1,
+  { fix: 'user_chrome' }
+);
+
+const chromeDownChat = (args: Record<string, unknown>) =>
+  args.agentId === 'chief'
+    ? [...(messagesFor(args) as unknown[]), CHROME_DOWN_LINE]
+    : messagesFor(args);
+
 const linesChat = (args: Record<string, unknown>) => {
   if (args.agentId === 'ops') return OPS_CHAT;
   if (args.agentId === 'chief') return [...(messagesFor(args) as unknown[]), DISK_LINE];
@@ -288,6 +301,27 @@ export const agentsProbeScenarios: Scenario[] = [
     steps: [{ click: '[data-agent-id="chief"]' }],
     requires: '.agent-chat__header',
     commands: { agents_overview: overview([...TEAM, OPS]), agents_messages: linesChat },
+  },
+  {
+    id: 'agents-probe-chrome-down-line',
+    title: 'Agents — Chrome isn’t reachable through Claude’s extension',
+    looksRightWhen:
+      'The Chief’s chat ends on one quiet line, “Chrome isn’t reachable through Claude’s extension. Set up Your Chrome once (Settings → Agents → Your Chrome) so this can’t happen again. Until then, agents use their own browser…”, then “· Set up Your Chrome” as a link-style button; wrapping inside the column, not a card, not red, nothing about signing in to the Claude extension.',
+    openSelector: AGENTS_TAB,
+    steps: [{ click: '[data-agent-id="chief"]' }],
+    requires: '[data-fix="user_chrome"]',
+    commands: { agents_overview: overview(TEAM), agents_messages: chromeDownChat },
+  },
+  {
+    id: 'agents-probe-chrome-down-fix',
+    title: 'Agents — “Set up Your Chrome” opens its settings',
+    looksRightWhen:
+      'Pressing “Set up Your Chrome” on the line opens Settings on Agents, scrolled to Your Chrome: the switch, off, with its one line.',
+    openSelector: AGENTS_TAB,
+    steps: [{ click: '[data-agent-id="chief"]' }, { click: '[data-fix="user_chrome"] button' }],
+    requires: 'section[aria-labelledby="agents-settings-user-chrome"]',
+    clipSelector: 'section[aria-labelledby="agents-settings-user-chrome"]',
+    commands: { agents_overview: overview(TEAM), agents_messages: chromeDownChat },
   },
   ...LEVELS.map(independenceAt),
   {

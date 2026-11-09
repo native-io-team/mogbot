@@ -2229,6 +2229,22 @@ outside text (a "When…" routine's items, or a message carrying that taint
 through `message_agent` or a room): those run `--no-chrome`, and the broker
 refuses any browser call they make anyway.
 
+**The way that works right now** (`agents/chrome_health.rs`). Per turn: Your
+Chrome when its link is connected (no `--chrome`); else, only for a turn that
+would get Claude in Chrome, the app asks `list_connected_browsers` (no model
+turn, cached a minute, one probe at a time; the setup card's check and the
+profile list feed the same cache). Only a readable `[]` counts as down; a probe
+that fails or times out changes nothing. Down: the turn runs `--no-chrome`, the
+access chain sends sites to the agents' browser, the turn is told why
+(`connections::CHROME_DOWN_PROMPT`: never send the user to sign in or out of the
+Claude extension), and the app's own line, once per agent per outage, says
+"Chrome isn't reachable through Claude's extension. Set up Your Chrome once
+(Settings → Agents → Your Chrome) so this can't happen again." with a **Set up
+Your Chrome** button (`NoteFix::UserChrome`). Observed: after a Claude account
+switch Claude in Chrome's native host went stale, three routines ran into "0
+browsers", and the Chief told the owner to reopen Chrome signed in to the same
+account.
+
 **What asks** (`agents/browser_gate.rs`, before Always-allow rules). The one
 place the independence level changes an approval, and only for the browser:
 

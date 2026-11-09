@@ -882,8 +882,23 @@ pub async fn for_turn(agent: &store::Agent, port: u16, outside: bool) -> TurnAcc
         }
         access.prompt.push_str(USER_CHROME_PROMPT);
     }
+    // It would have had Claude in Chrome, but no browser answers it
+    // (`chrome_health`): it runs `--no-chrome` and is told why, so it
+    // neither calls tools it hasn't got nor sends the user to fix them.
+    let chrome_down = !user_chrome
+        && super::browser::allowed(super::browser::team_enabled(), agent, outside)
+        && super::chrome_health::known_down();
+    if chrome_down {
+        if !access.prompt.is_empty() {
+            access.prompt.push_str("\n\n");
+        }
+        access.prompt.push_str(CHROME_DOWN_PROMPT);
+    }
     access
 }
+
+/// What a turn is told when Claude in Chrome isn't answering this turn.
+pub const CHROME_DOWN_PROMPT: &str = "### The user's Chrome isn't reachable\n\nClaude in Chrome isn't answering this turn (the app checked, and has told the user the fix in this chat), so you have no tools for the user's Chrome. Use the agents' browser (mcp__browser__*) for sites signed in there; a step that needs a site signed in only in their Chrome waits: say so in one line. Never tell the user to sign out of or into the Claude extension, reinstall it, or restart Chrome. The fix is Settings → Agents → Your Chrome, the app's own extension, which doesn't depend on Claude's.";
 
 /// What a turn with the user's Chrome through the app's extension is told.
 pub const USER_CHROME_PROMPT: &str = "### Your Chrome\n\nThis turn reaches the user's own Chrome, where they're signed in, through the app's extension: the mcp__user_chrome__* tools, with the same names and arguments as the agents' browser's (mcp__browser__*). Wherever you're told to use the Claude in Chrome tools (mcp__claude-in-chrome__*), use these instead: there are no others this turn.";

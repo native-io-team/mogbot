@@ -1842,6 +1842,7 @@ pub fn new_message(agent_id: &str, kind: MessageKind, text: impl Into<String>) -
         local_links: Vec::new(),
         remembered: None,
         via: None,
+        fix: None,
     }
 }
 
@@ -5388,6 +5389,12 @@ async fn run_turn(
     // A "When…" routine's items came from outside: such a turn gets no
     // browser, and can't write its own instructions or memory (below).
     let outside = from_outside(agent_id);
+    // The way into the user's Chrome that works right now: Your Chrome when
+    // it's connected, else Claude in Chrome only if a browser answers it
+    // (`chrome_health`, cached a minute; said once when it doesn't).
+    if !quiet {
+        super::chrome_health::before_turn(app, &agent, outside).await;
+    }
     let mut access = super::connections::for_turn(&agent, port, outside).await;
     // On an added Claude Code account, `--chrome` would look for a browser
     // signed in to that account's claude.ai, not the user's: the same

@@ -1380,6 +1380,12 @@ export interface AgentMessage {
    */
   via?: MessageVia;
   /**
+   * On a note: the one fix it names (`agents/chrome_health.rs`):
+   * `user_chrome` is Settings → Agents → Your Chrome on the Mac. The phone
+   * shows the note's text, which names where. Older Macs never send it.
+   */
+  fix?: 'user_chrome';
+  /**
    * Links in the reply to a server on this Mac (`http://localhost:3400`),
    * taken out of the text by the Mac (`agents/local_links.rs`). One the Mac
    * knows serves a project offers Preview (desk) and Watch live (phone);

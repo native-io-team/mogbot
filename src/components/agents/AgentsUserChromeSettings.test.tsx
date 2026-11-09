@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { AgentsUserChromeSettings } from './AgentsUserChromeSettings';
-import { userChromeLine, type UserChromeStatus } from '../../lib/userChrome';
+import { USER_CHROME_CONNECTED, userChromeLine, type UserChromeStatus } from '../../lib/userChrome';
+import { ToastContext } from '../../contexts/ToastContext';
 
 const invoke = vi.hoisted(() => vi.fn());
 vi.mock('@tauri-apps/api/core', async (importOriginal) => ({
@@ -83,6 +84,59 @@ describe('AgentsUserChromeSettings', () => {
     expect(await screen.findByText(/Install Google Chrome on this Mac first/)).toBeTruthy();
     expect(screen.getByText(/Turn Your Chrome off and on to set it up/)).toBeTruthy();
     expect(screen.getByRole('button', { name: 'Open Chrome’s extensions' })).toBeTruthy();
+  });
+
+  it('copies the folder path for Load unpacked', async () => {
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true });
+    invoke.mockResolvedValue(status({ extensionDir: '/Users/you/Library/App/chrome-extension' }));
+    render(<AgentsUserChromeSettings />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Copy folder path' }));
+    await waitFor(() =>
+      expect(writeText).toHaveBeenCalledWith('/Users/you/Library/App/chrome-extension')
+    );
+  });
+
+  it('says Connected once the extension appears, with no buttons left', async () => {
+    const showToast = vi.fn();
+    invoke.mockResolvedValue(status());
+    render(
+      <ToastContext.Provider value={{ toasts: [], showToast, dismissToast: () => {} }}>
+        <AgentsUserChromeSettings />
+      </ToastContext.Provider>
+    );
+    await screen.findByRole('button', { name: 'Copy folder path' });
+    expect(showToast).not.toHaveBeenCalled();
+    // Load unpacked: the next read finds it connected.
+    invoke.mockResolvedValue(
+      status({
+        browsers: [{ profileId: 'p', label: '', extensionVersion: '0.1.0', connectedAt: 1 }],
+      })
+    );
+    act(() => void window.dispatchEvent(new Event('focus')));
+    await waitFor(() => expect(showToast).toHaveBeenCalledWith(USER_CHROME_CONNECTED, 'success'));
+    expect(screen.getByText('Done. The extension is connected.')).toBeTruthy();
+    expect(screen.queryByRole('button', { name: 'Copy folder path' })).toBeNull();
+    // Once only.
+    act(() => void window.dispatchEvent(new Event('focus')));
+    await waitFor(() => expect(invoke.mock.calls.length).toBeGreaterThanOrEqual(3));
+    expect(showToast).toHaveBeenCalledTimes(1);
+  });
+
+  it('opening the page already connected says nothing', async () => {
+    const showToast = vi.fn();
+    invoke.mockResolvedValue(
+      status({
+        browsers: [{ profileId: 'p', label: '', extensionVersion: '0.1.0', connectedAt: 1 }],
+      })
+    );
+    render(
+      <ToastContext.Provider value={{ toasts: [], showToast, dismissToast: () => {} }}>
+        <AgentsUserChromeSettings />
+      </ToastContext.Provider>
+    );
+    await screen.findByText('Done. The extension is connected.');
+    expect(showToast).not.toHaveBeenCalled();
   });
 });
 

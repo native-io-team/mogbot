@@ -56,6 +56,10 @@ export const addUserChromeFromStore = () => invoke<void>('agents_user_chrome_add
 
 export const USER_CHROME_TITLE = 'Your Chrome';
 
+/** Said once when the extension connects while its settings are open. */
+export const USER_CHROME_CONNECTED =
+  'Your Chrome is connected. Agents use it from their next turn.';
+
 /** The line under the switch. */
 export function userChromeLine(s: UserChromeStatus | null): string {
   if (!s?.enabled) {
@@ -89,7 +93,7 @@ export function extensionLine(s: UserChromeStatus): string {
   if (s.webStoreUrl) {
     return 'Not done yet. Add it from the Chrome Web Store, then press Enable when Chrome asks.';
   }
-  return 'Not done yet. In Chrome’s extensions page turn on Developer mode, press Load unpacked, and choose the folder this shows.';
+  return 'Not done yet. In Chrome’s extensions page turn on Developer mode, press Load unpacked, and choose this folder (copy its path, then ⇧⌘G in the picker). This turns to Connected by itself.';
 }
 
 /** A connected profile, in words. */

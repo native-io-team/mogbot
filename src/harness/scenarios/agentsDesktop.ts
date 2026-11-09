@@ -269,7 +269,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'settings-agents-user-chrome-setup',
     title: 'Settings — Your Chrome, on, the extension not added yet',
     looksRightWhen:
-      'Your Chrome on with “On. Add the extension to Chrome, then keep Chrome open.”; “Chrome can reach this app” — Done; “Add the extension to Chrome” — “Not done yet. In Chrome’s extensions page turn on Developer mode, press Load unpacked, and choose the folder this shows.” with two neutral buttons, “Open Chrome’s extensions” and “Show the folder”, side by side.',
+      'Your Chrome on with “On. Add the extension to Chrome, then keep Chrome open.”; “Chrome can reach this app” — Done; “Add the extension to Chrome” — “Not done yet. In Chrome’s extensions page turn on Developer mode, press Load unpacked, and choose this folder (copy its path, then ⇧⌘G in the picker). This turns to Connected by itself.” with three neutral buttons, “Open Chrome’s extensions”, “Copy folder path” and “Show the folder”, side by side or wrapping, never cut off.',
     command: 'agents.userChrome',
     requires: '[data-testid="user-chrome-steps"]',
     clipSelector: 'section[aria-labelledby="agents-settings-user-chrome"]',

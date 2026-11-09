@@ -139,3 +139,14 @@ fn external_extensions_point_at_the_web_store_only() {
     let v: Value = serde_json::from_slice(&std::fs::read(p).unwrap()).unwrap();
     assert_eq!(v, json!({ "external_update_url": WEB_STORE_UPDATE_URL }));
 }
+
+#[test]
+fn the_extensions_page_opens_as_a_new_chrome_tab() {
+    // A tab Chrome makes itself, never a launch argument (ignored for
+    // chrome:// pages), and only in Google Chrome.
+    assert!(OPEN_EXTENSIONS_SCRIPT.starts_with("tell application \"Google Chrome\""));
+    assert!(OPEN_EXTENSIONS_SCRIPT
+        .contains("make new tab with properties {URL:\"chrome://extensions/\"}"));
+    assert!(OPEN_EXTENSIONS_SCRIPT.contains("if (count of windows) is 0 then"));
+    assert_eq!(OPEN_EXTENSIONS_SCRIPT.matches("chrome://").count(), 2);
+}
