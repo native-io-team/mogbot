@@ -2922,13 +2922,15 @@ pub(super) fn use_account_asks(caller_id: &str) -> bool {
 
 /// The owner's own request at Go hard or above (`direct`): after outside
 /// content, only data leaving and new packages ask. Never a turn answering
-/// outside text, an agent, or a note the app queued.
+/// outside text, an agent, or a note the app queued, alone or batched with
+/// the user's message (`runner::users_message_alone`). The exposure mark is
+/// what "direct" relaxes, so it doesn't count against it here.
 pub(super) fn owner_direct(
     level: super::independence::Level,
     outside: bool,
     caller_id: &str,
 ) -> bool {
-    level.goes_hard() && !outside && runner::answering_user(caller_id)
+    level.goes_hard() && !outside && runner::users_message_alone(caller_id)
 }
 
 fn holds_for_exact_text(caller: &store::Agent, tool: &str, input: &Value) -> bool {

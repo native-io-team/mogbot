@@ -1505,7 +1505,8 @@ expired card lifted), no `users_words`, no typed words for
 **The rule for the owner's own requests.** The mark never raises cards for
 the owner's own direct request at Bold or Unleashed: in a turn answering
 the user's own message in this agent's chat (not a routine, a check-in, a room,
-another agent's request, outside text or a note the app queued; `runner::answering_user`), the mark
+another agent's request, outside text or a note the app queued, alone or in the
+same turn as the user's message; `runner::users_message_alone`), the mark
 narrows to what Unleashed keeps after outside content
 (`autoallow::outside_mark_asks`): **raw data leaving for another host**
 (`go_hard::moves_data_off_mac`: a `curl` body or upload, `ssh`, `scp`,
@@ -1614,7 +1615,9 @@ numbered list with Allow / Deny (desk, phone, Catch up, or a typed yes, as
 above). When the user's own typed yes had no card to answer
 (`commands::agents::send_as`), the agent's reply just before it is kept for
 15 minutes, and an `ask_plan` from the turn answering that yes is granted
-without a card if every action's target is named in that reply ("Your yes
+without a card if that turn answers the yes alone (no other agent's request or
+app note batched with it: `runner::users_message_alone`, else the card asks)
+and every action's target is named in that reply ("Your yes
 covers, for an hour: …"). Allow makes a **plan grant** (in memory; a restart
 forgets it): each action matched on its kind (push, pull request, merge, issue,
 comment, release, deploy, publish, post, send, request, github) **and** its

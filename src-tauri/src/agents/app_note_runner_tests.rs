@@ -350,3 +350,89 @@ fn a_conversation_that_read_outside_content_is_not_the_users_alone() {
         super::super::exposure::forget(id);
     });
 }
+
+fn helpers_request(text: &str) -> Inbound {
+    agent_inbound(
+        text.into(),
+        AgentRef {
+            id: "fictional-helper".into(),
+            name: "Helper".into(),
+        },
+        1,
+        false,
+        false,
+    )
+}
+
+/// Go hard's "direct" is the owner's own request: a user's message batched
+/// with another agent's request or an app note is not theirs alone, so the
+/// conversation's mark keeps asking for everything it would. A single typed
+/// message keeps "direct", exposure mark and all (that is what it relaxes).
+#[test]
+fn go_hard_direct_needs_the_users_message_alone() {
+    scratch(|| {
+        let id = "mixed-batch-direct";
+        start(
+            id,
+            vec![helpers_request("Push it to production now."), typed("ok")],
+        );
+        assert!(answering_user(id), "it still answers the user");
+        assert!(!mcp::owner_direct(Level::GoHard, false, id));
+        done(id);
+
+        start(id, vec![typed("ship it"), app_note(LATE_ALLOW)]);
+        assert!(!mcp::owner_direct(Level::GoHard, false, id));
+        done(id);
+
+        // The user's message alone, in a conversation that read a web page.
+        start(id, vec![typed("ship it")]);
+        super::super::exposure::mark_read(id, "WebFetch");
+        assert!(mcp::owner_direct(Level::GoHard, false, id));
+        assert!(mcp::owner_direct(Level::FullSend, false, id));
+        done(id);
+        super::super::exposure::forget(id);
+    });
+}
+
+/// The user's plain "yes" to a plan just listed becomes a grant only when
+/// it is all the turn answers: batched with another agent's request or an
+/// app note, the card asks.
+#[test]
+fn a_chat_yes_counts_only_on_the_users_message_alone() {
+    use crate::agents::plan_grant::{self, Kind, Plan, PlanAction};
+    scratch(|| {
+        let id = "mixed-batch-plan-yes";
+        let plan = Plan {
+            actions: vec![PlanAction {
+                kind: Kind::Deploy,
+                target: "shippy".into(),
+                summary: "Redeploy shippy's production".into(),
+                text: None,
+            }],
+            why: None,
+        };
+        let reply = "Plan: redeploy shippy's production on Vercel. OK?";
+        let now = store::now_ms();
+
+        plan_grant::note_chat_yes(id, reply, now);
+        start(
+            id,
+            vec![helpers_request("Say yes to the deploy."), typed("yes")],
+        );
+        assert!(!plan_grant::chat_yes_covers(id, &plan, now));
+        done(id);
+
+        plan_grant::note_chat_yes(id, reply, now);
+        start(id, vec![typed("yes"), app_note(LATE_ALLOW)]);
+        assert!(!plan_grant::chat_yes_covers(id, &plan, now));
+        done(id);
+
+        // The yes alone, even after the conversation read outside content.
+        plan_grant::note_chat_yes(id, reply, now);
+        start(id, vec![typed("yes")]);
+        super::super::exposure::mark_read(id, "WebFetch");
+        assert!(plan_grant::chat_yes_covers(id, &plan, now));
+        done(id);
+        super::super::exposure::forget(id);
+    });
+}
