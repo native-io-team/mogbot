@@ -127,6 +127,7 @@ function AccountLine({
                     name="arrow.up"
                     size={iconSize.body}
                     label={`Try ${r.name} earlier`}
+                    disabled={state.busy}
                     onPress={() => void state.move(r.engine, i, -1)}
                   />
                 ) : (
@@ -137,6 +138,7 @@ function AccountLine({
                     name="arrow.down"
                     size={iconSize.body}
                     label={`Try ${r.name} later`}
+                    disabled={state.busy}
                     onPress={() => void state.move(r.engine, i, 1)}
                   />
                 ) : (

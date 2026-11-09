@@ -15,7 +15,7 @@
  *
  *   pnpm qa:web                          # everything, into qa-shots/
  *   pnpm qa:web --only chat-,composer-   # shots whose name starts with chat- or composer-
- *   pnpm qa:web --phases heavy           # only these phases (demo,fresh,live,cached,impostor,bars,heavy,importing,team-setup,live-work,engine,torture)
+ *   pnpm qa:web --phases heavy           # only these phases (demo,fresh,live,cached,impostor,bars,usage-accounts,heavy,importing,team-setup,live-work,engine,probe,torture)
  *   pnpm qa:web --themes dark            # one theme
  *   pnpm qa:web --phases send            # a send, frame by frame (not in the default run)
  *   pnpm qa:web --out /tmp/shots
@@ -49,11 +49,11 @@ const ONLY = opt('--only', 'QA_ONLY', '');
 const THEMES = opt('--themes', 'QA_THEMES', 'light,dark').split(',').filter(Boolean);
 const VERBOSE = args.includes('--verbose');
 // A run that outlives this is hung: everything it started is killed and it fails.
-const MAX_MS = Number(opt('--max-ms', 'QA_MAX_MS', 30 * 60 * 1000));
+const MAX_MS = Number(opt('--max-ms', 'QA_MAX_MS', 75 * 60 * 1000));
 const PHASES = opt(
   '--phases',
   'QA_PHASES',
-  'demo,fresh,live,cached,impostor,bars,usage-accounts,heavy,importing,team-setup,live-work,engine,torture'
+  'demo,fresh,live,cached,impostor,bars,usage-accounts,heavy,importing,team-setup,live-work,engine,probe,torture'
 ).split(',');
 const phase = (name) => PHASES.includes(name);
 // Ports other tools in this repo own: the desktop app, its harness, the phone's Metro.
@@ -724,6 +724,121 @@ const scrollToText = (text) => async (page) => {
 /** Whether Catch up's bottom bar has a button labelled `label`. */
 const CATCHUP_HAS = (label) =>
   `!![...document.querySelectorAll('[aria-label]')].find((e) => e.getAttribute('aria-label') === ${JSON.stringify(label)})`;
+
+/** Ask the mock Mac to do what the desk would (`--probe` only). */
+const desk = (what) => async () => {
+  await fetch(`${MOCK}/dev/probe?do=${what}`);
+  await sleep(1500);
+};
+
+/** Scroll until an element whose own text contains `text` is in view. */
+const scrollToIncludes = (text) => async (page) => {
+  await page.eval(FIND_SCROLLER);
+  for (let i = 0; i < 20; i++) {
+    const seen = await page.eval(`(() => {
+      const el = [...document.querySelectorAll('body *')].filter((e) => e.innerText?.includes(${JSON.stringify(text)})).pop();
+      if (!el) return false;
+      el.scrollIntoView({ block: 'center' });
+      return true;
+    })()`);
+    if (seen) return sleep(600);
+    await page.eval(
+      'window.__qaScroller && (window.__qaScroller.scrollTop -= window.__qaScroller.clientHeight * 0.6)'
+    );
+    await sleep(400);
+  }
+  throw new Error(`never found "${text}"`);
+};
+
+/** The states the other phases miss (`--probe`, dev/mock-probe.ts). */
+const PROBE = [
+  {
+    name: 'probe-fifty',
+    route: '/agents',
+    ready: 'Chief of Staff',
+    pages: 4,
+    check:
+      'Fifty agents: the list scrolls, every row one line of name over its line, the long-named one cut with an ellipsis (never over its time); Browser Helper, Deploys and Temp Helper waiting on you',
+  },
+  {
+    name: 'probe-long-chat',
+    route: '/chat/long',
+    ready: 'supplier thread',
+    pages: 3,
+    check:
+      'A very long agent name in the header (cut, not wrapping over the buttons); a long question and a fifteen-paragraph reply that wrap and scroll',
+  },
+  {
+    name: 'probe-long-sheet',
+    route: '/agent/long',
+    ready: 'Regional Wholesale',
+    check: 'The agent sheet with a very long name and role: both wrap in full, nothing overlaps',
+  },
+  {
+    name: 'probe-step-in',
+    route: '/chat/browse',
+    ready: 'needs you in its browser',
+    check:
+      'The step-in card: the reason, “Step in on your Mac: its tab opens there.”, and only Not now (no Allow, no Step in)',
+  },
+  {
+    name: 'probe-stale-card',
+    route: '/chat/stale',
+    ready: 'pnpm run deploy',
+    act: desk('desk-answer'),
+    check:
+      'Answered on the desk while open here: the card is a receipt (“Allowed”), no buttons, and Deploys is working',
+  },
+  {
+    name: 'probe-deleted',
+    route: '/chat/doomed',
+    ready: 'Delete files',
+    act: desk('delete'),
+    check:
+      'Deleted on the desk while its card was open here: “This agent was removed”, nothing to answer or send',
+  },
+  {
+    name: 'probe-mid-turn',
+    route: '/chat/builder',
+    ready: 'gift-card',
+    check: 'Builder working (the live line), its header saying “on Work”',
+  },
+  {
+    name: 'probe-accounts',
+    route: '/settings',
+    ready: 'Settings',
+    act: scrollToText('CLAUDE CODE ACCOUNTS'),
+    check:
+      'Three Claude accounts: sam@example.com in use; Work out of usage (amber name, when it resets, “Builder runs only on this one”), no Use now; Personal “Not signed in”, no Use now; arrows to reorder',
+  },
+  {
+    name: 'probe-runs-on',
+    route: '/controls?id=builder',
+    ready: 'Builder',
+    act: scrollToText('RUNS ON'),
+    check:
+      'Runs on: Any account, then the three Claude accounts, Work ticked; Personal says “Not signed in”',
+  },
+  {
+    name: 'probe-quiet-hours',
+    route: '/chat/chief',
+    ready: 'Chief of Staff',
+    act: scrollToIncludes('Quiet hours set'),
+    check:
+      'Quiet hours: the ask, the Chief’s one line saying what is set, then the routine’s line and its answer saying it waited',
+  },
+];
+
+/** The same Mac after a restart cut Builder's turn off (`--probe --restarted`). */
+const PROBE_RESTARTED = [
+  {
+    name: 'probe-restarted',
+    route: '/chat/builder',
+    ready: 'gift-card',
+    check:
+      'After the Mac restarted mid-turn: no live line, the turn ends on “Interrupted: the app closed while this agent was working…” with Continue, never Retry',
+  },
+];
 
 /** Connected, everything the mock seeds. */
 const LIVE = [
@@ -2420,6 +2535,11 @@ async function main() {
       await setTheme(page, theme);
       for (const s of list) await screen(page, theme, s);
     }
+    // So far, after every phase: a run stopped part-way (its time ran out) still says what it saw.
+    await writeFile(
+      path.join(OUT, 'report.md'),
+      report(`Unfinished: ${Math.round((Date.now() - started) / 1000)} s so far.`)
+    );
   };
 
   // Nothing opened yet: the deep-linked chat has nothing saved.
@@ -2514,6 +2634,25 @@ async function main() {
       await setTheme(page, theme);
       await sendFrames(page, theme);
     }
+  }
+
+  if (phase('probe')) {
+    // Each theme on a fresh Mac: the desk answers and deletes as it goes.
+    for (const theme of THEMES) {
+      await setTheme(page, theme);
+      await startMock('--probe');
+      await page.goto(`${WEB}/agents`);
+      await sleep(4000);
+      for (const s of PROBE) await screen(page, theme, s);
+      await startMock('--probe', '--restarted');
+      await page.goto(`${WEB}/agents`);
+      await sleep(4000);
+      for (const s of PROBE_RESTARTED) await screen(page, theme, s);
+    }
+    await writeFile(
+      path.join(OUT, 'report.md'),
+      report(`Unfinished: ${Math.round((Date.now() - started) / 1000)} s so far.`)
+    );
   }
 
   if (phase('torture')) {

@@ -46,7 +46,7 @@ import {
 } from './pairing';
 import { flushCache, forgetCache, saveOutbox, loadCache, watchCache } from './cache';
 import { flushDrafts, forgetDrafts, loadDrafts, refusedToDraft, setComposer } from './drafts';
-import { outboxPlan, unreached } from './outbox';
+import { outboxPlan, sendInOrder, unreached } from './outbox';
 import { loadPrefs } from './prefs';
 import { getApp, setApp, update, useApp } from './store';
 import {
@@ -542,10 +542,12 @@ async function flushOutbox() {
   try {
     const { flush, expire } = outboxPlan(getApp().pending, Date.now());
     for (const p of expire) update((s) => setPendingFailed(s, p.agentId, p.clientId, true));
-    for (const p of flush) {
-      if (getApp().link.kind !== 'connected') break;
-      await resend(p).catch(() => {});
-    }
+    await sendInOrder(
+      flush,
+      resend,
+      () => getApp().link.kind === 'connected',
+      (p) => !!getApp().pending[p.agentId]?.some((x) => x.clientId === p.clientId && x.waiting)
+    );
   } finally {
     flushing = false;
   }

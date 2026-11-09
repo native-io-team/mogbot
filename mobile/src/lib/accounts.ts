@@ -93,7 +93,9 @@ export function useAccounts({ room = true }: { room?: boolean } = {}): AccountsS
 
   const change = useCallback(
     async (engine: AgentEngine, ids: string[], send: () => Promise<UsageAccount[]>) => {
-      if (!accounts) return;
+      // One change at a time: a second tap while the first is on its way
+      // would build on an order the Mac hasn't settled yet.
+      if (!accounts || swapping.current > 0) return;
       const before = accounts;
       haptic.select();
       setError(null);

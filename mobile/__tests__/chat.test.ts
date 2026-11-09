@@ -6,7 +6,13 @@ import { BAR_ORDER } from '../src/lib/bars';
 import { agentActions, messageActions, plainText, toggleFor } from '../src/lib/actions';
 import { CACHED_MESSAGES, fromCache, toCache, toOutbox } from '../src/lib/cache';
 import { EMPTY_DRAFT, liveMentions, putDraft } from '../src/lib/drafts';
-import { OUTBOX_WAIT_MS, outboxPlan, restorePending, unreached } from '../src/lib/outbox';
+import {
+  OUTBOX_WAIT_MS,
+  outboxPlan,
+  restorePending,
+  sendInOrder,
+  unreached,
+} from '../src/lib/outbox';
 import { emptySync, type PendingSend } from '../src/lib/sync';
 import { chatItems, dayLabel, timeLabel } from '../src/lib/timeline';
 import { WireFailure } from '../src/lib/transport';
@@ -64,6 +70,40 @@ describe('outbox', () => {
     );
     expect(plan.flush.map((p) => p.clientId)).toEqual(['early', 'late']);
     expect(plan.expire.map((p) => p.clientId)).toEqual(['stale']);
+  });
+
+  it('a send that times out again holds back the rest of its chat, never overtaken', async () => {
+    // Offline mid-send: three waited in one chat, one in another. The first
+    // times out again when the link comes back.
+    const flush = [
+      pend('a1', now - 4000, { waiting: true }),
+      { ...pend('b1', now - 3000, { waiting: true }), agentId: 'b' },
+      pend('a2', now - 2000, { waiting: true }),
+      pend('a3', now - 1000, { waiting: true }),
+    ];
+    const sent: string[] = [];
+    await sendInOrder(
+      flush,
+      async (p) => {
+        sent.push(p.clientId);
+      },
+      () => true,
+      (p) => p.clientId === 'a1'
+    );
+    expect(sent).toEqual(['a1', 'b1']);
+    // The link goes part-way: nothing more is tried.
+    const tried: string[] = [];
+    let up = true;
+    await sendInOrder(
+      flush,
+      async (p) => {
+        tried.push(p.clientId);
+        up = false;
+      },
+      () => up,
+      () => false
+    );
+    expect(tried).toEqual(['a1']);
   });
 
   it('retries only what may not have reached the Mac', () => {
