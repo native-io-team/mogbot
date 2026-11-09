@@ -7,7 +7,8 @@
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
-import { RootError, ScreenError } from '../src/components/ScreenError';
+import { DevSettings } from 'react-native';
+import { reloadApp, RootError, ScreenError } from '../src/components/ScreenError';
 
 const mockBack = jest.fn();
 let mockCanGoBack = true;
@@ -16,6 +17,8 @@ jest.mock('expo-router', () => ({
 }));
 const mockHideAsync = jest.fn(() => Promise.resolve());
 jest.mock('expo-splash-screen', () => ({ hideAsync: () => mockHideAsync() }));
+const mockReloadAsync = jest.fn(() => Promise.resolve());
+jest.mock('expo-updates', () => ({ reloadAsync: () => mockReloadAsync() }));
 const mockRecordCrash = jest.fn((..._args: unknown[]) => Promise.resolve());
 jest.mock('../src/lib/crash', () => ({
   recordCrash: (...a: unknown[]) => mockRecordCrash(...a),
@@ -51,6 +54,27 @@ describe('ScreenError', () => {
     await render(<RootError error={new Error('x')} retry={() => Promise.resolve()} />);
     expect(mockHideAsync).toHaveBeenCalled();
     expect(screen.getByText('This couldn’t be shown.')).toBeTruthy();
+  });
+
+  it('at the root, offers Reload, which starts the app afresh', async () => {
+    mockReloadAsync.mockClear();
+    await render(<RootError error={new Error('x')} retry={() => Promise.resolve()} />);
+    expect(screen.getByText('Try again')).toBeTruthy();
+    await fireEvent.press(screen.getByText('Reload'));
+    expect(mockReloadAsync).toHaveBeenCalled();
+  });
+
+  it('a route offers no Reload: Try again and Go back are enough there', async () => {
+    await render(<ScreenError error={new Error('x')} retry={() => Promise.resolve()} />);
+    expect(screen.queryByText('Reload')).toBeNull();
+  });
+
+  it('reloads through the bundler where the update runtime can’t (development)', async () => {
+    mockReloadAsync.mockImplementationOnce(() => Promise.reject(new Error('dev')));
+    const devReload = jest.spyOn(DevSettings, 'reload').mockImplementation(() => {});
+    await reloadApp();
+    expect(devReload).toHaveBeenCalled();
+    devReload.mockRestore();
   });
 });
 

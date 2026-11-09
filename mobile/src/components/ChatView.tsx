@@ -98,6 +98,7 @@ import {
 import { makeStyles, useColors } from '../lib/appearance';
 import { AgentAvatar, Spinner } from './agent';
 import { DaySeparator, DraftRow, MessageRow, PendingRow, SendRise, WorkingRow } from './chat';
+import { RowBoundary, rowResetKey } from './RowBoundary';
 import { Arrive } from './Arrive';
 import { useArrivedKeys } from '../lib/arrivals';
 import { Composer } from './Composer';
@@ -835,7 +836,7 @@ function ItemView({
   lit?: boolean;
 }) {
   const styles = useStyles();
-  const body =
+  const drawn =
     item.kind === 'message' ? (
       <MessageRow
         message={item.message}
@@ -860,6 +861,8 @@ function ItemView({
     ) : (
       <WorkingRow label={item.label} agent={agent} onError={onError} />
     );
+  // One row that can't be drawn says so in a Line; the chat goes on.
+  const body = <RowBoundary resetKey={rowResetKey(item)}>{drawn}</RowBoundary>;
   // A run from one side sits close together; a new speaker gets room. A
   // pending send is spaced as its confirmed copy will be, so nothing shifts.
   const grouped = (item.kind === 'message' || item.kind === 'pending') && item.grouped;

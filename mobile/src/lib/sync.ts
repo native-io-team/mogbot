@@ -23,6 +23,7 @@ import type {
   RoomView,
 } from '@shipstudio/companion-protocol';
 import { chatKeysOf, pendingKeyOf } from './rooms';
+import { asMessage, asMessages } from './wellFormed';
 
 export interface Chat {
   /** Oldest first. */
@@ -133,7 +134,10 @@ export function applyEvent(s: SyncState, event: CompanionEvent, cursor?: Cursor)
 function reduce(s: SyncState, event: CompanionEvent, cursor?: Cursor): SyncState {
   switch (event.type) {
     case 'agents.message': {
-      const m = event.message;
+      // From a Mac of another version it may not be the shape this phone
+      // knows: made safe to draw, or left out when it isn't a message.
+      const m = asMessage(event.message);
+      if (!m) return s;
       // A replayed or overtaken event for a row already written at a later
       // seq in this epoch (a newer event, or a page read after it): applying
       // it would put the older copy back (an answered card turning pending).
@@ -269,17 +273,18 @@ export function mergePage(
   older: boolean
 ): SyncState {
   const chat = s.chats[agentId] ?? emptyChat();
-  const comparable = s.cursor?.epoch === page.asOf.epoch;
+  const comparable = !!page.asOf && s.cursor?.epoch === page.asOf.epoch;
   let messages = chat.messages;
   const seqs = { ...s.seqs };
-  for (const m of page.messages) {
+  for (const m of asMessages(page.messages)) {
     const written = seqs[m.id];
     // An event newer than this read already wrote the row: keep it.
     if (comparable && written != null && written > page.asOf.seq) continue;
     messages = upsert(messages, m);
-    seqs[m.id] = page.asOf.seq;
+    seqs[m.id] = page.asOf?.seq ?? 0;
   }
-  const more = older || !chat.loaded ? page.more : chat.more || page.more;
+  const pageMore = page.more === true;
+  const more = older || !chat.loaded ? pageMore : chat.more || pageMore;
   return { ...s, seqs, chats: { ...s.chats, [agentId]: { messages, more, loaded: true } } };
 }
 
@@ -288,7 +293,17 @@ export function addPending(s: SyncState, p: PendingSend): SyncState {
 }
 
 /** The Mac answered a send: drop the pending copy and keep the real one. */
-export function confirmSend(s: SyncState, clientId: string, message: AgentMessage): SyncState {
+export function confirmSend(s: SyncState, clientId: string, sent: AgentMessage): SyncState {
+  const message = asMessage(sent);
+  // No usable copy came back: the send is settled, the event or a page brings the row.
+  if (!message) {
+    return {
+      ...s,
+      pending: Object.fromEntries(
+        Object.entries(s.pending).map(([k, l]) => [k, l.filter((p) => p.clientId !== clientId)])
+      ),
+    };
+  }
   const key = pendingKeyOf(message);
   const list = (s.pending[key] ?? []).filter((p) => p.clientId !== clientId);
   const chat = s.chats[key] ?? emptyChat();

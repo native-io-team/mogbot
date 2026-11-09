@@ -64,7 +64,12 @@ import { roomIdOf, roomKey, roomsOffered } from './rooms';
 import { registerPush } from './push';
 import { sendSecret } from './secrets';
 export { secretRouteProblem } from './secrets';
-import { DirectTransport, WireFailure } from './transport';
+import { DirectTransport, setTransportFaultReporter, WireFailure } from './transport';
+import { recordCrash } from './crash';
+import { asMessage } from './wellFormed';
+
+// A frame the phone couldn't handle is skipped (transport.ts) and logged here.
+setTransportFaultReporter((e) => void recordCrash(e, 'js', false).catch(() => {}));
 import { DemoTransport, demoCredentials, isDemo } from './demo';
 import { newChallenge, PAIR_AGAIN } from './identity';
 import { forgetSettledBy, withForget, withoutForget } from './forgets';
@@ -209,7 +214,10 @@ function connect(c: Credentials) {
     if (canCall('devices.setPush', welcome)) void syncPush();
   });
   t.onEvent((event, cursor) => {
-    if (event.type === 'agents.message') noticeMessage(event.message);
+    if (event.type === 'agents.message') {
+      const m = asMessage(event.message);
+      if (m) noticeMessage(m);
+    }
     update((s) => applyEvent(s, event, cursor));
     if (event.type === 'alert') void notify(event.alert);
     if (event.type === 'system.status') learnRoutes(event.status.routes);
