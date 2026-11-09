@@ -105,6 +105,18 @@ another device's blob or a path outside the agent's `attachments/` is a bare
 **Heartbeat:** the Mac pings every 15 s; the phone treats 40 s of silence as
 a dead link, which catches sleep and Wi-Fi handoffs faster than TCP.
 
+**Reconnecting** (`lib/transport.ts`): with the app in front the phone waits
+1, 2, 4, then at most 5 s between tries (in the background 2 s up to 60 s, to
+spare the battery). A try not welcomed within 8–20 s is given up and the next
+route tried (a route that drops packets, like a home address from cellular,
+otherwise hangs for the OS's own minute). A route that was working is tried
+again first. Coming forward, a network change (NetInfo: online, Wi-Fi to
+cellular, a VPN like Tailscale coming up) or Try again tries at once; on a
+socket that looks open they send a ping that must be answered within 4 s. As
+its app exits (a quit or an update's restart) the Mac closes every socket
+with 1001 "going away" (`CLOSE_MAC_CLOSING`, `HubItem::AppClosing`), and the
+phone says "Waiting for the app on your Mac" for up to 2 minutes.
+
 **Limits:** 600 requests a minute per device, socket and HTTP together,
 of which at most 10 may create an agent (`MAX_AGENTS_CREATED_PER_MINUTE`;
 a retry answered from the `clientId` cache doesn't count); 4 sockets per
@@ -947,6 +959,8 @@ installed and signed in (a `signed_out` turn makes it a problem whatever the
 check says); each agent's capabilities; this device. Screens say nothing
 while all is well and show the pill when something isn't; in a chat it is the
 first bar above the composer ("Saved messages shown"), after a 2 s grace.
+The first 15 s of trying (counted again from when the app comes forward) read
+"Reconnecting…" or "Connecting…", never "Can’t reach Mac" (`CALM_MS`).
 
 ### Offline cache and outbox
 

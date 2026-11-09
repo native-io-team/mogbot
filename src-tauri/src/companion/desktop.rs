@@ -33,6 +33,19 @@ pub fn get() -> Option<Arc<Companion>> {
     COMPANION.get().cloned()
 }
 
+/// The app is exiting: tell every connected phone it's going away (an update's
+/// restart is the usual reason), so it waits calmly rather than saying it
+/// can't reach this Mac. Blocks briefly so the close frames leave before the
+/// process does; returns at once when no phone is connected.
+pub fn say_goodbye_sync() {
+    let Some(c) = get() else { return };
+    if c.hub.listeners() == 0 {
+        return;
+    }
+    c.hub.signal(super::hub::HubItem::AppClosing);
+    std::thread::sleep(std::time::Duration::from_millis(200));
+}
+
 /// Create the companion (once) and subscribe it to the agents' events. The
 /// journal starts here, so its epoch is this run's.
 pub fn ensure(app: &AppHandle) -> Arc<Companion> {

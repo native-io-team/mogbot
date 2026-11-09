@@ -13,11 +13,24 @@ import type { MethodName, Params, Result, BlobRef } from './methods';
 import type { RouteKind } from './model';
 
 export type LinkState =
-  /** Trying routes in order. */
-  | { kind: 'connecting'; attempt: number }
+  /**
+   * Trying routes in order. `since`: when this spell of trying began (or the
+   * app last came forward during it), so a short one reads as calm.
+   */
+  | { kind: 'connecting'; attempt: number; since?: number }
   | { kind: 'connected'; route: RouteKind | 'relay'; since: number }
-  /** Was connected; retrying with backoff. `lastSeenAt` is the last frame from the Mac. */
-  | { kind: 'reconnecting'; lastSeenAt: number; nextTryAt: number }
+  /**
+   * Was connected; retrying with backoff. `lastSeenAt` is the last frame from
+   * the Mac; `since` as for `connecting`. `macClosing`: the Mac's app said
+   * goodbye as it closed (a quit, an update's restart), so it may well be back.
+   */
+  | {
+      kind: 'reconnecting';
+      lastSeenAt: number;
+      nextTryAt: number;
+      since?: number;
+      macClosing?: boolean;
+    }
   /** The Mac said no for good: re-pair (revoked) or update a side. */
   | {
       kind: 'refused';

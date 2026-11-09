@@ -124,16 +124,31 @@ export function pill(s: Inputs, now = Date.now()): Pill {
       : { tone: 'ok', label: 'Connected' };
   }
   if (s.phoneOnline === false) return { tone: 'problem', label: 'Can’t reach Mac' };
+  // The first moments of trying read as calm: the phone tries every few
+  // seconds with the app in front, and the Mac is usually back by then.
+  const calm = link.since != null && now - link.since < CALM_MS;
   if (link.kind === 'reconnecting') {
+    // The Mac's app said it was closing (a quit, an update's restart): waiting for it isn't a fault.
+    if (link.macClosing && now - link.lastSeenAt < MAC_CLOSING_WAIT_MS) {
+      return { tone: 'busy', label: 'Waiting for the app on your Mac' };
+    }
+    if (calm) return { tone: 'busy', label: 'Reconnecting…' };
     // A short blip reads as calm; a long one says plainly that it's not there.
     return now - link.lastSeenAt > 2 * 60_000
       ? { tone: 'problem', label: 'Can’t reach Mac' }
       : { tone: 'busy', label: `Reconnecting · last seen ${formatAgo(link.lastSeenAt, now)}` };
   }
-  return link.attempt >= 3
+  if (calm) return { tone: 'busy', label: 'Connecting…' };
+  // A link state from before `since` existed: the old rule, by tries.
+  return link.since != null || link.attempt >= 3
     ? { tone: 'problem', label: 'Can’t reach Mac' }
     : { tone: 'busy', label: 'Connecting…' };
 }
+
+/** How long trying reads as "Reconnecting…" before it may say it can't reach the Mac. */
+export const CALM_MS = 15_000;
+/** How long the Mac's app may take to come back after saying it was closing. */
+export const MAC_CLOSING_WAIT_MS = 2 * 60_000;
 
 export interface Layer {
   title: string;

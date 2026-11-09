@@ -285,3 +285,10 @@ export type ServerFrame =
 /** The Mac sends a heartbeat `pong` every 15 s; no frame for this long means the link is dead. */
 export const HEARTBEAT_MS = 15_000;
 export const DEAD_AFTER_MS = 40_000;
+
+/**
+ * The WebSocket close code the Mac sends every phone as its app closes (a
+ * quit, or an update's restart): RFC 6455's "going away". The phone keeps
+ * trying every few seconds and says it's waiting, not that it can't reach it.
+ */
+export const CLOSE_MAC_CLOSING = 1001;

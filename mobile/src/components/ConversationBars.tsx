@@ -13,7 +13,7 @@ import { setupBar } from '../lib/teamSetup';
 import { DEMO_BAR, isDemo } from '../lib/demo';
 import { pill } from '../lib/connection';
 import { useApp } from '../lib/store';
-import { BANNER_GRACE_MS, useLinkState, useNow } from './ConnectionPill';
+import { BANNER_GRACE_MS, useLinkNow, useLinkState } from './ConnectionPill';
 import { BarStack, type BarSpec } from './surfaces';
 
 /**
@@ -24,7 +24,7 @@ import { BarStack, type BarSpec } from './surfaces';
 function useConnectionBar(): BarSpec | null {
   const router = useRouter();
   const state = useLinkState();
-  const now = useNow(10_000);
+  const now = useLinkNow(state.link, 10_000);
   const down = state.link.kind !== 'connected';
   const [late, setLate] = useState(false);
   useEffect(() => {

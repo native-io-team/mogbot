@@ -187,7 +187,14 @@ pub enum HubItem {
     },
     /// The companion was turned off: every connection closes.
     Shutdown,
+    /// The app is closing (a quit, or an update's restart): every connection
+    /// closes with "going away" ([`CLOSE_APP_CLOSING`]), so a phone waits for
+    /// it calmly instead of saying it can't reach the Mac.
+    AppClosing,
 }
+
+/// RFC 6455's "going away"; `CLOSE_MAC_CLOSING` in frames.ts.
+pub const CLOSE_APP_CLOSING: u16 = 1001;
 
 /// How a connecting phone catches up.
 pub enum Resume {
@@ -247,6 +254,11 @@ impl Hub {
 
     pub fn signal(&self, item: HubItem) {
         let _ = self.tx.send(item);
+    }
+
+    /// Connections listening right now.
+    pub fn listeners(&self) -> usize {
+        self.tx.receiver_count()
     }
 
     /// Subscribe and decide how to catch up, atomically with respect to

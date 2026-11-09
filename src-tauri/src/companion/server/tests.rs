@@ -431,6 +431,35 @@ async fn a_revoked_phone_is_closed_at_once_and_told_so() {
 }
 
 #[tokio::test]
+async fn closing_the_app_tells_each_phone_it_is_going_away() {
+    let (c, _) = Stub::companion();
+    let port = start(c.clone()).await;
+    let (_, token, _) = c
+        .registry
+        .add(&phone(), String::new(), 1, &[], None)
+        .unwrap();
+    let (mut ws, ..) = open(port, &token, None).await;
+    assert!(c.hub.listeners() > 0);
+    c.hub.signal(crate::companion::hub::HubItem::AppClosing);
+    let close = loop {
+        let msg = tokio::time::timeout(Duration::from_secs(5), ws.next())
+            .await
+            .expect("a close within 5 s");
+        match msg {
+            Some(Ok(Message::Close(frame))) => break frame,
+            Some(Ok(_)) => continue,
+            other => panic!("expected a close frame, got {other:?}"),
+        }
+    };
+    let frame = close.expect("a close code, not a bare close");
+    assert_eq!(
+        u16::from(frame.code),
+        crate::companion::hub::CLOSE_APP_CLOSING
+    );
+    assert_eq!(u16::from(frame.code), 1001, "frames.ts CLOSE_MAC_CLOSING");
+}
+
+#[tokio::test]
 async fn unknown_tokens_and_old_versions_are_refused() {
     let (c, _) = Stub::companion();
     let port = start(c.clone()).await;
