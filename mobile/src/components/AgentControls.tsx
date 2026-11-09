@@ -10,6 +10,10 @@
  * - How much it does on its own: `agents.setAgentIndependence`. Raising it
  *   past the team's asks first; it applies at the turn's next step, so it is
  *   the one control open while a turn runs.
+ * - Runs on: any account (the default) or one of its engine's, only while
+ *   that engine has two or more (`agents.update` with `account`, from a
+ *   Mac that serves `agents.accounts.use`). Pinned, it never moves to
+ *   another account when that one runs out.
  * - Usage: the team's mode, read-only (there's no per-agent budget), and a
  *   way to the usage sheet.
  * - Apps: "Apps your agents can use", opened for it (`agents.apps`).
@@ -34,6 +38,7 @@ import {
   type AgentEffort,
   type AgentEngine,
   type AgentIndependence,
+  type UsageAccount,
   type UsageMode,
 } from '@shipstudio/companion-protocol';
 import { useRouter } from 'expo-router';
@@ -46,7 +51,8 @@ import { engineName } from '../lib/agents';
 import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
 import { modelOptions } from '../lib/newAgentDefaults';
-import { call, canCall, describeError, setAgentEngine } from '../lib/session';
+import { runsOnChoices } from '../lib/accountsView';
+import { call, canCall, describeError, setAgentAccount, setAgentEngine } from '../lib/session';
 import { useApp, useServed } from '../lib/store';
 import { iconSize, space } from '../lib/theme';
 import { choose } from './menu';
@@ -175,6 +181,8 @@ export function AgentControls({ agentId }: { agentId: string }) {
         </Section>
       )}
 
+      <RunsOn agent={agent} disabled={!live} onError={setError} />
+
       {levels && team && (
         <LevelChoices agent={agent} team={team} disabled={!live} onError={setError} />
       )}
@@ -240,6 +248,71 @@ function Choice({
       }
       last={last}
     />
+  );
+}
+
+/** "Runs on": Any account, or one of its engine's (two or more to pick between). */
+function RunsOn({
+  agent,
+  disabled,
+  onError,
+}: {
+  agent: Agent;
+  disabled: boolean;
+  onError: (text: string | null) => void;
+}) {
+  const welcome = useApp((s) => s.welcome);
+  const serves = canCall('agents.accounts.use', welcome);
+  const [accounts, setAccounts] = useState<UsageAccount[] | null>(null);
+  // Read once while the sheet is open: the list changes on the Mac, rarely.
+  useEffect(() => {
+    if (!serves) return;
+    let live = true;
+    call('agents.accounts', {}).then(
+      (list) => live && setAccounts(list),
+      () => {}
+    );
+    return () => {
+      live = false;
+    };
+  }, [serves]);
+  const choices = serves ? runsOnChoices(accounts, agent.engine) : [];
+  if (choices.length === 0) return null;
+  const own = agent.account && choices.some((a) => a.id === agent.account) ? agent.account : '';
+  const pick = (account: string) => {
+    if (account === own) return;
+    haptic.select();
+    onError(null);
+    setAgentAccount(agent.id, account).then(
+      () => haptic.success(),
+      (e: unknown) => {
+        haptic.error();
+        onError(describeError(e));
+      }
+    );
+  };
+  const rows = [
+    { id: '', label: 'Any account', detail: 'In order, carrying on with the next when one runs out' },
+    ...choices.map((a) => ({
+      id: a.id,
+      label: a.name,
+      detail: a.signedIn ? 'Only this one, never another' : 'Not signed in',
+    })),
+  ];
+  return (
+    <Section title="Runs on">
+      {rows.map((r, i) => (
+        <Choice
+          key={r.id || 'any'}
+          label={r.label}
+          detail={r.detail}
+          on={r.id === own}
+          disabled={disabled}
+          onPress={() => pick(r.id)}
+          last={i === rows.length - 1}
+        />
+      ))}
+    </Section>
   );
 }
 

@@ -4621,7 +4621,12 @@ async fn run_on_accounts(
     mut resumes: u8,
 ) -> Result<Ended, CommandError> {
     use super::wallet::{self, Choice};
-    let engine = store::get(agent_id)?.engine;
+    let agent = store::get(agent_id)?;
+    let engine = agent.engine;
+    // "Runs on" one account: only that one, never another (`wallet::for_agent`).
+    let pin = agent.account.clone();
+    let pinned = pin.as_deref();
+    let mine = move || async move { wallet::for_agent(wallet::candidates(engine).await, pinned) };
     let mut tried: Vec<String> = Vec::new();
     let mut prompt = prompt.to_string();
     // A pick-up carries on in the conversation it was cut off in, or not at
@@ -4631,7 +4636,7 @@ async fn run_on_accounts(
     clear_acted(agent_id);
     loop {
         let now = store::now_ms();
-        let candidates = wallet::candidates(engine).await;
+        let candidates = mine().await;
         let account = match wallet::choose(&candidates, &tried, now) {
             Choice::Run(account) => account,
             Choice::AllOut { earliest, count } => {
@@ -4654,7 +4659,7 @@ async fn run_on_accounts(
                 // the servers that need a sign-in on it, asked of it now.
                 if let Ok(agent) = store::get(agent_id) {
                     if let Some(caps) = agent.capabilities {
-                        switched_from(agent_id, &account.name, caps);
+                        switched_from(agent_id, &wallet::line_name(&account.name), caps);
                     }
                 }
                 if !account.is_this_mac() {
@@ -4701,7 +4706,9 @@ async fn run_on_accounts(
             return Err(CommandError::expected(SESSION_GONE_LINE));
         }
         if switched_after_acting && is_missing_session(&err.to_string()) {
-            return Err(CommandError::expected(not_carried_line(&account.name)));
+            return Err(CommandError::expected(not_carried_line(
+                &wallet::line_name(&account.name),
+            )));
         }
         let (_, failure) = super::failure::describe_now(engine, &err.to_string());
         if failure.kind != super::failure::FailureKind::UsageLimit {
@@ -4710,8 +4717,16 @@ async fn run_on_accounts(
         let now = store::now_ms();
         wallet::mark_out(engine, &account.id, failure.resets_at, now);
         tried.push(account.id.clone());
-        let candidates = wallet::candidates(engine).await;
+        let candidates = mine().await;
         let signed_in = candidates.iter().filter(|c| c.signed_in).count();
+        // Set to one account, and another has room: say once how to let it.
+        if pin.is_some() && candidates.len() == 1 {
+            let others = wallet::candidates(engine).await;
+            if wallet::can_switch(&others, &tried, now) {
+                let line = pinned_out_line(&agent.name, &account.name);
+                let _ = record_in_turn(app, new_message(agent_id, MessageKind::Note, line));
+            }
+        }
         if !wallet::can_switch(&candidates, &tried, now) {
             if signed_in >= 2 {
                 if let Choice::AllOut { earliest, count } = wallet::choose(&candidates, &tried, now)
@@ -4820,6 +4835,14 @@ fn clear_acted(agent_id: &str) {
 /// A switch whose conversation couldn't be brought to the next account,
 /// after the last one had already done part of the work. Not said with the
 /// usage-limit words: it isn't one, and mustn't mark this account out.
+/// An agent set to run on one account that is out, while another has room.
+pub(crate) fn pinned_out_line(agent: &str, account: &str) -> String {
+    format!(
+        "{agent} runs only on {}, which is out of usage. To carry on with another account, set Runs on to Any account in its … menu.",
+        super::wallet::line_name(account)
+    )
+}
+
 fn not_carried_line(to: &str) -> String {
     format!("Stopped instead of switching to {to}: this conversation couldn't be brought over to it, and part of the work had already run, so starting again could do it twice. Check what was done, then send what's left.")
 }

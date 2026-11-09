@@ -58,6 +58,7 @@ import {
 import { CHIEF_CHIPS, type ChiefIdea } from '../../lib/chiefIdeas';
 import { AgentSchedulePopover } from './AgentSchedulePopover';
 import { AgentUsageRing } from './AgentUsageRing';
+import { AgentAccountChip } from './AccountSwitcher';
 import { AgentFilesModal } from './AgentFilesModal';
 import { RememberModal } from './AgentRemember';
 import { useArrivals, useFollowBottom, usePresence, useRecently } from './useAgentMotion';
@@ -1588,6 +1589,7 @@ export const AgentChat = memo(function AgentChat({
                 {title}
                 {/* Not in the compact switcher: it's a button already. */}
                 <AgentProjectChip agent={agent} />
+                <AgentAccountChip agent={agent} />
               </div>
             )}
             <div className="agent-chat__actions">

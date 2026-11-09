@@ -68,6 +68,10 @@ export const USAGE_PLAN_EVENT = 'agents://usage-plan';
 
 export const getUsageInventory = () => invoke<UsageInventory>('agents_usage_overview');
 
+/** What is known, without asking for a read: a glance, not someone looking. */
+export const glanceUsageInventory = () =>
+  invoke<UsageInventory>('agents_usage_overview', { look: false });
+
 export const setUsageMode = (mode: UsageMode) => invoke<void>('agents_set_usage_mode', { mode });
 
 export const addSpareItem = (text: string, agentId?: string) =>

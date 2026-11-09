@@ -84,6 +84,7 @@ pub fn stored_agent() -> Agent {
             "unread": 2,
             "pendingApprovals": 1,
             "engine": "claude",
+            "account": "a1work",
             "model": "opus",
             "effort": "high",
             "context": { "used": 30_099, "window": 200_000, "at": 1_762_290_000_000_i64 },
@@ -415,6 +416,10 @@ pub fn overview() -> Value {
         takeover: None,
         // Its own level, above the team's Go hard.
         independence: Some(crate::agents::independence::Level::FullSend),
+        ran_on: Some(crate::commands::agents::RanOn {
+            id: "a1work".into(),
+            name: "Work".into(),
+        }),
     };
     super::wire::phone_overview(
         serde_json::to_value(crate::commands::agents::AgentsOverview {
@@ -562,6 +567,8 @@ pub struct Stub {
     pub agent_levels: Mutex<Vec<(String, Option<crate::agents::independence::Level>)>>,
     pub import_choices: Mutex<Vec<crate::agents::import_choice::Choice>>,
     pub admins: Mutex<Vec<(String, bool)>>,
+    /// `agents.accounts.use` / `.reorder` calls: (engine, ids in order).
+    pub account_orders: Mutex<Vec<(String, Vec<String>)>>,
     /// Agents started fresh, by id.
     pub fresh: Mutex<Vec<String>>,
     /// What reached a session: `(session id, text or "key:<key>")`.
@@ -606,6 +613,7 @@ impl Stub {
             agent_levels: Mutex::new(Vec::new()),
             import_choices: Mutex::new(Vec::new()),
             admins: Mutex::new(Vec::new()),
+            account_orders: Mutex::new(Vec::new()),
             fresh: Mutex::new(Vec::new()),
             typed: Mutex::new(Vec::new()),
             revoked: Mutex::new(Vec::new()),
@@ -1327,16 +1335,34 @@ impl Backend for Stub {
 
     async fn accounts(&self) -> Result<Value, CommandError> {
         // Every field set: this Mac's own, and an added one that is out.
+        // This Mac's own Claude sign-in unnamed, so shown as who it is.
         Ok(json!([
-            { "id": "default", "engine": "claude", "name": "This Mac", "thisMac": true,
-              "signedIn": true, "out": false },
-            { "id": "a1work", "engine": "claude", "name": "Work", "thisMac": false,
+            { "id": "default", "engine": "claude", "name": "sam@example.com", "named": false,
+              "thisMac": true, "signedIn": true, "email": "sam@example.com", "plan": "Max",
+              "out": false },
+            { "id": "a1work", "engine": "claude", "name": "Work", "named": true, "thisMac": false,
               "signedIn": true, "email": "me@work.example",
               "limit": { "at": 1_762_290_000_000_i64, "resetsAt": 1_762_300_000_000_i64 },
               "out": true },
-            { "id": "default", "engine": "codex", "name": "This Mac", "thisMac": true,
-              "signedIn": false, "out": false }
+            { "id": "default", "engine": "codex", "name": "Signed in on this Mac", "named": false,
+              "thisMac": true, "signedIn": false, "out": false }
         ]))
+    }
+
+    async fn account_use(&self, engine: &str, id: &str) -> Result<Value, CommandError> {
+        self.account_orders
+            .lock()
+            .unwrap()
+            .push((engine.to_string(), vec![id.to_string()]));
+        self.accounts().await
+    }
+
+    async fn account_reorder(&self, engine: &str, ids: Vec<String>) -> Result<Value, CommandError> {
+        self.account_orders
+            .lock()
+            .unwrap()
+            .push((engine.to_string(), ids));
+        self.accounts().await
     }
 
     async fn login_start(

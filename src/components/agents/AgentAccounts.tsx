@@ -4,9 +4,12 @@
  * (`agents/wallet.rs`). This Mac's own sign-in is always in the list; more
  * can be added, each signed in into a folder of its own.
  *
- * Every row is a Line: its name in full, then one muted line of state with
+ * Every row is a Line: its name in full (this Mac's own sign-in, unnamed, is
+ * shown as who it is signed in as), then one muted line of state with
  * who it is signed in as and its plan, only as the engine's own files say
- * (`agents/identity.rs`). Actions are quiet: Sign in when it isn't, a More
+ * (`agents/identity.rs`). The account turns start on is marked "In use";
+ * any other signed-in one offers "Use this one now", which puts it first
+ * (`agents_account_use`). Actions are quiet: Sign in when it isn't, a More
  * menu (Rename, Sign in again, Remove…, which asks first; This Mac's own
  * sign-in can't be removed and says why), and the two order arrows as one
  * group. Adding names the account, then runs its engine's own sign-in in a
@@ -46,8 +49,10 @@ import {
   reorderUsageAccounts,
   suggestName,
   takeAccountsRequest,
+  putAccountFirst,
   type UsageAccount,
 } from '../../lib/agentAccounts';
+import { inUseOf } from '../../../packages/companion-protocol/src/accountSwitcher';
 import { AccountSignIn } from './AccountSignIn';
 
 const say = (e: unknown) => formatCommandError(asCommandError(e));
@@ -56,6 +61,8 @@ function AccountRow({
   account,
   index,
   count,
+  inUse,
+  onUse,
   onMove,
   onRename,
   onSignIn,
@@ -64,6 +71,8 @@ function AccountRow({
   account: UsageAccount;
   index: number;
   count: number;
+  inUse: boolean;
+  onUse: () => void;
   onMove: (by: -1 | 1) => void;
   onRename: (name: string) => Promise<boolean>;
   onSignIn: () => void;
@@ -109,8 +118,10 @@ function AccountRow({
           </Tooltip>
         )}
         <span className="agent-account__detail">
-          <span className="agent-account__state">{detail.state}</span>
-          {detail.email && (
+          <span className="agent-account__state">
+            {inUse && !account.out ? 'In use' : detail.state}
+          </span>
+          {detail.email && detail.email !== account.name && (
             <Tooltip content={detail.email}>
               <span className="agent-account__email">{detail.email}</span>
             </Tooltip>
@@ -135,6 +146,11 @@ function AccountRow({
             {!account.signedIn && (
               <Button size="compact" variant="secondary" onClick={onSignIn}>
                 Sign in
+              </Button>
+            )}
+            {account.signedIn && !account.out && !inUse && (
+              <Button size="compact" variant="secondary" onClick={onUse}>
+                Use this one now
               </Button>
             )}
             <Dropdown
@@ -331,6 +347,8 @@ export function AgentAccounts({ engines }: { engines: EngineInfo[] }) {
                   account={account}
                   index={i}
                   count={mine.length}
+                  inUse={mine.length > 1 && inUseOf(mine)?.id === account.id}
+                  onUse={() => void attempt(() => putAccountFirst(engine, account.id))}
                   onMove={(by) => {
                     const next = moved(ids, i, by);
                     if (next) void attempt(() => reorderUsageAccounts(engine, next));

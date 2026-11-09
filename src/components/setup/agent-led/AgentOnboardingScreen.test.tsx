@@ -90,6 +90,10 @@ describe('AgentOnboardingScreen', () => {
     press('Continue');
     await waitFor(() => expect(setDefaultAgentId).toHaveBeenCalledWith('codex'));
 
+    // Another account, optional: Skip goes on.
+    expect(await heading('Add another account?')).toBeInTheDocument();
+    press('Skip');
+
     expect(await heading('How much should your agents do on their own?')).toBeInTheDocument();
     press('Skip');
     expect(setIndependence).not.toHaveBeenCalled();
@@ -173,7 +177,7 @@ describe('AgentOnboardingScreen', () => {
     fireEvent.click(
       screen.getByText('Claude Code', { selector: '.agent-pick-card-name' }).closest('button')!
     );
-    expect(await heading('How much should your agents do on their own?')).toBeInTheDocument();
+    expect(await heading('Add another account?')).toBeInTheDocument();
     expect(setDefaultAgentId).toHaveBeenCalledWith('claude-code');
   });
 

@@ -24,6 +24,39 @@ pub struct AgentView {
     /// Its own independence level (`policy`); omitted when it's the team's.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub independence: Option<agents::independence::Level>,
+    /// The account its last turn ran on, as it is shown; only while its
+    /// engine has more than one (with one, there is nothing to tell apart).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub ran_on: Option<RanOn>,
+}
+
+/// Which account a turn ran on (`wallet::last_on`).
+#[derive(Serialize, Clone, Debug, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct RanOn {
+    pub id: String,
+    pub name: String,
+}
+
+/// The account `agent`'s last turn ran on, when its engine has 2+ accounts.
+pub(crate) fn ran_on(agent: &store::Agent, counts: &[(Engine, usize)]) -> Option<RanOn> {
+    let many = counts.iter().any(|(e, n)| *e == agent.engine && *n > 1);
+    if !many {
+        return None;
+    }
+    agents::wallet::last_on(&agent.id, agent.engine).map(|a| RanOn {
+        id: a.id,
+        name: a.name,
+    })
+}
+
+/// How many accounts each engine has.
+pub(crate) fn account_counts() -> Vec<(Engine, usize)> {
+    let all = agents::wallet::list();
+    Engine::ALL
+        .iter()
+        .map(|e| (*e, all.iter().filter(|a| a.engine == *e).count()))
+        .collect()
 }
 
 #[derive(Serialize)]
@@ -72,10 +105,12 @@ pub async fn agents_overview(app: AppHandle) -> Result<AgentsOverview, CommandEr
         tracing::warn!(error = %e, "couldn't move the Chief of Staff onto a ready engine");
     }
     let policy = agents::policy::load();
+    let counts = account_counts();
     let agents = store::list()?
         .into_iter()
         .map(|agent| {
             Ok(AgentView {
+                ran_on: ran_on(&agent, &counts),
                 independence: agents::policy::own_independence(&policy, &agent.id),
                 takeover: takeover::view(&agent.id),
                 status: runner::status_with_work(&agent.id),
@@ -134,6 +169,7 @@ pub async fn agents_with_projects() -> Result<Vec<AgentView>, CommandError> {
             })
             .map(|agent| {
                 Ok(AgentView {
+                    ran_on: None,
                     independence: agents::policy::own_independence(&policy, &agent.id),
                     takeover: takeover::view(&agent.id),
                     status: runner::status_with_work(&agent.id),
@@ -559,6 +595,10 @@ pub struct UpdateAgentInput {
     /// "Work directly in the project" instead of in a copy of it.
     #[serde(default)]
     pub work_directly: Option<bool>,
+    /// "Runs on": one of its engine's accounts (`wallet`), or an empty
+    /// string for any account.
+    #[serde(default)]
+    pub account: Option<String>,
 }
 
 #[tauri::command]
@@ -620,6 +660,21 @@ pub async fn agents_update(
         Some(p) => Some(project::resolve(p).await?.map(|p| p.path)),
         None => None,
     };
+    // An account of the engine it will be on; refused, never guessed at.
+    let account = match input.account.as_deref().map(str::trim) {
+        None => None,
+        Some("") => Some(None),
+        Some(id) => {
+            let on = engine.unwrap_or(current.engine);
+            if !agents::wallet::has(on, id) {
+                return Err(agents::err_invalid(
+                    "account",
+                    format!("That isn't one of the {} accounts here.", on.label()),
+                ));
+            }
+            Some(Some(id.to_string()))
+        }
+    };
     // A copy open with unkept work stays tied to the project it was made of.
     if let Some(p) = &project {
         agents::task::refuse_rebind(&current, p.as_deref())?;
@@ -677,6 +732,10 @@ pub async fn agents_update(
         if let Some(direct) = input.work_directly {
             a.work_directly = direct;
         }
+        // After the engine: a move clears the account, then this sets it.
+        if let Some(account) = account.clone() {
+            a.account = account;
+        }
     })?;
     // "Work directly" is how it works in its project, in its settings now
     // (`policy`); the field above is the mirror the copy code reads.
@@ -694,6 +753,12 @@ pub async fn agents_update(
         store::write_instructions(&store::agent_home(&agent_id)?, &updated, &instructions)?;
     }
     if let Some(line) = settings_line(&current, &updated, engine.is_some()) {
+        let _ = runner::record(
+            &app,
+            runner::new_message(&agent_id, store::MessageKind::Note, line),
+        );
+    }
+    if let Some(line) = account_line(&current, &updated) {
         let _ = runner::record(
             &app,
             runner::new_message(&agent_id, store::MessageKind::Note, line),
@@ -746,6 +811,30 @@ pub(crate) fn settings_line(
         }
     } else {
         format!("Now on {what} from its next message")
+    })
+}
+
+/// The one quiet line when what account it runs on changed: "Runs only on
+/// Work from its next message." / "Runs on any account from its next
+/// message." `None` when it didn't, or only because it moved engine.
+pub(crate) fn account_line(before: &store::Agent, after: &store::Agent) -> Option<String> {
+    if before.account == after.account || (before.engine != after.engine && after.account.is_none())
+    {
+        return None;
+    }
+    Some(match &after.account {
+        Some(id) => {
+            let name = agents::wallet::of(after.engine)
+                .into_iter()
+                .find(|a| &a.id == id)
+                .map(|a| agents::wallet::labelled(a, true).name)
+                .unwrap_or_else(|| "one account".to_string());
+            format!(
+                "Runs only on {} from its next message",
+                agents::wallet::line_name(&name)
+            )
+        }
+        None => "Runs on any account from its next message".to_string(),
     })
 }
 
@@ -2306,6 +2395,50 @@ mod tests {
         );
     }
 
+    #[test]
+    fn runs_on_says_one_quiet_line_and_an_agent_shows_the_account_it_ran_on() {
+        with_chief(|_| {
+            let work = agents::wallet::add(Engine::Claude, "Work").unwrap();
+            let base: store::Agent = serde_json::from_value(serde_json::json!({
+                "id": "a", "name": "A", "shape": 0, "color": "blue", "createdAt": 0
+            }))
+            .unwrap();
+            let mut pinned = base.clone();
+            pinned.account = Some(work.id.clone());
+            assert_eq!(
+                account_line(&base, &pinned).as_deref(),
+                Some("Runs only on Work from its next message")
+            );
+            assert_eq!(
+                account_line(&pinned, &base).as_deref(),
+                Some("Runs on any account from its next message")
+            );
+            assert_eq!(account_line(&base, &base), None);
+            // Moving engine clears it, and the engine's own line says enough.
+            let mut moved = pinned.clone();
+            moved.switch_engine(Engine::Codex);
+            assert_eq!(moved.account, None);
+            assert_eq!(account_line(&pinned, &moved), None);
+
+            // The chip: only once its engine has more than one account.
+            assert_eq!(ran_on(&base, &[(Engine::Claude, 1)]), None);
+            let counts = account_counts();
+            assert_eq!(ran_on(&base, &counts), None, "nothing recorded yet");
+            agents::wallet::ran_on("a", &work);
+            assert_eq!(
+                ran_on(&base, &counts),
+                Some(RanOn {
+                    id: work.id.clone(),
+                    name: "Work".into()
+                })
+            );
+            assert_eq!(
+                crate::agents::runner::pinned_out_line("Riley", "Work"),
+                "Riley runs only on Work, which is out of usage. To carry on with another account, set Runs on to Any account in its … menu."
+            );
+        });
+    }
+
     fn engines(claude: bool, codex: bool) -> Vec<engine::EngineInfo> {
         [(Engine::Claude, claude), (Engine::Codex, codex)]
             .into_iter()
@@ -2432,11 +2565,63 @@ pub async fn agents_account_remove(
     id: String,
 ) -> Result<(), CommandError> {
     let engine = Engine::parse(&engine)?;
+    let gone = id.clone();
     tokio::task::spawn_blocking(move || agents::wallet::remove(engine, &id))
         .await
         .map_err(agents::err_other)??;
+    // An agent set to run on it runs on any account again.
+    for agent in store::list()?
+        .into_iter()
+        .filter(|a| a.engine == engine && a.account.as_deref() == Some(gone.as_str()))
+    {
+        let _ = store::update(&agent.id, |a| a.account = None);
+        let _ = runner::record(
+            &app,
+            runner::new_message(
+                &agent.id,
+                store::MessageKind::Note,
+                "Runs on any account from its next message: the one it was set to was removed"
+                    .to_string(),
+            ),
+        );
+    }
+    emit_registry(&app);
     let _ = app.emit(EVENT_ACCOUNTS, ());
     Ok(())
+}
+
+/// "Use this one now": the account goes first in its engine's order, so
+/// every turn that starts from now on tries it first (`wallet::use_first`).
+/// A turn already running finishes on its account; an agent set to run on
+/// one account stays on it. Refused for an account that isn't signed in:
+/// turns would pass over it, which isn't what was asked.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_account_use(
+    app: AppHandle,
+    engine: String,
+    id: String,
+) -> Result<Vec<agents::wallet::AccountView>, CommandError> {
+    let engine = Engine::parse(&engine)?;
+    let account = agents::wallet::of(engine)
+        .into_iter()
+        .find(|a| a.id == id)
+        .ok_or_else(|| CommandError::expected("That account isn't in the list any more."))?;
+    if !agents::wallet::signed_in(&account).await {
+        return Err(CommandError::expected(format!(
+            "Sign {} in first.",
+            agents::wallet::line_name(&agents::wallet::labelled(account, false).name)
+        )));
+    }
+    let to = id.clone();
+    tokio::task::spawn_blocking(move || agents::wallet::use_first(engine, &to))
+        .await
+        .map_err(agents::err_other)??;
+    tracing::info!(engine = engine.label(), account = %id, "[Agents] account put first");
+    let _ = app.emit(EVENT_ACCOUNTS, ());
+    // The usage view's "used next" moves with it, at once.
+    let _ = app.emit(runner::EVENT_USAGE_PLAN, ());
+    Ok(agents::wallet::views().await)
 }
 
 /* ------------------------------------------------- setting up your team */

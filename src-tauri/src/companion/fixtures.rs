@@ -523,6 +523,24 @@ async fn generate() -> String {
         call("agents.accounts", json!({})).await,
     );
     out += &entry(
+        "agentsAccountsUse",
+        "Result<'agents.accounts.use'>",
+        call(
+            "agents.accounts.use",
+            json!({ "engine": "claude", "id": "a1work" }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsAccountsReorder",
+        "Result<'agents.accounts.reorder'>",
+        call(
+            "agents.accounts.reorder",
+            json!({ "engine": "claude", "ids": ["a1work", "default"] }),
+        )
+        .await,
+    );
+    out += &entry(
         "agentsUsagePlan",
         "Result<'agents.usagePlan'>",
         call("agents.usagePlan", json!({})).await,

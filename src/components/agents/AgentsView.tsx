@@ -96,7 +96,7 @@ import {
   TerminalIcon,
 } from '@/components/icons';
 import { useAgentProjects } from './AgentProject';
-import { AgentsQuota } from './AgentsQuota';
+import { AccountSwitcher } from './AccountSwitcher';
 import { RoomChat } from './RoomChat';
 import { RoomEditorModal } from './RoomEditorModal';
 import { AgentPreviewPane } from './AgentPreviewPane';
@@ -878,9 +878,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                 onOpen={focusSearch}
               />
             }
-            footerContent={
-              sidebarProps.isSidebarHidden ? undefined : <AgentsQuota place="sidebar" />
-            }
+            footerContent={<AccountSwitcher collapsed={sidebarProps.isSidebarHidden ?? false} />}
             listContent={
               <AgentsSidebar
                 agents={listed}

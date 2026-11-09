@@ -20,11 +20,18 @@ fn changed(app: &AppHandle) {
 /// `agents://quota`.
 #[tauri::command]
 #[tracing::instrument(skip(app))]
-pub async fn agents_usage_overview(app: AppHandle) -> Result<Inventory, CommandError> {
-    let handle = app.clone();
-    tauri::async_runtime::spawn(async move {
-        agents::usage_read::refresh_if_stale(&handle).await;
-    });
+pub async fn agents_usage_overview(
+    app: AppHandle,
+    look: Option<bool>,
+) -> Result<Inventory, CommandError> {
+    // `look: false`: a glance (the sidebar's account row), not someone
+    // looking; what is known, with no read of its own.
+    if look != Some(false) {
+        let handle = app.clone();
+        tauri::async_runtime::spawn(async move {
+            agents::usage_read::refresh_if_stale(&handle).await;
+        });
+    }
     Ok(agents::inventory::read().await)
 }
 

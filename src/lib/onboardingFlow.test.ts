@@ -48,6 +48,7 @@ describe('the line', () => {
     expect(walked).toEqual([
       'welcome',
       'engine',
+      'accounts',
       'independence',
       'phone',
       'tailscaleMac',
@@ -65,6 +66,8 @@ describe('the line', () => {
   it('Back goes one screen back; Ready goes back to the phone question', () => {
     expect(prevStep('welcome')).toBeNull();
     expect(prevStep('engine')).toBe('welcome');
+    expect(prevStep('accounts')).toBe('engine');
+    expect(prevStep('independence')).toBe('accounts');
     expect(prevStep('tailscalePhone')).toBe('tailscaleMac');
     expect(prevStep('ready')).toBe('phone');
     expect(prevStep('importRemote')).toBe('ready');
@@ -75,6 +78,8 @@ describe('the line', () => {
   it('shows five parts, and "2 of 4" inside the phone and the import', () => {
     expect(progressOf('welcome')).toEqual({ section: 1, sections: 5, sub: null });
     expect(progressOf('independence').section).toBe(3);
+    // Another account is part of "Your AI", not a part of its own.
+    expect(progressOf('accounts')).toEqual({ section: 2, sections: 5, sub: null });
     expect(progressOf('tailscalePhone')).toEqual({
       section: 4,
       sections: 5,

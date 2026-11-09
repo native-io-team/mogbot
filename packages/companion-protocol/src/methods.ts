@@ -11,6 +11,7 @@ import type { Cursor } from './frames';
 import type { AgentPolicyView } from './policy';
 import type {
   AgentDraft,
+  AgentEngine,
   RoutineStep,
   AgentMessage,
   AgentReach,
@@ -427,6 +428,22 @@ export interface Methods {
    * and signed in on the Mac. Newer Macs only.
    */
   'agents.accounts': { params: Record<string, never>; result: UsageAccount[] };
+  /**
+   * "Use this one now": the account goes first in its engine's order, so
+   * every turn that starts from now on tries it first; a turn already
+   * running finishes on its own account, and an agent set to one account
+   * stays on it. Refused for an account that isn't signed in. Answers the
+   * accounts as `agents.accounts` does. Audited. Newer Macs only.
+   */
+  'agents.accounts.use': {
+    params: { engine: AgentEngine; id: string };
+    result: UsageAccount[];
+  };
+  /** An engine's accounts in this order, every id once. Audited. Newer Macs only. */
+  'agents.accounts.reorder': {
+    params: { engine: AgentEngine; ids: string[] };
+    result: UsageAccount[];
+  };
   /**
    * The capacity inventory: the usage mode, every account with what its
    * engine last reported, other compute, spare windows, estimates from past

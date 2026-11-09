@@ -25,34 +25,3 @@ export function accountState(a: UsageAccount, now = Date.now()): string {
   const who = a.email ? `Signed in as ${a.email}` : 'Signed in';
   return a.limit ? `${who} · last limit ${readDay(a.limit.at, now)}` : who;
 }
-
-/** One account as the phone's Settings lists it. */
-export interface AccountLine {
-  key: string;
-  label: string;
-  detail: string;
-  out: boolean;
-}
-
-const ENGINE_NAME: Record<UsageAccount['engine'], string> = {
-  claude: 'Claude Code',
-  codex: 'Codex',
-};
-
-/**
- * One line per account, in order, for each engine that has more than one:
- * with a single account there is nothing to switch to, so nothing to say.
- */
-export function accountLines(accounts: UsageAccount[], now = Date.now()): AccountLine[] {
-  const engines = [...new Set(accounts.map((a) => a.engine))];
-  return engines.flatMap((engine) => {
-    const mine = accounts.filter((a) => a.engine === engine);
-    if (mine.length < 2) return [];
-    return mine.map((a, i) => ({
-      key: `${engine}:${a.id}`,
-      label: `${ENGINE_NAME[engine]} ${i + 1}. ${a.name}`,
-      detail: accountState(a, now),
-      out: a.out,
-    }));
-  });
-}

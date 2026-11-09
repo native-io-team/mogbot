@@ -667,6 +667,27 @@ export async function setAgentEngine(
 }
 
 /**
+ * "Runs on": one of its engine's accounts, or '' for any account. From the
+ * next turn; the Mac writes the quiet line in its chat. The stored agent
+ * says what it is now (absent: any account).
+ */
+export async function setAgentAccount(agentId: string, account: string) {
+  const stored = await call('agents.update', { agentId, input: { account } });
+  setApp((s) =>
+    s.overview
+      ? {
+          overview: {
+            ...s.overview,
+            agents: s.overview.agents.map((a) =>
+              a.id === agentId ? { ...a, account: stored.account } : a
+            ),
+          },
+        }
+      : {}
+  );
+}
+
+/**
  * A new agent, made on the Mac by the desk's own create path. Resolves once
  * the overview has it, read back from the Mac rather than assumed, so its
  * chat opens on the agent as the Mac stores it. `clientId` is the screen's

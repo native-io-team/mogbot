@@ -283,6 +283,12 @@ pub struct Agent {
     /// What its turns run on: Claude Code (the default) or Codex.
     #[serde(default)]
     pub engine: super::engine::Engine,
+    /// "Runs on": the one account of its engine its turns run on
+    /// (`wallet::for_agent`), never another. `None` (the default): any
+    /// account, in the wallet's order, carrying on with the next when one
+    /// runs out. Cleared when it moves engine or the account is removed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
     /// Explicit model override (`--model` / `-m`), one its engine offers;
     /// `None` uses the engine's own default.
     #[serde(default)]
@@ -389,6 +395,7 @@ impl Agent {
             return;
         }
         self.engine = engine;
+        self.account = None;
         self.model = None;
         self.routine_model = None;
         self.session_id = None;
@@ -1014,7 +1021,10 @@ pub fn find(name_or_id: &str) -> Result<Option<Agent>, CommandError> {
 
 /// Names that always mean the Chief, whatever it is called now.
 fn chief_alias(name: &str) -> bool {
-    let n = name.trim().trim_start_matches("the ").trim_start_matches("The ");
+    let n = name
+        .trim()
+        .trim_start_matches("the ")
+        .trim_start_matches("The ");
     ["chief", "chief of staff", "the chief"]
         .iter()
         .any(|alias| n.eq_ignore_ascii_case(alias))
@@ -1201,6 +1211,7 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         new_engine: false,
         context: None,
         routine_model: None,
+        account: None,
         template: None,
         reach: Default::default(),
         muted: false,

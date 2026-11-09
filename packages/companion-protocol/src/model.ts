@@ -196,6 +196,17 @@ export interface Agent {
   pendingApprovals: number;
   /** What its turns run on; mirrors `engine::Engine`. */
   engine: AgentEngine;
+  /**
+   * "Runs on": the one account of its engine (`UsageAccount.id`) its turns
+   * run on, never another. Absent: any account, in the order turns try
+   * them. Older Macs never send it.
+   */
+  account?: string;
+  /**
+   * The account its last turn ran on, as it is shown; only while its engine
+   * has more than one account. Older Macs never send it.
+   */
+  ranOn?: { id: string; name: string };
   /** One of its engine's models; null is that engine's default. */
   model: string | null;
   /**
@@ -1528,10 +1539,12 @@ export interface UpdateAgentInput {
   effort?: AgentEffort | '';
   project?: string;
   workDirectly?: boolean;
+  /** "Runs on": an account id of its engine, or '' for any account. */
+  account?: string;
 }
 
 /** What `agents.create` / `agents.update` return: the stored agent, no live state. */
-export type StoredAgent = Omit<Agent, 'status' | 'home'>;
+export type StoredAgent = Omit<Agent, 'status' | 'home' | 'ranOn'>;
 
 export interface SearchHit {
   agentId: string;
@@ -1617,7 +1630,14 @@ export interface UsageLimitHit {
 export interface UsageAccount {
   id: string;
   engine: AgentEngine;
+  /**
+   * As it is shown: the user's name for it; else, for this Mac's own
+   * sign-in, who it is signed in as (as the engine recorded it); else
+   * "Signed in on this Mac". Older Macs send "This Mac".
+   */
   name: string;
+  /** The user named it. Absent from older Macs. */
+  named?: boolean;
   thisMac: boolean;
   signedIn: boolean;
   /** Who it is signed in as, as the engine recorded it; absent when unknown. */

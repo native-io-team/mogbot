@@ -342,15 +342,16 @@ personal one, say).
 
 **HUMAN:** *"Do you have more than one Claude or ChatGPT plan you'd like the
 agents to use? If one runs out of usage, the app switches to the next one on
-its own. If yes: in the app open Settings → Agents → Accounts and click Add a
-Claude Code account (or Add a Codex account), give it a name (Work, say),
-click Add and sign in, and sign in to the other account in the browser page
-that opens. Tell me when it's listed."*
+its own. If yes: click the account row at the foot of the Agents sidebar
+(or press ⌘K and type Add an account), click Add account, give it a name
+(Work, say), click Add and sign in, and sign in to the other account in the
+browser page that opens. Tell me when it's listed."*
 
-**Check:** the human sees the account in Settings → Agents → Accounts, below
-**This Mac** (the login from Step 10, always first). Accounts are tried in that
-order; when one hits its usage limit the chat shows a quiet note like
-"Switched to Work: This Mac is out of usage until 10:00 AM." There is no
+**Check:** the human sees the account in the popover (and Settings → Agents →
+Accounts), below this Mac's own sign-in from Step 10, shown by its email.
+Accounts are tried in that order ("Use this one now" puts one first); when
+one hits its usage limit the chat shows a quiet note like "Switched to Work:
+sam@example.com is out of usage until 10:00 AM." There is no
 terminal check for this; the list in Settings is the answer.
 
 ### Step 12. Tailscale on the Mac

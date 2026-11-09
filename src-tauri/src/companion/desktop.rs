@@ -469,6 +469,7 @@ impl Backend for DesktopBackend {
             effort: toggles.effort,
             project: None,
             work_directly: None,
+            account: toggles.account,
         };
         json(cmd::agents_update(self.app.clone(), agent_id.to_string(), input).await?)
     }
@@ -558,8 +559,17 @@ impl Backend for DesktopBackend {
         json(cmd::agents_accounts().await?)
     }
 
+    async fn account_use(&self, engine: &str, id: &str) -> Result<Value, CommandError> {
+        json(cmd::agents_account_use(self.app.clone(), engine.to_string(), id.to_string()).await?)
+    }
+
+    async fn account_reorder(&self, engine: &str, ids: Vec<String>) -> Result<Value, CommandError> {
+        cmd::agents_account_reorder(self.app.clone(), engine.to_string(), ids).await?;
+        json(cmd::agents_accounts().await?)
+    }
+
     async fn usage_plan(&self) -> Result<Value, CommandError> {
-        json(crate::commands::agents_usage::agents_usage_overview(self.app.clone()).await?)
+        json(crate::commands::agents_usage::agents_usage_overview(self.app.clone(), None).await?)
     }
 
     async fn import_status(&self) -> Result<Value, CommandError> {

@@ -3,7 +3,7 @@
  * straight line of one-question screens (`lib/onboardingFlow`).
  *
  * Welcome → the engine (pick, then install and sign in, a screen each) →
- * how independent agents are → your phone (optional: Tailscale here,
+ * another account, if they want one (skippable) → how independent agents are → your phone (optional: Tailscale here,
  * Tailscale there, the app, scan and Allow) → "You're ready: bring your
  * agents, or start fresh?" The import is its own short line off the end.
  *
@@ -20,6 +20,7 @@ import { Spinner } from '../../primitives/Spinner';
 import { Button } from '../../primitives/Button';
 import { EngineStep, engineName } from '../flow/EngineStep';
 import { IndependenceStep, ReadyStep, WelcomeStep } from '../flow/SimpleSteps';
+import { AccountsStep } from '../flow/AccountsStep';
 import {
   PhoneAppStep,
   PhoneIntroStep,
@@ -194,6 +195,14 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
             mock={testMode.mock}
             forcePick={testMode.forceOnboarding}
             onEngineReady={engineReady}
+            onBack={back}
+          />
+        );
+      case 'accounts':
+        return (
+          <AccountsStep
+            engine={chosen === 'codex' ? 'codex' : 'claude'}
+            onNext={forward}
             onBack={back}
           />
         );

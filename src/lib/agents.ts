@@ -188,6 +188,10 @@ export interface Agent {
   pendingApprovals: number;
   /** What its turns run on; mirrors `engine::Engine`. */
   engine: AgentEngine;
+  /** "Runs on": the one account of its engine its turns use, never another. Absent: any account. */
+  account?: string;
+  /** The account its last turn ran on; only while its engine has more than one. */
+  ranOn?: { id: string; name: string };
   /** One of its engine's models; null is that engine's default. */
   model: string | null;
   /** How hard its conversation turns think; omitted is the engine's default. */
@@ -906,6 +910,8 @@ export interface UpdateAgentInput {
   project?: string;
   /** Work directly in the project instead of in a copy of it. */
   workDirectly?: boolean;
+  /** "Runs on": one of its engine's accounts, or '' for any account. */
+  account?: string;
 }
 
 /** The model choice that passes no model: whatever the engine itself defaults to. */

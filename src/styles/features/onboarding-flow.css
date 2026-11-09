@@ -302,3 +302,63 @@
     flex-direction: column;
   }
 }
+
+/* "Add another account?": the accounts there are, a Line each. */
+.flow-accounts {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.flow-accounts__row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) 0;
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.flow-accounts__row:first-child {
+  border-top: none;
+}
+
+.flow-accounts__mark {
+  flex: none;
+  display: inline-flex;
+  justify-content: center;
+  width: var(--size-icon-sm);
+  color: var(--text-primary);
+}
+
+.flow-accounts__name {
+  min-width: 0;
+  font-size: var(--font-size-body-md);
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.flow-accounts__detail {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.flow-accounts__row .flow-accounts__detail {
+  margin-left: auto;
+  text-align: right;
+}
+
+.flow-accounts__field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+}
+
+.flow-accounts__more {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--spacing-md);
+  font-size: var(--font-size-body-sm);
+}
