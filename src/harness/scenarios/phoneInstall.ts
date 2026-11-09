@@ -118,9 +118,8 @@ function fakePty(screen: string) {
 // With feedback and the changelog switched off by brand, the Settings trigger
 // opens Settings directly; there is no one-item menu to pick from.
 const OPEN: ScenarioStep[] = [
-  // Settings opens on its Agents page; Phone is a page of its own in the list.
+  // Settings opens on its Agents page; Phone is a page of its own, the panel on it.
   { click: '[data-settings-nav="phone"]' },
-  { click: 'button[data-settings-open="phone"]' },
   { click: '[data-install-open]' },
 ];
 const ANDROID: ScenarioStep = { click: 'button[aria-label="Android"]' };

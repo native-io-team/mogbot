@@ -12,7 +12,7 @@
  * @module components/remote/RemoteAccessModal
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Spinner } from '../primitives/Spinner';
 import { TextButton } from '../primitives/TextButton';
@@ -65,7 +65,52 @@ interface RemoteAccessModalProps {
   onClose: () => void;
 }
 
+/** Remote access as its own dialog (⌘K, the sidebar's indicator). */
 export function RemoteAccessModal({ isOpen, onClose }: RemoteAccessModalProps) {
+  return (
+    <RemoteAccessPanel
+      isOpen={isOpen}
+      onClose={onClose}
+      frame={(body) => (
+        <ModalFrame
+          isOpen={isOpen}
+          onClose={onClose}
+          title="Remote access"
+          className="settings-modal remote-access-modal"
+        >
+          {body}
+        </ModalFrame>
+      )}
+    />
+  );
+}
+
+/** The same panel inline on Settings → Phone, under the phone's. */
+export function RemoteAccessSettingsPanel() {
+  return (
+    <RemoteAccessPanel
+      isOpen
+      inline
+      onClose={() => {}}
+      frame={(body) => (
+        <section
+          className="settings-inline-panel"
+          aria-label="Remote access"
+          data-settings-inline="remote"
+        >
+          {body}
+        </section>
+      )}
+    />
+  );
+}
+
+function RemoteAccessPanel({
+  isOpen,
+  onClose,
+  frame,
+  inline = false,
+}: RemoteAccessModalProps & { frame: (body: ReactNode) => ReactNode; inline?: boolean }) {
   const { showToast } = useOptionalToast();
   const openModal = useOpenModal();
   const status = useAsyncState<RemoteAccessStatus>(getRemoteAccessStatus);
@@ -132,56 +177,54 @@ export function RemoteAccessModal({ isOpen, onClose }: RemoteAccessModalProps) {
   const ctl: RemoteCtl | null = s ? { status: s, busy, act, now } : null;
   const complete = s ? isSetupComplete(s, choices) : false;
 
-  return (
-    <ModalFrame
-      isOpen={isOpen}
-      onClose={onClose}
-      title="Remote access"
-      className="settings-modal remote-access-modal"
-    >
-      <div className="settings-modal-body remote-access">
-        {!ctl ? (
-          <div className="remote-loading">
-            {status.error ? (
-              <p className="remote-error">Couldn’t read remote access status.</p>
-            ) : (
-              <Spinner />
+  return frame(
+    <div className="settings-modal-body remote-access">
+      {!ctl ? (
+        <div className="remote-loading">
+          {status.error ? (
+            <p className="remote-error">Couldn’t read remote access status.</p>
+          ) : (
+            <Spinner />
+          )}
+        </div>
+      ) : complete ? (
+        <RemoteLive
+          ctl={ctl}
+          projects={projects.data ?? []}
+          onProjectChange={onProjectChange}
+          activity={audit.data ?? []}
+        />
+      ) : (
+        <>
+          <p className="remote-intro">
+            Drive your agents from another assistant — Grok, ChatGPT, Claude, or anything that
+            supports MCP connectors. It works on this computer — the same agents, the same
+            conversations — so everything is waiting when you’re back.
+            {!inline && (
+              <>
+                {' '}
+                <TextButton
+                  variant="strong"
+                  onClick={() => {
+                    onClose();
+                    openModal('phone');
+                  }}
+                >
+                  For your phone, use the phone app.
+                </TextButton>
+              </>
             )}
-          </div>
-        ) : complete ? (
-          <RemoteLive
+          </p>
+          <RemoteOnBar ctl={ctl} />
+          <RemoteSetup
             ctl={ctl}
+            choices={choices}
+            setChoice={setChoice}
             projects={projects.data ?? []}
             onProjectChange={onProjectChange}
-            activity={audit.data ?? []}
           />
-        ) : (
-          <>
-            <p className="remote-intro">
-              Drive your agents from another assistant — Grok, ChatGPT, Claude, or anything that
-              supports MCP connectors. It works on this computer — the same agents, the same
-              conversations — so everything is waiting when you’re back.{' '}
-              <TextButton
-                variant="strong"
-                onClick={() => {
-                  onClose();
-                  openModal('phone');
-                }}
-              >
-                For your phone, use the phone app.
-              </TextButton>
-            </p>
-            <RemoteOnBar ctl={ctl} />
-            <RemoteSetup
-              ctl={ctl}
-              choices={choices}
-              setChoice={setChoice}
-              projects={projects.data ?? []}
-              onProjectChange={onProjectChange}
-            />
-          </>
-        )}
-      </div>
-    </ModalFrame>
+        </>
+      )}
+    </div>
   );
 }

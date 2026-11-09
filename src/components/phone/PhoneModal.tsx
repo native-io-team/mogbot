@@ -10,7 +10,7 @@
  * @module components/phone/PhoneModal
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { ModalFrame } from '../primitives/ModalFrame';
@@ -67,7 +67,50 @@ interface PhoneModalProps {
   onClose: () => void;
 }
 
+/** Where the panel is drawn: a title, a class, and the body. */
+type Frame = (title: string, className: string, body: ReactNode) => ReactNode;
+
+/** The panel as its own dialog (the sidebar's Phone row, ⌘K). */
 export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
+  return (
+    <PhonePanel
+      isOpen={isOpen}
+      onClose={onClose}
+      frame={(title, className, body) => (
+        <ModalFrame isOpen={isOpen} onClose={onClose} title={title} className={className}>
+          {body}
+        </ModalFrame>
+      )}
+    />
+  );
+}
+
+/** The same panel inline on Settings → Phone: no dialog on top of a dialog. */
+export function PhoneSettingsPanel() {
+  return (
+    <PhonePanel
+      isOpen
+      inline
+      onClose={() => {}}
+      frame={(title, className, body) => (
+        <section
+          className={`settings-inline-panel ${className}`}
+          aria-label={title}
+          data-settings-inline="phone"
+        >
+          {body}
+        </section>
+      )}
+    />
+  );
+}
+
+function PhonePanel({
+  isOpen,
+  onClose,
+  frame,
+  inline = false,
+}: PhoneModalProps & { frame: Frame; inline?: boolean }) {
   const { showToast } = useOptionalToast();
   const openModal = useOpenModal();
   const status = useAsyncState<PhoneStatus>(getPhoneStatus);
@@ -179,23 +222,18 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
     });
 
   if (install) {
-    return (
-      <ModalFrame
-        isOpen={isOpen}
-        onClose={onClose}
-        title="Get the phone app"
-        className="phone-modal phone-modal--install"
-      >
-        <PhoneInstall
-          reinstall={install.reinstall}
-          tailscale={s?.tailscale ?? null}
-          onBack={() => setInstall(null)}
-          onPair={() => {
-            setInstall(null);
-            if (s && phoneStep(s).kind === 'ready') void pair();
-          }}
-        />
-      </ModalFrame>
+    return frame(
+      'Get the phone app',
+      'phone-modal phone-modal--install',
+      <PhoneInstall
+        reinstall={install.reinstall}
+        tailscale={s?.tailscale ?? null}
+        onBack={() => setInstall(null)}
+        onPair={() => {
+          setInstall(null);
+          if (s && phoneStep(s).kind === 'ready') void pair();
+        }}
+      />
     );
   }
 
@@ -208,97 +246,100 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
     !readInstallRecord() &&
     !haveApp;
 
-  return (
-    <ModalFrame isOpen={isOpen} onClose={onClose} title="Your phone" className="phone-modal">
-      <div className="settings-modal-body phone-access">
-        {!s ? (
-          <div className="phone-loading">
-            {status.error ? (
-              <p className="phone-error">Couldn’t read phone access status.</p>
-            ) : (
-              <Spinner />
-            )}
-          </div>
-        ) : (
-          <>
-            {/* The app comes first: there's nothing to connect until it's on a
+  return frame(
+    'Your phone',
+    'phone-modal',
+    <div className="settings-modal-body phone-access">
+      {!s ? (
+        <div className="phone-loading">
+          {status.error ? (
+            <p className="phone-error">Couldn’t read phone access status.</p>
+          ) : (
+            <Spinner />
+          )}
+        </div>
+      ) : (
+        <>
+          {/* The app comes first: there's nothing to connect until it's on a
                 phone. Off, with no phone paired and no build from this Mac, the
                 panel is the way to get it; turning access on comes after. */}
-            {getAppFirst ? (
-              <PhoneGetApp
-                tailscale={s.tailscale}
-                onInstall={COMPANION_INSTALL_ENABLED ? () => setInstall({}) : undefined}
-                onHaveApp={() => setHaveApp(true)}
-              />
-            ) : (
-              <AccessHeader
-                step={phoneStep(s)}
-                busy={busy}
-                onEnable={(on) => void run(on ? 'enable' : 'disable', () => setPhoneAccess(on))}
-                onRetry={() => void run('retry', retryPhoneTailscale)}
-              />
-            )}
+          {getAppFirst ? (
+            <PhoneGetApp
+              tailscale={s.tailscale}
+              onInstall={COMPANION_INSTALL_ENABLED ? () => setInstall({}) : undefined}
+              onHaveApp={() => setHaveApp(true)}
+            />
+          ) : (
+            <AccessHeader
+              step={phoneStep(s)}
+              busy={busy}
+              onEnable={(on) => void run(on ? 'enable' : 'disable', () => setPhoneAccess(on))}
+              onRetry={() => void run('retry', retryPhoneTailscale)}
+            />
+          )}
 
-            {phoneStep(s).kind === 'ready' && (
-              <section className="phone-section">
-                {pairing?.request ? (
-                  <PairConfirm request={pairing.request} busy={busy} onDecide={decide} />
-                ) : showingCode && code ? (
-                  <PairCode
-                    code={code}
-                    now={now}
-                    busy={busy !== null}
-                    tailscale={s.tailscale}
-                    reachedAt={pairing?.reachedAt}
-                    onCopy={() => void copy(code.link)}
-                    onCancel={() => void run('cancel', cancelPairing)}
-                  />
-                ) : (
-                  <PairOffer busy={busy !== null} onPair={() => void pair()} />
-                )}
-              </section>
-            )}
-
-            {COMPANION_INSTALL_ENABLED && !getAppFirst && (
-              <PhoneInstallEntry
-                now={now}
-                onInstall={() => setInstall({})}
-                onReinstall={(platform) => setInstall({ reinstall: platform })}
-              />
-            )}
-
-            {(s.enabled || s.devices.length > 0) && (
-              <section className="phone-section">
-                <h3 className="phone-section__title">Paired phones</h3>
-                <PhoneDevices
-                  devices={s.devices}
-                  activity={s.activity}
+          {phoneStep(s).kind === 'ready' && (
+            <section className="phone-section">
+              {pairing?.request ? (
+                <PairConfirm request={pairing.request} busy={busy} onDecide={decide} />
+              ) : showingCode && code ? (
+                <PairCode
+                  code={code}
                   now={now}
-                  busy={busy}
-                  onRemove={remove}
+                  busy={busy !== null}
+                  tailscale={s.tailscale}
+                  reachedAt={pairing?.reachedAt}
+                  onCopy={() => void copy(code.link)}
+                  onCancel={() => void run('cancel', cancelPairing)}
                 />
-                {!s.enabled && s.devices.length > 0 && (
-                  <p className="phone-footnote">
-                    Phone access is off. These phones stay paired and reconnect when you turn it
-                    back on.
-                  </p>
-                )}
-              </section>
-            )}
+              ) : (
+                <PairOffer busy={busy !== null} onPair={() => void pair()} />
+              )}
+            </section>
+          )}
 
-            {/* A build with no push service has nothing to offer here, so the
-                section isn't shown at all rather than as a dead checkbox. */}
-            {s.devices.length > 0 && s.push.available && (
-              <PhonePush
-                push={s.push}
+          {COMPANION_INSTALL_ENABLED && !getAppFirst && (
+            <PhoneInstallEntry
+              now={now}
+              onInstall={() => setInstall({})}
+              onReinstall={(platform) => setInstall({ reinstall: platform })}
+            />
+          )}
+
+          {(s.enabled || s.devices.length > 0) && (
+            <section className="phone-section">
+              <h3 className="phone-section__title">Paired phones</h3>
+              <PhoneDevices
+                devices={s.devices}
+                activity={s.activity}
+                now={now}
                 busy={busy}
-                onChange={(on) => void run('push', () => setPhonePush(on))}
+                onRemove={remove}
               />
-            )}
+              {!s.enabled && s.devices.length > 0 && (
+                <p className="phone-footnote">
+                  Phone access is off. These phones stay paired and reconnect when you turn it back
+                  on.
+                </p>
+              )}
+            </section>
+          )}
 
-            {s.devices.length > 0 && <PhoneAbilities methods={s.methods} />}
+          {/* A build with no push service has nothing to offer here, so the
+                section isn't shown at all rather than as a dead checkbox. */}
+          {s.devices.length > 0 && s.push.available && (
+            <PhonePush
+              push={s.push}
+              busy={busy}
+              onChange={(on) => void run('push', () => setPhonePush(on))}
+            />
+          )}
 
-            {/* Remote access is the other way in: secondary, and said so. */}
+          {s.devices.length > 0 && <PhoneAbilities methods={s.methods} />}
+
+          {/* Remote access is the other way in: secondary, and said so.
+                On the Settings page it sits just below, so no link. */}
+          {!inline && (
             <p className="phone-footnote">
               Want to drive this from another assistant (ChatGPT, Claude, Grok…)?{' '}
               <TextButton
@@ -310,10 +351,10 @@ export function PhoneModal({ isOpen, onClose }: PhoneModalProps) {
                 Here’s how
               </TextButton>
             </p>
-          </>
-        )}
-      </div>
-    </ModalFrame>
+          )}
+        </>
+      )}
+    </div>
   );
 }
 
