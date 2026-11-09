@@ -210,6 +210,10 @@ fn the_extension_relays_exactly_the_page_logics_methods_and_expressions() {
             "cdp.js doesn't allow {double}"
         );
     }
+    for f in crate::agent_browser::page::FUNCTIONS {
+        let double = serde_json::to_string(f).unwrap();
+        assert!(js.contains(&double), "cdp.js doesn't allow {double}");
+    }
     // Nothing else: every quoted CDP method in the file is one of ours.
     let re = regex::Regex::new(r"'([A-Z][A-Za-z]+\.[a-z][A-Za-z]+)'").unwrap();
     for c in re.captures_iter(&js) {

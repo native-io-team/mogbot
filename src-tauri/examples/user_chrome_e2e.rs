@@ -36,12 +36,17 @@ const PAGE: &str = r#"<!doctype html><html><head><title>Dashbot e2e</title></hea
 <input aria-label="Search" id="q">
 <input type="password" aria-label="Password" id="pw">
 <button onclick="document.getElementById('out').textContent='shown:'+document.getElementById('q').value">Show</button>
-<button onclick="document.getElementById('out').textContent='SENT'">Send</button>
+<button onclick="window.sends=(window.sends||0)+1;document.getElementById('out').textContent='SENT '+window.sends">Send</button>
 <p id="out">nothing yet</p>
+<div role="list" aria-label="Results" id="list" style="height:60px;overflow:auto;border:1px solid #888" onscroll="document.getElementById('pos').textContent='list at '+this.scrollTop">
+<button onclick="document.getElementById('out').textContent='picked 1'">Result 1</button><br><button onclick="document.getElementById('out').textContent='picked 2'">Result 2</button><br><button>Result 3</button><br><button>Result 4</button><br><button>Result 5</button><br><button>Result 6</button><br><button>Result 7</button><br><button>Result 8</button><br><button>Result 9</button><br><button>Result 10</button><br><button>Result 11</button><br><button>Result 12</button><br><button>Result 13</button><br><button>Result 14</button><br><button>Result 15</button><br><button>Result 16</button><br>
+</div>
+<p id="pos">list at 0</p>
 </body></html>"#;
 
 /// A one-page web server on loopback.
 static HITS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+static SLOW_HITS: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
 
 fn serve_page() -> u16 {
     let l = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
@@ -54,7 +59,13 @@ fn serve_page() -> u16 {
             std::thread::spawn(move || {
                 let mut s = s;
                 let mut buf = [0u8; 2048];
-                let _ = s.read(&mut buf);
+                let n = s.read(&mut buf).unwrap_or(0);
+                // `/slow`: a page that takes a while, so a step is still
+                // out when the extension's worker is stopped.
+                if String::from_utf8_lossy(&buf[..n]).starts_with("GET /slow") {
+                    SLOW_HITS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+                    std::thread::sleep(Duration::from_secs(6));
+                }
                 let _ = write!(
                     s,
                     "HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Length: {}\r\nConnection: close\r\n\r\n{PAGE}",
@@ -207,11 +218,23 @@ fn main() {
     let conns = user_chrome::registry().conns();
     if conns.is_empty() {
         sw_state(&browser);
+        println!(
+            "  host.log: {}",
+            std::fs::read_to_string(link_dir.join("host.log")).unwrap_or_else(|e| e.to_string())
+        );
     }
     check(
         "the extension connected through the native host",
         conns.len() == 1,
     );
+    if conns.is_empty() {
+        // Nothing below can pass: stop here, and leave nothing running.
+        browser.close();
+        running.stop(&user_chrome::registry(), "test");
+        let _ = std::fs::remove_dir_all(&udd);
+        println!("\nFAILED: the extension never connected");
+        std::process::exit(1);
+    }
     if let Some(c) = conns.first() {
         println!(
             "  connected in {:.1}s: profile {} extension {} protocol {}",
@@ -413,6 +436,183 @@ fn main() {
     );
     let r = call("scroll", json!({ "direction": "down" }));
     check("scroll", !is_error(&r));
+
+    // --- scrolling inside a control, in a tab Chrome isn't painting
+    // A wheel event waits for a frame; a background tab or a minimised
+    // window never paints one, which used to cost the full 20 s wait.
+    let quick = Duration::from_secs(5);
+    let mut timed = |name: &str, args: Value| {
+        let t = Instant::now();
+        let r = call(name, args);
+        (r, t.elapsed())
+    };
+    // Read by the test over its own pipe: a page Chrome isn't painting
+    // never runs its scroll handlers, so the page's own text can't say.
+    let list_top = || {
+        eval_in(&browser, &url, "document.getElementById('list').scrollTop")
+            .as_f64()
+            .unwrap_or(-1.0)
+    };
+    let (r, _) = timed("read_page", json!({}));
+    let list = ref_in(&text(&r), "\"Result 5\"");
+    println!("  list ref: {list:?}");
+    if let Some(l) = &list {
+        let (r, took) = timed(
+            "scroll",
+            json!({ "ref": l, "direction": "down", "amount": 1 }),
+        );
+        println!("    {}", text(&r));
+        check(
+            &format!(
+                "scroll inside a list, window shown: the list moved ({} ms)",
+                took.as_millis()
+            ),
+            !is_error(&r) && took < quick && list_top() > 0.0,
+        );
+    }
+    // Another agent opens a tab in the agents' window: ours goes to the back.
+    let other_agent: Agent = serde_json::from_value(json!({
+        "id": "e2e_other", "name": "Other", "shape": 0, "color": "red", "createdAt": 0
+    }))
+    .unwrap();
+    let o = rt.block_on(tools::dispatch(None, &other_agent, Some(1), &json!({ "jsonrpc": "2.0", "id": 200, "method": "tools/call", "params": { "name": "open", "arguments": { "url": format!("{url}?other") } } })));
+    println!(
+        "  other agent opened: {}",
+        text(&o).lines().next().unwrap_or("")
+    );
+    let (r, _) = timed("get_text", json!({}));
+    let before = list_top();
+    let (r, _) = timed("read_page", json!({}));
+    let list = ref_in(&text(&r), "\"Result 5\"");
+    if let Some(l) = &list {
+        let (r, took) = timed(
+            "scroll",
+            json!({ "ref": l, "direction": "down", "amount": 1 }),
+        );
+        println!("    {}", text(&r));
+        check(
+            &format!(
+                "scroll inside a list, tab in the background: moved ({} ms)",
+                took.as_millis()
+            ),
+            !is_error(&r) && took < quick && list_top() > before,
+        );
+    }
+    let (r, _) = timed("read_page", json!({}));
+    if let Some(s) = ref_in(&text(&r), "\"Result 1\"") {
+        let (r, took) = timed("click", json!({ "ref": s }));
+        println!("    {}", text(&r));
+        let (r2, _) = timed("get_text", json!({}));
+        check(
+            &format!(
+                "click, tab in the background: clicked, quickly ({} ms)",
+                took.as_millis()
+            ),
+            !is_error(&r) && took < quick && text(&r2).contains("picked 1"),
+        );
+    }
+    // The agents' window minimised: Chrome paints nothing in it.
+    let win = window_of(&browser, &url);
+    println!("  agents' window: {win:?}");
+    if let Some(w) = win {
+        let _ = browser.call(
+            "Browser.setWindowBounds",
+            json!({ "windowId": w, "bounds": { "windowState": "minimized" } }),
+            None,
+            Duration::from_secs(5),
+        );
+        std::thread::sleep(Duration::from_millis(800));
+        let (r, took) = timed("get_text", json!({}));
+        let before = list_top();
+        check(
+            &format!("get_text, window minimised ({} ms)", took.as_millis()),
+            !is_error(&r) && took < quick,
+        );
+        let (r, _) = timed("read_page", json!({}));
+        if let Some(l) = ref_in(&text(&r), "\"Result 5\"") {
+            let (r, took) = timed(
+                "scroll",
+                json!({ "ref": l, "direction": "down", "amount": 1 }),
+            );
+            println!("    {}", text(&r));
+            check(
+                &format!(
+                    "scroll inside a list, window minimised: moved ({} ms)",
+                    took.as_millis()
+                ),
+                !is_error(&r) && took < quick && list_top() > before,
+            );
+        }
+        let (r, _) = timed("read_page", json!({}));
+        if let Some(s) = ref_in(&text(&r), "\"Result 2\"") {
+            let (r, took) = timed("click", json!({ "ref": s }));
+            println!("    {}", text(&r));
+            let (r2, _) = timed("get_text", json!({}));
+            let clicked = text(&r2).contains("picked 2");
+            println!("    clicked: {clicked}");
+            // Either it happened, or the agent heard at once that it
+            // didn't; never a 20 s wait, never a click landing later.
+            check(
+                &format!(
+                    "click, window minimised: answers quickly and honestly ({} ms)",
+                    took.as_millis()
+                ),
+                took < quick && (clicked != is_error(&r)),
+            );
+        }
+        let (r, _) = timed("read_page", json!({}));
+        if let Some(q) = ref_in(&text(&r), "\"Search\"") {
+            let (r, took) = timed("type", json!({ "ref": q, "text": " min" }));
+            println!("    {}", text(&r));
+            let typed = eval_in(&browser, &url, "document.getElementById('q').value");
+            println!(
+                "    field now {typed} · focus {} · page focused {}",
+                eval_in(&browser, &url, "document.activeElement && document.activeElement.id"),
+                eval_in(&browser, &url, "document.hasFocus()")
+            );
+            check(
+                &format!(
+                    "type by ref, window minimised: typed, quickly ({} ms)",
+                    took.as_millis()
+                ),
+                !is_error(&r) && took < quick && typed.as_str().is_some_and(|v| v.contains(" min")),
+            );
+            let (r, took) = timed("press", json!({ "key": "Tab" }));
+            check(
+                &format!("press, window minimised ({} ms)", took.as_millis()),
+                !is_error(&r) && took < quick,
+            );
+        }
+        let (r, _) = timed("read_page", json!({}));
+        if let Some(s) = ref_in(&text(&r), "\"Show\"") {
+            let (r, took) = timed("hover", json!({ "ref": s }));
+            println!("    {}", text(&r));
+            check(
+                &format!(
+                    "hover, window minimised: says why at once ({} ms)",
+                    took.as_millis()
+                ),
+                is_error(&r) && took < quick,
+            );
+        }
+        let (r, took) = timed("screenshot", json!({}));
+        println!("    screenshot: {}", text(&r).lines().last().unwrap_or(""));
+        check(
+            &format!(
+                "screenshot, window minimised: answers quickly ({} ms)",
+                took.as_millis()
+            ),
+            took < quick,
+        );
+        let _ = browser.call(
+            "Browser.setWindowBounds",
+            json!({ "windowId": w, "bounds": { "windowState": "normal" } }),
+            None,
+            Duration::from_secs(5),
+        );
+        std::thread::sleep(Duration::from_millis(800));
+    }
+    tools::close_agent("e2e_other");
     let r = call("open", json!({ "url": "file:///etc/hosts" }));
     check("open file://: asks (refused here)", is_error(&r));
     let r = call("javascript_tool", json!({}));
@@ -433,6 +633,78 @@ fn main() {
     check("another agent can't read that tab", is_error(&r));
     let r = call("close_tab", json!({ "tab": tab_id }));
     check("close_tab", !is_error(&r));
+
+    // --- the extension's service worker stops with a step still out (MV3
+    // stops idle workers; Chrome can stop one at any time)
+    let before = user_chrome::registry().conns().first().map(|c| c.serial);
+    let slow = format!("{url}slow");
+    let (tx, rx) = std::sync::mpsc::channel();
+    {
+        let (codex, handle) = (codex.clone(), rt.handle().clone());
+        let msg = json!({ "jsonrpc": "2.0", "id": 300, "method": "tools/call", "params": { "name": "open", "arguments": { "url": slow } } });
+        std::thread::spawn(move || {
+            let out = handle.block_on(tools::dispatch(None, &codex, Some(1), &msg));
+            let _ = tx.send((out, Instant::now()));
+        });
+    }
+    let start = Instant::now();
+    while SLOW_HITS.load(std::sync::atomic::Ordering::SeqCst) == 0
+        && start.elapsed() < Duration::from_secs(10)
+    {
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let how = stop_worker(&browser);
+    let stopped_at = Instant::now();
+    println!("  worker stopped ({how}) with `open` still loading");
+    match rx.recv_timeout(Duration::from_secs(30)) {
+        Ok((r, at)) => {
+            let took = at.saturating_duration_since(stopped_at);
+            println!("    {} ({} ms after)", text(&r), took.as_millis());
+            check(
+                "worker stopped mid-step: the step hears at once that it may or may not have happened",
+                is_error(&r) && text(&r).contains("may or may not") && took < Duration::from_secs(5),
+            );
+        }
+        Err(_) => check("worker stopped mid-step: the step answers", false),
+    }
+    let start = Instant::now();
+    while user_chrome::registry().conns().first().is_none_or(|c| Some(c.serial) == before)
+        && start.elapsed() < Duration::from_secs(90)
+    {
+        std::thread::sleep(Duration::from_millis(250));
+    }
+    check(
+        &format!(
+            "the worker came back and reconnected by itself in {:.0}s",
+            start.elapsed().as_secs_f32()
+        ),
+        user_chrome::registry()
+            .conns()
+            .first()
+            .is_some_and(|c| Some(c.serial) != before),
+    );
+    let r = call("tabs", json!({}));
+    let slow_tabs = text(&r).lines().filter(|l| l.contains("/slow")).count();
+    check(
+        &format!(
+            "nothing repeated: one slow tab, fetched once (tabs {slow_tabs}, fetches {})",
+            SLOW_HITS.load(std::sync::atomic::Ordering::SeqCst)
+        ),
+        slow_tabs == 1 && SLOW_HITS.load(std::sync::atomic::Ordering::SeqCst) == 1,
+    );
+    let r = call("get_text", json!({}));
+    check(
+        "the restarted worker still knows the agent's tab, and drives it",
+        text(&r).contains("Hello from the e2e page"),
+    );
+    if let Some(id) = text(&call("tabs", json!({})))
+        .lines()
+        .find(|l| l.contains("/slow"))
+        .and_then(|l| l.split(' ').next())
+        .and_then(|s| s.parse::<i64>().ok())
+    {
+        let _ = call("close_tab", json!({ "tab": id }));
+    }
 
     // --- the app quits and comes back: the extension reconnects by itself
     running.stop(&user_chrome::registry(), "quit");
@@ -477,6 +749,114 @@ fn main() {
     } else {
         println!("\nFAILED: {failed:?}");
         std::process::exit(1);
+    }
+}
+
+/// The ref on the line naming `label` in a read_page tree.
+fn ref_in(tree: &str, label: &str) -> Option<String> {
+    tree.lines()
+        .find(|l| l.contains(label))
+        .and_then(|l| {
+            l.split_whitespace()
+                .find(|w| w.starts_with("[ref_") || w.starts_with("ref_"))
+        })
+        .map(|w| w.trim_matches(|c| c == '[' || c == ']').to_string())
+}
+
+/// The window holding the first page tab at `url`.
+fn window_of(browser: &cdp::Browser, url: &str) -> Option<i64> {
+    let t = Duration::from_secs(5);
+    let targets = browser
+        .call("Target.getTargets", json!({}), None, t)
+        .ok()?;
+    let target = targets["targetInfos"]
+        .as_array()?
+        .iter()
+        .find(|x| x["type"] == "page" && x["url"].as_str() == Some(url))?
+        .clone();
+    let w = browser
+        .call(
+            "Browser.getWindowForTarget",
+            json!({ "targetId": target["targetId"] }),
+            None,
+            t,
+        )
+        .ok()?;
+    w["windowId"].as_i64()
+}
+
+/// `expression`'s value in the page tab at `url`, read by the test itself
+/// over its own debugging pipe (the extension would refuse it).
+fn eval_in(browser: &cdp::Browser, url: &str, expression: &str) -> Value {
+    let t = Duration::from_secs(5);
+    let Ok(targets) = browser.call("Target.getTargets", json!({}), None, t) else {
+        return Value::Null;
+    };
+    let Some(target) = targets["targetInfos"]
+        .as_array()
+        .and_then(|a| {
+            a.iter()
+                .find(|x| x["type"] == "page" && x["url"].as_str() == Some(url))
+        })
+        .cloned()
+    else {
+        return Value::Null;
+    };
+    let Ok(a) = browser.call(
+        "Target.attachToTarget",
+        json!({ "targetId": target["targetId"], "flatten": true }),
+        None,
+        t,
+    ) else {
+        return Value::Null;
+    };
+    let session = a["sessionId"].as_str().unwrap_or("").to_string();
+    let r = browser
+        .call(
+            "Runtime.evaluate",
+            json!({ "expression": expression, "returnByValue": true }),
+            Some(&session),
+            t,
+        )
+        .map(|r| r["result"]["value"].clone())
+        .unwrap_or(Value::Null);
+    let _ = browser.call(
+        "Target.detachFromTarget",
+        json!({ "sessionId": session }),
+        None,
+        t,
+    );
+    r
+}
+
+/// Stop the app's extension's service worker, the way Chrome stops an idle
+/// one. Says how.
+fn stop_worker(browser: &cdp::Browser) -> String {
+    let t = Duration::from_secs(5);
+    let targets = browser
+        .call("Target.getTargets", json!({}), None, t)
+        .unwrap_or_default();
+    let prefix = format!("chrome-extension://{}/", auth::DEV_EXTENSION_ID);
+    let Some(sw) = targets["targetInfos"]
+        .as_array()
+        .and_then(|a| {
+            a.iter().find(|x| {
+                x["type"] == "service_worker"
+                    && x["url"].as_str().is_some_and(|u| u.starts_with(&prefix))
+            })
+        })
+        .cloned()
+    else {
+        return "no worker found".into();
+    };
+    match browser.call(
+        "Target.closeTarget",
+        json!({ "targetId": sw["targetId"] }),
+        None,
+        t,
+    ) {
+        Ok(v) => format!("Target.closeTarget: {v}"),
+        Err(e) => format!("Target.closeTarget failed: {e}"),
     }
 }
 

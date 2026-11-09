@@ -14,6 +14,7 @@ export const METHODS = new Set([
   'Accessibility.getFullAXTree',
   'DOM.describeNode',
   'DOM.getBoxModel',
+  'DOM.resolveNode',
   'DOM.scrollIntoViewIfNeeded',
   'Input.dispatchKeyEvent',
   'Input.dispatchMouseEvent',
@@ -23,6 +24,7 @@ export const METHODS = new Set([
   'Page.getNavigationHistory',
   'Page.navigate',
   'Page.navigateToHistoryEntry',
+  'Runtime.callFunctionOn',
   'Runtime.evaluate',
 ]);
 
@@ -34,10 +36,19 @@ export const EXPRESSIONS = new Set([
   /* FOCUSED_FIELD_JS */ "(() => { let e = document.activeElement; for (let i = 0; e; i++) { if (i > 32) return 'unknown'; if (e.shadowRoot && e.shadowRoot.activeElement) { e = e.shadowRoot.activeElement; continue; } const tag = (e.tagName || '').toUpperCase(); if (tag === 'IFRAME' || tag === 'FRAME') { let d = null; try { d = e.contentDocument; } catch (_) { return 'unknown'; } if (!d) return 'unknown'; e = d.activeElement; continue; } break; } if (!e || (e.tagName || '').toUpperCase() !== 'INPUT') return 'plain'; const t = (e.type || '').toLowerCase(); const a = (e.autocomplete || '').toLowerCase(); return (t === 'password' || a.includes('one-time-code') || a.includes('current-password') || a.includes('new-password')) ? 'secret' : 'plain'; })()",
   /* TEXT_JS */ "document.body ? document.body.innerText : ''",
   /* READY_JS */ 'document.readyState',
+  /* VISIBILITY_JS */ 'document.visibilityState',
   /* SCROLL_UP_JS */ 'window.scrollBy(0, -120)',
   /* SCROLL_DOWN_JS */ 'window.scrollBy(0, 120)',
   /* SCROLL_LEFT_JS */ 'window.scrollBy(-120, 0)',
   /* SCROLL_RIGHT_JS */ 'window.scrollBy(120, 0)',
+]);
+
+/**
+ * The only functions the app calls on a page's node (`Runtime.callFunctionOn`),
+ * with numbers as their only arguments: the app's own.
+ */
+export const FUNCTIONS = new Set([
+  /* SCROLL_WITHIN_FN */ "function (dx, dy) { let e = this && this.nodeType === 1 ? this : this && this.parentElement; for (let i = 0; e && i < 64; i++) { if (e.nodeType === 1 && e !== document.body && e !== document.documentElement) { const s = getComputedStyle(e); const y = dy !== 0 && /(auto|scroll|overlay)/.test(s.overflowY) && e.scrollHeight > e.clientHeight; const x = dx !== 0 && /(auto|scroll|overlay)/.test(s.overflowX) && e.scrollWidth > e.clientWidth; if (x || y) { const t = e.scrollTop, l = e.scrollLeft; e.scrollBy({ left: dx, top: dy, behavior: 'instant' }); return e.scrollTop !== t || e.scrollLeft !== l ? 'moved' : 'end'; } } const r = e.getRootNode && e.getRootNode(); e = e.parentElement || (r && r.host) || null; } return 'none'; }",
 ]);
 
 /** How long the user's Cancel on Chrome's bar holds. */
@@ -68,6 +79,29 @@ export function vet(method, params) {
       throw new ExtError(CODES.notAllowed, 'only the app’s own expressions run');
     return { expression: p.expression, returnByValue: true, silent: true };
   }
+  if (method === 'Runtime.callFunctionOn') {
+    if (!FUNCTIONS.has(p.functionDeclaration))
+      throw new ExtError(CODES.notAllowed, 'only the app’s own functions run');
+    const args = Array.isArray(p.arguments) ? p.arguments : [];
+    if (
+      typeof p.objectId !== 'string' ||
+      args.length > 4 ||
+      !args.every((a) => a && typeof a.value === 'number' && Number.isFinite(a.value))
+    )
+      throw new ExtError(CODES.notAllowed, 'a function call the app never makes');
+    return {
+      objectId: p.objectId,
+      functionDeclaration: p.functionDeclaration,
+      arguments: args.map((a) => ({ value: a.value })),
+      returnByValue: true,
+      silent: true,
+    };
+  }
+  if (method === 'DOM.resolveNode') {
+    if (!Number.isInteger(p.backendNodeId))
+      throw new ExtError(CODES.notAllowed, 'a node the app never names');
+    return { backendNodeId: p.backendNodeId };
+  }
   if (method === 'Page.navigate') {
     if (!isWebUrl(p.url)) throw new ExtError(CODES.notAllowed, 'only http and https pages open');
     return { url: String(p.url) };
@@ -85,6 +119,13 @@ export class Cdp {
     this.tabs = tabs;
     /** Tabs this extension is attached to. */
     this.attached = new Set();
+    /**
+     * Tabs with an input event (a click, a key) Chrome hasn't answered yet.
+     * Chrome answers input only once the tab paints, so one sent to a tab
+     * it isn't painting waits; anything sent after it would queue behind it
+     * and land late, after the app was told it failed. So nothing is.
+     */
+    this.inputs = new Set();
     this.pausedUntil = 0;
     this.onEvent = () => {};
   }
@@ -98,6 +139,7 @@ export class Cdp {
 
   async detached(tabId, reason) {
     this.attached.delete(tabId);
+    this.inputs.delete(tabId);
     if (reason === 'canceled_by_user') this.pausedUntil = Date.now() + PAUSE_MS;
     await this.tabs.ready;
     const owned = this.tabs.state.tabs[tabId];
@@ -153,12 +195,22 @@ export class Cdp {
   async send(agent, tabId, method, params) {
     const clean = vet(method, params);
     const tab = await this.tabs.owned(agent, tabId);
+    const input = method.startsWith('Input.');
+    if (input && this.inputs.has(tabId)) {
+      throw new ExtError(
+        CODES.busy,
+        'Chrome hasn’t answered the last input event on this tab; nothing more was sent'
+      );
+    }
     await this.attach(tab);
+    if (input) this.inputs.add(tabId);
     try {
       const r = await this.chrome.debugger.sendCommand({ tabId }, method, clean);
       return r === undefined ? {} : r;
     } catch (e) {
       throw new ExtError(CODES.cdp, String((e && e.message) || e));
+    } finally {
+      if (input) this.inputs.delete(tabId);
     }
   }
 

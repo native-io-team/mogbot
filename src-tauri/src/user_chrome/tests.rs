@@ -202,6 +202,58 @@ async fn a_call_nobody_answers_times_out() {
     running.stop(&reg, "test");
 }
 
+/// The extension's service worker stops (or restarts) with a request still
+/// out: the call hears at once, and is told it may or may not have
+/// happened, never "Chrome is closed" and never sent again on its own.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn a_link_dropping_mid_call_says_the_step_may_have_happened() {
+    let (dir, running, reg) = started().await;
+    let path = dir.path().to_path_buf();
+    let o = origin();
+    let mut s = tokio::task::spawn_blocking(move || host::connect(&path, &o).unwrap())
+        .await
+        .unwrap();
+    send(&mut s, &hello("p-1", PROTOCOL));
+    let _ = recv(&mut s);
+    wait_for(&reg, 1).await;
+    let conn = reg.conns().pop().unwrap();
+    let c = conn.clone();
+    let call = tokio::task::spawn_blocking(move || {
+        let t = std::time::Instant::now();
+        let r = c.call(
+            Op::Cdp {
+                agent: "ops".into(),
+                tab_id: 1,
+                method: "Input.dispatchMouseEvent".into(),
+                params: json!({ "type": "mousePressed", "x": 1, "y": 1 }),
+            },
+            Duration::from_secs(20),
+        );
+        (r, t.elapsed())
+    });
+    // The request reached the extension; then its side goes away.
+    let (req, s) = tokio::task::spawn_blocking(move || (recv(&mut s), s))
+        .await
+        .unwrap();
+    assert_eq!(req["op"]["kind"], "cdp");
+    drop(s);
+    let (r, took) = call.await.unwrap();
+    let e = r.unwrap_err();
+    assert_eq!(e, link::CallError::Interrupted);
+    assert!(took < Duration::from_secs(5), "waited {took:?}");
+    assert!(e.line().contains("may or may not have happened"));
+    assert!(e.line().contains("Read the page"));
+    // A call made after that is plainly gone, nothing sent.
+    wait_for(&reg, 0).await;
+    assert_eq!(
+        conn.call(Op::Ping, Duration::from_secs(1)).unwrap_err(),
+        link::CallError::Gone
+    );
+    // A timeout says the step may still happen.
+    assert!(link::CallError::Timeout.line().contains("may still happen"));
+    running.stop(&reg, "test");
+}
+
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn a_host_without_the_token_is_refused_and_learns_nothing() {
     let (dir, running, reg) = started().await;
@@ -482,6 +534,7 @@ fn the_extensions_copy_of_the_protocol_matches() {
         "attach_failed",
         "cdp",
         "protected",
+        "busy",
         "internal",
     ] {
         assert!(
