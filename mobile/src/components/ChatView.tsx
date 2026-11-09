@@ -14,6 +14,7 @@ import * as Clipboard from 'expo-clipboard';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import {
   type ComponentProps,
+  memo,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -811,7 +812,12 @@ export function ChatView({
   );
 }
 
-function ItemView({
+/**
+ * Memoised: the chat re-renders as it lays out (its height, the composer's,
+ * the rows in view), several times while it opens, and each of those drew
+ * every row again.
+ */
+const ItemView = memo(function ItemView({
   item,
   agent,
   liveCopyCard,
@@ -899,7 +905,7 @@ function ItemView({
       )}
     </View>
   );
-}
+});
 
 /**
  * Whether a row is drawn as a Line (a time, a note, an answered card, a task

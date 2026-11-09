@@ -24,6 +24,7 @@ import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
 import { call, describeError, stop } from '../lib/session';
 import { useServed } from '../lib/store';
+import { useTurnSteps } from '../lib/turnSteps';
 import { fonts, iconSize, radius, space, PRESSED } from '../lib/theme';
 import {
   earlierSteps,
@@ -213,8 +214,56 @@ export function WorkLine({
   return (
     <View style={styles.wrap}>
       <Toggle open={open} label={workSummary(work)} onPress={() => setOpen((o) => !o)} />
-      {open && (
-        <Steps work={work} steps={work.steps} agentId={message.agentId} onError={onError} files />
+      {open && <FinishedSteps message={message} work={work} onError={onError} />}
+    </View>
+  );
+}
+
+/** The steps once read (`useTurnSteps`), or a line saying where they are. */
+function FinishedSteps({
+  message,
+  work,
+  onError,
+}: {
+  message: AgentMessage;
+  work: TurnWork;
+  onError: (text: string) => void;
+}) {
+  const colors = useColors();
+  const styles = useStyles();
+  const steps = useTurnSteps(message.agentId, message.id, work, true);
+  if (steps.state === 'ready') {
+    return (
+      <Steps
+        work={steps.work}
+        steps={steps.work.steps}
+        agentId={message.agentId}
+        onError={onError}
+        files
+      />
+    );
+  }
+  const words =
+    steps.state === 'reading'
+      ? 'Reading the steps…'
+      : steps.state === 'gone'
+        ? 'Its steps are no longer kept.'
+        : 'Couldn’t read the steps.';
+  return (
+    <View style={styles.steps}>
+      <T variant="caption" color={colors.textMuted} style={styles.indent}>
+        {words}
+      </T>
+      {steps.state === 'failed' && (
+        <Pressable
+          onPress={steps.retry}
+          accessibilityRole="button"
+          style={({ pressed }) => [styles.indent, pressed && PRESSED]}
+        >
+          <T variant="caption" color={colors.textSecondary}>
+            Try again
+          </T>
+        </Pressable>
       )}
     </View>
   );

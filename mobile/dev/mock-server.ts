@@ -2173,7 +2173,21 @@ export function createMockServer(opts: MockOptions = {}) {
       const end = p.before ? list.findIndex((m) => m.id === p.before) : list.length;
       const stop = end === -1 ? 0 : end;
       const start = Math.max(0, stop - limit);
-      return { messages: list.slice(start, stop), asOf: cursor(), more: start > 0 };
+      const page = list.slice(start, stop);
+      // As the Mac does for a phone that asks: timelines as folded lines.
+      const lines =
+        p.work === 'summary'
+          ? page.map((m) =>
+              m.work?.steps.length
+                ? { ...m, work: { ...m.work, steps: [], stepsOmitted: true } }
+                : m
+            )
+          : page;
+      return { messages: lines, asOf: cursor(), more: start > 0 };
+    },
+    'agents.workSteps': (p) => {
+      const m = messages.get(String(p.agentId))?.find((x) => x.id === p.messageId);
+      return { work: m?.work ?? null };
     },
     'agents.send': (p, c) => {
       const agentId = String(p.agentId);
@@ -2992,12 +3006,14 @@ export function createMockServer(opts: MockOptions = {}) {
     // As `quiet::checked` does: whole minutes in a day, start ≠ end.
     'agents.setQuietHours': (p) => {
       const w = p.window as { start: number; end: number } | null | undefined;
-      const inDay = (n: unknown) => Number.isInteger(n) && (n as number) >= 0 && (n as number) < 1440;
+      const inDay = (n: unknown) =>
+        Number.isInteger(n) && (n as number) >= 0 && (n as number) < 1440;
       if (w && (!inDay(w.start) || !inDay(w.end) || w.start === w.end)) {
         return fail({
           type: 'Protocol',
           code: 'bad_params',
-          message: 'Quiet hours take a window {start, end} in minutes after midnight, different times, or null for off.',
+          message:
+            'Quiet hours take a window {start, end} in minutes after midnight, different times, or null for off.',
         });
       }
       quietWindow = w ?? null;

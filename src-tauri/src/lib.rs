@@ -743,6 +743,7 @@ pub fn run() {
             commands::agents::agents_overview,
             commands::agents::agents_with_projects,
             commands::agents::agents_messages,
+            commands::agents::agents_turn_work,
             commands::agents::agents_change_diff,
             commands::agents::agents_copy_keep,
             commands::agents::agents_copy_discard,

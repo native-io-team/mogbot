@@ -1747,6 +1747,752 @@ export const agentsMessages = {
   ],
   "more": false
 } satisfies Result<'agents.messages'>;
+export const agentsMessagesSummary = {
+  "asOf": {
+    "epoch": "epoch-test",
+    "seq": 1
+  },
+  "messages": [
+    {
+      "agentId": "a1",
+      "attachments": [
+        {
+          "mime": "application/pdf",
+          "name": "invoice.pdf",
+          "path": "attachments/m01/invoice.pdf",
+          "size": 52000
+        }
+      ],
+      "id": "m01",
+      "kind": "user",
+      "mentions": [
+        {
+          "id": "a2",
+          "name": "Ops"
+        }
+      ],
+      "text": "@Ops can you file these?",
+      "ts": 1762290001000
+    },
+    {
+      "agentId": "a1",
+      "id": "m02",
+      "kind": "agent",
+      "stopped": true,
+      "text": "Filing them now",
+      "ts": 1762290002000
+    },
+    {
+      "agentId": "a1",
+      "id": "m03",
+      "kind": "sent_to_agent",
+      "peer": {
+        "id": "a2",
+        "name": "Ops"
+      },
+      "text": "File these",
+      "ts": 1762290003000
+    },
+    {
+      "agentId": "a1",
+      "id": "m04",
+      "kind": "from_agent",
+      "peer": {
+        "id": "a2",
+        "name": "Ops"
+      },
+      "text": "Done",
+      "ts": 1762290004000
+    },
+    {
+      "agentId": "a1",
+      "approval": {
+        "always": {
+          "kind": "command_prefix",
+          "label": "npm test",
+          "value": "npm test"
+        },
+        "detail": "npm test",
+        "input": {
+          "command": "npm test"
+        },
+        "requestId": "q1",
+        "status": "pending",
+        "title": "Run a command",
+        "tool": "Bash"
+      },
+      "id": "m05",
+      "kind": "approval",
+      "text": "",
+      "ts": 1762290005000
+    },
+    {
+      "agentId": "a1",
+      "approval": {
+        "always": {
+          "kind": "domain",
+          "label": "example.com",
+          "value": "example.com"
+        },
+        "alwaysAllowed": true,
+        "detail": "https://example.com",
+        "input": {
+          "url": "https://example.com"
+        },
+        "requestId": "q2",
+        "status": "allowed",
+        "title": "Fetch a page",
+        "tool": "WebFetch"
+      },
+      "id": "m06",
+      "kind": "approval",
+      "text": "",
+      "ts": 1762290006000
+    },
+    {
+      "agentId": "a1",
+      "approval": {
+        "detail": "Ops and its chat",
+        "note": "Keep Ops",
+        "requestId": "q3",
+        "status": "denied",
+        "title": "Delete Ops"
+      },
+      "id": "m07",
+      "kind": "approval",
+      "text": "",
+      "ts": 1762290007000
+    },
+    {
+      "agentId": "a1",
+      "approval": {
+        "always": {
+          "kind": "tool",
+          "label": "Send an email · Gmail",
+          "value": "mcp__gmail__send"
+        },
+        "detail": "to accounts@",
+        "requestId": "q4",
+        "setAside": "Set aside: this came from Chief of Staff checking in with every agent after the import. Nothing ran.",
+        "status": "expired",
+        "title": "Send an email",
+        "tool": "mcp__gmail__send"
+      },
+      "id": "m08",
+      "kind": "approval",
+      "text": "",
+      "ts": 1762290008000
+    },
+    {
+      "agentId": "a1",
+      "failure": {
+        "kind": "signed_out"
+      },
+      "id": "m09",
+      "kind": "error",
+      "text": "Claude Code is signed out.",
+      "ts": 1762290009000
+    },
+    {
+      "agentId": "a1",
+      "failure": {
+        "kind": "other"
+      },
+      "id": "m10",
+      "kind": "error",
+      "text": "Something broke.",
+      "ts": 1762290010000
+    },
+    {
+      "agentId": "a1",
+      "checkIn": {
+        "dueAt": 1762290000000,
+        "found": "2 new GitHub mentions",
+        "late": true,
+        "manual": true,
+        "repeats": true
+      },
+      "id": "m11",
+      "kind": "check_in",
+      "text": "Check the invoices",
+      "ts": 1762290011000
+    },
+    {
+      "agentId": "a1",
+      "approval": {
+        "always": {
+          "kind": "command",
+          "label": "git status",
+          "value": "git status"
+        },
+        "alwaysAllowed": true,
+        "detail": "git status",
+        "requestId": "q5",
+        "status": "allowed",
+        "title": "Run a command"
+      },
+      "id": "m12",
+      "kind": "note",
+      "text": "Allowed automatically: git status · Always allowed",
+      "ts": 1762290012000
+    },
+    {
+      "agentId": "a1",
+      "changes": {
+        "added": 12,
+        "branch": "main",
+        "copy": {
+          "branch": "finance/invoice-totals-ab12",
+          "id": "copy-1",
+          "path": "/Users/julian/ShipStudio/.worktrees/site/finance-invoice-totals-ab12"
+        },
+        "fileCount": 3,
+        "files": [
+          {
+            "added": 10,
+            "path": "src/a.ts",
+            "status": "added"
+          },
+          {
+            "added": 2,
+            "path": "src/b.ts",
+            "removed": 1,
+            "status": "modified"
+          },
+          {
+            "path": "src/c.ts",
+            "removed": 7,
+            "status": "deleted"
+          }
+        ],
+        "from": "abc123",
+        "project": "/Users/julian/ShipStudio/site",
+        "removed": 8,
+        "to": "def456"
+      },
+      "id": "m13",
+      "kind": "changes",
+      "text": "",
+      "ts": 1762290013000
+    },
+    {
+      "agentId": "a1",
+      "id": "m14",
+      "kind": "session",
+      "session": {
+        "cli": "claude",
+        "event": "started",
+        "project": "/Users/julian/ShipStudio/site",
+        "sessionId": "pty-1",
+        "tab": 1
+      },
+      "text": "",
+      "ts": 1762290014000
+    },
+    {
+      "agentId": "a1",
+      "id": "m15",
+      "kind": "session",
+      "session": {
+        "event": "sent",
+        "project": "/Users/julian/ShipStudio/site"
+      },
+      "text": "Fix the header",
+      "ts": 1762290015000
+    },
+    {
+      "agentId": "a1",
+      "id": "m16",
+      "kind": "session",
+      "session": {
+        "event": "reply",
+        "project": "/Users/julian/ShipStudio/site"
+      },
+      "text": "Fixed",
+      "ts": 1762290016000
+    },
+    {
+      "agentId": "a1",
+      "attachments": [
+        {
+          "mime": "image/jpeg",
+          "name": "Desktop.jpg",
+          "path": "attachments/m17/Desktop.jpg",
+          "size": 184000
+        }
+      ],
+      "id": "m17",
+      "kind": "session",
+      "session": {
+        "event": "screenshot",
+        "project": "/Users/julian/ShipStudio/site"
+      },
+      "text": "",
+      "ts": 1762290017000
+    },
+    {
+      "agentId": "a1",
+      "attachments": [
+        {
+          "mime": "image/png",
+          "name": "logo.png",
+          "path": "attachments/m18/logo.png",
+          "size": 9000
+        }
+      ],
+      "clientId": "c_8f2a1b",
+      "id": "m18",
+      "kind": "user",
+      "text": "Here's the logo",
+      "ts": 1762290018000
+    },
+    {
+      "agentId": "a1",
+      "approval": {
+        "detail": "@@ -1,2 +1,2 @@\n-  padding: 8px;\n+  padding: 12px;",
+        "prompt": {
+          "chats": [
+            "a2",
+            "a1"
+          ],
+          "kind": "permission",
+          "options": [
+            {
+              "keys": [
+                "1"
+              ],
+              "label": "Yes",
+              "role": "allow"
+            },
+            {
+              "keys": [
+                "2"
+              ],
+              "label": "Yes, allow all edits during this session",
+              "role": "other"
+            },
+            {
+              "keys": [
+                "3"
+              ],
+              "label": "No, and tell Claude what to do differently",
+              "role": "deny"
+            }
+          ],
+          "owner": {
+            "id": "a2",
+            "name": "Ops"
+          },
+          "project": "/Users/julian/ShipStudio/site",
+          "question": "Do you want to make this edit to Header.tsx?",
+          "sessionId": "pty-2",
+          "tab": 2
+        },
+        "requestId": "q6",
+        "status": "pending",
+        "title": "Do you want to make this edit to Header.tsx?"
+      },
+      "id": "m19",
+      "kind": "approval",
+      "text": "",
+      "ts": 1762290019000
+    },
+    {
+      "agentId": "a1",
+      "approval": {
+        "choice": "Yes, proceed",
+        "detail": "Claude Code asks once per folder.",
+        "prompt": {
+          "chats": [
+            "a1"
+          ],
+          "kind": "trust",
+          "options": [
+            {
+              "keys": [
+                "1"
+              ],
+              "label": "Yes, proceed",
+              "role": "allow"
+            },
+            {
+              "keys": [
+                "2"
+              ],
+              "label": "No, exit",
+              "role": "deny"
+            }
+          ],
+          "owner": {
+            "id": "a1",
+            "name": "Finance"
+          },
+          "project": "/Users/julian/ShipStudio/site",
+          "question": "Do you trust the files in this folder?",
+          "sessionId": "pty-3",
+          "tab": 3
+        },
+        "requestId": "q7",
+        "status": "allowed",
+        "title": "Let Claude Code work in site?"
+      },
+      "id": "m20",
+      "kind": "approval",
+      "text": "",
+      "ts": 1762290020000
+    },
+    {
+      "agentId": "a1",
+      "approval": {
+        "detail": "Download the statements",
+        "requestId": "q8",
+        "secret": {
+          "fields": [
+            {
+              "env": "BANK_USERNAME",
+              "label": "Username"
+            },
+            {
+              "env": "BANK_PASSWORD",
+              "label": "Password"
+            }
+          ],
+          "kind": "password",
+          "name": "Bank login",
+          "purpose": "Download the statements",
+          "reference": "secret:finance/bank_login"
+        },
+        "status": "pending",
+        "title": "Bank login"
+      },
+      "id": "m21",
+      "kind": "approval",
+      "text": "",
+      "ts": 1762290021000
+    },
+    {
+      "agentId": "a1",
+      "approval": {
+        "detail": "Reconcile payouts",
+        "requestId": "q9",
+        "secret": {
+          "fields": [
+            {
+              "env": "STRIPE_KEY",
+              "label": "API key"
+            }
+          ],
+          "kind": "api_key",
+          "name": "Stripe key",
+          "purpose": "Reconcile payouts",
+          "reference": "secret:finance/stripe_key"
+        },
+        "status": "allowed",
+        "title": "Stripe key"
+      },
+      "id": "m22",
+      "kind": "approval",
+      "text": "",
+      "ts": 1762290022000
+    },
+    {
+      "agentId": "a1",
+      "approval": {
+        "detail": "Deploy",
+        "requestId": "q10",
+        "secret": {
+          "fields": [
+            {
+              "env": "TOKEN",
+              "label": "Token"
+            }
+          ],
+          "kind": "token",
+          "name": "Token",
+          "purpose": "Deploy",
+          "reference": "secret:finance/token"
+        },
+        "status": "denied",
+        "title": "Token"
+      },
+      "id": "m23",
+      "kind": "approval",
+      "text": "",
+      "ts": 1762290023000
+    },
+    {
+      "agentId": "a1",
+      "approval": {
+        "detail": "Other",
+        "requestId": "q11",
+        "secret": {
+          "fields": [
+            {
+              "env": "OTHER",
+              "label": "Value"
+            }
+          ],
+          "kind": "other",
+          "name": "Other",
+          "purpose": "Other",
+          "reference": "secret:finance/other"
+        },
+        "status": "expired",
+        "title": "Other"
+      },
+      "id": "m24",
+      "kind": "approval",
+      "text": "",
+      "ts": 1762290024000
+    },
+    {
+      "agentId": "a1",
+      "id": "m25",
+      "kind": "agent",
+      "text": "Fixed the header.",
+      "ts": 1762290025000,
+      "work": {
+        "endedAt": 1762290025000,
+        "fileCount": 1,
+        "files": [
+          "Header.tsx"
+        ],
+        "startedAt": 1762290013000,
+        "stepCount": 17,
+        "steps": [],
+        "stepsOmitted": true
+      }
+    },
+    {
+      "agentId": "a1",
+      "attachments": [
+        {
+          "mime": "application/pdf",
+          "name": "october-invoices.pdf",
+          "path": "attachments/m26/october-invoices.pdf",
+          "size": 48211
+        }
+      ],
+      "id": "m26",
+      "kind": "agent",
+      "result": {
+        "checked": [
+          "Totals match the bank export"
+        ],
+        "id": "res-oct",
+        "items": [
+          {
+            "file": {
+              "mime": "application/pdf",
+              "name": "october-invoices.pdf",
+              "path": "attachments/m26/october-invoices.pdf",
+              "size": 48211
+            },
+            "kind": "file",
+            "label": "Summary"
+          },
+          {
+            "kind": "link",
+            "label": "Source sheet",
+            "url": "https://docs.example.com/sheets/october"
+          }
+        ],
+        "notVerified": [
+          "Two EUR invoices use today's rate, not the invoice date's"
+        ],
+        "summary": "One page with every October invoice, grouped by client.",
+        "title": "October invoice summary",
+        "version": 1
+      },
+      "text": "One page with every October invoice, grouped by client.",
+      "ts": 1762290026000
+    },
+    {
+      "agentId": "a1",
+      "id": "m27",
+      "kind": "user",
+      "revises": {
+        "id": "res-oct",
+        "title": "October invoice summary",
+        "version": 1
+      },
+      "text": "Use the rate on each invoice's date",
+      "ts": 1762290027000
+    },
+    {
+      "agentId": "a1",
+      "attachments": [
+        {
+          "mime": "image/png",
+          "name": "before.png",
+          "path": "attachments/m28/before.png",
+          "size": 9000
+        },
+        {
+          "mime": "image/png",
+          "name": "after.png",
+          "path": "attachments/m28/after.png",
+          "size": 9100
+        }
+      ],
+      "changes": {
+        "added": 4,
+        "copy": {
+          "branch": "finance/invoice-totals-ab12",
+          "id": "copy-1",
+          "path": "/Users/julian/ShipStudio/.worktrees/site/finance-invoice-totals-ab12"
+        },
+        "fileCount": 1,
+        "files": [
+          {
+            "added": 4,
+            "path": "src/invoices.ts",
+            "removed": 2,
+            "status": "modified"
+          }
+        ],
+        "from": "abc123",
+        "project": "/Users/julian/ShipStudio/site",
+        "removed": 2,
+        "to": "fed321"
+      },
+      "id": "m28",
+      "kind": "changes",
+      "result": {
+        "changes": "EUR invoices use the rate on each invoice's date",
+        "checked": [
+          "Recomputed both EUR totals"
+        ],
+        "id": "res-oct",
+        "items": [
+          {
+            "file": {
+              "mime": "image/png",
+              "name": "before.png",
+              "path": "attachments/m28/before.png",
+              "size": 9000
+            },
+            "kind": "file",
+            "role": "before"
+          },
+          {
+            "file": {
+              "mime": "image/png",
+              "name": "after.png",
+              "path": "attachments/m28/after.png",
+              "size": 9100
+            },
+            "kind": "file",
+            "role": "after"
+          }
+        ],
+        "summary": "EUR invoices now use the rate on each invoice's date.",
+        "title": "October invoice summary",
+        "version": 2
+      },
+      "text": "Changed 1 file in a copy of site",
+      "ts": 1762290028000
+    }
+  ],
+  "more": false
+} satisfies Result<'agents.messages'>;
+export const agentsWorkSteps = {
+  "work": {
+    "endedAt": 1762290025000,
+    "fileCount": 1,
+    "files": [
+      "Header.tsx"
+    ],
+    "startedAt": 1762290013000,
+    "stepCount": 17,
+    "steps": [
+      {
+        "at": 1762290013000,
+        "kind": "plan",
+        "label": "Updated its plan"
+      },
+      {
+        "at": 1762290014000,
+        "kind": "read",
+        "label": "Read Header.tsx"
+      },
+      {
+        "at": 1762290014000,
+        "kind": "search",
+        "label": "Searched for “padding”"
+      },
+      {
+        "at": 1762290015000,
+        "kind": "web",
+        "label": "Searched the web for “header spacing”"
+      },
+      {
+        "at": 1762290015000,
+        "kind": "edit",
+        "label": "Edited Header.tsx"
+      },
+      {
+        "at": 1762290016000,
+        "kind": "command",
+        "label": "Ran npm test"
+      },
+      {
+        "at": 1762290017000,
+        "kind": "approval",
+        "label": "You declined: Run a command",
+        "outcome": "declined"
+      },
+      {
+        "at": 1762290017000,
+        "kind": "command",
+        "label": "Asked to run rm — you declined",
+        "outcome": "declined"
+      },
+      {
+        "at": 1762290017000,
+        "kind": "edit",
+        "label": "Tried to edit Nav.tsx",
+        "outcome": "failed"
+      },
+      {
+        "at": 1762290018000,
+        "kind": "message",
+        "label": "Messaged Ops"
+      },
+      {
+        "at": 1762290019000,
+        "kind": "delegate",
+        "label": "Worked on a sub-task: check the nav"
+      },
+      {
+        "at": 1762290020000,
+        "kind": "project",
+        "label": "Worked in site"
+      },
+      {
+        "at": 1762290021000,
+        "image": {
+          "mime": "image/jpeg",
+          "name": "Desktop.jpg",
+          "path": "attachments/m17/Desktop.jpg",
+          "size": 184000
+        },
+        "kind": "screenshot",
+        "label": "Took a screenshot of site"
+      },
+      {
+        "at": 1762290022000,
+        "kind": "web",
+        "label": "Browsed acme.com"
+      },
+      {
+        "at": 1762290022000,
+        "kind": "tool",
+        "label": "Searched Google Drive"
+      }
+    ]
+  }
+} satisfies Result<'agents.workSteps'>;
 export const agentsSend = {
   "id": "m01",
   "agentId": "a1",
@@ -3235,6 +3981,7 @@ export const frames = [
       "devices.setPush",
       "agents.overview",
       "agents.messages",
+      "agents.workSteps",
       "agents.send",
       "agents.stop",
       "agents.interrupt",

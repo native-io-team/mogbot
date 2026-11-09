@@ -2557,6 +2557,20 @@ const frameStats = (ft) => {
   };
 };
 
+/** The Long Rich chat on screen at its newest line; a picture of what was there instead. */
+async function openedChat(page, failedShot) {
+  try {
+    await page.waitFor(
+      `location.pathname.includes('longrich') && document.body.innerText.includes('Question 4995:')`,
+      30_000,
+      'the chat'
+    );
+  } catch (error) {
+    await page.screenshot(path.join(OUT, failedShot)).catch(() => {});
+    throw error;
+  }
+}
+
 async function perfLongChat(page) {
   const results = {};
   await page.send('Page.addScriptToEvaluateOnNewDocument', { source: PERF_PRELUDE });
@@ -2572,29 +2586,38 @@ async function perfLongChat(page) {
     });
   }
   results.cold = cold;
+  log('perf', `cold ${JSON.stringify(cold)}`);
   // Warm: the app already running on the agents list, then into the chat
   // (an in-app navigation, as a tap makes it).
   const warm = [];
+  // `QA_PROFILE=1`: a .cpuprofile of the last open (and of the scroll, below).
+  const profileOpen = !!process.env.QA_PROFILE;
   for (let i = 0; i < 3; i++) {
     await page.goto(`${WEB}/agents`);
     await page.waitFor(`document.body.innerText.includes('Long Rich')`, 60_000, 'the agents list');
     await sleep(2500);
+    if (profileOpen && i === 2) {
+      await page.send('Profiler.enable');
+      await page.send('Profiler.setSamplingInterval', { interval: 100 });
+      await page.send('Profiler.start');
+    }
     const t0 = await page.eval('performance.now()');
     await page.eval(
       `history.pushState(null, '', '/chat/longrich'); dispatchEvent(new PopStateEvent('popstate'))`
     );
-    await page.waitFor(
-      `location.pathname.includes('longrich') && document.body.innerText.includes('Question 4995:')`,
-      30_000,
-      'the chat'
-    );
+    await openedChat(page, 'perf-warm-failed.png');
     const t1 = await page.eval(
       'new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(performance.now()))))'
     );
     await sleep(1000);
+    if (profileOpen && i === 2) {
+      const { profile: p } = await page.send('Profiler.stop');
+      await writeFile(path.join(OUT, 'perf-open.cpuprofile'), JSON.stringify(p));
+    }
     warm.push({ openMs: Math.round(t1 - t0), longTasks: await longTasksSince(page, t0) });
   }
   results.warm = warm;
+  log('perf', `warm ${JSON.stringify(warm)}`);
   // Scrolling up (older lines: further on in the inverted list), 30 s at 250 px a frame.
   // The chat's own list: the agents list stays mounted under it in the stack.
   await page.eval(`(() => {

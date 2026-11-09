@@ -28,6 +28,7 @@ import type {
   SigninInput,
   SigninOutcome,
   TeamLogins,
+  TurnWork,
   AgentSecret,
   AgentsOverview,
   CheckIn,
@@ -102,8 +103,28 @@ export interface Methods {
    * merge needs it.
    */
   'agents.messages': {
-    params: { agentId: string; limit?: number; before?: string };
+    params: {
+      agentId: string;
+      limit?: number;
+      before?: string;
+      /**
+       * `'summary'`: each timeline as its folded line only (`stepsOmitted`,
+       * no steps), read with `agents.workSteps` as one opens. They were most
+       * of a page. An older Mac ignores it and sends steps inline, so check
+       * `stepsOmitted`, never the Mac's version.
+       */
+      work?: 'summary';
+    };
     result: { messages: AgentMessage[]; asOf: Cursor; more: boolean };
+  };
+  /**
+   * `agents_turn_work`: what the turn ending on `messageId` did, steps and
+   * all; null when nothing was kept (pruned). Only for a line its page sent
+   * with `stepsOmitted`, so only ever asked of a Mac that serves it.
+   */
+  'agents.workSteps': {
+    params: { agentId: string; messageId: string };
+    result: { work: TurnWork | null };
   };
   /**
    * `agents_send`. Attachments are uploaded first and passed by blob id.
@@ -645,6 +666,7 @@ export const READ_ONLY_METHODS = [
   'devices.self',
   'agents.overview',
   'agents.messages',
+  'agents.workSteps',
   'agents.instructions',
   'agents.memory',
   'agents.reach',

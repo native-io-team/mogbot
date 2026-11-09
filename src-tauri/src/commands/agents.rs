@@ -189,6 +189,7 @@ pub async fn agents_messages(
     limit: Option<usize>,
     before: Option<String>,
     through: Option<String>,
+    lazy_work: Option<bool>,
 ) -> Result<Vec<store::AgentMessage>, CommandError> {
     const MAX: usize = 5000;
     blocking(move || {
@@ -208,7 +209,28 @@ pub async fn agents_messages(
         crate::agents::admin::apply(&mut page);
         // A remembered rule's line: still in force, or undone.
         crate::agents::remember::apply(&agent_id, &mut page);
+        // Timelines as their folded lines only: the steps come one turn at
+        // a time when one is opened (`agents_turn_work`).
+        if lazy_work.unwrap_or(false) {
+            crate::agents::work::omit_steps(&mut page);
+        }
         Ok(page)
+    })
+    .await
+}
+
+/// What the turn that ended on `message_id` did, steps and all: a "What it
+/// did" opened under a line its page sent without them (`lazy_work`).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_turn_work(
+    agent_id: String,
+    message_id: String,
+) -> Result<Option<crate::agents::work::TurnWork>, CommandError> {
+    blocking(move || {
+        // Validates the id before it becomes a path.
+        store::agent_home(&agent_id)?;
+        Ok(crate::agents::work::load(&agent_id, &message_id))
     })
     .await
 }

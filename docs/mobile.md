@@ -200,7 +200,10 @@ replaces its card), and `agents.send` requires a `clientId` that the Mac
 remembers for 24 h and echoes on the message, so a retried send returns the
 original. A page from `agents.messages` carries `asOf`, and only rows whose
 last-applied `seq` ≤ `asOf.seq` are overwritten, so a fetch can't undo an
-event that beat it.
+event that beat it. The phone asks for pages with `work: 'summary'`: each
+"What it did" comes as its folded line (`stepsOmitted`) and its steps are read
+with `agents.workSteps` when it opens. An older Mac ignores the field and sends
+steps inline, which the phone shows as they are; an older phone never asks.
 
 **Drafts** are appends, `{id, from, text}`, throttled to 50 ms per socket and
 restarted from 0 on a new connection. A `from` that doesn't match is dropped;
@@ -1212,7 +1215,8 @@ chat, 5,000 lines of every kind (markdown, code, timelines, result and
 approval cards, pictures): a deep link's cold open to the newest line, a tap
 in from the agents list, and 20 s of scrolling back (frame times, long tasks,
 how far it got), into `perf-long-chat.json` in `--out`. It runs against Metro's
-development build, so read the numbers as relative.
+development build, so read the numbers as relative. `QA_PROFILE=1` adds
+`perf-open.cpuprofile` (the last open from the agents list) and `perf-scroll.cpuprofile`.
 
 The ports also read `QA_WEB_PORT`, `QA_MOCK_PORT` and `QA_CDP_PORT`; `--verbose`
 streams the mock's and Expo's output. With a `TMPDIR` longer than 60 characters

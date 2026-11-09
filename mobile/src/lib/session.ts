@@ -332,7 +332,9 @@ function readPage(key: string, before?: string) {
   const at = before ? { before } : {};
   return roomId
     ? call('rooms.messages', { roomId, limit: PAGE, ...at })
-    : call('agents.messages', { agentId: key, limit: PAGE, ...at });
+    : // Timelines as their folded lines: the steps were most of a page, and
+      // are read as one opens (`lib/turnSteps`). An older Mac sends them anyway.
+      call('agents.messages', { agentId: key, limit: PAGE, work: 'summary', ...at });
 }
 
 /** `agents.focus`, or `rooms.focus` for a room's key. */
@@ -409,17 +411,25 @@ export async function loadOlder(agentId: string) {
 /** On screen (or `null` on leaving): the Mac clears its unread and holds alerts for it. */
 export function setOpenChat(agentId: string | null) {
   const roomId = agentId ? roomIdOf(agentId) : null;
+  // The overview (or rooms) changes only when there was something unread: a
+  // new one re-renders everything that reads it, every row of the agents
+  // list under the chat included, inside the task that opens the chat.
   setApp((s) => ({
     openChat: agentId,
     overview:
-      agentId && s.overview && !roomId
+      agentId &&
+      s.overview &&
+      !roomId &&
+      s.overview.agents.some((a) => a.id === agentId && a.unread)
         ? {
             ...s.overview,
             agents: s.overview.agents.map((a) => (a.id === agentId ? { ...a, unread: 0 } : a)),
           }
         : s.overview,
     rooms:
-      roomId && s.rooms ? s.rooms.map((r) => (r.id === roomId ? { ...r, unread: 0 } : r)) : s.rooms,
+      roomId && s.rooms?.some((r) => r.id === roomId && r.unread)
+        ? s.rooms.map((r) => (r.id === roomId ? { ...r, unread: 0 } : r))
+        : s.rooms,
   }));
   if (transport?.state.kind === 'connected') void focusChat(agentId).catch(() => {});
   if (roomId) return;

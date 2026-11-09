@@ -301,8 +301,9 @@ Screenshots say what the Agents view looks like; `scripts/perf-agents.mjs` says
 what it costs. It drives the `agents-stress` scenario — 40 agents, a 2,000-line
 Chief of Staff chat served in 150-line pages exactly as `agents_messages`
 serves them (markdown, code, result cards with 60-step timelines, approvals,
-copy cards, images) — against a **production** React build, because the dev
-server's development React measures React rather than the app.
+copy cards, images; a timeline's steps left out and read by `agents_turn_work`
+when it opens, as `lazyWork` asks) — against a **production** React build,
+because the dev server's development React measures React rather than the app.
 
 ```bash
 node scripts/perf-agents.mjs --build                 # build, serve on 1805, measure everything

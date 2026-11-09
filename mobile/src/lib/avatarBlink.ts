@@ -54,8 +54,14 @@ export function useEyeBlink(active: boolean, height: number, eyeY: number) {
       closed.set(0);
       return;
     }
-    closed.set(blinkAnimation());
-    return () => cancelAnimation(closed);
+    // Built a moment later, off the task that mounts the avatar: a dozen
+    // timed steps per avatar was ten of the milliseconds a chat took to open.
+    // The first blink waits seconds anyway.
+    const timer = setTimeout(() => closed.set(blinkAnimation()), 0);
+    return () => {
+      clearTimeout(timer);
+      cancelAnimation(closed);
+    };
   }, [active, closed]);
   const offset = eyeY - height / 2;
   return useAnimatedStyle(() => ({
