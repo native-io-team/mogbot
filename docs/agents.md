@@ -3810,7 +3810,10 @@ bubble that looks like the user's. The user's own message is a user line
 labelled "From Slack · #launch" (`AgentMessage::via`, desk and phone), queued
 with `enqueue_user(.., typed: None)`: it is their request, but not *typed in
 this chat*, so a Slack "yes" never answers a card and `remember_permission`
-can't be satisfied from Slack.
+can't be satisfied from Slack. A mention in it reads as `@name`, and since
+a display name is free text someone else picked yet lands in the user's
+unsealed ask, every name is cut to a name (`slack_api::clean_name`: letters,
+digits, spaces, `.-'_()`, one line, 32 characters).
 
 **The reply.** When the agent is idle again, its last reply in its own chat
 after the ask (a result card's title when the reply is only a card) is cut to
