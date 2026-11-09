@@ -329,6 +329,8 @@
 
 .flow-accounts__mark {
   flex: none;
+  /* An icon has no text baseline: on the row's baseline it rode high. */
+  align-self: center;
   display: inline-flex;
   justify-content: center;
   width: var(--size-icon-sm);

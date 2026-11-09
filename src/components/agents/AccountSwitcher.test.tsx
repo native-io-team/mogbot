@@ -176,6 +176,49 @@ describe('AccountSwitcher', () => {
     expect(within(pop).getByRole('button', { name: 'Add and sign in' })).toBeEnabled();
   });
 
+  it('adds once however often Enter is pressed, and never with an empty name', async () => {
+    store.engines = [claude];
+    store.agents = [];
+    const calls = mock([mac]);
+    let release: (() => void) | undefined;
+    mockIPC(
+      (cmd, args) => {
+        calls.push({ cmd, args });
+        if (cmd === 'agents_accounts') return [mac];
+        if (cmd === 'agents_account_add') {
+          return new Promise((r) => {
+            release = () => r({ ...work, signedIn: false });
+          });
+        }
+        return null;
+      },
+      { shouldMockEvents: true }
+    );
+    render(<AccountSwitcher collapsed={false} />);
+    await screen.findByTestId('account-switcher');
+    act(() => {
+      requestSwitcher('add');
+    });
+    const pop = await screen.findByRole('dialog', { name: 'Accounts' });
+    const field = within(pop).getByRole('textbox', { name: /Name for the new/ });
+
+    fireEvent.change(field, { target: { value: '   ' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(calls.filter((c) => c.cmd === 'agents_account_add')).toHaveLength(0);
+
+    fireEvent.change(field, { target: { value: 'Work' } });
+    await act(async () => {
+      fireEvent.keyDown(field, { key: 'Enter' });
+      fireEvent.keyDown(field, { key: 'Enter' });
+      await Promise.resolve();
+    });
+    expect(calls.filter((c) => c.cmd === 'agents_account_add')).toHaveLength(1);
+    await act(async () => {
+      release?.();
+      await Promise.resolve();
+    });
+  });
+
   it('shows nothing with no engine on this Mac', async () => {
     store.engines = [{ ...claude, installed: false }];
     mock([mac]);
