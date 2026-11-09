@@ -17,6 +17,7 @@ import { createPortal } from 'react-dom';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { usePortalAccentScope } from '../../contexts/AccentScopeContext';
 import { PORTAL_ANCHOR_ATTR, PORTAL_OWNER_ATTR } from './ModalFrame';
+import { fitMenu, MENU_GAP } from '../../lib/menuFit';
 
 const MENU_ITEM_SELECTOR = '[role="menuitem"]';
 const TYPEAHEAD_TIMEOUT_MS = 500;
@@ -400,16 +401,28 @@ export function Dropdown({
       const btn = triggerRef.current;
       if (!btn) return;
       const rect = btn.getBoundingClientRect();
+      // Never past the window's edge: the menu opens on the side asked for
+      // unless the other has more room for it, and is never taller than the
+      // room it has (it scrolls inside instead of running off the window).
+      const { side: opens, maxHeight } = fitMenu(
+        rect,
+        window.innerHeight,
+        menuRef.current?.scrollHeight ?? 0,
+        side
+      );
       // Explicitly neutralize the class's `left: 0` / `margin-top` — with only
       // `right` set inline, the menu would stretch from the viewport's left
       // edge to the anchor. Inline styles must own both horizontal edges.
       const vertical =
-        side === 'top'
-          ? { top: 'auto', bottom: window.innerHeight - rect.top + 6 }
-          : { top: rect.bottom + 6, bottom: 'auto' };
+        opens === 'top'
+          ? { top: 'auto', bottom: window.innerHeight - rect.top + MENU_GAP }
+          : { top: rect.bottom + MENU_GAP, bottom: 'auto' };
       setPortalPos({
         position: 'fixed',
         ...vertical,
+        // A cap the menu's own CSS takes as well as its own (dropdown.css):
+        // an inline max-height would lift a menu's shorter cap.
+        ['--ss-dropdown-room' as string]: `${maxHeight}px`,
         ...(align === 'right'
           ? { right: window.innerWidth - rect.right, left: 'auto' }
           : { left: rect.left, right: 'auto' }),

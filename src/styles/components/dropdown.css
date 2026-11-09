@@ -20,7 +20,7 @@
      list (164 projects, say) renders every row and runs off the screen with no
      way to reach the end. The floor keeps a short menu from becoming a
      pointlessly tiny scroll box. */
-  max-height: min(360px, calc(100vh - var(--spacing-2xl) * 3));
+  max-height: min(360px, calc(100vh - var(--spacing-2xl) * 3), var(--ss-dropdown-room, 100vh));
   overflow-y: auto;
   /* Reaching the end of the menu must not start scrolling the page or the
      dialog behind it. */
