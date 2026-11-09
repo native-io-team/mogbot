@@ -10,7 +10,8 @@ import { NewAgentDefaults } from '../components/NewAgentDefaults';
 import { IndependenceSetting } from '../components/IndependenceSetting';
 import { formatDate } from '../lib/agents';
 import { useQuotaLines } from '../lib/quota';
-import { useAccountLines } from '../lib/accounts';
+import { useAccounts } from '../lib/accounts';
+import { AccountsSections } from '../components/accounts';
 import { useUsageRows } from '../lib/usagePlan';
 import { appInfo } from '../lib/pairing';
 import { isDemo } from '../lib/demo';
@@ -48,12 +49,8 @@ const TEXT_SIZE_LABELS: Record<TextSize, string> = {
   largest: 'Largest',
 };
 
-/** Accounts are added and signed in on the Mac; here they are only shown. */
 const USAGE_FOOTER =
   'Change it on the Mac in Settings → Agents → Usage, or ask your Chief of Staff. Estimates come from your past runs.';
-
-const ACCOUNTS_FOOTER =
-  'When one runs out of usage, agents carry on with the next. Add or reorder them on the Mac.';
 
 type UpdateState =
   | { kind: 'idle' }
@@ -141,7 +138,7 @@ export default function Settings() {
     );
 
   const quota = useQuotaLines();
-  const accounts = useAccountLines();
+  const accounts = useAccounts();
   const usage = useUsageRows();
   const { version, build } = appInfo();
   const updateLabel =
@@ -180,6 +177,8 @@ export default function Settings() {
           <Row label="Forget this Mac" destructive onPress={confirmUnpair} last />
         </Section>
       )}
+
+      <AccountsSections state={accounts} />
 
       {quota.length > 0 && (
         <Section title="Plan usage">
@@ -233,19 +232,6 @@ export default function Settings() {
       {canImport && (
         <Section title="Bring agents in" footer="From Grok Bot, ChatGPT or any other assistant.">
           <Row label="Import agents" onPress={() => router.push('/import')} last />
-        </Section>
-      )}
-      {accounts.length > 0 && (
-        <Section title="Accounts" footer={ACCOUNTS_FOOTER}>
-          {accounts.map((line, i) => (
-            <Row
-              key={line.key}
-              label={line.label}
-              detail={line.detail}
-              warning={line.out}
-              last={i === accounts.length - 1}
-            />
-          ))}
         </Section>
       )}
 

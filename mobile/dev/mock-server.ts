@@ -22,6 +22,7 @@ import {
   SUPPORTED,
   type Agent,
   type Quota,
+  type UsageAccount,
   type AgentMessage,
   type AgentSecret,
   type AgentReach,
@@ -2046,6 +2047,16 @@ export function createMockServer(opts: MockOptions = {}) {
     armed: importArmed,
     talk: importTalk,
   });
+  let walletAccounts: UsageAccount[] = [
+    { id: 'default', engine: 'claude', name: 'sam@example.com', named: false, thisMac: true,
+      signedIn: true, email: 'sam@example.com', plan: 'Max', out: false },
+    { id: 'w1', engine: 'claude', name: 'Work', named: true, thisMac: false, signedIn: true,
+      email: 'me@work.example', plan: 'max', out: false },
+    { id: 'p1', engine: 'claude', name: 'Personal', named: true, thisMac: false, signedIn: true,
+      out: false },
+    { id: 'default', engine: 'codex', name: 'Signed in on this Mac', named: false, thisMac: true,
+      signedIn: true, out: false },
+  ];
   const methods: Partial<Record<MethodName, Handler>> = {
     'system.status': () => status,
     'devices.self': (_, c) => devices.get(c.deviceId)!.device,
@@ -2807,6 +2818,31 @@ export function createMockServer(opts: MockOptions = {}) {
     },
     // The ready-made agents, as the Mac serializes them.
     'agents.templates': () => real.agentsTemplates,
+    // Three Claude accounts (ids as `agents.usagePlan`'s) and Codex's own,
+    // in the order turns try them; "Use now" and the arrows change it, as
+    // `wallet::use_first` / `reorder` do. Never a token.
+    'agents.accounts': () => structuredClone(walletAccounts),
+    'agents.accounts.use': (p) => {
+      const engine = String(p.engine);
+      const id = String(p.id);
+      const a = walletAccounts.find((x) => x.engine === engine && x.id === id);
+      if (!a) return fail({ type: 'Other', message: 'That account isn’t in the list any more.' });
+      if (!a.signedIn) return fail({ type: 'Other', message: `Sign ${a.name} in first.` });
+      walletAccounts = [a, ...walletAccounts.filter((x) => x !== a)];
+      return structuredClone(walletAccounts);
+    },
+    'agents.accounts.reorder': (p) => {
+      const engine = String(p.engine);
+      const ids = Array.isArray(p.ids) ? p.ids.map(String) : [];
+      const mine = walletAccounts.filter((x) => x.engine === engine);
+      if (ids.length !== mine.length || !ids.every((i) => mine.some((a) => a.id === i))) {
+        return fail({ type: 'Validation', field: 'ids', reason: 'The list of accounts changed meanwhile. Try again.' });
+      }
+      const sorted = ids.map((i) => mine.find((a) => a.id === i)!);
+      let k = 0;
+      walletAccounts = walletAccounts.map((a) => (a.engine === engine ? sorted[k++] : a));
+      return structuredClone(walletAccounts);
+    },
     // Its spare window placed 40 minutes before a reset from now, so the line shows.
     // This Mac's five-hour window matches `agents.quota`'s (resets in 2 hours),
     // and its pace estimate lands 80 minutes from now, before that reset.
@@ -3145,6 +3181,7 @@ export function createMockServer(opts: MockOptions = {}) {
         'engine',
         'model',
         'effort',
+        'account',
       ];
       if (!Object.keys(input).length || Object.keys(input).some((k) => !allowed.includes(k))) {
         return fail({
@@ -3193,6 +3230,13 @@ export function createMockServer(opts: MockOptions = {}) {
       if (typeof input.effort === 'string') {
         if (input.effort) a.effort = input.effort as Agent['effort'];
         else delete a.effort;
+      }
+      if (typeof input.account === 'string') {
+        if (input.account && !walletAccounts.some((w) => w.engine === a.engine && w.id === input.account)) {
+          return fail({ type: 'Validation', field: 'account', reason: 'That isn’t one of the accounts here.' });
+        }
+        if (input.account) a.account = input.account;
+        else delete a.account;
       }
       // The Mac's one quiet line (`settings_line` in commands/agents.rs).
       const line = settingsLine(before, a, engines());
@@ -4078,6 +4122,8 @@ function seedAgents(now: number): Agent[] {
       preview: 'Needs your OK',
     }),
     base('design', 'Designer', 'Design system', 'purple', {
+      // Its last turn ran on this Mac's own sign-in (three Claude accounts here).
+      ranOn: { id: 'default', name: 'sam@example.com' },
       lastActivityAt: now - 26 * 60_000,
       pendingApprovals: 1,
       status: { state: 'idle', activity: null, since: null },
@@ -4090,6 +4136,9 @@ function seedAgents(now: number): Agent[] {
       preview: 'Usage limit reached.',
     }),
     base('qa', 'QA 2', 'Regression checks', 'amber', {
+      // Set to run only on Work.
+      account: 'w1',
+      ranOn: { id: 'w1', name: 'Work' },
       lastActivityAt: now - 26 * 3_600_000,
       pendingApprovals: 2,
       preview: 'All 48 checks passed on main.',

@@ -1528,6 +1528,37 @@ const LIVE = [
     check: `The Designer's chat at ${size}: replies reflow, nothing clipped, the fade above the composer`,
   })),
   {
+    name: 'settings-accounts',
+    route: '/settings',
+    ready: 'Personal',
+    act: scrollToText('CLAUDE CODE ACCOUNTS'),
+    check:
+      'CLAUDE CODE ACCOUNTS: sam@example.com with a neutral tick (Max plan · this Mac’s own sign-in; In use · 5-hour …% left), Work (me@work.example · Max plan; Ready · 5-hour 20% left; “QA 2 runs only on this one”) and Personal, each Ready with Use now and up/down arrows (none past the ends); then Codex accounts; the footer saying agents carry on with the next and that accounts are added on the Mac',
+  },
+  {
+    name: 'settings-accounts-swapped',
+    route: '/settings',
+    ready: 'Personal',
+    act: async (page) => {
+      await scrollToText('CLAUDE CODE ACCOUNTS')(page);
+      await page.clickLabel('Use Work now');
+      await sleep(900);
+    },
+    after: async (page) => {
+      await page.clickLabel('Use sam@example.com now');
+      await sleep(600);
+    },
+    check: 'After Use now on Work: Work first with the tick and In use, sam@example.com second and Ready with Use now',
+  },
+  {
+    name: 'controls-runs-on',
+    route: '/controls?id=qa',
+    ready: 'Any account',
+    act: scrollToText('RUNS ON'),
+    check:
+      'Agent controls: RUNS ON with Any account (“In order, carrying on with the next when one runs out”), sam@example.com, Work ticked (“Only this one, never another”) and Personal',
+  },
+  {
     name: 'settings-usage',
     route: '/settings',
     ready: 'Use it all before reset',

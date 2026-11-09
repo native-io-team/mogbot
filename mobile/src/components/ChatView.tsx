@@ -8,6 +8,7 @@
  * (`embedded`), where it draws its own header instead of the stack's.
  */
 
+import { headerSubtitle } from '../lib/accountsView';
 import { newestResults, type Agent, type AgentMessage } from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
@@ -933,6 +934,7 @@ function Header({ agent }: { agent: Agent }) {
   const colors = useColors();
   const styles = useStyles();
   const { width } = useWindowDimensions();
+  const subtitle = headerSubtitle(agent);
   return (
     <View style={[styles.header, { maxWidth: Math.min(260, width - HEADER_RESERVED) }]}>
       <AgentAvatar
@@ -951,14 +953,14 @@ function Header({ agent }: { agent: Agent }) {
         >
           {agent.name}
         </T>
-        {!!agent.role && (
+        {!!subtitle && (
           <T
             variant="caption"
             color={colors.textSecondary}
             numberOfLines={1}
             maxFontSizeMultiplier={chromeScale}
           >
-            {agent.role}
+            {subtitle}
           </T>
         )}
       </View>
