@@ -20,7 +20,7 @@ const variants: Array<
       cursorBlink: true,
       cursorStyle: 'block',
       scrollback: 5000,
-      background: '#141414',
+      background: '#151413',
     },
   ],
   [
@@ -30,7 +30,7 @@ const variants: Array<
       cursorBlink: true,
       cursorStyle: 'block',
       scrollback: 5000,
-      background: '#141414',
+      background: '#151413',
     },
   ],
   [
@@ -40,7 +40,7 @@ const variants: Array<
       cursorBlink: true,
       cursorStyle: 'bar',
       scrollback: 5000,
-      background: '#141414',
+      background: '#151413',
     },
   ],
   [
@@ -50,7 +50,7 @@ const variants: Array<
       cursorBlink: false,
       cursorStyle: 'block',
       scrollback: 10000,
-      background: '#1a1a1a',
+      background: '#1c1b19',
     },
   ],
   [
@@ -60,7 +60,7 @@ const variants: Array<
       cursorBlink: true,
       cursorStyle: 'block',
       scrollback: 1000,
-      background: '#141414',
+      background: '#151413',
     },
   ],
 ];
@@ -76,7 +76,7 @@ describe('createTerminalOptions', () => {
       scrollback: expected.scrollback,
       theme: {
         background: expected.background,
-        foreground: '#bcbcbc',
+        foreground: '#d6d2ca',
         brightWhite: '#ffffff',
       },
     });

@@ -17,19 +17,26 @@
   --color-black-o12: rgba(0, 0, 0, 0.12);
   --color-black-o14: rgba(0, 0, 0, 0.14);
   --color-white-o22: rgba(255, 255, 255, 0.22);
+  /* Key and tray ingredients (the site's depth): a lit top edge on dark,
+     a tray's light lower lip on light, and a card's long soft drop. */
+  --color-white-o05: rgba(255, 255, 255, 0.05);
+  --color-white-o08: rgba(255, 255, 255, 0.08);
+  --color-white-o70: rgba(255, 255, 255, 0.7);
+  --color-black-o30: rgba(0, 0, 0, 0.3);
+  --color-black-o50: rgba(0, 0, 0, 0.5);
 
-  --color-gray-950: #141414;
-  --color-gray-900: #1a1a1a;
-  --color-gray-850: #282828;
-  --color-gray-800: #303030;
-  --color-gray-750: #393939;
-  --color-gray-700: #4e4e4e;
-  --color-gray-600: #767676;
-  --color-gray-500: #868686;
-  --color-gray-400: #979797;
-  --color-gray-300: #a9a9a9;
-  --color-gray-200: #bcbcbc;
-  --color-gray-100: #f1f1f1;
+  --color-gray-950: #151413;
+  --color-gray-900: #1c1b19;
+  --color-gray-850: #292725;
+  --color-gray-800: #31302d;
+  --color-gray-750: #3a3835;
+  --color-gray-700: #4f4c48;
+  --color-gray-600: #7a766f;
+  --color-gray-500: #8a857e;
+  --color-gray-400: #a29d95;
+  --color-gray-300: #b3aea6;
+  --color-gray-200: #d6d2ca;
+  --color-gray-100: #f4f2ee;
 
   --color-green-800: #1f9a3f;
   --color-green-700: #26bf4f;
@@ -69,28 +76,31 @@
 
   --color-green-tag: #3fce90;
 
+  /* Neutrals are warm, from the site's chalk, paper and ink (see
+     docs/internal/brand-direction.md); the grey ramp above is the site's
+     dark key, warm charcoal. Chroma stays low: warm, never beige. */
   /* The light theme's neutrals. "Paper" are surfaces and hairlines, from
      white down; "ink" is text and the strong neutral fill, from near-black
      up. Only tokens-semantic.css's light block should reach for these. */
-  --color-paper-0: #ffffff;
-  --color-paper-50: #fafafa;
-  --color-paper-100: #f5f5f5;
-  --color-paper-150: #f0f0f0;
-  --color-paper-200: #ebebeb;
-  --color-paper-250: #e5e5e5;
-  --color-paper-300: #dcdcdc;
-  --color-paper-400: #cbcbcb;
-  --color-ink-950: #0d0d0d;
+  --color-paper-0: #fdfcfa;
+  --color-paper-50: #faf9f6;
+  --color-paper-100: #f4f2ee;
+  --color-paper-150: #efede8;
+  --color-paper-200: #e9e6e0;
+  --color-paper-250: #e3dfd8;
+  --color-paper-300: #dad6ce;
+  --color-paper-400: #cbc6bd;
+  --color-ink-950: #0f0e0d;
   --color-ink-900: #1c1c1c;
-  --color-ink-800: #2b2b2b;
-  --color-ink-700: #3f3f3f;
-  --color-ink-600: #555555;
-  --color-ink-550: #5a5a5a;
-  --color-ink-525: #606060;
-  --color-ink-500: #6b6b6b;
-  --color-ink-450: #6f6f6f;
-  --color-ink-400: #8f8f8f;
-  --color-ink-300: #a6a6a6;
+  --color-ink-800: #2c2a27;
+  --color-ink-700: #403d39;
+  --color-ink-600: #55524b;
+  --color-ink-550: #59564f;
+  --color-ink-525: #5e5a53;
+  --color-ink-500: #6b675f;
+  --color-ink-450: #6e6a62;
+  --color-ink-400: #8f8a81;
+  --color-ink-300: #a8a39a;
 
   /* Status and syntax hues deep enough to read as text on white (WCAG AA). */
   --color-green-900: #157532;
@@ -158,6 +168,7 @@
   --radius-4: 4px;
   --radius-6: 6px;
   --radius-8: 8px;
+  --radius-10: 10px;
   --radius-12: 12px;
   --radius-999: 999px;
 
@@ -175,6 +186,7 @@
   --font-size-16: 16px;
   --font-size-18: 18px;
   --font-size-24: 24px;
+  --font-size-32: 32px;
   --font-size-40: 40px;
 
   --font-weight-regular: 400;
@@ -190,6 +202,11 @@
   --tracking-code: -0.44px;
   --tracking-04: 0.4px;
   --tracking-display: -2px;
+  /* The site's signature is tight Geist: names, titles and display type
+     tracked in, in em so it scales with the size it sits on. */
+  --tracking-tight-1: -0.01em;
+  --tracking-tight-2: -0.02em;
+  --tracking-tight-3: -0.035em;
 
   --duration-fast: 100ms;
   --duration-standard: 150ms;

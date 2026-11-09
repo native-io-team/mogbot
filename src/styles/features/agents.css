@@ -41,7 +41,7 @@
      gets that from the control fill; light from a white panel ringed by a
      hairline shadow, or the Allow card reads as a faint smudge. */
   --agents-card-surface: var(--surface-control);
-  --agents-card-shadow: none;
+  --agents-card-shadow: var(--shadow-card);
 }
 
 /* White is the strongest neutral of the theme: near-black on light, as the
@@ -49,7 +49,7 @@
 :root[data-theme='light'] {
   --agents-tint-white: #1c1c1c;
   --agents-card-surface: var(--surface-panel);
-  --agents-card-shadow: var(--shadow-sm);
+  --agents-card-shadow: var(--shadow-card);
 }
 
 [data-color='white'] {
@@ -105,6 +105,45 @@
 .agents-list {
   display: flex;
   flex-direction: column;
+}
+
+/* The team line: "3 working" or "All quiet", at the head of the list. Quiet
+   by design (a caption, not a header); the dot is the running status hue and
+   only lights while someone is working. */
+.agents-list__team {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-tight);
+  height: var(--size-sidebar-section-row);
+  padding: var(--spacing-xs) var(--spacing-md) 0 var(--spacing-md);
+  box-sizing: content-box;
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-label);
+  letter-spacing: var(--tracking-name);
+  color: var(--text-muted);
+  border-bottom: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agents-list__team-dot {
+  flex: 0 0 auto;
+  width: var(--size-sidebar-status-indicator);
+  height: var(--size-sidebar-status-indicator);
+  border-radius: var(--radius-pill);
+  background: var(--text-faint);
+}
+
+.agents-list__team[data-working] {
+  color: var(--text-secondary);
+}
+
+.agents-list__team[data-working] .agents-list__team-dot {
+  background: var(--status-running);
+  box-shadow: 0 0 0 var(--border-width-emphasis)
+    color-mix(in srgb, var(--status-running) 22%, transparent);
+}
+
+.workspace-sidebar.is-hidden .agents-list__team {
+  display: none;
 }
 
 /* The project row's band and hairline. The badge starts on the sidebar's
@@ -169,10 +208,11 @@
   align-items: center;
   gap: var(--spacing-xs);
   min-width: 0;
-  font-size: var(--font-size-body-md);
+  font-size: var(--font-size-body-lg);
   font-weight: var(--font-weight-label);
   line-height: var(--line-height-compact);
-  color: var(--text-secondary);
+  letter-spacing: var(--tracking-name);
+  color: var(--text-primary);
 }
 
 /* The text ellipsises; the pin beside it never gets pushed out. */
@@ -191,8 +231,9 @@
   /* Basis zero: only the room the name leaves over, never taken from it. */
   flex: 1 1 0;
   overflow: hidden;
-  font-size: var(--font-size-body-sm);
+  font-size: var(--font-size-body-md);
   font-weight: var(--font-weight-body);
+  letter-spacing: 0;
   color: var(--text-muted);
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -233,9 +274,9 @@
 .agents-list__preview {
   display: block;
   overflow: hidden;
-  font-size: var(--font-size-body-sm);
+  font-size: var(--font-size-body-md);
   line-height: var(--line-height-compact);
-  color: var(--text-muted);
+  color: var(--text-secondary);
   white-space: nowrap;
   text-overflow: ellipsis;
 }

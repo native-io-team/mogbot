@@ -1,5 +1,12 @@
 import { describe, expect, it } from 'vitest';
-import { agentNeedsYou, agentsNeedingYou, needsYouCount, setupHold } from './attention';
+import {
+  agentNeedsYou,
+  agentsNeedingYou,
+  needsYouCount,
+  setupHold,
+  teamLine,
+  workingCount,
+} from './attention';
 import type { AttentionAgent, AttentionSetup } from './attention';
 import cases from './attention-cases.json';
 
@@ -63,5 +70,21 @@ describe('the checklist', () => {
     expect(needsYouCount(agents, view())).toBe(2);
     expect(agentsNeedingYou(agents, view()).map((a) => a.id)).toEqual(['chief', 'hiring']);
     expect(needsYouCount(agents)).toBe(4);
+  });
+});
+
+describe('the team line', () => {
+  const at = (state: 'idle' | 'working' | 'waiting', takeover?: object) => ({
+    status: { state },
+    takeover,
+  });
+
+  it('counts agents mid-turn, leaving out one taken over', () => {
+    expect(workingCount([at('working'), at('idle'), at('waiting'), at('working', {})])).toBe(1);
+  });
+
+  it('says how many are working, or that it is quiet', () => {
+    expect(teamLine(3)).toBe('3 working');
+    expect(teamLine(0)).toBe('All quiet');
   });
 });

@@ -45,9 +45,9 @@ one row, while the export list is checked exactly against the source file.
 
 | Layer | Definition files | Token count | Sample names |
 | --- | --- | ---: | --- |
-| core | `src/styles/global/fonts.css`<br>`src/styles/global/tokens-core.css` | 164 | `--color-white`, `--color-white-o15`, `--color-black`, `--color-black-o15`, `--color-black-o38`, `--color-black-o75` |
-| semantic | `src/styles/global/tokens-semantic.css` | 262 | `--font-size-micro`, `--font-size-caption`, `--tracking-micro`, `--surface-app`, `--surface-panel`, `--surface-control` |
-| components | `src/styles/global/tokens-components.css` | 336 | `--size-control-standard`, `--size-control-large`, `--size-control-medium`, `--size-control-compact`, `--workspace-layout-menu-width`, `--workspace-layout-menu-row-height` |
+| core | `src/styles/global/fonts.css`<br>`src/styles/global/tokens-core.css` | 174 | `--color-white`, `--color-white-o15`, `--color-black`, `--color-black-o15`, `--color-black-o38`, `--color-black-o75` |
+| semantic | `src/styles/global/tokens-semantic.css` | 270 | `--font-size-micro`, `--font-size-caption`, `--tracking-micro`, `--surface-app`, `--surface-panel`, `--surface-control` |
+| components | `src/styles/global/tokens-components.css` | 353 | `--size-control-standard`, `--size-control-large`, `--size-control-medium`, `--size-control-compact`, `--workspace-layout-menu-width`, `--workspace-layout-menu-row-height` |
 | compatibility | `src/styles/global/tokens-compatibility.css` | 43 | `--modified-yellow`, `--info`, `--info-hover`, `--info-light`, `--info-dark`, `--purple` |
 
 ## Drift checks

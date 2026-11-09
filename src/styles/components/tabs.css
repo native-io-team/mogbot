@@ -2,7 +2,7 @@
    restrained tab surface layered on top; the indicator provides the motion. */
 .tabs__list {
   --tabs-list-padding: var(--space-02);
-  --tabs-tab-radius: var(--radius-4);
+  --tabs-tab-radius: var(--radius-6);
   position: relative;
   box-sizing: border-box;
   display: inline-flex;
@@ -11,9 +11,12 @@
   min-height: 0;
   gap: var(--tabs-list-padding);
   padding: var(--tabs-list-padding);
-  background: var(--surface-control);
-  border: var(--stroke-1) solid var(--border-default);
+  /* The site's tray: recessed, with a light lower lip. The border keeps its
+     width (sizes elsewhere count it) but draws nothing. */
+  background: var(--tabs-tray-surface);
+  border: var(--stroke-1) solid var(--tabs-tray-border);
   border-radius: calc(var(--tabs-tab-radius) + var(--tabs-list-padding));
+  box-shadow: var(--tabs-tray-shadow);
 }
 
 .tabs__list--stretch {
@@ -133,8 +136,9 @@
   left: 0;
   top: 0;
   border-radius: var(--tabs-tab-radius);
-  background: var(--surface-selected);
-  box-shadow: var(--shadow-button);
+  /* The keycap that slides along the tray. */
+  background: var(--tabs-key-surface);
+  box-shadow: var(--tabs-key-shadow);
   pointer-events: none;
   box-sizing: border-box;
   transition:

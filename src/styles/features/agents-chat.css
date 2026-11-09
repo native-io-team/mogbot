@@ -83,9 +83,10 @@
   min-width: 0;
   margin: 0;
   overflow: hidden;
-  font-size: var(--font-size-subhead);
+  font-size: var(--font-size-subhead-lg);
   font-weight: var(--font-weight-heading);
   line-height: var(--line-height-compact);
+  letter-spacing: var(--tracking-title);
   color: var(--text-primary);
   white-space: nowrap;
   text-overflow: ellipsis;
@@ -98,7 +99,7 @@
   /* What it's doing, or idle what it's for: cut, never wrapped. */
   max-width: 40ch;
   overflow: hidden;
-  font-size: var(--font-size-body-sm);
+  font-size: var(--font-size-body-md);
   line-height: var(--line-height-compact);
   color: var(--text-muted);
   white-space: nowrap;
@@ -401,6 +402,8 @@
 .agent-bubble--user {
   white-space: pre-wrap;
   background: var(--surface-selected);
+  /* The site's message: rounded, with a small tail corner toward you. */
+  border-bottom-right-radius: var(--radius-sm);
 }
 
 /* A message and its quiet actions on one line: Copy and the time sit beside

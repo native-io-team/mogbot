@@ -376,9 +376,12 @@
 
 .settings-group__title {
   margin: 0;
-  font-size: var(--font-size-body-sm);
+  /* A section's name, read as one (the site's names): primary ink, tracked
+     in. A muted 11px label made a long page read as a log. */
+  font-size: var(--font-size-body-lg);
   font-weight: var(--font-weight-heading);
-  color: var(--text-muted);
+  letter-spacing: var(--tracking-name);
+  color: var(--text-primary);
 }
 
 /* The same air under every group before its divider. A group that ends on
