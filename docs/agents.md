@@ -344,7 +344,7 @@ to ask the user to repeat any of it; `search_my_chat` reaches further back.
 **Do it, don't ask.** Every agent's prompt (`prompts::AGENCY`) has it look
 before asking (`search_my_chat` over its own chat, a teammate's, or with
 `agent: "team"` every agent's chat and memory at once, for the Chief, admins
-and at Go hard; memory; logs; its tools; then the user's own accounts and
+and at Bold; memory; logs; its tools; then the user's own accounts and
 assistants in their Chrome: Gmail, X, Grok), asks the Chief to search the
 team when it isn't the Chief, and only then asks the user, one question, with
 its own pick and why when the choice is really theirs. It never treats
@@ -353,8 +353,8 @@ never pre-declines a send (the app raises the card), and answers "is it good?"
 with an end-to-end check and proof. A reply that gives up anyway ("I have no
 Slack tool", "they'd need to say yes", a tool name in the user's chat) earns a
 hidden note at the start of its next turn in its own chat (`agents/agency.rs`,
-beside `share_text`'s): nothing shown, nothing re-run on its own. At Go hard
-and Full send a needless question gets one too ("Want me to…?", "Should I
+beside `share_text`'s): nothing shown, nothing re-run on its own. At Bold
+and Unleashed a needless question gets one too ("Want me to…?", "Should I
 file those too?", "or would you rather send them yourself?"), unless it is
 about the floor (money, credentials, deleting for good, production or main,
 or exact text the user wants to see). The level's own section says the same
@@ -1094,10 +1094,35 @@ numbers, "via connector" or "(import)" in anything a person reads.
 
 ## How much agents do on their own
 
-One choice for the whole team (`agents/independence.rs`): **Check with me
-often**, **Use good judgement** (the default), **Go hard — get it done** or
-**Full send — let it rip**. "Go full send" to the Chief raises one settings
-card (`propose_settings_change`, `independence: full_send`).
+One choice for the whole team (`agents/independence.rs`), drawn on desk and
+phone as one four-stop slider titled "How much it does on its own", "Asks a
+lot" at the left end and "Just does it" at the right:
+
+| Stop | Stored id | Its line under the slider |
+| --- | --- | --- |
+| **Careful** | `often` | Reads and looks around; asks before bigger changes. |
+| **Steady** (the default) | `judgement` | Reads and edits; asks before running changes or anything leaving this Mac. |
+| **Bold** | `go_hard` | Does local work on this Mac; asks before anything leaves it. |
+| **Unleashed** | `full_send` | Sends, posts and pushes too; only stops for money, logins, deleting for good or going live. |
+
+Under it, at every stop: "Always asks before spending money, using your
+passwords, or deleting for good." The names were "Check with me often", "Use
+good judgement", "Go hard" and "Full send" until the slider; the stored ids,
+the protocol and the tools kept the old ids, and the Chief still reads the old
+names as the same levels (`Level::parse`). Each line is held to what the level
+really answers (`autoallow::allows`, `go_hard::asks`): Careful answers no
+card (only `acceptEdits` file edits in its own folder or copy, and the engine's
+own read tools, go through); Steady answers reads; Bold allows local work and
+network reads and asks for anything leaving the Mac (pushing, sending,
+publishing, deploys, network writes) and for `sudo`, deletes outside the work
+folders and credentials; Unleashed asks only the floor (money, credentials,
+deleting for good, pushing to production or a protected branch, publishing a
+package, `sudo` and system persistence). Words and ids live once in the
+protocol's `independence.ts`; the desk draws them in `IndependenceSlider.tsx`,
+the phone in `mobile/src/components/IndependenceSlider.tsx` (one adjustable
+control for VoiceOver; arrows, Home and End on the desk). "Go full send" or
+"unleash it" to the Chief raises one settings card (`propose_settings_change`,
+`independence: full_send`).
 Asked once in onboarding, after the engine is ready and before the hand-off
 (Skip keeps the default); kept in Settings → Agents → Independence, ⌘K "How
 independent your agents are…", and the phone's Settings
@@ -1105,26 +1130,26 @@ independent your agents are…", and the phone's Settings
 Saved in `agents/independence.json`.
 
 **Each agent may have its own** (the owner: "I want some of my agents to be
-super autonomous, Go hard, Full send, and some of them not to be"). The team's
+super autonomous, Bold, Unleashed, and some of them not to be"). The team's
 level is the default; an agent's own is kept with its settings in
 `access.json` (`Overrides.independence`), and what it runs at is its own, else
 the team's (`policy::chosen_level`). Every decision path reads that: the
-auto-allow in `mcp::decide` and the card sweep, Go hard's and Full send's
-lists, the browser gate, "work in its own copy" at Go hard, who may search a
+auto-allow in `mcp::decide` and the card sweep, Bold's and Unleashed's
+lists, the browser gate, "work in its own copy" at Bold, who may search a
 teammate's chat, and the prompt's "How much to do on your own"
 (`policy::independence_for`). A turn answering outside text is capped exactly
 as before (`independence::for_turn`), whatever its own level.
 
-- **From chat (primary).** "Make Finance check with me often" or "put Social
-  Posts on Full send" to the Chief: `propose_settings_change` with that agent
+- **From chat (primary).** "Make Finance careful" or "put Social
+  Posts on Unleashed" to the Chief: `propose_settings_change` with that agent
   and `independence`. Raising one (above where it is, including putting it
   back on a higher team level) is one card. Lowering only, with nothing else
   changing, applies at once with a "Settings changed: …" line in the chat and
   each changed agent's (`policy_card::lowers_only`).
 - **On the desk.** The agent editor's "How much it does on its own":
-  "Same as team (Go hard)" first, then the four levels; saved at once
+  "Same as team (Bold)" first, then the four levels; saved at once
   (`agents_policy_set`, which also answers open cards a raise now covers).
-  The sidebar row shows a tiny label ("Full send", "Checks often") only when
+  The sidebar row shows a tiny label ("Unleashed", "Careful") only when
   the agent's level differs from the team's; Settings → Agents → Independence
   says "Agents set on their own: N" when any are.
 - **On the phone.** The same row on the agent sheet
@@ -1140,19 +1165,19 @@ many cards") or unhappy that something went ahead ("why did you do that without
 asking me?", "should've asked me"). Either leaves a hidden note for the Chief's
 next turn naming the agent, its level and the direction (from another agent's
 chat, a team note). The note itself tells the Chief to
-offer once, in a line ("Want me to put Finance (or the team) on Full send?",
+offer once, in a line ("Want me to put Finance (or the team) on Unleashed?",
 the card ready; or "Want Finance to check with you before that?", which applies
 at once), and to drop it for the day if the user passes; nothing is added to the
 Chief's system prompt for it. At most one note per agent every 24 hours (`level_hints.json`), and
-none when it would be moot (already Full send, already Check with me often).
+none when it would be moot (already Unleashed, already Careful).
 
 The level is one short app-owned section of every agent's system prompt,
 built from code each turn (so existing and imported agents get it on their
 next turn, nothing in their CLAUDE.md is touched) and fixed per level (the
-prompt cache only breaks when the user changes it). Go hard tells an agent to
+prompt cache only breaks when the user changes it). Bold tells an agent to
 do what it was asked without asking at each step, stopping only for money,
 identity, sending or publishing as them, pushing, deleting their data or
-credentials. Go hard and Use good judgement both carry the "whatever it
+credentials. Bold and Steady both carry the "whatever it
 takes" block (`independence::RELENTLESS`): be relentless and resourceful;
 when blocked, try every route (its tools, the user's files and CLIs,
 connected apps, their signed-in Chrome, search, a small script, another
@@ -1170,12 +1195,12 @@ calls):
 
 | Level | Answered without a card |
 |---|---|
-| Check with me often | nothing (as before) |
-| Use good judgement | reads |
-| Go hard | everything except its short ask list (`agents/go_hard.rs`) |
-| Full send | everything except the floor below (`go_hard::full_send_program`, `connector_floor`) |
+| Careful | nothing (as before) |
+| Steady | reads |
+| Bold | everything except its short ask list (`agents/go_hard.rs`) |
+| Unleashed | everything except the floor below (`go_hard::full_send_program`, `connector_floor`) |
 
-**Full send** (the owner: "I want to be able to make it just rip"). Sending,
+**Unleashed** (the owner: "I want to be able to make it just rip"). Sending,
 posting, scheduling, commenting, emailing and publishing as the user run
 without a card: mail and chat CLIs, `git send-email`, `gh` issues, pull
 requests, comments and reviews, network writes, preview deploys, connector
@@ -1199,23 +1224,23 @@ writes to a repo's or org's settings, webhooks, Pages, environments, members
 or visibility; observed: `vercel curl` made a protection bypass token on a
 production project with no card) and **system persistence** (launch agents,
 shell profiles, `crontab`, `launchctl`, `defaults write`). Each send leaves
-"Sent without asking — Full send · …" in "What it did", and the turn ends on
-one chat line naming what happened ("Without asking (Full send): posted on
+"Sent without asking — Unleashed · …" in "What it did", and the turn ends on
+one chat line naming what happened ("Without asking (Unleashed): posted on
 x.com 3 times, pushed branch fix/copy, created a Vercel bypass token on
 <project>", `agents/full_send.rs`), read from the command or tool and its
 arguments, else the command's first words; there are no Undo or Open links
 yet. The exact-text switch below holds sends even here. After outside
 content only raw data leaving this Mac and new packages ask
-(`go_hard::moves_data_off_mac`). **Outside text never gets Full send**: such a
-turn's prompt and browser run at "Use good judgement" and its approvals by Go
+(`go_hard::moves_data_off_mac`). **Outside text never gets Unleashed**: such a
+turn's prompt and browser run at "Steady" and its approvals by Go
 hard's outside-text rules.
 
-At Go hard and Full send **every agent reads the team folder** (each agent's
+At Bold and Unleashed **every agent reads the team folder** (each agent's
 home: its files, chat log, CLAUDE.md) and copies out of it into its own home or
 a project without a card; `wallet.json`, `connections.json`, anything named
 like a secret, and writes into another agent's home still ask.
 
-**Go hard is allow-by-default** (after the owner's report that it still asked
+**Bold is allow-by-default** (after the owner's report that it still asked
 for nearly every step: worktrees, `npm ci`, dev servers in the background,
 `pkill`, copying `.env.local` between his projects, scripts on a page). It
 behaves like Claude Code's "do anything" mode and does not use the classifier
@@ -1284,14 +1309,14 @@ given to `echo` / `printf` or kept in a variable are split too, but their
 `<` and `>` are text, not redirects, unless the line hands text to a shell
 (`| sh`, `eval`, `bash -c`); a `$(…)` inside them still runs and is judged.
 Before, `echo "<style>$(cat a.css)</style></head>"` building a local page
-read `</head>` as a write into `/head` and asked at Full send on every
+read `</head>` as a write into `/head` and asked at Unleashed on every
 render. Relative paths
 are only judged for `rm -r` (against the turn's folder), because the engine's
 shell keeps its folder between calls. What it can't parse runs: the list is
 what has to be right, and `go_hard_tests.rs` holds every item on it and the
 owner's real commands (fictional paths).
 
-A turn answering outside text at Go hard keeps Go hard for local work and
+A turn answering outside text at Bold keeps Bold for local work and
 reading (reading a page is the job), and additionally asks for any network
 write (localhost included) and for running a package fetched by name (`npx
 pkg`, `npm i pkg`, `pnpm add`, `pip`/`brew`/`cargo`/`go install`, `curl … |
@@ -1309,7 +1334,7 @@ The two lower levels use the allow-list classifier (`agents/autoallow.rs`):
   the app's own data (every agent's home but this one's) and `~/.<slug>`, and
   any `.env`, key, `*credential*`, `*secret*`, `*token*` or `*password*` file.
   A recursive read of a folder that holds one of those (`grep -r x ~`) asks.
-- **Local work** (no level answers this class any more since Go hard became
+- **Local work** (no level answers this class any more since Bold became
   allow-by-default; the admin agent's "local" answers still use it): creating, editing, moving, copying, linking,
   `chmod` (no setuid) and unpacking inside the home, never into a shell
   profile, `~/Library/LaunchAgents`, `~/Library/Preferences`, a PATH folder,
@@ -1337,7 +1362,7 @@ The two lower levels use the allow-list classifier (`agents/autoallow.rs`):
   above it up to the home; a short list of well-known tools (`typescript`,
   `prettier`, `eslint`, `vitest`, `pytest`, `ruff`, `jq`, `gh`…); or one the
   user already allowed on a card for this project. A package that is none of
-  those still goes through at Go hard, but **in a turn that read outside
+  those still goes through at Bold, but **in a turn that read outside
   content it asks, once per project**: allowing its card remembers it
   (`installs.json`; a bound agent's copies count as its project, an unbound
   agent's home is its own). An install naming no package (`pnpm install`,
@@ -1392,10 +1417,10 @@ The two lower levels use the allow-list classifier (`agents/autoallow.rs`):
   (a symlink out of the home asks). When in doubt, a card.
 
 Each one answered this way leaves a step in the turn's "What it did"
-("Allowed automatically — Go hard · ls -la ~/SomeFolder"). A turn answering
+("Allowed automatically — Bold · ls -la ~/SomeFolder"). A turn answering
 outside text (a "When…" routine's items, or anything carrying their taint
-through `message_agent` or a room) at Use good judgement stays there; at Go
-hard it keeps Go hard with the extra outside-text asks above (network
+through `message_agent` or a room) at Steady stays there; at Go
+hard it keeps Bold with the extra outside-text asks above (network
 writes, packages fetched by name).
 
 **After outside content, sending and new code ask** (`agents/exposure.rs`).
@@ -1406,14 +1431,14 @@ anything but `localhost`), issue or pull request comments (`gh issue view`,
 …/comments|reviews|issues…`), a cloned repository, mail, chat or documents
 through a connection, or a page in the browser that isn't this Mac's own —
 the turn is marked, and for the rest of it two things ask on a card even at
-Go hard (`autoallow::after_outside_asks`): **sending to the network** beyond
+Bold (`autoallow::after_outside_asks`): **sending to the network** beyond
 a read, to anywhere but this Mac (a `curl` body, form or upload, a non-GET,
 `wget --post-*`, a `gh` write, `git push`, `ssh` / `scp` / `rsync` / `nc`,
 mail), and **running a package new to the project** (above). Nothing else
 changes: reading and clicking in the browser, local work, builds, project
 installs and network reads go on as before. Its timeline says so once:
 "Asking before it sends anything or runs a new package, because it read
-outside content" (at Go hard, in a turn not already capped). Cards from such
+outside content" (at Bold, in a turn not already capped). Cards from such
 a turn record `fromOutside`, so a later sweep judges them at Use good
 judgement. Marks come from every call `mcp::decide` lets through, every call
 through the connection relay, and every tool call in the engine's stream
@@ -1425,14 +1450,14 @@ request in it could act on an instruction planted in what was read. Only
 sends and new packages ask; local work, `gh` reads and renders never do.
 
 **The rule for the owner's own requests.** The mark never raises cards for
-the owner's own direct request at Go hard or Full send: in a turn answering
+the owner's own direct request at Bold or Unleashed: in a turn answering
 the user's own message in this agent's chat (not a routine, a check-in, a room,
 another agent's request or outside text; `runner::answering_user`), the mark
-narrows to what Full send keeps after outside content
+narrows to what Unleashed keeps after outside content
 (`autoallow::outside_mark_asks`): **raw data leaving for another host**
 (`go_hard::moves_data_off_mac`: a `curl` body or upload, `ssh`, `scp`,
 `rsync`, `nc`…) and **packages new to the project**. Pushes and `gh` writes
-still follow the level itself (Go hard asks for them anyway). Every other
+still follow the level itself (Bold asks for them anyway). Every other
 turn in the conversation (a routine, a delegated request) keeps the full
 guard above. Before, the Chief reading x.com once made every later network
 write in the conversation ask, including what the owner asked for directly.
@@ -1443,11 +1468,11 @@ conversation").
 
 **Cards already open.** On launch and whenever the level changes,
 `mcp::sweep_auto_allowed` answers open permission cards the level now covers,
-with a receipt line in the chat ("Allowed automatically — Go hard · …"),
+with a receipt line in the chat ("Allowed automatically — Bold · …"),
 through the same path as a late Allow (a waiter is woken; otherwise the exact
 call is granted once). Each new card records whether its turn answered
 outside text (`Approval.fromOutside`); a card without that record, or from
-such a turn, is judged at Use good judgement and doesn't wake its agent.
+such a turn, is judged at Steady and doesn't wake its agent.
 Logins, secure input, session questions and import cards are never answered.
 
 ## Approvals
@@ -1458,7 +1483,7 @@ that isn't read-only, a web fetch, an MCP tool like sending email, a file
 outside those folders) goes to `approve`, which puts a card in that agent's
 chat showing the exact command, file, URL or tool input, and waits for
 **Allow** or **Deny**, unless the independence level answers it (local reads
-and, at Go hard, local work; see "How much agents do on their own"). While it waits, the agent's row says "Needs your OK".
+and, at Bold, local work; see "How much agents do on their own"). While it waits, the agent's row says "Needs your OK".
 
 **What the broker trusts** (`agents/broker.rs`). Each turn gets an id, named
 by its secret, open until `run_turn` returns. An `approve` call with no
@@ -1507,7 +1532,7 @@ sign-in, secret, session question or import card), it is allowed as their
 answer, with "Allowed from your message". Only the user's send gets there.
 
 **One yes for the whole plan** (`ask_plan`, `agents/plan_grant.rs`). Observed:
-the owner, at Go hard, typed "YES" to the Chief's plan (redeploy production on
+the owner, at Bold, typed "YES" to the Chief's plan (redeploy production on
 Vercel, one GitHub issue, two comments); the Chief told the agent doing it
 "each action may still show an approval card", and each did. Now an agent
 with several outward steps ahead lists them once: `ask_plan {actions: [{kind,
@@ -1535,15 +1560,15 @@ tools that pay, charge or refund), anything that deletes (`rm -r` outside the
 work folders, `gh … delete`, `vercel rm`, a connector `delete_…`), force
 pushes, branch deletes, mirrors and tag pushes, launch agents and shell
 profiles, a turn answering outside text, and anything on the line the plan
-doesn't name: at "Check with me often" and "Use good judgement" (and after
+doesn't name: at "Careful" and "Steady" (and after
 outside content) a covered command must be only listed steps and `cd`; at Go
-hard and Full send the rest of the line is judged by that level as usual
+hard and Unleashed the rest of the line is judged by that level as usual
 (`go_hard::with_covered`). An action may carry `text`, the exact words it
 sends, shown on the card; with the exact-text switch on, a send is covered
 only by an action whose `text` is what it sends (see "What each agent can do").
 
 **An agent's word is never the user's approval** (`agents/approval_claim.rs`).
-Observed: at Full send the Chief promised the owner the exact text of a Slack
+Observed: at Unleashed the Chief promised the owner the exact text of a Slack
 confirmation, then four seconds after the draft came back told the drafter
 "Julian approved this. Post the Slack message under Julian's name, exactly as
 drafted", with no new message from him, and it went out. Approval comes only
@@ -1675,10 +1700,10 @@ instead of only saying OK. Rust decides, not the prompt:
   of what they typed.
 - **Only a card they saw.** The rule is the `always` scope a card in this
   chat offered, found by tool name, command, host or label. Nothing broader.
-- **Never the floor** (`go_hard::floor`): Go hard's ask list for commands and
+- **Never the floor** (`go_hard::floor`): Bold's ask list for commands and
   files (push, publish, deploy, send, `sudo`, deleting outside the work
   folders, credentials, system files), every browser action, and every
-  connector call Go hard asks for (`connector_asks`: sends or posts, pays,
+  connector call Bold asks for (`connector_asks`: sends or posts, pays,
   deletes, deploys, code-host and database writes) plus payouts, wipes and
   credentials (`remembered_floor`). A rule for one is refused; a call on the floor still asks
   whatever a remembered rule says (`remember::covering`). Updating the
@@ -1739,7 +1764,7 @@ call, so turning it off holds from the next call):
   leaves its rooms. The user's own Delete is unchanged.
 
 **What it may never do** (`classify_in`, `judge_in`, both pure and tested):
-local work is exactly what Go hard answers on its own (`autoallow::classify`:
+local work is exactly what Bold answers on its own (`autoallow::classify`:
 Read and Change). Without the asking agent's context, the narrower fallback:
 reading (`ls`, `cat`, `grep`, read-only `git`…), `mkdir` /
 `touch`, Read, and Write of a *new* file under the home folder. Anything with
@@ -1768,7 +1793,7 @@ read (`admin::apply`).
 **Not verified.** No live engine turn has called these tools; the rules are
 held by unit tests (`admin_tests.rs`) and the UI by the harness
 (`agents-admin-batch`, `settings-agents-admins`) and the phone's `qa:web`
-(`chat-chief`). Local work is Go hard's own classifier
+(`chat-chief`). Local work is Bold's own classifier
 (`autoallow::classify`, Read and Change) with the asking agent's context;
 `local_call` is only the fallback without one. "Maybe later" here closes the
 card rather than using the access chain's checklist.
@@ -2006,9 +2031,9 @@ one call returns the page and its files, where Chrome meant twenty steps
 scraping a canvas. `--print` turns it off by default (the `sdk-cli`
 entrypoint), so every Claude turn runs with `CLAUDE_CODE_ARTIFACT=1`
 (`claude::ENV`); it needs a claude.ai sign-in. A read is a read (`autoallow`,
-and runs at Go hard) and counts as outside content (`exposure`), like a
+and runs at Bold) and counts as outside content (`exposure`), like a
 fetched page; publishing, commenting or writing an artifact's rows asks
-(at Full send only deleting one does). Codex has no `Artifact` tool: it opens
+(at Unleashed only deleting one does). Codex has no `Artifact` tool: it opens
 the link in the browser and says so in one line. The line fit the prompt
 budget by trimming two examples from "Getting access".
 
@@ -2048,14 +2073,14 @@ refuses any browser call they make anyway.
 **What asks** (`agents/browser_gate.rs`, before Always-allow rules). The one
 place the independence level changes an approval, and only for the browser:
 
-- **Looking never asks** at "Use good judgement" and "Go hard": tabs, browsers
+- **Looking never asks** at "Steady" and "Bold": tabs, browsers
   and profiles, `navigate` / a new tab to *any* `http(s)` page, `read_page`,
   `get_page_text`, `find`, screenshots, zoom, scroll, hover, wait, the console
   and network, resizing, recording a GIF. Other schemes (`javascript:`,
-  `file:`, `chrome:`) ask. At "Check with me often" only the agent's own
+  `file:`, `chrome:`) ask. At "Careful" only the agent's own
   `browser_sites` are free to open, and a URL carrying another URL (`//` after
   the host, plain or percent-encoded) asks.
-- **Acting goes through unless it sends**, at "Use good judgement" and "Go
+- **Acting goes through unless it sends**, at "Steady" and "Go
   hard": a click, keystroke, form fill or batch asks only when the control's
   accessible name (what `read_page` / `find` answered for that `ref`, kept per
   agent from the stream: `browser_gate::observe`) is a send / post / publish /
@@ -2065,33 +2090,33 @@ place the independence level changes an approval, and only for the browser:
   is), or when the page is a payment host or a checkout / cart / billing /
   compose / transfer page. A click by coordinate can't be named, so it goes
   through except on those pages: **an accepted gap**, as is a navigation
-  carrying data in its own URL to a site the agent chose. At "Check with me
-  often" every interaction asks.
+  carrying data in its own URL to a site the agent chose. At "Careful"
+  every interaction asks.
 - **Enter into a box nobody named goes back to the agent first**
   (`browser_gate::only_unlabelled_enter`): when the only thing a call would
   ask about is Enter after a click by position (or no click), the agent is
   told to find the box and click it by ref, so a search runs on its own and a
   message asks with its exact words. The same steps sent again reach the
   card. A search typed into a chat app's search box by position had raised
-  "Goes out under your name" at Full send, expired, and stopped the check.
-- **Always a card** below Go hard: `javascript_tool`, `file_upload`,
+  "Goes out under your name" at Unleashed, expired, and stopped the check.
+- **Always a card** below Bold: `javascript_tool`, `file_upload`,
   `upload_image`, `shortcuts_execute`, a GIF export and any tool this build
   doesn't know.
-- **In an editor at Go hard only the final step asks**
+- **In an editor at Bold only the final step asks**
   (`browser_gate::final_submit`): a control whose name starts with a send word
   ("Post", "Send now", "Schedule", "Delete post"), or a short one holding one
   that doesn't start by describing; "Will send on Fri…", "Post text" (a text
   box), "Discard changes", "Close" and "Edit post" run. Password boxes ask at
-  Go hard and above. At Go hard and above a click is judged by what it clicks
+  Bold and above. At Bold and above a click is judged by what it clicks
   (label and role), never by the page's address: an X-like scheduled-posts
   list lives under `/compose/…`, and every unlabelled click there asked. So a
   click that can't be named (by coordinate, or a `ref` nothing labelled) asks
-  at Go hard only on a payment host or checkout / cart / billing page: **an
-  accepted gap**, the same one "Use good judgement" accepts for ordinary
-  pages; a "Post" clicked by coordinate goes through. **At Full send** only money, closing an account or a
+  at Bold only on a payment host or checkout / cart / billing page: **an
+  accepted gap**, the same one "Steady" accepts for ordinary
+  pages; a "Post" clicked by coordinate goes through. **At Unleashed** only money, closing an account or a
   repository / project, password boxes and checkout pages ask; uploads run
   unless the file looks like a key.
-- **At Go hard everything runs**, `javascript_tool`, shortcuts and unknown
+- **At Bold everything runs**, `javascript_tool`, shortcuts and unknown
   tools included, except send-like clicks and keys (above), `file_upload` /
   `upload_image`, a GIF export, and a script that submits or sends
   (`go_hard::script_sends`): `.submit(` / `requestSubmit`, `sendBeacon`, a
@@ -2328,7 +2353,7 @@ their own, and the person signs in to it from the phone.
   click on a checkout or compose page. Labels come from the tree the server
   read itself. An engine that asked first leaves a one-call pass
   (`tools::note_cleared`); a call nobody asked about is decided by the
-  server (`mcp::decide_agents_browser`). "Go hard" doesn't auto-allow a step
+  server (`mcp::decide_agents_browser`). "Bold" doesn't auto-allow a step
   the browser gate said asks (this also closed that gap for Claude in
   Chrome's send clicks).
 - **Which browser** (`access_chain`): the agents' browser first; the user's
@@ -2351,7 +2376,7 @@ their own, and the person signs in to it from the phone.
   for any agent named for Grok or "… Teammate": an agent on this team, an
   imported one a copy that knows only what came over (`prompts::copies_note`).
   The Chief asks Grok itself in the user's Chrome and reads the reply off the
-  page; at Go hard and above the Send or Enter in Grok's chat runs without a
+  page; at Bold and above the Send or Enter in Grok's chat runs without a
   card (`browser_gate::assistant_chat`), since asking their own assistant
   isn't posting as them, while Share, Delete and anything elsewhere on X still
   ask. Grok can reach the Chief over Remote Access (`ask_chief`); the Chief
@@ -3537,7 +3562,7 @@ Claude Code its edit tools are denied for that file (`--disallowedTools
 Edit(//<home>/CLAUDE.md),…`), and for any engine a change to it is put back
 when the turn ends, with a note in the chat, unless the app itself wrote it
 meanwhile (`runner::MemorySeal`). Bash still asks through `approve` as always.
-In the agent's own turns, at Go hard and Full send, a Bash edit of its own
+In the agent's own turns, at Bold and Unleashed, a Bash edit of its own
 CLAUDE.md (`sed -i`, `>>`) is local work (`go_hard::protected`); its chat log
 always asks. Observed: an unanswered card for such a `sed` left an owner's new
 rule unsaved.
@@ -4541,7 +4566,7 @@ then its own).
 | Browser | yes / no | `--no-chrome` (mirrored to `reach.browser_off`, which the access chain's browser reads) and the broker |
 | Independence | team's or its own level | prompt only (`policy::independence_for`; outside text still never goes hard) |
 | Admin | may propose for others (Chief by default) | `propose_settings_change` |
-| Sent under your name | as its independence allows / only after you OK the exact text (`outward_text_needs_ok`) | the app, at every level including Full send (`agents/outward.rs`) |
+| Sent under your name | as its independence allows / only after you OK the exact text (`outward_text_needs_ok`) | the app, at every level including Unleashed (`agents/outward.rs`) |
 | Rules | free text | prompt only, and every UI line and card says so |
 
 **The exact-text switch** (`outward_text_needs_ok`, `agents/outward.rs`).
@@ -4553,7 +4578,7 @@ from "What it can do". On, any send, post, comment or email under the user's
 name (`outward::sends_as_user`: chat and mail CLIs, an AppleScript that sends,
 `git send-email`, `gh` issues, pull requests, comments, reviews, releases and
 gists and `gh api` writes to them, web writes to chat, mail and social APIs;
-a browser step Go hard asks for, such as a send click or Enter in a message
+a browser step Bold asks for, such as a send click or Enter in a message
 box; connector tools that send, post, reply, comment or publish) runs only
 after a card whose summary shows the exact words going out
 (`outward::texts`: message, title and body flags, here-documents, body files,
@@ -4588,9 +4613,9 @@ Chief); a quiet line in an agent's chat only when its own settings changed.
 Observed: one team rule put ~17 identical "Settings changed: New rule…" notes
 in every chat in the same minute.
 
-**Presets.** "I trust my agents" (direct, every app, browser, Go hard),
+**Presets.** "I trust my agents" (direct, every app, browser, Bold),
 **Balanced** (exactly the old behaviour, the default), "Locked down" (read
-projects only, no apps, no browser, Check with me often). "Reset everyone to
+projects only, no apps, no browser, Careful). "Reset everyone to
 …" sets the team and clears every agent's own settings (admin role kept);
 "everyone" with one field clears only that field. "Make X like Y" copies Y's
 own settings (not its admin role).
@@ -5210,7 +5235,7 @@ and asks the agent (`test_prompt`) to click through the site while you watch.
   `test_screenshot`, `test_note`, `test_report` — listed only while the user's
   run is open, only for that folder, refused once the pane is closed or the
   run stopped. They run the existing preview bridge tools against the pane.
-  Clicking around your own localhost is local work: like Go hard's local work,
+  Clicking around your own localhost is local work: like Bold's local work,
   no card, at any level (they're app tools, reachable only after you pressed
   Test it). Everything else in that turn is under the usual rules.
 - **Steps are observed**: each action becomes a step in the app's words
@@ -5340,7 +5365,7 @@ turn and approval. Two lines, in decimal GB as Finder counts:
   (`disk::fetches`: npm/pnpm/yarn/bun installs, pip/uv/poetry, cargo
   build/test/run/fetch, go get/build/mod download, brew install, `git clone`,
   `gh repo clone`, also inside `bash -c` and loops) asks on a card at every
-  level, Full send included. No "Always allow" rule answers it; a plan the user
+  level, Unleashed included. No "Always allow" rule answers it; a plan the user
   allowed (`ask_plan`) still covers what it lists. The card says why ("This Mac
   has N GB free, under the 5 GB floor…"), and the turn's note says installs now
   ask. The Chief's chat gets a line and the user gets one notification.
@@ -5498,13 +5523,13 @@ Chief makes mid-run.
 
 | Scenario | Checks |
 |---|---|
-| `core-delegate` | Go hard: the Chief creates Filer (on the saved default model), delegates a file write in its home, hears back; no cards anywhere |
-| `core-chain` | Go hard: `mkdir`, writes, `ls`, a `for` loop and a log in `$TMPDIR` in one Bash call; no card, its "Allowed automatically — Go hard" receipt in What it did |
-| `core-often` | The same chain at Check with me often: a card (allowed, so it finishes) |
-| `core-push` | Go hard: `git push` to a local bare remote raises a card; denied, nothing reaches the remote |
+| `core-delegate` | Bold: the Chief creates Filer (on the saved default model), delegates a file write in its home, hears back; no cards anywhere |
+| `core-chain` | Bold: `mkdir`, writes, `ls`, a `for` loop and a log in `$TMPDIR` in one Bash call; no card, its "Allowed automatically — Bold" receipt in What it did |
+| `core-often` | The same chain at Careful: a card (allowed, so it finishes) |
+| `core-push` | Bold: `git push` to a local bare remote raises a card; denied, nothing reaches the remote |
 | `core-result` | `share_result` with a file: one v1 result card naming it, no card for the write |
 | `core-kill` | The engine SIGKILLed mid-reply: the partial kept as stopped, a plain error line, and the next message answered |
-| `core-search` | WebSearch at Go hard: no card, a search step and its receipt |
+| `core-search` | WebSearch at Bold: no card, a search step and its receipt |
 
 What the first run found and fixed: an agent asked to `git push` a repository
 in its home refused outright ("the push card can't be created"), because the

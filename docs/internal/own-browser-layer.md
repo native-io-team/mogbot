@@ -104,11 +104,11 @@ permissions, no content scripts.
 `mcp__user_chrome__*` is judged exactly as a Claude in Chrome call is: each
 tool maps to its Claude in Chrome equivalent (`agents_equivalent`, extended
 with `hover`, `browsers`, `use_browser`) and `decide` rules it, so looking is
-free at "Use good judgement" and "Go hard", a click whose accessible name is
+free at "Steady" and "Bold", a click whose accessible name is
 a send word asks, Enter outside a search box asks, checkout/payment pages
-ask, password fields are refused, "Check with me often" asks for every
+ask, password fields are refused, "Careful" asks for every
 interaction, and an unknown tool asks. The exact-text rule (`outward`), plan
-grants (`plan_grant`), Full send's summary, the "Enter into a box nobody
+grants (`plan_grant`), Unleashed's summary, the "Enter into a box nobody
 named" redirect and the phone sign-in pause all apply (`is_own_browser`,
 `own_page_key`). Turns answering outside text get no server and the gate
 refuses anyway. A card is the agents'-browser card with Claude in Chrome's
@@ -177,7 +177,7 @@ answered by the app itself (no extension), for any engine.
 - **Act**: `CGEvent` mouse and keyboard, behind Accessibility permission;
   the accessibility tree (`AXUIElement`) for refs, so the gate can name the
   control as it does in the browser.
-- **Approvals**: every action through a card, below Full send; app-level
+- **Approvals**: every action through a card, below Unleashed; app-level
   allow-lists (`computer_apps`), the same send-word rules on AX names, and a
   hard floor (Terminal, System Settings, password fields, Keychain Access).
   The app shows a persistent "an agent is using your Mac" bar with Stop.

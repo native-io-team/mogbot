@@ -375,13 +375,13 @@ couldn't give.
   - No `evaluate` tool, and no extensions in the profile (refuse
     `--load-extension`; check `Extensions/` at launch).
   - Downloads go to a per-agent folder inside the agent's home.
-- **Scope.** The site → account memory is the allowlist. At "Check with me
-  often" only those sites open freely; at other levels navigation is free
+- **Scope.** The site → account memory is the allowlist. At "Careful" only
+  those sites open freely; at other levels navigation is free
   but anything that sends asks.
 - **Prompt injection** is the real exposure, as with Claude in Chrome:
   - Page text can tell the agent to act. Cards on sends, deletes and
     shares stand against it.
-  - Navigation that carries data out asks at "Check with me often"; at
+  - Navigation that carries data out asks at "Careful"; at
     other levels it is an accepted gap.
   - Outside-text turns never get the browser.
   - Passwords are never typed by an agent.

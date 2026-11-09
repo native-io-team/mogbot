@@ -9,7 +9,7 @@ import { useEffect, useRef, useState } from 'react';
 import { Button } from '../../primitives/Button';
 import { Spinner } from '../../primitives/Spinner';
 import { AgentAvatar } from '../../agents/AgentAvatar';
-import { IndependenceChoice } from '../../agents/IndependenceChoice';
+import { IndependenceSlider } from '../../agents/IndependenceSlider';
 import { FlowShell } from './FlowParts';
 import {
   DEFAULT_INDEPENDENCE,
@@ -94,7 +94,7 @@ export function IndependenceStep({ onNext, onBack }: { onNext: () => void; onBac
       }
     >
       <div className="agent-onboarding-independence">
-        <IndependenceChoice
+        <IndependenceSlider
           value={level}
           onChange={(next) => {
             touched.current = true;
@@ -102,6 +102,7 @@ export function IndependenceStep({ onNext, onBack }: { onNext: () => void; onBac
           }}
           disabled={saving}
           large
+          showTitle={false}
         />
       </div>
       {problem && (

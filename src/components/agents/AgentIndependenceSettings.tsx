@@ -7,10 +7,9 @@
  */
 
 import { useEffect, useRef, useState } from 'react';
-import { IndependenceChoice } from './IndependenceChoice';
+import { IndependenceSlider } from './IndependenceSlider';
 import { useAgentsSelector, refreshAgents } from '../../lib/agentsStore';
 import {
-  INDEPENDENCE_QUESTION,
   independenceOf,
   ownIndependenceCount,
   ownIndependenceLine,
@@ -65,8 +64,7 @@ export function AgentIndependenceSettings() {
         Independence
       </h3>
       <div className="settings-section agent-independence-settings__body">
-        <span className="agent-independence-settings__question">{INDEPENDENCE_QUESTION}</span>
-        <IndependenceChoice value={value} onChange={(l) => void choose(l)} />
+        <IndependenceSlider value={value} onChange={(l) => void choose(l)} />
         {own > 0 && <p className="agent-independence-settings__own">{ownIndependenceLine(own)}</p>}
       </div>
     </section>

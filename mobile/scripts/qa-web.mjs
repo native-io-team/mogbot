@@ -1216,7 +1216,7 @@ const LIVE = [
       await sleep(600);
     },
     check:
-      'Finance’s sheet with its own level: the choice sheet titled “How much it does on its own”, “Same as team (Use good judgement)” first, then the four levels, and Cancel',
+      'Finance’s sheet with its own level: the choice sheet titled “How much it does on its own”, “Same as team (Steady)” first, then Careful, Steady, Bold, Unleashed, and Cancel',
   },
   {
     name: 'agent-sheet-level-row',
@@ -1224,7 +1224,7 @@ const LIVE = [
     ready: 'Finance',
     act: scrollToText('How much it does on its own'),
     check:
-      'The row “How much it does on its own”, value “Check with me often”, with its one line under it, above the Admin switch',
+      'The row “How much it does on its own”, value “Careful”, with its one line under it, above the Admin switch',
   },
   {
     name: 'agent-sheet-chief',
@@ -1489,6 +1489,14 @@ const LIVE = [
     route: '/settings',
     pages: 2,
     check: 'Dates in the one short format ("Nov 5, 2026")',
+  },
+  {
+    name: 'settings-independence',
+    route: '/settings',
+    ready: 'Just does it',
+    act: scrollToText('Just does it'),
+    check:
+      'HOW MUCH IT DOES ON ITS OWN over one card: “Asks a lot” and “Just does it” at the ends, a track with four dots and a neutral thumb (never the accent), Careful · Steady · Bold · Unleashed under it with the chosen one stronger, the chosen stop’s line, then “Always asks before spending money, using your passwords, or deleting for good.” and the count set on their own',
   },
   {
     name: 'settings-text-size',

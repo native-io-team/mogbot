@@ -92,7 +92,7 @@ describe('What it can do', () => {
     const lines = (real.agentsPolicy as AgentPolicyView).lines;
     expect(policyDetail(lines.find((l) => l.key === 'browser')!)).toBe('No · Its own');
     expect(policyDetail(lines.find((l) => l.key === 'independence')!)).toBe(
-      'Use good judgement · Team default · instructions'
+      'Steady · Team default · instructions'
     );
     expect(screen.getByText(/except independence and rules/)).toBeTruthy();
     expect(screen.queryByText(/on your Mac|Settings/)).toBeNull();

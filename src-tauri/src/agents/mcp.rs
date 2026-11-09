@@ -157,7 +157,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "search_my_chat",
-        description: "Search your own chat with the user (and your messages with other agents), whole messages, newest first: what you reported, an error you hit, what the user decided. Use it before asking the user anything they or you may already have said. With `agent`, a teammate's chat instead, or `\"team\"` for every agent's chat and memory at once (the Chief, admins, and at Go hard).",
+        description: "Search your own chat with the user (and your messages with other agents), whole messages, newest first: what you reported, an error you hit, what the user decided. Use it before asking the user anything they or you may already have said. With `agent`, a teammate's chat instead, or `\"team\"` for every agent's chat and memory at once (the Chief, admins, and at Bold or Unleashed).",
         main_only: false,
         schema: || json!({
             "type": "object",
@@ -1203,7 +1203,7 @@ fn search_my_chat(caller: &store::Agent, args: &Value) -> Value {
     };
     if arg(args, "agent").is_some_and(is_team_scope) {
         if !may_search_team(caller, runner::from_outside(&caller.id)) {
-            return error("Only the Chief, an admin, or any agent at Go hard can search the team's chats. Ask the Chief of Staff to search the team with message_agent.");
+            return error("Only the Chief, an admin, or any agent at Bold or Unleashed can search the team's chats. Ask the Chief of Staff to search the team with message_agent.");
         }
         let limit = args
             .get("limit")
@@ -1223,7 +1223,7 @@ fn search_my_chat(caller: &store::Agent, args: &Value) -> Value {
         },
     };
     if !may_search_chat_of(caller, &whose, runner::from_outside(&caller.id)) {
-        return error("Only the Chief, an admin, or any agent at Go hard can search a teammate's chat. Ask them with message_agent.");
+        return error("Only the Chief, an admin, or any agent at Bold or Unleashed can search a teammate's chat. Ask them with message_agent.");
     }
     let limit = args
         .get("limit")
@@ -3089,10 +3089,10 @@ fn receipt_level(chosen: super::independence::Level, outside: bool) -> super::in
     }
 }
 
-/// The timeline's line for a send "Full send" let through.
-pub(super) const SENT_LINE: &str = "Sent without asking — Full send";
+/// The timeline's line for a send Unleashed ("Full send") let through.
+pub(super) const SENT_LINE: &str = "Sent without asking — Unleashed";
 
-/// "Allowed automatically — Go hard · ls -la ~/Notes".
+/// "Allowed automatically — Bold · ls -la ~/Notes".
 fn auto_line(level: super::independence::Level, tool: &str, input: &Value) -> String {
     format!(
         "Allowed automatically — {} · {}",
@@ -3442,7 +3442,7 @@ mod tests {
         let fetched = json!({ "command": "npx some-fictional-package" });
         assert_eq!(auto_allowed(&agent, "Bash", &fetched, true), None);
         assert!(auto_line(Level::GoHard, "Bash", &mkdir)
-            .starts_with("Allowed automatically — Go hard · mkdir -p"));
+            .starts_with("Allowed automatically — Bold · mkdir -p"));
         independence::set_level(Level::Often, 2).unwrap();
         assert_eq!(auto_allowed(&agent, "Bash", &ls, false), None);
         store::set_root_for_tests(None);

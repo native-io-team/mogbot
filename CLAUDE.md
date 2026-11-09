@@ -138,25 +138,27 @@ these without updating that doc.
 - **Approvals are the wall.** An admin agent can answer only another agent's *local* requests (`admin::classify`, tested), never its own, never in a turn answering outside text. Agents run in `acceptEdits`; everything else goes through the
   approval broker (`agents/broker.rs`), which trusts only a live turn's `?turn=` id and stops a turn
   that reports `bypassPermissions` ([docs/agents.md](docs/agents.md), "Approvals"). The only
-  cards answered for the user are ones their independence level covers (`mcp::decide`, for
+  cards answered for the user are ones their independence level covers (a four-stop slider shown as
+  Careful, Steady, Bold, Unleashed; stored as `often`, `judgement`, `go_hard`, `full_send`, which
+  never change; `mcp::decide`, for
   Claude Code and Codex alike; each agent's own level, else the team's, `policy::chosen_level`;
   raising one from chat is a card, lowering applies with a line; outside text stays capped;
-  the Chief offers a change once a day per agent when the user sounds fed up, `agents/level_hint.rs`): reads at "Use good judgement" (`agents/autoallow.rs`, an
-  allow-list), and at "Go hard" everything except a short ask list (`agents/go_hard.rs`): pushing,
+  the Chief offers a change once a day per agent when the user sounds fed up, `agents/level_hint.rs`): reads at "Steady" (`agents/autoallow.rs`, an
+  allow-list), and at "Bold" everything except a short ask list (`agents/go_hard.rs`): pushing,
   `gh` writes, publishing, production deploys, sending mail/messages, live payments, network writes
   off this Mac, `sudo`, `rm -r` outside projects/agent homes/temp, credentials, shell profiles,
   launch agents and system tools; in the browser, the final send click, uploads and scripts that
-  submit or post. At "Full send" (`go_hard::full_send_program`, never for outside text) sending and
+  submit or post. At "Unleashed" (`go_hard::full_send_program`, never for outside text) sending and
   posting what the user asked for runs too, and only money, credentials, deleting for good, pushing
-  to production or a protected branch, and system persistence ask. A turn answering outside text at "Go hard" also asks for any network write and for
+  to production or a protected branch, and system persistence ask. A turn answering outside text at "Bold" also asks for any network write and for
   packages fetched by name. Each
   auto-answer leaves a line in "What it did" ("How much agents do on their own"). One Allow on
   an `ask_plan` card (or the user's typed yes to a plan just listed) covers exactly the listed
   actions, by kind and target, for an hour, for that agent and those it delegates to; never
   the floor (money, credentials, `sudo`, deletes, force pushes, system persistence) or outside
   text (`agents/plan_grant.rs`; docs/agents.md, "One yes for the whole plan"). Secrets go
-  into the Keychain through a masked card, never the chat ("Secrets"). "You can always do those" in chat becomes a rule only through `remember_permission` (`agents/remember.rs`): a live turn whose latest input the user typed in that chat, the scope of a card it showed, and never Go hard's floor (`go_hard::floor`) ("Said in chat")
-- **"Go hard" hardening.** No request goes through on its own with a secret in its address, query
+  into the Keychain through a masked card, never the chat ("Secrets"). "You can always do those" in chat becomes a rule only through `remember_permission` (`agents/remember.rs`): a live turn whose latest input the user typed in that chat, the scope of a card it showed, and never Bold's floor (`go_hard::floor`) ("Said in chat")
+- **"Bold" hardening.** No request goes through on its own with a secret in its address, query
   or headers (`agents/egress.rs`). After a turn reads outside content (web pages and search
   results, issue/PR comments, mail and chat through connections, other sites in the browser),
   network writes to another host and packages new to the project ask for the rest of that

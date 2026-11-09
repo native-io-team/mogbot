@@ -35,7 +35,7 @@ struct Pattern {
 }
 
 const NO_TOOL: &str = "\"No tool for it\" is never the answer: go down the access chain (a connection, the command on this Mac, the agents' browser, then the user's own Chrome where they're signed in), and report a block only after the browser route actually failed.";
-const ASKS_FIRST: &str = "Don't stop for an OK in chat: do the send, and the app raises the one card for the user itself (at Full send it just goes). Never decline it ahead of time.";
+const ASKS_FIRST: &str = "Don't stop for an OK in chat: do the send, and the app raises the one card for the user itself (at Unleashed it just goes). Never decline it ahead of time.";
 const PLUMBING: &str = "Never name the app's tools or plumbing to the user (`message_agent`, `share_result`, `request_login`, `mcp__…`): say what you did in plain words.";
 
 const PATTERNS: &[Pattern] = &[

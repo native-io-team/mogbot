@@ -288,7 +288,7 @@ function RowBody({
     )
   );
   const state = onMac || quiet ? undefined : lineState(agent);
-  // Its own level, only when it differs from the team's ("Full send").
+  // Its own level, only when it differs from the team's ("Unleashed").
   const level = useAgentLevelLabel(agent);
   // Running (not queued for a slot): the line says what and how long, on a
   // clock that ticks only while it works (the avatar holds still; it bobs
@@ -395,7 +395,7 @@ function RowBody({
               maxFontSizeMultiplier={NAME_SCALE}
               style={styles.level}
             >
-              {/* Beside the time it reads as one quiet line: "Checks often · 3 h ago". */}
+              {/* Beside the time it reads as one quiet line: "Careful · 3 h ago". */}
               {stacked ? level : `${level} ·`}
             </T>
           )}

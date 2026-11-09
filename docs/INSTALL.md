@@ -669,7 +669,7 @@ closed, agents report the browser as not connected.
 ### Step 18. First run choices
 
 **HUMAN:** *"Two things worth knowing. **How independent your agents are**:
-the app asked you once (Check with me often, Use good judgement, Go hard). You
+the app asked you once (Careful, Steady, Bold). You
 can change it any time by telling your Chief. Whatever you pick, anything that spends money, sends as you,
 publishes or deletes still asks you first. **Your team**: the Chief of Staff
 creates, changes and removes the other agents for you, and you can change an

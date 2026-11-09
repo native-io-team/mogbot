@@ -1,6 +1,7 @@
 /**
- * Settings → How much agents do on their own: the same four choices as the
- * desk's Settings → Agents, worded by the protocol's `independence.ts`. Read
+ * Settings → How much it does on its own: the same four-stop slider as the
+ * desk's Settings → Agents (Careful, Steady, Bold, Unleashed), worded by the
+ * protocol's `independence.ts`. Read
  * from the overview (`independence`), written with `agents.setIndependence`,
  * which the Mac audits. A Mac that doesn't send it shows nothing; one that
  * doesn't serve the write shows the choice, not offered.
@@ -8,13 +9,14 @@
 
 import {
   AGENT_INDEPENDENCE_TITLE,
+  INDEPENDENCE_ALWAYS_ASKS,
   INDEPENDENCE_DETAIL,
   INDEPENDENCE_LABEL,
   INDEPENDENCE_LEVELS,
-  INDEPENDENCE_QUESTION,
   INDEPENDENCE_SHORT,
-  INDEPENDENCE_STILL_ASKS,
+  INDEPENDENCE_TITLE,
   effectiveIndependence,
+  independenceOf,
   independenceRowLabel,
   ownIndependenceCount,
   ownIndependenceLine,
@@ -23,17 +25,15 @@ import {
   type AgentIndependence,
 } from '@shipstudio/companion-protocol';
 import { useState } from 'react';
-import { Alert, StyleSheet, View } from 'react-native';
+import { Alert } from 'react-native';
+import { IndependenceSlider } from './IndependenceSlider';
 import { choose } from './menu';
-import { Icon, Row, Section, tap } from './ui';
-import { useAccent } from '../lib/accent';
+import { Row, Section, tap } from './ui';
 import { haptic } from '../lib/haptics';
 import { call, describeError } from '../lib/session';
 import { useApp, useServed } from '../lib/store';
-import { iconSize } from '../lib/theme';
 
 export function IndependenceSetting() {
-  const accent = useAccent();
   const level = useApp((s) => s.overview?.independence ?? null);
   const canSet = useServed('agents.setIndependence');
   // Agents with a level of their own (their sheet, the desk, the Chief).
@@ -42,7 +42,7 @@ export function IndependenceSetting() {
   if (!level) return null;
 
   const change = async (next: AgentIndependence) => {
-    if (busy) return;
+    if (busy || !canSet) return;
     tap();
     setBusy(true);
     try {
@@ -58,40 +58,25 @@ export function IndependenceSetting() {
 
   return (
     <Section
-      title={INDEPENDENCE_QUESTION}
+      title={INDEPENDENCE_TITLE}
       footer={
         own > 0
-          ? `${INDEPENDENCE_STILL_ASKS[level]} ${ownIndependenceLine(own)}.`
-          : INDEPENDENCE_STILL_ASKS[level]
+          ? `${INDEPENDENCE_ALWAYS_ASKS} ${ownIndependenceLine(own)}.`
+          : INDEPENDENCE_ALWAYS_ASKS
       }
     >
-      {INDEPENDENCE_LEVELS.map((l, i) => {
-        const on = l === level;
-        return (
-          <Row
-            key={l}
-            label={INDEPENDENCE_LABEL[l]}
-            detail={INDEPENDENCE_DETAIL[l]}
-            selected={on}
-            onPress={canSet && !on ? () => void change(l) : undefined}
-            trailing={
-              on ? (
-                <Icon name="checkmark" size={iconSize.body} color={accent.accent} />
-              ) : (
-                <View style={styles.check} />
-              )
-            }
-            last={i === INDEPENDENCE_LEVELS.length - 1}
-          />
-        );
-      })}
+      <IndependenceSlider
+        value={independenceOf(level)}
+        onChange={(l) => void change(l)}
+        disabled={!canSet || busy}
+      />
     </Section>
   );
 }
 
 /**
- * The agent sheet's "How much it does on its own": "Same as team (Go hard)"
- * first, then the four levels, in one sheet. Written with
+ * The agent sheet's "How much it does on its own": "Same as team (Bold)"
+ * first, then the four levels (Careful to Unleashed), in one sheet. Written with
  * `agents.setAgentIndependence` (audited on the Mac); a Mac that doesn't
  * serve it shows nothing. The user choosing it here applies at once.
  */
@@ -143,7 +128,3 @@ export function useAgentLevelLabel(agent: Pick<Agent, 'independence'>): string |
   const team = useApp((s) => s.overview?.independence ?? null);
   return independenceRowLabel(agent, team);
 }
-
-const styles = StyleSheet.create({
-  check: { width: iconSize.body },
-});

@@ -36,23 +36,23 @@ describe('AgentLevelPicker', () => {
   it('follows the team by default, naming the team’s level', () => {
     render(<AgentLevelPicker agent={finance} />);
     expect(screen.getByRole('group', { name: 'How much it does on its own' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Same as team (Go hard)' })).toBeInTheDocument();
-    expect(screen.getByText(/try every way they have/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Same as team (Bold)' })).toBeInTheDocument();
+    expect(screen.getByText(/asks before anything leaves it/)).toBeInTheDocument();
   });
 
   it('offers the team first, then the four levels, and saves a pick at once', async () => {
     render(<AgentLevelPicker agent={finance} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Same as team (Go hard)' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Same as team (Bold)' }));
     const items = await screen.findAllByRole('menuitem');
     expect(items.map((i) => i.textContent)).toEqual([
-      'Same as team (Go hard)',
-      'Check with me often',
-      'Use good judgement',
-      'Go hard — get it done',
-      'Full send — let it rip',
+      'Same as team (Bold)',
+      'Careful',
+      'Steady',
+      'Bold',
+      'Unleashed',
     ]);
     await act(async () => {
-      fireEvent.click(screen.getByRole('menuitem', { name: 'Full send — let it rip' }));
+      fireEvent.click(screen.getByRole('menuitem', { name: 'Unleashed' }));
       await Promise.resolve();
     });
     expect(setAgentIndependence).toHaveBeenCalledWith('a1', 'full_send');
@@ -63,9 +63,9 @@ describe('AgentLevelPicker', () => {
     const own = { ...finance, independence: 'often' } as Agent;
     store.value = { loaded: true, independence: 'go_hard', agents: [own] };
     render(<AgentLevelPicker agent={own} />);
-    fireEvent.click(screen.getByRole('button', { name: 'Check with me often' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Careful' }));
     await act(async () => {
-      fireEvent.click(await screen.findByRole('menuitem', { name: 'Same as team (Go hard)' }));
+      fireEvent.click(await screen.findByRole('menuitem', { name: 'Same as team (Bold)' }));
     });
     expect(setAgentIndependence).toHaveBeenCalledWith('a1', 'team');
   });
@@ -79,8 +79,8 @@ describe('AgentLevelBadge', () => {
     rerender(<AgentLevelBadge agent={{ independence: 'go_hard' }} />);
     expect(container).toBeEmptyDOMElement();
     rerender(<AgentLevelBadge agent={{ independence: 'full_send' }} />);
-    expect(screen.getByText('Full send')).toBeInTheDocument();
+    expect(screen.getByText('Unleashed')).toBeInTheDocument();
     rerender(<AgentLevelBadge agent={{ independence: 'often' }} />);
-    expect(screen.getByText('Checks often')).toBeInTheDocument();
+    expect(screen.getByText('Careful')).toBeInTheDocument();
   });
 });

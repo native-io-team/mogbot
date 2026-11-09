@@ -401,9 +401,14 @@ export function useAppCommands({
           'trust',
           'ask',
           'permission',
-          'check with me',
-          'good judgement',
+          'careful',
+          'steady',
+          'bold',
+          'unleashed',
+          'slider',
+          // The levels' old names, still what some people type.
           'go hard',
+          'full send',
           'on their own',
         ],
         run: () => {

@@ -247,8 +247,11 @@ fn an_agent_may_lower_itself_but_never_raise_itself_without_a_card() {
 #[test]
 fn the_tool_tells_the_chief_how_to_set_one_agent() {
     let schema = schema().to_string();
-    assert!(schema.contains("put Social Posts on Full send"));
-    assert!(schema.contains("make Finance check with me often"));
+    assert!(schema.contains("put Social Posts on Unleashed"));
+    assert!(schema.contains("make Finance careful"));
+    // The names the user sees, and the old ones they may still type.
+    assert!(schema.contains("often = Careful, judgement = Steady, go_hard = Bold, full_send = Unleashed"));
+    assert!(schema.contains("\\\"go hard\\\", \\\"full send\\\""));
     assert!(schema.contains("Raising needs the user's card; lowering"));
 }
 

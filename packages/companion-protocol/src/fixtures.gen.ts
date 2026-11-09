@@ -1912,7 +1912,7 @@ export const agentsPolicy = {
       "key": "independence",
       "label": "Independence",
       "team": true,
-      "value": "Use good judgement"
+      "value": "Steady"
     },
     {
       "enforced": "app",

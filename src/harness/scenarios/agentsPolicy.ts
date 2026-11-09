@@ -96,7 +96,7 @@ const HIRING_VIEW = {
   },
 };
 
-/** The team at Go hard; Social Posts on Full send and Finance on "Check with me often", on their own. */
+/** The team at Bold; Social Posts on Unleashed and Finance on Careful, on their own. */
 const LEVELS_TEAM = TEAM.map((a) =>
   a.id === 'social'
     ? { ...a, independence: 'full_send' }
@@ -142,7 +142,7 @@ export const agentsPolicyScenarios: Scenario[] = [
     id: 'agents-level-picker',
     title: 'Agents — one agent’s own level, in Edit agent',
     looksRightWhen:
-      'Editing Hiring, which follows the team: “How much it does on its own” with a menu open under its button “Same as team (Go hard)”: “Same as team (Go hard)” checked first, a divider, then Check with me often, Use good judgement, Go hard — get it done, Full send — let it rip. Under the row a muted line for Go hard and what still asks. In the sidebar, Social Posts shows a tiny “Full send” label and Finance “Checks often”; nobody else has one.',
+      'Editing Hiring, which follows the team: “How much it does on its own” with a menu open under its button “Same as team (Bold)”: “Same as team (Bold)” checked first, a divider, then Careful, Steady, Bold, Unleashed. Under the row a muted line for Bold and what always asks. In the sidebar, Social Posts shows a tiny “Unleashed” label and Finance “Careful”; nobody else has one.',
     openSelector: AGENTS_TAB,
     requires: '.agent-level-picker',
     steps: [
@@ -162,7 +162,7 @@ export const agentsPolicyScenarios: Scenario[] = [
     id: 'settings-agents-independence-own',
     title: 'Settings — Independence, with agents set on their own',
     looksRightWhen:
-      'The team’s four choices with Go hard selected (a neutral stronger border), the line on what still asks, and under it a muted “Agents set on their own: 2”.',
+      'The team’s slider on Bold (a neutral thumb), its line and the always-asks line, and under it a muted “Agents set on their own: 2”.',
     command: 'agents.independence',
     requires: '.agent-independence-settings__own',
     clipSelector: 'section[aria-labelledby="agents-settings-independence"]',
@@ -224,7 +224,7 @@ export const agentsPolicyScenarios: Scenario[] = [
     id: 'agents-policy-editor',
     title: 'Agents — What it can do, in Edit agent',
     looksRightWhen:
-      'Editing Hiring: “What it can do” with a menu button “Its own settings”, then one line each: Projects (only client-site and marketing-site, its own copy in client-site), Folders on this Mac (~/Documents/Candidates, read), Apps, Your browser “No”, Independence “Use good judgement · Team default · instructions”, Admin “No”, Rules with “Never email candidates directly” and a Remove. Lines it has of its own say “Its own”; the rest “Team default”. Under them a muted line that the app enforces these except independence and rules, and a “Change in chat” text button.',
+      'Editing Hiring: “What it can do” with a menu button “Its own settings”, then one line each: Projects (only client-site and marketing-site, its own copy in client-site), Folders on this Mac (~/Documents/Candidates, read), Apps, Your browser “No”, Independence “Steady · Team default · instructions”, Admin “No”, Rules with “Never email candidates directly” and a Remove. Lines it has of its own say “Its own”; the rest “Team default”. Under them a muted line that the app enforces these except independence and rules, and a “Change in chat” text button.',
     openSelector: AGENTS_TAB,
     requires: '.agent-policy__line',
     clipSelector: '.agent-editor [role="group"][aria-label="What it can do"]',

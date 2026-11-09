@@ -1,16 +1,19 @@
 //! How much the user's agents do on their own: one choice for the whole team,
 //! asked once in onboarding and kept in Settings → Agents (and the phone).
 //!
-//! **Levels.** `Often` ("Check with me often"): plans are confirmed before a
-//! change with several steps. `Judgement` ("Use good judgement", the
-//! default): finish the job, and only ask for what's really the user's to
-//! decide or do. `GoHard` ("Go hard — get it done"): finish what you're
-//! asked, and before asking the user to do anything, check that they haven't
-//! already asked for it and that every way you have of doing it yourself has
-//! been tried. `FullSend` ("Full send — let it rip"): Go hard, and sending,
-//! posting and publishing what the user asked for run without a card; only
-//! the floor asks (`go_hard::full_send_program`, `browser_gate::final_submit`).
-//! Never for outside text ([`for_turn`]).
+//! **Levels**, shown as a four-stop slider ("How much it does on its own",
+//! "Asks a lot" to "Just does it"). The stored ids are unchanged; only the
+//! names shown are new ([`Level::label`]), and the old names still parse.
+//! `Often` ("Careful", once "Check with me often"): plans are confirmed
+//! before a change with several steps. `Judgement` ("Steady", once "Use good
+//! judgement", the default): finish the job, and only ask for what's really
+//! the user's to decide or do. `GoHard` ("Bold", once "Go hard"): finish
+//! what you're asked, and before asking the user to do anything, check that
+//! they haven't already asked for it and that every way you have of doing it
+//! yourself has been tried. `FullSend` ("Unleashed", once "Full send"):
+//! Bold, and sending, posting and publishing what the user asked for run
+//! without a card; only the floor asks (`go_hard::full_send_program`,
+//! `browser_gate::final_submit`). Never for outside text ([`for_turn`]).
 //!
 //! **What it changes.** The level is one short, app-owned section of every
 //! agent's system prompt ([`prompt_section`]), built from code each turn, so
@@ -49,7 +52,7 @@ pub enum Level {
     #[default]
     Judgement,
     GoHard,
-    /// "Full send — let it rip": Go hard, and sending, posting and
+    /// "Unleashed" (once "Full send"): Bold, and sending, posting and
     /// publishing what the user asked for run without a card too. Only the
     /// floor asks (`go_hard`, "Full send"). Never for outside text.
     FullSend,
@@ -63,28 +66,30 @@ impl Level {
             .replace(['-', ' '], "_")
             .as_str()
         {
-            "often" | "check_with_me_often" => Ok(Level::Often),
-            "judgement" | "judgment" | "use_good_judgement" => Ok(Level::Judgement),
-            "go_hard" | "go_hard_get_it_done" => Ok(Level::GoHard),
-            "full_send" | "go_full_send" | "full_send_let_it_rip" | "let_it_rip" | "just_rip"
-            | "rip" => Ok(Level::FullSend),
+            // The names shown now, then the old ones people still type.
+            "often" | "careful" | "check_with_me_often" => Ok(Level::Often),
+            "judgement" | "judgment" | "steady" | "use_good_judgement" => Ok(Level::Judgement),
+            "go_hard" | "bold" | "go_hard_get_it_done" => Ok(Level::GoHard),
+            "full_send" | "unleashed" | "go_full_send" | "full_send_let_it_rip" | "let_it_rip"
+            | "just_rip" | "rip" => Ok(Level::FullSend),
             _ => Err(super::err_invalid(
                 "level",
-                "Pick often (Check with me often), judgement (Use good judgement), go_hard (Go hard) or full_send (Full send).",
+                "Pick often (Careful), judgement (Steady), go_hard (Bold) or full_send (Unleashed).",
             )),
         }
     }
 
+    /// The name shown everywhere (the slider's stops, cards, chat lines).
     pub fn label(self) -> &'static str {
         match self {
-            Level::Often => "Check with me often",
-            Level::Judgement => "Use good judgement",
-            Level::GoHard => "Go hard — get it done",
-            Level::FullSend => "Full send — let it rip",
+            Level::Often => "Careful",
+            Level::Judgement => "Steady",
+            Level::GoHard => "Bold",
+            Level::FullSend => "Unleashed",
         }
     }
 
-    /// "Go hard" or "Full send": allow by default with a short list that
+    /// Bold or Unleashed ("Go hard" or "Full send"): allow by default with a short list that
     /// asks (`go_hard`).
     pub fn goes_hard(self) -> bool {
         matches!(self, Level::GoHard | Level::FullSend)
@@ -102,7 +107,7 @@ impl Level {
         }
     }
 
-    /// One step stricter ("Full send" → "Go hard"), or itself at the bottom.
+    /// One step stricter (Unleashed → Bold), or itself at the bottom.
     pub fn stricter(self) -> Level {
         match self {
             Level::FullSend => Level::GoHard,
@@ -111,14 +116,10 @@ impl Level {
         }
     }
 
-    /// The level in a receipt line ("Allowed automatically — Go hard").
+    /// The level in a receipt line ("Allowed automatically — Bold"): the
+    /// same one word as [`Level::label`].
     pub fn short(self) -> &'static str {
-        match self {
-            Level::Often => "Check with me often",
-            Level::Judgement => "Use good judgement",
-            Level::GoHard => "Go hard",
-            Level::FullSend => "Full send",
-        }
+        self.label()
     }
 }
 
@@ -128,21 +129,21 @@ const HEADING: &str = "## How much to do on your own";
 /// what needs the user's OK.
 const WALL: &str = "Approvals don't change with this: what needs the user's OK asks on a card here (one `ask_plan` for several).";
 
-const OFTEN: &str = "The user chose \"Check with me often\". Before a change with several steps, \
+const OFTEN: &str = "The user chose \"Careful\". Before a change with several steps, \
 or anything that's hard to undo, say your plan in a few lines and wait for their go-ahead. \
 Answering, reading and looking things up don't need it. If you can't finish, say exactly what's left and why.";
 
 const JUDGEMENT: &str =
-    "The user chose \"Use good judgement\". Do what you're asked through to the end. \
+    "The user chose \"Steady\". Do what you're asked through to the end. \
 Ask when a choice is really theirs, or a step needs their money, their identity, or sending or \
 publishing as them.";
 
-const GO_HARD: &str = "The user chose \"Go hard — get it done\". Do what you're asked without asking at \
+const GO_HARD: &str = "The user chose \"Bold\". Do what you're asked without asking at \
 each step; did they already ask you to do it? Then do it. Only stop for their money, their identity, \
 sending or publishing as them, pushing, deleting their data, or credentials: ask once, clearly, then \
 carry on with everything else.";
 
-const FULL_SEND: &str = "The user chose \"Full send — let it rip\". Do what you're asked, start to \
+const FULL_SEND: &str = "The user chose \"Unleashed\". Do what you're asked, start to \
 finish, without asking: sending, posting, scheduling, commenting and publishing what they asked for \
 just happen; say what went where. Only spending their money, credentials, deleting what can't come \
 back, pushing to production or main, and how their Mac starts up still ask, once.";
@@ -340,6 +341,19 @@ mod tests {
         assert_eq!(Level::parse("go full send").unwrap(), Level::FullSend);
         assert_eq!(Level::parse("Full send").unwrap(), Level::FullSend);
         assert_eq!(Level::parse("let it rip").unwrap(), Level::FullSend);
+        // The names shown now.
+        assert_eq!(Level::parse("Careful").unwrap(), Level::Often);
+        assert_eq!(Level::parse("steady").unwrap(), Level::Judgement);
+        assert_eq!(Level::parse("Bold").unwrap(), Level::GoHard);
+        assert_eq!(Level::parse("Unleashed").unwrap(), Level::FullSend);
+        assert_eq!(
+            [Level::Often, Level::Judgement, Level::GoHard, Level::FullSend].map(Level::label),
+            ["Careful", "Steady", "Bold", "Unleashed"]
+        );
+        assert_eq!(Level::FullSend.short(), "Unleashed");
+        // Stored ids never change.
+        assert_eq!(serde_json::to_value(Level::Often).unwrap(), "often");
+        assert_eq!(serde_json::to_value(Level::Judgement).unwrap(), "judgement");
         assert!(Level::parse("yolo").is_err());
         let saved: Saved = serde_json::from_str(r#"{"level":"reckless"}"#).unwrap();
         assert_eq!(saved.level, Level::Judgement);

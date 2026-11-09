@@ -327,6 +327,13 @@ export const iconSize = { micro: 10, inline: 12, body: 16, button: 20, hero: 28 
 export const typingDot = { size: 5, gap: space.xs, lift: 1.5 } as const;
 
 /**
+ * The independence slider (`components/IndependenceSlider.tsx`), the desk's
+ * `--independence-slider-*`: a 4pt track, 8pt stop dots and a 24pt thumb in
+ * a 44pt touch row.
+ */
+export const levelSlider = { track: 4, tick: 8, thumb: 24, row: 44 } as const;
+
+/**
  * The message field, as Claude's own: one capsule of the system's glass
  * (components/Glass.tsx), like the tab bar's. Empty or one line it's a 48pt
  * pill with everything inside it: the + at the left, the words, then the

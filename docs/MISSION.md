@@ -31,7 +31,7 @@ You say what you want; your agents do whatever it takes to get it done.
   exhausted, and then with one plain ask.
 - **When you send them somewhere, it's clear**: which browser, which account,
   which site, what they did there.
-- **Autopilot by default for people who want it.** "Go hard" means they run;
+- **Autopilot by default for people who want it.** "Bold" means they run;
   they stop only for money, sending or publishing as you, pushing, deleting
   your data, or credentials — and when they truly need you, it's loud.
 - **Maximum control with maximum ease.** Everything can be changed by asking an
