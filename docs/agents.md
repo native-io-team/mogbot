@@ -4214,7 +4214,11 @@ the wallet's own loop (`run_on_engine`):
   (Allow: this outage, until the engine has room again, at most a week),
   **Wait** (Deny). One card per engine at a time; it isn't swept by expiry and
   closes itself ("Claude Code has room again") when the outage ends. A yes
-  runs the turn again on the other engine. Older clients show Allow / Deny.
+  runs the turn again on the other engine. The phone shows the same three
+  answers and sends them the same way (`ApprovalCard`, the words from
+  `companion-protocol` `crossover.ts`); Catch up opens the card rather than
+  answering it; Settings → Accounts there says "Claude Code out · on Codex
+  until 4:00 PM" while agents are away. Older clients show Allow / Deny.
 - **Never** for an agent set to one account ("Runs on"), never for the app's
   own tidy turn, never silently: the chat gets "Carried on with Codex (Claude
   Code is out until 4:00 PM)." plus, when relevant, what stays behind ("Claude

@@ -39,6 +39,8 @@ import {
   type AgentEngine,
   type AgentIndependence,
   type UsageAccount,
+  RUNS_ON_ANY,
+  RUNS_ON_ANY_DETAIL,
   type UsageMode,
 } from '@shipstudio/companion-protocol';
 import { useRouter } from 'expo-router';
@@ -292,7 +294,7 @@ function RunsOn({
     );
   };
   const rows = [
-    { id: '', label: 'Any account', detail: 'In order, carrying on with the next when one runs out' },
+    { id: '', label: RUNS_ON_ANY, detail: RUNS_ON_ANY_DETAIL },
     ...choices.map((a) => ({
       id: a.id,
       label: a.name,

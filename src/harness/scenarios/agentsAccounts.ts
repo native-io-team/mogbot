@@ -155,7 +155,7 @@ export const agentsAccountsScenarios: Scenario[] = [
     id: 'agents-account-switcher',
     title: 'Agents — Switch account… (every account in one popover)',
     looksRightWhen:
-      'A popover opening upward from the account row: “Accounts”, one muted line on the order. Claude Code: “sam@example.com” with a neutral check and “In use”, “Max plan · this Mac’s own sign-in”, “5-hour 62% left · resets …” over a slim bar and “Weekly 39% left”; then “Work” “Ready” with its email and plan, its two limits, “Finance runs only on this one”, and a secondary “Use this one now”; then “Side project” in amber “Out of usage until …” and no Use button.. Each row has the up/down pair (first up, last down disabled) and a … menu. At the bottom a quiet “+ Add account”. No accent anywhere; the in-use mark is the text colour.',
+      'A popover opening upward from the account row: “Accounts”, one muted line on the order. Claude Code: “sam@example.com” with a neutral check and a green “In use” pill, “Max plan · this Mac’s own sign-in”, “5-hour 62% left · resets …” over a slim bar and “Weekly 39% left”; then “Work” with a neutral “Ready” pill, its email and plan, its two limits, “Finance runs only on this one”, and a secondary “Use this one now”; then “Side project” with a neutral “Out of usage until …” pill (never amber, as in Settings and on the phone) and no Use button. Each row has the up/down pair (first up, last down disabled) and a … menu. At the bottom a quiet “+ Add account”. No accent anywhere; the in-use mark is the text colour.',
     openSelector: AGENTS_TAB,
     command: 'agents.switchAccount',
     requires: '.account-switcher .account-switcher__account[data-in-use]',
@@ -179,7 +179,7 @@ export const agentsAccountsScenarios: Scenario[] = [
     id: 'agents-runs-on',
     title: 'Agents — Runs on, in an agent’s … menu, and the chip in its header',
     looksRightWhen:
-      'The open conversation’s header has, beside the name, a quiet chip with the Claude icon “Work · only”. The … menu, under Model and Effort, has “Runs on · Work”: Any account (“Carries on when one runs out”), sam@example.com, Work ticked, Side project (“Out of usage now”). No accent.',
+      'The open conversation’s header has, beside the name, a quiet chip with the Claude icon “Work · only”. The … menu, under Model and Effort, has “Runs on · Work”: Any account (“In order, carrying on with the next when one runs out”), then each account with “Only this one, never another”, Work ticked, Side project “…· out of usage now” (the phone’s words). No accent.',
     openSelector: AGENTS_TAB,
     steps: [{ click: `[data-agent-id="finance"]` }, { click: '.agent-chat__menu button' }],
     requires: '.agent-model-menu .agent-model-menu__heading',

@@ -33,11 +33,8 @@ export function runsOnChoices(
   return mine.length > 1 ? mine : [];
 }
 
-/** Under an account in "Runs on": what pinning to it means, and why it can't run now. */
-export function runsOnDetail(a: Pick<UsageAccount, 'signedIn' | 'out'>): string {
-  if (!a.signedIn) return 'Not signed in';
-  return a.out ? 'Only this one, never another · out of usage now' : 'Only this one, never another';
-}
+/** Under an account in "Runs on": worded once, with the desk's menu. */
+export { runsOnDetail } from '@shipstudio/companion-protocol';
 
 /**
  * Under the name: its role, and the account its last turn ran on (only

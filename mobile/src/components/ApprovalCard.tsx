@@ -3,10 +3,22 @@
  * the exact command, then ⋯ · Deny · Allow with the neutral Allow last, and
  * Always allow (when the desktop offers a scope) one tap away behind ⋯,
  * inert for a beat after it lands. Once answered, the outcome in a line.
+ *
+ * "Carry on with Codex until then?" (`approval.crossover`) has the desk's
+ * three answers instead: Wait and Just this time outlined, Always the
+ * neutral strong one last. They go to the Mac as Deny, Allow, and Allow with
+ * `always`, exactly as the desk sends them.
  */
 
 import type { Agent, AgentMessage, Approval, ImportProposal } from '@shipstudio/companion-protocol';
-import { GATE_ALLOW, GATE_DENY } from '@shipstudio/companion-protocol';
+import {
+  CROSSOVER_ALWAYS,
+  CROSSOVER_ONCE,
+  CROSSOVER_WAIT,
+  GATE_ALLOW,
+  GATE_DENY,
+  stepInSource,
+} from '@shipstudio/companion-protocol';
 import { STEP_IN_AT_MAC, STEP_IN_ON_YOUR_MAC } from '../lib/agents';
 import {
   Children,
@@ -264,6 +276,8 @@ export function ApprovalCard({
     approval.connector?.kind === 'consent' || !!approval.front || handoff || !!stepIn;
   // "OK to go on?" between a routine's steps: Stop here / Go ahead, nothing broader.
   const gate = approval.gate;
+  // "Carry on with Codex until then?": Wait, Just this time, Always; nothing behind ⋯.
+  const crossover = approval.crossover;
   const [denyWord, allowWord] = approval.front
     ? ['Not now', 'Check again']
     : stepIn
@@ -274,7 +288,10 @@ export function ApprovalCard({
           ? [GATE_DENY, GATE_ALLOW]
           : ['Deny', 'Allow'];
   // Deny and Allow share the row beside ⋯ while both say their word whole.
-  const share = useActionShare([denyWord, allowWord], consentCard || gate ? 0 : 44);
+  const share = useActionShare(
+    crossover ? [CROSSOVER_WAIT, CROSSOVER_ONCE, CROSSOVER_ALWAYS] : [denyWord, allowWord],
+    consentCard || gate || crossover ? 0 : 44
+  );
 
   if (!pending) {
     return (
@@ -319,14 +336,14 @@ export function ApprovalCard({
         deliberate second step, with what it covers spelled out. A consent
         request has nothing to say instead: just Deny.
       */}
-      {!consent && !gate && (
+      {!consent && !gate && !crossover && (
         <MoreAnswers
           disabled={off || !armed}
           onPress={() => choose(approval.title, more, scope ?? undefined)}
         />
       )}
       <Button
-        title={denyWord}
+        title={crossover ? CROSSOVER_WAIT : denyWord}
         variant="outline"
         busy={busy === 'deny'}
         disabled={off}
@@ -334,7 +351,30 @@ export function ApprovalCard({
         onPress={() => void answer(false)}
         style={share}
       />
-      {!stepIn && (
+      {crossover && (
+        <>
+          <Button
+            title={CROSSOVER_ONCE}
+            variant="outline"
+            busy={busy === 'allow'}
+            disabled={off}
+            focusable={armed}
+            onPress={() => void answer(true)}
+            style={share}
+          />
+          <Button
+            title={CROSSOVER_ALWAYS}
+            variant="answer"
+            busy={busy === 'always'}
+            disabled={off}
+            focusable={armed}
+            onPress={() => void answer(true, true)}
+            accessibilityHint="Carry on with the other engine whenever this happens. Change it on your Mac in Settings → Agents → Usage."
+            style={share}
+          />
+        </>
+      )}
+      {!stepIn && !crossover && (
         <Button
           title={allowWord}
           variant="answer"
@@ -352,13 +392,17 @@ export function ApprovalCard({
   return (
     <Card
       icon={
-        consent
-          ? 'square.and.arrow.down'
-          : approval.settings
-            ? 'slider.horizontal.3'
-            : gate
-              ? 'arrow.trianglehead.2.clockwise'
-              : 'checkmark.shield'
+        stepIn
+          ? 'globe'
+          : crossover
+            ? 'arrow.left.arrow.right'
+            : consent
+              ? 'square.and.arrow.down'
+              : approval.settings
+                ? 'slider.horizontal.3'
+                : gate
+                  ? 'arrow.trianglehead.2.clockwise'
+                  : 'checkmark.shield'
       }
       title={approval.title}
       // Whose and where, as its sibling import card says it.
@@ -367,7 +411,10 @@ export function ApprovalCard({
           ? `From ${approval.connector.source} · over Remote access`
           : gate
             ? `${gate.routine} · step ${gate.done} of ${gate.total} done`
-            : undefined
+            : stepIn
+              ? // Where, as the desk's card says it: "login.example.com · Verify it's you".
+                stepInSource(stepIn)
+              : undefined
       }
       // The pin above the chat shows the question while this can't fit whole.
       hideHead={fit.pinned}
@@ -382,15 +429,24 @@ export function ApprovalCard({
               : STEP_IN_ON_YOUR_MAC
             : gate
               ? 'It waits for you, and closes if the routine runs again first.'
-              : paused && !fit.pinned && !consent && !approval.settings && !approval.slackReply
+              : paused &&
+                  !fit.pinned &&
+                  !consent &&
+                  !approval.settings &&
+                  !approval.slackReply &&
+                  !crossover
                 ? 'It paused here for you. Allow it and it picks up where it left off.'
                 : undefined
       }
       actions={answers && !stepIn?.inSince ? actions : undefined}
     >
-      {!!approval.detail && (
+      {/* A step-in card's reason is its title, and its detail is the desk's
+          ("opens on this Mac"): the note says where to step in instead. */}
+      {!!(crossover ? approval.summary : !stepIn && approval.detail) && (
         <FittedDetail fit={fit}>
-          {consent ? (
+          {crossover ? (
+            <T color={colors.textBody}>{approval.summary}</T>
+          ) : consent ? (
             // Consent asks in sentences, not a command: prose that wraps.
             <T color={colors.textBody}>{approval.detail}</T>
           ) : gate ? (

@@ -779,7 +779,7 @@ const PROBE = [
     route: '/chat/browse',
     ready: 'needs you in its browser',
     check:
-      'The step-in card: the reason, “Step in on your Mac: its tab opens there.”, and only Not now (no Allow, no Step in)',
+      'The step-in card as the desk draws it: a globe, the title with the reason, the site · page title under it, “Step in on your Mac: its tab opens there.”, and only Not now (no Allow, no Step in)',
   },
   {
     name: 'probe-stale-card',
@@ -823,9 +823,46 @@ const PROBE = [
     name: 'probe-quiet-hours',
     route: '/chat/chief',
     ready: 'Chief of Staff',
-    act: scrollToIncludes('Quiet hours set'),
+    act: scrollToIncludes('Sweep the shop inbox'),
     check:
-      'Quiet hours: the ask, the Chief’s one line saying what is set, then the routine’s line and its answer saying it waited',
+      'Quiet hours: the ask, the Chief’s one line saying what is set, then the routine’s line (“Routine · late, was due …”, as the desk says it) and its answer saying it waited',
+  },
+  {
+    name: 'probe-crossover',
+    route: '/chat/ledger',
+    ready: 'Carry on with Claude Code',
+    check:
+      'The crossover card, as the desk draws it: a swap icon, “Your Codex account is out until …. Carry on with Claude Code until then?”, the paragraph, then Wait and Just this time outlined and Always neutral strong, last; no ⋯, no Allow or Deny',
+  },
+  {
+    name: 'probe-crossover-answered',
+    route: '/chat/ledger',
+    ready: 'Carry on with Claude Code',
+    act: async (page) => {
+      await sleep(900);
+      await page.clickWhere(
+        `() => [...document.querySelectorAll('body *')].filter((e) => e.innerText?.trim() === 'Always' && e.getBoundingClientRect().width).pop()`,
+        'Always'
+      );
+      await sleep(1800);
+    },
+    check:
+      'Answered Always: the card is one receipt, “Always · carrying on with Claude Code whenever Codex is out” (the desk’s words)',
+  },
+  {
+    name: 'probe-carried',
+    route: '/settings',
+    ready: 'Settings',
+    act: scrollToText('CODEX ACCOUNTS'),
+    check:
+      'Codex accounts: a neutral pill “Codex out · on Claude Code until …” under the heading (never amber), then its account “Out of usage until …”',
+  },
+  {
+    name: 'probe-slack',
+    route: '/chat/launch',
+    ready: 'Reply in Slack?',
+    check:
+      'An ask from Slack: the bubble with “From Slack · #launch” under it, the reply, the “Reply in Slack?” card quoting the exact words with ⋯ · Deny · Allow (neutral), and the quiet line “Sam asked in Slack …”',
   },
 ];
 
@@ -1663,7 +1700,8 @@ const LIVE = [
       await page.clickLabel('Use sam@example.com now');
       await sleep(600);
     },
-    check: 'After Use now on Work: Work first with the tick and In use, sam@example.com second and Ready with Use now',
+    check:
+      'After Use now on Work: Work first with the tick and In use, sam@example.com second and Ready with Use now',
   },
   {
     name: 'controls-runs-on',

@@ -85,6 +85,9 @@ it('offers Not now and says Step in is on the Mac; never an Allow', async () => 
   );
   await act(() => jest.advanceTimersByTime(ARM_MS + 50));
   expect(screen.getByText(STEP_IN_ON_YOUR_MAC)).toBeTruthy();
+  // Where, as the desk's card says it; the Mac's "opens on this Mac" detail isn't repeated.
+  expect(screen.getByText('portal.northwind.example')).toBeTruthy();
+  expect(screen.queryByText('The portal asks for a code sent to your phone.')).toBeNull();
   expect(screen.queryByText('Allow')).toBeNull();
   expect(screen.queryByText('Step in')).toBeNull();
   await fireEvent.press(screen.getByText('Not now'));

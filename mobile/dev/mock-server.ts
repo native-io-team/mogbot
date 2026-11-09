@@ -2053,16 +2053,50 @@ export function createMockServer(opts: MockOptions = {}) {
     armed: importArmed,
     talk: importTalk,
   });
-  let walletAccounts: UsageAccount[] = opts.probe ? probeAccounts() : [
-    { id: 'default', engine: 'claude', name: 'sam@example.com', named: false, thisMac: true,
-      signedIn: true, email: 'sam@example.com', plan: 'Max', out: false },
-    { id: 'w1', engine: 'claude', name: 'Work', named: true, thisMac: false, signedIn: true,
-      email: 'me@work.example', plan: 'max', out: false },
-    { id: 'p1', engine: 'claude', name: 'Personal', named: true, thisMac: false, signedIn: true,
-      out: false },
-    { id: 'default', engine: 'codex', name: 'Signed in on this Mac', named: false, thisMac: true,
-      signedIn: true, out: false },
-  ];
+  let walletAccounts: UsageAccount[] = opts.probe
+    ? probeAccounts()
+    : [
+        {
+          id: 'default',
+          engine: 'claude',
+          name: 'sam@example.com',
+          named: false,
+          thisMac: true,
+          signedIn: true,
+          email: 'sam@example.com',
+          plan: 'Max',
+          out: false,
+        },
+        {
+          id: 'w1',
+          engine: 'claude',
+          name: 'Work',
+          named: true,
+          thisMac: false,
+          signedIn: true,
+          email: 'me@work.example',
+          plan: 'max',
+          out: false,
+        },
+        {
+          id: 'p1',
+          engine: 'claude',
+          name: 'Personal',
+          named: true,
+          thisMac: false,
+          signedIn: true,
+          out: false,
+        },
+        {
+          id: 'default',
+          engine: 'codex',
+          name: 'Signed in on this Mac',
+          named: false,
+          thisMac: true,
+          signedIn: true,
+          out: false,
+        },
+      ];
   const methods: Partial<Record<MethodName, Handler>> = {
     'system.status': () => status,
     'devices.self': (_, c) => devices.get(c.deviceId)!.device,
@@ -2226,6 +2260,14 @@ export function createMockServer(opts: MockOptions = {}) {
       }
       const picked =
         typeof p.choice === 'number' ? card.approval.prompt?.options[p.choice] : undefined;
+      // `crossover::settle`: Always (allow + always), Just this time (allow), Wait (deny).
+      const crossover = card.approval.crossover
+        ? p.allow
+          ? p.always
+            ? 'Always'
+            : 'Just this time'
+          : 'Wait'
+        : undefined;
       putMessage({
         ...card,
         approval: {
@@ -2240,6 +2282,7 @@ export function createMockServer(opts: MockOptions = {}) {
           ...(p.always ? { alwaysAllowed: true } : {}),
           ...(typeof p.note === 'string' && p.note ? { note: p.note } : {}),
           ...(picked ? { choice: picked.label } : {}),
+          ...(crossover ? { choice: crossover } : {}),
         },
       });
       settle(String(p.agentId));
@@ -2462,7 +2505,10 @@ export function createMockServer(opts: MockOptions = {}) {
       if (sheet) {
         appSheets.delete(String(p.flowId));
         const url = typeof p.callbackUrl === 'string' ? p.callbackUrl : '';
-        if (!url.startsWith('dashbot-companion://oauth?') || !url.includes(`state=${sheet.state}`)) {
+        if (
+          !url.startsWith('dashbot-companion://oauth?') ||
+          !url.includes(`state=${sheet.state}`)
+        ) {
           appFlows.set(sheet.service, {
             service: sheet.service,
             flow: {
@@ -2849,7 +2895,11 @@ export function createMockServer(opts: MockOptions = {}) {
       const ids = Array.isArray(p.ids) ? p.ids.map(String) : [];
       const mine = walletAccounts.filter((x) => x.engine === engine);
       if (ids.length !== mine.length || !ids.every((i) => mine.some((a) => a.id === i))) {
-        return fail({ type: 'Validation', field: 'ids', reason: 'The list of accounts changed meanwhile. Try again.' });
+        return fail({
+          type: 'Validation',
+          field: 'ids',
+          reason: 'The list of accounts changed meanwhile. Try again.',
+        });
       }
       const sorted = ids.map((i) => mine.find((a) => a.id === i)!);
       let k = 0;
@@ -3245,8 +3295,15 @@ export function createMockServer(opts: MockOptions = {}) {
         else delete a.effort;
       }
       if (typeof input.account === 'string') {
-        if (input.account && !walletAccounts.some((w) => w.engine === a.engine && w.id === input.account)) {
-          return fail({ type: 'Validation', field: 'account', reason: 'That isn’t one of the accounts here.' });
+        if (
+          input.account &&
+          !walletAccounts.some((w) => w.engine === a.engine && w.id === input.account)
+        ) {
+          return fail({
+            type: 'Validation',
+            field: 'account',
+            reason: 'That isn’t one of the accounts here.',
+          });
         }
         if (input.account) a.account = input.account;
         else delete a.account;
@@ -3714,7 +3771,9 @@ export function createMockServer(opts: MockOptions = {}) {
       });
       if (q.get('do') === 'desk-answer') {
         // Allowed on the desk: the card closes everywhere, as `answer_card` emits it.
-        const card = (messages.get('stale') ?? []).find((m) => m.approval?.requestId === 'req_stale');
+        const card = (messages.get('stale') ?? []).find(
+          (m) => m.approval?.requestId === 'req_stale'
+        );
         if (card?.approval?.status === 'pending') {
           putMessage({ ...card, approval: { ...card.approval, status: 'allowed' } });
           settle('stale');
