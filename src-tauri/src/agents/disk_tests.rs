@@ -60,27 +60,62 @@ fn levels_and_the_turn_note() {
     assert!(floor.starts_with("[A note from the app, not the user:"));
 }
 
+const T0: i64 = 1_800_000_000_000;
+const MIN: i64 = 60_000;
+
 #[test]
 fn each_crossing_is_said_once_until_space_comes_back() {
     let mut said = Said::default();
-    assert_eq!(step(&mut said, 40 * GB), None);
-    assert_eq!(step(&mut said, 14 * GB), Some(Crossing::Low));
-    assert_eq!(step(&mut said, 13 * GB), None);
-    assert_eq!(step(&mut said, 4 * GB), Some(Crossing::Floor));
-    assert_eq!(step(&mut said, 2 * GB), None);
+    assert_eq!(step(&mut said, 40 * GB, T0), None);
+    assert_eq!(step(&mut said, 14 * GB, T0), Some(Crossing::Low));
+    assert_eq!(step(&mut said, 13 * GB, T0), None);
+    assert_eq!(step(&mut said, 4 * GB, T0), Some(Crossing::Floor));
+    assert_eq!(step(&mut said, 2 * GB, T0), None);
     // A little back, not past the floor's margin: still quiet.
-    assert_eq!(step(&mut said, 6 * GB), None);
-    assert_eq!(step(&mut said, 4 * GB), None);
+    assert_eq!(step(&mut said, 6 * GB, T0), None);
+    assert_eq!(step(&mut said, 4 * GB, T0), None);
     // Past the floor's margin, then down again: the floor once more, not "low".
-    assert_eq!(step(&mut said, 8 * GB), None);
-    assert_eq!(step(&mut said, 4 * GB), Some(Crossing::Floor));
-    // Fully back, then low again.
-    assert_eq!(step(&mut said, 30 * GB), None);
-    assert_eq!(step(&mut said, 10 * GB), Some(Crossing::Low));
+    assert_eq!(step(&mut said, 8 * GB, T0), None);
+    assert_eq!(step(&mut said, 4 * GB, T0), Some(Crossing::Floor));
+    // Fully back, then low again the next day.
+    let later = T0 + LOW_AGAIN_MS;
+    assert_eq!(step(&mut said, 30 * GB, later), None);
+    assert_eq!(step(&mut said, 10 * GB, later), Some(Crossing::Low));
     // Straight from fine to the floor is one line, the floor's.
     let mut said = Said::default();
-    assert_eq!(step(&mut said, GB), Some(Crossing::Floor));
-    assert_eq!(step(&mut said, GB), None);
+    assert_eq!(step(&mut said, GB, T0), Some(Crossing::Floor));
+    assert_eq!(step(&mut said, GB, T0), None);
+}
+
+/// Observed (2026-11-09): the disk went 14 → 17 → 14 GB within 18 minutes
+/// (a build's output, then a browser download) and the Chief's chat got the
+/// same "low" line twice. Once per half-day; the floor still always speaks.
+#[test]
+fn the_low_line_is_not_said_twice_in_a_night() {
+    let mut said = Said::default();
+    assert_eq!(step(&mut said, 14 * GB, T0), Some(Crossing::Low));
+    assert_eq!(step(&mut said, 18 * GB, T0 + 10 * MIN), None);
+    assert_eq!(step(&mut said, 14 * GB, T0 + 18 * MIN), None);
+    // Still quiet on the next readings of the same dip.
+    assert_eq!(step(&mut said, 13 * GB, T0 + 20 * MIN), None);
+    // The floor isn't held back by it.
+    assert_eq!(
+        step(&mut said, 4 * GB, T0 + 30 * MIN),
+        Some(Crossing::Floor)
+    );
+    // Back and down again after the half-day: said again.
+    let later = T0 + LOW_AGAIN_MS + 31 * MIN;
+    assert_eq!(step(&mut said, 18 * GB, later), None);
+    assert_eq!(step(&mut said, 14 * GB, later), Some(Crossing::Low));
+    // Kept across a relaunch too.
+    let dir = tempfile::tempdir().unwrap();
+    let kept = dir.path().join(SAID_FILE);
+    assert_eq!(step_kept(&kept, 14 * GB, T0), Some(Crossing::Low));
+    assert_eq!(step_kept(&kept, 18 * GB, T0 + 5 * MIN), None);
+    assert_eq!(step_kept(&kept, 14 * GB, T0 + 9 * MIN), None);
+    // An older file without the time still reads.
+    std::fs::write(&kept, r#"{"low":false,"floor":false}"#).unwrap();
+    assert_eq!(step_kept(&kept, 14 * GB, T0), Some(Crossing::Low));
 }
 
 /// Observed (2026-11-08): six relaunches in an afternoon, the disk hovering
@@ -90,18 +125,19 @@ fn each_crossing_is_said_once_until_space_comes_back() {
 fn a_relaunch_is_not_a_new_crossing() {
     let dir = tempfile::tempdir().unwrap();
     let kept = dir.path().join(SAID_FILE);
-    assert_eq!(step_kept(&kept, 13 * GB), Some(Crossing::Low));
+    assert_eq!(step_kept(&kept, 13 * GB, T0), Some(Crossing::Low));
     // Each reading below is a fresh launch: only the file carries over.
     for free in [14 * GB, 14 * GB, 11 * GB, 14 * GB] {
-        assert_eq!(step_kept(&kept, free), None, "{free}");
+        assert_eq!(step_kept(&kept, free, T0), None, "{free}");
     }
-    assert_eq!(step_kept(&kept, 4 * GB), Some(Crossing::Floor));
-    assert_eq!(step_kept(&kept, 3 * GB), None);
-    assert_eq!(step_kept(&kept, 30 * GB), None);
-    assert_eq!(step_kept(&kept, 12 * GB), Some(Crossing::Low));
+    assert_eq!(step_kept(&kept, 4 * GB, T0), Some(Crossing::Floor));
+    assert_eq!(step_kept(&kept, 3 * GB, T0), None);
+    let later = T0 + LOW_AGAIN_MS;
+    assert_eq!(step_kept(&kept, 30 * GB, later), None);
+    assert_eq!(step_kept(&kept, 12 * GB, later), Some(Crossing::Low));
     // A file it can't read is a fresh start, never a panic.
     std::fs::write(&kept, "not json").unwrap();
-    assert_eq!(step_kept(&kept, 12 * GB), Some(Crossing::Low));
+    assert_eq!(step_kept(&kept, 12 * GB, later), Some(Crossing::Low));
 }
 
 #[test]

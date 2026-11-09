@@ -278,19 +278,32 @@ pub struct Said {
     pub low: bool,
     #[serde(default)]
     pub floor: bool,
+    /// When the "low" line was last said (ms). Observed (2026-11-09): builds
+    /// and caches moved the disk back and forth across 15–17 GB, and the
+    /// Chief's chat got the same line twice in 18 minutes. It isn't said
+    /// again for [`LOW_AGAIN_MS`]; the floor's line always is.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub low_at: i64,
 }
+
+fn is_zero(n: &i64) -> bool {
+    *n == 0
+}
+
+/// How soon after the "low" line it may be said again, however the disk moves.
+pub const LOW_AGAIN_MS: i64 = 12 * 60 * 60 * 1000;
 
 /// Where [`Said`] is kept, in the agents folder.
 pub const SAID_FILE: &str = "disk-said.json";
 
 /// [`step`] against what an earlier launch said, kept at `path`.
-pub fn step_kept(path: &Path, free: u64) -> Option<Crossing> {
+pub fn step_kept(path: &Path, free: u64, now: i64) -> Option<Crossing> {
     let before: Said = std::fs::read(path)
         .ok()
         .and_then(|b| serde_json::from_slice(&b).ok())
         .unwrap_or_default();
     let mut said = before;
-    let crossing = step(&mut said, free);
+    let crossing = step(&mut said, free, now);
     if said != before {
         if let Ok(json) = serde_json::to_vec(&said) {
             let _ = store::write_atomic(path, &json);
@@ -306,20 +319,29 @@ pub enum Crossing {
 }
 
 /// A new reading: what to say now, if anything. Once per crossing; again
-/// only after space came back [`REARM_BYTES`] above the line.
-pub fn step(said: &mut Said, free: u64) -> Option<Crossing> {
+/// only after space came back [`REARM_BYTES`] above the line; the "low"
+/// line at most once per [`LOW_AGAIN_MS`] (`now`, ms).
+pub fn step(said: &mut Said, free: u64, now: i64) -> Option<Crossing> {
     if free >= LOW_BYTES + REARM_BYTES {
-        *said = Said::default();
+        *said = Said {
+            low_at: said.low_at,
+            ..Said::default()
+        };
     } else if free >= FLOOR_BYTES + REARM_BYTES {
         said.floor = false;
     }
     if free < FLOOR_BYTES && !said.floor {
         said.floor = true;
         said.low = true;
+        said.low_at = now;
         return Some(Crossing::Floor);
     }
     if free < LOW_BYTES && !said.low {
         said.low = true;
+        if said.low_at != 0 && now - said.low_at < LOW_AGAIN_MS {
+            return None;
+        }
+        said.low_at = now;
         return Some(Crossing::Low);
     }
     None
@@ -345,7 +367,7 @@ fn check(app: &AppHandle) {
     let Ok(root) = store::agents_root() else {
         return;
     };
-    let Some(crossing) = step_kept(&root.join(SAID_FILE), free) else {
+    let Some(crossing) = step_kept(&root.join(SAID_FILE), free, store::now_ms()) else {
         return;
     };
     tracing::warn!("[Agents] disk {crossing:?}: {} free", gb(free));
