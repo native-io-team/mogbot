@@ -1931,7 +1931,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-quota-calm',
     title: 'Agents — plan usage Claude Code reported, below 90%',
     looksRightWhen:
-      'The chat header’s usage control is a ring a fifth full (the 5-hour 22% Claude Code reported), not the word “Usage”. Nothing about Codex: it reported nothing. (The sidebar’s usage row reads the account inventory, which this scenario does not serve; see the agents-usage-* scenarios.)',
+      'The chat header’s usage control is a static meter: a full-contrast circle with a fifth of it filled as a wedge from twelve o’clock (the 5-hour 22% Claude Code reported), never a thin arc that reads as a spinner, and not the word “Usage”. Nothing about Codex: it reported nothing. (The sidebar’s usage row reads the account inventory, which this scenario does not serve; see the agents-usage-* scenarios.)',
     command: 'agents.open',
     requires: '.agent-usage-ring__dial',
     commands: {

@@ -37,7 +37,7 @@ import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import {
   ArrowLeftIcon,
   ChevronIcon,
-  HistoryIcon,
+  RoutineIcon,
   MoreHorizontalIcon,
   PlusIcon,
 } from '@/components/icons';
@@ -157,7 +157,7 @@ export function AgentSchedulePopover({
             tabIndex={0}
             variant="ghost"
             className="agent-chat__scheduled"
-            leftIcon={<HistoryIcon size={12} />}
+            leftIcon={<RoutineIcon size={12} />}
             title={`${count} scheduled ${count === 1 ? 'routine' : 'routines'}`}
             // Narrow, the word is hidden; the name keeps it.
             aria-label={`${count} scheduled`}
@@ -174,7 +174,7 @@ export function AgentSchedulePopover({
             tabIndex={0}
             variant="ghost"
             className="agent-chat__scheduled"
-            leftIcon={<HistoryIcon size={12} />}
+            leftIcon={<RoutineIcon size={12} />}
             title="Schedule a routine"
             aria-label={`Schedule a routine for ${agent.name}`}
           >

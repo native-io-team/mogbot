@@ -4,6 +4,7 @@ import AlertSvg from '../../assets/icons/alert.svg?react';
 import BellOffSvg from '../../assets/icons/bell-off.svg?react';
 import ActiveSvg from '../../assets/icons/active.svg?react';
 import HistorySvg from '../../assets/icons/history.svg?react';
+import CalendarClockSvg from '../../assets/icons/calendar-clock.svg?react';
 import ShieldTickSvg from '../../assets/icons/shield-tick.svg?react';
 import PluginSvg from '../../assets/icons/plugin.svg?react';
 import GraduationCapSvg from '../../assets/icons/graduation-cap.svg?react';
@@ -48,6 +49,14 @@ export const ActivityIcon = createIcon(ActiveSvg, {
 export const HistoryIcon = createIcon(HistorySvg, {
   name: 'HistoryIcon',
   source: 'icons/history.svg',
+  kind: 'ui',
+  defaultSize: 16,
+  strokeWidth: '1px',
+});
+/** An agent's routines (a calendar with a clock): not history, which is the clock-with-arrow. */
+export const RoutineIcon = createIcon(CalendarClockSvg, {
+  name: 'RoutineIcon',
+  source: 'icons/calendar-clock.svg',
   kind: 'ui',
   defaultSize: 16,
   strokeWidth: '1px',
