@@ -356,6 +356,26 @@ mod tests {
         }
     }
 
+    /// An agent called "Chief of Staff" from another assistant, with the
+    /// Chief renamed here, is a new agent: the old name doesn't merge it in.
+    #[test]
+    fn an_agent_named_like_the_chief_is_not_merged_into_it() {
+        let _serial = store::tests_lock();
+        let dir = tempfile::tempdir().unwrap();
+        store::set_root_for_tests(Some(dir.path().to_path_buf()));
+        let chief = crate::agents::ensure_main().unwrap();
+        store::update(&chief.id, |a| a.name = "Dash".into()).unwrap();
+        let summary = import(vec![incoming("Chief of Staff", false)], "Grok Bot").unwrap();
+        assert_eq!(summary.created, vec!["Chief of Staff".to_string()]);
+        let made = store::find("Chief of Staff").unwrap().unwrap();
+        assert!(!made.is_main);
+        assert_ne!(made.id, chief.id);
+        let main = store::get(&chief.id).unwrap();
+        assert_eq!(main.name, "Dash");
+        assert_ne!(main.role, "Handles money");
+        store::set_root_for_tests(None);
+    }
+
     #[test]
     fn the_tool_accepts_routines_and_agents_without_them() {
         let agents: Vec<ImportedAgent> = serde_json::from_value(serde_json::json!([
