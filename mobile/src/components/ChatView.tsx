@@ -9,7 +9,12 @@
  */
 
 import { headerSubtitle, headerSubtitleParts } from '../lib/accountsView';
-import { newestResults, type Agent, type AgentMessage } from '@shipstudio/companion-protocol';
+import {
+  newestResults,
+  foldResultReplies,
+  type Agent,
+  type AgentMessage,
+} from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
 import { Stack, useFocusEffect, useRouter } from 'expo-router';
 import {
@@ -271,7 +276,9 @@ export function ChatView({
       loadLatest(id).catch((e: unknown) => showError(describeError(e)));
   }, [connected, chat?.loaded, id, showError, agent]);
 
-  const messages = chat?.messages ?? NONE;
+  const stored = chat?.messages ?? NONE;
+  // A card that repeats the reply above it keeps the words; the reply shrinks to a line.
+  const messages = useMemo(() => foldResultReplies(stored), [stored]);
   // "Setting up your team" is a row like a message, where it was posted.
   const setup = useApp((s) => (agent?.isMain && showsSetup(s.teamSetup) ? s.teamSetup : null));
   const setupAt = useMemo(() => (setup ? setupAnchor(setup, messages) : null), [setup, messages]);

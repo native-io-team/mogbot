@@ -52,14 +52,6 @@
   white-space: nowrap;
 }
 
-.account-switcher__line[data-tone='warning'] .account-switcher__room {
-  color: var(--accent-warning);
-}
-
-.account-switcher__line[data-tone='out'] .account-switcher__room {
-  color: var(--accent-error);
-}
-
 /* The popover. */
 .ss-dropdown__menu.account-switcher {
   /* Above the sidebar it opens from (its own stacking tier). */

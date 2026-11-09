@@ -1619,6 +1619,39 @@ struct Live {
     dirty: bool,
 }
 
+/// The settings tools whose call may end as a card the user hasn't answered
+/// (or answered no) rather than a change, by their `ask` words.
+const SETTINGS_ASKS: [&str; 3] = [
+    "switch the account turns run on",
+    "change how your limits are used",
+    "change what happens when an engine runs out",
+];
+
+/// What a settings tool's result says happened: asked (a card is waiting) or
+/// refused. `None` leaves the label as the call described it (switched or
+/// changed, or a plain failure).
+fn settings_outcome(
+    ask: &str,
+    outcome: Outcome,
+    text: &str,
+) -> Option<(Option<StepOutcome>, String)> {
+    if !SETTINGS_ASKS.contains(&ask) || outcome == Outcome::Declined {
+        return None;
+    }
+    let text = text.trim_start();
+    if outcome == Outcome::Failed {
+        return text.starts_with("The user said no").then(|| {
+            (
+                Some(StepOutcome::Declined),
+                format!("Asked to {ask} — you said no"),
+            )
+        });
+    }
+    // `usage_tools::switch_asked`: the card stands and nothing changed yet.
+    (text.starts_with("Nothing changed yet") || text.starts_with("The card asking"))
+        .then(|| (None, format!("Asked you to {ask} — waiting for your OK")))
+}
+
 impl Live {
     fn push(&mut self, step: WorkStep) -> u32 {
         let n = self.work.step_count;
@@ -1757,6 +1790,15 @@ impl Live {
                     step.output = output::tail(&text, output::TAIL_LINES);
                 }
             }
+        }
+        // A settings tool that may only have raised a card says which.
+        if let Some((outcome, label)) = settings_outcome(&ask, result.outcome, &text) {
+            let label = clean(&label);
+            if let Some(step) = self.step_mut(n) {
+                step.outcome = outcome;
+                step.label = label;
+            }
+            return;
         }
         let (outcome, label) = match result.outcome {
             Outcome::Done => {

@@ -103,6 +103,66 @@ interface Carrier {
   result?: ResultCard;
 }
 
+/** What a reply shrinks to when its card says the same. */
+export const FOLDED_REPLY = 'Here it is:';
+
+/** Words of a text with markdown, punctuation, case and spacing removed. */
+function words(text: string): string[] {
+  return text
+    .toLowerCase()
+    .replace(/[`*_#>~|\[\]()]/g, ' ')
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter(Boolean);
+}
+
+/** Share of `reply`'s words that `card` also has (each word counted once per use). */
+function covered(reply: string[], card: string[]): number {
+  if (reply.length === 0) return 0;
+  const pool = new Map<string, number>();
+  for (const w of card) pool.set(w, (pool.get(w) ?? 0) + 1);
+  let hit = 0;
+  for (const w of reply) {
+    const left = pool.get(w) ?? 0;
+    if (left > 0) {
+      pool.set(w, left - 1);
+      hit++;
+    }
+  }
+  return hit / reply.length;
+}
+
+interface Foldable extends Carrier {
+  kind: string;
+  text: string;
+  attachments?: unknown[];
+}
+
+/**
+ * A result card often arrives right under the reply that already said the
+ * same thing. When the agent bubble just before a card (nothing from you in
+ * between) is substantially the card's summary, it shrinks to one line and
+ * the card keeps the words. A reply with anything the card doesn't have
+ * (under 85% of its words in the card's title and summary) is left whole.
+ */
+export function foldResultReplies<T extends Foldable>(messages: readonly T[]): T[] {
+  let out: T[] | null = null;
+  for (let i = 1; i < messages.length; i++) {
+    const card = messages[i].result;
+    if (!card || card.checkpoint) continue;
+    let j = i - 1;
+    while (j >= 0 && (messages[j].kind === 'note' || messages[j].kind === 'changes')) j--;
+    const reply = messages[j];
+    if (!reply || reply.kind !== 'agent' || reply.result || reply.attachments?.length) continue;
+    if (reply.text.trim() === FOLDED_REPLY) continue;
+    const mine = words(reply.text);
+    if (mine.length < 8) continue;
+    if (covered(mine, words(`${card.title} ${card.summary}`)) < 0.85) continue;
+    out ??= messages.slice();
+    out[j] = { ...reply, text: FOLDED_REPLY };
+  }
+  return out ?? (messages as T[]);
+}
+
 /**
  * For each result in a conversation, the message holding its newest
  * version. Older versions are folded to a line that points at it.

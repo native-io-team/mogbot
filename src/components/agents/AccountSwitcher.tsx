@@ -67,7 +67,7 @@ import {
 } from '../../../packages/companion-protocol/src/accountSwitcher';
 import { awayStateOf } from '../../../packages/companion-protocol/src/crossover';
 import { USE_THIS_ONE_NOW } from '../../../packages/companion-protocol/src/cardWords';
-import { StatusPill } from '../primitives/StatusPill';
+import { StatusPill, type StatusTone } from '../primitives/StatusPill';
 
 const ENGINE_ICON: Record<AgentEngine, typeof ClaudeIcon> = {
   claude: ClaudeIcon,
@@ -80,6 +80,17 @@ const STATUS: Record<WorkingLine['tone'], FooterRowStatus> = {
   out: 'down',
   off: 'off',
 };
+
+/**
+ * The sidebar row's room as the same pill as everywhere else: out of usage is
+ * neutral (it resets by itself), carrying on with the other engine is
+ * running. A plain "62% left" stays text.
+ */
+export function rowPill(line: WorkingLine): StatusTone | null {
+  if (line.away) return 'running';
+  if (line.tone === 'out') return 'out';
+  return null;
+}
 
 const selectEngines = (s: { engines: EngineInfo[] }) => s.engines;
 const selectAgents = (s: { agents: Agent[] }) => s.agents;
@@ -194,7 +205,12 @@ export function AccountSwitcher({ collapsed }: { collapsed: boolean }) {
                     data-away={l.away || undefined}
                   >
                     <span className="account-switcher__name">{l.name}</span>
-                    {l.room && <span className="account-switcher__room">{l.room}</span>}
+                    {l.room &&
+                      (rowPill(l) ? (
+                        <StatusPill tone={rowPill(l)!}>{l.room}</StatusPill>
+                      ) : (
+                        <span className="account-switcher__room">{l.room}</span>
+                      ))}
                   </span>
                 ))}
               </span>
