@@ -6,8 +6,8 @@
  */
 import type { AgentIndependence } from '@shipstudio/companion-protocol';
 import * as real from '../../packages/companion-protocol/src/fixtures.gen';
-import { fireEvent, render, screen } from '@testing-library/react-native';
-import { Text } from 'react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
+import { Alert, Text } from 'react-native';
 
 const mockCall = jest.fn((..._a: unknown[]) => Promise.resolve({}));
 jest.mock('../src/lib/session', () => ({
@@ -133,6 +133,31 @@ describe('one agent’s level on the phone', () => {
     expect(screen.getByText(/^Always asks before spending money, using your passwords, or deleting for good\./)).toBeTruthy();
     await fireEvent(slider, 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
     expect(mockCall).toHaveBeenCalledWith('agents.setIndependence', { level: 'full_send' });
+  });
+
+  it('VoiceOver hears the new stop at once, and a refusal puts it back', async () => {
+    const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
+    let refuse: (e: Error) => void = () => {};
+    let accept: (v: object) => void = () => {};
+    mockCall.mockImplementationOnce(() => new Promise((ok) => (accept = ok)));
+    await render(<IndependenceSetting />);
+    const slider = () => screen.getByTestId('independence-slider');
+    await fireEvent(slider(), 'accessibilityAction', { nativeEvent: { actionName: 'decrement' } });
+    // Before the Mac answers (and before its overview arrives), the value
+    // read out is the stop just chosen, not the old one.
+    expect(slider().props.accessibilityValue.now).toBe(1);
+    expect(slider().props.accessibilityValue.text).toMatch(/^Steady\./);
+    await act(async () => accept({}));
+    expect(slider().props.accessibilityValue.now).toBe(1);
+
+    mockCall.mockImplementationOnce(() => new Promise((_, no) => (refuse = no)));
+    await fireEvent(slider(), 'accessibilityAction', { nativeEvent: { actionName: 'decrement' } });
+    expect(slider().props.accessibilityValue.now).toBe(0);
+    await act(async () => refuse(new Error('Not now')));
+    // Refused: back to what the Mac's overview says is set, and why.
+    expect(slider().props.accessibilityValue.now).toBe(2);
+    expect(alert).toHaveBeenCalledWith('Couldn’t change it', 'Error: Not now');
+    alert.mockRestore();
   });
 
   it('a stop named under the track is a tap target', async () => {

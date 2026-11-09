@@ -24,7 +24,7 @@ import {
   type Agent,
   type AgentIndependence,
 } from '@shipstudio/companion-protocol';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Alert } from 'react-native';
 import { IndependenceSlider } from './IndependenceSlider';
 import { choose } from './menu';
@@ -39,16 +39,22 @@ export function IndependenceSetting() {
   // Agents with a level of their own (their sheet, the desk, the Chief).
   const own = useApp((s) => ownIndependenceCount(s.overview?.agents ?? []));
   const [busy, setBusy] = useState(false);
+  // The stop just chosen, shown (and read out by VoiceOver) at once, until
+  // the Mac's overview says what is set; a refusal puts it back.
+  const [asked, setAsked] = useState<AgentIndependence | null>(null);
+  useEffect(() => setAsked(null), [level]);
   if (!level) return null;
 
   const change = async (next: AgentIndependence) => {
     if (busy || !canSet) return;
     tap();
     setBusy(true);
+    setAsked(next);
     try {
       // The overview follows as an event; nothing to merge here.
       await call('agents.setIndependence', { level: next });
     } catch (e) {
+      setAsked(null);
       haptic.error();
       Alert.alert('Couldn’t change it', describeError(e));
     } finally {
@@ -66,7 +72,7 @@ export function IndependenceSetting() {
       }
     >
       <IndependenceSlider
-        value={independenceOf(level)}
+        value={asked ?? independenceOf(level)}
         onChange={(l) => void change(l)}
         disabled={!canSet || busy}
       />

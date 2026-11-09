@@ -27,6 +27,7 @@ import {
   fonts,
   iconSize,
   lineHeight,
+  PRESSED,
   radius,
   READ_LINE,
   READ_MAX_SCALE,
@@ -315,6 +316,7 @@ export function IconButton({
   color: tint,
   size = iconSize.button,
   fallback,
+  disabled = false,
 }: {
   name: SFName;
   label: string;
@@ -322,6 +324,8 @@ export function IconButton({
   color?: string;
   size?: IconSize;
   fallback?: string;
+  /** Takes no tap while something it would change is already on its way. */
+  disabled?: boolean;
 }) {
   const colors = useColors();
   const styles = useStyles();
@@ -331,12 +335,15 @@ export function IconButton({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
+      accessibilityState={{ disabled }}
+      disabled={disabled}
       hitSlop={4}
       onPress={onPress}
       android_ripple={{ ...ripple, borderless: true, radius: 22 }}
       style={({ pressed }) => [
         styles.iconButton,
         pressed && { backgroundColor: colors.surfaceControl },
+        disabled && PRESSED,
       ]}
     >
       <Icon name={name} size={size} color={color} fallback={<T color={color}>{fallback}</T>} />

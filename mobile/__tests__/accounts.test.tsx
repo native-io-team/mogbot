@@ -2,7 +2,14 @@ import { switcherView, type UsageAccount } from '@shipstudio/companion-protocol'
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import { AccountsSections, accountRowLines, shownEngines } from '../src/components/accounts';
 import type { AccountsState } from '../src/lib/accounts';
-import { headerSubtitle, idsOf, reordered, runsOnChoices } from '../src/lib/accountsView';
+import {
+  headerSubtitle,
+  headerSubtitleParts,
+  idsOf,
+  reordered,
+  runsOnChoices,
+  runsOnDetail,
+} from '../src/lib/accountsView';
 import * as real from '../../packages/companion-protocol/src/fixtures.gen';
 
 jest.mock('../src/lib/session', () => ({
@@ -65,7 +72,10 @@ describe('usage accounts, on the phone', () => {
       now: NOW,
       pins: [{ engine: 'claude', account: 'w1', name: 'QA 2' }],
     });
-    expect(accountRowLines(claude.rows[0])).toEqual(['Max plan · this Mac’s own sign-in', 'In use']);
+    expect(accountRowLines(claude.rows[0])).toEqual([
+      'Max plan · this Mac’s own sign-in',
+      'In use',
+    ]);
     expect(accountRowLines(claude.rows[1])).toEqual([
       'me@work.example',
       'Ready',
@@ -103,12 +113,15 @@ describe('usage accounts, on the phone', () => {
   });
 
   it('Runs on is offered only with two accounts of the agent’s engine to pick between', () => {
-    expect(runsOnChoices([mac, work, codex], 'claude').map((a) => a.id)).toEqual([
-      'default',
-      'w1',
-    ]);
+    expect(runsOnChoices([mac, work, codex], 'claude').map((a) => a.id)).toEqual(['default', 'w1']);
     expect(runsOnChoices([mac, work, codex], 'codex')).toEqual([]);
     expect(runsOnChoices(null, 'claude')).toEqual([]);
+    // Pinning to one that can't run now says why.
+    expect(runsOnDetail({ signedIn: false, out: false })).toBe('Not signed in');
+    expect(runsOnDetail({ signedIn: true, out: true })).toBe(
+      'Only this one, never another · out of usage now'
+    );
+    expect(runsOnDetail({ signedIn: true, out: false })).toBe('Only this one, never another');
   });
 
   it('the chat header names the account its last turn ran on, quietly', () => {
@@ -118,5 +131,17 @@ describe('usage accounts, on the phone', () => {
     );
     expect(headerSubtitle({ role: '', ranOn: { id: 'w1', name: 'Work' } })).toBe('On Work');
     expect(headerSubtitle({ role: '' })).toBe('');
+    // In two parts, so the role gives way before the account.
+    expect(
+      headerSubtitleParts({ role: 'Design system', ranOn: { id: 'w1', name: 'Work' } })
+    ).toEqual({ role: 'Design system', on: '\u00a0· on Work' });
+    expect(headerSubtitleParts({ role: '', ranOn: { id: 'w1', name: 'Work' } })).toEqual({
+      role: '',
+      on: 'On Work',
+    });
+    expect(headerSubtitleParts({ role: 'Design system' })).toEqual({
+      role: 'Design system',
+      on: '',
+    });
   });
 });

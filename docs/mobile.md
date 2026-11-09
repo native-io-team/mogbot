@@ -1191,14 +1191,19 @@ opacity per frame in the report), and an account in daily use
 paused routines, long chats, an import an hour in), live and offline, and
 what agents are doing (`--live-work`: QA 2 five minutes into a Cypress run
 with its output open, Finance gone quiet with "Check on it" answered, a
-finished Cypress step with its time, counts and output). Out: `mobile/qa-shots/` (PNGs and
+finished Cypress step with its time, counts and output), and the states the
+others miss (`--probe`: fifty agents, a very long name, a step-in card with
+only Not now, a card answered on the desk while open here, an agent deleted
+on the desk while its card is open, three Claude accounts with one out of
+usage and one signed out, Runs on, quiet hours, and a turn cut off by the Mac
+restarting). Out: `mobile/qa-shots/` (PNGs and
 `report.md`, which lists each shot's route, what to check, console errors and
-any text cut off with an ellipsis). It exits non-zero when a screen failed or threw.
+any text cut off with an ellipsis), rewritten after every phase so a run stopped part-way still reports. It exits non-zero when a screen failed or threw; a run is stopped after 75 minutes (`--max-ms`).
 
 ```bash
 cd mobile && pnpm qa:web
 pnpm qa:web --only chat-fixtures --themes dark --out /tmp/shots
-pnpm qa:web --phases heavy          # fresh,live,cached,impostor,bars,heavy,importing
+pnpm qa:web --phases heavy          # demo,fresh,live,cached,impostor,bars,usage-accounts,heavy,importing,team-setup,live-work,engine,probe,torture
 pnpm qa:web --web-port 8098 --mock-port 47498 --cdp-port 9681   # the defaults
 ```
 

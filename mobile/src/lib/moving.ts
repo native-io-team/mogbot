@@ -5,12 +5,34 @@
 
 import { useIsFocused } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { AppState } from 'react-native';
+import { AccessibilityInfo, AppState } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
+
+/**
+ * Reduce Motion as it is now. Reanimated's hook reads it once, at launch,
+ * so turning it on in Settings with the app open left the avatars
+ * breathing and blinking until the next launch; this follows the change.
+ */
+export function useReduceMotion(): boolean {
+  const atLaunch = useReducedMotion();
+  const [reduced, setReduced] = useState(atLaunch);
+  useEffect(() => {
+    let live = true;
+    void AccessibilityInfo.isReduceMotionEnabled?.()
+      .then((on) => live && setReduced(on))
+      .catch(() => {});
+    const sub = AccessibilityInfo.addEventListener?.('reduceMotionChanged', (on) => setReduced(on));
+    return () => {
+      live = false;
+      sub?.remove();
+    };
+  }, []);
+  return reduced;
+}
 
 /** False with Reduce Motion, in the background, on a screen that isn't showing, or `still`. */
 export function useMoving(still: boolean): boolean {
-  const reduced = useReducedMotion();
+  const reduced = useReduceMotion();
   const [active, setActive] = useState(AppState.currentState === 'active');
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => setActive(s === 'active'));

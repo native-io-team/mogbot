@@ -34,6 +34,27 @@ export function outboxPlan(
 }
 
 /**
+ * Send what waited, oldest first. A send that still didn't reach the Mac
+ * (it timed out again) holds back the rest of its chat until the next
+ * flush, so a later message never arrives before an earlier one; other
+ * chats carry on. Stops when the link goes.
+ */
+export async function sendInOrder(
+  flush: PendingSend[],
+  resend: (p: PendingSend) => Promise<unknown>,
+  connected: () => boolean,
+  stillWaiting: (p: PendingSend) => boolean
+): Promise<void> {
+  const held = new Set<string>();
+  for (const p of flush) {
+    if (!connected()) break;
+    if (held.has(p.agentId)) continue;
+    await resend(p).catch(() => {});
+    if (stillWaiting(p)) held.add(p.agentId);
+  }
+}
+
+/**
  * The send may not have reached the Mac (no link, or no answer in time):
  * worth sending again with the same `clientId`. A refusal is final.
  */

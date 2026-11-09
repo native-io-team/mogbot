@@ -33,6 +33,12 @@ export function runsOnChoices(
   return mine.length > 1 ? mine : [];
 }
 
+/** Under an account in "Runs on": what pinning to it means, and why it can't run now. */
+export function runsOnDetail(a: Pick<UsageAccount, 'signedIn' | 'out'>): string {
+  if (!a.signedIn) return 'Not signed in';
+  return a.out ? 'Only this one, never another · out of usage now' : 'Only this one, never another';
+}
+
 /**
  * Under the name: its role, and the account its last turn ran on (only
  * while its engine has more than one, as the Mac sends `ranOn`).
@@ -41,4 +47,20 @@ export function headerSubtitle(agent: Pick<Agent, 'role' | 'ranOn'>): string {
   const on = agent.ranOn ? `on ${agent.ranOn.name}` : '';
   if (!agent.role) return on ? on.charAt(0).toUpperCase() + on.slice(1) : '';
   return on ? `${agent.role} · ${on}` : agent.role;
+}
+
+/**
+ * The subtitle in two parts, so the header can let the role give way
+ * first: the account is the news, and "Design system · on sam@ex…" hid it.
+ */
+export function headerSubtitleParts(agent: Pick<Agent, 'role' | 'ranOn'>): {
+  role: string;
+  on: string;
+} {
+  const whole = headerSubtitle(agent);
+  if (!agent.ranOn || !agent.role)
+    return { role: agent.ranOn ? '' : whole, on: agent.ranOn ? whole : '' };
+  // A no-break space: a leading plain one is dropped where the two parts meet.
+  const on = `\u00a0· on ${agent.ranOn.name}`;
+  return { role: agent.role, on };
 }
