@@ -61,12 +61,16 @@ export function useAccounts({ room = true }: { room?: boolean } = {}): AccountsS
   const [busy, setBusy] = useState(false);
   // A read that lands mid-swap would put the old order back for a moment.
   const swapping = useRef(0);
+  // Bumped by every change: a read that went out before one (a poll's, slow)
+  // and lands after it has finished carries the old order, so it is dropped.
+  const changes = useRef(0);
 
   const read = useCallback(async () => {
     if (!serves) return;
     try {
+      const asked = changes.current;
       const next = await call('agents.accounts', {});
-      if (swapping.current === 0) setAccounts(next);
+      if (swapping.current === 0 && asked === changes.current) setAccounts(next);
     } catch {
       // Unanswered: keep what was last read.
     }
@@ -101,6 +105,7 @@ export function useAccounts({ room = true }: { room?: boolean } = {}): AccountsS
       setError(null);
       setAccounts(reordered(accounts, engine, ids));
       swapping.current += 1;
+      changes.current += 1;
       setBusy(true);
       try {
         setAccounts(await send());

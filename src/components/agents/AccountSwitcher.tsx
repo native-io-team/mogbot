@@ -20,7 +20,7 @@
  * @module components/agents/AccountSwitcher
  */
 
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
 import {
   AddIcon,
   ArrowDownIcon,
@@ -374,7 +374,11 @@ function Row({
   const [confirming, setConfirming] = useState(false);
   const pinned = pinnedLine(row.pinnedBy);
   const save = async () => {
-    if (name.trim() === row.name) return setEditing(false);
+    // Emptied is "never mind", as Escape is: not a rename the Mac refuses.
+    if (!name.trim() || name.trim() === row.name) {
+      setName(row.name);
+      return setEditing(false);
+    }
     if (await onRename(name)) setEditing(false);
   };
 
@@ -504,7 +508,14 @@ function Row({
                 />
               )}
             >
-              <DropdownItem icon={<EditIcon size={14} />} onSelect={() => setEditing(true)}>
+              <DropdownItem
+                icon={<EditIcon size={14} />}
+                onSelect={() => {
+                  // Its name as it is now: renamed from the phone since, too.
+                  setName(row.name);
+                  setEditing(true);
+                }}
+              >
                 Rename
               </DropdownItem>
               {row.signedIn && !row.thisMac && (
@@ -547,6 +558,9 @@ function AddAccount({
 }) {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
+  // Enter skipped the disabled button: a second Enter while the first add was
+  // on its way added the account twice, and an empty name went through.
+  const inFlight = useRef(false);
   useEffect(() => {
     if (adding && adding !== 'pick') setName(suggestName(all, adding));
     // Only when the engine is picked: typing must not be reset by a refresh.
@@ -586,10 +600,15 @@ function AddAccount({
     );
   }
   const submit = async () => {
+    if (inFlight.current || !name.trim()) return;
+    inFlight.current = true;
     setBusy(true);
-    const done = await onAdd(adding, name);
-    setBusy(false);
-    if (done) setAdding(null);
+    try {
+      if (await onAdd(adding, name)) setAdding(null);
+    } finally {
+      inFlight.current = false;
+      setBusy(false);
+    }
   };
   return (
     <div className="account-switcher__new" data-adding={adding}>

@@ -10,8 +10,7 @@
  * @module components/agents/useUsageAccounts
  */
 
-import { useCallback, useEffect } from 'react';
-import { useAsyncState } from '../../hooks/useAsyncState';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import {
@@ -25,8 +24,31 @@ import type { AgentEngine } from '../../lib/agents';
 
 export function useUsageAccounts() {
   const { showToast } = useOptionalToast();
-  const { data, execute, setData } = useAsyncState(listUsageAccounts);
-  const reload = useCallback(() => void execute().catch(() => undefined), [execute]);
+  const [data, setList] = useState<UsageAccount[] | null>(null);
+  // Reads overlap (mount, focus, every change event, after each change) and
+  // can answer out of order: only the newest may land. A read that started
+  // before a change answered with the new list would otherwise put the old
+  // order back ("Use this one now" flicking back until the next read).
+  const seq = useRef(0);
+  const live = useRef(true);
+  useEffect(() => {
+    live.current = true;
+    return () => {
+      live.current = false;
+    };
+  }, []);
+  const setData = useCallback((list: UsageAccount[]) => {
+    seq.current += 1;
+    setList(list);
+  }, []);
+  const reload = useCallback(() => {
+    const mine = ++seq.current;
+    listUsageAccounts()
+      .then((list) => {
+        if (live.current && mine === seq.current) setList(list);
+      })
+      .catch(() => undefined);
+  }, []);
 
   useEffect(() => {
     reload();

@@ -6,6 +6,7 @@ import {
   loadMessages,
   loadOlderMessages,
   MESSAGE_PAGE,
+  refreshAgents,
   sameJson,
   updateDraft,
   upsertMessage,
@@ -144,5 +145,45 @@ describe('sameJson', () => {
     for (const [a, b] of cases) {
       expect(sameJson(a, b)).toBe(JSON.stringify(a) === JSON.stringify(b));
     }
+  });
+});
+
+describe('overlapping overview reads', () => {
+  afterEach(() => __resetAgentsStore());
+
+  const overview = (name: string) => ({
+    agents: [{ id: 'a', name }],
+    engineReady: true,
+    engines: [],
+  });
+
+  it('an older read answering last never puts its older list back', async () => {
+    const answers: ((v: unknown) => void)[] = [];
+    mockIPC((cmd) => (cmd === 'agents_overview' ? new Promise((r) => answers.push(r)) : null));
+    const first = refreshAgents();
+    const second = refreshAgents();
+    await new Promise((r) => setTimeout(r, 0));
+    answers[1](overview('Renamed'));
+    await second;
+    answers[0](overview('Old name'));
+    await first;
+    expect(getAgentsSnapshot().agents[0]?.name).toBe('Renamed');
+  });
+
+  it('an older read failing after a newer one answered leaves no error', async () => {
+    const calls: { resolve: (v: unknown) => void; reject: (e: unknown) => void }[] = [];
+    mockIPC((cmd) =>
+      cmd === 'agents_overview'
+        ? new Promise((resolve, reject) => calls.push({ resolve, reject }))
+        : null
+    );
+    const first = refreshAgents();
+    const second = refreshAgents();
+    await new Promise((r) => setTimeout(r, 0));
+    calls[1].resolve(overview('Fine'));
+    await second;
+    calls[0].reject('gone');
+    await first;
+    expect(getAgentsSnapshot().error).toBeNull();
   });
 });

@@ -12,6 +12,7 @@
 /* The body's own inset, named so a full-bleed child can cancel it. */
 :root {
   --settings-body-inset: 20px;
+  --settings-row-info-min: 280px;
 }
 
 .settings-modal-body {
@@ -74,8 +75,26 @@
 /* More than one action beside a row (Settings → Agents → Your Chrome). */
 .settings-row-actions {
   display: flex;
+  flex-wrap: wrap;
   flex-shrink: 0;
   gap: var(--spacing-sm);
+}
+
+/* Two buttons beside a long description squeezed it into a narrow column
+   seven lines tall; once the words would get narrower than this, the
+   actions drop under them instead. */
+.settings-row:has(> .settings-row-actions) {
+  flex-wrap: wrap;
+}
+
+.settings-row:has(> .settings-row-actions) > .settings-row-info {
+  flex-basis: var(--settings-row-info-min);
+}
+
+/* Steps that follow a switch read as more rows of the same section, not a
+   second block with its own gap above it. */
+.settings-row-steps {
+  display: contents;
 }
 
 /* Projects folder row (stacked: label/description/path above the actions) */

@@ -14,7 +14,7 @@
  * @module components/setup/flow/AccountsStep
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CheckIcon } from '@/components/icons';
 import { Button } from '../../primitives/Button';
 import { TextButton } from '../../primitives/TextButton';
@@ -69,16 +69,27 @@ export function AccountsStep({
     setName(suggestName(all, e));
     setNaming(e);
   };
+  // One add at a time: a second Enter (or a click) while the first is on its
+  // way added the account twice.
+  const adding = useRef(false);
+  const [busy, setBusy] = useState(false);
   const submit = async () => {
-    if (!naming) return;
+    if (!naming || !name.trim() || adding.current) return;
+    adding.current = true;
+    setBusy(true);
     let made: UsageAccount | null = null;
-    const ok = await attempt(async () => {
-      const a = await addUsageAccount(naming, name);
-      made = { ...a, thisMac: false, signedIn: false, out: false };
-    });
-    if (ok && made) {
-      setNaming(null);
-      setSigningIn(made);
+    try {
+      const ok = await attempt(async () => {
+        const a = await addUsageAccount(naming, name);
+        made = { ...a, thisMac: false, signedIn: false, out: false };
+      });
+      if (ok && made) {
+        setNaming(null);
+        setSigningIn(made);
+      }
+    } finally {
+      adding.current = false;
+      setBusy(false);
     }
   };
 
@@ -86,7 +97,7 @@ export function AccountsStep({
     <Button
       variant="primary"
       size="large"
-      disabled={!name.trim()}
+      disabled={busy || !name.trim()}
       onClick={() => void submit()}
       data-flow-primary
     >
@@ -151,7 +162,7 @@ export function AccountsStep({
             aria-label={`Name for the new ${ENGINE_LABEL[naming]} account`}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && name.trim()) void submit();
+              if (e.key === 'Enter') void submit();
               if (e.key === 'Escape') setNaming(null);
             }}
           />
