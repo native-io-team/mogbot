@@ -1007,9 +1007,11 @@ pub fn answer_card(
     } else {
         store::ApprovalStatus::Denied
     };
-    if let Some(m) = store::set_approval_status(agent_id, &approval.request_id, status)? {
-        let _ = app.emit(runner::EVENT_MESSAGE, &m);
-    }
+    // Only the answer that closed the card posts (`answer_gate`).
+    let Some(m) = store::set_approval_status(agent_id, &approval.request_id, status)? else {
+        return Err(super::answer_gate::lost(agent_id, &approval.request_id));
+    };
+    let _ = app.emit(runner::EVENT_MESSAGE, &m);
     store::refresh_pending(agent_id);
     let _ = app.emit(runner::EVENT_REGISTRY, ());
     super::notify::refresh_badge(app);

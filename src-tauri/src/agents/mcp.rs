@@ -3191,6 +3191,12 @@ pub fn sweep_auto_allowed(app: &AppHandle) -> usize {
                 continue;
             }
             let level = receipt_level(chosen, !inside);
+            // The user answering it right now keeps their answer.
+            let Some(_claim) =
+                super::answer_gate::try_claim(&agent.id, &card.request_id, "Allowed")
+            else {
+                continue;
+            };
             let Ok(Some(updated)) =
                 store::set_approval_status(&agent.id, &card.request_id, ApprovalStatus::Allowed)
             else {

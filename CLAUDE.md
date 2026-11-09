@@ -138,7 +138,9 @@ these without updating that doc.
 - **Logins never carry a password.** Tokens only in the Keychain (`<slug>-connection-<id>`), reaching a turn through its 0600 config file or its environment, never argv, a log or the phone; the phone may run a provider's sign-in sheet but gets only the URL and a one-time code, relayed once to the Mac that holds the PKCE verifier (`agents/login_relay.rs`); read grants refuse writes and full grants ask for every write ([docs/agents.md](docs/agents.md), "Logins", "Threat model additions")
 - **Approvals are the wall.** An admin agent can answer only another agent's *local* requests (`admin::classify`, tested), never its own, never in a turn answering outside text. Agents run in `acceptEdits`; everything else goes through the
   approval broker (`agents/broker.rs`), which trusts only a live turn's `?turn=` id and stops a turn
-  that reports `bypassPermissions` ([docs/agents.md](docs/agents.md), "Approvals"). The only
+  that reports `bypassPermissions` ([docs/agents.md](docs/agents.md), "Approvals"). Every card
+  answer, from any device or path, first takes the card's claim (`agents/answer_gate.rs`): exactly
+  one answer acts, the rest get "Already answered: <winner>" ("One answer per card"). The only
   cards answered for the user are ones their independence level covers (a four-stop slider shown as
   Careful, Steady, Bold, Unleashed; stored as `often`, `judgement`, `go_hard`, `full_send`, which
   never change; `mcp::decide`, for

@@ -194,6 +194,12 @@ pub fn decline_all(
             let Some(k) = matched.filter(|k| keys.contains(&k.as_str())) else {
                 continue;
             };
+            // One being answered (a sign-in finishing) keeps that answer.
+            let Some(_claim) =
+                super::answer_gate::try_claim(&agent.id, &a.request_id, logins::NOT_NEEDED)
+            else {
+                continue;
+            };
             logins::clear_flow(&a.request_id);
             if let Some(m) = store::deny_with_note(&agent.id, &a.request_id, logins::NOT_NEEDED)? {
                 messages.push(m);

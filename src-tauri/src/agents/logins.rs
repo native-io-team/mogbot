@@ -942,11 +942,30 @@ fn complete_via(
     told: String,
     agents_browser: bool,
 ) -> Result<(), CommandError> {
+    // A sign-in finishing as the user declines (or as a second one does):
+    // one answer per card (`answer_gate`).
+    let claim = super::answer_gate::claim(agent_id, request_id, &said)?;
+    complete_held(app, &claim, agent_id, r, said, told, agents_browser)
+}
+
+/// [`complete_via`] for a caller already holding the card's claim.
+fn complete_held(
+    app: &AppHandle,
+    claim: &super::answer_gate::Claim,
+    agent_id: &str,
+    r: &LoginRequest,
+    said: String,
+    told: String,
+    agents_browser: bool,
+) -> Result<(), CommandError> {
+    let request_id = claim.request_id();
     clear_flow(request_id);
-    let card = store::answer_prompt(agent_id, request_id, ApprovalStatus::Allowed, &said)?;
-    if let Some(m) = card {
-        let _ = app.emit(runner::EVENT_MESSAGE, &m);
-    }
+    // Only the answer that closed the card connects anyone or wakes them.
+    let Some(m) = store::answer_prompt(agent_id, request_id, ApprovalStatus::Allowed, &said)?
+    else {
+        return Err(super::answer_gate::lost(agent_id, request_id));
+    };
+    let _ = app.emit(runner::EVENT_MESSAGE, &m);
     // Its other asks for the same thing (a second card, an old token card) are covered now.
     for m in retire_stale(agent_id, &r.service, request_id, &said.to_lowercase()) {
         let _ = app.emit(runner::EVENT_MESSAGE, &m);
@@ -1359,6 +1378,39 @@ pub async fn start(
     option_id: &str,
     origin: Origin,
 ) -> Result<(), CommandError> {
+    let (r, option) = mark_starting(app, agent_id, request_id, option_id, origin)?;
+    let out = start_marked(app, agent_id, request_id, r, option, origin).await;
+    // A way in that stopped before it got going doesn't hold the card.
+    if out.is_err()
+        && matches!(
+            flow_of(request_id),
+            Some(Flow {
+                state: FlowState::Starting,
+                ..
+            })
+        )
+    {
+        FLOWS
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(request_id);
+        emit_card(app, agent_id, request_id);
+    }
+    out
+}
+
+/// The check that nothing else is answering the card or signing in on it,
+/// and the mark that this is, as one step under the card's claim
+/// (`answer_gate`): Connect on the desk and the phone at once starts one
+/// sign-in, and the other is told it's already signing in.
+fn mark_starting(
+    app: &AppHandle,
+    agent_id: &str,
+    request_id: &str,
+    option_id: &str,
+    origin: Origin,
+) -> Result<(LoginRequest, LoginOption), CommandError> {
+    let _claim = super::answer_gate::claim(agent_id, request_id, "Signing in")?;
     let r = pending_login(agent_id, request_id)?;
     let option = r
         .option(option_id)
@@ -1371,6 +1423,36 @@ pub async fn start(
             "It's already signing in on your Mac."
         }));
     }
+    match option.method {
+        // Refused below, or answered at once (it claims the card itself).
+        Method::Key | Method::Existing => {}
+        Method::AgentBrowser if origin.from_phone => {}
+        _ => set_flow(
+            app,
+            agent_id,
+            request_id,
+            Flow {
+                state: FlowState::Starting,
+                option: option.id.clone(),
+                started_at: store::now_ms(),
+                from_phone: origin.from_phone,
+                on_phone: origin.on_phone,
+                ..Flow::default()
+            },
+            None,
+        ),
+    }
+    Ok((r, option))
+}
+
+async fn start_marked(
+    app: &AppHandle,
+    agent_id: &str,
+    request_id: &str,
+    r: LoginRequest,
+    option: LoginOption,
+    origin: Origin,
+) -> Result<(), CommandError> {
     let access = r.access();
     let run = Run {
         app: app.clone(),
@@ -1703,15 +1785,19 @@ pub fn decline(
     request_id: &str,
     note: Option<&str>,
 ) -> Result<(), CommandError> {
+    // One answer per card (`answer_gate`): a decline racing a sign-in that's
+    // finishing, or the other device, is one answer.
+    let _claim = super::answer_gate::claim(agent_id, request_id, "Denied")?;
     let r = pending_login(agent_id, request_id)?;
     clear_flow(request_id);
     let card = match note {
         Some(n) => store::deny_with_note(agent_id, request_id, n)?,
         None => store::set_approval_status(agent_id, request_id, ApprovalStatus::Denied)?,
     };
-    if let Some(m) = card {
-        let _ = app.emit(runner::EVENT_MESSAGE, &m);
-    }
+    let Some(m) = card else {
+        return Err(super::answer_gate::lost(agent_id, request_id));
+    };
+    let _ = app.emit(runner::EVENT_MESSAGE, &m);
     store::refresh_pending(agent_id);
     super::notify::refresh_badge(app);
     let _ = app.emit(runner::EVENT_REGISTRY, ());
@@ -1734,6 +1820,7 @@ pub fn save_key(
     request_id: &str,
     value: &str,
 ) -> Result<secrets::Secret, CommandError> {
+    let _claim = super::answer_gate::claim(agent_id, request_id, "Saved a key")?;
     let r = pending_login(agent_id, request_id)?;
     let key = r
         .key
@@ -2458,6 +2545,7 @@ pub(crate) fn fan_out(app: &AppHandle, service_id: &str, first: TeamCard, rest: 
 /// "Not needed": the card is put away without connecting anything, and the
 /// agent isn't woken. If it really needs it, it asks again.
 pub fn dismiss(app: &AppHandle, agent_id: &str, request_id: &str) -> Result<(), CommandError> {
+    let _claim = super::answer_gate::claim(agent_id, request_id, NOT_NEEDED)?;
     pending_login(agent_id, request_id)?;
     clear_flow(request_id);
     // Nobody is woken by "Not needed"; whoever joined the card is let go too.

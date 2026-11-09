@@ -2150,11 +2150,15 @@ fn resolve_approval(
 }
 
 /// Close a pending card nobody answered (`agents/expiry.rs`), saying how.
+/// One being answered right now is left to that answer (`answer_gate`).
 pub fn expire_card(
     agent_id: &str,
     request_id: &str,
     expiry: super::expiry::Expiry,
 ) -> Result<Option<AgentMessage>, CommandError> {
+    if super::answer_gate::in_flight(request_id) {
+        return Ok(None);
+    }
     resolve_approval_as(
         agent_id,
         request_id,

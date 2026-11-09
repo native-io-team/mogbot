@@ -509,7 +509,7 @@ pub fn settle(
     };
     let message =
         super::store::answer_prompt(agent_id, &approval.request_id, status, answer_word(answer))?
-            .ok_or_else(|| CommandError::expected("That request was already answered."))?;
+            .ok_or_else(|| super::answer_gate::lost(agent_id, &approval.request_id))?;
     clear_asking(&approval.request_id);
     match answer {
         Answer::Always => set_mode(ask.from, Mode::Carry)?,

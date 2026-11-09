@@ -930,6 +930,9 @@ pub fn apply_card(
     picks: &Picks,
 ) -> Result<(ConnectorCard, Applied, Option<store::AgentMessage>), CommandError> {
     let _one = APPLYING.lock().unwrap_or_else(|e| e.into_inner());
+    // And one answer per card (`answer_gate`): Import against a Dismiss from
+    // the phone is one answer, not agents made on a dismissed card.
+    let _claim = super::answer_gate::claim(chief_id, request_id, "Imported")?;
     let (_, card) = find_card(chief_id, request_id)?;
     if card.kind != CardKind::Review {
         return Err(CommandError::expected("That isn't an import review."));
@@ -1251,7 +1254,10 @@ mod tests {
         );
         // And a third, later, is told it was answered.
         let err = apply_card(None, &chief.id, "req", &picks).unwrap_err();
-        assert!(err.to_string().contains("already answered"), "{err}");
+        assert!(
+            err.to_string().starts_with("Already answered: Imported"),
+            "{err}"
+        );
         store::set_root_for_tests(None);
     }
 

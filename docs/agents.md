@@ -1553,6 +1553,26 @@ for 400 ms after a card appears, and a click the keyboard produced counts only
 if the key went down on that button, so typing in the composer can never
 answer a card (`useCardGuard`). Deny is never held back.
 
+**One answer per card** (`agents/answer_gate.rs`). A card can be answered
+from several places at the same moment: the desk and the phone, a typed
+"approve it" and a tap, an admin agent and the user, a sign-in finishing as
+the user declines. Every answer path (`answer_card` and each kind behind it,
+Not now / Step in / Hand back, Check again, Save on a secret, a login's
+Connect, Decline, Not needed and a sign-in completing, Import and the
+playback on an import, an admin's put-away) first takes the card's
+**claim**: one compare-and-set under one lock, keyed by request id, that
+wins only if nobody else holds the card and it is still pending on disk. Only
+the winner acts and writes; the others get "Already answered: <the winning
+answer>." and nothing of theirs runs. So a Slack reply posts once, a plan is
+granted only by the Allow that closed its card, an Always rule is kept only
+when Always won (the answer is written before the rule), and a turn runs
+again once. A winner whose answer is refused (a key that must be typed, an
+account that's gone) drops the claim without writing, and the card stays
+open. Answers the app gives for the user (a raised level, a rule from chat,
+an Always covering other open cards, "Not needed" from What your team needs)
+skip a card being answered, and expiry never closes one
+(`answer_gate_tests.rs` races every kind on real threads).
+
 Verified against Claude Code 2.1.318: the tool receives
 `{tool_name, input, tool_use_id}` and must answer
 `{"behavior":"allow","updatedInput":…}` or `{"behavior":"deny","message":…}`.

@@ -1301,6 +1301,9 @@ fn put_away(
     line: &str,
     later: bool,
 ) -> Result<(), CommandError> {
+    // One answer per card (`answer_gate`): the user's own answer at the
+    // same moment wins or loses as a whole.
+    let _claim = super::answer_gate::claim(agent_id, &card.request_id, line)?;
     if card.login.is_some() {
         super::logins::clear_flow(&card.request_id);
     }
@@ -1309,9 +1312,10 @@ fn put_away(
     } else {
         store::deny_with_note(agent_id, &card.request_id, line)?
     };
-    if let Some(m) = updated {
-        let _ = tauri::Emitter::emit(app, runner::EVENT_MESSAGE, &m);
-    }
+    let Some(m) = updated else {
+        return Err(super::answer_gate::lost(agent_id, &card.request_id));
+    };
+    let _ = tauri::Emitter::emit(app, runner::EVENT_MESSAGE, &m);
     store::refresh_pending(agent_id);
     super::notify::refresh_badge(app);
     let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());

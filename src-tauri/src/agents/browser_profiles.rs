@@ -631,15 +631,20 @@ pub async fn answer(
     } else {
         ApprovalStatus::Denied
     };
+    // One answer per card (`answer_gate`).
+    let _claim = super::answer_gate::claim(
+        agent_id,
+        request_id,
+        if allow { "Check again" } else { "Not now" },
+    )?;
     let card = store::find_approval(agent_id, request_id)?
         .ok_or_else(|| CommandError::expected("That request no longer exists."))?;
-    if card.status != ApprovalStatus::Pending {
-        return Err(CommandError::expected("That request was already answered."));
-    }
     let front = card
         .front
         .ok_or_else(|| CommandError::expected("That isn't a browser card."))?;
-    store::set_approval_status(agent_id, request_id, status)?;
+    if store::set_approval_status(agent_id, request_id, status)?.is_none() {
+        return Err(super::answer_gate::lost(agent_id, request_id));
+    }
     store::refresh_pending(agent_id);
     super::notify::refresh_badge(app);
     let _ = tauri::Emitter::emit(app, super::runner::EVENT_REGISTRY, ());
