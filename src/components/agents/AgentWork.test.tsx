@@ -100,6 +100,20 @@ describe('the working line, live', () => {
     expect(screen.queryByRole('button', { name: /^3 steps/ })).toBeNull();
   });
 
+  it('shimmers with a brighter copy drawn by CSS, so the words are in the page once', () => {
+    const { container } = render(
+      <WorkingIndicator activity="Running npm test" work={live} agent={agent} />
+    );
+    const line = container.querySelector('.agent-working__activity');
+    expect(line).toHaveAttribute('data-live');
+    // The copy is the band's ::after (content: attr(data-text)), hidden from
+    // assistive tech, never a second text node.
+    const band = line?.querySelector('.agent-working__glint-band');
+    expect(band).toHaveAttribute('data-text', 'Running npm test');
+    expect(line?.querySelector('.agent-working__glint')).toHaveAttribute('aria-hidden', 'true');
+    expect(line?.textContent).toBe('Running npm test');
+  });
+
   it('opens under the line, and the step it is saying is not listed twice', () => {
     render(<WorkingIndicator activity="Running npm test" work={live} agent={agent} />);
     fireEvent.click(screen.getByRole('button', { name: /steps/ }));
