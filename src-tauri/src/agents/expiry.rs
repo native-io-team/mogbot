@@ -161,6 +161,12 @@ pub fn verdict(a: &Approval, age_ms: i64, waited_on: bool, moment: Moment) -> Op
     if a.gate.is_some() {
         return None;
     }
+    // "Carry on with Codex until then?" is about the next turns, not a live
+    // one: it stays until answered, or until the engine has room again
+    // (`agents/crossover.rs`).
+    if a.crossover.is_some() {
+        return None;
+    }
     if let Some(s) = &a.secret {
         // An import's old-style secure input (before sign-in cards, which
         // replaced it): nothing raises these any more and nothing waits on

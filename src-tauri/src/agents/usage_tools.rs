@@ -89,6 +89,19 @@ pub const TOOLS: &[Def] = &[
         }),
     },
     Def {
+        name: "set_engine_fallback",
+        description: "Change what happens when every account of an engine is out of usage, when the user asks (\"carry on with Codex when Claude runs out\", \"just wait for the reset\"): `carry` moves agents' turns to the other engine until it has room again (never for an agent set to one account), `wait` waits for the reset, `ask` asks the user first with a card. `engine` is the one that runs out. The user confirms on a card first.",
+        main_only: true,
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "engine": { "type": "string", "enum": ["claude", "codex"], "description": "The engine whose accounts run out." },
+                "mode": { "type": "string", "enum": ["ask", "carry", "wait"] }
+            },
+            "required": ["engine", "mode"]
+        }),
+    },
+    Def {
         name: "run_routine_now",
         description: "Run one of the user's routines now, without moving its next time: only in \"Use it all before reset\" mode, to use capacity that would otherwise expire. Its usual approvals still apply.",
         main_only: true,
@@ -139,7 +152,45 @@ pub async fn overview(app: &AppHandle) -> Value {
     )
     .await;
     let inv = inventory::read().await;
-    text(inventory::overview_text(&inv, &chrono::Local))
+    let mut out = inventory::overview_text(&inv, &chrono::Local);
+    // When every account of an engine is out: what the user chose.
+    let agents = store::list().unwrap_or_default();
+    if let Some(line) = super::crossover::overview_line(&super::crossover::view(&agents)) {
+        out.push_str("\n\n");
+        out.push_str(&line);
+    }
+    text(out)
+}
+
+/// The card the user OKs before `set_engine_fallback` changes their choice.
+pub fn fallback_card(engine: Engine, mode: super::crossover::Mode) -> (String, String) {
+    use super::crossover::{other, Mode as M};
+    let (from, to) = (engine.label(), other(engine).label());
+    let title = match mode {
+        M::Carry => format!("Carry on with {to} whenever every {from} account is out?"),
+        M::Wait => format!("Wait for the reset whenever every {from} account is out?"),
+        M::Ask => format!("Ask you first whenever every {from} account is out?"),
+    };
+    let detail = match mode {
+        M::Carry => format!("Agents' turns move to {to} until {from} has room again, then go back, with one line in the chat each way. Never for an agent set to one account."),
+        M::Wait => format!("Agents stop on the usage-limit line until a {from} account resets."),
+        M::Ask => format!("The first time it happens, one card asks whether to carry on with {to}."),
+    };
+    (title, detail)
+}
+
+pub fn set_fallback(app: &AppHandle, engine: Engine, mode: super::crossover::Mode) -> Value {
+    match super::crossover::set_mode(engine, mode) {
+        Ok(()) => {
+            let _ = tauri::Emitter::emit(app, super::runner::EVENT_USAGE_PLAN, ());
+            let (title, _) = fallback_card(engine, mode);
+            text(format!(
+                "Done: {}",
+                title.trim_end_matches('?').to_lowercase()
+            ))
+        }
+        Err(e) => error(e.to_string()),
+    }
 }
 
 /// The planned work, from the tool's arguments: each agent's own history,
@@ -634,6 +685,7 @@ mod tests {
                 "finish_spare_work",
                 "set_usage_mode",
                 "use_account",
+                "set_engine_fallback",
                 "run_routine_now"
             ]
         );
@@ -641,7 +693,10 @@ mod tests {
         for t in TOOLS {
             assert_eq!(
                 t.main_only,
-                matches!(t.name, "set_usage_mode" | "use_account" | "run_routine_now"),
+                matches!(
+                    t.name,
+                    "set_usage_mode" | "use_account" | "set_engine_fallback" | "run_routine_now"
+                ),
                 "{}",
                 t.name
             );

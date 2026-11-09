@@ -1510,6 +1510,10 @@ pub(crate) fn answer_card(
     if approval.gate.is_some() {
         return agents::routine_steps::answer_card(app, agent_id, &approval, allow);
     }
+    // "Carry on with Codex until then?": Always, Just this time or Wait.
+    if approval.crossover.is_some() {
+        return runner::answer_crossover(app, agent_id, &approval, allow, always == Some(true));
+    }
     // "Do these under your name?": Allow is the user's OK for each listed
     // action, here and only here (`plan_grant`).
     if let (true, Some(plan)) = (allow, &approval.plan) {

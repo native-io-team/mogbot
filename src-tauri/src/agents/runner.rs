@@ -1294,23 +1294,28 @@ fn plan_recovery_for(
     plan.partial = partial_reply(agent_id, progress.draft.as_ref());
     plan.work = progress.work;
     let agent = store::get(agent_id).ok();
-    let engine = agent.as_ref().map(|a| a.engine).unwrap_or_default();
+    // Carrying on with the other engine (`crossover`): its turns, and so
+    // the conversation cut off, are that engine's.
+    let engine = agent
+        .as_ref()
+        .map(|a| a.away.as_ref().map_or(a.engine, |w| w.engine))
+        .unwrap_or_default();
     // The conversation it was in, still the agent's (not started fresh
     // since), and really on disk.
     let session = mark.session_id.as_deref().filter(|sid| {
-        agent
-            .as_ref()
-            .is_some_and(|a| a.session_id.as_deref().is_none_or(|own| own == *sid))
-            && session_on_disk(engine, sid)
+        agent.as_ref().is_some_and(|a| {
+            super::crossover::session_on(a, engine)
+                .as_deref()
+                .is_none_or(|own| own == *sid)
+        }) && session_on_disk(engine, sid)
     });
     let pickup = pickup_after(&mark, driven, session.is_some(), cause);
     if let (Pickup::Resume, Some(sid)) = (&pickup, session) {
         // Claude Code's first turn may have gone before it said its session.
         let sid = sid.to_string();
         let _ = store::update(agent_id, |a| {
-            if a.session_id.is_none() {
-                a.session_id = Some(sid);
-                a.new_engine = false;
+            if super::crossover::session_on(a, engine).is_none() {
+                super::crossover::save_session(a, engine, sid);
             }
         });
         let resume = next_pickup(mark.resumes).unwrap_or(MAX_RESUMES);
@@ -4167,14 +4172,42 @@ fn with_recap(agent_id: &str, prompt: &str) -> String {
     recap_prompt(&lines, &recap_open(&log), prompt)
 }
 
+/// [`with_recap`] opening with `header`, and only what was said since
+/// `since` when given (carrying on with, or back from, another engine).
+pub(super) fn with_recap_as(
+    agent_id: &str,
+    header: &str,
+    since: Option<i64>,
+    prompt: &str,
+) -> String {
+    let Ok(mut log) = store::messages(agent_id, RECAP_SCAN) else {
+        return prompt.to_string();
+    };
+    if let Some(since) = since {
+        log.retain(|m| m.ts >= since);
+    }
+    let lines = recap_lines_except(&log, &on_the_way(agent_id));
+    recap_prompt_with(header, &lines, &recap_open(&log), prompt)
+}
+
+const LOST_HEADER: &str = "[Your previous working session was lost. This is the recent conversation from your own chat, newest last: what \"You\" said, you said, and you know it. Pick up from here without mentioning the loss unless asked; never ask the user to repeat or paste anything in it. search_my_chat finds anything older.]";
+
 /// The recap around `prompt`: the conversation, then what is still open.
 fn recap_prompt(lines: &[String], open: &[String], prompt: &str) -> String {
+    recap_prompt_with(LOST_HEADER, lines, open, prompt)
+}
+
+/// [`recap_prompt`] opening with `header`.
+pub(super) fn recap_prompt_with(
+    header: &str,
+    lines: &[String],
+    open: &[String],
+    prompt: &str,
+) -> String {
     if lines.is_empty() && open.is_empty() {
         return prompt.to_string();
     }
-    let mut out = String::from(
-        "[Your previous working session was lost. This is the recent conversation from your own chat, newest last: what \"You\" said, you said, and you know it. Pick up from here without mentioning the loss unless asked; never ask the user to repeat or paste anything in it. search_my_chat finds anything older.]\n\n",
-    );
+    let mut out = format!("{header}\n\n");
     out.push_str(&lines.join("\n"));
     if !open.is_empty() {
         out.push_str("\n\n[Still open]\n");
@@ -4610,21 +4643,368 @@ enum Ended {
     Died(String),
 }
 
-/// Run one turn on the engine's accounts (`agents::wallet`): on the first
-/// one that can, and when it ends on the usage limit, again on the next, with
-/// a quiet line saying so. With one account this is exactly [`run_turn`].
+/// Run one turn: on its own engine's accounts ([`run_on_engine`]), or, when
+/// every one of them is out, on the other engine's, as the user chose
+/// (`agents::crossover`): carrying on there, asking first with a card, or
+/// waiting for the reset. Never for an agent set to one account, never
+/// without a line saying so; back on its own engine once that has room.
 async fn run_on_accounts(
     app: &AppHandle,
     agent_id: &str,
     prompt: &str,
     routine: bool,
+    resumes: u8,
+) -> Result<Ended, CommandError> {
+    use super::crossover::{self, Route};
+    let agent = store::get(agent_id)?;
+    let home = agent.engine;
+    let now = store::now_ms();
+    let s = crossover_situation(&agent, resumes > 0, now).await;
+    if s.home_room {
+        crossover::outage_over(home);
+        close_crossover_card(app, home);
+    }
+    let mut first = prompt.to_string();
+    match crossover::before_turn(s) {
+        Route::Carry => return carry_on(app, agent_id, prompt, routine, resumes).await,
+        Route::Return => first = go_back(app, agent_id, prompt),
+        _ => {}
+    }
+    let result = run_on_engine(app, agent_id, &first, routine, resumes, home).await;
+    let Err(err) = &result else { return result };
+    // Every account it may use is out (the wallet's line, or a lone
+    // account's own usage limit): perhaps the other engine carries on.
+    let all_out = super::wallet::peek_all_out(agent_id)
+        || super::failure::describe_now(home, &err.to_string()).1.kind
+            == super::failure::FailureKind::UsageLimit;
+    if !all_out || QUITTING.load(Ordering::SeqCst) {
+        return result;
+    }
+    let agent = store::get(agent_id)?;
+    let now = store::now_ms();
+    let acted = resumes > 0 || took_action(agent_id);
+    let s = crossover_situation(&agent, acted, now).await;
+    match crossover::after_out(s) {
+        Route::Carry => {
+            // Carrying on says so itself: not the usage-limit line as well.
+            let _ = super::wallet::take_all_out(agent_id);
+            carry_on(app, agent_id, prompt, routine, resumes).await
+        }
+        Route::Held => {
+            let _ = super::wallet::take_all_out(agent_id);
+            Err(CommandError::expected(crossover::held_line(
+                home,
+                crossover::other(home),
+            )))
+        }
+        Route::Ask { resume } => {
+            ask_to_carry_on(app, &agent, resume, now).await;
+            result
+        }
+        _ => result,
+    }
+}
+
+/// What deciding where a turn runs reads (`crossover::Situation`). The
+/// other engine is only looked at when its own has no room, or it is away.
+async fn crossover_situation(
+    agent: &store::Agent,
+    acted: bool,
+    now: i64,
+) -> super::crossover::Situation {
+    use super::crossover;
+    use super::wallet;
+    let home = agent.engine;
+    let mine = wallet::for_agent(wallet::candidates(home).await, agent.account.as_deref());
+    let signed_in: Vec<&wallet::Candidate> = mine.iter().filter(|c| c.signed_in).collect();
+    // Out of usage, not signed out: a signed-out engine says so itself.
+    let home_room = signed_in.is_empty() || signed_in.iter().any(|c| c.account.out(now).is_none());
+    let away = agent.away.is_some();
+    let other_room = if home_room && !away {
+        false
+    } else {
+        let to = crossover::other(home);
+        super::engine::binary(to).await.is_some()
+            && wallet::candidates(to)
+                .await
+                .iter()
+                .any(|c| c.signed_in && c.account.out(now).is_none())
+    };
+    crossover::Situation {
+        pinned: agent.account.is_some(),
+        quiet: super::tidy::is_quiet(&agent.id),
+        away,
+        home_room,
+        other_room,
+        mode: crossover::mode(home),
+        once: crossover::once(home, now),
+        asking: !home_room && crossover::still_asking(home),
+        acted,
+    }
+}
+
+/// When the first of the agent's own accounts is back, as reported, and
+/// how many of them are signed in.
+async fn back_at(agent: &store::Agent, now: i64) -> (Option<i64>, usize) {
+    use super::wallet;
+    let mine = wallet::for_agent(
+        wallet::candidates(agent.engine).await,
+        agent.account.as_deref(),
+    );
+    let signed_in: Vec<&wallet::Candidate> = mine.iter().filter(|c| c.signed_in).collect();
+    let at = signed_in
+        .iter()
+        .filter_map(|c| c.account.out(now).flatten())
+        .min();
+    (at, signed_in.len())
+}
+
+/// Run this turn on the other engine, the agent's own being out: the first
+/// time with one quiet line, and in a new session there with the app's own
+/// recap (engines can't open each other's sessions); after that, in that
+/// session. Its instructions and memory are the one CLAUDE.md, before and
+/// after (`crossover::sync_instructions`).
+async fn carry_on(
+    app: &AppHandle,
+    agent_id: &str,
+    prompt: &str,
+    routine: bool,
+    resumes: u8,
+) -> Result<Ended, CommandError> {
+    use super::crossover::{self, Away};
+    let agent = store::get(agent_id)?;
+    let home = agent.engine;
+    let to = crossover::other(home);
+    let now = store::now_ms();
+    let (until, _) = back_at(&agent, now).await;
+    let arriving = agent.away.as_ref().is_none_or(|a| a.engine != to);
+    store::update(agent_id, |a| match a.away.as_mut() {
+        Some(away) if away.engine == to => away.until = until.or(away.until),
+        _ => {
+            a.away = Some(Away {
+                engine: to,
+                session_id: None,
+                since: now,
+                until,
+                fresh: false,
+            })
+        }
+    })?;
+    if arriving {
+        let reach = crossover_reach(&agent, to);
+        let line = crossover::carried_line(home, to, until, reach.as_deref(), &chrono::Local, now);
+        let _ = record_in_turn(app, new_message(agent_id, MessageKind::Note, line));
+        let _ = app.emit(EVENT_REGISTRY, ());
+        let _ = app.emit(EVENT_USAGE_PLAN, ());
+        tracing::info!(
+            "[Agents] {agent_id}: every {} account is out; carrying on with {}",
+            home.label(),
+            to.label()
+        );
+    }
+    let home_dir = store::agent_home(agent_id)?;
+    crossover::sync_instructions(&home_dir);
+    let away = store::get(agent_id)?.away;
+    let fresh_there = away
+        .as_ref()
+        .is_none_or(|a| a.session_id.is_none() && !a.fresh);
+    let prompt = if fresh_there && resumes == 0 {
+        with_recap_as(agent_id, &crossover::carry_header(home, to), None, prompt)
+    } else {
+        prompt.to_string()
+    };
+    let result = run_on_engine(app, agent_id, &prompt, routine, resumes, to).await;
+    // Memory it saved there is kept, wherever Codex put it.
+    if crossover::sync_instructions(&home_dir) {
+        tracing::info!("[Agents] kept memory {agent_id} saved on {}", to.label());
+    }
+    result
+}
+
+/// Its own engine has room again: back to it, with one line, and (when it
+/// has its own conversation to resume) told what was said meanwhile.
+fn go_back(app: &AppHandle, agent_id: &str, prompt: &str) -> String {
+    use super::crossover;
+    let Ok(agent) = store::get(agent_id) else {
+        return prompt.to_string();
+    };
+    let Some(away) = agent.away.clone() else {
+        return prompt.to_string();
+    };
+    let _ = store::update(agent_id, |a| a.away = None);
+    if let Ok(home_dir) = store::agent_home(agent_id) {
+        crossover::sync_instructions(&home_dir);
+    }
+    let line = crossover::back_line(agent.engine);
+    let _ = record_in_turn(app, new_message(agent_id, MessageKind::Note, line));
+    let _ = app.emit(EVENT_REGISTRY, ());
+    let _ = app.emit(EVENT_USAGE_PLAN, ());
+    // Started fresh meanwhile, or never had one: nothing missed to tell.
+    if agent.session_id.is_none() || away.fresh {
+        return prompt.to_string();
+    }
+    with_recap_as(
+        agent_id,
+        &crossover::back_header(agent.engine, away.engine),
+        Some(away.since),
+        prompt,
+    )
+}
+
+/// What the agent would have had on its own engine that the other lacks
+/// (`crossover::reach_line`): Claude in Chrome and claude.ai connectors.
+fn crossover_reach(agent: &store::Agent, to: Engine) -> Option<String> {
+    use super::connections::Kind;
+    let outside = from_outside(&agent.id);
+    let there = super::crossover::as_on(agent.clone(), to);
+    let lost_chrome = super::browser::claude_in_chrome_for_turn(agent, outside)
+        && !crate::user_chrome::for_turn(agent, outside);
+    let user_chrome = crate::user_chrome::for_turn(&there, outside);
+    let all = super::connections::list().unwrap_or_default();
+    let granted: Vec<&super::connections::Connection> = all
+        .iter()
+        .filter(|c| c.grant_for(&agent.id).is_some())
+        .collect();
+    let connectors: Vec<String> = if agent.engine == Engine::Claude {
+        granted
+            .iter()
+            .filter(|c| matches!(c.kind, Kind::ClaudeAi { .. }))
+            .map(|c| c.title.clone())
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let connections = granted
+        .iter()
+        .any(|c| !matches!(c.kind, Kind::ClaudeAi { .. }));
+    super::crossover::reach_line(to, lost_chrome, &connectors, user_chrome, connections)
+}
+
+/// "Carry on with Codex until then?": one card, in this agent's chat, for
+/// the engine's outage; nobody else is asked while it is open.
+async fn ask_to_carry_on(app: &AppHandle, agent: &store::Agent, resume: bool, now: i64) {
+    use super::crossover;
+    let home = agent.engine;
+    let to = crossover::other(home);
+    let (until, count) = back_at(agent, now).await;
+    let ask = crossover::Ask {
+        from: home,
+        to,
+        until,
+        resume,
+    };
+    let reach = crossover_reach(agent, to);
+    let approval = crossover::card(
+        ask,
+        &agent.name,
+        count,
+        reach.as_deref(),
+        &chrono::Local,
+        now,
+    );
+    let request_id = approval.request_id.clone();
+    let mut message = new_message(&agent.id, MessageKind::Approval, "");
+    message.approval = Some(approval);
+    if let Err(e) = record_own(app, message) {
+        tracing::warn!(
+            "[Agents] couldn't ask about carrying on with {}: {e}",
+            to.label()
+        );
+        return;
+    }
+    let _ = crossover::set_asking(
+        home,
+        crossover::Asking {
+            agent_id: agent.id.clone(),
+            request_id,
+            at: now,
+        },
+    );
+    store::refresh_pending(&agent.id);
+    notify::refresh_badge(app);
+}
+
+/// The engine has room again: a card still asking about its outage closes.
+fn close_crossover_card(app: &AppHandle, home: Engine) {
+    let Some(asking) = super::crossover::asking(home) else {
+        return;
+    };
+    super::crossover::clear_asking(&asking.request_id);
+    let why = format!("{} has room again, so this closed.", home.label());
+    if let Ok(Some(m)) = store::set_aside(&asking.agent_id, &asking.request_id, &why) {
+        let _ = app.emit(EVENT_MESSAGE, &m);
+    }
+    store::refresh_pending(&asking.agent_id);
+}
+
+/// "Carry on with Codex until then?" answered, on the desk, the phone or by
+/// a typed yes: Always (the team's setting), Just this time (this outage),
+/// or Wait. A yes to a turn that hadn't started runs it again there.
+pub fn answer_crossover(
+    app: &AppHandle,
+    agent_id: &str,
+    approval: &store::Approval,
+    allow: bool,
+    always: bool,
+) -> Result<(), CommandError> {
+    use super::crossover::{self, Answer};
+    let Some(ask) = approval.crossover.clone() else {
+        return Err(CommandError::expected(
+            "That isn't a card about carrying on.",
+        ));
+    };
+    let answer = crossover::answer_of(allow, always);
+    match answer {
+        Answer::Always => crossover::set_mode(ask.from, crossover::Mode::Carry)?,
+        Answer::JustThisTime => crossover::grant_once(ask.from, store::now_ms())?,
+        Answer::Wait => {}
+    }
+    crossover::clear_asking(&approval.request_id);
+    let status = if allow {
+        store::ApprovalStatus::Allowed
+    } else {
+        store::ApprovalStatus::Denied
+    };
+    if let Some(updated) = store::answer_prompt(
+        agent_id,
+        &approval.request_id,
+        status,
+        crossover::answer_word(answer),
+    )? {
+        let _ = app.emit(EVENT_MESSAGE, &updated);
+    }
+    if allow && ask.resume {
+        enqueue(
+            app,
+            agent_id,
+            crossover::resume_prompt(ask.from),
+            From::User,
+        );
+    }
+    store::refresh_pending(agent_id);
+    let _ = app.emit(EVENT_REGISTRY, ());
+    let _ = app.emit(EVENT_USAGE_PLAN, ());
+    notify::refresh_badge(app);
+    Ok(())
+}
+
+/// Run one turn on `engine`'s accounts (`agents::wallet`): on the first
+/// one that can, and when it ends on the usage limit, again on the next, with
+/// a quiet line saying so. With one account this is exactly [`run_turn`].
+/// On the agent's own engine its "Runs on" pin holds; on the other engine
+/// (carrying on, `crossover`) any of that engine's accounts.
+async fn run_on_engine(
+    app: &AppHandle,
+    agent_id: &str,
+    prompt: &str,
+    routine: bool,
     mut resumes: u8,
+    engine: Engine,
 ) -> Result<Ended, CommandError> {
     use super::wallet::{self, Choice};
     let agent = store::get(agent_id)?;
-    let engine = agent.engine;
     // "Runs on" one account: only that one, never another (`wallet::for_agent`).
-    let pin = agent.account.clone();
+    let pin = agent.account.clone().filter(|_| engine == agent.engine);
     let pinned = pin.as_deref();
     let mine = move || async move { wallet::for_agent(wallet::candidates(engine).await, pinned) };
     let mut tried: Vec<String> = Vec::new();
@@ -4857,7 +5237,11 @@ async fn run_turn(
     account: &super::wallet::Account,
 ) -> Result<Ended, CommandError> {
     let began = std::time::Instant::now();
-    let mut agent = store::get(agent_id)?;
+    // On the other engine while its own is out (`crossover`): the agent as
+    // it is there, its own engine's session and settings left as they are.
+    let own = store::get(agent_id)?;
+    let crossed = own.engine != account.engine;
+    let mut agent = super::crossover::as_on(own, account.engine);
     let engine = agent.engine;
     // The app's own turn (`tidy`): its words never reach the chat.
     let quiet = super::tidy::is_quiet(agent_id);
@@ -5212,7 +5596,8 @@ async fn run_turn(
     let mut reading = ReadingWatch {
         app: app.clone(),
         agent_id: agent_id.to_string(),
-        armed: model == agent.model.as_deref(),
+        // Another engine's readings aren't its own conversation's.
+        armed: !crossed && model == agent.model.as_deref(),
         read: false,
     };
     let deadline = tokio::time::sleep(std::time::Duration::from_secs(TURN_TIMEOUT_SECS));
@@ -5341,8 +5726,7 @@ async fn run_turn(
                                 // The conversation a pick-up resumes.
                                 update_mark(&id, |m| m.session_id = Some(sid.clone()));
                                 store::update(&id, |a| {
-                                    a.session_id = Some(sid);
-                                    a.new_engine = false;
+                                    super::crossover::save_session(a, engine, sid)
                                 })
                             }).await;
                         }
@@ -5692,10 +6076,7 @@ async fn run_turn(
         tracing::warn!("[Agents] Session {session_id} for {agent_id} is gone; starting a new one");
         // The reading was the lost session's; the retry takes its own.
         reading.armed = false;
-        let _ = store::update(agent_id, |a| {
-            a.session_id = None;
-            a.context = None;
-        });
+        let _ = store::update(agent_id, |a| super::crossover::drop_session(a, engine));
         // The new session starts blank. Hand it the conversation the user
         // can see, so the agent doesn't greet them like a stranger, and say so.
         let _ = record_in_turn(
@@ -6533,6 +6914,7 @@ mod tests {
                 handoff: None,
                 gate: None,
                 step_in: None,
+                crossover: None,
             });
             store::append_message(&card).unwrap();
             let err = begin_fresh(&a.id).unwrap_err().to_string();

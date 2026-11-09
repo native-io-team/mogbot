@@ -609,6 +609,7 @@ pub async fn bring_to_front(
         handoff: None,
         gate: None,
         step_in: None,
+        crossover: None,
     });
     super::runner::record_own(app, card).map_err(|e| e.to_string())?;
     store::refresh_pending(&agent.id);

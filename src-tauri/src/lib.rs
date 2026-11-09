@@ -889,6 +889,8 @@ pub fn run() {
             commands::agents::agents_accounts,
             commands::agents_usage::agents_usage_overview,
             commands::agents_usage::agents_set_usage_mode,
+            commands::agents_usage::agents_crossover,
+            commands::agents_usage::agents_set_crossover,
             commands::agents_usage::agents_spare_add,
             commands::agents_usage::agents_spare_remove,
             commands::agents::agents_account_add,

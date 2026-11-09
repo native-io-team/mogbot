@@ -17,6 +17,7 @@
 import type { AgentEngine, QuotaWindow, UsageAccount, UsageInventory } from './model';
 import { QUOTA_WARN_PERCENT, resetPhrase } from './quota';
 import { planLabel, type UsageTone } from './usage';
+import { awayRoom, type AwayState } from './crossover';
 
 export const ACCOUNT_ENGINE_LABEL: Record<AgentEngine, string> = {
   claude: 'Claude Code',
@@ -211,15 +212,41 @@ export interface WorkingLine {
   detail: string;
   /** The engine has more than one account (so there is something to swap to). */
   several: boolean;
+  /** Agents carry on with the other engine (`crossover`): the name, short, never truncates. */
+  away?: boolean;
 }
 
-export function workingLine(view: SwitcherEngine): WorkingLine | null {
+/**
+ * `away`: agents of this engine are carrying on with the other while every
+ * account they may use is out (`agents/crossover.rs`): the line says so,
+ * "Claude Code out · on Codex until 4:00 PM", whatever the rows say.
+ */
+export function workingLine(
+  view: SwitcherEngine,
+  away?: AwayState | null,
+  now = Date.now()
+): WorkingLine | null {
   // All out: nothing is in use; the line names the first, and that all are out.
   const row =
     view.rows.find((r) => r.inUse) ?? (view.allOut ? view.rows.find((r) => r.signedIn) : undefined);
-  if (!row) return null;
   const several = view.rows.length > 1;
   const engine = ACCOUNT_ENGINE_LABEL[view.engine];
+  if (away && away.home === view.engine) {
+    const who = away.count === 1 ? '1 agent is' : `${away.count} agents are`;
+    return {
+      engine: view.engine,
+      // Short: the row is narrow, and the room says where they went.
+      name: `${view.engine === 'claude' ? 'Claude' : 'Codex'} out`,
+      // "Claude out · on Codex": what fits the sidebar's row; until when
+      // is in its detail (the tooltip) and in Settings → Agents → Usage.
+      room: `on ${ACCOUNT_ENGINE_LABEL[away.on]}`,
+      tone: 'warning',
+      away: true,
+      detail: `Every ${engine} account is out of usage: ${who} carrying on with ${ACCOUNT_ENGINE_LABEL[away.on]}${away.until ? ` ${awayRoom(away, now).replace(/^on \S+ /, '')}` : ''}, then back to ${engine}.`,
+      several,
+    };
+  }
+  if (!row) return null;
   if (view.allOut) {
     const back = view.rows.map((r) => r.state).find((s) => s.startsWith('Out of usage until'));
     return {

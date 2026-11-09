@@ -4005,9 +4005,7 @@ anthropics/claude-code#103820, #103253, #70697):
   (`cli_auth_credentials_store = "keyring"`), where `CODEX_HOME` isolation
   depends on how the "Codex Auth" item is keyed. Unit tests cover detection
   (real wordings), choosing, marking, the lines and the transcript copy.
-- Not built: falling back across engines (Claude Code → Codex). It would move
-  the agent to another model mid-conversation and lose its session; left out
-  rather than done half-way.
+- Falling back across engines: see "Carrying on with the other engine" below.
 
 The plan reading (`quota.json`) is one account's picture: when a turn on
 another account reports one, the old reading is cleared first
@@ -4020,6 +4018,61 @@ Mac's own (`wallet::keep_sessions`), so an agent that last ran on it resumes
 where it was, then deletes its Keychain items and its folder (`accounts::forget_isolated_account`,
 which refuses any id a workspace uses). The phone reads the list read-only
 (`agents.accounts`) in its Settings, once an engine has more than one.
+
+### Carrying on with the other engine (`agents/crossover.rs`)
+
+When every account an agent may use on its own engine is out of usage, its
+turns can carry on with the other engine (Claude Code ↔ Codex) if that one is
+installed and signed in with room. `runner::run_on_accounts` decides around
+the wallet's own loop (`run_on_engine`):
+
+- **The user's choice, per engine** (`crossover.json` beside the wallet;
+  Settings → Agents → Usage, "When every Claude Code account is out"; the
+  Chief's `set_engine_fallback`, behind a card): **Ask first** (default),
+  **Carry on with Codex**, or **Wait for the reset**. Ask first puts one card
+  in the agent's chat when a turn ends with every account out: "All your
+  Claude Code accounts are out until 4:00 PM. Carry on with Codex until
+  then?" — **Always** (Allow + always: sets Carry on), **Just this time**
+  (Allow: this outage, until the engine has room again, at most a week),
+  **Wait** (Deny). One card per engine at a time; it isn't swept by expiry and
+  closes itself ("Claude Code has room again") when the outage ends. A yes
+  runs the turn again on the other engine. Older clients show Allow / Deny.
+- **Never** for an agent set to one account ("Runs on"), never for the app's
+  own tidy turn, never silently: the chat gets "Carried on with Codex (Claude
+  Code is out until 4:00 PM)." plus, when relevant, what stays behind ("Claude
+  in Chrome and the claude.ai connector Gmail stay with Claude Code; on Codex
+  it uses your Chrome through the app's own extension, and your connections
+  here").
+- **Never twice.** A turn whose try already ran a tool before the accounts ran
+  out (or a pick-up after a crash) isn't started again in a fresh session on
+  the other engine: it stops on a line saying so, and the next message runs
+  there. Asked in that case, the card's yes doesn't re-run it.
+- **The conversation.** Engines can't open each other's sessions. The agent
+  keeps `engine` and `session_id` as they were; `Agent.away` holds the other
+  engine, its session there, since when and the reported reset. The first
+  turn there starts a new session with the app's recap (`with_recap_as`,
+  `crossover::carry_header`); later turns resume it. `run_turn` sees the
+  agent as it is on that engine (`crossover::as_on`: no model, effort, pin
+  or context reading of its own engine), and a confirmed session is saved to
+  `away` (`save_session`). Recovery after a restart picks up the away session.
+- **Back.** Once its own engine has room (an account not out, or its reset
+  passed), the next turn goes home: one line, "Back on Claude Code: it has
+  room again.", and its own session resumes with a recap of only what was
+  said since it left (`back_header`). Start fresh while away starts fresh on
+  both sides, without a recap.
+- **Instructions and memory** are one file: the home's `CLAUDE.md` is Codex's
+  project doc already; before and after each turn there, `AGENTS.md` in the
+  home is made a link to it (`sync_instructions`). If Codex wrote an
+  `AGENTS.md` of its own, the lines `CLAUDE.md` lacks are kept in memory
+  under "### Saved on Codex" before it becomes the link. A bound agent's
+  project's own `AGENTS.md` is never touched.
+- **Shown:** the account row "Claude out · on Codex" (until when in its
+  tooltip), Settings → Agents → Usage "Claude Code out · on Codex until
+  4:00 PM", and the Chief's `usage_overview`.
+- **Not verified:** a live turn on Codex carrying a Claude Code conversation
+  (Codex isn't signed in on the development Mac), how a real Codex treats
+  the `AGENTS.md` link when it writes memory, and take-over while away (it
+  drives the agent's own engine's session, not the away one).
 
 ## Usage awareness (`agents/inventory.rs`, `agents/forecast.rs`, `agents/usage_plan.rs`)
 

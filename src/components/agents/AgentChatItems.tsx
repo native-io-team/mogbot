@@ -48,6 +48,7 @@ import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
 import { LoginCard } from './AgentLoginCard';
 import { StepInCard } from './AgentStepIn';
+import { CrossoverCard } from './AgentCrossoverCard';
 import { AgentSettingsChange } from './AgentSettingsChange';
 import { AgentPlanList } from './AgentPlanList';
 import { AgentGateBody } from './AgentRoutineSteps';
@@ -1053,6 +1054,16 @@ export const ApprovalCard = memo(function ApprovalCard({
       <StepInCard
         message={message}
         onAnswer={(id, allow) => onAnswer(id, allow)}
+        arrived={arrived}
+      />
+    );
+  }
+  // "Carry on with Codex until then?": Wait, Just this time, Always.
+  if (approval.crossover) {
+    return (
+      <CrossoverCard
+        message={message}
+        onAnswer={(id, allow, always) => onAnswer(id, allow, always)}
         arrived={arrived}
       />
     );

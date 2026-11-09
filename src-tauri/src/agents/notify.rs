@@ -448,6 +448,7 @@ mod tests {
             model: None,
             effort: None,
             new_engine: false,
+            away: None,
             context: None,
             routine_model: None,
             account: None,
@@ -494,6 +495,7 @@ mod tests {
             handoff: None,
             gate: None,
             step_in: None,
+            crossover: None,
         });
         message
     }

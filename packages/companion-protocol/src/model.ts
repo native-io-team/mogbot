@@ -16,6 +16,7 @@
 
 import type { ResultCard, ResultRef } from './results';
 import type { SettingsProposal } from './policy';
+import type { CrossoverAsk, CrossoverAway } from './crossover';
 
 /** What a planned action is (`agents/plan_grant.rs`, `Kind`). */
 export type PlanKind =
@@ -244,6 +245,8 @@ export interface Agent {
   reach?: AgentReachSettings;
   /** Moved engines and not run there yet: its next turn starts a new conversation. */
   newEngine?: boolean;
+  /** Every account of its engine is out; its turns carry on with the other engine meanwhile (`crossover`). */
+  away?: CrossoverAway;
   /** How full its conversation is, as its engine reported it; omitted when it doesn't say. */
   context?: ContextFill;
   /** You're driving its session in a terminal on the Mac; omitted otherwise. */
@@ -648,6 +651,8 @@ export interface Approval {
    * plain Allow is refused with "Step in on your Mac". Older Macs never send it.
    */
   stepIn?: StepInCard;
+  /** "Carry on with Codex until then?": Always (allow + always), Just this time (allow), Wait (deny). */
+  crossover?: CrossoverAsk;
   /**
    * "Bring your work Chrome window to the front so I can use it": Allow means
    * Check again, Deny means Not now. Never a login.

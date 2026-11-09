@@ -370,6 +370,14 @@ export const baseCommands: CommandMap = {
     now: 0,
   },
   agents_set_usage_mode: null,
+  // When every account of an engine is out (`agents::crossover::View`):
+  // never chosen (ask first), nobody carrying on elsewhere.
+  agents_crossover: { claude: 'ask', codex: 'ask', away: [] },
+  agents_set_crossover: (args: Record<string, unknown>) => ({
+    claude: args.engine === 'claude' ? args.mode : 'ask',
+    codex: args.engine === 'codex' ? args.mode : 'ask',
+    away: [],
+  }),
   // How much agents do on their own (`agents::independence`): never chosen.
   agents_independence: 'judgement',
   agents_set_independence: (args: Record<string, unknown>) => args.level,

@@ -985,6 +985,12 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
             "Changing how your limits are used",
             "change how your limits are used",
         ),
+        "set_engine_fallback" => act(
+            StepKind::Plan,
+            "Changed what happens when an engine runs out",
+            "Changing what happens when an engine runs out",
+            "change what happens when an engine runs out",
+        ),
         "use_account" => act(
             StepKind::Plan,
             "Switched the account turns run on",

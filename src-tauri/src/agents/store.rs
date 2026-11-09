@@ -303,6 +303,11 @@ pub struct Agent {
     /// turn starts a new session and is handed the recent conversation.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub new_engine: bool,
+    /// Every account of its engine is out, and its turns carry on with the
+    /// other engine meanwhile (`crossover`): which, and its conversation
+    /// there. Its own `session_id` stays as it was, for when it goes back.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub away: Option<super::crossover::Away>,
     /// How full its current conversation is, as its engine last reported it.
     /// `None` when the engine doesn't say, or since a fresh start.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -402,6 +407,8 @@ impl Agent {
         self.new_engine = true;
         self.capabilities = None;
         self.context = None;
+        // Carrying on elsewhere was for the engine it's leaving.
+        self.away = None;
     }
 
     /// Whether its next turn would continue a conversation: there is one to
@@ -426,6 +433,11 @@ impl Agent {
         self.session_id = None;
         self.new_engine = false;
         self.context = None;
+        // Carrying on with the other engine starts fresh there too.
+        if let Some(away) = self.away.as_mut() {
+            away.session_id = None;
+            away.fresh = true;
+        }
     }
 }
 
@@ -593,6 +605,12 @@ pub struct Approval {
     /// and an Allow is refused with "Step in on your Mac".
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub step_in: Option<super::step_in::StepIn>,
+    /// "All your Claude Code accounts are out until 4:00 PM. Carry on with
+    /// Codex until then?" (`agents/crossover.rs`): Always (Allow + always),
+    /// Just this time (Allow), Wait (Deny). Older clients show a plain
+    /// Allow / Deny over the same title and summary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crossover: Option<super::crossover::Ask>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -1228,6 +1246,7 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         model: None,
         effort: None,
         new_engine: false,
+        away: None,
         context: None,
         routine_model: None,
         account: None,
@@ -2541,6 +2560,7 @@ mod tests {
                         handoff: None,
                         gate: None,
                         step_in: None,
+                        crossover: None,
                     });
                 }
                 append_message(&line).unwrap();
@@ -2753,6 +2773,7 @@ mod tests {
                     handoff: None,
                     gate: None,
                     step_in: None,
+                    crossover: None,
                 }),
                 attachments: Vec::new(),
                 check_in: None,
@@ -2876,6 +2897,7 @@ mod tests {
                 handoff: None,
                 gate: None,
                 step_in: None,
+                crossover: None,
             });
             append_message(&card).unwrap();
             let raw = std::fs::read(log_path(&a.id).unwrap()).unwrap();
