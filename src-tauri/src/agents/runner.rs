@@ -2036,6 +2036,11 @@ pub struct MemorySeal {
     path: std::path::PathBuf,
     before: Option<Vec<u8>>,
     writes: u64,
+    /// AGENTS.md as the turn began: Codex has no rule against writing it,
+    /// and a file of its own there would be Codex's project doc and folded
+    /// into memory (`crossover::sync_instructions`).
+    home: std::path::PathBuf,
+    agents_before: super::crossover::AgentsDoc,
     app: AppHandle,
 }
 
@@ -2047,6 +2052,8 @@ impl MemorySeal {
             before: std::fs::read(&path).ok(),
             writes: store::claude_md_writes(&path),
             path,
+            home: home.to_path_buf(),
+            agents_before: super::crossover::agents_doc(home),
             app: app.clone(),
         }
     }
@@ -2069,7 +2076,9 @@ pub fn put_back_claude_md(path: &Path, before: Option<&[u8]>, writes_before: u64
 
 impl Drop for MemorySeal {
     fn drop(&mut self) {
-        if put_back_claude_md(&self.path, self.before.as_deref(), self.writes) {
+        let claude = put_back_claude_md(&self.path, self.before.as_deref(), self.writes);
+        let agents = super::crossover::put_back_agents_md(&self.home, &self.agents_before);
+        if claude || agents {
             let line = new_message(
                 &self.agent_id,
                 MessageKind::Note,

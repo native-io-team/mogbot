@@ -613,6 +613,14 @@ pub fn sync_instructions(home: &Path) -> bool {
             }
             let _ = std::fs::remove_file(&agents);
         }
+        // Another name for some other file (a hard link to `~/.ssh/…`), or
+        // far bigger than any memory: never read into memory, just replaced.
+        Ok(meta) if meta.is_file() && !foldable(&meta) => {
+            tracing::warn!(
+                "[Agents] AGENTS.md wasn't a note of the agent's own; replaced, not kept"
+            );
+            let _ = std::fs::remove_file(&agents);
+        }
         Ok(meta) if meta.is_file() => {
             let theirs = std::fs::read_to_string(&agents).unwrap_or_default();
             match fold_into(&claude, &theirs) {
@@ -633,6 +641,83 @@ pub fn sync_instructions(home: &Path) -> bool {
         tracing::warn!("[Agents] couldn't link AGENTS.md to CLAUDE.md: {e}");
     }
     folded
+}
+
+/// The most of a separate AGENTS.md read into memory.
+const MAX_FOLD_BYTES: u64 = 64 * 1024;
+
+/// A file of the agent's own: one name only (not a hard link to something
+/// elsewhere) and no bigger than a memory could be.
+fn foldable(meta: &std::fs::Metadata) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        if meta.nlink() != 1 {
+            return false;
+        }
+    }
+    meta.len() <= MAX_FOLD_BYTES
+}
+
+/// What `AGENTS.md` in a home is, for a turn answering outside text to have
+/// it put back as it was (`runner::MemorySeal`): Codex has no rule against
+/// writing it, and a file there is Codex's project doc and folded into
+/// memory ([`sync_instructions`]).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AgentsDoc {
+    Absent,
+    Link(PathBuf),
+    File(Vec<u8>),
+    /// A folder, or unreadable: left as it is.
+    Other,
+}
+
+pub fn agents_doc(home: &Path) -> AgentsDoc {
+    let path = home.join("AGENTS.md");
+    match path.symlink_metadata() {
+        Err(_) => AgentsDoc::Absent,
+        Ok(m) if m.file_type().is_symlink() => std::fs::read_link(&path)
+            .map(AgentsDoc::Link)
+            .unwrap_or(AgentsDoc::Other),
+        Ok(m) if m.is_file() => std::fs::read(&path)
+            .map(AgentsDoc::File)
+            .unwrap_or(AgentsDoc::Other),
+        Ok(_) => AgentsDoc::Other,
+    }
+}
+
+/// Put `AGENTS.md` back as `before` if it changed. Returns whether it did.
+pub fn put_back_agents_md(home: &Path, before: &AgentsDoc) -> bool {
+    let now = agents_doc(home);
+    if &now == before || *before == AgentsDoc::Other {
+        return false;
+    }
+    let path = home.join("AGENTS.md");
+    match now {
+        AgentsDoc::Absent => {}
+        AgentsDoc::Other => {
+            if path.symlink_metadata().is_ok_and(|m| m.is_dir()) {
+                let _ = std::fs::remove_dir_all(&path);
+            } else {
+                let _ = std::fs::remove_file(&path);
+            }
+        }
+        _ => {
+            let _ = std::fs::remove_file(&path);
+        }
+    }
+    let restored = match before {
+        AgentsDoc::Absent | AgentsDoc::Other => Ok(()),
+        #[cfg(unix)]
+        AgentsDoc::Link(to) => std::os::unix::fs::symlink(to, &path),
+        #[cfg(not(unix))]
+        AgentsDoc::Link(_) => Ok(()),
+        AgentsDoc::File(bytes) => std::fs::write(&path, bytes),
+    };
+    if let Err(e) = restored {
+        tracing::warn!("[Agents] couldn't put AGENTS.md back: {e}");
+    }
+    true
 }
 
 /// Add each line of `theirs` that CLAUDE.md doesn't already have to its
