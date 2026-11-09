@@ -207,6 +207,24 @@ pub async fn list() -> Result<Apps, CommandError> {
     })
 }
 
+/// `claude mcp list` as another account: its environment (`wallet::env_for`)
+/// on the command, and its own config read for which servers are
+/// user-scope. Read-only, like [`list`].
+pub async fn list_as(
+    env: &[(String, String)],
+    config: &std::path::Path,
+) -> Result<Vec<App>, CommandError> {
+    let mut cmd = claude(&["mcp", "list"])?;
+    for (k, v) in env {
+        cmd.env(k, v);
+    }
+    let output = run_with_timeout(cmd, "claude mcp list", LIST_TIMEOUT_SECS).await?;
+    let names = std::fs::read_to_string(config)
+        .map(|text| user_scope_names(&text))
+        .unwrap_or_default();
+    Ok(parse_list(&String::from_utf8_lossy(&output.stdout), &names))
+}
+
 /// Remove a user-scope server. Others are managed where they were set up.
 pub async fn remove(name: &str) -> Result<(), CommandError> {
     if !read_user_scope_names().iter().any(|n| n == name) {
