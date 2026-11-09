@@ -792,6 +792,32 @@ pub fn clean_turn(agent_id: &str, others: bool, batch_clean: bool) -> bool {
     !others && batch_clean && !super::exposure::read_outside(agent_id)
 }
 
+/// The words a reply would post, or why none go: cut to Slack's length
+/// ([`shorten`]), but checked whole first, since a secret past the cut is
+/// still a secret in the part before it when the cut falls inside it. A
+/// reply that starts with the trigger is refused too: posted under the
+/// user's name it would read back as the user's own instruction, unsealed,
+/// whenever the `posted` list misses it (a card answered while a check is
+/// reading the same conversation). Pure.
+pub fn prepare(full: &str, trigger: &str, known: &[String]) -> Result<String, String> {
+    if super::egress::holds_secret(full, known) {
+        return Err(
+            "The reply looked like it held a password, key or token, so it wasn't posted in Slack."
+                .into(),
+        );
+    }
+    if full
+        .trim_start()
+        .to_lowercase()
+        .starts_with(&trigger.to_lowercase())
+    {
+        return Err(format!(
+            "The reply started with “{trigger}”, which would read as your own ask in Slack, so it wasn't posted."
+        ));
+    }
+    Ok(shorten(full))
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Posting {
     /// Post it now.
@@ -842,6 +868,23 @@ pub struct ReplyCard {
     pub place: String,
     /// Exactly what is posted.
     pub text: String,
+    /// The Slack account it was written for (`team:user`): Allow posts it
+    /// only while that is the account connected.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+}
+
+/// `team:user`, as a [`ReplyCard`] names the account it's for.
+pub fn account_key(a: &Account) -> String {
+    format!("{}:{}", a.team_id, a.user_id)
+}
+
+/// Whether a card's words may go out with the account connected now: the
+/// one it was written for (a card from before a reconnect as someone else
+/// would otherwise post under their name). A card without one predates
+/// the check.
+pub fn same_account(r: &ReplyCard, now: Option<&Account>) -> bool {
+    r.account.is_none() || r.account == now.map(account_key)
 }
 
 /// "Reply in Slack?", showing the exact words. Pure.
@@ -914,6 +957,14 @@ pub async fn post_reply(
 }
 
 async fn post_and_say(app: &AppHandle, agent_id: &str, r: &ReplyCard) {
+    if !same_account(r, load().account.as_ref()) {
+        note(
+            app,
+            agent_id,
+            "Slack is connected to a different account now, so the reply wasn't posted.".into(),
+        );
+        return;
+    }
     let Some(token) = token() else {
         note(
             app,
@@ -1033,7 +1084,14 @@ async fn settle(app: &AppHandle) {
         let Ok(agent) = store::get(&p.agent_id) else {
             continue;
         };
-        let text = shorten(&text);
+        let saved = load();
+        let text = match prepare(&text, &saved.trigger(), &known) {
+            Ok(t) => t,
+            Err(why) => {
+                note(app, &agent.id, why);
+                continue;
+            }
+        };
         let clean = clean_turn(&agent.id, others, batch_clean);
         let effective = super::policy::effective(&agent);
         let r = ReplyCard {
@@ -1041,6 +1099,7 @@ async fn settle(app: &AppHandle) {
             thread_ts: p.thread_ts.clone(),
             place: p.place.clone(),
             text,
+            account: saved.account.as_ref().map(account_key),
         };
         match decide(
             p.own,

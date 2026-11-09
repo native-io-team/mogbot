@@ -3821,8 +3821,10 @@ after the ask (a result card's title when the reply is only a card) is cut to
 `slack::decide`:
 
 - **refused** (a line in the chat) if it's empty or holds anything shaped
-  like a secret or a known Keychain value (`egress::holds_secret`), card or no
-  card;
+  like a secret or a known Keychain value (`egress::holds_secret`, checked on
+  the whole reply before the cut, so a token straddling it isn't half
+  posted), or starts with the trigger (posted under the user's name it would
+  read back as their own unsealed ask; `slack::prepare`), card or no card;
 - **posted by itself** only when all four hold: the user wrote the Slack
   message themself; the turn that took it read no outside text
   (`runner::take_batch` → `slack::note_batch`; unknown after a restart counts
@@ -3836,8 +3838,11 @@ after the ask (a result card's title when the reply is only a card) is cut to
   phone): where it goes, then `outward::card_block`'s "Goes out under your
   name, exactly: “…”". No Always allow; nothing waits on it; it never expires
   (`expiry.rs`). Allow (or a typed yes in the chat) posts exactly those words
-  in the thread (`chat.postMessage`, `&<>` escaped, unfurls off) and leaves
-  "Posted in Slack (#launch)."; Deny leaves "Not posted in Slack.".
+  in the thread (`chat.postMessage`, `&<>` escaped, `parse=none`,
+  `link_names=false`, unfurls off, so no `@channel` or mention is made from
+  words) and leaves "Posted in Slack (#launch)."; Deny leaves "Not posted in
+  Slack.". A card names the account it was written for and posts only while
+  that account is connected (`slack::same_account`).
 
 So the default, at Steady, is a card for every reply. Agents get no Slack
 tool and never hold the token; a turn told "don't post to Slack yourself"

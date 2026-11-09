@@ -424,6 +424,10 @@ pub async fn post(
                 ("channel", channel.to_string()),
                 ("thread_ts", thread_ts.to_string()),
                 ("text", escape(text)),
+                // Text only: no @channel, @here or user-group mention is
+                // made from words, and nothing unfurls.
+                ("parse", "none".to_string()),
+                ("link_names", "false".to_string()),
                 ("unfurl_links", "false".to_string()),
                 ("unfurl_media", "false".to_string()),
             ],
