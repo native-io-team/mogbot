@@ -121,8 +121,15 @@ pub fn allowed(enabled: bool, agent: &Agent, outside: bool) -> bool {
     enabled && agent.engine == Engine::Claude && !agent.reach.browser_off && !outside
 }
 
-/// [`allowed`] with the team's switch as it is now.
+/// Whether a turn of `agent` has the user's own Chrome by any route:
+/// Claude in Chrome ([`claude_in_chrome_for_turn`]), or the app's own
+/// extension (`user_chrome`), for either engine.
 pub fn for_turn(agent: &Agent, outside: bool) -> bool {
+    claude_in_chrome_for_turn(agent, outside) || crate::user_chrome::for_turn(agent, outside)
+}
+
+/// [`allowed`] with the team's switch as it is now: Claude in Chrome only.
+pub fn claude_in_chrome_for_turn(agent: &Agent, outside: bool) -> bool {
     allowed(team_enabled(), agent, outside)
 }
 

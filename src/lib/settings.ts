@@ -363,7 +363,8 @@ export type SettingsSectionRequest =
   | 'agent-independence'
   | 'agent-admins'
   | 'agent-policy'
-  | 'agent-disk';
+  | 'agent-disk'
+  | 'agent-user-chrome';
 let settingsSectionOnOpen: SettingsSectionRequest | null = null;
 
 export function requestSettingsSectionOnOpen(section: SettingsSectionRequest) {

@@ -24,6 +24,9 @@
     "companionSource": null,
     "pushRelay": null
   },
+  "chromeExtension": {
+    "webStoreId": null
+  },
   "telemetry": {
     "posthogKey": null,
     "posthogHost": null,

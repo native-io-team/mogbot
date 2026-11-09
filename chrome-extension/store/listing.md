@@ -1,0 +1,45 @@
+# Chrome Web Store listing (draft, not submitted)
+
+Package: `pnpm package:extension` → `chrome-extension/dist/<slug>-chrome-<version>.zip`
+(the manifest's dev `key` is removed; the store assigns the listing's own id,
+which then goes into `brand.json` as `chromeExtension.webStoreId`).
+
+Icon: `icons/icon-128.png` (from `store/icon.svg`). Still needed before
+submitting: at least one 1280×800 screenshot (the popup over a page with an
+agent's tab group), and a small promo tile 440×280.
+
+## Name
+
+Dashbot for Chrome
+
+## Summary (132 characters max)
+
+Let your Dashbot agents use this Chrome, in tabs of their own, through the Dashbot app on your Mac. Sends and payments ask you first.
+
+## Category
+
+Productivity / Tools
+
+## Description
+
+Dashbot runs a team of AI agents on your own Mac. This extension lets them
+use the sites you're already signed in to in Chrome, instead of asking you to
+log in somewhere else.
+
+- Agents open their own tabs, in a tab group with their name, and only ever
+  see and act in those. Your other tabs are never read.
+- Anything that would send, post, publish, pay, delete or share stops and
+  asks you in the Dashbot app first, with what it would do and as whom.
+- Agents never type passwords or one-time codes.
+- It talks only to the Dashbot app on this Mac, through Chrome's native
+  messaging. Nothing goes to any server of ours; there isn't one.
+- While an agent drives a tab, Chrome shows its own "started debugging this
+  browser" bar. Press Cancel on it at any time and agents stop.
+
+Requires the Dashbot app for macOS, with Settings → Agents → Your Chrome
+turned on.
+
+## Single purpose
+
+Lets the user's Dashbot agents, running in the Dashbot app on the same
+computer, open and use web pages in this Chrome on the user's behalf.

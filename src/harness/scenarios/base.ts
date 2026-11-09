@@ -374,6 +374,38 @@ export const baseCommands: CommandMap = {
   agents_phone_signin_stop: null,
   // The agents' own browser: on, Chrome here, the phone's Google sign-in
   // permissions not yet given (`AgentsBrowserSettings`).
+  // "Your Chrome" (`AgentsUserChromeSettings`): off, as it ships.
+  agents_user_chrome_status: {
+    supported: true,
+    enabled: false,
+    listening: false,
+    error: null,
+    chromeInstalled: true,
+    host: 'missing',
+    extensionDir: null,
+    extensionVersion: '0.1.0',
+    webStoreUrl: null,
+    extensionId: 'acpipahophpoekcmokoejnkooedofagk',
+    browsers: [],
+    updateNeeded: false,
+  },
+  agents_user_chrome_set_enabled: {
+    supported: true,
+    enabled: true,
+    listening: true,
+    error: null,
+    chromeInstalled: true,
+    host: 'current',
+    extensionDir: '/Users/you/Library/Application Support/App/chrome-extension',
+    extensionVersion: '0.1.0',
+    webStoreUrl: null,
+    extensionId: 'acpipahophpoekcmokoejnkooedofagk',
+    browsers: [],
+    updateNeeded: false,
+  },
+  agents_user_chrome_show_extension: null,
+  agents_user_chrome_open_extensions_page: null,
+  agents_user_chrome_add_from_store: null,
   agents_agent_browser_status: {
     compiled: true,
     enabled: true,

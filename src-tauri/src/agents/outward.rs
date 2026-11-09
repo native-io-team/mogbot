@@ -67,7 +67,7 @@ pub fn sends_as_user(agent: &super::store::Agent, tool: &str, input: &Value) -> 
     match tool {
         "Bash" => command_sends(input.get("command").and_then(Value::as_str).unwrap_or("")),
         t if t.starts_with(super::browser_gate::SERVER)
-            || t.starts_with(super::browser_gate::AGENTS_SERVER) =>
+            || super::browser_gate::is_own_browser(t) =>
         {
             super::browser_gate::outward_step(agent, t, input)
         }
@@ -193,7 +193,7 @@ pub fn connector_sends(tool: &str) -> bool {
     let server = rest.split("__").next().unwrap_or("");
     if server == super::prompts::SERVER_KEY
         || tool.starts_with(super::browser_gate::SERVER)
-        || tool.starts_with(super::browser_gate::AGENTS_SERVER)
+        || super::browser_gate::is_own_browser(tool)
     {
         return false;
     }
@@ -444,7 +444,7 @@ pub fn texts(tool: &str, input: &Value, ctx: Option<&Ctx>, typed: &[String]) -> 
         let command = input.get("command").and_then(Value::as_str).unwrap_or("");
         command_texts(&mut out, command, ctx);
     } else if tool.starts_with(super::browser_gate::SERVER)
-        || tool.starts_with(super::browser_gate::AGENTS_SERVER)
+        || super::browser_gate::is_own_browser(tool)
     {
         for t in typed {
             push(&mut out, t);

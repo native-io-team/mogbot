@@ -692,7 +692,9 @@ impl TurnAccess {
             .iter()
             .map(|s| {
                 // The agents' browser may wait on a card before it answers.
-                let wait = if s.key == crate::agent_browser::tools::SERVER_KEY {
+                let wait = if s.key == crate::agent_browser::tools::SERVER_KEY
+                    || s.key == crate::user_chrome::tools::SERVER_KEY
+                {
                     format!(",tool_timeout_sec={}", super::mcp::APPROVAL_WAIT_SECS + 60)
                 } else {
                     String::new()
@@ -791,7 +793,7 @@ pub async fn for_turn(agent: &store::Agent, port: u16, outside: bool) -> TurnAcc
     let mut access = TurnAccess {
         // The team's switch, this agent's, and never for outside text
         // (`browser::for_turn`).
-        browser: super::browser::for_turn(agent, outside),
+        browser: super::browser::claude_in_chrome_for_turn(agent, outside),
         ..Default::default()
     };
     let mut lines = Vec::new();
@@ -854,14 +856,35 @@ pub async fn for_turn(agent: &store::Agent, port: u16, outside: bool) -> TurnAcc
             url: crate::agent_browser::tools::url(port),
         });
     }
+    // The user's own Chrome through the app's extension, for either engine:
+    // the Settings switch, a Chrome answering, the agent's browser grant,
+    // never outside text. It replaces Claude in Chrome for this turn, so a
+    // turn never holds two ways into the same Chrome.
+    let user_chrome = crate::user_chrome::for_turn(agent, outside);
+    if user_chrome {
+        access.servers.push(TurnServer {
+            key: crate::user_chrome::tools::SERVER_KEY.to_string(),
+            url: crate::user_chrome::tools::url(port),
+        });
+        access.browser = false;
+    }
     if !lines.is_empty() {
         access.prompt = format!(
             "### Apps you're signed in to\n\nThrough the user's own sign-in, for this agent:\n\n{}\n\nTools that read go straight through. Anything that sends, posts, changes or pays asks the user on a card first; a read-only grant refuses it.",
             lines.join("\n")
         );
     }
+    if user_chrome {
+        if !access.prompt.is_empty() {
+            access.prompt.push_str("\n\n");
+        }
+        access.prompt.push_str(USER_CHROME_PROMPT);
+    }
     access
 }
+
+/// What a turn with the user's Chrome through the app's extension is told.
+pub const USER_CHROME_PROMPT: &str = "### Your Chrome\n\nThis turn reaches the user's own Chrome, where they're signed in, through the app's extension: the mcp__user_chrome__* tools, with the same names and arguments as the agents' browser's (mcp__browser__*). Wherever you're told to use the Claude in Chrome tools (mcp__claude-in-chrome__*), use these instead: there are no others this turn.";
 
 /* ------------------------------------------------------------- relay */
 

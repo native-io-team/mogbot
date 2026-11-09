@@ -388,7 +388,10 @@ pub fn describe_tool(name: &str, input: Option<&Value>) -> Option<Action> {
     if let Some(rest) = name.strip_prefix("mcp__") {
         let (server, tool) = rest.split_once("__").unwrap_or(("", rest));
         if server == crate::agent_browser::tools::SERVER_KEY {
-            return Some(own_browser(tool, field("url").as_deref()));
+            return Some(own_browser(OWN_BROWSER, tool, field("url").as_deref()));
+        }
+        if server == crate::user_chrome::tools::SERVER_KEY {
+            return Some(own_browser(YOUR_CHROME, tool, field("url").as_deref()));
         }
         return Some(other_mcp(server, tool, &field));
     }
@@ -604,8 +607,10 @@ fn browsed(url: Option<&str>) -> Action {
 /// site is the address the call names (`open`, `navigate`); otherwise
 /// [`on_action`] fills in the page it's on.
 pub const OWN_BROWSER: &str = "its own browser";
+/// The user's own Chrome through the app's extension (`user_chrome`).
+pub const YOUR_CHROME: &str = "your Chrome";
 
-fn own_browser(tool: &str, url: Option<&str>) -> Action {
+fn own_browser(which: &str, tool: &str, url: Option<&str>) -> Action {
     let kind = match tool {
         "screenshot" => StepKind::Screenshot,
         _ => StepKind::Web,
@@ -614,9 +619,9 @@ fn own_browser(tool: &str, url: Option<&str>) -> Action {
     let tail = site.map(|h| format!(" · {h}")).unwrap_or_default();
     act(
         kind,
-        format!("Used {OWN_BROWSER}{tail}"),
-        format!("Using {OWN_BROWSER}{tail}"),
-        format!("use {OWN_BROWSER}{tail}"),
+        format!("Used {which}{tail}"),
+        format!("Using {which}{tail}"),
+        format!("use {which}{tail}"),
     )
 }
 
@@ -630,15 +635,18 @@ fn site_of(url: &str) -> Option<String> {
 /// An own-browser step that didn't name a site: the page that agent's
 /// browser is on.
 fn with_site(agent_id: &str, mut action: Action) -> Action {
-    let bare = format!("Used {OWN_BROWSER}");
-    if action.label != bare {
+    let (which, key) = if action.label == format!("Used {OWN_BROWSER}") {
+        (OWN_BROWSER, super::browser_gate::agents_key(agent_id))
+    } else if action.label == format!("Used {YOUR_CHROME}") {
+        (YOUR_CHROME, super::browser_gate::user_chrome_key(agent_id))
+    } else {
         return action;
-    }
-    let page = super::browser_gate::page_of(&super::browser_gate::agents_key(agent_id));
+    };
+    let page = super::browser_gate::page_of(&key);
     if let Some(h) = page.url.as_deref().and_then(site_of) {
-        action.label = format!("{bare} · {h}");
-        action.doing = format!("Using {OWN_BROWSER} · {h}");
-        action.ask = format!("use {OWN_BROWSER} · {h}");
+        action.label = format!("Used {which} · {h}");
+        action.doing = format!("Using {which} · {h}");
+        action.ask = format!("use {which} · {h}");
     }
     action
 }

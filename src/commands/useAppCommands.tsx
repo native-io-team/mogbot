@@ -370,6 +370,27 @@ export function useAppCommands({
         },
       },
       {
+        id: 'agents.userChrome',
+        title: 'Let agents use your Chrome (any engine)…',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: [
+          'agents',
+          'browser',
+          'chrome',
+          'extension',
+          'codex',
+          'signed in',
+          'your chrome',
+          'native',
+        ],
+        run: () => {
+          requestSettingsTabOnOpen('agents');
+          requestSettingsSectionOnOpen('agent-user-chrome');
+          openModal('settings');
+        },
+      },
+      {
         id: 'agents.independence',
         title: 'How independent your agents are…',
         icon: <SettingsIcon size={14} />,

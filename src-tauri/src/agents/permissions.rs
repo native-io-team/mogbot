@@ -193,8 +193,7 @@ fn is_scopable_tool(tool: &str) -> bool {
 }
 
 fn is_browser_tool(tool: &str) -> bool {
-    tool.starts_with(super::browser_gate::SERVER)
-        || tool.starts_with(super::browser_gate::AGENTS_SERVER)
+    tool.starts_with(super::browser_gate::SERVER) || super::browser_gate::is_own_browser(tool)
 }
 
 /// What a card for this call may offer to always allow, if anything.

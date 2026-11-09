@@ -9,6 +9,9 @@
  * - **Agents' browser**: the team's own Chrome on this Mac (on by default),
  *   and the two permissions a phone sign-in to Google needs
  *   (`AgentsBrowserSettings`, `agent_browser/`).
+ * - **Your Chrome**: the user's own Chrome through the app's extension, for
+ *   any engine (off by default), with its guided setup
+ *   (`AgentsUserChromeSettings`, `user_chrome/`).
  * - **Independence**: how much agents do on their own (Check with me often,
  *   Use good judgement, Go hard), and what always asks at every level
  *   (`AgentIndependenceSettings`, `agents/independence.rs`).
@@ -46,6 +49,7 @@ import { AgentAdminSettings } from './AgentAdmin';
 import { Row, Toggle } from './AgentSettingsRows';
 import { AgentTeamPolicySettings } from './AgentTeamPolicySettings';
 import { AgentsBrowserSettings } from './AgentsBrowserSettings';
+import { AgentsUserChromeSettings } from './AgentsUserChromeSettings';
 import { AgentPreviewFixSetting } from './AgentPreviewFixSetting';
 import { useStayOn } from '../../hooks/useStayOn';
 import { useAgentsSelector } from '../../lib/agentsStore';
@@ -110,6 +114,7 @@ export function AgentsSettings({
       </section>
 
       <AgentsBrowserSettings />
+      <AgentsUserChromeSettings />
 
       <AgentIndependenceSettings />
 

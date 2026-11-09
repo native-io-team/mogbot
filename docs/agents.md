@@ -2022,6 +2022,14 @@ must be signed in to the **same claude.ai account** as Claude Code, and Claude
 Code must be signed in with claude.ai (an API key keeps it off). Codex has no
 equivalent here: Codex agents never get the browser and ask instead.
 
+**Or the app's own extension, for any engine** ("Your Chrome",
+`user_chrome/`, off by default): Settings → Agents → Your Chrome sets up a
+native host (the app's own binary) and the app's MV3 extension, and every
+turn, Claude Code or Codex on any account, gets `mcp__user_chrome__*` with the
+agents' browser's tool names. The same gate decides it (below), outside text
+never gets it, and a turn that has it runs `--no-chrome`. Design, trust and
+what's verified: docs/internal/own-browser-layer.md.
+
 **Set up once, checked by the app.** ⌘K "Let agents use your browser…", the
 setup checklist and "What it can reach" open one guided card: Claude Code
 signed in (`claude auth status`), the extension in a Chrome profile, and a

@@ -237,6 +237,62 @@ export const agentsDesktopScenarios: Scenario[] = [
     },
   },
   {
+    id: 'settings-agents-user-chrome',
+    title: 'Settings — Your Chrome, on, one profile connected',
+    looksRightWhen:
+      'Opened from ⌘K “Let agents use your Chrome (any engine)…”, scrolled to Your Chrome: a switch, on, with “On. Agents can use your Chrome, in tabs of their own.”; “Chrome can reach this app” — “Done. Chrome can reach this app.”; “Add the extension to Chrome” — “Done. The extension is connected.” with no buttons; then one row “Work” — “Connected (extension 0.1.0).” Nothing in the accent colour.',
+    command: 'agents.userChrome',
+    requires: '[data-testid="user-chrome-steps"]',
+    clipSelector: 'section[aria-labelledby="agents-settings-user-chrome"]',
+    commands: {
+      agents_overview: overview(TEAM),
+      agents_desktop_settings: DESKTOP_SETTINGS,
+      agents_user_chrome_status: {
+        supported: true,
+        enabled: true,
+        listening: true,
+        error: null,
+        chromeInstalled: true,
+        host: 'current',
+        extensionDir: '/Users/you/Library/Application Support/App/chrome-extension',
+        extensionVersion: '0.1.0',
+        webStoreUrl: null,
+        extensionId: 'acpipahophpoekcmokoejnkooedofagk',
+        browsers: [
+          { profileId: 'p-1', label: 'Work', extensionVersion: '0.1.0', connectedAt: Date.now() },
+        ],
+        updateNeeded: false,
+      },
+    },
+  },
+  {
+    id: 'settings-agents-user-chrome-setup',
+    title: 'Settings — Your Chrome, on, the extension not added yet',
+    looksRightWhen:
+      'Your Chrome on with “On. Add the extension to Chrome, then keep Chrome open.”; “Chrome can reach this app” — Done; “Add the extension to Chrome” — “Not done yet. In Chrome’s extensions page turn on Developer mode, press Load unpacked, and choose the folder this shows.” with two neutral buttons, “Open Chrome’s extensions” and “Show the folder”, side by side.',
+    command: 'agents.userChrome',
+    requires: '[data-testid="user-chrome-steps"]',
+    clipSelector: 'section[aria-labelledby="agents-settings-user-chrome"]',
+    commands: {
+      agents_overview: overview(TEAM),
+      agents_desktop_settings: DESKTOP_SETTINGS,
+      agents_user_chrome_status: {
+        supported: true,
+        enabled: true,
+        listening: true,
+        error: null,
+        chromeInstalled: true,
+        host: 'current',
+        extensionDir: '/Users/you/Library/Application Support/App/chrome-extension',
+        extensionVersion: '0.1.0',
+        webStoreUrl: null,
+        extensionId: 'acpipahophpoekcmokoejnkooedofagk',
+        browsers: [],
+        updateNeeded: false,
+      },
+    },
+  },
+  {
     id: 'settings-agents-independence',
     title: 'Settings — how independent agents are, set to Go hard',
     looksRightWhen:
