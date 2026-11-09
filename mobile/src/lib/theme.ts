@@ -1,7 +1,7 @@
 /**
  * The app's tokens, for React Native. The names are the desktop's semantic
  * roles (src/styles/global/tokens-semantic.css), so `colors.surfacePanel` is
- * `--surface-panel`. The neutrals are the site's (dashbot-site global.css):
+ * `--surface-panel`. The neutrals are the site's (mogbot-site global.css):
  * warm paper, chalk and ink in light, the dark keys' charcoal in dark, so the
  * phone reads as the brand people saw before they installed it. The semantic
  * colours (success, warning, error, focus) are the desk's.

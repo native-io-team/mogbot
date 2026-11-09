@@ -223,7 +223,7 @@
   --duration-loader-isolated: 1800ms;
   --ease-standard: ease;
   --ease-icon-swap: cubic-bezier(0.2, 0, 0, 1);
-  /* The site's motion (dashbot-site global.css): one curve for arriving, one
+  /* The site's motion (mogbot-site global.css): one curve for arriving, one
      for a key going down. An arrival is short here: the app is a tool, and
      a new line should be readable by the time the eye gets to it. */
   --duration-press: 70ms;

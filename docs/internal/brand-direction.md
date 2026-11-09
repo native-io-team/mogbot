@@ -1,6 +1,6 @@
 # Brand direction: the desk app and the site
 
-The site (`~/ShipStudio/dashbot-site`, Astro) is the brand reference. This note says what its
+The site (`~/ShipStudio/mogbot-site`, Astro) is the brand reference. This note says what its
 visual language is, where the desktop app drifts from it, and the concrete changes that close the
 gap. The benchmark is two competitors: Reason Machines (a calm three-pane agents app) and OpenBot
 (a dark, sticker-avatar team app). We want to read as calmer than the first and more crafted than
