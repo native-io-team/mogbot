@@ -48,7 +48,16 @@ export interface PlanCard {
   actions: PlanAction[];
   why?: string;
 }
-import type { AgentLook } from './avatar';
+/**
+ * A look from before keys (`agents::store::AgentLook`): a shape, a face and
+ * a finish. The Mac still keeps it, and older clients send it; nothing here
+ * draws it any more (agents are keys, `agentKeys.ts`).
+ */
+export interface AgentLook {
+  shape: string;
+  face: string;
+  finish?: string;
+}
 
 export interface AgentStatus {
   state: 'idle' | 'working' | 'waiting';
@@ -179,7 +188,7 @@ export interface Agent {
   name: string;
   role: string;
   shape: number;
-  /** Its chosen shape and face. Absent: derived from its id (`lookFor` in avatar.ts). */
+  /** Its look from before keys, as the Mac keeps it. Nothing draws it. */
   avatar?: AgentLook;
   /**
    * Its key (docs/internal/agent-keys.md): a colourway, a legend and the

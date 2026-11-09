@@ -1,14 +1,13 @@
-//! Avatars: the keys match the shared spec the clients draw from, the
-//! default look matches theirs exactly, a look saved under the previous
-//! system reads as its nearest key the same way theirs does, and a look
-//! changes from chat at once through `update_agent` (no card: looks aren't
-//! settings). Fixtures are fictional (Hiring, Sales).
+//! Avatar looks, which the Mac still keeps beside each agent's key (the
+//! clients draw keys now; docs/internal/agent-keys.md): the keys and default
+//! look older clients drew, a look saved under the system before that reads
+//! as its nearest key, and a look changes from chat at once through
+//! `update_agent` (no card: looks aren't settings). Fixtures are fictional
+//! (Hiring, Sales).
 
 use super::mcp::{look_args, LookUpdate};
 use super::store::{self, Agent, AgentLook};
 use serde_json::json;
-
-const SPEC: &str = include_str!("../../../packages/companion-protocol/src/avatar.ts");
 
 fn agent(id: &str, name: &str) -> Agent {
     serde_json::from_value(json!({
@@ -31,57 +30,54 @@ fn look_of(shape: &str, face: &str, finish: Option<&str>) -> AgentLook {
     }
 }
 
-/// The quoted keys of `export const <name> = [ … ]` in avatar.ts.
-fn spec_keys(name: &str) -> Vec<String> {
-    let start = SPEC
-        .find(&format!("export const {name} = ["))
-        .unwrap_or_else(|| panic!("{name} is in avatar.ts"));
-    let body = &SPEC[start..];
-    let body = &body[body.find('[').unwrap() + 1..body.find(']').unwrap()];
-    body.split(',')
-        .map(|k| k.trim().trim_matches('\'').to_string())
-        .filter(|k| !k.is_empty())
-        .collect()
-}
-
-/// The `key: 'value',` pairs of `export const <name>: Record<…> = { … }` in avatar.ts.
-fn spec_map(name: &str) -> Vec<(String, String)> {
-    let start = SPEC
-        .find(&format!("export const {name}:"))
-        .unwrap_or_else(|| panic!("{name} is in avatar.ts"));
-    let body = &SPEC[start..];
-    let body = &body[body.find("= {").unwrap() + 3..body.find("};").unwrap()];
-    body.lines()
-        .filter_map(|line| {
-            let (k, v) = line.trim().trim_end_matches(',').split_once(':')?;
-            Some((
-                k.trim().to_string(),
-                v.trim().trim_matches('\'').to_string(),
-            ))
-        })
-        .collect()
+#[test]
+fn the_keys_are_the_ones_older_clients_drew_in_their_order() {
+    // The clients draw keys now (agent-keys.md); these are the looks the
+    // previous clients drew, which the Mac still keeps and the Chief can set.
+    assert_eq!(
+        store::AVATAR_SHAPES,
+        ["circle", "squircle", "diamond", "hexagon"]
+    );
+    assert_eq!(
+        store::AVATAR_FACES,
+        ["dots", "smile", "debossed", "monogram"]
+    );
+    assert_eq!(store::AVATAR_FINISHES, ["keycap", "embossed"]);
+    assert_eq!(store::DEFAULT_FACE, "dots");
 }
 
 #[test]
-fn the_keys_are_the_specs_in_its_order() {
-    assert_eq!(spec_keys("AVATAR_SHAPES"), store::AVATAR_SHAPES);
-    assert_eq!(spec_keys("AVATAR_FACES"), store::AVATAR_FACES);
-    assert_eq!(spec_keys("AVATAR_FINISHES"), store::AVATAR_FINISHES);
-    assert!(SPEC.contains(&format!(
-        "export const DEFAULT_FACE: AvatarFace = '{}';",
-        store::DEFAULT_FACE
-    )));
-}
-
-#[test]
-fn an_old_look_migrates_to_the_nearest_key_exactly_as_the_clients_do() {
+fn an_old_look_migrates_to_the_nearest_key() {
     let pairs = |m: &[(&str, &str)]| -> Vec<(String, String)> {
         m.iter()
             .map(|(a, b)| (a.to_string(), b.to_string()))
             .collect()
     };
-    assert_eq!(spec_map("LEGACY_SHAPES"), pairs(store::LEGACY_SHAPES));
-    assert_eq!(spec_map("LEGACY_FACES"), pairs(store::LEGACY_FACES));
+    assert_eq!(
+        pairs(store::LEGACY_SHAPES),
+        pairs(&[
+            ("rounded", "squircle"),
+            ("pill", "circle"),
+            ("drop", "circle"),
+            ("cookie", "circle"),
+            ("arch", "squircle"),
+        ])
+    );
+    assert_eq!(
+        pairs(store::LEGACY_FACES),
+        pairs(&[
+            ("calm", "smile"),
+            ("cheerful", "smile"),
+            ("curious", "smile"),
+            ("focused", "smile"),
+            ("sleepy", "smile"),
+            ("wink", "smile"),
+            ("determined", "smile"),
+            ("bright", "smile"),
+            ("quiet", "dots"),
+            ("content", "dots"),
+        ])
+    );
     // Every old key is covered: the previous system's eight shapes and ten faces.
     for old in [
         "circle", "rounded", "squircle", "hexagon", "pill", "drop", "cookie", "arch",
@@ -122,9 +118,8 @@ fn an_old_look_migrates_to_the_nearest_key_exactly_as_the_clients_do() {
 }
 
 #[test]
-fn the_default_look_is_the_one_the_clients_derive() {
-    // Computed by `defaultLook` in avatar.ts (FNV-1a of the id); avatar.test.ts
-    // holds the same table, so the two can't drift apart.
+fn the_default_look_is_the_one_older_clients_derived() {
+    // FNV-1a of the id, as the previous clients' `defaultLook` computed it.
     for (id, shape, face) in [
         ("hiring", "hexagon", "dots"),
         ("finance", "circle", "dots"),
@@ -245,8 +240,7 @@ fn a_look_is_checked_in_plain_words_and_what_it_wears_changes_nothing() {
 }
 
 #[test]
-fn describe_says_it_as_the_clients_do() {
-    // describeLook in avatar.ts; avatar.test.ts checks the same sentences.
+fn describe_says_it_in_words() {
     let d = AgentLook::describe;
     assert_eq!(
         d(Some("hexagon"), Some("dots"), None),
