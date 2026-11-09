@@ -155,6 +155,41 @@ pub fn from_result(value: &serde_json::Value) -> Option<UsageTotals> {
     })
 }
 
+/// One turn's `result`s, recorded once. Claude Code can send more than one
+/// `result` in a turn (`turn_end`: a helper reporting back starts another
+/// round), and each carries `total_cost_usd` **for the whole process so
+/// far** (observed on 2.1.319: two results, both 0.00523), while its `usage`
+/// tokens and `duration_ms` are that round's. Recorded as they came, one
+/// turn counted as two and its cost twice.
+#[derive(Debug, Default)]
+pub struct TurnTally {
+    results: u32,
+    /// The process's cost as the last result reported it.
+    cost_so_far: f64,
+    priced: bool,
+}
+
+impl TurnTally {
+    /// What this `result` adds to the turn already recorded: the first is
+    /// the turn; each later one adds its round's tokens and time and the
+    /// cost the process added since, never another turn.
+    pub fn next(&mut self, mut u: UsageTotals) -> UsageTotals {
+        let first = self.results == 0;
+        self.results += 1;
+        if u.priced_turns > 0 {
+            let total = u.cost_usd;
+            u.cost_usd = (total - self.cost_so_far).max(0.0);
+            self.cost_so_far = self.cost_so_far.max(total);
+            u.priced_turns = u32::from(!self.priced);
+            self.priced = true;
+        }
+        if !first {
+            u.turns = 0;
+        }
+        u
+    }
+}
+
 fn day_key(day: NaiveDate) -> String {
     day.format("%Y-%m-%d").to_string()
 }
@@ -207,6 +242,47 @@ mod tests {
 
     fn day(s: &str) -> NaiveDate {
         NaiveDate::parse_from_str(s, "%Y-%m-%d").unwrap()
+    }
+
+    /// Found live (`nf-turn-end`): a turn whose helper reported back sent
+    /// two `result`s, each with the process's cost so far, and was counted
+    /// as two turns at twice its cost.
+    #[test]
+    fn two_results_in_one_turn_are_one_turn_at_its_own_cost() {
+        let result = |cost: f64, cache_write: u64, ms: u64| {
+            from_result(&serde_json::json!({
+                "type": "result", "total_cost_usd": cost, "duration_ms": ms,
+                "usage": {"input_tokens": 4, "output_tokens": 200,
+                    "cache_creation_input_tokens": cache_write, "cache_read_input_tokens": 100}
+            }))
+            .unwrap()
+        };
+        let mut tally = TurnTally::default();
+        let mut usage = AgentUsage::default();
+        // Trimmed from Claude Code 2.1.319: both results said 0.00523485.
+        usage.record(
+            &tally.next(result(0.00523485, 12166, 4280)),
+            day("2026-11-09"),
+        );
+        usage.record(
+            &tally.next(result(0.00523485, 684, 2379)),
+            day("2026-11-09"),
+        );
+        let t = &usage.all_time;
+        assert_eq!(t.turns, 1);
+        assert_eq!(t.priced_turns, 1);
+        assert!((t.cost_usd - 0.00523485).abs() < 1e-12, "{}", t.cost_usd);
+        // Each round's own tokens and time do add up.
+        assert_eq!(t.cache_write_tokens, 12166 + 684);
+        assert_eq!(t.output_tokens, 400);
+        assert_eq!(t.duration_ms, 4280 + 2379);
+        // A later result that cost more adds only the difference.
+        let more = tally.next(result(0.008, 10, 1));
+        assert!((more.cost_usd - (0.008 - 0.00523485)).abs() < 1e-12);
+        assert_eq!((more.turns, more.priced_turns), (0, 0));
+        // One result: exactly as before.
+        let mut one = TurnTally::default();
+        assert_eq!(one.next(result(0.1, 5, 9)), result(0.1, 5, 9));
     }
 
     #[test]

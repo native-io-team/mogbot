@@ -3929,7 +3929,9 @@ reading and are never shown as one.
 
 **Cost, per agent and per routine.** Each turn's `result` (Claude Code:
 `usage`, `total_cost_usd`) or `turn/completed` (Codex: tokens only) is added
-to the agent's last 7 days. A turn that finished having run nothing but
+to the agent's last 7 days. A Claude Code turn can send more than one
+`result` (a helper reporting back), each with the process's cost so far:
+it counts once, at the cost it added (`usage::TurnTally`). A turn that finished having run nothing but
 routine firings, all of one routine (every check-in each of its tickets
 names), is also charged to that routine (`runs::charged_to`, inside the
 id-based settlement of `runs::turn_ended`); a turn shared with a person's
@@ -4030,7 +4032,10 @@ phone's agent controls): Any account (the default) or one account. Set to
 one, its turns run only there (`wallet::for_agent`), never failing over to
 another: when that one is out, the turn ends on the engine's usage-limit
 line plus one Note saying how to let it use any account
-(`runner::pinned_out_line`). Moving engine clears it; removing the account
+(`runner::pinned_out_line`). Already marked out until a reset the engine
+reported, it ends that way before the turn runs, without spending a
+refused try (`wallet::pinned_and_out`); out with no reset known, it is
+tried. Moving engine clears it; removing the account
 clears it with a Note. The chat header's chip names the account its last
 turn ran on (`AgentView.ranOn`, only while its engine has 2+ accounts),
 "· only" when set there. Every row, This Mac included,

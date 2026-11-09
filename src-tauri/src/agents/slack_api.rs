@@ -24,6 +24,26 @@ use serde_json::Value;
 use std::time::Duration;
 
 const BASE: &str = "https://slack.com/api/";
+
+/// The live end-to-end example's fake Slack (`examples/agents_e2e`): a
+/// loopback address it serves itself. Set once, for good, and only to
+/// `http://127.0.0.1:<port>/…/`, so a token can never go anywhere else.
+static BASE_FOR_E2E: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+
+/// Send every call of this process to a fake Slack on this Mac.
+#[doc(hidden)]
+pub fn use_fake_for_e2e(base: &str) -> Result<(), String> {
+    if !base.starts_with("http://127.0.0.1:") || !base.ends_with('/') {
+        return Err("only http://127.0.0.1:<port>/…/".into());
+    }
+    BASE_FOR_E2E
+        .set(base.to_string())
+        .map_err(|_| "already set".to_string())
+}
+
+fn base() -> &'static str {
+    BASE_FOR_E2E.get().map_or(BASE, String::as_str)
+}
 const HTTP_TIMEOUT: Duration = Duration::from_secs(20);
 
 /// The scopes the user token needs, and nothing more: read the channels and
@@ -153,7 +173,7 @@ impl Api for HttpApi {
             .join("&");
         let res = self
             .http
-            .post(format!("{BASE}{method}"))
+            .post(format!("{}{method}", base()))
             .bearer_auth(&self.token)
             .header("content-type", "application/x-www-form-urlencoded")
             .body(body)

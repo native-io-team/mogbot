@@ -26,6 +26,10 @@
 //! - `nf-restart`: a routine paused at its OK card, the app restarted (a
 //!   second process on the same data, through the launch steps); Go ahead
 //!   then runs step 2 once
+//! - `nf-turn-end`, `nf-step-in`, `nf-account-pin`, `nf-slack`,
+//!   `nf-crossover`: background helpers and blank turns, Step in, an agent
+//!   set to an account that's out, Slack against a local fake, and the
+//!   crossover card's Wait; see `nf_more.rs`
 //!
 //! Each scenario runs as its own child process in its own throwaway HOME
 //! (quiet hours and the follow-up cap are process-wide), under a hard limit
@@ -46,7 +50,7 @@ use store::{ApprovalStatus, MessageKind};
 
 use super::{approvals, ensure, log, no_errors, of_kind, Check, H};
 
-pub const SCENARIOS: [&str; 9] = [
+pub const SCENARIOS: [&str; 14] = [
     "nf-draft",
     "nf-steps",
     "nf-follow-up",
@@ -56,6 +60,11 @@ pub const SCENARIOS: [&str; 9] = [
     "nf-reach",
     "nf-disk",
     "nf-restart",
+    "nf-turn-end",
+    "nf-step-in",
+    "nf-account-pin",
+    "nf-slack",
+    "nf-crossover",
 ];
 
 /// The processes a scenario runs as, in order, on the same data: a restart
@@ -73,7 +82,11 @@ const MARK: &str = "NEWFEAT ";
 /* ------------------------------------------------------------ the parent */
 
 fn limit(name: &str) -> Duration {
-    let default = if name == "nf-quiet" { 480 } else { 300 };
+    let default = match name {
+        "nf-quiet" => 480,
+        "nf-turn-end" | "nf-step-in" => 420,
+        _ => 300,
+    };
     Duration::from_secs(
         std::env::var("AGENTS_NF_TIMEOUT_SECS")
             .ok()
@@ -212,6 +225,9 @@ async fn run_part(exe: &Path, name: &str, home: &Path) -> (bool, String, f64) {
 /* ------------------------------------------------------------- the child */
 
 pub async fn phase(h: &H, name: &str) {
+    // Accounts, Slack's token, secrets: in this process's memory, never the
+    // owner's Keychain (the scratch HOME's Keychains link to theirs).
+    app_lib::keychain::use_memory_for_e2e();
     let inner = limit(name).saturating_sub(Duration::from_secs(20));
     let started = Instant::now();
     let result = tokio::time::timeout(inner, async {
@@ -226,6 +242,11 @@ pub async fn phase(h: &H, name: &str) {
             "nf-disk" => disk_hygiene(h).await,
             "nf-restart-a" => restart_a(h).await,
             "nf-restart-b" => restart_b(h).await,
+            "nf-turn-end" => super::nf_more::turn_end(h).await,
+            "nf-step-in" => super::nf_more::step_in(h).await,
+            "nf-account-pin" => super::nf_more::account_pin(h).await,
+            "nf-slack" => super::nf_more::slack_scenario(h).await,
+            "nf-crossover" => super::nf_more::crossover(h).await,
             other => Err(format!("unknown scenario {other}")),
         }
     })
