@@ -53,8 +53,15 @@ use crate::errors::CommandError;
 /// The settings changed (or a check finished): the desk re-reads them.
 pub const EVENT: &str = "agents-slack";
 
-const POLL_EVERY_MS: i64 = 30_000;
+/// Between checks for new messages: `power::Poll::Slack` (30 s, 90 s on battery).
+fn poll_every_ms() -> i64 {
+    crate::power::every(crate::power::Poll::Slack).as_millis() as i64
+}
+/// While a reply waits to be posted, the loop looks this often.
 const TICK: Duration = Duration::from_secs(5);
+/// Not connected, off or signed out: the loop only wakes for a change of
+/// settings ([`WAKE`]), and this backstop.
+const IDLE_WAIT: Duration = Duration::from_secs(5 * 60);
 const STARTUP_GRACE: Duration = Duration::from_secs(20);
 /// Conversations one connection may watch.
 pub const MAX_CONVERSATIONS: usize = 20;
@@ -217,11 +224,36 @@ pub fn load() -> Settings {
 }
 
 pub fn change<T>(f: impl FnOnce(&mut Settings) -> T) -> Result<T, CommandError> {
-    let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
-    let mut s = read()?;
-    let out = f(&mut s);
-    write(&s)?;
+    let out = {
+        let _g = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        let mut s = read()?;
+        let out = f(&mut s);
+        write(&s)?;
+        out
+    };
+    // Connected, switched on, an ask waiting: the loop re-plans its wait.
+    WAKE.notify_one();
     Ok(out)
+}
+
+/// Wakes the loop early when the settings change.
+static WAKE: LazyLock<tokio::sync::Notify> = LazyLock::new(tokio::sync::Notify::new);
+
+/// How long the loop sleeps after a pass. A reply waiting to be posted is
+/// looked at every [`TICK`]; otherwise it sleeps until the next check is due
+/// (at least [`TICK`], at most one poll interval); with nothing to check it
+/// waits for a change of settings. Replaces a flat 5 s tick that read
+/// `slack.json` twice every 5 s whether or not Slack was connected.
+pub fn next_wait(s: &Settings, now_ms: i64, poll_every_ms: i64) -> Duration {
+    if !s.pending.is_empty() {
+        return TICK;
+    }
+    if s.account.is_none() || !s.enabled || s.needs_sign_in {
+        return IDLE_WAIT;
+    }
+    let tick = TICK.as_millis() as i64;
+    let until = (s.next_check_at - now_ms).clamp(tick, poll_every_ms.max(tick));
+    Duration::from_millis(until as u64)
 }
 
 /* --------------------------------------------------------------- token */
@@ -1150,7 +1182,7 @@ fn save_check(checked: &Settings, result: &Checked, now: i64) {
                 s.failures = 0;
                 s.last_check_at = Some(now);
                 s.last_error = result.warning.clone();
-                s.next_check_at = now + POLL_EVERY_MS;
+                s.next_check_at = now + poll_every_ms();
             }
             Some(ApiError::SignIn(_)) => {
                 s.needs_sign_in = true;
@@ -1163,7 +1195,7 @@ fn save_check(checked: &Settings, result: &Checked, now: i64) {
             Some(e) => {
                 s.failures = s.failures.saturating_add(1);
                 s.last_error = Some(e.words());
-                let wait = POLL_EVERY_MS
+                let wait = poll_every_ms()
                     .saturating_mul(1 << s.failures.min(6))
                     .min(MAX_BACKOFF_MS);
                 s.next_check_at = now + wait;
@@ -1243,7 +1275,11 @@ pub fn spawn(app: AppHandle) {
         loop {
             check(&app, false).await;
             settle(&app).await;
-            tokio::time::sleep(TICK).await;
+            let wait = next_wait(&load(), store::now_ms(), poll_every_ms());
+            tokio::select! {
+                _ = tokio::time::sleep(wait) => {}
+                _ = WAKE.notified() => {}
+            }
         }
     });
 }

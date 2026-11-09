@@ -59,7 +59,8 @@ pub fn spawn(app: AppHandle) {
                 // well succeed (a project mounted, a CLI reinstalled).
                 warn!(error = %err, "workflow scheduler tick failed");
             }
-            tokio::time::sleep(TICK).await;
+            // On the minute, with the other minute loops (one wake-up).
+            crate::power::sleep_aligned(TICK).await;
         }
     });
 }

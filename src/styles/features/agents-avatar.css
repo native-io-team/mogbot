@@ -178,10 +178,14 @@
   animation: agents-avatar-blink var(--agents-avatar-blink) ease-in-out;
 }
 
-/* Off-screen, or the window hidden: hold still where it is. */
+/* Off-screen, the window hidden, or the app in the background (the drift and
+   the glow are decoration; lib/appActivity sets the root's attribute): hold
+   still where it is. !important because the mood rules above set the
+   `animation` shorthand, which resets the play state, at a higher
+   specificity: without it an off-screen working avatar kept looking around. */
 .agent-avatar[data-offscreen] *,
-:root[data-avatars-hidden] .agent-avatar * {
-  animation-play-state: paused;
+:root[data-app-background] .agent-avatar * {
+  animation-play-state: paused !important; /* css-ok: beats the mood shorthands */
 }
 
 /* Values in grid units: `fu` is one of the top's (the face moves inside it),

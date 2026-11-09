@@ -649,13 +649,15 @@ pub async fn refresh_if_stale(app: &AppHandle) {
     }
 }
 
-/// On open and every [`EVERY`] while the app is open.
+/// On open and every [`EVERY`] while the app is open (twice that on
+/// battery, `power::Poll::UsageRead`). Someone looking still gets a fresh
+/// read at once ([`refresh_if_stale`]).
 pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(FIRST_AFTER).await;
         loop {
             check_and_tell(&app).await;
-            tokio::time::sleep(EVERY).await;
+            tokio::time::sleep(crate::power::every(crate::power::Poll::UsageRead)).await;
         }
     });
 }

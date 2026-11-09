@@ -3798,8 +3798,9 @@ answer's line says which: "Slack signed the token out", or that only this Mac
 forgot it and the user should remove the app in Slack to be sure. Slack keeps
 the app either way (the user removes it there).
 
-**Listening.** Every 30 s while connected and on (a 5 s tick also settles
-replies), this Mac reads each chosen conversation (at most 20):
+**Listening.** Every 30 s while connected and on (90 s on battery, see "Low
+power"; a 5 s tick settles replies only while one is waiting, and with
+Slack off or disconnected the loop sleeps until the settings change), this Mac reads each chosen conversation (at most 20):
 `conversations.history` (newest 30), plus `conversations.replies` for a
 thread whose `latest_reply` is past the cursor. The first read of a
 conversation is a baseline (nothing already there starts anything); a
@@ -4276,7 +4277,8 @@ never slow down for limits unless the user chose that.
   both exist, the newer of the engine-wide and the account's own is shown
   (a check without a turn is often newer than the last turn).
 - **Every account read without a turn** (`agents/usage_read.rs`): on open
-  (20 s after launch), every 10 minutes while the app is open, and when
+  (20 s after launch), every 10 minutes while the app is open (20 on
+  battery, see "Low power"), and when
   someone looks (the usage popover, Settings → Usage, the phone's
   `agents.usagePlan`, an agent's `usage_overview`, which waits up to 20 s for
   it) unless a check ran in the last 2 minutes; one at a time, never
@@ -4520,6 +4522,34 @@ Every call goes through `run_with_timeout` (60s for list, 30s for changes)
 with `runner::strip_session_env`, from the agents folder, so what's listed is
 what a turn sees. The project MCP modal edits the same Claude Code settings for
 the active agent CLI, plus project scope; it's left as it is.
+
+## Low power (`src-tauri/src/power.rs`, `lib/appActivity.ts`)
+
+The app's own idle cost, desk and phone, measured in the harness
+(`agents-heavy`, production build): hidden, ~0 main-thread time and no
+timers firing; in the background, only status loops (loaders, the key).
+
+- **On battery** (IOKit's power source, read at most every 30 s, no process
+  spawned), non-urgent background polls wait longer (`power::Poll`): usage
+  reads 10 → 20 min, free disk 2 → 5 min (every turn still reads it fresh),
+  Slack 30 → 90 s, the phone's projects list 2 → 4 s. Never stretched: turns
+  in progress, routines and "When…" checks the user timed, Slack replies
+  waiting to post, card expiry, and closing idle dev servers or browsers.
+- **One wake-up a minute.** The minute loops (check-ins, "When…" checks,
+  workflows, card expiry) sleep to the minute boundary (`power::sleep_aligned`)
+  so they wake together. The phone's projects watch has no timer while no
+  phone is in the foreground.
+- **Desk, window hidden** (`data-app-hidden`): every CSS animation pauses,
+  `usePolling` holds (catching up on its own cadence when seen; `whileHidden`
+  for the two polls with an effect outside the window), the workflows poll
+  skips. **In the background** (`data-app-background`, another app focused):
+  the avatars' drift and blinks and the working line's shimmer pause; status
+  loops keep going. **Off-screen** (`lib/offscreen.ts`): avatars, the key and
+  the working loader hold still. Blinks run on one shared clock with no timer
+  while nothing can blink (`lib/avatarBlink.ts`).
+- **Phone**: the spinner, typing dots, shimmer, avatar and key loop only
+  while the app is in front and their screen is showing (`lib/moving.ts`);
+  live-view polling and "2 min ago" clocks have no timer in the background.
 
 ## When the Mac sleeps, a window closes, or the app quits
 

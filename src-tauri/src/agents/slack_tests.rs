@@ -1257,3 +1257,39 @@ fn the_picker_names_every_conversation() {
         );
     });
 }
+
+/* ------------------------------------------------------ the loop's wait */
+
+#[test]
+fn the_loop_sleeps_until_the_next_check_not_a_flat_tick() {
+    let poll = 30_000;
+    let mut s = settings();
+    // Due in 20 s: it wakes then, not four times before.
+    s.next_check_at = NOW + 20_000;
+    assert_eq!(next_wait(&s, NOW, poll), Duration::from_secs(20));
+    // Overdue or about to be: never sooner than the tick.
+    s.next_check_at = NOW - 1;
+    assert_eq!(next_wait(&s, NOW, poll), TICK);
+    // Backing off 15 min: still looks once per poll interval.
+    s.next_check_at = NOW + 15 * 60_000;
+    assert_eq!(next_wait(&s, NOW, poll), Duration::from_secs(30));
+    // On battery the poll interval is longer, and so is that ceiling.
+    assert_eq!(next_wait(&s, NOW, 90_000), Duration::from_secs(90));
+}
+
+#[test]
+fn a_reply_waiting_to_be_posted_keeps_the_quick_tick() {
+    let mut s = settings();
+    s.next_check_at = NOW + 60_000;
+    s.pending.push(pending(NOW, "m1"));
+    assert_eq!(next_wait(&s, NOW, 90_000), TICK);
+}
+
+#[test]
+fn with_nothing_to_check_it_waits_for_a_change_of_settings() {
+    let mut s = settings();
+    s.enabled = false;
+    assert_eq!(next_wait(&s, NOW, 30_000), IDLE_WAIT);
+    let s = Settings::default();
+    assert_eq!(next_wait(&s, NOW, 30_000), IDLE_WAIT);
+}

@@ -545,10 +545,13 @@ export function Spinner({
   const colors = useColors();
   color ??= colors.textSecondary;
   const turn = useSharedValue(0);
+  // In the background or on a screen not showing, it holds where it is.
+  const moving = useMoving(false);
   useEffect(() => {
+    if (!moving) return;
     turn.set(withRepeat(withTiming(1, { duration: 900, easing: Easing.linear }), -1));
     return () => cancelAnimation(turn);
-  }, [turn]);
+  }, [turn, moving]);
   const style = useAnimatedStyle(() => ({ transform: [{ rotate: `${turn.value * 360}deg` }] }));
   return (
     <Animated.View

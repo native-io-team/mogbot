@@ -249,9 +249,11 @@
   animation: agents-key-drop var(--agents-key-period) ease-in-out infinite;
 }
 
+/* Off-screen or hidden: hold still. !important for the same reason as the
+   avatar's (agents-avatar.css): the press shorthand above out-ranks it. */
 .agent-key[data-offscreen] *,
-:root[data-avatars-hidden] .agent-key * {
-  animation-play-state: paused;
+:root[data-app-hidden] .agent-key * {
+  animation-play-state: paused !important; /* css-ok: beats the press shorthand */
 }
 
 /* TYPING_KEY.press: a quick tap, a lighter one, each springing back a hair
@@ -382,6 +384,14 @@
   animation:
     agents-motion-swap-in var(--agents-motion-enter) backwards,
     agents-work-shimmer var(--agents-work-shimmer-period) linear infinite;
+}
+
+/* The shimmer animates a background, which no browser can hand to the
+   compositor: it restyles the line every frame on the main thread (~60
+   restyles a second, measured). In the background it holds still; the key
+   and the words still say it is working. */
+:root[data-app-background] .agent-working__activity[data-live] {
+  animation-play-state: paused;
 }
 
 .agent-chat__row--working {

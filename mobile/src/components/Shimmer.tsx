@@ -11,12 +11,12 @@ import Animated, {
   Easing,
   cancelAnimation,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withRepeat,
   withTiming,
 } from 'react-native-reanimated';
 import { SHIMMER_LOW_OPACITY, SHIMMER_PERIOD_MS } from '../lib/typingDots';
+import { useMoving } from '../lib/moving';
 
 export function Shimmer({
   live,
@@ -27,10 +27,11 @@ export function Shimmer({
   style?: StyleProp<ViewStyle>;
   children: ReactNode;
 }) {
-  const still = useReducedMotion();
+  // Reduce Motion, the background, or a screen not showing: no loop.
+  const moving = useMoving(!live);
   const level = useSharedValue(1);
   useEffect(() => {
-    if (still || !live) {
+    if (!moving) {
       cancelAnimation(level);
       level.set(1);
       return;
@@ -46,7 +47,7 @@ export function Shimmer({
       )
     );
     return () => cancelAnimation(level);
-  }, [level, live, still]);
+  }, [level, moving]);
   const faded = useAnimatedStyle(() => ({ opacity: level.get() }));
   return <Animated.View style={[style, faded]}>{children}</Animated.View>;
 }

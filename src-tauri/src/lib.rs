@@ -26,6 +26,7 @@ pub mod external_command;
 pub mod keychain;
 pub mod logging;
 pub mod navigation_guard;
+pub mod power;
 pub mod preview_isolation;
 pub mod proxy;
 pub mod remote_access;

@@ -287,7 +287,8 @@ pub fn sweep_all(app: &AppHandle, moment: Moment) {
 pub fn start(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         loop {
-            tokio::time::sleep(std::time::Duration::from_secs(SWEEP_EVERY_SECS)).await;
+            // On the minute, with the other minute loops (one wake-up).
+            crate::power::sleep_aligned(std::time::Duration::from_secs(SWEEP_EVERY_SECS)).await;
             let app = app.clone();
             let _ =
                 tauri::async_runtime::spawn_blocking(move || sweep_all(&app, Moment::Tick)).await;
