@@ -61,6 +61,13 @@ pub const MAX_CONVERSATIONS: usize = 20;
 const HISTORY_LIMIT: u32 = 30;
 /// Messages one check starts turns for; the rest are dropped, with a line.
 pub const MAX_ASKS_PER_CHECK: usize = 5;
+/// Other people's asks one check starts turns for: their own budget, so
+/// they never crowd out the user's.
+pub const MAX_OUTSIDE_PER_CHECK: usize = 2;
+/// Other people's asks that start turns in any hour: each one runs a turn
+/// on the user's own plan, and anyone in a listened-to channel can post.
+pub const MAX_OUTSIDE_PER_HOUR: usize = 10;
+const HOUR_MS: i64 = 60 * 60_000;
 const SEEN_CAP: usize = 500;
 const POSTED_CAP: usize = 200;
 const NAMES_CAP: usize = 200;
@@ -137,6 +144,9 @@ pub struct Settings {
     pub others_can_start: bool,
     #[serde(default)]
     pub needs_sign_in: bool,
+    /// When other people's asks started turns, within the last hour.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub outside_started: Vec<i64>,
     /* what the checks keep */
     /// Per conversation, the newest `ts` read: nothing at or before it is new.
     #[serde(default)]
@@ -365,10 +375,17 @@ pub struct Found {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Checked {
     pub found: Vec<Found>,
-    /// Asks past [`MAX_ASKS_PER_CHECK`], left alone.
+    /// The user's asks past [`MAX_ASKS_PER_CHECK`], left alone.
     pub dropped: usize,
+    /// Other people's asks past their own limits
+    /// ([`MAX_OUTSIDE_PER_CHECK`], [`MAX_OUTSIDE_PER_HOUR`]), left alone.
+    pub limited: usize,
     /// A conversation that couldn't be read, in words (the rest still were).
     pub warning: Option<String>,
+    /// What ended the check early (a refused sign-in, a rate limit, no
+    /// network). `found` still holds what the conversations read before it
+    /// started: their cursors have moved past it, so it is delivered or lost.
+    pub stopped: Option<ApiError>,
 }
 
 fn remember(list: &mut Vec<String>, key: String, cap: usize) {
@@ -399,13 +416,14 @@ async fn name_of(api: &dyn Api, s: &mut Settings, id: &str) -> Option<String> {
 }
 
 /// Read every chosen conversation once, keeping `s`'s cursors, seen and
-/// names up to date, and return what starts a turn. A sign-in, scope,
-/// network or rate-limit error ends the check (nothing it read is lost: the
-/// cursors only move past what was looked at); a conversation Slack won't
-/// show any more is skipped with a warning.
-pub async fn check_once(api: &dyn Api, s: &mut Settings, now_ms: i64) -> Result<Checked, ApiError> {
+/// names up to date, and return what starts a turn. A sign-in, network or
+/// rate-limit error ends the check (`stopped`), keeping what the
+/// conversations before it found: the cursors only move past a conversation
+/// read in full, and nothing it found is lost. A conversation Slack won't
+/// show, or the app lacks a permission for, is skipped with a warning.
+pub async fn check_once(api: &dyn Api, s: &mut Settings, now_ms: i64) -> Checked {
     let Some(account) = s.account.clone() else {
-        return Ok(Checked::default());
+        return Checked::default();
     };
     let trigger = s.trigger();
     let mut out = Checked::default();
@@ -422,18 +440,27 @@ pub async fn check_once(api: &dyn Api, s: &mut Settings, now_ms: i64) -> Result<
                 out.warning = Some(format!("Couldn't read {}: Slack said “{e}”.", conv.name));
                 continue;
             }
-            Err(e) => return Err(e),
+            Err(e @ ApiError::Scope(_)) => {
+                out.warning = Some(format!("Couldn't read {}: {}", conv.name, e.words()));
+                continue;
+            }
+            Err(e) => {
+                out.stopped = Some(e);
+                return out;
+            }
         };
         let Some(cursor) = s.cursors.get(&conv.id).cloned() else {
             // The first look is a baseline: what's already there is history.
-            let mut newest = now_ts(now_ms);
-            for m in &top {
-                for t in std::iter::once(&m.ts).chain(m.latest_reply.iter()) {
-                    if newer(t, &newest) {
-                        newest = t.clone();
-                    }
-                }
-            }
+            // By Slack's clock (the newest `ts` it showed), not this Mac's: a
+            // Mac running ahead would otherwise skip what's said until Slack
+            // catches up. This Mac's clock only for a conversation with
+            // nothing in it.
+            let newest = top
+                .iter()
+                .flat_map(|m| std::iter::once(&m.ts).chain(m.latest_reply.iter()))
+                .max_by_key(|t| ts_key(t))
+                .cloned()
+                .unwrap_or_else(|| now_ts(now_ms));
             s.cursors.insert(conv.id.clone(), newest);
             continue;
         };
@@ -447,8 +474,11 @@ pub async fn check_once(api: &dyn Api, s: &mut Settings, now_ms: i64) -> Result<
         }) {
             match slack_api::replies(api, &conv.id, &parent.ts, &cursor).await {
                 Ok(r) => candidates.extend(r.into_iter().filter(|m| newer(&m.ts, &cursor))),
-                Err(ApiError::Slack(_)) => {}
-                Err(e) => return Err(e),
+                Err(ApiError::Slack(_) | ApiError::Scope(_)) => {}
+                Err(e) => {
+                    out.stopped = Some(e);
+                    return out;
+                }
             }
         }
         candidates.sort_by_key(|m| ts_key(&m.ts));
@@ -481,9 +511,21 @@ pub async fn check_once(api: &dyn Api, s: &mut Settings, now_ms: i64) -> Result<
             let Some(raw) = ask_in(&m.text, &trigger, &account.user_id, own, conv.is_dm()) else {
                 continue;
             };
-            if out.found.len() >= MAX_ASKS_PER_CHECK {
-                out.dropped += 1;
-                continue;
+            if own {
+                if out.found.iter().filter(|f| f.own).count() >= MAX_ASKS_PER_CHECK {
+                    out.dropped += 1;
+                    continue;
+                }
+            } else {
+                s.outside_started
+                    .retain(|t| now_ms - t < HOUR_MS && *t <= now_ms);
+                if out.found.iter().filter(|f| !f.own).count() >= MAX_OUTSIDE_PER_CHECK
+                    || s.outside_started.len() >= MAX_OUTSIDE_PER_HOUR
+                {
+                    out.limited += 1;
+                    continue;
+                }
+                s.outside_started.push(now_ms);
             }
             for id in mentioned_ids(&raw).into_iter().take(5) {
                 if id == account.user_id {
@@ -515,7 +557,7 @@ pub async fn check_once(api: &dyn Api, s: &mut Settings, now_ms: i64) -> Result<
         }
         s.cursors.insert(conv.id.clone(), newest);
     }
-    Ok(out)
+    out
 }
 
 /// Where a reply goes, in words: "#launch", "your own DM", "your DM with Sam".
@@ -581,29 +623,114 @@ pub fn chat_line(agent_id: &str, f: &Found) -> AgentMessage {
 
 /* ------------------------------------------------- what the turn read */
 
-/// For each chat message a turn took, whether that turn read outside text.
-static BATCHES: LazyLock<Mutex<HashMap<String, bool>>> = LazyLock::new(Default::default);
+/// The turn that took a Slack ask's chat line, as [`took`] reports it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct Took {
+    /// When that turn started: its reply is after this.
+    pub started_at: i64,
+    /// When the agent's next turn started, if one has: what that turn wrote
+    /// answers something else (a routine, another agent, outside text),
+    /// never this ask.
+    pub next_started_at: Option<i64>,
+    /// That turn read outside text.
+    pub outside: bool,
+    /// The ask was the only thing that turn answered.
+    pub alone: bool,
+}
 
-/// The runner took these messages as one turn (`runner::take_batch`).
-pub fn note_batch(ids: &[String], outside: bool) {
-    let mut map = BATCHES.lock().unwrap_or_else(|e| e.into_inner());
-    if map.len() > 1_000 {
-        map.clear();
+#[derive(Default)]
+struct Turns {
+    /// Chat message id → (agent, the turn that took it, outside, alone).
+    took: HashMap<String, (String, u64, bool, bool)>,
+    /// Per agent, its latest turns' (number, start), oldest first.
+    starts: HashMap<String, Vec<(u64, i64)>>,
+    seq: u64,
+}
+
+static TURNS: LazyLock<Mutex<Turns>> = LazyLock::new(Default::default);
+const TURNS_KEPT: usize = 50;
+
+/// The runner took these messages as one turn (`runner::take_batch`) at
+/// `now`. `carried`: the turn replaces an interrupted one and carries what
+/// that one took.
+pub fn note_batch(agent_id: &str, ids: &[String], outside: bool, carried: bool, now: i64) {
+    let mut t = TURNS.lock().unwrap_or_else(|e| e.into_inner());
+    if t.took.len() > 1_000 {
+        t.took.clear();
     }
+    t.seq += 1;
+    let seq = t.seq;
+    let starts = t.starts.entry(agent_id.to_string()).or_default();
+    let previous = starts.last().map(|(n, _)| *n);
+    starts.push((seq, now));
+    if starts.len() > TURNS_KEPT {
+        starts.remove(0);
+    }
+    if let (true, Some(prev)) = (carried, previous) {
+        for v in t.took.values_mut() {
+            if v.0 == agent_id && v.1 == prev {
+                v.1 = seq;
+                v.2 |= outside;
+                v.3 = false;
+            }
+        }
+    }
+    // Alone: the only message in the batch (one without an id, a routine's
+    // or another assistant's, still counts), with nothing carried over.
+    let alone = ids.len() == 1 && !carried;
     for id in ids.iter().filter(|i| !i.is_empty()) {
-        let was = map.get(id).copied().unwrap_or(false);
-        map.insert(id.clone(), was || outside);
+        let again = t.took.get(id).cloned();
+        let was_outside = again.as_ref().is_some_and(|v| v.2);
+        t.took.insert(
+            id.clone(),
+            (
+                agent_id.to_string(),
+                seq,
+                was_outside || outside,
+                alone && again.is_none(),
+            ),
+        );
     }
 }
 
-/// Whether the turn that took `message_id` read outside text; `None` when
-/// no turn took it since launch.
-pub fn batch_outside(message_id: &str) -> Option<bool> {
-    BATCHES
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .get(message_id)
-        .copied()
+/// The turn that took `message_id`; `None` when no turn took it since launch.
+pub fn took(message_id: &str) -> Option<Took> {
+    let t = TURNS.lock().unwrap_or_else(|e| e.into_inner());
+    let (agent, seq, outside, alone) = t.took.get(message_id)?.clone();
+    let starts = t.starts.get(&agent)?;
+    let started_at = starts.iter().find(|(n, _)| *n == seq)?.1;
+    let next_started_at = starts.iter().find(|(n, _)| *n > seq).map(|(_, at)| *at);
+    Some(Took {
+        started_at,
+        next_started_at,
+        outside,
+        alone,
+    })
+}
+
+/// When this process started: an ask made since that no turn has taken is
+/// still queued; one made before may have been taken before a restart.
+static STARTED_AT: LazyLock<i64> = LazyLock::new(store::now_ms);
+
+/// Where in the log the answer to `p` is: `None` while no turn has taken
+/// it yet; else (from, until) — the turn that took it, up to the agent's
+/// next one — and whether that turn answered only this and read no
+/// outside text. An ask taken before a restart: whatever came after, and
+/// never by itself. Pure.
+pub fn window(
+    p: &Pending,
+    took: Option<Took>,
+    started_at: i64,
+) -> Option<(i64, Option<i64>, bool)> {
+    match took {
+        Some(t) => Some((
+            p.asked_at.max(t.started_at),
+            t.next_started_at,
+            t.alone && !t.outside,
+        )),
+        None if p.asked_at >= started_at => None,
+        None => Some((p.asked_at, None, false)),
+    }
 }
 
 /* --------------------------------------------------------------- reply */
@@ -612,14 +739,18 @@ pub fn batch_outside(message_id: &str) -> Option<bool> {
 /// chat after it (`id`, words), with a result card's title when the reply
 /// is only a card. `others`: someone else's message came between, so the
 /// answer may be to that too.
+///
+/// `until`: when the agent's next turn started. What it wrote from then on
+/// answers something else, so it is never this ask's reply.
 pub fn reply_after(
     log: &[AgentMessage],
     since: i64,
+    until: Option<i64>,
     asked: &str,
 ) -> Option<(String, String, bool)> {
     let after: Vec<&AgentMessage> = log
         .iter()
-        .filter(|m| m.ts >= since && m.room.is_none())
+        .filter(|m| m.ts >= since && until.is_none_or(|u| m.ts <= u) && m.room.is_none())
         .collect();
     let reply = after.iter().rev().find(|m| {
         m.kind == MessageKind::Agent && (!m.text.trim().is_empty() || m.result.is_some())
@@ -649,6 +780,44 @@ pub fn shorten(text: &str) -> String {
         .or_else(|| head.rfind(' '))
         .unwrap_or(head.len());
     format!("{}\n… the rest is in the app.", head[..cut].trim_end())
+}
+
+/// Whether the turn that answered read no outside text, for [`decide`]:
+/// nobody else's message came between (`others`), its batch was only the
+/// ask and carried no outside text (`batch_clean`), and nothing it (or an
+/// earlier turn in the same engine conversation) read came from outside:
+/// a web page, a search, mail or chat through a connection
+/// (`exposure::read_outside`). What was read stays in the engine's context,
+/// so an instruction planted in a page the user asked it to summarise
+/// could otherwise steer a reply that goes out under their name unseen.
+pub fn clean_turn(agent_id: &str, others: bool, batch_clean: bool) -> bool {
+    !others && batch_clean && !super::exposure::read_outside(agent_id)
+}
+
+/// The words a reply would post, or why none go: cut to Slack's length
+/// ([`shorten`]), but checked whole first, since a secret past the cut is
+/// still a secret in the part before it when the cut falls inside it. A
+/// reply that starts with the trigger is refused too: posted under the
+/// user's name it would read back as the user's own instruction, unsealed,
+/// whenever the `posted` list misses it (a card answered while a check is
+/// reading the same conversation). Pure.
+pub fn prepare(full: &str, trigger: &str, known: &[String]) -> Result<String, String> {
+    if super::egress::holds_secret(full, known) {
+        return Err(
+            "The reply looked like it held a password, key or token, so it wasn't posted in Slack."
+                .into(),
+        );
+    }
+    if full
+        .trim_start()
+        .to_lowercase()
+        .starts_with(&trigger.to_lowercase())
+    {
+        return Err(format!(
+            "The reply started with “{trigger}”, which would read as your own ask in Slack, so it wasn't posted."
+        ));
+    }
+    Ok(shorten(full))
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -701,6 +870,23 @@ pub struct ReplyCard {
     pub place: String,
     /// Exactly what is posted.
     pub text: String,
+    /// The Slack account it was written for (`team:user`): Allow posts it
+    /// only while that is the account connected.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+}
+
+/// `team:user`, as a [`ReplyCard`] names the account it's for.
+pub fn account_key(a: &Account) -> String {
+    format!("{}:{}", a.team_id, a.user_id)
+}
+
+/// Whether a card's words may go out with the account connected now: the
+/// one it was written for (a card from before a reconnect as someone else
+/// would otherwise post under their name). A card without one predates
+/// the check.
+pub fn same_account(r: &ReplyCard, now: Option<&Account>) -> bool {
+    r.account.is_none() || r.account == now.map(account_key)
 }
 
 /// "Reply in Slack?", showing the exact words. Pure.
@@ -746,7 +932,7 @@ fn deliver(app: &AppHandle, agent: &store::Agent, f: &Found) -> Option<Pending> 
         // no `remember_permission` from Slack.
         runner::enqueue_user(app, &agent.id, &line.id, own_prompt(f), None);
     } else {
-        runner::enqueue_assistant(app, &agent.id, outside_prompt(f));
+        runner::enqueue_assistant_for(app, &agent.id, &line.id, outside_prompt(f));
     }
     Some(Pending {
         agent_id: agent.id.clone(),
@@ -773,6 +959,14 @@ pub async fn post_reply(
 }
 
 async fn post_and_say(app: &AppHandle, agent_id: &str, r: &ReplyCard) {
+    if !same_account(r, load().account.as_ref()) {
+        note(
+            app,
+            agent_id,
+            "Slack is connected to a different account now, so the reply wasn't posted.".into(),
+        );
+        return;
+    }
     let Some(token) = token() else {
         note(
             app,
@@ -857,13 +1051,28 @@ async fn settle(app: &AppHandle) {
             }
             continue;
         }
+        let Some((from, until, batch_clean)) = window(&p, took(&p.message_id), *STARTED_AT) else {
+            // Still queued behind another turn.
+            if now - p.asked_at > GIVE_UP_MS {
+                note(
+                    app,
+                    &p.agent_id,
+                    format!(
+                        "Nothing was posted in Slack ({}): no reply came in time.",
+                        p.place
+                    ),
+                );
+                done.push(p.message_id.clone());
+            }
+            continue;
+        };
         let agent_id = p.agent_id.clone();
         let log = tokio::task::spawn_blocking(move || store::messages(&agent_id, 80))
             .await
             .ok()
             .and_then(Result::ok)
             .unwrap_or_default();
-        let Some((reply_id, text, others)) = reply_after(&log, p.asked_at, &p.message_id) else {
+        let Some((reply_id, text, others)) = reply_after(&log, from, until, &p.message_id) else {
             if now - p.asked_at > NO_REPLY_MS {
                 done.push(p.message_id.clone());
             }
@@ -877,14 +1086,22 @@ async fn settle(app: &AppHandle) {
         let Ok(agent) = store::get(&p.agent_id) else {
             continue;
         };
-        let text = shorten(&text);
-        let clean = !others && batch_outside(&p.message_id) == Some(false);
+        let saved = load();
+        let text = match prepare(&text, &saved.trigger(), &known) {
+            Ok(t) => t,
+            Err(why) => {
+                note(app, &agent.id, why);
+                continue;
+            }
+        };
+        let clean = clean_turn(&agent.id, others, batch_clean);
         let effective = super::policy::effective(&agent);
         let r = ReplyCard {
             channel: p.channel.clone(),
             thread_ts: p.thread_ts.clone(),
             place: p.place.clone(),
             text,
+            account: saved.account.as_ref().map(account_key),
         };
         match decide(
             p.own,
@@ -913,7 +1130,7 @@ async fn settle(app: &AppHandle) {
 
 /// Merge what a check learnt into the saved settings, leaving anything the
 /// user changed meanwhile alone.
-fn save_check(checked: &Settings, result: &Result<Checked, ApiError>, now: i64) {
+fn save_check(checked: &Settings, result: &Checked, now: i64) {
     let _ = change(|s| {
         if s.account.as_ref().map(|a| &a.user_id) != checked.account.as_ref().map(|a| &a.user_id) {
             return; // disconnected or reconnected meanwhile
@@ -925,22 +1142,23 @@ fn save_check(checked: &Settings, result: &Result<Checked, ApiError>, now: i64) 
         }
         s.seen = checked.seen.clone();
         s.names = checked.names.clone();
-        match result {
-            Ok(r) => {
+        s.outside_started = checked.outside_started.clone();
+        match &result.stopped {
+            None => {
                 s.failures = 0;
                 s.last_check_at = Some(now);
-                s.last_error = r.warning.clone();
+                s.last_error = result.warning.clone();
                 s.next_check_at = now + POLL_EVERY_MS;
             }
-            Err(ApiError::SignIn(_)) => {
+            Some(ApiError::SignIn(_)) => {
                 s.needs_sign_in = true;
                 s.last_error = Some(ApiError::SignIn(String::new()).words());
             }
-            Err(ApiError::RateLimited(secs)) => {
+            Some(ApiError::RateLimited(secs)) => {
                 s.last_error = Some(ApiError::RateLimited(*secs).words());
                 s.next_check_at = now + (*secs as i64) * 1000;
             }
-            Err(e) => {
+            Some(e) => {
                 s.failures = s.failures.saturating_add(1);
                 s.last_error = Some(e.words());
                 let wait = POLL_EVERY_MS
@@ -979,31 +1197,45 @@ pub async fn check(app: &AppHandle, force: bool) {
     let api = slack_api::HttpApi::new(token);
     let result = check_once(&api, &mut s, now).await;
     save_check(&s, &result, now);
-    if let Ok(r) = &result {
-        if let Some(agent) = answering_agent(&s) {
-            let mut added = Vec::new();
-            for f in &r.found {
-                if let Some(p) = deliver(app, &agent, f) {
-                    added.push(p);
-                }
+    // Even when the check stopped early: what it found before is past the
+    // cursors now, and would never be found again.
+    if let Some(agent) = answering_agent(&s) {
+        let r = &result;
+        let mut added = Vec::new();
+        for f in &r.found {
+            if let Some(p) = deliver(app, &agent, f) {
+                added.push(p);
             }
-            if r.dropped > 0 {
-                note(app, &agent.id, format!(
-                    "{} more Slack {} came in at once and {} left alone. Ask again if one mattered.",
-                    r.dropped,
-                    if r.dropped == 1 { "message" } else { "messages" },
-                    if r.dropped == 1 { "was" } else { "were" },
-                ));
-            }
-            if !added.is_empty() {
-                let _ = change(|s| s.pending.extend(added));
-            }
+        }
+        if r.dropped > 0 {
+            note(
+                app,
+                &agent.id,
+                format!(
+                "{} more Slack {} came in at once and {} left alone. Ask again if one mattered.",
+                r.dropped,
+                if r.dropped == 1 { "message" } else { "messages" },
+                if r.dropped == 1 { "was" } else { "were" },
+            ),
+            );
+        }
+        if r.limited > 0 {
+            note(app, &agent.id, format!(
+                "{} Slack {} from other people {} left alone: at most {MAX_OUTSIDE_PER_CHECK} at once and {MAX_OUTSIDE_PER_HOUR} an hour start a turn.",
+                r.limited,
+                if r.limited == 1 { "message" } else { "messages" },
+                if r.limited == 1 { "was" } else { "were" },
+            ));
+        }
+        if !added.is_empty() {
+            let _ = change(|s| s.pending.extend(added));
         }
     }
     let _ = app.emit(EVENT, ());
 }
 
 pub fn spawn(app: AppHandle) {
+    LazyLock::force(&STARTED_AT);
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(STARTUP_GRACE).await;
         loop {

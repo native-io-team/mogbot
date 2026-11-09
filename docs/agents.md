@@ -3782,16 +3782,20 @@ conversation is a baseline (nothing already there starts anything); a
 conversation added later starts from then. `channel:ts` of what was read is
 kept (500) so nothing fires twice. A refused token stops checks and says so
 on the row; a rate limit waits `Retry-After`; other failures back off
-(doubling, at most 15 minutes); a conversation Slack won't show is skipped
-with a warning. Default listening place: the user's DM to themself.
+(doubling, at most 15 minutes); a conversation Slack won't show, or the app
+lacks a permission for, is skipped with a warning. A check that stops early
+still delivers what the conversations before it found (`Checked::stopped`):
+their cursors have moved past it, so it would otherwise be lost. Default listening place: the user's DM to themself.
 
 **The trigger.** A message counts only when it starts with the trigger
 (`<slug>:`, so `dashbot:`, changeable, 2–24 characters, not `/ @ # ! <`),
 case aside: ordinary chatter never starts a turn. Someone else's counts only
 when the user turned on **Let others start it** (off by default), and then
 only when it @-mentions the user first, then the trigger; in a DM to the
-user, the trigger alone. At most 5 asks start per check; the rest get one
-line in the chat.
+user, the trigger alone. At most 5 of the user's asks start per check; other
+people's have their own budget (2 per check, 10 an hour, `outside_started`),
+so a colleague can neither crowd out the user's asks nor run turns on the
+user's plan all day. The rest get one line in the chat.
 
 **Whose words.** A message is the user's instruction only when Slack says the
 user wrote it: `user` equals the token's own id (from `auth.test`), no
@@ -3806,7 +3810,10 @@ bubble that looks like the user's. The user's own message is a user line
 labelled "From Slack · #launch" (`AgentMessage::via`, desk and phone), queued
 with `enqueue_user(.., typed: None)`: it is their request, but not *typed in
 this chat*, so a Slack "yes" never answers a card and `remember_permission`
-can't be satisfied from Slack.
+can't be satisfied from Slack. A mention in it reads as `@name`, and since
+a display name is free text someone else picked yet lands in the user's
+unsealed ask, every name is cut to a name (`slack_api::clean_name`: letters,
+digits, spaces, `.-'_()`, one line, 32 characters).
 
 **The reply.** When the agent is idle again, its last reply in its own chat
 after the ask (a result card's title when the reply is only a card) is cut to
@@ -3814,28 +3821,43 @@ after the ask (a result card's title when the reply is only a card) is cut to
 `slack::decide`:
 
 - **refused** (a line in the chat) if it's empty or holds anything shaped
-  like a secret or a known Keychain value (`egress::holds_secret`), card or no
-  card;
+  like a secret or a known Keychain value (`egress::holds_secret`, checked on
+  the whole reply before the cut, so a token straddling it isn't half
+  posted), or starts with the trigger (posted under the user's name it would
+  read back as their own unsealed ask; `slack::prepare`), card or no card;
 - **posted by itself** only when all four hold: the user wrote the Slack
   message themself; the turn that took it read no outside text
   (`runner::take_batch` → `slack::note_batch`; unknown after a restart counts
-  as outside) and no other user message came between; the agent's own level
+  as outside), its engine conversation hasn't read outside content (a web
+  page, a search, mail or chat through a connection: `exposure::read_outside`,
+  which lasts until Start fresh, `slack::clean_turn`) and no other user
+  message came between; the agent's own level
   is **Unleashed** (which already lets it send what the user asked for); and
   the exact-text switch is **off**;
 - otherwise a **"Reply in Slack?" card** in the agent's chat (desk and
   phone): where it goes, then `outward::card_block`'s "Goes out under your
   name, exactly: “…”". No Always allow; nothing waits on it; it never expires
   (`expiry.rs`). Allow (or a typed yes in the chat) posts exactly those words
-  in the thread (`chat.postMessage`, `&<>` escaped, unfurls off) and leaves
-  "Posted in Slack (#launch)."; Deny leaves "Not posted in Slack.".
+  in the thread (`chat.postMessage`, `&<>` escaped, `parse=none`,
+  `link_names=false`, unfurls off, so no `@channel` or mention is made from
+  words) and leaves "Posted in Slack (#launch)."; Deny leaves "Not posted in
+  Slack.". A card names the account it was written for and posts only while
+  that account is connected (`slack::same_account`).
 
 So the default, at Steady, is a card for every reply. Agents get no Slack
 tool and never hold the token; a turn told "don't post to Slack yourself"
 that tries anyway goes through the usual `outward` rules (a `curl` to
 `slack.com` is a send).
 
-When one turn answers two asks, the later ask's thread gets the reply and the
-earlier gets nothing. A reply that never comes is dropped after 2 minutes of
+The reply is the one **the turn that took the ask** wrote (`slack::took`,
+`slack::window`): from that turn's start to the agent's next turn's start.
+A later turn's reply (a routine, another agent's request, a "When…" item
+that read a stranger's email) is never posted as the answer, and an ask
+still queued behind another turn waits for its own. "Read no outside text"
+also means the ask was the only thing its turn answered: when one turn
+answers two asks (say #board's and #launch's), the later ask's thread gets
+the reply **on a card**, never by itself, since it may hold the other's
+answer; the earlier gets nothing. A reply that never comes is dropped after 2 minutes of
 idleness or 6 hours of work, with a line.
 
 **Not verified** (no live Slack calls were made building this): the prefilled

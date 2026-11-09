@@ -1931,11 +1931,18 @@ pub fn enqueue_scheduled(
 /// (`ask_chief`). It's outside text: the turn is capped and sealed the same
 /// way as any other text that didn't come from the user here.
 pub fn enqueue_assistant(app: &AppHandle, agent_id: &str, text: String) {
+    enqueue_assistant_for(app, agent_id, "", text);
+}
+
+/// [`enqueue_assistant`] under the id of the chat line that shows it (a
+/// note), so whoever queued it can tell which turn took it
+/// (`slack::took`). Still outside text: sealed and capped all the same.
+pub fn enqueue_assistant_for(app: &AppHandle, agent_id: &str, message_id: &str, text: String) {
     push(
         app,
         agent_id,
         Inbound {
-            id: String::new(),
+            id: message_id.to_string(),
             text,
             from: From::User,
             reply: false,
@@ -2980,7 +2987,14 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
         batch.iter().any(|m| m.outside) || (runtime.outside && runtime.interrupted.is_some());
     runtime.typed = typed_of(&batch, runtime.outside);
     // Whether the turn answering a Slack ask read outside text (`slack::decide`).
-    super::slack::note_batch(&runtime.batch_ids, runtime.outside);
+    // Which turn took it, too, so its reply is that turn's and no other's.
+    super::slack::note_batch(
+        agent_id,
+        &runtime.batch_ids,
+        runtime.outside,
+        runtime.interrupted.is_some(),
+        store::now_ms(),
+    );
     let request = batch.first().map(|m| m.text.clone()).unwrap_or_default();
     let user_said = batch
         .iter()
