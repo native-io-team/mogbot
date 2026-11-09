@@ -2329,7 +2329,7 @@ their own, and the person signs in to it from the phone.
   agent's browser is off ("What it can reach" or its settings) or the turn
   answers outside text. Tools: `tabs`, `open`, `navigate`, `read_page`
   (the accessibility tree with `ref_N`), `find`, `get_text`, `screenshot`,
-  `click`, `type`, `press`, `scroll`, `wait_for`, `close_tab`. No script,
+  `click`, `type`, `press`, `scroll`, `wait_for`, `close_tab`, and `ask_user_to_step_in` ("Step in", below). No script,
   upload or download tool; `type` refuses password and one-time-code
   fields; an agent sees its own tabs only.
 - **Seeing it work.** Every step in "What it did" reads "Used its own
@@ -2397,6 +2397,62 @@ their own, and the person signs in to it from the phone.
   unchanged.
   Observed: an import's denied Gmail card told the Chief to "carry on
   without Gmail" while Gmail was open and signed in in the user's Chrome.
+
+#### Step in (`agents/step_in.rs`, `agent_browser/step_in.rs`)
+
+Grok Bot lets the user take over its computer for SSO, passkeys and
+CAPTCHAs. Here: an agent in its own browser that hits a step only a person
+can pass calls **`ask_user_to_step_in`** (`reason`, optional `tab`) on the
+`browser` server, instead of failing or asking for a password. Its tool
+description and one sentence in the server's instructions say when: SSO or
+"verify it's you", a passkey, a 2FA or emailed code, a CAPTCHA; a plain
+sign-in on a site it's signed out of is still `request_login` with
+`signed_out: true`. Nothing was added to the system prompt (its budget).
+
+- **One card**: "<Agent> needs you in its browser: <reason>", the site and
+  page title, and a line that the tab opens on this Mac and the agent never
+  sees what's typed. **Not now** and **Step in** (neutral, never the
+  accent). The tool returns at once; the agent stops and is woken later.
+  One per agent at a time; asked again while one waits, it's told so.
+- **Step in** (`agents_step_in`, desk only) brings that tab's real Chrome
+  window on screen and in front (`Service::show`), so the keyboard, the
+  mouse and macOS's own passkey and Touch ID sheets work as in any Chrome:
+  nothing is relayed through the app. If Chrome closed meanwhile (15 idle
+  minutes), the card's page opens again in a new tab of the agent's.
+- **While you're in it** the tab is **held** (`agent_browser::step_in`):
+  every browser call of the agent's that resolves to that tab is refused,
+  reading included (`tools::tab_of`), `tabs` names it without reading it,
+  and the chat's live picture of it stops (`live::frame_on`). Its other tabs
+  and `open` still work. Chrome's idle close waits. The chat shows the bar
+  "You're in <Agent>'s browser · Hand back" (pinned, with the site and when
+  it hands back by itself) and the card says so with **Show window**
+  (`agents_step_in_show`) and **Hand back**; ⌘K "Hand <Agent> its browser
+  back". The live state is laid over the card on read (`step_in::apply`),
+  never stored.
+- **Hand back** (`agents_step_in_hand_back`) parks the window, answers the
+  card ("Handed back"), leaves a line ("You handed Finance its browser back
+  after 4 min · billing.acme.example") and wakes the agent with
+  `step_in::resume_note`: the tab, the reason, how long, and where the page
+  was and is (address and title only), never anything typed.
+- **By itself**: the tab closing ("The tab closed while you were in …"), or
+  15 minutes with no hand-back (the card reads "Handed back by itself after
+  15 min", and the agent is told the user may not have finished and not to
+  ask again for the same wall). Checked every 2 s.
+- **Not now** (desk or phone, through `agents_answer_approval`) ends any
+  hold and wakes the agent with "don't ask again for this".
+- **Never for outside text**: the `browser` server isn't given to those
+  turns, the gate refuses the tool for them (`gate_agents_with`), and
+  `step_in::check_ask` refuses it again. Not in a take-over, and not with no
+  app to put a card in (`tools::dispatch`). An admin can't answer it
+  (`admin::classify`: "only you can step into its browser"); the sweep puts
+  an unanswered one away like a login card, never while the user is in it.
+- **The phone** shows the card with "Step in on your Mac: its tab opens
+  there." and **Not now** only; a plain Allow from an older phone is refused
+  with "Step in on your Mac". No remote control of the tab in v1 (the
+  sign-in screen's frames-and-taps could carry it; not built).
+- **Not verified**: a real SSO, passkey, 2FA or CAPTCHA page; a live turn
+  calling the tool on either engine; the window coming forward in a built
+  app (tested against the fake Chrome only, `step_in_tests.rs`).
 
 **Signing in from the phone** (`agents/phone_signin.rs`, `Via::AgentsBrowser`):
 

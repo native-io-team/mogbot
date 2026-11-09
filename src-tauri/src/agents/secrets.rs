@@ -701,6 +701,7 @@ mod tests {
             plan: None,
             handoff: None,
             gate: None,
+            step_in: None,
         });
         store::append_message(&card).unwrap();
         (request_id, request)

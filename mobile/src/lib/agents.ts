@@ -681,9 +681,20 @@ const EXPIRY_OUTCOME = {
 } as const;
 
 /** An answered card in a line, as the desk words it (with the option picked on a session's question). */
+/** A step-in card on the phone: Step in happens at the Mac (no remote control yet). */
+export const STEP_IN_ON_YOUR_MAC = 'Step in on your Mac: its tab opens there.';
+/** While the user is in the agent's tab at the Mac. */
+export const STEP_IN_AT_MAC = 'You’re in its browser on your Mac. Hand back there.';
+
 export function cardOutcome(approval: Approval): string {
   // Nobody answered: what the desk's receipt says.
   if (approval.status === 'expired' && approval.expiry) return EXPIRY_OUTCOME[approval.expiry];
+  // "Needs you in its browser": the desk's words.
+  if (approval.stepIn) {
+    if (approval.status === 'allowed') return 'Handed back';
+    if (approval.status === 'denied') return 'Not now';
+    if (approval.setAside) return approval.setAside;
+  }
   // Closed by the Mac, not answered: why, in its own words ("Nothing ran").
   if (approval.setAside) {
     const why = approval.setAside.replace(/^Set aside:\s*/i, '');

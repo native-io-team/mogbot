@@ -579,6 +579,13 @@ pub struct Approval {
     /// Older clients show a plain Allow / Deny over the same summary and detail.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub gate: Option<super::routine_steps::Gate>,
+    /// "<Agent> needs you in its browser: <reason>" (`ask_user_to_step_in`,
+    /// `agents/step_in.rs`): Step in (desk only) brings the agent's tab
+    /// forward for the user, Hand back answers it; Deny is Not now. Older
+    /// clients show the same title and detail with a plain Allow / Deny,
+    /// and an Allow is refused with "Step in on your Mac".
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub step_in: Option<super::step_in::StepIn>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -2510,6 +2517,7 @@ mod tests {
                         plan: None,
                         handoff: None,
                         gate: None,
+                        step_in: None,
                     });
                 }
                 append_message(&line).unwrap();
@@ -2721,6 +2729,7 @@ mod tests {
                     plan: None,
                     handoff: None,
                     gate: None,
+                    step_in: None,
                 }),
                 attachments: Vec::new(),
                 check_in: None,
@@ -2843,6 +2852,7 @@ mod tests {
                 plan: None,
                 handoff: None,
                 gate: None,
+                step_in: None,
             });
             append_message(&card).unwrap();
             let raw = std::fs::read(log_path(&a.id).unwrap()).unwrap();

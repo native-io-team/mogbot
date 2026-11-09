@@ -866,7 +866,8 @@ fn spawn_reaper() {
             .tabs
             .values()
             .any(|t| matches!(t.owner, Owner::Signin(_)));
-        if !signing_in && s.idle_for() >= IDLE {
+        // Someone stepped into a tab: what they do there touches nothing here.
+        if !signing_in && !super::step_in::any() && s.idle_for() >= IDLE {
             tracing::info!("[AgentBrowser] idle; closing");
             shutdown();
         }

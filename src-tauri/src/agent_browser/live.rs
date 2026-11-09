@@ -115,6 +115,10 @@ pub fn frame_on(
     cast: Screencast,
 ) -> Option<LiveFrame> {
     let tab = svc.tab_for(agent, None).ok()?;
+    // The user is in it (`step_in`): no pictures of what they do there.
+    if super::step_in::refusal(agent, &tab).is_some() {
+        return None;
+    }
     let previous = {
         let g = leases();
         g.as_ref()

@@ -1509,6 +1509,10 @@ pub fn gate_agents_with(
             "The browser isn't on for you. If the task needs a signed-in site, ask with request_login for it.".into(),
         );
     }
+    // Asking the user to step in is a card of its own, never a page action.
+    if name == crate::agent_browser::tools::STEP_IN_TOOL {
+        return Gate::Allow;
+    }
     let (n, i) = agents_equivalent(name, input);
     decide(level, agent, &n, &i, page)
 }

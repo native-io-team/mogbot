@@ -200,5 +200,7 @@ export function askAction(m: AgentMessage | undefined): AskAction {
     return { kind: 'open', label: 'Review' };
   }
   if (a.front) return { kind: 'answer', allow: 'Check again', deny: 'Not now' };
+  // Step in happens at the Mac: open the card, which says so.
+  if (a.stepIn) return { kind: 'open', label: 'Open' };
   return { kind: 'answer', allow: 'Allow', deny: 'Deny' };
 }

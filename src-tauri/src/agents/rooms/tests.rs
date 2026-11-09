@@ -204,6 +204,7 @@ fn the_thread_reads_back_with_each_members_card_answers() {
             plan: None,
             handoff: None,
             gate: None,
+            step_in: None,
             summary: None,
         });
         // The member's own log has the card, the room a copy.

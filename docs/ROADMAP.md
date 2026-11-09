@@ -18,9 +18,10 @@ infrastructure where a good one exists.
    real recognizer, notification click-through and Android hardware have
    only been tried in tests or the simulator ([mobile.md](mobile.md), "Not
    built").
-3. **"Take over" a browser tab.** Driving the agent's own session in a
-   terminal is done; stepping into the Chrome tab it drives is not. Codex
-   take-over is unverified on a real thread.
+3. **"Take over" a browser tab, the rest.** Step in at the desk is built
+   (below); stepping in from the phone (remote control of the tab) is not,
+   and Step in hasn't been run against a real SSO, passkey or CAPTCHA.
+   Codex take-over is unverified on a real thread.
 4. **Watch claude.ai connectors.** Linear or Gmail set up as claude.ai
    connectors can't be watched by a "When…" check (the sealed call loads
    only apps configured in Claude Code itself), and connector checks are
@@ -38,6 +39,14 @@ reply to a single message.
 
 ## Done
 
+- **Step in to an agent's browser** — an agent that hits a wall only a
+  person can pass in its own browser (SSO, "verify it's you", a passkey, a
+  2FA code, a CAPTCHA) calls `ask_user_to_step_in` instead of failing or
+  asking for a password; one card, **Step in** brings that tab's real
+  Chrome window forward, the chat says "You're in <Agent>'s browser · Hand
+  back", and Hand back wakes the agent with where the page ended up
+  ([agents.md](agents.md), "Step in"). Desk only; the phone says "Step in on
+  your Mac". Not yet run on a live engine or a real sign-in.
 - **Describe the agent you want** — one prompt drafts the whole agent (name,
   colour, briefing, routines read by the app's grammar, apps it will need) for
   one review before Create; desk, phone and the Chief

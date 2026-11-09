@@ -231,6 +231,7 @@ impl Backend for DesktopBackend {
             // What each turn did, read after the log's lock is let go.
             crate::agents::work::apply(&agent_id, &mut page);
             crate::agents::logins::apply(&mut page);
+            crate::agents::step_in::apply(&mut page);
             crate::agents::admin::apply(&mut page);
             crate::agents::remember::apply(&agent_id, &mut page);
             Ok::<_, CommandError>((page, more))

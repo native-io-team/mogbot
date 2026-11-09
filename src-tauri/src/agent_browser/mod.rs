@@ -15,6 +15,8 @@
 //! - [`tools`]: the `browser` MCP server on the agent bridge.
 //! - [`signin`]: a sign-in window (phone or desk); [`refusal`] spots a site
 //!   refusing it; [`plain`] and [`macos`]: the plain-window fallback.
+//! - [`step_in`]: the person steps into an agent's tab for a step only a
+//!   person can pass, then hands it back.
 //! - [`live`]: the chat's live preview of an agent's page (slow, small, leased).
 //! - [`settings`]: the Settings → Agents switch (on by default).
 //! - [`viewer`]: the prototype's loopback stand-in for the phone (the demo).
@@ -33,6 +35,7 @@ pub mod refusal;
 pub mod service;
 pub mod settings;
 pub mod signin;
+pub mod step_in;
 pub mod tools;
 /// A loopback input server for the demo only: never compiled into the app.
 #[cfg(any(test, feature = "browser-demo"))]

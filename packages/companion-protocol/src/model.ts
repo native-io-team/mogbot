@@ -577,6 +577,26 @@ export interface AgentRef {
   name: string;
 }
 
+/**
+ * A step-in card (desktop `agents/step_in.rs`): an agent in its own browser
+ * needs a person for one step (SSO, a passkey, a 2FA code, a CAPTCHA). Never
+ * anything typed: the reason and the page it was on.
+ */
+export interface StepInCard {
+  /** The agent's words: what the user needs to do there. */
+  reason: string;
+  /** The page's host, for the card. */
+  site: string;
+  url: string;
+  pageTitle?: string;
+  /** The agent's tab number. */
+  tab: number;
+  /** The user is in the tab now, since (ms). Laid over by the Mac, never stored. */
+  inSince?: number;
+  /** When it is handed back by itself (ms). */
+  until?: number;
+}
+
 export interface Approval {
   requestId: string;
   title: string;
@@ -611,6 +631,12 @@ export interface Approval {
   handoff?: HandoffCard;
   /** "OK to go on?" between a routine's steps: Allow is Go ahead, Deny is Stop here. */
   gate?: RoutineGate;
+  /**
+   * "<Agent> needs you in its browser: <reason>" (`ask_user_to_step_in`).
+   * Step in happens only at the Mac; the phone offers Not now (Deny), and a
+   * plain Allow is refused with "Step in on your Mac". Older Macs never send it.
+   */
+  stepIn?: StepInCard;
   /**
    * "Bring your work Chrome window to the front so I can use it": Allow means
    * Check again, Deny means Not now. Never a login.
