@@ -55,6 +55,8 @@ import { AgentSettingsChange } from './AgentSettingsChange';
 import { AgentPlanList } from './AgentPlanList';
 import { AgentGateBody } from './AgentRoutineSteps';
 import { AgentCard } from './AgentCard';
+import { ApprovalFallback } from './AgentApprovalFallback';
+import { AreaBoundary } from '../primitives/AreaBoundary';
 import { ImportReviewCard } from './ImportReviewCard';
 import { ImportPlaybackCard } from './ImportPlaybackCard';
 import { WorkTimeline } from './AgentWork';
@@ -999,7 +1001,22 @@ function outcomeText(approval: Approval, agentName: string, compact: boolean): R
   return label;
 }
 
-export const ApprovalCard = memo(function ApprovalCard({
+/**
+ * A request card in its own boundary: one that fails to draw still offers
+ * Deny (`AgentApprovalFallback`), so the turn waiting on it isn't stuck.
+ */
+export const ApprovalCard = memo(function GuardedApprovalCard(props: ApprovalCardProps) {
+  return (
+    <AreaBoundary
+      where="approval-card"
+      fallback={() => <ApprovalFallback message={props.message} onAnswer={props.onAnswer} />}
+    >
+      <ApprovalCardBody {...props} />
+    </AreaBoundary>
+  );
+});
+
+const ApprovalCardBody = memo(function ApprovalCard({
   message,
   agentName,
   paused,

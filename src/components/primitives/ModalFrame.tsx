@@ -12,6 +12,7 @@ import {
 } from 'react';
 import { CloseIcon } from '@/components/icons';
 import { IconButton } from './IconButton';
+import { AreaBoundary, AreaError } from './AreaBoundary';
 import { usePortalAccentScope } from '../../contexts/AccentScopeContext';
 
 interface ModalFrameBaseProps {
@@ -515,7 +516,21 @@ export function ModalFrame({
             )}
           </div>
         )}
-        {children}
+        {/* The body in its own boundary: a dialog whose content throws keeps
+            its header and close button, instead of blanking the window. */}
+        <AreaBoundary
+          where="dialog"
+          fallback={(retry) => (
+            <div className="modal-frame-error">
+              <AreaError
+                message="This dialog couldn’t be shown. Nothing was changed."
+                onRetry={retry}
+              />
+            </div>
+          )}
+        >
+          {children}
+        </AreaBoundary>
       </div>
     </div>
   );

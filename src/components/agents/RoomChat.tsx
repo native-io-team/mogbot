@@ -23,8 +23,10 @@ import {
   useMemo,
   useRef,
   useState,
+  type ReactElement,
   type ReactNode,
 } from 'react';
+import { guardRow } from './AgentsErrorBoundary';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -408,7 +410,7 @@ export function RoomChat({
   const colorOf = useCallback((id: string) => agentsById.get(id)?.color, [agentsById]);
   const anyMember = members[0];
 
-  const rows = items.map((item, index) => {
+  const rowFor = (item: (typeof items)[number], index: number): ReactElement | ReactElement[] => {
     if (item.type === 'day') return <DayDivider key={`day-${item.ts}`} ts={item.ts} />;
     if (item.type !== 'message') {
       // Agent-to-agent lines in a room are each speaker's own: shown as notes.
@@ -443,7 +445,7 @@ export function RoomChat({
         m.kind === 'note'
           ? [...members]
               .sort((a, b) => b.name.length - a.name.length)
-              .find((a) => m.text.startsWith(`${a.name} `))
+              .find((a) => (m.text ?? '').startsWith(`${a.name} `))
           : undefined;
       return about ? (
         <MemberNote key={m.id} m={m} speaker={about} arrived={arrived} theme={theme} />
@@ -479,6 +481,12 @@ export function RoomChat({
         />
       </SpeakerBlock>
     );
+  };
+  // Each line in its own boundary, as in a one-to-one chat: one that fails to
+  // draw is one muted line, the rest of the room still shows.
+  const rows = items.map((item, index) => {
+    const row = rowFor(item, index);
+    return Array.isArray(row) ? row.map(guardRow) : guardRow(row);
   });
 
   // Nobody left to answer: nothing can be sent until someone is added.

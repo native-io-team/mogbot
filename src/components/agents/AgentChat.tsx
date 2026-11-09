@@ -167,6 +167,7 @@ import { useChatReadTo } from './useChatReadTo';
 import { useAccentScope } from '../../lib/accent';
 import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
 import { guardRow } from './AgentsErrorBoundary';
+import { AreaBoundary } from '../primitives/AreaBoundary';
 
 /**
  * The Chief's first open: three workflows that run without the user
@@ -1532,8 +1533,16 @@ export const AgentChat = memo(function AgentChat({
   // must not rebuild the history around it.
   // "Setting up your team", at its place in the history (never pinned under
   // the newest line), then the working line.
-  const setupRow = setupHere && setupAt >= startIndex && (
-    <TeamSetupCard key="team-setup" view={setupHere} chief={agent.name} onOpenAgent={onOpenAgent} />
+  const setupRow = guardRow(
+    (setupHere && setupAt >= startIndex && (
+      <TeamSetupCard
+        key="team-setup"
+        view={setupHere}
+        chief={agent.name}
+        onOpenAgent={onOpenAgent}
+      />
+    )) ||
+      null
   );
   // One line that fails to draw is one muted line, not a blank window.
   const guarded = useMemo(() => history.map(guardRow), [history]);
@@ -1542,18 +1551,21 @@ export const AgentChat = memo(function AgentChat({
   const rows = withIndicatorAt(
     setupRow && setupAt - startIndex <= workingAt ? workingAt + 1 : workingAt,
     withSetup,
-    indicator.mounted && (
-      <WorkingIndicator
-        key="working"
-        activity={activity}
-        work={work}
-        agent={rowAgent}
-        place={inRoom && <RoomWorkingPlace roomId={inRoom} onOpenRoom={onOpenAgent} />}
-        entering={indicator.entering}
-        leaving={indicator.leaving}
-        onExited={indicator.onExited}
-      />
-    )
+    // The working line draws what the engine reports mid-turn: in a boundary
+    // like any history row, so an odd step can't take the chat down.
+    indicator.mounted &&
+      guardRow(
+        <WorkingIndicator
+          key="working"
+          activity={activity}
+          work={work}
+          agent={rowAgent}
+          place={inRoom && <RoomWorkingPlace roomId={inRoom} onOpenRoom={onOpenAgent} />}
+          entering={indicator.entering}
+          leaving={indicator.leaving}
+          onExited={indicator.onExited}
+        />
+      )
   );
 
   return (
@@ -1750,110 +1762,113 @@ export const AgentChat = memo(function AgentChat({
 
             {/* This conversation's state, in one stack in a fixed order: you're
               driving it, an import, what its engine can't do, a key in the
-              draft, dictation blocked. Two at most; the rest fold. */}
-            <ConversationBars
-              bars={[
-                // The phone is driving a tab in this Mac's Chrome: said in every conversation.
-                { id: 'phoneSignin', node: <PhoneSigninBar /> },
-                // You're in its browser right now (Step in): Hand back from here.
-                { id: 'stepIn', node: <StepInBar agent={agent} messages={messages} /> },
-                {
-                  id: 'waiting',
-                  node: <WaitingForYouBar agent={agent} messages={messages} />,
-                },
-                {
-                  id: 'takeover',
-                  node: (
-                    <TakeoverBanner
-                      agent={agent}
-                      terminalShown={terminalShown}
-                      onToggleTerminal={toggleTerminal}
-                    />
-                  ),
-                },
-                { id: 'import', node: agent.isMain && <ImportTalkBar /> },
-                {
-                  // What the import left to do opens its checklist, not the
-                  // requests panel: those logins are on the card (and left out
-                  // of the requests bar's counts through `shownRequestIds`).
-                  id: 'setup',
-                  node: setupHere && !setupHere.complete && (
-                    <ConversationBar
-                      state="waiting"
-                      data-testid="team-setup-bar"
-                      title={SETUP_BAR_TITLE}
-                      detail={progressLine(setupHere)}
-                      actions={
-                        <Button size="compact" variant="secondary" onClick={showTeamSetup}>
-                          Continue
-                        </Button>
-                      }
-                    />
-                  ),
-                },
-                {
-                  id: 'requests',
-                  node: engineReady && (
-                    <AgentRequestsBar
-                      agent={agent}
-                      peerIds={peerIds}
-                      askers={foreignOwners}
-                      shownRequestIds={shownRequestIds}
-                      onOpenAgent={onOpenAgent}
-                      setup={setupBarTarget}
-                    />
-                  ),
-                },
-                {
-                  id: 'engine',
-                  node: engineReady && cantAsk && (
-                    <ConversationBar
-                      data-testid="agent-cant-ask"
-                      title={`${ENGINE_LABEL[agent.engine]} can’t stop to ask you here`}
-                      detail={`Anything that needs your OK is refused instead. Updating ${ENGINE_LABEL[agent.engine]} fixes this.`}
-                    />
-                  ),
-                },
-                {
-                  id: 'secret',
-                  node: engineReady && (
-                    <AgentSecretHint
-                      agentId={agent.id}
-                      agentName={agent.name}
-                      draft={draft}
-                      setDraft={setDraft}
-                    />
-                  ),
-                },
-                {
-                  id: 'dictation',
-                  node: blocked && (
-                    <ConversationBar
-                      role="alert"
-                      state="waiting"
-                      title={blocked.message}
-                      actions={
-                        <>
-                          <TextButton onClick={dictation.dismissBlocked}>Dismiss</TextButton>
-                          {blocked.settings && (
-                            <Button
-                              size="compact"
-                              variant="secondary"
-                              onClick={() => {
-                                const url = blocked.settings;
-                                if (url) void openPrivacySettings(url);
-                              }}
-                            >
-                              Open System Settings
-                            </Button>
-                          )}
-                        </>
-                      }
-                    />
-                  ),
-                },
-              ]}
-            />
+              draft, dictation blocked. Two at most; the rest fold. A bar that
+              fails to draw leaves the composer and the history working. */}
+            <AreaBoundary where="agent-bars" resetKey={agent.id}>
+              <ConversationBars
+                bars={[
+                  // The phone is driving a tab in this Mac's Chrome: said in every conversation.
+                  { id: 'phoneSignin', node: <PhoneSigninBar /> },
+                  // You're in its browser right now (Step in): Hand back from here.
+                  { id: 'stepIn', node: <StepInBar agent={agent} messages={messages} /> },
+                  {
+                    id: 'waiting',
+                    node: <WaitingForYouBar agent={agent} messages={messages} />,
+                  },
+                  {
+                    id: 'takeover',
+                    node: (
+                      <TakeoverBanner
+                        agent={agent}
+                        terminalShown={terminalShown}
+                        onToggleTerminal={toggleTerminal}
+                      />
+                    ),
+                  },
+                  { id: 'import', node: agent.isMain && <ImportTalkBar /> },
+                  {
+                    // What the import left to do opens its checklist, not the
+                    // requests panel: those logins are on the card (and left out
+                    // of the requests bar's counts through `shownRequestIds`).
+                    id: 'setup',
+                    node: setupHere && !setupHere.complete && (
+                      <ConversationBar
+                        state="waiting"
+                        data-testid="team-setup-bar"
+                        title={SETUP_BAR_TITLE}
+                        detail={progressLine(setupHere)}
+                        actions={
+                          <Button size="compact" variant="secondary" onClick={showTeamSetup}>
+                            Continue
+                          </Button>
+                        }
+                      />
+                    ),
+                  },
+                  {
+                    id: 'requests',
+                    node: engineReady && (
+                      <AgentRequestsBar
+                        agent={agent}
+                        peerIds={peerIds}
+                        askers={foreignOwners}
+                        shownRequestIds={shownRequestIds}
+                        onOpenAgent={onOpenAgent}
+                        setup={setupBarTarget}
+                      />
+                    ),
+                  },
+                  {
+                    id: 'engine',
+                    node: engineReady && cantAsk && (
+                      <ConversationBar
+                        data-testid="agent-cant-ask"
+                        title={`${ENGINE_LABEL[agent.engine]} can’t stop to ask you here`}
+                        detail={`Anything that needs your OK is refused instead. Updating ${ENGINE_LABEL[agent.engine]} fixes this.`}
+                      />
+                    ),
+                  },
+                  {
+                    id: 'secret',
+                    node: engineReady && (
+                      <AgentSecretHint
+                        agentId={agent.id}
+                        agentName={agent.name}
+                        draft={draft}
+                        setDraft={setDraft}
+                      />
+                    ),
+                  },
+                  {
+                    id: 'dictation',
+                    node: blocked && (
+                      <ConversationBar
+                        role="alert"
+                        state="waiting"
+                        title={blocked.message}
+                        actions={
+                          <>
+                            <TextButton onClick={dictation.dismissBlocked}>Dismiss</TextButton>
+                            {blocked.settings && (
+                              <Button
+                                size="compact"
+                                variant="secondary"
+                                onClick={() => {
+                                  const url = blocked.settings;
+                                  if (url) void openPrivacySettings(url);
+                                }}
+                              >
+                                Open System Settings
+                              </Button>
+                            )}
+                          </>
+                        }
+                      />
+                    ),
+                  },
+                ]}
+              />
+            </AreaBoundary>
 
             {engineReady ? (
               <form

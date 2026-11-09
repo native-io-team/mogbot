@@ -26,7 +26,7 @@ import { AgentsSidebar } from './AgentsSidebar';
 import { AgentsSearchPopover, AgentsTopSearch } from './AgentsSearchBox';
 import { EngineSignInModal, type EngineSetup } from './EngineSignInModal';
 import { AgentChat } from './AgentChat';
-import { PaneBoundary } from './AgentsErrorBoundary';
+import { PaneBoundary, SidebarBoundary } from './AgentsErrorBoundary';
 import { AgentsTeamView } from './AgentsTeamView';
 import { AgentEditorModal, type EditorTab } from './AgentEditorModal';
 import { AgentProjectsProvider } from './AgentProject';
@@ -878,28 +878,34 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                 onOpen={focusSearch}
               />
             }
-            footerContent={<AccountSwitcher collapsed={sidebarProps.isSidebarHidden ?? false} />}
+            footerContent={
+              <SidebarBoundary part="accounts" message="Accounts couldn’t be shown.">
+                <AccountSwitcher collapsed={sidebarProps.isSidebarHidden ?? false} />
+              </SidebarBoundary>
+            }
             listContent={
-              <AgentsSidebar
-                agents={listed}
-                selectedId={room ? roomKey(room.id) : (selected?.id ?? null)}
-                showHidden={showHidden}
-                onToggleShowHidden={toggleShowHidden}
-                onSelect={setSelectedId}
-                onNew={() => openNew()}
-                needsYouCount={needsYouCount}
-                inFlightOpen={teamOpen}
-                onOpenInFlight={openInFlight}
-                rooms={roomRows}
-                roomActions={roomActions}
-                onNewRoom={openNewRoom}
-                actions={actions}
-                query={popoverSearch ? '' : query}
-                searchRef={searchRef}
-                onOpenHit={openHit}
-                onOpenAgent={openAgentByName}
-                currentHit={currentHit}
-              />
+              <SidebarBoundary>
+                <AgentsSidebar
+                  agents={listed}
+                  selectedId={room ? roomKey(room.id) : (selected?.id ?? null)}
+                  showHidden={showHidden}
+                  onToggleShowHidden={toggleShowHidden}
+                  onSelect={setSelectedId}
+                  onNew={() => openNew()}
+                  needsYouCount={needsYouCount}
+                  inFlightOpen={teamOpen}
+                  onOpenInFlight={openInFlight}
+                  rooms={roomRows}
+                  roomActions={roomActions}
+                  onNewRoom={openNewRoom}
+                  actions={actions}
+                  query={popoverSearch ? '' : query}
+                  searchRef={searchRef}
+                  onOpenHit={openHit}
+                  onOpenAgent={openAgentByName}
+                  currentHit={currentHit}
+                />
+              </SidebarBoundary>
             }
           />
         )}
