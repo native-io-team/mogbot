@@ -1272,6 +1272,35 @@ where
     }
 }
 
+/// An agent set to one account (`pinned`) about to start a turn on it while
+/// it is out until a reset the engine reported: when that is, and the turn
+/// ends now instead of spending a refused try. A limit with no reset known
+/// is tried, as a lone account always is: it may be back.
+pub fn pinned_and_out(pinned: bool, account: &Account, tried: &[String], now: i64) -> Option<i64> {
+    if !pinned || !tried.is_empty() {
+        return None;
+    }
+    account.out(now).flatten()
+}
+
+/// The line that turn ends on: "Personal has reached its usage limit. It's
+/// back at 4:00 PM." (worded so `failure::describe` reads it as the limit).
+pub fn pinned_out_until_line<Tz: chrono::TimeZone>(name: &str, at: i64, tz: &Tz, now: i64) -> String
+where
+    Tz::Offset: std::fmt::Display,
+{
+    let who = line_name(name);
+    let mut chars = who.chars();
+    let who = match chars.next() {
+        Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+        None => who,
+    };
+    format!(
+        "{who} has reached its usage limit. It's back {}.",
+        super::failure::clock_phrase(tz, at, now)
+    )
+}
+
 /// What the next account is told: the same request, with why it's here
 /// again, so work already done on the last one is continued, not redone.
 pub fn continue_prompt(prompt: &str) -> String {
@@ -1584,6 +1613,44 @@ mod tests {
             all_out_line(Engine::Codex, 3, None, &Utc, now()),
             "All 3 Codex accounts have reached their usage limit, and none said when it resets."
         );
+    }
+
+    /// Found live (`nf-account-pin`): an agent set to an account marked out
+    /// until a known reset still ran a turn on it, spending a refused try
+    /// (and, on an account whose sign-in had gone, failing as signed out
+    /// with no Note). It ends before the turn now.
+    #[test]
+    fn set_to_an_account_out_until_a_known_reset_ends_before_the_turn() {
+        let out = account("a2", "Personal", out_until(now() + 2 * H));
+        assert_eq!(pinned_and_out(true, &out, &[], now()), Some(now() + 2 * H));
+        // Not set to it: failover chooses as ever.
+        assert_eq!(pinned_and_out(false, &out, &[], now()), None);
+        // Out with no reset known: tried, it may be back.
+        let unknown = account(
+            "a2",
+            "Personal",
+            Some(LimitHit {
+                at: now() - 60_000,
+                resets_at: None,
+            }),
+        );
+        assert_eq!(pinned_and_out(true, &unknown, &[], now()), None);
+        // Its reset passed, or it isn't out: it runs.
+        let back = account("a2", "Personal", out_until(now() - 1));
+        assert_eq!(pinned_and_out(true, &back, &[], now()), None);
+        assert_eq!(
+            pinned_and_out(true, &account("a2", "Personal", None), &[], now()),
+            None
+        );
+        // The line, and it reads as the usage limit.
+        let line = pinned_out_until_line("Personal", now() + 2 * H, &Utc, now());
+        assert_eq!(
+            line,
+            "Personal has reached its usage limit. It's back at 10:00 AM."
+        );
+        let (_, f) = super::super::failure::describe(Engine::Claude, &line, &Utc, None, now());
+        assert_eq!(f.kind, super::super::failure::FailureKind::UsageLimit);
+        assert!(pinned_out_until_line(DEFAULT_NAME, now() + H, &Utc, now()).starts_with("This Mac"));
     }
 
     #[test]

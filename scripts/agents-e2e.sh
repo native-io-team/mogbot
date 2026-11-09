@@ -8,7 +8,9 @@
 #   scripts/agents-e2e.sh newfeat          # drafting, routine steps, follow-ups, quiet
 #                                          # hours, monthly, the Chief's draft, who can
 #                                          # reach, disk hygiene, a routine across a
-#                                          # restart (each a capped child;
+#                                          # restart, helpers and blank turns,
+#                                          # Step in, Runs on, Slack, crossover
+#                                          # (each a capped child;
 #                                          # AGENTS_NF_TIMEOUT_SECS)
 set -euo pipefail
 cd "$(dirname "$0")/../src-tauri"

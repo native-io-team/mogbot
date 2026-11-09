@@ -5086,6 +5086,19 @@ async fn run_on_engine(
                 return Err(CommandError::expected(line));
             }
         };
+        // Set to one account that is out until a reset it reported: the turn
+        // ends now, on the usage-limit line and the Note, rather than spend
+        // a refused try on it (`wallet::pinned_and_out`).
+        if let Some(back) = wallet::pinned_and_out(pin.is_some(), &account, &tried, now) {
+            let others = wallet::candidates(engine).await;
+            if wallet::can_switch(&others, std::slice::from_ref(&account.id), now) {
+                let line = pinned_out_line(&agent.name, &account.name);
+                let _ = record_in_turn(app, new_message(agent_id, MessageKind::Note, line));
+            }
+            let line = wallet::pinned_out_until_line(&account.name, back, &chrono::Local, now);
+            wallet::set_all_out(agent_id, line.clone(), Some(back));
+            return Err(CommandError::expected(line));
+        }
         // Held for the try: removing the account waits for it to end. Gone
         // from the list since it was chosen: another one.
         let Some(_in_use) = wallet::hold(&account, agent_id) else {
@@ -5646,6 +5659,7 @@ async fn run_turn(
     let mut saw_result = false;
     // Whether that result really ended it, and the helpers still out (`turn_end`).
     let mut turn_end = super::turn_end::TurnEnd::default();
+    let mut tally = super::usage::TurnTally::default();
     let mut said_anything = false;
     let mut result_error: Option<String> = None;
     // What the engine said along the way, for a turn that ends without a result.
@@ -5860,7 +5874,9 @@ async fn run_turn(
                         Step::Output { id, text } => {
                             super::work::on_output(agent_id, &id, &text, store::now_ms());
                         }
-                        Step::Usage(mut turn) => {
+                        Step::Usage(turn) => {
+                            // A second `result` (a helper reported back) is the same turn.
+                            let mut turn = tally.next(turn);
                             timing.cli_ms = turn.duration_ms;
                             // Codex doesn't time its turns; this one was timed here.
                             if turn.duration_ms == 0 {

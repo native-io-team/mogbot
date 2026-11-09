@@ -1271,16 +1271,19 @@ pub async fn check(app: &AppHandle, force: bool) {
     let _ = app.emit(EVENT, ());
 }
 
+/// One pass of the loop: a check when due (or `force`), then whatever is
+/// waiting gets its reply posted, a card, or a line.
+pub async fn pass(app: &AppHandle, force: bool) {
+    check(app, force).await;
+    settle(app).await;
+}
+
 pub fn spawn(app: AppHandle) {
     LazyLock::force(&STARTED_AT);
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(STARTUP_GRACE).await;
         loop {
-            super::survive::tick("slack", async {
-                check(&app, false).await;
-                settle(&app).await;
-            })
-            .await;
+            super::survive::tick("slack", pass(&app, false)).await;
             let wait = next_wait(&load(), store::now_ms(), poll_every_ms());
             tokio::select! {
                 _ = tokio::time::sleep(wait) => {}

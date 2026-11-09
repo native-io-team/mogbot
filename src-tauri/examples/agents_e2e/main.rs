@@ -54,6 +54,7 @@ mod behaviour;
 mod core_jobs;
 mod import_muse;
 mod new_features;
+mod nf_more;
 
 type Check = Result<(), String>;
 

@@ -467,18 +467,56 @@ static VAULT: std::sync::LazyLock<Vault<macos::MacStore>> = std::sync::LazyLock:
     Vault::new(macos::MacStore, mode)
 });
 
+/// The live end-to-end example's stand-in: once [`use_memory_for_e2e`] is
+/// called, this process keeps every item in memory and never reads or
+/// writes the login Keychain. Its HOME is a scratch folder whose Keychains
+/// link to the owner's (Claude Code signs in from there), so without this an
+/// account, a Slack token or a secret it makes would land in the owner's.
+static MEMORY: std::sync::OnceLock<Mutex<HashMap<(String, String), String>>> =
+    std::sync::OnceLock::new();
+
+/// Keep every Keychain item of this process in memory from now on, for
+/// good. Only the live example calls this (`examples/agents_e2e`).
+#[doc(hidden)]
+pub fn use_memory_for_e2e() {
+    MEMORY.get_or_init(Default::default);
+}
+
+fn memory() -> Option<std::sync::MutexGuard<'static, HashMap<(String, String), String>>> {
+    MEMORY
+        .get()
+        .map(|m| m.lock().unwrap_or_else(|e| e.into_inner()))
+}
+
 #[cfg(target_os = "macos")]
 pub fn read(service: &str, account: &str) -> Read {
+    if let Some(m) = memory() {
+        return match m.get(&(service.to_string(), account.to_string())) {
+            Some(v) => Read::Found(v.clone()),
+            None => Read::NotFound,
+        };
+    }
     VAULT.read(service, account)
 }
 
 #[cfg(target_os = "macos")]
 pub fn write(service: &str, account: &str, value: &str) -> Result<(), String> {
+    if let Some(mut m) = memory() {
+        m.insert(
+            (service.to_string(), account.to_string()),
+            value.to_string(),
+        );
+        return Ok(());
+    }
     VAULT.write(service, account, value)
 }
 
 #[cfg(target_os = "macos")]
 pub fn delete(service: &str, account: &str) -> Result<(), String> {
+    if let Some(mut m) = memory() {
+        m.remove(&(service.to_string(), account.to_string()));
+        return Ok(());
+    }
     VAULT.delete(service, account)
 }
 
