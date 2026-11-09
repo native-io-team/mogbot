@@ -207,3 +207,36 @@ fn a_switch_names_the_connectors_the_account_lacks_and_the_way_in_meanwhile() {
         .starts_with("Gmail and Google Calendar"));
     assert!(lost_line("Personal", &before, &before, true).is_none());
 }
+
+/// Agents failing over to the same account at once each sync it before
+/// their turn. Found in review (2026-11-08): every sync wrote the same
+/// `.claude.json.tmp`, so one rename could move another's half-written file
+/// over the account's config (its login) and the other's rename failed.
+#[test]
+fn syncs_at_once_keep_the_accounts_config_whole() {
+    let (_home, native, target) = fixture();
+    for round in 0..20 {
+        // A server that changes each round, so every sync writes.
+        let mut n = read(&native);
+        n["mcpServers"]["round"] =
+            json!({ "type": "http", "url": format!("https://r{round}.example") });
+        n["mcpServers"]["pad"] = json!({ "type": "stdio", "command": "x".repeat(200_000) });
+        write(&native, &n);
+        let results: Vec<std::io::Result<Synced>> = std::thread::scope(|s| {
+            let handles: Vec<_> = (0..8)
+                .map(|_| s.spawn(|| sync_servers(&native, &target)))
+                .collect();
+            handles.into_iter().map(|h| h.join().unwrap()).collect()
+        });
+        for r in &results {
+            assert!(r.is_ok(), "round {round}: {r:?}");
+        }
+        let got = read(&target);
+        assert_eq!(got["oauthAccount"]["emailAddress"], "personal@example.test");
+        assert_eq!(
+            got["mcpServers"]["round"]["url"],
+            format!("https://r{round}.example")
+        );
+        assert!(got["mcpServers"]["own"].is_object());
+    }
+}
