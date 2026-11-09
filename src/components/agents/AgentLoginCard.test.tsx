@@ -106,6 +106,20 @@ describe('LoginCard', () => {
     expect(document.querySelector('input[type="password"]')).toBeNull();
   });
 
+  it('after a failure, the lead button says Try again only when the lead way in is what failed', () => {
+    const failed = (option: string) => ({
+      ...X,
+      flow: { state: 'failed' as const, option, message: 'Nope.', startedAt: Date.now() },
+    });
+    const { unmount } = renderCard(card(failed('browser')));
+    expect(screen.getByRole('button', { name: 'Try again' })).toBeInTheDocument();
+    unmount();
+    // The key route failed; the lead button still opens the browser, so it says so.
+    renderCard(card(failed('key')));
+    expect(screen.queryByRole('button', { name: 'Try again' })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Use my browser' })).toBeInTheDocument();
+  });
+
   it('Connect starts the sign-in on the Mac with the option chosen', async () => {
     vi.useFakeTimers();
     const calls: [string, unknown][] = [];
