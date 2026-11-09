@@ -129,3 +129,16 @@ fn code_ranges_survive_multibyte_characters() {
         assert!(text.is_char_boundary(s) && text.is_char_boundary(e));
     }
 }
+
+#[test]
+fn a_page_no_preview_shows_keeps_its_own_address() {
+    // The agents' own browser or a page to step into: no pane shows it, so
+    // "the preview below" would point at nothing.
+    let (text, links) = rewrite(
+        "The page at http://127.0.0.1:4311/login is asking for a code.",
+        site,
+    );
+    assert_eq!(text, "The page at 127.0.0.1:4311 is asking for a code.");
+    assert_eq!(links[0].port, 4311);
+    assert_eq!(links[0].path, None);
+}

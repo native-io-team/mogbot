@@ -150,6 +150,15 @@ pub fn rewrite(text: &str, known: impl Fn(u16) -> Option<Known>) -> (String, Vec
         let Some(port) = port_of(&url) else {
             continue;
         };
+        let k = known(port);
+        // "The preview below" only where a preview shows that address (a
+        // project the app knows serves on it). Anything else on this Mac —
+        // the agents' own browser, a page an agent asks the user to step
+        // into — keeps its short form, so the sentence stays true.
+        let words = match words.as_deref() {
+            Some(BARE_WORDS) if k.is_none() => Some(host_port(&url)),
+            _ => words,
+        };
         out.push_str(&text[last..whole.start()]);
         // A line of nothing but links ("[before](…) [after](…)") goes: the
         // chips under the reply carry the same words.
@@ -162,7 +171,6 @@ pub fn rewrite(text: &str, known: impl Fn(u16) -> Option<Known>) -> (String, Vec
         if links.iter().any(|l| l.url == url) {
             continue;
         }
-        let k = known(port);
         links.push(LocalLink {
             label,
             port,
