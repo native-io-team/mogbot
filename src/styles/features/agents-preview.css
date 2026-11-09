@@ -195,14 +195,17 @@
   font-size: var(--font-size-caption);
   color: var(--text-secondary);
   background: var(--surface-control);
-  border: var(--border-width-default) solid var(--border-control);
+  /* A soft hairline, like the workspace's address. The control border is the
+     ink-500 form-field outline, which read as a black frame here. */
+  border: var(--border-width-default) solid var(--border-default);
   border-radius: var(--radius-control);
 }
 
+.agent-preview__address:focus,
 .agent-preview__address:focus-visible {
   outline: none;
   color: var(--text-primary);
-  box-shadow: var(--focus-ring);
+  border-color: var(--border-strong);
 }
 
 .agent-preview__viewport {
