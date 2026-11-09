@@ -285,6 +285,16 @@ async function loadAllRows() {
   await sleep(800);
   return rows();
 }
+/** Wait until the mounted row count holds still for 3 s, past the let-go delay (up to 20 s). */
+async function settleRows() {
+  let last = await rows();
+  for (let i = 0, still = 0; i < 80 && still < 12; i++) {
+    await sleep(250);
+    const now = await rows();
+    still = now === last ? still + 1 : 0;
+    last = now;
+  }
+}
 async function startProfile(interval = 200) {
   if (TRACE) {
     traceEvents = [];
@@ -308,10 +318,12 @@ async function stopTrace() {
   );
   const by = {};
   const styled = [];
+  let timerFires = 0;
   for (const e of traceEvents) {
     if (!main || e.tid !== main.tid || e.ph !== 'X' || !e.dur) continue;
     by[e.name] = (by[e.name] ?? 0) + e.dur / 1000;
     if (e.name === 'UpdateLayoutTree' && e.args?.elementCount) styled.push(e.args.elementCount);
+    if (e.name === 'TimerFire') timerFires++;
   }
   styled.sort((a, b) => a - b);
   return {
@@ -324,6 +336,7 @@ async function stopTrace() {
     styleRecalcs: styled.length,
     elementsStyledP50: styled[Math.floor(styled.length / 2)] ?? 0,
     elementsStyledMax: styled[styled.length - 1] ?? 0,
+    timerFires,
   };
 }
 async function stopProfile(name) {
@@ -410,6 +423,10 @@ if (want('background') || want('openEvents')) {
   await load();
   const n = await loadAllRows();
   if (want('background')) {
+    // Back at the newest line, the rows mounted on the way up are let go a
+    // few at a time (AgentChat's own renders); counted here they would read
+    // as renders caused by the events.
+    await settleRows();
     const rc = await renders(async () => {
       await ev(`window.__stress.start({ rate: 10, open: false })`);
       await sleep(10_000);
@@ -512,7 +529,16 @@ if (want('idle')) {
     const anims = await ev(
       `document.getAnimations().filter(a => a.playState === 'running').length`
     );
-    report(`idle_six_working_${all ? 2000 : 150}`, { rows: n, runningAnimations: anims, ...c });
+    // Which loops they are: the animation's name and the class of what it moves.
+    const animsByName = await ev(
+      `JSON.stringify(document.getAnimations().filter(a => a.playState === 'running').reduce((o, a) => { const t = a.effect?.target; const k = (a.animationName ?? a.constructor.name) + ' ' + (t?.classList?.[0] ?? t?.tagName ?? ''); o[k] = (o[k] ?? 0) + 1; return o; }, {}))`
+    );
+    report(`idle_six_working_${all ? 2000 : 150}`, {
+      rows: n,
+      runningAnimations: anims,
+      animationsByName: JSON.parse(animsByName),
+      ...c,
+    });
   }
 }
 
