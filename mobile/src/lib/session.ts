@@ -279,6 +279,21 @@ export async function enableAlerts(): Promise<void> {
 
 // ---- Lifecycle ----------------------------------------------------------------
 
+/** Which network the phone is on, as far as NetInfo says: a change of it is worth a fresh try. */
+export function networkKey(s: {
+  type: string;
+  isConnected: boolean | null;
+  isInternetReachable?: boolean | null;
+  details?: unknown;
+}): string {
+  const d = (s.details ?? {}) as { ipAddress?: unknown; ssid?: unknown; carrier?: unknown };
+  return [s.type, s.isConnected, s.isInternetReachable, d.ipAddress, d.ssid, d.carrier]
+    .map((v) =>
+      typeof v === 'string' || typeof v === 'number' || typeof v === 'boolean' ? String(v) : ''
+    )
+    .join('|');
+}
+
 /** Foreground/background and network changes. Returns a cleanup. */
 export function watchLifecycle(): () => void {
   const app = AppState.addEventListener('change', (state) => {
@@ -295,15 +310,19 @@ export function watchLifecycle(): () => void {
       void call('agents.focus', { agentId: fg ? open : null }).catch(() => {});
     }
   });
+  let network = '';
   const net = NetInfo.addEventListener((s) => {
     const online = s.isConnected === null ? null : Boolean(s.isConnected);
     const was = getApp().phoneOnline;
     setApp({ phoneOnline: online });
-    // A new network is the best moment to try again, not the end of a backoff.
-    if (online && was !== true) {
-      transport?.retryNow();
-      void finishForgets();
-    }
+    // A new network is the best moment to try again, not the end of a backoff:
+    // coming online, and also a switch (Wi-Fi to cellular, a VPN like
+    // Tailscale coming up or back), after which an open socket may be dead.
+    const now = networkKey(s);
+    const changed = network !== '' && now !== network;
+    network = now;
+    if (online && (was !== true || changed)) transport?.retryNow();
+    if (online && was !== true) void finishForgets();
   });
   // Increase Contrast (iOS) / high-contrast text (Android): words get one step brighter.
   if (Platform.OS === 'ios') {

@@ -99,6 +99,13 @@ function selfSigned(dir: string) {
       ? { impostorKey: generateKeyPairSync('ed25519').privateKey }
       : {}),
   });
+  // Stopped (Ctrl-C, or qa:web between phases): say goodbye as the real Mac's app does.
+  for (const signal of ['SIGINT', 'SIGTERM'] as const) {
+    process.once(signal, () => {
+      mock.sayGoodbye();
+      setTimeout(() => process.exit(0), 100);
+    });
+  }
   void mock.listen().then((url) => {
     const link = mock.pairingLink();
     console.log(`\nShip Studio mock Mac on ${url}\n`);

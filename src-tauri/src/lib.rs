@@ -1364,6 +1364,8 @@ pub fn run() {
                 agent_browser::service::shutdown();
                 // The user's Chrome hears that the app is gone.
                 user_chrome::stop("quit");
+                // Phones hear it's going away, so they wait for it calmly.
+                companion::say_goodbye_sync();
                 tracing::info!(
                     ptys,
                     sessions,

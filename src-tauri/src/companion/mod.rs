@@ -46,7 +46,7 @@ use std::sync::{Arc, Mutex};
 use crate::errors::CommandError;
 use wire::{BuildKind, Device, DevicePlatform, PairDevice, RouteKind};
 
-pub use desktop::{is_showing, resume_on_launch};
+pub use desktop::{is_showing, resume_on_launch, say_goodbye_sync};
 
 /// The HTTPS port `tailscale serve` publishes on. Deliberately not 443, 8443
 /// or 10000: those are the only ports Funnel can open to the internet, and

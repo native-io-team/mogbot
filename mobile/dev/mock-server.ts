@@ -15,6 +15,7 @@ import {
   macProofMessage,
   pairProofMessage,
   negotiate,
+  CLOSE_MAC_CLOSING,
   HEARTBEAT_MS,
   HTTP,
   MAX_ATTACHMENTS,
@@ -4021,6 +4022,8 @@ function reachOf(agentId: string): AgentReach {
     serverId,
     /** Kill every socket without a close handshake, as sleep or a Wi-Fi handoff would. */
     dropAll: () => conns.forEach((c) => c.ws.terminate()),
+    /** The app quitting (or restarting for an update): every socket hears "going away". */
+    sayGoodbye: () => conns.forEach((c) => c.ws.close(CLOSE_MAC_CLOSING, 'app closing')),
     /** The app restarted: a new epoch, so phones get a snapshot. */
     restartJournal() {
       epoch = randomUUID();

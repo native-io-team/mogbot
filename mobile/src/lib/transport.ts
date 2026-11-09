@@ -7,6 +7,7 @@
  */
 
 import {
+  CLOSE_MAC_CLOSING,
   DEAD_AFTER_MS,
   FEATURES,
   HEARTBEAT_MS,
@@ -153,7 +154,32 @@ interface Pending {
   timer: ReturnType<typeof setTimeout>;
 }
 
-const BACKOFF_MS = [400, 1000, 2000, 4000, 8000, 15000];
+/**
+ * Waits between tries. With the app in front someone is looking, and the Mac
+ * is usually back within seconds (its app restarting for an update), so the
+ * wait never passes 5 s. In the background iOS barely runs the app anyway;
+ * the radio isn't kept busy for nobody.
+ */
+export const FOREGROUND_BACKOFF_MS = [1000, 2000, 4000, 5000];
+export const BACKGROUND_BACKOFF_MS = [2000, 5000, 15000, 30000, 60000];
+
+/**
+ * A try that hasn't been welcomed in this long is stuck (a route that drops
+ * packets rather than refusing, like a home address from a cellular network,
+ * waits out the OS's own timeout of a minute or more): give it up and try
+ * the next route. Grows with each failed try, for a slow first path over Tailscale.
+ */
+export const connectTimeoutMs = (attempt: number) => 8000 + 4000 * Math.min(attempt, 3);
+
+/**
+ * When the app comes forward, or the network changes, on a socket that
+ * looks open: the Mac must answer a ping this quickly, or it's taken as gone
+ * (a socket iOS suspended in the background often is), not after 40 s.
+ */
+export const PROBE_MS = 4000;
+
+/** `retryNow` leaves a try this young alone, so a burst of triggers doesn't churn sockets. */
+const FRESH_TRY_MS = 1500;
 
 export class DirectTransport implements Transport {
   private ws: SocketLike | null = null;
@@ -169,6 +195,13 @@ export class DirectTransport implements Transport {
   private retryTimer: ReturnType<typeof setTimeout> | null = null;
   private pingTimer: ReturnType<typeof setInterval> | null = null;
   private deadTimer: ReturnType<typeof setTimeout> | null = null;
+  private connectTimer: ReturnType<typeof setTimeout> | null = null;
+  /** When the socket in flight was opened (epoch ms). */
+  private triedAt = 0;
+  /** When this spell of trying began; reset when the app comes forward. 0 while connected. */
+  private troubleSince = 0;
+  /** The Mac's app said goodbye as it closed; cleared on the next welcome. */
+  private macClosing = false;
   private pingSentAt = 0;
   private eventListeners = new Set<(e: CompanionEvent, c?: Cursor) => void>();
   private stateListeners = new Set<(s: LinkState) => void>();
@@ -299,17 +332,50 @@ export class DirectTransport implements Transport {
   }
 
   setForeground(foreground: boolean) {
+    const cameForward = foreground && !this.foreground;
     this.foreground = foreground;
-    if (this.ready) this.send({ t: 'presence', foreground });
-    // Coming back to the app is the moment to stop waiting out a backoff.
-    else if (foreground) this.retryNow();
+    if (this.ready) {
+      this.send({ t: 'presence', foreground });
+      // A socket that sat in the background may be dead without knowing it.
+      if (cameForward) this.probe();
+    } else if (foreground) {
+      // Someone is looking now: the calm moment starts over, and so do the tries.
+      if (cameForward && this.troubleSince) {
+        this.troubleSince = Date.now();
+        if (this.state.kind === 'reconnecting' || this.state.kind === 'connecting') {
+          this.setState({ ...this.state, since: this.troubleSince });
+        }
+      }
+      this.retryNow();
+    }
   }
 
-  /** Try again now (the network changed, or the app came forward). */
+  /**
+   * Make sure of the link now (the network changed, the app came forward, or
+   * the user asked): an open socket must answer a ping within `PROBE_MS`;
+   * otherwise try again at once, instead of waiting out a backoff or a try
+   * stuck on a dead route.
+   */
   retryNow() {
-    if (this.closed || this.refused || this.ws) return;
+    if (this.closed || this.refused) return;
+    if (this.ready) return this.probe();
+    if (this.ws) {
+      if (Date.now() - this.triedAt < FRESH_TRY_MS) return;
+      // The try in flight is stuck on its route: the next one goes elsewhere.
+      this.routeIndex = (this.routeIndex + 1) % this.opts.routes.length;
+    }
+    this.teardown();
     this.attempt = 0;
     this.connect();
+  }
+
+  private probe() {
+    if (!this.ready) return;
+    this.pingSentAt = Date.now();
+    this.send({ t: 'ping' });
+    // Any frame re-arms the full wait (`onmessage`).
+    if (this.deadTimer) clearTimeout(this.deadTimer);
+    this.deadTimer = setTimeout(() => this.lost(), PROBE_MS);
   }
 
   close() {
@@ -324,11 +390,19 @@ export class DirectTransport implements Transport {
   private connect() {
     if (this.retryTimer) clearTimeout(this.retryTimer);
     this.retryTimer = null;
-    if (!this.everConnected) this.setState({ kind: 'connecting', attempt: this.attempt });
+    if (!this.troubleSince) this.troubleSince = Date.now();
+    if (!this.everConnected) {
+      this.setState({ kind: 'connecting', attempt: this.attempt, since: this.troubleSince });
+    }
     const Impl = this.opts.WebSocketImpl ?? WebSocket;
     const url = this.route.url.replace(/^http/, 'ws').replace(/\/$/, '') + HTTP.ws;
     const ws = new Impl(url) as unknown as SocketLike;
     this.ws = ws;
+    this.triedAt = Date.now();
+    if (this.connectTimer) clearTimeout(this.connectTimer);
+    this.connectTimer = setTimeout(() => {
+      if (ws === this.ws && !this.ready) this.lost();
+    }, connectTimeoutMs(this.attempt));
     ws.onopen = () => {
       this.armDeadTimer();
       // Nothing private until the Mac proves itself: just a challenge.
@@ -356,8 +430,13 @@ export class DirectTransport implements Transport {
       }
     };
     ws.onerror = () => {};
-    ws.onclose = () => {
-      if (ws === this.ws) this.lost();
+    ws.onclose = (ev) => {
+      if (ws !== this.ws) return;
+      // The Mac's app closing says so; anything else (a drop, a refusal) doesn't.
+      if (this.ready && (ev as { code?: number } | null)?.code === CLOSE_MAC_CLOSING) {
+        this.macClosing = true;
+      }
+      this.lost();
     };
   }
 
@@ -411,6 +490,10 @@ export class DirectTransport implements Transport {
         this.ready = true;
         this.everConnected = true;
         this.attempt = 0;
+        this.troubleSince = 0;
+        this.macClosing = false;
+        if (this.connectTimer) clearTimeout(this.connectTimer);
+        this.connectTimer = null;
         this.welcome = frame;
         if (frame.resume === 'replay') this.epoch = this.opts.getResume()?.epoch ?? this.epoch;
         this.startPings();
@@ -460,18 +543,28 @@ export class DirectTransport implements Transport {
   /** The socket closed or went silent: fail what's in flight and retry with backoff. */
   private lost() {
     const unanswered = this.silent;
+    const wasReady = this.ready;
     this.teardown();
     if (this.closed || this.refused) return;
     if (unanswered && !this.probed) void this.probeOldMac(this.route.url);
-    // A route that failed before ever answering hands over to the next one.
-    if (!this.ready) this.routeIndex = (this.routeIndex + 1) % this.opts.routes.length;
-    const base = BACKOFF_MS[Math.min(this.attempt, BACKOFF_MS.length - 1)];
+    // A route that failed before ever answering hands over to the next one;
+    // one that was working is tried again first (the Mac restarting is still there).
+    if (!wasReady) this.routeIndex = (this.routeIndex + 1) % this.opts.routes.length;
+    if (!this.troubleSince) this.troubleSince = Date.now();
+    const schedule = this.foreground ? FOREGROUND_BACKOFF_MS : BACKGROUND_BACKOFF_MS;
+    const base = schedule[Math.min(this.attempt, schedule.length - 1)];
     const delay = Math.round(base * (0.8 + Math.random() * 0.4));
     this.attempt++;
     this.setState(
       this.everConnected
-        ? { kind: 'reconnecting', lastSeenAt: this.lastSeenAt, nextTryAt: Date.now() + delay }
-        : { kind: 'connecting', attempt: this.attempt }
+        ? {
+            kind: 'reconnecting',
+            lastSeenAt: this.lastSeenAt,
+            nextTryAt: Date.now() + delay,
+            since: this.troubleSince,
+            ...(this.macClosing ? { macClosing: true } : {}),
+          }
+        : { kind: 'connecting', attempt: this.attempt, since: this.troubleSince }
     );
     this.retryTimer = setTimeout(() => this.connect(), delay);
   }
@@ -505,7 +598,8 @@ export class DirectTransport implements Transport {
     if (this.pingTimer) clearInterval(this.pingTimer);
     if (this.deadTimer) clearTimeout(this.deadTimer);
     if (this.retryTimer) clearTimeout(this.retryTimer);
-    this.pingTimer = this.deadTimer = this.retryTimer = null;
+    if (this.connectTimer) clearTimeout(this.connectTimer);
+    this.pingTimer = this.deadTimer = this.retryTimer = this.connectTimer = null;
     const ws = this.ws;
     this.ws = null;
     if (ws) {

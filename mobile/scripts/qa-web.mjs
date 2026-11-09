@@ -19,6 +19,7 @@
  *   pnpm qa:web --themes dark            # one theme
  *   pnpm qa:web --phases send            # a send, frame by frame (not in the default run)
  *   pnpm qa:web --phases perf            # a 5,000-line chat: first render and scroll jank (not in the default run)
+ *   pnpm qa:web --phases reconnecting    # the Mac going away under an open app (not in the default run)
  *   pnpm qa:web --out /tmp/shots
  *   pnpm qa:web --web-port 8098 --mock-port 47498 --cdp-port 9681
  *   QA_WEB_PORT=… QA_MOCK_PORT=… QA_CDP_PORT=… pnpm qa:web
@@ -214,6 +215,20 @@ async function stopMock() {
   await stop(mock);
   mock = null;
   log('mock stopped');
+}
+/** Gone without a goodbye, as a crash or a dropped network would look. */
+async function killMock() {
+  if (mock && mock.exitCode === null) {
+    const gone = new Promise((resolve) => mock.once('exit', resolve));
+    try {
+      process.kill(-mock.pid, 'SIGKILL');
+    } catch {
+      /* gone */
+    }
+    await gone;
+  }
+  mock = null;
+  log('mock killed');
 }
 
 // ---- CDP ---------------------------------------------------------------------------
@@ -1805,18 +1820,63 @@ const OFFLINE_CACHED = [
   },
 ];
 
-/** Straight after pairing, before any chat was opened: nothing saved for it. */
+/**
+ * The Mac goes away under an open app (`--phases reconnecting`): the first
+ * seconds read as calm. `goodbye` stops the mock as the Mac's app quits
+ * (1001 "going away"); otherwise it is killed without a word.
+ */
+const RECONNECTING = [
+  {
+    name: 'reconnecting-agents',
+    route: '/agents',
+    goodbye: false,
+    check: 'A few seconds after a drop: "Reconnecting…", never "Can’t reach Mac"',
+  },
+  {
+    name: 'reconnecting-chat-chief',
+    route: '/chat/chief',
+    goodbye: false,
+    check: 'The chat bar says "Reconnecting…" quietly, saved messages shown',
+  },
+  {
+    name: 'reconnecting-goodbye-chat-chief',
+    route: '/chat/chief',
+    goodbye: true,
+    check: 'The Mac’s app said it was closing: "Waiting for the app on your Mac"',
+  },
+];
+
+async function reconnectingShots(page) {
+  for (const theme of THEMES) {
+    await setTheme(page, theme);
+    for (const s of RECONNECTING) {
+      if (!wanted(`${s.name}-${theme}`)) continue;
+      await startMock();
+      await page.goto(WEB + s.route);
+      await sleep(5000);
+      await (s.goodbye ? stopMock() : killMock());
+      // Past the chat bar's 2 s grace, well inside the 15 s calm.
+      await sleep(3500);
+      await screen(page, theme, { name: s.name, check: s.check });
+    }
+  }
+}
+
+/**
+ * Straight after pairing, before any chat was opened: nothing saved for it.
+ * Settled past the first 15 s, which read as "Connecting…" (`CALM_MS`).
+ */
 const OFFLINE_FRESH = [
   {
     name: 'offline-agents',
     route: '/agents',
-    settle: 5000,
+    settle: 17000,
     check: 'The list as last seen at pairing, or the empty reason',
   },
   {
     name: 'offline-chat-design',
     route: '/chat/design',
-    settle: 6000,
+    settle: 17000,
     check: 'Deep-linked chat, nothing cached: header + reason + retry, never a bare spinner',
   },
 ];
@@ -2879,6 +2939,8 @@ async function main() {
       report(`Unfinished: ${Math.round((Date.now() - started) / 1000)} s so far.`)
     );
   }
+
+  if (phase('reconnecting')) await reconnectingShots(page);
 
   if (phase('perf')) {
     await startMock('--torture');

@@ -9,7 +9,8 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useShallow } from 'zustand/react/shallow';
-import { pill, problemBody } from '../lib/connection';
+import type { LinkState } from '@shipstudio/companion-protocol';
+import { CALM_MS, pill, problemBody } from '../lib/connection';
 import { retryNow } from '../lib/session';
 import { useApp } from '../lib/store';
 import { useShowing } from '../lib/moving';
@@ -39,6 +40,23 @@ export function useNow(ms = 15_000) {
   return now;
 }
 
+/**
+ * The time for `pill`: `useNow`, plus a tick the moment the calm first
+ * seconds of trying end, so "Reconnecting…" turns into what's true then
+ * rather than at the next tick.
+ */
+export function useLinkNow(link: LinkState, ms = 15_000) {
+  const now = useNow(ms);
+  const [calmEnded, setCalmEnded] = useState(0);
+  const since = link.kind === 'connecting' || link.kind === 'reconnecting' ? link.since : undefined;
+  useEffect(() => {
+    if (since == null) return;
+    const timer = setTimeout(() => setCalmEnded(Date.now()), since + CALM_MS - Date.now() + 50);
+    return () => clearTimeout(timer);
+  }, [since]);
+  return Math.max(now, calmEnded);
+}
+
 /** Everything `pill` and `layers` read, from the store. */
 export function useLinkState() {
   return useApp(
@@ -59,7 +77,8 @@ function ConnectionPill() {
   const styles = useStyles();
   const toneColor = useToneColor();
   const router = useRouter();
-  const p = pill(useLinkState(), useNow());
+  const state = useLinkState();
+  const p = pill(state, useLinkNow(state.link));
   return (
     <Pressable
       accessibilityRole="button"
@@ -93,7 +112,7 @@ function ConnectionPill() {
 export function ConnectionNotice() {
   const styles = useStyles();
   const state = useLinkState();
-  const p = pill(state, useNow());
+  const p = pill(state, useLinkNow(state.link));
   if (p.tone === 'ok' || state.link.kind === 'refused') return null;
   return (
     <Animated.View
@@ -117,7 +136,7 @@ export function LinkProblem({ what, macName }: { what: string; macName: string }
   const styles = useStyles();
   const router = useRouter();
   const state = useLinkState();
-  const p = pill(state, useNow());
+  const p = pill(state, useLinkNow(state.link));
   if (p.tone !== 'problem') {
     return (
       <View style={styles.connecting}>

@@ -1045,6 +1045,15 @@ fn conn_of(label: &str) -> u64 {
         .unwrap_or(0)
 }
 
+/// The close every phone hears as the app quits: "going away", so it waits.
+fn app_closing_frame() -> Message {
+    use tokio_tungstenite::tungstenite::protocol::frame::{coding::CloseCode, CloseFrame};
+    Message::Close(Some(CloseFrame {
+        code: CloseCode::from(super::hub::CLOSE_APP_CLOSING),
+        reason: "app closing".into(),
+    }))
+}
+
 fn event_frame(seq: Option<u64>, event: Event) -> ServerFrame {
     ServerFrame::Evt { seq, event }
 }
@@ -1081,6 +1090,10 @@ where
         HubItem::Revoked { .. } => return None,
         HubItem::Shutdown => {
             let _ = ws.send(Message::Close(None)).await;
+            return Some(Ended::Shutdown);
+        }
+        HubItem::AppClosing => {
+            let _ = ws.send(app_closing_frame()).await;
             return Some(Ended::Shutdown);
         }
     };
