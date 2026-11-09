@@ -199,3 +199,39 @@ fn settings_windows_are_checked_like_chats() {
     })
     .is_err());
 }
+
+/// Turning quiet hours off, or for a window that leaves part of the current
+/// one out, holds back less: routines run and notifications reach the user
+/// in hours they asked not to be bothered. Not on another agent's word.
+#[test]
+fn holding_back_less_is_told_apart_from_more() {
+    let night = Window {
+        start: 22 * 60,
+        end: 7 * 60,
+    };
+    let longer = Window {
+        start: 21 * 60,
+        end: 8 * 60,
+    };
+    let shorter = Window {
+        start: 23 * 60,
+        end: 7 * 60,
+    };
+    let daytime = Window {
+        start: 9 * 60,
+        end: 17 * 60,
+    };
+    assert!(holds_less(Some(night), None), "off");
+    assert!(holds_less(Some(night), Some(shorter)));
+    assert!(holds_less(Some(night), Some(daytime)));
+    assert!(!holds_less(Some(night), Some(longer)));
+    assert!(!holds_less(Some(night), Some(night)));
+    // None set: any window only holds back (a check-in setting them from memory).
+    assert!(!holds_less(None, Some(daytime)));
+    assert!(!holds_less(None, None));
+    assert_eq!(wanted(&serde_json::json!({ "off": true })), Ok(None));
+    assert_eq!(
+        wanted(&serde_json::json!({ "from": "22:00", "to": "7am" })),
+        Ok(Some(night))
+    );
+}

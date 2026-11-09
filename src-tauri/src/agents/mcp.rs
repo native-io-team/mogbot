@@ -761,6 +761,27 @@ async fn call(
         }
         super::quiet::TOOL => {
             let outside = runner::from_outside(&caller.id);
+            // Holding back less (off, or a window that leaves some of the
+            // current one out) lets routines run and notifications reach
+            // the user at night: only on their own message, else a card.
+            if !outside {
+                if let Ok(next) = super::quiet::wanted(args) {
+                    let now = super::quiet::get();
+                    if super::quiet::holds_less(now, next) && !runner::users_own_ask(&caller.id) {
+                        let answer = ask_user(
+                            app,
+                            caller,
+                            "Change your quiet hours?".to_string(),
+                            super::quiet::change_line(now, next),
+                            None,
+                        )
+                        .await;
+                        if let Some(refused) = refused_reply(&answer, "change them") {
+                            return error(refused);
+                        }
+                    }
+                }
+            }
             match super::quiet::call(args, outside, store::now_ms()) {
                 Ok(t) => {
                     let _ = tauri::Emitter::emit(app, super::quiet::EVENT, ());
@@ -1904,6 +1925,32 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     }
     if account.as_ref().is_some_and(|a| *a != agent.account) {
         fields.push("account");
+        // Which of the user's accounts it spends: the user's own message
+        // alone changes it at once (as `use_account`); anything else asks.
+        // A turn answering outside text already asked for the whole call.
+        if !runner::users_own_ask(&caller.id) && !runner::from_outside(&caller.id) {
+            let shown = account
+                .as_ref()
+                .and_then(|a| a.as_deref())
+                .and_then(|id| {
+                    super::wallet::list()
+                        .into_iter()
+                        .find(|w| w.id == id)
+                        .map(|w| super::wallet::labelled(w, true).name)
+                })
+                .unwrap_or_else(|| "any account".to_string());
+            let answer = ask_user(
+                app,
+                caller,
+                format!("Change which account {} runs on?", agent.name),
+                format!("Runs on: {shown}"),
+                None,
+            )
+            .await;
+            if let Some(refused) = refused_reply(&answer, "change it") {
+                return error(refused);
+            }
+        }
     }
     // The same guard as the editor's: not out of a session the user drives.
     let moves_session = engine.is_some() || fields.contains(&"project");
@@ -2867,9 +2914,10 @@ pub(super) async fn decide(
 /// for the exact text's OK (`outward`): then no level, rule or plan without
 /// the words answers it, and its card shows the words.
 /// `use_account` needs a card: the turn isn't answering the user's own
-/// message (another agent, a routine, or a note the app queued).
+/// message alone (another agent, a routine, a note the app queued, or a
+/// conversation that read outside content: `runner::users_own_ask`).
 pub(super) fn use_account_asks(caller_id: &str) -> bool {
-    !runner::answering_user(caller_id)
+    !runner::users_own_ask(caller_id)
 }
 
 /// The owner's own request at Go hard or above (`direct`): after outside

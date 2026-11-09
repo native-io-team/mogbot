@@ -160,16 +160,53 @@ pub async fn call(
             if !super::runner::answering_user(&caller.id) {
                 return error(NOT_THE_USERS);
             }
+            // The user's message, but not theirs alone: another agent's
+            // request or an app note rode in with it, or the conversation
+            // read outside content. Their accounts: they OK it on a card.
+            if !super::runner::users_own_ask(&caller.id) {
+                let answer = super::mcp::ask_user(
+                    app,
+                    caller,
+                    "Change your accounts?".to_string(),
+                    account_card_detail(args),
+                    None,
+                )
+                .await;
+                if let Some(refused) = super::mcp::refused_reply(&answer, "change it") {
+                    return error(refused);
+                }
+            }
             manage_account(app, caller, args)
         }
         "slack_settings" => slack_settings(app, caller, args).await,
-        "change_app_setting" => change_app_setting(app, caller, args),
+        "change_app_setting" => change_app_setting(app, caller, args).await,
         "free_up_space" => free_up_space(app, caller, args).await,
         _ => error("Unknown tool"),
     }
 }
 
 /* ------------------------------------------------------------ accounts */
+
+/// What a `manage_account` card says it will do, from its arguments. Pure.
+pub fn account_card_detail(args: &Value) -> String {
+    let account = arg(args, "account").unwrap_or("an account");
+    match arg(args, "action").unwrap_or("") {
+        "move" => format!(
+            "Move “{account}” to {} in the order turns try accounts",
+            arg(args, "to").unwrap_or("another place")
+        ),
+        "rename" => format!(
+            "Rename “{account}” to “{}”",
+            arg(args, "name").unwrap_or("")
+        ),
+        "add" => format!(
+            "Add a {} account “{}” (its sign-in opens on the Mac)",
+            arg(args, "engine").unwrap_or(""),
+            arg(args, "name").unwrap_or("")
+        ),
+        other => format!("{other} “{account}”"),
+    }
+}
 
 /// Where `to` puts the account at `from` among `len`: 0-based. Pure.
 pub fn move_to(to: &str, from: usize, len: usize) -> Result<usize, String> {
@@ -532,11 +569,34 @@ async fn slack_settings(app: &AppHandle, caller: &store::Agent, args: &Value) ->
 
 /* ------------------------------------------------- the app's own switches */
 
-fn change_app_setting(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
+/// Whether turning "slow down on battery" to `slow` gives background work
+/// more room: off, from on. Pure.
+pub fn slow_widens(now_on: bool, slow: Option<bool>) -> bool {
+    now_on && slow == Some(false)
+}
+
+async fn change_app_setting(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
     let theme = arg(args, "theme");
     let slow = args.get("slow_on_battery").and_then(Value::as_bool);
     if theme.is_none() && slow.is_none() {
         return error("Say what to change: `theme` or `slow_on_battery`.");
+    }
+    // Keeping full pace on battery spends the user's battery: only on their
+    // own message, else a card.
+    if slow_widens(crate::power::low_power_enabled(), slow)
+        && !super::runner::users_own_ask(&caller.id)
+    {
+        let answer = super::mcp::ask_user(
+            app,
+            caller,
+            "Keep background checks at full pace on battery?".to_string(),
+            slow_line(false).to_string(),
+            None,
+        )
+        .await;
+        if let Some(refused) = super::mcp::refused_reply(&answer, "change it") {
+            return error(refused);
+        }
     }
     let mut lines = Vec::new();
     if let Some(t) = theme {

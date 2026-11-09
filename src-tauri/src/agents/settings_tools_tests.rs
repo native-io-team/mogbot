@@ -229,3 +229,30 @@ fn holding_back_usage_is_a_line_and_spending_more_is_a_card() {
     assert!(fallback_lowers(Fallback::Carry, Fallback::Wait));
     assert!(fallback_lowers(Fallback::Carry, Fallback::Ask));
 }
+
+/// Keeping full pace on battery spends the battery: off from on is more
+/// room (a card unless the user's own message asked); on, or off from off,
+/// is not.
+#[test]
+fn slow_on_battery_off_is_more_room() {
+    assert!(slow_widens(true, Some(false)));
+    assert!(!slow_widens(true, Some(true)));
+    assert!(!slow_widens(false, Some(false)));
+    assert!(!slow_widens(true, None));
+}
+
+/// The account card says what changes, in the user's names.
+#[test]
+fn the_account_card_says_what_changes() {
+    let detail = account_card_detail(&serde_json::json!({
+        "action": "move", "account": "Personal", "to": "first"
+    }));
+    assert_eq!(
+        detail,
+        "Move “Personal” to first in the order turns try accounts"
+    );
+    let detail = account_card_detail(&serde_json::json!({
+        "action": "add", "engine": "codex", "name": "Side project"
+    }));
+    assert!(detail.contains("“Side project”"), "{detail}");
+}
