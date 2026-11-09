@@ -532,7 +532,7 @@ fn not_needed_keys() -> Vec<String> {
     team.chain(checklist).collect()
 }
 
-async fn gh_login() -> Option<String> {
+pub(crate) async fn gh_login() -> Option<String> {
     crate::commands::github::get_github_username(None)
         .await
         .ok()

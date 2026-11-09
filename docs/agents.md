@@ -226,6 +226,38 @@ call and the review are this app's.
 Not verified: drafting against a live Claude Code or Codex account (the
 prompt, the parse and the review are unit-tested on recorded shapes).
 
+### A new agent speaks first (`agents/starters.rs`)
+
+Every agent made from the desk, the phone or the Chief's `create_agent` opens
+on a stored welcome in its own voice (one or two sentences; no model turn,
+like `CHIEF_GREETING`) and three tasks under it. Tapping one sends its words
+as the user's message; they are kept in `<home>/starters.json`, carried on
+the overview as `starters`, and removed by `runner::record` the moment the
+user sends anything.
+
+- **Where the words come from.** The draft returns `welcome` and up to six
+  `starters`, each with the apps it `needs` (a need outside the draft's apps
+  is dropped). The Chief can pass `welcome`, `starters` and `apps` to
+  `create_agent`. A ready-made agent adds its own send-as-is buttons. Without
+  a welcome: "Hi, I'm <name>. <role>."
+- **Only what it can reach** (`starters::choose`, pure and tested). Each app
+  the job needs is checked against what the app already knows, no call made
+  to find out: a working connection granted to it or a connector its engine
+  listed (`team_reach::facts`), and for GitHub `gh` signed in. A browser being
+  on doesn't count. A task is offered only when every app it needs is
+  reachable; when one isn't, the first of the three is "Help me connect
+  <app>" (one ask, however many are missing). Then, in order: the creator's
+  tasks, its first routine's first sentence (only when nothing is missing),
+  its bound project, "What's new in <app>?" for a reachable app, and tasks
+  that need nothing. Too long to read at a glance (over 70 characters) is
+  skipped, never cut.
+- An agent the Chief starts on a `first_task` gets the welcome but no
+  starters: it is already busy.
+
+Not verified: a fresh agent's reach is usually just `gh` and its project
+(its engine lists connectors only once a turn runs), so most first opens
+offer the login ask when the job needs a connector.
+
 ## What an agent is
 
 | Piece | Where | Notes |

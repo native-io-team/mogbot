@@ -26,6 +26,7 @@ import { useRouter } from 'expo-router';
 import {
   freeLook,
   keptRoutines,
+  openingOf,
   lookFor,
   MAC_FEATURES,
   type AgentDraft,
@@ -177,6 +178,7 @@ export default function NewAgent() {
           ? {
               instructions: instructions.trim(),
               routines: keptRoutines(draft, kept),
+              ...openingOf(draft),
             }
           : {}),
       },

@@ -196,6 +196,13 @@ const TOOLS: &[Tool] = &[
                 "project": { "type": "string", "description": "Optional: bind it to one of the user's projects (name or path from project_list), so its own turns run inside that project. Usually unnecessary: any agent can work on any project through sessions." },
                 "engine": { "type": "string", "enum": ["claude", "codex"], "description": "Optional: what it runs on. `claude` (Claude Code) or `codex` (Codex, on the user's ChatGPT plan). Left out, it goes on the user's default engine and model for new agents (Settings → Agents), or on whichever engine is set up when that one isn't. Only when the user asks for it; it must be installed and signed in." },
                 "first_task": { "type": "string", "description": "Optional message to start it on right away." },
+                "welcome": { "type": "string", "description": "Optional: what it says first in its chat, one or two short sentences in its own voice (\"I'm Inbox. I go through your mail and tell you what needs you.\"). No model turn runs for it." },
+                "starters": {
+                    "type": "array",
+                    "description": "Optional: up to 6 first tasks the user could tap in its chat, short (under 70 characters), as the user would say them (\"Sum up my unread mail\"), each naming the apps it needs. The app shows three, only those whose apps it can already reach, and asks to connect a missing one instead.",
+                    "items": { "type": "object", "properties": { "text": { "type": "string" }, "needs": { "type": "array", "items": { "type": "string" } } }, "required": ["text"] }
+                },
+                "apps": { "type": "array", "items": { "type": "string" }, "description": "Optional: outside apps its job needs (\"Gmail\", \"GitHub\")." },
                 "routines": {
                     "type": "array",
                     "description": "Optional: its routines, set up with it (at most 4). Each `when` uses schedule_check_in's shapes; `note` is the first step; `then` holds later steps, each `{text, ask_first}`: put an outward step (posting, sending) after a draft with `ask_first: true`, so the user OKs the draft on a card first.",
@@ -1819,6 +1826,10 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
                 let _ = runner::record(app, note);
             }
             let set = super::draft::add_routines(app, &agent.id, &routines);
+            // Its first open: a welcome, and starters unless it's already on a task.
+            let opening = super::starters::opening_arg(args);
+            super::starters::open(app, &agent.id, &opening, arg(args, "first_task").is_none())
+                .await;
             let routines_said = match (routines.len(), set) {
                 (0, _) => String::new(),
                 (n, s) if s == n => format!(" with {s} routine{}", if s == 1 { "" } else { "s" }),

@@ -421,6 +421,16 @@ pub fn overview() -> Value {
             id: "a1work".into(),
             name: "Work".into(),
         }),
+        starters: vec![
+            crate::agents::starters::Starter {
+                text: "Help me connect Gmail".into(),
+                connect: Some("Gmail".into()),
+            },
+            crate::agents::starters::Starter {
+                text: "Plan my week".into(),
+                connect: None,
+            },
+        ],
     };
     super::wire::phone_overview(
         serde_json::to_value(crate::commands::agents::AgentsOverview {

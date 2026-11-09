@@ -130,7 +130,9 @@ import {
   engineIsReady,
   roleWithoutPath,
   avatarMood,
+  showsStarters,
 } from '../../lib/agents';
+import { AgentStarters } from './AgentStarters';
 import {
   agentIn,
   getAgentsSnapshot,
@@ -769,6 +771,8 @@ export const AgentChat = memo(function AgentChat({
     shown.length > 0 &&
     shown.every((m) => m.kind === 'note') &&
     agent.status.state === 'idle';
+  /** A new agent's welcome is up and the user hasn't spoken: its own starters. */
+  const firstOpen = !agent.isMain && agent.status.state === 'idle' && showsStarters(agent, shown);
   const livePeerLines = useMemo(() => newestPeerGroups(items), [items]);
   const similar = useMemo(() => approvalSeries(items), [items]);
   // Who this chat has worked with, and the cards already in it: for the
@@ -1730,7 +1734,11 @@ export const AgentChat = memo(function AgentChat({
               {greetingOnly && engineReady && chiefStarters}
               {/* A ready-made agent the Chief just made: only "Created by" so
               far, so its own starters sit under it until the user speaks. */}
-              {templateFirstOpen && engineReady && templateStarters}
+              {templateFirstOpen && engineReady && !firstOpen && templateStarters}
+              {/* A new agent's welcome, then three things it can do now. */}
+              {firstOpen && engineReady && (
+                <AgentStarters starters={agent.starters ?? []} onSend={sendStarter} />
+              )}
               {items.length > 0 && (
                 <FreshHint agent={agent} onStartFresh={() => actions.onStartFresh(agent)} />
               )}

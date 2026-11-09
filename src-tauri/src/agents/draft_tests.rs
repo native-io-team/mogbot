@@ -139,3 +139,35 @@ fn routines_from_a_tool_need_a_time_and_a_note() {
     assert!(routines_arg(&serde_json::json!({})).unwrap().is_empty());
     assert!(routines_arg(&serde_json::json!({ "routines": "daily" })).is_err());
 }
+
+#[test]
+fn a_draft_brings_its_welcome_and_starters_tied_to_its_apps() {
+    let text = serde_json::json!({
+        "name": "Inbox",
+        "role": "Goes through my mail.",
+        "color": "teal",
+        "instructions": "You read the user's mail.",
+        "apps": ["Gmail"],
+        "welcome": "I'm Inbox.\nI tell you what needs you.",
+        "starters": [
+            { "text": "Sum up my unread mail", "needs": ["gmail"] },
+            { "text": "Post it to Slack", "needs": ["Slack"] },
+            { "text": "Plan my week", "needs": [] },
+            { "text": "x".repeat(crate::agents::starters::MAX_TEXT + 1), "needs": [] },
+            { "text": "" }
+        ]
+    })
+    .to_string();
+    let d = parse(&utc(), &text, &[], NOW).unwrap();
+    assert_eq!(d.welcome, "I'm Inbox. I tell you what needs you.");
+    let texts: Vec<_> = d.starters.iter().map(|s| s.text.as_str()).collect();
+    // A need outside its apps can never be met; too long or empty isn't a button.
+    assert_eq!(texts, vec!["Sum up my unread mail", "Plan my week"]);
+    assert_eq!(d.starters[0].needs, vec!["Gmail"]);
+}
+
+#[test]
+fn a_draft_without_starters_still_reads() {
+    let d = parse(&utc(), &answer(), &[], NOW).unwrap();
+    assert!(d.welcome.is_empty() && d.starters.is_empty());
+}

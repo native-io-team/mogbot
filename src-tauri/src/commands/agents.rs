@@ -28,6 +28,9 @@ pub struct AgentView {
     /// engine has more than one (with one, there is nothing to tell apart).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub ran_on: Option<RanOn>,
+    /// Its first-open starters, until the user says anything (`starters`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub starters: Vec<agents::starters::Starter>,
 }
 
 /// Which account a turn ran on (`wallet::last_on`).
@@ -111,6 +114,7 @@ pub async fn agents_overview(app: AppHandle) -> Result<AgentsOverview, CommandEr
         .map(|agent| {
             Ok(AgentView {
                 ran_on: ran_on(&agent, &counts),
+                starters: agents::starters::load(&agent.id),
                 independence: agents::policy::own_independence(&policy, &agent.id),
                 takeover: takeover::view(&agent.id),
                 status: runner::status_with_work(&agent.id),
@@ -170,6 +174,7 @@ pub async fn agents_with_projects() -> Result<Vec<AgentView>, CommandError> {
             .map(|agent| {
                 Ok(AgentView {
                     ran_on: None,
+                    starters: agents::starters::load(&agent.id),
                     independence: agents::policy::own_independence(&policy, &agent.id),
                     takeover: takeover::view(&agent.id),
                     status: runner::status_with_work(&agent.id),
@@ -533,6 +538,10 @@ pub struct CreateAgentInput {
     /// them; the user keeps the ones they ticked).
     #[serde(default)]
     pub routines: Vec<agents::draft::NewRoutine>,
+    /// Its welcome, first tasks and the apps its job needs, from a draft
+    /// (`agents::starters`).
+    #[serde(flatten)]
+    pub opening: agents::starters::Opening,
 }
 
 /// "Describe the agent you want": a draft to check, nothing created
@@ -610,6 +619,7 @@ pub async fn agents_create(
     if !input.routines.is_empty() {
         agents::draft::add_routines(&app, &agent.id, &input.routines);
     }
+    agents::starters::open(&app, &agent.id, &input.opening, true).await;
     let agent = store::get(&agent.id).unwrap_or(agent);
     emit_registry(&app);
     Ok(agent)
