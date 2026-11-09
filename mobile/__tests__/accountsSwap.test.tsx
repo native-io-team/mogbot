@@ -18,10 +18,15 @@ jest.mock('../src/lib/session', () => ({
   describeError: (e: unknown) => String(e),
 }));
 // Read once, as the screen does on opening.
+// The latest read, so a test can run the poll's next tick itself.
+const mockPoll: { read?: () => Promise<unknown> } = {};
 jest.mock('../src/lib/usePolling', () => {
   const { useEffect } = jest.requireActual('react');
   return {
-    usePolling: (fn: () => Promise<unknown>) => useEffect(() => void fn(), []),
+    usePolling: (fn: () => Promise<unknown>) => {
+      mockPoll.read = fn;
+      return useEffect(() => void fn(), []);
+    },
   };
 });
 
@@ -89,4 +94,42 @@ it('the arrows take no tap while a change is on its way', async () => {
   expect(later.props.accessibilityState).toEqual(expect.objectContaining({ disabled: true }));
   await fireEvent.press(later);
   expect(move).not.toHaveBeenCalled();
+});
+
+it('a read that went out before a move and lands after it does not put the old order back', async () => {
+  const reads: ((v: UsageAccount[]) => void)[] = [];
+  let land: (v: UsageAccount[]) => void = () => {};
+  mockCall.mockImplementation((method: string) => {
+    if (method === 'agents.accounts') return new Promise<UsageAccount[]>((r) => reads.push(r));
+    if (method === 'agents.accounts.reorder') return new Promise<UsageAccount[]>((r) => (land = r));
+    return Promise.reject(new Error(`unexpected ${method}`));
+  });
+  const { result } = await renderHook(() => useAccounts({ room: false }));
+  await act(async () => {
+    reads[0](structuredClone(LIST));
+  });
+  // The poll's next read goes out, and is slow.
+  let slow: Promise<unknown> = Promise.resolve();
+  await act(async () => {
+    slow = mockPoll.read!();
+  });
+  expect(reads).toHaveLength(2);
+
+  // Meanwhile a move goes out and lands.
+  let moved: Promise<void> = Promise.resolve();
+  await act(async () => {
+    moved = result.current.move('claude', 0, 1);
+  });
+  await act(async () => {
+    land([LIST[1], LIST[0], LIST[2]]);
+    await moved;
+  });
+  expect(result.current.accounts?.map((a) => a.id)).toEqual(['w1', 'default', 'p1']);
+
+  // The slow read answers with the order from before the move.
+  await act(async () => {
+    reads[1](structuredClone(LIST));
+    await slow;
+  });
+  expect(result.current.accounts?.map((a) => a.id)).toEqual(['w1', 'default', 'p1']);
 });
