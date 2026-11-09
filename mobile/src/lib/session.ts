@@ -19,6 +19,7 @@ import type {
   AgentLook,
   RoutineStep,
 } from '@shipstudio/companion-protocol';
+import { MAC_FEATURES } from '@shipstudio/companion-protocol';
 import NetInfo from '@react-native-community/netinfo';
 import { AccessibilityInfo, AppState, Platform } from 'react-native';
 import * as Crypto from 'expo-crypto';
@@ -33,7 +34,6 @@ import {
   dismissApproval,
   dismissPushFor,
   dismissRead,
-  post,
   postNote,
   postNotice,
   setBadge,
@@ -41,6 +41,7 @@ import {
   type Target,
 } from './notify';
 import { answerFromAlert, approvalNotice, setupCategories, type AnswerOutcome } from './actionable';
+import { defaultDeps, LiveAlerts } from './liveAlerts';
 import {
   appInfo,
   asCredentials,
@@ -230,7 +231,10 @@ function connect(c: Credentials) {
       const m = asMessage(event.message);
       if (m) {
         noticeMessage(m);
-        alertApproval(m);
+        // A Mac that sends alerts decides which cards to post; an older one
+        // leaves it to this phone.
+        if (macSendsAlerts()) liveAlerts.heard(m);
+        else alertApproval(m);
       }
     }
     update((s) => applyEvent(s, event, cursor));
@@ -941,6 +945,7 @@ export async function unpair(): Promise<'removed' | 'queued'> {
   const serverId = credentials?.serverId;
   await forgetCredentials();
   await clearCache().catch(() => {});
+  liveAlerts.forget();
   await clearAll();
   if (serverId) {
     await forgetCache(serverId).catch(() => {});
@@ -1046,21 +1051,32 @@ Notifications.setNotificationHandler({
     }),
 });
 
-/** The Mac only sends an alert when this phone isn't showing that agent. */
-async function notify(alert: Alert) {
-  if (getApp().openChat === alert.agentId && AppState.currentState === 'active') return;
-  await post(alert);
-}
+/**
+ * The Mac's alerts (`liveAlerts.ts`). It already left out the socket in
+ * front of that chat; a chat opened since is checked here.
+ */
+const liveAlerts = new LiveAlerts(
+  defaultDeps(
+    (id) => getApp().overview?.agents.find((a) => a.id === id),
+    (id) => getApp().openChat === id && AppState.currentState === 'active'
+  )
+);
+
+const notify = (alert: Alert) => liveAlerts.alert(alert);
+
+/** This Mac sends `alert` for every card that needs the user (`MAC_FEATURES.alerts`). */
+const macSendsAlerts = () => !!getApp().welcome?.features?.includes(MAC_FEATURES.alerts);
 
 /** How long after posting a card's own notification the relay's duplicate is looked for again. */
 const PUSH_DEDUPE_MS = 4000;
 
 /**
- * The live notifier: a new card arrives over the socket while the app is
- * in the background (it keeps its connection for a while there), so this
- * phone posts it itself, with its words and, when it fits, Allow / Deny
- * (`actionable.ts`). Replayed history is never news; in front, the app
- * shows it. Runs before the message is stored, so "new" is knowable.
+ * With a Mac that sends no alerts (older than `MAC_FEATURES.alerts`): a
+ * new card arrives over the socket while the app is in the background (iOS
+ * gives it seconds there), so this phone posts it itself, with its words
+ * and, when it fits, Allow / Deny (`actionable.ts`). Replayed history is
+ * never news; in front, the app shows it. Runs before the message is
+ * stored, so "new" is knowable.
  */
 function alertApproval(m: AgentMessage) {
   if (!caughtUp || AppState.currentState === 'active') return;
@@ -1125,7 +1141,14 @@ export function answerFromNotification(
  */
 function noticeMessage(m: AgentMessage) {
   const known = getApp().chats[m.agentId]?.messages.find((x) => x.id === m.id);
-  if (m.approval && m.approval.status !== 'pending' && known?.approval?.status === 'pending') {
+  // Answered or expired, here or anywhere: its notification is no longer
+  // true. Taken back even when this chat was never loaded (the alert came
+  // over the socket, or as a push), and on replay after a reconnect.
+  if (
+    m.approval &&
+    m.approval.status !== 'pending' &&
+    known?.approval?.status !== m.approval.status
+  ) {
     void dismissApproval(m.agentId, m.id);
   }
   if (!caughtUp || known) return;
