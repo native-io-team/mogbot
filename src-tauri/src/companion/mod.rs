@@ -18,6 +18,7 @@
 //!
 //! Full design: docs/mobile.md.
 
+pub mod alerts;
 pub mod blobs;
 pub mod desktop;
 pub mod files;
@@ -595,12 +596,19 @@ fn remember_revoked(s: &mut Stored, hash: String) {
 // The companion: everything a connection needs
 // ============================================================================
 
+/// The socket id at the end of a [`Companion::label`].
+fn conn_of_label(label: &str) -> Option<u64> {
+    label.rsplit(':').next().and_then(|n| n.parse::<u64>().ok())
+}
+
 #[derive(Debug, Clone)]
 struct Conn {
     device_id: String,
     foreground: bool,
     /// When `foreground` last changed (ms), for [`Companion::presence`].
     since: u64,
+    /// The agent whose chat this socket has open (`agents.focus`).
+    showing: Option<String>,
 }
 
 pub struct Companion {
@@ -611,6 +619,8 @@ pub struct Companion {
     pub sends: router::SendCache,
     pub blobs: blobs::Blobs,
     pub push: push::Push,
+    /// The live notifier's burst cap (`alerts`).
+    pub alerts: alerts::Alerts,
     conns: Mutex<HashMap<u64, Conn>>,
     /// A phone came to the foreground: the projects watch wakes (it sleeps
     /// without a timer while no phone is looking).
@@ -660,6 +670,7 @@ impl Companion {
             backend,
             sends: router::SendCache::default(),
             push: push::Push::default(),
+            alerts: alerts::Alerts::default(),
             conns: Mutex::new(HashMap::new()),
             foreground_changed: tokio::sync::Notify::new(),
             next_conn: AtomicU64::new(1),
@@ -738,6 +749,7 @@ impl Companion {
                 device_id: device_id.to_string(),
                 foreground,
                 since: now_ms(),
+                showing: None,
             },
         );
         if foreground {
@@ -796,10 +808,31 @@ impl Companion {
     /// Whether the socket behind `label` is open with the app in front:
     /// only then does a chat on the phone count as on screen.
     pub fn label_on_screen(&self, label: &str) -> bool {
-        let Some(conn) = label.rsplit(':').next().and_then(|n| n.parse::<u64>().ok()) else {
+        let Some(conn) = conn_of_label(label) else {
             return false;
         };
         self.conns().get(&conn).is_some_and(|c| c.foreground)
+    }
+
+    /// `agents.focus` on the socket behind `label`: the chat it has open.
+    pub fn set_showing(&self, label: &str, agent_id: Option<String>) {
+        let Some(conn) = conn_of_label(label) else {
+            return;
+        };
+        if let Some(c) = self.conns().get_mut(&conn) {
+            c.showing = agent_id;
+        }
+    }
+
+    /// The socket behind `label` is in front with `agent_id`'s chat open:
+    /// it sees that agent's news itself, so it gets no alert for it.
+    pub fn in_front_of(&self, label: &str, agent_id: &str) -> bool {
+        let Some(conn) = conn_of_label(label) else {
+            return false;
+        };
+        self.conns()
+            .get(&conn)
+            .is_some_and(|c| c.foreground && c.showing.as_deref() == Some(agent_id))
     }
 
     /// Paired devices, with whether each is connected now.

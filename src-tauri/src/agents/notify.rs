@@ -29,6 +29,7 @@ use tauri_plugin_notification::NotificationExt;
 
 use super::store::{self, Agent, AgentMessage, MessageKind};
 use crate::companion::push::PushKind;
+use crate::companion::wire::AlertKind;
 
 /// Payload: the agent id. The frontend opens that agent's chat.
 pub const EVENT_OPEN: &str = "agents://open";
@@ -42,6 +43,21 @@ pub struct Alert {
     pub title: String,
     pub body: String,
     pub sound: bool,
+    /// The message it is about, so a phone opens the chat there and replaces
+    /// (never stacks) a second alert for it. None for a line no message holds.
+    pub message_id: Option<String>,
+    /// What a phone files it under (`Alert['kind']` in model.ts).
+    pub kind: AlertKind,
+}
+
+/// What kind of alert a phone gets for a message of this kind.
+pub fn alert_kind(kind: MessageKind) -> AlertKind {
+    match kind {
+        MessageKind::Approval => AlertKind::Approval,
+        MessageKind::Error => AlertKind::Error,
+        MessageKind::CheckIn => AlertKind::CheckIn,
+        _ => AlertKind::Reply,
+    }
 }
 
 /// Which agent each window (by label) has open in Agents mode.
@@ -82,6 +98,8 @@ pub fn alert_for(agent: &Agent, message: &AgentMessage) -> Option<Alert> {
         title: agent.name.clone(),
         body: super::runner::preview_for(message)?,
         sound: message.kind == MessageKind::Approval,
+        message_id: Some(message.id.clone()),
+        kind: alert_kind(message.kind),
     })
 }
 
@@ -173,6 +191,15 @@ pub fn chat_in_view(app: &AppHandle) -> Option<String> {
     focused.or(showing.first()).map(|(_, id)| id.clone())
 }
 
+/// The user is at the desk: one of this app's windows has focus. Then the
+/// desk's own banner is the notification, and the phones stay quiet; with
+/// the app in the background the Mac can't tell, so both hear it.
+pub fn at_desk(app: &AppHandle) -> bool {
+    app.webview_windows()
+        .values()
+        .any(|w| w.is_focused().unwrap_or(false))
+}
+
 /// Whether a focused window (or a phone in the foreground) shows this agent right now.
 pub fn on_screen(app: &AppHandle, agent_id: &str) -> bool {
     let windows: Vec<String> = SHOWING
@@ -220,6 +247,8 @@ pub fn replace_held(agent_id: &str, body: Option<String>) {
         title: store::get(agent_id).map(|a| a.name).unwrap_or_default(),
         body,
         sound: false,
+        message_id: None,
+        kind: AlertKind::Error,
     });
     pending().set(agent_id, alert);
 }
@@ -245,6 +274,8 @@ pub fn alert_user(app: &AppHandle, agent_id: &str, body: &str) {
         title: store::get(agent_id).map(|a| a.name).unwrap_or_default(),
         body: body.to_string(),
         sound: false,
+        message_id: None,
+        kind: AlertKind::Error,
     };
     post(app, &alert, PushKind::Message);
 }
@@ -259,8 +290,19 @@ fn post(app: &AppHandle, alert: &Alert, kind: PushKind) {
         });
         return;
     }
-    // A paired phone that can't see it gets a content-free push (companion/push.rs).
-    crate::companion::push::raise(&alert.agent_id, kind);
+    // The phones, unless the user is at the desk (`at_desk`): each connected
+    // phone gets the alert over its socket (companion/alerts.rs), and one
+    // that can't hear it a content-free push (companion/push.rs).
+    if !at_desk(app) {
+        crate::companion::push::raise(&alert.agent_id, kind);
+        crate::companion::alerts::raise(crate::companion::alerts::alert(
+            &alert.agent_id,
+            alert.message_id.as_deref(),
+            &alert.title,
+            &alert.body,
+            alert.kind,
+        ));
+    }
     // The real end-to-end suite (debug builds only): never a banner or a
     // sound, even for an agent the Chief made mid-run that nobody muted.
     #[cfg(debug_assertions)]
@@ -306,6 +348,8 @@ pub fn release_quiet(app: &AppHandle) {
         title: held.title,
         body: held.body,
         sound: false,
+        message_id: None,
+        kind: AlertKind::Reply,
     };
     post(app, &alert, PushKind::Message);
 }
@@ -517,9 +561,23 @@ mod tests {
 
     #[test]
     fn an_approval_asks_for_the_ok_with_a_sound() {
-        let alert = alert_for(&agent(false), &approval_message()).unwrap();
+        let message = approval_message();
+        let alert = alert_for(&agent(false), &message).unwrap();
         assert_eq!(alert.body, "Needs your OK: Run a command");
         assert!(alert.sound);
+        // A phone files it as an approval, about that card.
+        assert_eq!(alert.kind, AlertKind::Approval);
+        assert_eq!(alert.message_id.as_deref(), Some(message.id.as_str()));
+        // Muted: no alert for the desk, so none for a phone or the relay either.
+        assert!(alert_for(&agent(true), &message).is_none());
+    }
+
+    #[test]
+    fn a_phone_files_each_kind_of_news_under_its_own_kind() {
+        assert_eq!(alert_kind(MessageKind::Agent), AlertKind::Reply);
+        assert_eq!(alert_kind(MessageKind::Error), AlertKind::Error);
+        assert_eq!(alert_kind(MessageKind::CheckIn), AlertKind::CheckIn);
+        assert_eq!(alert_kind(MessageKind::Approval), AlertKind::Approval);
     }
 
     #[test]
@@ -561,6 +619,8 @@ mod tests {
             title: "Finance".into(),
             body: body.into(),
             sound: false,
+            message_id: None,
+            kind: AlertKind::Reply,
         };
         assert!(c
             .record(reply("Looking now."), MessageKind::Agent, true)
@@ -580,6 +640,8 @@ mod tests {
             title: "Finance".into(),
             body: body.into(),
             sound: false,
+            message_id: None,
+            kind: AlertKind::Reply,
         };
         c.record(alert("Checking."), MessageKind::Agent, true);
         let now = c.record(
@@ -604,6 +666,8 @@ mod tests {
                 title: "Finance".into(),
                 body: "Done.".into(),
                 sound: false,
+                message_id: None,
+                kind: AlertKind::Reply,
             },
             MessageKind::Agent,
             true,

@@ -995,7 +995,7 @@ where
             item = rx.recv() => {
                 match item {
                     Ok(item) => {
-                        if let Some(ended) = forward(ws, drafts, caller, item, shows).await {
+                        if let Some(ended) = forward(ws, c, drafts, caller, item, shows).await {
                             return ended;
                         }
                     }
@@ -1010,7 +1010,7 @@ where
             Some((id, result)) = done_rx.recv() => {
                 // Events the request caused go out before its response.
                 while let Ok(item) = rx.try_recv() {
-                    if let Some(ended) = forward(ws, drafts, caller, item, shows).await {
+                    if let Some(ended) = forward(ws, c, drafts, caller, item, shows).await {
                         return ended;
                     }
                 }
@@ -1063,6 +1063,7 @@ fn event_frame(seq: Option<u64>, event: Event) -> ServerFrame {
 /// Send one hub item to this socket. `Some` ends the connection.
 async fn forward<S>(
     ws: &mut S,
+    c: &Companion,
     drafts: &mut Drafts,
     caller: &Caller,
     item: HubItem,
@@ -1084,6 +1085,14 @@ where
         HubItem::Draft { agent_id, id, text } => {
             let event = drafts.offer(agent_id, id, text, Instant::now())?;
             event_frame(None, event)
+        }
+        // An older app doesn't know the Mac decides (it posts cards itself),
+        // and the chat in front already shows what the alert would say.
+        HubItem::Alert { alert } => {
+            if !shows.alerts || c.in_front_of(&caller.label, &alert.agent_id) {
+                return None;
+            }
+            event_frame(None, Event::Alert { alert })
         }
         HubItem::Revoked { device_id } if device_id == caller.device_id => {
             refuse(ws, RefusedReason::Revoked, "This Mac removed this phone.").await;

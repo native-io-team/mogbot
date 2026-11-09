@@ -1071,6 +1071,161 @@ async fn rooms_reach_only_phones_that_show_them() {
         .any(|(_, id)| id.as_deref() == Some("room:r1")));
 }
 
+/// Hello with these features, then everything up to `sync.caughtUp`.
+async fn open_showing(port: u16, token: &str, features: Value, foreground: bool) -> (Ws, Value) {
+    let mut ws = connect(port).await;
+    let mut h = hello(token, None);
+    h["features"] = features;
+    h["foreground"] = json!(foreground);
+    send(&mut ws, h).await;
+    let welcome = next(&mut ws).await;
+    assert_eq!(welcome["t"], "welcome", "{welcome}");
+    loop {
+        let f = next(&mut ws).await;
+        if f["event"]["type"] == "sync.caughtUp" {
+            return (ws, welcome);
+        }
+    }
+}
+
+/// The next `alert` or `agents.message` event, past registry and status churn.
+async fn next_alert_or_card(ws: &mut Ws) -> Value {
+    loop {
+        let f = next(ws).await;
+        let kind = f["event"]["type"].as_str().unwrap_or("");
+        if f["t"] == "closed" || kind == "alert" || kind == "agents.message" {
+            return f;
+        }
+    }
+}
+
+/// The live notifier: a card that needs the user reaches every connected
+/// phone that posts alerts, ids and plain words only; never an older app
+/// (it posts cards itself), never the socket in front with that chat open;
+/// and answering it publishes the card's new state, which is what the phone
+/// takes its notification back on.
+#[tokio::test]
+async fn an_alert_reaches_each_phone_that_posts_them_and_is_withdrawn_on_answer() {
+    use crate::companion::alerts;
+    use crate::companion::wire::{AlertKind, Event};
+    let (c, _) = Stub::companion();
+    c.registry.write(|s| s.enabled = true).unwrap();
+    let port = start(c.clone()).await;
+    let (_, token, _) = c
+        .registry
+        .add(&phone(), String::new(), 1, &[], None)
+        .unwrap();
+    let (_, other_token, _) = c
+        .registry
+        .add(&other_phone(), String::new(), 1, &[], None)
+        .unwrap();
+
+    // A phone in the background, another in front with this agent's chat
+    // open, and an older app that doesn't post alerts.
+    let (mut away, welcome) = open_showing(port, &token, json!(["alerts"]), false).await;
+    assert!(
+        welcome["features"]
+            .as_array()
+            .unwrap()
+            .contains(&json!("alerts")),
+        "{welcome}"
+    );
+    let (mut looking, _) = open_showing(port, &other_token, json!(["alerts"]), true).await;
+    let (_, focused) = call(&mut looking, 1, "agents.focus", json!({ "agentId": AGENT })).await;
+    assert_eq!(focused["ok"], true, "{focused}");
+    let (mut old, ..) = open(port, &token, None).await;
+
+    let card = alerts::alert(
+        AGENT,
+        Some("m9"),
+        "Acme Site",
+        "Needs your OK: Run a command with ghp_0123456789abcdefghijklmnopqrstuvwxyzAB",
+        AlertKind::Approval,
+    );
+    assert!(alerts::send(&c, card));
+    let heard = next_alert_or_card(&mut away).await;
+    assert_eq!(heard["t"], "evt", "{heard}");
+    assert!(
+        heard.get("seq").is_none_or(Value::is_null),
+        "never journaled: {heard}"
+    );
+    let alert = &heard["event"]["alert"];
+    assert_eq!(heard["event"]["type"], "alert");
+    assert_eq!(alert["agentId"], AGENT);
+    assert_eq!(alert["messageId"], "m9");
+    assert_eq!(alert["kind"], "approval");
+    assert_eq!(alert["title"], "Acme Site");
+    assert!(
+        !alert["body"].as_str().unwrap().contains("ghp_0123456789"),
+        "{alert}"
+    );
+
+    // The card is answered at the desk: its new state reaches every phone,
+    // and the alerted one hears it next (nothing else came in between).
+    c.hub.publish(Event::Message {
+        message: json!({ "id": "m9", "agentId": AGENT, "ts": 2, "kind": "approval", "text": "",
+            "approval": { "requestId": "r9", "title": "Run a command", "detail": "ls", "status": "allowed" } }),
+    });
+    let answered = next_alert_or_card(&mut away).await;
+    assert_eq!(answered["event"]["type"], "agents.message", "{answered}");
+    assert_eq!(
+        answered["event"]["message"]["approval"]["status"],
+        "allowed"
+    );
+    // The phone in front of that chat and the older app got the card, not the alert.
+    for ws in [&mut looking, &mut old] {
+        let first = next_alert_or_card(ws).await;
+        assert_eq!(first["event"]["type"], "agents.message", "{first}");
+    }
+
+    // A reply for another agent does reach the phone in front.
+    assert!(alerts::send(
+        &c,
+        alerts::alert("other", None, "Finance", "Done.", AlertKind::Reply)
+    ));
+    let elsewhere = next_alert_or_card(&mut looking).await;
+    assert_eq!(
+        elsewhere["event"]["alert"]["agentId"], "other",
+        "{elsewhere}"
+    );
+    assert!(elsewhere["event"]["alert"].get("messageId").is_none());
+
+    // Phones off on the Mac: nothing goes out.
+    c.registry.write(|s| s.enabled = false).unwrap();
+    assert!(!alerts::send(
+        &c,
+        alerts::alert(AGENT, None, "Acme Site", "Done.", AlertKind::Reply)
+    ));
+}
+
+/// Bursts of replies are capped as on the desk; an approval always goes.
+#[tokio::test]
+async fn a_burst_of_alerts_is_capped_but_approvals_always_go() {
+    use crate::companion::alerts;
+    use crate::companion::wire::AlertKind;
+    let (c, _) = Stub::companion();
+    c.registry.write(|s| s.enabled = true).unwrap();
+    let port = start(c.clone()).await;
+    let (_, token, _) = c
+        .registry
+        .add(&phone(), String::new(), 1, &[], None)
+        .unwrap();
+    let (_ws, _) = open_showing(port, &token, json!(["alerts"]), false).await;
+    let reply = || alerts::alert(AGENT, None, "Acme Site", "Done.", AlertKind::Reply);
+    let sent = (0..6).filter(|_| alerts::send(&c, reply())).count();
+    assert_eq!(sent, 3);
+    assert!(alerts::send(
+        &c,
+        alerts::alert(
+            AGENT,
+            Some("m1"),
+            "Acme Site",
+            "Needs your OK",
+            AlertKind::Approval
+        )
+    ));
+}
+
 // ============================================================================
 // Hardening (security audit of the companion, Nov 2026)
 // ============================================================================

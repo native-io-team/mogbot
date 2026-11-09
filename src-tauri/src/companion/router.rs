@@ -2044,6 +2044,7 @@ async fn run(
         }
         "agents.focus" => {
             let p: FocusParams = parse(params)?;
+            c.set_showing(&caller.label, p.agent_id.clone());
             b.focus(&caller.label, p.agent_id).await?;
             Ok(Value::Null)
         }

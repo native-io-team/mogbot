@@ -12,8 +12,9 @@
 //! - The user turns it on in the Phone panel ("Phone notifications via Ship
 //!   Studio's push service"). Off, the relay is told to forget this Mac.
 //! - An alert the desk would post (`agents::notify`, which already applies
-//!   mute, on-screen and the per-turn coalescing) is also pushed to each phone
-//!   that isn't in front: [`needs_push`].
+//!   mute, quiet hours, on-screen, at-the-desk and the per-turn coalescing)
+//!   is also pushed to each phone that isn't in front: [`needs_push`]. The
+//!   same alert goes over each open socket (`alerts.rs`).
 //! - Only official builds: a self-built app has no push entitlement.
 //! - A build with no relay URL compiled in (forks, dev) says "unavailable".
 
@@ -36,9 +37,14 @@ pub const RELAY_URL_VAR: &str = "APP_PUSH_RELAY_URL";
 const RELAY_TIMEOUT: Duration = Duration::from_secs(10);
 
 /// How long a just-backgrounded phone with an open socket is left to the
-/// live notifier instead. Zero while there is no `LiveSocket` notifier on
-/// this branch: a backgrounded phone posts nothing locally, so holding the
-/// push back would lose the alert. Raise it (to ~25 s) when that lands.
+/// live notifier (`alerts.rs`) instead of a push. Zero on purpose: the app
+/// asks iOS for no background time, so it is suspended within seconds of
+/// leaving the screen while its socket still looks open from here (writes
+/// into it succeed for minutes). An alert held back from the push in that
+/// window would be read only when the app next opens. So a phone not in
+/// front gets both; when it is still awake it posts the alert with the
+/// card's words and takes the relay's content-free banner for that agent
+/// back (`dismissPushFor` in notify.ts).
 pub const LIVE_WINDOW_MS: u64 = 0;
 
 // ============================================================================

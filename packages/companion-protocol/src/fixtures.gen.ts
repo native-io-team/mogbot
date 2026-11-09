@@ -4439,7 +4439,8 @@ export const frames = [
       "agents.effort",
       "agents.draft",
       "routines.steps",
-      "import.export"
+      "import.export",
+      "alerts"
     ]
   },
   {
@@ -5380,6 +5381,19 @@ export const frames = [
       "id": "r1",
       "from": 5,
       "text": " world"
+    }
+  },
+  {
+    "t": "evt",
+    "event": {
+      "type": "alert",
+      "alert": {
+        "agentId": "a1",
+        "messageId": "m2",
+        "title": "Acme Site",
+        "body": "Needs your OK: Run a command",
+        "kind": "approval"
+      }
     }
   },
   {

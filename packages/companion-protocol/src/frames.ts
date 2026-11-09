@@ -96,6 +96,12 @@ export const FEATURES = {
   liveWork: 'work.live',
   /** Rooms: `rooms.changed` events and room-only lines (an empty `agentId`). */
   rooms: 'rooms',
+  /**
+   * This app posts the Mac's `alert` events (an approval's with its card's
+   * own words and buttons), so the Mac sends them. Without it the Mac sends
+   * none, and the app posts approval cards it hears by itself.
+   */
+  alerts: 'alerts',
 } as const;
 export type Feature = (typeof FEATURES)[keyof typeof FEATURES];
 
@@ -220,6 +226,13 @@ export const MAC_FEATURES = {
    * Import without Remote access: `agents.import.exportPrompt|exportPreview|exportReview`.
    */
   importExport: 'import.export',
+  /**
+   * The Mac sends `alert` to apps that list `FEATURES.alerts`, having decided
+   * mute, quiet hours, "on screen" and "at the desk" itself. The app then
+   * posts only what it is told; with an older Mac it posts approval cards
+   * it hears on its own, as before.
+   */
+  alerts: 'alerts',
 } as const;
 export type MacFeature = (typeof MAC_FEATURES)[keyof typeof MAC_FEATURES];
 

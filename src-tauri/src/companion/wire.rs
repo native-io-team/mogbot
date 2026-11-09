@@ -328,6 +328,17 @@ pub const MAC_FEATURE_REVISE_RESULTS: &str = "results.revise";
 /// (`agents/watch.rs`), which the phone shows read-only.
 pub const MAC_FEATURE_WHEN_ROUTINES: &str = "routines.when";
 
+/// `hello.features`: the app posts the Mac's `alert` events itself, and an
+/// approval's with its card's buttons (`notify.ts`, `actionable.ts`), so it
+/// no longer decides on its own which cards to post.
+pub const FEATURE_ALERTS: &str = "alerts";
+
+/// `welcome.features`: this Mac sends `alert` to apps that list
+/// [`FEATURE_ALERTS`] (`companion/alerts.rs`), having applied mute, quiet
+/// hours, "on screen" and "at the desk". An app talking to an older Mac keeps
+/// posting approval cards it hears by itself.
+pub const MAC_FEATURE_ALERTS: &str = "alerts";
+
 /// `hello.features`: the app shows rooms, so it gets `rooms.changed` and the
 /// lines only a room has (an empty `agentId`).
 pub const FEATURE_ROOMS: &str = "rooms";
@@ -397,6 +408,7 @@ pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_DRAFT,
     MAC_FEATURE_STEPS,
     MAC_FEATURE_IMPORT_EXPORT,
+    MAC_FEATURE_ALERTS,
 ];
 
 /// What one connected app said it shows (`hello.features`).
@@ -404,6 +416,8 @@ pub const MAC_FEATURES: &[&str] = &[
 pub struct Shows {
     pub live_work: bool,
     pub rooms: bool,
+    /// Posts the Mac's `alert` events ([`FEATURE_ALERTS`]).
+    pub alerts: bool,
 }
 
 impl Shows {
@@ -411,6 +425,7 @@ impl Shows {
         Shows {
             live_work: features.iter().any(|f| f == FEATURE_LIVE_WORK),
             rooms: features.iter().any(|f| f == FEATURE_ROOMS),
+            alerts: features.iter().any(|f| f == FEATURE_ALERTS),
         }
     }
 }
@@ -621,6 +636,11 @@ pub enum Event {
         from: usize,
         text: String,
     },
+    /// Post a notification (ephemeral; `companion/alerts.rs`). Only to apps
+    /// that list [`FEATURE_ALERTS`], and never to the socket in front of
+    /// that agent's chat.
+    #[serde(rename = "alert")]
+    Alert { alert: LiveAlert },
     #[serde(rename = "sync.snapshot")]
     Snapshot {
         cursor: Cursor,
@@ -630,6 +650,31 @@ pub enum Event {
     },
     #[serde(rename = "sync.caughtUp")]
     CaughtUp { cursor: Cursor },
+}
+
+/// What a phone's notification says (`Alert` in model.ts): ids and plain
+/// words only, already through `agents::secrets::redact`.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct LiveAlert {
+    pub agent_id: String,
+    /// The message it is about: tapping opens the chat there, and the phone
+    /// replaces (never stacks) a second alert for the same one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<String>,
+    pub title: String,
+    pub body: String,
+    pub kind: AlertKind,
+}
+
+/// `Alert['kind']` in model.ts.
+#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum AlertKind {
+    Reply,
+    Approval,
+    Error,
+    CheckIn,
 }
 
 /// The desktop's `agents_overview`, as the phone gets it. Each agent's
@@ -779,10 +824,12 @@ mod tests {
         let old = Shows {
             live_work: true,
             rooms: false,
+            ..Default::default()
         };
         let new = Shows {
             live_work: true,
             rooms: true,
+            ..Default::default()
         };
         let rooms = Event::Rooms {
             rooms: serde_json::json!([]),
@@ -823,6 +870,7 @@ mod tests {
         let new = Shows {
             live_work: false,
             rooms: true,
+            ..Default::default()
         };
         assert_eq!(search_for_app(hits.clone(), new), hits);
     }
