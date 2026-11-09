@@ -134,6 +134,40 @@ export function upsert(list: AgentMessage[], message: AgentMessage): AgentMessag
   return [...rest.slice(0, i), message, ...rest.slice(i)];
 }
 
+/**
+ * [`upsert`] for a whole page, in one pass: what's already held, less the
+ * lines the page moves, merged in time order with the page's. Upserting a
+ * page line by line copied and searched the whole chat once per line, so
+ * paging back through a 5,000-line chat cost the square of its length.
+ */
+export function upsertAll(list: AgentMessage[], page: AgentMessage[]): AgentMessage[] {
+  if (page.length === 0) return list;
+  if (page.length === 1) return upsert(list, page[0]);
+  const incoming = new Map<string, AgentMessage>();
+  for (const m of page) incoming.set(m.id, m);
+  // Same id, same time: replaced where it is. Same id at another time: moved.
+  const kept: AgentMessage[] = [];
+  for (const m of list) {
+    const next = incoming.get(m.id);
+    if (!next) kept.push(m);
+    else if (next.ts === m.ts) {
+      kept.push(next);
+      incoming.delete(m.id);
+    }
+  }
+  const added = [...incoming.values()].sort((a, b) => (before(a, b) ? -1 : before(b, a) ? 1 : 0));
+  if (added.length === 0) return kept;
+  // A line goes after everything not later than it, as `upsert` puts it.
+  const out: AgentMessage[] = [];
+  let i = 0;
+  for (const m of added) {
+    while (i < kept.length && !before(m, kept[i])) out.push(kept[i++]);
+    out.push(m);
+  }
+  while (i < kept.length) out.push(kept[i++]);
+  return out;
+}
+
 export function applyEvent(s: SyncState, event: CompanionEvent, cursor?: Cursor): SyncState {
   const next = reduce(s, event, cursor);
   return cursor ? { ...next, cursor } : next;
@@ -181,9 +215,7 @@ function reduce(s: SyncState, event: CompanionEvent, cursor?: Cursor): SyncState
       if (!s.overview || !Array.isArray(s.overview.agents)) return s;
       if (typeof event.agentId !== 'string') return s;
       const status = asStatus(event.status);
-      const agents = s.overview.agents.map((a) =>
-        a?.id === event.agentId ? { ...a, status } : a
-      );
+      const agents = s.overview.agents.map((a) => (a?.id === event.agentId ? { ...a, status } : a));
       return { ...s, overview: { ...s.overview, agents } };
     }
     case 'agents.registry': {
@@ -293,15 +325,16 @@ export function mergePage(
 ): SyncState {
   const chat = s.chats[agentId] ?? emptyChat();
   const comparable = !!page.asOf && s.cursor?.epoch === page.asOf.epoch;
-  let messages = chat.messages;
   const seqs = { ...s.seqs };
+  const taken: AgentMessage[] = [];
   for (const m of asMessages(page.messages)) {
     const written = seqs[m.id];
     // An event newer than this read already wrote the row: keep it.
     if (comparable && written != null && written > page.asOf.seq) continue;
-    messages = upsert(messages, m);
+    taken.push(m);
     seqs[m.id] = page.asOf?.seq ?? 0;
   }
+  const messages = upsertAll(chat.messages, taken);
   const pageMore = page.more === true;
   const more = older || !chat.loaded ? pageMore : chat.more || pageMore;
   return { ...s, seqs, chats: { ...s.chats, [agentId]: { messages, more, loaded: true } } };

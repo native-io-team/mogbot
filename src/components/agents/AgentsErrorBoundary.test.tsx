@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { guardRow, PaneBoundary, SectionBoundary, SidebarBoundary } from './AgentsErrorBoundary';
+import { cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react';
+import {
+  guardRow,
+  PaneBoundary,
+  SectionBoundary,
+  SidebarBoundary,
+  useGuardedRows,
+} from './AgentsErrorBoundary';
 
 const logError = vi.hoisted(() => vi.fn());
 vi.mock('../../lib/logger', () => ({ logger: { logError, error: vi.fn() } }));
@@ -124,5 +130,36 @@ describe('a broken settings section', () => {
       expect.objectContaining({ where: 'settings:slack' }),
       'frontend-crash'
     );
+  });
+});
+
+describe('history rows kept between renders', () => {
+  const Row = ({ n }: { n: number }) => <p>{n}</p>;
+
+  it('keeps an unchanged row’s guarded element, so React skips it, and redraws a changed one', () => {
+    const { result, rerender } = renderHook(({ rows }) => useGuardedRows(rows), {
+      initialProps: { rows: [<Row key="a" n={1} />, <Row key="b" n={2} />] },
+    });
+    const [a, b] = result.current;
+    rerender({ rows: [<Row key="a" n={1} />, <Row key="b" n={3} />, <Row key="c" n={4} />] });
+    expect(result.current[0]).toBe(a);
+    expect(result.current[1]).not.toBe(b);
+    expect(result.current).toHaveLength(3);
+    // A row of another kind under the same key is never mistaken for it.
+    const Other = ({ n }: { n: number }) => <span>{n}</span>;
+    const kept = result.current[0];
+    rerender({ rows: [<Other key="a" n={1} />] });
+    expect(result.current[0]).not.toBe(kept);
+  });
+
+  it('keeps every row in its own boundary', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    function Rows() {
+      const rows = useGuardedRows([<Flaky key="x" label="x" />, <p key="y">fine</p>]);
+      return <div>{rows}</div>;
+    }
+    render(<Rows />);
+    expect(screen.getByText(/This line couldn.t be shown/)).toBeTruthy();
+    expect(screen.getByText('fine')).toBeTruthy();
   });
 });

@@ -8,6 +8,9 @@
  *   allowed / expired, a secure-input card, a settings change, a result v1
  *   then v2, an error, a stopped reply, a fresh-start divider.
  * - "Long Chat": 5,000 lines, paged as the Mac pages them.
+ * - "Long Rich": 5,000 lines of every kind (markdown and code, timelines,
+ *   result and approval cards, pictures): the desk's `agents-stress` chat at
+ *   `--lines 5000`, for `qa:web --phases perf`.
  * - "Quiet": no lines at all.
  *
  * `GET /dev/torture?do=<action>` (this mode only) drives the event orders a
@@ -127,7 +130,11 @@ export function addTortureAccount(
       lastActivityAt: now - 5 * MIN,
       preview: `Answer ${4999}`,
     }),
-    base('quiet', 'Quiet', 'Nothing said yet', 'teal', { lastActivityAt: now - 9 * MIN })
+    base('quiet', 'Quiet', 'Nothing said yet', 'teal', { lastActivityAt: now - 9 * MIN }),
+    base('longrich', 'Long Rich', 'Five thousand lines of everything', 'purple', {
+      lastActivityAt: now - 6 * MIN,
+      preview: 'Plain reply 4999',
+    })
   );
 
   const t: AgentMessage[] = [];
@@ -236,6 +243,96 @@ export function addTortureAccount(
     })
   );
   messages.set('quiet', []);
+  messages.set('longrich', longRich(now));
+}
+
+const richWork = (t0: number) =>
+  ({
+    startedAt: t0,
+    endedAt: t0 + 240_000,
+    stepCount: 60,
+    fileCount: 3,
+    files: ['src/a.tsx', 'src/b.css', 'src/c.ts'],
+    steps: Array.from({ length: 60 }, (_, s) => ({
+      at: t0 + s * 4000,
+      kind: (['read', 'edit', 'search', 'web', 'command'] as const)[s % 5],
+      label: `Step ${s + 1}: read thing-${s}.tsx`,
+    })),
+  }) as AgentMessage['work'];
+const richMarkdown = (i: number) =>
+  [
+    `### Update ${i}`,
+    `Here is what I found about **item ${i}**, with \`inline code\` and a [link](https://example.com/${i}).`,
+    '',
+    '- first point',
+    '- second point',
+    '',
+    '| Client | Due |',
+    '| --- | --- |',
+    `| Acme | $${i * 10} |`,
+  ].join('\n');
+const FENCE = '```';
+const richCode = (i: number) =>
+  `Here is the fix:\n\n${FENCE}ts\nexport function price${i}(n: number) {\n  return n * ${i};\n}\n${FENCE}`;
+
+/** Every ten lines: questions, markdown with a timeline, code, a result, a card, a picture, a note. */
+function longRich(now: number): AgentMessage[] {
+  return Array.from({ length: 5000 }, (_, i): AgentMessage => {
+    const ts = now - (5000 - i) * 3 * MIN;
+    const base = { id: `lr_${String(i).padStart(4, '0')}`, agentId: 'longrich', ts };
+    switch (i % 10) {
+      case 0:
+      case 5:
+        return { ...base, kind: 'user', text: `Question ${i}: can you check item ${i}?` };
+      case 1:
+        return { ...base, kind: 'agent', text: richMarkdown(i), work: richWork(ts - 240_000) };
+      case 2:
+        return { ...base, kind: 'agent', text: richCode(i) };
+      case 3:
+        return {
+          ...base,
+          kind: 'agent',
+          text: `Report ${i}, grouped by client.`,
+          result: { ...RESULT_V1, id: `lr-res-${i}`, title: `Report ${i}` },
+          work: richWork(ts - 240_000),
+        };
+      case 4:
+        return {
+          ...base,
+          kind: 'approval',
+          text: '',
+          approval: {
+            requestId: `lr-req-${i}`,
+            title: 'Run a command',
+            detail: `npm run build -- --item ${i}`,
+            status: 'allowed',
+            tool: 'Bash',
+          } as AgentMessage['approval'],
+        };
+      case 6:
+        return {
+          ...base,
+          kind: 'user',
+          text: 'Screenshots attached',
+          attachments: [
+            {
+              name: 'a.jpg',
+              path: `attachments/${base.id}/a.jpg`,
+              mime: 'image/jpeg',
+              size: 27_238,
+            },
+          ],
+        } as AgentMessage;
+      case 8:
+        return { ...base, kind: 'note', text: 'Allowed automatically: Read package.json' };
+      default:
+        return {
+          ...base,
+          kind: 'agent',
+          text: `Plain reply ${i}. Done, the cards stack below 640px.`,
+        };
+    }
+  });
 }
 
 export interface TortureWorld {

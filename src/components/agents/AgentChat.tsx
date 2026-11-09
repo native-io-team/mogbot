@@ -167,7 +167,7 @@ import { keepDraft, unsentDraft } from '../../lib/chatRestore';
 import { useChatReadTo } from './useChatReadTo';
 import { useAccentScope } from '../../lib/accent';
 import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
-import { guardRow } from './AgentsErrorBoundary';
+import { guardRow, useGuardedRows } from './AgentsErrorBoundary';
 import { AreaBoundary } from '../primitives/AreaBoundary';
 
 /**
@@ -271,11 +271,18 @@ const WORKING_AFTER_REPLY_MS = 700;
 /**
  * A chat opens with this many of its newest lines in the DOM, and mounts more
  * of what's loaded, this many at a time, as you scroll up: the same steps as
- * a page from the backend (`MESSAGE_PAGE`). Lines stay mounted once shown.
+ * a page from the backend (`MESSAGE_PAGE`), until the reader is back at the
+ * newest line (`LET_GO_AFTER_MS`).
  * Reopening a chat with thousands of lines loaded mounted all of them, a
  * quarter-second task, before you saw any.
  */
 const MOUNT_PAGE = 150;
+
+/** How long the reader stays at the newest line before rows far above are let go. */
+const LET_GO_AFTER_MS = 2000;
+/** Rows let go per step, and the pause between steps. */
+const LET_GO_STEP = 30;
+const LET_GO_STEP_MS = 40;
 
 /** The first message an item stands for (a day divider stands for none). */
 function itemMessageId(item: ChatItem | undefined): string | null {
@@ -973,6 +980,32 @@ export const AgentChat = memo(function AgentChat({
     el.style.overflowAnchor = '';
   }, [startIndex]);
 
+  // Back at the newest line after reading far up: once the reader has stayed
+  // there a moment, the lines mounted on the way up are let go again, as a
+  // reopened chat would be. They are still loaded, and scrolling up mounts
+  // them again. A chat open all day, read back through once, held thousands
+  // of rows (130,000 elements at 5,000 lines) until it was closed. Let go a
+  // few rows at a time, oldest first: all at once was a two-second task
+  // (removing rows is what costs: about 0.4 ms each in Chrome).
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const mountedCount = items.length - startIndex;
+  const lettingGo = useRef(false);
+  useEffect(() => {
+    if (!atBottom) lettingGo.current = false;
+    if (!atBottom || mountedCount <= MOUNT_PAGE * 2) return;
+    const step = window.setTimeout(
+      () => {
+        if (!atBottomRef.current) return;
+        lettingGo.current = true;
+        const keep = Math.max(MOUNT_PAGE, mountedCount - LET_GO_STEP);
+        setMountFrom(newestFrom(itemsRef.current, keep));
+      },
+      lettingGo.current ? LET_GO_STEP_MS : LET_GO_AFTER_MS
+    );
+    return () => window.clearTimeout(step);
+  }, [atBottom, mountedCount]);
+
   // After a restart the chat opens where you had read to (once).
   const indexOf = useCallback((id: string) => itemIndexOf(items, id), [items]);
   const { onScrolled } = useChatReadTo({
@@ -1546,7 +1579,7 @@ export const AgentChat = memo(function AgentChat({
       null
   );
   // One line that fails to draw is one muted line, not a blank window.
-  const guarded = useMemo(() => history.map(guardRow), [history]);
+  const guarded = useGuardedRows(history);
   const withSetup = withIndicatorAt(setupAt - startIndex, guarded, setupRow);
   const workingAt = Math.max(0, queuedFrom - startIndex);
   const rows = withIndicatorAt(

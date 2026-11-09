@@ -280,6 +280,20 @@ describe('timeline', () => {
     expect(dayLabel(now - day, now)).toBe('Yesterday');
   });
 
+  it('marks the days of a 5,000-line chat once each, at their first line', () => {
+    const now = new Date(2026, 10, 9, 12).getTime();
+    // Twenty minutes apart: 72 a day, so about 70 days back.
+    const list = Array.from({ length: 5000 }, (_, i) =>
+      msg(`m${i}`, now - (5000 - i) * 20 * 60_000)
+    );
+    const items = chatItems(agent(), list, [], undefined, now);
+    const dayOf = (t: number) => new Date(t).toDateString();
+    const firsts = list.filter((m, i) => i === 0 || dayOf(list[i - 1].ts) !== dayOf(m.ts));
+    const days = items.filter((i) => i.kind === 'day');
+    expect(days.map((d) => d.key)).toEqual(firsts.map((m) => `day:${m.id}`).reverse());
+    expect(days[0].kind === 'day' && days[0].label).toMatch(/^Today /);
+  });
+
   it('keeps the draft’s key when it becomes its message, so the row never remounts', () => {
     const items = chatItems(agent(), [msg('r1', 1)], [], { id: 'r1', text: 'Deplo' }, 2);
     expect(items.filter((i) => i.key === 'r1')).toHaveLength(1);

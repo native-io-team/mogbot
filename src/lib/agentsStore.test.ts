@@ -102,6 +102,21 @@ describe('paged history', () => {
     expect(ids()[0]).toBe('m5');
     expect(calls).toHaveLength(2);
   });
+
+  it('pages a 5,000-line chat back to its first line, every line once and in order', async () => {
+    const calls = serve(5000);
+    await loadMessages('a');
+    // A line arriving while you read back stays at the foot, not inside a page.
+    upsertMessage({ ...reply('live', 'new'), ts: 3 });
+    while (getAgentsSnapshot().older.a) await loadOlderMessages('a');
+    const got = ids();
+    expect(got).toHaveLength(5001);
+    expect(got.slice(0, 5000)).toEqual(Array.from({ length: 5000 }, (_, i) => `m${i}`));
+    expect(got[5000]).toBe('live');
+    // One page per request, newest first: never the whole log at once.
+    expect(calls).toHaveLength(Math.ceil(5000 / MESSAGE_PAGE));
+    expect(calls.every((c) => (c as { limit: number }).limit === MESSAGE_PAGE)).toBe(true);
+  });
 });
 
 describe('sameJson', () => {

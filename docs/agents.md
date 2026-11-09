@@ -684,7 +684,16 @@ on disk, since the log is append-only. A torn last line in
 `messages.jsonl` is skipped on read, and the next append starts a new line
 instead of fusing into it. Opening a chat and paging back through it
 (`agents_messages` with `before`/`through`) read the log from its end, only as
-far back as the page needs, and apply `approvals.jsonl` to the page read. A log that can't be written: the user's own send
+far back as the page needs, and apply `approvals.jsonl` to the page read
+(`store::page_back`, a room's thread too). Lines newer than `before` are only
+scanned for its `"id"`, never parsed, so a page far back costs its own lines
+plus a byte scan, not a parse of everything after it. On the desk a chat
+mounts its newest 150 rows and more as you scroll up; back at the newest line
+for 2 s, the rows mounted on the way up are let go again (they stay loaded).
+A row whose element is unchanged keeps its guarded element
+(`useGuardedRows`), so a new line re-renders only itself, not every row's
+boundary. The phone merges a page in one pass (`upsertAll`). Measured with
+`scripts/perf-agents.mjs --lines 5000` and `qa:web --phases perf`. A log that can't be written: the user's own send
 fails with the reason; a reply mid-turn is still shown, with one error line
 (at most a minute) saying it won't survive a restart.
 
