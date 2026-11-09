@@ -76,7 +76,9 @@ pub fn the_card(open: &[Approval]) -> Option<&Approval> {
             if only.login.is_none()
                 && only.secret.is_none()
                 && only.prompt.is_none()
-                && only.connector.is_none() =>
+                && only.connector.is_none()
+                // Step in is a button on the desk, never a plain Allow.
+                && only.step_in.is_none() =>
         {
             Some(only)
         }

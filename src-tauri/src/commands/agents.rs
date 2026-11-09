@@ -1487,6 +1487,13 @@ pub(crate) fn answer_card(
     if approval.status != store::ApprovalStatus::Pending {
         return Err(CommandError::expected("That request was already answered."));
     }
+    // "Needs you in its browser": Step in is the desk's button and Not now
+    // its own answer (`agents_answer_approval`), never a plain Allow here
+    // (a typed yes, an older path): that closed the card with no hold and
+    // never woke the agent.
+    if approval.step_in.is_some() {
+        return Err(CommandError::expected(agents::step_in::ON_YOUR_MAC));
+    }
     // The import connector's own cards: consent, and the staged agents.
     if approval.connector.is_some() {
         return agents::connector::answer_card(app, agent_id, &approval, allow, note);

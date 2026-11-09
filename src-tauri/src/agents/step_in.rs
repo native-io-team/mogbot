@@ -119,6 +119,37 @@ pub fn not_now_note(reason: &str) -> String {
     )
 }
 
+/// How long a Not now keeps the same site from being asked about again.
+pub const NOT_NOW_QUIET_MS: i64 = 60 * 60 * 1000;
+
+/// Not now, by agent: the site and when.
+static NOT_NOW: std::sync::Mutex<Option<std::collections::HashMap<String, (String, i64)>>> =
+    std::sync::Mutex::new(None);
+
+/// The user said Not now to `agent` stepping in on `site`.
+pub fn note_not_now(agent: &str, site: &str, now: i64) {
+    let mut g = NOT_NOW.lock().unwrap_or_else(|e| e.into_inner());
+    g.get_or_insert_with(Default::default)
+        .insert(agent.to_string(), (site.to_string(), now));
+}
+
+/// Whether `agent` may ask about `site` again: not within
+/// [`NOT_NOW_QUIET_MS`] of a Not now for it, so neither the agent nor a
+/// page steering it can put up card after card.
+pub fn ask_again(agent: &str, site: &str, now: i64) -> Result<(), String> {
+    let g = NOT_NOW.lock().unwrap_or_else(|e| e.into_inner());
+    let recent = g
+        .as_ref()
+        .and_then(|m| m.get(agent))
+        .is_some_and(|(s, at)| s == site && now.saturating_sub(*at) < NOT_NOW_QUIET_MS);
+    if recent {
+        return Err(format!(
+            "The user said not now to stepping in on {site} a moment ago. Don't ask again: carry on with what doesn't need it, or say in one line what you can't do without it."
+        ));
+    }
+    Ok(())
+}
+
 /* ---------------------------------------------------------------- ask */
 
 /// `ask_user_to_step_in`: one card in the agent's own chat.
@@ -152,6 +183,7 @@ pub async fn ask(
     let site = super::browser_gate::host_of(&tab.url)
         .map(|h| h.trim_start_matches("www.").to_string())
         .unwrap_or_else(|| "this page".into());
+    ask_again(&agent.id, &site, store::now_ms())?;
     let card_data = StepIn {
         reason: reason.clone(),
         site: site.clone(),
@@ -305,7 +337,12 @@ pub async fn decline(
     let _ =
         tokio::task::spawn_blocking(move || hold::end(&a, &r, How::HandedBack, store::now_ms()))
             .await;
-    store::set_approval_status(agent_id, request_id, ApprovalStatus::Denied)?;
+    // Hand back (or the watcher ending it) answered it meanwhile: that
+    // answer stands, and the agent isn't woken twice.
+    if store::set_approval_status(agent_id, request_id, ApprovalStatus::Denied)?.is_none() {
+        return Err(CommandError::expected("That request was already answered."));
+    }
+    note_not_now(agent_id, &card.site, store::now_ms());
     store::refresh_pending(agent_id);
     super::notify::refresh_badge(app);
     emit_card(app, agent_id, request_id);

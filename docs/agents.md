@@ -2467,7 +2467,13 @@ sign-in on a site it's signed out of is still `request_login` with
   15 min", and the agent is told the user may not have finished and not to
   ask again for the same wall). Checked every 2 s.
 - **Not now** (desk or phone, through `agents_answer_approval`) ends any
-  hold and wakes the agent with "don't ask again for this".
+  hold and wakes the agent with "don't ask again for this", and the same
+  site can't be asked about again by that agent for an hour
+  (`step_in::ask_again`), so neither it nor a page steering it puts up card
+  after card. A typed "approve it" never answers a step-in card
+  (`typed_answer::the_card`), and `answer_card` refuses one: a plain Allow
+  used to close it with no hold and the agent never woken. A Not now racing
+  Hand back wakes the agent once.
 - **Never for outside text**: the `browser` server isn't given to those
   turns, the gate refuses the tool for them (`gate_agents_with`), and
   `step_in::check_ask` refuses it again. Not in a take-over, and not with no
