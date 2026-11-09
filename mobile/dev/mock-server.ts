@@ -10,6 +10,12 @@
  */
 
 import {
+  boundKeyFor,
+  isColorway,
+  isKeyIcon,
+  keyLookFor,
+  legacyColorFor,
+  normalizeBoundKey,
   formatPairingLink,
   hostOf,
   macProofMessage,
@@ -1323,8 +1329,29 @@ export function createMockServer(opts: MockOptions = {}) {
   // Quiet hours (`agents::quiet`): on, 22:00–07:00, until the phone changes them.
   let quietWindow: { start: number; end: number } | null = { start: 22 * 60, end: 7 * 60 };
   let morningBrief = { on: true, at: 8 * 60, always: false };
+  // Every agent's key, as the Mac's `keys::fill` gives one saved before keys: its
+  // colour's nearest colourway, an icon from its name then role, the first free
+  // letter of its name, the Chief first.
+  const fillKeys = () => {
+    const used = new Set(agents.map((a) => a.boundKey).filter((k): k is string => !!k));
+    for (const a of [...agents].sort((x, y) => Number(y.isMain) - Number(x.isMain))) {
+      const k = keyLookFor(a);
+      a.colorway ??= k.colorway;
+      a.icon ??= k.icon;
+      if (!a.boundKey) {
+        const free = boundKeyFor(a.name, used);
+        if (free) {
+          a.boundKey = free;
+          used.add(free);
+        }
+      }
+    }
+  };
+  /** Why `key` can't be this agent's: someone else has it. */
+  const keyTaken = (key: string, self: string) =>
+    agents.find((o) => o.id !== self && o.boundKey === key);
   const overview = (): AgentsOverview => ({
-    agents: structuredClone(agents),
+    agents: (fillKeys(), structuredClone(agents)),
     engineReady: !opts.codexOnly,
     engines: engines(),
     defaults: defaults(),
@@ -1890,21 +1917,21 @@ export function createMockServer(opts: MockOptions = {}) {
 
   /** What an agent can reach: its connected login cards, its browser, its secrets. */
   /** What the phone took away, per agent (`TEAM_KEY`: the team's rules). */
-const TEAM_KEY = 'team';
-const onItsOwnTaken = new Map<string, string[]>();
-const takenFrom = (id: string) => onItsOwnTaken.get(id) ?? [];
-function onItsOwnOf(id: string, name?: string): OnItsOwn {
-  const view: OnItsOwn = structuredClone(real.agentsOnItsOwn);
-  view.agentId = id;
-  view.agentName = name ?? view.agentName;
-  view.items = view.items
-    .filter((i) => !takenFrom(id).includes(i.key) && !takenFrom(TEAM_KEY).includes(i.key))
-    // The fixture's plan ended long ago: a live one has most of its hour left.
-    .map((i) => (i.endsAt ? { ...i, endsAt: Date.now() + 42 * 60_000 } : i));
-  return view;
-}
+  const TEAM_KEY = 'team';
+  const onItsOwnTaken = new Map<string, string[]>();
+  const takenFrom = (id: string) => onItsOwnTaken.get(id) ?? [];
+  function onItsOwnOf(id: string, name?: string): OnItsOwn {
+    const view: OnItsOwn = structuredClone(real.agentsOnItsOwn);
+    view.agentId = id;
+    view.agentName = name ?? view.agentName;
+    view.items = view.items
+      .filter((i) => !takenFrom(id).includes(i.key) && !takenFrom(TEAM_KEY).includes(i.key))
+      // The fixture's plan ended long ago: a live one has most of its hour left.
+      .map((i) => (i.endsAt ? { ...i, endsAt: Date.now() + 42 * 60_000 } : i));
+    return view;
+  }
 
-function reachOf(agentId: string): AgentReach {
+  function reachOf(agentId: string): AgentReach {
     const a = agent(agentId);
     const answered = (messages.get(agentId) ?? []).filter(
       (m) => m.approval?.login && m.approval.status === 'allowed'
@@ -2540,10 +2567,7 @@ function reachOf(agentId: string): AgentReach {
       if (sheet) {
         appSheets.delete(String(p.flowId));
         const url = typeof p.callbackUrl === 'string' ? p.callbackUrl : '';
-        if (
-          !url.startsWith('mogbot-companion://oauth?') ||
-          !url.includes(`state=${sheet.state}`)
-        ) {
+        if (!url.startsWith('mogbot-companion://oauth?') || !url.includes(`state=${sheet.state}`)) {
           appFlows.set(sheet.service, {
             service: sheet.service,
             flow: {
@@ -3256,7 +3280,18 @@ function reachOf(agentId: string): AgentReach {
       if (
         Object.keys(input).some(
           (k) =>
-            !['name', 'role', 'color', 'template', 'avatar', 'instructions', 'routines'].includes(k)
+            ![
+              'name',
+              'role',
+              'color',
+              'template',
+              'avatar',
+              'instructions',
+              'routines',
+              'colorway',
+              'icon',
+              'boundKey',
+            ].includes(k)
         )
       ) {
         return fail({
@@ -3303,6 +3338,14 @@ function reachOf(agentId: string): AgentReach {
         shape: agents.length % 14,
         color: typeof input.color === 'string' && input.color ? input.color : 'orange',
         ...(input.avatar ? { avatar: input.avatar as Agent['avatar'] } : {}),
+        ...(isColorway(input.colorway)
+          ? { colorway: input.colorway, color: legacyColorFor(input.colorway) }
+          : {}),
+        ...(isKeyIcon(input.icon) ? { icon: input.icon } : {}),
+        ...(normalizeBoundKey(input.boundKey as string) &&
+        !keyTaken(normalizeBoundKey(input.boundKey as string)!, '')
+          ? { boundKey: normalizeBoundKey(input.boundKey as string)! }
+          : {}),
         isMain: false,
         pinned: false,
         hidden: false,
@@ -3337,6 +3380,9 @@ function reachOf(agentId: string): AgentReach {
         'instructions',
         'avatar',
         'color',
+        'colorway',
+        'icon',
+        'boundKey',
         'engine',
         'model',
         'effort',
@@ -3367,6 +3413,34 @@ function reachOf(agentId: string): AgentReach {
       if (typeof input.hidden === 'boolean') a.hidden = input.hidden;
       if (input.avatar) a.avatar = input.avatar as Agent['avatar'];
       if (typeof input.color === 'string') a.color = input.color;
+      if (input.colorway !== undefined) {
+        if (!isColorway(input.colorway))
+          return fail({ type: 'Validation', field: 'colorway', reason: 'No such colour.' });
+        a.colorway = input.colorway;
+        a.color = legacyColorFor(input.colorway);
+      }
+      if (input.icon !== undefined) {
+        if (!isKeyIcon(input.icon))
+          return fail({ type: 'Validation', field: 'icon', reason: 'No such icon.' });
+        a.icon = input.icon;
+      }
+      if (input.boundKey !== undefined) {
+        const key = normalizeBoundKey(String(input.boundKey));
+        if (!key)
+          return fail({
+            type: 'Validation',
+            field: 'boundKey',
+            reason: 'Pick one letter or digit.',
+          });
+        const other = keyTaken(key, a.id);
+        if (other)
+          return fail({
+            type: 'Validation',
+            field: 'boundKey',
+            reason: `${key} is already ${other.name}’s key. Pick another, or change theirs first.`,
+          });
+        a.boundKey = key;
+      }
       if (input.engine === 'claude' || input.engine === 'codex') {
         const info = engines().find((e) => e.id === input.engine);
         if (!info?.installed || !info.signedIn) {

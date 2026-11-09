@@ -16,10 +16,9 @@ import type {
   TeamSetupStepState,
   AgentEffort,
   AgentEngine,
-  AgentLook,
   RoutineStep,
 } from '@shipstudio/companion-protocol';
-import { MAC_FEATURES } from '@shipstudio/companion-protocol';
+import { MAC_FEATURES, legacyColorFor } from '@shipstudio/companion-protocol';
 import NetInfo from '@react-native-community/netinfo';
 import { AccessibilityInfo, AppState, Platform } from 'react-native';
 import * as Crypto from 'expo-crypto';
@@ -655,20 +654,28 @@ export function saveSecret(agentId: string, requestId: string, values: string[])
 
 export const deviceSelf = () => call('devices.self', {});
 
-/** Pin, mute or hide: shown at once, put back if the Mac says no. */
+/**
+ * Pin, mute or hide, or how it looks: shown at once, put back if the Mac
+ * says no. A colourway also moves the old `color` (the chat's accent) to
+ * its nearest, as the Mac does when it saves it.
+ */
 export async function setAgentToggles(
   agentId: string,
   input: Partial<Record<'pinned' | 'muted' | 'hidden', boolean>> & {
-    /** How it looks, from a Mac listing `MAC_FEATURES.keycaps` (key-cap keys). */
-    avatar?: AgentLook;
+    /** From a Mac listing `MAC_FEATURES.looks`. */
     color?: string;
+    /** Its key, from a Mac listing `MAC_FEATURES.agentKeys`. */
+    colorway?: string;
+    icon?: string;
+    boundKey?: string;
   }
 ) {
   const before = getApp().overview;
+  const shown = input.colorway ? { ...input, color: legacyColorFor(input.colorway) } : input;
   const patch = (on: typeof before) =>
     on && {
       ...on,
-      agents: on.agents.map((a) => (a.id === agentId ? { ...a, ...input } : a)),
+      agents: on.agents.map((a) => (a.id === agentId ? { ...a, ...shown } : a)),
     };
   setApp({ overview: patch(before) });
   try {
@@ -682,7 +689,16 @@ export async function setAgentToggles(
               agents: s.overview.agents.map((a) => {
                 const was = before.agents.find((b) => b.id === a.id);
                 return a.id === agentId && was
-                  ? { ...a, pinned: was.pinned, muted: was.muted, hidden: was.hidden }
+                  ? {
+                      ...a,
+                      pinned: was.pinned,
+                      muted: was.muted,
+                      hidden: was.hidden,
+                      color: was.color,
+                      colorway: was.colorway,
+                      icon: was.icon,
+                      boundKey: was.boundKey,
+                    }
                   : a;
               }),
             }

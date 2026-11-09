@@ -399,7 +399,7 @@ export const radius = {
   pill: 999,
 } as const;
 
-/** An avatar's or logo's corner: one squircle proportion at every size. */
+/** A logo's or tile's corner: one squircle proportion at every size. */
 export const squircle = (size: number) => Math.round(size * 0.28);
 
 /**
@@ -512,18 +512,91 @@ export const waveform = {
   fade: 16,
 } as const;
 
-/**
- * Agent avatars: leading the working line (the steps' icon column), in a
- * search group, a chat header, a list row, the agent sheet.
- */
-export const avatarSize = { line: 16, group: 24, header: 28, list: 48, sheet: 56 } as const;
+/** The round mark an empty or finished screen leads with (a tick in a circle). */
+export const heroMark = 56;
 
 /**
- * A key cap's light and shade (avatar.ts `AVATAR_LIGHT`): white and black at
- * the spec's opacities, in either appearance. The key's own colours come
- * from the spec (`avatarPaint`), equal OKLCH per theme.
+ * Agent keys (docs/internal/agent-keys.md; components/AgentKey.tsx): every
+ * agent is a keycap. Its sizes are the desk's (`AgentKey`'s `size`): a line
+ * of text, a menu item or a group, a list row's small key, a header, and the
+ * big key with its sublegend and pips (the agent sheet).
  */
-export const keyLight = { light: '#ffffff', shade: '#000000' } as const;
+export const keySize = { xs: 16, sm: 20, md: 30, lg: 44, xl: 112 } as const;
+
+/** A key's three shades (face, skirt, depth) and its legend's ink. */
+export interface KeyColors {
+  face: string;
+  skirt: string;
+  depth: string;
+  legend: string;
+}
+
+/**
+ * The eight colourways, value for value with the shared `agent-keys.json`
+ * (theme.node.test holds them equal). Keys keep their colours in both
+ * appearances; only the socket and the shadow under them follow it.
+ */
+export const keyColorways: Record<string, KeyColors> = {
+  blue: { face: '#3f6fd8', skirt: '#3159b4', depth: '#223f85', legend: '#ffffff' },
+  orange: { face: '#ec6a2e', skirt: '#c9521c', depth: '#8f3810', legend: '#1f1005' },
+  putty: { face: '#e6decc', skirt: '#cbc1ab', depth: '#a0967f', legend: '#2a2722' },
+  teal: { face: '#6fc2b6', skirt: '#52a398', depth: '#33756c', legend: '#0c2421' },
+  graphite: { face: '#4a4e55', skirt: '#34373c', depth: '#131417', legend: '#f2eee4' },
+  mustard: { face: '#e8b93f', skirt: '#c99a26', depth: '#8e6b12', legend: '#2a1e05' },
+  pink: { face: '#efa9a2', skirt: '#d48a83', depth: '#9c5c56', legend: '#2b0e0c' },
+  sage: { face: '#a9ba78', skirt: '#8c9d5c', depth: '#5f6e38', legend: '#1a2108' },
+};
+
+/**
+ * The lit legend (Live, Needs your OK): a backlit shine-through cap, the
+ * icon warm white with a tight glow round the icon only; and the black wash
+ * that darkens a pressed or lit face.
+ */
+export const keyLit = {
+  legend: '#fff6dc',
+  glow: '#ffe2a0',
+  shade: '#000000',
+  /** The hairline of light along a face's top edge. */
+  shine: 'rgba(255, 255, 255, 0.22)',
+} as const;
+
+/** What follows the theme under a key: its soft ambient shadow, and the socket a removed cap leaves. */
+export interface KeyNeutrals {
+  ambient: string;
+  ambientOpacity: number;
+  socket: string;
+  socketRim: string;
+  socketShade: string;
+  housing: string;
+  housingShade: string;
+  stem: string;
+  stemDepth: string;
+}
+
+export const keyNeutrals: Record<'dark' | 'light', KeyNeutrals> = {
+  dark: {
+    ambient: '#000000',
+    ambientOpacity: 0.45,
+    socket: '#1d1c1a',
+    socketRim: 'rgba(255, 255, 255, 0.06)',
+    socketShade: 'rgba(0, 0, 0, 0.55)',
+    housing: '#2a2926',
+    housingShade: 'rgba(0, 0, 0, 0.5)',
+    stem: '#5b5850',
+    stemDepth: '#3a3833',
+  },
+  light: {
+    ambient: '#3c2c14',
+    ambientOpacity: 0.3,
+    socket: '#d9d1c0',
+    socketRim: 'rgba(70, 55, 30, 0.1)',
+    socketShade: 'rgba(70, 55, 30, 0.3)',
+    housing: '#cbc2af',
+    housingShade: 'rgba(70, 55, 30, 0.28)',
+    stem: '#b3aa96',
+    stemDepth: '#9c937f',
+  },
+};
 
 /**
  * The desktop's type scale (`--font-size-*`), one step up where the desk
@@ -610,7 +683,7 @@ export const READ_LINE = 1.55;
 
 /**
  * How far chrome may grow with Dynamic Type before it would crowd out what
- * it frames: titles, pills, avatar initials and buttons.
+ * it frames: titles, pills and buttons.
  */
 export const chromeScale = 1.3;
 
@@ -651,7 +724,7 @@ export const fonts = {
   mono: 'GeistMono_400Regular',
 } as const;
 
-/** `color-mix(in srgb, a p%, b)`, which the avatar tile uses. */
+/** `color-mix(in srgb, a p%, b)`. */
 export function mix(a: string, b: string, p: number): string {
   const ca = parseHex(a);
   const cb = parseHex(b);

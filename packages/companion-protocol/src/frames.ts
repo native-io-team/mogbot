@@ -180,7 +180,7 @@ export const MAC_FEATURES = {
    */
   loginsPhone: 'logins.phone',
   /**
-   * Agents carry `avatar` (a shape and a face; `lookFor` in avatar.ts), and
+   * Agents carry `avatar` (a shape and a face, from before keys), and
    * `agents.create` / `agents.update` take `avatar` (and `agents.update` `color`).
    */
   looks: 'agents.looks',

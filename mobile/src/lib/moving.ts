@@ -1,6 +1,6 @@
 /**
  * Whether something on screen should move: shared by every loop on the
- * phone (the avatar, the typing key, the spinner, the typing dots, the
+ * phone (a key's Needs-your-OK pulse, the spinner, the typing dots, the
  * shimmer) and the "2 min ago" clocks. Nothing runs on the UI thread for a
  * screen nobody is looking at, or while the app is in the background.
  */
@@ -12,7 +12,7 @@ import { useReducedMotion } from 'react-native-reanimated';
 
 /**
  * Reduce Motion as it is now. Reanimated's hook reads it once, at launch,
- * so turning it on in Settings with the app open left the avatars
+ * so turning it on in Settings with the app open left the loops
  * breathing and blinking until the next launch; this follows the change.
  */
 export function useReduceMotion(): boolean {

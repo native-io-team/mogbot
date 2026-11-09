@@ -649,8 +649,8 @@ request, the diff and the photo viewer push over them. At
   On a Mac without the method the choice shows but isn't tappable. Existing
   agents keep theirs ([agents.md](agents.md), "Defaults for new agents").
 - **What it's doing right now** (`LiveStep` in `components/work.tsx`): the
-  working row is the desk's one line: the agent as a key (`AgentKey`,
-  the desk's: its avatar raised, pressed by `lib/typingKey.ts` on the UI thread),
+  working row is the desk's one line: the agent's key, pressed while it
+  works (`AgentKey`, as the desk's working line; still, no clock),
   what it's doing in plain words (gently breathing while it's live,
   `Shimmer`), then muted "· 5 steps · 6:02" (the turn's time). Tapping the
   line opens the steps so far under it, ending on the call it's on (the
@@ -666,15 +666,44 @@ request, the diff and the photo viewer push over them. At
   (`agents.checkOn`: what the Mac can see, one line, never interrupting)
   and Stop. Finished steps read "Ran the Cypress tests · 6m 12s
   · 42 passed, 3 failed", and a long or failed command keeps "Show output".
-  On the list a working agent's avatar (a shape and a face, drawn with
-  react-native-svg from the shared avatar spec: docs/internal/avatars.md; the desk now draws agent keys, docs/internal/agent-keys.md;
-  the agent sheet changes it on a Mac listing `agents.looks`) holds still
-  in place of the spinner (no blink, never a ring around it), and
+  On the list a working agent's key (see "Agent keys" below) sits pressed
+  in place of the spinner (never a ring around it), and
   its line says the step and how long ("Running the Cypress tests · 5m");
   the overview carries no steps, so until a live status arrives it is the
   status's words and the turn's time. The words come from
   `@shipstudio/companion-protocol`'s `work.ts`, shared with the desk; the
   methods show only on a Mac that lists them.
+
+### Agent keys
+
+Every agent is its keycap, as on the desk (docs/internal/agent-keys.md):
+`components/AgentKey.tsx` draws it from the shared spec
+(`packages/companion-protocol/src/agentKeys.ts`, `agentKeyIcons.ts`):
+Views for the skirt, the inset face and the solid depth under them, one
+soft ambient shadow, and the legend in react-native-svg. The geometry is
+the desk's (`lib/agentKey.ts`): one unit of size/112, the small key (36pt
+and under) its own drawing on a 30pt unit. Sizes are the desk's
+(`keySize` in theme.ts: 16 a line, 20 a menu, mention or room, 30 a header
+or the Needs-you feed, 44 a list row, 112 the agent sheet); the sublegend
+(its keyboard key) and the four independence pips show at 64pt and up.
+The colourways and the socket's neutrals are named colours in theme.ts,
+which the theme test holds to `agent-keys.json`.
+
+States come from `agentKeyState` (lib/agents.ts, the desk's): Needs your
+OK while a card waits, Paused (a socket with its stem in its colour) while
+a usage limit stops it, Working (pressed) while a turn runs, Live (the
+legend lit) while you drive it at the desk. Only Needs your OK moves: a
+slow pulse of the lit legend, a Reanimated loop mounted on that key alone
+and still with Reduce Motion, in the background or off screen. An agent
+from an older Mac is drawn by `keyLookFor` (its colour's nearest
+colourway, an icon from its name and role).
+
+The agent sheet's key opens its colour, icon and keyboard key (a letter or
+digit nobody else has), sent as `agents.update` `colorway` / `icon` /
+`boundKey` only to a Mac listing `agents.keys`; one listing only
+`agents.keycaps` gets its colour. New agent offers the same three on such
+a Mac, seeded with a colourway nobody wears, an icon read from what it's
+for and the first free letter of its name.
 
 ### Rooms
 

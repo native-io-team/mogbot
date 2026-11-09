@@ -15,6 +15,8 @@
 
 import {
   SUPPORTED,
+  boundKeyFor,
+  keyLookFor,
   type Agent,
   type AgentMessage,
   type AgentsOverview,
@@ -118,6 +120,17 @@ const base =
     home: `/Users/you/Agents/${id}`,
     ...extra,
   });
+
+/** Each its key, as the Mac fills one in: a free letter of its name, the Chief first. */
+function withKeys(agents: Agent[]): Agent[] {
+  const used: string[] = [];
+  return agents.map((a) => {
+    const { colorway, icon } = keyLookFor(a);
+    const boundKey = boundKeyFor(a.name, used) ?? undefined;
+    if (boundKey) used.push(boundKey);
+    return { ...a, colorway, icon, boundKey };
+  });
+}
 
 function demoAgents(now: number): Agent[] {
   const agent = base(now);
@@ -318,7 +331,7 @@ export class DemoTransport {
 
   constructor(private readonly now: () => number = Date.now) {
     const t = now();
-    this.agents = demoAgents(t);
+    this.agents = withKeys(demoAgents(t));
     this.messages = demoMessages(t);
     // After the session has subscribed, as a real link's first frames are.
     this.later(0, () => this.open());

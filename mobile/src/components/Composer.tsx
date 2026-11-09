@@ -117,7 +117,7 @@ import { OUTBOX_WAIT_MS } from '../lib/outbox';
 import { describeError, send, stop, upload } from '../lib/session';
 import { getApp, useApp, useServed } from '../lib/store';
 import {
-  avatarSize,
+  keySize,
   chromeScale,
   composer,
   fonts,
@@ -129,7 +129,7 @@ import {
   PRESSED,
 } from '../lib/theme';
 import { makeStyles, useAppearance, useColors, useTextScale } from '../lib/appearance';
-import { AgentAvatar } from './agent';
+import { AgentKey } from './AgentKey';
 import { Glass, hasLiquidGlass } from './Glass';
 import { StagedTile, type Staged } from './attachments';
 import { choose } from './menu';
@@ -479,7 +479,7 @@ export function Composer({
                 onPress={() => pickMention(a)}
                 style={({ pressed }) => [styles.suggestion, pressed && styles.pressed]}
               >
-                <AgentAvatar id={a.id} name={a.name} color={a.color} size={avatarSize.group} />
+                <AgentKey id={a.id} name={a.name} color={a.color} size={keySize.sm} />
                 <T variant="small" color={colors.textPrimary} maxFontSizeMultiplier={chromeScale}>
                   {a.name}
                 </T>

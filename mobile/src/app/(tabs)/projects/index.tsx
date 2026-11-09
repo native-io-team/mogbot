@@ -33,14 +33,14 @@ import { SessionState, useTaskName } from '../../../components/session';
 import { choose } from '../../../components/menu';
 import { Button, Icon, useRipple, T } from '../../../components/ui';
 import { formatAgo, workingLine } from '../../../lib/agents';
-import { AgentAvatar } from '../../../components/agent';
+import { AgentKey } from '../../../components/AgentKey';
 import { haptic } from '../../../lib/haptics';
 import { canCall, describeError, previewScreenshot, refreshProjects } from '../../../lib/session';
 import { useApp } from '../../../lib/store';
 import { largeTitle } from '../../../lib/navigation';
 import { useRefresh } from '../../../lib/refresh';
 import { RefreshStatus } from '../../../components/RefreshStatus';
-import { avatarSize, iconSize, radius, space } from '../../../lib/theme';
+import { keySize, iconSize, radius, space } from '../../../lib/theme';
 import { makeStyles, useColors } from '../../../lib/appearance';
 
 /** Waiting on you first, then where an agent is at work, then the most recently active. */
@@ -288,7 +288,7 @@ function AgentAtWorkRow({ agent, first }: { agent: Agent; first: boolean }) {
         pressed && { backgroundColor: colors.surfaceControl },
       ]}
     >
-      <AgentAvatar name={agent.name} color={agent.color} size={avatarSize.group} />
+      <AgentKey id={agent.id} name={agent.name} color={agent.color} size={keySize.sm} />
       <View style={styles.sessionText}>
         <T variant="subhead" color={colors.textStrong} numberOfLines={1}>
           {agent.name}

@@ -53,7 +53,7 @@ jest.mock('../src/lib/persist', () => ({
   removeJson: () => Promise.resolve(),
   debounced: () => ({ schedule: () => {}, flush: () => Promise.resolve(), cancel: () => {} }),
 }));
-jest.mock('../src/components/agent', () => ({ AgentAvatar: () => null }));
+jest.mock('../src/components/AgentKey', () => ({ AgentKey: () => null }));
 jest.mock('../src/components/ConversationBars', () => ({ ConversationBars: () => null }));
 
 const idle = agent({ id: 'ops', name: 'Ops' });
@@ -132,7 +132,10 @@ describe('the model chip', () => {
   // The chip is in the card's row: a second line makes the card.
   const asCard = async () => {
     await act(async () => {
-      await fireEvent.changeText(screen.getByLabelText('Message Ops'), 'the numbers\nand the summary');
+      await fireEvent.changeText(
+        screen.getByLabelText('Message Ops'),
+        'the numbers\nand the summary'
+      );
     });
   };
   const serve = (a: typeof onOpus, features: string[]) =>
@@ -155,7 +158,10 @@ describe('the model chip', () => {
   });
 
   it('opens them mid-turn too: the level can still change', async () => {
-    const busy = { ...onOpus, status: { state: 'working', activity: 'Thinking', since: 1 } } as typeof onOpus;
+    const busy = {
+      ...onOpus,
+      status: { state: 'working', activity: 'Thinking', since: 1 },
+    } as typeof onOpus;
     serve(busy, ['agents.engine', 'agents.effort']);
     await render(composer(busy));
     await asCard();
