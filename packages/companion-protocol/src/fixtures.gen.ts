@@ -779,6 +779,25 @@ export const agentsAccountsReorder = [
 export const agentsUsagePlan = {
   "accounts": [
     {
+      "changes": [
+        {
+          "from": 20.0,
+          "kind": "five_hour",
+          "nothingHere": false,
+          "runs": [
+            {
+              "agentId": "a1",
+              "name": "Riley",
+              "routine": "Morning brief",
+              "tokens": 90000,
+              "turns": 2
+            }
+          ],
+          "since": 1762280000000,
+          "to": 38.0,
+          "until": 1762290000000
+        }
+      ],
       "check": {
         "at": 1762294000000,
         "outcome": "read"
@@ -790,6 +809,7 @@ export const agentsUsagePlan = {
       ],
       "name": "This Mac",
       "next": true,
+      "orgName": "Example",
       "out": false,
       "pace": [
         {
@@ -802,6 +822,14 @@ export const agentsUsagePlan = {
         }
       ],
       "signedIn": true,
+      "spent": [
+        {
+          "agentId": "a1",
+          "name": "Riley",
+          "tokens": 182000,
+          "turns": 4
+        }
+      ],
       "thisMac": true,
       "windows": [
         {

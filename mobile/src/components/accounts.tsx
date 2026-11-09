@@ -22,7 +22,9 @@ import {
   type SwitcherEngine,
   type SwitcherRow,
 } from '@shipstudio/companion-protocol';
+import { usageGlance } from '@shipstudio/companion-protocol';
 import { View } from 'react-native';
+import { GlanceCard } from './usageStack';
 import { makeStyles, useColors } from '../lib/appearance';
 import type { AccountsState } from '../lib/accounts';
 import { useApp } from '../lib/store';
@@ -58,8 +60,16 @@ export function AccountsSections({ state }: { state: AccountsState }) {
   const engines = shownEngines(state.view);
   if (!state.serves || engines.length === 0) return null;
   const several = engines.length > 1;
+  // The whole stack at a glance first, as the desk's sidebar says it.
+  const glance =
+    state.accounts && state.inventory ? usageGlance(state.accounts, state.inventory) : null;
   return (
     <>
+      {glance && glance.keys.length > 1 && (
+        <View style={styles.glance}>
+          <GlanceCard glance={glance} />
+        </View>
+      )}
       {engines.map((e, ei) => (
         <Section
           key={e.engine}
@@ -196,6 +206,7 @@ function AccountLine({
 }
 
 const useStyles = makeStyles(() => ({
+  glance: { marginBottom: space.lg },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',

@@ -39,3 +39,4 @@ export * from './accountSwitcher';
 export * from './crossover';
 export * from './cardWords';
 export * from './quiet';
+export * from './usageGlance';

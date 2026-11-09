@@ -1,20 +1,28 @@
 /**
- * Usage, from the ring in a chat's header: this agent's context, the 5-hour
- * and weekly limits of the account its turns run on, and every other account
- * the Mac knows with its own limits. Each reading shows once: the top
+ * Usage, from the ring in a chat's header: this agent's context, then the
+ * whole stack of accounts as the desk's Usage view shows it (one line, a
+ * segmented meter, each account as a card with its limits, who used it and
+ * where its usage went; components/usageStack.tsx). From an older Mac, the
+ * account the turns run on and every other account with its own limits. Each reading shows once: the top
  * account is never listed again under it (lib/usageSheet.ts `usageSheet`). Only what the Mac serves
  * (lib/usageSheet.ts): a section with no reading isn't drawn. The one
  * estimate, the pace line under a limit, is the Mac's (`UsagePace`) and says
  * it is one. ↻ reads it all again.
  */
 
-import type { AccountBlock, UsageInventory } from '@shipstudio/companion-protocol';
+import {
+  usageGlance,
+  type AccountBlock,
+  type UsageInventory,
+} from '@shipstudio/companion-protocol';
 import { useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Spinner } from '../components/agent';
 import { SheetTitle } from '../components/SheetTitle';
 import { ComputeAccount, ComputeQuiet, ComputeSummary, MeterRow } from '../components/usage';
+import { GlanceCard, KeyCard } from '../components/usageStack';
+import { useAccounts } from '../lib/accounts';
 import { IconButton, Section, SectionTitle, SheetPage, T } from '../components/ui';
 import { engineName } from '../lib/agents';
 import { makeStyles, useColors } from '../lib/appearance';
@@ -80,7 +88,15 @@ export default function Usage() {
   // Every account at once, from a Mac that serves it: each reading once,
   // the account turns run on next marked in the list.
   const total = useMemo(() => computeView(inventory, now), [inventory, now]);
-  const nothing = !context && !total && !active && others.length === 0;
+  // The stack of accounts, as the desk's Usage view says it: from a Mac
+  // that serves its accounts and their readings.
+  const { accounts } = useAccounts({ room: false });
+  const glance = useMemo(
+    () => (accounts && inventory ? usageGlance(accounts, inventory, { now }) : null),
+    [accounts, inventory, now]
+  );
+  const stacked = glance !== null && glance.keys.length > 0;
+  const nothing = !context && !total && !stacked && !active && others.length === 0;
 
   return (
     <SheetPage>
@@ -115,7 +131,17 @@ export default function Usage() {
           </Section>
         )}
 
-        {total && (
+        {stacked && glance && (
+          <View style={styles.accounts}>
+            <SectionTitle title="Your accounts" />
+            <GlanceCard glance={glance} />
+            {glance.keys.map((k) => (
+              <KeyCard key={k.key} k={k} />
+            ))}
+          </View>
+        )}
+
+        {!stacked && total && (
           // Each account its own card, not one long group: the headline
           // answers first, then every card reads on its own.
           <View style={styles.accounts}>
@@ -128,7 +154,7 @@ export default function Usage() {
           </View>
         )}
 
-        {!total && active && agent && (
+        {!stacked && !total && active && agent && (
           <Section title={`Plan usage · ${engineName(agent)}`}>
             <View style={styles.block}>
               {active.account && (
@@ -151,7 +177,7 @@ export default function Usage() {
           </Section>
         )}
 
-        {!total && others.length > 0 && (
+        {!stacked && !total && others.length > 0 && (
           <Section title={active ? 'Other accounts' : 'Accounts'}>
             {others.map((a, i) => (
               <AccountRows key={a.key} account={a} divided={i > 0} />

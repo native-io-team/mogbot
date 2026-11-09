@@ -612,7 +612,7 @@ describe('plainActivity', () => {
 describe('failure lines', () => {
   it('says what kind of failure, in the row’s few words', () => {
     expect(failureLine({ kind: 'signed_out' }, 'x')).toBe('Claude Code is signed out');
-    expect(failureLine({ kind: 'usage_limit' }, 'x')).toBe('Usage limit reached');
+    expect(failureLine({ kind: 'usage_limit' }, 'x')).toBe('Out of usage');
     expect(failureLine({ kind: 'other' }, "Couldn't start Claude Code: no such file. More")).toBe(
       "Couldn't start Claude Code · didn’t finish"
     );

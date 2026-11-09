@@ -79,6 +79,17 @@ pub async fn agents_spare_remove(app: AppHandle, id: String) -> Result<(), Comma
     Ok(())
 }
 
+/// The Usage view's "Give agents something to do": the Chief starts the
+/// spare-capacity list now on a window near its reset with room left.
+/// Answers the line to show.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_spare_spend_now(app: AppHandle) -> Result<String, CommandError> {
+    let line = agents::usage_tools::spend_now(&app).await?;
+    changed(&app);
+    Ok(line)
+}
+
 /// Settings → Agents → Usage, "When every account of an engine is out":
 /// each engine's choice (`agents::crossover`) and the agents carrying on
 /// with the other engine right now.

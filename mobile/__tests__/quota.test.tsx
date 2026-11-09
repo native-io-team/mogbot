@@ -17,7 +17,7 @@ describe('usage before the wall, on the phone', () => {
       ['codex', 'limited'],
     ]);
     expect(lines[0].text).toMatch(/^Claude usage 85% · resets /);
-    expect(lines[1].text).toMatch(/^Codex usage limit · resets /);
+    expect(lines[1].text).toMatch(/^Codex out of usage until /);
     // After every reset, nothing is left to say.
     expect(quotaLines(real.agentsQuota, 1_762_500_000_000)).toEqual([]);
     expect(routineWeekLine(real.agentsUsage.routines?.[0]?.week)).toBe(
@@ -58,7 +58,7 @@ describe('usage before the wall, on the phone', () => {
   it('a weekly usage limit names its day, never just a clock time', () => {
     const inThreeDays = Date.now() + 72 * HOUR;
     const line = failureLine({ kind: 'usage_limit', resetsAt: inThreeDays }, null);
-    expect(line).toMatch(/^Usage limit · resets /);
-    expect(line).not.toMatch(/^Usage limit · resets \d/);
+    expect(line).toMatch(/^Out of usage until /);
+    expect(line).not.toMatch(/^Out of usage until \d/);
   });
 });

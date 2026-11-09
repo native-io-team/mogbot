@@ -104,7 +104,7 @@ export type QuotaTone = 'calm' | 'warning' | 'limited';
 
 export interface QuotaLine {
   engine: AgentEngine;
-  /** "Claude usage 85% · resets Thu", "Claude usage limit · resets 3:00 PM". */
+  /** "Claude usage 85% · resets Thu", "Claude out of usage until 3:00 PM". */
   text: string;
   tone: QuotaTone;
   /** Which window, when it was read, and that other use counts too. */
@@ -132,8 +132,8 @@ export function quotaLines(quotas: Quota[], now = Date.now()): QuotaLine[] {
       lines.push({
         engine: q.engine,
         text: out.resetsAt
-          ? `${name} usage limit · resets ${resetDay(out.resetsAt, now)}`
-          : `${name} usage limit reached`,
+          ? `${name} out of usage until ${resetDay(out.resetsAt, now)}`
+          : `${name} out of usage`,
         tone: 'limited',
         detail: read(out),
         percent: out.usedPercent,

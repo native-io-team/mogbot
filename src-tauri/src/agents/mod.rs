@@ -175,6 +175,7 @@ pub mod typed_answer;
 pub mod usage;
 pub mod usage_plan;
 pub mod usage_read;
+pub mod usage_story;
 pub mod usage_tools;
 pub mod wallet;
 pub mod watch;

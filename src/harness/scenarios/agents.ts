@@ -1333,7 +1333,7 @@ const resetClock = new Date(RESETS_AT).toLocaleTimeString(undefined, {
   minute: '2-digit',
 });
 const usageLimit = (minutesAgo: number) =>
-  msg('error', `Claude Code’s usage limit is reached. It resets at ${resetClock}.`, minutesAgo, {
+  msg('error', `Claude Code is out of usage until ${resetClock}.`, minutesAgo, {
     agentId: 'finance',
     failure: { kind: 'usage_limit', resetsAt: RESETS_AT },
   });
@@ -1372,7 +1372,7 @@ const failingOverview = () => ({
       ? {
           ...a,
           unread: 0,
-          preview: `Claude Code’s usage limit is reached. It resets at ${resetClock}.`,
+          preview: `Claude Code is out of usage until ${resetClock}.`,
           failure: { kind: 'usage_limit', resetsAt: RESETS_AT },
         }
       : a.id === 'leadgen'
@@ -1853,7 +1853,7 @@ const weeklyLimitOverview = () => ({
     a.id === 'finance'
       ? {
           ...a,
-          preview: `Claude Code’s usage limit is reached. It resets ${weeklyResetWords}.`,
+          preview: `Claude Code is out of usage until ${weeklyResetWords}.`,
           failure: { kind: 'usage_limit', resetsAt: WEEKLY_RESET },
         }
       : a
@@ -1862,7 +1862,7 @@ const weeklyLimitOverview = () => ({
 const WEEKLY_LIMIT_CHAT = [
   LIMIT_CHAT[0],
   // As failure::describe_now words it from the reset Claude Code reported.
-  msg('error', `Claude Code’s usage limit is reached. It resets ${weeklyResetWords}.`, 5, {
+  msg('error', `Claude Code is out of usage until ${weeklyResetWords}.`, 5, {
     agentId: 'finance',
     failure: { kind: 'usage_limit', resetsAt: WEEKLY_RESET },
   }),
@@ -1987,7 +1987,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-usage-limit',
     title: 'Agents — a usage limit with a reset time Claude Code reported',
     looksRightWhen:
-      'Finance’s chat ends in a quiet amber notice (not a red alarm): “Claude Code’s usage limit is reached. It resets at <time>.” with one text action, “Retry at <time>”, in the agent’s readable accent (never paler than the text around it). Finance’s sidebar row reads “Usage limit · resets <time>” in muted text with no dot (amber is for needs-you only); Lead Gen’s row reads “<reason> · didn’t finish” in red, over two lines if needed, with a red dot.',
+      'Finance’s chat ends in a quiet amber notice (not a red alarm): “Claude Code is out of usage until <time>.” with one text action, “Retry at <time>”, in the agent’s readable accent (never paler than the text around it). Finance’s sidebar row reads “Out of usage until <time>” in muted text with no dot (amber is for needs-you only); Lead Gen’s row reads “<reason> · didn’t finish” in red, over two lines if needed, with a red dot.',
     requires: '.agent-bubble--error[data-failure="usage_limit"]',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="finance"]' }],
@@ -2065,7 +2065,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-quota-limited',
     title: 'Agents — the weekly limit hit: the same reset everywhere',
     looksRightWhen:
-      'Finance’s chat ends in the quiet usage-limit notice (“It resets <weekday> at <time>.”, the same weekday as everywhere else) with “Retry <weekday> <time>” (a day, not just a clock time, since it resets days from now) as its one action. Finance’s sidebar row reads “Usage limit · resets <weekday> <time>” muted. The sidebar foot reads “Claude usage limit · resets <weekday>” in amber.',
+      'Finance’s chat ends in the quiet usage-limit notice (“Claude Code is out of usage until <weekday> at <time>.”, the same weekday as everywhere else) with “Retry <weekday> <time>” (a day, not just a clock time, since it resets days from now) as its one action. Finance’s sidebar row reads “Out of usage until <weekday> <time>” muted. The sidebar foot reads “Claude out of usage until <weekday>” in amber.',
     openSelector: AGENTS_TAB,
     requires: '.agents-quota__line[data-tone="limited"]',
     steps: [{ click: '[data-agent-id="finance"]' }],
@@ -2120,7 +2120,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-team-failures',
     title: 'Agents — What’s in flight lists turns that didn’t finish',
     looksRightWhen:
-      'Opened from ⌘K. Needs your OK lists Lead Gen (“Didn’t finish: …”, red dot) with its error and Retry, and Finance (“Usage limit · resets <time>”, amber dot) with the quiet notice, “Retry at <time>” and “Retry now”. Each card spans from the name to the meta edge.',
+      'Opened from ⌘K. Needs your OK lists Lead Gen (“Didn’t finish: …”, red dot) with its error and Retry, and Finance (“Out of usage until <time>”, amber dot) with the quiet notice, “Retry at <time>” and “Retry now”. Each card spans from the name to the meta edge.',
     command: 'agents.team',
     requires: '.agents-team .agent-bubble--error',
     commands: {

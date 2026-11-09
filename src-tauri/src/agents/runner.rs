@@ -5942,7 +5942,7 @@ async fn run_turn(
                             let today = super::usage::today();
                             add_turn_usage(agent_id, &turn);
                             // The account's token count, which forecasts set against its readings.
-                            super::usage_plan::add_tokens(engine, &account.id, &turn);
+                            super::usage_plan::add_turn(engine, &account.id, agent_id, &turn, store::now_ms());
                             let id = agent_id.to_string();
                             let _ = tokio::task::spawn_blocking(move || store::update(&id, |a| a.usage.record(&turn, today))).await;
                         }

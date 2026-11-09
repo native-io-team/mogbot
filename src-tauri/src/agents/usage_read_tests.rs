@@ -466,3 +466,19 @@ fn a_header_reading_is_marked_and_asked_again_only_every_half_hour() {
     assert!(!skip(Some(&plain), NOW + 60_000));
     store::set_root_for_tests(None);
 }
+
+#[test]
+fn the_organization_header_is_read_only_when_it_says_one() {
+    let h = |k: &str, v: &str| (k.to_string(), v.to_string());
+    assert_eq!(
+        org_of(&[
+            h("anthropic-ratelimit-unified-7d-utilization", "0.2"),
+            h(ORG_HEADER, " org-1 ")
+        ]),
+        Some("org-1")
+    );
+    assert_eq!(org_of(&[h(ORG_HEADER, "  ")]), None);
+    assert_eq!(org_of(&[]), None);
+    // The header never becomes a window.
+    assert!(parse_claude_headers(&[h(ORG_HEADER, "org-1")], 0).is_none());
+}

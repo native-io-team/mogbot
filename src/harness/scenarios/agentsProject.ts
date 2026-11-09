@@ -263,7 +263,7 @@ const LEADGEN_FAILED_CHAT = [
   }),
   msg(
     'error',
-    'Claude Code’s usage limit is reached, so AI generation isn’t available right now. It resets at 3:00 PM.',
+    'Claude Code is out of usage until 3:00 PM, so AI generation isn’t available right now.',
     14,
     { agentId: 'leadgen' }
   ),

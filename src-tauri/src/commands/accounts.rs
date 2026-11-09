@@ -251,6 +251,8 @@ pub fn store_claude_token(
     email: Option<&str>,
 ) -> Result<(), CommandError> {
     write_to_keychain(account_id, CLAUDE_TOKEN_KEY, token.trim())?;
+    // A usage account signed in again may be another Claude account now.
+    crate::agents::usage_plan::fresh_sign_in(crate::agents::engine::Engine::Claude, account_id);
     if let Some(email) = email.map(str::trim).filter(|e| !e.is_empty()) {
         // Email is display-only; a failure to store it must not fail the connect.
         let _ = write_to_keychain(account_id, CLAUDE_EMAIL_KEY, email);

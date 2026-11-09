@@ -129,6 +129,47 @@ struct ReadingsFile {
     /// How each account's last check without a turn went (`usage_read`).
     #[serde(default)]
     checks: BTreeMap<String, Check>,
+    /// Each account's turns this app ran, with when and for whom: what
+    /// "Where did my usage go" splits a change in a meter across
+    /// (`usage_story`). Kept [`TURNS_KEEP_MS`].
+    #[serde(default)]
+    turns: BTreeMap<String, Vec<TurnRecord>>,
+    /// Which organization each account's token answered for, from the
+    /// `anthropic-organization-id` header of its one-token read
+    /// (`usage_read`): how a setup-token sign-in of the same account as
+    /// another is told apart from a second account (`inventory`).
+    #[serde(default)]
+    orgs: BTreeMap<String, String>,
+    /// Since when turns are recorded here. A change in a meter before this
+    /// is never said to be unexplained: nothing was being recorded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    tracked_since: Option<i64>,
+}
+
+/// Turn records are kept this long: the week a weekly window covers, and a day.
+pub const TURNS_KEEP_MS: i64 = 8 * 24 * HOUR_MS;
+/// At most this many turn records per account.
+const TURNS_MAX: usize = 3000;
+
+/// One turn this app ran on an account.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct TurnRecord {
+    /// When it reported its tokens, epoch ms.
+    pub at: i64,
+    pub agent: String,
+    pub tokens: u64,
+    /// The routine it ran, when it ran that one alone (`runs::charged_to`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub routine: Option<String>,
+}
+
+/// What `inventory` reads to say who used each account and what it is.
+#[derive(Debug, Clone, Default)]
+pub struct Records {
+    pub turns: BTreeMap<String, Vec<TurnRecord>>,
+    pub orgs: BTreeMap<String, String>,
+    pub tracked_since: Option<i64>,
 }
 
 /// How a check of an account's limits without a turn came out
@@ -473,6 +514,124 @@ pub fn add_tokens(engine: Engine, account: &str, turn: &super::usage::UsageTotal
     });
 }
 
+/// A turn by `agent` on `account` reported `turn`'s tokens: counted for
+/// forecasts, and kept as a turn record for "Where did my usage go".
+pub fn add_turn(
+    engine: Engine,
+    account: &str,
+    agent: &str,
+    turn: &super::usage::UsageTotals,
+    now: i64,
+) {
+    let n = forecast::tokens(turn);
+    if n == 0 {
+        return;
+    }
+    let key = account_key(engine, account);
+    change_readings(|f| {
+        let count = f.tokens.entry(key.clone()).or_default();
+        *count = count.saturating_add(n);
+        f.tracked_since.get_or_insert(now);
+        let list = f.turns.entry(key).or_default();
+        keep_turn(
+            list,
+            TurnRecord {
+                at: now,
+                agent: agent.to_string(),
+                tokens: n,
+                routine: None,
+            },
+            now,
+        );
+    });
+}
+
+fn keep_turn(list: &mut Vec<TurnRecord>, record: TurnRecord, now: i64) {
+    list.retain(|t| now - t.at < TURNS_KEEP_MS);
+    list.push(record);
+    if list.len() > TURNS_MAX {
+        let extra = list.len() - TURNS_MAX;
+        list.drain(..extra);
+    }
+}
+
+/// The turn `agent` ran between `since` and `until` was one routine's
+/// alone (`runs::turn_ended`): its records say so.
+pub fn tag_routine(agent: &str, since: i64, until: i64, routine: &str) {
+    change_readings(|f| {
+        for list in f.turns.values_mut() {
+            for t in list
+                .iter_mut()
+                .filter(|t| t.agent == agent && t.at >= since && t.at <= until)
+            {
+                t.routine = Some(routine.to_string());
+            }
+        }
+    });
+}
+
+/// Turns are recorded from now, if they weren't already (the app opened).
+pub fn start_tracking(now: i64) {
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut file: ReadingsFile = read_json(readings_path());
+    if file.tracked_since.is_some() {
+        return;
+    }
+    file.tracked_since = Some(now);
+    if let Err(e) = write_json(readings_path(), &file) {
+        tracing::warn!("[Agents] usage readings not saved: {e}");
+    }
+}
+
+/// The organization `account`'s token answered for (`usage_read`).
+pub fn set_org(engine: Engine, account: &str, org: &str) {
+    let key = account_key(engine, account);
+    let org = org.trim();
+    if org.is_empty() || org.len() > 200 {
+        return;
+    }
+    let value = format!("claude-org:{org}");
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut file: ReadingsFile = read_json(readings_path());
+    if file.orgs.get(&key) == Some(&value) {
+        return;
+    }
+    file.orgs.insert(key, value);
+    if let Err(e) = write_json(readings_path(), &file) {
+        tracing::warn!("[Agents] usage readings not saved: {e}");
+    }
+}
+
+/// Forget what an account's token answered for (it was signed in again, or removed).
+pub fn forget_org(engine: Engine, account: &str) {
+    let key = account_key(engine, account);
+    change_readings(|f| {
+        f.orgs.remove(&key);
+    });
+}
+
+/// An account was signed in again: what its old token said about it
+/// (which organization, its last check) no longer holds, so it is read
+/// afresh.
+pub fn fresh_sign_in(engine: Engine, account: &str) {
+    let key = account_key(engine, account);
+    change_readings(|f| {
+        f.orgs.remove(&key);
+        f.checks.remove(&key);
+    });
+}
+
+/// Every account's turn records and organization, as stored.
+pub fn records() -> Records {
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let f: ReadingsFile = read_json(readings_path());
+    Records {
+        turns: f.turns,
+        orgs: f.orgs,
+        tracked_since: f.tracked_since,
+    }
+}
+
 /// A reading arrived from a turn on `account`: kept as its own, and each
 /// window with a figure kept as a sample against its token count. A reading
 /// with no windows (no plan on this login) clears the account's.
@@ -578,6 +737,31 @@ mod tests {
                 plan: None,
             },
         }
+    }
+
+    #[test]
+    fn turn_records_keep_a_week_and_a_day_at_most() {
+        let mut list = Vec::new();
+        let rec = |at: i64| TurnRecord {
+            at,
+            agent: "a".into(),
+            tokens: 5,
+            routine: None,
+        };
+        keep_turn(
+            &mut list,
+            rec(NOW - TURNS_KEEP_MS - 1),
+            NOW - TURNS_KEEP_MS - 1,
+        );
+        keep_turn(&mut list, rec(NOW), NOW);
+        assert_eq!(list, vec![rec(NOW)]);
+        for i in 0..(TURNS_MAX + 5) {
+            keep_turn(&mut list, rec(NOW + i as i64), NOW + i as i64);
+        }
+        assert_eq!(list.len(), TURNS_MAX);
+        // An older file has none of these, and reads.
+        let f: ReadingsFile = serde_json::from_str("{}").unwrap();
+        assert!(f.turns.is_empty() && f.orgs.is_empty() && f.tracked_since.is_none());
     }
 
     #[test]

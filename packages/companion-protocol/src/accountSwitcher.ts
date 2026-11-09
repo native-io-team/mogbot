@@ -205,7 +205,7 @@ export interface WorkingLine {
   engine: AgentEngine;
   /** "Work", "sam@example.com". */
   name: string;
-  /** "62% left", "Out until 3:20 PM", "Not signed in"; absent: no reading. */
+  /** "62% left", "Out of usage until 3:20 PM", "Not signed in"; absent: no reading. */
   room?: string;
   tone: 'ok' | 'warning' | 'out' | 'off';
   /** For the tooltip and screen readers, in a sentence. */
@@ -252,7 +252,7 @@ export function workingLine(
     return {
       engine: view.engine,
       name: row.name,
-      room: 'All out',
+      room: 'Out of usage',
       tone: 'out',
       detail: `Every ${engine} account is out of usage.${back ? ` ${row.name}: ${back.toLowerCase()}.` : ''}`,
       several,
@@ -272,7 +272,7 @@ export function workingLine(
     return {
       engine: view.engine,
       name: row.name,
-      room: row.state.replace('Out of usage until', 'Out until'),
+      room: row.state,
       tone: 'out',
       detail: `${row.name}: ${row.state.toLowerCase()}.`,
       several,

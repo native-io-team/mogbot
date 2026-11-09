@@ -63,7 +63,7 @@ describe('AgentsQuota', () => {
     serve([claude(100, { limited: true })]);
     render(<AgentsQuota place="team" />);
     await waitFor(() =>
-      expect(screen.getByText(/^Claude usage limit · resets /)).toHaveAttribute(
+      expect(screen.getByText(/^Claude out of usage until /)).toHaveAttribute(
         'data-tone',
         'limited'
       )

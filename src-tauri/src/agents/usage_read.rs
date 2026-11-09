@@ -80,6 +80,22 @@ pub const CLAUDE_MESSAGES_URL: &str = "https://api.anthropic.com/v1/messages";
 /// The cheapest model, for the one-token request a setup token is read with.
 pub const CLAUDE_PROBE_MODEL: &str = "claude-haiku-4-5";
 
+/// The organization a request's token answered for, on every API answer.
+/// Kept (as an id to compare, never shown) so a setup-token sign-in of the
+/// same Claude account as another is known to be the same one. Seen in
+/// Claude Code 2.1.321's own code; not yet observed on a setup token's
+/// answer here, so an answer without it changes nothing.
+pub const ORG_HEADER: &str = "anthropic-organization-id";
+
+/// The organization id in a probe's kept headers.
+pub fn org_of(headers: &[(String, String)]) -> Option<&str> {
+    headers
+        .iter()
+        .find(|(k, _)| k == ORG_HEADER)
+        .map(|(_, v)| v.trim())
+        .filter(|v| !v.is_empty())
+}
+
 pub const CLAUDE_USAGE_URL: &str = "https://api.anthropic.com/api/oauth/usage";
 const CLAUDE_SERVICE: &str = "Claude Code-credentials";
 
@@ -377,7 +393,7 @@ pub async fn claude_probe(url: &str, token: &str) -> Result<(u16, Vec<(String, S
         .iter()
         .filter_map(|(k, v)| {
             let k = k.as_str().to_ascii_lowercase();
-            if !k.starts_with("anthropic-ratelimit-unified-") {
+            if !k.starts_with("anthropic-ratelimit-unified-") && k != ORG_HEADER {
                 return None;
             }
             Some((k, v.to_str().ok()?.to_string()))
@@ -429,7 +445,16 @@ pub async fn read_claude(account: &Account, url: &str, now: i64) -> Answer {
     }
     if login.setup_token {
         return match claude_probe(CLAUDE_MESSAGES_URL, &login.token).await {
-            Ok((status, headers)) => claude_headers_answer(status, &headers, now),
+            Ok((status, headers)) => {
+                if let Some(org) = org_of(&headers).map(str::to_string) {
+                    let id = account.id.clone();
+                    let _ = tokio::task::spawn_blocking(move || {
+                        usage_plan::set_org(Engine::Claude, &id, &org)
+                    })
+                    .await;
+                }
+                claude_headers_answer(status, &headers, now)
+            }
             Err(why) => Answer::Failed(why),
         };
     }
@@ -654,6 +679,10 @@ pub async fn refresh_if_stale(app: &AppHandle) {
 /// read at once ([`refresh_if_stale`]).
 pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
+        // Turns are recorded from here on: a meter's change before this is
+        // never called unexplained ("Where did my usage go").
+        let _ = tokio::task::spawn_blocking(|| usage_plan::start_tracking(super::store::now_ms()))
+            .await;
         tokio::time::sleep(FIRST_AFTER).await;
         loop {
             super::survive::tick("usage_read", check_and_tell(&app)).await;

@@ -373,6 +373,8 @@ pub fn turn_ended(
     };
     if let (Some(id), Some(spent)) = (charged_to(&mine, spent), spent) {
         let today = super::usage::today();
+        // "Where did my usage go" names the routine, not only the agent.
+        super::usage_plan::tag_routine(agent_id, since, store::now_ms(), &id);
         let _ = store::update(agent_id, |agent| {
             if let Some(c) = agent.check_ins.iter_mut().find(|c| c.id == id) {
                 c.usage.record(spent, today);
@@ -764,7 +766,7 @@ mod tests {
         };
         let s = settle(
             &ticket(1),
-            Some(("Claude Code's usage limit is reached.", &limit)),
+            Some(("Claude Code is out of usage.", &limit)),
             &[],
             NOW,
             None,

@@ -155,3 +155,19 @@ export function takeAccountsRequest(): AgentEngine | 'show' | null {
   pendingAdd = null;
   return what;
 }
+
+/* "Add an account…" from ⌘K: the Usage view starts adding one when it shows. */
+let usageAdd = false;
+
+export function requestUsageAdd() {
+  usageAdd = true;
+}
+
+export function takeUsageAdd(): boolean {
+  const asked = usageAdd;
+  usageAdd = false;
+  return asked;
+}
+
+/** The Usage view's place in Agents, as What's in flight has `TEAM_ID`. */
+export const USAGE_ID = '__usage';

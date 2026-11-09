@@ -1,6 +1,6 @@
 /**
- * Accounts, from the sidebar's foot to each agent: which account is working
- * (the row), every account in one popover (swap, reorder, add), "Runs on"
+ * Accounts, from the sidebar's foot to each agent: usage at a glance (the
+ * row), every account in the Usage view (swap, reorder, add), "Runs on"
  * in an agent's … menu, and the chip in its header naming the account its
  * last turn ran on. Built on the Agents team fixture (`./agents`); every
  * name and address is fictional.
@@ -138,6 +138,7 @@ const commands = {
   agents_account_rename: null,
   agents_account_remove: null,
   agents_account_add: null,
+  agents_crossover: { claude: 'ask', codex: 'ask', away: [] },
 };
 
 export const agentsAccountsScenarios: Scenario[] = [
@@ -145,7 +146,7 @@ export const agentsAccountsScenarios: Scenario[] = [
     id: 'agents-account-row',
     title: 'Agents — which account is working, at the sidebar’s foot',
     looksRightWhen:
-      'At the foot of the Agents sidebar, above Phone and Settings, one row in the Phone row’s shape: the Claude icon with a green dot, “sam@example.com” and, muted, “39% left” (the tighter of 62% of the 5-hour and 39% of the week). It never shows “This Mac”. The text truncates before it ever wraps; nothing accent-coloured.',
+      'At the foot of the Agents sidebar, above Phone and Settings: the Claude icon with a green dot, “Room to work”, the stack as three thin segments (sam@example.com 39% in ink, Work 78% quieter, Side project empty: out of usage) and, muted, “2 accounts · resets …”. It never shows “This Mac”. Nothing wraps; nothing accent-coloured.',
     openSelector: AGENTS_TAB,
     requires: '[data-testid="account-switcher"]',
     clipSelector: '.workspace-sidebar-footer',
@@ -153,25 +154,12 @@ export const agentsAccountsScenarios: Scenario[] = [
   },
   {
     id: 'agents-account-switcher',
-    title: 'Agents — Switch account… (every account in one popover)',
+    title: 'Agents — Switch account… (opens Usage)',
     looksRightWhen:
-      'A popover opening upward from the account row: “Accounts”, one muted line on the order. Claude Code: “sam@example.com” with a neutral check and a green “In use” pill, “Max plan · this Mac’s own sign-in”, “5-hour 62% left · resets …” over a slim bar and “Weekly 39% left”; then “Work” with a neutral “Ready” pill, its email and plan, its two limits, “Finance runs only on this one”, and a secondary “Use this one now”; then “Side project” with a neutral “Out of usage until …” pill (never amber, as in Settings and on the phone) and no Use button. Each row has the up/down pair (first up, last down disabled) and a … menu. At the bottom a quiet “+ Add account”. No accent anywhere; the in-use mark is the text colour.',
+      'The Usage view, from ⌘K: the hero with the stack (sam@example.com in use, Work next, Side project out of usage), then each account as a key card in order with “Use this one now” on Work and none on the one out.',
     openSelector: AGENTS_TAB,
     command: 'agents.switchAccount',
-    requires: '.account-switcher .account-switcher__account[data-in-use]',
-    clipSelector: '.ss-dropdown__menu.account-switcher',
-    viewport: { width: 1280, height: 900 },
-    commands,
-  },
-  {
-    id: 'agents-account-add',
-    title: 'Agents — Add an account… (from ⌘K, both engines here)',
-    looksRightWhen:
-      'The same popover, its foot asking which engine: the muted line “When one account runs out of usage, agents carry on with the next, so nothing stops.” and two secondary buttons, Claude Code and Codex, with a quiet Cancel.',
-    openSelector: AGENTS_TAB,
-    command: 'agents.addAccount',
-    requires: '.account-switcher .account-switcher__new',
-    clipSelector: '.ss-dropdown__menu.account-switcher',
+    requires: '[data-testid="usage-hero"]',
     viewport: { width: 1280, height: 900 },
     commands,
   },

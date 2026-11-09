@@ -2864,11 +2864,9 @@ async function main() {
           name: `usage-accounts-${variant}`,
           route: '/usage?id=site',
           ready: 'Usage',
-          act: scrollToText('ALL ACCOUNTS'),
+          act: scrollToText('YOUR ACCOUNTS'),
           check:
-            variant === 'two-claude'
-              ? 'All accounts: one short headline "Room now on Claude · This Mac", no counts or Weekly summary line; This Mac its own card (Max plan · Used next) with a 5-hour row and a Weekly row, the weekly bar amber with "At this pace it runs out …" and its basis under it; then a compact muted card: Personal "Out of usage until …", Codex · This Mac "Not signed in"'
-              : 'All accounts: "Room now on Claude · This Mac", nothing under it; This Mac its own card (Max plan, no "Used next"), the weekly bar amber with its pace line and basis under it, said once; then a compact muted card: Personal says why it can’t be read, Codex "Not signed in"',
+            'Your accounts: a sheet with one headline, the stack as a segmented meter (one segment per account in order; an unread one an empty outlined slot, never full) with each account named and its room under it, and the next reset; then each account as a card: a numbered keycap (the one in use filled), its name, plan and who, a state pill ("In use", "Out of usage until …", "Not signed in"), its 5-hour and Weekly bars with "Resets in …", and an amber pace line when the Mac sent one',
         },
       ]);
     }

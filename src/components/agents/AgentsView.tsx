@@ -100,6 +100,8 @@ import {
 } from '@/components/icons';
 import { useAgentProjects } from './AgentProject';
 import { AccountSwitcher } from './AccountSwitcher';
+import { AgentsUsageView } from './AgentsUsageView';
+import { USAGE_ID } from '../../lib/agentAccounts';
 import { RoomChat } from './RoomChat';
 import { RoomEditorModal } from './RoomEditorModal';
 import { AgentPreviewPane } from './AgentPreviewPane';
@@ -130,7 +132,7 @@ function readSelected(): string | null {
   try {
     // "What's in flight" (the Needs you row, or ⌘K) is a detour, never where Agents reopens.
     const id = localStorage.getItem(SELECTED_KEY);
-    return id === TEAM_ID ? null : id;
+    return id === TEAM_ID || id === USAGE_ID ? null : id;
   } catch {
     return null;
   }
@@ -217,9 +219,11 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
   const [deletingRoom, setDeletingRoom] = useState<Room | null>(null);
   // "What's in flight" (the Needs you row or ⌘K), else the last agent you had open, else the Chief of Staff.
   const teamOpen = selectedId === TEAM_ID;
+  // Usage (the sidebar's usage row, ⌘K, a chat's account chip): a detour too.
+  const usageOpen = selectedId === USAGE_ID;
   const roomOpen = room !== null;
   const selected =
-    teamOpen || roomOpen
+    teamOpen || usageOpen || roomOpen
       ? null
       : (selectedId && agentsById.get(selectedId)) ||
         agents.find((a) => a.isMain) ||
@@ -265,13 +269,13 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
   useEffect(() => {
     if (!selected) {
       // On "What's in flight" no conversation is on screen, so replies still count as unread.
-      if (teamOpen) void focusAgent(null);
+      if (teamOpen || usageOpen) void focusAgent(null);
       return;
     }
     writeSelected(selected.id);
     void focusAgent(selected.id);
     if (!getAgentsSnapshot().messages[selected.id]) void loadMessages(selected.id);
-  }, [selected?.id, teamOpen]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selected?.id, teamOpen, usageOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Leaving Agents mode: nothing is on screen any more, so new replies count as unread.
   useEffect(() => () => void focusAgent(null), []);
@@ -306,6 +310,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
   }, []);
   const openAppsForAll = useCallback(() => openApps(), [openApps]);
   const openInFlight = useCallback(() => setSelectedId(TEAM_ID), []);
+  const openUsage = useCallback(() => setSelectedId(USAGE_ID), []);
   /** New agent's "Ask your Chief of Staff": the request, drafted in the Chief's composer. */
   const [prefill, setPrefill] = useState<{ agentId: string; text: string; n: number } | null>(null);
   // Delivered once: leaving that chat and coming back doesn't type it again.
@@ -908,7 +913,11 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
             }
             footerContent={
               <SidebarBoundary part="accounts" message="Accounts couldn’t be shown.">
-                <AccountSwitcher collapsed={sidebarProps.isSidebarHidden ?? false} />
+                <AccountSwitcher
+                  collapsed={sidebarProps.isSidebarHidden ?? false}
+                  open={usageOpen}
+                  onOpen={openUsage}
+                />
               </SidebarBoundary>
             }
             listContent={
@@ -949,7 +958,15 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
             />
           )}
           <PaneBoundary
-            resetKey={room ? roomKey(room.id) : teamOpen ? TEAM_ID : (shown?.id ?? null)}
+            resetKey={
+              room
+                ? roomKey(room.id)
+                : teamOpen
+                  ? TEAM_ID
+                  : usageOpen
+                    ? USAGE_ID
+                    : (shown?.id ?? null)
+            }
           >
             {error && !loaded ? (
               <div className="agents-main__state">{error}</div>
@@ -975,6 +992,8 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                 }
                 {...roomActions}
               />
+            ) : usageOpen ? (
+              <AgentsUsageView />
             ) : teamOpen ? (
               <AgentsTeamView
                 onOpenAgent={openAgent}

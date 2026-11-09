@@ -93,9 +93,9 @@ describe('quotaLines', () => {
       NOW
     );
     expect(line.tone).toBe('limited');
-    expect(line.text).toMatch(/^Claude usage limit · resets 5:00/);
+    expect(line.text).toMatch(/^Claude out of usage until 5:00/);
     const [bare] = quotaLines([claude(win({ limited: true }))], NOW);
-    expect(bare.text).toBe('Claude usage limit reached');
+    expect(bare.text).toBe('Claude out of usage');
   });
 
   it('says how old a reading is: its day in the tooltip, its age on the line after 6 h', () => {

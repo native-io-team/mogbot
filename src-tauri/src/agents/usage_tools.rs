@@ -667,6 +667,61 @@ pub async fn nudge(app: &AppHandle) {
         // Not recorded: waking it now could wake it every tick.
         return;
     }
+    wake_for_spare(app, &inv, &chief, &spare, &waiting, false);
+}
+
+/// The user pressed "Give agents something to do" by a window near its
+/// reset with room left (the Usage view): the Chief starts the
+/// spare-capacity list on it now, whatever the mode. Their press is the OK
+/// for this window, as "Use it all before reset" is a standing one; it
+/// changes no approval. Answers the line to show.
+pub async fn spend_now(app: &AppHandle) -> Result<String, crate::errors::CommandError> {
+    let inv = inventory::read().await;
+    let waiting: Vec<&usage_plan::SpareItem> = inv
+        .backlog
+        .iter()
+        .filter(|i| i.state == usage_plan::ItemState::Waiting)
+        .collect();
+    if waiting.is_empty() {
+        return Err(super::err_invalid(
+            "backlog",
+            "Your spare-capacity list is empty. Add something to it first.",
+        ));
+    }
+    let now = inv.now;
+    let Some(spare) = inv
+        .spare
+        .iter()
+        .find(|s| s.next && s.resets_at > now)
+        .cloned()
+    else {
+        return Err(super::err_invalid(
+            "spare",
+            "No limit is about to reset with room left on the account agents use next.",
+        ));
+    };
+    let chief = store::list()
+        .ok()
+        .and_then(|all| all.into_iter().find(|a| a.is_main))
+        .ok_or_else(|| super::err_invalid("chief", "There's no Chief of Staff to start it."))?;
+    // Recorded, so "Use it all" doesn't wake it a second time for this window.
+    let _ = usage_plan::mark_nudged(usage_plan::spare_key(&spare));
+    wake_for_spare(app, &inv, &chief, &spare, &waiting, true);
+    Ok(format!(
+        "{} is starting your spare-capacity list ({} waiting).",
+        chief.name,
+        waiting.len()
+    ))
+}
+
+fn wake_for_spare(
+    app: &AppHandle,
+    inv: &inventory::Inventory,
+    chief: &store::Agent,
+    spare: &usage_plan::Spare,
+    waiting: &[&usage_plan::SpareItem],
+    pressed: bool,
+) {
     let tz = chrono::Local;
     let window = inventory::window_name(&spare.kind, spare.window_minutes);
     let reset = super::failure::clock_phrase(&tz, spare.resets_at, inv.now);
@@ -690,8 +745,13 @@ pub async fn nudge(app: &AppHandle) {
             format!("- [{}] {}{who}", i.id, i.text)
         })
         .collect();
+    let why = if pressed {
+        "The user pressed “Give agents something to do” for this window in Usage: their OK to use capacity that would otherwise expire, for this window."
+    } else {
+        "The user chose “Use it all before reset”: their standing OK to use capacity that would otherwise expire."
+    };
     let prompt = format!(
-        "[Spare capacity — from the app, not the user]\n\nThe user chose “Use it all before reset”: their standing OK to use capacity that would otherwise expire. {} account “{}”: the {window} limit resets {reset} and was {}% used when reported {read}.\n\nWaiting on the spare-capacity list:\n{}\n\nStart what fits before the reset: hand each item to the agent it names, or whose role fits, with message_agent (on {} if there's a choice), or do it yourself, and mark each started with finish_spare_work. You may also bring a routine forward with run_routine_now. Nothing that sends, spends, pushes or changes what other people see without the user's usual Allow. Then tell the user in one line what you started and which account it runs on.",
+        "[Spare capacity — from the app, not the user]\n\n{why} {} account “{}”: the {window} limit resets {reset} and was {}% used when reported {read}.\n\nWaiting on the spare-capacity list:\n{}\n\nStart what fits before the reset: hand each item to the agent it names, or whose role fits, with message_agent (on {} if there's a choice), or do it yourself, and mark each started with finish_spare_work. You may also bring a routine forward with run_routine_now. Nothing that sends, spends, pushes or changes what other people see without the user's usual Allow. Then tell the user in one line what you started and which account it runs on.",
         spare.engine.label(),
         spare.account_name,
         spare.used_percent.floor(),

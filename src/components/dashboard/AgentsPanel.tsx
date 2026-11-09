@@ -505,7 +505,7 @@ export function AgentsPanel() {
       <DashboardCardDisclosure
         storageKey="shipstudio.dashboard.workspaceAccountsExpanded"
         defaultExpanded
-        title="Accounts"
+        title="Tools &amp; services"
         className="agents-panel"
         subtitle={
           <p className="dashboard-card-subtitle text-style-body-medium">
