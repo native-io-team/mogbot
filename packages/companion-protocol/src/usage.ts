@@ -129,16 +129,26 @@ export function localLine(l: LocalCompute): string {
   return `${l.name} · running · ${shown}${more}`;
 }
 
+/**
+ * The names a Mac gives an account nobody named, which describe a place,
+ * not an account ("This Mac" from older Macs, "Signed in on this Mac" when
+ * the engine doesn't record who). Never shown as an account's name
+ * (`accountLabel`).
+ */
+const PLACE_NAMES = new Set(['this mac', 'signed in on this mac']);
+
+export const isPlaceName = (name: string) => PLACE_NAMES.has(name.trim().toLowerCase());
+
 export interface SpareLine {
-  /** "Claude 5-hour limit resets 3:00 PM · 62% unused". */
+  /** "Claude 5-hour limit resets 3:00 PM · 62% left". */
   text: string;
   /** Where it came from and what happens next. */
   detail: string;
 }
 
 function spareText(s: SpareWindow, now: number): string {
-  const unused = Math.max(0, Math.floor(100 - s.usedPercent));
-  return `${ENGINE_SHORT[s.engine]} ${windowName(s)} limit resets ${resetDay(s.resetsAt, now)} · ${unused}% unused`;
+  const left = Math.max(0, Math.floor(100 - s.usedPercent));
+  return `${ENGINE_SHORT[s.engine]} ${windowName(s)} limit resets ${resetDay(s.resetsAt, now)} · ${left}% left`;
 }
 
 /**
@@ -153,7 +163,11 @@ export function spareLine(
   const s = inv?.spare.find((w) => w.next && w.resetsAt > now);
   if (!inv || !s) return null;
   const waiting = inv.backlog.filter((i) => i.state === 'waiting').length;
-  const reported = `On ${s.accountName}, as reported ${readPhrase(s.observedAt, now)}.`;
+  const when = readPhrase(s.observedAt, now);
+  // "This Mac" is where it is signed in, not an account's name.
+  const reported = isPlaceName(s.accountName)
+    ? `As reported ${when}.`
+    : `On ${s.accountName}, as reported ${when}.`;
   const next =
     inv.mode === 'use_it_all'
       ? waiting > 0

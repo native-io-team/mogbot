@@ -71,7 +71,7 @@ export interface KeyLimit {
 /** One rise in a meter, said for "Where did my usage go". */
 export interface ChangeLine {
   key: string;
-  /** "Weekly 32% → 67% used". */
+  /** "Weekly 68% → 33% left": said as what is left, as every figure is. */
   title: string;
   /** "Sat 11:40 PM – Sun 7:10 AM". */
   when: string;
@@ -257,7 +257,7 @@ export function changeLines(
     const label = isSession(c) ? '5-hour' : isWeek(c) ? 'Weekly' : c.kind.replace(/_/g, ' ');
     return {
       key: `${c.kind}:${c.since}`,
-      title: `${label} ${Math.floor(c.from)}% → ${Math.floor(c.to)}% used`,
+      title: `${label} ${100 - Math.ceil(c.from)}% → ${100 - Math.ceil(c.to)}% left`,
       when: whenSpan(c.since, c.until, now),
       runs: c.runs.map(runLine),
       elsewhere: c.nothingHere ? elsewhereLine(engine) : null,

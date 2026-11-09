@@ -27,6 +27,8 @@ vi.mock('../../lib/agentsStore', () => ({
 
 import { AccountSwitcher, AgentAccountChip, glanceStatus, rowPill } from './AccountSwitcher';
 import { AgentsUsageView } from './AgentsUsageView';
+import { AccountsPage } from './AgentsSettings';
+import { requestAccountSignIn } from '../../lib/settingsFromChat';
 import { AgentAccountItems } from './AgentModelMenu';
 import { requestSwitcher, switcherMounted, takeUsageAdd } from '../../lib/agentAccounts';
 
@@ -213,6 +215,38 @@ describe('Usage view', () => {
     const adds = calls.filter((c) => c.cmd === 'agents_account_add');
     expect(adds).toHaveLength(1);
     expect(adds[0].args).toMatchObject({ engine: 'claude', name: 'Account 2' });
+  });
+
+  it('Settings → Accounts & usage is the same rendering: same keys, same words, drag to order', async () => {
+    store.engines = [claude];
+    store.agents = [];
+    mock([mac, work]);
+    const { unmount } = render(<AgentsUsageView />);
+    const inView = (await screen.findAllByRole('article')).map((k) => k.textContent);
+    await waitFor(() => expect(screen.getAllByRole('article')[0]).toHaveTextContent('62% left'));
+    const viewText = screen.getAllByRole('article').map((k) => k.textContent);
+    unmount();
+
+    render(<AccountsPage />);
+    await waitFor(() => expect(screen.getAllByRole('article')[0]).toHaveTextContent('62% left'));
+    expect(screen.getAllByRole('article').map((k) => k.textContent)).toEqual(viewText);
+    expect(inView).toHaveLength(2);
+    // One reorder method: the drag handle (which moves with the keyboard too), never ↑/↓ buttons.
+    expect(screen.getByRole('button', { name: 'Move Work in the order' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /earlier|later|Move up|Move down/ })).toBeNull();
+    // Always "left", never a bare used figure.
+    expect(document.body.textContent).not.toMatch(/\b38%/);
+    expect(document.body.textContent).not.toMatch(/This Mac\b(?!’s own sign-in)/);
+  });
+
+  it('in Settings, an account the Chief added from chat starts its sign-in', async () => {
+    store.engines = [claude];
+    store.agents = [];
+    const pending: UsageAccount = { ...work, id: 'a9', name: 'Account 2', signedIn: false };
+    mock([mac, pending]);
+    requestAccountSignIn('a9');
+    render(<AccountsPage />);
+    expect(await screen.findByText(/Sign in “Account 2” to Claude Code/)).toBeInTheDocument();
   });
 });
 

@@ -334,7 +334,7 @@ describe('where did my usage go', () => {
       ],
       NOW
     );
-    expect(lines[0].title).toBe('Weekly 32% → 67% used');
+    expect(lines[0].title).toBe('Weekly 68% → 33% left');
     expect(lines[0].elsewhere).toMatch(/^Nothing these agents ran explains this/);
     expect(lines[1].runs).toEqual(['Riley: Morning brief · 3 turns · 1.2M tokens']);
     expect(lines[1].elsewhere).toBeNull();

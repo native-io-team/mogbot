@@ -581,7 +581,10 @@ export function useAppCommands({
           'codex',
           'chatgpt',
         ],
+        // The one home for usage and accounts: the Usage view when Agents
+        // shows it; else Settings → Accounts & usage, which is the same panel.
         run: () => {
+          if (requestSwitcher('open')) return;
           requestAccountsOnOpen('show');
           requestSettingsTabOnOpen('agents');
           openModal('settings');

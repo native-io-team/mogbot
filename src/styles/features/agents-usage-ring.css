@@ -1,6 +1,7 @@
-/* The chat header's usage ring and its popover (AgentUsageRing): the phone's
-   Usage sheet on the desk. Engine-reported figures, plus the Mac's labelled
-   pace estimate. Status colours for near and at a limit, never the accent. */
+/* The chat header's usage ring and its popover (AgentUsageRing): the
+   conversation's context and the stack of accounts as the Usage view says
+   it. The ring fills to what is left. Status colours only near and at a
+   limit, never the accent. */
 
 :root {
   /* The ring's stroke: thin, like the phone's (an icon's line, doubled). */
@@ -138,64 +139,23 @@
   background: var(--agent-usage-ink);
 }
 
-.agent-usage__muted,
-.agent-usage__state {
+.agent-usage__muted {
+  margin: 0;
   font-size: var(--font-size-body-sm);
   line-height: var(--line-height-help);
   color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }
 
-.agent-usage__body > .agent-usage__muted {
+/* The stack's one line, as the Usage view says it: ink, and a status hue
+   only when the user has a choice to make. */
+.agent-usage__headline {
   margin: 0;
-}
-
-.agent-usage__state:is([data-tone='warning'], [data-tone='limited']) {
-  color: var(--accent-warning);
-}
-
-/* An estimate, said as one: amber words, then what it rests on. */
-.agent-usage__pace {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-3xs);
-}
-
-.agent-usage__pace-text {
-  font-size: var(--font-size-body-sm);
-  line-height: var(--line-height-help);
-  color: var(--accent-warning);
-}
-
-.agent-usage__account {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-sm);
-  padding-top: var(--spacing-sm);
-  border-top: var(--border-width-default) solid var(--border-subtle);
-}
-
-.agent-usage__account:first-of-type {
-  padding-top: 0;
-  border-top: none;
-}
-
-.agent-usage__account-head {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-3xs);
-}
-
-.agent-usage__account-name {
   font-size: var(--font-size-body-md);
   font-weight: var(--font-weight-label);
   color: var(--text-primary);
-  overflow-wrap: anywhere;
 }
 
-/* Settings → Usage: the pace line under an account's state. */
-.agents-usage__pace {
-  font-size: var(--font-size-body-sm);
-  line-height: var(--line-height-help);
+.agent-usage__headline:is([data-tone='warning'], [data-tone='limited']) {
   color: var(--accent-warning);
 }

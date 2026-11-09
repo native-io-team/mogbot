@@ -31,6 +31,7 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { accountsOf } from '../../lib/agentAccounts';
 import { useUsageAccounts } from './useUsageAccounts';
+import { accountLabel } from '../../../packages/companion-protocol/src/accountSwitcher';
 import {
   RUNS_ON_ANY,
   RUNS_ON_ANY_DETAIL,
@@ -58,7 +59,7 @@ export function AgentAccountItems({
     { value: '', label: RUNS_ON_ANY, detail: RUNS_ON_ANY_DETAIL },
     ...mine.map((a) => ({
       value: a.id,
-      label: a.name,
+      label: accountLabel(a),
       detail: runsOnDetail(a),
     })),
   ];

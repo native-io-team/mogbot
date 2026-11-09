@@ -22,7 +22,7 @@ import type {
   UsageInventory,
 } from './model';
 import { QUOTA_WARN_PERCENT, resetPhrase } from './quota';
-import { planLabel, type UsageTone } from './usage';
+import { isPlaceName, planLabel, type UsageTone } from './usage';
 import { awayRoom, type AwayState } from './crossover';
 
 export const ACCOUNT_ENGINE_LABEL: Record<AgentEngine, string> = {
@@ -36,13 +36,6 @@ export const ADD_ACCOUNT_WHY =
 
 /** Where the phone sends anything it can't do itself. */
 export const ADD_ON_MAC = 'Add or sign in to accounts on your Mac: Agents → Usage.';
-
-/**
- * The names a Mac gives an account nobody named, which describe a place,
- * not an account ("This Mac" from older Macs, "Signed in on this Mac" when
- * the engine doesn't record who). Never shown as an account's name.
- */
-const PLACE_NAMES = new Set(['this mac', 'signed in on this mac']);
 
 /** A Claude organization named after its owner by default ("Sam’s Organization") says nothing new. */
 const DEFAULT_ORG = /['’]s Organization$/;
@@ -63,7 +56,7 @@ export function accountLabel(
   line?: Pick<UsageAccountLine, 'orgName' | 'plan'> | null
 ): string {
   const given = a.name.trim();
-  const place = PLACE_NAMES.has(given.toLowerCase());
+  const place = isPlaceName(given);
   // An older Mac doesn't say whether it was named: any name but a place's was.
   if (given !== '' && !place && (a.named ?? true)) return given;
   if (a.email) return a.email;
@@ -72,6 +65,16 @@ export function accountLabel(
   const plan = a.plan ?? line?.plan;
   if (plan) return `${PLAN_OWNER[a.engine]} ${capital(plan)}`;
   return `${ACCOUNT_ENGINE_LABEL[a.engine]} account`;
+}
+
+/**
+ * The account an agent's last turn ran on (`Agent.ranOn`), named as its
+ * key is: the Mac sends its name for it, which may be a place.
+ */
+export function ranOnName(agent: { engine?: AgentEngine; ranOn?: { name: string } }): string {
+  if (!agent.ranOn) return '';
+  if (agent.engine) return accountLabel({ engine: agent.engine, name: agent.ranOn.name });
+  return isPlaceName(agent.ranOn.name) ? 'this Mac’s own sign-in' : agent.ranOn.name;
 }
 
 /** One limit's room: "62% left", with its reset. */

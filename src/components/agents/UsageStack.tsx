@@ -22,6 +22,7 @@ import {
   ResetIcon,
   TrashIcon,
   ChevronRightIcon,
+  WarningIcon,
 } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { IconButton } from '../primitives/IconButton';
@@ -30,7 +31,12 @@ import { StatusPill, type StatusTone } from '../primitives/StatusPill';
 import { Dropdown, DropdownDivider, DropdownItem } from '../primitives/Dropdown';
 import { DragSortHandle } from '../primitives/DragSort';
 import type { AgentEngine } from '../../lib/agents';
-import type { KeyLimit, AccountKeyState, StackKey } from '../../lib/agentsUsage';
+import {
+  LOW_LEFT,
+  type KeyLimit,
+  type AccountKeyState,
+  type StackKey,
+} from '../../lib/agentsUsage';
 import { USE_THIS_ONE_NOW } from '../../../packages/companion-protocol/src/cardWords';
 import { pinnedLine } from '../../../packages/companion-protocol/src/accountSwitcher';
 
@@ -135,9 +141,15 @@ function LimitRow({ limit }: { limit: KeyLimit }) {
         </span>
       )}
       {limit.pace && (
+        // An estimate: secondary ink, never amber; a small mark only when little is left.
         <span className="usage-key__pace" title={limit.pace.basis}>
-          {limit.pace.text}
-          <span className="usage-key__basis"> · {limit.pace.basis}</span>
+          {limit.left <= LOW_LEFT && (
+            <WarningIcon size={12} className="usage-key__pace-icon" aria-hidden />
+          )}
+          <span>
+            {limit.pace.text}
+            <span className="usage-key__basis"> · {limit.pace.basis}</span>
+          </span>
         </span>
       )}
     </div>

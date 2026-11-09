@@ -34,35 +34,15 @@ export {
   USAGE_MODES,
   USAGE_MODE_DETAIL,
   USAGE_MODE_LABEL,
-  accountTags,
-  accountUsage,
   estimateLine,
   localLine,
   spareLine,
-  windowLine,
-  type SpareLine,
-  type UsageTone,
 } from '../../packages/companion-protocol/src/usage';
-export { windowName } from '../../packages/companion-protocol/src/quota';
-// The chat header's ring and its popover say what the phone's do.
+// The chat header's ring: what is left of the 5-hour window, and the context meter.
 export {
-  accountBlocks,
-  computeForecast,
-  computeRows,
-  computeView,
   contextMeter,
-  type ComputeRow,
-  type ComputeView,
-  paceLine,
-  planUsage,
   ringPercent,
-  usageSheet,
-  type AccountBlock,
-  type ActiveUsage,
-  type PaceLine,
-  type PlanUsage,
   type UsageMeter,
-  type UsageSheet,
 } from '../../packages/companion-protocol/src/usageSheet';
 
 /** The mode or the list changed (`runner::EVENT_USAGE_PLAN`). */

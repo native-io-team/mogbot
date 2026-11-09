@@ -39,6 +39,7 @@ import {
   type AgentEngine,
   type AgentIndependence,
   type UsageAccount,
+  accountLabel,
   RUNS_ON_ANY,
   RUNS_ON_ANY_DETAIL,
   type UsageMode,
@@ -298,7 +299,7 @@ function RunsOn({
     { id: '', label: RUNS_ON_ANY, detail: RUNS_ON_ANY_DETAIL },
     ...choices.map((a) => ({
       id: a.id,
-      label: a.name,
+      label: accountLabel(a),
       detail: runsOnDetail(a),
     })),
   ];
