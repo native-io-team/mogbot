@@ -91,6 +91,7 @@ pub fn find_binary_by_name(binary_name: &str) -> Option<std::path::PathBuf> {
     candidate_paths_for(binary_name)
         .into_iter()
         .find(|p| p.exists())
+        .or_else(|| npm_global_candidate(binary_name).filter(|p| p.exists()))
 }
 
 /// Finds a CLI binary by name and validates that it actually runs.
@@ -101,7 +102,12 @@ pub fn find_binary_by_name(binary_name: &str) -> Option<std::path::PathBuf> {
 /// probe fails. This protects us from shadowing scenarios where a broken
 /// binary on the GUI PATH masks a working install elsewhere on the system.
 pub fn find_validated_binary(binary_name: &str, version_flag: &str) -> Option<std::path::PathBuf> {
-    for candidate in candidate_paths_for(binary_name) {
+    let listed = candidate_paths_for(binary_name);
+    // npm's global bin is asked last, and only if nothing listed works.
+    let npm = std::iter::once_with(|| npm_global_candidate(binary_name))
+        .flatten()
+        .filter(|p| !listed.contains(p));
+    for candidate in listed.clone().into_iter().chain(npm) {
         if !candidate.exists() {
             continue;
         }
@@ -256,21 +262,6 @@ fn candidate_paths_for(binary_name: &str) -> Vec<std::path::PathBuf> {
                 std::path::PathBuf::from(&program_files).join(format!("Claude\\{}", exe_name)),
             );
         }
-
-        if let Ok(output) = create_command("npm")
-            .args(["prefix", "-g"])
-            .env("PATH", get_extended_path())
-            .output()
-        {
-            if output.status.success() {
-                let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                push_candidate(
-                    &mut paths,
-                    &mut seen,
-                    std::path::PathBuf::from(&prefix).join(&cmd_name),
-                );
-            }
-        }
     }
 
     #[cfg(not(windows))]
@@ -369,25 +360,52 @@ fn candidate_paths_for(binary_name: &str) -> Vec<std::path::PathBuf> {
                     }
                 }
             }
-
-            if let Ok(output) = create_command("npm")
-                .args(["prefix", "-g"])
-                .env("PATH", get_extended_path())
-                .output()
-            {
-                if output.status.success() {
-                    let prefix = String::from_utf8_lossy(&output.stdout).trim().to_string();
-                    push_candidate(
-                        &mut paths,
-                        &mut seen,
-                        std::path::PathBuf::from(&prefix).join(format!("bin/{binary_name}")),
-                    );
-                }
-            }
         }
     }
 
     paths
+}
+
+/// Where npm's global install of `binary_name` would be: the last place
+/// looked, and the only one that costs a process (`npm prefix -g` starts
+/// Node), so it is asked only when nothing found earlier exists, and its
+/// prefix is kept ([`npm_global_prefix`]).
+fn npm_global_candidate(binary_name: &str) -> Option<std::path::PathBuf> {
+    let prefix = std::path::PathBuf::from(npm_global_prefix()?);
+    Some(if cfg!(windows) {
+        prefix.join(format!("{binary_name}.cmd"))
+    } else {
+        prefix.join(format!("bin/{binary_name}"))
+    })
+}
+
+/// `npm prefix -g`, kept: an answer for half an hour, no answer (npm missing
+/// or failing) for a minute so installing Node shows up soon. It was asked
+/// on every binary lookup, a Node start each time, several a minute while
+/// the usage view was open.
+fn npm_global_prefix() -> Option<String> {
+    use std::sync::Mutex;
+    use std::time::{Duration, Instant};
+    static PREFIX: Mutex<Option<(Option<String>, Instant)>> = Mutex::new(None);
+    // Held across the ask so concurrent lookups share one `npm` run.
+    let mut kept = PREFIX.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((prefix, at)) = kept.as_ref() {
+        let keep = if prefix.is_some() { 30 * 60 } else { 60 };
+        if at.elapsed() < Duration::from_secs(keep) {
+            return prefix.clone();
+        }
+    }
+    let prefix = create_command("npm")
+        .args(["prefix", "-g"])
+        .env("PATH", get_extended_path())
+        .stdin(std::process::Stdio::null())
+        .output()
+        .ok()
+        .filter(|output| output.status.success())
+        .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+        .filter(|prefix| !prefix.is_empty());
+    *kept = Some((prefix.clone(), Instant::now()));
+    prefix
 }
 
 // Walks every dir in `path_env`, emitting a candidate per dir (with the

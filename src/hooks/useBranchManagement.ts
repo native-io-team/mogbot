@@ -18,7 +18,7 @@ import {
   switchBranch,
   pullAndMerge,
 } from '../lib/branches';
-import { getChangedFiles, ChangedFile } from '../lib/git';
+import { getChangedFiles, isGitRepository, ChangedFile } from '../lib/git';
 import { invoke } from '@tauri-apps/api/core';
 import { logger } from '../lib/logger';
 import {
@@ -35,6 +35,13 @@ import type { HealthTabPanelRef } from '../components/code/HealthTabPanel';
 import { usePolling } from './usePolling';
 import { useReviewHandoff } from './useReviewHandoff';
 import type { Project } from '../lib/project';
+
+/**
+ * A folder that isn't a git repository has no git status to poll. Each tick
+ * used to run three failing git processes on it; now it is checked from the
+ * disk once, and again only this often (or when the window comes back).
+ */
+export const NOT_A_REPO_RECHECK_MS = 60_000;
 
 export interface UseBranchManagementParams {
   currentProject: Project | null;
@@ -155,6 +162,25 @@ export function useBranchManagement({
     [] // stable — reads currentBranch from ref
   );
 
+  // Whether the project is a git repository. A yes is kept for the project;
+  // a no is asked again after NOT_A_REPO_RECHECK_MS (an agent may `git init`).
+  // A failed check counts as a repository, so polling carries on as before.
+  const repoCheck = useRef<{ path: string; isRepo: boolean; at: number } | null>(null);
+  const isRepo = useCallback(async (path: string, fresh = false) => {
+    const known = repoCheck.current;
+    if (
+      known?.path === path &&
+      (known.isRepo || (!fresh && Date.now() - known.at < NOT_A_REPO_RECHECK_MS))
+    ) {
+      return known.isRepo;
+    }
+    const answer = await isGitRepository(path)
+      .then((r) => r !== false)
+      .catch(() => true);
+    repoCheck.current = { path, isRepo: answer, at: Date.now() };
+    return answer;
+  }, []);
+
   // Track tab visibility so polling pauses when the window is hidden
   const [isTabVisible, setIsTabVisible] = useState(() =>
     typeof document === 'undefined' ? true : !document.hidden
@@ -179,7 +205,7 @@ export function useBranchManagement({
       const now = Date.now();
       if (now - lastFocusRefresh.current < 3000) return;
       lastFocusRefresh.current = now;
-      void fetchBranchInfo(path);
+      void isRepo(path, true).then((repo) => (repo ? fetchBranchInfo(path) : undefined));
     };
     window.addEventListener('focus', refreshOnFocus);
     document.addEventListener('visibilitychange', refreshOnFocus);
@@ -187,13 +213,13 @@ export function useBranchManagement({
       window.removeEventListener('focus', refreshOnFocus);
       document.removeEventListener('visibilitychange', refreshOnFocus);
     };
-  }, [currentProject, fetchBranchInfo]);
+  }, [currentProject, fetchBranchInfo, isRepo]);
 
   // Periodically check git status when a project is open and window is focused
   const projectPath = currentProject?.path ?? null;
   usePolling(
     async () => {
-      if (projectPath) {
+      if (projectPath && (await isRepo(projectPath))) {
         await checkGitStatus(projectPath);
       }
     },
