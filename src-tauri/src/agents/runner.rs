@@ -4648,6 +4648,19 @@ async fn run_on_accounts(
                 .map(|c| &c.account);
             let line = wallet::switch_line(&account, from, &chrono::Local, now);
             let _ = record_in_turn(app, new_message(agent_id, MessageKind::Note, line));
+            if engine == Engine::Claude {
+                // What this account lacks that the last had (`account_reach`):
+                // compared when this turn's engine lists its connectors, and
+                // the servers that need a sign-in on it, asked of it now.
+                if let Ok(agent) = store::get(agent_id) {
+                    if let Some(caps) = agent.capabilities {
+                        switched_from(agent_id, &account.name, caps);
+                    }
+                }
+                if !account.is_this_mac() {
+                    check_sign_ins(app, agent_id, &account);
+                }
+            }
         }
         // A switched try whose last attempt already acted resumes that
         // attempt's conversation or doesn't run: a fresh start there would
@@ -4713,6 +4726,71 @@ async fn run_on_accounts(
         tracing::info!("[Agents] {agent_id}'s account is out of usage; trying the next");
         prompt = wallet::continue_prompt(&prompt);
     }
+}
+
+/// Agents whose turn just switched account: (the account's name, what the
+/// last turn's engine listed), compared with this turn's own listing.
+static SWITCHED: LazyLock<
+    Mutex<std::collections::HashMap<String, (String, super::capabilities::Capabilities)>>,
+> = LazyLock::new(Default::default);
+
+fn switched_from(agent_id: &str, account: &str, caps: super::capabilities::Capabilities) {
+    SWITCHED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .insert(agent_id.to_string(), (account.to_string(), caps));
+}
+
+/// This turn's engine listed what it has: after a switch, one quiet line
+/// naming what the last account had and this one doesn't (`account_reach`).
+fn compare_after_switch(app: &AppHandle, agent_id: &str, now: &super::capabilities::Capabilities) {
+    let Some((account, before)) = SWITCHED
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(agent_id)
+    else {
+        return;
+    };
+    let chrome = store::get(agent_id)
+        .map(|a| super::browser::for_turn(&a, false))
+        .unwrap_or(false);
+    if let Some(line) = super::account_reach::lost_line(&account, &before, now, chrome) {
+        let _ = record_in_turn(app, new_message(agent_id, MessageKind::Note, line));
+    }
+}
+
+/// (account id, line) already said: a missing sign-in is said once per run
+/// of the app, not on every switch.
+static SIGN_INS_SAID: LazyLock<Mutex<std::collections::HashSet<(String, String)>>> =
+    LazyLock::new(Default::default);
+
+/// Ask Claude Code, as `account`, which of the user's servers need a
+/// sign-in there, in the background (it health-checks each server), and say
+/// so in the chat once. Read-only.
+fn check_sign_ins(app: &AppHandle, agent_id: &str, account: &super::wallet::Account) {
+    let (app, agent_id, account) = (app.clone(), agent_id.to_string(), account.clone());
+    tauri::async_runtime::spawn(async move {
+        let env = super::wallet::env_for(&account);
+        let config = super::wallet::folder(&account).join(".claude.json");
+        let apps = match super::apps::list_as(&env, &config).await {
+            Ok(apps) => apps,
+            Err(e) => {
+                tracing::info!(account = %account.id, "[Agents] couldn't list an account's MCP servers: {e}");
+                return;
+            }
+        };
+        let name = store::get(&agent_id).map(|a| a.name).unwrap_or_default();
+        let Some(line) = super::account_reach::needs_auth_line(&account.name, &name, &apps) else {
+            return;
+        };
+        let fresh = SIGN_INS_SAID
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .insert((account.id.clone(), line.clone()));
+        if fresh {
+            let _ = record(&app, new_message(&agent_id, MessageKind::Note, line));
+        }
+    });
 }
 
 /// Agents whose turn ran a tool in any of its tries (`run_on_accounts`).
@@ -4786,13 +4864,28 @@ async fn run_turn(
     // browser, and can't write its own instructions or memory (below).
     let outside = from_outside(agent_id);
     let mut access = super::connections::for_turn(&agent, port, outside).await;
+    // On an added Claude Code account, `--chrome` would look for a browser
+    // signed in to that account's claude.ai, not the user's: the same
+    // server, run as this Mac's sign-in, under another name
+    // (`account_reach`, "Claude in Chrome").
+    let chrome_as_this_mac = engine == Engine::Claude && access.browser && !account.is_this_mac();
+    let mut claude_servers = access.claude_servers(turn.secret());
+    if chrome_as_this_mac {
+        access.browser = false;
+        claude_servers.insert(
+            super::account_reach::CHROME_SERVER.to_string(),
+            super::account_reach::chrome_server(&binary),
+        );
+        if !access.prompt.is_empty() {
+            access.prompt.push('\n');
+        }
+        access
+            .prompt
+            .push_str(&super::account_reach::chrome_prompt_line());
+    }
     let mcp_config = match engine {
         Engine::Claude => Some(super::reach::write_config(
-            &super::reach::claude_config_with(
-                &url,
-                turn.secret(),
-                access.claude_servers(turn.secret()),
-            ),
+            &super::reach::claude_config_with(&url, turn.secret(), claude_servers),
         )?),
         Engine::Codex => None,
     };
@@ -5232,6 +5325,7 @@ async fn run_turn(
                         }
                         Step::Session(_) => {}
                         Step::Capabilities(caps) => {
+                            compare_after_switch(app, agent_id, &caps);
                             let _ = store::update(agent_id, |a| a.capabilities = Some(caps));
                         }
                         Step::Reply(text) => {

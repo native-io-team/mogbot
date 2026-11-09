@@ -3703,10 +3703,60 @@ own on every account. The folder gets symlinks to This Mac's
 `settings.json`, `CLAUDE.md`, `agents`, `commands`, `skills`, `plugins`
 (Claude Code) or `config.toml`, `AGENTS.md`, `prompts`, `skills`,
 `models_cache.json` (Codex), where it has none of its own, so an agent
-behaves the same on every account. **Not** shared: logins, history and
-Claude Code's `.claude.json`, which holds the signed-in account *and* the
-user-scope MCP servers. So MCP servers added with `claude mcp add --scope
-user` exist only on This Mac (a known difference, not papered over).
+behaves the same on every account. **Not** shared: logins and history.
+Claude Code's `.claude.json` (the signed-in account *and* the user-scope
+MCP servers) stays per account, but its servers are brought over (below).
+
+**The same reach on every account** (`agents/account_reach.rs`; Claude
+Code 2.1.319, read in its own code and observed on this Mac 2026-11-08):
+
+- **MCP servers.** Before each turn on an added account, This Mac's
+  user-scope `mcpServers` are merged into the account's `.claude.json`
+  (`sync_servers`): only that key, atomic 0600 write, the account's own
+  servers kept, a server This Mac dropped removed only if the sync put it
+  there (`.synced-mcp-servers.json` beside it). Nothing else of the file is
+  touched; no login is copied. The servers' OAuth tokens live in Claude
+  Code's secure storage, which is per config dir (Keychain `Claude
+  Code-credentials-<sha256(dir)[..8]>`, key `mcpOAuth`), so a server that
+  signs in by OAuth (Figma, Webflow…) needs **one sign-in per account**. On
+  a switch to an added account the app runs `claude mcp list` as that
+  account in the background and says once, in a quiet Note, which need it:
+  "On Personal, Figma and Webflow need a one-time sign-in … Take over
+  Riley, type /mcp and sign in, then hand back." Servers with a static
+  header or URL key work at once (their definition carries it; the file is
+  0600 like This Mac's).
+- **Claude in Chrome.** `--chrome` reaches the extension through the
+  claude.ai bridge *as the claude.ai account of the OAuth token in use*
+  (`bridgeConfig.getUserId`), and the extension in the user's Chrome is
+  signed in to This Mac's. So on an added account `--chrome` finds no
+  browser (observed: `claude --claude-in-chrome-mcp` under the account's
+  `CLAUDE_CONFIG_DIR` answers "Browser extension is not connected"; under
+  This Mac's it lists the browser). A turn on an added account therefore
+  runs `--no-chrome` and gets the same server through `--mcp-config`,
+  started by `/usr/bin/env -u CLAUDE_CONFIG_DIR -u CLAUDE_CODE_OAUTH_TOKEN
+  -u CLAUDE_SECURESTORAGE_CONFIG_DIR claude --claude-in-chrome-mcp`, so it
+  signs in to the bridge as This Mac and reaches the user's own Chrome.
+  Claude Code drops a config entry named `claude-in-chrome`, so it is
+  `user-chrome` (`account_reach::CHROME_SERVER`); `e2e_alias` maps
+  `mcp__user-chrome__*` back to `mcp__claude-in-chrome__*` in the broker and
+  the stream, so the browser gate, cards, "What it did" and capabilities
+  treat it exactly as the real one, and the turn's prompt names the tools.
+  Observed: a `--print` turn under another `CLAUDE_CONFIG_DIR` loaded
+  `user-chrome` (20 tools) and `list_connected_browsers` returned the user's
+  browser. Nothing for the owner to do.
+- **claude.ai connectors** belong to each claude.ai account and can't be
+  copied. When a switched turn's engine lists what it has, `lost_line`
+  compares it with the last turn's and posts one Note: "Gmail isn't on in
+  claude.ai for Personal: turn it on at claude.ai/settings/connectors while
+  signed in as Personal; agents use them in your Chrome meanwhile." (or "or
+  connect them here" without the browser). The access chain already falls
+  back to a connection here or the user's Chrome for that service, since
+  the connector is no longer in the agent's capabilities.
+- **Not verified:** a full turn on the owner's real added account (its token
+  is in the app's Keychain item, which nothing but the app reads without a
+  prompt), and whether a `setup-token` token reaches claude.ai connectors
+  at all (its scope may be inference only; then every connector is "not on"
+  for that account and the Note says so, which is honest either way).
 
 **Failover** (`runner::run_on_accounts`, around `run_turn`):
 

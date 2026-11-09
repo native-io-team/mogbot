@@ -41,7 +41,8 @@
 //! behaves the same on every account. Not its login, history or user-level
 //! state: Claude Code's `.claude.json` (which holds the signed-in account and
 //! the user's own MCP servers) is per account, so MCP servers added with
-//! `claude mcp add --scope user` are only on this Mac's own sign-in.
+//! `claude mcp add --scope user` are brought over before each turn on an
+//! added account (`account_reach::sync_servers`; their OAuth logins aren't).
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -678,6 +679,8 @@ pub fn prepare(account: &Account) {
     }
     let native = folder(&this_mac(account.engine));
     link_shared(account.engine, &native, &folder(account));
+    // This Mac's user-scope MCP servers, on this account too.
+    super::account_reach::prepare(account);
 }
 
 pub fn link_shared(engine: Engine, native: &Path, target: &Path) {
