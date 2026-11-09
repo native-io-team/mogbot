@@ -553,6 +553,8 @@ fn tools_list(caller: &store::Agent) -> Value {
     tools.extend(super::project_tools::definitions());
     // "Test it": only while the user's run is open (`preview_test`).
     tools.extend(super::preview_test::definitions(&caller.id));
+    // This Mac's own apps: every agent, one Allow per app on first use.
+    tools.extend(super::mac_apps::definitions());
     json!({ "tools": tools })
 }
 
@@ -599,6 +601,11 @@ pub async fn handle_rpc(
             if let Some(tool) = super::preview_test::find(name) {
                 return ok(super::preview_test::call(app, &caller, turn, tool, &args).await);
             }
+            // This Mac's apps: its grant, a card, macOS's own permission
+            // (`mac_apps::call`).
+            if let Some(tool) = super::mac_apps::find(name) {
+                return ok(super::mac_apps::call(app, &caller, turn, tool, &args).await);
+            }
             if let Some(tool) = super::usage_tools::find(name) {
                 return ok(usage_tool(app, &caller, turn, tool, &args).await);
             }
@@ -641,19 +648,27 @@ pub async fn handle_rpc(
             // needs the user's OK to change the team or set up a routine.
             // `delete_agent` asks anyway; `watch_for` asks in `check_ins`,
             // with what the routine costs on the same card.
-            if needs_card_in_routine_turn(name)
-                && name != "delete_agent"
-                && name != "watch_for"
-                && runner::from_outside(&caller.id)
-                && super::broker::is_live(&caller.id, turn)
-            {
+            // A turn that read one of this Mac's apps (`mac_apps`) asks the
+            // same way: what it read could hold someone else's words.
+            let outside_now =
+                runner::from_outside(&caller.id) && super::broker::is_live(&caller.id, turn);
+            let why = if outside_now {
+                (name != "watch_for").then_some(OUTSIDE_WHY)
+            } else {
+                super::mac_apps::read_in_turn(&caller.id, turn).then_some(super::mac_apps::READ_WHY)
+            };
+            if let (true, false, Some(why)) = (
+                needs_card_in_routine_turn(name),
+                name == "delete_agent",
+                why,
+            ) {
                 // A call that would fail anyway fails before asking.
                 if name == "create_agent" {
                     if let Err(e) = create_args(&args) {
                         return ok(error(e));
                     }
                 }
-                let (title, detail) = outside_card(name, &args);
+                let (title, detail) = outside_card(name, &args, why);
                 let answer = ask_user(app, &caller, title, detail, None).await;
                 if let Some(refused) = refused_reply(&answer, "do it") {
                     return ok(error(refused));
@@ -862,8 +877,7 @@ pub fn needs_card_in_routine_turn(tool: &str) -> bool {
 pub(super) const OUTSIDE_WHY: &str = "It’s working on something a “When…” routine found, which came from outside this app, so it asks you first.";
 
 /// The card for one of those, in a turn answering outside text.
-fn outside_card(tool: &str, args: &Value) -> (String, String) {
-    let why = OUTSIDE_WHY;
+fn outside_card(tool: &str, args: &Value, why: &str) -> (String, String) {
     let who = arg(args, "agent")
         .or(arg(args, "name"))
         .unwrap_or("an agent");
@@ -4065,6 +4079,7 @@ mod tests {
         let (title, detail) = outside_card(
             "create_agent",
             &json!({ "name": "Research", "template": "research", "instructions": "Works in climate policy." }),
+            OUTSIDE_WHY,
         );
         assert_eq!(title, "Create Research");
         assert!(
@@ -4078,12 +4093,14 @@ mod tests {
         let (_, detail) = outside_card(
             "create_agent",
             &json!({ "name": "R", "template": "research", "role": "Climate papers" }),
+            OUTSIDE_WHY,
         );
         assert!(detail.contains("\nClimate papers\n") && !detail.contains(&research.role));
         // Without a template, the briefing is what's shown.
         let (_, detail) = outside_card(
             "create_agent",
             &json!({ "name": "F", "role": "Invoices", "instructions": "Pay on time." }),
+            OUTSIDE_WHY,
         );
         assert!(
             detail.starts_with("Invoices\nInstructions: Pay on time.\n\n"),

@@ -24,6 +24,12 @@
   hardened runtime the mic delivers silence without it, and ad-hoc dev builds
   hide that.
 
+  com.apple.security.personal-information.calendars and .addressbook: agents
+  using Calendar, Reminders and Contacts (src-tauri/src/agents/mac_apps.rs).
+  Under the hardened runtime the request is refused without them, and ad-hoc
+  dev builds hide that too. The automation entitlement above also covers
+  Notes and sending in Messages there.
+
   Deliberately minimal: no App Sandbox keys, no other Apple Events scoping, and
   nothing that affects the Windows or Linux bundles.
 -->
@@ -32,6 +38,10 @@
 	<key>com.apple.security.automation.apple-events</key>
 	<true/>
 	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<key>com.apple.security.personal-information.calendars</key>
+	<true/>
+	<key>com.apple.security.personal-information.addressbook</key>
 	<true/>
 </dict>
 </plist>

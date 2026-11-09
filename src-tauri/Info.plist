@@ -10,8 +10,16 @@
   Event instead of prompting — so this key is required alongside the
   com.apple.security.automation.apple-events entitlement in Entitlements.plist.
 
-  Needed only by the opt-in Spotify widget
-  (src-tauri/src/commands/spotify.rs). Do not remove.
+  Needed by the opt-in Spotify widget (src-tauri/src/commands/spotify.rs)
+  and by agents using Notes and sending in Messages
+  (src-tauri/src/agents/mac_apps.rs). Do not remove.
+
+  NSCalendars*, NSReminders* and NSContactsUsageDescription are the strings
+  macOS shows when an agent first uses Calendar, Reminders or Contacts
+  (agents/mac_apps.rs, through EventKit and the Contacts framework in an
+  osascript child, which macOS attributes to this app). The FullAccess keys
+  are macOS 14's; the older ones are kept for macOS 13. Without them macOS
+  refuses (or kills) the request instead of prompting.
 
   NSMicrophoneUsageDescription and NSSpeechRecognitionUsageDescription are
   for dictation in the Agents composer (src-tauri/src/commands/dictation.rs).
@@ -21,7 +29,17 @@
 <plist version="1.0">
 <dict>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>Used to show and control what's playing in Spotify.</string>
+	<string>Used to show and control what's playing in Spotify, and for agents you allow to use Notes or send in Messages.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>Lets agents you allow read and add to your calendar.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>Lets agents you allow read and add to your calendar.</string>
+	<key>NSRemindersUsageDescription</key>
+	<string>Lets agents you allow read and add to your reminders.</string>
+	<key>NSRemindersFullAccessUsageDescription</key>
+	<string>Lets agents you allow read and add to your reminders.</string>
+	<key>NSContactsUsageDescription</key>
+	<string>Lets agents you allow look people up in your contacts.</string>
 	<key>NSMicrophoneUsageDescription</key>
 	<string>Listens only while you dictate a message to an agent.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
