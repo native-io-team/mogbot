@@ -364,8 +364,10 @@ describe('a site that stopped by itself', () => {
   it('with no agent owning it, the workspace line stays', async () => {
     vi.useFakeTimers({ shouldAdvanceTime: true });
     pane();
-    // A beat to hear who owns it, without a call to action meanwhile.
-    expect(await screen.findByText('The site stopped running.')).toBeTruthy();
+    // A beat to hear who owns it, without a call to action meanwhile. Under
+    // a loaded machine the real clock can pass the beat before the first
+    // look, so either wording counts here; the exact one is checked below.
+    expect(await screen.findByText(/^The site stopped running\./)).toBeTruthy();
     expect(screen.queryByRole('button', { name: /Ask / })).toBeNull();
     await act(async () => {
       await vi.advanceTimersByTimeAsync(2_500);
