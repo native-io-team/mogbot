@@ -1479,6 +1479,39 @@ const LIVE = [
       'Agent controls: an Apps row (“Which apps QA 2 can use, and connecting new ones.”) above More about QA 2',
   },
   {
+    name: 'on-its-own',
+    route: '/on-its-own?id=fin',
+    ready: 'What can Finance do on its own?',
+    pages: 3,
+    check:
+      'What can Finance do on its own?: a quiet box “Unleashed · its own level” and its line; ALWAYS ASKS (money, passwords, deleting; exact words); WITHOUT ASKING, BEYOND ITS LEVEL in sections: Rules (Run npm test, Run pnpm build with the quote, Run ls for every agent) each with Remove; Plans you OK’d with Take back; Apps (Gmail with Remove and Read only); Browser with Turn off; Team and accounts (admin Turn off, Slack Ask first, the Work account with no button). Quiet text buttons, never the accent; the foot line',
+  },
+  {
+    name: 'on-its-own-narrowed',
+    route: '/on-its-own?id=site',
+    ready: 'What can Acme Site do on its own?',
+    act: async (page) => {
+      // The mock keeps what was taken away, so the second theme finds it gone already.
+      await page.clickLabel('Read only').catch(() => {});
+      await sleep(800);
+    },
+    check: 'After Read only on Gmail: the Gmail row is gone (the Mac answered with the narrowed view); everything else as before',
+  },
+  {
+    name: 'on-its-own-team',
+    route: '/on-its-own',
+    ready: 'What your agents do on their own',
+    pages: 2,
+    check:
+      'The team: Bold in a quiet box with its line and the always-asks line; RULES FOR EVERY AGENT (Run ls, Remove); AGENTS, one row each with its level and how much stands beyond it, each opening its own list',
+  },
+  {
+    name: 'agent-sheet-on-its-own-row',
+    route: '/agent/fin',
+    ready: 'Finance',
+    check: 'Finance’s sheet: “What it does on its own” with a shield, among Instructions, Memory and Files',
+  },
+  {
     name: 'settings-apps',
     route: '/settings',
     ready: 'Settings',

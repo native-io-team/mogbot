@@ -139,6 +139,55 @@ const planChat = (status: 'pending' | 'allowed') => (args: Record<string, unknow
 
 export const agentsPolicyScenarios: Scenario[] = [
   {
+    id: 'agents-on-its-own',
+    title: 'Agents — “What can Lead Gen do on its own?”',
+    looksRightWhen:
+      'A dialog titled “What can Lead Gen do on its own?”: a quiet box “Bold · the team’s level” with Bold’s line; “Always asks” with the money, passwords and deleting line; then “Without asking, beyond its level” in sections — Rules (Run npm test; a rule from what you said with the quote; a rule for every agent), Plans you OK’d (two steps, one done, “… · 42 min left”), Apps (Gmail with Remove and Read only; Linear needing sign-in), Browser (Turn off), Team and accounts (Spends only your Work account, no button). Every button is a quiet text button, never the accent. A muted foot line: taking away applies at once; giving more is a card.',
+    openSelector: AGENTS_TAB,
+    requires: '[data-testid="on-its-own"] .on-its-own__item',
+    clipSelector: '.on-its-own-modal',
+    steps: [
+      { click: '[data-agent-id="leadgen"]' },
+      { click: '.agent-chat__menu [aria-label^="Actions for"]' },
+      { click: '[role="menuitem"]', text: 'What it does on its own' },
+    ],
+    commands: {
+      agents_overview: overview(TEAM),
+      agents_messages: messagesFor,
+    },
+  },
+  {
+    id: 'agents-on-its-own-bare',
+    title: 'Agents — an agent with nothing beyond its level',
+    looksRightWhen:
+      'The same dialog for Acme Site: its level and line, Always asks, then the muted “Nothing beyond its level…” line and only “Team and accounts” with the accounts it spends. No buttons.',
+    openSelector: AGENTS_TAB,
+    requires: '.on-its-own__none',
+    clipSelector: '.on-its-own-modal',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-chat__menu [aria-label^="Actions for"]' },
+      { click: '[role="menuitem"]', text: 'What it does on its own' },
+    ],
+    commands: {
+      agents_overview: overview(TEAM),
+      agents_messages: messagesFor,
+    },
+  },
+  {
+    id: 'settings-agents-on-its-own',
+    title: 'Settings — What your agents do on their own',
+    looksRightWhen:
+      'Under its heading: the team’s level (Bold) in a quiet box with its line and the always-asks line; “Rules for every agent” with one LinkedIn rule and Remove; then one row per agent with its level and how much stands beyond it. The Chief’s row is open: Unleashed · its own level, an admin line with Turn off, Slack replies with Ask first.',
+    command: 'agents.onItsOwnTeam',
+    requires: '.on-its-own__agent-body [data-testid="on-its-own"] .on-its-own__item',
+    clipSelector: 'section[aria-labelledby="agents-settings-on-its-own"]',
+    afterCommand: [{ click: '.on-its-own__agent-head', text: 'Chief of Staff' }],
+    commands: {
+      agents_overview: { ...overview(TEAM), engines: ENGINES, defaults: DEFAULTS },
+    },
+  },
+  {
     id: 'agents-level-picker',
     title: 'Agents — one agent’s own level, in Edit agent',
     looksRightWhen:

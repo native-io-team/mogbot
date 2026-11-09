@@ -576,6 +576,7 @@ pub struct Stub {
     pub typed: Mutex<Vec<(String, String)>>,
     /// Permission rules revoked, by id.
     pub revoked: Mutex<Vec<String>>,
+    pub narrowed: Mutex<Vec<Value>>,
     /// Login card calls, as "start <request> <option>", "cancel <request>"…
     pub logins: Mutex<Vec<String>>,
     /// "keep <copy>" / "discard <copy>", in order.
@@ -618,6 +619,7 @@ impl Stub {
             fresh: Mutex::new(Vec::new()),
             typed: Mutex::new(Vec::new()),
             revoked: Mutex::new(Vec::new()),
+            narrowed: Mutex::new(Vec::new()),
             logins: Mutex::new(Vec::new()),
             copies: Mutex::new(Vec::new()),
             secrets_saved: AtomicUsize::new(0),
@@ -1541,6 +1543,23 @@ impl Backend for Stub {
         Ok(policy_fixture())
     }
 
+    async fn on_its_own(&self, _agent_id: &str) -> Result<Value, CommandError> {
+        Ok(on_its_own_fixture())
+    }
+
+    async fn on_its_own_team(&self) -> Result<Value, CommandError> {
+        Ok(on_its_own_team_fixture())
+    }
+
+    async fn on_its_own_narrow(
+        &self,
+        _agent_id: &str,
+        narrow: Value,
+    ) -> Result<Value, CommandError> {
+        self.narrowed.lock().unwrap().push(narrow);
+        Ok(on_its_own_fixture())
+    }
+
     async fn logins_team(&self, _since: Option<i64>) -> Result<Value, CommandError> {
         Ok(team_fixture())
     }
@@ -2283,6 +2302,93 @@ pub fn apps_fixture() -> Value {
 
 /// "What it can do", as `agents_policy` serializes it: an agent with its own
 /// browser setting and rule on a Balanced team. Built from the real types.
+/// "What it does on its own" with every kind of item and every narrow.
+pub fn on_its_own_fixture() -> Value {
+    use crate::agents::connections::Access;
+    use crate::agents::independence::Level;
+    use crate::agents::on_its_own::{build, AppFact, BrowserFact, Facts, SlackFact};
+    use crate::agents::permissions::{Rule, RuleKind, Scope};
+    let rule = |id: &str, value: &str, said: Option<&str>| Rule {
+        id: id.into(),
+        scope: Scope {
+            kind: RuleKind::CommandPrefix,
+            value: value.into(),
+            label: value.into(),
+            said: said.map(Into::into),
+        },
+        created_at: 1_762_200_000_000,
+        extra: Default::default(),
+    };
+    let mut agent: crate::agents::store::Agent = serde_json::from_value(json!({
+        "id": AGENT, "name": "Finance", "shape": 0, "color": "red", "createdAt": 0
+    }))
+    .unwrap();
+    agent.permissions = vec![
+        rule("r1", "npm test", None),
+        rule("r2", "pnpm build", Some("you can always build")),
+    ];
+    let v = build(&Facts {
+        agent,
+        level: Level::FullSend,
+        own_level: true,
+        exact_text: true,
+        team_rules: vec![rule("t1", "ls", Some("all of you can"))],
+        plans: vec![crate::agents::plan_grant::Held {
+            id: "g1".into(),
+            actions: vec![("Push fix/copy".into(), false)],
+            holders: vec![AGENT.into()],
+            expires_at: 1_762_203_600_000,
+        }],
+        names: Vec::new(),
+        apps: vec![AppFact {
+            connection_id: "c1".into(),
+            title: "Gmail".into(),
+            account: "work@acme.com".into(),
+            access: Access::Full,
+            needs_sign_in: false,
+        }],
+        browser: BrowserFact {
+            claude_in_chrome: true,
+            your_chrome: false,
+            agents_browser: true,
+        },
+        admin: true,
+        pinned_account: Some("Work".into()),
+        slack: Some(SlackFact { by_itself: true }),
+    });
+    serde_json::to_value(v).unwrap()
+}
+
+/// The team's "What agents do on their own".
+pub fn on_its_own_team_fixture() -> Value {
+    use crate::agents::independence::Level;
+    use crate::agents::on_its_own::{TeamOnItsOwn, TeamRow, ALWAYS_ASKS};
+    let one = on_its_own_fixture();
+    let team_rules = one["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|i| i["kind"] == "team_rule")
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut v = serde_json::to_value(TeamOnItsOwn {
+        level: Level::GoHard,
+        level_line: crate::agents::on_its_own::level_line(Level::GoHard).into(),
+        always_asks: vec![ALWAYS_ASKS.into()],
+        team_rules: Vec::new(),
+        agents: vec![TeamRow {
+            agent_id: AGENT.into(),
+            name: "Finance".into(),
+            level: Level::FullSend,
+            own_level: true,
+            standing: 7,
+        }],
+    })
+    .unwrap();
+    v["teamRules"] = Value::Array(team_rules);
+    v
+}
+
 pub fn policy_fixture() -> Value {
     use crate::agents::policy::{self, Overrides, Preset, Saved};
     let mut agent: crate::agents::store::Agent = serde_json::from_value(json!({

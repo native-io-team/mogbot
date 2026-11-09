@@ -1841,6 +1841,45 @@ phone, is `agents_revoke_permission` (`agents.revokePermission`), which also
 takes team rules back and re-emits the line as "Undone". Team rules show only
 on their line: there is no settings list for them yet.
 
+## What it does on its own (`src-tauri/src/agents/on_its_own.rs`)
+
+"What can this agent do without asking me?", answered in one calm view from
+the app's own stores, never inferred (the gap: Grok Bot's plain-language
+"Allow automatically" list; ours was spread over the slider, Permissions,
+chat lines, in-memory plan grants and What it can reach). `view` reads, for
+one agent: its level (its own or the team's) and the slider's line for it
+(a test holds the words equal to `independence.ts`); what always asks (the
+floor line, plus the exact-text switch when on); and every standing item in
+plain words: Always allow rules chosen on a card, rules remembered from chat
+(its own and the team's, with the quote), live plan grants with their end
+(`plan_grant::held_by`, so grants now carry an id), app connections with
+read / read-and-asks, its browsers (Claude in Chrome, Your Chrome, the
+agents' own), admin powers, the accounts its turns spend (shown, never
+changed here: unpinning would widen it) and Slack (replies by itself only
+at Unleashed with exact text off; else every reply is a card).
+
+**Narrowing only.** Each item carries the narrows offered for it (`Narrow`:
+forget a rule, end a plan for everyone holding it, remove an app or drop it
+to read only, browser off, admin off, exact text on for Slack's "Ask first").
+`narrow` applies one only when the agent's current view offers it, so a
+stale or forged request (another agent's rule, a "give") is refused and
+nothing here can widen; giving stays on cards and in Settings. Applied at
+once, with a line in the agent's chat ("Taken back: Run npm test. It asks
+again."); a team rule is taken back through the Chief.
+
+**Where.** The agent's … and right-click menus ("What it does on its own…"),
+⌘K "What can <agent> do on its own?" per agent and "What your agents do on
+their own…", Settings → Agents (the team's level, rules every agent shares,
+each agent opening in place), the phone's agent sheet and Settings
+(`agents.onItsOwn`, `agents.onItsOwnTeam`, `agents.onItsOwnNarrow`, the last
+audited, unknown narrow shapes refused at the router). Agents read the same
+source with `what_it_does_on_its_own` (itself always; a teammate or the
+team for the Chief and admins). Words: item text from Rust, headings and
+buttons in the protocol's `onItsOwn.ts`.
+
+**Not verified.** No live engine turn has called the tool; the browser line
+reads the switches, not whether Chrome is connected right now.
+
 ## Admins (`src-tauri/src/agents/admin.rs`)
 
 "All of the agents are begging me for something, I open them and I don't even

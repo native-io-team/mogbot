@@ -39,6 +39,9 @@ pub const METHODS: &[&str] = &[
     "agents.loginSaveKey",
     "agents.reach",
     "agents.policy",
+    "agents.onItsOwn",
+    "agents.onItsOwnTeam",
+    "agents.onItsOwnNarrow",
     "agents.loginsTeam",
     "agents.loginsConnect",
     "agents.loginDismiss",
@@ -133,6 +136,8 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.memory",
     "agents.reach",
     "agents.policy",
+    "agents.onItsOwn",
+    "agents.onItsOwnTeam",
     "agents.loginsTeam",
     "agents.apps",
     "agents.usage",
@@ -701,6 +706,13 @@ pub trait Backend: Send + Sync + 'static {
     async fn reach(&self, agent_id: &str) -> Result<Value, CommandError>;
     /// `agents_policy`: "What it can do". Read-only on the phone; changed in chat.
     async fn policy(&self, agent_id: &str) -> Result<Value, CommandError>;
+    /// `agents_on_its_own`: what it may do without asking, in plain words.
+    async fn on_its_own(&self, agent_id: &str) -> Result<Value, CommandError>;
+    /// `agents_on_its_own_team`: the same for the team.
+    async fn on_its_own_team(&self) -> Result<Value, CommandError>;
+    /// `agents_on_its_own_narrow`: take one thing away (never gives).
+    async fn on_its_own_narrow(&self, agent_id: &str, narrow: Value)
+        -> Result<Value, CommandError>;
     /// `agents_logins_team`: "What your team needs", one row per service.
     async fn logins_team(&self, since: Option<i64>) -> Result<Value, CommandError>;
     /// `agents_logins_connect`: one row's way in, for every agent on it but `skip`.
@@ -956,6 +968,13 @@ struct SetPushParams {
 #[serde(rename_all = "camelCase")]
 struct AgentParam {
     agent_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct NarrowParams {
+    agent_id: String,
+    narrow: Value,
 }
 
 #[derive(Deserialize, Default)]
@@ -1579,6 +1598,15 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
         },
         "agents.fetchPath" => preview(field("path")),
         "agents.revokePermission" => format!("revoke {} {}", field("ruleId"), field("agentId")),
+        "agents.onItsOwnNarrow" => format!(
+            "take back {} {}",
+            params
+                .get("narrow")
+                .and_then(|n| n.get("kind"))
+                .and_then(Value::as_str)
+                .unwrap_or("?"),
+            field("agentId")
+        ),
         "agents.teamSetup.step" => format!("setup: {} {}", field("step"), field("state")),
         "agents.teamSetup.later" => format!("setup: {} {}", field("action"), field("key")),
         "agents.teamSetup.check" => "setup: check what the team can reach".into(),
@@ -2366,6 +2394,18 @@ async fn run(
         "agents.policy" => {
             let p: AgentParam = parse(params)?;
             Ok(b.policy(&p.agent_id).await?)
+        }
+        "agents.onItsOwn" => {
+            let p: AgentParam = parse(params)?;
+            Ok(b.on_its_own(&p.agent_id).await?)
+        }
+        "agents.onItsOwnTeam" => Ok(b.on_its_own_team().await?),
+        "agents.onItsOwnNarrow" => {
+            let p: NarrowParams = parse(params)?;
+            // Only the shapes the Mac knows: anything else (a "give") is refused here.
+            serde_json::from_value::<crate::agents::on_its_own::Narrow>(p.narrow.clone())
+                .map_err(|_| bad_params("That isn't something that can be taken away."))?;
+            Ok(b.on_its_own_narrow(&p.agent_id, p.narrow).await?)
         }
         "agents.loginsTeam" => {
             let p: TeamParams = parse(params)?;
@@ -4060,6 +4100,53 @@ mod tests {
         let audit = stub.audited();
         assert_eq!(audit.len(), 1);
         assert_eq!(audit[0].1, "agents.revokePermission");
+    }
+
+    /// "What it does on its own": reading is unaudited, taking away is
+    /// audited, and nothing but a known narrow reaches the desk.
+    #[tokio::test]
+    async fn on_its_own_reads_and_only_narrows() {
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let view = dispatch(&c, &me, "agents.onItsOwn", json!({ "agentId": AGENT }))
+            .await
+            .unwrap();
+        assert_eq!(view["level"], "full_send");
+        let team = dispatch(&c, &me, "agents.onItsOwnTeam", json!({}))
+            .await
+            .unwrap();
+        assert_eq!(team["agents"][0]["agentId"], AGENT);
+        for give in [
+            json!({ "kind": "browser_on" }),
+            json!({ "kind": "admin_on" }),
+            json!({ "kind": "level", "level": "full_send" }),
+            json!("browser"),
+        ] {
+            assert!(dispatch(
+                &c,
+                &me,
+                "agents.onItsOwnNarrow",
+                json!({ "agentId": AGENT, "narrow": give }),
+            )
+            .await
+            .is_err());
+        }
+        assert!(stub.narrowed.lock().unwrap().is_empty());
+        dispatch(
+            &c,
+            &me,
+            "agents.onItsOwnNarrow",
+            json!({ "agentId": AGENT, "narrow": { "kind": "rule", "ruleId": "r1" } }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(stub.narrowed.lock().unwrap().len(), 1);
+        // Reads aren't audited; each attempt to take away is, refused or not.
+        let audit = stub.audited();
+        assert_eq!(audit.len(), 5);
+        assert!(audit.iter().all(|a| a.1 == "agents.onItsOwnNarrow"));
+        assert!(audit[4].2.starts_with("take back rule"), "{:?}", audit[4]);
     }
 
     #[tokio::test]

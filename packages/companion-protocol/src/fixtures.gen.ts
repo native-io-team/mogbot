@@ -2775,6 +2775,272 @@ export const agentsPolicy = {
   ],
   "sameAsTeam": false
 } satisfies Result<'agents.policy'>;
+export const agentsOnItsOwn = {
+  "agentId": "a1",
+  "agentName": "Finance",
+  "alwaysAsks": [
+    "Always asks before spending money, using your passwords, or deleting for good.",
+    "Anything it sends under your name waits for you to OK the exact words."
+  ],
+  "items": [
+    {
+      "detail": "Always allowed on a card",
+      "key": "rule:r1",
+      "kind": "rule",
+      "narrow": [
+        {
+          "kind": "rule",
+          "ruleId": "r1"
+        }
+      ],
+      "text": "Run npm test"
+    },
+    {
+      "detail": "From what you said: “you can always build”",
+      "key": "rule:r2",
+      "kind": "said",
+      "narrow": [
+        {
+          "kind": "rule",
+          "ruleId": "r2"
+        }
+      ],
+      "text": "Run pnpm build"
+    },
+    {
+      "detail": "Every agent · from what you said: “all of you can”",
+      "key": "rule:t1",
+      "kind": "team_rule",
+      "narrow": [
+        {
+          "kind": "rule",
+          "ruleId": "t1"
+        }
+      ],
+      "text": "Run ls"
+    },
+    {
+      "detail": "A plan you said yes to",
+      "endsAt": 1762203600000,
+      "key": "plan:g1",
+      "kind": "plan",
+      "narrow": [
+        {
+          "grantId": "g1",
+          "kind": "plan"
+        }
+      ],
+      "text": "Push fix/copy"
+    },
+    {
+      "detail": "Reads without asking; sending or changing asks you each time",
+      "key": "app:c1",
+      "kind": "app",
+      "narrow": [
+        {
+          "connectionId": "c1",
+          "kind": "app"
+        },
+        {
+          "connectionId": "c1",
+          "kind": "app_read_only"
+        }
+      ],
+      "text": "Uses Gmail (work@acme.com)"
+    },
+    {
+      "detail": "Through Claude in Chrome · what it does on a page follows its level; never for text from outside",
+      "key": "browser",
+      "kind": "browser",
+      "narrow": [
+        {
+          "kind": "browser"
+        }
+      ],
+      "text": "Opens pages in your Chrome, where you’re signed in, and in the agents’ own browser"
+    },
+    {
+      "detail": "Never spending, sending, publishing, pushing or keys: those come to you",
+      "key": "admin",
+      "kind": "admin",
+      "narrow": [
+        {
+          "kind": "admin"
+        }
+      ],
+      "text": "Manages the team: answers other agents’ local requests, pauses them, changes their routines"
+    },
+    {
+      "detail": "Only to what you asked there yourself, in a turn that read nothing from outside",
+      "key": "slack",
+      "kind": "slack",
+      "narrow": [
+        {
+          "kind": "exact_text"
+        }
+      ],
+      "text": "Replies in Slack by itself, under your name"
+    },
+    {
+      "detail": "Waits when it runs out; change it in Edit agent",
+      "key": "account",
+      "kind": "account",
+      "narrow": [],
+      "text": "Spends only your Work account (Claude Code)"
+    }
+  ],
+  "level": "full_send",
+  "levelLine": "Sends, posts and pushes too; only stops for money, logins, deleting for good or going live.",
+  "ownLevel": true
+} satisfies Result<'agents.onItsOwn'>;
+export const agentsOnItsOwnTeam = {
+  "agents": [
+    {
+      "agentId": "a1",
+      "level": "full_send",
+      "name": "Finance",
+      "ownLevel": true,
+      "standing": 7
+    }
+  ],
+  "alwaysAsks": [
+    "Always asks before spending money, using your passwords, or deleting for good."
+  ],
+  "level": "go_hard",
+  "levelLine": "Does local work on this Mac; asks before anything leaves it.",
+  "teamRules": [
+    {
+      "detail": "Every agent · from what you said: “all of you can”",
+      "key": "rule:t1",
+      "kind": "team_rule",
+      "narrow": [
+        {
+          "kind": "rule",
+          "ruleId": "t1"
+        }
+      ],
+      "text": "Run ls"
+    }
+  ]
+} satisfies Result<'agents.onItsOwnTeam'>;
+export const agentsOnItsOwnNarrow = {
+  "agentId": "a1",
+  "agentName": "Finance",
+  "alwaysAsks": [
+    "Always asks before spending money, using your passwords, or deleting for good.",
+    "Anything it sends under your name waits for you to OK the exact words."
+  ],
+  "items": [
+    {
+      "detail": "Always allowed on a card",
+      "key": "rule:r1",
+      "kind": "rule",
+      "narrow": [
+        {
+          "kind": "rule",
+          "ruleId": "r1"
+        }
+      ],
+      "text": "Run npm test"
+    },
+    {
+      "detail": "From what you said: “you can always build”",
+      "key": "rule:r2",
+      "kind": "said",
+      "narrow": [
+        {
+          "kind": "rule",
+          "ruleId": "r2"
+        }
+      ],
+      "text": "Run pnpm build"
+    },
+    {
+      "detail": "Every agent · from what you said: “all of you can”",
+      "key": "rule:t1",
+      "kind": "team_rule",
+      "narrow": [
+        {
+          "kind": "rule",
+          "ruleId": "t1"
+        }
+      ],
+      "text": "Run ls"
+    },
+    {
+      "detail": "A plan you said yes to",
+      "endsAt": 1762203600000,
+      "key": "plan:g1",
+      "kind": "plan",
+      "narrow": [
+        {
+          "grantId": "g1",
+          "kind": "plan"
+        }
+      ],
+      "text": "Push fix/copy"
+    },
+    {
+      "detail": "Reads without asking; sending or changing asks you each time",
+      "key": "app:c1",
+      "kind": "app",
+      "narrow": [
+        {
+          "connectionId": "c1",
+          "kind": "app"
+        },
+        {
+          "connectionId": "c1",
+          "kind": "app_read_only"
+        }
+      ],
+      "text": "Uses Gmail (work@acme.com)"
+    },
+    {
+      "detail": "Through Claude in Chrome · what it does on a page follows its level; never for text from outside",
+      "key": "browser",
+      "kind": "browser",
+      "narrow": [
+        {
+          "kind": "browser"
+        }
+      ],
+      "text": "Opens pages in your Chrome, where you’re signed in, and in the agents’ own browser"
+    },
+    {
+      "detail": "Never spending, sending, publishing, pushing or keys: those come to you",
+      "key": "admin",
+      "kind": "admin",
+      "narrow": [
+        {
+          "kind": "admin"
+        }
+      ],
+      "text": "Manages the team: answers other agents’ local requests, pauses them, changes their routines"
+    },
+    {
+      "detail": "Only to what you asked there yourself, in a turn that read nothing from outside",
+      "key": "slack",
+      "kind": "slack",
+      "narrow": [
+        {
+          "kind": "exact_text"
+        }
+      ],
+      "text": "Replies in Slack by itself, under your name"
+    },
+    {
+      "detail": "Waits when it runs out; change it in Edit agent",
+      "key": "account",
+      "kind": "account",
+      "narrow": [],
+      "text": "Spends only your Work account (Claude Code)"
+    }
+  ],
+  "level": "full_send",
+  "levelLine": "Sends, posts and pushes too; only stops for money, logins, deleting for good or going live.",
+  "ownLevel": true
+} satisfies Result<'agents.onItsOwnNarrow'>;
 export const agentsLoginsTeam = {
   "done": 1,
   "needs": [
@@ -3995,6 +4261,9 @@ export const frames = [
       "agents.loginSaveKey",
       "agents.reach",
       "agents.policy",
+      "agents.onItsOwn",
+      "agents.onItsOwnTeam",
+      "agents.onItsOwnNarrow",
       "agents.loginsTeam",
       "agents.loginsConnect",
       "agents.loginDismiss",

@@ -1369,6 +1369,56 @@ pub async fn agents_reach_remove(
     Ok(reach)
 }
 
+/* ----------------------------------------------- what it does on its own */
+
+/// "What can this agent do without asking me?" (`agents/on_its_own.rs`).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_on_its_own(
+    agent_id: String,
+) -> Result<agents::on_its_own::OnItsOwn, CommandError> {
+    blocking(move || Ok(agents::on_its_own::view(&store::get(&agent_id)?))).await
+}
+
+/// The same for the whole team: its level, the rules every agent shares,
+/// and each agent in a line.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_on_its_own_team() -> Result<agents::on_its_own::TeamOnItsOwn, CommandError> {
+    blocking(agents::on_its_own::team_view).await
+}
+
+/// Take one thing away, in one tap: only what the view offers, so nothing
+/// here widens. Applied at once, with a line in the agent's chat.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_on_its_own_narrow(
+    app: AppHandle,
+    agent_id: String,
+    narrow: agents::on_its_own::Narrow,
+) -> Result<agents::on_its_own::OnItsOwn, CommandError> {
+    let id = agent_id.clone();
+    let (line, rule) = blocking(move || {
+        let line = agents::on_its_own::narrow(&id, &narrow)?;
+        let rule = match narrow {
+            agents::on_its_own::Narrow::Rule { rule_id } => Some(rule_id),
+            _ => None,
+        };
+        Ok((line, rule))
+    })
+    .await?;
+    // A remembered rule's chat line says "Undone" wherever it's shown.
+    if let Some(rule_id) = rule {
+        let _ = agents::remember::forget_and_show(&app, &agent_id, &rule_id);
+    }
+    let _ = runner::record_own(
+        &app,
+        runner::new_message(&agent_id, store::MessageKind::Note, line),
+    );
+    emit_registry(&app);
+    blocking(move || Ok(agents::on_its_own::view(&store::get(&agent_id)?))).await
+}
+
 /* --------------------------------------------------------- what it can do */
 
 /// "What it can do": one agent's settings in plain words (`agents/policy.rs`).

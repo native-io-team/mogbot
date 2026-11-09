@@ -724,6 +724,24 @@ impl Backend for DesktopBackend {
         json(cmd::agents_policy(agent_id.to_string()).await?)
     }
 
+    async fn on_its_own(&self, agent_id: &str) -> Result<Value, CommandError> {
+        json(cmd::agents_on_its_own(agent_id.to_string()).await?)
+    }
+
+    async fn on_its_own_team(&self) -> Result<Value, CommandError> {
+        json(cmd::agents_on_its_own_team().await?)
+    }
+
+    async fn on_its_own_narrow(
+        &self,
+        agent_id: &str,
+        narrow: Value,
+    ) -> Result<Value, CommandError> {
+        let narrow = serde_json::from_value(narrow)
+            .map_err(|_| CommandError::expected("That isn't something that can be taken away."))?;
+        json(cmd::agents_on_its_own_narrow(self.app.clone(), agent_id.to_string(), narrow).await?)
+    }
+
     async fn logins_team(&self, since: Option<i64>) -> Result<Value, CommandError> {
         json(cmd::agents_logins_team(since).await?)
     }

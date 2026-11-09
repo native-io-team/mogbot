@@ -45,6 +45,7 @@
 //! - [`connections`]: accounts connected through them, per-agent grants, what a turn gets
 //! - [`oauth`]: signing in to a remote MCP server ourselves (PKCE, loopback)
 //! - [`team_setup`]: "Setting up your team" after an import: one checklist, quiet agents, the fan-out cap
+//! - [`on_its_own`]: "What can this agent do without asking me?", from the app's own stores; narrowing only
 //! - [`team_reach`]: who on the team can reach an app, from what the app knows (`who_can_reach`)
 //! - [`follow_up`]: a reply that promised work and stopped gets run as a follow-up
 //! - [`quiet`]: the team's quiet hours: scheduled work waits, notifications are held
@@ -120,6 +121,7 @@ pub mod memory;
 pub mod narration;
 pub mod notify;
 pub mod oauth;
+pub mod on_its_own;
 pub mod other_app;
 pub mod outward;
 pub mod paste;

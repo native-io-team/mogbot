@@ -650,6 +650,25 @@ async fn generate() -> String {
         call("agents.policy", json!({ "agentId": AGENT })).await,
     );
     out += &entry(
+        "agentsOnItsOwn",
+        "Result<'agents.onItsOwn'>",
+        call("agents.onItsOwn", json!({ "agentId": AGENT })).await,
+    );
+    out += &entry(
+        "agentsOnItsOwnTeam",
+        "Result<'agents.onItsOwnTeam'>",
+        call("agents.onItsOwnTeam", json!({})).await,
+    );
+    out += &entry(
+        "agentsOnItsOwnNarrow",
+        "Result<'agents.onItsOwnNarrow'>",
+        call(
+            "agents.onItsOwnNarrow",
+            json!({ "agentId": AGENT, "narrow": { "kind": "app_read_only", "connectionId": "c1" } }),
+        )
+        .await,
+    );
+    out += &entry(
         "agentsLoginsTeam",
         "Result<'agents.loginsTeam'>",
         call(

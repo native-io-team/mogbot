@@ -23,6 +23,7 @@ export * from './usageSheet';
 export * from './independence';
 export * from './links';
 export * from './policy';
+export * from './onItsOwn';
 export * from './work';
 export * from './secretName';
 export * from './loginNames';

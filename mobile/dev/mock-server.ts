@@ -26,6 +26,8 @@ import {
   type AgentMessage,
   type AgentSecret,
   type AgentReach,
+  type OnItsOwn,
+  type OnItsOwnTeam,
   type LoginOption,
   type LoginRequest,
   type TeamCard,
@@ -1885,7 +1887,22 @@ export function createMockServer(opts: MockOptions = {}) {
   }
 
   /** What an agent can reach: its connected login cards, its browser, its secrets. */
-  function reachOf(agentId: string): AgentReach {
+  /** What the phone took away, per agent (`TEAM_KEY`: the team's rules). */
+const TEAM_KEY = 'team';
+const onItsOwnTaken = new Map<string, string[]>();
+const takenFrom = (id: string) => onItsOwnTaken.get(id) ?? [];
+function onItsOwnOf(id: string, name?: string): OnItsOwn {
+  const view: OnItsOwn = structuredClone(real.agentsOnItsOwn);
+  view.agentId = id;
+  view.agentName = name ?? view.agentName;
+  view.items = view.items
+    .filter((i) => !takenFrom(id).includes(i.key) && !takenFrom(TEAM_KEY).includes(i.key))
+    // The fixture's plan ended long ago: a live one has most of its hour left.
+    .map((i) => (i.endsAt ? { ...i, endsAt: Date.now() + 42 * 60_000 } : i));
+  return view;
+}
+
+function reachOf(agentId: string): AgentReach {
     const a = agent(agentId);
     const answered = (messages.get(agentId) ?? []).filter(
       (m) => m.approval?.login && m.approval.status === 'allowed'
@@ -2737,6 +2754,35 @@ export function createMockServer(opts: MockOptions = {}) {
       return null;
     },
     'agents.policy': (p) => ({ ...structuredClone(real.agentsPolicy), agentId: String(p.agentId) }),
+    // "What can it do on its own?": the Mac's real view, narrowed as the phone takes things away.
+    'agents.onItsOwn': (p) => onItsOwnOf(String(p.agentId), agent(String(p.agentId))?.name),
+    'agents.onItsOwnTeam': () => {
+      const team: OnItsOwnTeam = structuredClone(real.agentsOnItsOwnTeam);
+      team.agents = overview().agents.map((a) => ({
+        agentId: a.id,
+        name: a.name,
+        level: a.independence ?? team.level,
+        ownLevel: !!a.independence,
+        standing: onItsOwnOf(a.id, a.name).items.filter(
+          (i) => i.kind !== 'account' && i.kind !== 'team_rule'
+        ).length,
+      }));
+      team.teamRules = team.teamRules.filter((i) => !takenFrom(TEAM_KEY).includes(i.key));
+      return team;
+    },
+    'agents.onItsOwnNarrow': (p) => {
+      const id = String(p.agentId);
+      const narrow = JSON.stringify(p.narrow);
+      const item = onItsOwnOf(id, agent(id)?.name).items.find((i) =>
+        i.narrow.some((n) => JSON.stringify(n) === narrow)
+      );
+      if (!item) {
+        return fail({ type: 'Other', message: 'That’s already gone, or it isn’t this agent’s.' });
+      }
+      const whose = item.kind === 'team_rule' ? TEAM_KEY : id;
+      onItsOwnTaken.set(whose, [...takenFrom(whose), item.key]);
+      return onItsOwnOf(id, agent(id)?.name);
+    },
     'agents.loginsTeam': (p) => teamLogins(typeof p.since === 'number' ? p.since : undefined),
     'agents.loginsConnect': (p) => {
       const need = teamLogins().needs.find((n) => n.key === p.key);

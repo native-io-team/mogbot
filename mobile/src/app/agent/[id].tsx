@@ -209,6 +209,15 @@ function AgentSheet() {
               onPress={() => router.push({ pathname: '/memory', params: { id } })}
             />
           )}
+          {canCall('agents.onItsOwn', welcome) && (
+            <Row
+              label="What it does on its own"
+              leading={
+                <Icon name="checkmark.shield" size={iconSize.body} color={colors.textSecondary} />
+              }
+              onPress={() => router.push({ pathname: '/on-its-own', params: { id } })}
+            />
+          )}
           {canCall('agents.files', welcome) && (
             <Row
               label="Files"

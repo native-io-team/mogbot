@@ -15,6 +15,7 @@ import { remoteBrief, remoteStatus } from './remote';
 import { phoneStatus } from './phone';
 import type { CommandMap } from '../types';
 import { BALANCED_TEAM, BALANCED_VIEW } from '../fixtures/policy';
+import { onItsOwnFor, TEAM_ON_ITS_OWN } from '../fixtures/onItsOwn';
 
 export const HARNESS_ROOT = '/Users/harness/ShipStudio';
 
@@ -263,6 +264,18 @@ export const baseCommands: CommandMap = {
   }),
   agents_policy_team: BALANCED_TEAM,
   agents_policy_set: null,
+  // "What can it do on its own?" (`agents/on_its_own.rs`). Narrowing answers
+  // the same view without the item it took away.
+  agents_on_its_own: onItsOwnFor,
+  agents_on_its_own_team: TEAM_ON_ITS_OWN,
+  agents_on_its_own_narrow: (args: Record<string, unknown>) => {
+    const view = onItsOwnFor(args);
+    const taken = JSON.stringify(args.narrow);
+    return {
+      ...view,
+      items: view.items.filter((i) => !i.narrow.some((n) => JSON.stringify(n) === taken)),
+    };
+  },
   agents_usage: {
     week: {
       turns: 0,

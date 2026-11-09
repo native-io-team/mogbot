@@ -33,6 +33,8 @@ import { AgentProjectsProvider } from './AgentProject';
 import { TakeoverProvider, useTakeover } from './AgentTakeover';
 import { ImportAgentsModal, type ImportPath } from './ImportAgentsModal';
 import { AgentAppsModal } from './AgentAppsModal';
+import { AgentOnItsOwnModal } from './AgentOnItsOwn';
+import { onItsOwnTitle } from '../../lib/agentOnItsOwn';
 import { ChiefIdeasModal } from './ChiefIdeasModal';
 import { TeamLoginsModal } from './TeamLogins';
 import { BrowserSetupModal } from './TeamSetupReach';
@@ -92,6 +94,7 @@ import {
   FolderIcon,
   PinIcon,
   ResetIcon,
+  ShieldCheckIcon,
   TrashIcon,
   TerminalIcon,
 } from '@/components/icons';
@@ -191,6 +194,8 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
   const [appsOpen, setAppsOpen] = useState(false);
   /** The agent the apps dialog was opened for: the one ticked to start with. */
   const [appsFor, setAppsFor] = useState<string | null>(null);
+  /** "What can it do on its own?" is open for this agent. */
+  const [onItsOwnFor, setOnItsOwnFor] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Agent | null>(null);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [showHidden, setShowHidden] = useState(false);
@@ -519,6 +524,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
       onStartFresh: setFreshening,
       onTakeOver: takeover?.takeOver,
       onHandBack: takeover?.handBack,
+      onOnItsOwn: (a: Agent) => setOnItsOwnFor(a.id),
     }),
     [run, takeover]
   );
@@ -705,6 +711,26 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
               : []),
           ]
         : []),
+      // "What can <agent> do on its own?" for every agent, by name.
+      ...agents
+        .filter((a) => !a.hidden || a.id === selected?.id)
+        .map((a) => ({
+          id: `agents.onItsOwn.${a.id}`,
+          title: onItsOwnTitle(a.name),
+          icon: <ShieldCheckIcon size={14} />,
+          category: 'action' as const,
+          keywords: [
+            'agents',
+            'without asking',
+            'permissions',
+            'always allow',
+            'rules',
+            'allowed',
+            'independence',
+            'access',
+          ],
+          run: () => setOnItsOwnFor(a.id),
+        })),
       ...(selected && canStartFresh(selected) && selected.status.state === 'idle'
         ? [
             {
@@ -1043,6 +1069,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
           openAgent(id);
         }}
       />
+      <AgentOnItsOwnModal agentId={onItsOwnFor} onClose={() => setOnItsOwnFor(null)} />
       <AgentAppsModal
         isOpen={appsOpen}
         onClose={() => setAppsOpen(false)}

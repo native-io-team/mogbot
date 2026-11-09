@@ -156,6 +156,8 @@ struct Slot {
 
 #[derive(Debug, Clone)]
 struct Grant {
+    /// So the user can take one back ("What it does on its own").
+    id: String,
     holders: Vec<String>,
     slots: Vec<Slot>,
     /// Calls already made under it: the same call again (a retry) is covered.
@@ -175,6 +177,7 @@ pub fn grant(agent_id: &str, plan: &Plan, now: i64) {
     with_grants(|g| {
         g.retain(|x| x.expires_at > now);
         g.push(Grant {
+            id: store::new_id(),
             holders: vec![agent_id.to_string()],
             slots: plan
                 .actions
@@ -210,6 +213,51 @@ pub fn holds(agent_id: &str, now: i64) -> bool {
     with_grants(|g| {
         g.iter()
             .any(|x| x.expires_at > now && x.holders.iter().any(|h| h == agent_id))
+    })
+}
+
+/// One live plan grant, as "What it does on its own" shows it.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Held {
+    pub id: String,
+    /// Each listed action's summary, and whether it was done already (a
+    /// retry of a done action is still covered).
+    pub actions: Vec<(String, bool)>,
+    /// Every agent holding it, the one the user allowed it for first.
+    pub holders: Vec<String>,
+    pub expires_at: i64,
+}
+
+/// The live plans `agent_id` holds, soonest to end first.
+pub fn held_by(agent_id: &str, now: i64) -> Vec<Held> {
+    with_grants(|g| {
+        let mut out: Vec<Held> = g
+            .iter()
+            .filter(|x| x.expires_at > now && x.holders.iter().any(|h| h == agent_id))
+            .map(|x| Held {
+                id: x.id.clone(),
+                actions: x
+                    .slots
+                    .iter()
+                    .map(|s| (s.action.summary.clone(), s.used))
+                    .collect(),
+                holders: x.holders.clone(),
+                expires_at: x.expires_at,
+            })
+            .collect();
+        out.sort_by_key(|h| h.expires_at);
+        out
+    })
+}
+
+/// The user takes a plan back: it ends now for every agent holding it,
+/// since it was one yes. Whether there was one to take back.
+pub fn revoke(id: &str) -> bool {
+    with_grants(|g| {
+        let before = g.len();
+        g.retain(|x| x.id != id);
+        g.len() != before
     })
 }
 
