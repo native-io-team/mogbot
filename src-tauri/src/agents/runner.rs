@@ -428,12 +428,21 @@ pub fn answering_user(agent_id: &str) -> bool {
 /// needs: words planted in what was read, or passed on by another agent,
 /// read to the engine exactly like the user's own.
 pub fn users_own_ask(agent_id: &str) -> bool {
-    let alone = RUNTIMES
+    users_message_alone(agent_id) && !super::exposure::read_outside(agent_id)
+}
+
+/// The turn in progress answers the user's own message and nothing else in
+/// the same prompt: no other agent's request, no note from the app, no
+/// outside text. Unlike [`users_own_ask`] it ignores the conversation's
+/// exposure mark: for what is about *who asked* in this turn (Go hard's
+/// "direct", which exists for a marked conversation; the user's typed yes
+/// to a plan just listed), not about planted words in what was read.
+pub fn users_message_alone(agent_id: &str) -> bool {
+    RUNTIMES
         .lock()
         .unwrap_or_else(|e| e.into_inner())
         .get(agent_id)
-        .is_some_and(|r| r.running && r.user_asked && !r.outside && !r.noted && !r.agent_in);
-    alone && !super::exposure::read_outside(agent_id)
+        .is_some_and(|r| r.running && r.user_asked && !r.outside && !r.noted && !r.agent_in)
 }
 
 /// The Chief (or an admin) passing on the user's own request, "try again":

@@ -1065,8 +1065,15 @@ fn write_registry(registry: &Registry) -> Result<(), CommandError> {
     if let Err(e) = write_atomic(&path.with_extension("json.bak"), &json) {
         tracing::warn!("[Agents] registry backup not written: {e}");
     }
+    // What the user took away, beside each agent, for a rebuild to restore.
+    if let Some(root) = path.parent() {
+        limits::write_changed(root, &registry.agents);
+    }
     Ok(())
 }
+
+#[path = "store_limits.rs"]
+mod limits;
 
 /// The colour an agent created as the registry's `index`-th entry gets: the
 /// one it asked for if it's in the palette, otherwise the next spread colour.
@@ -3417,6 +3424,114 @@ mod tests {
                     .any(|l| l.contains("browser") && l.contains("admin")),
                 "{lines:?}"
             );
+        });
+    }
+
+    /// What the user narrowed lives only in the list; the file beside each
+    /// agent brings it back on a rebuild: apps kept from it, muted, Runs only
+    /// on one account. Taking a limit off updates the file too.
+    #[test]
+    fn a_rebuild_restores_what_the_user_narrowed() {
+        with_root(|| {
+            let _ = crate::agents::survive::take_pending();
+            let chief = create(NewAgent {
+                is_main: true,
+                ..new(crate::agents::prompts::CHIEF_NAME)
+            })
+            .unwrap();
+            let outreach = create(new("Outreach")).unwrap();
+            update(&outreach.id, |a| {
+                a.reach.blocked_apps = vec!["claude.ai Gmail".into(), "Linear".into()];
+                a.muted = true;
+                a.account = Some("work-account".into());
+            })
+            .unwrap();
+            // A limit taken off again is off in the file too.
+            update(&chief.id, |a| a.muted = true).unwrap();
+            update(&chief.id, |a| a.muted = false).unwrap();
+            let home = agent_home(&outreach.id).unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                let meta = std::fs::metadata(home.join(limits::FILE)).unwrap();
+                assert_eq!(meta.permissions().mode() & 0o777, 0o600);
+            }
+
+            let path = registry_path().unwrap();
+            std::fs::write(&path, b"{\"agents\": [").unwrap();
+            std::fs::remove_file(path.with_extension("json.bak")).unwrap();
+
+            let back = list().unwrap();
+            let o = back.iter().find(|a| a.id == outreach.id).unwrap();
+            assert_eq!(o.reach.blocked_apps, ["claude.ai Gmail", "Linear"]);
+            assert!(o.muted);
+            assert_eq!(o.account.as_deref(), Some("work-account"));
+            assert!(o.reach.browser_off);
+            let c = back.iter().find(|a| a.id == chief.id).unwrap();
+            assert!(!c.muted);
+            assert!(!crate::agents::admin::is_admin(c));
+            let _ = crate::agents::survive::take_pending();
+        });
+    }
+
+    /// A folder is anyone's to write: a file there that says "browser on",
+    /// "admin", "not muted" or no apps kept gives nothing back, and one that
+    /// isn't a limits file is ignored whole.
+    #[test]
+    fn a_limits_file_never_widens_a_rebuild() {
+        with_root(|| {
+            let _ = crate::agents::survive::take_pending();
+            let chief = create(NewAgent {
+                is_main: true,
+                ..new(crate::agents::prompts::CHIEF_NAME)
+            })
+            .unwrap();
+            let other = create(new("Finance")).unwrap();
+            let path = registry_path().unwrap();
+            std::fs::write(&path, b"{\"agents\": [").unwrap();
+            std::fs::remove_file(path.with_extension("json.bak")).unwrap();
+            let chief_home = agent_home(&chief.id).unwrap();
+            std::fs::write(
+                chief_home.join(limits::FILE),
+                br#"{"browserOff": false, "adminOff": false, "muted": false, "blockedApps": [], "admin": true}"#,
+            )
+            .unwrap();
+            let other_home = agent_home(&other.id).unwrap();
+            std::fs::write(other_home.join(limits::FILE), b"not json").unwrap();
+
+            let back = list().unwrap();
+            let c = back.iter().find(|a| a.id == chief.id).unwrap();
+            assert!(c.reach.browser_off);
+            assert!(!crate::agents::admin::is_admin(c));
+            assert!(back.iter().all(|a| !crate::agents::admin::is_admin(a)));
+            let f = back.iter().find(|a| a.id == other.id).unwrap();
+            assert!(f.reach.blocked_apps.is_empty() && !f.muted && f.reach.browser_off);
+            let _ = crate::agents::survive::take_pending();
+        });
+    }
+
+    /// A Runs on pin for another engine means nothing to the engine it was
+    /// rebuilt on; it isn't applied.
+    #[test]
+    fn a_runs_on_pin_comes_back_only_on_its_own_engine() {
+        with_root(|| {
+            let mut agent = create(new("Finance")).unwrap();
+            let other = match agent.engine {
+                crate::agents::engine::Engine::Codex => crate::agents::engine::Engine::Claude,
+                _ => crate::agents::engine::Engine::Codex,
+            };
+            let pin = |engine| limits::Limits {
+                runs_on: Some(limits::RunsOn {
+                    engine,
+                    account: "elsewhere".into(),
+                }),
+                ..Default::default()
+            };
+            limits::restore(&mut agent, &pin(other));
+            assert_eq!(agent.account, None);
+            let own = agent.engine;
+            limits::restore(&mut agent, &pin(own));
+            assert_eq!(agent.account.as_deref(), Some("elsewhere"));
         });
     }
 

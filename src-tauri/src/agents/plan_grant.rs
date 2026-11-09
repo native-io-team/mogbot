@@ -271,6 +271,15 @@ fn take_chat_yes(agent_id: &str, plan: &Plan, now: i64) -> bool {
     true
 }
 
+/// The user's yes in chat covers `plan`: the turn answers their typed
+/// message and nothing else (a "yes" batched with another agent's request
+/// or an app note may be answering either, so the card asks:
+/// `runner::users_message_alone`), and the yes answers this plan
+/// (`take_chat_yes`, which it takes).
+pub(super) fn chat_yes_covers(caller_id: &str, plan: &Plan, now: i64) -> bool {
+    runner::users_message_alone(caller_id) && take_chat_yes(caller_id, plan, now)
+}
+
 /// Whether `target` (or its last part: `shippy` of `julian/shippy`) is in
 /// the text.
 fn named_in(target: &str, text: &str) -> bool {
@@ -393,7 +402,7 @@ pub async fn call(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value
     };
     let now = store::now_ms();
     // The user's own yes in chat to the plan just listed.
-    if runner::answering_user(&caller.id) && take_chat_yes(&caller.id, &plan, now) {
+    if chat_yes_covers(&caller.id, &plan, now) {
         grant(&caller.id, &plan, now);
         let _ = runner::record_in_turn(
             app,

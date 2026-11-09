@@ -667,7 +667,14 @@ no folder changed, and the Chief's chat says how many came back and that
 engine, routines, project and logins start at defaults. Where the default is
 the wider side it doesn't: every rebuilt agent starts with its browser off and
 as no admin (the Chief included), since a folder is anyone's to write and a
-browser or admin the user took away must not come back on its own. With no folder to go
+browser or admin the user took away must not come back on its own. What the
+user narrowed that lives only in the list comes back from
+`<home>/.agent-limits.json` (0600, `store_limits.rs`), rewritten on the
+registry write that changes it: apps kept from the agent, muted, browser off,
+admin off, and a Runs on pin (only when it rebuilt on that pin's engine). The
+file can only narrow: each field restores only its narrow side, and a file that
+isn't one is ignored whole. Independence lives in the policy file and isn't
+rebuilt; routines (and their paused state) don't come back at all. With no folder to go
 on either it is an error, never an empty list that would be saved over it.
 The app's other saved files in the agents folder (wallet, Slack, connections,
 import choice, declined apps, team set-up, login waiters, browser settings…)
@@ -1505,7 +1512,8 @@ expired card lifted), no `users_words`, no typed words for
 **The rule for the owner's own requests.** The mark never raises cards for
 the owner's own direct request at Bold or Unleashed: in a turn answering
 the user's own message in this agent's chat (not a routine, a check-in, a room,
-another agent's request, outside text or a note the app queued; `runner::answering_user`), the mark
+another agent's request, outside text or a note the app queued, alone or in the
+same turn as the user's message; `runner::users_message_alone`), the mark
 narrows to what Unleashed keeps after outside content
 (`autoallow::outside_mark_asks`): **raw data leaving for another host**
 (`go_hard::moves_data_off_mac`: a `curl` body or upload, `ssh`, `scp`,
@@ -1614,7 +1622,9 @@ numbered list with Allow / Deny (desk, phone, Catch up, or a typed yes, as
 above). When the user's own typed yes had no card to answer
 (`commands::agents::send_as`), the agent's reply just before it is kept for
 15 minutes, and an `ask_plan` from the turn answering that yes is granted
-without a card if every action's target is named in that reply ("Your yes
+without a card if that turn answers the yes alone (no other agent's request or
+app note batched with it: `runner::users_message_alone`, else the card asks)
+and every action's target is named in that reply ("Your yes
 covers, for an hour: …"). Allow makes a **plan grant** (in memory; a restart
 forgets it): each action matched on its kind (push, pull request, merge, issue,
 comment, release, deploy, publish, post, send, request, github) **and** its
@@ -5066,7 +5076,8 @@ are `agents/settings_tools.rs`. Tests: `agents/settings_chat_tests.rs`,
 | Which account turns start on ("use my personal plan") | `use_account` (Chief): puts that signed-in account first in the order (`wallet::reorder`), failover unchanged | no when the user's own message asked; a card when another agent or a routine did; never for outside text |
 | Engine, model, effort, routines' model | `update_agent` (Chief) | no: what its turns run on, not what they may do; one "Now on Opus · High from its next message" line, as the editor leaves |
 | Mute an agent's notifications | `update_agent` `muted` (Chief) | no; unread and the badge still count it |
-| Name, role, instructions, project, look | `update_agent` / `create_agent` (Chief) | no (a card in a turn answering outside text, as before) |
+| Name, role, look; unbinding from a project | `update_agent` / `create_agent` (Chief) | no (a card in a turn answering outside text, as before) |
+| Binding an agent to a project (more reach), changing its instructions | `update_agent` `project` / `instructions` (Chief) | no on the user's own message alone; a card otherwise ("Works in: shippy", "New instructions: …", with Runs on on the same card when it changes too; `mcp::update_widens`) |
 | Admin switch | `propose_settings_change` `admin` (admins) | yes |
 | Logins and secrets | `request_login`, `request_secret` | their own cards; never a value in chat |
 | Not from chat | the phone pairing and revoking, Remote Access on/off and its push PIN, removing an account and its sign-in, quick-entry shortcut and menu-bar icon, new agents' default engine/model, the agents' browser switch, the phone's own appearance and text size | each is either a security wall that must be confirmed on the desk (pairing, Remote Access, PIN) or rarely asked for; the desk is the way in |
