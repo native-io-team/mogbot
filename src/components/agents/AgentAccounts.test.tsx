@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
+import type React from 'react';
 import { AgentAccounts } from './AgentAccounts';
+import { ToastContext } from '../../contexts/ToastContext';
 import type { EngineInfo } from '../../lib/agents';
 import {
   accountDetail,
@@ -183,6 +185,33 @@ describe('AgentAccounts', () => {
     expect(removed).toHaveLength(0);
     fireEvent.click(screen.getByText('Remove'));
     await waitFor(() => expect(removed).toEqual([{ engine: 'claude', id: 'a1' }]));
+  });
+
+  it('removing mid-turn says it goes when that turn ends', async () => {
+    const said: [string, string | undefined][] = [];
+    const toasts = {
+      toasts: [],
+      dismissToast: () => undefined,
+      showToast: (message: string, type?: string) => {
+        said.push([message, type]);
+        return 0;
+      },
+    } as unknown as React.ContextType<typeof ToastContext>;
+    mockIPC((cmd) => {
+      if (cmd === 'agents_accounts') return [mac('claude'), work];
+      if (cmd === 'agents_account_remove')
+        return { waiting: "Removing after Finance's turn ends." };
+      return null;
+    }, EVENTS);
+    render(
+      <ToastContext.Provider value={toasts}>
+        <AgentAccounts engines={[engine('claude')]} />
+      </ToastContext.Provider>
+    );
+    fireEvent.click(await screen.findByLabelText('More for Work'));
+    fireEvent.click(await screen.findByText('Remove…'));
+    fireEvent.click(screen.getByText('Remove'));
+    await waitFor(() => expect(said).toEqual([["Removing after Finance's turn ends.", 'info']]));
   });
 
   it('opens on adding one when the palette asked for it', async () => {

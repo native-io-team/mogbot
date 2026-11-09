@@ -273,6 +273,10 @@ pub fn run() {
                 }
                 // A turn the last run quit in the middle of: stop its process, say so.
                 agents::runner::recover_after_restart(&badge_app).await;
+                // An account removed while a turn ran on it, and the app quit
+                // before that turn ended: its folder and sign-in go now (its
+                // turn's process was stopped above).
+                let _ = tauri::async_runtime::spawn_blocking(agents::wallet::finish_pending_removals).await;
                 // Cards raised before the independence level answered local
                 // work: the ones it answers now are allowed, with a receipt.
                 {

@@ -5035,6 +5035,12 @@ async fn run_on_engine(
                 return Err(CommandError::expected(line));
             }
         };
+        // Held for the try: removing the account waits for it to end. Gone
+        // from the list since it was chosen: another one.
+        let Some(_in_use) = wallet::hold(&account, agent_id) else {
+            tried.push(account.id.clone());
+            continue;
+        };
         // Another account than its last turn's: the chat says so, quietly.
         if let Some(prev) = wallet::ran_on(agent_id, &account) {
             let from = candidates

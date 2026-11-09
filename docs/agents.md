@@ -4035,7 +4035,13 @@ and which account each engine's reading came from. Removing an account
 first carries every conversation in its folder that is newer there into this
 Mac's own (`wallet::keep_sessions`), so an agent that last ran on it resumes
 where it was, then deletes its Keychain items and its folder (`accounts::forget_isolated_account`,
-which refuses any id a workspace uses). The phone reads the list read-only
+which refuses any id a workspace uses). A turn (or a taken-over terminal)
+holds the account it runs on (`wallet::hold`); removing one that is held
+takes it out of the list at once, so no new turn starts there, and leaves its
+folder and sign-in until the last turn on it ends ("Removing after Finance's
+turn ends.", `wallet::Removed::After`), then carries its conversations over
+and deletes them. A quit before then finishes it at the next launch
+(`wallet.json`'s `removing`, `wallet::finish_pending_removals`). The phone reads the list read-only
 (`agents.accounts`) in its Settings, once an engine has more than one.
 
 ### Carrying on with the other engine (`agents/crossover.rs`)

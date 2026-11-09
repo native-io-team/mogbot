@@ -39,8 +39,21 @@ export const renameUsageAccount = (engine: AgentEngine, id: string, name: string
 export const reorderUsageAccounts = (engine: AgentEngine, ids: string[]) =>
   invoke<UsageAccount[]>('agents_account_reorder', { engine, ids });
 
+/**
+ * What removing an account did. `waiting`: a turn is running on it, so it
+ * left the list now and its sign-in goes when that turn ends ("Removing
+ * after Finance's turn ends."). Absent when it went at once.
+ */
+export interface AccountRemoval {
+  waiting?: string;
+}
+
 export const removeUsageAccount = (engine: AgentEngine, id: string) =>
-  invoke<void>('agents_account_remove', { engine, id });
+  invoke<AccountRemoval | null>('agents_account_remove', { engine, id });
+
+/** The line to show after a removal, when it waits on a turn. */
+export const removalLine = (removal: AccountRemoval | null | undefined): string | null =>
+  removal?.waiting ?? null;
 
 /**
  * "Use this one now": it goes first in its engine's order, so every turn

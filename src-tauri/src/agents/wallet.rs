@@ -159,6 +159,10 @@ struct WalletFile {
     /// Which account each engine's plan reading (`quota.json`) came from.
     #[serde(default)]
     quota_from: BTreeMap<String, String>,
+    /// Accounts removed while a turn ran on them (`engine:id`): their folder
+    /// and sign-in go when it ends, or at the next launch.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    removing: Vec<String>,
 }
 
 fn this_mac(engine: Engine) -> Account {
@@ -426,29 +430,85 @@ pub fn has(engine: Engine, id: &str) -> bool {
     of(engine).iter().any(|a| a.id == id)
 }
 
+/// What [`remove`] did: the account left the list either way; its folder
+/// and sign-in went now, or go when the turns running on it end.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Removed {
+    Now,
+    /// Turns are running on it: these agents' (ids, once each). The folder
+    /// and sign-in go when the last one ends ([`wait_unused`], [`finish_remove`]).
+    After(Vec<String>),
+}
+
 /// Remove an added account: from the list, and its sign-in (Keychain items
 /// and its folder) from this Mac. This Mac's own sign-in isn't ours to remove.
-pub fn remove(engine: Engine, id: &str) -> Result<(), CommandError> {
+///
+/// A turn running on it keeps its folder and sign-in until it ends: the
+/// account leaves the list at once (no new turn starts on it, [`hold`]), and
+/// the rest waits ([`Removed::After`]). Recorded in the wallet, so a quit
+/// before then finishes it at the next launch ([`finish_pending_removals`]).
+pub fn remove(engine: Engine, id: &str) -> Result<Removed, CommandError> {
     if id == THIS_MAC {
         return Err(super::err_invalid(
             "id",
             "This Mac's own sign-in can't be removed here; move it down the list instead.",
         ));
     }
-    change(|file| {
-        let before = file.accounts.len();
-        file.accounts
-            .retain(|a| !(a.engine == engine && a.id == id));
-        if file.accounts.len() == before {
-            return Err(not_found());
-        }
-        let k = key(engine, id);
+    let k = key(engine, id);
+    // Under the in-use lock: a turn either holds it already (and is waited
+    // for) or finds it gone from the list and runs on another (`hold`).
+    let users = {
+        let in_use = IN_USE.lock().unwrap_or_else(|e| e.into_inner());
+        let mut users: Vec<String> = in_use.get(&k).cloned().unwrap_or_default();
+        users.sort();
+        users.dedup();
+        change(|file| {
+            let before = file.accounts.len();
+            file.accounts
+                .retain(|a| !(a.engine == engine && a.id == id));
+            if file.accounts.len() == before {
+                return Err(not_found());
+            }
+            file.last_used.retain(|_, v| *v != k);
+            file.quota_from.retain(|_, v| *v != k);
+            if !users.is_empty() && !file.removing.contains(&k) {
+                file.removing.push(k.clone());
+            }
+            Ok(())
+        })?;
+        users
+    };
+    if users.is_empty() {
+        finish_remove(engine, id);
+        return Ok(Removed::Now);
+    }
+    tracing::info!(
+        account = %id,
+        turns = users.len(),
+        "[Agents] removing an account after the turns running on it end"
+    );
+    Ok(Removed::After(users))
+}
+
+/// The removed account's folder and sign-in, gone. Conversations that last
+/// ran there go on: their newest copies are kept in this Mac's own folder
+/// first. Never while a turn holds it (the caller waited, [`wait_unused`]).
+pub fn finish_remove(engine: Engine, id: &str) {
+    forget_sign_in(engine, id);
+    let k = key(engine, id);
+    let _ = change(|file| {
+        file.removing.retain(|r| *r != k);
+        // A turn that ended on it after it left the list recorded it.
         file.last_used.retain(|_, v| *v != k);
         file.quota_from.retain(|_, v| *v != k);
         Ok(())
-    })?;
-    // Conversations that last ran there go on: their newest copies are kept
-    // in this Mac's own folder before the account's folder goes.
+    });
+}
+
+/// The account's conversations kept in this Mac's own folder, then its
+/// folder and Keychain items deleted.
+#[cfg(not(test))]
+fn forget_sign_in(engine: Engine, id: &str) {
     let gone = Account {
         id: id.to_string(),
         engine,
@@ -459,7 +519,133 @@ pub fn remove(engine: Engine, id: &str) -> Result<(), CommandError> {
     let kept = keep_sessions(engine, &folder(&gone), &folder(&this_mac(engine)));
     tracing::info!("[Agents] kept {kept} conversation(s) from a removed account");
     accounts::forget_isolated_account(id);
-    Ok(())
+}
+
+/// Tests never touch the Keychain or the real account folders: what would
+/// have been forgotten, and how many turns held it at that moment.
+#[cfg(test)]
+static FORGOTTEN: Mutex<Vec<(String, usize)>> = Mutex::new(Vec::new());
+
+#[cfg(test)]
+fn forget_sign_in(engine: Engine, id: &str) {
+    let holding = in_use_by(engine, id).len();
+    FORGOTTEN
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .push((key(engine, id), holding));
+}
+
+/// Removals a quit cut short (their turns were stopped with the app):
+/// finished at launch, before any turn starts.
+pub fn finish_pending_removals() {
+    let pending = {
+        let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+        read().removing
+    };
+    for k in pending {
+        let Some((engine, id)) = split_key(&k) else {
+            continue;
+        };
+        // Never an account that is in the list.
+        if has(engine, id) {
+            continue;
+        }
+        finish_remove(engine, id);
+    }
+}
+
+/// `engine:id` back into its parts.
+fn split_key(k: &str) -> Option<(Engine, &str)> {
+    let (word, id) = k.split_once(':')?;
+    [Engine::Claude, Engine::Codex]
+        .into_iter()
+        .find(|e| engine_word(*e) == word)
+        .map(|e| (e, id))
+}
+
+/// "Removing after Finance's turn ends." The line for a removal waiting on
+/// the turns running on the account, by the agents' names.
+pub fn removing_after_line(names: &[String]) -> String {
+    match names {
+        [] => "Removed.".to_string(),
+        [one] => format!("Removing after {one}'s turn ends."),
+        [a, b] => format!("Removing after {a}'s and {b}'s turns end."),
+        more => format!("Removing after {} agents' turns end.", more.len()),
+    }
+}
+
+/* ------------------------------------------------- in use while removing */
+
+/// Turns running on each account, by `engine:id`: one agent id per hold.
+static IN_USE: Mutex<BTreeMap<String, Vec<String>>> = Mutex::new(BTreeMap::new());
+
+/// Told whenever a hold ends.
+static RELEASED: std::sync::LazyLock<tokio::sync::Notify> =
+    std::sync::LazyLock::new(tokio::sync::Notify::new);
+
+/// A turn (or a taken-over terminal) running on an account. While it is
+/// alive, removing the account leaves its folder and sign-in in place.
+#[derive(Debug)]
+pub struct InUse {
+    key: String,
+    agent_id: String,
+}
+
+impl Drop for InUse {
+    fn drop(&mut self) {
+        let mut in_use = IN_USE.lock().unwrap_or_else(|e| e.into_inner());
+        if let Some(list) = in_use.get_mut(&self.key) {
+            if let Some(at) = list.iter().position(|a| *a == self.agent_id) {
+                list.remove(at);
+            }
+            if list.is_empty() {
+                in_use.remove(&self.key);
+            }
+        }
+        drop(in_use);
+        RELEASED.notify_waiters();
+    }
+}
+
+/// Hold `account` for `agent_id`'s turn. `None` when it has left the list
+/// (removed since it was chosen): the turn runs on another account.
+pub fn hold(account: &Account, agent_id: &str) -> Option<InUse> {
+    let k = key(account.engine, &account.id);
+    let mut in_use = IN_USE.lock().unwrap_or_else(|e| e.into_inner());
+    if !account.is_this_mac() && !has(account.engine, &account.id) {
+        return None;
+    }
+    in_use
+        .entry(k.clone())
+        .or_default()
+        .push(agent_id.to_string());
+    Some(InUse {
+        key: k,
+        agent_id: agent_id.to_string(),
+    })
+}
+
+/// The agents with a turn running on the account (ids, once each).
+pub fn in_use_by(engine: Engine, id: &str) -> Vec<String> {
+    let in_use = IN_USE.lock().unwrap_or_else(|e| e.into_inner());
+    let mut users = in_use.get(&key(engine, id)).cloned().unwrap_or_default();
+    users.sort();
+    users.dedup();
+    users
+}
+
+/// Until no turn holds the account.
+pub async fn wait_unused(engine: Engine, id: &str) {
+    loop {
+        let released = RELEASED.notified();
+        tokio::pin!(released);
+        // Listening before looking, so a hold ending in between isn't missed.
+        released.as_mut().enable();
+        if in_use_by(engine, id).is_empty() {
+            return;
+        }
+        let _ = tokio::time::timeout(std::time::Duration::from_secs(30), released).await;
+    }
 }
 
 /// Every session in `from` carried into `into` where it is newer there.
@@ -1596,6 +1782,125 @@ mod tests {
         touch(&work.join("sessions").join(&rel), "t\n", 0);
         assert_eq!(keep_sessions(Engine::Codex, &work, &mac), 1);
         assert!(mac.join("sessions").join(&rel).is_file());
+    }
+
+    fn forgotten(k: &str) -> Vec<usize> {
+        FORGOTTEN
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|(f, _)| f == k)
+            .map(|(_, n)| *n)
+            .collect()
+    }
+
+    #[test]
+    fn an_account_with_no_turn_on_it_goes_at_once() {
+        in_scratch(|| {
+            let work = add(Engine::Claude, "Idle").unwrap();
+            assert_eq!(remove(Engine::Claude, &work.id).unwrap(), Removed::Now);
+            assert!(!has(Engine::Claude, &work.id));
+            assert_eq!(forgotten(&key(Engine::Claude, &work.id)), [0]);
+            assert!(read().removing.is_empty());
+        });
+    }
+
+    #[test]
+    fn removing_an_account_mid_turn_waits_for_the_turn_to_end() {
+        in_scratch(|| {
+            let work = add(Engine::Claude, "Finance work").unwrap();
+            let k = key(Engine::Claude, &work.id);
+            let turn = hold(&work, "finance").expect("in the list");
+            let other = hold(&work, "ops").expect("in the list");
+
+            let removed = remove(Engine::Claude, &work.id).unwrap();
+            assert_eq!(
+                removed,
+                Removed::After(vec!["finance".into(), "ops".into()])
+            );
+            // Out of the list now: no new turn starts on it.
+            assert!(!has(Engine::Claude, &work.id));
+            assert!(hold(&work, "planner").is_none());
+            // Its folder and sign-in are still there for the turns on it.
+            assert!(forgotten(&k).is_empty());
+            assert_eq!(read().removing, [k.clone()]);
+
+            let rt = tokio::runtime::Builder::new_current_thread()
+                .enable_all()
+                .build()
+                .unwrap();
+            drop(turn);
+            assert_eq!(in_use_by(Engine::Claude, &work.id), ["ops"]);
+            rt.block_on(async {
+                let waiting = wait_unused(Engine::Claude, &work.id);
+                tokio::pin!(waiting);
+                // Still held by one: it doesn't end.
+                assert!(tokio::time::timeout(
+                    std::time::Duration::from_millis(50),
+                    waiting.as_mut()
+                )
+                .await
+                .is_err());
+                drop(other);
+                tokio::time::timeout(std::time::Duration::from_secs(2), waiting)
+                    .await
+                    .expect("ends when the last turn does");
+            });
+            finish_remove(Engine::Claude, &work.id);
+            // Forgotten once, with nothing holding it.
+            assert_eq!(forgotten(&k), [0]);
+            assert!(read().removing.is_empty());
+        });
+    }
+
+    #[test]
+    fn a_removal_a_quit_cut_short_finishes_at_launch() {
+        in_scratch(|| {
+            let work = add(Engine::Codex, "Quit mid-turn").unwrap();
+            let k = key(Engine::Codex, &work.id);
+            let turn = hold(&work, "finance").unwrap();
+            assert!(matches!(
+                remove(Engine::Codex, &work.id).unwrap(),
+                Removed::After(_)
+            ));
+            // The app quit: the turn's process went with it.
+            drop(turn);
+            assert!(forgotten(&k).is_empty());
+            finish_pending_removals();
+            assert_eq!(forgotten(&k), [0]);
+            assert!(read().removing.is_empty());
+            // Nothing pending: nothing more.
+            finish_pending_removals();
+            assert_eq!(forgotten(&k), [0]);
+        });
+    }
+
+    #[test]
+    fn this_macs_own_sign_in_is_held_but_never_removed() {
+        in_scratch(|| {
+            let mac = this_mac(Engine::Claude);
+            let held = hold(&mac, "chief").expect("always in the list");
+            assert!(remove(Engine::Claude, THIS_MAC).is_err());
+            drop(held);
+            assert!(in_use_by(Engine::Claude, THIS_MAC).is_empty());
+        });
+    }
+
+    #[test]
+    fn the_waiting_line_names_whose_turn_it_waits_for() {
+        let names = |n: &[&str]| n.iter().map(|s| s.to_string()).collect::<Vec<_>>();
+        assert_eq!(
+            removing_after_line(&names(&["Finance"])),
+            "Removing after Finance's turn ends."
+        );
+        assert_eq!(
+            removing_after_line(&names(&["Finance", "Ops"])),
+            "Removing after Finance's and Ops's turns end."
+        );
+        assert_eq!(
+            removing_after_line(&names(&["A", "B", "C"])),
+            "Removing after 3 agents' turns end."
+        );
     }
 
     #[test]

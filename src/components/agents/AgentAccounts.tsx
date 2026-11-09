@@ -44,6 +44,7 @@ import {
   listUsageAccounts,
   moved,
   onUsageAccountsChanged,
+  removalLine,
   removeUsageAccount,
   renameUsageAccount,
   reorderUsageAccounts,
@@ -355,7 +356,13 @@ export function AgentAccounts({ engines }: { engines: EngineInfo[] }) {
                   }}
                   onRename={(name) => attempt(() => renameUsageAccount(engine, account.id, name))}
                   onSignIn={() => setSigningIn(account)}
-                  onRemove={() => void attempt(() => removeUsageAccount(engine, account.id))}
+                  onRemove={() =>
+                    void attempt(async () => {
+                      // A turn running on it: it goes when that turn ends.
+                      const line = removalLine(await removeUsageAccount(engine, account.id));
+                      if (line) showToast(line, 'info');
+                    })
+                  }
                 />
               ))}
             </ol>

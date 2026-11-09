@@ -17,8 +17,11 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import {
   listUsageAccounts,
   onUsageAccountsChanged,
+  removalLine,
+  removeUsageAccount,
   type UsageAccount,
 } from '../../lib/agentAccounts';
+import type { AgentEngine } from '../../lib/agents';
 
 export function useUsageAccounts() {
   const { showToast } = useOptionalToast();
@@ -56,5 +59,15 @@ export function useUsageAccounts() {
     [reload, setData, showToast]
   );
 
-  return { accounts: data ?? null, reload, attempt };
+  // Removing waits for a turn running on the account: it says so.
+  const remove = useCallback(
+    (engine: AgentEngine, id: string) =>
+      attempt(async () => {
+        const line = removalLine(await removeUsageAccount(engine, id));
+        if (line) showToast(line, 'info');
+      }),
+    [attempt, showToast]
+  );
+
+  return { accounts: data ?? null, reload, attempt, remove };
 }
