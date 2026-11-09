@@ -307,7 +307,12 @@ pub fn pick_account(
         .collect();
     let exact: Vec<&&super::wallet::Account> = mine
         .iter()
-        .filter(|a| a.id == named.trim() || a.name.to_lowercase() == want)
+        .filter(|a| {
+            a.id == named.trim()
+                || a.name.to_lowercase() == want
+                // "This Mac" still names this Mac's own sign-in, however it is shown.
+                || (a.is_this_mac() && want == super::wallet::DEFAULT_NAME.to_lowercase())
+        })
         .collect();
     let found: Vec<&&super::wallet::Account> = if exact.is_empty() && !want.is_empty() {
         mine.iter()
@@ -359,7 +364,12 @@ pub async fn use_account(app: &AppHandle, args: &Value) -> Value {
         Ok(e) => e,
         Err(e) => return error(e.to_string()),
     };
-    let account = match pick_account(&super::wallet::list(), named, engine) {
+    // By the names the user sees (an unnamed sign-in shows as its email).
+    let shown: Vec<super::wallet::Account> = super::wallet::list()
+        .into_iter()
+        .map(|a| super::wallet::labelled(a, true))
+        .collect();
+    let account = match pick_account(&shown, named, engine) {
         Ok(a) => a,
         Err(e) => return error(e),
     };
@@ -369,10 +379,11 @@ pub async fn use_account(app: &AppHandle, args: &Value) -> Value {
             account.name
         ));
     }
-    let order = order_with_first(&super::wallet::of(account.engine), &account.id);
-    match super::wallet::reorder(account.engine, &order) {
+    // The same as the desk's and the phone's "Use this one now".
+    match super::wallet::use_first(account.engine, &account.id) {
         Ok(_) => {
             let _ = tauri::Emitter::emit(app, "agents-accounts-changed", ());
+            let _ = tauri::Emitter::emit(app, super::runner::EVENT_USAGE_PLAN, ());
             text(format!(
                 "{} turns now start on “{}”. If it reaches its limit they move to the next account, as before.",
                 account.engine.label(),
