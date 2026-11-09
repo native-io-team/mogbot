@@ -1108,6 +1108,15 @@ pub fn set_all_out(agent_id: &str, line: String, resets_at: Option<i64>) {
         .insert(agent_id.to_string(), (line, resets_at));
 }
 
+/// Whether the runner ended this agent's turn because every account is out
+/// (the line is still there for the worker to say).
+pub fn peek_all_out(agent_id: &str) -> bool {
+    ALL_OUT
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .contains_key(agent_id)
+}
+
 pub fn take_all_out(agent_id: &str) -> Option<(String, Option<i64>)> {
     ALL_OUT
         .lock()

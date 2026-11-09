@@ -682,6 +682,22 @@ async fn usage_tool(
             }
             u::use_account(app, args).await
         }
+        "set_engine_fallback" => {
+            let engine = match Engine::parse(arg(args, "engine").unwrap_or("")) {
+                Ok(e) => e,
+                Err(e) => return error(e.to_string()),
+            };
+            let mode = match super::crossover::Mode::parse(arg(args, "mode").unwrap_or("")) {
+                Ok(m) => m,
+                Err(e) => return error(e.to_string()),
+            };
+            let (title, detail) = u::fallback_card(engine, mode);
+            let answer = ask_user(app, caller, title, detail, None).await;
+            if let Some(refused) = refused_reply(&answer, "change it") {
+                return error(refused);
+            }
+            u::set_fallback(app, engine, mode)
+        }
         "set_usage_mode" => {
             let mode = match super::usage_plan::Mode::parse(arg(args, "mode").unwrap_or("")) {
                 Ok(m) => m,
@@ -2427,6 +2443,7 @@ pub(crate) fn new_card(
         handoff: None,
         gate: None,
         step_in: None,
+        crossover: None,
     }
 }
 
@@ -3757,6 +3774,7 @@ mod tests {
             model: None,
             effort: None,
             new_engine: false,
+            away: None,
             context: None,
             routine_model: None,
             account: None,

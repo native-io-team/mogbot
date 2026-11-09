@@ -15,6 +15,7 @@ import type {
   WatchSource,
 } from '../../packages/companion-protocol/src/model';
 import type { SettingsProposal } from '../../packages/companion-protocol/src/policy';
+import type { CrossoverAsk, CrossoverAway } from '../../packages/companion-protocol/src/crossover';
 import type {
   AgentDraft,
   NewRoutine,
@@ -233,6 +234,11 @@ export interface Agent {
   secrets?: AgentSecret[];
   /** Moved engines and not run there yet: its next turn starts a new conversation. */
   newEngine?: boolean;
+  /**
+   * Every account of its engine is out, and its turns carry on with the
+   * other engine meanwhile (`agents/crossover.rs`); omitted otherwise.
+   */
+  away?: CrossoverAway;
   /** How full its conversation is, as its engine reported it; omitted when it doesn't say. */
   context?: ContextFill;
   /** You're driving its session in a terminal; omitted otherwise. */
@@ -579,6 +585,8 @@ export interface Approval {
   gate?: RoutineGate;
   /** "<Agent> needs you in its browser: <reason>": Step in, Hand back, Not now (`lib/agentStepIn`). */
   stepIn?: StepInCard;
+  /** "All your Claude Code accounts are out until 4:00 PM. Carry on with Codex until then?": Always (allow + always), Just this time (allow), Wait (deny). */
+  crossover?: CrossoverAsk;
   /**
    * "Bring your work Chrome window to the front so I can use it": answered
    * with Check again (allow) or Not now, never a login.

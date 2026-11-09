@@ -78,3 +78,39 @@ pub async fn agents_spare_remove(app: AppHandle, id: String) -> Result<(), Comma
     changed(&app);
     Ok(())
 }
+
+/// Settings → Agents → Usage, "When every account of an engine is out":
+/// each engine's choice (`agents::crossover`) and the agents carrying on
+/// with the other engine right now.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_crossover() -> Result<agents::crossover::View, CommandError> {
+    tokio::task::spawn_blocking(|| {
+        let all = agents::store::list().unwrap_or_default();
+        agents::crossover::view(&all)
+    })
+    .await
+    .map_err(agents::err_other)
+}
+
+/// Ask first, carry on with the other engine, or wait for the reset, when
+/// every account of `engine` is out.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_set_crossover(
+    app: AppHandle,
+    engine: String,
+    mode: String,
+) -> Result<agents::crossover::View, CommandError> {
+    let engine = agents::engine::Engine::parse(&engine)?;
+    let mode = agents::crossover::Mode::parse(&mode)?;
+    let view = tokio::task::spawn_blocking(move || {
+        agents::crossover::set_mode(engine, mode)?;
+        let all = agents::store::list().unwrap_or_default();
+        Ok::<_, CommandError>(agents::crossover::view(&all))
+    })
+    .await
+    .map_err(agents::err_other)??;
+    changed(&app);
+    Ok(view)
+}

@@ -14,10 +14,12 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
+  AgentEngine,
   SpareItem,
   UsageInventory,
   UsageMode,
 } from '../../packages/companion-protocol/src/model';
+import type { CrossoverMode, CrossoverView } from '../../packages/companion-protocol/src/crossover';
 
 export type {
   LocalCompute,
@@ -73,6 +75,12 @@ export const glanceUsageInventory = () =>
   invoke<UsageInventory>('agents_usage_overview', { look: false });
 
 export const setUsageMode = (mode: UsageMode) => invoke<void>('agents_set_usage_mode', { mode });
+
+/** When every account of an engine is out: each engine's choice, and who is carrying on elsewhere. */
+export const getCrossover = () => invoke<CrossoverView>('agents_crossover');
+
+export const setCrossover = (engine: AgentEngine, mode: CrossoverMode) =>
+  invoke<CrossoverView>('agents_set_crossover', { engine, mode });
 
 export const addSpareItem = (text: string, agentId?: string) =>
   invoke<SpareItem>('agents_spare_add', { text, agentId: agentId ?? null });

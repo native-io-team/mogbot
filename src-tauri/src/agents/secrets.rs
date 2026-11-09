@@ -702,6 +702,7 @@ mod tests {
             handoff: None,
             gate: None,
             step_in: None,
+            crossover: None,
         });
         store::append_message(&card).unwrap();
         (request_id, request)

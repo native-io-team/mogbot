@@ -304,6 +304,7 @@ pub(crate) fn card(
         handoff: None,
         gate: None,
         step_in: None,
+        crossover: None,
     }
 }
 

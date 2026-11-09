@@ -40,6 +40,18 @@
   font-variant-numeric: tabular-nums;
 }
 
+.account-switcher__line[data-away] .account-switcher__name {
+  flex: none;
+}
+
+.account-switcher__line[data-away] .account-switcher__room {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .account-switcher__line[data-tone='warning'] .account-switcher__room {
   color: var(--accent-warning);
 }

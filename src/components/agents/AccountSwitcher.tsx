@@ -66,6 +66,7 @@ import {
   type SwitcherRow,
   type WorkingLine,
 } from '../../../packages/companion-protocol/src/accountSwitcher';
+import { awayStateOf } from '../../../packages/companion-protocol/src/crossover';
 
 const ENGINE_ICON: Record<AgentEngine, typeof ClaudeIcon> = {
   claude: ClaudeIcon,
@@ -132,7 +133,9 @@ export function AccountSwitcher({ collapsed }: { collapsed: boolean }) {
     engines: shownEngines(engines, agents, all),
     pins,
   });
-  const lines = view.map(workingLine).filter((l): l is WorkingLine => l !== null);
+  const lines = view
+    .map((v) => workingLine(v, awayStateOf(v.engine, agents, now), now))
+    .filter((l): l is WorkingLine => l !== null);
   if (!accounts || lines.length === 0) return null;
 
   const worst = lines.find((l) => l.tone === 'out') ?? lines.find((l) => l.tone === 'warning');
@@ -183,7 +186,12 @@ export function AccountSwitcher({ collapsed }: { collapsed: boolean }) {
             {!collapsed && (
               <span className="account-switcher__lines">
                 {lines.map((l) => (
-                  <span key={l.engine} className="account-switcher__line" data-tone={l.tone}>
+                  <span
+                    key={l.engine}
+                    className="account-switcher__line"
+                    data-tone={l.tone}
+                    data-away={l.away || undefined}
+                  >
                     <span className="account-switcher__name">{l.name}</span>
                     {l.room && <span className="account-switcher__room">{l.room}</span>}
                   </span>

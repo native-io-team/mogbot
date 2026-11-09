@@ -2354,6 +2354,7 @@ pub fn settings_card() -> crate::agents::store::AgentMessage {
         handoff: None,
         gate: None,
         step_in: None,
+        crossover: None,
     });
     m
 }
@@ -2468,6 +2469,7 @@ pub fn login_card() -> crate::agents::store::AgentMessage {
         handoff: None,
         gate: None,
         step_in: None,
+        crossover: None,
         from_outside: None,
         login: Some(LoginRequest {
             service: "gmail".into(),

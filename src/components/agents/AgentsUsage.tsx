@@ -3,6 +3,8 @@
  *
  * - **How agents use your limits**: Normal (default, never throttles), Save
  *   my limits, or Use it all before reset (`agents::usage_plan`).
+ * - **When every account of an engine is out**: ask first, carry on with
+ *   the other engine, or wait for the reset (`AgentsCrossover`).
  * - **What you have**: each account with what its engine last reported (a
  *   reading, with its age) or "No reading yet"; each engine's average turn
  *   here as an *estimate* from past runs, absent with too little history;
@@ -32,6 +34,7 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import { AGENT_EVENTS, ENGINE_LABEL } from '../../lib/agents';
 import { takeSettingsSectionRequest } from '../../lib/settings';
 import { ComputeTotal } from './AgentsCompute';
+import { AgentsCrossover } from './AgentsCrossover';
 import {
   USAGE_MODES,
   USAGE_MODE_DETAIL,
@@ -254,6 +257,8 @@ export function AgentUsageSettings() {
         />
         <span className="agents-usage__muted">{USAGE_MODE_DETAIL[inventory.mode]}</span>
       </div>
+
+      <AgentsCrossover installed={engines.map((e) => e.id)} now={now} />
 
       {engines.length > 0 && total && (
         <div className="agents-usage__block">
