@@ -329,6 +329,19 @@
   animation: agents-motion-swap-in var(--agents-motion-enter) backwards;
 }
 
+/* An agent made while the list is up rises into its place once (useNewKeys);
+   the list as it loads holds still. */
+.agents-list > .agents-list__row[data-arrived] {
+  animation: agents-motion-rise var(--agents-motion-enter) backwards;
+}
+
+/* What's in flight: a row that joins a section while the view is open (a
+   new request, an agent starting, a reply) rises in the same way. */
+.agents-team__group[data-arrived],
+.agents-team__row[data-arrived] {
+  animation: agents-motion-rise var(--agents-motion-enter) backwards;
+}
+
 /* Results replace the list; they, hidden rows when shown and the
    Needs-your-OK row (the rows under it slide down: useFlipReorder) fade in. */
 .agents-list > .agents-list__needs-you,
@@ -413,7 +426,9 @@
   .agent-composer__send,
   .agent-composer__stop,
   .agent-composer__notice,
-  .agents-list__status > * {
+  .agents-list__status > *,
+  .agents-team__group[data-arrived],
+  .agents-team__row[data-arrived] {
     animation: none;
   }
 

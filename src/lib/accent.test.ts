@@ -79,6 +79,23 @@ describe('colour maths', () => {
     }
   });
 
+  it('gives every colour a keycap side darker than its face, in both themes', () => {
+    // The side is depth, not a fill: no ink sits on it, so it is held to
+    // reading as the key's shadowed edge (darker than both gradient stops),
+    // never to AA. A side lighter than the face reads as a glow.
+    for (const theme of ['dark', 'light'] as const) {
+      for (const key of AGENT_COLORS) {
+        const vars = accentVars(key, theme);
+        const side = relativeLuminance(parseHex(vars['--accent-user-side'])!);
+        for (const face of ['--accent-user', '--accent-user-start'] as const) {
+          expect(side, `${theme} ${key} side under ${face}`).toBeLessThan(
+            relativeLuminance(parseHex(vars[face])!)
+          );
+        }
+      }
+    }
+  });
+
   it('shades in OKLCH toward black and white', () => {
     expect(shadeOklch('#808080', 'black', 1)).toBe('#000000');
     expect(shadeOklch('#808080', 'white', 1)).toBe('#ffffff');
@@ -212,6 +229,7 @@ describe('kept in sync with the stylesheets', () => {
       ['strong', '--accent-user-strong'],
       ['start', '--accent-user-start'],
       ['end', '--accent-user-end'],
+      ['side', '--accent-user-side'],
     ] as const) {
       const m = new RegExp(`--color-accent-default-${suffix}:\\s*(#[0-9a-f]{6})`, 'i').exec(core);
       expect(m?.[1].toLowerCase(), suffix).toBe(white[name]);

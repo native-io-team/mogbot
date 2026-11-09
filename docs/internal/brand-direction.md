@@ -78,9 +78,13 @@ Each is a token or a scoped rule; status is noted where it shipped in this pass.
 | 11 | Composer and user bubble | The user bubble gets the site's small tail corner (`--radius-sm` bottom-right); the composer lifts off the canvas with `--shadow-sm` | Shipped |
 | 12 | Empty states (`EmptyState`) | Title tracked in (`--tracking-title`) to match the site's names | Shipped |
 | 13 | Settings → Agents section titles | Muted 11px labels → 13px `--text-primary` at 600 with `--tracking-name`, so the page reads as sections, not a log | Shipped |
-| 14 | Status pills (`.agent-engine-badge`, level badge) | Bordered boxes → the site's tag: 6px pill of `--tint` with muted ink, no border | Later |
-| 15 | Primary buttons | Flat accent fill → a keycap: the accent's own start/end gradient (already computed) plus a 1px darker side; press moves 1px | Later (needs the accent's side shade computed in `accent.ts`, with its AA check) |
-| 16 | Arrival motion | Instant → the site's arrive curve (`--ease-arrive`) for new messages and cards, 8px rise, reduced-motion respected | Later |
+| 14 | Status pills (`primitives/StatusPill`, `components/status-pill.css`; phone `StatusPill` in `ui.tsx`) | Coloured status words and whole amber/red lines → one calm pill: a 6px wash of the state's hue at 14%, a dot of it, the words in `--text-primary` (`--status-pill-*`). Running `--status-running`, waiting on you `--accent-warning`, failed `--accent-error`, done/in use `--accent-success`, out of usage and idle neutral (amber means needs you, only). Used on the sidebar rows, What's in flight (Needs you, Paused), Settings → Accounts, the usage list's quiet rows; phone agent and room rows and Settings → Accounts. The engine/level badge is the same tag with no hue (no border). `theme.test.ts` and the phone's `brandFinish.node.test.ts` hold the words at AA on every wash | Shipped |
+| 15 | Primary buttons (`base.css`, `--button-key-*`, `--button-primary-shadow*`, `--button-strong-shadow*`) | Flat fill → a keycap for `primary` and the neutral `strong` answer: lit top edge, a 2px side in the key's own shade (`--accent-user-side`, computed in `accent.ts` and always darker than the face, tested; the answer's is a fixed neutral), a soft drop, and a 1px press that gives up exactly 1px of side, so nothing moves (`--transition-press`, 70ms). Disabled sits flat. Phone: `Button`'s `primary`/`answer` draw the same through `keycapShadow` | Shipped |
+| 16 | Arrival motion | Instant / 300ms → the site's arrive curve (`--ease-arrive`, `--transition-arrive`, 200ms) with an 8px rise for new messages and cards (`--agents-motion-enter`), and for rows that join the sidebar or What's in flight while it's open (`useNewKeys`). Phone: replies, cards and lines that come in while a chat is open, and new agents in the list, rise on the same curve (`components/Arrive.tsx`, `lib/arrivals.ts`); history, the first load and a big catch-up batch hold still; Reduce Motion holds everything still on both | Shipped |
+
+Leftovers fixed in the same pass: the desk said "Claude Code is signed out" for a Codex agent
+(`failureLine` now takes the engine, as the phone's did), and the phone's agent rows built a
+steadied working line and then drew the unsteadied one.
 
 ## Rules this keeps
 

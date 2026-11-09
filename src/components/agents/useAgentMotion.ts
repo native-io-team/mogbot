@@ -47,6 +47,22 @@ export function useArrivals(ids: readonly string[] | undefined): (id: string) =>
   return useCallback((id: string) => baseline !== null && !baseline.seen.has(id), [baseline]);
 }
 
+/**
+ * Which rows of a list are new since it was first shown: the keys present
+ * when `ready` first holds are the baseline and never animate, so opening a
+ * list shows it still; a row that joins after that rises in once
+ * (`data-arrived`, agents-motion.css). Unlike `useArrivals`, order means
+ * nothing here: a list re-sorted by attention puts new rows anywhere.
+ *
+ * `ready`: the list has loaded. Pass `keys.length > 0` for a list that
+ * fills in after mount (its first fill is a load, not an arrival).
+ */
+export function useNewKeys(keys: readonly string[], ready = true): (key: string) => boolean {
+  const [baseline, setBaseline] = useState<ReadonlySet<string> | null>(null);
+  if (ready && baseline === null) setBaseline(new Set(keys));
+  return useCallback((key: string) => baseline !== null && !baseline.has(key), [baseline]);
+}
+
 type Phase = 'static' | 'entering' | 'leaving' | 'hidden';
 
 /**

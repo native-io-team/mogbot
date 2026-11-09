@@ -148,6 +148,11 @@
   --transition-interaction: var(--duration-standard) var(--ease-standard);
   --transition-interaction-slow: var(--duration-slow) var(--ease-standard);
   --transition-icon-swap: var(--duration-slow) var(--ease-icon-swap);
+  /* Something new arriving (a message, a card, a row): the site's arrive
+     curve, never longer than 200ms. */
+  --transition-arrive: var(--duration-arrive) var(--ease-arrive);
+  /* A key going down and coming back up. */
+  --transition-press: var(--duration-press) var(--ease-press);
 
   --shadow-button:
     0 var(--stroke-1) var(--space-02) var(--color-black-o75),
@@ -423,6 +428,7 @@
   --accent-user-strong: var(--color-accent-default-strong);
   --accent-user-start: var(--color-accent-default-start);
   --accent-user-end: var(--color-accent-default-end);
+  --accent-user-side: var(--color-accent-default-side);
   /* How much of the accent survives in accent-coloured text (the rest is the
      primary text colour). Less on light, where a bright accent is weaker. */
   --accent-text-share: 65%;
@@ -439,6 +445,7 @@
   --accent-user-strong: var(--color-accent-light-default-strong);
   --accent-user-start: var(--color-accent-light-default-start);
   --accent-user-end: var(--color-accent-light-default-end);
+  --accent-user-side: var(--color-accent-light-default-side);
   --accent-text-share: 55%;
 }
 

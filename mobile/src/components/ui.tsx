@@ -26,7 +26,11 @@ import {
   depthOf,
   fonts,
   iconSize,
+  KEY_TRAVEL,
+  keycapShadow,
   lineHeight,
+  PILL_DOT,
+  PILL_WASH,
   PRESSED,
   radius,
   READ_LINE,
@@ -219,6 +223,11 @@ export function Button({
     ? { bg: a.accent, pressed: a.pressed, fg: a.onAccent }
     : buttonColorsOf(colors)[variant];
   const height = size === 'large' ? 50 : size === 'compact' ? 32 : 44;
+  // Primary and the answer are keycaps, as on the desk: a lit edge, a short
+  // side in the fill's own shade, and a press that travels down by what the
+  // side gives up (no scale, so the label never shrinks). Disabled sits flat.
+  const depth = depthOf(colors);
+  const key = filled && !off;
   return (
     <Pressable
       accessibilityRole="button"
@@ -236,8 +245,11 @@ export function Button({
           backgroundColor: pressed ? c.pressed : c.bg,
           borderColor: c.border ?? 'transparent',
           opacity: off ? DISABLED_OPACITY : 1,
-          transform: [{ scale: pressed ? 0.98 : 1 }],
+          transform: key
+            ? [{ translateY: pressed ? KEY_TRAVEL : 0 }]
+            : [{ scale: pressed ? 0.98 : 1 }],
         },
+        key && { boxShadow: keycapShadow(depth, a.side, pressed) },
         style,
       ]}
       {...rest}
@@ -259,6 +271,54 @@ export function Button({
         </>
       )}
     </Pressable>
+  );
+}
+
+/**
+ * A state, as one calm pill (the desk's StatusPill): a wash of the state's
+ * hue, a dot of it, and the words in ordinary ink, so they read whatever the
+ * hue. Never the accent; amber is only "needs you" (out of usage resets by
+ * itself, so it is neutral).
+ */
+export type StatusTone = 'running' | 'waiting' | 'out' | 'done' | 'failed' | 'idle';
+
+export function useStatusHue(): Record<StatusTone, string> {
+  const colors = useColors();
+  return {
+    running: colors.statusRunning,
+    waiting: colors.accentWarning,
+    failed: colors.accentError,
+    done: colors.accentSuccess,
+    out: colors.textMuted,
+    idle: colors.textFaint,
+  };
+}
+
+export function StatusPill({
+  tone,
+  label,
+  style,
+}: {
+  tone: StatusTone;
+  label: string;
+  style?: StyleProp<ViewStyle>;
+}) {
+  const colors = useColors();
+  const styles = useStyles();
+  const hue = useStatusHue()[tone];
+  return (
+    <View style={[styles.pill, { backgroundColor: alpha(hue, PILL_WASH) }, style]}>
+      <Dot color={hue} size={PILL_DOT} />
+      <T
+        variant="caption"
+        color={colors.textPrimary}
+        numberOfLines={1}
+        maxFontSizeMultiplier={chromeScale}
+        style={styles.pillLabel}
+      >
+        {label}
+      </T>
+    </View>
   );
 }
 
@@ -630,6 +690,16 @@ const useStyles = makeStyles((colors) => ({
     paddingVertical: space.xs,
     overflow: 'hidden',
   },
+  pill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    flexShrink: 0,
+    gap: space.xs,
+    paddingHorizontal: space.sm,
+    borderRadius: radius.tag,
+  },
+  pillLabel: { fontFamily: fonts.medium, flexShrink: 1 },
   iconButton: {
     width: 44,
     height: 44,

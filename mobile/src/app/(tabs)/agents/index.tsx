@@ -28,6 +28,8 @@ import {
   View,
 } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
+import { Arrive } from '../../../components/Arrive';
+import { useArrivedKeys } from '../../../lib/arrivals';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HeaderHeightContext } from 'expo-router/react-navigation';
 import { useShallow } from 'zustand/react/shallow';
@@ -316,6 +318,10 @@ export default function Agents() {
       }),
     [colors, styles, hasList, router]
   );
+  // An agent made while the list is up rises into it once; the list as it
+  // loads holds still.
+  const agentKeys = useMemo(() => rows.flatMap((r) => (r.kind === 'agent' ? [r.key] : [])), [rows]);
+  const arrived = useArrivedKeys(agentKeys, !!overview, false);
   const list = (
     <Animated.FlatList
       data={rows}
@@ -390,6 +396,18 @@ export default function Agents() {
           </Pressable>
         ) : item.kind === 'room' ? (
           <RoomRow room={item.room} live={live} />
+        ) : arrived.has(item.key) ? (
+          <Arrive>
+            <AgentRow
+              agent={item.agent}
+              quiet={item.quiet}
+              caps={caps}
+              live={live}
+              selected={item.agent.id === shown}
+              onPress={split ? () => setSelected(item.agent.id) : undefined}
+              onAction={onAction}
+            />
+          </Arrive>
         ) : (
           <AgentRow
             agent={item.agent}

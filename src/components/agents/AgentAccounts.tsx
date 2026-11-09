@@ -23,6 +23,7 @@ import { Button } from '../primitives/Button';
 import { IconButton } from '../primitives/IconButton';
 import { TextField } from '../primitives/TextField';
 import { Tooltip } from '../primitives/Tooltip';
+import { StatusPill } from '../primitives/StatusPill';
 import { Dropdown, DropdownDivider, DropdownItem } from '../primitives/Dropdown';
 import {
   ArrowDownIcon,
@@ -119,9 +120,14 @@ function AccountRow({
           </Tooltip>
         )}
         <span className="agent-account__detail">
-          <span className="agent-account__state">
+          {/* The state is a pill (in use, out of usage, signed in or not); who
+              it is and its plan follow in quiet words. */}
+          <StatusPill
+            className="agent-account__state"
+            tone={account.out ? 'out' : inUse && account.signedIn ? 'done' : 'idle'}
+          >
             {inUse && !account.out ? 'In use' : detail.state}
-          </span>
+          </StatusPill>
           {detail.email && detail.email !== account.name && (
             <Tooltip content={detail.email}>
               <span className="agent-account__email">{detail.email}</span>

@@ -129,6 +129,7 @@
   --color-accent-default-strong: #949494;
   --color-accent-default-start: #c8c8c8;
   --color-accent-default-end: #e8e8e8;
+  --color-accent-default-side: #ababab;
   /* The default accent on the light theme: white becomes near-black
      (LIGHT_THEME_WHITE in accent.ts), with its shades (accentVars('white',
      'light')). accent.test.ts holds them in sync. */
@@ -137,6 +138,7 @@
   --color-accent-light-default-strong: #535353;
   --color-accent-light-default-start: #171717;
   --color-accent-light-default-end: #2b2b2b;
+  --color-accent-light-default-side: #121212;
 
   --color-swatch-blue: #007aff;
   --color-swatch-green: #34c759;
@@ -219,4 +221,11 @@
   --duration-loader-isolated: 1800ms;
   --ease-standard: ease;
   --ease-icon-swap: cubic-bezier(0.2, 0, 0, 1);
+  /* The site's motion (dashbot-site global.css): one curve for arriving, one
+     for a key going down. An arrival is short here: the app is a tool, and
+     a new line should be readable by the time the eye gets to it. */
+  --duration-press: 70ms;
+  --duration-arrive: 200ms;
+  --ease-arrive: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-press: cubic-bezier(0.3, 0.7, 0.4, 1);
 }

@@ -34,6 +34,7 @@ import {
 } from '@/components/icons';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '../primitives/ContextMenu';
 import { Button } from '../primitives/Button';
+import { StatusPill } from '../primitives/StatusPill';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentWorkingLine } from './AgentWorkingLine';
 import { AgentEngineBadge } from './AgentEngine';
@@ -43,13 +44,15 @@ import { AgentsSearchResults } from './AgentsSearchResults';
 import { AgentMark } from './AgentSwitcher';
 import { RoomRow, type RoomActions } from './AgentRoomParts';
 import { sortRooms, type Room } from '../../lib/agentRooms';
-import { useFlipReorder } from './useAgentMotion';
+import { useFlipReorder, useNewKeys } from './useAgentMotion';
 import { useSteadyList } from './useAttentionOrder';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import {
   avatarMood,
   failedTurn,
   failureLine,
+  failurePill,
+  type StatusTone,
   needsYou,
   roleWithoutPath,
   type Agent,
@@ -103,7 +106,7 @@ function subtitle(agent: Agent): ReactNode {
   // The step it's on and how long it's been at it, not "Working…".
   if (agent.status.state === 'working') return <AgentWorkingLine agent={agent} />;
   const failure = failedTurn(agent);
-  if (failure) return failureLine(failure, previewText(agent.preview));
+  if (failure) return failureLine(failure, previewText(agent.preview), agent.engine);
   return previewText(agent.preview) ?? '';
 }
 
@@ -127,6 +130,26 @@ function askingLine(agent: Agent, lines: readonly AgentMessage[] | undefined): s
   return groupLine(group);
 }
 const NONE_SHOWN: ReadonlySet<string> = new Set();
+
+/**
+ * Waiting on you or a turn that didn't finish: the state as a pill and the
+ * rest in words. Driving and working keep their own line (the step and its
+ * clock say more than "Working" would, and the running dot is beside them).
+ */
+function rowPill(
+  agent: Agent,
+  asking: string | null
+): { tone: StatusTone; label: string; rest: string } | null {
+  if (needsYou(agent)) {
+    const n = agent.pendingApprovals ?? 0;
+    // What it's asking, when the loaded lines know; else how many.
+    if (asking) return { tone: 'waiting', label: 'Needs your OK', rest: asking };
+    return { tone: 'waiting', label: n > 1 ? `Needs your OK · ${n}` : 'Needs your OK', rest: '' };
+  }
+  if (agent.takeover || agent.status.state === 'working') return null;
+  const failure = failedTurn(agent);
+  return failure ? failurePill(failure, previewText(agent.preview), agent.engine) : null;
+}
 
 /** The row's second line takes the colour of its state. */
 function lineState(agent: Agent): string | undefined {
@@ -233,6 +256,13 @@ export function AgentsSidebar({
     `${needsYouShown ? 'needs ' : ''}${shown.map((a) => a.id).join(' ')}`
   );
 
+  // An agent made while the list is up (by you or the Chief) rises in once;
+  // the list as it first loads holds still.
+  const isNew = useNewKeys(
+    useMemo(() => agents.map((a) => a.id), [agents]),
+    agents.length > 0
+  );
+
   // The one row in the Tab order: the open one, else the first.
   const tabStop = shown.some((a) => a.id === selectedId) ? selectedId : shown[0]?.id;
 
@@ -242,6 +272,7 @@ export function AgentsSidebar({
       agent={agent}
       current={agent.id === selectedId}
       tabStop={agent.id === tabStop}
+      arrived={isNew(agent.id)}
       onSelect={onSelect}
       actions={actions}
     />
@@ -360,18 +391,22 @@ const AgentRow = memo(function AgentRow({
   agent,
   current,
   tabStop,
+  arrived,
   onSelect,
   actions,
 }: {
   agent: Agent;
   current: boolean;
   tabStop: boolean;
+  /** Joined the list while it was up: it rises in once. */
+  arrived: boolean;
   onSelect: (agentId: string) => void;
   actions: AgentActions;
 }) {
   // Its loaded lines, only while it's waiting: the row says what it's asking.
   const lines = useAgentsSelector((s) => (needsYou(agent) ? s.messages[agent.id] : undefined));
   const asking = needsYou(agent) ? askingLine(agent, lines) : null;
+  const pill = rowPill(agent, asking);
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>
@@ -382,6 +417,7 @@ const AgentRow = memo(function AgentRow({
           className={`agents-list__row${current ? ' is-current' : ''}`}
           data-agent-id={agent.id}
           data-hidden={agent.hidden || undefined}
+          data-arrived={arrived || undefined}
           aria-current={current ? 'true' : undefined}
           onPointerEnter={tooltipIfTruncated}
           onClick={() => onSelect(agent.id)}
@@ -408,17 +444,18 @@ const AgentRow = memo(function AgentRow({
               <AgentEngineBadge engine={agent.engine} />
               <AgentLevelBadge agent={agent} />
             </span>
-            <span className="agents-list__preview" data-state={lineState(agent)}>
-              {asking ? (
-                <>
-                  Needs your OK
-                  {/* What it's asking reads as words, not as more amber. */}
-                  <span className="agents-list__asking"> · {asking}</span>
-                </>
-              ) : (
-                subtitle(agent)
-              )}
-            </span>
+            {pill ? (
+              // The state in a pill, what it's about in the row's ordinary ink:
+              // one coloured thing per row, never a whole amber or red line.
+              <span className="agents-list__preview agents-list__preview--pill">
+                <StatusPill tone={pill.tone}>{pill.label}</StatusPill>
+                {pill.rest && <span className="agents-list__rest">{pill.rest}</span>}
+              </span>
+            ) : (
+              <span className="agents-list__preview" data-state={lineState(agent)}>
+                {subtitle(agent)}
+              </span>
+            )}
           </span>
           <span className="agents-list__status">
             {/* Read already when it's the one open: no unread dot for it. */}

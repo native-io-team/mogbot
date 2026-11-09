@@ -98,6 +98,8 @@ import {
 import { makeStyles, useColors } from '../lib/appearance';
 import { AgentAvatar, Spinner } from './agent';
 import { DaySeparator, DraftRow, MessageRow, PendingRow, SendRise, WorkingRow } from './chat';
+import { Arrive } from './Arrive';
+import { useArrivedKeys } from '../lib/arrivals';
 import { Composer } from './Composer';
 import { LinkProblem } from './ConnectionPill';
 import { Line } from './surfaces';
@@ -276,6 +278,10 @@ export function ChatView({
     const rows = chatItems(agent, messages, pending, draft);
     return setup && chat?.loaded ? withSetupCard(rows, setupAt, !!chat.more) : rows;
   }, [agent, messages, draft, pending, setup, setupAt, chat?.loaded, chat?.more]);
+  // What came in while this chat was open rises in; the chat as it loads,
+  // and older history fetched by scrolling back, hold still.
+  const itemKeys = useMemo(() => items.map((i) => i.key), [items]);
+  const arrived = useArrivedKeys(itemKeys, !!chat?.loaded);
   // In a pane too short for a whole card, the question it's asking stays
   // pinned at the top, so the answers at the bottom never stand alone. Only
   // a card this phone can answer: an import's review is answered on the Mac.
@@ -624,6 +630,7 @@ export function ChatView({
                     onError={showError}
                     onLongPress={onMessageAction}
                     lit={!!target && isRowFor(item, target)}
+                    arrived={arrived.has(item.key)}
                   />
                 )}
                 onScrollToIndexFailed={(info) => {
@@ -813,8 +820,11 @@ function ItemView({
   onLongPress,
   lit,
   afterLine,
+  arrived,
 }: {
   afterLine?: boolean;
+  /** Came in while the chat was open: it rises in once. */
+  arrived?: boolean;
   item: Item;
   agent: Agent;
   liveCopyCard?: string | null;
@@ -877,7 +887,13 @@ function ItemView({
       ]}
     >
       {lit && <Glow />}
-      {yours ? <SendRise rise={item.kind === 'pending'}>{body}</SendRise> : body}
+      {yours ? (
+        <SendRise rise={item.kind === 'pending'}>{body}</SendRise>
+      ) : arrived ? (
+        <Arrive>{body}</Arrive>
+      ) : (
+        body
+      )}
     </View>
   );
 }

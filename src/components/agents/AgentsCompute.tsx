@@ -16,6 +16,7 @@
  */
 
 import type { CSSProperties } from 'react';
+import { StatusPill } from '../primitives/StatusPill';
 import type { ComputeRow, ComputeView, UsageMeter } from '../../lib/agentsUsage';
 
 export function ComputeTotal({ view }: { view: ComputeView }) {
@@ -40,7 +41,15 @@ export function ComputeTotal({ view }: { view: ComputeView }) {
           {view.quiet.map((r) => (
             <li className="agents-compute__quiet-row" key={r.key}>
               <span className="agents-compute__quiet-name">{r.title}</span>
-              {r.state && <span className="agents-compute__quiet-state">{r.state}</span>}
+              {/* Why it has no bar, as a pill: out of usage, or quiet (not signed in, not read). */}
+              {r.state && (
+                <StatusPill
+                  className="agents-compute__quiet-state"
+                  tone={r.tone === 'limited' ? 'out' : 'idle'}
+                >
+                  {r.state}
+                </StatusPill>
+              )}
             </li>
           ))}
         </ul>
