@@ -7,7 +7,11 @@
 
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { AVATAR_MOTION, type AvatarMood } from '../../../packages/companion-protocol/src/avatar';
+import {
+  AVATAR_MOTION,
+  BLINK,
+  type AvatarMood,
+} from '../../../packages/companion-protocol/src/avatar';
 
 // Paths from the repo root, where Vitest runs.
 const css = readFileSync('src/styles/features/agents-avatar.css', 'utf8');
@@ -108,7 +112,7 @@ describe('the desk’s avatar motion is the spec’s', () => {
     });
   }
 
-  it('is still with Reduce Motion, and never rings or blinks', () => {
+  it('is still with Reduce Motion, and never rings', () => {
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\)\s*\{\s*\.agent-avatar \*/);
     // Only transforms and the breathing light's opacity move: no ring, no
     // border, no squash of an eye.
@@ -117,8 +121,22 @@ describe('the desk’s avatar motion is the spec’s', () => {
         for (const prop of decl.matchAll(/([\w-]+)\s*:/g)) {
           expect(['transform', 'opacity'], m[1]).toContain(prop[1]);
         }
-        expect(decl).not.toMatch(/scale/);
+        // The blink alone squashes (the eyes), to the spec's thin line.
+        if (m[1] !== 'agents-avatar-blink') expect(decl).not.toMatch(/scale/);
       }
     }
+  });
+
+  it('blinks as the spec says: 140ms, squashed to the thin line, never in Reduce Motion', () => {
+    const total = BLINK.closeMs + BLINK.openMs;
+    expect(duration('--agents-avatar-blink')).toBeCloseTo(total);
+    const frames = keyframes('agents-avatar-blink');
+    expect(frames.map(([t]) => t)).toEqual([0, Math.round((BLINK.closeMs / total) * 100) / 100, 1]);
+    expect(frames.map(([, d]) => d.match(/scaleY\(([\d.]+)\)/)![1])).toEqual([
+      '1',
+      String(BLINK.closedScale),
+      '1',
+    ]);
+    expect(css).toMatch(/prefers-reduced-motion: reduce\)\s*\{[^}]*agent-avatar__eye/);
   });
 });

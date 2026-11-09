@@ -12,7 +12,8 @@
  * Motion says what the agent is doing, in CSS keyframes only (no per-frame
  * JS; agents-avatar.css): idle drift, looking around while it works, looking
  * out at you when it needs you, one press when it's done, a look down when
- * it failed. The eyes never close and nothing rings it. Paused off-screen and
+ * it failed. The eyes blink now and then (`BLINK`: random, its own beat,
+ * from 20px up; src/lib/avatarBlink.ts) and nothing rings it. Paused off-screen and
  * while the window is hidden; nothing at all with Reduce Motion.
  *
  * @module components/agents/AgentAvatar
@@ -30,6 +31,7 @@ import {
 } from 'react';
 import {
   AVATAR_MOTION,
+  blinks,
   DEBOSS_DEPTH,
   FACE_SPECS,
   KEY,
@@ -55,6 +57,7 @@ import {
   type AvatarPaint,
 } from '../../../packages/companion-protocol/src/avatar';
 import { getAgentsSnapshot, subscribeAgents } from '../../lib/agentsStore';
+import { startBlinking } from '../../lib/avatarBlink';
 import { useResolvedTheme } from '../../lib/theme';
 
 /**
@@ -187,6 +190,7 @@ export function AgentAvatar({
   const px = SIZE_PX[size];
   const mood = useMood(givenMood ?? (working ? 'working' : 'idle'));
   const ref = useOffscreen<HTMLSpanElement>(!still);
+  useBlink(ref, !still && blinks(look.face, px));
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
   const paint = avatarPaint(color, theme, selected);
   const lit = px >= LIT_MIN_PX;
@@ -306,6 +310,7 @@ export function AgentKey({
   const look = useMemo(() => lookFromTeam(team, id) ?? lookFor({ id }), [team, id]);
   const theme = useResolvedTheme();
   const ref = useOffscreen<HTMLSpanElement>(true);
+  useBlink(ref, blinks(look.face, TYPING_KEY.size));
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
   const paint = typingKeyPaint(color, theme);
   const shape = SHAPE_PATHS[look.shape];
@@ -495,7 +500,7 @@ function Face({
   return (
     <>
       {eyes.map((e) => (
-        <g key={e.cx}>
+        <g key={e.cx} className="agent-avatar__eye">
           {d > 0 && <ellipse cx={e.cx} cy={e.cy + d} rx={e.rx} ry={e.ry} fill={lip} />}
           <ellipse cx={e.cx} cy={e.cy} rx={e.rx} ry={e.ry} fill={fill} />
         </g>
@@ -557,4 +562,12 @@ function useOffscreen<T extends Element>(enabled: boolean) {
     return watch(ref.current);
   }, [enabled]);
   return ref;
+}
+
+/** The blink timer (avatarBlink.ts): sets `data-blinking` on the element, never React state. */
+function useBlink<T extends Element>(ref: { current: T | null }, enabled: boolean) {
+  useEffect(() => {
+    if (!enabled || !ref.current) return;
+    return startBlinking(ref.current);
+  }, [enabled, ref]);
 }

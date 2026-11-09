@@ -724,6 +724,57 @@ export const AVATAR_MOTION: Record<AvatarMood, MoodMotion> = {
 /** Below `LIT_MIN_PX`, the face moves this fraction as far, and nothing else moves. */
 export const SMALL_MOTION = 0.4;
 
+/**
+ * The blink: both eyes squash to a thin line about their own centre and
+ * reopen, in any mood, at random intervals, each avatar on its own beat.
+ * Calm and rare: a close and an open of `closeMs` + `openMs` (140ms), a gap
+ * of `gapMs` between blinks, now and then a second blink `doubleGapMs` after
+ * the first. Only at `minPx` and up (smaller, it reads as flicker) and only
+ * on a face with eyes. Still with Reduce Motion, off-screen, hidden or in the
+ * background. The desk draws it in CSS (agents-avatar.css `agents-avatar-blink`,
+ * triggered by a timer that sets one attribute); the phone runs
+ * `blinkSchedule` as one Reanimated sequence on the UI thread.
+ */
+export const BLINK = {
+  minPx: 20,
+  closeMs: 60,
+  openMs: 80,
+  /** How far the eyes squash: this fraction of their height is left. */
+  closedScale: 0.08,
+  /** The wait between blinks, [min, max] ms. */
+  gapMs: [3000, 7000],
+  /** The chance a blink is followed straight away by a second. */
+  doubleChance: 0.12,
+  /** From the start of one blink to the start of its double. */
+  doubleGapMs: 260,
+} as const;
+
+/** Whether an avatar `px` wide with this face blinks. */
+export const blinks = (face: AvatarFace, px: number) =>
+  px >= BLINK.minPx && !FACE_SPECS[face].monogram;
+
+/** One blink and what follows: how long to wait first, and whether it blinks twice. */
+export interface BlinkStep {
+  gapMs: number;
+  double: boolean;
+}
+
+/** The next step. `rand` gives [0, 1): `Math.random`, or a seeded one in a test. */
+export function nextBlink(rand: () => number): BlinkStep {
+  const [lo, hi] = BLINK.gapMs;
+  return { gapMs: Math.round(lo + rand() * (hi - lo)), double: rand() < BLINK.doubleChance };
+}
+
+/**
+ * A run of steps for the phone to play on the UI thread, repeating. The
+ * first gap is drawn over the whole range too, so a list never blinks in step.
+ */
+export function blinkSchedule(rand: () => number, count = 12): BlinkStep[] {
+  const steps: BlinkStep[] = [];
+  for (let i = 0; i < count; i++) steps.push(nextBlink(rand));
+  return steps;
+}
+
 /** The furthest any mood moves the face, for the edge-clearance test. */
 // Indexed and reduced, not destructured or spread: the phone's Babel would need a runtime helper.
 export const FACE_REACH = Object.values(AVATAR_MOTION).reduce(

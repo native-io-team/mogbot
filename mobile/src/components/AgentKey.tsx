@@ -16,6 +16,8 @@
 
 import {
   AVATAR_GRID,
+  FACE_SPECS,
+  blinks,
   KEY,
   SHAPE_PATHS,
   TYPING_KEY,
@@ -37,6 +39,7 @@ import Svg, { Defs, FeGaussianBlur, Filter, LinearGradient, Path, Stop } from 'r
 import { useAppearance } from '../lib/appearance';
 import { alpha, keyLight } from '../lib/theme';
 import { TYPING_KEY_PERIOD_MS, keyDepth, keyDrop } from '../lib/typingKey';
+import { useEyeBlink } from '../lib/avatarBlink';
 import { useMoving } from '../lib/moving';
 import { Face, RimFilter, useLook } from './agent';
 
@@ -63,6 +66,11 @@ export function AgentKey({
   const paint = typingKeyPaint(color, appearance);
   const look = useLook(id, name, undefined);
   const moving = useMoving(!pressing);
+  // The eyes blink while the line is live, a rest or not: the key itself only presses when typed on.
+  const blinking = blinks(look.face, K.size);
+  const eyeY = (FACE_SPECS[look.face].eyes[0].cy * K.size) / AVATAR_GRID;
+  const live = useMoving(false);
+  const blink = useEyeBlink(blinking && live, HEIGHT, eyeY);
   const clock = useSharedValue(0);
   useEffect(() => {
     if (!moving) {
@@ -139,8 +147,24 @@ export function AgentKey({
             paint={paint}
             ink={paint.ink}
             selected={false}
+            part={blinking ? 'rest' : 'all'}
           />
         </Layer>
+        {blinking && (
+          <Animated.View style={[StyleSheet.absoluteFill, blink]} testID="agent-key-eyes">
+            <Layer>
+              <Face
+                look={look}
+                name={name}
+                px={K.size}
+                paint={paint}
+                ink={paint.ink}
+                selected={false}
+                part="eyes"
+              />
+            </Layer>
+          </Animated.View>
+        )}
       </Animated.View>
     </View>
   );

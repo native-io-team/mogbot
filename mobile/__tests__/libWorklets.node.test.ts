@@ -6,6 +6,7 @@
  * uncaught throw there ends the app, as a pinch did on 6 Nov (zoom.ts).
  */
 
+import * as avatarBlink from '../src/lib/eyeBlink';
 import * as typingDots from '../src/lib/typingDots';
 import * as typingKey from '../src/lib/typingKey';
 import * as waveform from '../src/lib/waveform';
@@ -48,9 +49,16 @@ const calls: Record<string, unknown[][]> = {
   // typingKey.ts
   keyDepth: [[0], [0.02], [0.04], [0.1], [0.15], [0.3], [0.38], [0.9], [1], [1.5], [-0.25]],
   keyDrop: [[0], [0.5], [1], [-0.15], [2]],
+  // avatarBlink.ts
+  eyeScaleY: [[0], [0.3], [1], [-0.5], [2]],
 };
 
-const modules: Record<string, Record<string, unknown>> = { waveform, typingDots, typingKey };
+const modules: Record<string, Record<string, unknown>> = {
+  waveform,
+  typingDots,
+  typingKey,
+  avatarBlink,
+};
 const worklets = Object.entries(modules).flatMap(([mod, exports]) =>
   Object.entries(exports)
     .filter((entry): entry is [string, Worklet] => isWorklet(entry[1]))
@@ -60,7 +68,7 @@ const call = (fn: Worklet, args: unknown[]) => (fn as (...a: unknown[]) => unkno
 
 describe('lib worklets on the UI runtime', () => {
   it('are found, and all exercised here', () => {
-    expect(worklets.length).toBeGreaterThanOrEqual(9);
+    expect(worklets.length).toBeGreaterThanOrEqual(10);
     for (const [label, name] of worklets) {
       expect({ label, covered: name in calls }).toEqual({ label, covered: true });
     }

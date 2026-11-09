@@ -97,7 +97,14 @@ tacky. Use it to indicate thinking etc." A small state language (`AVATAR_MOTION`
 
 Rules:
 
-- **The eyes never close and never blink.** Nothing rings, pulses or outlines an avatar, ever.
+- **Blinking.** In any mood the eyes squash to a thin line and reopen (`BLINK`: 60ms shut, 80ms
+  open, 8% left), every 3 to 7s at random, one time in eight twice. Each avatar has its own random
+  beat. From 20px up, faces with eyes only. Desk: a per-avatar timer (`src/lib/avatarBlink.ts`)
+  sets `data-blinking`, CSS does the squash, no React state; it skips while off-screen, hidden or
+  Reduce Motion. Phone: one Reanimated sequence from `blinkSchedule` on the UI thread
+  (`lib/avatarBlink.ts`, worklet `eyeScaleY` in `lib/eyeBlink.ts`), still when `useMoving` is false.
+  Strip: `node scripts/avatar-strips.mjs --only-blink`.
+- **Nothing rings, pulses or outlines an avatar, ever.**
   Only transforms and the breathing light's opacity move (a test reads the stylesheet).
 - **Below 24px only the face moves**, at 40% of the distance (`SMALL_MOTION`); no press, no light.
 - **Moods come from what the rows already know:** needs you (a pending card or waiting), working,

@@ -23,6 +23,7 @@ import {
   AVATAR_MOODS,
   AVATAR_MOTION,
   AVATAR_SHAPES,
+  BLINK,
   FACE_NAMES,
   FINISH_NAMES,
   SHAPE_NAMES,
@@ -186,6 +187,49 @@ function States() {
   );
 }
 
+/**
+ * One blink as a frame strip at three sizes (24, 48, 96px): every frame is a
+ * still avatar whose `data-blinking` the capture script sets, then samples at
+ * its own time across the blink's length.
+ */
+const BLINK_FRAMES = 8;
+function Blink() {
+  const total = BLINK.closeMs + BLINK.openMs;
+  const times = Array.from({ length: BLINK_FRAMES }, (_, i) =>
+    Math.round((total * i) / (BLINK_FRAMES - 1))
+  );
+  const sizes: [string, AgentAvatarSize][] = [
+    ['24px', 'row'],
+    ['48px', 'lg'],
+    ['96px', 'xl'],
+  ];
+  return (
+    <section className="avatar-gallery__section" data-section="blink">
+      {sizes.map(([label, size]) => (
+        <div key={label} className="avatar-gallery__strip" data-blink-strip={label}>
+          <h2>
+            Blink at {label}: {total}ms, eyes to {BLINK.closedScale * 100}% and back
+          </h2>
+          <div className="avatar-gallery__frames">
+            {times.map((t) => (
+              <div key={t} className="avatar-gallery__frame" data-frame-ms={t}>
+                <AgentAvatar
+                  name="Chief"
+                  color="blue"
+                  look={{ shape: 'squircle', face: 'dots' }}
+                  size={size}
+                  still
+                />
+                <span className="avatar-gallery__caption">{t}ms</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      ))}
+    </section>
+  );
+}
+
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <>
@@ -203,6 +247,7 @@ function Gallery() {
       {(section === 'all' || section === 'sizes') && <Sizes />}
       {(section === 'all' || section === 'colors') && <Colors />}
       {section === 'states' && <States />}
+      {section === 'blink' && <Blink />}
     </main>
   );
 }

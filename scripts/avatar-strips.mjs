@@ -24,6 +24,8 @@ const PORT = Number(process.env.SHIPSTUDIO_HARNESS_PORT ?? 1425);
 const ORIGIN = `http://127.0.0.1:${PORT}`;
 const outAt = process.argv.indexOf('--out');
 const OUT = path.resolve(outAt > 0 ? process.argv[outAt + 1] : 'harness/shots');
+/** `--only-blink`: just the blink strip (keycap-blink.png). */
+const ONLY_BLINK = process.argv.includes('--only-blink');
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 class Page {
@@ -151,7 +153,7 @@ async function main() {
   cdp = chrome.port;
   const errors = [];
   try {
-    for (const theme of ['dark', 'light']) {
+    for (const theme of ONLY_BLINK ? [] : ['dark', 'light']) {
       for (const px of ['48', '96']) {
         const p = await open(
           `${ORIGIN}/harness-avatars.html?section=states&freeze=off&theme=${theme}&px=${px}`,
@@ -205,7 +207,24 @@ async function main() {
       errors.push(...app.errors);
       app.close();
     }
+    // One blink, sampled: each frame's avatar is told it is blinking, then
+    // paused at its own time across the blink's length.
+    const blink = await open(`${ORIGIN}/harness-avatars.html?section=blink&freeze=off&theme=dark`, {
+      width: 1100,
+      height: 900,
+    });
+    await blink.waitFor(`document.querySelectorAll('[data-frame-ms]').length >= 24`, 'blink');
+    await blink.eval(
+      `document.querySelectorAll('.agent-avatar').forEach((a) => a.setAttribute('data-blinking', ''))`
+    );
+    await sleep(100);
+    await blink.eval(SAMPLE);
+    await sleep(200);
+    await blink.shot('[data-section="blink"]', 'keycap-blink.png');
+    errors.push(...standalone(blink.errors));
+    blink.close();
     // Direction J as the designer drew it, for the side by side.
+    if (ONLY_BLINK) return;
     const ref = await open(`${ORIGIN}/harness/avatar-directions/index.html?d=J`, {
       width: 1440,
       height: 2400,
