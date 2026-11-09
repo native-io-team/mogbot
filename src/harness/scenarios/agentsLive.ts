@@ -409,10 +409,11 @@ export const agentsLiveScenarios: Scenario[] = [
     id: 'agents-live-in-flight',
     title: 'Agents — What’s in flight says what each one is on',
     looksRightWhen:
-      'What’s in flight. Under “Working now”, Acme Site reads “Running the Cypress tests · 5m” and Finance “No progress for 5 min”, each badge with a soft ring in its colour; no “Working…” anywhere.',
-    requires: '.agents-team__row .agent-avatar--working',
-    openSelector: AGENTS_TAB,
-    steps: [{ click: '.agents-list__needs-you' }],
+      'What’s in flight. Under “Working now”, Acme Site reads “Running the Cypress tests · 5m” and Finance “No progress for 5 min”, each with the working loader at its trailing edge; no “Working…” anywhere.',
+    requires: '.agents-team__row .agents-team__line[data-state="working"]',
+    // Nothing waits on you here, so the sidebar's "Needs your OK" row isn't
+    // drawn; What's in flight is ⌘K's, as it always is.
+    command: 'agents.team',
     commands,
   },
 ];

@@ -32,10 +32,12 @@ export interface ScenarioStep {
   fill?: string;
   /** Choose this value from a native select once it exists. */
   select?: string;
+  /** Focus this once it exists, so a following `key` step lands on it. */
+  focus?: string;
   /** The text `fill` types. */
   value?: string;
   /**
-   * Press a key on the window, e.g. `mod+k` for the palette (`mod` is ⌘).
+   * Press a key at what has focus (else the window), e.g. `mod+k` for the palette (`mod` is ⌘).
    * How the per-agent palette commands are reached: they exist only with an
    * agent selected, which the default-context palette sweep never has.
    */
@@ -95,6 +97,11 @@ export interface Scenario {
    * than as a tidy screenshot of the wrong screen.
    */
   steps?: ScenarioStep[];
+  /**
+   * Steps run after `command`, for a surface the command opens (a Settings
+   * section) that then needs a click or a key. `steps` run before it.
+   */
+  afterCommand?: ScenarioStep[];
 
   /**
    * Capture only this element. A scenario about a popover is reviewed on the

@@ -23,6 +23,7 @@ import { QuickEntry } from '../components/agents/QuickEntry';
 import { ErrorBoundary } from '../components/ErrorBoundary';
 import { installFakeBackend, whenIpcQuiet } from './fakeBackend';
 import { findScenario, scenarios } from './scenarios';
+import type { ScenarioStep } from './types';
 import { unhandledCalls } from './unhandled';
 import { listCommands, runCommand, whenRegistryStable } from './commandBridge';
 import { HarnessOverlay } from './HarnessOverlay';
@@ -169,8 +170,8 @@ function selectOption(el: HTMLElement, value: string): void {
  * steps are written against the screen it was supposed to open, so continuing
  * would click whatever happens to match on the wrong one.
  */
-async function runSteps(): Promise<void> {
-  const steps = [
+async function runSteps(list?: ScenarioStep[]): Promise<void> {
+  const steps = list ?? [
     // The sidebar's Projects segment (labels, stacked or compact icons).
     ...(scenario.startOn === 'projects' ? [{ click: '.mode-toggle [aria-label="Projects"]' }] : []),
     ...(scenario.openSelector ? [{ click: scenario.openSelector }] : []),
@@ -181,7 +182,13 @@ async function runSteps(): Promise<void> {
     if (step.key) {
       const parts = step.key.split('+');
       const key = parts[parts.length - 1];
-      window.dispatchEvent(
+      // At what has focus, so a control's own onKeyDown hears it (a slider's
+      // arrows); it bubbles on to the window's shortcut listeners from there.
+      const target: EventTarget =
+        document.activeElement && document.activeElement !== document.body
+          ? document.activeElement
+          : window;
+      target.dispatchEvent(
         new KeyboardEvent('keydown', {
           key,
           metaKey: parts.includes('mod'),
@@ -194,7 +201,7 @@ async function runSteps(): Promise<void> {
       await new Promise((r) => requestAnimationFrame(() => setTimeout(r, 50)));
       continue;
     }
-    const selector = step.click ?? step.hover ?? step.fill ?? step.select;
+    const selector = step.click ?? step.hover ?? step.fill ?? step.select ?? step.focus;
     if (!selector) continue;
     const el = await waitFor(selector, undefined, step.text);
     const named = step.text ? `${selector} “${step.text}”` : selector;
@@ -217,6 +224,9 @@ async function runSteps(): Promise<void> {
       stepLog.push(`hovered ${selector}`);
       // The shared tooltip waits out its one-second show delay first.
       await new Promise((r) => setTimeout(r, 1200));
+    } else if (step.focus) {
+      el.focus();
+      stepLog.push(`focused ${selector}`);
     } else if (step.fill) {
       fillInput(el, step.value ?? '');
       stepLog.push(`filled ${selector}`);
@@ -244,6 +254,10 @@ async function settle(): Promise<void> {
       window.__harness.commandMissing = true;
       console.error(`[harness] no such palette command: ${commandId}`);
     }
+  }
+  if (scenario.afterCommand?.length) {
+    await whenIpcQuiet();
+    await runSteps(scenario.afterCommand);
   }
 
   // Wait for the app to stop asking the backend for things, then for one

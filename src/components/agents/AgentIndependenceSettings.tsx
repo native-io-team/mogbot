@@ -30,6 +30,9 @@ export function AgentIndependenceSettings() {
   const [picked, setPicked] = useState<AgentIndependence | null>(null);
   const [saving, setSaving] = useState(false);
   const ref = useRef<HTMLElement>(null);
+  // The latest choice: an earlier one finishing must not snap the slider back
+  // while a later one (→ pressed twice) is still saving.
+  const latest = useRef(0);
   useEffect(() => {
     if (loaded && takeSettingsSectionRequest('agent-independence')) {
       ref.current?.scrollIntoView?.({ block: 'start' });
@@ -40,16 +43,19 @@ export function AgentIndependenceSettings() {
   const value = picked ?? independenceOf(saved);
   const choose = async (level: AgentIndependence) => {
     if (level === value) return;
+    const mine = ++latest.current;
     setPicked(level);
     setSaving(true);
     try {
       await setIndependence(level);
-      await refreshAgents();
+      if (mine === latest.current) await refreshAgents();
     } catch (e) {
       showToast(formatCommandError(asCommandError(e)), 'error');
     } finally {
-      setPicked(null);
-      setSaving(false);
+      if (mine === latest.current) {
+        setPicked(null);
+        setSaving(false);
+      }
     }
   };
 
