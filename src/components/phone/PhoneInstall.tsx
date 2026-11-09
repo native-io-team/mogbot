@@ -54,8 +54,6 @@ const NAME: Record<InstallPlatform, string> = { ios: 'iPhone', android: 'Android
 interface PhoneInstallProps {
   /** Reinstall from the Phone panel skips the route choice. */
   reinstall?: InstallPlatform;
-  /** Onboarding: straight to building for this platform (already chosen there). */
-  build?: InstallPlatform;
   /** This Mac's Tailscale, for who the phone signs in as; null before it's read. */
   tailscale: TailscaleState | null;
   onBack: () => void;
@@ -63,9 +61,9 @@ interface PhoneInstallProps {
   onPair: () => void;
 }
 
-export function PhoneInstall({ reinstall, build, tailscale, onBack, onPair }: PhoneInstallProps) {
-  const [platform, setPlatform] = useState<InstallPlatform>(reinstall ?? build ?? 'ios');
-  const [building, setBuilding] = useState(reinstall !== undefined || build !== undefined);
+export function PhoneInstall({ reinstall, tailscale, onBack, onPair }: PhoneInstallProps) {
+  const [platform, setPlatform] = useState<InstallPlatform>(reinstall ?? 'ios');
+  const [building, setBuilding] = useState(reinstall !== undefined);
 
   if (!building) {
     return (
@@ -83,7 +81,7 @@ export function PhoneInstall({ reinstall, build, tailscale, onBack, onPair }: Ph
       platform={platform}
       tailscale={tailscale}
       reinstall={reinstall !== undefined}
-      onBack={reinstall || build ? onBack : () => setBuilding(false)}
+      onBack={reinstall ? onBack : () => setBuilding(false)}
       onPair={onPair}
     />
   );

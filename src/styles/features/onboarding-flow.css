@@ -4,7 +4,6 @@
   --flow-body-width: 520px;
   --flow-body-width-wide: 720px;
   --flow-top-height: 64px;
-  --flow-qr-size: 184px;
   /* The site's desk: a dot grid that fades toward the edges, under one warm
      pool of light from above. Feature-local: only these screens sit on it. */
   --flow-mat-dot: rgba(214, 210, 202, 0.07);
@@ -157,16 +156,6 @@
   min-width: 240px;
 }
 
-.flow-choice {
-  display: flex;
-  gap: var(--spacing-md);
-  justify-content: center;
-}
-
-.flow-choice > .button {
-  min-width: 160px;
-}
-
 .flow-note,
 .flow-eyebrow {
   margin: 0;
@@ -238,132 +227,10 @@
   color: var(--text-muted);
 }
 
-/* A QR code beside what it's for. */
-.flow-split {
-  display: flex;
-  gap: var(--spacing-xl);
-  align-items: center;
-}
-
-.flow-split__side {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--spacing-md);
-  min-width: 0;
-}
-
-.flow-split__side > .flow-check {
-  align-self: stretch;
-}
-
-.flow-qr {
-  display: flex;
-  justify-content: center;
-  flex-shrink: 0;
-}
-
-.flow-qr .phone-qr {
-  border-radius: var(--radius-card);
-}
-
-.flow-qr__placeholder {
-  width: var(--flow-qr-size);
-  height: var(--flow-qr-size);
-  border-radius: var(--radius-card);
-  background: var(--surface-control);
-}
-
-.flow-ready-avatar {
-  display: flex;
-  justify-content: center;
-}
-
-/* The guided phone build, embedded as it is in the Phone panel. It carries
-   `.phone-modal` for that panel's inner styles, but not its 520px width:
-   the checklist and the agent's card sit side by side and need the column. */
-.flow-embed,
-.flow-embed.phone-modal {
-  width: 100%;
-  padding: var(--spacing-lg);
-  border-radius: var(--radius-card);
-  border: var(--border-width-default) solid var(--border-subtle);
-  background: var(--surface-panel);
-}
-
 .flow-error {
   position: fixed;
   left: 50%;
   bottom: var(--spacing-xl);
   transform: translateX(-50%);
   z-index: var(--z-dropdown);
-}
-
-@media (max-width: 640px) {
-  .flow-split {
-    flex-direction: column;
-  }
-}
-
-/* "Add another account?": the accounts there are, a Line each. */
-.flow-accounts {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.flow-accounts__row {
-  display: flex;
-  align-items: baseline;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-sm) 0;
-  border-top: var(--border-width-default) solid var(--border-subtle);
-}
-
-.flow-accounts__row:first-child {
-  border-top: none;
-}
-
-.flow-accounts__mark {
-  flex: none;
-  /* An icon has no text baseline: on the row's baseline it rode high. */
-  align-self: center;
-  display: inline-flex;
-  justify-content: center;
-  width: var(--size-icon-sm);
-  color: var(--text-primary);
-}
-
-.flow-accounts__name {
-  min-width: 0;
-  font-size: var(--font-size-body-md);
-  color: var(--text-primary);
-  overflow-wrap: anywhere;
-}
-
-.flow-accounts__detail {
-  font-size: var(--font-size-body-sm);
-  color: var(--text-muted);
-}
-
-.flow-accounts__row .flow-accounts__detail {
-  margin-left: auto;
-  text-align: right;
-}
-
-.flow-accounts__field {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-xs);
-}
-
-.flow-accounts__more {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: var(--spacing-md);
-  font-size: var(--font-size-body-sm);
 }

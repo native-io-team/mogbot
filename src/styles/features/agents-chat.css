@@ -376,6 +376,14 @@
   margin-top: var(--spacing-md);
 }
 
+/* The one card under the greeting (bring your agents?) reads like every
+   other card: left-aligned, with room above it so the greeting comes first. */
+.agent-chat__messages[data-greeting] > .agent-card {
+  align-self: stretch;
+  margin-top: var(--spacing-xl);
+  text-align: start;
+}
+
 /* What keeps them going, at the foot of What's in flight. */
 .agents-team__column > .agents-stay-on {
   margin-top: var(--spacing-xl);

@@ -145,6 +145,7 @@ import {
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { ImportTalkBar } from './ImportTalkBar';
 import { ImportChoiceCard } from './ImportChoiceCard';
+import { ChiefPhoneOffer, reachedFirstResult } from './ChiefPhoneOffer';
 import { WaitingForYouBar } from './WaitingForYouBar';
 import { TeamSetupCard } from './TeamSetupCard';
 import {
@@ -359,6 +360,8 @@ interface AgentChatProps extends AgentActions {
   /** The expired-login remedy on an error line. */
   onSignIn: () => void;
   onImport: () => void;
+  /** The Chief's phone offer, once the first result is in: open the Phone panel. */
+  onSetUpPhone?: () => void;
   /** Esc in the composer: true if something above it (search) took it. */
   onEscape?: () => boolean;
   /** Below the compact breakpoint the sidebar is gone; the header carries navigation. */
@@ -415,6 +418,7 @@ export const AgentChat = memo(function AgentChat({
   onSetUpEngine,
   onSignIn,
   onImport,
+  onSetUpPhone,
   onEscape,
   compact,
   jumpTo,
@@ -428,6 +432,7 @@ export const AgentChat = memo(function AgentChat({
   const accentScope = useAccentScope(agent.color);
   // This chat's slices only: another agent's reply streaming doesn't touch it.
   const messages = useAgentsSelector((s) => s.messages[agent.id]);
+  const importChoice = useAgentsSelector((s) => s.importChoice);
   const draftHead = useAgentsSelector((s) => draftHeadOf(s, agent.id), sameDraftHead);
   const engineReady = useAgentsSelector((s) =>
     engineIsReady(agent.engine, s.engines, s.engineReady)
@@ -1674,8 +1679,12 @@ export const AgentChat = memo(function AgentChat({
               ref={messagesRef}
               data-greeting={(greetingOnly && engineReady) || undefined}
             >
-              {/* Asked once, for an install that never answered it. */}
-              {agent.isMain && engineReady && <ImportChoiceCard onImport={onImport} />}
+              {/* Asked once, for an install that never answered it. On a
+              first run it comes after the greeting and its starters (below),
+              so the Chief speaks first. */}
+              {agent.isMain && engineReady && !greetingOnly && (
+                <ImportChoiceCard onImport={onImport} />
+              )}
               {items.length === 0 ? (
                 <div className="agent-chat__empty">
                   <AgentAvatar
@@ -1728,6 +1737,14 @@ export const AgentChat = memo(function AgentChat({
               {/* The Chief spoke first (its stored greeting); the ways in sit
               under it until the user says something. */}
               {greetingOnly && engineReady && chiefStarters}
+              {greetingOnly && engineReady && <ImportChoiceCard onImport={onImport} />}
+              {/* The phone, offered once the first thing asked for is back. */}
+              {agent.isMain &&
+                engineReady &&
+                onSetUpPhone &&
+                !busy &&
+                importChoice !== 'undecided' &&
+                reachedFirstResult(shown) && <ChiefPhoneOffer onSetUp={onSetUpPhone} />}
               {/* A ready-made agent the Chief just made: only "Created by" so
               far, so its own starters sit under it until the user speaks. */}
               {templateFirstOpen && engineReady && templateStarters}

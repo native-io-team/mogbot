@@ -2,7 +2,7 @@
  * How much agents do on their own: a four-stop slider titled "How much it
  * does on its own", from "Asks a lot" (Careful) to "Just does it" (Unleashed).
  * Under it, the chosen stop's one line, then the line true at every stop. The
- * same control in onboarding and Settings → Agents (`AgentIndependenceSettings`);
+ * control in Settings → Agents (`AgentIndependenceSettings`);
  * the phone draws the same stops from the same strings (`IndependenceSetting`).
  *
  * One `role="slider"` carries the value for the keyboard and screen readers
@@ -40,14 +40,11 @@ export function IndependenceSlider({
   value,
   onChange,
   disabled = false,
-  large = false,
   showTitle = true,
 }: {
   value: AgentIndependence;
   onChange: (level: AgentIndependence) => void;
   disabled?: boolean;
-  /** Onboarding's roomier version. */
-  large?: boolean;
   /** Off where a heading already asks the question; still its accessible name. */
   showTitle?: boolean;
 }) {
@@ -98,10 +95,7 @@ export function IndependenceSlider({
   };
 
   return (
-    <div
-      className={`independence-slider${large ? ' independence-slider--large' : ''}`}
-      data-level={shown}
-    >
+    <div className="independence-slider" data-level={shown}>
       {showTitle && (
         <span id={titleId} className="independence-slider__title">
           {INDEPENDENCE_TITLE}
@@ -132,10 +126,7 @@ export function IndependenceSlider({
       >
         <div className="independence-slider__rail" ref={rail}>
           <span className="independence-slider__track" />
-          <span
-            className="independence-slider__fill"
-            style={{ width: `${at(index) * 100}%` }}
-          />
+          <span className="independence-slider__fill" style={{ width: `${at(index) * 100}%` }} />
           {INDEPENDENCE_LEVELS.map((level, i) => (
             <span
               key={level}

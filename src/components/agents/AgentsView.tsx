@@ -315,6 +315,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
   const openIdeas = useCallback(() => openModal('chiefIdeas'), [openModal]);
   const openLogins = useCallback(() => openModal('teamLogins'), [openModal]);
   const openBrowser = useCallback(() => openModal('agentBrowser'), [openModal]);
+  const openPhone = useCallback(() => openModal('phone'), [openModal]);
   /** A picked idea: the Chief's chat, with its brief typed out. */
   const pickIdea = useCallback(
     (idea: ChiefIdea) => {
@@ -1002,6 +1003,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                 onSetUpEngine={setUpShownEngine}
                 onSignIn={signInShown}
                 onImport={openImport}
+                onSetUpPhone={shown.isMain ? openPhone : undefined}
                 onOpenApps={openShownApps}
                 onMoreIdeas={shown.isMain ? openIdeas : undefined}
                 onEscape={escapeSearch}
