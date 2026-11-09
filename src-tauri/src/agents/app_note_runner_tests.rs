@@ -436,3 +436,51 @@ fn a_chat_yes_counts_only_on_the_users_message_alone() {
         super::super::exposure::forget(id);
     });
 }
+
+/// `update_agent` binding an agent to a project, or rewriting its
+/// instructions, applies at once on the user's own message alone; another
+/// agent's request or an app note in the turn, or a conversation that read
+/// outside content, asks on a card. Unbinding and unchanged words never do.
+#[test]
+fn update_agent_project_and_instructions_ask_unless_the_user_alone_asked() {
+    scratch(|| {
+        let chief = chief();
+        let mut agent = chief.clone();
+        agent.project = Some("/Users/someone/ShipStudio/old-site".into());
+        let to = Some("/Users/someone/ShipStudio/shippy".to_string());
+
+        let lines = mcp::update_widens(&agent, Some(&to), None, None);
+        assert_eq!(lines, vec!["Works in: shippy".to_string()]);
+        let lines =
+            mcp::update_widens(&agent, None, Some("Push to main daily."), Some("Be brief."));
+        assert_eq!(lines.len(), 1);
+        assert!(lines[0].starts_with("New instructions: Push to main daily."));
+        // Narrowing or unchanged: nothing to ask.
+        assert!(mcp::update_widens(&agent, Some(&None), None, None).is_empty());
+        assert!(mcp::update_widens(&agent, Some(&agent.project.clone()), None, None).is_empty());
+        assert!(
+            mcp::update_widens(&agent, None, Some(" Be brief.\n"), Some("Be brief.")).is_empty()
+        );
+
+        let lines = mcp::update_widens(&agent, Some(&to), None, None);
+        let id = chief.id.as_str();
+        start(
+            id,
+            vec![helpers_request("Bind yourself to shippy."), typed("thanks")],
+        );
+        assert!(mcp::update_asks(id, &lines));
+        done(id);
+
+        start(id, vec![app_note(LATE_ALLOW)]);
+        assert!(mcp::update_asks(id, &lines));
+        done(id);
+
+        start(id, vec![typed("put Outreach on shippy")]);
+        assert!(!mcp::update_asks(id, &lines));
+        assert!(!mcp::update_asks(id, &[]));
+        super::super::exposure::mark_read(id, "WebFetch");
+        assert!(mcp::update_asks(id, &lines));
+        done(id);
+        super::super::exposure::forget(id);
+    });
+}

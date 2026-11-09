@@ -1923,33 +1923,47 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     if engine.is_some() {
         fields.push("engine");
     }
-    if account.as_ref().is_some_and(|a| *a != agent.account) {
+    let account_changes = account.as_ref().is_some_and(|a| *a != agent.account);
+    if account_changes {
         fields.push("account");
-        // Which of the user's accounts it spends: the user's own message
-        // alone changes it at once (as `use_account`); anything else asks.
-        // A turn answering outside text already asked for the whole call.
-        if !runner::users_own_ask(&caller.id) && !runner::from_outside(&caller.id) {
-            let shown = account
-                .as_ref()
-                .and_then(|a| a.as_deref())
-                .and_then(|id| {
-                    super::wallet::list()
-                        .into_iter()
-                        .find(|w| w.id == id)
-                        .map(|w| super::wallet::labelled(w, true).name)
-                })
-                .unwrap_or_else(|| "any account".to_string());
-            let answer = ask_user(
-                app,
-                caller,
-                format!("Change which account {} runs on?", agent.name),
-                format!("Runs on: {shown}"),
-                None,
-            )
-            .await;
-            if let Some(refused) = refused_reply(&answer, "change it") {
-                return error(refused);
-            }
+    }
+    // What gives it more reach, or rewrites what it is told to do: the
+    // user's own message alone changes it at once; another agent's request,
+    // an app note or a conversation that read outside content asks
+    // (`runner::users_own_ask`). Which of the user's accounts it spends
+    // (as `use_account`), a project it works in, its instructions. Unbinding
+    // or a name, role, look or model never asks. A turn answering outside
+    // text already asked for the whole call.
+    let current =
+        arg(args, "instructions").map(|_| store::read_instructions(&agent.id).unwrap_or_default());
+    let mut widens = update_widens(
+        &agent,
+        project.as_ref(),
+        arg(args, "instructions"),
+        current.as_deref(),
+    );
+    if account_changes {
+        let shown = account
+            .as_ref()
+            .and_then(|a| a.as_deref())
+            .and_then(|id| {
+                super::wallet::list()
+                    .into_iter()
+                    .find(|w| w.id == id)
+                    .map(|w| super::wallet::labelled(w, true).name)
+            })
+            .unwrap_or_else(|| "any account".to_string());
+        widens.insert(0, format!("Runs on: {shown}"));
+    }
+    if update_asks(&caller.id, &widens) {
+        let title = if account_changes && widens.len() == 1 {
+            format!("Change which account {} runs on?", agent.name)
+        } else {
+            format!("Change {}?", agent.name)
+        };
+        let answer = ask_user(app, caller, title, widens.join("\n"), None).await;
+        if let Some(refused) = refused_reply(&answer, "change it") {
+            return error(refused);
         }
     }
     // The same guard as the editor's: not out of a session the user drives.
@@ -2021,6 +2035,41 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     } else {
         text(format!("Updated {}: {}.", updated.name, said.join("; ")))
     }
+}
+
+/// The lines of an `update_agent` call that ask unless the user's own
+/// message alone asked for them: binding it to a project it isn't in (more
+/// reach: that project's files, dev server and pushes), and instructions
+/// that differ from what it has (`current`). Unbinding narrows: no line.
+pub(super) fn update_widens(
+    agent: &store::Agent,
+    project: Option<&Option<String>>,
+    instructions: Option<&str>,
+    current: Option<&str>,
+) -> Vec<String> {
+    let mut lines = Vec::new();
+    if let Some(Some(path)) = project {
+        if agent.project.as_deref() != Some(path.as_str()) {
+            let name = std::path::Path::new(path)
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| path.clone());
+            lines.push(format!("Works in: {name}"));
+        }
+    }
+    if let Some(i) = instructions {
+        if i.trim() != current.unwrap_or_default().trim() {
+            lines.push(format!("New instructions: {}", short_line(i)));
+        }
+    }
+    lines
+}
+
+/// Whether those lines (`update_widens`, plus a Runs on change) need a card:
+/// any at all, and the turn isn't the user's own message alone. A turn
+/// answering outside text asked for the whole call before it got here.
+pub(super) fn update_asks(caller_id: &str, widens: &[String]) -> bool {
+    !widens.is_empty() && !runner::users_own_ask(caller_id) && !runner::from_outside(caller_id)
 }
 
 /// `update_agent`'s `account` ("Runs on"): `None` for any account ("any",

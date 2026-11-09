@@ -5069,7 +5069,8 @@ are `agents/settings_tools.rs`. Tests: `agents/settings_chat_tests.rs`,
 | Which account turns start on ("use my personal plan") | `use_account` (Chief): puts that signed-in account first in the order (`wallet::reorder`), failover unchanged | no when the user's own message asked; a card when another agent or a routine did; never for outside text |
 | Engine, model, effort, routines' model | `update_agent` (Chief) | no: what its turns run on, not what they may do; one "Now on Opus · High from its next message" line, as the editor leaves |
 | Mute an agent's notifications | `update_agent` `muted` (Chief) | no; unread and the badge still count it |
-| Name, role, instructions, project, look | `update_agent` / `create_agent` (Chief) | no (a card in a turn answering outside text, as before) |
+| Name, role, look; unbinding from a project | `update_agent` / `create_agent` (Chief) | no (a card in a turn answering outside text, as before) |
+| Binding an agent to a project (more reach), changing its instructions | `update_agent` `project` / `instructions` (Chief) | no on the user's own message alone; a card otherwise ("Works in: shippy", "New instructions: …", with Runs on on the same card when it changes too; `mcp::update_widens`) |
 | Admin switch | `propose_settings_change` `admin` (admins) | yes |
 | Logins and secrets | `request_login`, `request_secret` | their own cards; never a value in chat |
 | Not from chat | the phone pairing and revoking, Remote Access on/off and its push PIN, removing an account and its sign-in, quick-entry shortcut and menu-bar icon, new agents' default engine/model, the agents' browser switch, the phone's own appearance and text size | each is either a security wall that must be confirmed on the desk (pairing, Remote Access, PIN) or rarely asked for; the desk is the way in |
