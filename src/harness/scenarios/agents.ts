@@ -1795,7 +1795,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-team',
     title: 'Agents — a working team, Chief of Staff open',
     looksRightWhen:
-      'Agent list under the Agents | Projects toggle and conversation search: an amber “Needs your OK · 1” row first, then the agents (pinned first, then most recent) with up to two-line previews; pin marks small and faint. The Chief of Staff conversation with its name and role centred in the header band, no engine control. “4 messages with Acme Site · working on the pricing table” sits centred, no empty slot after the dot. Above the composer, one bar: an amber dot, “Lead Gen needs your OK”, “1 request”, Review. New agent / Import agents are short rows in secondary text, with no gap between them.',
+      'Agent list under the Agents | Projects toggle and conversation search. Beside the sidebar toggle, a bell with a small “1” on an amber wash (What’s in flight); no “Needs your OK · N” row in the list. The agents (pinned first, then most recent): each row is the name alone (no role cut to a few letters) and one status line; Lead Gen’s says “Needs your OK” in its pill with no amber dot at the right; the right-hand column shows only Finance’s unread dot and Acme Site’s spinner; pin marks small and faint. The header’s controls are words: Usage, Routines, Model ⌄, then … The Chief of Staff conversation with its name and role centred in the header band, no engine control. “4 messages with Acme Site · working on the pricing table” sits centred, no empty slot after the dot. Above the composer, one bar: an amber dot, “Lead Gen needs your OK”, “1 request”, Review. New agent / Import agents are short rows in secondary text, with no gap between them.',
     command: 'agents.open',
     requires: '.agent-chat .agent-bubble--agent',
     commands: {
@@ -1906,7 +1906,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-usage-limit',
     title: 'Agents — a usage limit with a reset time Claude Code reported',
     looksRightWhen:
-      'Finance’s chat ends in a quiet amber notice (not a red alarm): “Claude Code’s usage limit is reached. It resets at <time>.” with one text action, “Retry at <time>”, in the agent’s readable accent (never paler than the text around it). Finance’s sidebar row reads “Usage limit · resets <time>” in muted text with no dot (amber is for needs-you only); Lead Gen’s row reads “<reason> · didn’t finish” in red, over two lines if needed, with a red dot.',
+      'Finance’s chat ends in a quiet amber notice (not a red alarm): “Claude Code’s usage limit is reached. It resets at <time>.” with one text action, “Retry at <time>”, in full neutral ink (never the agent’s colour: a red or green agent’s accent read as error or success). Finance’s sidebar row reads “Usage limit · resets <time>” in muted text with no dot (amber is for needs-you only); Lead Gen’s row reads “<reason> · didn’t finish” in red, over two lines if needed, with a red dot.',
     requires: '.agent-bubble--error[data-failure="usage_limit"]',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="finance"]' }],
@@ -2192,13 +2192,10 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-model-menu',
     title: 'Agents — model menu, with what routines run on',
     looksRightWhen:
-      'Finance’s … menu ends with its model: a quiet “Model · runs on Claude Code” line, then Default (checked), Most capable (Opus), Balanced (Sonnet), Fastest (Haiku) with the engine’s names small; Finance has a routine, so a divider, “Routines run on Fastest”, then Automatic (checked), Same as its chats and the three models.',
+      'Finance’s header has a quiet “Model ⌄” button left of the … menu. Open, it starts with a quiet “Model · runs on Claude Code” line, then Default (checked), Most capable (Opus), Balanced (Sonnet), Fastest (Haiku) with the engine’s names small; Finance has a routine, so a divider, “Routines run on Fastest”, then Automatic (checked), Same as its chats and the three models. The menu never runs past the window: it stops above the bottom edge and scrolls inside.',
     requires: '.agent-model-menu__heading',
     openSelector: AGENTS_TAB,
-    steps: [
-      { click: '[data-agent-id="finance"]' },
-      { click: '[aria-label="Actions for Finance"]' },
-    ],
+    steps: [{ click: '[data-agent-id="finance"]' }, { click: '.agent-chat__model button' }],
     commands: {
       agents_overview: overview(),
       agents_messages: messagesFor,
@@ -2543,10 +2540,10 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-model-menu',
     title: 'Agents — the model menu in the chat header',
     looksRightWhen:
-      'The header has no engine or model control: the … menu holds it. Open, the menu ends with “Model · runs on Claude Code” and Default (checked), Most capable, Balanced, Fastest, each with the engine’s own name small beside it; no item ringed or highlighted.',
+      'The header has a quiet “Model ⌄” button left of the … menu, which holds actions only. Open, the menu starts with “Model · runs on Claude Code” and Default (checked), Most capable, Balanced, Fastest, each with the engine’s own name small beside it; no item ringed or highlighted.',
     openSelector: AGENTS_TAB,
     requires: '.agent-model-menu__heading',
-    steps: [{ click: '[aria-label^="Actions for"]' }],
+    steps: [{ click: '.agent-chat__model button' }],
     commands: {
       agents_overview: overview(),
       agents_messages: messagesFor,
@@ -2679,18 +2676,22 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-new',
     title: 'Agents — creating an agent',
     looksRightWhen:
-      'Name first (with its avatar, which opens its look), then “What should it do?” and “What should it know?”, a muted line saying you can just ask your Chief of Staff, and a collapsed “Advanced” link. No colours, models or projects until Advanced is opened.',
+      'Describe first, and only that: “Describe the agent you want” over a tall box whose placeholder is short and muted (“For example: …”), so the box reads as empty; Draft it (the neutral strong button, disabled until there are a few words) and its one-line hint. Under it one quiet line: “Or fill it in yourself, start from Research, Inbox or Weekly Review, or ask your Chief of Staff.” No name field, form, Advanced or Create yet; the footer has Cancel only.',
     command: 'agents.new',
-    requires: '.agent-editor__advanced',
+    requires: '.agent-describe',
     commands: {},
   },
   {
     id: 'agents-new-advanced',
     title: 'Agents — creating an agent, Advanced open',
     looksRightWhen:
-      'Advanced open under the brief: Runs on, Model (Default / Opus / Sonnet / Haiku), Works in, Apps. (Colour is with the shape and face, behind the avatar beside Name.)',
+      'After “fill it in yourself”: Start from (Blank pressed), Name, the brief, then Advanced open under it: Runs on, Model (Default / Opus / Sonnet / Haiku), Works in, Apps, scrolled so Apps sits whole above the footer, not cut in half by it. (Colour is with the shape and face, behind the avatar beside Name.)',
     // Steps run before a scenario's command, so the dialog is opened by its button.
-    steps: [{ click: '.agents-list__new' }, { click: '.agent-editor__more' }],
+    steps: [
+      { click: '.agents-list__new' },
+      { click: '.agent-editor__fill-in' },
+      { click: '.agent-editor__more' },
+    ],
     requires: '.agent-editor__advanced-body',
     commands: {},
   },

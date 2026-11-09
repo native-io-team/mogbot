@@ -36,7 +36,6 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { ChevronIcon, HistoryIcon, PlusIcon } from '@/components/icons';
 import { Dropdown } from '../primitives/Dropdown';
-import { IconButton } from '../primitives/IconButton';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
 import { TextField } from '../primitives/TextField';
@@ -161,14 +160,18 @@ export function AgentSchedulePopover({
             </span>
           </Button>
         ) : (
-          <IconButton
+          // Words, not the clock alone: on its own it read as "history".
+          <Button
             {...p}
             tabIndex={0}
             variant="ghost"
-            icon={<HistoryIcon size={14} />}
+            className="agent-chat__scheduled"
+            leftIcon={<HistoryIcon size={12} />}
             title="Schedule a routine"
             aria-label={`Schedule a routine for ${agent.name}`}
-          />
+          >
+            <span className="agent-chat__scheduled-word">Routines</span>
+          </Button>
         )
       }
     >

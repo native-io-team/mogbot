@@ -1,6 +1,6 @@
 /**
- * What you can do to an agent: Pin, Mark as unread, Mute, Edit, What it does on its own, Take
- * over, Start fresh, Hide, Delete. One
+ * What you can do to an agent, actions only: Edit, What it does on its own, Schedule, Files;
+ * Pin, Mark as unread, Mute, Hide; Take over, Start fresh; then Delete, last. One
  * list, rendered as a row's right-click menu or as the conversation header's
  * … menu, so the two never drift apart.
  *
@@ -77,22 +77,11 @@ export function AgentActionItems({
   /** Same: only where the Files list can open. */
   onFiles?: () => void;
 } & AgentActions) {
+  // Actions only, in three short groups, Delete last on its own: what you do
+  // with it, where it sits in the list, then the conversation itself. Its
+  // model and effort are settings, not actions: the header's Model menu and
+  // Edit agent → Advanced hold them.
   const items: Item[] = [
-    {
-      label: agent.pinned ? 'Unpin' : 'Pin',
-      icon: <PinIcon size={12} />,
-      run: () => onTogglePin(agent),
-    },
-    { label: 'Mark as unread', icon: <CommentIcon size={12} />, run: () => onMarkUnread(agent) },
-    {
-      label: agent.muted ? 'Unmute notifications' : 'Mute notifications',
-      icon: agent.muted ? <BellIcon size={12} /> : <BellOffIcon size={12} />,
-      run: () => onToggleMuted(agent),
-    },
-    ...(onFiles ? [{ label: 'Files', icon: <PaperclipIcon size={12} />, run: onFiles }] : []),
-    ...(onSchedule
-      ? [{ label: 'Schedule a routine…', icon: <HistoryIcon size={12} />, run: onSchedule }]
-      : []),
     { label: 'Edit agent…', icon: <EditIcon size={12} />, run: () => onEdit(agent) },
     ...(onOnItsOwn
       ? [
@@ -103,25 +92,42 @@ export function AgentActionItems({
           },
         ]
       : []),
-    ...takeoverItems(agent, onTakeOver, onHandBack),
-    ...(canStartFresh(agent)
-      ? [
-          {
-            // How full it is, only when its engine said.
-            label: freshLabel(agent),
-            icon: <ResetIcon size={12} />,
-            run: () => onStartFresh(agent),
-            // Its turn is in the conversation it would leave.
-            disabled: agent.status.state !== 'idle',
-          },
-        ]
+    ...(onSchedule
+      ? [{ label: 'Schedule a routine…', icon: <HistoryIcon size={12} />, run: onSchedule }]
       : []),
+    ...(onFiles ? [{ label: 'Files', icon: <PaperclipIcon size={12} />, run: onFiles }] : []),
+    {
+      label: agent.pinned ? 'Unpin' : 'Pin',
+      icon: <PinIcon size={12} />,
+      run: () => onTogglePin(agent),
+      divider: true,
+    },
+    { label: 'Mark as unread', icon: <CommentIcon size={12} />, run: () => onMarkUnread(agent) },
+    {
+      label: agent.muted ? 'Unmute notifications' : 'Mute notifications',
+      icon: agent.muted ? <BellIcon size={12} /> : <BellOffIcon size={12} />,
+      run: () => onToggleMuted(agent),
+    },
     {
       label: agent.hidden ? 'Show in sidebar' : 'Hide from sidebar',
       icon: agent.hidden ? <EyeIcon size={12} /> : <EyeOffIcon size={12} />,
       run: () => onToggleHidden(agent),
-      divider: true,
     },
+    ...withDivider([
+      ...takeoverItems(agent, onTakeOver, onHandBack),
+      ...(canStartFresh(agent)
+        ? [
+            {
+              // How full it is, only when its engine said.
+              label: freshLabel(agent),
+              icon: <ResetIcon size={12} />,
+              run: () => onStartFresh(agent),
+              // Its turn is in the conversation it would leave.
+              disabled: agent.status.state !== 'idle',
+            },
+          ]
+        : []),
+    ]),
   ];
   if (!agent.isMain) {
     items.push({
@@ -129,6 +135,7 @@ export function AgentActionItems({
       icon: <TrashIcon size={12} />,
       run: () => onDelete(agent),
       danger: true,
+      divider: true,
     });
   }
 
@@ -164,6 +171,11 @@ export function AgentActionItems({
       ])}
     </>
   );
+}
+
+/** A group, set off by a divider above its first item (none when it's empty). */
+function withDivider(group: Item[]): Item[] {
+  return group.map((item, i) => (i === 0 ? { ...item, divider: true } : item));
 }
 
 /** Take over, or Hand back while you're driving; nothing before its first conversation. */

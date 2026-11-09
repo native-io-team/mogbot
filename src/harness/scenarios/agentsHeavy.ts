@@ -517,7 +517,7 @@ export const agentsHeavyScenarios: Scenario[] = [
     id: 'agents-heavy',
     title: 'Agents — the real shape: Chief + 21 imported agents, 16 waiting',
     looksRightWhen:
-      'Sidebar: “Needs your OK · 16” first, then the Chief (pinned) and Mobile App (pinned), then the 16 waiting on you, the two working, and the rest by recent activity; the two working agents show their activity line in the working colour; Customer Forum Helper fits on one line beside its dot. The Chief’s chat ends on a long markdown reply (headings, a numbered list with a nested list, a five-column table, a YAML block, a quote) that sits inside the reading column. Rooms below the agents.',
+      'Sidebar: the bell beside the toggle counts “9+”; the list starts with the Chief (pinned) and Mobile App (pinned), then the 16 waiting on you, the two working, and the rest by recent activity; the two working agents show their activity line in the working colour; Customer Forum Helper fits on one line beside its dot. The Chief’s chat ends on a long markdown reply (headings, a numbered list with a nested list, a five-column table, a YAML block, a quote) that sits inside the reading column. Rooms below the agents.',
   },
   {
     ...base,
@@ -534,7 +534,7 @@ export const agentsHeavyScenarios: Scenario[] = [
     looksRightWhen:
       'What’s in flight: the 16 agents needing you first, each one row with its count of requests; the two working ones under it; nothing overflowing.',
     requires: '.agents-team',
-    steps: [{ click: '.agents-list__needs-you' }],
+    steps: [{ click: '.agents-inflight button' }],
   },
   {
     ...base,

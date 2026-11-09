@@ -434,6 +434,21 @@ describe('component roles on fixed hues and light surfaces', () => {
     }
   );
 
+  it.each(['dark', 'light'] as const)(
+    'an off switch reads as off: its ring at 3:1, a knob lighter than its track (%s)',
+    (theme) => {
+      for (const bg of ['--surface-app', '--surface-panel', '--surface-control']) {
+        expect(
+          contrast(resolveComponent('--switch-off-track-border', theme), resolveHex(bg, theme)),
+          `ring on ${bg}`
+        ).toBeGreaterThanOrEqual(3);
+      }
+      const knob = parseHex(resolveComponent('--switch-off-knob', theme))!;
+      const track = parseHex(resolveComponent('--switch-off-track', theme))!;
+      expect(relativeLuminance(knob)).toBeGreaterThan(relativeLuminance(track));
+    }
+  );
+
   it('media text and the warning hover read on light surfaces', () => {
     for (const fg of ['--media-text', '--button-warning-text-hover']) {
       for (const bg of ['--surface-app', '--surface-panel', '--surface-control']) {

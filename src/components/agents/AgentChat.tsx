@@ -40,7 +40,7 @@ import { IconButton } from '../primitives/IconButton';
 import { CompactModeToggle } from '../workspace/ModeToggle';
 import { TextButton } from '../primitives/TextButton';
 import { AgentComposer, LiveSecretHint } from './AgentComposer';
-import { AgentModelItems } from './AgentModelMenu';
+import { AgentModelMenu } from './AgentModelMenu';
 import { AgentRequestsBar } from './AgentRequests';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentActionItems, type AgentActions } from './AgentActions';
@@ -1619,6 +1619,7 @@ export const AgentChat = memo(function AgentChat({
                     onOpenChange={openSchedule}
                     startWhen={scheduleWhen}
                   />
+                  <AgentModelMenu agent={agent} />
                 </>
               )}
               <Dropdown
@@ -1644,8 +1645,6 @@ export const AgentChat = memo(function AgentChat({
                   onFiles={() => setFilesOpen(true)}
                   {...actions}
                 />
-                {/* Nothing to pick a model for until its engine is here. */}
-                {engineReady && <AgentModelItems agent={agent} />}
               </Dropdown>
               <AgentFilesModal
                 agent={agent}

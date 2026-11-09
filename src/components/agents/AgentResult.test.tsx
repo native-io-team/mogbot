@@ -92,7 +92,7 @@ describe('the result card', () => {
     expect(screen.queryByRole('button', { name: 'Preview' })).toBeNull();
   });
 
-  it('shows what the agent gave, with Not verified up front', () => {
+  it('shows the work first, then what it checked and what it didn’t, together', () => {
     const ask = vi.fn();
     render(
       <ResultCardView message={message(V1)} card={V1} agent={agent} newest onAskForChanges={ask} />
@@ -101,9 +101,15 @@ describe('the result card', () => {
     expect(within(card).getByText('Every invoice on one page.')).toBeTruthy();
     const unverified = within(card).getByRole('group', { name: 'Not verified' });
     expect(unverified.textContent).toContain('EUR rate is today’s');
-    // Before the files: it's what the eye should land on.
-    const order = [...card.querySelectorAll('.agent-result__unverified, .agent-result__items')];
-    expect(order[0].className).toContain('unverified');
+    // The work first; the checks after it, side by side in one block.
+    const order = [
+      ...card.querySelectorAll(
+        '.agent-result__items, .agent-result__checked, .agent-result__unverified'
+      ),
+    ].map((el) => el.className);
+    expect(order[0]).toContain('items');
+    expect(order.slice(1).every((c) => /checked|unverified/.test(c))).toBe(true);
+    expect(unverified.parentElement?.className).toContain('agent-result__checks');
     // The agent's claim, attributed, with a plain bullet: never a tick that
     // reads as the app having verified it.
     const checked = within(card).getByRole('group', { name: 'It says it checked' });

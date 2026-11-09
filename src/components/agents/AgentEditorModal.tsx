@@ -322,6 +322,18 @@ export function AgentEditorModal({
   const [workDirectly, setWorkDirectly] = useState(agent?.workDirectly ?? false);
   const [usage, setUsage] = useState<UsageSummary | null>(null);
   const [showAdvanced, setShowAdvanced] = useState(false);
+  // New agent opens on "Describe the agent you want" alone; the form shows
+  // once there's a draft, a template, or "fill it in yourself". Editing (or
+  // opening on a template) starts on the form. While describing, the form's
+  // fields are hidden by the stylesheet (`[data-describing]`), not unmounted.
+  const [manual, setManual] = useState(editing || Boolean(first));
+  const describing = !editing && !draft && !manual;
+  // Advanced opens below the fold: bring what it opened into view rather
+  // than leaving it half under the dialog's footer.
+  const advancedRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (showAdvanced) advancedRef.current?.scrollIntoView?.({ block: 'nearest' });
+  }, [showAdvanced]);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -423,6 +435,7 @@ export function AgentEditorModal({
   const form = (
     <form
       className="agent-editor__body"
+      data-describing={describing || undefined}
       onSubmit={(e) => {
         e.preventDefault();
         if (canSave) void save.execute();
@@ -438,11 +451,49 @@ export function AgentEditorModal({
         (draft ? (
           <AgentDrafted onStartOver={startOver} />
         ) : (
-          <AgentDescribe autoFocus={!first} onDrafted={(d) => takeDraft(d)} />
+          !manual && <AgentDescribe autoFocus={!first} onDrafted={(d) => takeDraft(d)} />
         ))}
-      {!editing && !draft && (
+      {describing && (
+        // The other ways in, quiet: describing is the one this dialog leads with.
+        <p className="agent-editor__hint agent-editor__other-ways">
+          Or{' '}
+          <TextButton
+            tabIndex={0}
+            className="agent-editor__fill-in"
+            onClick={() => setManual(true)}
+          >
+            fill it in yourself
+          </TextButton>
+          , start from{' '}
+          {ROLE_TEMPLATES.map((t, i) => (
+            <Fragment key={t.id}>
+              {i > 0 && (i === ROLE_TEMPLATES.length - 1 ? ' or ' : ', ')}
+              <TextButton
+                tabIndex={0}
+                title={t.title}
+                onClick={() => {
+                  startFrom(t.id);
+                  setManual(true);
+                }}
+              >
+                {t.name}
+              </TextButton>
+            </Fragment>
+          ))}
+          {onAskChief && (
+            <>
+              , or{' '}
+              <TextButton tabIndex={0} onClick={onAskChief}>
+                ask your Chief of Staff
+              </TextButton>
+            </>
+          )}
+          .
+        </p>
+      )}
+      {!editing && !draft && manual && (
         <div className="agent-editor__label" role="group" aria-label="Start from">
-          Or start from
+          Start from
           <SegmentedControl
             value={template?.id ?? ''}
             options={[
@@ -453,6 +504,14 @@ export function AgentEditorModal({
             aria-label="Start from"
             className="agent-editor__templates"
           />
+          {/* The way back to the one box (what's typed here stays, for a draft to replace). */}
+          <TextButton
+            tabIndex={0}
+            className="agent-editor__describe"
+            onClick={() => setManual(false)}
+          >
+            Or describe it instead
+          </TextButton>
           {template && needsLine(template, engine) && (
             <div className="agent-editor__apps agent-editor__needs">
               <p className="agent-editor__hint">{needsLine(template, engine)}</p>
@@ -528,7 +587,8 @@ export function AgentEditorModal({
         </p>
       ) : (
         onAskChief &&
-        !draft && (
+        !draft &&
+        manual && (
           <p className="agent-editor__hint agent-editor__ask-chief">
             Not sure what to write?{' '}
             <TextButton tabIndex={0} variant="primary" onClick={onAskChief}>
@@ -557,7 +617,7 @@ export function AgentEditorModal({
         }
       />
 
-      <div className="agent-editor__advanced">
+      <div className="agent-editor__advanced" ref={advancedRef}>
         <TextButton
           className="agent-editor__more"
           aria-expanded={showAdvanced}
@@ -690,9 +750,11 @@ export function AgentEditorModal({
         <Button variant="secondary" onClick={onClose}>
           Cancel
         </Button>
-        <Button variant="primary" type="submit" disabled={!canSave}>
-          {editing ? 'Save' : 'Create'}
-        </Button>
+        {!describing && (
+          <Button variant="primary" type="submit" disabled={!canSave}>
+            {editing ? 'Save' : 'Create'}
+          </Button>
+        )}
       </div>
     </form>
   );

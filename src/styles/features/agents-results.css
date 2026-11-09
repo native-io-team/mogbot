@@ -1,11 +1,12 @@
 /* Result cards (`share_result`): the one card an agent ends a piece of work
    on (components/agents/AgentResult.tsx). The same surface as the approval
-   and copy cards; "Not verified" is the only tinted part, so it is the part
-   the eye lands on. */
+   and copy cards. The work comes first, at the chat's own reading size; what
+   it checked and what it didn't come after it, side by side. */
 
 :root {
   --agents-result-shot-height: 180px; /* css-ok: a before/after thumbnail */
   --agents-local-link-width: 360px; /* css-ok: a link row under a reply */
+  --agents-result-check-min: 220px; /* css-ok: below this the two lists stack */
 }
 
 /* The card, then the folded "what it did" line under it. */
@@ -41,6 +42,9 @@
 
 .agent-result__summary {
   margin: 0;
+  /* The deliverable reads at the chat's size, never smaller than chatter. */
+  font-size: var(--font-size-subhead-lg);
+  line-height: var(--line-height-reading);
   color: var(--text-primary);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -48,7 +52,19 @@
   user-select: text;
 }
 
-/* What the agent says it didn't verify: up front, tinted, never folded. */
+/* Checks: what it says it checked, then what it didn't verify, side by side
+   under the work (stacked when the card is narrow). Never folded. */
+.agent-result__checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(var(--agents-result-check-min), 1fr));
+  gap: var(--spacing-sm);
+  align-items: start;
+}
+
+.agent-result__checked {
+  padding: var(--spacing-sm) 0;
+}
+
 .agent-result__unverified {
   padding: var(--spacing-sm) var(--spacing-md);
   border: var(--border-width-default) solid var(--border-subtle);
@@ -92,15 +108,15 @@
   list-style: disc;
 }
 
-/* One size for both lists (as on the phone): the box and the title already
-   set "Not verified" apart, so its lines needn't outsize the summary's. */
+/* One size for both lists (as on the phone), the chat's body size like the
+   summary: the box and the title already set "Not verified" apart. */
 .agent-result__unverified li,
 .agent-result__checked li {
-  line-height: var(--line-height-compact);
+  font-size: var(--font-size-subhead-lg);
+  line-height: var(--line-height-help);
 }
 
 .agent-result__unverified li {
-  font-size: var(--font-size-body-sm);
   color: var(--text-primary);
   -webkit-user-select: text;
   user-select: text;
@@ -111,7 +127,6 @@
 }
 
 .agent-result__checked li {
-  font-size: var(--font-size-body-sm);
   color: var(--text-secondary);
   -webkit-user-select: text;
   user-select: text;
@@ -230,8 +245,13 @@
   white-space: nowrap;
 }
 
+/* A file or link it made is the work itself: the chat's size. */
+.agent-result__item-name {
+  font-size: var(--font-size-subhead-lg);
+}
+
 .agent-result__item-meta {
-  font-size: var(--font-size-caption);
+  font-size: var(--font-size-body-sm);
   color: var(--text-muted);
 }
 

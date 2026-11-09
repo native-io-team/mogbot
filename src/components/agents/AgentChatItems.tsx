@@ -487,9 +487,11 @@ export const ErrorLine = memo(function ErrorLine({
                 Retries {retryPhrase(retryAt)}
               </span>
             ) : (
+              // Neutral ink, never the agent's colour: on a status line a red
+              // or green agent's accent read as an error or a success.
               <TextButton
                 tabIndex={0}
-                variant="accent"
+                variant="strong"
                 disabled={scheduling}
                 aria-busy={scheduling || undefined}
                 onClick={() => scheduleRetry(retryAt)}
@@ -501,7 +503,7 @@ export const ErrorLine = memo(function ErrorLine({
               beside it, quiet, because the limit may already have lifted
               (another plan, extra usage). Once the reset has passed, Retry. */}
           {onRetry && (
-            <TextButton tabIndex={0} variant={retryAt ? 'default' : 'accent'} onClick={onRetry}>
+            <TextButton tabIndex={0} variant={retryAt ? 'default' : 'strong'} onClick={onRetry}>
               {retryAt ? 'Try anyway' : 'Retry'}
             </TextButton>
           )}

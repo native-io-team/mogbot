@@ -1,7 +1,6 @@
 /**
- * The model an agent runs on, inside the conversation header's … menu (the
- * header itself says who the agent is and what it's doing, not which engine
- * it runs on). Each choice is said by what it's for — "Most capable",
+ * The model an agent runs on, in the conversation header's own Model menu
+ * (settings, kept out of the … menu, which holds actions only). Each choice is said by what it's for — "Most capable",
  * "Balanced", "Fastest" — with the engine's own name for it in small text;
  * the change applies from its next turn. The engine is named once, in the
  * heading. Below, when the agent has a routine, what its routines run on: on
@@ -13,8 +12,9 @@
  * @module components/agents/AgentModelMenu
  */
 
-import { CheckIcon } from '@/components/icons';
-import { DropdownDivider, DropdownItem } from '../primitives/Dropdown';
+import { CheckIcon, ChevronIcon } from '@/components/icons';
+import { Dropdown, DropdownDivider, DropdownItem } from '../primitives/Dropdown';
+import { MenuButton } from '../primitives/MenuButton';
 import {
   EFFORT_CHOICES,
   ENGINE_LABEL,
@@ -105,7 +105,6 @@ export function AgentModelItems({ agent }: { agent: Agent }) {
   };
   return (
     <>
-      <DropdownDivider />
       <p className="agent-model-menu__heading">Model · runs on {engineName}</p>
       {choices.map((m) => (
         <DropdownItem
@@ -158,5 +157,41 @@ export function AgentModelItems({ agent }: { agent: Agent }) {
         </>
       )}
     </>
+  );
+}
+
+/**
+ * "Model ⌄" in the conversation header: the model, effort, account and what
+ * routines run on, as one menu of its own. A word, not an icon, so it says
+ * what it is; the current choice is in its tooltip and checked inside.
+ */
+export function AgentModelMenu({ agent }: { agent: Agent }) {
+  const engines = useAgentsSelector((s) => s.engines);
+  const current = modelLabel(agent.model ?? '', modelChoices(agent.engine, engines));
+  return (
+    <Dropdown
+      align="right"
+      portal
+      menuClassName="agent-model-menu"
+      className="agent-chat__model"
+      // Nothing looks chosen until you choose: the check marks what's current.
+      quietOpen
+      trigger={(p) => (
+        <MenuButton
+          {...p}
+          tabIndex={0}
+          expanded={p['aria-expanded']}
+          variant="ghost"
+          size="compact"
+          title={`Model: ${current}`}
+          aria-label={`Model for ${agent.name}: ${current}`}
+        >
+          Model
+          <ChevronIcon size={10} className={p['aria-expanded'] ? 'chevron-flipped' : undefined} />
+        </MenuButton>
+      )}
+    >
+      <AgentModelItems agent={agent} />
+    </Dropdown>
   );
 }

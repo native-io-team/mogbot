@@ -177,11 +177,11 @@ export const agentsAccountsScenarios: Scenario[] = [
   },
   {
     id: 'agents-runs-on',
-    title: 'Agents — Runs on, in an agent’s … menu, and the chip in its header',
+    title: 'Agents — Runs on, in an agent’s Model menu, and the chip in its header',
     looksRightWhen:
-      'The open conversation’s header has, beside the name, a quiet chip with the Claude icon “Work · only”. The … menu, under Model and Effort, has “Runs on · Work”: Any account (“In order, carrying on with the next when one runs out”), then each account with “Only this one, never another”, Work ticked, Side project “…· out of usage now” (the phone’s words). No accent.',
+      'The open conversation’s header has, beside the name, a quiet chip with the Claude icon “Work · only”. The header’s Model menu, under Model and Effort, has “Runs on · Work”: Any account (“In order, carrying on with the next when one runs out”), then each account with “Only this one, never another”, Work ticked, Side project “…· out of usage now” (the phone’s words). No accent.',
     openSelector: AGENTS_TAB,
-    steps: [{ click: `[data-agent-id="finance"]` }, { click: '.agent-chat__menu button' }],
+    steps: [{ click: `[data-agent-id="finance"]` }, { click: '.agent-chat__model button' }],
     requires: '.agent-model-menu .agent-model-menu__heading',
     commands,
   },

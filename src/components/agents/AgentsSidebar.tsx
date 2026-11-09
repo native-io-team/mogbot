@@ -27,6 +27,7 @@ import {
 } from 'react';
 import {
   AddIcon,
+  BellIcon,
   BellOffIcon,
   ChevronRightIcon,
   CollaboratorsIcon,
@@ -34,6 +35,7 @@ import {
 } from '@/components/icons';
 import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '../primitives/ContextMenu';
 import { Button } from '../primitives/Button';
+import { IconButton } from '../primitives/IconButton';
 import { StatusPill } from '../primitives/StatusPill';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentWorkingLine } from './AgentWorkingLine';
@@ -82,11 +84,6 @@ interface AgentsSidebarProps {
   onOpenAgent: (agentId: string) => void;
   /** The hit last opened, marked as the row is. */
   currentHit?: string | null;
-  /** Agents waiting on you (a card, or a turn that didn't finish). */
-  needsYouCount: number;
-  /** What's in flight is the view on screen. */
-  inFlightOpen: boolean;
-  onOpenInFlight: () => void;
   /** Group conversations, each with its members as they are now. */
   rooms: { room: Room; members: Agent[] }[];
   roomActions: RoomActions;
@@ -161,12 +158,18 @@ function lineState(agent: Agent): string | undefined {
   return undefined;
 }
 
-/** The full name as a tooltip only when the row cuts it short. */
+/** Its name and role as a tooltip; the name alone when it has no role and the row cuts it short. */
 function tooltipIfTruncated(event: PointerEvent<HTMLElement>) {
   const row = event.currentTarget;
   const text = row.querySelector<HTMLElement>('.agents-list__name-text');
-  if (text && text.scrollWidth > text.clientWidth) {
-    row.setAttribute('data-tooltip-content', text.textContent ?? '');
+  const name = text?.textContent ?? '';
+  const role = row.dataset.role ?? '';
+  // The role isn't on the row (a few letters of it was noise): it's the
+  // tooltip's second half, and the chat header says it in full.
+  if (role) {
+    row.setAttribute('data-tooltip-content', `${name} · ${role}`);
+  } else if (text && text.scrollWidth > text.clientWidth) {
+    row.setAttribute('data-tooltip-content', name);
   } else {
     row.removeAttribute('data-tooltip-content');
   }
@@ -209,6 +212,48 @@ function onListKeyDown(event: KeyboardEvent<HTMLDivElement>) {
   next?.focus();
 }
 
+/**
+ * What's in flight, beside the sidebar toggle: the one place the sidebar
+ * counts what waits on you. Each waiting row says so once more in its pill;
+ * nothing else in the list repeats it (docs/agents.md, "Needs you: one place
+ * per surface").
+ */
+export function InFlightBell({
+  count,
+  current,
+  onOpen,
+}: {
+  /** Agents waiting on you (a card, or a turn that didn't finish). */
+  count: number;
+  /** What's in flight is the view on screen. */
+  current: boolean;
+  onOpen: () => void;
+}) {
+  const label =
+    count > 0
+      ? `What’s in flight · ${count} ${count === 1 ? 'needs' : 'need'} you`
+      : 'What’s in flight';
+  return (
+    <span className="workspace-sidebar-inbox agents-inflight">
+      <IconButton
+        variant="ghost"
+        tabIndex={0}
+        className={`workspace-sidebar-home${current ? ' is-active' : ''}`}
+        icon={<BellIcon size={12} />}
+        onClick={onOpen}
+        aria-current={current ? 'page' : undefined}
+        title={count > 0 ? `${label} · ${kbd('mod', 'J')} jumps to the next one` : label}
+        aria-label={label}
+      />
+      {count > 0 && (
+        <span className="agents-inflight__count" aria-hidden="true">
+          {count > 9 ? '9+' : count}
+        </span>
+      )}
+    </span>
+  );
+}
+
 export function AgentsSidebar({
   agents,
   selectedId,
@@ -222,9 +267,6 @@ export function AgentsSidebar({
   onOpenAgent,
   currentHit,
   actions,
-  needsYouCount,
-  inFlightOpen,
-  onOpenInFlight,
   rooms,
   roomActions,
   onNewRoom,
@@ -233,14 +275,9 @@ export function AgentsSidebar({
   const working = workingCount(agents);
   // By attention (waiting on you, working, recent), held still while the
   // list is in use so a row never moves under the pointer, and re-sorted at
-  // most every few seconds. The Needs-your-OK row pushes the rows under it,
-  // so it comes and goes at those same moments.
+  // most every few seconds.
   const listRef = useRef<HTMLDivElement>(null);
-  const { agents: sorted, waiting: needsYouShown } = useSteadyList(
-    agents,
-    listRef,
-    needsYouCount > 0
-  );
+  const { agents: sorted } = useSteadyList(agents, listRef, false);
   const { visible, hidden } = useMemo(
     () => ({
       visible: sorted.filter((a) => !a.hidden || a.id === selectedId),
@@ -250,11 +287,7 @@ export function AgentsSidebar({
   );
   // An agent that just did something slides into place instead of jumping.
   const shown = showHidden ? [...visible, ...hidden] : visible;
-  useFlipReorder(
-    listRef,
-    '[data-agent-id]',
-    `${needsYouShown ? 'needs ' : ''}${shown.map((a) => a.id).join(' ')}`
-  );
+  useFlipReorder(listRef, '[data-agent-id]', shown.map((a) => a.id).join(' '));
 
   // An agent made while the list is up (by you or the Chief) rises in once;
   // the list as it first loads holds still.
@@ -302,29 +335,10 @@ export function AgentsSidebar({
             <span className="agents-list__team-dot" aria-hidden="true" />
             <span className="agents-list__team-line">{teamLine(working)}</span>
           </div>
-          {/* The Chief first, always (as on the phone); then what waits on you. */}
+          {/* The Chief first, always (as on the phone); then what waits on you.
+              How many wait is said once, on the bell (`InFlightBell`); each
+              waiting row says it once more, in its own pill. */}
           {visible.filter((a) => a.isMain).map(row)}
-          {/* What's in flight, said where you look: while something waits on
-              you (held a moment after the last answer, so it doesn't blink). */}
-          {needsYouShown && (
-            <button
-              type="button"
-              tabIndex={0}
-              className={`agents-list__needs-you${inFlightOpen ? ' is-current' : ''}`}
-              data-answered={needsYouCount === 0 || undefined}
-              aria-current={inFlightOpen ? 'page' : undefined}
-              onClick={onOpenInFlight}
-              title={`Open What’s in flight · ${kbd('mod', 'J')} jumps to the next one`}
-            >
-              <span className="agents-list__needs-you-mark" aria-hidden="true">
-                {needsYouCount > 0 && <span className="sidebar-row-dot dot-attention" />}
-              </span>
-              <span className="agents-list__needs-you-label">
-                {needsYouCount > 0 ? `Needs your OK · ${needsYouCount}` : 'All answered'}
-              </span>
-              <ChevronRightIcon size={10} className="agents-list__needs-you-chevron" />
-            </button>
-          )}
           {visible.filter((a) => !a.isMain).map(row)}
           {/* Rooms right after the agents, before the hidden ones (as on the
               phone), so they're seen without scrolling past the hidden list. */}
@@ -416,6 +430,7 @@ const AgentRow = memo(function AgentRow({
           tabIndex={tabStop ? 0 : -1}
           className={`agents-list__row${current ? ' is-current' : ''}`}
           data-agent-id={agent.id}
+          data-role={roleWithoutPath(agent.role ?? '') || undefined}
           data-hidden={agent.hidden || undefined}
           data-arrived={arrived || undefined}
           aria-current={current ? 'true' : undefined}
@@ -432,8 +447,6 @@ const AgentRow = memo(function AgentRow({
           <span className="agents-list__text">
             <span className="agents-list__name">
               <span className="agents-list__name-text">{agent.name}</span>
-              {/* Its role, muted, one line: it gives way before the name does. */}
-              <span className="agents-list__role">{roleWithoutPath(agent.role ?? '')}</span>
               {/* Marks, not controls: small, faint, and not a target (the menu toggles them). */}
               {agent.pinned && (
                 <PinIcon size={10} className="agents-list__pin" aria-label="Pinned" />
@@ -458,8 +471,25 @@ const AgentRow = memo(function AgentRow({
             )}
           </span>
           <span className="agents-list__status">
-            {/* Read already when it's the one open: no unread dot for it. */}
-            <AgentMark agent={current ? { ...agent, unread: 0 } : agent} />
+            {/* Read already when it's the one open: no unread dot for it.
+                With a pill the state is said there, so the column keeps one
+                meaning (unread; working has its own spinner) and the state
+                dot shows only on the collapsed rail, where the pill can't. */}
+            {pill ? (
+              <>
+                <span className="agents-list__rail-mark">
+                  <AgentMark agent={{ ...agent, unread: 0 }} />
+                </span>
+                {!current && agent.unread > 0 && (
+                  <span
+                    className="sidebar-row-dot dot-unread agents-list__row-unread"
+                    aria-label="Unread"
+                  />
+                )}
+              </>
+            ) : (
+              <AgentMark agent={current ? { ...agent, unread: 0 } : agent} />
+            )}
           </span>
         </button>
       </ContextMenuTrigger>

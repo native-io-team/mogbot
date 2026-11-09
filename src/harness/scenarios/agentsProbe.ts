@@ -268,7 +268,7 @@ export const agentsProbeScenarios: Scenario[] = [
     looksRightWhen:
       'What’s in flight lists those needing you, then the working ones; one row each, nothing overflowing.',
     openSelector: AGENTS_TAB,
-    steps: [{ click: '.agents-list__needs-you' }],
+    steps: [{ click: '.agents-inflight button' }],
     requires: '.agents-team',
     commands: { agents_overview: overview(FIFTY), agents_messages: messagesFor },
   },

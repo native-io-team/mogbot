@@ -192,11 +192,11 @@
 
 /* ---------------------------------------------------------- model, usage */
 
-/* The conversation's … menu carries its actions and then its model: taller
-   than the shared 360px cap, so the model choices aren't hidden below a
-   scroll. Still never taller than the window. */
+/* The header's Model menu: model, effort, account and routines model, taller
+   than the shared 360px cap so the choices aren't hidden below a scroll.
+   Never taller than the room the window has (Dropdown's --ss-dropdown-room). */
 .ss-dropdown__menu.agent-model-menu {
-  max-height: calc(100vh - var(--spacing-2xl) * 3);
+  max-height: min(calc(100vh - var(--spacing-2xl) * 3), var(--ss-dropdown-room, 100vh));
 }
 
 /* The engine's own name for a model, small beside its plain one. */

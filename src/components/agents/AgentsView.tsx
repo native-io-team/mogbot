@@ -22,7 +22,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
 import { flushSync } from 'react-dom';
 import { HomeSidebar } from '../workspace/HomeSidebar';
-import { AgentsSidebar } from './AgentsSidebar';
+import { AgentsSidebar, InFlightBell } from './AgentsSidebar';
 import { AgentsSearchPopover, AgentsTopSearch } from './AgentsSearchBox';
 import { EngineSignInModal, type EngineSetup } from './EngineSignInModal';
 import { AgentChat } from './AgentChat';
@@ -128,7 +128,7 @@ const SELECTED_KEY = 'shipstudio.agents.selected';
 
 function readSelected(): string | null {
   try {
-    // "What's in flight" (the Needs you row, or ⌘K) is a detour, never where Agents reopens.
+    // "What's in flight" (the sidebar’s bell, or ⌘K) is a detour, never where Agents reopens.
     const id = localStorage.getItem(SELECTED_KEY);
     return id === TEAM_ID ? null : id;
   } catch {
@@ -215,7 +215,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     room: null,
   });
   const [deletingRoom, setDeletingRoom] = useState<Room | null>(null);
-  // "What's in flight" (the Needs you row or ⌘K), else the last agent you had open, else the Chief of Staff.
+  // "What's in flight" (the sidebar’s bell or ⌘K), else the last agent you had open, else the Chief of Staff.
   const teamOpen = selectedId === TEAM_ID;
   const roomOpen = room !== null;
   const selected =
@@ -896,9 +896,11 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
           <HomeSidebar
             {...sidebarProps}
             activeNav="agents"
-            // Home, Workflows and the Inbox belong to the Projects side; What's
-            // in flight is the list's "Needs you" row, not an icon.
-            navContent={<></>}
+            // Home, Workflows and the Inbox belong to the Projects side; here
+            // the one control is What's in flight, with how many need you.
+            navContent={
+              <InFlightBell count={needsYouCount} current={teamOpen} onOpen={openInFlight} />
+            }
             searchContent={
               <AgentsTopSearch
                 search={search}
@@ -921,9 +923,6 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                   onToggleShowHidden={toggleShowHidden}
                   onSelect={setSelectedId}
                   onNew={() => openNew()}
-                  needsYouCount={needsYouCount}
-                  inFlightOpen={teamOpen}
-                  onOpenInFlight={openInFlight}
                   rooms={roomRows}
                   roomActions={roomActions}
                   onNewRoom={openNewRoom}

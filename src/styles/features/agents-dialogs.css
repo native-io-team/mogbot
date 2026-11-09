@@ -14,6 +14,23 @@
   padding: var(--spacing-lg) var(--spacing-xl) var(--spacing-xl);
 }
 
+/* New agent opens on describing alone (AgentEditorModal `describing`): the
+   form waits, out of sight and out of the Tab order, until there's a draft, a
+   template or "fill it in yourself". Runs on stays: it is a choice the draft
+   is made on. */
+.agent-editor__body[data-describing]
+  > :is(
+    .agent-editor__identity,
+    .agent-look,
+    label.agent-editor__label,
+    .agent-editor__ask-chief,
+    .agent-editor__advanced,
+    .agent-editor__more,
+    [data-testid='agent-engine-protections']
+  ) {
+  display: none;
+}
+
 .agent-editor__identity {
   display: flex;
   align-items: center;
@@ -155,8 +172,21 @@
   box-shadow: var(--shadow-md);
   width: 380px;
   max-width: calc(100vw - var(--spacing-2xl));
-  max-height: min(600px, calc(100vh - var(--spacing-2xl) * 3));
+  /* As tall as the window lets it (Dropdown's room), so a routine being
+     edited isn't cut at both ends inside a fixed 600px box. */
+  max-height: min(calc(100vh - var(--spacing-2xl) * 3), var(--ss-dropdown-room, 100vh));
   padding: var(--spacing-xs);
+  /* When it still scrolls, say so: a soft shade at whichever end has more.
+     The panel-coloured covers scroll with the content and hide the shade
+     once that end is reached. */
+  background:
+    linear-gradient(var(--surface-panel) 30%, transparent) top / 100% var(--spacing-xl) no-repeat
+      local,
+    linear-gradient(transparent, var(--surface-panel) 70%) bottom / 100% var(--spacing-xl) no-repeat
+      local,
+    linear-gradient(var(--overlay-50), transparent) top / 100% var(--spacing-sm) no-repeat scroll,
+    linear-gradient(transparent, var(--overlay-50)) bottom / 100% var(--spacing-sm) no-repeat scroll,
+    var(--surface-panel);
 }
 
 .agent-schedule__body {
@@ -614,4 +644,24 @@
   margin: 0 0 var(--spacing-sm);
   font-size: var(--font-size-body-md);
   color: var(--text-secondary);
+}
+
+/* "Or fill it in yourself, start from Research…": links in a sentence, so
+   they read as links (full ink, underlined), not as the hint around them. */
+.agent-editor__other-ways .text-button.button {
+  color: var(--text-primary);
+  text-decoration: underline;
+  text-decoration-color: var(--border-strong);
+  text-underline-offset: 0.2em;
+}
+
+.agent-editor__other-ways .text-button.button:hover:not(:disabled) {
+  text-decoration-color: currentColor;
+}
+
+/* "Or describe it instead", under Start from: quiet, on the choices' left edge. */
+.agent-editor__describe.button {
+  align-self: flex-start;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
 }
