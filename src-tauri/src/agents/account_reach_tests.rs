@@ -92,6 +92,32 @@ fn a_change_on_this_mac_follows_and_only_synced_servers_are_removed() {
     assert!(!servers.contains_key("notes"));
 }
 
+/// The account already had a server by the same name as one of this Mac's
+/// (both set up Figma by hand). The sync never put it there, so this Mac
+/// dropping Figma later must not take it off the account: it used to be
+/// recorded as synced the first time and removed the next.
+#[test]
+fn a_server_the_account_already_had_is_never_taken_off_it() {
+    let (_home, native, target) = fixture();
+    let figma = json!({ "type": "http", "url": "https://mcp.figma.example/mcp" });
+    let mut config = read(&target);
+    config["mcpServers"]["figma"] = figma.clone();
+    write(&target, &config);
+    let done = sync_servers(&native, &target).unwrap();
+    assert_eq!(done.added, ["notes"]);
+    // This Mac drops Figma and Notes.
+    write(&native, &json!({ "mcpServers": {} }));
+    let done = sync_servers(&native, &target).unwrap();
+    assert_eq!(done.removed, ["notes"]);
+    let servers = read(&target)["mcpServers"].as_object().unwrap().clone();
+    assert_eq!(
+        servers.get("figma"),
+        Some(&figma),
+        "the account's own Figma stays"
+    );
+    assert!(servers.contains_key("own"));
+}
+
 #[test]
 fn a_missing_account_file_is_started_and_a_broken_one_left_alone() {
     let (_home, native, target) = fixture();

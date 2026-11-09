@@ -561,11 +561,16 @@ async fn unpairing_from_the_phone_answers_then_closes() {
     assert!(c.registry.get(&record.id).is_none());
 }
 
+/// A phone that keeps changing network leaves sockets behind that the Mac
+/// can't yet tell are dead. Past its cap it used to be refused ("Too many
+/// connections from this phone"), which closing the app couldn't fix; now
+/// its newest socket gets in and its oldest is closed, so one phone still
+/// never holds more than the cap.
 #[tokio::test]
-async fn sockets_per_device_are_capped() {
+async fn a_phone_reconnecting_past_its_cap_replaces_its_oldest_socket() {
     let (c, _) = Stub::companion();
     let port = start(c.clone()).await;
-    let (_, token, _) = c
+    let (record, token, _) = c
         .registry
         .add(&phone(), String::new(), 1, &[], None)
         .unwrap();
@@ -573,9 +578,45 @@ async fn sockets_per_device_are_capped() {
     for _ in 0..crate::companion::MAX_SOCKETS_PER_DEVICE {
         held.push(open(port, &token, None).await.0);
     }
-    let mut ws = connect(port).await;
-    send(&mut ws, hello(&token, None)).await;
-    assert_eq!(next(&mut ws).await["reason"], "too_many_connections");
+    for round in 0..3 {
+        let (ws, welcome, ..) = open(port, &token, None).await;
+        assert_eq!(welcome["t"], "welcome", "round {round}");
+        let mut oldest = held.remove(0);
+        let mut closed = false;
+        for _ in 0..20 {
+            if next(&mut oldest).await["t"] == "closed" {
+                closed = true;
+                break;
+            }
+        }
+        assert!(closed, "round {round}: the oldest socket closes");
+        held.push(ws);
+    }
+    assert!(c.is_connected(&record.id));
+    // The newest ones still work.
+    let last = held.last_mut().unwrap();
+    let (_, res) = call(last, 1, "rooms.list", json!({})).await;
+    assert_eq!(res["t"], "res");
+}
+
+/// Other phones still can't push past the total: the cap per phone only
+/// ever trades a phone's own sockets.
+#[tokio::test]
+async fn replacing_a_socket_never_goes_past_the_total() {
+    use crate::companion::{MAX_SOCKETS, MAX_SOCKETS_PER_DEVICE};
+    let (c, _) = Stub::companion();
+    for _ in 0..MAX_SOCKETS_PER_DEVICE {
+        assert!(c.open_conn("d0", false).is_some());
+    }
+    for d in 0..(MAX_SOCKETS - MAX_SOCKETS_PER_DEVICE) {
+        assert!(c.open_conn(&format!("d{}", 1 + d / 2), false).is_some());
+    }
+    // A new phone: refused, the total is full.
+    assert!(c.open_conn("newcomer", false).is_none());
+    // One already there, at its cap: it trades its own oldest, and the
+    // total is still full.
+    assert!(c.open_conn("d0", false).is_some());
+    assert!(c.open_conn("newcomer", false).is_none());
 }
 
 // ============================================================================

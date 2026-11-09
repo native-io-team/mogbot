@@ -830,3 +830,31 @@ fn a_purpose_is_one_short_line_and_members_are_told_it() {
         assert!(back.get("purpose").is_none() && back.get("createdBy").is_none());
     });
 }
+
+/// The phone's room send landed as the app quit; after the relaunch it
+/// sends again under the same id. The thread has it, so it is answered with
+/// that line rather than said (and asked of everyone) a second time.
+#[test]
+fn a_room_send_repeated_after_a_relaunch_is_found_in_the_thread() {
+    scratch(|| {
+        let fin = agent("Finance", false);
+        let ops = agent("Ops", false);
+        let room = create(None, &[fin.id.clone(), ops.id.clone()]).unwrap();
+        let mut line = said_in(&room.id, "", MessageKind::User, "Budget by Friday?");
+        line.client_id = Some("room-send-1".into());
+        line.mentions = vec![store::AgentRef {
+            id: fin.id.clone(),
+            name: fin.name.clone(),
+        }];
+        append(&room.id, &line).unwrap();
+        append(
+            &room.id,
+            &said_in(&room.id, &fin.id, MessageKind::Agent, "On it."),
+        )
+        .unwrap();
+        let found = already_sent(&room.id, "room-send-1").expect("found by its send id");
+        assert_eq!(found.id, line.id);
+        assert_eq!(found.mentions.len(), 1);
+        assert!(already_sent(&room.id, "room-send-2").is_none());
+    });
+}

@@ -165,9 +165,27 @@ pub fn read_kept<T: DeserializeOwned>(path: &Path, what: &str) -> Option<T> {
     match serde_json::from_slice(&bytes) {
         Ok(value) => Some(value),
         Err(e) => {
-            set_aside(path, what, &e.to_string());
+            set_aside_if_still(path, &bytes, what, &e.to_string());
             None
         }
+    }
+}
+
+/// [`set_aside`], only while `path` still holds the `damaged` bytes read.
+///
+/// Two readers of one damaged file (most of these files are read without a
+/// lock) used to race: the first set it aside, the default was written
+/// back in its place, and the second, still holding the damaged bytes it
+/// had read, then moved that *good* new file aside too; or, the file being
+/// gone already, said "couldn't be read" a second time. Whoever finds the
+/// file no longer the damaged one leaves it, and says nothing.
+fn set_aside_if_still(path: &Path, damaged: &[u8], what: &str, why: &str) {
+    // One check-and-move at a time in this process.
+    static ONE: Mutex<()> = Mutex::new(());
+    let _one = ONE.lock().unwrap_or_else(|e| e.into_inner());
+    match std::fs::read(path) {
+        Ok(now) if now == damaged => set_aside(path, what, why),
+        _ => {}
     }
 }
 
@@ -193,6 +211,8 @@ pub fn set_aside(path: &Path, what: &str, why: &str) {
                 "{what} couldn't be read, so it starts fresh. The damaged copy is kept beside it as {kept}."
             ));
         }
+        // Already gone: whoever moved it said so.
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
         Err(e) => {
             // Not moved: nothing was lost, but the next write will replace it.
             tracing::error!("[Agents] {file} unreadable ({why}) and couldn't be set aside ({e})");

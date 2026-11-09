@@ -952,6 +952,18 @@ pub struct Sent {
     pub asked: Vec<AgentRef>,
 }
 
+/// The user's line in room `id` sent under the phone's send id `client_id`,
+/// among the thread's latest 200.
+pub(crate) fn already_sent(id: &str, client_id: &str) -> Option<AgentMessage> {
+    let lock = room_lock(id);
+    let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
+    store::page_back(&log_path(id).ok()?, 200, None, None)
+        .ok()?
+        .into_iter()
+        .rev()
+        .find(|m| m.kind == MessageKind::User && m.client_id.as_deref() == Some(client_id))
+}
+
 /// The user said `text` in the room. Recorded in the thread (with whom it
 /// was for as `mentions`), then queued for each addressed member.
 pub fn send(
@@ -968,6 +980,20 @@ pub fn send(
         return Err(super::err_invalid("text", "Type a message first."));
     }
     let room = get(id)?;
+    // The phone sends again under the same id when it never heard back; the
+    // companion's memory of ids doesn't outlast a quit or crash, so the
+    // thread is what says it was already said (and asked of everyone once).
+    if let Some(sent) = client_id
+        .as_deref()
+        .filter(|c| !c.is_empty())
+        .and_then(|c| already_sent(id, c))
+    {
+        let asked = sent.mentions.clone();
+        return Ok(Sent {
+            message: sent,
+            asked,
+        });
+    }
     let members = refs(&room);
     if members.is_empty() {
         return Err(CommandError::expected("Nobody is in this room any more."));

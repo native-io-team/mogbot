@@ -185,6 +185,11 @@ pub enum HubItem {
     Revoked {
         device_id: String,
     },
+    /// A newer socket from the same phone took this one's place (see
+    /// `Companion::open_conn`): the socket with this id closes.
+    Replaced {
+        conn: u64,
+    },
     /// The companion was turned off: every connection closes.
     Shutdown,
     /// The app is closing (a quit, or an update's restart): every connection
