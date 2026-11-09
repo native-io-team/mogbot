@@ -23,6 +23,32 @@ export const withForget = <T extends ForgetEntry>(list: T[], c: T): T[] => [
   c,
 ];
 
+/**
+ * The queue as saved, read back. Not JSON, or not a list: nothing can be
+ * read from it, so it's `damaged` and starts empty (the Macs it named keep
+ * those phones listed until removed there). An entry that isn't one is
+ * left out and the rest kept.
+ */
+export function readForgets<T>(
+  raw: string | null,
+  asEntry: (v: unknown) => T | null
+): { list: T[]; damaged: boolean } {
+  if (!raw) return { list: [], damaged: false };
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return { list: [], damaged: true };
+  }
+  if (!Array.isArray(parsed)) return { list: [], damaged: true };
+  const list: T[] = [];
+  for (const v of parsed) {
+    const entry = asEntry(v);
+    if (entry) list.push(entry);
+  }
+  return { list, damaged: list.length !== parsed.length };
+}
+
 /** The queue without `c`. */
 export const withoutForget = <T extends ForgetEntry>(list: T[], c: ForgetEntry): T[] =>
   list.filter((x) => !same(x, c));

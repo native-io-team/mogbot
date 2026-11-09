@@ -23,7 +23,15 @@ import type {
   RoomView,
 } from '@shipstudio/companion-protocol';
 import { chatKeysOf, pendingKeyOf } from './rooms';
-import { asMessage, asMessages } from './wellFormed';
+import {
+  asMessage,
+  asMessages,
+  asOverview,
+  asProject,
+  asProjects,
+  asRooms,
+  asStatus,
+} from './wellFormed';
 
 export interface Chat {
   /** Oldest first. */
@@ -168,16 +176,25 @@ function reduce(s: SyncState, event: CompanionEvent, cursor?: Cursor): SyncState
       };
     }
     case 'agents.status': {
-      if (!s.overview) return s;
+      // An overview from the offline copy or a Mac of another shape may
+      // have no list of agents: nothing to mark; the next overview brings it.
+      if (!s.overview || !Array.isArray(s.overview.agents)) return s;
+      if (typeof event.agentId !== 'string') return s;
+      const status = asStatus(event.status);
       const agents = s.overview.agents.map((a) =>
-        a.id === event.agentId ? { ...a, status: event.status } : a
+        a?.id === event.agentId ? { ...a, status } : a
       );
       return { ...s, overview: { ...s.overview, agents } };
     }
-    case 'agents.registry':
-      return { ...s, overview: shareStructure(s.overview, event.overview) };
-    case 'rooms.changed':
-      return { ...s, rooms: event.rooms };
+    case 'agents.registry': {
+      // Unreadable: what's shown stays until a readable one comes.
+      const overview = asOverview(event.overview);
+      return overview ? { ...s, overview: shareStructure(s.overview, overview) } : s;
+    }
+    case 'rooms.changed': {
+      const rooms = asRooms(event.rooms);
+      return rooms ? { ...s, rooms } : s;
+    }
     case 'system.status':
       return { ...s, mac: event.status };
     case 'agents.draft':
@@ -191,9 +208,9 @@ function reduce(s: SyncState, event: CompanionEvent, cursor?: Cursor): SyncState
       // them so the re-fetch overwrites. Drafts restart from 0 anyway.
       return {
         ...s,
-        overview: shareStructure(s.overview, event.overview),
+        overview: shareStructure(s.overview, asOverview(event.overview) ?? s.overview),
         mac: event.status,
-        projects: shareStructure(s.projects, event.projects),
+        projects: shareStructure(s.projects, asProjects(event.projects) ?? s.projects),
         cursor: event.cursor,
         seqs: {},
         drafts: {},
@@ -203,8 +220,10 @@ function reduce(s: SyncState, event: CompanionEvent, cursor?: Cursor): SyncState
       };
     case 'sync.caughtUp':
       return { ...s, cursor: event.cursor, syncedAt: Date.now() };
-    case 'projects.changed':
-      return { ...s, projects: upsertProject(s.projects ?? [], event.project) };
+    case 'projects.changed': {
+      const project = asProject(event.project);
+      return project ? { ...s, projects: upsertProject(s.projects ?? [], project) } : s;
+    }
     case 'projects.removed':
       return { ...s, projects: (s.projects ?? []).filter((p) => p.path !== event.path) };
     default:

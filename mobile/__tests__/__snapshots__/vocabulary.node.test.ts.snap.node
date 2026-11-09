@@ -187,6 +187,7 @@ exports[`the words a person reads use the agreed words the way the snapshot hold
   "This phone stops reaching your agents now. This pairing is from before the app checked your Mac’s identity, so this phone won’t contact … to remove it: remove it on the Mac, in Settings → Agents → Phone.",
   "This phone stops reaching your agents now. … can’t be reached, so it keeps this phone in its paired devices until it can: the next time this phone reaches it, it asks the Mac to remove it. You can also remove it on the Mac, in Settings → Agents → Phone.",
   "This phone stops reaching your agents, and the Mac removes it from its paired devices. You can pair again any time.",
+  "This phone’s pairing couldn’t be read, so it was removed. Your agents and their chats are still on your Mac. Pair again from it: Settings → Agents → Phone → Pair a phone.",
   "This task isn’t open on your Mac any more",
   "This version of the app can’t sign in here. Connect it on your Mac.",
   "This version of the app can’t sign in here. Finish on your Mac.",

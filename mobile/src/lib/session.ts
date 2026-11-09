@@ -38,11 +38,13 @@ import {
 } from './notify';
 import {
   appInfo,
+  asCredentials,
   forgetCredentials,
-  loadCredentials,
+  loadPairing,
   saveCredentials,
   usableRoutes,
   type Credentials,
+  type SavedPairing,
 } from './pairing';
 import { flushCache, forgetCache, saveOutbox, loadCache, watchCache } from './cache';
 import { flushDrafts, forgetDrafts, loadDrafts, refusedToDraft, setComposer } from './drafts';
@@ -66,13 +68,13 @@ import { sendSecret } from './secrets';
 export { secretRouteProblem } from './secrets';
 import { DirectTransport, setTransportFaultReporter, WireFailure } from './transport';
 import { recordCrash } from './crash';
-import { asMessage } from './wellFormed';
+import { asMessage, asOverview, asProjects, asRooms } from './wellFormed';
 
 // A frame the phone couldn't handle is skipped (transport.ts) and logged here.
 setTransportFaultReporter((e) => void recordCrash(e, 'js', false).catch(() => {}));
 import { DemoTransport, demoCredentials, isDemo } from './demo';
 import { newChallenge, PAIR_AGAIN } from './identity';
-import { forgetSettledBy, withForget, withoutForget } from './forgets';
+import { forgetSettledBy, readForgets, withForget, withoutForget } from './forgets';
 
 const PAGE = 50;
 let transport: DirectTransport | DemoTransport | null = null;
@@ -88,10 +90,13 @@ export const retryNow = () => transport?.retryNow();
  * copy's cursor. Called once at launch.
  */
 export async function boot() {
-  const [credentials] = await Promise.all([
-    loadCredentials().catch(() => null),
+  const [saved] = await Promise.all([
+    loadPairing().catch((): SavedPairing => ({ kind: 'none' })),
     loadPrefs().catch(() => {}),
   ]);
+  const credentials = saved.kind === 'paired' ? saved.credentials : null;
+  // Saved but unreadable: already removed; the pairing screen says why.
+  if (saved.kind === 'damaged') setApp({ pairingLost: true });
   if (credentials) {
     await Promise.all([
       loadCache(credentials.serverId).catch(() => false),
@@ -148,6 +153,7 @@ export async function adopt(credentials: Credentials) {
   setApp({
     ...emptySync(),
     credentials,
+    pairingLost: false,
     refusal: null,
     welcome: null,
     served: null,
@@ -339,7 +345,9 @@ function focusChat(key: string | null) {
 
 /** Every room, read again (after catching up, and on pull to refresh). */
 export async function refreshRooms() {
-  setApp({ rooms: await call('rooms.list', {}) });
+  // From a Mac of another shape: made safe to draw; not a list keeps what's shown.
+  const rooms = asRooms(await call('rooms.list', {}));
+  if (rooms) setApp({ rooms });
 }
 
 /** "Setting up your team", read again (null on a Mac without it). */
@@ -710,8 +718,8 @@ export async function createAgent(
 ) {
   const stored = await call('agents.create', { input, clientId });
   if (!getApp().overview?.agents.some((a) => a.id === stored.id)) {
-    const fresh = await call('agents.overview', {});
-    setApp((s) => ({ overview: shareStructure(s.overview, fresh) }));
+    const fresh = asOverview(await call('agents.overview', {}));
+    if (fresh) setApp((s) => ({ overview: shareStructure(s.overview, fresh) }));
   }
   return stored;
 }
@@ -830,8 +838,8 @@ export const schedule = {
 // ---- Projects and sessions -----------------------------------------------------------
 
 export async function refreshProjects() {
-  const projects = await call('projects.list', {});
-  setApp({ projects });
+  const projects = asProjects(await call('projects.list', {}));
+  if (projects) setApp({ projects });
 }
 
 export const readSession = (sessionId: string) => call('sessions.read', { sessionId });
@@ -920,7 +928,11 @@ const FORGET_OPTS = { keychainAccessible: SecureStore.AFTER_FIRST_UNLOCK_THIS_DE
 
 async function queuedForgets(): Promise<Credentials[]> {
   const raw = await SecureStore.getItemAsync(FORGET_KEY, FORGET_OPTS).catch(() => null);
-  return raw ? (JSON.parse(raw) as Credentials[]) : [];
+  const { list, damaged } = readForgets(raw, asCredentials);
+  // Whatever couldn't be read is dropped from the keychain, so it can't
+  // stop the readable ones (or the next launch) again.
+  if (damaged) await saveForgets(list).catch(() => {});
+  return list;
 }
 
 const saveForgets = (list: Credentials[]) =>

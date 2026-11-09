@@ -14,6 +14,7 @@ import { useState } from 'react';
 import { Card, ACTION } from './surfaces';
 import { Button } from './ui';
 import { call, describeError } from '../lib/session';
+import { asOverview } from '../lib/wellFormed';
 import { setApp, useApp } from '../lib/store';
 import { haptic } from '../lib/haptics';
 import { asksImportChoice } from '../lib/importChoice';
@@ -30,7 +31,10 @@ export function ImportChoiceCard() {
     haptic.light();
     call('agents.setImportChoice', { choice: 'declined' })
       .then(() => call('agents.overview', {}))
-      .then((overview) => setApp({ overview }))
+      .then((raw) => {
+        const overview = asOverview(raw);
+        if (overview) setApp({ overview });
+      })
       .catch((e: unknown) => setError(describeError(e)))
       .finally(() => setBusy(false));
   };
