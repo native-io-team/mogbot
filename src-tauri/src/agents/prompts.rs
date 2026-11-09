@@ -560,7 +560,8 @@ pub fn from_agent(sender: &str, text: &str, answer: bool, back_to: &[String]) ->
         )
     } else if answer {
         format!(
-            "[{sender}'s answer to your request — another agent, not the user]\n\n{text}\n\n[Finish what you asked for it for, then tell the user the outcome. Don't reply to {sender}.]"
+            "[{sender}'s answer to your request — another agent, not the user]\n\n{text}\n\n[Finish what you asked for it for, then tell the user the outcome. The user already sees this answer in your chat: if it only acknowledges what you sent, or nothing in it changes what you already told them, reply with exactly {} and nothing else: nothing more is posted. Don't reply to {sender}.]",
+            super::schedule::NOTHING_NEW
         )
     } else {
         format!(
@@ -847,10 +848,16 @@ mod tests {
         let answer = from_agent("Billing", "Drafted.", true, &[]);
         assert!(answer.starts_with("[Billing's answer to your request"));
         assert!(answer.contains("tell the user") && answer.contains("Don't reply to Billing"));
+        // An answer that only acknowledges may end with no post.
+        assert!(answer.contains("reply with exactly [nothing new]"));
         // Asked on someone else's behalf: the outcome goes up, not to the user.
         let up = from_agent("Voice", "Reworded.", true, &["Chief of Staff".into()]);
         assert!(up.contains("goes back to Chief of Staff automatically"));
         assert!(!up.contains("tell the user") && up.contains("Don't reply to Voice"));
+        assert!(
+            !up.contains("[nothing new]"),
+            "an outcome owed up the chain is always said"
+        );
     }
 
     #[test]

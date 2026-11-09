@@ -228,6 +228,53 @@ fn only_a_check_in_alone_may_finish_with_nothing_new() {
     });
 }
 
+/// An answer to this agent's own message, owing nobody, may end with no
+/// post; one carrying an outcome up the chain, or batched with the user's
+/// words, a request or a routine, may not.
+#[test]
+fn only_answers_owing_nobody_may_finish_with_nothing_new() {
+    scratch(|| {
+        let chief = agent("Chief");
+        let ops = agent("Ops");
+        let helper = agent("Helper");
+
+        // Ops sent the Chief a report; two acknowledgements come back.
+        queue(&ops.id, says("Noted, nothing to patch.", &chief, true));
+        queue(&ops.id, says("Helper confirmed it too.", &chief, true));
+        let batch = take_batch(&ops.id).unwrap();
+        assert!(batch.prompt.contains("[nothing new]"));
+        assert!(quiet_answer(&ops.id));
+        assert!(!quiet_check_in(&ops.id), "not a check-in");
+        finish(&ops.id);
+
+        // With the user's own words: they get an answer.
+        queue(&ops.id, says("Noted.", &chief, true));
+        queue(&ops.id, user("anything else?"));
+        take_batch(&ops.id).unwrap();
+        assert!(!quiet_answer(&ops.id));
+        finish(&ops.id);
+
+        // A request from another agent is owed a reply.
+        queue(&ops.id, says("Check the Node versions.", &chief, false));
+        take_batch(&ops.id).unwrap();
+        assert!(!quiet_answer(&ops.id));
+        take_owed(&ops.id);
+        finish(&ops.id);
+
+        // An answer to a request made for the Chief carries its outcome up.
+        queue(&ops.id, says("Check the Node versions.", &chief, false));
+        take_batch(&ops.id).unwrap();
+        note_onward(&ops.id, &helper.id);
+        take_owed(&ops.id);
+        finish(&ops.id);
+        queue(&ops.id, says("All on 22.x.", &helper, true));
+        let batch = take_batch(&ops.id).unwrap();
+        assert!(!batch.prompt.contains("[nothing new]"));
+        assert!(!quiet_answer(&ops.id));
+        RUNTIMES.lock().unwrap().remove(&ops.id);
+    });
+}
+
 /// Three deep: each level is noted as it asks, so the outcome climbs.
 #[test]
 fn a_three_level_chain_reports_all_the_way_up() {

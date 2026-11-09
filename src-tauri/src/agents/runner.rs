@@ -292,6 +292,10 @@ struct Runtime {
     /// (or the one it replaced): its words ride in the same prompt as the
     /// user's, so the turn is not the user's alone ([`users_own_ask`]).
     agent_in: bool,
+    /// Everything the turn in progress answers (and the one it replaced) is
+    /// other agents' answers to this agent: it may end with no post
+    /// ([`quiet_answer`]).
+    answers_only: bool,
 }
 
 /// Why a take-over can't start now.
@@ -390,6 +394,33 @@ fn quiet_check_in(agent_id: &str) -> bool {
                 && r.room.is_none()
         })
 }
+
+/// The turn in progress answers nothing but other agents' answers to this
+/// agent's own messages, and owes nobody an outcome: an answer that only
+/// acknowledges, or repeats what the user was already told, may end with
+/// [`super::schedule::NOTHING_NEW`] and post nothing. Observed: a weekly
+/// report sent to the Chief came back as two acknowledgements, and each
+/// became a post in the reporter's chat retelling the Chief's news about a
+/// third agent, which the user had already read in two other chats.
+fn quiet_answer(agent_id: &str) -> bool {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .is_some_and(|r| {
+            r.running
+                && r.answers_only
+                && r.tickets.is_empty()
+                && !r.user_asked
+                && !r.noted
+                && !r.outside
+                && r.owed.is_empty()
+                && r.room.is_none()
+        })
+}
+
+/// The quiet line an answer with nothing new for the user leaves.
+pub const ANSWER_READ_LINE: &str = "Read the answer · nothing new for you";
 
 /// A check-in answered [`super::schedule::NOTHING_NEW`]: no reply, no
 /// notification, and the unread its firing line added taken back. One quiet
@@ -3039,6 +3070,13 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
         || (runtime.interrupted.is_some() && runtime.noted);
     runtime.agent_in = batch.iter().any(|m| matches!(m.from, From::Agent { .. }))
         || (runtime.interrupted.is_some() && runtime.agent_in);
+    runtime.answers_only = batch.iter().all(|m| {
+        matches!(m.from, From::Agent { .. })
+            && m.reply
+            && m.room.is_none()
+            && m.ticket.is_none()
+            && !m.outside
+    }) && (runtime.interrupted.is_none() || runtime.answers_only);
     runtime.origin = if batch.iter().any(|m| m.from.here()) {
         None
     } else {
@@ -5826,6 +5864,18 @@ async fn run_turn(
                                 }
                                 said_anything = true;
                                 nothing_new(app, agent_id);
+                                continue;
+                            }
+                            // An agent's answer with nothing new for the user.
+                            if !quiet && super::schedule::is_nothing_new(&text) && quiet_answer(agent_id) {
+                                if let Some(id) = &draft_id {
+                                    emit_draft(app, agent_id, id, "");
+                                }
+                                said_anything = true;
+                                let _ = record_in_turn(
+                                    app,
+                                    new_message(agent_id, MessageKind::Note, ANSWER_READ_LINE),
+                                );
                                 continue;
                             }
                             if !text.is_empty() && !quiet {
