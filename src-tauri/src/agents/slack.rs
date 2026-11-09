@@ -451,14 +451,16 @@ pub async fn check_once(api: &dyn Api, s: &mut Settings, now_ms: i64) -> Checked
         };
         let Some(cursor) = s.cursors.get(&conv.id).cloned() else {
             // The first look is a baseline: what's already there is history.
-            let mut newest = now_ts(now_ms);
-            for m in &top {
-                for t in std::iter::once(&m.ts).chain(m.latest_reply.iter()) {
-                    if newer(t, &newest) {
-                        newest = t.clone();
-                    }
-                }
-            }
+            // By Slack's clock (the newest `ts` it showed), not this Mac's: a
+            // Mac running ahead would otherwise skip what's said until Slack
+            // catches up. This Mac's clock only for a conversation with
+            // nothing in it.
+            let newest = top
+                .iter()
+                .flat_map(|m| std::iter::once(&m.ts).chain(m.latest_reply.iter()))
+                .max_by_key(|t| ts_key(t))
+                .cloned()
+                .unwrap_or_else(|| now_ts(now_ms));
             s.cursors.insert(conv.id.clone(), newest);
             continue;
         };

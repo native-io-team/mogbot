@@ -214,6 +214,21 @@ fn the_first_look_is_a_baseline_and_nothing_old_starts_a_turn() {
     assert!(r.found.is_empty(), "{r:?}");
 }
 
+/// This Mac's clock runs ten minutes fast. Robin connects, then asks a
+/// minute later by Slack's clock: the baseline is Slack's, so it counts.
+#[test]
+fn a_mac_clock_running_ahead_doesnt_swallow_the_first_asks() {
+    let fake = Fake::default();
+    fake.say(LAUNCH, msg("1699999990.000100", ME, "dashbot: old news"));
+    let mut s = settings();
+    let ahead = NOW + 10 * 60_000;
+    assert!(block(check_once(&fake, &mut s, ahead)).found.is_empty());
+    fake.say(LAUNCH, msg("1700000060.000100", ME, "dashbot: new one"));
+    let r = block(check_once(&fake, &mut s, ahead + 30_000));
+    let asks: Vec<&str> = r.found.iter().map(|f| f.ask.as_str()).collect();
+    assert_eq!(asks, vec!["new one"]);
+}
+
 #[test]
 fn only_a_message_that_starts_with_the_trigger_counts() {
     let fake = Fake::default();
