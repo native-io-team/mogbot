@@ -4,9 +4,10 @@
  * From another assistant (Grok, ChatGPT, Claude…), the main path is a
  * conversation: the user sends it one message, and it talks to the Chief of
  * Staff over the connector until every agent is over
- * (`ImportConnectorPanel`, `agents/connector.rs`). Pasting its reply is the
- * fallback for one that can't connect (`ImportPastePanel`). Both end in the
- * same merge (`agents/import.rs`).
+ * (`ImportConnectorPanel`, `agents/connector.rs`). Without Remote access it
+ * opens on the path that needs nothing set up (`ImportPastePanel`): an
+ * export file or folder (Grok Bot, OpenBot, OpenClaw, Hermes), or a reply
+ * pasted back. Both end on the same review card in the Chief's chat.
  *
  * When the app this one grew out of has agents on this Mac, a second segment
  * reads them straight from its folder and copies them in whole
@@ -109,6 +110,8 @@ export function ImportAgentsModal({
     ]).then(([remote, other]) => {
       if (!live) return;
       setConnected(!!remote?.enabled);
+      // Nothing set up for the conversation: lead with the export or paste.
+      if (!remote?.enabled && !initialPath) setPasting(true);
       setOtherApp(other);
       setPath(other && initialPath === 'otherApp' ? 'otherApp' : 'assistant');
     });
@@ -162,11 +165,11 @@ export function ImportAgentsModal({
             {pasting ? (
               <ImportPastePanel
                 onCancel={close}
-                onDone={setResult}
+                onPosted={(posted) => openAgent(posted.chiefId)}
                 aside={
                   <p className="agents-import__switch">
                     <TextButton onClick={() => setPasting(false)}>
-                      Connect your assistant instead
+                      Connect your assistant over Remote access instead
                     </TextButton>
                   </p>
                 }

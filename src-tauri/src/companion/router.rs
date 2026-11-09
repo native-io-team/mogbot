@@ -115,6 +115,9 @@ pub const METHODS: &[&str] = &[
     "agents.import.start",
     "agents.import.stop",
     "agents.import.review",
+    "agents.import.exportPrompt",
+    "agents.import.exportPreview",
+    "agents.import.exportReview",
     "agents.teamSetup",
     "agents.teamSetup.step",
     "agents.teamSetup.routine",
@@ -146,6 +149,8 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.usagePlan",
     "agents.quietHours",
     "agents.import.status",
+    "agents.import.exportPrompt",
+    "agents.import.exportPreview",
     "agents.teamSetup",
     "agents.templates",
     "agents.changeDiff",
@@ -450,6 +455,15 @@ fn check_look(
     .map_err(bad_params)
 }
 
+/// Import without Remote access from the phone (`agents::import_export`):
+/// the message to send, what a pasted reply holds, and the review card.
+#[derive(Debug, Clone, PartialEq)]
+pub enum ImportExportAction {
+    Prompt,
+    Preview(String),
+    Review(String),
+}
+
 /// "Setting up your team" from the phone (`agents::team_setup`): the same
 /// commands the desk's card calls.
 #[derive(Debug, Clone, PartialEq)]
@@ -634,6 +648,9 @@ pub trait Backend: Send + Sync + 'static {
     async fn import_start(&self) -> Result<Value, CommandError>;
     /// Stop the import (`connector::stop`).
     async fn import_stop(&self) -> Result<Value, CommandError>;
+    /// `Prompt`: the message (text); `Preview`: what a reply holds;
+    /// `Review`: its review card in the Chief's chat (`{chiefId, requestId, agents}`).
+    async fn import_export(&self, action: ImportExportAction) -> Result<Value, CommandError>;
     /// Import from a review card, from the phone: the kept agents come in as
     /// new agents (a taken name as a copy), never replacing one here, and the
     /// Chief's notes (what the other assistant told it, by area) only when
@@ -1006,6 +1023,12 @@ struct TeamSetupRoutineParams {
     agent_id: String,
     check_in_id: String,
     on: bool,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ImportTextParams {
+    text: String,
 }
 
 #[derive(Deserialize)]
@@ -2211,6 +2234,19 @@ async fn run(
         "agents.import.status" => Ok(b.import_status().await?),
         "agents.import.start" => Ok(b.import_start().await?),
         "agents.import.stop" => Ok(b.import_stop().await?),
+        "agents.import.exportPrompt" => Ok(b.import_export(ImportExportAction::Prompt).await?),
+        "agents.import.exportPreview" | "agents.import.exportReview" => {
+            let p: ImportTextParams = parse(params)?;
+            if p.text.trim().is_empty() {
+                return Err(bad_params("Paste the reply first."));
+            }
+            let action = if method == "agents.import.exportPreview" {
+                ImportExportAction::Preview(p.text)
+            } else {
+                ImportExportAction::Review(p.text)
+            };
+            Ok(b.import_export(action).await?)
+        }
         "agents.import.review" => {
             let p: ImportReviewParams = parse(params)?;
             if p.keys.len() > crate::agents::review::MAX_PROPOSALS {

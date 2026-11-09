@@ -1274,6 +1274,26 @@ impl Backend for Stub {
         Ok(import_status_fixture(true, None))
     }
 
+    async fn import_export(
+        &self,
+        action: super::router::ImportExportAction,
+    ) -> Result<Value, CommandError> {
+        use super::router::ImportExportAction as A;
+        Ok(match action {
+            A::Prompt => json!("I'm moving to a new app on my computer…"),
+            A::Preview(_) => json!({
+                "source": "Grok Bot", "format": "Pasted reply", "verified": true,
+                "agents": [{"name": "Ledger", "role": "Bookkeeping", "instructionsChars": 64,
+                    "memoryLines": 2, "routines": 1, "watches": 1, "apps": 1}],
+                "main": "Atlas", "about": [["People and contacts", 1]], "problems": [],
+                "refused": [], "gaps": ["the conversations still open (\"about_me\".\"threads\")"],
+                "followUp": "Thanks. Some things are still missing:…", "masked": 1,
+                "read": [], "skipped": []
+            }),
+            A::Review(_) => json!({ "chiefId": "chief", "requestId": "r1", "agents": 1 }),
+        })
+    }
+
     async fn import_stop(&self) -> Result<Value, CommandError> {
         Ok(import_status_fixture(false, None))
     }

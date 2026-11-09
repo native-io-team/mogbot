@@ -11,7 +11,9 @@
  *    assistant starts talking to the Chief, and the last button opens the
  *    Chief's chat, where the consent card and the review card are.
  *
- * Start fresh is one click away on every screen.
+ * Start fresh is one click away on every screen, and on the first one so is
+ * the path that needs no Remote access: an export file or a pasted reply,
+ * in Import agents once onboarding ends (`ImportPastePanel`).
  *
  * @module components/setup/flow/ImportSteps
  */
@@ -41,6 +43,8 @@ interface StepProps {
   onBack: () => void;
   /** "Start fresh instead": finish onboarding without importing. */
   onStartFresh: () => void;
+  /** Finish onboarding into Import agents, at an export or a paste. */
+  onExport?: () => void;
 }
 
 const freshButton = (onStartFresh: () => void) => (
@@ -49,7 +53,7 @@ const freshButton = (onStartFresh: () => void) => (
   </Button>
 );
 
-export function ImportRemoteStep({ onNext, onBack, onStartFresh }: StepProps) {
+export function ImportRemoteStep({ onNext, onBack, onStartFresh, onExport }: StepProps) {
   const retry = useCallback(async () => {
     const s = await getRemoteAccessStatus();
     if (!s.enabled) return setRemoteAccessEnabled(true);
@@ -97,7 +101,16 @@ export function ImportRemoteStep({ onNext, onBack, onStartFresh }: StepProps) {
           </Button>
         )
       }
-      secondary={freshButton(onStartFresh)}
+      secondary={
+        <>
+          {onExport && (
+            <Button variant="ghost" onClick={onExport} data-flow-export>
+              Use an export or paste instead
+            </Button>
+          )}
+          {freshButton(onStartFresh)}
+        </>
+      }
     >
       <CheckLine
         result={result}

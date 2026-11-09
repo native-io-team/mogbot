@@ -486,6 +486,44 @@ export const agentsImportReview = {
   "routinesRefused": [],
   "skipped": []
 } satisfies Result<'agents.import.review'>;
+export const agentsImportExportPrompt = "I'm moving to a new app on my computer…" satisfies Result<'agents.import.exportPrompt'>;
+export const agentsImportExportPreview = {
+  "about": [
+    [
+      "People and contacts",
+      1
+    ]
+  ],
+  "agents": [
+    {
+      "apps": 1,
+      "instructionsChars": 64,
+      "memoryLines": 2,
+      "name": "Ledger",
+      "role": "Bookkeeping",
+      "routines": 1,
+      "watches": 1
+    }
+  ],
+  "followUp": "Thanks. Some things are still missing:…",
+  "format": "Pasted reply",
+  "gaps": [
+    "the conversations still open (\"about_me\".\"threads\")"
+  ],
+  "main": "Atlas",
+  "masked": 1,
+  "problems": [],
+  "read": [],
+  "refused": [],
+  "skipped": [],
+  "source": "Grok Bot",
+  "verified": true
+} satisfies Result<'agents.import.exportPreview'>;
+export const agentsImportExportReview = {
+  "agents": 1,
+  "chiefId": "chief",
+  "requestId": "r1"
+} satisfies Result<'agents.import.exportReview'>;
 export const agentsTeamSetup = {
   "agents": 3,
   "complete": false,
@@ -4337,6 +4375,9 @@ export const frames = [
       "agents.import.start",
       "agents.import.stop",
       "agents.import.review",
+      "agents.import.exportPrompt",
+      "agents.import.exportPreview",
+      "agents.import.exportReview",
       "agents.teamSetup",
       "agents.teamSetup.step",
       "agents.teamSetup.routine",
@@ -4360,7 +4401,8 @@ export const frames = [
       "agents.engine",
       "agents.effort",
       "agents.draft",
-      "routines.steps"
+      "routines.steps",
+      "import.export"
     ]
   },
   {

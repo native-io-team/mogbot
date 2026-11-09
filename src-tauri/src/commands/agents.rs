@@ -1985,6 +1985,73 @@ pub async fn agents_import_paste(
     .map_err(agents::err_other)?
 }
 
+/// What the user sends their old assistant for a reply that covers
+/// everything (`import_export::PROMPT`): the path that needs no remote access.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_import_export_prompt() -> Result<String, CommandError> {
+    Ok(agents::import_export::PROMPT.to_string())
+}
+
+/// What a pasted reply holds, what's still missing and the follow-up that
+/// asks for it. Read only.
+#[tauri::command]
+#[tracing::instrument(skip(text))]
+pub async fn agents_import_text_preview(
+    text: String,
+) -> Result<agents::import_export::Preview, CommandError> {
+    blocking(move || {
+        Ok(agents::import_export::preview(
+            &agents::import_export::read_text(&text),
+        ))
+    })
+    .await
+}
+
+/// Put a pasted reply up as one review card in the Chief's chat. Nothing is
+/// created until the user presses Import there.
+#[tauri::command]
+#[tracing::instrument(skip(app, text))]
+pub async fn agents_import_text_review(
+    app: AppHandle,
+    text: String,
+) -> Result<agents::import_export::Posted, CommandError> {
+    blocking(move || agents::import_export::post(&app, &agents::import_export::read_text(&text)))
+        .await
+}
+
+/// What an export file or folder the user picked holds. Read only: only
+/// text files, never credential files (`import_formats`).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_import_file_preview(
+    path: String,
+) -> Result<agents::import_export::Preview, CommandError> {
+    blocking(move || {
+        Ok(agents::import_export::preview(
+            &agents::import_export::read_path(std::path::Path::new(&path)),
+        ))
+    })
+    .await
+}
+
+/// Put an export file or folder up as one review card in the Chief's chat,
+/// read again now (never the preview's copy).
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_import_file_review(
+    app: AppHandle,
+    path: String,
+) -> Result<agents::import_export::Posted, CommandError> {
+    blocking(move || {
+        agents::import_export::post(
+            &app,
+            &agents::import_export::read_path(std::path::Path::new(&path)),
+        )
+    })
+    .await
+}
+
 /// The other app's agents on this Mac, and what importing them would do;
 /// `None` when it isn't here or has none. Reads only.
 #[tauri::command]

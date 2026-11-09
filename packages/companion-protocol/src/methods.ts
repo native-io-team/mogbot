@@ -43,6 +43,8 @@ import type {
   MemoryChange,
   MemoryView,
   PasteImportPreview,
+  ExportImportPreview,
+  ExportImportPosted,
   ProjectSummary,
   PushEnvironment,
   RoomView,
@@ -613,6 +615,15 @@ export interface Methods {
   };
   /** Check again what the team can already reach (progress arrives on the checklist). */
   'agents.teamSetup.check': { params: Record<string, never>; result: number };
+  /**
+   * Import without Remote access (a Mac with `import.export`): the message to
+   * send the old assistant, what its pasted reply holds and what's still
+   * missing, and the review card in the Chief's chat. Read on the Mac by
+   * plain code; nothing is created until Import on the card.
+   */
+  'agents.import.exportPrompt': { params: Record<string, never>; result: string };
+  'agents.import.exportPreview': { params: { text: string }; result: ExportImportPreview };
+  'agents.import.exportReview': { params: { text: string }; result: ExportImportPosted };
   'agents.import.pastePrompt': { params: Record<string, never>; result: string };
   'agents.import.pastePreview': { params: { text: string }; result: PasteImportPreview };
   'agents.import.paste': { params: { text: string }; result: ImportSummary };
@@ -694,6 +705,8 @@ export const READ_ONLY_METHODS = [
   'agents.usagePlan',
   'agents.quietHours',
   'agents.import.status',
+  'agents.import.exportPrompt',
+  'agents.import.exportPreview',
   'agents.teamSetup',
   'agents.templates',
   'agents.files',

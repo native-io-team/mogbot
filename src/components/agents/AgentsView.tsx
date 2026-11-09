@@ -296,7 +296,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     setImportPath(null);
     setImportOpen(true);
   }, []);
-  const openImportFrom = useCallback((from?: 'otherApp') => {
+  const openImportFrom = useCallback((from?: 'otherApp' | 'paste') => {
     setImportPath(from ?? null);
     setImportOpen(true);
   }, []);

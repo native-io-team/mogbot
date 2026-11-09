@@ -238,7 +238,9 @@ export function ImportConnectorPanel({
       </div>
       <footer className="agents-import__footer">
         <p className="agents-import__note">
-          <TextButton onClick={onPaste}>Can’t connect? Paste a reply instead</TextButton>
+          <TextButton onClick={onPaste}>
+            No Remote access? Use an export or paste a reply
+          </TextButton>
         </p>
         {(armed || live) && (
           <Button variant="secondary" onClick={cancel}>

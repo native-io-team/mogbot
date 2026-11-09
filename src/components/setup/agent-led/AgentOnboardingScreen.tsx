@@ -51,6 +51,7 @@ import {
   type FlowStep,
 } from '../../../lib/onboardingFlow';
 import { setImportChoice } from '../../../lib/agents';
+import { requestAgentsIntent } from '../../../commands/useAgentsCommands';
 import { initDefaultAgent } from '../../../lib/agent';
 import { withTimeout, TimeoutError } from '../../../lib/withTimeout';
 import { trackEvent, setActiveScreen } from '../../../lib/analytics';
@@ -180,7 +181,16 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
   const forward = () => go(nextStep(step));
   const skip = () => go(skipPhone());
   const phone = { onNext: forward, onBack: back, onSkip: skip };
-  const importing = { onNext: forward, onBack: back, onStartFresh: () => void startFresh() };
+  const importing = {
+    onNext: forward,
+    onBack: back,
+    onStartFresh: () => void startFresh(),
+    // No Remote access needed: Import agents opens at an export or a paste.
+    onExport: () => {
+      requestAgentsIntent({ kind: 'import', from: 'paste' });
+      void finish();
+    },
+  };
 
   const screen = (() => {
     switch (step) {

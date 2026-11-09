@@ -76,7 +76,9 @@ describe('ImportConnectorPanel', () => {
     expect(screen.getByText('Allow it, then check the plan in Ada’s chat')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Open Ada' }));
     expect(props.onOpenAgent).toHaveBeenCalledWith('chief');
-    fireEvent.click(screen.getByRole('button', { name: 'Can’t connect? Paste a reply instead' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'No Remote access? Use an export or paste a reply' })
+    );
     expect(props.onPaste).toHaveBeenCalled();
   });
 

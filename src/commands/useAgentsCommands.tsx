@@ -33,7 +33,7 @@ import {
 
 type AgentsIntent =
   | { kind: 'new'; template?: string }
-  | { kind: 'import'; from?: 'otherApp' }
+  | { kind: 'import'; from?: 'otherApp' | 'paste' }
   | { kind: 'apps' }
   | { kind: 'search' }
   | { kind: 'ideas' }
@@ -56,8 +56,8 @@ export function requestAgentsIntent(intent: AgentsIntent) {
 export function useAgentsIntents(handlers: {
   /** `template`: open on that ready-made agent. */
   onNewAgent: (template?: string) => void;
-  /** `otherApp`: open on the other app's team when it's on this Mac. */
-  onImportAgents: (from?: 'otherApp') => void;
+  /** `otherApp`: open on the other app's team when it's on this Mac; `paste`: on an export or a pasted reply. */
+  onImportAgents: (from?: 'otherApp' | 'paste') => void;
   onApps: () => void;
   onOpenAgent: (agentId: string) => void;
   onSearch: () => void;
@@ -164,6 +164,14 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
   useEffect(() => {
     const unlisten = listen<string>(AGENT_EVENTS.open, (e) => {
       requestAgentsIntent({ kind: 'open', agentId: e.payload });
+      setView('agents');
+    });
+    return () => void unlisten.then((off) => off());
+  }, [setView]);
+  // The Chief's `bring_agents_over` with no file: Import, at an export or a paste.
+  useEffect(() => {
+    const unlisten = listen<string>(AGENT_EVENTS.openImport, () => {
+      requestAgentsIntent({ kind: 'import', from: 'paste' });
       setView('agents');
     });
     return () => void unlisten.then((off) => off());
@@ -303,6 +311,28 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         ],
         run: () => {
           requestAgentsIntent({ kind: 'import' });
+          setView('agents');
+        },
+      },
+      {
+        id: 'agents.importExport',
+        title: 'Import agents from an export file…',
+        icon: <DownloadIcon size={14} />,
+        category: 'navigation',
+        keywords: [
+          'agents',
+          'import',
+          'export',
+          'file',
+          'paste',
+          'grok bot',
+          'openbot',
+          'openclaw',
+          'hermes',
+          'migrate',
+        ],
+        run: () => {
+          requestAgentsIntent({ kind: 'import', from: 'paste' });
           setView('agents');
         },
       },
