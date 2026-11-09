@@ -333,7 +333,7 @@ export function WhenComposer({ agent, editing, onDone, onCancel }: WhenComposerP
             Cancel
           </Button>
         )}
-        <Button variant="primary" size="compact" disabled={!canSave} onClick={() => void save()}>
+        <Button variant="strong" size="compact" disabled={!canSave} onClick={() => void save()}>
           {editing ? 'Save' : 'Add'}
         </Button>
       </div>

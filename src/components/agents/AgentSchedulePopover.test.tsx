@@ -132,7 +132,11 @@ describe('AgentSchedulePopover', () => {
     const agent = { id: 'a1', name: 'Finance', checkIns: [quarterly] } as Agent;
     render(<AgentSchedulePopover agent={agent} open onOpenChange={vi.fn()} />);
     expect(await screen.findByText('Every 3 months on the 15th at 9:00 AM')).toBeVisible();
-    fireEvent.click(screen.getByRole('button', { name: 'Edit “Estimated taxes”' }));
+    fireEvent.click(screen.getByRole('button', { name: 'More for “Estimated taxes”' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Edit' }));
+    // The editor stands in for the list.
+    expect(screen.queryByRole('list', { name: 'Scheduled' })).toBeNull();
+    expect(screen.getByText('Edit routine')).toBeVisible();
     expect(screen.getByRole('button', { name: 'Monthly' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByRole('combobox', { name: 'Which' })).toHaveValue('15');
     await waitFor(() =>
@@ -162,5 +166,40 @@ describe('AgentSchedulePopover', () => {
     render(<AgentSchedulePopover agent={agent} open onOpenChange={vi.fn()} />);
     expect(await screen.findByRole('dialog', { name: 'Routines for Finance' })).toBeVisible();
     expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('each row is on/off and a menu; Delete asks first, and nothing on the list is red', async () => {
+    const calls: { cmd: string; args: Record<string, unknown> }[] = [];
+    mockIPC((cmd, args) => {
+      calls.push({ cmd, args: args as Record<string, unknown> });
+      return null;
+    });
+    const daily = {
+      id: 'd1',
+      note: 'Draft my day',
+      repeat: { kind: 'daily', days: [], hour: 9, minute: 0 },
+      nextAt: Date.now() + 86_400_000,
+      createdAt: 0,
+      paused: false,
+    } as unknown as CheckIn;
+    const agent = { id: 'a1', name: 'Finance', checkIns: [daily] } as Agent;
+    render(<AgentSchedulePopover agent={agent} open onOpenChange={vi.fn()} />);
+    await screen.findByText('Draft my day');
+    expect(screen.queryByRole('button', { name: /Delete/ })).toBeNull();
+    // New routine is neutral, never the agent's colour.
+    expect(screen.getByRole('button', { name: 'New routine' }).className).not.toMatch(/primary/);
+
+    fireEvent.click(screen.getByRole('switch', { name: 'Turn off “Draft my day”' }));
+    await waitFor(() =>
+      expect(calls.find((c) => c.cmd === 'agents_schedule_pause')?.args).toMatchObject({
+        paused: true,
+      })
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'More for “Draft my day”' }));
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Delete…' }));
+    expect(calls.some((c) => c.cmd === 'agents_schedule_cancel')).toBe(false);
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    await waitFor(() => expect(calls.some((c) => c.cmd === 'agents_schedule_cancel')).toBe(true));
   });
 });
