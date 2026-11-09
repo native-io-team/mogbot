@@ -16,7 +16,7 @@
 
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { AgentAvatar, type AgentAvatarSize } from '../components/agents/AgentAvatar';
+import { AgentAvatar, AgentKey, type AgentAvatarSize } from '../components/agents/AgentAvatar';
 import {
   AVATAR_FACES,
   AVATAR_FINISHES,
@@ -230,6 +230,140 @@ function Blink() {
   );
 }
 
+/**
+ * The contact sheet (`section=contact&px=24`): every shape × face × finish
+ * in every colour at one size, at rest and selected, so a size can be judged
+ * as a whole. `px` is any width; the capture takes 16, 20, 24, 32, 64, 128.
+ */
+const CONTACT_LOOKS: AgentLook[] = AVATAR_FINISHES.flatMap((finish) =>
+  AVATAR_FACES.flatMap((face) => AVATAR_SHAPES.map((shape) => ({ shape, face, finish })))
+);
+
+function Contact() {
+  const sizes = (params.get('px') ?? '24').split(',').map(Number);
+  return (
+    <section className="avatar-gallery__section" data-section="contact">
+      {sizes.map((px) => (
+        <ContactBlock key={px} px={px} />
+      ))}
+    </section>
+  );
+}
+
+function ContactBlock({ px }: { px: number }) {
+  return (
+    <div
+      className="avatar-gallery__contact-block"
+      data-contact-px={px}
+      style={{ '--contact-px': `${px}px` } as React.CSSProperties}
+    >
+      <h2>
+        {px}px · {theme} · every colour (rows) × finish, face, shape (columns); then selected
+      </h2>
+      <div className="avatar-gallery__contact" data-contact-cols={CONTACT_LOOKS.length + 1}>
+        <span />
+        {CONTACT_LOOKS.map((l, i) => (
+          <span key={i} className="avatar-gallery__caption avatar-gallery__contact-head">
+            {i % AVATAR_SHAPES.length === 0
+              ? `${l.finish === 'embossed' ? 'emb' : 'cap'} · ${l.face}`
+              : ''}
+          </span>
+        ))}
+        {AGENT_COLORS.map((color) => (
+          <Row key={color} label={color}>
+            {CONTACT_LOOKS.map((look, i) => (
+              <AgentAvatar
+                key={i}
+                name={NAMES[i % NAMES.length]}
+                color={color}
+                look={look}
+                px={px}
+                still
+              />
+            ))}
+          </Row>
+        ))}
+        {AGENT_COLORS.map((color) => (
+          <Row key={`s${color}`} label={`${color} ✓`}>
+            {CONTACT_LOOKS.map((look, i) => (
+              <AgentAvatar
+                key={i}
+                name={NAMES[i % NAMES.length]}
+                color={color}
+                look={look}
+                px={px}
+                selected
+                still
+              />
+            ))}
+          </Row>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Twelve agents in a list, as the sidebar sets them (`section=list`): the
+ * test of distinctness. Each row at 20 and 24px, with a name beside it, and
+ * the same twelve as typing keys.
+ */
+const TEAM: [string, string, AgentLook][] = [
+  ['Chief of Staff', 'blue', { shape: 'squircle', face: 'dots' }],
+  ['Hiring', 'green', { shape: 'hexagon', face: 'dots' }],
+  ['Finance', 'amber', { shape: 'diamond', face: 'smile' }],
+  ['Sales', 'red', { shape: 'circle', face: 'dots' }],
+  ['Research', 'purple', { shape: 'hexagon', face: 'debossed' }],
+  ['Inbox', 'teal', { shape: 'circle', face: 'monogram' }],
+  ['Invoices', 'brown', { shape: 'diamond', face: 'dots' }],
+  ['Notes', 'gray', { shape: 'squircle', face: 'smile', finish: 'embossed' }],
+  ['Site', 'pink', { shape: 'circle', face: 'smile' }],
+  ['Bookings', 'orange', { shape: 'hexagon', face: 'dots' }],
+  ['Support', 'white', { shape: 'diamond', face: 'dots' }],
+  ['Ops', 'green', { shape: 'circle', face: 'dots', finish: 'embossed' }],
+];
+
+function List() {
+  return (
+    <section className="avatar-gallery__section" data-section="list">
+      <h2>A team of twelve at 20 and 24px, and as typing keys</h2>
+      <div className="avatar-gallery__list">
+        {[20, 24].map((px) => (
+          <div key={px} className="avatar-gallery__list-col">
+            {TEAM.map(([name, color, look], i) => (
+              <div key={name} className="avatar-gallery__list-row">
+                <AgentAvatar
+                  name={name}
+                  color={color}
+                  look={look}
+                  px={px}
+                  selected={i === 0}
+                  still
+                />
+                <span>{name}</span>
+              </div>
+            ))}
+          </div>
+        ))}
+        <div className="avatar-gallery__list-col">
+          {TEAM.map(([name, color], i) => (
+            <div key={name} className="avatar-gallery__list-row">
+              <AgentKey
+                id={`team-${i}`}
+                name={name}
+                color={color}
+                pressing={false}
+                look={TEAM[i][2]}
+              />
+              <span>{name}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+  );
+}
+
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <>
@@ -248,6 +382,8 @@ function Gallery() {
       {(section === 'all' || section === 'colors') && <Colors />}
       {section === 'states' && <States />}
       {section === 'blink' && <Blink />}
+      {section === 'contact' && <Contact />}
+      {section === 'list' && <List />}
     </main>
   );
 }

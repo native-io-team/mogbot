@@ -39,13 +39,15 @@ import {
   MONOGRAM,
   MOUTH_MIN_PX,
   SHAPE_PATHS,
+  flatInset,
+  shapePathAt,
   TOP_TRANSFORM,
   TYPING_KEY,
   TYPING_KEY_UNITS,
   TYPING_KEY_VIEWBOX,
   avatarPaint,
   typingKeyPaint,
-  eyeAt,
+  eyesAt,
   faceWeight,
   idlePhase,
   isPressed,
@@ -163,6 +165,8 @@ interface AgentAvatarProps {
   working?: boolean;
   /** Holds still whatever it's doing: a choice in the look picker. */
   still?: boolean;
+  /** An exact width in px instead of a size step's (the harness's contact sheet). */
+  px?: number;
   className?: string;
 }
 
@@ -176,6 +180,7 @@ export function AgentAvatar({
   mood: givenMood,
   working = false,
   still = false,
+  px: exactPx,
   className,
 }: AgentAvatarProps) {
   const team = useSyncExternalStore(subscribeAgents, teamLooks);
@@ -187,7 +192,7 @@ export function AgentAvatar({
     [given, id, team, name]
   );
   const theme = useResolvedTheme();
-  const px = SIZE_PX[size];
+  const px = exactPx ?? SIZE_PX[size];
   const mood = useMood(givenMood ?? (working ? 'working' : 'idle'));
   const ref = useOffscreen<HTMLSpanElement>(!still);
   useBlink(ref, !still && blinks(look.face, px));
@@ -195,12 +200,15 @@ export function AgentAvatar({
   const paint = avatarPaint(color, theme, selected);
   const lit = px >= LIT_MIN_PX;
   const cap = lit && look.finish === 'keycap';
-  const shape = SHAPE_PATHS[look.shape];
+  const shape = shapePathAt(look.shape, px);
   const rim = cap ? KEY.capRim : KEY.embossRim(px);
   const ids = { grad: `${uid}g`, rim: `${uid}r`, glow: `${uid}w`, shadow: `${uid}s` };
   const top = cap ? TOP_TRANSFORM : undefined;
   // Computed per agent: where in the idle loop it starts, so twelve never drift in step.
-  const phase = { '--agent-avatar-phase': `-${id ? idlePhase(id) : 0}ms` } as CSSProperties;
+  const phase = {
+    '--agent-avatar-phase': `-${id ? idlePhase(id) : 0}ms`,
+    ...(exactPx ? { '--agent-avatar-size': `${exactPx}px` } : {}),
+  } as CSSProperties;
   return (
     <span
       ref={ref}
@@ -256,7 +264,11 @@ export function AgentAvatar({
               />
             </>
           ) : (
-            <path d={shape} fill={paint.fill} />
+            <>
+              {/* Flat: the shape in the side's tone, the fill inset over it, a one-pixel edge. */}
+              <path d={shape} fill={paint.side} />
+              <path d={shape} transform={flatInset(px)} fill={paint.fill} />
+            </>
           )}
         </Layer>
         {lit && (
@@ -299,15 +311,21 @@ export function AgentKey({
   name,
   color,
   pressing,
+  look: given,
 }: {
   id: string;
   name: string;
   color: string;
   /** Being typed on (the line is live); otherwise it rests. */
   pressing: boolean;
+  /** An explicit look (the harness); otherwise the registry's for `id`. */
+  look?: AgentLook;
 }) {
   const team = useSyncExternalStore(subscribeAgents, teamLooks);
-  const look = useMemo(() => lookFromTeam(team, id) ?? lookFor({ id }), [team, id]);
+  const look = useMemo(
+    () => (given ? lookFor({ id, avatar: given }) : (lookFromTeam(team, id) ?? lookFor({ id }))),
+    [given, team, id]
+  );
   const theme = useResolvedTheme();
   const ref = useOffscreen<HTMLSpanElement>(true);
   useBlink(ref, blinks(look.face, TYPING_KEY.size));
@@ -484,7 +502,7 @@ function Face({
     );
   }
   const w = faceWeight(px);
-  const eyes = spec.eyes.map((e) => eyeAt(e, px));
+  const eyes = eyesAt(spec.eyes, px);
   const mouth = spec.mouth && px > MOUTH_MIN_PX ? spec.mouth : null;
   const stroke = (path: string, color: string, dy: number) => (
     <path

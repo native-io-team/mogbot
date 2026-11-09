@@ -18,6 +18,12 @@ import {
   SHAPE_PATHS,
   SHAPE_POINTS,
   SMALL_MOTION,
+  SMALL_SHAPE_POINTS,
+  SMALL_SHAPE_PX,
+  AVATAR_ROLES,
+  eyesAt,
+  flatInset,
+  shapePathAt,
   LIT_MIN_PX,
   TYPING_KEY,
   TYPING_KEY_UNITS,
@@ -388,6 +394,173 @@ describe('the typing key', () => {
     expect(Math.max(...press.map((k) => k[1]))).toBe(1);
     // Most of the loop is rest: a calm rhythm, not a buzz.
     expect(press[press.length - 2][0]).toBeLessThan(0.5);
+  });
+});
+
+// ------------------------------------------------- optical size and refinements
+
+describe('the optical size', () => {
+  it('draws crisper silhouettes under 20px: the same shapes, the same area, inside the grid', () => {
+    for (const s of AVATAR_SHAPES) {
+      const pts = SMALL_SHAPE_POINTS[s];
+      let a = 0;
+      pts.forEach((p, i) => {
+        const q = pts[(i + 1) % pts.length];
+        a += p[0] * q[1] - q[0] * p[1];
+      });
+      // The diamond may give a little area to stay inside the grid with its sharper corners.
+      expect(Math.abs(a / 2) / SHAPE_AREA, s).toBeGreaterThan(0.94);
+      expect(Math.abs(a / 2) / SHAPE_AREA, s).toBeLessThan(1.01);
+      for (const [x, y] of pts) {
+        expect(Math.min(x, y)).toBeGreaterThan(1);
+        expect(Math.max(x, y)).toBeLessThan(31);
+      }
+    }
+    // Crisper, not rounder: the diamond's and hexagon's points reach further out.
+    const reach = (pts: Pt[]) => Math.max(...pts.map((p) => Math.abs(p[1] - 16)));
+    for (const s of ['diamond', 'hexagon'] as const) {
+      expect(reach(SMALL_SHAPE_POINTS[s]), s).toBeGreaterThan(reach(SHAPE_POINTS[s]));
+    }
+    // Only below the cut: from 20px up, the drawing saved choices were made on.
+    expect(shapePathAt('diamond', SMALL_SHAPE_PX)).toBe(SHAPE_PATHS.diamond);
+    expect(shapePathAt('diamond', 16)).not.toBe(SHAPE_PATHS.diamond);
+    expect(shapePathAt('circle', 16)).toBe(SHAPE_PATHS.circle);
+  });
+
+  it('keeps the small faces off the edge of the crisper shapes', () => {
+    for (const shape of AVATAR_SHAPES) {
+      for (const face of AVATAR_FACES) {
+        if (FACE_SPECS[face].monogram) continue;
+        for (const px of [16, 18]) {
+          for (const e of eyesAt(FACE_SPECS[face].eyes, px)) {
+            const room = clearance(
+              [e.cx, e.cy],
+              Math.max(e.rx, e.ry) + FACE_REACH * SMALL_MOTION,
+              SMALL_SHAPE_POINTS[shape]
+            );
+            expect(room, `${shape} ${face} ${px}px`).toBeGreaterThan(1);
+          }
+        }
+      }
+    }
+  });
+
+  it('snaps a flat key’s eyes to the device pixel, evenly about the middle', () => {
+    for (const face of AVATAR_FACES) {
+      for (const px of [16, 18, 20, 22]) {
+        const [a, b] = eyesAt(FACE_SPECS[face].eyes, px);
+        const u = px / 32;
+        const half = (v: number) => Math.abs(v * 2 - Math.round(v * 2)) < 0.02;
+        for (const e of [a, b]) {
+          expect(half((e.cx - e.rx) * u), `${face} ${px} left`).toBe(true);
+          expect(half(e.rx * 2 * u), `${face} ${px} width`).toBe(true);
+          expect(half((e.cy - e.ry) * u), `${face} ${px} top`).toBe(true);
+          expect(e.rx * 2 * u).toBeGreaterThanOrEqual(2.2);
+          expect(e.ry).toBeGreaterThanOrEqual(e.rx);
+        }
+        // Mirrored: the same size, the same height, the same distance from the middle.
+        expect(b.rx).toBe(a.rx);
+        expect(b.cy).toBe(a.cy);
+        expect(b.cx - 16).toBeCloseTo(16 - a.cx, 1);
+      }
+    }
+    // A lit key's eyes are left where the face (and its motion) puts them.
+    expect(eyesAt(FACE_SPECS.dots.eyes, 48)[0]).toEqual(eyeAt(FACE_SPECS.dots.eyes[0], 48));
+  });
+
+  it('gives a flat key a one-pixel edge', () => {
+    for (const px of [16, 18, 20]) {
+      const k = Number(/scale\(([\d.]+)\)/.exec(flatInset(px))![1]);
+      // The inset at the shape's furthest reach (14.85 units), in CSS px.
+      const edge = ((1 - k) * 14.85 * px) / 32;
+      expect(edge).toBeGreaterThan(0.85);
+      expect(edge).toBeLessThan(1.15);
+    }
+  });
+
+  it('sets the top flush along its upper edge, the side showing below it', () => {
+    for (const s of AVATAR_SHAPES) {
+      const ys = SHAPE_POINTS[s].map((p) => p[1]);
+      const top = Math.min(...ys);
+      const bottom = Math.max(...ys);
+      const at = (y: number) => KEY.top.y + (y - 16) * KEY.top.scale;
+      // Within a quarter unit of the side's top edge: no bezel above it.
+      expect(Math.abs(at(top) - top), s).toBeLessThan(0.25);
+      // At least a unit and a half of side below.
+      expect(bottom - at(bottom), s).toBeGreaterThan(1.5);
+    }
+  });
+});
+
+describe('the palette, against the page', () => {
+  const themes: AvatarTheme[] = ['dark', 'light'];
+  /** The warm canvases the avatars sit on (tokens-core.css: the app and its panels). */
+  const pages: Record<AvatarTheme, string[]> = {
+    dark: ['#151413', '#1c1b19'],
+    light: ['#f4f2ee', '#fdfcfa'],
+  };
+
+  it('draws a dark face on a pastel key in both themes, as the site does', () => {
+    for (const theme of themes) {
+      expect(AVATAR_ROLES.clay[theme][0]).toBeGreaterThan(0.65);
+      expect(AVATAR_ROLES.ink[theme][0]).toBeLessThan(0.4);
+    }
+  });
+
+  it('keeps a selected key’s face legible, every colour, both themes', () => {
+    for (const theme of themes) {
+      for (const color of Object.keys(AVATAR_TONES)) {
+        const p = avatarPaint(color, theme, true);
+        const ink = p.ink ?? pages[theme][0];
+        expect(contrast(ink, p.fill), `${theme} ${color}`).toBeGreaterThan(4);
+      }
+    }
+  });
+
+  it('tells a selected key from one at rest', () => {
+    for (const theme of themes) {
+      for (const color of Object.keys(AVATAR_TONES)) {
+        const r = hexToOklab(avatarPaint(color, theme).fill);
+        const s = hexToOklab(avatarPaint(color, theme, true).fill);
+        const d = Math.hypot(r[0] - s[0], r[1] - s[1], r[2] - s[2]);
+        expect(d, `${theme} ${color}`).toBeGreaterThan(0.06);
+      }
+    }
+  });
+
+  it('gives every key a silhouette on the page: its edge, if not its fill', () => {
+    for (const theme of themes) {
+      for (const page of pages[theme]) {
+        for (const color of Object.keys(AVATAR_TONES)) {
+          const p = avatarPaint(color, theme);
+          const off = Math.max(contrast(p.side, page), contrast(p.fill, page));
+          expect(off, `${theme} ${color} on ${page}`).toBeGreaterThan(1.4);
+        }
+      }
+    }
+  });
+
+  it('presses a debossed face in deep enough to read', () => {
+    for (const theme of themes) {
+      for (const color of Object.keys(AVATAR_TONES)) {
+        const p = avatarPaint(color, theme);
+        expect(contrast(p.well, p.topLow), `${theme} ${color}`).toBeGreaterThan(2);
+      }
+    }
+  });
+
+  it('keeps the colours apart: no two at rest within a just-noticeable step', () => {
+    for (const theme of themes) {
+      const colors = Object.keys(AVATAR_TONES);
+      for (let i = 0; i < colors.length; i++) {
+        for (let j = i + 1; j < colors.length; j++) {
+          const a = hexToOklab(avatarPaint(colors[i], theme).fill);
+          const b = hexToOklab(avatarPaint(colors[j], theme).fill);
+          const d = Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+          expect(d, `${theme} ${colors[i]} / ${colors[j]}`).toBeGreaterThan(0.035);
+        }
+      }
+    }
   });
 });
 

@@ -33,7 +33,11 @@ The designer drew ten directions on one 32-unit grid with one equal-OKLCH palett
   0.9 units high), a soft shadow and a rim light on the top edge. Identity comes from shape, hue
   and that bit of physicality, so the face can stay tiny and calm.
 - **Flat below 24px.** At 16 and 18px the light and the side are mush, so the key is one flat
-  shape with the face on it.
+  shape with the face on it, inside a one-pixel edge in the side's tone (`flatInset`), so a pale
+  key on paper keeps its silhouette. Under 20px the silhouettes are drawn crisper at the same
+  area (`shapePathAt`: a pointier diamond and hexagon, a squarer squircle), and a flat key's eyes
+  snap to the device pixel, mirrored about the middle (`eyesAt`). See
+  [avatar-review.md](avatar-review.md).
 - **The face is a separate, small choice.** Dot eyes, eyes and a mouth, debossed (the features
   pressed into the top as wells with a light lip) or a monogram (the agent's initial). No props,
   no closed eyes.
@@ -53,8 +57,8 @@ The Chief of Staff defaults to the squircle, and no other agent gets the squircl
 ## The system
 
 **Construction** (`KEY`, `TOP_TRANSFORM`): shadow = the shape dropped 1.1 units, blurred 0.9,
-black at 55% (dark) / 20% (light); side = the shape in the side tone; top = the shape at 0.9
-about (16, 15.1), filled with a vertical gradient (±0.035 lightness) and lit by the rim filter
+black at 55% (dark) / 20% (light); side = the shape in the side tone; top = the shape at 0.93
+about (16, 14.95), flush with the side along its upper edge so the side shows below it, filled with a vertical gradient (±0.035 lightness) and lit by the rim filter
 (light on the top edge, shade on the bottom, both inside the shape, depth 0.7). Embossed: the
 gradient shape alone with a deeper rim (1.2 below 40px, 0.9 above). The filters are the
 reference's primitive for primitive, on both clients.
@@ -66,11 +70,15 @@ drawn on in the ink.
 
 **Colour** (`avatarPaint`, `AVATAR_ROLES`): every hue at one lightness and chroma per role per
 theme, converted to sRGB in the spec (chroma comes down for an out-of-gamut colour; lightness
-never moves). The roles are the clay (top), side, ink, well, solid (selected) and the solid's
+never moves). Both themes are the site's faces: a pastel key with a dark face (dark's clay a step
+below light's), so the sidebar's avatar and the working line's key are one object. The roles are the clay (top), side, ink, well, solid (selected) and the solid's
 side. Gray and brown cap their chroma; white is a neutral a step lighter than gray with a dark
 ink, and selected white on light is near black (the theme's strongest neutral). Tests hold every
 hue to one lightness per role and the ink to 3.5:1 on its key in both themes. **Selected** (the
-agent you're on) is the solid colour with the canvas colour as ink.
+agent you're on) is the solid colour, stronger, with a dark face (`solidInk`); a dark solid (white
+selected on light) takes the canvas colour as ink. Brown sits a step deeper than the hues so it
+reads as wood beside orange; tests keep every colour pair apart and every key clear of the warm
+canvases.
 
 **Migration** (`LEGACY_SHAPES`, `LEGACY_FACES`, mirrored in `store.rs`): rounded and arch become
 the squircle; pill, drop and cookie the circle; circle, squircle and hexagon stay. A face with a
