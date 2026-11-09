@@ -204,6 +204,24 @@ pub struct TurnWork {
     /// Chrome) right now, so the desk can offer to watch it.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub own_browser: bool,
+    /// A chat page asked for timelines without their steps (`omit_steps`):
+    /// `steps` is empty here though the turn kept some, and they are read
+    /// when its "What it did" opens (`agents_turn_work`, the phone's
+    /// `agents.workSteps`). Absent everywhere else, so a reader that never
+    /// asked keeps getting the steps inline.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub steps_omitted: bool,
+}
+
+impl TurnWork {
+    /// The folded line's part only: counts, times and files, no steps.
+    pub fn omit_steps(&mut self) {
+        if self.steps.is_empty() {
+            return;
+        }
+        self.steps = Vec::new();
+        self.steps_omitted = true;
+    }
 }
 
 /// A tool call, as the parsers describe it.
@@ -1993,6 +2011,7 @@ pub fn live(agent_id: &str) -> Option<TurnWork> {
             quiet_since: live.quiet_since,
             project: None,
             own_browser: false,
+            steps_omitted: false,
         }
     })
     .filter(|w| w.step_count > 0 || w.current.is_some() || w.quiet_since.is_some())
@@ -2150,6 +2169,33 @@ fn prune_at(agent_id: &str, now: std::time::SystemTime) {
         let old = now.duration_since(*modified).is_ok_and(|age| age > max_age);
         if i >= KEEP_TURNS || (i >= KEEP_RECENT && old) {
             let _ = std::fs::remove_file(path);
+        }
+    }
+}
+
+/// A chat page without what each turn's steps were: the folded lines need
+/// only the counts, and the steps were most of a page (66 of 111 KB for 150
+/// lines). They are read one turn at a time as a "What it did" opens.
+pub fn omit_steps(page: &mut [AgentMessage]) {
+    for work in page.iter_mut().filter_map(|m| m.work.as_mut()) {
+        work.omit_steps();
+    }
+}
+
+/// The same for a page already serialized (the phone's `agents.messages`),
+/// so it holds for whatever backend produced it.
+pub fn omit_steps_json(page: &mut [serde_json::Value]) {
+    for work in page
+        .iter_mut()
+        .filter_map(|m| m.get_mut("work").and_then(serde_json::Value::as_object_mut))
+    {
+        let has_steps = work
+            .get("steps")
+            .and_then(serde_json::Value::as_array)
+            .is_some_and(|s| !s.is_empty());
+        if has_steps {
+            work.insert("steps".into(), serde_json::Value::Array(Vec::new()));
+            work.insert("stepsOmitted".into(), serde_json::Value::Bool(true));
         }
     }
 }

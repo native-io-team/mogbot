@@ -188,18 +188,30 @@ const chiefLine = (i: number): Record<string, unknown> => {
   };
 };
 
+/** A timeline as a `lazyWork` page carries it: its folded line, no steps. */
+const folded = (m: Record<string, unknown>) => {
+  const w = m.work as { steps?: unknown[] } | undefined;
+  return w?.steps?.length ? { ...m, work: { ...w, steps: [], stepsOmitted: true } } : m;
+};
+
 const page = (log: Record<string, unknown>[], args: Record<string, unknown>) => {
   const {
     limit = 150,
     before,
     through,
-  } = args as { limit?: number; before?: string; through?: string };
+    lazyWork,
+  } = args as { limit?: number; before?: string; through?: string; lazyWork?: boolean };
   const end = before ? log.findIndex((m) => m.id === before) : log.length;
   let start = Math.max(0, end - limit);
   const at = through ? log.findIndex((m) => m.id === through) : -1;
   if (at >= 0 && at < start) start = at;
-  return log.slice(start, end);
+  const lines = log.slice(start, end);
+  return lazyWork ? lines.map(folded) : lines;
 };
+
+/** `agents_turn_work`: one line's whole timeline, as its "What it did" opens. */
+const turnWork = (log: Record<string, unknown>[], args: Record<string, unknown>) =>
+  log.find((m) => m.id === args.messageId)?.work ?? null;
 
 // Built on first ask, so the other scenarios' pages never pay for 2,000 lines.
 const LOGS: Record<string, Record<string, unknown>[]> = {};
@@ -352,6 +364,8 @@ export const agentsStressScenarios: Scenario[] = [
     commands: {
       agents_overview: () => overview(team.map((a) => ({ ...a }))),
       agents_messages: (args: Record<string, unknown>) => page(logFor(String(args.agentId)), args),
+      agents_turn_work: (args: Record<string, unknown>) =>
+        turnWork(logFor(String(args.agentId)), args),
     },
   },
 ];

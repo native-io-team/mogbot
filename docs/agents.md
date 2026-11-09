@@ -803,6 +803,15 @@ steps has no line.
   with one listing of `turns/` per page. Search, summaries and the shared
   files list never read them. `messages.jsonl` stays append-only; older
   builds show no timeline.
+- **Read when opened**: the steps were most of a chat page (66 of 111 KB for
+  150 lines), so a page asked for with `lazyWork` (the desk) or
+  `work: 'summary'` (the phone) carries each timeline as its folded line only:
+  counts, times and files, `steps: []` and `stepsOmitted: true`
+  (`work::omit_steps`). Opening a "What it did" reads that one turn
+  (`agents_turn_work`, the phone's `agents.workSteps`), once per window
+  (`lib/turnSteps.ts`, the phone's own). A reader that doesn't ask, an older
+  phone, a room's thread and the live turn (on the status) still get steps
+  inline, and a page without `stepsOmitted` (an older Mac) is shown as it came.
 - **Pruned**: an agent keeps the newest 500 timelines, and past its newest
   100 none older than 90 days; the replies stay, only what they did is
   forgotten. Deleting an agent removes its home and so its timelines;

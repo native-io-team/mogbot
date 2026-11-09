@@ -44,6 +44,7 @@ import { MessageAttachments } from './AgentAttachments';
 import { StepOutput } from './AgentLiveStep';
 import { BrowserStill } from './AgentBrowserLive';
 import { stepLine } from '../../../packages/companion-protocol/src/work';
+import { useTurnSteps } from '../../lib/turnSteps';
 
 type IconComponent = ComponentType<{ size?: number }>;
 
@@ -204,10 +205,52 @@ function Toggle({
 interface WorkTimelineProps {
   work: TurnWork;
   agent: Agent;
+  /** The line it's kept under, and whose chat log that is: where its steps are read from. */
+  messageId: string;
+  ownerId: string;
 }
 
-/** Under a finished turn's last message: folded unless it was open live. */
-export const WorkTimeline = memo(function WorkTimeline({ work, agent }: WorkTimelineProps) {
+/** The steps once read (`useTurnSteps`), or a line saying where they are. */
+function FinishedSteps({ work, agent, messageId, ownerId }: WorkTimelineProps) {
+  const steps = useTurnSteps(ownerId, messageId, work, true);
+  switch (steps.state) {
+    case 'ready':
+      return (
+        <>
+          <BrowserStill agent={agent} work={steps.work} />
+          <StepList work={steps.work} agent={agent} />
+        </>
+      );
+    case 'reading':
+      return (
+        <p className="agent-work__files" role="status">
+          Reading the steps…
+        </p>
+      );
+    case 'gone':
+      return <p className="agent-work__files">Its steps are no longer kept.</p>;
+    case 'failed':
+      return (
+        <p className="agent-work__files" role="alert">
+          Couldn’t read the steps.{' '}
+          <TextButton tabIndex={0} onClick={steps.retry}>
+            Try again
+          </TextButton>
+        </p>
+      );
+  }
+}
+
+/**
+ * Under a finished turn's last message: folded unless it was open live. Its
+ * steps are read the first time it opens when the page left them out.
+ */
+export const WorkTimeline = memo(function WorkTimeline({
+  work,
+  agent,
+  messageId,
+  ownerId,
+}: WorkTimelineProps) {
   const [open, setOpen] = useState(() => wasOpenLive(agent.id, work.startedAt));
   // Mounted from the first open on, so closing animates rather than blanking.
   const [ever, setEver] = useState(open);
@@ -229,10 +272,7 @@ export const WorkTimeline = memo(function WorkTimeline({ work, agent }: WorkTime
       <div className="agent-work__body" id={id} aria-hidden={!open}>
         <div className="agent-work__inner">
           {(open || ever) && (
-            <>
-              <BrowserStill agent={agent} work={work} />
-              <StepList work={work} agent={agent} />
-            </>
+            <FinishedSteps work={work} agent={agent} messageId={messageId} ownerId={ownerId} />
           )}
         </div>
       </div>

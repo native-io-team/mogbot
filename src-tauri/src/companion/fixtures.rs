@@ -560,6 +560,25 @@ async fn generate() -> String {
         "Result<'agents.messages'>",
         call("agents.messages", json!({ "agentId": AGENT, "limit": 100 })).await,
     );
+    // The same page for a phone that reads timelines' steps as one opens.
+    out += &entry(
+        "agentsMessagesSummary",
+        "Result<'agents.messages'>",
+        call(
+            "agents.messages",
+            json!({ "agentId": AGENT, "limit": 100, "work": "summary" }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsWorkSteps",
+        "Result<'agents.workSteps'>",
+        call(
+            "agents.workSteps",
+            json!({ "agentId": AGENT, "messageId": "m25" }),
+        )
+        .await,
+    );
     out += &entry(
         "agentsSend",
         "Result<'agents.send'>",

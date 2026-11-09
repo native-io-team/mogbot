@@ -396,6 +396,7 @@ pub fn live_work() -> crate::agents::work::TurnWork {
         quiet_since: Some(1_762_290_420_000),
         project: None,
         own_browser: false,
+        steps_omitted: false,
     }
 }
 
@@ -1887,6 +1888,18 @@ impl Backend for Stub {
     async fn revoke_permission(&self, _agent_id: &str, rule_id: &str) -> Result<(), CommandError> {
         self.revoked.lock().unwrap().push(rule_id.to_string());
         Ok(())
+    }
+
+    async fn turn_work(&self, agent_id: &str, message_id: &str) -> Result<Value, CommandError> {
+        if agent_id != AGENT {
+            return Err(CommandError::expected("No such agent."));
+        }
+        let all = self.messages.lock().unwrap();
+        let work = all
+            .iter()
+            .find(|m| m.id == message_id)
+            .and_then(|m| m.work.as_ref());
+        Ok(serde_json::to_value(work).unwrap())
     }
 
     async fn change_diff(

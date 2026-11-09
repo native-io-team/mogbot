@@ -29,10 +29,8 @@ import {
 import {
   ActivityIcon,
   ArrowDownIcon,
-  ArrowUpIcon,
   HistoryIcon,
   InfoIcon,
-  MicrophoneIcon,
   MoreHorizontalIcon,
   PaperclipIcon,
 } from '@/components/icons';
@@ -41,10 +39,9 @@ import { Dropdown } from '../primitives/Dropdown';
 import { IconButton } from '../primitives/IconButton';
 import { CompactModeToggle } from '../workspace/ModeToggle';
 import { TextButton } from '../primitives/TextButton';
-import { AgentSecretHint } from './AgentSecretHint';
+import { AgentComposer, LiveSecretHint } from './AgentComposer';
 import { AgentModelItems } from './AgentModelMenu';
 import { AgentRequestsBar } from './AgentRequests';
-import { TextArea } from '../primitives/TextField';
 import { AgentAvatar } from './AgentAvatar';
 import { AgentActionItems, type AgentActions } from './AgentActions';
 import { TakeoverBanner, TakeoverTerminal } from './AgentTakeover';
@@ -68,7 +65,6 @@ import { useRowAnchoring } from './useRowAnchoring';
 import { useDictation } from './useDictation';
 import { blockedCopy, dictationVocabulary, openPrivacySettings } from '../../lib/dictation';
 import { listProjects } from '../../lib/project';
-import { ComposerAttachments, ComposerQuotes } from './AgentAttachments';
 import {
   toOutgoing,
   useComposerAttachments,
@@ -77,7 +73,6 @@ import {
 } from './useComposerAttachments';
 import { AgentSwitcher } from './AgentSwitcher';
 import { useQuoteSelection } from './useQuoteSelection';
-import { useMentionPicker } from './AgentMentions';
 import { useCommands } from '../../commands/useCommands';
 import {
   AgentBubble,
@@ -94,7 +89,7 @@ import {
 } from './AgentChatItems';
 import { DecideCards } from './AgentAdmin';
 import { AgentProjectChip, ChangeCard, useAgentProjects } from './AgentProject';
-import { ComposerRevising, ResultCardView } from './AgentResult';
+import { ResultCardView } from './AgentResult';
 import { AgentGalleryProvider } from './AgentGallery';
 import { SessionCard } from './AgentSession';
 import { RoomFoldLine, RoomWorkingPlace } from './AgentRoomParts';
@@ -121,7 +116,6 @@ import {
   withQuotes,
   newestResults,
   sendAgentMessage,
-  sortAgents,
   stopAgent,
   type Agent,
   type AgentTurn,
@@ -163,7 +157,7 @@ import {
   useTeamSetupReveal,
 } from '../../lib/teamSetup';
 import { useOptionalToast } from '../../contexts/ToastContext';
-import { keepDraft, unsentDraft } from '../../lib/chatRestore';
+import { composerDraft, setComposerDraft } from '../../lib/composerDraft';
 import { useChatReadTo } from './useChatReadTo';
 import { useAccentScope } from '../../lib/accent';
 import { AccentScopeProvider } from '../../contexts/AccentScopeContext';
@@ -255,9 +249,6 @@ function TemplateStarters({
     </>
   );
 }
-
-/** A second Esc within this long stops a working agent; the first only says so. */
-const ESC_CONFIRM_MS = 1500;
 
 /** Within this many px of the bottom counts as "at the bottom". */
 const STICK_THRESHOLD = 80;
@@ -459,18 +450,16 @@ export const AgentChat = memo(function AgentChat({
   const { showToast } = useOptionalToast();
   // Kept outside the component: an agent opening a project switches this
   // window away from Agents and back, and a restart reopens the chat, and
-  // what you were typing survives both (`chatRestore`).
-  const [draft, setDraft] = useState(() => unsentDraft(agent.id));
-  useEffect(() => keepDraft(agent.id, draft), [agent.id, draft]);
+  // what you were typing survives both (`chatRestore`). Only the composer
+  // reads it as it changes (`useComposerDraft`): a keystroke doesn't
+  // re-render the conversation.
+  const getDraft = useCallback(() => composerDraft(agent.id), [agent.id]);
+  const setDraft = useCallback((text: string) => setComposerDraft(agent.id, text), [agent.id]);
   const [pending, setPending] = useState<Pending[]>([]);
   const [atBottom, setAtBottom] = useState(true);
   const scrollRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
   const inputRef = useRef<HTMLTextAreaElement>(null);
-  const draftRef = useRef(draft);
-  useLayoutEffect(() => {
-    draftRef.current = draft;
-  }, [draft]);
   // A request drafted elsewhere (New agent's "Ask your Chief of Staff"): in
   // the composer, caret at its end, for you to finish and send.
   useEffect(() => {
@@ -485,7 +474,6 @@ export const AgentChat = memo(function AgentChat({
     return () => cancelAnimationFrame(frame);
   }, [prefill?.n]); // eslint-disable-line react-hooks/exhaustive-deps
   const micRef = useRef<HTMLButtonElement>(null);
-  const getDraft = useCallback(() => draftRef.current, []);
   const getVocabulary = useCallback(
     async () =>
       dictationVocabulary(
@@ -526,20 +514,14 @@ export const AgentChat = memo(function AgentChat({
   }, [agent.takeover?.ptySession]);
   const [remembering, setRemembering] = useState<AgentMessage | null>(null);
 
-  // Who you can @mention here: everyone else on the team, in sidebar order.
+  // Who you can @mention here: everyone else on the team (the composer's
+  // picker lists them in sidebar order).
   const mentionSet = useAgentsSelector(
     (s) => s.agents.filter((a) => !a.hidden && a.id !== agent.id),
     sameMentionable
   );
-  // In sidebar order as it is now: computed again as you type, so the picker
-  // opening on "@" lists them the way the sidebar does at that moment.
-  const mentionable = useMemo(() => {
-    const order = new Map(sortAgents(getAgentsSnapshot().agents).map((a, i) => [a.id, i]));
-    return [...mentionSet].sort((a, b) => (order.get(a.id) ?? 0) - (order.get(b.id) ?? 0));
-  }, [mentionSet, draft]); // eslint-disable-line react-hooks/exhaustive-deps -- `draft`: re-read the order as you type
-  const mentionPicker = useMentionPicker(mentionable, inputRef, setDraft);
   const mentionsIn = (text: string): AgentRef[] =>
-    mentionedAgents(text, mentionable).map(({ id, name }) => ({ id, name }));
+    mentionedAgents(text, mentionSet).map(({ id, name }) => ({ id, name }));
 
   useCommands(
     () => [
@@ -1139,7 +1121,6 @@ export const AgentChat = memo(function AgentChat({
   };
 
   const staged = attachments.items;
-  const canSend = draft.trim().length > 0 || staged.length > 0 || quotes.length > 0;
 
   const interrupt = async () => {
     try {
@@ -1265,17 +1246,10 @@ export const AgentChat = memo(function AgentChat({
     }
   };
 
-  // Esc stops a working agent only when pressed twice: the first says so,
-  // quietly, where the hint goes. A reflex dismissal never drops a turn.
-  const [escArmed, setEscArmed] = useState(false);
-  useEffect(() => {
-    if (!escArmed) return;
-    const timer = window.setTimeout(() => setEscArmed(false), ESC_CONFIRM_MS);
-    return () => window.clearTimeout(timer);
-  }, [escArmed]);
-
   /** `now`: rather than queue behind the turn in progress, interrupt it. */
-  const send = (now = false) => {
+  const send = useStableEvent((now: boolean = false) => {
+    const draft = getDraft();
+    const canSend = draft.trim().length > 0 || staged.length > 0 || quotes.length > 0;
     if (!canSend || dictating) return;
     const typed = draft.trim();
     setDraft('');
@@ -1288,7 +1262,7 @@ export const AgentChat = memo(function AgentChat({
       return;
     }
     sendText(withQuotes(quotes, typed), now && busy, revising ? { revises: revising } : {});
-  };
+  });
 
   // Stable, for the memoised rows.
   const retry = useStableEvent((key: string) => {
@@ -1314,31 +1288,15 @@ export const AgentChat = memo(function AgentChat({
     }
   );
 
-  const onStop = async () => {
+  const onStop = useStableEvent(async () => {
     try {
       await stopAgent(agent.id);
     } catch (error) {
       showToast(formatCommandError(asCommandError(error)), 'error');
     }
-  };
-
-  // Grow with the text, up to a cap, like a messaging app.
-  useLayoutEffect(() => {
-    const el = inputRef.current;
-    if (!el) return;
-    // Measure at `auto` with transitions off, put the old height back, then
-    // set the new one, so the CSS height transition has a start to run from.
-    const previous = el.style.height;
-    el.style.transition = 'none';
-    el.style.height = 'auto';
-    // The cap is CSS's (about eight lines); past it the field scrolls.
-    const cap = parseFloat(getComputedStyle(el).maxHeight) || 180;
-    const next = `${Math.min(el.scrollHeight, cap)}px`;
-    el.style.height = previous || next;
-    void el.offsetHeight;
-    el.style.transition = '';
-    el.style.height = next;
-  }, [draft]);
+  });
+  const stopNow = useStableEvent(() => void onStop());
+  const clearRevising = useCallback(() => setRevising(null), []);
 
   // Identity only: who this is and what it's for. What it's doing is said
   // once in the sidebar row and once in the conversation (a bar, the working
@@ -1874,12 +1832,7 @@ export const AgentChat = memo(function AgentChat({
                   {
                     id: 'secret',
                     node: engineReady && (
-                      <AgentSecretHint
-                        agentId={agent.id}
-                        agentName={agent.name}
-                        draft={draft}
-                        setDraft={setDraft}
-                      />
+                      <LiveSecretHint agentId={agent.id} agentName={agent.name} />
                     ),
                   },
                   {
@@ -1914,136 +1867,27 @@ export const AgentChat = memo(function AgentChat({
             </AreaBoundary>
 
             {engineReady ? (
-              <form
-                className="agent-composer"
-                data-dictation={dictation.phase}
-                data-has-attachments={
-                  staged.length > 0 || quotes.length > 0 || revising !== null || undefined
-                }
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  send();
-                }}
-              >
-                {mentionPicker.menu}
-                <ComposerRevising revising={revising} onRemove={() => setRevising(null)} />
-                <ComposerQuotes quotes={quotes} onRemove={removeQuote} />
-                <ComposerAttachments items={staged} onRemove={attachments.remove} />
-                <TextArea
-                  ref={inputRef}
-                  className="agent-composer__input"
-                  rows={1}
-                  value={draft}
-                  placeholder={dictating ? '' : `Message ${agent.name}`}
-                  readOnly={dictating}
-                  onChange={(e) => {
-                    setDraft(e.target.value);
-                    mentionPicker.sync();
-                  }}
-                  onSelect={mentionPicker.sync}
-                  onPaste={attachments.onPaste}
-                  onKeyDown={(e) => {
-                    if (dictation.onComposerKeyDown(e)) return;
-                    if (mentionPicker.onKeyDown(e)) return;
-                    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                      e.preventDefault();
-                      send(e.metaKey);
-                    } else if (e.key === 'Escape' && onEscape?.()) {
-                      e.preventDefault();
-                    } else if (e.key === 'Escape' && working && !canSend) {
-                      e.preventDefault();
-                      if (escArmed) {
-                        setEscArmed(false);
-                        void onStop();
-                      } else {
-                        setEscArmed(true);
-                      }
-                    }
-                  }}
-                  aria-label={`Message ${agent.name}`}
-                />
-                <div className="agent-composer__bar">
-                  {dictating ? (
-                    <span className="agent-composer__listening" role="status">
-                      <span className="agent-composer__listening-dot" aria-hidden />
-                      {dictation.phase === 'finishing' ? 'Finishing…' : 'Listening'}
-                      <span aria-hidden>·</span>
-                      <TextButton tabIndex={0} onClick={dictation.cancel}>
-                        Cancel
-                      </TextButton>
-                    </span>
-                  ) : (
-                    <IconButton
-                      tabIndex={0}
-                      variant="ghost"
-                      className="agent-composer__attach"
-                      icon={<PaperclipIcon size={14} />}
-                      onClick={pickFiles}
-                      aria-label="Attach files"
-                      title="Attach files, or paste or drop them here"
-                    />
-                  )}
-                  {/* Its own row above the text, so a long hint never squeezes it. */}
-                  {escArmed && working && !canSend && !dictating ? (
-                    <span className="agent-composer__hint" data-armed role="status">
-                      Esc again to stop {agent.name}
-                    </span>
-                  ) : (
-                    busy &&
-                    canSend &&
-                    !dictating && (
-                      <span className="agent-composer__hint" aria-hidden>
-                        ↵ queues · ⌘↵ interrupts and sends now
-                      </span>
-                    )
-                  )}
-                  <div className="agent-composer__actions">
-                    <IconButton
-                      ref={micRef}
-                      tabIndex={0}
-                      variant="ghost"
-                      className="agent-composer__mic"
-                      icon={<MicrophoneIcon size={14} />}
-                      onClick={dictation.toggle}
-                      disabled={dictation.phase === 'finishing'}
-                      aria-pressed={dictating}
-                      aria-label={dictating ? 'Stop dictating' : 'Dictate'}
-                      title={
-                        dictating
-                          ? 'Stop dictating (Esc to discard)'
-                          : 'Dictate (⌘⇧D, or hold ⌥Space)'
-                      }
-                    />
-                    {working && !canSend && !dictating ? (
-                      <IconButton
-                        tabIndex={0}
-                        variant="secondary"
-                        className="agent-composer__stop"
-                        data-armed={escArmed || undefined}
-                        icon={<span className="agent-composer__stop-square" aria-hidden />}
-                        onClick={() => void onStop()}
-                        aria-label={`Stop ${agent.name}`}
-                        title="Stop (Esc twice)"
-                      />
-                    ) : (
-                      <IconButton
-                        tabIndex={0}
-                        type="submit"
-                        variant={canSend && !dictating ? 'primary' : 'secondary'}
-                        className="agent-composer__send"
-                        icon={<ArrowUpIcon size={14} />}
-                        disabled={!canSend || dictating}
-                        aria-label="Send"
-                        title={
-                          busy
-                            ? `Queue it: ${agent.name} reads it when it finishes (↵). Interrupt and send now: ⌘↵`
-                            : 'Send'
-                        }
-                      />
-                    )}
-                  </div>
-                </div>
-              </form>
+              <AgentComposer
+                agentId={agent.id}
+                agentName={agent.name}
+                inputRef={inputRef}
+                micRef={micRef}
+                dictation={dictation}
+                mentionSet={mentionSet}
+                staged={staged}
+                onRemoveStaged={attachments.remove}
+                onPaste={attachments.onPaste}
+                quotes={quotes}
+                onRemoveQuote={removeQuote}
+                revising={revising}
+                onClearRevising={clearRevising}
+                busy={busy}
+                working={working}
+                onEscape={onEscape}
+                onStop={stopNow}
+                onSend={send}
+                onPickFiles={pickFiles}
+              />
             ) : (
               <div className="agent-composer agent-composer--blocked" role="status">
                 <InfoIcon size={14} className="agent-composer__blocked-icon" />

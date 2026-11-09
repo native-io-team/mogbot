@@ -253,7 +253,11 @@ export const ResultCardView = memo(function ResultCardView({
   // Read field by field: a part that arrived missing or odd is left out
   // rather than throwing the whole card to its fallback.
   const card = useMemo(() => readResultCard(givenCard), [givenCard]);
-  const footer = given ?? (work && <WorkTimeline work={work} agent={agent} />);
+  const footer =
+    given ??
+    (work && (
+      <WorkTimeline work={work} agent={agent} messageId={message.id} ownerId={message.agentId} />
+    ));
   const [opened, setOpened] = useState(false);
   // Agents mode's pane beside the chat; elsewhere Preview opens the project.
   const preview = useAgentPreview();

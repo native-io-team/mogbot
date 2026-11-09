@@ -165,6 +165,13 @@ export interface TurnWork {
   project?: string;
   /** While it runs: it has a tab open in its own browser (the agents' Chrome) right now. */
   ownBrowser?: boolean;
+  /**
+   * The page was asked for folded lines only (`work: 'summary'`, `lazyWork`):
+   * `steps` is empty though the turn kept some. They are read when its
+   * "What it did" opens (`agents.workSteps`, `agents_turn_work`). Absent
+   * from a Mac that never leaves them out, and from pages that didn't ask.
+   */
+  stepsOmitted?: boolean;
 }
 
 export interface Agent {

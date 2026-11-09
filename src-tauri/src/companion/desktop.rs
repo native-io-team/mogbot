@@ -883,6 +883,10 @@ impl Backend for DesktopBackend {
             .await
     }
 
+    async fn turn_work(&self, agent_id: &str, message_id: &str) -> Result<Value, CommandError> {
+        json(cmd::agents_turn_work(agent_id.to_string(), message_id.to_string()).await?)
+    }
+
     async fn change_diff(
         &self,
         agent_id: &str,

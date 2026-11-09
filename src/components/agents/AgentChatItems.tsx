@@ -274,7 +274,14 @@ export const AgentBubble = memo(function AgentBubble({
       ) : (
         actions
       )}
-      {message.work && <WorkTimeline work={message.work} agent={agent} />}
+      {message.work && (
+        <WorkTimeline
+          work={message.work}
+          agent={agent}
+          messageId={message.id}
+          ownerId={message.agentId}
+        />
+      )}
     </div>
   );
 });
@@ -526,7 +533,14 @@ export const ErrorLine = memo(function ErrorLine({
         </div>
       )}
       <MessageActions text={message.text} ts={message.ts} />
-      {message.work && agent && <WorkTimeline work={message.work} agent={agent} />}
+      {message.work && agent && (
+        <WorkTimeline
+          work={message.work}
+          agent={agent}
+          messageId={message.id}
+          ownerId={message.agentId}
+        />
+      )}
     </div>
   );
 });
@@ -668,7 +682,12 @@ export const NoteLine = memo(function NoteLine({
     <>
       {note}
       <div className="agent-chat__row agent-chat__row--agent" data-work>
-        <WorkTimeline work={message.work} agent={agent} />
+        <WorkTimeline
+          work={message.work}
+          agent={agent}
+          messageId={message.id}
+          ownerId={message.agentId}
+        />
       </div>
     </>
   );

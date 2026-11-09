@@ -25,6 +25,7 @@ pub const METHODS: &[&str] = &[
     "devices.setPush",
     "agents.overview",
     "agents.messages",
+    "agents.workSteps",
     "agents.send",
     "agents.stop",
     "agents.interrupt",
@@ -127,6 +128,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "devices.self",
     "agents.overview",
     "agents.messages",
+    "agents.workSteps",
     "agents.instructions",
     "agents.memory",
     "agents.reach",
@@ -757,6 +759,9 @@ pub trait Backend: Send + Sync + 'static {
     ) -> Result<Value, CommandError>;
     /// `agents_connection_delete`: the connection and its Keychain token.
     async fn apps_remove(&self, connection_id: &str) -> Result<(), CommandError>;
+    /// `agents_turn_work`: what the turn ending on `message_id` did, steps
+    /// and all (a `TurnWork`), or null when nothing was kept.
+    async fn turn_work(&self, agent_id: &str, message_id: &str) -> Result<Value, CommandError>;
     /// `agents_change_diff`: one file of a change card.
     async fn change_diff(
         &self,
@@ -1002,6 +1007,17 @@ struct MessagesParams {
     agent_id: String,
     limit: Option<usize>,
     before: Option<String>,
+    /// `"summary"`: timelines without their steps (`stepsOmitted`), read
+    /// with `agents.workSteps` as one opens. An older Mac ignores it and
+    /// sends them inline, as it does for a phone that doesn't ask.
+    work: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WorkStepsParams {
+    agent_id: String,
+    message_id: String,
 }
 
 #[derive(Deserialize)]
@@ -1786,8 +1802,16 @@ async fn run(
             // phone as an event with a higher seq, which the merge keeps.
             let as_of = c.hub.cursor();
             let limit = p.limit.unwrap_or(MESSAGES_DEFAULT).clamp(1, MESSAGES_MAX);
-            let (messages, more) = b.messages(&p.agent_id, limit, p.before.as_deref()).await?;
+            let (mut messages, more) = b.messages(&p.agent_id, limit, p.before.as_deref()).await?;
+            if p.work.as_deref() == Some("summary") {
+                crate::agents::work::omit_steps_json(&mut messages);
+            }
             Ok(json!({ "messages": messages, "asOf": as_of, "more": more }))
+        }
+        "agents.workSteps" => {
+            let p: WorkStepsParams = parse(params)?;
+            let work = b.turn_work(&p.agent_id, &p.message_id).await?;
+            Ok(json!({ "work": work }))
         }
         "agents.send" => {
             let p: SendParams = parse(params)?;
@@ -2692,6 +2716,74 @@ mod tests {
             );
         }
         assert_eq!(stub.audited().len(), 3);
+    }
+
+    /// A phone that asks for timelines' folded lines gets no steps in the
+    /// page, and reads them one turn at a time; one that doesn't ask (an
+    /// older phone) still gets them inline.
+    #[tokio::test]
+    async fn timelines_come_without_steps_only_when_asked_and_open_on_their_own() {
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, _stub) = Stub::companion();
+        let me = caller("dev_a");
+        let page = |extra: Value| {
+            let mut p = json!({ "agentId": AGENT, "limit": 100 });
+            if let (Some(o), Some(e)) = (p.as_object_mut(), extra.as_object()) {
+                o.extend(e.clone());
+            }
+            p
+        };
+        let work_of = |page: &Value| {
+            page["messages"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|m| m["id"] == "m25")
+                .unwrap()["work"]
+                .clone()
+        };
+        let inline = dispatch(&c, &me, "agents.messages", page(json!({})))
+            .await
+            .unwrap();
+        let full = work_of(&inline);
+        assert!(!full["steps"].as_array().unwrap().is_empty());
+        assert!(full.get("stepsOmitted").is_none());
+
+        let lazy = dispatch(
+            &c,
+            &me,
+            "agents.messages",
+            page(json!({ "work": "summary" })),
+        )
+        .await
+        .unwrap();
+        let folded = work_of(&lazy);
+        assert_eq!(folded["steps"], json!([]));
+        assert_eq!(folded["stepsOmitted"], json!(true));
+        assert_eq!(folded["stepCount"], full["stepCount"]);
+        assert_eq!(folded["fileCount"], full["fileCount"]);
+        assert!(lazy.to_string().len() < inline.to_string().len());
+
+        let opened = dispatch(
+            &c,
+            &me,
+            "agents.workSteps",
+            json!({ "agentId": AGENT, "messageId": "m25" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(opened["work"], full);
+        // A line with no timeline: null, not an error.
+        let none = dispatch(
+            &c,
+            &me,
+            "agents.workSteps",
+            json!({ "agentId": AGENT, "messageId": "m01" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(none["work"], Value::Null);
+        assert!(READ_ONLY_METHODS.contains(&"agents.workSteps"));
     }
 
     /// The phone answers a login card: Connect starts it on the Mac, the

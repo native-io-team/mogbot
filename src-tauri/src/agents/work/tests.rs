@@ -891,3 +891,58 @@ fn a_call_refused_without_your_answer_never_says_you_declined() {
     assert!(!labels[0].contains("you declined"), "{labels:?}");
     assert_eq!(labels[1], "Asked for your OK: Run a command");
 }
+
+#[test]
+fn a_page_can_leave_steps_out_and_say_so() {
+    let step = WorkStep {
+        at: 1,
+        kind: StepKind::Read,
+        label: "Read a.ts".into(),
+        ..WorkStep::blank()
+    };
+    let work = TurnWork {
+        started_at: 1,
+        ended_at: Some(2),
+        step_count: 3,
+        steps: vec![step.clone(), step],
+        files: vec!["a.ts".into()],
+        file_count: 1,
+        ..TurnWork::default()
+    };
+    let mut with = message(MessageKind::Agent, "m1");
+    with.work = Some(work.clone());
+    let mut empty = message(MessageKind::Agent, "m2");
+    empty.work = Some(TurnWork::default());
+    let mut page = vec![with, empty, message(MessageKind::User, "u")];
+    omit_steps(&mut page);
+    let folded = page[0].work.as_ref().unwrap();
+    assert!(folded.steps.is_empty() && folded.steps_omitted);
+    assert_eq!(
+        (
+            folded.step_count,
+            folded.file_count,
+            &folded.files,
+            folded.ended_at
+        ),
+        (3, 1, &work.files, Some(2))
+    );
+    // Nothing to leave out: nothing is said to be missing.
+    assert!(!page[1].work.as_ref().unwrap().steps_omitted);
+    assert!(page[2].work.is_none());
+
+    // The wire form says the same, and an unasked-for page never carries it.
+    let value = serde_json::to_value(&page[0]).unwrap();
+    assert_eq!(value["work"]["stepsOmitted"], serde_json::json!(true));
+    assert!(serde_json::to_value(&work)
+        .unwrap()
+        .get("stepsOmitted")
+        .is_none());
+    let mut json_page = vec![serde_json::to_value({
+        let mut m = message(MessageKind::Agent, "m1");
+        m.work = Some(work.clone());
+        m
+    })
+    .unwrap()];
+    omit_steps_json(&mut json_page);
+    assert_eq!(json_page[0]["work"], value["work"]);
+}

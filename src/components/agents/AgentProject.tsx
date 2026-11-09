@@ -419,7 +419,16 @@ export const ChangeCard = memo(function ChangeCard({
       onAskForChanges={newestResult ? onAskForChanges : undefined}
       actionsInside={offering}
       arrived={arrived}
-      footer={message.work && <WorkTimeline work={message.work} agent={owner} />}
+      footer={
+        message.work && (
+          <WorkTimeline
+            work={message.work}
+            agent={owner}
+            messageId={message.id}
+            ownerId={message.agentId}
+          />
+        )
+      }
     >
       {/* Always passed: a superseded version folds as a whole (ResultCardView),
           and opening it shows its change receipt too. */}

@@ -1,5 +1,7 @@
-import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
+import { resetTurnStepsForTests } from '../../lib/turnSteps';
 import { AgentBubble, WorkingIndicator } from './AgentChatItems';
 import type { Agent, AgentMessage, TurnWork } from '../../lib/agents';
 
@@ -128,5 +130,49 @@ describe('the working line, live', () => {
   it('without a timeline is the plain working line', () => {
     render(<WorkingIndicator activity="Thinking" />);
     expect(screen.queryByRole('button')).toBeNull();
+  });
+});
+
+describe('a timeline its page sent without steps', () => {
+  const folded: TurnWork = { ...work, steps: [], stepsOmitted: true };
+
+  afterEach(() => {
+    clearMocks();
+    resetTurnStepsForTests();
+  });
+
+  it('reads nothing while folded, then its own steps once, when it opens', async () => {
+    const asked: unknown[] = [];
+    mockIPC((cmd, args) => {
+      if (cmd !== 'agents_turn_work') return null;
+      asked.push(args);
+      return work;
+    });
+    render(<AgentBubble message={reply(folded)} agent={agent} />);
+    const toggle = screen.getByRole('button', { name: 'Worked 6 min · 3 steps · edited 1 file' });
+    expect(asked).toEqual([]);
+    fireEvent.click(toggle);
+    await waitFor(() => expect(screen.getByText('Read Hero.tsx')).toBeInTheDocument());
+    expect(screen.queryByText('3 earlier steps')).toBeNull();
+    expect(asked).toEqual([{ agentId: 'acme', messageId: 'r1' }]);
+    // Folding and opening again reads nothing more.
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+    expect(asked).toHaveLength(1);
+  });
+
+  it('says so when the steps are no longer kept, and offers a retry when the read fails', async () => {
+    let fail = true;
+    mockIPC((cmd) => {
+      if (cmd !== 'agents_turn_work') return null;
+      if (fail) throw new Error('offline');
+      return null;
+    });
+    render(<AgentBubble message={reply(folded)} agent={agent} />);
+    fireEvent.click(screen.getByRole('button', { name: /^Worked/ }));
+    const retry = await screen.findByRole('button', { name: 'Try again' });
+    fail = false;
+    fireEvent.click(retry);
+    expect(await screen.findByText('Its steps are no longer kept.')).toBeInTheDocument();
   });
 });
