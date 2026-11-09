@@ -9,7 +9,13 @@
  */
 
 import { shareStructure } from '../../../lib/structure';
-import type { Agent, RoomView } from '@shipstudio/companion-protocol';
+import {
+  CHIEF_LOOK,
+  teamLine,
+  workingCount,
+  type Agent,
+  type RoomView,
+} from '@shipstudio/companion-protocol';
 import { Stack, useRouter } from 'expo-router';
 import { type ReactNode, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import { takeExitNotice } from '../../../lib/crash';
@@ -25,6 +31,7 @@ import Animated, { FadeIn, FadeInDown, FadeOut, LinearTransition } from 'react-n
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { HeaderHeightContext } from 'expo-router/react-navigation';
 import { useShallow } from 'zustand/react/shallow';
+import { AgentAvatar } from '../../../components/agent';
 import { AgentRow } from '../../../components/AgentRow';
 import { ImportChoiceCard } from '../../../components/ImportChoiceCard';
 import { RoomRow } from '../../../components/RoomRow';
@@ -35,7 +42,7 @@ import { useQuotaLines } from '../../../lib/quota';
 import { AgentAccent } from '../../../lib/accent';
 import { ConnectionNotice, LinkProblem, useNow } from '../../../components/ConnectionPill';
 import { DemoCard } from '../../../components/DemoCard';
-import { Button, Icon, IconButton, useRipple, T, tap } from '../../../components/ui';
+import { Button, Dot, Icon, IconButton, useRipple, T, tap } from '../../../components/ui';
 import { toggleFor, type AgentAction } from '../../../lib/actions';
 import { formatAgo, needsYou, pendingApproval } from '../../../lib/agents';
 import { barWords, buildHome, type HomeBar } from '../../../lib/home';
@@ -55,11 +62,21 @@ import { setApp, useApp } from '../../../lib/store';
 import { useRefresh } from '../../../lib/refresh';
 import { RefreshStatus } from '../../../components/RefreshStatus';
 import { largeTitle } from '../../../lib/navigation';
-import { chromeScale, iconSize, PRESSED, radius, space } from '../../../lib/theme';
+import {
+  agentColorKeys,
+  avatarSize,
+  chromeScale,
+  depthOf,
+  iconSize,
+  PRESSED,
+  radius,
+  space,
+} from '../../../lib/theme';
 import { makeStyles, useColors } from '../../../lib/appearance';
 
 type Row =
-  | { kind: 'header'; key: string; title: string }
+  | { kind: 'header'; key: string; title: string; team?: number }
+  | { kind: 'team'; key: string; working: number }
   | { kind: 'agent'; key: string; agent: Agent; quiet?: boolean }
   | { kind: 'bar'; key: string; bar: HomeBar }
   | { kind: 'room'; key: string; room: RoomView }
@@ -190,7 +207,12 @@ export default function Agents() {
     const add = (a: Agent) =>
       out.push({ kind: 'agent', key: a.id, agent: a, quiet: home.quiet.has(a.id) });
     // Offline (to say "as of"), or with Rooms below: the agents get their own label.
-    if (!live || rooms?.length) out.push({ kind: 'header', key: 'h-rest', title: 'Agents' });
+    // The team at a glance, as on the desk: "3 working" or "All quiet". Only
+    // while connected: offline, who is working isn't known.
+    const working = live ? workingCount(overview.agents) : undefined;
+    if (!live || rooms?.length)
+      out.push({ kind: 'header', key: 'h-rest', title: 'Agents', team: working });
+    else if (working !== undefined) out.push({ kind: 'team', key: 'team', working });
     if (home.chief) add(home.chief);
     if (home.bar) out.push({ kind: 'bar', key: 'bar', bar: home.bar });
     home.pinned.forEach(add);
@@ -329,7 +351,16 @@ export default function Agents() {
       }
       renderItem={({ item, index }) =>
         item.kind === 'header' ? (
-          <SectionHeader title={item.title} live={live} first={index === 0} />
+          <SectionHeader
+            title={item.title}
+            live={live}
+            first={index === 0}
+            action={item.team !== undefined ? <TeamLine working={item.team} /> : undefined}
+          />
+        ) : item.kind === 'team' ? (
+          <View style={styles.team}>
+            <TeamLine working={item.working} />
+          </View>
         ) : item.kind === 'bar' ? (
           <AttentionBar
             bar={item.bar}
@@ -466,6 +497,23 @@ function SectionHeader({
 }
 
 /**
+ * "3 working", with a running dot (status, never the accent), or "All quiet".
+ * Always there while connected, so the rows under it never move.
+ */
+function TeamLine({ working }: { working: number }) {
+  const colors = useColors();
+  const styles = useStyles();
+  return (
+    <View style={styles.teamLine} accessibilityRole="text">
+      <Dot color={working > 0 ? colors.statusRunning : colors.textFaint} size={space.tight} />
+      <T variant="caption" color={colors.textMuted} maxFontSizeMultiplier={chromeScale}>
+        {teamLine(working)}
+      </T>
+    </View>
+  );
+}
+
+/**
  * One calm row for everything waiting on you, under the Chief: "A few things
  * to finish setting up your team" (opens the Chief's chat, where the
  * checklist is) or "N agents need your OK" (opens them grouped in a sheet).
@@ -571,6 +619,15 @@ function Empty({ hasOverview, macName }: { hasOverview: boolean; macName: string
   if (hasOverview) {
     return (
       <Animated.View entering={FadeIn.duration(200)} style={styles.emptyCentered}>
+        {/* The brand's key, blank and waiting: the first one is yours to make. */}
+        <View style={styles.emptyMark}>
+          <AgentAvatar
+            name=""
+            color={agentColorKeys.all[0]}
+            look={CHIEF_LOOK}
+            size={avatarSize.sheet}
+          />
+        </View>
         <T variant="title" color={colors.textStrong} style={styles.centerText}>
           No agents yet
         </T>
@@ -610,6 +667,8 @@ const useStyles = makeStyles((colors) => ({
   },
   sectionLabel: { flex: 1, letterSpacing: 0.4 },
   sectionNext: { paddingTop: space.xl },
+  team: { paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xs },
+  teamLine: { flexDirection: 'row', alignItems: 'center', gap: space.tight },
   quota: { paddingHorizontal: space.lg, paddingTop: space.md },
   headerButtons: { flexDirection: 'row', alignItems: 'center' },
   bar: {
@@ -625,6 +684,7 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.cardBorder,
+    boxShadow: depthOf(colors).card,
     overflow: 'hidden',
   },
   barText: { flex: 1, gap: space.xs },
@@ -655,6 +715,7 @@ const useStyles = makeStyles((colors) => ({
     minHeight: 320,
   },
   centerText: { textAlign: 'center', maxWidth: 340 },
+  emptyMark: { marginBottom: space.xs },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   split: { flex: 1, flexDirection: 'row' },
   splitList: {

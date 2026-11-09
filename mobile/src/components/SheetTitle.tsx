@@ -6,8 +6,8 @@
 import { useRouter } from 'expo-router';
 import type { ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
-import { useColors } from '../lib/appearance';
-import { iconSize, space } from '../lib/theme';
+import { useColors, useTextScale } from '../lib/appearance';
+import { iconSize, lineHeight, space, track, tracking, type } from '../lib/theme';
 import { IconButton, T } from './ui';
 
 /** How far a sheet's title follows Dynamic Type: past this it crowds out the sheet. */
@@ -31,6 +31,11 @@ export function SheetTitle({
 }) {
   const colors = useColors();
   const router = useRouter();
+  // Read with the text size in force (it re-renders when that changes).
+  useTextScale();
+  // A step over a card's title, as the site's sheets set theirs: what the
+  // sheet is reads first, over the groups' small capitals and their rows.
+  const size = type.heading;
   return (
     <View style={styles.row}>
       <T
@@ -39,7 +44,12 @@ export function SheetTitle({
         accessibilityRole="header"
         maxFontSizeMultiplier={SHEET_TITLE_SCALE}
         numberOfLines={numberOfLines}
-        style={{ flex: 1 }}
+        style={{
+          flex: 1,
+          fontSize: size,
+          lineHeight: lineHeight(size, 1.25),
+          letterSpacing: track(size, tracking.title),
+        }}
       >
         {children}
       </T>

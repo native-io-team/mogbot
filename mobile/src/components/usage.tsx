@@ -9,7 +9,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { makeStyles, useColors } from '../lib/appearance';
 import type { ComputeRow, ComputeView, UsageMeter, UsageTone } from '../lib/usageSheet';
-import { iconSize, PRESSED, radius, space, type Palette } from '../lib/theme';
+import { depthOf, iconSize, PRESSED, radius, space, type Palette } from '../lib/theme';
 import { T } from './ui';
 
 const inkOf = (colors: Palette, tone: UsageTone) =>
@@ -231,14 +231,25 @@ const useStyles = makeStyles((colors) => ({
     padding: space.lg,
     backgroundColor: colors.surfaceGroup,
     borderRadius: radius.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.cardBorder,
+    boxShadow: depthOf(colors).card,
   },
   cardHead: { gap: space['2xs'] },
-  quiet: { backgroundColor: colors.surfaceGroup, borderRadius: radius.card, overflow: 'hidden' },
+  quiet: {
+    backgroundColor: colors.surfaceGroup,
+    borderRadius: radius.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.cardBorder,
+    boxShadow: depthOf(colors).card,
+    overflow: 'hidden',
+  },
   quietRow: { gap: space['2xs'], paddingHorizontal: space.lg, paddingVertical: space.md },
   divided: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderDefault },
   ring: { alignItems: 'center', justifyContent: 'center', padding: space['3xs'] },
+  // The site's meter: 8pt, so a share reads at a glance across the room.
   track: {
-    height: space.tight,
+    height: space.sm,
     borderRadius: radius.pill,
     // Selected, not control: on a dark group the control grey is a shade
     // apart, and left the empty part of a meter invisible.
