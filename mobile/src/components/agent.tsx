@@ -14,11 +14,12 @@ import {
   LIT_MIN_PX,
   MONOGRAM,
   MOUTH_MIN_PX,
-  SHAPE_PATHS,
+  flatInset,
+  shapePathAt,
   SMALL_MOTION,
   TOP_TRANSFORM,
   avatarPaint,
-  eyeAt,
+  eyesAt,
   faceWeight,
   idlePhase,
   isPressed,
@@ -152,7 +153,7 @@ export function AgentAvatar({
   const paint = avatarPaint(color, appearance, selected);
   const lit = size >= LIT_MIN_PX;
   const cap = lit && look.finish === 'keycap';
-  const shape = SHAPE_PATHS[look.shape];
+  const shape = shapePathAt(look.shape, size);
   const rim = cap ? KEY.capRim : KEY.embossRim(size);
   const top = cap ? TOP_TRANSFORM : undefined;
   const uid = useId().replace(/[^a-zA-Z0-9]/g, '');
@@ -162,7 +163,7 @@ export function AgentAvatar({
   const motion = useMotion(moving ? mood : null, size, cap, lit, id);
   // Blinking: the eyes on a layer of their own, squashed about their line.
   const blinking = !still && blinks(look.face, size);
-  const eyeCy = FACE_SPECS[look.face].eyes[0].cy;
+  const eyeCy = eyesAt(FACE_SPECS[look.face].eyes, size)[0].cy;
   const eyeY = ((cap ? KEY.top.y + (eyeCy - 16) * KEY.top.scale : eyeCy) * size) / 32;
   const blink = useEyeBlink(blinking && moving, size, eyeY);
   return (
@@ -205,7 +206,11 @@ export function AgentAvatar({
               </G>
             </>
           ) : (
-            <Path d={shape} fill={paint.fill} />
+            <>
+              {/* Flat: the shape in the side's tone, the fill inset over it, a one-pixel edge. */}
+              <Path d={shape} fill={paint.side} />
+              <Path d={shape} transform={flatInset(size)} fill={paint.fill} />
+            </>
           )}
         </Layer>
         {lit && mood === 'working' && moving && (
@@ -357,7 +362,7 @@ export function Face({
     );
   }
   const w = faceWeight(px);
-  const eyes = spec.eyes.map((e) => eyeAt(e, px));
+  const eyes = eyesAt(spec.eyes, px);
   const mouth = spec.mouth && px > MOUTH_MIN_PX ? spec.mouth : null;
   const stroke = (path: string, c: string, dy: number) => (
     <Path

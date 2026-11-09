@@ -26,6 +26,17 @@ const outAt = process.argv.indexOf('--out');
 const OUT = path.resolve(outAt > 0 ? process.argv[outAt + 1] : 'harness/shots');
 /** `--only-blink`: just the blink strip (keycap-blink.png). */
 const ONLY_BLINK = process.argv.includes('--only-blink');
+/**
+ * `--contact`: just the contact sheets (docs/internal/avatar-review.md):
+ * every shape × face × finish × colour, at rest and selected, one PNG per
+ * size per theme at 2x (contact-<theme>-<px>.png), all sizes on one sheet at
+ * 1x (contact-<theme>.png), and a team of twelve (contact-list-<theme>.png).
+ * `--prefix before-` names them for a before/after pair.
+ */
+const CONTACT = process.argv.includes('--contact');
+const prefixAt = process.argv.indexOf('--prefix');
+const PREFIX = prefixAt > 0 ? process.argv[prefixAt + 1] : '';
+const CONTACT_PX = [16, 20, 24, 32, 64, 128];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 class Page {
@@ -109,7 +120,7 @@ class Page {
 }
 
 let cdp = 0;
-async function open(url, { width = 1440, height = 900 } = {}) {
+async function open(url, { width = 1440, height = 900, scale = 2 } = {}) {
   const res = await fetch(`http://127.0.0.1:${cdp}/json/new?${encodeURIComponent(url)}`, {
     method: 'PUT',
   });
@@ -117,7 +128,7 @@ async function open(url, { width = 1440, height = 900 } = {}) {
   await page.send('Emulation.setDeviceMetricsOverride', {
     width,
     height,
-    deviceScaleFactor: 2,
+    deviceScaleFactor: scale,
     mobile: false,
   });
   await page.send('Page.reload', {});
@@ -153,6 +164,10 @@ async function main() {
   cdp = chrome.port;
   const errors = [];
   try {
+    if (CONTACT) {
+      await contactSheets(errors);
+      return;
+    }
     for (const theme of ONLY_BLINK ? [] : ['dark', 'light']) {
       for (const px of ['48', '96']) {
         const p = await open(
@@ -239,6 +254,45 @@ async function main() {
   if (errors.length) {
     console.error('Page errors:\n' + errors.join('\n'));
     process.exitCode = 1;
+  }
+}
+
+async function contactSheets(errors) {
+  const ready = `document.querySelectorAll('.agent-avatar').length > 600`;
+  for (const theme of ['dark', 'light']) {
+    for (const px of CONTACT_PX) {
+      const width = Math.ceil(33 * (px * 1.35 + 8) + 200);
+      const p = await open(
+        `${ORIGIN}/harness-avatars.html?section=contact&theme=${theme}&px=${px}`,
+        {
+          width,
+          height: 1200,
+        }
+      );
+      await p.waitFor(ready, 'the contact sheet');
+      await sleep(600);
+      await p.shot('[data-section="contact"]', `${PREFIX}contact-${theme}-${px}.png`);
+      errors.push(...standalone(p.errors));
+      p.close();
+    }
+    const all = await open(
+      `${ORIGIN}/harness-avatars.html?section=contact&theme=${theme}&px=${CONTACT_PX.join(',')}`,
+      { width: Math.ceil(33 * (128 * 1.35 + 8) + 200), height: 1200, scale: 1 }
+    );
+    await all.waitFor(ready, 'the whole contact sheet');
+    await sleep(1500);
+    await all.shot('[data-section="contact"]', `${PREFIX}contact-${theme}.png`);
+    errors.push(...standalone(all.errors));
+    all.close();
+    const list = await open(`${ORIGIN}/harness-avatars.html?section=list&theme=${theme}`, {
+      width: 900,
+      height: 700,
+    });
+    await list.waitFor(`document.querySelector('[data-section="list"] .agent-key')`, 'the list');
+    await sleep(500);
+    await list.shot('[data-section="list"]', `${PREFIX}contact-list-${theme}.png`);
+    errors.push(...standalone(list.errors));
+    list.close();
   }
 }
 

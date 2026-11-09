@@ -98,3 +98,44 @@ body {
   gap: var(--spacing-xs);
   padding: var(--spacing-sm);
 }
+
+.avatar-gallery__contact {
+  display: grid;
+  grid-template-columns: max-content repeat(32, var(--contact-px));
+  align-items: center;
+  justify-items: center;
+  gap: calc(var(--contact-px) * 0.35 + var(--spacing-xs));
+  width: max-content;
+}
+
+.avatar-gallery__contact-head {
+  justify-self: start;
+  white-space: nowrap;
+  overflow: visible;
+  width: 0;
+}
+
+.avatar-gallery__list {
+  display: flex;
+  gap: var(--spacing-2xl);
+}
+
+.avatar-gallery__list-col {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-md);
+  background: var(--surface-panel);
+  border-radius: var(--radius-lg);
+}
+
+.avatar-gallery__list-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-body-sm);
+}
+
+.avatar-gallery__contact-block {
+  margin-bottom: var(--spacing-2xl);
+}

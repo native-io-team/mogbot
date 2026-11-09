@@ -243,8 +243,12 @@ function area(pts: Pt[]): number {
 
 /** One area for every shape: a 13.9-unit circle's. */
 export const SHAPE_AREA = Math.PI * 13.9 * 13.9;
+/** No point further than this across or down from the centre: the grid, with room for the shadow. */
+const MAX_REACH = 14.85;
 function even(pts: Pt[]): Pt[] {
-  const k = Math.sqrt(SHAPE_AREA / area(pts));
+  // Reduced, not spread: the phone's Babel would need a runtime helper.
+  const reach = pts.reduce((far, p) => Math.max(far, Math.abs(p[0]), Math.abs(p[1])), 0);
+  const k = Math.min(Math.sqrt(SHAPE_AREA / area(pts)), MAX_REACH / reach);
   return pts.map((p) => [r2(C + p[0] * k), r2(C + p[1] * k)] as Pt);
 }
 const toPath = (pts: Pt[]) => pts.map((p, i) => `${i ? 'L' : 'M'}${p[0]} ${p[1]}`).join('') + 'Z';
@@ -264,6 +268,30 @@ export const SHAPE_PATHS: Record<AvatarShape, string> = {
 };
 
 /**
+ * The optical size: below `SMALL_SHAPE_PX` the silhouettes are drawn crisper
+ * (the diamond's and hexagon's corners tighter, the squircle squarer), the
+ * same area, so at 16 and 18px a diamond is still a diamond and not a blob
+ * beside the circle. Each is the same shape, sharpened, never another one.
+ */
+export const SMALL_SHAPE_PX = 20;
+export const SMALL_SHAPE_POINTS: Record<AvatarShape, Pt[]> = {
+  circle: SHAPE_POINTS.circle,
+  squircle: even(superPts(5.4, 0)),
+  diamond: even(superPts(3.9, Math.PI / 4)),
+  hexagon: even(softHexPts(0.18)),
+};
+const SMALL_SHAPE_PATHS: Record<AvatarShape, string> = {
+  circle: SHAPE_PATHS.circle,
+  squircle: toPath(SMALL_SHAPE_POINTS.squircle),
+  diamond: toPath(SMALL_SHAPE_POINTS.diamond),
+  hexagon: toPath(SMALL_SHAPE_POINTS.hexagon),
+};
+
+/** The outline to draw at `px`: crisper below `SMALL_SHAPE_PX`. */
+export const shapePathAt = (shape: AvatarShape, px: number) =>
+  px < SMALL_SHAPE_PX ? SMALL_SHAPE_PATHS[shape] : SHAPE_PATHS[shape];
+
+/**
  * The key's construction. At `LIT_MIN_PX` and up: a shadow (the shape,
  * dropped and blurred), the side (the shape, darker) and the top (the shape
  * scaled to `top.scale` about `top`, a little above centre, so the side
@@ -273,7 +301,12 @@ export const SHAPE_PATHS: Record<AvatarShape, string> = {
  */
 export const LIT_MIN_PX = 24;
 export const KEY = {
-  top: { x: 16, y: 15.1, scale: 0.9 },
+  /**
+   * The top: flush with the side along its upper edge, a hair in at the
+   * sides, the side showing mostly below, as a key is (the site's keys).
+   * It was 0.9 about 15.1, which showed the side all round, a bezel.
+   */
+  top: { x: 16, y: 14.95, scale: 0.93 },
   shadow: { dy: 1.1, blur: 0.9 },
   /** The rim light's offset on a key cap's top. */
   capRim: 0.7,
@@ -282,6 +315,17 @@ export const KEY = {
   /** The top's gradient: this much lighter at the top, darker at the bottom. */
   gradient: 0.035,
 } as const;
+
+/**
+ * A flat key's edge (below `LIT_MIN_PX`): the shape in the side's tone,
+ * with the fill inset over it by one CSS pixel, so a pale key on a pale page
+ * (white on paper) still has a silhouette, as the site's faces do.
+ */
+export const FLAT_EDGE_PX = 1;
+export const flatInset = (px: number) => {
+  const k = r2(1 - (FLAT_EDGE_PX * AVATAR_GRID) / px / MAX_REACH);
+  return `translate(${C} ${C}) scale(${k}) translate(${-C} ${-C})`;
+};
 
 /** The top's transform, for an SVG `transform` attribute. */
 export const TOP_TRANSFORM = `translate(${KEY.top.x} ${KEY.top.y}) scale(${KEY.top.scale}) translate(${-C} ${-C})`;
@@ -349,6 +393,33 @@ export function eyeAt(eye: Eye, px: number): Eye {
   return { cx: eye.cx, cy: eye.cy, rx: r2(eye.rx * k), ry: r2(eye.ry * k) };
 }
 
+/**
+ * Both eyes at `px`, as `eyeAt` draws them, and on a flat key (below
+ * `LIT_MIN_PX`, where nothing moves the face by a fraction) snapped to the
+ * half CSS pixel, a device pixel on a Retina screen: each eye's box starts
+ * and ends on one, the second mirrors the first about the middle, so the
+ * dots are crisp and even rather than smeared over three pixels.
+ */
+export function eyesAt(eyes: [Eye, Eye], px: number): [Eye, Eye] {
+  const a = eyeAt(eyes[0], px);
+  const b = eyeAt(eyes[1], px);
+  if (px >= LIT_MIN_PX) return [a, b];
+  const u = px / AVATAR_GRID;
+  const snap = (v: number) => Math.round(v * 2) / 2;
+  const w = Math.ceil(a.rx * 2 * u * 2) / 2;
+  const h = Math.max(w, snap(a.ry * 2 * u));
+  const left = snap(a.cx * u - w / 2);
+  const top = snap(a.cy * u - h / 2);
+  const eye = (x: number): Eye => ({
+    cx: r2((x + w / 2) / u),
+    cy: r2((top + h / 2) / u),
+    rx: r2(w / 2 / u),
+    ry: r2(h / 2 / u),
+  });
+  // The second eye: the first mirrored about the avatar's middle.
+  return [eye(left), eye(px - left - w)];
+}
+
 /** True when the face is pressed in rather than drawn on. */
 export const isPressed = (face: AvatarFace, px: number, selected: boolean) =>
   Boolean(FACE_SPECS[face].pressed) && px >= LIT_MIN_PX && !selected;
@@ -371,54 +442,60 @@ interface Tone {
   lift?: Record<AvatarTheme, number>;
   /** Selected (solid): a shift on its lightness, per theme. */
   solidLift?: Record<AvatarTheme, number>;
-  /** The ink is the light theme's (dark) in the dark theme too. */
-  darkInk?: boolean;
 }
 
 export const AVATAR_TONES: Record<string, Tone> = {
   red: { hue: 25 },
   orange: { hue: 55 },
-  amber: { hue: 84 },
+  amber: { hue: 88 },
   green: { hue: 150 },
   teal: { hue: 190 },
   blue: { hue: 262 },
   purple: { hue: 300 },
   pink: { hue: 350 },
-  brown: { hue: 60, maxChroma: 0.045 },
+  // A step deeper than the hues, so it reads as wood beside orange rather than a paler orange.
+  brown: { hue: 60, maxChroma: 0.045, lift: { dark: -0.06, light: -0.07 } },
   gray: { hue: 260, maxChroma: 0.018 },
   white: {
     hue: 0,
     maxChroma: 0,
-    lift: { dark: 0.2, light: 0.11 },
+    lift: { dark: 0.17, light: 0.11 },
     // On light, white is the theme's strongest neutral: near black, as the accent is.
-    solidLift: { dark: 0.2, light: -0.45 },
-    darkInk: true,
+    solidLift: { dark: 0.14, light: -0.45 },
   },
 };
 
-/** The roles, per theme: [lightness, chroma]. */
+/**
+ * The roles, per theme: [lightness, chroma]. Both themes are the site's
+ * faces: a pastel key with a dark face. Dark was a mid-tone clay with a
+ * white face (0.53), which went muddy on the warm charcoal and pulled red,
+ * orange, brown and pink together; a pastel a step down from the light
+ * theme's keeps them apart and makes the key the same object in both.
+ */
 export const AVATAR_ROLES = {
   /** The key's top, mid-gradient (and a flat key's whole fill). */
-  clay: { dark: [0.53, 0.09], light: [0.86, 0.07] },
-  /** The side: the clay, darker. */
-  side: { dark: [0.4, 0.09], light: [0.74, 0.07] },
-  /** The face. */
-  ink: { dark: [0.95, 0.04], light: [0.36, 0.1] },
+  clay: { dark: [0.72, 0.085], light: [0.86, 0.07] },
+  /** The side: the clay, darker (and a flat key's edge). */
+  side: { dark: [0.54, 0.085], light: [0.72, 0.075] },
+  /** The face: dark in both themes. */
+  ink: { dark: [0.26, 0.05], light: [0.34, 0.09] },
   /** A pressed feature's well. */
-  well: { dark: [0.27, 0.06], light: [0.58, 0.09] },
-  /** Selected: the colour itself. */
-  solid: { dark: [0.74, 0.12], light: [0.7, 0.13] },
-  solidSide: { dark: [0.6, 0.12], light: [0.56, 0.12] },
+  well: { dark: [0.47, 0.08], light: [0.55, 0.09] },
+  /** Selected: the colour itself, stronger. */
+  solid: { dark: [0.83, 0.12], light: [0.7, 0.13] },
+  solidSide: { dark: [0.64, 0.12], light: [0.56, 0.12] },
+  /** The face on a selected key (a dark solid takes the canvas colour instead). */
+  solidInk: { dark: [0.24, 0.05], light: [0.24, 0.05] },
 } as const satisfies Record<string, Record<AvatarTheme, readonly [number, number]>>;
 
 /** Light and shade, as white and black at these opacities. */
 export const AVATAR_LIGHT = {
   /** The rim light on the top edge, and the shade on the bottom one. */
-  rimLight: { dark: 0.32, light: 0.75 },
-  rimShade: { dark: 0.4, light: 0.16 },
+  rimLight: { dark: 0.5, light: 0.75 },
+  rimShade: { dark: 0.2, light: 0.16 },
   shadow: { dark: 0.55, light: 0.2 },
   /** A pressed feature's lip. */
-  lip: { dark: 0.22, light: 0.95 },
+  lip: { dark: 0.55, light: 0.95 },
 } as const;
 
 /** What to paint one key with. Colours are sRGB hex; light and shade are opacities. */
@@ -428,7 +505,7 @@ export interface AvatarPaint {
   topHigh: string;
   topLow: string;
   side: string;
-  /** The face's ink. Selected: none, so the client uses its canvas colour. */
+  /** The face's ink. Null on a dark solid (white selected on light): the client's canvas colour. */
   ink: string | null;
   well: string;
   rimLight: number;
@@ -440,20 +517,21 @@ export interface AvatarPaint {
 export function avatarPaint(color: string, theme: AvatarTheme, selected = false): AvatarPaint {
   const tone = AVATAR_TONES[color] ?? AVATAR_TONES.gray;
   const lift = tone.lift?.[theme] ?? 0;
-  const at = (role: keyof typeof AVATAR_ROLES, dl = lift, inkTheme = theme) => {
-    const lc = AVATAR_ROLES[role][inkTheme];
+  const at = (role: keyof typeof AVATAR_ROLES, dl = lift) => {
+    const lc = AVATAR_ROLES[role][theme];
     const l = lc[0];
     const c = lc[1];
     return oklchHex(l + dl, Math.min(c, tone.maxChroma ?? c), tone.hue);
   };
   const solidLift = tone.solidLift?.[theme] ?? lift;
   const solid = at('solid', solidLift);
+  const darkSolid = AVATAR_ROLES.solid[theme][0] + solidLift < 0.5;
   return {
     fill: selected ? solid : at('clay'),
     topHigh: selected ? solid : at('clay', lift + KEY.gradient),
     topLow: selected ? solid : at('clay', lift - KEY.gradient),
     side: selected ? at('solidSide', solidLift) : at('side'),
-    ink: selected ? null : at('ink', 0, tone.darkInk ? 'light' : theme),
+    ink: selected ? (darkSolid ? null : at('solidInk', 0)) : at('ink', 0),
     well: at('well'),
     rimLight: AVATAR_LIGHT.rimLight[theme],
     rimShade: AVATAR_LIGHT.rimShade[theme],
