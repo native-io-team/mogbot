@@ -294,7 +294,7 @@ function BuildOnMac({ platform, tailscale, reinstall, onBack, onPair }: BuildPro
     <div className="settings-modal-body phone-install phone-install--build">
       <div className="phone-install__bar">
         <TextButton leftIcon={<ArrowLeftIcon size={12} />} onClick={onBack}>
-          {reinstall ? 'Phone' : 'Routes'}
+          {reinstall ? 'Phone' : 'Other ways'}
         </TextButton>
         <span className="phone-install__where">
           {reinstall ? 'Reinstall' : 'Build it on this Mac'} · {NAME[platform]}

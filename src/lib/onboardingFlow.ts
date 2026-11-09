@@ -336,8 +336,8 @@ export function remoteOnCheck(s: RemoteAccessStatus | null, now: number): CheckR
     case 'approveFunnel':
       return {
         state: 'fail',
-        line: 'Funnel is off for this Mac in your Tailscale account.',
-        fix: 'Open the Tailscale page, allow Funnel for this Mac, then come back and check again.',
+        line: 'Tailscale needs your OK before the link can reach this Mac.',
+        fix: 'Open the Tailscale page and allow Funnel (Tailscale’s name for public links) for this Mac, then come back and check again.',
         action: { label: 'Open Tailscale', url: step.url },
       };
     case 'funnelFailed':

@@ -156,18 +156,26 @@ export function ReadyStep({
       title="You’re ready"
       lede={
         engineName
-          ? `${engineName} is connected and your Chief of Staff is waiting. Do you want to bring your agents from Grok, ChatGPT or another assistant first?`
-          : 'Your Chief of Staff is waiting. Do you want to bring your agents from Grok, ChatGPT or another assistant first?'
+          ? `${engineName} is connected and your Chief of Staff is waiting. Already running agents in Grok, ChatGPT or another assistant? You can bring your agents from there first.`
+          : 'Your Chief of Staff is waiting. Already running agents in Grok, ChatGPT or another assistant? You can bring your agents from there first.'
       }
       onBack={onBack}
+      // Most people arrive with nothing to bring, so Start fresh is the big
+      // answer; importing is the detour (Remote access, a link, a message).
       primary={
-        <Button variant="strong" size="large" onClick={onImport} disabled={going} data-flow-import>
-          Bring my agents
+        <Button variant="strong" size="large" onClick={fresh} disabled={going} data-flow-fresh>
+          {going ? <Spinner size="sm" /> : 'Start fresh'}
         </Button>
       }
       secondary={
-        <Button variant="secondary" size="large" onClick={fresh} disabled={going} data-flow-fresh>
-          {going ? <Spinner size="sm" /> : 'Start fresh'}
+        <Button
+          variant="secondary"
+          size="large"
+          onClick={onImport}
+          disabled={going}
+          data-flow-import
+        >
+          Bring my agents
         </Button>
       }
     >

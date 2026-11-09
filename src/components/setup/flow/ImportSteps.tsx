@@ -88,7 +88,7 @@ export function ImportRemoteStep({ onNext, onBack, onStartFresh }: StepProps) {
     <FlowShell
       step="importRemote"
       title="Turn on Remote access"
-      lede="Your other assistant reaches your Chief of Staff through a private link from this Mac. It turns on by itself."
+      lede="Your other assistant reaches your Chief of Staff through a private link from this Mac. This screen turns it on; Tailscale may ask you to allow it once."
       onBack={onBack}
       primary={
         doneOnArrival && (

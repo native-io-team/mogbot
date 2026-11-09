@@ -4739,7 +4739,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 579
+      "consumerCount": 578
     },
     {
       "name": "--text-muted",
@@ -4747,7 +4747,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 931
+      "consumerCount": 932
     },
     {
       "name": "--text-faint",
@@ -5995,7 +5995,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 579
+      "consumerCount": 578
     },
     {
       "name": "--text-quiet",
@@ -6011,7 +6011,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 931
+      "consumerCount": 932
     },
     {
       "name": "--text-faint",

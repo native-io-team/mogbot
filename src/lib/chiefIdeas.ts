@@ -42,6 +42,13 @@ export const GROUP_LABEL: Record<ChiefIdeaGroup, string> = {
 
 export const CHIEF_IDEAS: readonly ChiefIdea[] = [
   {
+    id: 'morning-brief',
+    label: 'Brief me every morning…',
+    what: 'Every weekday at 8am a researcher reads what’s new on the topics you pick and a writer boils it down to one short brief. The first one comes right away, so you see it today.',
+    text: 'Every weekday at 8am, have a researcher read what’s new on the topics I care about and a writer turn it into one short brief: the three things worth knowing and why they matter to me. Do the first one now so I can see it. My topics: ',
+    group: 'schedule',
+  },
+  {
     id: 'ship-fixes',
     label: 'Ship fixes while I sleep…',
     what: 'Each night a fixer takes your top open GitHub issue and fixes it in its own copy, a reviewer checks it, and the morning brings one card: Keep, Review or Discard. Your Chief helps you connect GitHub first.',
@@ -93,13 +100,16 @@ export const CHIEF_IDEAS: readonly ChiefIdea[] = [
 ];
 
 /**
- * The chips under the greeting: the three that best show work running
- * without the user (overnight, every morning, on a trigger). The rest are a
- * click away in the gallery. A fixed order: rotating them would make the
+ * The chips under the greeting: three that show work running without the
+ * user (every morning, on a trigger, a team), one from each group, and that
+ * someone who isn't a developer recognises as theirs. The morning brief and
+ * the launch need nothing set up, so a first result can land in the first
+ * minutes; the GitHub and folder ideas are a click away in the gallery,
+ * where they don't make the first screen read as a coding tool. A fixed order: rotating them would make the
  * first screen differ between two people comparing notes, and between a
  * screenshot and the app.
  */
-export const CHIEF_CHIP_IDS = ['ship-fixes', 'launch', 'client-brief'] as const;
+export const CHIEF_CHIP_IDS = ['morning-brief', 'inbox', 'launch'] as const;
 
 export function findIdea(id: string): ChiefIdea | null {
   return CHIEF_IDEAS.find((idea) => idea.id === id) ?? null;

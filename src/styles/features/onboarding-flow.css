@@ -280,8 +280,11 @@
   justify-content: center;
 }
 
-/* The guided phone build, embedded as it is in the Phone panel. */
-.flow-embed {
+/* The guided phone build, embedded as it is in the Phone panel. It carries
+   `.phone-modal` for that panel's inner styles, but not its 520px width:
+   the checklist and the agent's card sit side by side and need the column. */
+.flow-embed,
+.flow-embed.phone-modal {
   width: 100%;
   padding: var(--spacing-lg);
   border-radius: var(--radius-card);

@@ -216,7 +216,7 @@ export const onboardingFlowScenarios: Scenario[] = [
     'onboarding-accounts',
     'accounts',
     '2b. Add another account? (optional)',
-    'Still the second segment, “Your AI”. “Add another account?”, one line on why (“When one account runs out of usage, agents carry on with the next, so nothing stops.”) and that it is optional. One Line: a check, “sam@example.com”, muted “Claude Code · this Mac’s own sign-in”. A big “Add a Claude Code account”, a quiet “Or a Codex account” under it, and a quiet Skip. Never “This Mac” as a name.',
+    'Still the second segment, “Your AI”. “Add another account?”, one line on why (“When one account runs out of usage, agents carry on with the next, so nothing stops.”) and that it is optional. One Line: a check, “sam@example.com”, muted “Claude Code · this Mac’s own sign-in”. Quiet “Add another Claude Code account” (and “Add a Codex account” when Codex is installed) under it, and a big Continue: most people have one account, so going on is the default. No Skip. Never “This Mac” as a name.',
     {
       agents_accounts: [
         {
@@ -288,7 +288,7 @@ export const onboardingFlowScenarios: Scenario[] = [
     'onboarding-phone-intro',
     'phone',
     '4. Your phone?',
-    'The fourth segment lit, "Your phone". "Use your agents from your phone?", one line (Tailscale, about ten minutes), a big "Set up my phone" and a quiet "Skip for now".',
+    'The fourth segment lit, "Your phone". "Use your agents from your phone?", one line (Tailscale, said as what it is: a free app that links your own devices; about ten minutes), a big "Set up my phone" and a quiet "Skip phone setup", the same words as every phone screen.',
     {}
   ),
   flow(
@@ -438,14 +438,14 @@ export const onboardingFlowScenarios: Scenario[] = [
     'onboarding-handoff',
     'ready',
     '5. You’re ready: import or start fresh',
-    'The last segment lit, "Ready". The Chief’s badge, "You’re ready", one line naming Claude Code and asking whether to bring agents from Grok, ChatGPT or another assistant, then two big neutral answers: "Bring my agents" and "Start fresh". No accent.',
+    'The last segment lit, "Ready". The Chief’s badge, "You’re ready", one line naming Claude Code and offering to bring agents already running in Grok, ChatGPT or another assistant, then two big neutral answers: "Start fresh" first and solid (most people have nothing to bring), "Bring my agents" under it in outline. No accent.',
     {}
   ),
   flow(
     'onboarding-import-remote-funnel',
     'importRemote',
     '5a. Remote access: Funnel off',
-    '"Ready · 1 of 3". "Turn on Remote access". An amber "Not done yet. Funnel is off for this Mac in your Tailscale account.", the fix, "Open Tailscale ↗", Check again. A quiet "Start fresh instead".',
+    '"Ready · 1 of 3". "Turn on Remote access". An amber "Not done yet. Tailscale needs your OK before the link can reach this Mac.", the fix naming Funnel as Tailscale’s word for it, "Open Tailscale ↗", Check again. A quiet "Start fresh instead".',
     {
       get_remote_access_status: remoteStatus({
         enabled: true,

@@ -65,7 +65,7 @@ export function linkProblem(text: string): string {
   const read = readLink(text);
   return !read.ok && read.problem === 'old_mac'
     ? 'Update the app on your Mac to pair. This code comes from an older version that can’t prove it’s your Mac; once it’s updated, make a new code there.'
-    : 'That isn’t a pairing code. Make one on your Mac: Settings → Phone → Pair a phone.';
+    : 'That isn’t a pairing code. Make one on your Mac: Settings → Agents → Phone → Pair a phone.';
 }
 
 /**

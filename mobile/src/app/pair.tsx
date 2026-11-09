@@ -191,7 +191,7 @@ export default function Pair() {
                 Scan the code on your Mac
               </T>
               <T color={colors.textSecondary}>
-                It’s on the Mac’s last onboarding screen for your phone, or in Settings → Phone →
+                It’s on the Mac’s last setup screen for your phone, or in Settings → Agents → Phone →
                 Pair a phone. Then click Allow on the Mac.
               </T>
               <Button
@@ -508,7 +508,7 @@ function FailureCopy({ failure, mac, host }: { failure: PairFailure; mac: string
       case 'no_answer':
         return [
           `No answer from ${mac}`,
-          'The Mac had the request, but nothing came back within two minutes. If you clicked Allow, check Settings → Phone on the Mac; otherwise make a new code there and scan it.',
+          'The Mac had the request, but nothing came back within two minutes. If you clicked Allow, check Settings → Agents → Phone on the Mac; otherwise make a new code there and scan it.',
         ];
       case 'not_your_mac':
         return [
@@ -518,12 +518,12 @@ function FailureCopy({ failure, mac, host }: { failure: PairFailure; mac: string
       case 'lan_only':
         return [
           'This code only offers your local network',
-          'This version of the app connects over Tailscale. Turn on Tailscale on your Mac, then make a new code in Settings → Phone.',
+          'This version of the app connects over Tailscale. Turn on Tailscale on your Mac, then make a new code in Settings → Agents → Phone.',
         ];
       case 'expired':
         return [
           'This code has expired',
-          'A code works once and for five minutes. Make a new one on your Mac: Settings → Phone → Pair a phone.',
+          'A code works once and for five minutes. Make a new one on your Mac: Settings → Agents → Phone → Pair a phone.',
         ];
       case 'refused':
         return [

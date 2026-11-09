@@ -90,19 +90,19 @@ describe('AgentOnboardingScreen', () => {
     press('Continue');
     await waitFor(() => expect(setDefaultAgentId).toHaveBeenCalledWith('codex'));
 
-    // Another account, optional: Skip goes on.
+    // Another account, optional: going on is the big button.
     expect(await heading('Add another account?')).toBeInTheDocument();
-    press('Skip');
+    press('Continue');
 
     expect(await heading('How much should your agents do on their own?')).toBeInTheDocument();
     press('Skip');
     expect(setIndependence).not.toHaveBeenCalled();
 
     expect(await heading('Use your agents from your phone?')).toBeInTheDocument();
-    press('Skip for now');
+    press('Skip phone setup');
 
     expect(await heading('You’re ready')).toBeInTheDocument();
-    expect(screen.getByText(/bring your agents from Grok, ChatGPT/)).toBeInTheDocument();
+    expect(screen.getByText(/agents in Grok, ChatGPT/)).toBeInTheDocument();
     press('Start fresh');
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
     expect(setImportChoice).toHaveBeenCalledWith('declined');
