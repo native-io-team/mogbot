@@ -1293,8 +1293,15 @@ below; it asks only for:
   and packages new to the project (`agents/installs.rs`)
 
 Wrappers are judged by what they run: `env`, `xargs`, `timeout`, `eval`,
-`find -exec` / `-execdir` / `-ok` (with `{}` as what it finds) and `find
--delete` (like `rm -r` of its roots). Here-document bodies stay data.
+`nice -n N`, `time -p`, `caffeinate -t N`, `arch`, `lockf`/`flock`/`script
+FILE`, `find -exec` / `-execdir` / `-ok` (with `{}` as what it finds) and `find
+-delete` (like `rm -r` of its roots); a package manager's runner (`pnpm
+dlx`/`exec`, `npm exec`, `yarn dlx`/`exec`, `yarn <bin>`, `bun x`) like `npx`.
+`$'…'` is read as the word it makes, `>|` as a write, and `pushd` moves like
+`cd` (a `cd` it can't follow makes a relative `rm -r` ask). Quoted text kept
+in a variable or given to `echo` is data unless a shell reads the line,
+wherever it stands (`timeout 5 sh -c "$X"`, `find -exec sh`, `$SHELL -c`,
+`python3 -c "os.system(…)"`). Here-document bodies stay data.
 `go_hard_hardening_tests.rs` holds the owner's everyday work (git, builds,
 project installs, dev servers, local scripts, network reads, here-document
 scripts) card-free, after outside content too.
@@ -5390,6 +5397,9 @@ removed. A folder is removed only when all of these hold:
 - inside a working copy, git ignores it (`check-ignore`) and tracks nothing in
   it (`ls-files`), so removing it changes nothing git would call a change. Any
   doubt (git missing, an error, a timeout) keeps it;
+- no dev server a turn left running for the user, and no preview pane, runs
+  from its folder (or around it): a folder's date says nothing about a server
+  loading from it (`dev_servers::in_use`);
 - the agent hasn't started working again (checked before each removal).
 
 Only agent homes: never a project, an agent's copy of one (those live under
