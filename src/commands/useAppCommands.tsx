@@ -418,6 +418,18 @@ export function useAppCommands({
         },
       },
       {
+        id: 'agents.morningBrief',
+        title: 'Morning brief…',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: ['brief', 'briefing', 'morning', 'daily', 'summary', 'digest', 'today'],
+        run: () => {
+          requestSettingsTabOnOpen('agents');
+          requestSettingsSectionOnOpen('agent-brief');
+          openModal('settings');
+        },
+      },
+      {
         id: 'agents.lowPower',
         title: 'Slow down on battery…',
         icon: <SettingsIcon size={14} />,

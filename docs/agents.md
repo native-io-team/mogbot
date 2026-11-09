@@ -4110,6 +4110,52 @@ Not verified against live accounts: a model check through a real connector,
 and the GitHub search source (pagination included). The notifications
 call's shape was checked with one read-only `gh api notifications` call.
 
+### Morning brief (`agents/brief.rs`)
+
+Once a day, at the user's time (on by default at 08:00), the Chief posts one
+short message in its chat: what waits on the user, what didn't work, what
+runs today, what each agent did since the last brief (a day back at most a
+week), and the accounts' room. Its first line is the gist ("Morning brief,
+Monday 9 November: 1 card waits for you, 2 routines today.") and is what
+the desk banner and the phone notification say.
+
+- **No model turn.** `brief::gather` reads the app's own records: each
+  agent's chat log (replies, result cards by title, error lines), its
+  routines' runs and next times, its cards still pending, and
+  `compute::totals` over the accounts' own readings (room, the soonest
+  reported reset; an account nobody read is "not reported", never counted
+  as having room). `brief::compose` writes it from a template. Nothing is
+  inferred: an agent that did nothing isn't named.
+- **Prepared ahead.** 20 minutes before the time the slow parts (the usage
+  inventory and the user's checks) are read into `morning-brief-state.json`;
+  at the time the brief is posted at once with fresh local records. Once a
+  day: a day is settled when posted, skipped or missed. The Mac asleep or
+  the app closed more than 3 hours past the time skips that day rather than
+  posting a "morning" brief at noon. Quiet hours don't hold it (the user
+  chose its time), but its notification waits like any other.
+- **Nothing to say, nothing posted**, unless the user turned on "Post on
+  quiet days too" (`always`). Room on every account alone isn't news; no
+  room anywhere is.
+- **The user's own checks** (opt-in, at most 4): "events on my calendar
+  today" through Google Calendar, say. Each runs exactly as a "When…"
+  routine's connector check does (`watch::check`, sealed by `watch_seal`:
+  no shell, files or web, only that connector's read tools, on the Chief's
+  grant). What comes back is outside text: titles only, escaped by
+  `brief::plain` so nothing in them can become a link (not even a bare
+  address), a list or bold, and never given to a turn. A check that can't
+  run says why in one line ("Gmail isn't connected. Connect it in Apps.").
+- **Set from chat** with the Chief's `set_morning_brief` ("brief me at
+  7:30", "stop the morning brief", `now: true` posts today's at once), from
+  Settings → Agents → Notifications (⌘K "Morning brief…") and from the
+  phone's Settings (`agents.morningBrief` / `agents.setMorningBrief`,
+  audited; the phone sets on/off and the time). Adding a check is a card
+  unless the user's own message asked; never from a turn answering outside
+  text.
+
+Limits: a brief's check lines live in the Chief's chat log, so a later
+`search_my_chat` can return them to a turn as ordinary chat text. Not
+verified against a real connector, or across a real night on a sleeping Mac.
+
 ## Slack (`agents/slack.rs`, `agents/slack_api.rs`)
 
 Answers: **can I start my agents, and get their answer, from the Slack
@@ -5468,6 +5514,7 @@ are `agents/settings_tools.rs`. Tests: `agents/settings_chat_tests.rs`,
 | Account order, rename, add one | `manage_account` (Chief, the user's own message only) | no on their message alone, a card when another agent's request rode with it or the conversation read outside content; adding opens the engine's sign-in on the Mac (`agents-open-settings`), finished by the user there |
 | One agent's Runs on | `update_agent` `account` (Chief) | no on the user's own message alone (the editor's "Runs only on Work" line); a card otherwise: which of their accounts it spends |
 | Quiet hours | `set_quiet_hours` (any agent); also Settings → Notifications and the phone (`agents.quietHours` / `agents.setQuietHours`) | no when they hold back as much or more (a check-in setting them from memory); turning them off or leaving part of the current window out is a card unless the user's own message asked |
+| Morning brief | `set_morning_brief` (Chief only); also Settings → Notifications and the phone (`agents.morningBrief` / `agents.setMorningBrief`) | no for its time, on/off and quiet days; adding a read-only check is a card unless the user's own message asked; never from outside text |
 | Slack: who answers, where it listens, trigger, let others, on/off | `slack_settings` (Chief) | another agent, a new conversation, letting others in or turning on yes; the rest no. Connecting is `connect: true`, which opens the masked token field on the Mac; a token never goes through chat |
 | Theme; Slow down on battery | `change_app_setting` (Chief) | no, except Slow down on battery off, which is a card unless the user's own message asked; the desk follows (`app-theme-changed`, `app-settings-changed`) |
 | Free disk space in agents' folders | `free_up_space` (Chief) | no: regenerable folders only (`disk::free_up`) |

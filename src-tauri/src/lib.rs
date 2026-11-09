@@ -859,6 +859,8 @@ pub fn run() {
             commands::agents::agents_disk_free_up,
             commands::agents::agents_quiet_hours,
             commands::agents::agents_set_quiet_hours,
+            commands::agents::agents_morning_brief,
+            commands::agents::agents_set_morning_brief,
             commands::agents::agents_login_reopen,
             commands::agents::agents_logins_recheck,
             commands::agents::agents_logins_connect,

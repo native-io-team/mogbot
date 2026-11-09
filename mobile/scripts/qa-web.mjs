@@ -862,6 +862,14 @@ const PROBE = [
       'Quiet hours: the ask, the Chief’s one line saying what is set, then the routine’s line (“Routine · late, was due …”, as the desk says it) and its answer saying it waited',
   },
   {
+    name: 'probe-morning-brief',
+    route: '/chat/chief',
+    ready: 'Chief of Staff',
+    act: scrollToIncludes('Your checks'),
+    check:
+      'The morning brief: one reply from the Chief, its first line the gist (“Morning brief, Monday 9 November: 1 card waits for you, …”), then bold Waiting on you / Didn’t work / Today / Since yesterday / Usage / Your checks, each a few bullets; the calendar items nested; “9:30”, never “9\\:30”; the Gmail line says it couldn’t check and why. No link',
+  },
+  {
     name: 'probe-crossover',
     route: '/chat/ledger',
     ready: 'Carry on with Claude Code',

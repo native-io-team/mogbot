@@ -119,6 +119,7 @@ export const SECTION_PAGE: Record<SettingsSectionRequest, SettingsPage> = {
   'agent-user-chrome': 'chrome',
   'agent-slack': 'apps',
   'agent-quiet': 'notifications',
+  'agent-brief': 'notifications',
 };
 
 /** An older tab request's page: General and Experimental became Advanced. */

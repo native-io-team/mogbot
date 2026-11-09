@@ -18,7 +18,8 @@
  *   groups (`AgentsUsage`, `AgentAccounts`), whose content is their own.
  * - **Phone** (`PhonePage`): the phone app and other assistants.
  * - **Notifications** (`NotificationsPage`): what notifies, quiet hours
- *   (`agents/quiet.rs`), and where to mute one agent.
+ *   (`agents/quiet.rs`), the morning brief
+ *   (`AgentMorningBriefSetting`, `agents/brief.rs`), and where to mute one agent.
  * - **Chrome** (`ChromePage`): the agents' own browser and Your Chrome.
  * - **Apps** (`AppsPage`): Slack (`agents/slack.rs`) and apps you said no to.
  *
@@ -46,6 +47,7 @@ import { AgentsSlackSettings } from './AgentsSlackSettings';
 import { AgentPreviewFixSetting } from './AgentPreviewFixSetting';
 import { AgentLowPowerSetting } from './AgentLowPowerSetting';
 import { AgentQuietHoursSetting } from './AgentQuietHoursSetting';
+import { AgentMorningBriefSetting } from './AgentMorningBriefSetting';
 import { useStayOn } from '../../hooks/useStayOn';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import type { EngineInfo } from '../../lib/agents';
@@ -244,6 +246,9 @@ export function NotificationsPage() {
           />
           <SectionBoundary name="quiet-hours">
             <AgentQuietHoursSetting />
+          </SectionBoundary>
+          <SectionBoundary name="morning-brief">
+            <AgentMorningBriefSetting />
           </SectionBoundary>
           <Row
             label="Mute an agent"

@@ -3,6 +3,7 @@
 import type { Scenario } from '../types';
 import { agentsScenarios } from './agents';
 import { agentsDesktopScenarios } from './agentsDesktop';
+import { agentsBriefScenarios } from './agentsBrief';
 import { agentsProjectScenarios } from './agentsProject';
 import { agentsWorkScenarios } from './agentsWork';
 import { agentsLiveScenarios } from './agentsLive';
@@ -51,6 +52,7 @@ export const scenarios: Scenario[] = [
   ...agentsScenarios,
   ...agentsKeysScenarios,
   ...agentsDesktopScenarios,
+  ...agentsBriefScenarios,
   ...agentsProjectScenarios,
   ...agentsWorkScenarios,
   ...agentsLiveScenarios,

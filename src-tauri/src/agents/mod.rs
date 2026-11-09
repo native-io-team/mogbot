@@ -70,6 +70,7 @@ pub mod apps;
 pub mod arrival;
 pub mod attachments;
 pub mod autoallow;
+pub mod brief;
 pub mod broker;
 pub mod browser;
 pub mod browser_gate;

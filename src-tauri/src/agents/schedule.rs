@@ -1854,6 +1854,8 @@ fn tick(app: &AppHandle) -> Result<(), CommandError> {
     }
     // "Use it all before reset": capacity about to expire wakes the Chief.
     super::usage_tools::maybe_nudge(app);
+    // The morning brief: prepared ahead, posted at the user's time (`brief`).
+    super::brief::tick(app);
     Ok(())
 }
 
