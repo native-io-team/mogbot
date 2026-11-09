@@ -140,6 +140,26 @@ pub fn serves(path: &str, port: u16) -> bool {
         .any(|s| s.port == port && inside(&s.cwd, path))
 }
 
+/// Something is running from `dir` or around it: a kept server's folder is
+/// inside it (or it inside that folder), or the preview pane shows it. Disk
+/// tidying leaves such a folder's dependencies alone.
+pub fn in_use(dir: &std::path::Path) -> bool {
+    let dir = dir.to_string_lossy();
+    let near = |p: &str| inside(p, &dir) || inside(&dir, p);
+    state().servers.iter().any(|s| near(&s.cwd))
+        || super::preview_test::pane_paths().iter().any(|p| near(p))
+}
+
+#[cfg(test)]
+pub(crate) fn keep_for_test(server: Server) {
+    state().servers.push(server);
+}
+
+#[cfg(test)]
+pub(crate) fn forget_for_test(agent_id: &str) {
+    state().servers.retain(|s| s.agent_id != agent_id);
+}
+
 // ============================================================================
 // The rules, pure
 // ============================================================================

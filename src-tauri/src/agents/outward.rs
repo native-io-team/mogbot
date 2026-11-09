@@ -396,7 +396,43 @@ fn assigned_vars(command: &str) -> std::collections::HashMap<String, String> {
             }
         }
     }
+    // Only a name the command sets once and otherwise only reads: set again,
+    // appended to (`F+=`), or written by `read`, `printf -v` or a `for` loop,
+    // its words at the send aren't the ones assigned. Found in review
+    // (2026-11-08): the last plain assignment was shown, wherever it stood.
+    vars.retain(|name, _| bare_uses(command, name) == 1);
     vars
+}
+
+/// How often `name` appears in `command` as a word of its own, not as a
+/// `$name` / `${name}` expansion: its assignment, and anything else that
+/// could change it.
+fn bare_uses(command: &str, name: &str) -> usize {
+    let chars: Vec<char> = command.chars().collect();
+    let ident = |c: char| c.is_ascii_alphanumeric() || c == '_';
+    let mut count = 0;
+    let mut i = 0;
+    while i < chars.len() {
+        if !ident(chars[i]) {
+            i += 1;
+            continue;
+        }
+        let start = i;
+        while i < chars.len() && ident(chars[i]) {
+            i += 1;
+        }
+        let word: String = chars[start..i].iter().collect();
+        if word != name {
+            continue;
+        }
+        let before = start.checked_sub(1).map(|j| chars[j]);
+        let expanded =
+            before == Some('$') || (before == Some('{') && start >= 2 && chars[start - 2] == '$');
+        if !expanded {
+            count += 1;
+        }
+    }
+    count
 }
 
 /// `text` with `$NAME` / `${NAME}` replaced from `vars`; the names it

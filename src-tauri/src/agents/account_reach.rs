@@ -79,6 +79,11 @@ fn read_json(path: &Path) -> std::io::Result<Option<Value>> {
 /// read. A `target` that isn't JSON is left alone (an error). Nothing to
 /// change, nothing written.
 pub fn sync_servers(native: &Path, target: &Path) -> std::io::Result<Synced> {
+    // One sync at a time: agents failing over together each sync the same
+    // account before their turn, and a read-modify-write that overlapped
+    // another could write back what it had read before the other's change.
+    static SYNCING: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _one = SYNCING.lock().unwrap_or_else(|e| e.into_inner());
     let from: Map<String, Value> = read_json(native)?
         .and_then(|v| v.get("mcpServers")?.as_object().cloned())
         .unwrap_or_default();
@@ -131,12 +136,24 @@ pub fn sync_servers(native: &Path, target: &Path) -> std::io::Result<Synced> {
     Ok(done)
 }
 
+/// Written beside `path` under a name of its own, then renamed over it. A
+/// shared `.tmp` name let two writers truncate and rename each other's file:
+/// an account's `.claude.json` (its login) could be replaced by one still
+/// being written. Claude Code itself may also be writing beside it.
 fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     let mut tmp = path.as_os_str().to_owned();
-    tmp.push(".tmp");
+    tmp.push(format!(
+        ".{}.{}.tmp",
+        std::process::id(),
+        super::store::new_id()
+    ));
     let tmp = std::path::PathBuf::from(tmp);
-    super::store::write_private(&tmp, bytes)?;
-    std::fs::rename(&tmp, path)
+    let written =
+        super::store::write_private(&tmp, bytes).and_then(|()| std::fs::rename(&tmp, path));
+    if written.is_err() {
+        let _ = std::fs::remove_file(&tmp);
+    }
+    written
 }
 
 /// Before a turn on `account`: this Mac's user-scope servers on it too.

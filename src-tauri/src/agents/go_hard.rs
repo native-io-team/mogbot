@@ -334,8 +334,142 @@ fn repo_of(p: &Path) -> Option<PathBuf> {
 /// follows `$(` or a backtick.
 pub(super) fn commands(src: &str) -> Vec<Vec<String>> {
     let mut out = Vec::new();
-    lex_into(&without_heredoc_data(src), &mut out, 0, Text::Shell);
+    lex_into(
+        &without_heredoc_data(&ansi_c_quoted(src)),
+        &mut out,
+        0,
+        Text::Shell,
+    );
     out
+}
+
+/// `src` with each `$'…'` (bash's and zsh's quoting with escapes) written as
+/// the plain quoted word it makes, and `$"…"` as `"…"`. Found in review
+/// (2026-11-08): `git $'push'` lexed as `git $push` and ran without a card,
+/// and `echo $'a\'' > ~/.zshrc` hid its redirect inside a quote that never
+/// closed. Text already in quotes is copied as it is.
+fn ansi_c_quoted(src: &str) -> String {
+    if !src.contains("$'") && !src.contains("$\"") {
+        return src.to_string();
+    }
+    let chars: Vec<char> = src.chars().collect();
+    let mut out = String::with_capacity(src.len());
+    let mut i = 0;
+    while i < chars.len() {
+        match chars[i] {
+            '\\' if i + 1 < chars.len() => {
+                out.push(chars[i]);
+                out.push(chars[i + 1]);
+                i += 2;
+            }
+            '$' if chars.get(i + 1) == Some(&'"') => i += 1,
+            '$' if chars.get(i + 1) == Some(&'\'') => {
+                let (text, end) = ansi_c_text(&chars, i + 2);
+                if text.contains('\'') {
+                    out.push('"');
+                    for c in text.chars() {
+                        if matches!(c, '"' | '\\' | '$' | '`') {
+                            out.push('\\');
+                        }
+                        out.push(c);
+                    }
+                    out.push('"');
+                } else {
+                    out.push('\'');
+                    out.push_str(&text);
+                    out.push('\'');
+                }
+                i = end + 1;
+            }
+            '\'' | '"' => {
+                let end = quote_end(&chars, i).min(chars.len() - 1);
+                out.extend(&chars[i..=end]);
+                i = end + 1;
+            }
+            c => {
+                out.push(c);
+                i += 1;
+            }
+        }
+    }
+    out
+}
+
+/// The text of a `$'…'` whose first character is at `start`, and the index
+/// of its closing quote (or the last index).
+fn ansi_c_text(chars: &[char], start: usize) -> (String, usize) {
+    let mut out = String::new();
+    let mut j = start;
+    let radix = |chars: &[char], from: usize, max: usize, radix: u32| {
+        let digits: String = chars[from..]
+            .iter()
+            .take(max)
+            .take_while(|c| c.is_digit(radix))
+            .collect();
+        let n = digits.chars().count();
+        (
+            u32::from_str_radix(&digits, radix)
+                .ok()
+                .and_then(char::from_u32),
+            n,
+        )
+    };
+    while j < chars.len() {
+        match chars[j] {
+            '\'' => return (out, j),
+            '\\' if j + 1 < chars.len() => {
+                let e = chars[j + 1];
+                j += 2;
+                let simple = match e {
+                    'a' => Some('\x07'),
+                    'b' => Some('\x08'),
+                    'e' | 'E' => Some('\x1b'),
+                    'f' => Some('\x0c'),
+                    'n' => Some('\n'),
+                    'r' => Some('\r'),
+                    't' => Some('\t'),
+                    'v' => Some('\x0b'),
+                    '\\' | '\'' | '"' | '?' => Some(e),
+                    _ => None,
+                };
+                if let Some(c) = simple {
+                    out.push(c);
+                    continue;
+                }
+                let (c, used) = match e {
+                    'x' => radix(chars, j, 2, 16),
+                    'u' => radix(chars, j, 4, 16),
+                    'U' => radix(chars, j, 8, 16),
+                    '0'..='7' => {
+                        let (c, n) = radix(chars, j - 1, 3, 8);
+                        (c, n.saturating_sub(1))
+                    }
+                    'c' => (
+                        chars
+                            .get(j)
+                            .map(|c| char::from((c.to_ascii_uppercase() as u8) ^ 0x40)),
+                        1,
+                    ),
+                    _ => (None, 0),
+                };
+                match c {
+                    Some(c) if used > 0 || e.is_ascii_digit() => {
+                        out.push(c);
+                        j += used;
+                    }
+                    _ => {
+                        out.push('\\');
+                        out.push(e);
+                    }
+                }
+            }
+            c => {
+                out.push(c);
+                j += 1;
+            }
+        }
+    }
+    (out, chars.len().saturating_sub(1))
 }
 
 /// How a piece of text is read by [`lex_into`].
@@ -650,6 +784,8 @@ fn pattern_text(words: &[String], inner: &str) -> bool {
 }
 
 fn lex_into(src: &str, out: &mut Vec<Vec<String>>, depth: u8, text: Text) {
+    // Text a shell runs may spell words with `$'…'` too (`bash -c "git \$'push'"`).
+    let src = &ansi_c_quoted(src);
     let chars: Vec<char> = src.chars().collect();
     let start = out.len();
     let mut words: Vec<String> = Vec::new();
@@ -742,10 +878,9 @@ fn lex_into(src: &str, out: &mut Vec<Vec<String>>, depth: u8, text: Text) {
                 }
                 flush_word(&mut word, &mut started, &mut words);
                 let mut op = String::from(c);
-                while chars
-                    .get(i + 1)
-                    .is_some_and(|&n| n == '>' || n == '&' || n == '<')
-                {
+                while chars.get(i + 1).is_some_and(|&n| {
+                    n == '>' || n == '&' || n == '<' || (n == '|' && op.ends_with('>'))
+                }) {
                     i += 1;
                     op.push(chars[i]);
                 }
@@ -764,28 +899,7 @@ fn lex_into(src: &str, out: &mut Vec<Vec<String>>, depth: u8, text: Text) {
     }
     // A line that hands text to a shell (`echo "…" | sh`, `eval "$X"`,
     // `ssh box "$CMD"`): its data may be parsed as commands after all.
-    let to_shell = text == Text::Shell
-        && out[start..].iter().any(|w| {
-            // The program and the wrappers in front of it (`eval`, `env`…).
-            w.iter()
-                .map(String::as_str)
-                .skip_while(|w| is_assignment(w) || KEYWORDS.contains(w))
-                .take_while(|w| {
-                    WRAPPERS.contains(&base(w)) || w.starts_with('-') || is_assignment(w)
-                })
-                .chain(
-                    w.iter()
-                        .map(String::as_str)
-                        .skip_while(|w| {
-                            is_assignment(w)
-                                || KEYWORDS.contains(w)
-                                || WRAPPERS.contains(&base(w))
-                                || w.starts_with('-')
-                        })
-                        .take(1),
-                )
-                .any(|p| RUNS_ITS_INPUT.contains(&base(p)) || p == ".")
-        });
+    let to_shell = text == Text::Shell && out[start..].iter().any(|w| hands_to_shell(w));
     let data_text = if to_shell { Text::Shell } else { Text::Data };
     if depth < 3 {
         for n in nested {
@@ -799,6 +913,41 @@ fn lex_into(src: &str, out: &mut Vec<Vec<String>>, depth: u8, text: Text) {
             }
         }
     }
+}
+
+/// Interpreters whose inline code (`-c`, `-e`) can run a variable's text.
+const INLINE_CODE: &[&str] = &[
+    "python", "python3", "python2", "node", "perl", "ruby", "deno", "bun", "php",
+];
+
+/// Whether a command hands text to a shell, so a variable's value or
+/// `echo`'s output may be parsed as commands (and `>` in it redirects).
+/// Found in review (2026-11-08): only the program and plain wrappers were
+/// looked at, so `X='… >> ~/.zshrc'; timeout 5 sh -c "$X"`, `nice -n 5 sh`,
+/// `find -exec sh -c "$X"`, `$SHELL -c "$X"` and `python3 -c
+/// "os.system('$X')"` wrote a shell profile without a card. A shell named
+/// anywhere in the command counts.
+fn hands_to_shell(words: &[String]) -> bool {
+    if words.iter().any(|w| RUNS_ITS_INPUT.contains(&base(w))) {
+        return true;
+    }
+    let words: Vec<&str> = words.iter().map(String::as_str).collect();
+    let Some((&prog, args)) = unwrapped(&words).split_first() else {
+        return false;
+    };
+    let prog = base(prog);
+    let interpreter = prog.trim_end_matches(|c: char| c.is_ascii_digit() || c == '.');
+    prog == "."
+        || matches!(prog, "$SHELL" | "${SHELL}")
+        || (INLINE_CODE.contains(&interpreter) || INLINE_CODE.contains(&prog))
+            && args.iter().any(|a| {
+                // Not `python3 - <<EOF`: a here-document script is checked
+                // for the processes it starts (`without_heredoc_data`).
+                matches!(*a, "-p" | "--eval" | "--print" | "--command")
+                    || (a.starts_with('-')
+                        && !a.starts_with("--")
+                        && (a.contains('e') || a.contains('c')))
+            })
 }
 
 /* ------------------------------------------------------------ commands */
@@ -868,13 +1017,41 @@ fn command_asks(command: &str, ctx: &Ctx, outside: bool) -> bool {
     let mut here = ctx.clone();
     let mut known = false;
     for words in commands(command) {
-        if words.first().map(String::as_str) == Some("cd") {
-            match words.get(1).and_then(|d| resolve(d, &here)) {
-                Some(dir) => here.cwd = dir,
-                None if words.len() == 1 => here.cwd = ctx.home.clone(),
-                None => {}
+        // `pushd` moves like `cd`. Found in review (2026-11-08): `pushd ~ &&
+        // rm -rf Documents` resolved against the turn's folder and ran, and
+        // so did a `cd` to a folder that couldn't be read (`cd "$D"`, `cd -P
+        // ~`, `popd`): the shell is then somewhere unknown, and `rm -r` of a
+        // relative path there asks.
+        if matches!(
+            words.first().map(String::as_str),
+            Some("cd" | "pushd" | "popd" | "chdir")
+        ) {
+            let target = words
+                .iter()
+                .skip(1)
+                .map(String::as_str)
+                .find(|w| !w.starts_with('-') || *w == "-")
+                .filter(|_| words[0] != "popd");
+            match target {
+                None if words[0] == "cd" || words[0] == "chdir" => {
+                    here.cwd = ctx.home.clone();
+                    known = true;
+                }
+                Some(d) if d != "-" && !d.starts_with('+') => match resolve(d, &here) {
+                    Some(dir) => {
+                        here.cwd = dir;
+                        known = is_abs(d) || known;
+                    }
+                    None => {
+                        here.cwd = PathBuf::new();
+                        known = false;
+                    }
+                },
+                _ => {
+                    here.cwd = PathBuf::new();
+                    known = false;
+                }
             }
-            known = words.get(1).is_none_or(|d| is_abs(d) || known);
             continue;
         }
         if simple_asks(&words, &here, outside, known) {
@@ -917,7 +1094,33 @@ const WRAPPERS: &[&str] = &[
     "builtin",
     "caffeinate",
     "stdbuf",
+    "arch",
+    "unbuffer",
+    "chronic",
+    "watch",
+    "sandbox-exec",
 ];
+
+/// Wrappers that take a file before the command they run.
+const FILE_WRAPPERS: &[&str] = &["lockf", "flock", "script"];
+
+/// A wrapper's options that take a value as the next word.
+fn wrapper_values(wrapper: &str) -> &'static [&'static str] {
+    match wrapper {
+        "nice" => &["-n"],
+        "env" => &["-u", "-C", "-P", "-S", "--unset", "--chdir"],
+        "caffeinate" => &["-t", "-w"],
+        "exec" => &["-a"],
+        "stdbuf" => &["-i", "-o", "-e"],
+        "arch" => &["-arch"],
+        "watch" => &["-n", "--interval", "-d"],
+        "sandbox-exec" => &["-f", "-n", "-p", "-D"],
+        "lockf" => &["-t"],
+        "flock" => &["-w", "-E", "--timeout"],
+        "script" => &["-t", "-T"],
+        _ => &[],
+    }
+}
 
 pub(super) fn base(w: &str) -> &str {
     w.rsplit('/').next().unwrap_or(w)
@@ -948,7 +1151,7 @@ fn simple_asks(words: &[String], ctx: &Ctx, outside: bool, known: bool) -> bool 
     let mut targets = Vec::new();
     // An operator is only `<`, `>` and `&` ([`lex_into`] splits it from its
     // target); a quoted word that starts with one (`'<b>x</b>'`) is text.
-    let op = |w: &str| w.chars().all(|c| matches!(c, '<' | '>' | '&'));
+    let op = |w: &str| w.chars().all(|c| matches!(c, '<' | '>' | '&' | '|'));
     let mut i = 0;
     while i < words.len() {
         if words[i].starts_with('>') && op(words[i]) {
@@ -1233,20 +1436,42 @@ pub fn moves_data_off_mac(command: &str, ctx: &Ctx) -> bool {
 pub(super) fn unwrapped<'a, 'b>(mut rest: &'a [&'b str]) -> &'a [&'b str] {
     loop {
         match rest.first() {
-            Some(w) if is_assignment(w) || KEYWORDS.contains(w) => rest = &rest[1..],
-            Some(w) if WRAPPERS.contains(&base(w)) => {
+            // `time -p cmd`.
+            Some(&"time") => {
                 rest = &rest[1..];
-                while rest
-                    .first()
-                    .is_some_and(|w| w.starts_with('-') || is_assignment(w))
-                {
+                while rest.first().is_some_and(|w| w.starts_with('-')) {
                     rest = &rest[1..];
+                }
+            }
+            Some(w) if is_assignment(w) || KEYWORDS.contains(w) => rest = &rest[1..],
+            Some(w) if WRAPPERS.contains(&base(w)) || FILE_WRAPPERS.contains(&base(w)) => {
+                // Options, and the value of those that take one (`nice -n 5`,
+                // `env -u NAME`): found in review (2026-11-08), the value was
+                // read as the program, so `nice -n 5 git push` ran.
+                let valued = wrapper_values(base(w));
+                let file = FILE_WRAPPERS.contains(&base(w));
+                rest = &rest[1..];
+                while let Some(&o) = rest.first() {
+                    if o == "--" {
+                        rest = &rest[1..];
+                        break;
+                    }
+                    if !(o.starts_with('-') || is_assignment(o)) {
+                        break;
+                    }
+                    let takes = valued.contains(&o);
+                    rest = rest.get(if takes { 2 } else { 1 }..).unwrap_or(&[]);
+                }
+                // `lockf FILE cmd`, `script -q FILE cmd`.
+                if file {
+                    rest = rest.get(1..).unwrap_or(&[]);
                 }
             }
             Some(w) if base(w) == "timeout" || base(w) == "gtimeout" => {
                 rest = &rest[1..];
-                while rest.first().is_some_and(|w| w.starts_with('-')) {
-                    rest = &rest[1..];
+                while let Some(&o) = rest.first().filter(|w| w.starts_with('-')) {
+                    let takes = matches!(o, "-k" | "-s" | "--kill-after" | "--signal");
+                    rest = rest.get(if takes { 2 } else { 1 }..).unwrap_or(&[]);
                 }
                 rest = rest.get(1..).unwrap_or(&[]);
             }
@@ -1598,6 +1823,15 @@ fn program(prog: &str, args: &[&str], ctx: &Ctx, outside: bool, known: bool) -> 
                 args,
                 &["publish", "unpublish", "deprecate", "dist-tag", "owner"],
             ) || (outside && installs_package(prog, args))
+                || runner_runs(prog, args).is_some_and(|(p, a)| {
+                    program(
+                        base(p.split('@').next().unwrap_or(p)),
+                        &a,
+                        ctx,
+                        outside,
+                        known,
+                    )
+                })
         }
         "npx" | "pnpx" | "bunx" | "uvx" => {
             let pos = positional(args);
@@ -1722,6 +1956,84 @@ fn program(prog: &str, args: &[&str], ctx: &Ctx, outside: bool, known: bool) -> 
         "bash" | "sh" | "zsh" | "eval" | "ssh" => false, // their quoted text is split above
         _ => false,
     }
+}
+
+/// The command a package manager runs for its package (`pnpm dlx vercel
+/// --prod`, `npm exec -- vercel`, `yarn vercel`): judged like `npx`. Found
+/// in review (2026-11-08): only `npx` was, so `pnpm dlx vercel --prod`
+/// deployed to production without a card.
+fn runner_runs<'a>(prog: &str, args: &[&'a str]) -> Option<(&'a str, Vec<&'a str>)> {
+    // What `yarn` and `pnpm` answer themselves; another first word runs a
+    // script or the package's command of that name.
+    const OWN: &[&str] = &[
+        "install",
+        "i",
+        "add",
+        "remove",
+        "rm",
+        "uninstall",
+        "up",
+        "update",
+        "upgrade",
+        "run",
+        "test",
+        "t",
+        "init",
+        "create",
+        "info",
+        "why",
+        "list",
+        "ls",
+        "outdated",
+        "audit",
+        "link",
+        "unlink",
+        "pack",
+        "config",
+        "cache",
+        "store",
+        "import",
+        "rebuild",
+        "prune",
+        "dedupe",
+        "workspace",
+        "workspaces",
+        "set",
+        "plugin",
+        "help",
+        "version",
+        "node",
+        "env",
+        "patch",
+        "patch-commit",
+        "fetch",
+        "licenses",
+        "start",
+        "build",
+        "dev",
+        "ci",
+        "setup",
+        "root",
+        "bin",
+    ];
+    let at = args.iter().position(|a| !a.starts_with('-'))?;
+    let sub = args[at];
+    let runs = matches!(sub, "exec" | "dlx" | "x")
+        && (prog != "bun" || sub == "x")
+        && (prog != "npm" || sub == "exec" || sub == "x");
+    let rest: Vec<&str> = if runs {
+        args[at + 1..]
+            .iter()
+            .copied()
+            .skip_while(|a| a.starts_with('-'))
+            .collect()
+    } else if matches!(prog, "yarn" | "pnpm") && !OWN.contains(&sub) {
+        args[at..].to_vec()
+    } else {
+        return None;
+    };
+    let (p, a) = rest.split_first()?;
+    Some((p, a.to_vec()))
 }
 
 fn installs_package(_prog: &str, args: &[&str]) -> bool {
@@ -2933,3 +3245,7 @@ mod hardening_tests;
 #[cfg(test)]
 #[path = "full_send_tests.rs"]
 mod full_send_tests;
+
+#[cfg(test)]
+#[path = "go_hard_review_tests.rs"]
+mod review_tests;

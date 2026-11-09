@@ -27,7 +27,8 @@
 //! sits beside it (`package.json` for `node_modules`, `Cargo.toml` for
 //! `target`…); it is a real folder, not a symlink, and holds no `.git`; it is
 //! inside the agent's home; it was found without entering a `.git` folder
-//! or following a link; and, inside a git working copy, git ignores it and
+//! or following a link; no kept dev server or preview pane runs from its
+//! folder (`dev_servers::in_use`); and, inside a git working copy, git ignores it and
 //! tracks nothing in it, so removing it changes nothing git would call a
 //! change. Reports, `.git` folders and unpushed commits are never touched.
 
@@ -541,6 +542,13 @@ pub async fn prune(home: &Path, older_than: Duration, busy: impl Fn() -> bool) -
             || !dir.starts_with(&home)
             || dir == home
         {
+            continue;
+        }
+        // A server the turn left running for the user (or the preview pane)
+        // serves from this folder: its dependencies are in use, whatever
+        // their folder's date says.
+        if dir.parent().is_some_and(super::dev_servers::in_use) {
+            freed.kept += 1;
             continue;
         }
         if !safe_in_git(&dir, &home).await {

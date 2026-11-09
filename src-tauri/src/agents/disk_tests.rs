@@ -320,3 +320,32 @@ fn sizes_read_like_finder() {
     assert_eq!(gb(3_400_000_000), "3.4 GB");
     assert_eq!(gb(20_000_000), "20 MB");
 }
+
+/// A dev server the turn left running for the user to look at serves from
+/// its folder's `node_modules`, however old that folder's date. Found in
+/// review (2026-11-08): the prune at the next idle removed it from under
+/// the kept server.
+#[test]
+fn prune_leaves_a_folder_a_kept_dev_server_runs_from() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path().canonicalize().unwrap();
+    let site = home.join("boards/site");
+    npm_package(&site);
+    npm_package(&home.join("old/other"));
+    let agent = "disk-review-fictional";
+    super::super::dev_servers::keep_for_test(super::super::dev_servers::Server {
+        agent_id: agent.into(),
+        root: 1,
+        command: "node next dev".into(),
+        port: 3999,
+        cwd: site.to_string_lossy().into(),
+        last_watched: 0,
+    });
+    let freed = rt().block_on(prune(&home, Duration::ZERO, || false));
+    super::super::dev_servers::forget_for_test(agent);
+    assert!(
+        site.join("node_modules/left-kit/index.js").is_file(),
+        "{freed:?}"
+    );
+    assert!(!home.join("old/other/node_modules").exists(), "{freed:?}");
+}

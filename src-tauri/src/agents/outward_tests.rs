@@ -240,3 +240,35 @@ fn a_variable_it_cannot_fill_is_said_not_shown() {
     );
     assert!(!t.complete());
 }
+
+/// A variable set more than once, appended to, or changed some other way
+/// holds words the app can't know from reading the line: the words shown
+/// (and a plan's exact text) must not be its last plain assignment. Found
+/// in review (2026-11-08): the last assignment was shown, so a plan for
+/// "Shipped the Kite fix" covered a comment that said something else.
+#[test]
+fn a_variable_changed_after_it_is_set_is_not_read() {
+    for command in [
+        "F=\"Something else\"\ngh pr comment 4 --body \"$F\"\nF=\"Shipped the Kite fix\"",
+        "F=\"Shipped the Kite fix\"\nF+=\" and something else\"\ngh pr comment 4 --body \"$F\"",
+        "F=\"Shipped the Kite fix\"\nF=$(cat /tmp/other.txt)\ngh pr comment 4 --body \"$F\"",
+        "F=\"Shipped the Kite fix\"\nread -r F < /tmp/other.txt\ngh pr comment 4 --body \"$F\"",
+        "F=\"Shipped the Kite fix\"\nprintf -v F '%s' other\ngh pr comment 4 --body \"$F\"",
+        "F=\"Shipped the Kite fix\"\nfor F in other; do gh pr comment 4 --body \"$F\"; done",
+    ] {
+        let t = texts("Bash", &bash(command), None, &[]);
+        assert!(
+            !approved_covers("Shipped the Kite fix", &t),
+            "covered: {command:?} → {t:?}"
+        );
+        assert!(!t.complete(), "{command:?} → {t:?}");
+    }
+    // Set once and only read: still shown.
+    let t = texts(
+        "Bash",
+        &bash("F=\"Shipped the Kite fix\"\ncd ~/Desktop/Projects/kite\ngh pr comment 4 --body \"${F}\""),
+        None,
+        &[],
+    );
+    assert!(approved_covers("Shipped the Kite fix", &t), "{t:?}");
+}
