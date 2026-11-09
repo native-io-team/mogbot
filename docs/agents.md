@@ -3478,7 +3478,10 @@ what comes after it, and that earlier steps' output is just above.
   survives a restart: the card is in the log and `waiting` is on the routine.
   Answering checks the card is still the one `waiting` names and that the
   next step's words are still what the card showed; an edited step is not
-  run blind.
+  run blind. The answer takes the waiting run under the registry lock
+  (`routine_steps::settle`), and so does the next run closing it
+  (`close_waiting`): exactly one of them gets it, so a Go ahead on a card the
+  next run already closed starts nothing.
 - **Go ahead is exactly as wide as the card.** It is kept as the user's yes
   to what the card showed (`plan_grant::note_chat_yes`, with the card's
   summary and detail), and the step's wake is marked as one the user OK'd

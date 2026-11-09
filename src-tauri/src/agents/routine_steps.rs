@@ -378,17 +378,10 @@ pub fn after_step(
 }
 
 /// The routine fires again with a card still open: that card closes, and
-/// its run is recorded as never answered.
+/// its run is recorded as never answered. Only if it is still waiting: a Go
+/// ahead that took the run first ([`settle`]) keeps it.
 pub fn superseded(app: &AppHandle, agent_id: &str, check_in_id: &str) {
-    let Ok(agent) = store::get(agent_id) else {
-        return;
-    };
-    let Some(w) = agent
-        .check_ins
-        .iter()
-        .find(|c| c.id == check_in_id)
-        .and_then(|c| c.waiting.clone())
-    else {
+    let Some(w) = close_waiting(agent_id, check_in_id) else {
         return;
     };
     if let Ok(Some(m)) = store::set_aside(
@@ -399,13 +392,56 @@ pub fn superseded(app: &AppHandle, agent_id: &str, check_in_id: &str) {
         use tauri::Emitter;
         let _ = app.emit(runner::EVENT_MESSAGE, &m);
     }
-    let _ = store::update(agent_id, |a| {
-        if let Some(c) = a.check_ins.iter_mut().find(|c| c.id == check_in_id) {
-            c.waiting = None;
-            end_row(c, w.run_at, w.step - 1, "Not answered before its next run.");
-        }
-    });
     store::refresh_pending(agent_id);
+}
+
+/// Takes the run waiting on `check_in_id` for its next run, under the
+/// registry lock: its row ends as never answered and nothing is waiting any
+/// more. `None` when nothing was (a Go ahead took it first).
+pub fn close_waiting(agent_id: &str, check_in_id: &str) -> Option<Waiting> {
+    let mut taken = None;
+    store::update(agent_id, |a| {
+        if let Some(c) = a.check_ins.iter_mut().find(|c| c.id == check_in_id) {
+            if let Some(w) = c.waiting.take() {
+                end_row(c, w.run_at, w.step - 1, "Not answered before its next run.");
+                taken = Some(w);
+            }
+        }
+    })
+    .ok()?;
+    taken
+}
+
+/// Answers a gate card against the routine as it is now, and takes the
+/// waiting run in the same step, under the registry lock: of a Go ahead and
+/// the routine's next run ([`close_waiting`]), exactly one gets it, so a
+/// stale card never starts a step alongside the new run. Stop here ends the
+/// row too.
+pub fn settle(agent_id: &str, a: &Approval, allow: bool) -> Result<Answer, CommandError> {
+    let mut decided = Err(CommandError::expected("That routine has moved on."));
+    store::update(agent_id, |agent| {
+        decided = decide(agent, a, allow);
+        let Ok(answer) = &decided else {
+            return;
+        };
+        let id = a
+            .gate
+            .as_ref()
+            .map(|g| g.check_in_id.as_str())
+            .unwrap_or("");
+        if let Some(c) = agent.check_ins.iter_mut().find(|c| c.id == id) {
+            c.waiting = None;
+            if let Answer::Stop(_, run_at, done) = answer {
+                end_row(
+                    c,
+                    *run_at,
+                    *done,
+                    &format!("You stopped it after step {done}."),
+                );
+            }
+        }
+    })?;
+    decided
 }
 
 /// Its row ends at step `done`, declined with `why`.
@@ -472,38 +508,28 @@ pub fn answer_card(
     allow: bool,
 ) -> Result<(), CommandError> {
     use tauri::Emitter;
-    let agent = store::get(agent_id)?;
-    let decision = decide(&agent, a, allow)?;
     let (status, word) = if allow {
         (ApprovalStatus::Allowed, "Going ahead")
     } else {
         (ApprovalStatus::Denied, "Stopped here")
     };
-    let updated = store::answer_prompt(agent_id, &a.request_id, status, word)?
-        .ok_or_else(|| CommandError::expected("That card was already answered."))?;
-    let _ = app.emit(runner::EVENT_MESSAGE, &updated);
+    // Takes the waiting run first: a refused answer leaves the card open,
+    // and one the next run already closed starts nothing.
+    let decision = settle(agent_id, a, allow)?;
+    if let Some(updated) = store::answer_prompt(agent_id, &a.request_id, status, word)? {
+        let _ = app.emit(runner::EVENT_MESSAGE, &updated);
+    }
     match decision {
         Answer::Go(c, n, run_at) => {
             super::plan_grant::note_chat_yes(agent_id, &approved_text(a), store::now_ms());
             run_step(app, agent_id, &c, n, run_at, true)?;
         }
-        Answer::Stop(id, run_at, done) => {
+        Answer::Stop(_, _, done) => {
             let name = a
                 .gate
                 .as_ref()
                 .map(|g| g.routine.clone())
                 .unwrap_or_default();
-            store::update(agent_id, |x| {
-                if let Some(c) = x.check_ins.iter_mut().find(|c| c.id == id) {
-                    c.waiting = None;
-                    end_row(
-                        c,
-                        run_at,
-                        done,
-                        &format!("You stopped it after step {done}."),
-                    );
-                }
-            })?;
             let line = runner::new_message(
                 agent_id,
                 MessageKind::Note,
