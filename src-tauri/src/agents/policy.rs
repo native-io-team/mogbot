@@ -286,11 +286,11 @@ impl Preset {
     /// One line for the presets picker.
     pub fn blurb(self) -> &'static str {
         match self {
-            Preset::Trusted => "Change projects directly, every app, your browser, and go hard.",
+            Preset::Trusted => "Change projects directly, every app, your browser, at Bold.",
             Preset::Balanced => {
-                "Its own copy of the project it works in, your apps and browser, good judgement."
+                "Its own copy of the project it works in, your apps and browser, at Steady."
             }
-            Preset::Locked => "Read projects only, no apps, no browser, check with you often.",
+            Preset::Locked => "Read projects only, no apps, no browser, at Careful.",
         }
     }
 

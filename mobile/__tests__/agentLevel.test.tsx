@@ -1,6 +1,6 @@
 /**
  * One agent's own independence level, on the phone: the agent sheet's row
- * ("Same as team (Go hard)" first, then the four levels, written with
+ * ("Same as team (Bold)" first, then the four levels, written with
  * `agents.setAgentIndependence`), the list row's tiny label only when it
  * differs from the team's, and Settings saying how many are set on their own.
  */
@@ -57,16 +57,16 @@ describe('one agent’s level on the phone', () => {
       <AgentLevelRow agent={{ id: 'a3', name: 'Plain' }} enabled onError={() => {}} />
     );
     expect(screen.getByText('How much it does on its own')).toBeTruthy();
-    expect(screen.getByText('Same as team (Go hard)')).toBeTruthy();
+    expect(screen.getByText('Same as team (Bold)')).toBeTruthy();
     fireEvent.press(screen.getByText('How much it does on its own'));
     const [title, choices] = mockChoose.mock.calls[0] as [string, { label: string; run: () => void }[]];
     expect(title).toBe('How much it does on its own');
     expect(choices.map((c) => c.label)).toEqual([
-      'Same as team (Go hard)',
-      'Check with me often',
-      'Use good judgement',
-      'Go hard — get it done',
-      'Full send — let it rip',
+      'Same as team (Bold)',
+      'Careful',
+      'Steady',
+      'Bold',
+      'Unleashed',
     ]);
     choices[4].run();
     expect(mockCall).toHaveBeenCalledWith('agents.setAgentIndependence', {
@@ -87,7 +87,7 @@ describe('one agent’s level on the phone', () => {
         onError={() => {}}
       />
     );
-    expect(screen.getByText('Check with me often')).toBeTruthy();
+    expect(screen.getByText('Careful')).toBeTruthy();
     fireEvent.press(screen.getByText('How much it does on its own'));
     const [, choices] = mockChoose.mock.calls[0] as [string, { run: () => void }[]];
     choices[0].run();
@@ -105,9 +105,9 @@ describe('one agent’s level on the phone', () => {
 
   it('the list row’s label shows only when it differs from the team', async () => {
     await render(<Label agent={{ independence: 'full_send' }} />);
-    expect(screen.getByText('Full send')).toBeTruthy();
+    expect(screen.getByText('Unleashed')).toBeTruthy();
     await render(<Label agent={{ independence: 'often' }} />);
-    expect(screen.getByText('Checks often')).toBeTruthy();
+    expect(screen.getByText('Careful')).toBeTruthy();
     await render(<Label agent={{ independence: 'go_hard' }} />);
     expect(screen.getByText('none')).toBeTruthy();
   });
@@ -115,6 +115,45 @@ describe('one agent’s level on the phone', () => {
   it('Settings says how many agents are set on their own', async () => {
     await render(<IndependenceSetting />);
     expect(screen.getByText(/Agents set on their own: 2\./)).toBeTruthy();
+  });
+
+  it('Settings is a four-stop slider VoiceOver can adjust, one stop at a time', async () => {
+    await render(<IndependenceSetting />);
+    expect(screen.getByText('HOW MUCH IT DOES ON ITS OWN')).toBeTruthy();
+    const slider = screen.getByTestId('independence-slider');
+    expect(slider.props.accessibilityRole).toBe('adjustable');
+    expect(slider.props.accessibilityLabel).toBe('How much it does on its own');
+    expect(slider.props.accessibilityValue).toEqual({
+      min: 0,
+      max: 3,
+      now: 2,
+      text: 'Bold. Does local work on this Mac; asks before anything leaves it.',
+    });
+    expect(screen.getByText('Does local work on this Mac; asks before anything leaves it.')).toBeTruthy();
+    expect(screen.getByText(/^Always asks before spending money, using your passwords, or deleting for good\./)).toBeTruthy();
+    await fireEvent(slider, 'accessibilityAction', { nativeEvent: { actionName: 'increment' } });
+    expect(mockCall).toHaveBeenCalledWith('agents.setIndependence', { level: 'full_send' });
+  });
+
+  it('a stop named under the track is a tap target', async () => {
+    await render(<IndependenceSetting />);
+    await fireEvent(screen.getByTestId('independence-slider'), 'layout', {
+      nativeEvent: { layout: { width: 320, height: 44, x: 0, y: 0 } },
+    });
+    // Hidden from VoiceOver (the slider says it all), there for a finger.
+    await fireEvent.press(
+      screen.getByTestId('independence-stop-often', { includeHiddenElements: true })
+    );
+    expect(mockCall).toHaveBeenCalledWith('agents.setIndependence', { level: 'often' });
+  });
+
+  it('a Mac that doesn’t serve the write shows the slider, not offered', async () => {
+    mockState.welcome.methods = ['agents.setAgentIndependence'];
+    await render(<IndependenceSetting />);
+    const slider = screen.getByTestId('independence-slider');
+    expect(slider.props.accessibilityState).toEqual({ disabled: true });
+    await fireEvent(slider, 'accessibilityAction', { nativeEvent: { actionName: 'decrement' } });
+    expect(mockCall).not.toHaveBeenCalled();
   });
 
   it('reads the Mac’s real overview: its agent on its own level', () => {

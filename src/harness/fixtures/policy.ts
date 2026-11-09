@@ -28,7 +28,7 @@ export const BALANCED_LINES: PolicyLine[] = [
   line('folders', 'Folders on this Mac', 'None beyond its own and its projects'),
   line('apps', 'Apps', 'Every app you’ve connected'),
   line('browser', 'Your browser', 'Yes'),
-  line('independence', 'Independence', 'Use good judgement', 'prompt'),
+  line('independence', 'Independence', 'Steady', 'prompt'),
   line('admin', 'Admin', 'No'),
   line('outward_text', 'Sent under your name', 'As its independence allows'),
   line('rules', 'Rules', 'None', 'prompt'),
@@ -57,17 +57,17 @@ export const PRESETS: TeamPolicyView['presets'] = [
   {
     id: 'trusted',
     label: 'I trust my agents',
-    blurb: 'Change projects directly, every app, your browser, and go hard.',
+    blurb: 'Change projects directly, every app, your browser, at Bold.',
   },
   {
     id: 'balanced',
     label: 'Balanced',
-    blurb: 'Its own copy of the project it works in, your apps and browser, good judgement.',
+    blurb: 'Its own copy of the project it works in, your apps and browser, at Steady.',
   },
   {
     id: 'locked',
     label: 'Locked down',
-    blurb: 'Read projects only, no apps, no browser, check with you often.',
+    blurb: 'Read projects only, no apps, no browser, at Careful.',
   },
 ];
 

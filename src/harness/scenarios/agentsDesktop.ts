@@ -294,12 +294,12 @@ export const agentsDesktopScenarios: Scenario[] = [
   },
   {
     id: 'settings-agents-independence',
-    title: 'Settings — how independent agents are, set to Go hard',
+    title: 'Settings — how independent agents are, set to Bold',
     looksRightWhen:
-      'Opened from ⌘K “How independent your agents are…”, scrolled to Independence: the question “How much should your agents do on their own?”, then three choices with one line each — Check with me often, Use good judgement, Go hard — get it done (selected: a stronger neutral border and a faint tint, never the accent) — and under them “You’ll always be asked before anything that spends money, sends as you, or deletes.”',
+      'Opened from ⌘K “How independent your agents are…”, scrolled to Independence: the slider “How much it does on its own”, “Asks a lot” left and “Just does it” right, four stops Careful, Steady, Bold, Unleashed with the neutral thumb on Bold (never the accent), Bold’s line “Does local work on this Mac; asks before anything leaves it.”, and under it “Always asks before spending money, using your passwords, or deleting for good.”',
     command: 'agents.independence',
     requires:
-      '.agent-independence-settings .independence-choice__option[data-level="go_hard"][aria-checked="true"]',
+      '.agent-independence-settings .independence-slider[data-level="go_hard"] [role="slider"]',
     clipSelector: 'section[aria-labelledby="agents-settings-independence"]',
     commands: {
       agents_overview: { ...overview(TEAM), independence: 'go_hard' },

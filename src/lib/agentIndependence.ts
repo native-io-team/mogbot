@@ -7,7 +7,7 @@
  * `independence.ts`.
  *
  * It changes what agents are told on their next turn and which cards are
- * answered for the user; at "Full send" only a short floor still asks.
+ * answered for the user; at "Unleashed" (`full_send`) only a short floor still asks.
  *
  * @module lib/agentIndependence
  */
@@ -22,15 +22,19 @@ export {
   DEFAULT_INDEPENDENCE,
   INDEPENDENCE_ALWAYS_ASKS,
   INDEPENDENCE_DETAIL,
+  INDEPENDENCE_ENDS,
   INDEPENDENCE_LABEL,
   INDEPENDENCE_LEVELS,
   INDEPENDENCE_QUESTION,
   INDEPENDENCE_ROW_LABEL,
   INDEPENDENCE_SHORT,
   INDEPENDENCE_STILL_ASKS,
+  INDEPENDENCE_TITLE,
   effectiveIndependence,
   independenceOf,
   independenceRowLabel,
+  independenceStep,
+  independenceValueText,
   ownIndependenceCount,
   ownIndependenceLine,
   sameAsTeamLabel,

@@ -133,7 +133,7 @@ describe('Agent controls', () => {
     });
     expect(mockSetEngine).not.toHaveBeenCalled();
     await act(async () => {
-      fireEvent.press(screen.getByText('Check with me often'));
+      fireEvent.press(screen.getByText('Careful'));
     });
     expect(mockCall).toHaveBeenCalledWith('agents.setAgentIndependence', {
       agentId: 'design',
@@ -145,11 +145,11 @@ describe('Agent controls', () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     await sheet();
     await act(async () => {
-      fireEvent.press(screen.getByText('Full send — let it rip'));
+      fireEvent.press(screen.getByText('Unleashed'));
     });
     expect(alert).toHaveBeenCalledWith(
       'Let Designer do more than the team?',
-      expect.stringMatching(/post, send and publish/),
+      expect.stringMatching(/Sends, posts and pushes too/),
       expect.any(Array)
     );
     expect(mockCall).not.toHaveBeenCalledWith('agents.setAgentIndependence', expect.anything());

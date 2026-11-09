@@ -1,89 +1,148 @@
-/* How much agents do on their own: IndependenceChoice.tsx (Settings → Agents
-   and onboarding). Semantic tokens only: both themes. The chosen option is
-   neutral (a stronger border), never the accent. */
+/* How much agents do on their own: IndependenceSlider.tsx (Settings → Agents
+   and onboarding). A calm four-stop slider: semantic tokens only, so both
+   themes work. Neutral throughout, never the accent: the level is an answer. */
 
-.independence-choice {
+.independence-slider {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-sm);
+  gap: var(--spacing-xs);
 }
 
-.independence-choice__options {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-3xs);
+.independence-slider__title {
+  font-size: var(--font-size-body-md);
+  color: var(--text-primary);
 }
 
-.independence-choice__option {
+.independence-slider__ends {
   display: flex;
-  flex-direction: column;
-  gap: var(--spacing-3xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border: var(--border-width-default) solid transparent;
+  justify-content: space-between;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.independence-slider__control {
+  padding: var(--independence-slider-pad) calc(var(--independence-slider-thumb) / 2);
   border-radius: var(--radius-sm);
-  background: none;
-  color: var(--text-secondary);
-  font: inherit;
-  text-align: left;
   cursor: pointer;
-  transition:
-    background var(--transition-interaction),
-    border-color var(--transition-interaction);
+  touch-action: none;
 }
 
-.independence-choice__option:hover:not(:disabled) {
-  background: var(--tint-subtle);
-}
-
-.independence-choice__option:focus-visible {
+.independence-slider__control:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
 }
 
-.independence-choice__option[aria-checked='true'] {
-  border-color: var(--border-strong);
-  background: var(--tint-subtle);
-  color: var(--text-primary);
-}
-
-.independence-choice__option:disabled {
+.independence-slider__control[aria-disabled='true'] {
   cursor: default;
   opacity: var(--button-disabled-opacity);
 }
 
-.independence-choice__label {
+.independence-slider__rail {
+  position: relative;
+  height: var(--independence-slider-thumb);
+}
+
+.independence-slider__track,
+.independence-slider__fill {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: var(--independence-slider-track);
+  border-radius: var(--radius-pill);
+  transform: translateY(-50%);
+}
+
+.independence-slider__track {
+  right: 0;
+  background: var(--surface-selected-strong);
+}
+
+.independence-slider__fill {
+  background: var(--text-secondary);
+  transition: width var(--transition-interaction);
+}
+
+.independence-slider__tick {
+  position: absolute;
+  top: 50%;
+  width: var(--independence-slider-tick);
+  height: var(--independence-slider-tick);
+  border-radius: var(--radius-pill);
+  background: var(--border-strong);
+  transform: translate(-50%, -50%);
+}
+
+.independence-slider__tick[data-reached] {
+  background: var(--text-secondary);
+}
+
+.independence-slider__thumb {
+  position: absolute;
+  top: 50%;
+  width: var(--independence-slider-thumb);
+  height: var(--independence-slider-thumb);
+  border: var(--border-width-default) solid var(--surface-panel);
+  border-radius: var(--radius-pill);
+  background: var(--surface-inverse);
+  box-shadow: var(--shadow-sm);
+  transform: translate(-50%, -50%);
+  transition: left var(--transition-interaction);
+}
+
+/* The stop names, each under its tick: the ends hug the edges. */
+.independence-slider__stops {
+  position: relative;
+  height: var(--independence-slider-stops);
+  margin: 0 calc(var(--independence-slider-thumb) / 2);
+}
+
+.independence-slider__stop {
+  position: absolute;
+  top: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: var(--font-size-body-sm);
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.independence-slider__stop:hover:not(:disabled) {
+  color: var(--text-secondary);
+}
+
+.independence-slider__stop[data-selected] {
+  color: var(--text-primary);
+  font-weight: var(--font-weight-label);
+}
+
+.independence-slider__stop:disabled {
+  cursor: default;
+}
+
+.independence-slider__detail {
+  margin: var(--spacing-xs) 0 0;
   font-size: var(--font-size-body-md);
   line-height: var(--line-height-help);
+  color: var(--text-primary);
 }
 
-.independence-choice__detail {
-  font-size: var(--font-size-body-sm);
-  color: var(--text-muted);
-}
-
-.independence-choice__always {
-  margin: var(--spacing-xs) 0 0;
+.independence-slider__always {
+  margin: 0;
   font-size: var(--font-size-body-sm);
   line-height: var(--line-height-help);
   color: var(--text-muted);
 }
 
-/* Onboarding: roomier, bordered choices. */
-.independence-choice--large .independence-choice__options {
-  gap: var(--spacing-xs);
+/* Onboarding: roomier, centred lines. */
+.independence-slider--large {
+  gap: var(--spacing-sm);
 }
 
-.independence-choice--large .independence-choice__option {
-  padding: var(--spacing-sm) var(--spacing-md);
-  border-color: var(--border-subtle);
-  border-radius: var(--radius-card);
-}
-
-.independence-choice--large .independence-choice__option[aria-checked='true'] {
-  border-color: var(--border-strong);
-}
-
-.independence-choice--large .independence-choice__always {
+.independence-slider--large .independence-slider__detail,
+.independence-slider--large .independence-slider__always {
   text-align: center;
 }
 
@@ -94,11 +153,6 @@
   /* No side inset: the group's content starts on its heading's edge, as
      Admins, Engines and Usage do. */
   padding: 0;
-}
-
-.agent-independence-settings__question {
-  font-size: var(--font-size-body-md);
-  color: var(--text-primary);
 }
 
 /* Under the team's choice: how many agents have a level of their own. */

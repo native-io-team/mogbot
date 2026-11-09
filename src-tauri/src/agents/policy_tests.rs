@@ -1015,7 +1015,7 @@ fn a_reset_card_groups_agents_changed_the_same_way() {
         s.contains("\nSales: "),
         "Sales had no browser already: its own line: {s}"
     );
-    assert!(s.contains("Independence: Check with me often (was Use good judgement)"));
+    assert!(s.contains("Independence: Careful (was Steady)"));
 }
 
 #[test]

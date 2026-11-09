@@ -78,7 +78,7 @@ fn summary(ledger: &Ledger) -> Option<String> {
             }
         })
         .collect();
-    Some(format!("Without asking (Full send): {}.", parts.join(", ")))
+    Some(format!("Without asking (Unleashed): {}.", parts.join(", ")))
 }
 
 /// What a browser control did, from its label: "posted", "scheduled"…
@@ -512,7 +512,7 @@ mod tests {
         assert_eq!(
             take_summary(id).as_deref(),
             Some(
-                "Without asking (Full send): posted on x.example 3 times, pushed branch fix/copy."
+                "Without asking (Unleashed): posted on x.example 3 times, pushed branch fix/copy."
             )
         );
         assert_eq!(take_summary(id), None, "taken once");

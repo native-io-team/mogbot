@@ -12,8 +12,8 @@
  * - **Your Chrome**: the user's own Chrome through the app's extension, for
  *   any engine (off by default), with its guided setup
  *   (`AgentsUserChromeSettings`, `user_chrome/`).
- * - **Independence**: how much agents do on their own (Check with me often,
- *   Use good judgement, Go hard), and what always asks at every level
+ * - **Independence**: how much agents do on their own, a four-stop slider
+ *   (Careful, Steady, Bold, Unleashed), and what always asks at every stop
  *   (`AgentIndependenceSettings`, `agents/independence.rs`).
  * - **What agents can do**: the team's defaults, the presets, and "Reset
  *   everyone to …" (`AgentTeamPolicySettings`, `agents/policy.rs`). Chat is

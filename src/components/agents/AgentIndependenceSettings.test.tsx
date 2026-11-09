@@ -29,25 +29,34 @@ describe('AgentIndependenceSettings', () => {
     store.value = { loaded: true, independence: null };
   });
 
-  it('a Mac that sends no level shows the default, and the line that always holds', () => {
+  const slider = () => screen.getByRole('slider', { name: 'How much it does on its own' });
+  const stop = (name: string) =>
+    document.querySelector(`.independence-slider__stop[data-level="${name}"]`) as HTMLElement;
+
+  it('a Mac that sends no level shows the default, its line, and the line that always holds', () => {
     render(<AgentIndependenceSettings />);
+    expect(slider()).toHaveAttribute('aria-valuenow', '1');
+    expect(slider()).toHaveAttribute(
+      'aria-valuetext',
+      'Steady. Reads and edits; asks before running changes or anything leaving this Mac.'
+    );
+    expect(screen.getByText('Asks a lot')).toBeInTheDocument();
+    expect(screen.getByText('Just does it')).toBeInTheDocument();
+    for (const name of ['Careful', 'Steady', 'Bold', 'Unleashed']) {
+      expect(screen.getByText(name)).toBeInTheDocument();
+    }
     expect(
-      screen.getByRole('radiogroup', { name: 'How much should your agents do on their own?' })
-    ).toBeInTheDocument();
-    expect(screen.getByRole('radio', { checked: true })).toHaveTextContent('Use good judgement');
-    expect(
-      screen.getByText(
-        'You’ll always be asked before anything that spends money, sends as you, or deletes.'
-      )
+      screen.getByText('Always asks before spending money, using your passwords, or deleting for good.')
     ).toBeInTheDocument();
   });
 
-  it('shows the saved level and saves a click', async () => {
+  it('shows the saved level and saves a click on a stop', async () => {
     store.value = { loaded: true, independence: 'often' };
     render(<AgentIndependenceSettings />);
-    expect(screen.getByRole('radio', { checked: true })).toHaveTextContent('Check with me often');
+    expect(slider()).toHaveAttribute('aria-valuenow', '0');
+    expect(screen.getByText('Reads and looks around; asks before bigger changes.')).toBeInTheDocument();
     await act(async () => {
-      fireEvent.click(screen.getByRole('radio', { name: /Go hard/ }));
+      fireEvent.click(stop('go_hard'));
       await Promise.resolve();
     });
     expect(setIndependence).toHaveBeenCalledWith('go_hard');
@@ -55,21 +64,40 @@ describe('AgentIndependenceSettings', () => {
     // Clicking the one already chosen writes nothing.
     setIndependence.mockClear();
     await act(async () => {
-      fireEvent.click(screen.getByRole('radio', { name: /Check with me often/ }));
+      fireEvent.click(stop('often'));
       await Promise.resolve();
     });
     expect(setIndependence).not.toHaveBeenCalled();
   });
 
-  it('offers Full send, with what still asks there', () => {
+  it('moves one stop per arrow key, holds at the ends, and jumps with Home and End', async () => {
+    store.value = { loaded: true, independence: 'judgement' };
+    render(<AgentIndependenceSettings />);
+    await act(async () => {
+      fireEvent.keyDown(slider(), { key: 'ArrowRight' });
+      await Promise.resolve();
+    });
+    expect(setIndependence).toHaveBeenLastCalledWith('go_hard');
+    await act(async () => {
+      fireEvent.keyDown(slider(), { key: 'End' });
+      await Promise.resolve();
+    });
+    expect(setIndependence).toHaveBeenLastCalledWith('full_send');
+    setIndependence.mockClear();
+    store.value = { loaded: true, independence: 'often' };
+    render(<AgentIndependenceSettings />);
+    await act(async () => {
+      fireEvent.keyDown(screen.getAllByRole('slider')[1], { key: 'ArrowLeft' });
+      await Promise.resolve();
+    });
+    expect(setIndependence).not.toHaveBeenCalled();
+  });
+
+  it('offers Unleashed, with what it still stops for', () => {
     store.value = { loaded: true, independence: 'full_send' };
     render(<AgentIndependenceSettings />);
-    expect(screen.getAllByRole('radio')).toHaveLength(4);
-    expect(screen.getByRole('radio', { checked: true })).toHaveTextContent(
-      'Full send — let it rip'
-    );
-    expect(screen.getByText(/Still asks before spending money/)).toBeInTheDocument();
-    expect(screen.queryByText(/sends as you, or deletes/)).not.toBeInTheDocument();
+    expect(slider()).toHaveAttribute('aria-valuenow', '3');
+    expect(screen.getByText(/only stops for money, logins, deleting for good or going live/)).toBeInTheDocument();
   });
 
   it('a failed save says why and goes back to what is saved', async () => {
@@ -77,11 +105,11 @@ describe('AgentIndependenceSettings', () => {
     setIndependence.mockRejectedValue({ type: 'Other', message: 'Disk full' });
     render(<AgentIndependenceSettings />);
     await act(async () => {
-      fireEvent.click(screen.getByRole('radio', { name: /Go hard/ }));
+      fireEvent.click(stop('go_hard'));
       await Promise.resolve();
     });
     expect(showToast).toHaveBeenCalledWith(expect.stringContaining('Disk full'), 'error');
-    expect(screen.getByRole('radio', { checked: true })).toHaveTextContent('Use good judgement');
+    expect(slider()).toHaveAttribute('aria-valuenow', '1');
   });
 
   it('says how many agents are set on their own, only when any are', () => {

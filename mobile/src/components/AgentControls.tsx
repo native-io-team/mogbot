@@ -247,7 +247,7 @@ function Choice({
 const rank = (l: AgentIndependence) => INDEPENDENCE_LEVELS.indexOf(l);
 
 /**
- * "Same as team (Go hard)" and the four levels. Going past the team's level
+ * "Same as team (Bold)" and the four levels (Careful to Unleashed). Going past the team's level
  * asks first, saying what it then does without asking and what still asks.
  */
 function LevelChoices({

@@ -1,6 +1,6 @@
 /**
- * One agent's own independence level, in its editor: "Same as team (Go
- * hard)" first, then the four levels. Saved at once, like the Admin switch,
+ * One agent's own independence level, in its editor: "Same as team (Bold)"
+ * first, then the four levels (Careful to Unleashed). Saved at once, like the Admin switch,
  * because the user is the one choosing (from chat, raising one goes through
  * the Chief's card). The row label it leads to is `AgentLevelBadge`.
  *

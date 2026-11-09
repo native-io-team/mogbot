@@ -216,10 +216,10 @@ export const onboardingFlowScenarios: Scenario[] = [
     'onboarding-independence',
     'independence',
     '3. How much agents do on their own',
-    'The third segment lit. The question, one line that it applies to every agent, three bordered choices (Use good judgement selected with a stronger neutral border, never the accent), the always-asks line, a big Continue and a quiet Skip.',
+    'The third segment lit. The question, one line that it applies to every agent, then the four-stop slider: “Asks a lot” and “Just does it” at its ends, stops Careful, Steady, Bold, Unleashed under the track with Steady chosen (neutral thumb, never the accent), Steady’s one line, the always-asks line, a big Continue and a quiet Skip.',
     {},
     {
-      requires: '[data-flow-step="independence"] .independence-choice__option[aria-checked="true"]',
+      requires: '[data-flow-step="independence"] .independence-slider[data-level="judgement"] [role="slider"]',
     }
   ),
   flow(

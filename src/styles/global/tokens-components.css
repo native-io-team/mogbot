@@ -109,6 +109,13 @@
   --progress-indeterminate-duration: var(--duration-loader-standard);
   --progress-indeterminate-easing: var(--ease-standard);
 
+  /* Independence slider (agents/IndependenceSlider): the four-stop level. */
+  --independence-slider-track: var(--space-04);
+  --independence-slider-thumb: var(--space-16);
+  --independence-slider-tick: var(--space-06);
+  --independence-slider-pad: var(--space-06);
+  --independence-slider-stops: var(--space-24);
+
   /* Typing dots (primitives/TypingDots, components/typing-dots.css): one
      wave on one clock. The phone mirrors these in mobile/src/lib/typingDots.ts. */
   --typing-dots-size: 5px;

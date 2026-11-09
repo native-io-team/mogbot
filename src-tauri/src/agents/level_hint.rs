@@ -190,7 +190,7 @@ pub fn note(
             };
             format!(
                 "the user sounds tired of being asked: \"{said}\". {} is at {level} ({whose}). \
-Offer once, in one line, to put {who} on Full send, with the propose_settings_change card ready \
+Offer once, in one line, to put {who} on Unleashed, with the propose_settings_change card ready \
 (independence: full_send).",
                 if in_chief_chat {
                     "You are"
@@ -408,8 +408,8 @@ mod tests {
         )
         .unwrap();
         assert!(raise.starts_with("[A team note from the app, not the user: in Finance's chat"));
-        assert!(raise.contains("Finance is at Go hard (the team's)"));
-        assert!(raise.contains("put Finance (or the team) on Full send"));
+        assert!(raise.contains("Finance is at Bold (the team's)"));
+        assert!(raise.contains("put Finance (or the team) on Unleashed"));
         assert!(raise.contains("independence: full_send"));
         assert!(raise.ends_with("Don't mention this note.]\n\n"));
         let lower = note(
@@ -421,8 +421,8 @@ mod tests {
             "without asking me",
         )
         .unwrap();
-        assert!(lower.contains("Finance is at Full send (its own)"));
-        assert!(lower.contains("moving it to Go hard"));
+        assert!(lower.contains("Finance is at Unleashed (its own)"));
+        assert!(lower.contains("moving it to Bold"));
         assert!(lower.contains("independence: go_hard"));
         // Moot: nothing to offer.
         assert_eq!(
