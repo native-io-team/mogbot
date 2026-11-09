@@ -14,6 +14,10 @@
 //! switched off, would come back on their own, and a folder dressed as the
 //! Chief would be one with admin powers. Nothing in a folder is changed,
 //! and the damaged registry is copied aside before the rebuilt one is written.
+//!
+//! What the user narrowed (apps kept from it, muted, Runs only on one
+//! account) comes back from the folder's `.agent-limits.json`
+//! (`store_limits.rs`), which can only ever take room away.
 
 use std::path::Path;
 
@@ -53,6 +57,7 @@ pub(super) fn from_homes(root: &Path) -> Registry {
         let is_main = !registry.agents.iter().any(|a| a.is_main)
             && (role == super::super::prompts::CHIEF_ROLE
                 || name == super::super::prompts::CHIEF_NAME);
+        let limits = super::limits::read(&root.join(&id));
         registry.agents.push(Agent {
             id,
             name,
@@ -98,6 +103,10 @@ pub(super) fn from_homes(root: &Path) -> Registry {
             secrets: Vec::new(),
             extra: no_admin(),
         });
+        // What the user took away comes back from beside it: only ever less.
+        if let (Some(limits), Some(agent)) = (limits, registry.agents.last_mut()) {
+            super::limits::restore(agent, &limits);
+        }
     }
     registry
 }
@@ -162,6 +171,6 @@ pub(super) fn line(count: usize, kept: &str) -> String {
         format!("{count} agents")
     };
     format!(
-        "Your agents list was damaged and had no backup, so it was rebuilt from the agents' folders: {agents} back, with their instructions, memory and chats. Their engine, routines, project and logins start at the defaults, so set those again. Their browser and the Chief's admin are off until you turn them back on in Settings → Agents. The damaged list is kept as {kept}."
+        "Your agents list was damaged and had no backup, so it was rebuilt from the agents' folders: {agents} back, with their instructions, memory and chats. Their engine, routines, project and logins start at the defaults, so set those again; apps you kept from them and mutes are as you left them. Their browser and the Chief's admin are off until you turn them back on in Settings → Agents. The damaged list is kept as {kept}."
     )
 }

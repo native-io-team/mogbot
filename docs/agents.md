@@ -667,7 +667,14 @@ no folder changed, and the Chief's chat says how many came back and that
 engine, routines, project and logins start at defaults. Where the default is
 the wider side it doesn't: every rebuilt agent starts with its browser off and
 as no admin (the Chief included), since a folder is anyone's to write and a
-browser or admin the user took away must not come back on its own. With no folder to go
+browser or admin the user took away must not come back on its own. What the
+user narrowed that lives only in the list comes back from
+`<home>/.agent-limits.json` (0600, `store_limits.rs`), rewritten on the
+registry write that changes it: apps kept from the agent, muted, browser off,
+admin off, and a Runs on pin (only when it rebuilt on that pin's engine). The
+file can only narrow: each field restores only its narrow side, and a file that
+isn't one is ignored whole. Independence lives in the policy file and isn't
+rebuilt; routines (and their paused state) don't come back at all. With no folder to go
 on either it is an error, never an empty list that would be saved over it.
 The app's other saved files in the agents folder (wallet, Slack, connections,
 import choice, declined apps, team set-up, login waiters, browser settings…)
