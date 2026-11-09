@@ -989,12 +989,7 @@ fn complete_via(
             ),
         );
     } else {
-        runner::enqueue(
-            app,
-            agent_id,
-            connected_prompt(r, &told),
-            runner::From::User,
-        );
+        runner::enqueue(app, agent_id, connected_prompt(r, &told), runner::From::App);
     }
     Ok(())
 }
@@ -1727,7 +1722,7 @@ pub fn decline(
         super::access_chain::Answered::Declined(note),
     );
     if !r.quiet {
-        runner::enqueue(app, agent_id, declined_prompt(&r, note), runner::From::User);
+        runner::enqueue(app, agent_id, declined_prompt(&r, note), runner::From::App);
     }
     Ok(())
 }
@@ -1768,7 +1763,7 @@ pub fn save_key(
             app,
             agent_id,
             secrets::saved_prompt(&secret),
-            runner::From::User,
+            runner::From::App,
         );
     }
     Ok(secret)

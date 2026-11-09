@@ -1595,7 +1595,7 @@ fn wake(
                     "[The user declined what you asked for earlier: {} — {}. They said: \"{note}\". Do that instead.]",
                     approval.title, approval.detail
                 ),
-                runner::From::User,
+                runner::From::App,
             );
         }
     }
@@ -1627,7 +1627,7 @@ fn decline_secret(
             app,
             agent_id,
             secrets::denied_prompt(request, note),
-            runner::From::User,
+            runner::From::App,
         );
     }
     Ok(())
@@ -1674,7 +1674,7 @@ pub async fn agents_save_secret(
             &app,
             &agent_id,
             secrets::saved_prompt(&secret),
-            runner::From::User,
+            runner::From::App,
         );
     }
     Ok(secret)

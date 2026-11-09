@@ -670,7 +670,7 @@ pub async fn answer(
             .map(|w| w.agent_id),
     );
     for id in wake {
-        super::runner::enqueue(app, &id, told.clone(), super::runner::From::User);
+        super::runner::enqueue(app, &id, told.clone(), super::runner::From::App);
     }
     Ok(())
 }

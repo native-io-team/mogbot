@@ -103,8 +103,27 @@ pub fn shutdown_sync() -> usize {
 
 #[derive(Debug, Clone, Serialize, serde::Deserialize)]
 pub enum From {
+    /// The user, in this agent's own chat: what they sent (`enqueue_user`),
+    /// and the scheduled, room and outside wakes whose own flags say what
+    /// they are.
     User,
-    Agent { sender: AgentRef, hop: u8 },
+    /// A note the app queues on its own: a late Allow, a card answered, a
+    /// step-in handed back, a crossover's run again, spare capacity. The
+    /// turn runs like a user's (no agent owed, the hop chain starts over),
+    /// but it is never the user's own request: no `answering_user`, no
+    /// `users_words`, no typed words, no Go hard `direct`.
+    App,
+    Agent {
+        sender: AgentRef,
+        hop: u8,
+    },
+}
+
+impl From {
+    /// Said here rather than by another agent: the user or the app.
+    fn here(&self) -> bool {
+        matches!(self, From::User | From::App)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, serde::Deserialize)]
@@ -142,8 +161,8 @@ struct Inbound {
     #[serde(default, skip_serializing_if = "is_zero")]
     resume: u8,
     /// What the user typed themselves, in this agent's own chat (desk or
-    /// phone): only [`enqueue_user`] sets it. A notice the app queues "from
-    /// the user" (a late Allow, a declined login) never has it. What
+    /// phone): only [`enqueue_user`] sets it. A notice the app queues (a late
+    /// Allow, a declined login: `From::App`) never has it. What
     /// `remember_permission` checks the user's words against (`remember`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     typed: Option<String>,
@@ -266,6 +285,9 @@ struct Runtime {
     /// The user's own words in the turn in progress (see `user_asked`), and
     /// any the Chief or an admin passed on with its request (`RELAYED`).
     user_text: String,
+    /// A note the app queued (`From::App`) is among what the turn in
+    /// progress answers: it isn't a quiet check-in, though nobody asked.
+    noted: bool,
 }
 
 /// Why a take-over can't start now.
@@ -358,6 +380,7 @@ fn quiet_check_in(agent_id: &str) -> bool {
             r.running
                 && !r.tickets.is_empty()
                 && !r.user_asked
+                && !r.noted
                 && r.origin.is_none()
                 && r.owed.is_empty()
                 && r.room.is_none()
@@ -946,7 +969,7 @@ fn resent_note(queued: &[Inbound]) -> String {
                 line.push('…');
             }
             match &m.from {
-                From::User => format!("“{line}”"),
+                From::User | From::App => format!("“{line}”"),
                 From::Agent { sender, .. } => format!("{}'s “{line}”", sender.name),
             }
         })
@@ -1363,7 +1386,7 @@ fn resume_inbounds(took: &[Inbound], resume: u8, note: String) -> Vec<Inbound> {
         out.push(Inbound {
             id: store::new_id(),
             text: String::new(),
-            from: From::User,
+            from: From::App,
             reply: false,
             routine: false,
             ticket: None,
@@ -2964,22 +2987,25 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
         .join("\n");
     // The turn inherits the deepest hop it is answering; a user message
     // in the batch resets the chain.
-    runtime.origin = if batch.iter().any(|m| matches!(m.from, From::User)) {
+    // An app note, like the user, starts the chain over: it owes no agent.
+    runtime.noted = batch.iter().any(|m| matches!(m.from, From::App))
+        || (runtime.interrupted.is_some() && runtime.noted);
+    runtime.origin = if batch.iter().any(|m| m.from.here()) {
         None
     } else {
         batch.iter().rev().find_map(|m| match &m.from {
             From::Agent { sender, .. } => Some(sender.id.clone()),
-            From::User => None,
+            From::User | From::App => None,
         })
     };
-    runtime.hop = if batch.iter().any(|m| matches!(m.from, From::User)) {
+    runtime.hop = if batch.iter().any(|m| m.from.here()) {
         0
     } else {
         batch
             .iter()
             .filter_map(|m| match &m.from {
                 From::Agent { hop, .. } => Some(*hop),
-                From::User => None,
+                From::User | From::App => None,
             })
             .max()
             .unwrap_or(0)
@@ -3108,6 +3134,7 @@ fn finish_if_idle(agent_id: &str) -> Option<Idle> {
     runtime.outside = false;
     runtime.typed = None;
     runtime.user_asked = false;
+    runtime.noted = false;
     runtime.user_text.clear();
     Some(Idle {
         owed: std::mem::take(&mut runtime.owed),
@@ -3232,6 +3259,7 @@ fn reset_after_panic(agent_id: &str, progressed: bool) -> PanicReset {
     runtime.outside = false;
     runtime.typed = None;
     runtime.user_asked = false;
+    runtime.noted = false;
     runtime.user_text.clear();
     // What is recorded from now on is the agent's own, not the dead turn's room's.
     let room = runtime.room.take().map(|r| r.room_id);
@@ -4097,7 +4125,7 @@ fn compose(batch: &[Inbound], onward: &HashMap<String, Vec<AgentRef>>) -> String
         .filter(|m| m.resume == 0 || !m.text.is_empty())
         .map(|m| match &m.from {
             _ if m.resume > 0 => m.text.clone(),
-            From::User => m.text.clone(),
+            From::User | From::App => m.text.clone(),
             From::Agent { sender, .. } => {
                 let back_to: Vec<String> = match m.reply {
                     true => onward
@@ -4961,12 +4989,7 @@ pub fn answer_crossover(
     let settled = crossover::settle(agent_id, approval, allow, always, store::now_ms())?;
     let _ = app.emit(EVENT_MESSAGE, &settled.message);
     if let (true, Some(ask)) = (settled.resume, approval.crossover.as_ref()) {
-        enqueue(
-            app,
-            agent_id,
-            crossover::resume_prompt(ask.from),
-            From::User,
-        );
+        enqueue(app, agent_id, crossover::resume_prompt(ask.from), From::App);
     }
     store::refresh_pending(agent_id);
     let _ = app.emit(EVENT_REGISTRY, ());
@@ -7233,3 +7256,7 @@ mod outside_runner_tests;
 #[cfg(test)]
 #[path = "relay_runner_tests.rs"]
 mod relay_runner_tests;
+
+#[cfg(test)]
+#[path = "app_note_runner_tests.rs"]
+mod app_note_runner_tests;

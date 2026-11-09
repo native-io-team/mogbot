@@ -1222,7 +1222,7 @@ pub fn answer_card(
             app,
             agent_id,
             format!("[The user declined the settings change you proposed ({}). Nothing changed.{said} Don't propose it again unless they ask.]", summary(&p.groups).replace('\n', " ")),
-            runner::From::User,
+            runner::From::App,
         );
         return Ok(());
     }
@@ -1246,7 +1246,7 @@ pub fn answer_card(
                     "[The user allowed the settings change you proposed. It applies from each agent's next turn: {}]",
                     summary(&p.groups).replace('\n', " ")
                 ),
-                runner::From::User,
+                runner::From::App,
             );
             Ok(())
         }
@@ -1257,7 +1257,7 @@ pub fn answer_card(
                 app,
                 agent_id,
                 format!("[The user allowed your settings change, but it couldn't be applied: {why} Nothing changed. Propose it again if it's still wanted.]"),
-                runner::From::User,
+                runner::From::App,
             );
             Ok(())
         }

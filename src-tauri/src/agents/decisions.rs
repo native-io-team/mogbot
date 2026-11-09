@@ -627,7 +627,7 @@ pub fn answer(
                 "[The user answered the question your session in {name} (tab {}) was waiting on, on the card: “{label}”. Call session_wait for {name} to follow it, then tell them how it went.]",
                 prompt.tab
             ),
-            runner::From::User,
+            runner::From::App,
         );
     }
     Ok(())

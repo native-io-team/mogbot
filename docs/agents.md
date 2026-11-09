@@ -1481,10 +1481,20 @@ the next turn resumes the same context, and a routine or another agent's
 request in it could act on an instruction planted in what was read. Only
 sends and new packages ask; local work, `gh` reads and renders never do.
 
+**Notes the app queues are not the user asking.** A late Allow, a card
+answered (login, settings, hand-off, secret), a step-in handed back, a
+crossover's run again, a preview fix, spare capacity: each is queued as
+`runner::From::App`. The turn runs (it owes no agent and starts the hop chain
+over) but never counts as the user's own request: no `answering_user` (so no
+Go hard `direct`, no `use_account` without a card, no relayed approval, no
+expired card lifted), no `users_words`, no typed words for
+`remember_permission`. Only what the user sends in the chat, desk or phone
+(`enqueue_user`), is `From::User` (`app_note_runner_tests.rs`).
+
 **The rule for the owner's own requests.** The mark never raises cards for
 the owner's own direct request at Bold or Unleashed: in a turn answering
 the user's own message in this agent's chat (not a routine, a check-in, a room,
-another agent's request or outside text; `runner::answering_user`), the mark
+another agent's request, outside text or a note the app queued; `runner::answering_user`), the mark
 narrows to what Unleashed keeps after outside content
 (`autoallow::outside_mark_asks`): **raw data leaving for another host**
 (`go_hard::moves_data_off_mac`: a `curl` body or upload, `ssh`, `scp`,
@@ -1726,7 +1736,7 @@ instead of only saying OK. Rust decides, not the prompt:
   is a message the user typed in this agent's own chat, desk or phone
   (`runner::enqueue_typed` from `agents_send`; `runner::typed_input`). Another
   agent's message, a routine, a room, outside text (or a turn tainted by it),
-  a notice the app queues "from the user" (late Allow, declined login) and a
+  a note the app queues (`runner::From::App`: late Allow, declined login) and a
   message the app writes from a button ("Say hi") carry no typed words, so an
   admin answering for another agent can't either. `quote` must be whole words
   of what they typed.

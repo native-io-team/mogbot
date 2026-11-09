@@ -671,7 +671,7 @@ pub fn answer_waiters(app: &AppHandle, request_id: &str, r: &LoginRequest, how: 
         if w.quiet {
             continue;
         }
-        super::runner::enqueue(app, &w.agent_id, told, super::runner::From::User);
+        super::runner::enqueue(app, &w.agent_id, told, super::runner::From::App);
     }
 }
 

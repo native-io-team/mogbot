@@ -368,7 +368,7 @@ fn auto_fix_on() -> bool {
 fn apply(app: &AppHandle, view: &View, effect: Effect) {
     match effect {
         Effect::Wake { agent_id, prompt } => {
-            runner::enqueue(app, &agent_id, prompt, runner::From::User)
+            runner::enqueue(app, &agent_id, prompt, runner::From::App)
         }
         Effect::Tell { agent_id, line } => {
             let _ = runner::record(
