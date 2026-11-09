@@ -12,10 +12,10 @@ import { Pressable, View } from 'react-native';
 import { formatAgo } from '../lib/agents';
 import { foldLine, membersOf, roomKey, roomLine, workingHere, type RoomFold } from '../lib/rooms';
 import { useApp } from '../lib/store';
-import { avatarSize, chromeScale, fonts, iconSize, radius, space } from '../lib/theme';
+import { avatarSize, chromeScale, iconSize, radius, space } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { AgentAvatar, Spinner } from './agent';
-import { Dot, Icon, T, useRipple } from './ui';
+import { Dot, Icon, StatusPill, T, useRipple } from './ui';
 
 const NONE: never[] = [];
 /** The page's ring around each badge: wide enough to keep two apart, thin enough to stay quiet. */
@@ -150,15 +150,22 @@ export const RoomRow = memo(function RoomRow({
           </T>
         </View>
         <View style={styles.line}>
-          <T
-            variant="small"
-            numberOfLines={1}
-            maxFontSizeMultiplier={2}
-            color={asking && live ? colors.accentWarning : colors.textSecondary}
-            style={[{ flex: 1 }, asking && live && { fontFamily: fonts.medium }]}
-          >
-            {line}
-          </T>
+          {asking && live ? (
+            // Waiting on you, as the agent rows say it: a pill, not an amber line.
+            <View style={{ flex: 1 }}>
+              <StatusPill tone="waiting" label={line} />
+            </View>
+          ) : (
+            <T
+              variant="small"
+              numberOfLines={1}
+              maxFontSizeMultiplier={2}
+              color={colors.textSecondary}
+              style={{ flex: 1 }}
+            >
+              {line}
+            </T>
+          )}
           {/* "Needs your OK" says it once, in words: no dot beside it as well. */}
           <View style={styles.mark}>
             {asking ? null : working && live ? (

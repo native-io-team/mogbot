@@ -81,6 +81,41 @@ export function failureLine(failure: Failure, preview: string | null, engine?: s
 }
 
 /**
+ * A row's state as a pill and the words after it (the desk's `failurePill`):
+ * the state in the pill ("Didn't finish", "Out of usage"), the reason as
+ * plain text. Out of usage is neutral: it resets by itself.
+ */
+export function rowPill(
+  agent: Agent,
+  line: string
+): { tone: 'waiting' | 'failed' | 'out'; label: string; rest: string } | null {
+  const state = lineState(agent);
+  if (state === 'waiting') {
+    const cut = line.indexOf(' · ');
+    return cut < 0
+      ? { tone: 'waiting', label: line, rest: '' }
+      : { tone: 'waiting', label: line.slice(0, cut), rest: line.slice(cut + 3) };
+  }
+  const failure = state === 'failed' || state === 'limited' ? failedTurn(agent) : null;
+  if (!failure) return null;
+  if (failure.kind === 'usage_limit') {
+    return {
+      tone: 'out',
+      label: 'Out of usage',
+      rest: failure.resetsAt ? `resets ${resetPhrase(failure.resetsAt)}` : '',
+    };
+  }
+  if (failure.kind === 'signed_out') {
+    return { tone: 'failed', label: 'Signed out', rest: engineName(agent) };
+  }
+  if (failure.kind === 'interrupted') {
+    return { tone: 'failed', label: 'Interrupted', rest: 'Continue to pick it up' };
+  }
+  const clause = (previewText(agent.preview) ?? '').split(/(?<=[.!?:])\s/)[0].replace(/[.:]$/, '');
+  return { tone: 'failed', label: 'Didn’t finish', rest: clause };
+}
+
+/**
  * Queued behind the Mac's cap on concurrent turns: working, but its turn
  * hasn't started (no `since`). The desk's rule, from AgentChat's status label.
  */

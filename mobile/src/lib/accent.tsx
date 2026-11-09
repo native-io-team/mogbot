@@ -22,6 +22,7 @@ import {
   alpha,
   contrast,
   luminance,
+  keySide,
   mix,
   palettes,
   type Appearance,
@@ -37,6 +38,8 @@ export interface Accent {
   soft: string;
   /** Text and glyphs on the fill: whichever of dark and light ink reads better. */
   onAccent: string;
+  /** The keycap's side under the fill: its own shade, toward black (no ink sits on it). */
+  side: string;
 }
 
 /**
@@ -63,6 +66,7 @@ export function deriveAccent(hex: string, colors: Palette = palettes.dark): Acce
     pressed: mix(hex, colors.surfaceApp, 0.82),
     soft: alpha(hex, 0.16),
     onAccent,
+    side: keySide(hex),
   };
 }
 

@@ -414,10 +414,30 @@ body.compact-mode-active html {
   border-color: var(--button-border-solid);
 }
 
+/* Keycaps: the primary (the accent) and the neutral answer (strong) are the
+   site's raised key. The side and drop are shadows, so a key takes exactly the
+   room a flat button did; pressing moves it down by what its side gives up,
+   so its bottom edge stays where it was and nothing beside it moves. */
+.button--primary,
+.button--strong {
+  transition:
+    background-color var(--transition-interaction),
+    color var(--transition-interaction),
+    border-color var(--transition-interaction),
+    opacity var(--transition-interaction),
+    transform var(--transition-press),
+    box-shadow var(--transition-press);
+}
+
 .button--primary {
   background: linear-gradient(0deg, var(--button-primary-start), var(--button-primary-mid));
   color: var(--text-on-accent);
   border-color: transparent;
+  box-shadow: var(--button-primary-shadow);
+}
+.button--primary:active:not(:disabled) {
+  transform: translateY(var(--button-key-travel));
+  box-shadow: var(--button-primary-shadow-pressed);
 }
 .button--primary:hover:not(:disabled) {
   background: linear-gradient(0deg, var(--button-primary-mid), var(--button-primary-end));
@@ -442,6 +462,17 @@ body.compact-mode-active html {
   background: var(--button-strong-surface);
   color: var(--button-strong-text);
   border-color: transparent;
+  box-shadow: var(--button-strong-shadow);
+}
+.button--strong:active:not(:disabled) {
+  transform: translateY(var(--button-key-travel));
+  box-shadow: var(--button-strong-shadow-pressed);
+}
+
+/* A key that can't be pressed sits flat on the desk: no side, no drop. */
+.button--primary:disabled,
+.button--strong:disabled {
+  box-shadow: none;
 }
 
 .button--strong:hover:not(:disabled) {

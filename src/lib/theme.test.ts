@@ -174,6 +174,7 @@ describe('light token completeness', () => {
     '--accent-user-strong',
     '--accent-user-start',
     '--accent-user-end',
+    '--accent-user-side',
   ]);
   const colourBearing = (value: string) =>
     /#[0-9a-f]{3,8}\b|rgba?\(|var\(--color-|^\d{1,3}, \d{1,3}, \d{1,3}$/i.test(value);
@@ -208,7 +209,7 @@ describe('light token completeness', () => {
 
   it('defaults the light accent inputs to accentVars("white", "light")', () => {
     const lightWhite = accentVars('white', 'light');
-    for (const name of ['--accent-user', ...ACCENT_SHADE_VARS] as const) {
+    for (const name of ['--accent-user', ...ACCENT_SHADE_VARS, '--accent-user-side'] as const) {
       expect(resolveHex(name, 'light'), name).toBe(lightWhite[name]);
     }
   });
@@ -491,4 +492,60 @@ describe('a speaker’s name in its agent’s colour', () => {
       }
     }
   });
+});
+
+describe('status pills', () => {
+  const componentSource = css('tokens-components.css');
+  const components = declarations(componentSource, isRoot);
+  const ref = (name: string) => {
+    const m = /^var\((--[\w-]+)\)$/.exec(components.get(name) ?? '');
+    if (!m) throw new Error(`${name} is not a plain var()`);
+    return m[1];
+  };
+  const tones = ['running', 'waiting', 'failed', 'done', 'out', 'idle'] as const;
+  const wash = parseFloat(components.get('--status-pill-wash') ?? '') / 100;
+  const surfaces = [
+    '--surface-app',
+    '--surface-panel',
+    '--surface-control',
+    '--surface-control-hover',
+    '--surface-selected',
+  ];
+
+  it('takes its hues from status roles, never the accent', () => {
+    for (const tone of tones) {
+      expect(ref(`--status-pill-${tone}`), tone).not.toMatch(/accent-(active|user)/);
+    }
+    // Amber is "needs you", only: out of usage resets by itself.
+    expect(ref('--status-pill-waiting')).toBe('--accent-warning');
+    expect(ref('--status-pill-out')).not.toBe('--accent-warning');
+    expect(wash).toBeGreaterThan(0);
+    expect(wash).toBeLessThanOrEqual(0.2);
+  });
+
+  it.each(['dark', 'light'] as const)('keeps its words at AA on every surface (%s)', (theme) => {
+    const text = resolveHex(ref('--status-pill-text'), theme);
+    for (const tone of tones) {
+      const hue = resolveHex(ref(`--status-pill-${tone}`), theme);
+      for (const bg of surfaces) {
+        const fill = mixHex(resolveHex(bg, theme), hue, wash);
+        const r = contrastRatio(parseHex(text)!, parseHex(fill)!);
+        expect([tone, bg, r >= AA_TEXT]).toEqual([tone, bg, true]);
+      }
+    }
+  });
+
+  it.each(['dark', 'light'] as const)(
+    'gives each coloured dot 3:1 against its wash (%s)',
+    (theme) => {
+      for (const tone of ['running', 'waiting', 'failed', 'done'] as const) {
+        const hue = resolveHex(ref(`--status-pill-${tone}`), theme);
+        for (const bg of ['--surface-app', '--surface-panel']) {
+          const fill = mixHex(resolveHex(bg, theme), hue, wash);
+          const r = contrastRatio(parseHex(hue)!, parseHex(fill)!);
+          expect([tone, bg, r >= 3]).toEqual([tone, bg, true]);
+        }
+      }
+    }
+  );
 });

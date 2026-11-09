@@ -256,12 +256,14 @@
 }
 
 /* An agent on an engine other than the default (AgentEngineBadge). Quiet:
-   a label, not a status, so it never competes with the row's own marks. */
+   a label, not a status, so it never competes with the row's own marks. The
+   site's tag with no hue: a small rounded wash, muted ink, no border (a box
+   on a row reads as a button). */
 .agent-engine-badge {
   flex: 0 0 auto;
-  padding: 0 var(--spacing-3xs);
-  border: var(--border-width-default) solid var(--border-subtle);
-  border-radius: var(--radius-sm);
+  padding: 0 var(--spacing-xs);
+  border-radius: var(--radius-control);
+  background: var(--tint-subtle);
   font-size: var(--font-size-badge);
   font-weight: var(--font-weight-label);
   line-height: var(--line-height-compact);
@@ -308,6 +310,30 @@
 
 /* …and what it's asking, after the label, in the row's ordinary ink. */
 .agents-list__row .agents-list__asking {
+  color: var(--text-secondary);
+}
+
+/* A state in a pill, then its words: one line, the words cut first. The pill
+   sits in the line's own height (no vertical padding here), so a row that
+   turns amber or red never grows. */
+.agents-list__preview--pill {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0;
+}
+
+.agents-list__preview--pill .status-pill {
+  padding-block: 0;
+  max-width: 100%;
+}
+
+.agents-list__rest {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
   color: var(--text-secondary);
 }
 

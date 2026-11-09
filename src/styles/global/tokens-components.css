@@ -215,6 +215,23 @@
   --button-strong-surface: var(--surface-inverse);
   --button-strong-surface-hover: var(--surface-inverse-hover);
   --button-strong-text: var(--text-on-inverse);
+  /* Keycaps (base.css): the primary and the neutral answer are the site's
+     raised key, kept small: a lit top edge, a short side in the key's own
+     shade under it, a soft drop, and a press that travels down by exactly
+     what the side gives up, so nothing around it moves. */
+  --button-key-depth: var(--space-02);
+  --button-key-travel: var(--stroke-1);
+  --button-key-lit: var(--color-white-o22);
+  --button-key-drop: var(--color-black-o50);
+  --button-strong-side: var(--color-gray-300);
+  --button-strong-shadow:
+    inset 0 var(--stroke-1) 0 var(--color-white-o70),
+    0 var(--button-key-depth) 0 var(--button-strong-side),
+    0 var(--button-key-depth) var(--space-04) var(--button-key-drop);
+  --button-strong-shadow-pressed:
+    inset 0 var(--stroke-1) 0 var(--color-white-o70),
+    0 calc(var(--button-key-depth) - var(--button-key-travel)) 0 var(--button-strong-side),
+    0 0 var(--space-02) var(--button-key-drop);
   --button-variable-surface: var(--color-purple-700);
   --button-variable-hover: var(--color-purple-600);
   --button-variable-text: var(--text-inverse);
@@ -352,11 +369,12 @@
   --drag-sort-reorder-transition: var(--transition-interaction);
   --drag-sort-settle-transition: var(--duration-sortable-settle) cubic-bezier(0.25, 1, 0.5, 1);
 
-  /* Agents mode motion (features/agents-motion.css). Arrivals use the
-     icon-swap deceleration; anything that moves an existing thing (a row
-     reordering, a thread opening) settles exactly as drag-sort does, so the
-     sidebar's reorder and a dragged project land the same way. */
-  --agents-motion-enter: var(--transition-icon-swap);
+  /* Agents mode motion (features/agents-motion.css). Arrivals take the site's
+     arrive curve in 200ms (a message, a card, a row: an 8px rise and a fade);
+     anything that moves an existing thing (a row reordering, a thread
+     opening) settles exactly as drag-sort does, so the sidebar's reorder and
+     a dragged project land the same way. */
+  --agents-motion-enter: var(--transition-arrive);
   /* A search hit's ring: long enough to find after the scroll lands. */
   --agents-motion-flash: calc(var(--duration-slow) * 6) var(--ease-standard);
   --agents-motion-settle: var(--drag-sort-settle-transition);
@@ -480,6 +498,28 @@
     0 var(--space-02) var(--space-04) var(--color-black-o08);
 }
 
+/* Status pills (components/status-pill.css): one calm look for a state. The
+   hue is a status role, never the accent; the words are ordinary ink on a
+   wash of the hue, so they clear AA on every surface (theme.test.ts). Amber
+   is only "needs you": out of usage resets by itself, so it is neutral. */
+:root {
+  --status-pill-running: var(--status-running);
+  --status-pill-waiting: var(--accent-warning);
+  --status-pill-failed: var(--accent-error);
+  --status-pill-done: var(--accent-success);
+  --status-pill-out: var(--text-muted);
+  --status-pill-idle: var(--text-faint);
+  --status-pill-wash: 14%;
+  --status-pill-fallback: var(--tint-subtle);
+  --status-pill-text: var(--text-primary);
+  --status-pill-font-size: var(--font-size-label);
+  --status-pill-radius: var(--radius-control);
+  --status-pill-pad-y: var(--space-01);
+  --status-pill-pad-x: var(--space-06);
+  --status-pill-gap: var(--space-04);
+  --status-pill-dot: var(--space-06);
+}
+
 /* Progress and "working" indicators are status, never the accent: a red or
    amber accent would make "in progress" read as an error or a warning. */
 :root {
@@ -508,6 +548,16 @@
      idle gradient, and opaque: dimming with `opacity` let whatever sat
      behind the button show through it. */
   --button-primary-busy: var(--accent-active-strong);
+  /* The primary keycap. Here, not at :root, because its side is the scoped
+     accent's own shade (accent.ts, --accent-user-side). */
+  --button-primary-shadow:
+    inset 0 var(--stroke-1) 0 var(--button-key-lit),
+    0 var(--button-key-depth) 0 var(--accent-user-side),
+    0 var(--button-key-depth) var(--space-04) var(--button-key-drop);
+  --button-primary-shadow-pressed:
+    inset 0 var(--stroke-1) 0 var(--button-key-lit),
+    0 calc(var(--button-key-depth) - var(--button-key-travel)) 0 var(--accent-user-side),
+    0 0 var(--space-02) var(--button-key-drop);
 }
 
 /* Light values for component roles built from fixed hues (theme.test.ts holds
@@ -516,4 +566,17 @@
 :root[data-theme='light'] {
   --media-text: var(--color-pink-800);
   --button-warning-text-hover: var(--color-orange-900);
+  /* On paper the drop is lighter, and the near-black answer key sits on a
+     black side with only a faint lit edge. */
+  --button-key-lit: var(--color-white-o15);
+  --button-key-drop: var(--color-black-o12);
+  --button-strong-side: var(--color-black);
+  --button-strong-shadow:
+    inset 0 var(--stroke-1) 0 var(--color-white-o15),
+    0 var(--button-key-depth) 0 var(--button-strong-side),
+    0 var(--button-key-depth) var(--space-04) var(--button-key-drop);
+  --button-strong-shadow-pressed:
+    inset 0 var(--stroke-1) 0 var(--color-white-o15),
+    0 calc(var(--button-key-depth) - var(--button-key-travel)) 0 var(--button-strong-side),
+    0 0 var(--space-02) var(--button-key-drop);
 }

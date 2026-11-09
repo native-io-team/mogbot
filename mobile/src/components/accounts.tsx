@@ -20,13 +20,18 @@ import { View } from 'react-native';
 import { makeStyles, useColors } from '../lib/appearance';
 import type { AccountsState } from '../lib/accounts';
 import { iconSize, space } from '../lib/theme';
-import { Button, Icon, IconButton, InsetDivider, Section, T } from './ui';
+import { Button, Icon, IconButton, InsetDivider, Section, StatusPill, T } from './ui';
 
-/** The muted lines under an account's name. */
+/** Its room, after the state pill: "5-hour 62% left, resets 2:07 AM". */
+function roomLine(r: SwitcherRow): string {
+  return r.room
+    .map((l) => `${l.label} ${l.left}% left${l.resets ? `, ${l.resets}` : ''}`)
+    .join(' · ');
+}
+
+/** The muted lines under an account's name (as read aloud, and in tests). */
 export function accountRowLines(r: SwitcherRow): string[] {
-  const room = r.room.map(
-    (l) => `${l.label} ${l.left}% left${l.resets ? `, ${l.resets}` : ''}`
-  );
+  const room = r.room.map((l) => `${l.label} ${l.left}% left${l.resets ? `, ${l.resets}` : ''}`);
   return [
     r.detail.join(' · '),
     [r.state, ...room].join(' · '),
@@ -101,12 +106,31 @@ function AccountLine({
         {r.inUse && <Icon name="checkmark" size={iconSize.body} color={colors.textStrong} />}
       </View>
       <View style={styles.body}>
-        <T color={r.tone === 'out' ? colors.accentWarning : colors.textBody}>{r.name}</T>
-        {accountRowLines(r).map((line) => (
-          <T key={line} variant="small" color={colors.textMuted}>
-            {line}
+        <T color={colors.textBody}>{r.name}</T>
+        {r.detail.length > 0 && (
+          <T variant="small" color={colors.textMuted}>
+            {r.detail.join(' · ')}
           </T>
-        ))}
+        )}
+        {/* Its state as a pill (out of usage, in use, signed in or not), its room after it. */}
+        <View style={styles.state}>
+          {!!r.state && (
+            <StatusPill
+              tone={r.tone === 'out' ? 'out' : r.inUse && r.tone === 'ok' ? 'done' : 'idle'}
+              label={r.state}
+            />
+          )}
+          {roomLine(r) !== '' && (
+            <T variant="small" color={colors.textMuted} style={styles.stateRest}>
+              {roomLine(r)}
+            </T>
+          )}
+        </View>
+        {!!pinnedLine(r.pinnedBy) && (
+          <T variant="small" color={colors.textMuted}>
+            {pinnedLine(r.pinnedBy)}
+          </T>
+        )}
         {(use || order) && (
           <View style={styles.actions}>
             {use && (
@@ -164,6 +188,8 @@ const useStyles = makeStyles(() => ({
   },
   lead: { width: iconSize.body, paddingTop: space['2xs'] },
   body: { flex: 1, gap: space['2xs'] },
+  state: { flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: space.xs },
+  stateRest: { flexShrink: 1 },
   actions: { flexDirection: 'row', alignItems: 'center', marginTop: space.xs },
   spacer: { flex: 1 },
   order: { flexDirection: 'row', alignItems: 'center' },

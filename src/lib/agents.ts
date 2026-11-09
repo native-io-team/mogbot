@@ -2165,18 +2165,56 @@ export const needsAttention = (agent: Agent) => {
 export const usageLimited = (agent: Agent) =>
   !needsYou(agent) && failedTurn(agent)?.kind === 'usage_limit';
 
-/** The text of a failure's first clause: "Didn't finish: Couldn't start Claude Code". */
-export function failureLine(failure: Failure, preview: string | null): string {
+/**
+ * The text of a failure's first clause: "Didn't finish: Couldn't start Claude
+ * Code". `engine`: what the agent runs on, so a Codex agent is never said to
+ * be signed out of Claude Code (the phone's rule).
+ */
+export function failureLine(
+  failure: Failure,
+  preview: string | null,
+  engine: AgentEngine = 'claude'
+): string {
   if (failure.kind === 'usage_limit') {
     return failure.resetsAt
       ? `Usage limit · resets ${resetWords(failure.resetsAt)}`
       : 'Usage limit reached';
   }
-  if (failure.kind === 'signed_out') return 'Claude Code is signed out';
+  if (failure.kind === 'signed_out') return `${ENGINE_LABEL[engine]} is signed out`;
   if (failure.kind === 'interrupted') return 'Interrupted · Continue to pick it up';
   // The reason first: two lines in the sidebar, and the reason is what matters.
   const clause = (preview ?? '').split(/(?<=[.!?:])\s/)[0].replace(/[.:]$/, '');
   return clause ? `${clause} · didn’t finish` : 'Didn’t finish';
+}
+
+/** A status pill's kind (primitives/StatusPill): never the accent, always a status role. */
+export type StatusTone = 'running' | 'waiting' | 'out' | 'done' | 'failed' | 'idle';
+
+/**
+ * A failed turn as a pill and the words after it: the state in the pill
+ * ("Didn't finish", "Out of usage"), the reason as plain text. The pill is
+ * what a scanning eye lands on; the reason is what the reader reads.
+ */
+export function failurePill(
+  failure: Failure,
+  preview: string | null,
+  engine: AgentEngine = 'claude'
+): { tone: StatusTone; label: string; rest: string } {
+  if (failure.kind === 'usage_limit') {
+    return {
+      tone: 'out',
+      label: 'Out of usage',
+      rest: failure.resetsAt ? `resets ${resetWords(failure.resetsAt)}` : '',
+    };
+  }
+  if (failure.kind === 'signed_out') {
+    return { tone: 'failed', label: 'Signed out', rest: ENGINE_LABEL[engine] };
+  }
+  if (failure.kind === 'interrupted') {
+    return { tone: 'failed', label: 'Interrupted', rest: 'Continue to pick it up' };
+  }
+  const clause = (preview ?? '').split(/(?<=[.!?:])\s/)[0].replace(/[.:]$/, '');
+  return { tone: 'failed', label: 'Didn’t finish', rest: clause };
 }
 
 const FILE_EXT =

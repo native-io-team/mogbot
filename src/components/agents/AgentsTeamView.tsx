@@ -25,6 +25,7 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ChevronRightIcon, CollaboratorsIcon } from '@/components/icons';
 import { TextButton } from '../primitives/TextButton';
+import { StatusPill } from '../primitives/StatusPill';
 import { CompactModeToggle } from '../workspace/ModeToggle';
 import { PixelLoaderRings } from '../workspace/PixelLoaderRings';
 import { AgentAvatar } from './AgentAvatar';
@@ -32,13 +33,14 @@ import { AgentWorkingLine } from './AgentWorkingLine';
 import { AgentEngineBadge } from './AgentEngine';
 import { ApprovalCard, ErrorLine } from './AgentChatItems';
 import { AgentMark, AgentSwitcher } from './AgentSwitcher';
-import { useHeightReveal } from './useAgentMotion';
+import { useHeightReveal, useNewKeys } from './useAgentMotion';
 import {
   answerApproval,
   promptAnswer,
   createCheckIn,
   failedTurn,
-  failureLine,
+  failurePill,
+  type StatusTone,
   formatWhen,
   getAgentMessages,
   lastUserMessage,
@@ -204,17 +206,22 @@ interface RowProps {
   onOpen: () => void;
   /** A row that folds what's under it: its chevron, and whether it's open. */
   fold?: { expanded: boolean; controls: string };
+  /** Its state as a pill before the line: the row's one coloured thing. */
+  pill?: { tone: StatusTone; label: string };
+  /** Joined its section while the view was open: it rises in once. */
+  arrived?: boolean;
 }
 
 /**
  * One line per agent: "Hiring · Send an email · 2m ago". The name, then what
  * it's about (it gives way first), then the time or a mark at the right.
  */
-function Row({ agent, place, line, meta, state, working, onOpen, fold }: RowProps) {
+function Row({ agent, place, line, meta, state, working, onOpen, fold, pill, arrived }: RowProps) {
   return (
     <button
       type="button"
       tabIndex={0}
+      data-arrived={arrived || undefined}
       className="agents-team__row"
       onClick={onOpen}
       aria-expanded={fold?.expanded}
@@ -232,9 +239,19 @@ function Row({ agent, place, line, meta, state, working, onOpen, fold }: RowProp
           {place && <span className="agents-team__place">in {place}</span>}
           <AgentEngineBadge engine={agent.engine} />
         </span>
-        <span className="agents-team__line" data-state={state}>
-          {line}
-        </span>
+        {pill && (
+          <StatusPill tone={pill.tone} className="agents-team__pill">
+            {pill.label}
+          </StatusPill>
+        )}
+        {(line || !pill) && (
+          <span
+            className={`agents-team__line${pill ? ' agents-team__line--after-pill' : ''}`}
+            data-state={pill ? undefined : state}
+          >
+            {line}
+          </span>
+        )}
       </span>
       {meta && <span className="agents-team__meta">{meta}</span>}
       {fold && <ChevronRightIcon size={12} className="agents-team__chevron" />}
@@ -441,6 +458,24 @@ export function AgentsTeamView({
     return [...byAgent.values()];
   }, [team.needsYou, held, agents, roomCards, setupLogins]);
 
+  // Rows that join a section while this view is open rise in once; what was
+  // there when it opened holds still. Replies load after the view mounts, so
+  // their first fill is a load (`ready` once there are some), not arrivals.
+  const isNewRow = useNewKeys(
+    useMemo(
+      () => [
+        ...groups.map((g) => `needs:${g.agent.id}`),
+        ...team.paused.map((p) => `paused:${p.agent.id}`),
+        ...team.working.map((a) => `working:${a.id}`),
+      ],
+      [groups, team]
+    )
+  );
+  const isNewReply = useNewKeys(
+    useMemo(() => team.replies.map((r) => r.message.id), [team]),
+    team.replies.length > 0
+  );
+
   const title = (
     <>
       <span className="agent-avatar agent-avatar--row agent-avatar--tile agent-avatar--selected agents-team__badge">
@@ -525,14 +560,23 @@ export function AgentsTeamView({
               // One line: what it's about, in the review panel's words, and when.
               const asked = cardsGroup(agent, approvals);
               const open = asked.pending + asked.older;
-              const line =
-                pending || !kind
-                  ? open > 0
-                    ? groupLine(asked)
-                    : needsYou(agent)
-                      ? 'Needs your OK'
-                      : 'Answered'
-                  : failureLine(kind, previewText(agent.preview));
+              const failed =
+                !pending && kind
+                  ? failurePill(kind, previewText(agent.preview), agent.engine)
+                  : null;
+              const waiting = pending || needsYou(agent);
+              const line = failed
+                ? failed.rest
+                : open > 0
+                  ? groupLine(asked)
+                  : waiting
+                    ? ''
+                    : 'Answered';
+              const pill = failed
+                ? { tone: failed.tone, label: failed.label }
+                : waiting
+                  ? { tone: 'waiting' as const, label: 'Needs your OK' }
+                  : undefined;
               const at = newestCardAt(approvals) ?? (kind ? failure?.ts : undefined);
               // Something to open under the row: its cards, or the failure's next step.
               const foldable = approvals.length > 0 || Boolean(failure && kind && !pending);
@@ -540,12 +584,16 @@ export function AgentsTeamView({
               const cardsId = `agents-team-cards-${agent.id}`;
               return (
                 <Fold key={agent.id} open={stays}>
-                  <div className="agents-team__group">
+                  <div
+                    className="agents-team__group"
+                    data-arrived={isNewRow(`needs:${agent.id}`) || undefined}
+                  >
                     <div className="agents-team__head">
                       <Row
                         agent={agent}
                         place={roomName(room)}
                         line={line}
+                        pill={pill}
                         state={
                           pending || needsYou(agent)
                             ? undefined
@@ -617,11 +665,19 @@ export function AgentsTeamView({
             <Section title="Paused" empty="">
               {team.paused.map(({ agent, failure }) => {
                 const kind = failedTurn(agent);
+                const paused = kind
+                  ? failurePill(kind, previewText(agent.preview), agent.engine)
+                  : null;
                 return (
-                  <div key={agent.id} className="agents-team__group">
+                  <div
+                    key={agent.id}
+                    className="agents-team__group"
+                    data-arrived={isNewRow(`paused:${agent.id}`) || undefined}
+                  >
                     <Row
                       agent={agent}
-                      line={kind ? failureLine(kind, previewText(agent.preview)) : 'Paused'}
+                      line={paused ? paused.rest : 'Paused'}
+                      pill={paused ? { tone: paused.tone, label: paused.label } : undefined}
                       state="limited"
                       onOpen={() => onOpenAgent(agent.id)}
                     />
@@ -655,6 +711,7 @@ export function AgentsTeamView({
                 line={<AgentWorkingLine agent={agent} />}
                 state="working"
                 working
+                arrived={isNewRow(`working:${agent.id}`)}
                 meta={<PixelLoaderRings size="sm" label={`${agent.name} is working`} />}
                 onOpen={() => openWhere(agent, agent.status.room)}
               />
@@ -681,6 +738,7 @@ export function AgentsTeamView({
                 place={roomName(message.room)}
                 line={replyPreview(message.text)}
                 meta={formatAgo(message.ts)}
+                arrived={isNewReply(message.id)}
                 onOpen={() => openWhere(agent, message.room, message.id)}
               />
             ))}

@@ -15,7 +15,8 @@ import {
 } from '@shipstudio/companion-protocol';
 import { memo, useEffect, useState, type ReactNode } from 'react';
 import { type LayoutChangeEvent, Pressable, View } from 'react-native';
-import Animated, { FadeIn, FadeInDown } from 'react-native-reanimated';
+import Animated, { FadeIn } from 'react-native-reanimated';
+import { arriving } from './Arrive';
 import { useRouter } from 'expo-router';
 import { engineName, failureLine, folderName, formatClock } from '../lib/agents';
 import { drivenWait } from '../lib/bars';
@@ -69,8 +70,6 @@ import { ResultCardView, useCanRevise } from './result';
 import { setComposer } from '../lib/drafts';
 import { getApp, useApp, useServed } from '../lib/store';
 
-const enter = FadeInDown.duration(220).springify().damping(18);
-
 /**
  * "Sending…" only once a send is slow. On a quick link the Mac answers
  * before it could be read, and a line that shows for a beat and goes moved
@@ -84,7 +83,7 @@ export const SENDING_AFTER_MS = 900;
  * Mac answering mid-rise neither restarts nor cuts it.
  */
 export function SendRise({ rise, children }: { rise: boolean; children: ReactNode }) {
-  return <Animated.View entering={rise ? enter : undefined}>{children}</Animated.View>;
+  return <Animated.View entering={rise ? arriving() : undefined}>{children}</Animated.View>;
 }
 
 export const MessageRow = memo(function MessageRow({

@@ -1,0 +1,61 @@
+/* Status pill (primitives/StatusPill.tsx): the site's tag. A small rounded
+   wash of the state's hue, a dot of it, and the words in ordinary ink, so the
+   label clears AA on every surface whatever the hue (theme.test.ts). Never
+   the accent. Sits inline in a line of text and never wraps. */
+.status-pill {
+  --status-pill-hue: var(--status-pill-idle);
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: var(--status-pill-gap);
+  max-width: 100%;
+  padding: var(--status-pill-pad-y) var(--status-pill-pad-x);
+  border-radius: var(--status-pill-radius);
+  background: var(--status-pill-fallback);
+  color: var(--status-pill-text);
+  font-size: var(--status-pill-font-size);
+  font-weight: var(--font-weight-label);
+  line-height: var(--line-height-compact);
+  letter-spacing: var(--tracking-name);
+  white-space: nowrap;
+  vertical-align: baseline;
+}
+
+@supports (color: color-mix(in srgb, red 50%, transparent)) {
+  .status-pill {
+    background: color-mix(in srgb, var(--status-pill-hue) var(--status-pill-wash), transparent);
+  }
+}
+
+.status-pill__dot {
+  flex: 0 0 auto;
+  width: var(--status-pill-dot);
+  height: var(--status-pill-dot);
+  border-radius: var(--radius-pill);
+  background: var(--status-pill-hue);
+}
+
+.status-pill__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.status-pill--running {
+  --status-pill-hue: var(--status-pill-running);
+}
+.status-pill--waiting {
+  --status-pill-hue: var(--status-pill-waiting);
+}
+.status-pill--failed {
+  --status-pill-hue: var(--status-pill-failed);
+}
+.status-pill--done {
+  --status-pill-hue: var(--status-pill-done);
+}
+.status-pill--out {
+  --status-pill-hue: var(--status-pill-out);
+}
+.status-pill--idle {
+  --status-pill-hue: var(--status-pill-idle);
+}

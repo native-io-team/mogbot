@@ -17,6 +17,9 @@
  * - `--accent-user-strong` pressed / busy fill
  * - `--accent-user-start`  the primary gradient's lower stop
  * - `--accent-user-end`    the primary gradient's lighter (hover) stop
+ * - `--accent-user-side`   the keycap's side: the band of the key in shadow
+ *                          under its face (no ink sits on it, so it is held
+ *                          to being darker than the face, not to AA)
  *
  * Why not derive the shades with CSS `color-mix()`? Two reasons. A WebView
  * without `color-mix()` (Safari 15, which macOS 12 can still ship) drops the
@@ -113,6 +116,7 @@ export interface AccentVars {
   '--accent-user-strong': string;
   '--accent-user-start': string;
   '--accent-user-end': string;
+  '--accent-user-side': string;
 }
 
 /** The precomputed shades, each a `#rrggbb` hex. */
@@ -129,7 +133,14 @@ export const ACCENT_VAR_NAMES = [
   '--accent-on-user',
   '--accent-user-rgb',
   ...ACCENT_SHADE_VARS,
+  '--accent-user-side',
 ] as const;
+
+/**
+ * How far the keycap's side is shaded toward black. Always darker, even for a
+ * near-black accent: a side lit from below would read as a glow, not depth.
+ */
+export const KEY_SIDE_SHADE = 0.2;
 
 /** WCAG AA for normal-size text. Every fill the accent ink sits on must clear it. */
 export const AA_TEXT = 4.5;
@@ -331,6 +342,7 @@ export function accentVarsForHex(hex: string): AccentVars {
     '--accent-user-strong': inkSafeShade(hex, ink, shade, 0.28),
     '--accent-user-start': inkSafeShade(hex, ink, 'black', 0.1, 0),
     '--accent-user-end': inkSafeShade(hex, ink, 'white', 0.08),
+    '--accent-user-side': shadeOklch(hex, 'black', KEY_SIDE_SHADE),
   };
 }
 

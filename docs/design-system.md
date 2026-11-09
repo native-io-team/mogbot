@@ -183,6 +183,7 @@ value, consume a semantic role or an owner-appropriate component token.
 | Layout dims | `--editor-panel-w`, `--preview-toolbar-h` | Shared panel dimensions that must agree across files. Docked panel widths are not here — they are per-project state in `PANEL_META` (`src/lib/workspaceLayout.ts`); see [Flexible panels](flexible-panels.md). |
 | Shadows | `--shadow-sm` / `--shadow` / `--shadow-md` / `--shadow-lg` | Elevation: small popovers → dropdowns → modals → fullscreen layers. |
 | Transitions | `--transition-fast` (0.1s) / `--transition` (0.15s) / `--transition-slow` (0.3s) | Duration + easing bundled: `transition: background var(--transition)`. |
+| Arrive / press | `--transition-arrive` (200ms, `--ease-arrive`), `--transition-press` (70ms, `--ease-press`) | The site's motion: something new arriving (an 8px rise and a fade, only for what came in while the view was open, never on load, off under reduced motion), and a keycap going down. |
 | Type scale | Numeric `--font-size-*` primitives, semantic `--font-size-h1/hero/heading/subhead/body-*/control/label/button/menu-item/badge`, `--font-ui`, `--font-code`, `--font-symbol` | Define each numeric size once in the core scale. Every rendered text kind uses a semantic role that references that scale; Geist is for UI, Geist Mono for code/editor styling, and JetBrains Nerd Font for terminal/symbol glyph coverage. |
 
 ### The accent
@@ -216,7 +217,9 @@ agent's colour instead.
   `--accent-on-user` (black or white), `--accent-user-rgb` (for `rgba()`
   tints), and `--accent-user-hover`,
   `-strong`, `-start`, `-end`. Each shade is checked against the ink for
-  WCAG AA and pulled the other way when the usual direction would fail. The
+  WCAG AA and pulled the other way when the usual direction would fail.
+  `--accent-user-side` (the keycap's side) carries no ink, so it is held
+  only to being darker than the face. The
   primary button uses no `color-mix()`, so a WebView without it (Safari 15)
   keeps the fill. Only theme-relative tints (accent mixed with a surface or
   text token) stay in CSS, behind `@supports` with a plain fallback.
@@ -484,6 +487,12 @@ Use the component matching the behavior instead of flattening different controls
 </Button>
 ```
 
+`primary` and `strong` are **keycaps** (the site's raised key, kept small): a lit top edge, a 2px
+side in the key's own shade (`--accent-user-side` / `--button-strong-side`), a soft drop, and a
+press that moves the face down 1px while the side gives up 1px, so the key's bottom edge and
+everything around it stay put (`--transition-press`). Disabled keys sit flat. Every other variant
+stays flat; a key is for the one action that starts or answers something.
+
 Use `TextButton` for inline prose/metadata actions: it retains native button, ref, disabled, focus,
 and icon behavior without a fixed control surface. Its `accent` variant carries the Chief's colour,
 so it is only for the recommended action; an action inside an alert, a status line or prose (Try
@@ -530,6 +539,20 @@ Raw `<button>` elements are reserved for controls whose geometry is the interact
 as canvas handles, timeline points, colour swatches, rich selection cards, and internals owned by
 another primitive. Toolbar actions, icon-only actions, toggles, menu triggers, tabs, segmented
 choices, and split actions use the matching family component.
+
+### StatusPill — [StatusPill.tsx](../src/components/primitives/StatusPill.tsx)
+
+One calm look for a state, the site's tag: a 6px wash of the state's hue (14%), a dot of it, and
+the words in `--text-primary`, so the label reads on every surface whatever the hue
+(`theme.test.ts`). Tones: `running` (`--status-running`), `waiting` (on you, `--accent-warning`),
+`failed` (`--accent-error`), `done` (also "in use", `--accent-success`), `out` (out of usage) and
+`idle`, the last two neutral: amber means needs you, only, and a limit resets by itself. Never the
+accent. Put the state in the pill and the rest of the line in ordinary ink after it, so a row has
+one coloured thing. The phone's is `StatusPill` in `mobile/src/components/ui.tsx`.
+
+```tsx
+<StatusPill tone="waiting">Needs your OK</StatusPill>
+```
 
 ### Spinner — [Spinner.tsx](../src/components/primitives/Spinner.tsx)
 

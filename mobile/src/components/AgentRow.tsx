@@ -24,6 +24,7 @@ import {
   needsLine,
   needsYou,
   roleLabel,
+  rowPill,
   subtitle,
   waitingForSlot,
   waitingOnMac,
@@ -33,27 +34,11 @@ import { useSteadyLine } from '../lib/steady';
 import { useApp } from '../lib/store';
 import { useAgentLevelLabel } from './IndependenceSetting';
 import { haptic } from '../lib/haptics';
-import {
-  avatarSize,
-  chromeScale,
-  fonts,
-  iconSize,
-  radius,
-  space,
-  type Palette,
-} from '../lib/theme';
+import { avatarSize, chromeScale, iconSize, radius, space } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { AgentAvatar, StatusMark } from './agent';
 import { showActions } from './menu';
-import { Icon, useRipple, T } from './ui';
-
-const lineColor = (colors: Palette) =>
-  ({
-    waiting: colors.accentWarning,
-    failed: colors.accentErrorLight,
-    working: colors.textSecondary,
-    limited: colors.textSecondary,
-  }) as const;
+import { Icon, StatusPill, useRipple, T } from './ui';
 
 /** How far a row's words follow Dynamic Type: past this they'd outgrow the title above them. */
 const NAME_SCALE = 2;
@@ -304,7 +289,9 @@ function RowBody({
         : subtitle(agent, now)
   );
   const role = roleLabel(agent.role);
-  const tinted = !!state && live && (state === 'waiting' || state === 'failed');
+  // Waiting on you, a turn that didn't finish, or out of usage: the state as
+  // a pill, the rest in the line's own ink (one coloured thing per row).
+  const pill = state && live ? rowPill(agent, line) : null;
   const cut = line.indexOf(' · ');
   // Steadied while it works, so step → "Thinking" → step doesn't flicker.
   const head = useSteadyLine(cut < 0 ? line : line.slice(0, cut), running);
@@ -402,6 +389,7 @@ function RowBody({
           {!stacked && time}
         </View>
         <View style={styles.nameLine}>
+          {pill && <StatusPill tone={pill.tone} label={pill.label} />}
           <T
             variant="small"
             numberOfLines={stacked ? 3 : 1}
@@ -409,24 +397,8 @@ function RowBody({
             color={colors.textSecondary}
             style={{ flex: 1 }}
           >
-            {/*
-              Only the state word takes the colour ("Needs your OK"), never
-              the whole line: three amber lines would shout down the list.
-            */}
-            {tinted ? (
-              <>
-                <T
-                  variant="small"
-                  color={lineColor(colors)[state]}
-                  style={{ fontFamily: fonts.medium }}
-                >
-                  {head}
-                </T>
-                {tail}
-              </>
-            ) : (
-              line
-            )}
+            {/* Working: the steadied step, so step → "Thinking" → step doesn't flicker. */}
+            {pill ? pill.rest : `${head}${tail}`}
           </T>
           {/*
             Waiting on you is said once, in the row's words ("Needs your OK",

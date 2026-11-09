@@ -246,6 +246,10 @@ const depthByAppearance = {
     trayFill: '#151413', // --tabs-tray-surface (surface-app)
     key: 'inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 0.5px rgba(0, 0, 0, 1), 0 1px 0 rgba(21, 20, 19, 1), 0 2px 4px rgba(0, 0, 0, 0.3)',
     keyFill: '#3a3835', // --color-gray-750
+    // A filled button's keycap (base.css .button--primary/--strong): its lit
+    // top edge and the soft drop under its side (--button-key-lit/-drop).
+    capLit: 'rgba(255, 255, 255, 0.22)',
+    capDrop: 'rgba(0, 0, 0, 0.5)',
   },
   light: {
     card: '0 24px 32px -24px rgba(0, 0, 0, 0.3), 0 6px 12px -8px rgba(0, 0, 0, 0.15)',
@@ -253,6 +257,8 @@ const depthByAppearance = {
     trayFill: '#e6e2db', // between --color-paper-250 and -200, the tray's gradient
     key: '0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 1px 0 rgba(203, 198, 189, 1), 0 2px 4px rgba(0, 0, 0, 0.08)',
     keyFill: '#ffffff',
+    capLit: 'rgba(255, 255, 255, 0.15)',
+    capDrop: 'rgba(0, 0, 0, 0.12)',
   },
 } as const;
 
@@ -261,6 +267,38 @@ export type Depth = (typeof depthByAppearance)[Appearance];
 /** The depth for the palette in force. */
 export const depthOf = (colors: Palette): Depth =>
   colors === palettes.dark ? depthByAppearance.dark : depthByAppearance.light;
+
+/** How far a keycap's side sits below its face, and how far a press moves it (the desk's 2 and 1). */
+export const KEY_DEPTH = 2;
+export const KEY_TRAVEL = 1;
+/** The side's shade: the face mixed toward black by this much (accent.ts KEY_SIDE_SHADE). */
+export const KEY_SIDE_SHADE = 0.2;
+
+/** A keycap's side for a fill: always darker, even under a near-black key (a lit side reads as a glow). */
+export const keySide = (fill: string): string => mix(fill, '#000000', 1 - KEY_SIDE_SHADE);
+
+/**
+ * A filled button as a keycap: lit top edge, a short side in the key's own
+ * shade, a soft drop. Pressed, the face travels down by what the side gives
+ * up, so the key's bottom edge (and everything below it) stays put.
+ */
+export function keycapShadow(depth: Depth, side: string, pressed: boolean): string {
+  const d = pressed ? KEY_DEPTH - KEY_TRAVEL : KEY_DEPTH;
+  return pressed
+    ? `inset 0 1px 0 ${depth.capLit}, 0 ${d}px 0 ${side}, 0 0 2px ${depth.capDrop}`
+    : `inset 0 1px 0 ${depth.capLit}, 0 ${d}px 0 ${side}, 0 ${d}px 4px ${depth.capDrop}`;
+}
+
+/** A status pill's wash: its hue at this alpha (the desk's --status-pill-wash). */
+export const PILL_WASH = 0.14;
+/** A status pill's dot (the desk's --status-pill-dot). */
+export const PILL_DOT = 6;
+
+/**
+ * Something new arriving (a message, a card, a row): the site's arrive
+ * curve, 200 ms at most (the desk's --transition-arrive), an 8pt rise.
+ */
+export const ARRIVE = { ms: 200, rise: 8, curve: [0.16, 1, 0.3, 1] } as const;
 export type Appearance = keyof typeof palettes;
 export const APPEARANCES = Object.keys(palettes) as Appearance[];
 
@@ -350,7 +388,16 @@ export const space = {
  * - `card`: every card, group, chip, thumbnail, toast and summary bar.
  * - `sheet`: sheets, native and our own menu.
  */
-export const radius = { sm: 4, inner: 10, control: 12, card: 16, sheet: 24, pill: 999 } as const;
+export const radius = {
+  sm: 4,
+  /** A status pill: the site's 6px tag. */
+  tag: 6,
+  inner: 10,
+  control: 12,
+  card: 16,
+  sheet: 24,
+  pill: 999,
+} as const;
 
 /** An avatar's or logo's corner: one squircle proportion at every size. */
 export const squircle = (size: number) => Math.round(size * 0.28);
@@ -590,7 +637,12 @@ export const lineHeight = (size: number, ratio = 1.4) => Math.round(size * ratio
  * --tracking-title -0.02em, --tracking-hero -0.035em), after the site's tight
  * headlines: names and titles pulled in, running text left as drawn.
  */
-export const tracking = { display: -0.035, title: -0.02, headline: -0.01, subhead: -0.006 } as const;
+export const tracking = {
+  display: -0.035,
+  title: -0.02,
+  headline: -0.01,
+  subhead: -0.006,
+} as const;
 
 /** Letter spacing in points for a size and a tracking, to a hundredth. */
 export const track = (size: number, em: number) => Math.round(size * em * 100) / 100;

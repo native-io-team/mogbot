@@ -573,9 +573,21 @@
   color: var(--text-muted);
 }
 
-/* Out of usage is a status, never the accent; told apart by words as well. */
-.agent-account--out .agent-account__state {
-  color: var(--accent-warning);
+/* The state pill sits in the detail line's height and is followed by the
+   email; the pill's own wash says out of usage, never the accent. */
+.agent-account__detail .agent-account__state {
+  align-self: center;
+  padding-block: 0;
+}
+
+.agent-account__state + .agent-account__email::before,
+.agent-account__state + .agent-account__plan::before,
+.agent-account__state + .agent-account__note::before {
+  content: none;
+}
+
+.agent-account__state + * {
+  margin-left: var(--spacing-xs);
 }
 
 .agent-account__actions {

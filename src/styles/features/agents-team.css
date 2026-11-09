@@ -117,6 +117,15 @@
   content: '·';
 }
 
+/* The state as a pill after the name; the line after it needs no dot. */
+.agents-team__pill {
+  margin-left: var(--spacing-xs);
+}
+
+.agents-team__line--after-pill::before {
+  content: none;
+}
+
 /* What it's asking for, in quiet words, as the review panel says it: the
    heading already says "needs you", and sixteen amber lines would shout it. */
 .agents-team__line[data-state='waiting'] {

@@ -179,6 +179,5 @@
 }
 
 .agents-compute__quiet-state {
-  color: var(--text-muted);
   font-variant-numeric: tabular-nums;
 }

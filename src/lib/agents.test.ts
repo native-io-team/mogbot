@@ -14,6 +14,7 @@ import {
   isQueued,
   lastUserMessage,
   failureLine,
+  failurePill,
   continuesFrom,
   retrySourceFor,
   approvalSeries,
@@ -615,6 +616,23 @@ describe('failure lines', () => {
     expect(failureLine({ kind: 'other' }, "Couldn't start Claude Code: no such file. More")).toBe(
       "Couldn't start Claude Code · didn’t finish"
     );
+    // A Codex agent is never said to be signed out of Claude Code.
+    expect(failureLine({ kind: 'signed_out' }, 'x', 'codex')).toBe('Codex is signed out');
+  });
+  it('splits a failure into a pill and its words, out of usage neutral', () => {
+    expect(failurePill({ kind: 'usage_limit' }, 'x')).toEqual({
+      tone: 'out',
+      label: 'Out of usage',
+      rest: '',
+    });
+    expect(failurePill({ kind: 'signed_out' }, 'x', 'codex')).toEqual({
+      tone: 'failed',
+      label: 'Signed out',
+      rest: 'Codex',
+    });
+    expect(
+      failurePill({ kind: 'other' }, "Couldn't start Claude Code: no such file. More")
+    ).toEqual({ tone: 'failed', label: 'Didn’t finish', rest: "Couldn't start Claude Code" });
   });
   it('a retry note keeps the ask and fits a check-in', () => {
     expect(retryNote('Send the invoices')).toContain('“Send the invoices”');
