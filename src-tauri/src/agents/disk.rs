@@ -386,7 +386,9 @@ fn regenerates(name: &str, parent: &Path) -> bool {
 }
 
 /// Regenerable folders under `home`, untouched for `older_than` as of `now`.
-/// Never enters `.git`, a symlink or another regenerable folder.
+/// Never enters `.git`, a symlink or another regenerable folder, and never
+/// offers one holding a working copy or anything changed since then
+/// ([`untouched_inside`]).
 pub fn candidates(home: &Path, older_than: Duration, now: SystemTime) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut seen = 0usize;
@@ -420,7 +422,7 @@ pub fn candidates(home: &Path, older_than: Duration, now: SystemTime) -> Vec<Pat
                     .ok()
                     .and_then(|m| now.duration_since(m).ok())
                     .is_some_and(|age| age >= older_than);
-                if old && regenerates(&name, &dir) && !path.join(".git").exists() {
+                if old && regenerates(&name, &dir) && untouched_inside(&path, older_than, now) {
                     out.push(path);
                 }
                 continue;
@@ -432,6 +434,50 @@ pub fn candidates(home: &Path, older_than: Duration, now: SystemTime) -> Vec<Pat
     }
     out.sort();
     out
+}
+
+/// Most entries a candidate is walked through before it is kept unread.
+const INSIDE_MAX_ENTRIES: usize = 250_000;
+
+/// Nothing anywhere inside `dir` is a working copy (`.git`, at any depth)
+/// or was changed within `older_than` of `now`. A folder's own date moves
+/// only when its direct entries do, so an old `node_modules` can hold a
+/// repo cloned into it or a linked package edited a minute ago. Links are
+/// not followed; anything it can't read, or more than
+/// [`INSIDE_MAX_ENTRIES`], keeps the folder.
+fn untouched_inside(dir: &Path, older_than: Duration, now: SystemTime) -> bool {
+    let fresh = |meta: &std::fs::Metadata| {
+        meta.modified()
+            .ok()
+            .and_then(|m| now.duration_since(m).ok())
+            .is_none_or(|age| age < older_than)
+    };
+    let mut seen = 0usize;
+    let mut stack = vec![dir.to_path_buf()];
+    while let Some(d) = stack.pop() {
+        let Ok(entries) = std::fs::read_dir(&d) else {
+            return false;
+        };
+        for entry in entries {
+            let Ok(entry) = entry else {
+                return false;
+            };
+            seen += 1;
+            if seen > INSIDE_MAX_ENTRIES || entry.file_name() == ".git" {
+                return false;
+            }
+            let Ok(meta) = std::fs::symlink_metadata(entry.path()) else {
+                return false;
+            };
+            if fresh(&meta) {
+                return false;
+            }
+            if meta.is_dir() {
+                stack.push(entry.path());
+            }
+        }
+    }
+    true
 }
 
 /// The working copy `p` is in, below `home`: the nearest ancestor with `.git`.

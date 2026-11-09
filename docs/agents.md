@@ -5428,7 +5428,9 @@ removed. A folder is removed only when all of these hold:
   for `.turbo` also `turbo.json`; `Cargo.toml` for `target`). A `target` folder
   of notes is not a build folder;
 - it is a real folder inside the agent's home, found without following a link
-  or entering a `.git` folder, and it holds no `.git` of its own;
+  or entering a `.git` folder, and nothing anywhere inside it is a `.git` or
+  was changed within the age limit (a folder's own date moves only with its
+  direct entries; a walk past 250,000 entries keeps it);
 - inside a working copy, git ignores it (`check-ignore`) and tracks nothing in
   it (`ls-files`), so removing it changes nothing git would call a change. Any
   doubt (git missing, an error, a timeout) keeps it;
