@@ -818,7 +818,7 @@ those turns exposed is replaced once at the next launch.)
 | `request_login` | all | a login card: connect an app or account (Gmail, Slack, LinkedIn, GitHub…) on this Mac, never a password (below, "Logins") |
 | `request_secret` | all | a secure input card for an API key made for programs; the agent gets `$VAR` and a reference, never the value (below) |
 | `create_agent` | Chief | name, role, instructions, optional `template`, `project` and `first_task` |
-| `update_agent` | Chief | name / role / instructions / project (memory kept); engine, model, effort, routines' model and mute, with no card (below, "Settings from chat") |
+| `update_agent` | Chief | name / role / instructions / project (memory kept); engine, model, effort, routines' model, mute and Runs on (`account`), with no card (below, "Settings from chat") |
 | `delete_agent` | Chief | puts an Allow / Deny card in the Chief's chat first |
 | `create_room` | Chief | name, 2–6 members, optional lead, a one-line purpose (`agents/room_tools.rs`, below, "Rooms") |
 | `add_to_room`, `remove_from_room` | Chief | change who's in a room (it keeps 2–6); a joiner gets the room's files |
@@ -5024,22 +5024,33 @@ to go to Settings".
 North star: every setting is changeable from chat. The rule for which ones
 ask: **more room for agents, or anything that reaches outside the Mac, is a
 card; less applies at once with a quiet line; secrets never go through chat.**
-Tests: `agents/settings_chat_tests.rs`.
+None of them is changed by a turn answering outside text. Every change leaves
+a line in the caller's chat and a log entry. The Chief's own settings tools
+are `agents/settings_tools.rs`. Tests: `agents/settings_chat_tests.rs`,
+`agents/settings_tools_tests.rs`.
 
 | Setting (desk) | From chat | Card? |
 | --- | --- | --- |
 | What it can do: projects, folders, apps, browser, admin, rules, exact-text OK | `propose_settings_change` | yes; lowering independence and turning the exact-text OK on apply at once |
-| Independence, per agent or team | `propose_settings_change` `independence` | raising yes, lowering no |
+| Independence, per agent or team | `propose_settings_change` `independence` (Careful/Steady/Bold/Unleashed, or the old names) | raising yes, lowering no |
 | An app already connected here, per agent ("let Outreach use Linear") | `propose_settings_change` `changes.connections {give, take}` | giving or widening to full yes; taking away or down to read no |
-| Fix stopped previews; Keep this Mac awake; Keep running when closed; Open at login | `propose_settings_change` `fix_previews` / `keep_awake` / `keep_running` / `open_at_login`, admins only, on their own | on yes (open at login is a LaunchAgent); off no |
-| Usage mode | `set_usage_mode` (Chief) | yes |
+| Fix stopped previews; Keep this Mac awake; Keep running when closed; Open at login; Your Chrome | `propose_settings_change` `fix_previews` / `keep_awake` / `keep_running` / `open_at_login` / `your_chrome`, admins only, on their own | on yes (open at login is a LaunchAgent); off no |
+| Usage mode | `set_usage_mode` (Chief) | Use it all, or Normal from Save, yes; Save, or Normal from Use it all, no |
+| When every account of an engine is out | `set_engine_fallback` (Chief) | carry on with the other engine yes; wait / ask first no |
+| Which account turns use now | `use_account` (Chief) | no on the user's own message; a standing card otherwise |
+| Account order, rename, add one | `manage_account` (Chief, the user's own message only) | no; adding opens the engine's sign-in on the Mac (`agents-open-settings`), finished by the user there |
+| One agent's Runs on | `update_agent` `account` (Chief) | no: what it runs on; the editor's "Runs only on Work" line |
+| Quiet hours | `set_quiet_hours` (any agent); also Settings → Notifications and the phone (`agents.quietHours` / `agents.setQuietHours`) | no: they only hold things back |
+| Slack: who answers, where it listens, trigger, let others, on/off | `slack_settings` (Chief) | another agent, a new conversation, letting others in or turning on yes; the rest no. Connecting is `connect: true`, which opens the masked token field on the Mac; a token never goes through chat |
+| Theme; Slow down on battery | `change_app_setting` (Chief) | no; the desk follows (`app-theme-changed`, `app-settings-changed`) |
+| Free disk space in agents' folders | `free_up_space` (Chief) | no: regenerable folders only (`disk::free_up`) |
 | Which account turns start on ("use my personal plan") | `use_account` (Chief): puts that signed-in account first in the order (`wallet::reorder`), failover unchanged | no when the user's own message asked; a card when another agent or a routine did; never for outside text |
 | Engine, model, effort, routines' model | `update_agent` (Chief) | no: what its turns run on, not what they may do; one "Now on Opus · High from its next message" line, as the editor leaves |
 | Mute an agent's notifications | `update_agent` `muted` (Chief) | no; unread and the badge still count it |
 | Name, role, instructions, project, look | `update_agent` / `create_agent` (Chief) | no (a card in a turn answering outside text, as before) |
 | Admin switch | `propose_settings_change` `admin` (admins) | yes |
 | Logins and secrets | `request_login`, `request_secret` | their own cards; never a value in chat |
-| Not from chat | the phone pairing and revoking, Remote Access on/off and its push PIN, adding or removing an account (`wallet`), quick-entry shortcut and menu-bar icon, new agents' default engine/model, the agents' browser switch | each is either a security wall that must be confirmed on the desk (pairing, Remote Access, PIN) or rarely asked for; the desk is the way in |
+| Not from chat | the phone pairing and revoking, Remote Access on/off and its push PIN, removing an account and its sign-in, quick-entry shortcut and menu-bar icon, new agents' default engine/model, the agents' browser switch, the phone's own appearance and text size | each is either a security wall that must be confirmed on the desk (pairing, Remote Access, PIN) or rarely asked for; the desk is the way in |
 
 **An app already connected** (`policy_card::GrantChange`). No sign-in and no
 token: the tool finds the one connection for that app (service id or title,

@@ -471,6 +471,16 @@ async fn generate() -> String {
         call("agents.setIndependence", json!({ "level": "go_hard" })).await,
     );
     out += &entry(
+        "agentsQuietHours",
+        "Result<'agents.quietHours'>",
+        call("agents.quietHours", json!({})).await,
+    );
+    out += &entry(
+        "agentsSetQuietHours",
+        "Result<'agents.setQuietHours'>",
+        call("agents.setQuietHours", json!({ "window": null })).await,
+    );
+    out += &entry(
         "agentsSetImportChoice",
         "Result<'agents.setImportChoice'>",
         call("agents.setImportChoice", json!({ "choice": "declined" })).await,

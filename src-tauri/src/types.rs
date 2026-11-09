@@ -939,6 +939,9 @@ pub struct AppState {
     /// (`agents::preview_fix`). `None` is on.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub agents_fix_previews: Option<bool>,
+    /// On battery, the app's background polls slow down (`power`). `None` is on.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub low_power_on_battery: Option<bool>,
     /// Whether the dashboard home header is hidden
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dashboard_header_hidden: Option<bool>,

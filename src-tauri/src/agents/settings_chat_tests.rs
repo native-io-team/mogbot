@@ -490,3 +490,67 @@ fn what_it_runs_on_applies_with_a_line_not_a_card() {
         "update_agent"
     ));
 }
+
+#[test]
+fn your_chrome_on_is_a_card_off_is_a_line_and_only_where_it_runs() {
+    let now = MacNow {
+        your_chrome_supported: true,
+        ..Default::default()
+    };
+    let on = MacChange {
+        your_chrome: Some(true),
+        ..Default::default()
+    };
+    let p = mac_proposal(true, &on, &now, Some("let agents use my Chrome".into()), 3).unwrap();
+    assert!(p.groups[0].changes[0].contains("your own Chrome"));
+    assert!(!mac_lowers(p.mac.as_ref().unwrap()));
+    // Already on, turning it off applies with a line.
+    let was_on = MacNow {
+        your_chrome: true,
+        ..now.clone()
+    };
+    let off = MacChange {
+        your_chrome: Some(false),
+        ..Default::default()
+    };
+    let p = mac_proposal(true, &off, &was_on, None, 3).unwrap();
+    assert!(mac_lowers(p.mac.as_ref().unwrap()));
+    assert!(p.groups[0].changes[0].contains("no longer"));
+    // Not an admin, or not on macOS: refused before a card.
+    assert!(mac_proposal(false, &on, &now, None, 3).is_err());
+    let elsewhere = MacNow::default();
+    assert!(mac_proposal(true, &on, &elsewhere, None, 3)
+        .unwrap_err()
+        .contains("macOS"));
+    // The tool's key reads it.
+    assert_eq!(
+        MacChange::from_args(&json!({ "your_chrome": true })).your_chrome,
+        Some(true)
+    );
+    assert!(MAC_KEYS.contains(&"your_chrome"));
+}
+
+#[test]
+fn independence_takes_the_names_on_the_slider_and_the_old_ones() {
+    let schema = schema();
+    let levels = schema["properties"]["changes"]["properties"]["independence"]["enum"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|v| v.as_str().unwrap().to_string())
+        .collect::<Vec<_>>();
+    for name in [
+        "careful",
+        "steady",
+        "bold",
+        "unleashed",
+        "often",
+        "go_hard",
+        "team",
+    ] {
+        assert!(levels.iter().any(|l| l == name), "{name}");
+    }
+    for name in ["careful", "steady", "bold", "unleashed"] {
+        assert!(Level::parse(name).is_ok(), "{name}");
+    }
+}

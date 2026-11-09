@@ -97,6 +97,21 @@ impl Window {
     }
 }
 
+/// Settings and the phone read quiet hours again on this.
+pub const EVENT: &str = "agents-quiet-hours-changed";
+
+/// A window from Settings or the phone, checked: whole minutes in a day,
+/// and not the same start and end.
+pub fn checked(w: Window) -> Result<Window, String> {
+    if w.start >= DAY_MINUTES || w.end >= DAY_MINUTES {
+        return Err("Quiet hours start and end inside one day (00:00 to 23:59).".into());
+    }
+    if w.start == w.end {
+        return Err("`from` and `to` are the same time: that's no quiet hours at all.".into());
+    }
+    Ok(w)
+}
+
 /// "22:00" and "7am" as a window. Refused when they're the same time.
 pub fn parse(from: &str, to: &str) -> Result<Window, String> {
     let read = |raw: &str, field: &str| {

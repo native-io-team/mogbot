@@ -150,6 +150,7 @@ pub mod schedule;
 pub mod search;
 pub mod secrets;
 pub mod sessions;
+pub mod settings_tools;
 pub mod share_text;
 pub mod slack;
 pub mod slack_api;

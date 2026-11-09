@@ -624,6 +624,29 @@
   gap: var(--spacing-sm);
 }
 
+/* Settings → Agents → Notifications, "Quiet hours": the two times beside
+   the switch, on one line. */
+.agents-quiet {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.agents-quiet__times {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.agents-quiet__time {
+  width: calc(var(--spacing-xl) * 4);
+}
+
+.agents-quiet__to {
+  color: var(--text-secondary);
+  font-size: var(--font-size-body-md);
+}
+
 /* Settings → Agents → Slack: the trigger word's short field, and the
    conversations to listen in, one tickable line each. */
 .agents-slack-trigger {

@@ -334,6 +334,20 @@ pub fn set_agents_fix_previews(enabled: bool) -> Result<(), CommandError> {
     Ok(())
 }
 
+/// "Slow down on battery": whether the app's background polls stretch on
+/// battery (`power`). On unless the user turned it off.
+#[tauri::command]
+#[tracing::instrument]
+pub fn get_low_power_on_battery() -> Result<bool, CommandError> {
+    Ok(crate::power::low_power_enabled())
+}
+
+#[tauri::command]
+#[tracing::instrument]
+pub fn set_low_power_on_battery(enabled: bool) -> Result<(), CommandError> {
+    crate::power::set_low_power(enabled)
+}
+
 /// Get whether the Slack community CTA is hidden on the dashboard.
 #[tauri::command]
 #[tracing::instrument]

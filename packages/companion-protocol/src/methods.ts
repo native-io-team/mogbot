@@ -9,6 +9,7 @@
 
 import type { Cursor } from './frames';
 import type { AgentPolicyView } from './policy';
+import type { QuietHours, QuietWindow } from './quiet';
 import type {
   AgentDraft,
   AgentEngine,
@@ -394,6 +395,17 @@ export interface Methods {
     result: { level: AgentIndependence };
   };
   /**
+   * `agents_quiet_hours`: the team's quiet hours (Settings → Agents →
+   * Notifications), `window` null when off. Read-only. Newer Macs only.
+   */
+  'agents.quietHours': { params: Record<string, never>; result: QuietHours };
+  /**
+   * `agents_set_quiet_hours`: set them, or `window: null` for off. They only
+   * hold things back (nothing scheduled runs, only approvals notify), so the
+   * user's choice applies at once. Audited. Newer Macs only.
+   */
+  'agents.setQuietHours': { params: { window: QuietWindow | null }; result: QuietHours };
+  /**
    * `agents_set_import_choice`: "bring your agents from another assistant,
    * or start fresh?" answered (the phone home's one-time card), read back
    * from `agents.overview`'s `importChoice`. An import that brings anything
@@ -643,6 +655,7 @@ export const READ_ONLY_METHODS = [
   'agents.quota',
   'agents.accounts',
   'agents.usagePlan',
+  'agents.quietHours',
   'agents.import.status',
   'agents.teamSetup',
   'agents.templates',

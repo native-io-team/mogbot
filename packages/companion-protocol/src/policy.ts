@@ -138,12 +138,14 @@ export interface SettingsProposal {
   why?: string;
   /** Some of it is a rule: words, not something the app stops. */
   hasRules?: boolean;
-  /** Switches for this whole Mac instead of agents' settings ("Fix stopped previews", keep awake, keep running, open at login). */
+  /** Switches for this whole Mac instead of agents' settings ("Fix stopped previews", keep awake, keep running, open at login, Your Chrome). */
   mac?: {
     fixPreviews?: boolean;
     keepAwake?: boolean;
     keepRunning?: boolean;
     openAtLogin?: boolean;
+    /** Agents may use the user's own Chrome through the app's extension. */
+    yourChrome?: boolean;
   };
   /** Apps already connected on this Mac, given to or taken from agents; each `line` is also in `groups`. */
   grants?: {

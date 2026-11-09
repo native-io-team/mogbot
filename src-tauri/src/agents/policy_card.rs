@@ -15,7 +15,7 @@
 //!   version; if anything changed since (the desk, another card), Allow
 //!   applies nothing and says to ask again.
 //! - **This Mac's switches** ("Fix stopped previews", "Keep this Mac
-//!   awake", "Keep running when closed", "Open at login") ride the same card
+//!   awake", "Keep running when closed", "Open at login", "Your Chrome") ride the same card
 //!   ([`MacChange`]): on is a card, off applies with a line.
 //! - **An app already connected here** ("let Outreach use Linear") is given,
 //!   narrowed or taken away on the same card ([`GrantChange`]): giving one
@@ -87,14 +87,19 @@ pub struct MacChange {
     /// "Open at login" (a LaunchAgent: system persistence, so on is a card).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub open_at_login: Option<bool>,
+    /// "Your Chrome" (`user_chrome`): agents may drive the user's own,
+    /// signed-in Chrome through the app's extension, on any engine.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub your_chrome: Option<bool>,
 }
 
 /// The tool's names for them, in [`MacChange`]'s order.
-pub const MAC_KEYS: [&str; 4] = [
+pub const MAC_KEYS: [&str; 5] = [
     "fix_previews",
     "keep_awake",
     "keep_running",
     "open_at_login",
+    "your_chrome",
 ];
 
 /// How this Mac's switches are now, read back from each thing itself.
@@ -104,8 +109,11 @@ pub struct MacNow {
     pub keep_awake: bool,
     pub keep_running: bool,
     pub open_at_login: bool,
+    pub your_chrome: bool,
     /// macOS, where the last three exist.
     pub stay_on_supported: bool,
+    /// Where the Your Chrome link runs (macOS).
+    pub your_chrome_supported: bool,
     /// False in a dev build: there is no app bundle to reopen.
     pub open_at_login_available: bool,
 }
@@ -127,6 +135,10 @@ const LOGIN: (&str, &str) = (
     "The app reopens at login, so agents carry on after a restart",
     "The app no longer reopens at login",
 );
+const CHROME: (&str, &str) = (
+    "Agents may use your own Chrome, signed in as you, through the app's extension (each send still asks)",
+    "Agents no longer use your own Chrome",
+);
 
 impl MacChange {
     fn from_args(c: &Value) -> Self {
@@ -136,6 +148,7 @@ impl MacChange {
             keep_awake: b("keep_awake"),
             keep_running: b("keep_running"),
             open_at_login: b("open_at_login"),
+            your_chrome: b("your_chrome"),
         }
     }
 
@@ -162,6 +175,9 @@ pub fn mac_proposal(
     if stay_on && !now.stay_on_supported {
         return Err("Keeping agents going (awake, running when closed, open at login) is only offered on macOS.".into());
     }
+    if want.your_chrome.is_some() && !now.your_chrome_supported {
+        return Err("Your Chrome is only offered on macOS. Nothing changed.".into());
+    }
     if want.open_at_login == Some(true) && !now.open_at_login_available {
         return Err("Open at login isn't available in this build: there is no app to reopen. Nothing changed.".into());
     }
@@ -186,6 +202,12 @@ pub fn mac_proposal(
             now.open_at_login,
             LOGIN,
             &mut kept.open_at_login,
+        ),
+        (
+            want.your_chrome,
+            now.your_chrome,
+            CHROME,
+            &mut kept.your_chrome,
         ),
     ] {
         if let Some(on) = wanted.filter(|on| *on != is_now) {
@@ -226,6 +248,7 @@ pub fn mac_lowers(m: &MacChange) -> bool {
             m.keep_awake,
             m.keep_running,
             m.open_at_login,
+            m.your_chrome,
         ]
         .iter()
         .all(|v| *v != Some(true))
@@ -240,7 +263,9 @@ fn mac_now() -> MacNow {
         keep_awake: stay.keep_awake,
         keep_running: stay.keep_running,
         open_at_login: stay.open_at_login,
+        your_chrome: crate::user_chrome::settings::enabled(),
         stay_on_supported: stay.supported,
+        your_chrome_supported: crate::user_chrome::SUPPORTED,
         open_at_login_available: stay.open_at_login_available,
     }
 }
@@ -257,6 +282,9 @@ fn apply_mac(m: &MacChange) -> Result<(), String> {
         )
         .map_err(|e| e.to_string())?;
     }
+    if let Some(on) = m.your_chrome {
+        crate::user_chrome::settings::set_enabled(on).map_err(|e| e.to_string())?;
+    }
     Ok(())
 }
 
@@ -265,6 +293,15 @@ fn synced_mac(app: &AppHandle, p: &Proposal) {
     if let Some(m) = &p.mac {
         if m.keep_awake.is_some() || m.keep_running.is_some() || m.open_at_login.is_some() {
             crate::commands::remote_access::sync_stay_on(app, m.keep_running.is_some());
+        }
+        // Saved by `apply_mac`; this starts or stops the link to match.
+        if let Some(on) = m.your_chrome {
+            tracing::info!(on, "[Agents] Your Chrome switched from chat");
+            tauri::async_runtime::spawn(async move {
+                if let Err(e) = crate::user_chrome::set_enabled(on).await {
+                    tracing::warn!("[Agents] Your Chrome didn't follow its switch: {e}");
+                }
+            });
         }
     }
 }
@@ -571,13 +608,14 @@ pub fn schema() -> Value {
                         }
                     },
                     "browser": { "type": "boolean", "description": "May use the user's signed-in browser." },
-                    "independence": { "type": "string", "enum": ["often", "judgement", "go_hard", "full_send", "team"], "description": "How much it does on its own, for the agents named (each may have its own; \"team\" puts one back on the team's level). Shown to the user as a slider: often = Careful, judgement = Steady, go_hard = Bold, full_send = Unleashed; say those names, and read the old ones they may type (\"check with me often\", \"good judgement\", \"go hard\", \"full send\") as the same levels. Name the agent for one (\"put Social Posts on Unleashed\": agents [\"Social Posts\"]), \"team\" for everyone's default. full_send when the user says \"unleashed\", \"go full send\", \"let it rip\" or \"stop asking me\". Raising needs the user's card; lowering (\"make Finance careful\": often) applies at once." },
+                    "independence": { "type": "string", "enum": ["careful", "steady", "bold", "unleashed", "often", "judgement", "go_hard", "full_send", "team"], "description": "How much it does on its own, for the agents named (each may have its own; \"team\" puts one back on the team's level). Shown to the user as a slider: Careful, Steady, Bold, Unleashed (often, judgement, go_hard, full_send are the same stops); say those names, and read the old ones they may type (\"check with me often\", \"good judgement\", \"go hard\", \"full send\") as the same levels. Name the agent for one (\"put Social Posts on Unleashed\": agents [\"Social Posts\"]), \"team\" for everyone's default. full_send when the user says \"unleashed\", \"go full send\", \"let it rip\" or \"stop asking me\". Raising needs the user's card; lowering (\"make Finance careful\": often) applies at once." },
                     "admin": { "type": "boolean", "description": "Admins may propose changes for other agents." },
                     "outward_text_needs_ok": { "type": "boolean", "description": "Nothing goes out under the user's name (message, post, comment, email, issue, pull request) until they OK its exact text on a card, at every level including Unleashed. On when the user says \"nothing goes out unless I approve the exact text\" or \"word for word\": the app enforces it, unlike a rule. On applies at once." },
                     "fix_previews": { "type": "boolean", "description": "This Mac's \"Fix stopped previews\" switch: agents fix a preview that stopped by itself." },
                     "keep_awake": { "type": "boolean", "description": "This Mac's \"Keep this Mac awake\": agents pause while it sleeps (\"keep going overnight\")." },
                     "keep_running": { "type": "boolean", "description": "This Mac's \"Keep running when closed\": closing the window keeps agents going." },
                     "open_at_login": { "type": "boolean", "description": "This Mac's \"Open at login\": the app reopens after a restart." },
+                    "your_chrome": { "type": "boolean", "description": "This Mac's \"Your Chrome\": agents may use the user's own signed-in Chrome through the app's extension, on any engine (\"let agents use my Chrome\")." },
                     "connections": {
                         "type": "object",
                         "description": "Apps already connected on this Mac, for the agents named (\"let Outreach use Linear\"). Not a sign-in: an app not connected yet is the agent's request_login. Giving or widening is a card; taking away or down to read applies at once.",
@@ -601,7 +639,7 @@ pub fn schema() -> Value {
     })
 }
 
-pub const DESCRIPTION: &str = "Propose a change to what an agent may do (projects and how it works in them, folders on this Mac, apps, an app already connected here, the user's browser, independence, admin, rules, whether sends wait for the exact text's OK), to the team's defaults, or to this Mac's switches (“Fix stopped previews”, keep awake, keep running when closed, open at login; on their own, with no agents; off applies at once). Use it whenever the user says an agent should or shouldn't be able to do something, or asks to reset settings or make one agent like another. The user gets a card showing the change in plain words and applies it with Allow; nothing changes before. It returns at once: say in one line what you proposed and stop; you're told when they answer. Never tell the user to go to Settings.";
+pub const DESCRIPTION: &str = "Propose a change to what an agent may do (projects and how it works in them, folders on this Mac, apps, an app already connected here, the user's browser, independence, admin, rules, whether sends wait for the exact text's OK), to the team's defaults, or to this Mac's switches (“Fix stopped previews”, keep awake, keep running when closed, open at login, Your Chrome; on their own, with no agents; off applies at once). Use it whenever the user says an agent should or shouldn't be able to do something, or asks to reset settings or make one agent like another. The user gets a card showing the change in plain words and applies it with Allow; nothing changes before. It returns at once: say in one line what you proposed and stop; you're told when they answer. Never tell the user to go to Settings.";
 
 fn text(message: impl Into<String>) -> Value {
     json!({ "content": [{ "type": "text", "text": message.into() }] })

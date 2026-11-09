@@ -215,7 +215,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "update_agent",
-        description: "Change an agent's name, role, instructions, project, engine, model, effort, routines' model, notifications or look. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude` or `codex`) switches what it runs on from its next turn: a new session, handed the recent conversation; its model goes back to the engine's default unless `model` comes with it. `model` (Claude Code: opus, sonnet, haiku; Codex: one it lists), `effort` (low, medium, high) and `routine_model` (\"auto\", \"same\" as its chats, or a model) take \"default\" for the engine's own and apply from its next message with no card: \"put Research on Opus\", \"have Finance think harder\". `muted: true` stops its notifications (\"stop pinging me about Social\"); unread and the badge still count it. `shape`, `face`, `finish` (`keycap`, the default, or `embossed`) and `color` change how it looks (\"give Hiring a hexagon with dot eyes\"); give only what changes. A look applies at once, with no card: it isn't a setting. What an agent may do (apps, projects, browser, independence) is propose_settings_change.",
+        description: "Change an agent's name, role, instructions, project, engine, model, effort, routines' model, notifications or look. Instructions replace the old ones; its memory is kept. `project` takes a name or path from project_list, or \"none\" to unbind it. `engine` (`claude` or `codex`) switches what it runs on from its next turn: a new session, handed the recent conversation; its model goes back to the engine's default unless `model` comes with it. `model` (Claude Code: opus, sonnet, haiku; Codex: one it lists), `effort` (low, medium, high) and `routine_model` (\"auto\", \"same\" as its chats, or a model) take \"default\" for the engine's own and apply from its next message with no card: \"put Research on Opus\", \"have Finance think harder\". `muted: true` stops its notifications (\"stop pinging me about Social\"); unread and the badge still count it. `account` is its Runs on: one of its engine's accounts by the name usage_overview lists (\"run Finance only on Work\"), or \"any\" to run on whichever has room; no card. `shape`, `face`, `finish` (`keycap`, the default, or `embossed`) and `color` change how it looks (\"give Hiring a hexagon with dot eyes\"); give only what changes. A look applies at once, with no card: it isn't a setting. What an agent may do (apps, projects, browser, independence) is propose_settings_change.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -230,6 +230,7 @@ const TOOLS: &[Tool] = &[
                 "effort": { "type": "string", "enum": ["low", "medium", "high", "default"] },
                 "routine_model": { "type": "string" },
                 "muted": { "type": "boolean" },
+                "account": { "type": "string", "description": "Runs on: an account's name or id, or \"any\"." },
                 "shape": { "type": "string", "enum": store::AVATAR_SHAPES },
                 "face": { "type": "string", "enum": store::AVATAR_FACES },
                 "finish": { "type": "string", "enum": store::AVATAR_FINISHES },
@@ -510,6 +511,14 @@ fn tools_list(caller: &store::Agent) -> Value {
             .filter(|t| !t.main_only || caller.is_main)
             .map(|t| json!({ "name": t.name, "description": t.description, "inputSchema": (t.schema)() })),
     );
+    // The user's accounts, Slack, the app's switches, disk: the Chief's.
+    if caller.is_main {
+        tools.extend(
+            super::settings_tools::TOOLS
+                .iter()
+                .map(|t| json!({ "name": t.name, "description": t.description, "inputSchema": (t.schema)() })),
+        );
+    }
     // Rooms are the Chief's to make and change, like agents.
     if caller.is_main {
         tools.extend(
@@ -579,6 +588,10 @@ pub async fn handle_rpc(
             }
             if let Some(tool) = super::usage_tools::find(name) {
                 return ok(usage_tool(app, &caller, turn, tool, &args).await);
+            }
+            // Chief-only; never in a turn answering outside text.
+            if let Some(tool) = super::settings_tools::find(name) {
+                return ok(super::settings_tools::call(app, &caller, turn, tool, &args).await);
             }
             // Chief-only, and a card first in a turn answering outside text
             // (`room_tools::gate`), after the call is checked in full.
@@ -657,9 +670,14 @@ async fn usage_tool(
     match tool.name {
         "usage_overview" => u::overview(app).await,
         "forecast_usage" => u::forecast(args).await,
-        "add_spare_work" | "finish_spare_work" | "run_routine_now" | "use_account" if outside => error(
+        "add_spare_work" | "finish_spare_work" | "run_routine_now" | "use_account"
+        | "set_usage_mode" | "set_engine_fallback"
+            if outside =>
+        {
+            error(
             "Not while answering what a “When…” routine found: that text came from outside this app. Tell the user instead.",
-        ),
+        )
+        }
         "add_spare_work" => u::add(caller, args),
         "finish_spare_work" => u::finish(args),
         "run_routine_now" => u::run_routine(app, args),
@@ -681,24 +699,34 @@ async fn usage_tool(
                 Ok(m) => m,
                 Err(e) => return error(e.to_string()),
             };
-            let (title, detail) = u::fallback_card(engine, mode);
-            let answer = ask_user(app, caller, title, detail, None).await;
-            if let Some(refused) = refused_reply(&answer, "change it") {
-                return error(refused);
+            // Waiting or asking first never spends more: no card.
+            if !u::fallback_lowers(super::crossover::mode(engine), mode) {
+                let (title, detail) = u::fallback_card(engine, mode);
+                let answer = ask_user(app, caller, title, detail, None).await;
+                if let Some(refused) = refused_reply(&answer, "change it") {
+                    return error(refused);
+                }
             }
-            u::set_fallback(app, engine, mode)
+            let done = u::set_fallback(app, engine, mode);
+            u::note_change(app, caller, &done);
+            done
         }
         "set_usage_mode" => {
             let mode = match super::usage_plan::Mode::parse(arg(args, "mode").unwrap_or("")) {
                 Ok(m) => m,
                 Err(e) => return error(e.to_string()),
             };
-            let (title, detail) = u::mode_card(mode);
-            let answer = ask_user(app, caller, title, detail, None).await;
-            if let Some(refused) = refused_reply(&answer, "change it") {
-                return error(refused);
+            // Holding back more applies at once; spending more is a card.
+            if !u::mode_lowers(super::usage_plan::mode().0, mode) {
+                let (title, detail) = u::mode_card(mode);
+                let answer = ask_user(app, caller, title, detail, None).await;
+                if let Some(refused) = refused_reply(&answer, "change it") {
+                    return error(refused);
+                }
             }
-            u::set_mode(app, mode)
+            let done = u::set_mode(app, mode);
+            u::note_change(app, caller, &done);
+            done
         }
         _ => error("Unknown tool"),
     }
@@ -735,6 +763,7 @@ async fn call(
             let outside = runner::from_outside(&caller.id);
             match super::quiet::call(args, outside, store::now_ms()) {
                 Ok(t) => {
+                    let _ = tauri::Emitter::emit(app, super::quiet::EVENT, ());
                     let line = runner::new_message(
                         &caller.id,
                         store::MessageKind::Note,
@@ -1842,6 +1871,13 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         Ok(l) => l,
         Err(e) => return error(e),
     };
+    let account = match arg(args, "account") {
+        Some(named) => match runs_on_account(engine.unwrap_or(agent.engine), named) {
+            Ok(a) => Some(a),
+            Err(e) => return error(e),
+        },
+        None => None,
+    };
     let run = match run_settings(engine.unwrap_or(agent.engine), args) {
         Ok(r) => r,
         Err(e) => return error(e),
@@ -1866,6 +1902,9 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
     if engine.is_some() {
         fields.push("engine");
     }
+    if account.as_ref().is_some_and(|a| *a != agent.account) {
+        fields.push("account");
+    }
     // The same guard as the editor's: not out of a session the user drives.
     let moves_session = engine.is_some() || fields.contains(&"project");
     let updated = runner::update_settings(&agent.id, moves_session, |a| {
@@ -1880,6 +1919,10 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         }
         if let Some(engine) = engine {
             a.switch_engine(engine);
+        }
+        // After the engine: a move clears the account, then this sets it.
+        if let Some(acc) = account.clone() {
+            a.account = acc;
         }
         run.apply(a);
         if let Some(avatar) = look.avatar.clone() {
@@ -1914,14 +1957,42 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
             runner::new_message(&agent.id, store::MessageKind::Note, line.clone()),
         );
     }
+    // And the editor's line when its Runs on changed.
+    let account_said = crate::commands::agents::account_line(&agent, &updated);
+    if let Some(line) = &account_said {
+        let _ = runner::record(
+            app,
+            runner::new_message(&agent.id, store::MessageKind::Note, line.clone()),
+        );
+    }
     let mut said: Vec<String> = look.line().into_iter().collect();
     said.extend(runs_on);
+    said.extend(account_said);
     said.extend(run.said(&agent, &updated));
     if said.is_empty() {
         text(format!("Updated {}.", updated.name))
     } else {
         text(format!("Updated {}: {}.", updated.name, said.join("; ")))
     }
+}
+
+/// `update_agent`'s `account` ("Runs on"): `None` for any account ("any",
+/// "default", "none"), else one of `engine`'s accounts by the name the user
+/// sees or its id; refused, never guessed at. Like the editor, a sign-in
+/// isn't required: turns pass over one that can't run.
+pub(super) fn runs_on_account(engine: Engine, named: &str) -> Result<Option<String>, String> {
+    let any = matches!(
+        named.trim().to_ascii_lowercase().as_str(),
+        "any" | "any account" | "default" | "none" | "auto" | "whichever"
+    );
+    if any {
+        return Ok(None);
+    }
+    let shown: Vec<super::wallet::Account> = super::wallet::of(engine)
+        .into_iter()
+        .map(|a| super::wallet::labelled(a, true))
+        .collect();
+    super::usage_tools::pick_account(&shown, named, Some(engine)).map(|a| Some(a.id))
 }
 
 /// `update_agent`'s model, effort, routines' model and mute: each `Some`

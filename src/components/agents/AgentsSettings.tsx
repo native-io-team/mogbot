@@ -4,8 +4,9 @@
  * - **On this Mac**: the menu-bar icon and quick message
  *   (`AgentsDesktopSettings`), and what keeps agents going (keep awake, keep
  *   running when closed, open at login — `useStayOn`, read back from the
- *   thing itself), and whether a stopped preview wakes its agent
- *   (`AgentPreviewFixSetting`).
+ *   thing itself), whether a stopped preview wakes its agent
+ *   (`AgentPreviewFixSetting`), and slowing down on battery
+ *   (`AgentLowPowerSetting`, `power.rs`).
  * - **Agents' browser**: the team's own Chrome on this Mac (on by default),
  *   and the two permissions a phone sign-in to Google needs
  *   (`AgentsBrowserSettings`, `agent_browser/`).
@@ -29,7 +30,8 @@
  *   one runs out of usage (`AgentAccounts`, `agents/wallet.rs`).
  * - **Disk space**: free space when low, and each large agent home with
  *   "Free up space" (`AgentsDiskSettings`, `agents/disk.rs`).
- * - **Notifications**: what notifies, and where to mute one agent.
+ * - **Notifications**: what notifies, quiet hours (`AgentQuietHoursSetting`,
+ *   `agents/quiet.rs`), and where to mute one agent.
  * - **Slack**: start agents from a Slack message, answered in the thread
  *   (`AgentsSlackSettings`, `agents/slack.rs`).
  * - **Phone and other assistants**: the way into each.
@@ -54,6 +56,8 @@ import { AgentsBrowserSettings } from './AgentsBrowserSettings';
 import { AgentsUserChromeSettings } from './AgentsUserChromeSettings';
 import { AgentsSlackSettings } from './AgentsSlackSettings';
 import { AgentPreviewFixSetting } from './AgentPreviewFixSetting';
+import { AgentLowPowerSetting } from './AgentLowPowerSetting';
+import { AgentQuietHoursSetting } from './AgentQuietHoursSetting';
 import { useStayOn } from '../../hooks/useStayOn';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import type { EngineInfo } from '../../lib/agents';
@@ -113,6 +117,7 @@ export function AgentsSettings({
         )}
         <div className="settings-section">
           <AgentPreviewFixSetting />
+          <AgentLowPowerSetting />
         </div>
       </section>
 
@@ -156,6 +161,7 @@ export function AgentsSettings({
             label="Replies and requests"
             description="A reply notifies once per turn; a request for your OK comes with a sound."
           />
+          <AgentQuietHoursSetting />
           <Row
             label="Mute an agent"
             description="From its … menu. Muted agents still count in the Dock badge."

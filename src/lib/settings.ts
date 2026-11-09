@@ -365,7 +365,9 @@ export type SettingsSectionRequest =
   | 'agent-policy'
   | 'agent-disk'
   | 'agent-user-chrome'
-  | 'agent-slack';
+  | 'agent-slack'
+  | 'agent-quiet'
+  | 'agent-low-power';
 let settingsSectionOnOpen: SettingsSectionRequest | null = null;
 
 export function requestSettingsSectionOnOpen(section: SettingsSectionRequest) {

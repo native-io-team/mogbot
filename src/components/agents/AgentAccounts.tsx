@@ -56,6 +56,7 @@ import {
 } from '../../lib/agentAccounts';
 import { inUseOf } from '../../../packages/companion-protocol/src/accountSwitcher';
 import { AccountSignIn } from './AccountSignIn';
+import { onAccountSignIn, takeAccountSignIn } from '../../lib/settingsFromChat';
 
 const say = (e: unknown) => formatCommandError(asCommandError(e));
 
@@ -292,8 +293,17 @@ export function AgentAccounts({ engines }: { engines: EngineInfo[] }) {
   const { data, execute } = useAsyncState(listUsageAccounts);
   const [signingIn, setSigningIn] = useState<UsageAccount | null>(null);
   const [request] = useState(takeAccountsRequest);
+  // An account the Chief added from chat (`manage_account add`): its sign-in
+  // runs here, as Add and sign in would, once the list has it.
+  const [signInFor, setSignInFor] = useState<string | null>(takeAccountSignIn);
+  useEffect(() => onAccountSignIn(setSignInFor), []);
   const ref = useRef<HTMLElement>(null);
   const all = data ?? [];
+  const asked = signInFor ? all.find((a) => a.id === signInFor) : undefined;
+  if (asked) {
+    setSignInFor(null);
+    if (!asked.signedIn) setSigningIn(asked);
+  }
 
   const reload = useCallback(() => void execute().catch(() => undefined), [execute]);
   useEffect(() => {
