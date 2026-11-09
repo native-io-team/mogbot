@@ -2036,6 +2036,11 @@ pub struct MemorySeal {
     path: std::path::PathBuf,
     before: Option<Vec<u8>>,
     writes: u64,
+    /// AGENTS.md as the turn began: Codex has no rule against writing it,
+    /// and a file of its own there would be Codex's project doc and folded
+    /// into memory (`crossover::sync_instructions`).
+    home: std::path::PathBuf,
+    agents_before: super::crossover::AgentsDoc,
     app: AppHandle,
 }
 
@@ -2047,6 +2052,8 @@ impl MemorySeal {
             before: std::fs::read(&path).ok(),
             writes: store::claude_md_writes(&path),
             path,
+            home: home.to_path_buf(),
+            agents_before: super::crossover::agents_doc(home),
             app: app.clone(),
         }
     }
@@ -2069,7 +2076,9 @@ pub fn put_back_claude_md(path: &Path, before: Option<&[u8]>, writes_before: u64
 
 impl Drop for MemorySeal {
     fn drop(&mut self) {
-        if put_back_claude_md(&self.path, self.before.as_deref(), self.writes) {
+        let claude = put_back_claude_md(&self.path, self.before.as_deref(), self.writes);
+        let agents = super::crossover::put_back_agents_md(&self.home, &self.agents_before);
+        if claude || agents {
             let line = new_message(
                 &self.agent_id,
                 MessageKind::Note,
@@ -4947,33 +4956,11 @@ pub fn answer_crossover(
     allow: bool,
     always: bool,
 ) -> Result<(), CommandError> {
-    use super::crossover::{self, Answer};
-    let Some(ask) = approval.crossover.clone() else {
-        return Err(CommandError::expected(
-            "That isn't a card about carrying on.",
-        ));
-    };
-    let answer = crossover::answer_of(allow, always);
-    match answer {
-        Answer::Always => crossover::set_mode(ask.from, crossover::Mode::Carry)?,
-        Answer::JustThisTime => crossover::grant_once(ask.from, store::now_ms())?,
-        Answer::Wait => {}
-    }
-    crossover::clear_asking(&approval.request_id);
-    let status = if allow {
-        store::ApprovalStatus::Allowed
-    } else {
-        store::ApprovalStatus::Denied
-    };
-    if let Some(updated) = store::answer_prompt(
-        agent_id,
-        &approval.request_id,
-        status,
-        crossover::answer_word(answer),
-    )? {
-        let _ = app.emit(EVENT_MESSAGE, &updated);
-    }
-    if allow && ask.resume {
+    use super::crossover;
+    // Only the answer that closes the card sets anything or runs the turn.
+    let settled = crossover::settle(agent_id, approval, allow, always, store::now_ms())?;
+    let _ = app.emit(EVENT_MESSAGE, &settled.message);
+    if let (true, Some(ask)) = (settled.resume, approval.crossover.as_ref()) {
         enqueue(
             app,
             agent_id,

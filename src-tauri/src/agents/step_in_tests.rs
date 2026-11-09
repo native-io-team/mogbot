@@ -299,6 +299,31 @@ fn only_the_user_answers_it_and_the_sweep_waits() {
     crate::agent_browser::step_in::forget("si_sweep");
 }
 
+/// Review: "Approve it" typed into a chat whose only card was a step-in
+/// answered it as a plain Allow: the card closed as allowed with no hold,
+/// no window, and the agent never woken. A typed yes leaves it alone.
+#[test]
+fn review_a_typed_yes_never_answers_a_step_in_card() {
+    let c = card("req_typed");
+    assert!(crate::agents::typed_answer::the_card(std::slice::from_ref(&c)).is_none());
+}
+
+/// Review: after Not now, nothing stopped the agent (or a page steering it)
+/// asking again at once, card after card. The same site isn't asked about
+/// again for a while; another site can be.
+#[test]
+fn review_after_not_now_the_same_site_isnt_asked_again_for_a_while() {
+    let a = "si_spam";
+    let t = 1_000_000;
+    assert!(ask_again(a, "idp.example", t).is_ok());
+    note_not_now(a, "idp.example", t);
+    let why = ask_again(a, "idp.example", t + 60_000).unwrap_err();
+    assert!(why.contains("not now"), "{why}");
+    assert!(ask_again(a, "other.example", t + 60_000).is_ok());
+    assert!(ask_again("someone_else", "idp.example", t + 60_000).is_ok());
+    assert!(ask_again(a, "idp.example", t + NOT_NOW_QUIET_MS).is_ok());
+}
+
 /// What it did: the step reads as asking, never as using the browser.
 #[test]
 fn the_timeline_says_it_asked() {

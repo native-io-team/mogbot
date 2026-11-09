@@ -117,7 +117,7 @@ pub const TOOLS: &[ToolDef] = &[
     },
     ToolDef {
         name: STEP_IN_TOOL,
-        description: "When the page in your tab needs a person for one step you can't pass (an SSO or \"verify it's you\" page, a passkey, a 2FA or emailed code, a CAPTCHA): one card asks the user to step into that tab on this Mac, do the step themselves, and hand it back. You never see what they type, only where the page ended up. Use it instead of asking for a password or a code, or failing. A plain sign-in on a site you're signed out of is request_login with signed_out: true instead. It returns at once: stop and say in one line what you need them for; you're woken when they hand back, with the page's new address and title.",
+        description: "When the page in your tab needs a person for one step you can't pass (an SSO or \"verify it's you\" page, a passkey, a 2FA or emailed code, a CAPTCHA): one card asks the user to step into that tab on this Mac, do the step themselves, and hand it back. You never see what they type, only where the page ended up. Use it instead of asking for a password or a code, or failing. A plain sign-in on a site you're signed out of is request_login with signed_out: true instead. It returns at once: stop and say in one line what you need them for; you're woken when they hand back, with the page's new address (read the page for the rest).",
         schema: || json!({ "type": "object", "properties": { "reason": { "type": "string", "description": "What they need to do, in a few words, shown on the card: \"approve the Okta sign-in\", \"the CAPTCHA on checkout\", \"the 6-digit code from your phone\"." }, "tab": tab_prop() }, "required": ["reason"] }),
     },
     ToolDef {
@@ -477,6 +477,10 @@ pub fn run(agent: &str, name: &str, args: &Value) -> Result<Vec<Value>, String> 
                 .filter(|t| !t.is_empty())
             {
                 Some(want) => loop {
+                    // The user stepped in while it waited: stop reading.
+                    if let Some(why) = super::step_in::refusal(agent, &tab) {
+                        return Err(why.into());
+                    }
                     if svc.text(&tab, MAX_TEXT).contains(want) {
                         return Ok(vec![text(format!("\"{want}\" is on the page."))]);
                     }
