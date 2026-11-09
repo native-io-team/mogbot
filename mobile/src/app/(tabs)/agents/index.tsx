@@ -695,7 +695,10 @@ const useStyles = makeStyles((colors) => ({
     alignItems: 'center',
     gap: space.md,
     marginHorizontal: space.lg,
-    marginVertical: space.sm,
+    marginTop: space.sm,
+    // The card's drop reaches ~30px under it; the row below is opaque and
+    // drawn later, so the gap has to hold the whole shadow.
+    marginBottom: space['2xl'],
     paddingHorizontal: space.lg,
     paddingVertical: space.md,
     minHeight: 56,

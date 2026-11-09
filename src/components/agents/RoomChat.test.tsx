@@ -9,6 +9,7 @@ vi.mock('../../contexts/ToastContext', async (importOriginal) => ({
 
 import { RoomChat } from './RoomChat';
 import { AgentProjectsProvider } from './AgentProject';
+import { composerDraft, setComposerDraft } from '../../lib/composerDraft';
 import { takeHandedRevision } from '../../lib/agentRooms';
 import { __resetAgentsStore, loadRoomMessages, refreshRooms } from '../../lib/agentsStore';
 import { RoomWorkingPlace } from './AgentRoomParts';
@@ -281,5 +282,29 @@ describe('an agent’s own chat while it answers in a room', () => {
     expect(screen.getByText(/Replying in/)).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Month end' }));
     expect(onOpenRoom).toHaveBeenCalledWith('room:r1');
+  });
+});
+
+describe('the room’s draft', () => {
+  const box = () =>
+    screen.getByRole('textbox', { name: 'Message Month end' }) as HTMLTextAreaElement;
+
+  it('is held in the per-room draft store, kept across a reopen, and cleared by sending', async () => {
+    await open(room());
+    fireEvent.change(box(), { target: { value: '@Finance hello' } });
+    expect(composerDraft('room:r1')).toBe('@Finance hello');
+    cleanup();
+    await open(room());
+    expect(box().value).toBe('@Finance hello');
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    await waitFor(() => expect(sends).toHaveLength(1));
+    expect(composerDraft('room:r1')).toBe('');
+  });
+
+  it('is its own per room', async () => {
+    setComposerDraft('room:other', 'elsewhere');
+    await open(room());
+    expect(box().value).toBe('');
+    setComposerDraft('room:other', '');
   });
 });

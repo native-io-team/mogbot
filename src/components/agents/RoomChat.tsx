@@ -17,6 +17,8 @@
 
 import {
   memo,
+  type ClipboardEvent as ReactClipboardEvent,
+  type RefObject,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -99,7 +101,7 @@ import {
 import { loadOlderRoomMessages, upsertMessage, useAgentsSelector } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
-import { keepDraft, unsentDraft } from '../../lib/chatRestore';
+import { composerDraft, setComposerDraft, useComposerDraft } from '../../lib/composerDraft';
 import { accentScopeProps, useAccentScope } from '../../lib/accent';
 import { blockedCopy, dictationVocabulary, openPrivacySettings } from '../../lib/dictation';
 import { listProjects } from '../../lib/project';
@@ -150,8 +152,14 @@ export function RoomChat({
     (a, b) => a.length === b.length && a.every((d, i) => d === b[i])
   );
   const { showToast } = useOptionalToast();
-  const [draft, setDraft] = useState(() => unsentDraft(`room:${room.id}`));
-  useEffect(() => keepDraft(`room:${room.id}`, draft), [room.id, draft]);
+  // The draft lives outside this component (`composerDraft`): typing
+  // re-renders the composer below, never the room.
+  const draftKey = `room:${room.id}`;
+  const setDraft = useCallback(
+    (next: string | ((d: string) => string)) =>
+      setComposerDraft(draftKey, typeof next === 'function' ? next(composerDraft(draftKey)) : next),
+    [draftKey]
+  );
   const [pending, setPending] = useState<Pending[]>([]);
   /** Nobody named and no lead: who should answer, asked above the composer. */
   const [asking, setAsking] = useState(false);
@@ -182,9 +190,7 @@ export function RoomChat({
   const pickFiles = useCallback(() => {
     pick().catch((error: unknown) => toastError(String(error)));
   }, [pick, toastError]);
-  const draftRef = useRef(draft);
-  draftRef.current = draft;
-  const getDraft = useCallback(() => draftRef.current, []);
+  const getDraft = useCallback(() => composerDraft(draftKey), [draftKey]);
   const getVocabulary = useCallback(
     async () =>
       dictationVocabulary(
@@ -203,14 +209,6 @@ export function RoomChat({
   });
   const dictating = dictation.phase !== 'idle';
   const blocked = dictation.blocked ? blockedCopy(dictation.blocked) : null;
-
-  // @ offers the room's members and @everyone, nobody else.
-  const mentionable = useMemo(() => [...members, everyoneEntry(members.length)], [members]);
-  const mentionPicker = useMentionPicker(mentionable, inputRef, setDraft);
-  const to: Addressed = addressed(draft, members, room.lead);
-  // Quiet while the mention menu is up: who answers is still being picked.
-  const toLine =
-    (draft.trim() || staged.length > 0) && !mentionPicker.showing ? addressLine(to, members) : null;
 
   useEffect(() => {
     inputRef.current?.focus({ preventScroll: true });
@@ -358,9 +356,9 @@ export function RoomChat({
 
   /** Send what's typed to `target`, or to whoever it names. */
   const send = (target?: Addressed) => {
-    const text = draft.trim();
+    const text = composerDraft(draftKey).trim();
     if ((!text && staged.length === 0) || members.length === 0 || dictating) return;
-    const aim = target ?? to;
+    const aim = target ?? addressed(text, members, room.lead);
     if (aim.kind === 'ask') {
       setAsking(true);
       return;
@@ -489,11 +487,8 @@ export function RoomChat({
     return Array.isArray(row) ? row.map(guardRow) : guardRow(row);
   });
 
-  // Nobody left to answer: nothing can be sent until someone is added.
-  const canSend = (draft.trim().length > 0 || staged.length > 0) && members.length > 0;
   // Replying here and nothing typed: the send button is Stop, as in a 1:1 chat.
   const replying = working.length > 0 || waiting.length > 0;
-  const showStop = replying && !canSend && !dictating;
   const memberNames = listNames(members.map((m) => m.name));
   const memberLine =
     room.lead && agentsById.get(room.lead)
@@ -694,7 +689,7 @@ export function RoomChat({
               ]}
             />
           )}
-          {asking && canSend && (
+          {asking && (
             <WhoShouldAnswer
               members={members}
               onPick={(target) => send(target)}
@@ -704,125 +699,23 @@ export function RoomChat({
               }}
             />
           )}
-          <form
-            className="agent-composer"
-            data-dictation={dictation.phase}
-            data-has-attachments={staged.length > 0 || undefined}
-            onSubmit={(e) => {
-              e.preventDefault();
-              send();
-            }}
-          >
-            {mentionPicker.menu}
-            <ComposerAttachments items={staged} onRemove={attachments.remove} />
-            <TextArea
-              ref={inputRef}
-              className="agent-composer__input"
-              rows={1}
-              value={draft}
-              placeholder={
-                dictating
-                  ? ''
-                  : members.length === 1
-                    ? `Message ${members[0].name}`
-                    : `Message ${room.name} · @ to pick who answers`
-              }
-              readOnly={dictating}
-              onChange={(e) => {
-                setDraft(e.target.value);
-                mentionPicker.sync();
-                if (asking) setAsking(false);
-              }}
-              onSelect={mentionPicker.sync}
-              onPaste={attachments.onPaste}
-              onKeyDown={(e) => {
-                if (dictation.onComposerKeyDown(e)) return;
-                if (mentionPicker.onKeyDown(e)) return;
-                if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
-                  e.preventDefault();
-                  send();
-                } else if (e.key === 'Escape' && asking) {
-                  e.preventDefault();
-                  setAsking(false);
-                }
-              }}
-              aria-label={`Message ${room.name}`}
-            />
-            <div className="agent-composer__bar">
-              {dictating ? (
-                <span className="agent-composer__listening" role="status">
-                  <span className="agent-composer__listening-dot" aria-hidden />
-                  {dictation.phase === 'finishing' ? 'Finishing…' : 'Listening'}
-                  <span aria-hidden>·</span>
-                  <TextButton tabIndex={0} onClick={dictation.cancel}>
-                    Cancel
-                  </TextButton>
-                </span>
-              ) : (
-                engineReady && (
-                  <IconButton
-                    tabIndex={0}
-                    variant="ghost"
-                    className="agent-composer__attach"
-                    icon={<PaperclipIcon size={14} />}
-                    onClick={pickFiles}
-                    aria-label="Attach files"
-                    title="Attach files, or paste or drop them here"
-                  />
-                )
-              )}
-              {!dictating && (
-                <span className="agent-composer__hint agent-room__address" aria-live="polite">
-                  {toLine ??
-                    (canSend && to.kind === 'ask' && !asking && !mentionPicker.showing
-                      ? 'Who should answer? @ someone'
-                      : '')}
-                </span>
-              )}
-              <div className="agent-composer__actions">
-                {engineReady && (
-                  <IconButton
-                    ref={micRef}
-                    tabIndex={0}
-                    variant="ghost"
-                    className="agent-composer__mic"
-                    icon={<MicrophoneIcon size={14} />}
-                    onClick={dictation.toggle}
-                    disabled={dictation.phase === 'finishing'}
-                    aria-pressed={dictating}
-                    aria-label={dictating ? 'Stop dictating' : 'Dictate'}
-                    title={
-                      dictating
-                        ? 'Stop dictating (Esc to discard)'
-                        : 'Dictate (⌘⇧D, or hold ⌥Space)'
-                    }
-                  />
-                )}
-                {showStop ? (
-                  <IconButton
-                    tabIndex={0}
-                    variant="secondary"
-                    className="agent-composer__stop"
-                    icon={<span className="agent-composer__stop-square" aria-hidden />}
-                    onClick={stop}
-                    aria-label={`Stop replies in ${room.name}`}
-                    title="Stop replies here"
-                  />
-                ) : (
-                  <IconButton
-                    tabIndex={0}
-                    type="submit"
-                    variant={canSend && !dictating ? 'primary' : 'secondary'}
-                    className="agent-composer__send"
-                    icon={<ArrowUpIcon size={14} />}
-                    disabled={!canSend || dictating}
-                    aria-label="Send"
-                    title="Send"
-                  />
-                )}
-              </div>
-            </div>
-          </form>
+          <RoomComposer
+            room={room}
+            members={members}
+            draftKey={draftKey}
+            inputRef={inputRef}
+            micRef={micRef}
+            dictation={dictation}
+            staged={staged}
+            attachments={attachments}
+            engineReady={engineReady}
+            pickFiles={pickFiles}
+            asking={asking}
+            setAsking={setAsking}
+            replying={replying}
+            onSend={() => send()}
+            onStop={stop}
+          />
         </div>
 
         <div className="agent-chat__drop" aria-hidden={!dropping}>
@@ -847,6 +740,179 @@ export function RoomChat({
       el.setSelectionRange(el.value.length, el.value.length);
     });
   }
+}
+
+/**
+ * The room's composer: it reads the draft itself (`useComposerDraft`), so a
+ * keystroke re-renders this and not the room's conversation above it.
+ */
+function RoomComposer({
+  room,
+  members,
+  draftKey,
+  inputRef,
+  micRef,
+  dictation,
+  staged,
+  attachments,
+  engineReady,
+  pickFiles,
+  asking,
+  setAsking,
+  replying,
+  onSend,
+  onStop,
+}: {
+  room: Room;
+  members: Agent[];
+  draftKey: string;
+  inputRef: RefObject<HTMLTextAreaElement | null>;
+  micRef: RefObject<HTMLButtonElement | null>;
+  dictation: ReturnType<typeof useDictation>;
+  staged: DraftAttachment[];
+  attachments: { remove: (id: string) => void; onPaste: (e: ReactClipboardEvent) => void };
+  engineReady: boolean;
+  pickFiles: () => void;
+  asking: boolean;
+  setAsking: (v: boolean) => void;
+  replying: boolean;
+  onSend: () => void;
+  onStop: () => void;
+}) {
+  const draft = useComposerDraft(draftKey);
+  const setDraft = useCallback((text: string) => setComposerDraft(draftKey, text), [draftKey]);
+  const dictating = dictation.phase !== 'idle';
+  // @ offers the room's members and @everyone, nobody else.
+  const mentionable = useMemo(() => [...members, everyoneEntry(members.length)], [members]);
+  const mentionPicker = useMentionPicker(mentionable, inputRef, setDraft);
+  const to: Addressed = addressed(draft, members, room.lead);
+  // Quiet while the mention menu is up: who answers is still being picked.
+  const toLine =
+    (draft.trim() || staged.length > 0) && !mentionPicker.showing ? addressLine(to, members) : null;
+  // Nobody left to answer: nothing can be sent until someone is added.
+  const canSend = (draft.trim().length > 0 || staged.length > 0) && members.length > 0;
+  // Replying here and nothing typed: the send button is Stop, as in a 1:1 chat.
+  const showStop = replying && !canSend && !dictating;
+
+  return (
+    <form
+      className="agent-composer"
+      data-dictation={dictation.phase}
+      data-has-attachments={staged.length > 0 || undefined}
+      onSubmit={(e) => {
+        e.preventDefault();
+        onSend();
+      }}
+    >
+      {mentionPicker.menu}
+      <ComposerAttachments items={staged} onRemove={attachments.remove} />
+      <TextArea
+        ref={inputRef}
+        className="agent-composer__input"
+        rows={1}
+        value={draft}
+        placeholder={
+          dictating
+            ? ''
+            : members.length === 1
+              ? `Message ${members[0].name}`
+              : `Message ${room.name} · @ to pick who answers`
+        }
+        readOnly={dictating}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          mentionPicker.sync();
+          if (asking) setAsking(false);
+        }}
+        onSelect={mentionPicker.sync}
+        onPaste={attachments.onPaste}
+        onKeyDown={(e) => {
+          if (dictation.onComposerKeyDown(e)) return;
+          if (mentionPicker.onKeyDown(e)) return;
+          if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+            e.preventDefault();
+            onSend();
+          } else if (e.key === 'Escape' && asking) {
+            e.preventDefault();
+            setAsking(false);
+          }
+        }}
+        aria-label={`Message ${room.name}`}
+      />
+      <div className="agent-composer__bar">
+        {dictating ? (
+          <span className="agent-composer__listening" role="status">
+            <span className="agent-composer__listening-dot" aria-hidden />
+            {dictation.phase === 'finishing' ? 'Finishing…' : 'Listening'}
+            <span aria-hidden>·</span>
+            <TextButton tabIndex={0} onClick={dictation.cancel}>
+              Cancel
+            </TextButton>
+          </span>
+        ) : (
+          engineReady && (
+            <IconButton
+              tabIndex={0}
+              variant="ghost"
+              className="agent-composer__attach"
+              icon={<PaperclipIcon size={14} />}
+              onClick={pickFiles}
+              aria-label="Attach files"
+              title="Attach files, or paste or drop them here"
+            />
+          )
+        )}
+        {!dictating && (
+          <span className="agent-composer__hint agent-room__address" aria-live="polite">
+            {toLine ??
+              (canSend && to.kind === 'ask' && !asking && !mentionPicker.showing
+                ? 'Who should answer? @ someone'
+                : '')}
+          </span>
+        )}
+        <div className="agent-composer__actions">
+          {engineReady && (
+            <IconButton
+              ref={micRef}
+              tabIndex={0}
+              variant="ghost"
+              className="agent-composer__mic"
+              icon={<MicrophoneIcon size={14} />}
+              onClick={dictation.toggle}
+              disabled={dictation.phase === 'finishing'}
+              aria-pressed={dictating}
+              aria-label={dictating ? 'Stop dictating' : 'Dictate'}
+              title={
+                dictating ? 'Stop dictating (Esc to discard)' : 'Dictate (⌘⇧D, or hold ⌥Space)'
+              }
+            />
+          )}
+          {showStop ? (
+            <IconButton
+              tabIndex={0}
+              variant="secondary"
+              className="agent-composer__stop"
+              icon={<span className="agent-composer__stop-square" aria-hidden />}
+              onClick={onStop}
+              aria-label={`Stop replies in ${room.name}`}
+              title="Stop replies here"
+            />
+          ) : (
+            <IconButton
+              tabIndex={0}
+              type="submit"
+              variant={canSend && !dictating ? 'primary' : 'secondary'}
+              className="agent-composer__send"
+              icon={<ArrowUpIcon size={14} />}
+              disabled={!canSend || dictating}
+              aria-label="Send"
+              title="Send"
+            />
+          )}
+        </div>
+      </div>
+    </form>
+  );
 }
 
 /** A run of one agent's lines, in its colour, under its name once. */
