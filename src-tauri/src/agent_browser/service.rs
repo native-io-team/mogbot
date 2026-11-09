@@ -45,33 +45,7 @@ pub const MAX_TABS: usize = 6;
 /// A CDP call's wait.
 const T: Duration = Duration::from_secs(20);
 
-/// What the focused field is, before anything is typed into it.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Focus {
-    /// Not a password or a code.
-    Plain,
-    /// A password or one-time-code field.
-    Secret,
-    /// Couldn't be told: focus in another site's frame, or no answer.
-    Unknown,
-}
-
-impl Focus {
-    /// [`FOCUSED_FIELD_JS`]'s answer. Anything but a plain "plain" fails
-    /// closed.
-    pub fn from_answer(answer: Result<Value, String>) -> Focus {
-        match answer.ok().as_ref().and_then(Value::as_str) {
-            Some("plain") => Focus::Plain,
-            Some("secret") => Focus::Secret,
-            _ => Focus::Unknown,
-        }
-    }
-}
-
-/// Follows focus through shadow roots and into same-origin frames; a frame
-/// whose document it can't read (another site's) is "unknown", as is a
-/// chain too deep to follow.
-const FOCUSED_FIELD_JS: &str = "(() => { let e = document.activeElement; for (let i = 0; e; i++) { if (i > 32) return 'unknown'; if (e.shadowRoot && e.shadowRoot.activeElement) { e = e.shadowRoot.activeElement; continue; } const tag = (e.tagName || '').toUpperCase(); if (tag === 'IFRAME' || tag === 'FRAME') { let d = null; try { d = e.contentDocument; } catch (_) { return 'unknown'; } if (!d) return 'unknown'; e = d.activeElement; continue; } break; } if (!e || (e.tagName || '').toUpperCase() !== 'INPUT') return 'plain'; const t = (e.type || '').toLowerCase(); const a = (e.autocomplete || '').toLowerCase(); return (t === 'password' || a.includes('one-time-code') || a.includes('current-password') || a.includes('new-password')) ? 'secret' : 'plain'; })()";
+pub use super::page::{Focus, PageCdp, FOCUSED_FIELD_JS};
 
 /// Who a tab belongs to.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -91,6 +65,18 @@ pub struct Tab {
     pub url: String,
     pub title: String,
     pub owner: Owner,
+}
+
+/// One of the agents' tabs over the service's own pipe.
+pub struct TabPage<'a> {
+    svc: &'a Service,
+    tab: &'a Tab,
+}
+
+impl PageCdp for TabPage<'_> {
+    fn cdp(&self, method: &str, params: Value) -> Result<Value, String> {
+        self.svc.call(self.tab, method, params)
+    }
 }
 
 /// One frame of a watched tab.
@@ -437,84 +423,36 @@ impl Service {
         self.browser.call(method, params, Some(&tab.session_id), T)
     }
 
+    /// One tab as a [`PageCdp`] page: the page logic shared with the
+    /// user's own Chrome (`super::page`).
+    pub fn page<'a>(&'a self, tab: &'a Tab) -> TabPage<'a> {
+        TabPage { svc: self, tab }
+    }
+
     /// Go to `url` (or "back"/"forward"), then wait for it to settle.
     pub fn navigate(&self, tab: &Tab, url: &str) -> Result<(), String> {
-        match url.trim() {
-            "back" | "forward" => {
-                let h = self.call(tab, "Page.getNavigationHistory", json!({}))?;
-                let at = h["currentIndex"].as_i64().unwrap_or(0);
-                let entries = h["entries"].as_array().cloned().unwrap_or_default();
-                let to = if url.trim() == "back" { at - 1 } else { at + 1 };
-                let entry = usize::try_from(to)
-                    .ok()
-                    .and_then(|i| entries.get(i))
-                    .ok_or("There's no page to go to that way.")?;
-                self.call(
-                    tab,
-                    "Page.navigateToHistoryEntry",
-                    json!({ "entryId": entry["id"] }),
-                )?;
-            }
-            u => {
-                let r = self.call(tab, "Page.navigate", json!({ "url": u }))?;
-                if let Some(e) = r["errorText"].as_str().filter(|e| !e.is_empty()) {
-                    return Err(format!("The page didn't load ({e})."));
-                }
-            }
-        }
-        self.settle(tab, Duration::from_secs(15));
-        Ok(())
+        self.page(tab).navigate(url)
     }
 
     /// Wait until the document has loaded (or `max` passes).
     pub fn settle(&self, tab: &Tab, max: Duration) {
-        let end = Instant::now() + max;
-        std::thread::sleep(Duration::from_millis(150));
-        while Instant::now() < end {
-            let ready = self
-                .eval(tab, "document.readyState")
-                .ok()
-                .and_then(|v| v.as_str().map(str::to_string));
-            if ready.as_deref() == Some("complete") {
-                return;
-            }
-            std::thread::sleep(Duration::from_millis(200));
-        }
+        self.page(tab).settle(max)
     }
 
     /// The app's own expression in the page (never an agent's: there is no
     /// script tool), its value returned.
     pub fn eval(&self, tab: &Tab, expression: &str) -> Result<Value, String> {
-        let r = self.call(
-            tab,
-            "Runtime.evaluate",
-            json!({ "expression": expression, "returnByValue": true, "silent": true }),
-        )?;
-        if r.get("exceptionDetails").is_some() {
-            return Err("The page didn't answer.".into());
-        }
-        Ok(r["result"]["value"].clone())
+        self.page(tab).eval(expression)
     }
 
     /// The page's visible text, cut at `max` characters.
     pub fn text(&self, tab: &Tab, max: usize) -> String {
-        let t = self
-            .eval(tab, "document.body ? document.body.innerText : ''")
-            .ok()
-            .and_then(|v| v.as_str().map(str::to_string))
-            .unwrap_or_default();
-        if t.chars().count() > max {
-            t.chars().take(max).collect::<String>() + "\n… (cut)"
-        } else {
-            t
-        }
+        self.page(tab).text(max)
     }
 
-    /// What the focused field is, followed into shadow roots and same-origin
-    /// frames. Focus in a frame the page can't see into (another site's), or
-    /// a check that didn't answer, is [`Focus::Unknown`]: never typed into.
+    /// What the focused field is ([`PageCdp::focused_field`]).
     pub fn focused_field(&self, tab: &Tab) -> Focus {
-        Focus::from_answer(self.eval(tab, FOCUSED_FIELD_JS))
+        self.page(tab).focused_field()
     }
 
     /// The focused field may take a password or a code: a secret one, or
@@ -524,141 +462,47 @@ impl Service {
     }
 
     pub fn ax_nodes(&self, tab: &Tab) -> Result<Vec<Value>, String> {
-        let r = self.call(tab, "Accessibility.getFullAXTree", json!({}))?;
-        Ok(r["nodes"].as_array().cloned().unwrap_or_default())
+        self.page(tab).ax_nodes()
     }
 
     /// The centre of a node, scrolled into view, in CSS pixels.
     pub fn center_of(&self, tab: &Tab, backend_node_id: i64) -> Result<(f64, f64), String> {
-        let _ = self.call(
-            tab,
-            "DOM.scrollIntoViewIfNeeded",
-            json!({ "backendNodeId": backend_node_id }),
-        );
-        let bm = self
-            .call(
-                tab,
-                "DOM.getBoxModel",
-                json!({ "backendNodeId": backend_node_id }),
-            )
-            .map_err(|_| "That control isn't on the page any more. Read the page again.")?;
-        let q: Vec<f64> = bm["model"]["content"]
-            .as_array()
-            .map(|a| a.iter().filter_map(Value::as_f64).collect())
-            .unwrap_or_default();
-        if q.len() != 8 {
-            return Err("That control has no size on the page.".into());
-        }
-        Ok((
-            (q[0] + q[2] + q[4] + q[6]) / 4.0,
-            (q[1] + q[3] + q[5] + q[7]) / 4.0,
-        ))
+        self.page(tab).center_of(backend_node_id)
     }
 
     /// The node is a password (or one-time code) input, or couldn't be
     /// described: either way nothing is typed into it.
     pub fn node_is_secret(&self, tab: &Tab, backend_node_id: i64) -> bool {
-        let Ok(d) = self.call(
-            tab,
-            "DOM.describeNode",
-            json!({ "backendNodeId": backend_node_id }),
-        ) else {
-            return true;
-        };
-        let attrs: Vec<String> = d["node"]["attributes"]
-            .as_array()
-            .map(|a| {
-                a.iter()
-                    .filter_map(|v| v.as_str().map(|s| s.to_ascii_lowercase()))
-                    .collect()
-            })
-            .unwrap_or_default();
-        attrs.chunks(2).any(|kv| match kv {
-            [k, v] => {
-                (k == "type" && v == "password")
-                    || (k == "autocomplete"
-                        && (v.contains("password") || v.contains("one-time-code")))
-            }
-            _ => false,
-        })
+        self.page(tab).node_is_secret(backend_node_id)
     }
 
     /// A real click: move, press, release.
     pub fn click(&self, tab: &Tab, x: f64, y: f64) -> Result<(), String> {
-        self.call(
-            tab,
-            "Input.dispatchMouseEvent",
-            json!({ "type": "mouseMoved", "x": x, "y": y }),
-        )?;
-        for t in ["mousePressed", "mouseReleased"] {
-            self.call(
-                tab,
-                "Input.dispatchMouseEvent",
-                json!({ "type": t, "x": x, "y": y, "button": "left", "clickCount": 1 }),
-            )?;
-        }
-        Ok(())
+        self.page(tab).click(x, y)
     }
 
     /// Text at the focused field, as typing would put it there.
     pub fn insert_text(&self, tab: &Tab, text: &str) -> Result<(), String> {
-        self.call(tab, "Input.insertText", json!({ "text": text }))
-            .map(|_| ())
+        self.page(tab).insert_text(text)
     }
 
     pub fn key(&self, tab: &Tab, key: super::keys::Key) -> Result<(), String> {
-        let (down, up) = key.events();
-        self.call(tab, "Input.dispatchKeyEvent", down)?;
-        self.call(tab, "Input.dispatchKeyEvent", up)?;
-        Ok(())
+        self.page(tab).key(key)
     }
 
     pub fn wheel(&self, tab: &Tab, x: f64, y: f64, dx: f64, dy: f64) -> Result<(), String> {
-        self.call(
-            tab,
-            "Input.dispatchMouseEvent",
-            json!({ "type": "mouseWheel", "x": x, "y": y, "deltaX": dx, "deltaY": dy }),
-        )
-        .map(|_| ())
+        self.page(tab).wheel(x, y, dx, dy)
     }
 
     /// The viewport's size in CSS pixels.
     pub fn viewport(&self, tab: &Tab) -> (f64, f64) {
-        self.call(tab, "Page.getLayoutMetrics", json!({}))
-            .ok()
-            .and_then(|m| {
-                let v = m.get("cssLayoutViewport")?;
-                Some((v["clientWidth"].as_f64()?, v["clientHeight"].as_f64()?))
-            })
-            .unwrap_or((WINDOW.0 as f64, WINDOW.1 as f64))
+        self.page(tab).viewport()
     }
 
     /// A JPEG of the viewport, at CSS-pixel size (so a point on it is a
     /// point `click` takes).
     pub fn screenshot(&self, tab: &Tab) -> Result<(Vec<u8>, u32, u32), String> {
-        let (cw, ch) = self.viewport(tab);
-        let r = self.call(
-            tab,
-            "Page.captureScreenshot",
-            json!({ "format": "jpeg", "quality": 70, "optimizeForSpeed": true }),
-        )?;
-        use base64::Engine as _;
-        let raw = base64::engine::general_purpose::STANDARD
-            .decode(r["data"].as_str().unwrap_or(""))
-            .map_err(|e| e.to_string())?;
-        let img = image::load_from_memory(&raw).map_err(|e| e.to_string())?;
-        let (w, h) = (cw.round().max(1.0) as u32, ch.round().max(1.0) as u32);
-        let img = if img.width() > w {
-            img.resize_exact(w, h, image::imageops::FilterType::Triangle)
-        } else {
-            img
-        };
-        let rgb = img.to_rgb8();
-        let mut out = Vec::new();
-        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, 70)
-            .encode_image(&rgb)
-            .map_err(|e| e.to_string())?;
-        Ok((out, rgb.width(), rgb.height()))
+        self.page(tab).screenshot()
     }
 
     /* ------------------------------------------------------- windows */

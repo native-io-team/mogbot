@@ -27,6 +27,7 @@ pub mod chrome;
 pub mod keys;
 pub mod live;
 pub mod macos;
+pub mod page;
 pub mod plain;
 pub mod refusal;
 pub mod service;
