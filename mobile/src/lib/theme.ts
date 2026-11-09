@@ -1,7 +1,10 @@
 /**
- * The app's tokens, for React Native. Values are copied from the desktop's
- * token layers (src/styles/global/tokens-core.css → tokens-semantic.css); the
- * names are the semantic roles, so `colors.surfacePanel` is `--surface-panel`.
+ * The app's tokens, for React Native. The names are the desktop's semantic
+ * roles (src/styles/global/tokens-semantic.css), so `colors.surfacePanel` is
+ * `--surface-panel`. The neutrals are the site's (dashbot-site global.css):
+ * warm paper, chalk and ink in light, the dark keys' charcoal in dark, so the
+ * phone reads as the brand people saw before they installed it. The semantic
+ * colours (success, warning, error, focus) are the desk's.
  *
  * Two layers, as MISSION asks ("black and white, plus one accent"):
  *
@@ -58,8 +61,9 @@ export interface Palette {
    */
   surfaceGroup: string;
   /**
-   * The one border a card may have. None in light, where the fill step carries
-   * it; one hairline in dark, where the fill step alone (1.07:1) doesn't.
+   * The one border a card may have: one hairline in either appearance. In
+   * light it is the site's card ring, which keeps a card crisp on paper; in
+   * dark the fill step alone (1.07:1) doesn't carry it.
    */
   cardBorder: string;
   /** A pressed row inside a group. */
@@ -107,49 +111,52 @@ const media = {
 } as const;
 
 const dark: Palette = {
-  surfaceApp: '#141414', // --surface-app (gray-950)
-  surfacePanel: '#1a1a1a', // --surface-panel (gray-900)
-  surfaceControl: '#282828', // --surface-control (gray-850)
-  surfaceControlHover: '#303030', // --surface-control-hover (gray-800)
-  surfaceSelected: '#393939', // --surface-selected (gray-750)
-  surfaceBubble: '#393939',
+  // Warm charcoal, the site's dark keys, step for step the desk's warm grey
+  // ramp (tokens-core.css --color-gray-*; docs/internal/brand-direction.md),
+  // so desk, phone and site read as one brand.
+  surfaceApp: '#151413',
+  surfacePanel: '#1c1b19',
+  surfaceControl: '#292725',
+  surfaceControlHover: '#31302d',
+  surfaceSelected: '#3a3835',
+  surfaceBubble: '#3a3835',
   textStrong: '#ffffff',
-  // Between --color-gray-100 and -200: a whole reply in #bcbcbc read dim next
-  // to Grok's and iMessage's near-white bodies. Chrome keeps textPrimary.
-  textBody: '#e6e6e6',
-  textPrimary: '#bcbcbc', // --text-primary (gray-200)
-  textSecondary: '#979797', // --text-secondary (gray-400)
-  // --text-muted is gray-600 on the desk, 4.06:1 on these surfaces: too faint
-  // for words read outdoors at 12-14pt. The phone's sits just under
-  // textSecondary, so it still passes 4.5:1 where placeholders and metadata
-  // sit on a fill: a control (4.5), a group (4.6), the message field (4.8).
-  textMuted: '#8e8e8e',
-  // Decoration only (rules, chevrons, a disabled glyph), never words: 2.2:1.
-  textFaint: '#4e4e4e', // --text-faint (gray-700)
-  inkDark: '#141414', // --text-on-accent
+  // A reply is read in near-white with a warm cast: a whole reply in the
+  // chrome's grey read dim next to Grok's and iMessage's bodies.
+  textBody: '#ebe8e3',
+  textPrimary: '#d6d2ca',
+  textSecondary: '#a29d95',
+  // The desk's --text-muted (#7a766f) is 3.5:1 on a control: too faint for
+  // words read outdoors. The phone's sits just under textSecondary, so it
+  // still passes 4.5:1 where placeholders and metadata sit on a fill: a
+  // control and a group (4.7), the message field.
+  textMuted: '#959088',
+  // Decoration only (rules, chevrons, a disabled glyph), never words.
+  textFaint: '#4f4c48',
+  inkDark: '#151413',
   inkLight: '#ffffff',
-  selectedFill: '#ededed',
-  onSelectedFill: '#141414',
-  // Named by how much they show: the desktop's --border-subtle (#303030) is
-  // the firmer of its two, so the phone's names are the other way round.
-  borderDefault: '#303030',
-  borderSubtle: '#232323',
-  borderStrong: '#393939', // --border-strong
-  surfaceGroup: '#262626',
-  cardBorder: '#262626',
-  surfaceGroupPressed: '#303030',
-  composerFill: '#232323',
+  selectedFill: '#f4f2ee',
+  onSelectedFill: '#151413',
+  // Named by how much they show: the desktop's --border-subtle is the firmer
+  // of its two, so the phone's names are the other way round.
+  borderDefault: '#31302d',
+  borderSubtle: '#242220',
+  borderStrong: '#3a3835',
+  surfaceGroup: '#292725',
+  cardBorder: '#292725',
+  surfaceGroupPressed: '#31302d',
+  composerFill: '#242220',
   composerBorder: 'transparent',
-  inputFill: '#141414',
-  inputBorder: '#393939',
+  inputFill: '#151413',
+  inputBorder: '#3a3835',
   accentSuccess: '#35d35d', // --accent-success (green-600)
   statusRunning: '#6bb5ff', // --status-running (blue-400)
   accentWarning: '#e89a1c', // --accent-warning (orange-600)
-  onWarning: '#141414',
+  onWarning: '#151413',
   accentError: '#f44747', // --accent-error
   accentErrorLight: '#ef4444', // --accent-error-light
   accentFocus: '#2792ff', // --accent-focus (blue-500)
-  accentNeutral: '#e6e6e6', // --agents-tint-white
+  accentNeutral: '#ebe8e3', // --agents-tint-white, warmed as textBody
   diffAdd: '#35d35d',
   diffAddBg: 'rgba(53, 211, 93, 0.1)',
   diffDel: '#ef4444',
@@ -169,52 +176,91 @@ const dark: Palette = {
  * and so on): the bright ones the dark palette uses wash out on white.
  */
 const light: Palette = {
-  surfaceApp: '#ffffff',
-  surfacePanel: '#f5f5f5',
-  surfaceControl: '#ebebeb',
-  surfaceControlHover: '#e3e3e3',
-  surfaceSelected: '#dcdcdc',
-  surfaceBubble: '#ededed',
-  textStrong: '#0f0f0f',
-  textBody: '#1c1c1c',
-  textPrimary: '#383838',
-  textSecondary: '#5c5c5c',
-  // 4.9:1 on a control (placeholders sit there), 5.2 on a panel, 5.7 on the app.
-  textMuted: '#666666',
+  // The desk's warm paper ramp (tokens-core.css --color-paper-*, from the
+  // site's paper and chalk; --fill #f1efeb for your bubble). The phone keeps
+  // its own order: warm white where things are read, each layer a step
+  // darker, so panels and cards recess like the site's trays rather than glow.
+  surfaceApp: '#fdfcfa',
+  surfacePanel: '#f4f2ee',
+  surfaceControl: '#efede8',
+  surfaceControlHover: '#e9e6e0',
+  surfaceSelected: '#e3dfd8',
+  surfaceBubble: '#f1efeb',
+  // The desk's ink (--color-ink-900, -800, -700, -600, -525).
+  textStrong: '#1c1c1c',
+  textBody: '#2c2a27',
+  textPrimary: '#403d39',
+  textSecondary: '#55524b',
+  // 5.9:1 on a control (placeholders sit there), 6.2 on a panel.
+  textMuted: '#5e5a53',
   // Decoration only, as in dark.
-  textFaint: '#c2c2c2',
-  inkDark: '#0f0f0f',
+  textFaint: '#cbc6bd',
+  inkDark: '#1c1c1c',
   inkLight: '#ffffff',
-  selectedFill: '#171717',
+  selectedFill: '#1c1c1c',
   onSelectedFill: '#ffffff',
-  borderDefault: '#e0e0e0',
-  borderSubtle: '#ebebeb',
-  borderStrong: '#cfcfcf',
-  surfaceGroup: '#ffffff',
-  cardBorder: 'transparent',
-  surfaceGroupPressed: '#ebebeb',
-  composerFill: '#f5f5f5',
-  composerBorder: '#e0e0e0',
-  inputFill: '#ffffff',
-  inputBorder: '#cfcfcf',
-  accentSuccess: '#15803d', // green-700
+  borderDefault: '#e3dfd8',
+  borderSubtle: '#e9e6e0',
+  borderStrong: '#cbc6bd',
+  surfaceGroup: '#fdfcfa',
+  // The site's card ring (0 0 0 1px #00000012): a hairline that keeps a
+  // card crisp on paper, where the fill step alone (1.04:1) went soft.
+  cardBorder: '#e3dfd8',
+  surfaceGroupPressed: '#efede8',
+  composerFill: '#f4f2ee',
+  composerBorder: '#e3dfd8',
+  inputFill: '#fdfcfa',
+  inputBorder: '#cbc6bd',
+  accentSuccess: '#2f7349', // the site's --live
   statusRunning: '#0a63c9', // --status-running (blue-800)
-  accentWarning: '#b45309', // amber-700
+  // Amber-700 a step deeper: 4.5:1 on the warm panel too.
+  accentWarning: '#ad4f08',
   onWarning: '#ffffff',
   accentError: '#d42a20',
   accentErrorLight: '#c4261c',
   accentFocus: '#0b6bdc',
   // The neutral accent in light is ink: a white Chief on a white app would be invisible.
-  accentNeutral: '#171717',
+  accentNeutral: '#1c1c1c',
   diffAdd: '#11672f',
   diffAddBg: 'rgba(21, 128, 61, 0.1)',
   diffDel: '#b0221a',
   diffDelBg: 'rgba(212, 42, 32, 0.08)',
-  scrim: 'rgba(0, 0, 0, 0.22)',
+  scrim: 'rgba(29, 28, 26, 0.24)',
   ...media,
 };
 
 export const palettes = { dark, light } as const;
+
+/**
+ * Depth, as the desk draws it (tokens-semantic.css --shadow-card,
+ * tokens-components.css --tabs-tray-* / --tabs-key-*): a card is a sheet (a
+ * long soft drop pulled in under it; on dark a lit top edge as well), a
+ * segmented control is a recessed tray with a raised key on it. `boxShadow`
+ * strings; the fills are the key's and the tray's own. Read through
+ * `depthOf(colors)`.
+ */
+const depthByAppearance = {
+  dark: {
+    card: 'inset 0 1px 0 rgba(255, 255, 255, 0.05), 0 8px 24px -12px rgba(0, 0, 0, 0.5)',
+    tray: 'inset 0 1px 2px rgba(0, 0, 0, 0.5), inset 0 -1px 0 rgba(255, 255, 255, 0.05)',
+    trayFill: '#151413', // --tabs-tray-surface (surface-app)
+    key: 'inset 0 1px 0 rgba(255, 255, 255, 0.08), 0 0 0 0.5px rgba(0, 0, 0, 1), 0 1px 0 rgba(21, 20, 19, 1), 0 2px 4px rgba(0, 0, 0, 0.3)',
+    keyFill: '#3a3835', // --color-gray-750
+  },
+  light: {
+    card: '0 24px 32px -24px rgba(0, 0, 0, 0.3), 0 6px 12px -8px rgba(0, 0, 0, 0.15)',
+    tray: 'inset 0 1px 2px rgba(0, 0, 0, 0.1), inset 0 -1px 0 rgba(255, 255, 255, 0.7)',
+    trayFill: '#e6e2db', // between --color-paper-250 and -200, the tray's gradient
+    key: '0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 1px 0 rgba(203, 198, 189, 1), 0 2px 4px rgba(0, 0, 0, 0.08)',
+    keyFill: '#ffffff',
+  },
+} as const;
+
+export type Depth = (typeof depthByAppearance)[Appearance];
+
+/** The depth for the palette in force. */
+export const depthOf = (colors: Palette): Depth =>
+  colors === palettes.dark ? depthByAppearance.dark : depthByAppearance.light;
 export type Appearance = keyof typeof palettes;
 export const APPEARANCES = Object.keys(palettes) as Appearance[];
 
@@ -538,6 +584,16 @@ export const READ_MAX_SCALE = 2;
 export const CARD_TITLE_SCALE = 1.5;
 
 export const lineHeight = (size: number, ratio = 1.4) => Math.round(size * ratio);
+
+/**
+ * Tracking, in ems, as the desk sets Geist (--tracking-name -0.01em,
+ * --tracking-title -0.02em, --tracking-hero -0.035em), after the site's tight
+ * headlines: names and titles pulled in, running text left as drawn.
+ */
+export const tracking = { display: -0.035, title: -0.02, headline: -0.01, subhead: -0.006 } as const;
+
+/** Letter spacing in points for a size and a tracking, to a hundredth. */
+export const track = (size: number, em: number) => Math.round(size * em * 100) / 100;
 
 export const fonts = {
   regular: 'Geist_400Regular',

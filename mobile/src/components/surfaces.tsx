@@ -39,6 +39,7 @@ import { TypingDots } from './TypingDots';
 import {
   CARD_TITLE_SCALE,
   chromeScale,
+  depthOf,
   fonts,
   iconSize,
   lineHeight,
@@ -574,6 +575,8 @@ export const useCardStyles = makeStyles((colors) => ({
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.cardBorder,
+    // A sheet, as the desk's cards: a ring and a long soft drop.
+    boxShadow: depthOf(colors).card,
     // Nothing inside draws past the corner: a pressed row, a well or an
     // image at the edge is cut to the card's own curve, never squared off.
     overflow: 'hidden',
@@ -627,6 +630,7 @@ const useBarStyles = makeStyles((colors) => ({
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.cardBorder,
+    boxShadow: depthOf(colors).card,
     overflow: 'hidden',
   },
   barRow: {

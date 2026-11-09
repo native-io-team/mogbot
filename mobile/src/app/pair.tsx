@@ -9,15 +9,15 @@
  * web page or message can open one.
  */
 
-import { type PairingLink } from '@shipstudio/companion-protocol';
+import { CHIEF_LOOK, type PairingLink } from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
 import * as Notifications from 'expo-notifications';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Image, ScrollView, StyleSheet, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Spinner } from '../components/agent';
+import { AgentAvatar, Spinner } from '../components/agent';
 import { Button, Icon, T } from '../components/ui';
 import { ALERTS_WHILE_OPEN } from '../lib/push';
 import {
@@ -38,10 +38,9 @@ import { isDemo } from '../lib/demo';
 import { useApp } from '../lib/store';
 import { PAIRING_SCHEME } from '@shipstudio/companion-protocol';
 import { haptic } from '../lib/haptics';
-import { iconSize, radius, space, squircle } from '../lib/theme';
+import { agentColorKeys, avatarSize, iconSize, radius, space } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 // The placeholder tile (unbranded) until real branding lands.
-import icon from '../../assets/splash-icon.png';
 
 type Phase =
   | { kind: 'start'; error?: string }
@@ -155,7 +154,15 @@ export default function Pair() {
       bounces={false}
     >
       <View style={styles.hero}>
-        <Image source={icon} style={styles.logo} />
+        {/* The site's mark: a neutral key with a face, as the Chief wears. */}
+        <View style={styles.logo}>
+          <AgentAvatar
+            name=""
+            color={agentColorKeys.all[0]}
+            look={CHIEF_LOOK}
+            size={avatarSize.sheet}
+          />
+        </View>
         <T variant="display" color={colors.textStrong}>
           Your agents, on your phone
         </T>
@@ -547,12 +554,10 @@ function FailureCopy({ failure, mac, host }: { failure: PairFailure; mac: string
   );
 }
 
-const LOGO = 56;
-
 const useStyles = makeStyles((colors) => ({
   page: { paddingHorizontal: space.xl, gap: space['2xl'], flexGrow: 1 },
   hero: { gap: space.md },
-  logo: { width: LOGO, height: LOGO, borderRadius: squircle(LOGO), marginBottom: space.sm },
+  logo: { alignSelf: 'flex-start', marginBottom: space.sm },
   block: { gap: space.md },
   card: {
     padding: space.lg,

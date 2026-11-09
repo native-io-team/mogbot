@@ -23,6 +23,7 @@ import {
 import {
   alpha,
   chromeScale,
+  depthOf,
   fonts,
   iconSize,
   lineHeight,
@@ -30,6 +31,8 @@ import {
   READ_LINE,
   READ_MAX_SCALE,
   space,
+  track,
+  tracking,
   type,
   type Palette,
 } from '../lib/theme';
@@ -90,22 +93,25 @@ const useVariants = makeStyles(() => ({
     fontFamily: fonts.medium,
     fontSize: type.subhead,
     lineHeight: lineHeight(type.subhead, 1.3),
+    letterSpacing: track(type.subhead, tracking.subhead),
   },
   headline: {
     fontFamily: fonts.semibold,
     fontSize: type.subhead,
     lineHeight: lineHeight(type.subhead, 1.375),
+    letterSpacing: track(type.subhead, tracking.headline),
   },
   title: {
     fontFamily: fonts.semibold,
     fontSize: type.title,
     lineHeight: lineHeight(type.title, 1.3),
+    letterSpacing: track(type.title, tracking.title),
   },
   display: {
     fontFamily: fonts.semibold,
     fontSize: type.display,
-    lineHeight: lineHeight(type.display, 1.2),
-    letterSpacing: -0.4,
+    lineHeight: lineHeight(type.display, 1.15),
+    letterSpacing: track(type.display, tracking.display),
   },
   mono: { fontFamily: fonts.mono, fontSize: type.small, lineHeight: lineHeight(type.small, 1.5) },
   read: {
@@ -575,8 +581,8 @@ export function Segmented<V extends string>({
           >
             <T
               variant="small"
-              color={on ? colors.onSelectedFill : colors.textSecondary}
-              style={on ? { fontFamily: fonts.medium } : undefined}
+              color={on ? colors.textStrong : colors.textSecondary}
+              style={on ? { fontFamily: fonts.semibold } : undefined}
               maxFontSizeMultiplier={chromeScale}
             >
               {o.label}
@@ -589,12 +595,15 @@ export function Segmented<V extends string>({
 }
 
 const useStyles = makeStyles((colors) => ({
+  // The site's tray and keycap, as the desk's segmented tabs: a recessed
+  // tray, and the choice in force a raised key on it. Neutral, never the accent.
   segmented: {
     flexDirection: 'row',
     padding: space['2xs'],
     gap: space['2xs'],
     borderRadius: radius.control,
-    backgroundColor: colors.surfaceControl,
+    backgroundColor: depthOf(colors).trayFill,
+    boxShadow: depthOf(colors).tray,
   },
   segment: {
     flex: 1,
@@ -603,7 +612,7 @@ const useStyles = makeStyles((colors) => ({
     justifyContent: 'center',
     borderRadius: radius.inner,
   },
-  segmentOn: { backgroundColor: colors.selectedFill },
+  segmentOn: { backgroundColor: depthOf(colors).keyFill, boxShadow: depthOf(colors).key },
   button: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -623,10 +632,14 @@ const useStyles = makeStyles((colors) => ({
   },
   section: { marginBottom: space.xl },
   sectionTitle: { marginLeft: space.lg, marginBottom: space.sm, letterSpacing: 0.4 },
-  // Groups sit on a sheet or a grouped screen (surfacePanel): fill, no line.
+  // Groups sit on a sheet or a grouped screen (surfacePanel): a fill and the
+  // card's hairline, which in light is the site's ring around a white card.
   sectionBody: {
     backgroundColor: colors.surfaceGroup,
     borderRadius: radius.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.cardBorder,
+    boxShadow: depthOf(colors).card,
     overflow: 'hidden',
   },
   sectionFooter: { marginHorizontal: space.lg, marginTop: space.sm },

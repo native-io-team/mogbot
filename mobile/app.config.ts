@@ -39,8 +39,8 @@ export const APP_VERSION = '1.0.0';
 const appleTeamId = process.env.APPLE_TEAM_ID;
 const updatesUrl = process.env.UPDATES_URL ?? (projectId ? `https://u.expo.dev/${projectId}` : '');
 
-const SURFACE_APP = '#141414'; // --surface-app
-const SURFACE_APP_LIGHT = '#ffffff'; // the light palette's surfaceApp (src/lib/theme.ts)
+const SURFACE_APP = '#151413'; // the dark palette's surfaceApp (src/lib/theme.ts)
+const SURFACE_APP_LIGHT = '#fdfcfa'; // the light palette's surfaceApp (src/lib/theme.ts)
 const CAMERA =
   'Used to scan the pairing code on your Mac, and to take photos you send to your agents.';
 /**
