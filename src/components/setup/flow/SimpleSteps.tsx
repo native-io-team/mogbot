@@ -27,6 +27,9 @@ export function WelcomeStep({ onNext }: { onNext: () => void }) {
   return (
     <FlowShell
       step="welcome"
+      mark={
+        <AgentAvatar look={CHIEF_LOOK} name="Chief of Staff" color="white" size="hero" selected />
+      }
       title="Your own team of AI agents"
       lede="They run on this Mac, on your own Claude or ChatGPT plan. You talk to one, your Chief of Staff, and anything risky waits for your OK."
       primary={

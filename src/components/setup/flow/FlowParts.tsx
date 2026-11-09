@@ -41,6 +41,8 @@ interface FlowShellProps {
   onBack?: () => void;
   /** Wider body, for a terminal or a QR code beside its steps. */
   wide?: boolean;
+  /** Above the title: the Chief's key cap on the welcome. */
+  mark?: ReactNode;
 }
 
 export function FlowShell({
@@ -52,6 +54,7 @@ export function FlowShell({
   secondary,
   onBack,
   wide = false,
+  mark,
 }: FlowShellProps) {
   const { section, sections, sub } = progressOf(step);
   return (
@@ -93,6 +96,7 @@ export function FlowShell({
         <div className="flow-top__back" aria-hidden />
       </header>
       <main className={`flow-body${wide ? ' flow-body--wide' : ''}`}>
+        {mark && <div className="flow-mark">{mark}</div>}
         <h1 className="flow-title">{title}</h1>
         {lede && <p className="flow-lede">{lede}</p>}
         {children && <div className="flow-content">{children}</div>}
