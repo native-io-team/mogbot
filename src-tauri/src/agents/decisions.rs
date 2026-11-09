@@ -305,6 +305,7 @@ pub(crate) fn card(
         gate: None,
         step_in: None,
         crossover: None,
+        account_switch: None,
     }
 }
 

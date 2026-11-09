@@ -611,6 +611,12 @@ pub struct Approval {
     /// Allow / Deny over the same title and summary.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub crossover: Option<super::crossover::Ask>,
+    /// "Run turns on “Personal” first?" (`use_account` from a turn that
+    /// isn't the user's own message): nothing waits on it, it stays until
+    /// answered, and Allow makes the switch (`usage_tools::answer_switch`).
+    /// Older clients show a plain Allow / Deny over the same title and detail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account_switch: Option<super::usage_tools::AccountSwitch>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -2561,6 +2567,7 @@ mod tests {
                         gate: None,
                         step_in: None,
                         crossover: None,
+                        account_switch: None,
                     });
                 }
                 append_message(&line).unwrap();
@@ -2774,6 +2781,7 @@ mod tests {
                     gate: None,
                     step_in: None,
                     crossover: None,
+                    account_switch: None,
                 }),
                 attachments: Vec::new(),
                 check_in: None,
@@ -2898,6 +2906,7 @@ mod tests {
                 gate: None,
                 step_in: None,
                 crossover: None,
+                account_switch: None,
             });
             append_message(&card).unwrap();
             let raw = std::fs::read(log_path(&a.id).unwrap()).unwrap();

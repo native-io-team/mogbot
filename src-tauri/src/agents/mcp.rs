@@ -664,21 +664,11 @@ async fn usage_tool(
         "finish_spare_work" => u::finish(args),
         "run_routine_now" => u::run_routine(app, args),
         // The user's own message asked for it: done, as Settings would. Asked
-        // for by another agent (or a routine), the user OKs it on a card.
+        // for by another agent (or a routine), the user OKs it on a card that
+        // nothing waits on (`usage_tools::ask_to_switch`).
         "use_account" => {
             if use_account_asks(&caller.id) {
-                let named = arg(args, "account").unwrap_or("that account");
-                let answer = ask_user(
-                    app,
-                    caller,
-                    format!("Run turns on “{named}” first?"),
-                    "Every agent's next turn starts on it; when it reaches its limit, turns move to the next account as before.".to_string(),
-                    None,
-                )
-                .await;
-                if let Some(refused) = refused_reply(&answer, "switch accounts") {
-                    return error(refused);
-                }
+                return u::ask_to_switch(app, caller, args).await;
             }
             u::use_account(app, args).await
         }
@@ -2444,6 +2434,7 @@ pub(crate) fn new_card(
         gate: None,
         step_in: None,
         crossover: None,
+        account_switch: None,
     }
 }
 

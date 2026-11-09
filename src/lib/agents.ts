@@ -587,6 +587,8 @@ export interface Approval {
   stepIn?: StepInCard;
   /** "All your Claude Code accounts are out until 4:00 PM. Carry on with Codex until then?": Always (allow + always), Just this time (allow), Wait (deny). */
   crossover?: CrossoverAsk;
+  /** "Run turns on “Personal” first?": a plain Allow / Deny; Allow makes the switch. Nothing waits on it. */
+  accountSwitch?: { engine: 'claude' | 'codex'; id: string; name: string };
   /**
    * "Bring your work Chrome window to the front so I can use it": answered
    * with Check again (allow) or Not now, never a login.

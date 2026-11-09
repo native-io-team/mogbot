@@ -408,41 +408,163 @@ pub fn order_with_first(accounts: &[super::wallet::Account], first: &str) -> Vec
 /// `use_account`: put the named account first for its engine. Only a
 /// signed-in one: a turn on an account it can't use would just fail over.
 pub async fn use_account(app: &AppHandle, args: &Value) -> Value {
+    let account = match named_account(args).await {
+        Ok(a) => a,
+        Err(e) => return error(e),
+    };
+    match switch_now(app, account.engine, &account.id) {
+        Ok(()) => text(format!(
+            "{} turns now start on “{}”. If it reaches its limit they move to the next account, as before.",
+            account.engine.label(),
+            account.name
+        )),
+        Err(e) => error(e.to_string()),
+    }
+}
+
+/// The signed-in account `args` names, by the names the user sees (an
+/// unnamed sign-in shows as its email).
+async fn named_account(args: &Value) -> Result<super::wallet::Account, String> {
     let Some(named) = arg(args, "account") else {
-        return error("`account` is required: its name as usage_overview lists it.");
+        return Err("`account` is required: its name as usage_overview lists it.".into());
     };
-    let engine = match arg(args, "engine").map(Engine::parse).transpose() {
-        Ok(e) => e,
-        Err(e) => return error(e.to_string()),
-    };
-    // By the names the user sees (an unnamed sign-in shows as its email).
+    let engine = arg(args, "engine")
+        .map(Engine::parse)
+        .transpose()
+        .map_err(|e| e.to_string())?;
     let shown: Vec<super::wallet::Account> = super::wallet::list()
         .into_iter()
         .map(|a| super::wallet::labelled(a, true))
         .collect();
-    let account = match pick_account(&shown, named, engine) {
-        Ok(a) => a,
-        Err(e) => return error(e),
-    };
+    let account = pick_account(&shown, named, engine)?;
     if !super::wallet::signed_in(&account).await {
-        return error(format!(
+        return Err(format!(
             "“{}” isn't signed in on this Mac. Ask the user to sign it in under Settings → Agents → Usage; nothing changed.",
             account.name
         ));
     }
-    // The same as the desk's and the phone's "Use this one now".
-    match super::wallet::use_first(account.engine, &account.id) {
-        Ok(_) => {
-            let _ = tauri::Emitter::emit(app, "agents-accounts-changed", ());
-            let _ = tauri::Emitter::emit(app, super::runner::EVENT_USAGE_PLAN, ());
-            text(format!(
-                "{} turns now start on “{}”. If it reaches its limit they move to the next account, as before.",
-                account.engine.label(),
-                account.name
-            ))
-        }
-        Err(e) => error(e.to_string()),
+    Ok(account)
+}
+
+/// The same as the desk's and the phone's "Use this one now".
+fn switch_now(
+    app: &AppHandle,
+    engine: Engine,
+    id: &str,
+) -> Result<(), crate::errors::CommandError> {
+    super::wallet::use_first(engine, id)?;
+    let _ = tauri::Emitter::emit(app, "agents-accounts-changed", ());
+    let _ = tauri::Emitter::emit(app, super::runner::EVENT_USAGE_PLAN, ());
+    Ok(())
+}
+
+/* ------------------------------------------------ the switch on a card */
+
+/// A switch the user OKs on a card (`use_account` from a check-in, a
+/// routine or another agent's message). Observed: the card blocked a 3 a.m.
+/// check-in for four minutes, expired unanswered, and the Chief told the
+/// owner to make the switch in Settings himself. Now nothing waits on it: it
+/// stays in the chat until answered, and Allow makes the switch.
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountSwitch {
+    pub engine: Engine,
+    pub id: String,
+    pub name: String,
+}
+
+/// The card for a switch. Pure.
+pub fn switch_card(engine: Engine, id: &str, name: &str) -> store::Approval {
+    let mut card = super::mcp::new_card(
+        store::new_id(),
+        format!("Run turns on “{name}” first?"),
+        format!(
+            "Every agent's next {} turn starts on it; when it reaches its limit, turns move to the next account as before.",
+            engine.label()
+        ),
+        None,
+    );
+    card.account_switch = Some(AccountSwitch {
+        engine,
+        id: id.to_string(),
+        name: name.to_string(),
+    });
+    card
+}
+
+/// What the agent is told once the card is up (or already was). Pure.
+pub fn switch_asked(name: &str, already: bool) -> String {
+    let lead = if already {
+        format!("The card asking to run turns on “{name}” is still open in your chat.")
+    } else {
+        format!("Nothing changed yet: the user has a card in your chat, “Run turns on “{name}” first?”.")
+    };
+    format!("{lead} It stays until they answer, and their Allow makes the switch. Say in one line that it's waiting for their OK there. Don't ask again, and don't send them to Settings.")
+}
+
+/// `use_account` when the turn isn't the user's own message: one standing
+/// card, never a wait.
+pub async fn ask_to_switch(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
+    let account = match named_account(args).await {
+        Ok(a) => a,
+        Err(e) => return error(e),
+    };
+    let open = store::pending_approvals(&caller.id).unwrap_or_default();
+    if open.iter().any(|a| {
+        a.account_switch
+            .as_ref()
+            .is_some_and(|s| s.engine == account.engine && s.id == account.id)
+    }) {
+        return text(switch_asked(&account.name, true));
     }
+    let mut message = super::runner::new_message(&caller.id, store::MessageKind::Approval, "");
+    message.approval = Some(switch_card(account.engine, &account.id, &account.name));
+    if let Err(e) = super::runner::record_own(app, message) {
+        return error(e.to_string());
+    }
+    store::refresh_pending(&caller.id);
+    super::notify::refresh_badge(app);
+    text(switch_asked(&account.name, false))
+}
+
+/// The switch card answered (desk, phone or a typed yes): Allow makes it.
+pub fn answer_switch(
+    app: &AppHandle,
+    agent_id: &str,
+    approval: &store::Approval,
+    allow: bool,
+) -> Result<(), crate::errors::CommandError> {
+    use crate::errors::CommandError;
+    let Some(s) = approval.account_switch.clone() else {
+        return Err(CommandError::expected("That isn't a card about accounts."));
+    };
+    if allow {
+        switch_now(app, s.engine, &s.id).map_err(|_| {
+            CommandError::expected(format!(
+                "“{}” isn't in your accounts any more, so nothing changed.",
+                s.name
+            ))
+        })?;
+    }
+    let status = if allow {
+        store::ApprovalStatus::Allowed
+    } else {
+        store::ApprovalStatus::Denied
+    };
+    if let Some(m) = store::set_approval_status(agent_id, &approval.request_id, status)? {
+        let _ = tauri::Emitter::emit(app, super::runner::EVENT_MESSAGE, &m);
+    }
+    if allow {
+        let line = format!("{} turns now start on “{}”.", s.engine.label(), s.name);
+        let _ = super::runner::record_own(
+            app,
+            super::runner::new_message(agent_id, store::MessageKind::Note, line),
+        );
+    }
+    store::refresh_pending(agent_id);
+    let _ = tauri::Emitter::emit(app, super::runner::EVENT_REGISTRY, ());
+    super::notify::refresh_badge(app);
+    Ok(())
 }
 
 pub fn run_routine(app: &AppHandle, args: &Value) -> Value {
@@ -671,6 +793,41 @@ mod tests {
             order_with_first(&claude, "default"),
             ["default", "a1", "a2"]
         );
+    }
+
+    /// A switch asked for from a check-in: a card nothing waits on, which
+    /// no sweep closes, and the agent is told not to send the user to
+    /// Settings or ask again.
+    #[test]
+    fn a_switch_on_a_card_waits_for_the_user_not_the_turn() {
+        use crate::agents::expiry::{verdict, Moment};
+        let card = switch_card(Engine::Claude, "a1", "Personal Account");
+        assert_eq!(card.title, "Run turns on “Personal Account” first?");
+        assert!(card.detail.contains("Claude Code turn"), "{}", card.detail);
+        assert_eq!(
+            card.account_switch,
+            Some(AccountSwitch {
+                engine: Engine::Claude,
+                id: "a1".into(),
+                name: "Personal Account".into(),
+            })
+        );
+        assert!(card.tool.is_none(), "never tied to a tool call");
+        let day = 24 * 60 * 60 * 1000;
+        for moment in [Moment::Launch, Moment::TurnEnded, Moment::Tick] {
+            assert_eq!(verdict(&card, day, false, moment), None, "{moment:?}");
+        }
+        // The same JSON the phone and the desk read.
+        let json = serde_json::to_value(&card).unwrap();
+        assert_eq!(json["accountSwitch"]["engine"], "claude");
+        assert_eq!(json["accountSwitch"]["name"], "Personal Account");
+        for already in [false, true] {
+            let told = switch_asked("Personal Account", already);
+            assert!(told.contains("Personal Account"));
+            assert!(told.contains("Don't ask again"));
+            assert!(told.contains("don't send them to Settings"));
+        }
+        assert!(switch_asked("Personal Account", false).starts_with("Nothing changed yet"));
     }
 
     #[test]

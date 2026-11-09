@@ -6931,6 +6931,7 @@ mod tests {
                 gate: None,
                 step_in: None,
                 crossover: None,
+                account_switch: None,
             });
             store::append_message(&card).unwrap();
             let err = begin_fresh(&a.id).unwrap_err().to_string();
