@@ -122,6 +122,14 @@ export const baseCommands: CommandMap = {
   // Quiet hours on, 22:00–07:00, so Settings shows the times.
   agents_quiet_hours: { start: 22 * 60, end: 7 * 60 },
   agents_set_quiet_hours: null,
+  // The morning brief as it starts: on, 08:00, nothing on a quiet day.
+  agents_morning_brief: { on: true, at: 8 * 60, always: false },
+  agents_set_morning_brief: (args: Record<string, unknown>) => ({
+    on: args.on,
+    at: args.at,
+    always: args.always,
+    checks: args.checks ?? [],
+  }),
   agents_preview_fix_state: null,
   agents_dev_server_exited: null,
   get_compact_workspace_toolbar_enabled: false,

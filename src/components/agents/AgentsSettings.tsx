@@ -34,7 +34,8 @@
  * - **Disk space**: free space when low, and each large agent home with
  *   "Free up space" (`AgentsDiskSettings`, `agents/disk.rs`).
  * - **Notifications**: what notifies, quiet hours (`AgentQuietHoursSetting`,
- *   `agents/quiet.rs`), and where to mute one agent.
+ *   `agents/quiet.rs`), the morning brief (`AgentMorningBriefSetting`,
+ *   `agents/brief.rs`), and where to mute one agent.
  * - **Slack**: start agents from a Slack message, answered in the thread
  *   (`AgentsSlackSettings`, `agents/slack.rs`).
  * - **Phone and other assistants**: the way into each.
@@ -63,6 +64,7 @@ import { AgentsSlackSettings } from './AgentsSlackSettings';
 import { AgentPreviewFixSetting } from './AgentPreviewFixSetting';
 import { AgentLowPowerSetting } from './AgentLowPowerSetting';
 import { AgentQuietHoursSetting } from './AgentQuietHoursSetting';
+import { AgentMorningBriefSetting } from './AgentMorningBriefSetting';
 import { useStayOn } from '../../hooks/useStayOn';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import type { EngineInfo } from '../../lib/agents';
@@ -201,6 +203,9 @@ export function AgentsSettings({
           />
           <SectionBoundary name="quiet-hours">
             <AgentQuietHoursSetting />
+          </SectionBoundary>
+          <SectionBoundary name="morning-brief">
+            <AgentMorningBriefSetting />
           </SectionBoundary>
           <Row
             label="Mute an agent"

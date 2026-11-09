@@ -368,6 +368,7 @@ export type SettingsSectionRequest =
   | 'agent-user-chrome'
   | 'agent-slack'
   | 'agent-quiet'
+  | 'agent-brief'
   | 'agent-low-power';
 let settingsSectionOnOpen: SettingsSectionRequest | null = null;
 

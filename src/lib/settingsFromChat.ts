@@ -4,6 +4,9 @@
  * - **Quiet hours** (`agents::quiet`): read and set here too (Settings →
  *   Agents → Notifications), worded by the protocol's `quiet.ts`, the same
  *   on the phone. The chat's `set_quiet_hours` emits {@link QUIET_EVENT}.
+ * - **Morning brief** (`agents::brief`): on or off, its time, quiet days
+ *   and the user's checks, worded by the protocol's `brief.ts`. The chat's
+ *   `set_morning_brief` emits {@link BRIEF_EVENT}.
  * - **Slow down on battery** (`power.rs`): on by default; the Chief's
  *   `change_app_setting` emits {@link APP_SETTINGS_EVENT}.
  * - **Opening Settings** for what needs the user's own hands on the Mac: a
@@ -16,6 +19,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type { QuietWindow } from '../../packages/companion-protocol/src/quiet';
+import type { BriefCheck, MorningBrief } from '../../packages/companion-protocol/src/brief';
 import type { AgentEngine } from './agents';
 
 export {
@@ -28,13 +32,33 @@ export {
   type QuietWindow,
 } from '../../packages/companion-protocol/src/quiet';
 
+export {
+  BRIEF_ALWAYS,
+  BRIEF_DETAIL,
+  BRIEF_TITLE,
+  type BriefCheck,
+  type MorningBrief,
+} from '../../packages/companion-protocol/src/brief';
+
 export const QUIET_EVENT = 'agents-quiet-hours-changed';
+export const BRIEF_EVENT = 'agents-morning-brief-changed';
 export const APP_SETTINGS_EVENT = 'app-settings-changed';
 export const OPEN_SETTINGS_EVENT = 'agents-open-settings';
 
 export const getQuietHours = () => invoke<QuietWindow | null>('agents_quiet_hours');
 export const setQuietHours = (window: QuietWindow | null) =>
   invoke<QuietWindow | null>('agents_set_quiet_hours', { window });
+
+export const setMorningBrief = (
+  brief: Pick<MorningBrief, 'on' | 'at' | 'always'>,
+  checks?: BriefCheck[]
+) =>
+  invoke<MorningBrief>('agents_set_morning_brief', {
+    on: brief.on,
+    at: brief.at,
+    always: brief.always,
+    checks: checks ?? null,
+  });
 
 export const getLowPower = () => invoke<boolean>('get_low_power_on_battery');
 export const setLowPower = (enabled: boolean) =>

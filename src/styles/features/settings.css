@@ -645,6 +645,18 @@
   font-size: var(--font-size-body-md);
 }
 
+/* Settings → Agents → Notifications, "Morning brief": its time beside the
+   switch. */
+.agents-brief {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.agents-brief__time {
+  width: calc(var(--spacing-xl) * 4);
+}
+
 /* Settings → Agents → Slack: the trigger word's short field, and the
    conversations to listen in, one tickable line each. */
 .agents-slack-trigger {
