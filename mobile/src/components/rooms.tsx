@@ -52,6 +52,7 @@ import { avatarSize, chromeScale, fonts, iconSize, radius, space, speakerInk } f
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 import { AgentAvatar, Spinner } from './agent';
 import { DaySeparator, DraftRow, MessageRow, PendingRow, SendRise, WorkingRow } from './chat';
+import { RowBoundary, rowResetKey } from './RowBoundary';
 import { MentionContext } from './Markdown';
 import { ComposerField, RoundButton } from './Composer';
 import { RoomBars } from './ConversationBars';
@@ -443,7 +444,13 @@ function RoomItemView({
     item.kind === 'pending' || (item.kind === 'message' && item.message.kind === 'user');
   return (
     <View style={[styles.item, grouped && styles.itemGrouped]}>
-      {yours ? <SendRise rise={item.kind === 'pending'}>{body}</SendRise> : body}
+      {yours ? (
+        <SendRise rise={item.kind === 'pending'}>
+          <RowBoundary resetKey={rowResetKey(item)}>{body}</RowBoundary>
+        </SendRise>
+      ) : (
+        <RowBoundary resetKey={rowResetKey(item)}>{body}</RowBoundary>
+      )}
     </View>
   );
 }

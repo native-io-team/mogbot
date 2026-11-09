@@ -61,3 +61,24 @@
   white-space: pre-wrap;
   word-break: break-word;
 }
+
+/* One area that failed to draw (primitives/AreaBoundary): a card, one line,
+   Try again. The rest of the window keeps working around it. */
+.area-error {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-md);
+  margin: var(--spacing-sm) 0;
+  padding: var(--spacing-md) var(--spacing-lg);
+  font-size: var(--font-size-body-md);
+  color: var(--text-secondary);
+  background: var(--surface-control);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.area-error__line {
+  margin: 0;
+  min-width: 0;
+}

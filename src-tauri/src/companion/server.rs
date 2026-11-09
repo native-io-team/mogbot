@@ -39,6 +39,7 @@ use super::router::{self, Caller};
 use super::wire::{
     self, ClientFrame, Event, IdentityRequest, IdentityResponse, Negotiation, PairRefusal,
     PairRequest, PairResponse, RefusedReason, ResumeMode, RouteKind, ServerFrame, ServerInfo,
+    WireError,
 };
 use super::{actor_for, now_ms, Auth, Companion, DeviceRecord};
 
@@ -512,6 +513,37 @@ fn upgrade(
     res
 }
 
+/// [`router::dispatch`], with a panic answered as an error: a request whose
+/// handler panicked used to get no answer at all, and the phone waited on it.
+pub(crate) async fn dispatch_caught(
+    c: &Companion,
+    caller: &Caller,
+    method: &str,
+    params: Value,
+) -> Result<Value, WireError> {
+    caught(method, router::dispatch(c, caller, method, params)).await
+}
+
+/// A request's answer, or an error answer if working it out panicked.
+pub(crate) async fn caught(
+    method: &str,
+    answer: impl std::future::Future<Output = Result<Value, WireError>>,
+) -> Result<Value, WireError> {
+    use futures_util::FutureExt;
+    match std::panic::AssertUnwindSafe(answer).catch_unwind().await {
+        Ok(result) => result,
+        Err(payload) => {
+            tracing::error!(
+                "[Companion] {method} panicked: {}",
+                crate::agents::survive::panic_text(payload.as_ref())
+            );
+            Err(WireError::Command(crate::errors::CommandError::expected(
+                "This Mac hit a fault answering that. Try again.",
+            )))
+        }
+    }
+}
+
 async fn send<S>(ws: &mut S, frame: &ServerFrame) -> bool
 where
     S: SinkExt<Message> + Unpin,
@@ -943,7 +975,7 @@ where
                     ClientFrame::Req { id, method, params } => {
                         let (c, caller, done) = (c.clone(), caller.clone(), done_tx.clone());
                         work.spawn(async move {
-                            let result = router::dispatch(&c, &caller, &method, params).await;
+                            let result = dispatch_caught(&c, &caller, &method, params).await;
                             let _ = done.send((id, result));
                         });
                     }

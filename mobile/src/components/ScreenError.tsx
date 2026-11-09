@@ -8,20 +8,29 @@
  * in it), so a throw in one screen leaves the navigator, its header and its
  * back gesture working. The root layout's boundary is the last resort: it
  * replaces everything, so it also lets the splash go, or a throw before the
- * splash hid would leave the app on it for good.
+ * splash hid would leave the app on it for good, and it offers Reload: Try
+ * again redraws the same tree, which a throw from bad state at the top would
+ * only repeat; Reload starts the app's JavaScript afresh (drafts and the
+ * outbox are on disk, so nothing typed is lost).
  */
 
 import type { ErrorBoundaryProps } from 'expo-router';
 import { useRouter } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
 import { useEffect } from 'react';
-import { View } from 'react-native';
+import { DevSettings, View } from 'react-native';
+import * as Updates from 'expo-updates';
 import { useColors } from '../lib/appearance';
 import { recordCrash } from '../lib/crash';
 import { space } from '../lib/theme';
 import { Button, T } from './ui';
 
-function Body({ error, retry, back }: ErrorBoundaryProps & { back?: () => void }) {
+function Body({
+  error,
+  retry,
+  back,
+  reload,
+}: ErrorBoundaryProps & { back?: () => void; reload?: () => void }) {
   const colors = useColors();
   useEffect(() => {
     void recordCrash(error, 'render', false).catch(() => {});
@@ -47,6 +56,7 @@ function Body({ error, retry, back }: ErrorBoundaryProps & { back?: () => void }
       </T>
       <Button title="Try again" onPress={() => void retry()} />
       {back ? <Button title="Go back" variant="ghost" onPress={back} /> : null}
+      {reload ? <Button title="Reload" variant="ghost" onPress={reload} /> : null}
     </View>
   );
 }
@@ -63,10 +73,28 @@ export function ScreenError(props: ErrorBoundaryProps) {
   return <Body {...props} back={canGoBack ? () => router.back() : undefined} />;
 }
 
+/**
+ * Start the JavaScript again: the update runtime's reload in a release build,
+ * the bundler's in development (where the update runtime has nothing to load).
+ */
+export async function reloadApp(): Promise<void> {
+  try {
+    await Updates.reloadAsync();
+    return;
+  } catch {
+    // Not available here (development, or updates off): the bundler's reload.
+  }
+  try {
+    DevSettings.reload();
+  } catch {
+    // Nothing left to try: Try again is still on screen.
+  }
+}
+
 /** The root layout's boundary: nothing else is drawn, splash included. */
 export function RootError(props: ErrorBoundaryProps) {
   useEffect(() => {
     void SplashScreen.hideAsync().catch(() => {});
   }, []);
-  return <Body {...props} />;
+  return <Body {...props} reload={() => void reloadApp()} />;
 }

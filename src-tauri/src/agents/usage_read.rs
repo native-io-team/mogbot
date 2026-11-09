@@ -656,7 +656,7 @@ pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(FIRST_AFTER).await;
         loop {
-            check_and_tell(&app).await;
+            super::survive::tick("usage_read", check_and_tell(&app)).await;
             tokio::time::sleep(crate::power::every(crate::power::Poll::UsageRead)).await;
         }
     });

@@ -149,11 +149,13 @@ fn path() -> Result<PathBuf, CommandError> {
     Ok(store::agents_root()?.join("connections.json"))
 }
 
+/// Damaged, the file is set aside (and the Chief told) before the empty
+/// default is used, so the next change can't write over it.
 fn read() -> Result<Registry, CommandError> {
     let path = path()?;
     match std::fs::read_to_string(&path) {
         Ok(raw) => Ok(serde_json::from_str(&raw).unwrap_or_else(|e| {
-            tracing::warn!("[Agents] connections.json unreadable ({e}); starting empty");
+            super::survive::set_aside(&path, "The list of connected apps", &e.to_string());
             Registry::default()
         })),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Registry::default()),

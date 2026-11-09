@@ -30,6 +30,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AgentAvatar, Spinner } from '../components/agent';
 import { ApprovalCard, useArmed } from '../components/ApprovalCard';
 import { MessageRow } from '../components/chat';
+import { RowBoundary } from '../components/RowBoundary';
 import { Card, Line } from '../components/surfaces';
 import { Button, Icon, IconButton, T } from '../components/ui';
 import { AgentAccent } from '../lib/accent';
@@ -349,7 +350,9 @@ function Shown({
           </View>
           <GalleryContext.Provider value={gallery}>
             {shown.map((m) => (
-              <MessageRow key={m.id} message={m} agent={agent} queued={false} onError={setError} />
+              <RowBoundary key={m.id} resetKey={m}>
+                <MessageRow message={m} agent={agent} queued={false} onError={setError} />
+              </RowBoundary>
             ))}
           </GalleryContext.Provider>
           {item.kind === 'reply' && shown.length === 0 && !!agent.preview && (

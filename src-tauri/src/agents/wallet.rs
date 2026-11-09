@@ -269,11 +269,12 @@ fn path() -> Result<PathBuf, CommandError> {
     Ok(super::store::agents_root()?.join("wallet.json"))
 }
 
+/// A damaged file is set aside before the empty default is used, so the
+/// next change can't write over the accounts it held ([`super::survive`]).
 fn read() -> WalletFile {
     path()
         .ok()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|raw| serde_json::from_str::<WalletFile>(&raw).ok())
+        .and_then(|p| super::survive::read_kept::<WalletFile>(&p, "Your accounts list"))
         .unwrap_or_default()
         .normalized()
 }

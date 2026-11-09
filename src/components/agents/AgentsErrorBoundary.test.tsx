@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, fireEvent, render, screen } from '@testing-library/react';
-import { guardRow, PaneBoundary } from './AgentsErrorBoundary';
+import { guardRow, PaneBoundary, SectionBoundary, SidebarBoundary } from './AgentsErrorBoundary';
 
 const logError = vi.hoisted(() => vi.fn());
 vi.mock('../../lib/logger', () => ({ logger: { logError, error: vi.fn() } }));
@@ -68,6 +68,60 @@ describe('a history line that fails to draw', () => {
     expect(logError).toHaveBeenCalledWith(
       expect.objectContaining({ message: 'bad line' }),
       expect.objectContaining({ where: 'agents-row' }),
+      'frontend-crash'
+    );
+  });
+});
+
+describe('a broken sidebar', () => {
+  it('leaves the chat beside it, says so, and Try again redraws it', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(
+      <div>
+        <SidebarBoundary>
+          <Flaky label="agents list" />
+        </SidebarBoundary>
+        <p>chat</p>
+      </div>
+    );
+    expect(screen.getByText('chat')).toBeTruthy();
+    expect(screen.getByRole('alert').textContent).toContain(
+      'The list of agents couldn’t be shown.'
+    );
+    expect(logError).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ where: 'agents-sidebar:agents' }),
+      'frontend-crash'
+    );
+    broken = false;
+    fireEvent.click(screen.getByText('Try again'));
+    expect(screen.getByText('agents list')).toBeTruthy();
+  });
+});
+
+describe('a broken settings section', () => {
+  it('is one card; the sections around it still show', () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(
+      <div>
+        <SectionBoundary name="usage">
+          <p>usage ok</p>
+        </SectionBoundary>
+        <SectionBoundary name="slack">
+          <Flaky label="slack" />
+        </SectionBoundary>
+        <SectionBoundary name="disk">
+          <p>disk ok</p>
+        </SectionBoundary>
+      </div>
+    );
+    expect(screen.getByText('usage ok')).toBeTruthy();
+    expect(screen.getByText('disk ok')).toBeTruthy();
+    expect(screen.getAllByRole('alert')).toHaveLength(1);
+    expect(screen.getByRole('alert').textContent).toContain('This setting couldn’t be shown');
+    expect(logError).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ where: 'settings:slack' }),
       'frontend-crash'
     );
   });

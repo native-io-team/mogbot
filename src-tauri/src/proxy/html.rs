@@ -130,11 +130,13 @@ pub fn extract_error_message(html: &str) -> String {
                 .replace("&amp;", "&")
                 .replace("&quot;", "\"");
             if !cleaned.trim().is_empty() {
-                let truncated = if cleaned.len() > 2000 {
-                    &cleaned[..2000]
-                } else {
-                    &cleaned
-                };
+                // On a character boundary: byte 2000 can fall inside a
+                // non-ASCII character in a build error, and slicing there panics.
+                let mut cut = cleaned.len().min(2000);
+                while !cleaned.is_char_boundary(cut) {
+                    cut -= 1;
+                }
+                let truncated = &cleaned[..cut];
                 return truncated.trim().to_string();
             }
         }
@@ -311,6 +313,14 @@ pub fn inject_error_into_html(html: &[u8], status_code: u16) -> Vec<u8> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_long_non_ascii_build_error_is_cut_on_a_character() {
+        // 1999 ASCII bytes, then "é" straddling byte 2000.
+        let html = format!("<pre>{}é and more</pre>", "x".repeat(1999));
+        let msg = extract_error_message(&html);
+        assert_eq!(msg.len(), 1999);
+    }
 
     #[test]
     fn test_inject_before_head() {

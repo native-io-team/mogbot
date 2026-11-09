@@ -51,6 +51,7 @@ import { DeclinedAppsSettings } from './DeclinedAppsSettings';
 import { AgentsDiskSettings } from './AgentsDiskSettings';
 import { AgentAdminSettings } from './AgentAdmin';
 import { Row, Toggle } from './AgentSettingsRows';
+import { SectionBoundary } from './AgentsErrorBoundary';
 import { AgentTeamPolicySettings } from './AgentTeamPolicySettings';
 import { AgentsBrowserSettings } from './AgentsBrowserSettings';
 import { AgentsUserChromeSettings } from './AgentsUserChromeSettings';
@@ -84,7 +85,9 @@ export function AgentsSettings({
         <h3 className="settings-group__title" id="agents-settings-mac">
           On this Mac
         </h3>
-        <AgentsDesktopSettings />
+        <SectionBoundary name="desktop">
+          <AgentsDesktopSettings />
+        </SectionBoundary>
         {stayOn?.supported && (
           <div className="settings-section">
             <Row label="Keep this Mac awake" description="Agents pause while the Mac sleeps.">
@@ -116,25 +119,41 @@ export function AgentsSettings({
           </div>
         )}
         <div className="settings-section">
-          <AgentPreviewFixSetting />
-          <AgentLowPowerSetting />
+          <SectionBoundary name="preview-fix">
+            <AgentPreviewFixSetting />
+          </SectionBoundary>
+          <SectionBoundary name="low-power">
+            <AgentLowPowerSetting />
+          </SectionBoundary>
         </div>
       </section>
 
-      <AgentsBrowserSettings />
-      <AgentsUserChromeSettings />
+      <SectionBoundary name="browser">
+        <AgentsBrowserSettings />
+      </SectionBoundary>
+      <SectionBoundary name="user-chrome">
+        <AgentsUserChromeSettings />
+      </SectionBoundary>
 
-      <AgentIndependenceSettings />
+      <SectionBoundary name="independence">
+        <AgentIndependenceSettings />
+      </SectionBoundary>
 
-      <AgentAdminSettings />
-      <AgentTeamPolicySettings />
+      <SectionBoundary name="admin">
+        <AgentAdminSettings />
+      </SectionBoundary>
+      <SectionBoundary name="team-policy">
+        <AgentTeamPolicySettings />
+      </SectionBoundary>
 
       {engines.length > 0 && hasDefaults && (
         <section className="settings-group" aria-labelledby="agents-settings-engines">
           <h3 className="settings-group__title" id="agents-settings-engines">
             Engines and models
           </h3>
-          <AgentDefaultsSettings />
+          <SectionBoundary name="defaults">
+            <AgentDefaultsSettings />
+          </SectionBoundary>
           <div className="settings-section">
             <Row
               label="Routines"
@@ -144,13 +163,25 @@ export function AgentsSettings({
         </section>
       )}
 
-      {engines.some((e) => e.installed) && <AgentUsageSettings />}
+      {engines.some((e) => e.installed) && (
+        <SectionBoundary name="usage">
+          <AgentUsageSettings />
+        </SectionBoundary>
+      )}
 
-      {engines.some((e) => e.installed) && <AgentAccounts engines={engines} />}
+      {engines.some((e) => e.installed) && (
+        <SectionBoundary name="accounts">
+          <AgentAccounts engines={engines} />
+        </SectionBoundary>
+      )}
 
-      <DeclinedAppsSettings />
+      <SectionBoundary name="declined-apps">
+        <DeclinedAppsSettings />
+      </SectionBoundary>
 
-      <AgentsDiskSettings />
+      <SectionBoundary name="disk">
+        <AgentsDiskSettings />
+      </SectionBoundary>
 
       <section className="settings-group" aria-labelledby="agents-settings-notify">
         <h3 className="settings-group__title" id="agents-settings-notify">
@@ -161,7 +192,9 @@ export function AgentsSettings({
             label="Replies and requests"
             description="A reply notifies once per turn; a request for your OK comes with a sound."
           />
-          <AgentQuietHoursSetting />
+          <SectionBoundary name="quiet-hours">
+            <AgentQuietHoursSetting />
+          </SectionBoundary>
           <Row
             label="Mute an agent"
             description="From its … menu. Muted agents still count in the Dock badge."
@@ -169,7 +202,9 @@ export function AgentsSettings({
         </div>
       </section>
 
-      <AgentsSlackSettings />
+      <SectionBoundary name="slack">
+        <AgentsSlackSettings />
+      </SectionBoundary>
 
       <section className="settings-group" aria-labelledby="agents-settings-away">
         <h3 className="settings-group__title" id="agents-settings-away">

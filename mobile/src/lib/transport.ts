@@ -32,6 +32,32 @@ import {
 } from '@shipstudio/companion-protocol';
 import { checkMac, MAC_RESET, NOT_YOUR_MAC, UPDATE_MAC, type Pinned } from './identity';
 
+/**
+ * Where a frame this phone couldn't handle is reported (the session sends it
+ * to the crash log). A throw out of a socket callback is fatal in a release
+ * build, so a frame from a Mac of another version, or a listener that trips
+ * on one, is reported and skipped, never let through.
+ */
+let reportFault: (error: unknown) => void = () => {};
+export function setTransportFaultReporter(report: (error: unknown) => void) {
+  reportFault = report;
+}
+
+/** Call each listener; one that throws is reported and the rest still run. */
+function each<A extends unknown[]>(listeners: Set<(...a: A) => void>, ...args: A) {
+  for (const l of listeners) {
+    try {
+      l(...args);
+    } catch (e) {
+      try {
+        reportFault(e);
+      } catch {
+        // Reporting is best effort.
+      }
+    }
+  }
+}
+
 /** A request that failed, carrying the Mac's (or our) structured error. */
 export class WireFailure extends Error {
   constructor(readonly error: WireError) {
@@ -321,7 +347,13 @@ export class DirectTransport implements Transport {
       } catch {
         return;
       }
-      this.handle(frame);
+      // Not a frame at all (`null`, a number, a list): nothing to do with it.
+      if (!frame || typeof frame !== 'object' || typeof frame.t !== 'string') return;
+      try {
+        this.handle(frame);
+      } catch (e) {
+        reportFault(e);
+      }
     };
     ws.onerror = () => {};
     ws.onclose = () => {
@@ -383,12 +415,12 @@ export class DirectTransport implements Transport {
         if (frame.resume === 'replay') this.epoch = this.opts.getResume()?.epoch ?? this.epoch;
         this.startPings();
         this.setState({ kind: 'connected', route: this.route.kind, since: Date.now() });
-        this.welcomeListeners.forEach((l) => l(frame));
+        each(this.welcomeListeners, frame);
         return;
       }
       case 'refused': {
         this.refusal = frame;
-        this.refusedListeners.forEach((l) => l(frame));
+        each(this.refusedListeners, frame);
         // Close follows; retry with backoff.
         if (frame.reason === 'too_many_connections' || frame.reason === 'unavailable') return;
         this.refused = true;
@@ -407,12 +439,13 @@ export class DirectTransport implements Transport {
       }
       case 'evt': {
         const { event } = frame;
+        if (!event || typeof event !== 'object' || typeof event.type !== 'string') return;
         if (event.type === 'sync.snapshot' || event.type === 'sync.caughtUp') {
           this.epoch = event.cursor.epoch;
         }
         const cursor =
           frame.seq != null && this.epoch ? { epoch: this.epoch, seq: frame.seq } : undefined;
-        this.eventListeners.forEach((l) => l(event, cursor));
+        each(this.eventListeners, event, cursor);
         return;
       }
       case 'pong':

@@ -88,8 +88,7 @@ fn path() -> Result<std::path::PathBuf, CommandError> {
 fn read() -> Saved {
     path()
         .ok()
-        .and_then(|p| std::fs::read(p).ok())
-        .and_then(|b| serde_json::from_slice(&b).ok())
+        .and_then(|p| super::survive::read_kept(&p, "What you told agents they can always do"))
         .unwrap_or_default()
 }
 

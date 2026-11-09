@@ -54,7 +54,8 @@ pub fn spawn(app: AppHandle) {
         tokio::time::sleep(STARTUP_GRACE).await;
         info!("workflow scheduler started");
         loop {
-            if let Err(err) = tick(&app).await {
+            let ticked = crate::agents::survive::tick("workflows", tick(&app)).await;
+            if let Some(Err(err)) = ticked {
                 // A failing tick must never kill the loop — the next one may
                 // well succeed (a project mounted, a CLI reinstalled).
                 warn!(error = %err, "workflow scheduler tick failed");

@@ -940,7 +940,8 @@ fn save_inbox(agent_id: &str, queue: &VecDeque<Inbound>) {
         super::secrets::redact_value(&mut v);
         serde_json::to_vec(&v)
     }) {
-        if let Err(e) = super::store::write_private(&path, &json) {
+        // By rename: a crash mid-write leaves the last good queue, never half.
+        if let Err(e) = super::store::write_atomic(&path, &json) {
             tracing::warn!("[Agents] couldn't save {agent_id}'s queue: {e}");
         }
     }
@@ -950,10 +951,10 @@ fn take_inbox(agent_id: &str) -> Vec<Inbound> {
     let Ok(path) = store::agent_home(agent_id).map(|h| h.join("inbox.json")) else {
         return Vec::new();
     };
-    let queued = std::fs::read_to_string(&path)
-        .ok()
-        .and_then(|raw| serde_json::from_str(&raw).ok())
-        .unwrap_or_default();
+    // Damaged, it's set aside and the Chief told, rather than the messages
+    // waiting in it vanishing with nothing said.
+    let queued =
+        super::survive::read_kept(&path, "Messages waiting for an agent").unwrap_or_default();
     let _ = std::fs::remove_file(path);
     queued
 }

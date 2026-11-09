@@ -1796,9 +1796,11 @@ pub fn spawn(app: AppHandle) {
         }
         tokio::time::sleep(STARTUP_GRACE).await;
         loop {
-            if let Err(err) = tick(&app) {
+            // A panic in one tick is caught: routines keep firing.
+            if let Some(Err(err)) = super::survive::tick_blocking("schedule", || tick(&app)) {
                 tracing::warn!(error = %err, "agent check-in tick failed");
             }
+            super::survive::flush(&app);
             // On the minute, with the other minute loops (one wake-up).
             crate::power::sleep_aligned(TICK).await;
         }

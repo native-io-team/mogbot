@@ -1917,9 +1917,15 @@ fn ends_with_newline(file: &mut std::fs::File) -> bool {
     file.read_exact(&mut last).is_err() || last[0] == b'\n'
 }
 
-fn read_text(path: &Path) -> Result<String, CommandError> {
-    match std::fs::read_to_string(path) {
-        Ok(raw) => Ok(raw),
+/// A log's text. Invalid UTF-8 (a crash mid-append, cut inside an emoji) is
+/// replaced rather than failing the read: a torn last line used to make the
+/// whole chat unreadable, where the parser skips just that line.
+pub(crate) fn read_text(path: &Path) -> Result<String, CommandError> {
+    match std::fs::read(path) {
+        Ok(raw) => Ok(match String::from_utf8(raw) {
+            Ok(text) => text,
+            Err(e) => String::from_utf8_lossy(e.as_bytes()).into_owned(),
+        }),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(String::new()),
         Err(e) => Err(super::err_io(e.to_string())),
     }

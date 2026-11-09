@@ -67,3 +67,8 @@
   gap: var(--spacing-sm);
   flex: none;
 }
+
+/* A dialog body that failed to draw (ModalFrame's AreaBoundary). */
+.modal-frame-error {
+  padding: var(--spacing-md) var(--spacing-lg) var(--spacing-lg);
+}

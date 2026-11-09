@@ -1083,8 +1083,8 @@ pub fn any_log_mentions(needle: &str) -> bool {
         return false;
     };
     entries.flatten().any(|e| {
-        std::fs::read_to_string(e.path().join("messages.jsonl"))
-            .is_ok_and(|log| log.contains(needle))
+        // Lossy: one torn byte mustn't make a room's files look unreferenced.
+        store::read_text(&e.path().join("messages.jsonl")).is_ok_and(|log| log.contains(needle))
     })
 }
 
