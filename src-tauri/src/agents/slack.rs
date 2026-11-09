@@ -740,6 +740,18 @@ pub fn shorten(text: &str) -> String {
     format!("{}\n… the rest is in the app.", head[..cut].trim_end())
 }
 
+/// Whether the turn that answered read no outside text, for [`decide`]:
+/// nobody else's message came between (`others`), its batch was only the
+/// ask and carried no outside text (`batch_clean`), and nothing it (or an
+/// earlier turn in the same engine conversation) read came from outside:
+/// a web page, a search, mail or chat through a connection
+/// (`exposure::read_outside`). What was read stays in the engine's context,
+/// so an instruction planted in a page the user asked it to summarise
+/// could otherwise steer a reply that goes out under their name unseen.
+pub fn clean_turn(agent_id: &str, others: bool, batch_clean: bool) -> bool {
+    !others && batch_clean && !super::exposure::read_outside(agent_id)
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub enum Posting {
     /// Post it now.
@@ -982,7 +994,7 @@ async fn settle(app: &AppHandle) {
             continue;
         };
         let text = shorten(&text);
-        let clean = !others && batch_clean;
+        let clean = clean_turn(&agent.id, others, batch_clean);
         let effective = super::policy::effective(&agent);
         let r = ReplyCard {
             channel: p.channel.clone(),

@@ -3819,7 +3819,10 @@ after the ask (a result card's title when the reply is only a card) is cut to
 - **posted by itself** only when all four hold: the user wrote the Slack
   message themself; the turn that took it read no outside text
   (`runner::take_batch` → `slack::note_batch`; unknown after a restart counts
-  as outside) and no other user message came between; the agent's own level
+  as outside), its engine conversation hasn't read outside content (a web
+  page, a search, mail or chat through a connection: `exposure::read_outside`,
+  which lasts until Start fresh, `slack::clean_turn`) and no other user
+  message came between; the agent's own level
   is **Unleashed** (which already lets it send what the user asked for); and
   the exact-text switch is **off**;
 - otherwise a **"Reply in Slack?" card** in the agent's chat (desk and

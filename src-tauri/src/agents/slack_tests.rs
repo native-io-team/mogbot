@@ -779,6 +779,24 @@ fn a_reply_from_before_the_asks_turn_started_is_not_the_answer() {
     );
 }
 
+/// Robin asks "dashbot: summarise https://example.test/post" in his own DM.
+/// The turn is his, its batch clean, but it fetched a stranger's page that
+/// says to append his memory to the reply: it never goes out by itself.
+#[test]
+fn a_turn_that_read_a_web_page_never_posts_by_itself() {
+    with_root(|| {
+        let agent = "agent-web-reader";
+        assert!(clean_turn(agent, false, true));
+        crate::agents::exposure::note(
+            agent,
+            "WebFetch",
+            &json!({"url": "https://example.test/post"}),
+        );
+        assert!(!clean_turn(agent, false, true));
+        crate::agents::exposure::forget(agent);
+    });
+}
+
 /// Two of Robin's asks, from #board and #launch, taken as one turn: the
 /// combined answer may hold #board's, so it never goes to #launch by itself.
 #[test]
