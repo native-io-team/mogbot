@@ -102,14 +102,24 @@ export function EngineStep({
   // Pressing the card is the intent: each screen starts its own work once.
   // A failure or a cancel stops the autopilot; Try again takes over.
   const started = useRef(new Set<string>());
+  // Every screen whose work has been started this visit, so one that comes
+  // back neither done nor failed (its window closed) can say so.
+  const [tried, setTried] = useState<ReadonlySet<string>>(() => new Set());
+  const run = useCallback(
+    (id: string) => {
+      setTried((prev) => (prev.has(id) ? prev : new Set(prev).add(id)));
+      void actions.handleItemAction(id);
+    },
+    [actions]
+  );
   useEffect(() => {
     if (!shownItem || busy || shownReady) return;
     if (shownItem.status === 'error' || shownItem.status === 'in_progress') return;
     if (getBlockingDependencies(shownItem.id, items).length > 0) return;
     if (started.current.has(shownItem.id)) return;
     started.current.add(shownItem.id);
-    void actions.handleItemAction(shownItem.id);
-  }, [shownItem, busy, shownReady, items, actions]);
+    run(shownItem.id);
+  }, [shownItem, busy, shownReady, items, run]);
 
   const terminal = actions.terminalConfig && (
     <div className="onboarding-terminal-overlay">
@@ -151,7 +161,7 @@ export function EngineStep({
             disabled={finishing}
             data-flow-primary
           >
-            {finishing ? <Spinner size="sm" /> : 'Continue'}
+            {finishing ? <Spinner size="sm" /> : 'Meet your Chief of Staff'}
           </Button>
         }
         secondary={
@@ -187,7 +197,8 @@ export function EngineStep({
   const copy = engineItemCopy(itemId, engine);
   const check = engineItemCheck(
     items.find((i) => i.id === itemId),
-    itemId.endsWith('_auth')
+    itemId.endsWith('_auth'),
+    tried.has(itemId) && !busy
   );
   const failed = check?.state === 'fail';
   const pending = check === null;
@@ -205,7 +216,7 @@ export function EngineStep({
               variant="primary"
               size="large"
               disabled={busy}
-              onClick={() => void actions.handleItemAction(itemId)}
+              onClick={() => run(itemId)}
               data-flow-primary
             >
               {failed ? 'Try again' : copy.action}

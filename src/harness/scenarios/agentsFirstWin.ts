@@ -304,4 +304,26 @@ export const agentsFirstWinScenarios: Scenario[] = [
         args.agentId === 'chief' ? FIRST_WIN : [],
     },
   },
+  {
+    id: 'agents-first-run-import-choice',
+    title: 'Agents — first run, straight from onboarding: the Chief speaks first',
+    looksRightWhen:
+      'The Chief’s greeting, its three starters and More ideas… directly under it, and only then one calm card, “Bring your agents from another assistant?”, with “No thanks, start fresh” and a neutral “Bring my agents”. The import question used to be its own onboarding screen; here it waits under the greeting and nothing above the greeting competes with it.',
+    command: 'agents.open',
+    requires: '.agent-chat__starters ~ [data-testid="agent-import-choice"]',
+    commands: { agents_overview: { ...BASE_OVERVIEW, importChoice: 'undecided' } },
+  },
+  {
+    id: 'agents-first-result-phone-offer',
+    title: 'Agents — the first result is back: the Chief offers the phone',
+    looksRightWhen:
+      'The site handed back on its result card, and under it one calm card: a phone icon, “Use your agents from your phone?”, one muted line (chat, answer and approve from anywhere; about ten minutes), then “Not now” and a neutral “Set up my phone”. The phone used to be four onboarding screens before any result; now it is offered once something came back.',
+    command: 'agents.open',
+    requires: '[data-testid="chief-phone-offer"]',
+    commands: {
+      agents_overview: { ...BASE_OVERVIEW, importChoice: 'declined' },
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? SITE_HANDED_BACK : [],
+    },
+  },
 ];

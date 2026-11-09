@@ -96,13 +96,8 @@ tool, which is the opposite of OpenBot's "describe what you want" and Cowork's
 
 ## Worth deciding, not done here
 
-- **Fewer questions before the Chief.** Accounts and Independence could move
-  out of onboarding into the Chief's first replies ("want a second account so
-  nothing stops?"), getting closer to OpenBot's four moves. That changes the
-  flow's shape, so it is a product call.
-- **Independence Skip vs Continue.** Skip leaves the level unset rather than
-  saving the default; if that difference doesn't matter to the user, one button
-  is clearer.
+- **Fewer questions before the Chief.** Done in the follow-up below.
+- **Independence Skip vs Continue.** Moot: the screen is gone.
 - **The phone's pre-scan ticks** read as verified; a neutral bullet would be
   honest.
 
@@ -111,3 +106,45 @@ tool, which is the opposite of OpenBot's "describe what you want" and Cowork's
 Before and after, light and dark (harness at 1440×900 @2x; phone at 402×874
 @3x), in the session scratchpad: `before-dark/`, `before-light/`,
 `after-dark/`, `after-light/`, `phone-before/`, `phone-after/`.
+
+## Follow-up, same day: two screens to the Chief
+
+Following the competitor teardown (`competitors-2026-11-09.md`, recommendation
+1), onboarding is now Welcome and the engine, then the Chief's chat. Counted
+in the harness on a Mac with nothing installed, choosing Claude Code:
+
+| | Screens before the Chief | Clicks before the Chief |
+| - | - | - |
+| Before | 8 (Welcome, pick, install, sign in, Accounts, Independence, Phone, Ready) | 6 (+ the terminal) |
+| After | 4 (Welcome, pick, install, sign in) | 2 (+ the terminal) |
+
+With the engine already set up: 6 screens and 6 clicks before, 2 and 2 after.
+From the Chief's greeting to a first brief is the same as before: a starter,
+the one blank, Send.
+
+Each question that left has a moment instead, and each is skippable:
+
+- **Bring your agents?** One card under the greeting and starters
+  (`ImportChoiceCard`, now after them on a first run, so the Chief speaks
+  first). Its three onboarding screens are gone; the card's Bring my agents
+  opens the same import.
+- **Your phone.** A card in the Chief's chat once the first thing asked for
+  has come back (`ChiefPhoneOffer`): Set up my phone opens the Phone panel,
+  Not now puts it away. Never with a phone paired or the import question
+  open. "Get the phone app" at the sidebar's foot is unchanged.
+- **Another account.** "Add another account" on the usage-limit line, the
+  moment one runs out (opens the account row's add).
+- **Independence.** The default (Steady, asks before anything risky) holds;
+  the Chief already offers a change when the user sounds fed up
+  (`level_hint.rs`), and Settings → Agents has the slider.
+
+Also: the screen's big button (or the recommended engine card) takes focus
+whenever nothing has it, so Enter always goes on and Tab starts there; the
+engine card's focus ring is the app's neutral one, not the browser's blue; a
+cancelled install or sign-in says "Not done yet. Sign-in was closed before
+it finished." instead of going quiet. A launch saved on one of the removed
+screens counts as finished.
+
+Not checked: a real install or sign-in, WKWebView, the phone's own import
+card wording, and whether the phone card's timing feels right on a real
+first run (it keys off the first reply, not a result card).

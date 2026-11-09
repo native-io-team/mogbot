@@ -267,11 +267,11 @@ export const appScenarios: Scenario[] = [
   },
   {
     id: 'onboarding-end-to-agents',
-    title: 'Onboarding — after the hand-off, Agents with the Chief',
+    title: 'Onboarding — after the engine, straight to the Chief',
     looksRightWhen:
-      'After “Start fresh” on the last onboarding step: Agents mode, not the projects dashboard: the Chief of Staff selected in the sidebar, its chat open on the greeting, with the three starters and More ideas… under it and the composer ready.',
-    storage: { [FLOW_STORAGE_KEY]: JSON.stringify({ v: 1, step: 'ready', finished: false }) },
-    steps: [{ click: '[data-flow-fresh]' }],
+      'After “Meet your Chief of Staff” on the engine screen (the last onboarding screen): Agents mode, not the projects dashboard: the Chief of Staff selected in the sidebar, its chat open on the greeting, with the three starters and More ideas… under it and the composer ready. No phone, account or independence questions came first.',
+    storage: { [FLOW_STORAGE_KEY]: JSON.stringify({ v: 1, step: 'engine', finished: false }) },
+    steps: [{ click: '[data-flow-primary]' }],
     requires: '.agents-mode .agent-chat__messages > .agent-chat__starters',
     commands: ONBOARDING_ENGINE_ONLY,
   },

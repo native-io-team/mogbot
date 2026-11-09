@@ -7,14 +7,11 @@
  * @module components/setup/flow/FlowParts
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { Button } from '../../primitives/Button';
 import { Spinner } from '../../primitives/Spinner';
 import { ArrowLeftIcon, CheckIcon, ExternalLinkIcon, WarningIcon } from '@/components/icons';
-import { usePolling } from '../../../hooks/usePolling';
-import { PhoneQr } from '../../phone/PhoneQr';
-import { getLinkQr } from '../../../lib/companion';
 import {
   DONE,
   FLOW_SECTIONS,
@@ -28,6 +25,16 @@ import {
 /** How long "Done" stays before the next screen, when it was just done here. */
 export const ADVANCE_MS = 1200;
 
+/**
+ * What takes focus on a screen, best first: its big button, the first
+ * answer when the big button is a choice of cards, then any action.
+ */
+export const FLOW_FOCUS_TARGET = [
+  '.flow-actions [data-flow-primary]:not(:disabled)',
+  '.flow-content .agent-pick-card:not(:disabled)',
+  '.flow-actions button:not(:disabled)',
+] as const;
+
 interface FlowShellProps {
   step: FlowStep;
   title: ReactNode;
@@ -36,10 +43,10 @@ interface FlowShellProps {
   children?: ReactNode;
   /** The big button (or the check that replaces it). */
   primary?: ReactNode;
-  /** One quiet way out: Skip, Start fresh, I already have it. */
+  /** One quiet way out: Use a different one. */
   secondary?: ReactNode;
   onBack?: () => void;
-  /** Wider body, for a terminal or a QR code beside its steps. */
+  /** Wider body, for the choice of engines. */
   wide?: boolean;
   /** Above the title: the Chief's key cap on the welcome. */
   mark?: ReactNode;
@@ -56,9 +63,25 @@ export function FlowShell({
   wide = false,
   mark,
 }: FlowShellProps) {
-  const { section, sections, sub } = progressOf(step);
+  const { section, sections } = progressOf(step);
+  const screen = useRef<HTMLDivElement>(null);
+  // Keyboard first: whenever nothing has focus (a new screen, a button that
+  // just disappeared, a check that just passed), the screen's one answer
+  // takes it, so Enter always means "the big button" and Tab starts there.
+  // Never takes focus from something the user is in.
+  useEffect(() => {
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    for (const target of FLOW_FOCUS_TARGET) {
+      const el = screen.current?.querySelector<HTMLElement>(target);
+      if (el) {
+        el.focus();
+        return;
+      }
+    }
+  });
   return (
-    <div className="onboarding-screen flow-screen" data-flow-step={step}>
+    <div className="onboarding-screen flow-screen" data-flow-step={step} ref={screen}>
       <header className="flow-top">
         <div className="flow-top__back">
           {onBack && (
@@ -88,10 +111,7 @@ export function FlowShell({
               data-state={i + 1 < section ? 'done' : i + 1 === section ? 'current' : 'todo'}
             />
           ))}
-          <span className="flow-progress__label">
-            {SECTION_LABEL[FLOW_SECTIONS[section - 1]]}
-            {sub && ` · ${sub.index} of ${sub.total}`}
-          </span>
+          <span className="flow-progress__label">{SECTION_LABEL[FLOW_SECTIONS[section - 1]]}</span>
         </div>
         <div className="flow-top__back" aria-hidden />
       </header>
@@ -177,109 +197,6 @@ export function CheckLine({ result, onCheckAgain, checking = false, checkedAt }:
         </div>
         {checkedAt && <span className="flow-check__when">Checked at {timeOf(checkedAt)}</span>}
       </div>
-    </div>
-  );
-}
-
-/**
- * A check that keeps itself current while its screen is open, and a Check
- * again that visibly checks (at least a beat of "Checking…") and always
- * records when. `retry` runs first on Check again (ask Tailscale again).
- */
-export function useFlowCheck<T>(
-  load: () => Promise<T>,
-  {
-    intervalMs = 3000,
-    retry,
-    name,
-  }: { intervalMs?: number; retry?: () => Promise<unknown>; name: string }
-) {
-  const [data, setData] = useState<T | null>(null);
-  const [checking, setChecking] = useState(false);
-  const [checkedAt, setCheckedAt] = useState<number | null>(null);
-  const live = useRef(true);
-  useEffect(() => {
-    live.current = true;
-    return () => {
-      live.current = false;
-    };
-  }, []);
-  const refresh = useCallback(async () => {
-    try {
-      const next = await load();
-      if (live.current) setData(next);
-      return next;
-    } catch {
-      return null;
-    }
-  }, [load]);
-  useEffect(() => {
-    void refresh();
-  }, [refresh]);
-  usePolling(refresh, { intervalMs, enabled: !checking, name });
-  const checkAgain = useCallback(async () => {
-    setChecking(true);
-    const beat = new Promise((r) => setTimeout(r, 500));
-    try {
-      if (retry) await retry().catch(() => undefined);
-      await Promise.all([refresh(), beat]);
-    } finally {
-      if (live.current) {
-        setChecking(false);
-        setCheckedAt(Date.now());
-      }
-    }
-  }, [retry, refresh]);
-  return { data, setData, checking, checkedAt, checkAgain, refresh };
-}
-
-/**
- * Move on by itself once a check passes, but only when it passed while the
- * screen was open. Arriving at an already-done step (Back, a resumed launch)
- * shows "Done" and waits for Continue, so Back never bounces forward.
- * Returns whether it was already done on arrival.
- */
-export function useAdvanceOnPass(
-  result: CheckResult,
-  onNext: () => void,
-  /** The first answer has arrived: what it says decides "already done". */
-  loaded: boolean
-): boolean {
-  const [firstSeen, setFirstSeen] = useState<CheckResult['state'] | null>(null);
-  if (firstSeen === null && loaded) setFirstSeen(result.state);
-  const doneOnArrival = firstSeen === 'pass';
-  const passed = result.state === 'pass';
-  const next = useRef(onNext);
-  useLayoutEffect(() => {
-    next.current = onNext;
-  });
-  useEffect(() => {
-    if (!passed || doneOnArrival || firstSeen === null) return;
-    const timer = setTimeout(() => next.current(), ADVANCE_MS);
-    return () => clearTimeout(timer);
-  }, [passed, doneOnArrival, firstSeen]);
-  return doneOnArrival;
-}
-
-/** A store page as a QR code, for the phone's camera; the link beside it. */
-export function StoreQr({ url, label }: { url: string; label: string }) {
-  const [qr, setQr] = useState<{ size: number; modules: string } | null>(null);
-  useEffect(() => {
-    let live = true;
-    getLinkQr(url)
-      .then((q) => live && setQr(q))
-      .catch(() => live && setQr(null));
-    return () => {
-      live = false;
-    };
-  }, [url]);
-  return (
-    <div className="flow-qr" data-testid="flow-store-qr">
-      {qr ? (
-        <PhoneQr size={qr.size} modules={qr.modules} pixels={168} label={label} />
-      ) : (
-        <div className="flow-qr__placeholder" aria-hidden />
-      )}
     </div>
   );
 }

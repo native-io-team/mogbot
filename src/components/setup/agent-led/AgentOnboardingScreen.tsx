@@ -3,9 +3,10 @@
  * straight line of one-question screens (`lib/onboardingFlow`).
  *
  * Welcome → the engine (pick, then install and sign in, a screen each) →
- * another account, if they want one (skippable) → how independent agents are → your phone (optional: Tailscale here,
- * Tailscale there, the app, scan and Allow) → "You're ready: bring your
- * agents, or start fresh?" The import is its own short line off the end.
+ * the Chief's chat. That's all: the engine is the only thing nothing works
+ * without. Bringing agents from another assistant, the phone, another
+ * account and how independent agents are each wait for their moment in the
+ * app, skippable (`lib/onboardingFlow` says where).
  *
  * Only the engine is required. Everything a project needs is asked for
  * later, when work first becomes a project (`ProjectToolsModal`). The app
@@ -18,17 +19,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Spinner } from '../../primitives/Spinner';
 import { Button } from '../../primitives/Button';
-import { EngineStep, engineName } from '../flow/EngineStep';
-import { IndependenceStep, ReadyStep, WelcomeStep } from '../flow/SimpleSteps';
-import { AccountsStep } from '../flow/AccountsStep';
-import {
-  PhoneAppStep,
-  PhoneIntroStep,
-  PhonePairStep,
-  TailscaleMacStep,
-  TailscalePhoneStep,
-} from '../flow/PhoneSteps';
-import { ImportConnectStep, ImportRemoteStep, ImportStartStep } from '../flow/ImportSteps';
+import { EngineStep } from '../flow/EngineStep';
+import { WelcomeStep } from '../flow/SimpleSteps';
 import type { AgentCardKey } from './AgentPickGrid';
 import {
   SetupItem,
@@ -36,21 +28,15 @@ import {
   getFullSetupStatus,
   setDefaultAgentId,
 } from '../../../lib/setup';
-import {
-  getOnboardingTestMode,
-  readyAgentsEngine,
-  OnboardingTestMode,
-} from '../../../lib/agentOnboarding';
+import { getOnboardingTestMode, OnboardingTestMode } from '../../../lib/agentOnboarding';
 import {
   nextStep,
   prevStep,
   readProgress,
   resumeStep,
   saveProgress,
-  skipPhone,
   type FlowStep,
 } from '../../../lib/onboardingFlow';
-import { setImportChoice } from '../../../lib/agents';
 import { initDefaultAgent } from '../../../lib/agent';
 import { withTimeout, TimeoutError } from '../../../lib/withTimeout';
 import { trackEvent, setActiveScreen } from '../../../lib/analytics';
@@ -68,7 +54,7 @@ function agentIdForBinary(binaryId: string): string {
 }
 
 interface AgentOnboardingScreenProps {
-  /** Called at the end of the line: Start fresh, or into the Chief's chat. */
+  /** Called at the end of the line: the engine is ready, into the Chief's chat. */
   onComplete: () => void | Promise<void>;
 }
 
@@ -76,7 +62,6 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
   const [step, setStep] = useState<FlowStep | null>(null);
   const [items, setItems] = useState<SetupItem[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [chosen, setChosen] = useState<AgentCardKey | null>(null);
   const [testMode, setTestMode] = useState<OnboardingTestMode>({
     mock: false,
     forceOnboarding: false,
@@ -125,47 +110,37 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
         forceOnboarding: false,
       }));
       setTestMode(mode);
-      const status = await fetchStatus();
+      await fetchStatus();
       if (!agentSetupStartedFired) {
         agentSetupStartedFired = true;
         void trackEvent('setup_started', { entry_path: 'agent_led', entry_step: null });
       }
-      const ready = status ? readyAgentsEngine(status.items) : null;
-      if (ready) setChosen(ready);
-      setStep(resumeStep(readProgress(), ready !== null));
+      setStep(resumeStep(readProgress()));
     };
     void init();
   }, [fetchStatus]);
 
-  /** The engine is installed and signed in: make it the default and go on. */
+  /** The end of the line: saved as finished, then off to the Chief's chat. */
+  const finish = useCallback(async () => {
+    saveProgress('engine', true);
+    await onComplete();
+  }, [onComplete]);
+
+  /** The engine is installed and signed in: make it the default, then the Chief. */
   const engineReady = useCallback(
     async (key: AgentCardKey) => {
       const agentId = agentIdForBinary(key);
       await setDefaultAgentId(agentId);
       initDefaultAgent(agentId);
-      setChosen(key);
       void trackEvent('onboarding_completed', {
         agents: [agentId],
         entry_path: 'agent_led',
         $screen_name: 'Onboarding',
       });
-      go(nextStep('engine'));
+      await finish();
     },
-    [go]
+    [finish]
   );
-
-  /** The end of the line: saved as finished, then off to Agents. */
-  const finish = useCallback(async () => {
-    saveProgress('ready', true);
-    await onComplete();
-  }, [onComplete]);
-
-  const startFresh = useCallback(async () => {
-    await setImportChoice('declined').catch((e: unknown) =>
-      logger.warn('Could not save the import choice', { error: String(e) })
-    );
-    await finish();
-  }, [finish]);
 
   if (!step) {
     return (
@@ -176,65 +151,20 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
     );
   }
 
-  const back = () => go(prevStep(step));
-  const forward = () => go(nextStep(step));
-  const skip = () => go(skipPhone());
-  const phone = { onNext: forward, onBack: back, onSkip: skip };
-  const importing = { onNext: forward, onBack: back, onStartFresh: () => void startFresh() };
-
-  const screen = (() => {
-    switch (step) {
-      case 'welcome':
-        return <WelcomeStep onNext={forward} />;
-      case 'engine':
-        return (
-          <EngineStep
-            items={items}
-            fetchStatus={fetchStatus}
-            updateItemStatus={updateItemStatus}
-            mock={testMode.mock}
-            forcePick={testMode.forceOnboarding}
-            onEngineReady={engineReady}
-            onBack={back}
-          />
-        );
-      case 'accounts':
-        return (
-          <AccountsStep
-            engine={chosen === 'codex' ? 'codex' : 'claude'}
-            onNext={forward}
-            onBack={back}
-          />
-        );
-      case 'independence':
-        return <IndependenceStep onNext={forward} onBack={back} />;
-      case 'phone':
-        return <PhoneIntroStep {...phone} />;
-      case 'tailscaleMac':
-        return <TailscaleMacStep {...phone} />;
-      case 'tailscalePhone':
-        return <TailscalePhoneStep {...phone} />;
-      case 'phoneApp':
-        return <PhoneAppStep {...phone} />;
-      case 'phonePair':
-        return <PhonePairStep {...phone} />;
-      case 'ready':
-        return (
-          <ReadyStep
-            engineName={chosen ? engineName(chosen) : null}
-            onImport={() => go('importRemote')}
-            onStartFresh={startFresh}
-            onBack={back}
-          />
-        );
-      case 'importRemote':
-        return <ImportRemoteStep {...importing} />;
-      case 'importConnect':
-        return <ImportConnectStep {...importing} />;
-      case 'importStart':
-        return <ImportStartStep {...importing} onOpenChief={finish} />;
-    }
-  })();
+  const screen =
+    step === 'welcome' ? (
+      <WelcomeStep onNext={() => go(nextStep(step))} />
+    ) : (
+      <EngineStep
+        items={items}
+        fetchStatus={fetchStatus}
+        updateItemStatus={updateItemStatus}
+        mock={testMode.mock}
+        forcePick={testMode.forceOnboarding}
+        onEngineReady={engineReady}
+        onBack={() => go(prevStep(step))}
+      />
+    );
 
   return (
     <>

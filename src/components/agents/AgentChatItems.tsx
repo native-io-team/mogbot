@@ -65,6 +65,7 @@ export { WorkingIndicator } from './AgentWorkingIndicator';
 import { RevisesBar } from './AgentResult';
 import { NoteFixLine } from './AgentNoteFix';
 import { useOptionalToast } from '../../contexts/ToastContext';
+import { requestSwitcher, switcherMounted } from '../../lib/agentAccounts';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useHeightReveal } from './useAgentMotion';
 import { useCardGuard } from './useCardGuard';
@@ -502,6 +503,13 @@ export const ErrorLine = memo(function ErrorLine({
           {onRetry && (
             <TextButton tabIndex={0} variant={retryAt ? 'default' : 'accent'} onClick={onRetry}>
               {retryAt ? 'Try anyway' : 'Retry'}
+            </TextButton>
+          )}
+          {/* The moment another account is worth having, so onboarding
+              doesn't ask for one up front: the account row's own "Add". */}
+          {switcherMounted() && (
+            <TextButton tabIndex={0} onClick={() => requestSwitcher('add')} data-add-account>
+              Add another account
             </TextButton>
           )}
         </div>

@@ -7,6 +7,7 @@ import { act, fireEvent, render, screen } from '@testing-library/react';
 import { clearMocks, mockIPC } from '@tauri-apps/api/mocks';
 import { ApprovalCard, ErrorLine, FreshHint, NoteLine } from './AgentChatItems';
 import type { Agent, AgentMessage } from '../../lib/agents';
+import { onSwitcherRequest } from '../../lib/agentAccounts';
 
 const approvalMessage: AgentMessage = {
   id: 'm1',
@@ -213,6 +214,52 @@ describe('ErrorLine', () => {
     expect(screen.getByRole('button', { name: /retry at/i })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Try anyway' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
+  });
+
+  it('offers another account at the limit, through the account row, only when that row is there', () => {
+    const message: AgentMessage = {
+      id: 'e3',
+      agentId: 'acme',
+      ts: Date.now(),
+      kind: 'error',
+      text: 'Usage limit reached',
+      failure: { kind: 'usage_limit' },
+    };
+    // No account row on screen (no Agents sidebar): nothing to open, so no offer.
+    const first = render(<ErrorLine message={message} onRetry={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: 'Add another account' })).not.toBeInTheDocument();
+    first.unmount();
+
+    const requests: string[] = [];
+    const off = onSwitcherRequest((what) => requests.push(what));
+    try {
+      render(<ErrorLine message={message} onRetry={vi.fn()} />);
+      fireEvent.click(screen.getByRole('button', { name: 'Add another account' }));
+      expect(requests).toEqual(['add']);
+    } finally {
+      off();
+    }
+  });
+
+  it('never offers an account on a failure that isn’t the usage limit', () => {
+    const off = onSwitcherRequest(() => {});
+    try {
+      render(
+        <ErrorLine
+          message={{
+            id: 'e4',
+            agentId: 'acme',
+            ts: Date.now(),
+            kind: 'error',
+            text: 'Claude Code is signed out.',
+            failure: { kind: 'signed_out' },
+          }}
+        />
+      );
+      expect(screen.queryByRole('button', { name: 'Add another account' })).not.toBeInTheDocument();
+    } finally {
+      off();
+    }
   });
 });
 

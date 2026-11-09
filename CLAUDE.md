@@ -435,12 +435,13 @@ Onboarding is critical — it's the first thing every new user sees, and it ends
 One straight line of one-question screens (`lib/onboardingFlow.ts`, `components/setup/flow/`): a progress bar, Back, one big button, one sentence each. The step is saved (`shipstudio.onboarding.flow`), and a launch with an unfinished onboarding reopens it (`postSetupViewFor`).
 
 1. **Welcome** — one line on what this is.
-2. **Engine** — Claude Code or Codex (only engines `agents::engine` can run are offered), then each install / sign-in its own screen (Codex first gets the package manager and Node.js); each starts on its own and ticks from the app's checks.
-3. **Independence** — how much agents do on their own (Skip keeps the default).
-4. **Your phone** (skippable) — Tailscale on this Mac; Tailscale on the phone on the same account (App Store QR, `companion_tailnet_phones`); the phone app (TestFlight when there is one, else the guided build, or "I already have it"); scan and Allow.
-5. **Ready** — "Bring your agents, or start fresh?" Importing is three screens (Remote access on, the link in the assistant, the message), ending in the Chief's chat; Start fresh lands on the Chief's greeting (`CHIEF_GREETING`, written by `agents::ensure_main`; no model turn runs until the user replies). Either answer is the Mac's (`agents::import_choice`), so the Chief's one-time card and the phone's stop asking.
+2. **Engine** — Claude Code or Codex (only engines `agents::engine` can run are offered), then each install / sign-in its own screen (Codex first gets the package manager and Node.js); each starts on its own and ticks from the app's checks. Once it passes, the app lands on the Chief's greeting (`CHIEF_GREETING`, written by `agents::ensure_main`; no model turn runs until the user replies).
 
-Every check says **Done** when it passes (and moves on by itself if it passed on that screen) or **Not done yet** with the one fix and the page that does it; Check again always answers with when it checked. Never a silent reload.
+Two clicks from launch to the Chief (Get started, an engine card) when nothing needs installing. Everything else is asked at its moment, in the app, each skippable (`lib/onboardingFlow.ts` lists them): bringing agents from another assistant is one card under the Chief's greeting (`ImportChoiceCard`; the answer is the Mac's, `agents::import_choice`, so the phone stops asking too); the phone is a card in the Chief's chat once the first thing asked for is back (`ChiefPhoneOffer`, which opens the Phone panel) and "Get the phone app" at the sidebar's foot; another account is offered on the usage-limit line the moment one runs out; independence keeps its default (asks before anything risky), the Chief offers a change when the user sounds fed up (`agents/level_hint.rs`), and Settings → Agents has the slider. A launch saved on one of the screens older builds had (accounts, independence, phone, ready, import) counts as finished.
+
+Keyboard: whenever nothing has focus, the screen's big button (or the recommended engine card) takes it, so Enter always goes on (`FLOW_FOCUS_TARGET`).
+
+Every check says **Done** when it passes (and moves on by itself if it passed on that screen) or **Not done yet** with the one fix; a window closed before it finished (a cancelled install or sign-in) says so too. Never a silent screen.
 
 The app verifies; nothing self-certifies: an engine counts when `get_full_setup_status` says it is installed and signed in. Backend `allReady` means exactly that (`has_agents_engine` in `commands/setup/status.rs`), and the background check after launch only logs — it never sends a user back to onboarding.
 
@@ -452,7 +453,7 @@ The classic step-by-step wizard and its "Try classic onboarding" toggle were rem
 
 #### Looking at it
 
-- `pnpm harness` scenarios: every screen and failure state is an `onboarding-*` scenario (`src/harness/scenarios/onboardingFlow.ts`; `onboarding-fresh` is the welcome, `onboarding-handoff` the last step, `onboarding-end-to-agents` Start fresh → Agents), `launch-returning` (launch lands on Agents), `project-tools` and `project-tools-running`.
+- `pnpm harness` scenarios: every screen and failure state is an `onboarding-*` scenario (`src/harness/scenarios/onboardingFlow.ts`; `onboarding-fresh` is the welcome, `onboarding-engine-connected` the last screen, `onboarding-end-to-agents` the engine → Agents, `onboarding-status-failed` a check that couldn't run), `agents-first-run-import-choice` and `agents-first-result-phone-offer` (the questions that left onboarding), `launch-returning` (launch lands on Agents), `project-tools` and `project-tools-running`.
 - `SHIPSTUDIO_FORCE_SETUP=fresh pnpm tauri dev` — mock backend; install/connect buttons flip mock state after a visible beat, and the Project tools dialog plays the scripted `DemoAgentTerminal`. Nothing touches the host machine. Also `auth-only` (engines installed, none signed in). Note that `both-agents`, `codex-only` and `almost-done` have a ready engine, so mock `allReady` is true and launch **skips onboarding entirely** (straight to Agents); use them to look at the post-setup app, not the hand-off.
 - `SHIPSTUDIO_FORCE_ONBOARDING=1 pnpm tauri dev` — real checks, onboarding forced open, the pick phase always shown even on a set-up machine; `mark_setup_complete` is in-memory only.
 
@@ -471,9 +472,9 @@ VM login is admin/admin; the DMG appears under "My Shared Files → dmg". Locall
 
 - [ ] Claude Code card: installs via terminal, sign-in completes, hand-off screen names it
 - [ ] Codex card on a bare machine: package manager and Node.js install first, then Codex, then sign-in
-- [ ] Each phone screen ticks Done by itself (Tailscale here, the phone on the tailnet, paired); HTTPS certificates off says Not done yet with the admin page
-- [ ] Start fresh lands on Agents with the Chief's greeting and starters; the Chief runs on the engine chosen
-- [ ] Quit mid-way (e.g. on the phone screens) and relaunch: it reopens on that screen
+- [ ] Signed in, it lands on Agents with the Chief's greeting, starters and the one import card; the Chief runs on the engine chosen
+- [ ] After the first reply to something you asked, the phone card appears once; Set up my phone pairs (each phone step ticks Done by itself; HTTPS certificates off says Not done yet with the admin page)
+- [ ] Quit mid-way (e.g. on the sign-in) and relaunch: it reopens on that screen
 - [ ] Re-launch lands on Agents, not onboarding (setup_complete persisted)
 - [ ] New project: the Project tools dialog lists what's missing, the agent installs it, the checklist turns green, the new-project flow opens
 - [ ] A project window (opened from a project) still goes straight to the workspace

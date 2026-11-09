@@ -4,14 +4,23 @@
  *
  * 1. Welcome — what this is, in a line.
  * 2. Engine — Claude Code or Codex, then each install / sign-in as its own
- *    screen, ticked by the app's own checks; then, optionally, another
- *    account (Claude or Codex), so agents carry on when one runs out.
- * 3. Independence — how much agents do on their own.
- * 4. Your phone (skippable) — Tailscale on this Mac, Tailscale on the phone
- *    (same account), the phone app, then scan and Allow.
- * 5. Ready — bring your agents from another assistant, or start fresh. The
- *    import path is its own short line: Remote access on, the link in the
- *    assistant, then the one message.
+ *    screen, ticked by the app's own checks.
+ * 3. The Chief of Staff's chat, on its greeting and starters.
+ *
+ * That is all onboarding asks, because the engine is the only thing nothing
+ * works without. Everything else waits for the moment it means something,
+ * each skippable, in the app:
+ *
+ * - Bringing agents from another assistant: one card under the Chief's
+ *   greeting (`ImportChoiceCard`), answered once for the Mac.
+ * - Your phone: a card in the Chief's chat once the first thing asked for
+ *   has come back (`ChiefPhoneOffer`), and "Get the phone app" at the
+ *   sidebar's foot.
+ * - Another account: on the usage-limit line the moment one runs out, and
+ *   at the account row at the foot of Agents.
+ * - How independent agents are: the default asks before anything risky;
+ *   the Chief offers a change when the user sounds fed up
+ *   (`agents/level_hint.rs`), and Settings → Agents has the slider.
  *
  * Everything here is pure: the order, Back, what a resumed launch opens on,
  * and what each check says when it passes or fails. A failed check always
@@ -25,17 +34,64 @@
  * @module lib/onboardingFlow
  */
 
-import type { TailscaleState, PhoneStatus, TailnetPhone } from './companion';
-import { phoneTailscaleSignIn } from './companion';
-import { connectionStep, TAILSCALE_DOWNLOAD_URL, type RemoteAccessStatus } from './remoteAccess';
-import type { ImportTalk } from './agents';
 import { SETUP_DEPENDENCIES, type SetupItem } from './setup';
 
 // ============ Steps ============
 
-export const FLOW_STEPS = [
-  'welcome',
-  'engine',
+export const FLOW_STEPS = ['welcome', 'engine'] as const;
+export type FlowStep = (typeof FLOW_STEPS)[number];
+
+/**
+ * The parts the progress bar shows: the two screens, then where they lead.
+ * The last is never a screen here; it is the Chief's chat, and the bar
+ * shows it so the engine screens read as the last thing in the way.
+ */
+export const FLOW_SECTIONS = ['welcome', 'engine', 'chief'] as const;
+export type FlowSection = (typeof FLOW_SECTIONS)[number];
+
+export const SECTION_LABEL: Record<FlowSection, string> = {
+  welcome: 'Welcome',
+  engine: 'Your AI',
+  chief: 'Your Chief of Staff',
+};
+
+export function sectionOf(step: FlowStep): FlowSection {
+  return step;
+}
+
+/** "Step 2 of 3". */
+export function progressOf(step: FlowStep): { section: number; sections: number } {
+  return { section: FLOW_SECTIONS.indexOf(sectionOf(step)) + 1, sections: FLOW_SECTIONS.length };
+}
+
+/** The screen after this one; null after the engine, which is the Chief's chat. */
+export function nextStep(step: FlowStep): FlowStep | null {
+  return FLOW_STEPS[FLOW_STEPS.indexOf(step) + 1] ?? null;
+}
+
+/** Back: the screen before. */
+export function prevStep(step: FlowStep): FlowStep | null {
+  return FLOW_STEPS[FLOW_STEPS.indexOf(step) - 1] ?? null;
+}
+
+// ============ Persistence ============
+
+export const FLOW_STORAGE_KEY = 'shipstudio.onboarding.flow';
+
+export interface FlowProgress {
+  v: 1;
+  step: FlowStep;
+  /** The whole line was walked to the end (the engine is set up, into the Chief's chat). */
+  finished: boolean;
+}
+
+/**
+ * Screens an older build saved that are no longer in the line. Each came
+ * after the engine was set up, which is all onboarding asks now, so a
+ * launch saved on one counts as finished: it opens on Agents, not on the
+ * welcome. (Signed out since? Agents shows its own "no engine" panel.)
+ */
+const RETIRED_STEPS = new Set([
   'accounts',
   'independence',
   'phone',
@@ -47,94 +103,20 @@ export const FLOW_STEPS = [
   'importRemote',
   'importConnect',
   'importStart',
-] as const;
-export type FlowStep = (typeof FLOW_STEPS)[number];
+]);
 
-/** The five parts the progress bar shows. */
-export const FLOW_SECTIONS = ['welcome', 'engine', 'independence', 'phone', 'ready'] as const;
-export type FlowSection = (typeof FLOW_SECTIONS)[number];
-
-export const SECTION_LABEL: Record<FlowSection, string> = {
-  welcome: 'Welcome',
-  engine: 'Your AI',
-  independence: 'How independent',
-  phone: 'Your phone',
-  ready: 'Ready',
-};
-
-const PHONE_STEPS: readonly FlowStep[] = [
-  'tailscaleMac',
-  'tailscalePhone',
-  'phoneApp',
-  'phonePair',
-];
-const IMPORT_STEPS: readonly FlowStep[] = ['importRemote', 'importConnect', 'importStart'];
-
-export function sectionOf(step: FlowStep): FlowSection {
-  // Another account is part of "Your AI".
-  if (step === 'accounts') return 'engine';
-  if (step === 'phone' || PHONE_STEPS.includes(step)) return 'phone';
-  if (step === 'ready' || IMPORT_STEPS.includes(step)) return 'ready';
-  return step as FlowSection;
-}
-
-/** "Step 4 of 5", and within a part with several screens, "2 of 4". */
-export function progressOf(step: FlowStep): {
-  section: number;
-  sections: number;
-  sub: { index: number; total: number } | null;
-} {
-  const section = FLOW_SECTIONS.indexOf(sectionOf(step)) + 1;
-  const within = PHONE_STEPS.includes(step)
-    ? PHONE_STEPS
-    : IMPORT_STEPS.includes(step)
-      ? IMPORT_STEPS
-      : null;
-  return {
-    section,
-    sections: FLOW_SECTIONS.length,
-    sub: within ? { index: within.indexOf(step) + 1, total: within.length } : null,
-  };
-}
-
-/** The screen after this one, in the straight line (the phone part included). */
-export function nextStep(step: FlowStep): FlowStep | null {
-  const i = FLOW_STEPS.indexOf(step);
-  // "Ready" is the end of the line; importing is a branch off it.
-  if (step === 'ready' || step === 'importStart') return null;
-  if (step === 'phonePair') return 'ready';
-  return FLOW_STEPS[i + 1] ?? null;
-}
-
-/** Back: the screen before, except that "Ready" goes back to the phone question. */
-export function prevStep(step: FlowStep): FlowStep | null {
-  if (step === 'welcome') return null;
-  if (step === 'ready') return 'phone';
-  if (step === 'importRemote') return 'ready';
-  return FLOW_STEPS[FLOW_STEPS.indexOf(step) - 1] ?? null;
-}
-
-/** Skipping the phone part, from any of its screens. */
-export const skipPhone = (): FlowStep => 'ready';
-
-// ============ Persistence ============
-
-export const FLOW_STORAGE_KEY = 'shipstudio.onboarding.flow';
-
-export interface FlowProgress {
-  v: 1;
-  step: FlowStep;
-  /** The whole line was walked to the end (Start fresh, or into the import). */
-  finished: boolean;
-}
+const isFlowStep = (s: string): s is FlowStep => (FLOW_STEPS as readonly string[]).includes(s);
 
 export function readProgress(): FlowProgress | null {
   try {
     const raw = window.localStorage.getItem(FLOW_STORAGE_KEY);
     if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<FlowProgress>;
-    if (parsed.v !== 1 || !FLOW_STEPS.includes(parsed.step as FlowStep)) return null;
-    return { v: 1, step: parsed.step as FlowStep, finished: parsed.finished === true };
+    const parsed = JSON.parse(raw) as { v?: unknown; step?: unknown; finished?: unknown };
+    const step = parsed.step;
+    if (parsed.v !== 1 || typeof step !== 'string') return null;
+    if (RETIRED_STEPS.has(step)) return { v: 1, step: 'engine', finished: true };
+    if (!isFlowStep(step)) return null;
+    return { v: 1, step, finished: parsed.finished === true };
   } catch {
     return null;
   }
@@ -159,13 +141,12 @@ export function isOnboardingInProgress(p: FlowProgress | null = readProgress()):
 }
 
 /**
- * Where a launch opens: the saved step, unless it is past the engine and the
- * engine is no longer ready (signed out since), which goes back to it.
+ * Where a launch opens: the saved step (the engine screen re-checks what is
+ * installed and signed in on arrival), or the welcome when nothing unfinished
+ * is saved.
  */
-export function resumeStep(saved: FlowProgress | null, engineReady: boolean): FlowStep {
+export function resumeStep(saved: FlowProgress | null): FlowStep {
   if (!saved || saved.finished) return 'welcome';
-  const pastEngine = FLOW_STEPS.indexOf(saved.step) > FLOW_STEPS.indexOf('engine');
-  if (pastEngine && !engineReady) return 'engine';
   return saved.step;
 }
 
@@ -186,222 +167,6 @@ export type CheckResult =
 
 export const NOT_DONE = 'Not done yet';
 export const DONE = 'Done';
-
-/** "Get Tailscale on this Mac": installed, signed in, switched on. */
-export function tailscaleMacCheck(t: TailscaleState | null): CheckResult {
-  if (!t) return { state: 'checking', line: 'Checking this Mac…' };
-  switch (t.state) {
-    case 'connected':
-      return {
-        state: 'pass',
-        line: t.login ? `Tailscale is on, signed in as ${t.login}.` : 'Tailscale is on.',
-      };
-    case 'notInstalled':
-      return {
-        state: 'fail',
-        line: 'Tailscale isn’t installed on this Mac.',
-        fix: 'Download it, open it, and sign in. This screen ticks by itself.',
-        action: { label: 'Download Tailscale', url: TAILSCALE_DOWNLOAD_URL },
-      };
-    case 'needsLogin':
-      return {
-        state: 'fail',
-        line: 'Tailscale is installed but not signed in, or switched off.',
-        fix: 'Click the Tailscale icon in the menu bar, sign in, and switch it on.',
-      };
-    case 'unknown':
-      return {
-        state: 'fail',
-        line: `Tailscale answered with something unexpected: ${t.detail}`,
-        fix: 'Quit Tailscale from the menu bar, open it again, then check again.',
-      };
-  }
-}
-
-/**
- * "Get Tailscale on your phone, same account": a phone signed in as this
- * Mac's account shows up on the tailnet. Switched off isn't done.
- */
-export function tailscalePhoneCheck(
-  t: TailscaleState | null,
-  phones: TailnetPhone[] | null
-): CheckResult {
-  if (t && t.state !== 'connected') {
-    return {
-      state: 'fail',
-      line: 'Tailscale on this Mac is off, so it can’t see your phone.',
-      fix: 'Go back one step and get Tailscale on this Mac first.',
-    };
-  }
-  if (!t || phones === null) return { state: 'checking', line: 'Looking for your phone…' };
-  const on = phones.find((p) => p.online);
-  if (on) return { state: 'pass', line: `${on.name} is on your Tailscale.` };
-  const off = phones[0];
-  if (off) {
-    return {
-      state: 'fail',
-      line: `${off.name} is signed in, but Tailscale is switched off on it.`,
-      fix: 'Open Tailscale on your phone and turn the switch on.',
-    };
-  }
-  return {
-    state: 'fail',
-    line: 'No phone is on your Tailscale yet.',
-    fix: `On your phone, install Tailscale, ${phoneTailscaleSignIn(t)}, and turn the switch on.`,
-  };
-}
-
-/** Where pairing the phone has got to, as one screen state. */
-export type PairStage =
-  | { kind: 'starting' }
-  | { kind: 'fix'; check: Extract<CheckResult, { state: 'fail' }>; retry: boolean }
-  | { kind: 'code' }
-  | { kind: 'confirm' }
-  | { kind: 'paired'; name: string };
-
-/**
- * From the phone panel's status. `knownDevices`: the phones paired before
- * this screen opened, so only a new one counts as done.
- */
-export function pairStage(s: PhoneStatus | null, knownDevices: readonly string[]): PairStage {
-  if (!s) return { kind: 'starting' };
-  const fresh = s.devices.find((d) => !knownDevices.includes(d.id));
-  if (fresh) return { kind: 'paired', name: fresh.name };
-  if (s.tailscale.state !== 'connected') {
-    const mac = tailscaleMacCheck(s.tailscale);
-    if (mac.state === 'fail') return { kind: 'fix', check: mac, retry: false };
-  }
-  if (!s.enabled) return { kind: 'starting' };
-  switch (s.serve.state) {
-    case 'needsApproval':
-      return {
-        kind: 'fix',
-        retry: true,
-        check: {
-          state: 'fail',
-          line: 'HTTPS certificates are off in your Tailscale account.',
-          fix: 'Open the Tailscale admin page, click Enable HTTPS, then come back and check again.',
-          action: { label: 'Open Tailscale admin', url: s.serve.url },
-        },
-      };
-    case 'failed':
-      return {
-        kind: 'fix',
-        retry: true,
-        check: {
-          state: 'fail',
-          line: `Tailscale didn’t start phone access: ${s.serve.detail}`,
-          fix: 'Check that Tailscale is on in the menu bar, then check again.',
-        },
-      };
-    case 'off':
-      if (s.tailscale.state === 'unknown') {
-        return {
-          kind: 'fix',
-          retry: true,
-          check: {
-            state: 'fail',
-            line: `Tailscale answered with something unexpected: ${s.tailscale.detail}`,
-            fix: 'Quit Tailscale from the menu bar, open it again, then check again.',
-          },
-        };
-      }
-      return { kind: 'starting' };
-    case 'on':
-      return s.pairing.request ? { kind: 'confirm' } : { kind: 'code' };
-  }
-}
-
-/** "Turn on Remote access": done when a request from the internet actually got here. */
-export function remoteOnCheck(s: RemoteAccessStatus | null, now: number): CheckResult {
-  if (!s) return { state: 'checking', line: 'Checking Remote access…' };
-  const step = connectionStep(s, now);
-  switch (step.kind) {
-    case 'ready':
-      return { state: 'pass', line: 'Remote access is on, and the internet can reach this Mac.' };
-    case 'unsupported':
-      return {
-        state: 'fail',
-        line: 'Remote access works only on a Mac.',
-        fix: 'Start fresh instead: you can import later from ⌘K → Import agents.',
-      };
-    case 'installTailscale':
-    case 'signInTailscale':
-    case 'tailscaleProblem': {
-      const mac = tailscaleMacCheck(s.tailscale);
-      return mac.state === 'fail' ? mac : { state: 'checking', line: 'Checking Tailscale…' };
-    }
-    case 'off':
-      return { state: 'checking', line: 'Turning on Remote access…' };
-    case 'approveFunnel':
-      return {
-        state: 'fail',
-        line: 'Tailscale needs your OK before the link can reach this Mac.',
-        fix: 'Open the Tailscale page and allow Funnel (Tailscale’s name for public links) for this Mac, then come back and check again.',
-        action: { label: 'Open Tailscale', url: step.url },
-      };
-    case 'funnelFailed':
-      return {
-        state: 'fail',
-        line: `Tailscale couldn’t turn on the link: ${step.detail}`,
-        fix: 'Check that Tailscale is on in the menu bar, then check again.',
-      };
-    case 'starting':
-      return { state: 'checking', line: 'Asking Tailscale for a link…' };
-    case 'publishing':
-      return step.stage === 'stuck'
-        ? {
-            state: 'fail',
-            line: `The link still isn’t reachable after ${step.minutes} minutes.`,
-            fix: 'Check again to ask Tailscale to publish it once more.',
-          }
-        : {
-            state: 'checking',
-            line: 'Publishing the link. The first time this can take a few minutes.',
-          };
-    case 'unreachable':
-      return {
-        state: 'fail',
-        line: `The link is set up, but requests don’t get through: ${step.detail}`,
-        fix: 'Check again to ask Tailscale to publish it once more.',
-      };
-  }
-}
-
-/** "Add the link to your assistant": done once it has connected. */
-export function assistantCheck(s: RemoteAccessStatus | null, copied: boolean): CheckResult {
-  if (s?.everConnected) {
-    const who = s.activity.lastClient;
-    return { state: 'pass', line: who ? `${who} is connected.` : 'Your assistant is connected.' };
-  }
-  if (!copied) return { state: 'checking', line: 'Waiting for you to copy the link…' };
-  return {
-    state: 'fail',
-    line: 'Your assistant hasn’t connected yet.',
-    fix: 'In your assistant, add a custom connector, paste the link, and save it. Then ask it anything.',
-  };
-}
-
-/** "Send it this message": done when the assistant has started talking to the Chief. */
-export function importTalkCheck(
-  talk: ImportTalk | null,
-  armed: boolean,
-  copied: boolean
-): CheckResult {
-  if (
-    talk &&
-    ['awaiting_consent', 'interviewing', 'playback', 'review', 'imported'].includes(talk.state)
-  ) {
-    return { state: 'pass', line: `${talk.source} is talking to your Chief of Staff.` };
-  }
-  if (!armed) return { state: 'checking', line: 'Getting the import ready…' };
-  if (!copied) return { state: 'checking', line: 'Waiting for you to copy the message…' };
-  return {
-    state: 'fail',
-    line: 'Your assistant hasn’t sent anything yet.',
-    fix: 'Paste the message into a new chat with your assistant and send it.',
-  };
-}
 
 // ============ The engine's own screens ============
 
@@ -457,7 +222,13 @@ export function engineItemCopy(
 /** The check under an install / sign-in screen, from the app's own detection. */
 export function engineItemCheck(
   item: { id: string; friendlyName: string; status: string; errorMessage?: string } | undefined,
-  isAuth: boolean
+  isAuth: boolean,
+  /**
+   * Its window was closed before it finished (Cancel, or the browser's
+   * sign-in abandoned). Without this the screen fell silent: the same
+   * button and no word on what happened.
+   */
+  stopped = false
 ): CheckResult | null {
   if (!item) return { state: 'checking', line: 'Checking this Mac…' };
   switch (item.status) {
@@ -478,6 +249,16 @@ export function engineItemCheck(
         fix: 'Press Try again. If it fails twice, quit and reopen the app, then try once more.',
       };
     default:
-      return null;
+      return stopped
+        ? {
+            state: 'fail',
+            line: isAuth
+              ? 'Sign-in was closed before it finished.'
+              : 'The install was closed before it finished.',
+            fix: isAuth
+              ? 'Press Try again. Already signed in in the browser? This screen notices in a moment.'
+              : 'Press Try again.',
+          }
+        : null;
   }
 }

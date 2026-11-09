@@ -1200,8 +1200,9 @@ the phone in `mobile/src/components/IndependenceSlider.tsx` (one adjustable
 control for VoiceOver; arrows, Home and End on the desk). "Go full send" or
 "unleash it" to the Chief raises one settings card (`propose_settings_change`,
 `independence: full_send`).
-Asked once in onboarding, after the engine is ready and before the hand-off
-(Skip keeps the default); kept in Settings → Agents → Independence, ⌘K "How
+Not asked in onboarding: the default asks before anything risky, and the
+Chief offers a change when the user sounds fed up (`agents/level_hint.rs`).
+Kept in Settings → Agents → Independence, ⌘K "How
 independent your agents are…", and the phone's Settings
 (`agents.setIndependence`, audited; read from the overview's `independence`).
 Saved in `agents/independence.json`.
@@ -3227,12 +3228,11 @@ to the user and asks what's missing, then every connector import ends on one
 review card in the Chief's chat, and the user imports what they keep
 (`agents/harvest.rs`, `agents/review.rs`).
 
-**Asked once, then in the background.** Onboarding's last step asks
-everyone new "Bring your agents from Grok, ChatGPT or another assistant, or
-start fresh?" (its import path is three screens: Remote access on, the link
-in the assistant, the message). An install from before that question gets
-one card at the top of the Chief's chat (`ImportChoiceCard`) and on the
-phone's home, asking once. The answer is the Mac's
+**Asked once, then in the background.** Onboarding no longer asks: it
+ends on the Chief's greeting, and under the greeting and its starters one
+card asks "Bring your agents from another assistant?" (`ImportChoiceCard`;
+at the top of the chat once there is a conversation), as does the phone's
+home, once. The answer is the Mac's
 (`agents::import_choice`, `import-choice.json` beside the agents; carried on
 the overview as `importChoice`, set by `agents_set_import_choice` /
 `agents.setImportChoice`); any import that brings something across sets it

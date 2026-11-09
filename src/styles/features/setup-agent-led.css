@@ -71,6 +71,13 @@
   transform: translateY(-1px); /* css-ok: hover lift, not spacing */
 }
 
+/* The engine screen focuses the recommended card, so Enter picks it: the
+   app's neutral ring, not the browser's blue. */
+.agent-pick-card:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
 .agent-pick-card:disabled {
   opacity: 0.6;
   cursor: default;
