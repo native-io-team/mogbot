@@ -60,6 +60,7 @@ import { groupLine, groupRequests } from '../../lib/agentRequests';
 import { secretTitle } from '../../lib/agentSecrets';
 import { kbd } from '../../lib/shortcuts';
 import { previewText } from '../../../packages/companion-protocol/src/preview';
+import { teamLine, workingCount } from '../../../packages/companion-protocol/src/attention';
 
 interface AgentsSidebarProps {
   agents: Agent[];
@@ -206,6 +207,7 @@ export function AgentsSidebar({
   onNewRoom,
 }: AgentsSidebarProps) {
   const searching = query.trim().length > 0;
+  const working = workingCount(agents);
   // By attention (waiting on you, working, recent), held still while the
   // list is in use so a row never moves under the pointer, and re-sorted at
   // most every few seconds. The Needs-your-OK row pushes the rows under it,
@@ -263,6 +265,12 @@ export function AgentsSidebar({
         />
       ) : (
         <>
+          {/* The team at a glance: one calm line, always there so the rows
+              under it never move. The dot is status (running), never the accent. */}
+          <div className="agents-list__team" data-working={working > 0 || undefined}>
+            <span className="agents-list__team-dot" aria-hidden="true" />
+            <span className="agents-list__team-line">{teamLine(working)}</span>
+          </div>
           {/* The Chief first, always (as on the phone); then what waits on you. */}
           {visible.filter((a) => a.isMain).map(row)}
           {/* What's in flight, said where you look: while something waits on

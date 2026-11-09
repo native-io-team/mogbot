@@ -83,3 +83,19 @@ export function needsYouCount(
 ): number {
   return agentsNeedingYou(agents, setup).length;
 }
+
+/** What "working" reads of an agent. A taken-over agent is the user's, not working. */
+export type WorkingAgent = { status: Pick<Agent['status'], 'state'>; takeover?: unknown };
+
+/**
+ * How many agents are mid-turn right now: the calm team line at the head of
+ * the agent list ("3 working"), on desk and phone alike.
+ */
+export function workingCount(agents: readonly WorkingAgent[]): number {
+  return agents.filter((a) => a.status.state === 'working' && !a.takeover).length;
+}
+
+/** The team line's words: "3 working", or "All quiet" when nobody is. */
+export function teamLine(working: number): string {
+  return working > 0 ? `${working} working` : 'All quiet';
+}
