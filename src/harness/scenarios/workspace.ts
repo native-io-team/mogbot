@@ -65,6 +65,23 @@ export const workspaceCommands: CommandMap = {
   mark_project_opened: null,
   set_window_title: null,
   get_auto_accept_mode: false,
+  // The preview's page list (`usePreviewConnection`), asked on a 5s poll that
+  // usually lands after the capture: none found, as the scan says of a
+  // project with no routes it recognises. Unmocked it answered undefined and
+  // a later render crashed into the ErrorBoundary.
+  list_pages: [],
+  // Code health (`useCodeHealth`), also asked late: no scripts set up and
+  // never run, as the backend answers for a fresh project.
+  detect_health_scripts: {
+    packageManager: 'pnpm',
+    test: null,
+    lint: null,
+    typecheck: null,
+    format: null,
+    hasPackageJson: true,
+    suggestions: [],
+  },
+  get_health_status: null,
 
   // ---- dev server --------------------------------------------------------
   // Null rather than a port: the harness has no dev server, and inventing a

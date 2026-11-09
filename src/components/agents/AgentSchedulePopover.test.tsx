@@ -38,6 +38,34 @@ describe('AgentSchedulePopover', () => {
     expect(screen.queryByRole('tooltip')).toBeNull();
   });
 
+  it('a failed run reads as one line: no full stop before “·”, “need” for two apps', async () => {
+    mockIPC(() => null);
+    const routine = {
+      id: 'r1',
+      note: 'Brief me.',
+      repeat: { kind: 'days', days: [1], hour: 9, minute: 0 },
+      nextAt: Date.now() + 86_400_000,
+      createdAt: 0,
+      paused: false,
+      runs: [
+        {
+          at: Date.now() - 3_600_000,
+          outcome: 'failed',
+          attempt: 1,
+          detail: 'Claude Code is signed out.',
+          signIn: ['Gmail', 'Slack'],
+        },
+      ],
+    } as unknown as CheckIn;
+    const agent = { id: 'a1', name: 'Finance', checkIns: [routine] } as Agent;
+    render(<AgentSchedulePopover agent={agent} open onOpenChange={vi.fn()} />);
+    fireEvent.click(await screen.findByRole('button', { name: /Past runs/ }));
+    const line = await screen.findByText(/need signing in again/);
+    expect(line.textContent).toContain(
+      'Claude Code is signed out · Gmail, Slack need signing in again'
+    );
+  });
+
   it('makes a monthly routine: one more chip, then a sentence', async () => {
     const calls: { cmd: string; args: Record<string, unknown> }[] = [];
     mockIPC((cmd, args) => {

@@ -819,8 +819,11 @@ function RunHistory({ runs }: { runs: CheckInRun[] }) {
       {[...runs].reverse().map((run) => {
         const extra = [
           run.manual ? 'run now' : null,
-          run.detail ? describeRunDetail(run.detail) : null,
-          run.signIn?.length ? `${run.signIn.join(', ')} needs signing in again` : null,
+          // A sentence's own full stop would sit before the next " · ".
+          run.detail ? describeRunDetail(run.detail).replace(/\.+$/, '') : null,
+          run.signIn?.length
+            ? `${run.signIn.join(', ')} ${run.signIn.length > 1 ? 'need' : 'needs'} signing in again`
+            : null,
         ].filter(Boolean);
         const outcome = [describeRun(run), ...extra].join(' · ');
         return (

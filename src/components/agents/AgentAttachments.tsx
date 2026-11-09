@@ -219,8 +219,9 @@ export function MessageAttachments({ agent, attachments, side = 'user' }: Messag
     <div className="agent-attachments" data-side={side}>
       {images.length > 0 && (
         <div className="agent-attachments__images" data-count={Math.min(images.length, 3)}>
-          {images.map((image) => (
-            <span key={image.path} className="agent-attachments__item">
+          {/* Index too: one file sent twice in a message is two thumbnails. */}
+          {images.map((image, i) => (
+            <span key={`${i}:${image.path}`} className="agent-attachments__item">
               <button
                 type="button"
                 className="agent-attachments__image"
@@ -237,8 +238,8 @@ export function MessageAttachments({ agent, attachments, side = 'user' }: Messag
       )}
       {files.length > 0 && (
         <div className="agent-attachments__files">
-          {files.map((file) => (
-            <span key={file.path} className="agent-attachments__item">
+          {files.map((file, i) => (
+            <span key={`${i}:${file.path}`} className="agent-attachments__item">
               <button
                 type="button"
                 className="agent-attachment-chip agent-attachment-chip--sent"

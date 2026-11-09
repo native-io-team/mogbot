@@ -2,7 +2,7 @@
  * An image an agent shared is a picture, or says why it isn't: never an
  * empty box. (Real chats showed shared screenshots as blank frames.)
  */
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { AttachmentImage, IMAGE_UNAVAILABLE, MessageAttachments } from './AgentAttachments';
 import type { Agent } from '../../lib/agents';
@@ -28,6 +28,17 @@ describe('a shared image', () => {
     expect(img.getAttribute('src')).toContain('attachments/m9/scheduled-posts.jpg');
     // A lazy image inside a `content-visibility: auto` row could never load.
     expect(img.getAttribute('loading')).toBeNull();
+  });
+
+  it('the same file twice in one message is two thumbnails, with no key clash', () => {
+    const error = vi.spyOn(console, 'error').mockImplementation(() => {});
+    render(<MessageAttachments agent={agent} attachments={[shot, shot]} side="agent" />);
+    expect(screen.getAllByRole('img', { name: 'scheduled-posts.jpg' })).toHaveLength(2);
+    const clash = error.mock.calls.some((args) =>
+      args.some((a) => typeof a === 'string' && a.includes('same key'))
+    );
+    expect(clash).toBe(false);
+    error.mockRestore();
   });
 
   it('says it is not available, with its name, when the file can’t be loaded', () => {
