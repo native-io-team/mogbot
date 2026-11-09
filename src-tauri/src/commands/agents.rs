@@ -3060,6 +3060,17 @@ pub async fn agents_user_chrome_show_extension() -> Result<(), CommandError> {
 #[tauri::command]
 #[tracing::instrument]
 pub async fn agents_user_chrome_open_extensions_page() -> Result<(), CommandError> {
+    // `open` hands chrome:// URLs to Chrome as a launch argument, which it
+    // ignores for its own pages; asking Chrome for a new tab works.
+    let mut cmd = tokio::process::Command::new("osascript");
+    cmd.arg("-e")
+        .arg(crate::user_chrome::install::OPEN_EXTENSIONS_SCRIPT);
+    if crate::external_command::run_with_timeout(cmd, "open chrome://extensions", 15)
+        .await
+        .is_ok()
+    {
+        return Ok(());
+    }
     let mut cmd = tokio::process::Command::new("open");
     cmd.args(["-a", "Google Chrome", "chrome://extensions/"]);
     crate::external_command::run_with_timeout(cmd, "open chrome://extensions", 10)

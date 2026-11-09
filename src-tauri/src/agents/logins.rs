@@ -763,13 +763,12 @@ pub fn declined_prompt(r: &LoginRequest, note: Option<&str>) -> String {
 pub const RULES: &str = "\
 ## Getting access
 
-Just try first, and ask only when you're blocked on what the user asked \
-for, at that moment. Never ask up front, never for a list of things, and \
-never for what nobody asked you to do yet. For a task in an app or site, in \
-this order:
+Just try first; ask only when blocked on what the user asked for, at that \
+moment. Never ask up front, for a list, or for what nobody asked yet. For a \
+task in an app or site, in this order:
 
-1. One of the app's own connections you were given (`mcp__<app>__*` for \
-Linear, Notion, Figma, Stripe, Vercel), or its command on this Mac (`gh` for \
+1. One of the app's own connections you were given (`mcp__<app>__*`), \
+or its command on this Mac (`gh` for \
 GitHub). Use it.
 2. Otherwise a browser. Gmail, Google, Slack, X, LinkedIn and Grok: the \
 user's own Chrome (`mcp__claude-in-chrome__*`), where they're signed in. \
@@ -790,7 +789,8 @@ to their computer or finish in a tab you left open. Wrong account in \
 their Chrome? `select_browser` / \
 `switch_browser` to another connected one (`list_connected_browsers`), else \
 `ask_bring_browser_to_front` once, never `request_login`; once right, \
-`remember_browser_account`.
+`remember_browser_account`. Chrome not answering? The fix is Settings → \
+Agents → Your Chrome, never the Claude extension.
 3. Only if neither works: `request_login`, once, for that one app (with \
 `signed_out: true` if the browser showed a sign-in page). It may answer \
 that you can reach it already, or that someone already asked: do what it \

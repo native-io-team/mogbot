@@ -127,9 +127,11 @@ pub fn for_turn(agent: &Agent, outside: bool) -> bool {
     claude_in_chrome_for_turn(agent, outside) || crate::user_chrome::for_turn(agent, outside)
 }
 
-/// [`allowed`] with the team's switch as it is now: Claude in Chrome only.
+/// [`allowed`] with the team's switch as it is now, and Claude in Chrome
+/// not known to be down (`chrome_health`: the app's last check found no
+/// browser answering): Claude in Chrome only.
 pub fn claude_in_chrome_for_turn(agent: &Agent, outside: bool) -> bool {
-    allowed(team_enabled(), agent, outside)
+    allowed(team_enabled(), agent, outside) && !super::chrome_health::known_down()
 }
 
 /* ------------------------------------------------------------- the gate */
@@ -585,6 +587,7 @@ async fn claude_account(claude: &std::path::Path) -> (bool, Option<String>) {
 pub async fn connected_browsers(claude: &std::path::Path) -> Result<usize, CommandError> {
     let mut mcp = ChromeMcp::start(claude).await?;
     let text = mcp.call("list_connected_browsers", json!({})).await?;
+    super::chrome_health::note_answer(&text);
     Ok(count_browsers(&text))
 }
 

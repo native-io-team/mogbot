@@ -721,6 +721,18 @@ pub struct AgentMessage {
     /// theirs, written in Slack; on a note, someone else's (`from`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub via: Option<Via>,
+    /// On a `note`: the one fix it names, as a button ("Set up Your
+    /// Chrome", `chrome_health`). Older builds show the note alone.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fix: Option<NoteFix>,
+}
+
+/// A fix a note offers, as a button that opens where it's done.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NoteFix {
+    /// Settings → Agents → Your Chrome.
+    UserChrome,
 }
 
 /// `agents.json`. Read and written losslessly: an entry this build can't
@@ -2703,6 +2715,7 @@ mod tests {
                     local_links: Vec::new(),
                     remembered: None,
                     via: None,
+                    fix: None,
                 })
                 .unwrap();
             }
@@ -3009,6 +3022,7 @@ mod tests {
                 local_links: Vec::new(),
                 remembered: None,
                 via: None,
+                fix: None,
             };
             append_message(&pending("r1")).unwrap();
             append_message(&pending("r2")).unwrap();
@@ -3059,6 +3073,7 @@ mod tests {
             local_links: Vec::new(),
             remembered: None,
             via: None,
+            fix: None,
         }
     }
 

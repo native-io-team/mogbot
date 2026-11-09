@@ -718,7 +718,15 @@ export interface AgentMessage {
    * Mac: one it knows serves a project offers Preview; any other is a chip.
    */
   localLinks?: LocalLink[];
+  /**
+   * On a note: the one fix it names, as a button (`agents/chrome_health.rs`:
+   * "Chrome isn't reachable through Claude's extension" → Your Chrome).
+   */
+  fix?: NoteFix;
 }
+
+/** A fix a note offers: `user_chrome` opens Settings → Agents → Your Chrome. */
+export type NoteFix = 'user_chrome';
 
 /** "Remembered: Lead Gen can always …": the rule behind the line (`agents/remember.rs`). */
 /** Where a message came in from, when not this app: "From Slack · #launch". */

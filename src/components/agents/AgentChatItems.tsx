@@ -63,6 +63,7 @@ import { ImportPlaybackCard } from './ImportPlaybackCard';
 import { WorkTimeline } from './AgentWork';
 export { WorkingIndicator } from './AgentWorkingIndicator';
 import { RevisesBar } from './AgentResult';
+import { NoteFixLine } from './AgentNoteFix';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useHeightReveal } from './useAgentMotion';
@@ -653,6 +654,7 @@ export const NoteLine = memo(function NoteLine({
   const tail = screenTail(message);
   if (tail) return <TakeoverEndedLine message={message} arrived={arrived} tail={tail} />;
   if (message.remembered) return <RememberedLine message={message} arrived={arrived} />;
+  if (message.fix) return <NoteFixLine message={message} arrived={arrived} />;
   // "Created Finance": the agent it names is a link, while that agent exists.
   const name = message.peer?.name;
   const at = name && onOpenPeer ? message.text.indexOf(name) : -1;

@@ -13,10 +13,12 @@ import { Button } from '../primitives/Button';
 import { Row, Toggle } from './AgentSettingsRows';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { useAsyncState } from '../../hooks/useAsyncState';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { usePolling } from '../../hooks/usePolling';
 import { takeSettingsSectionRequest } from '../../lib/settings';
 import { POLICY_EVENT } from '../../lib/agentPolicy';
 import {
+  USER_CHROME_CONNECTED,
   USER_CHROME_TITLE,
   addUserChromeFromStore,
   browserLabel,
@@ -87,6 +89,24 @@ export function AgentsUserChromeSettings() {
     enabled: !!status?.enabled && status.browsers.length === 0,
   });
 
+  // The extension appeared while this was open (Load unpacked just now):
+  // say so, once, rather than leaving a row to change quietly.
+  const connected = !!status?.enabled && status.browsers.length > 0;
+  const waiting = useRef(false);
+  useEffect(() => {
+    if (!status) return;
+    if (status.enabled && !connected) waiting.current = true;
+    else if (connected && waiting.current) {
+      waiting.current = false;
+      showToast(USER_CHROME_CONNECTED, 'success');
+    } else waiting.current = false;
+  }, [status, connected, showToast]);
+
+  const { copy, isCopied } = useCopyToClipboard({
+    onCopy: () => showToast('Folder path copied.', 'success'),
+    onError,
+  });
+
   if (status && !status.supported) return null;
   return (
     <section ref={ref} className="settings-group" aria-labelledby="agents-settings-user-chrome">
@@ -110,7 +130,11 @@ export function AgentsUserChromeSettings() {
               />
             )}
             <Row label="Chrome can reach this app" description={hostLine(status.host)} />
-            <Row label="Add the extension to Chrome" description={extensionLine(status)}>
+            <Row
+              label="Add the extension to Chrome"
+              description={extensionLine(status)}
+              stacked={status.browsers.length === 0 && !status.webStoreUrl}
+            >
               {status.browsers.length === 0 &&
                 (status.webStoreUrl ? (
                   <Button variant="secondary" onClick={tryIt(addUserChromeFromStore)}>
@@ -122,9 +146,14 @@ export function AgentsUserChromeSettings() {
                       Open Chrome’s extensions
                     </Button>
                     {status.extensionDir && (
-                      <Button variant="secondary" onClick={tryIt(showUserChromeExtension)}>
-                        Show the folder
-                      </Button>
+                      <>
+                        <Button variant="secondary" onClick={() => void copy(status.extensionDir!)}>
+                          {isCopied ? 'Copied' : 'Copy folder path'}
+                        </Button>
+                        <Button variant="secondary" onClick={tryIt(showUserChromeExtension)}>
+                          Show the folder
+                        </Button>
+                      </>
                     )}
                   </span>
                 ))}

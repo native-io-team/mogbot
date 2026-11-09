@@ -39,6 +39,7 @@
 //! - [`secrets`]: credentials an agent asked for, kept in the Keychain, never shown to it
 //! - [`logins`]: login cards (`request_login`), the team's list, what an agent can reach
 //! - [`browser`]: the team's signed-in Chrome (Claude in Chrome), set up once, per agent, never for outside text
+//! - [`chrome_health`]: whether Claude in Chrome answers, per turn, so a turn uses the way into Chrome that works
 //! - [`browser_profiles`]: which Chrome profile a site is signed in to, found by the agent and remembered by the app
 //! - [`access_check`]: "Checking what your team can already reach" after an import
 //! - [`conn_relay`]: a turn reaches a connected app through the bridge, never holding its token
@@ -74,6 +75,7 @@ pub mod browser_gate;
 pub mod browser_profiles;
 pub mod capabilities;
 pub mod capacity;
+pub mod chrome_health;
 pub mod claude;
 pub mod codex;
 pub mod codex_app;
@@ -230,6 +232,7 @@ fn greet(agent_id: &str) {
         local_links: Vec::new(),
         remembered: None,
         via: None,
+        fix: None,
     };
     if let Err(e) = store::append_message(&message) {
         tracing::warn!("[Agents] Couldn't write the Chief's greeting: {e}");

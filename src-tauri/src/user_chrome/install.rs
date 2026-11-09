@@ -193,6 +193,20 @@ pub fn id_from_key(key_b64: &str) -> Option<String> {
     )
 }
 
+/// AppleScript that opens Chrome's extensions page (Developer mode, Load
+/// unpacked) in a new tab. `open -a "Google Chrome" chrome://extensions/`
+/// doesn't: Chrome won't open its own pages from a launch argument. Asking
+/// Chrome for a tab with that URL does (checked by the owner).
+pub const OPEN_EXTENSIONS_SCRIPT: &str = r#"tell application "Google Chrome"
+    activate
+    if (count of windows) is 0 then
+        make new window
+        set URL of active tab of front window to "chrome://extensions/"
+    else
+        tell front window to make new tab with properties {URL:"chrome://extensions/"}
+    end if
+end tell"#;
+
 /* ----------------------------------------- Web Store, External Extensions */
 
 /// Chrome's update URL for Web Store extensions.

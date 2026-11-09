@@ -679,6 +679,7 @@ mod tests {
             local_links: Vec::new(),
             remembered: None,
             via: None,
+            fix: None,
         };
         let request_id = store::new_id();
         card.approval = Some(Approval {

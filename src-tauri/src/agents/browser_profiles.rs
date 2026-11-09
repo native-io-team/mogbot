@@ -104,6 +104,7 @@ pub async fn connected() -> Option<Vec<Connected>> {
         .call("list_connected_browsers", serde_json::json!({}))
         .await
         .ok()?;
+    super::chrome_health::note_answer(&text);
     Some(parse_browsers(&text))
 }
 
