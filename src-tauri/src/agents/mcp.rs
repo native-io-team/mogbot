@@ -325,6 +325,12 @@ const TOOLS: &[Tool] = &[
         schema: super::quiet::schema,
     },
     Tool {
+        name: super::brief::TOOL,
+        description: super::brief::DESCRIPTION,
+        main_only: true,
+        schema: super::brief::schema,
+    },
+    Tool {
         name: super::team_reach::TOOL,
         description: super::team_reach::DESCRIPTION,
         main_only: false,
@@ -809,6 +815,7 @@ async fn call(
                 Err(e) => error(e),
             }
         }
+        super::brief::TOOL => morning_brief(app, caller, args).await,
         super::team_reach::TOOL => match super::team_reach::call(caller, args) {
             Ok(t) => text(t),
             Err(e) => error(e),
@@ -2596,6 +2603,68 @@ pub(super) fn read_wait(
 
 /// The tool's reply when a confirmation didn't come back as Allow: the
 /// user's No, or (never dressed up as a No) a card that expired unanswered.
+/// `set_morning_brief` (`agents/brief.rs`). The user's setting: never in a
+/// turn answering outside text. Adding a check (a daily read of their apps)
+/// wants their own message, else a card; anything else applies at once with
+/// a line.
+async fn morning_brief(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
+    if runner::from_outside(&caller.id) {
+        return error("Not while answering what came from outside this app: the morning brief is the user's to set. Tell the user instead.");
+    }
+    let now = super::brief::get();
+    let next = match super::brief::wanted(args, &now) {
+        Ok(next) => next,
+        Err(e) => return error(e),
+    };
+    if super::brief::adds_checks(&now, &next) && !runner::users_own_ask(&caller.id) {
+        let answer = ask_user(
+            app,
+            caller,
+            "Add checks to your morning brief?".to_string(),
+            super::brief::checks_line(&next),
+            None,
+        )
+        .await;
+        if let Some(refused) = refused_reply(&answer, "add them") {
+            return error(refused);
+        }
+    }
+    let saved = if next != now {
+        match super::brief::set(next) {
+            Ok(saved) => {
+                let _ = tauri::Emitter::emit(app, super::brief::EVENT, ());
+                let line = runner::new_message(
+                    &caller.id,
+                    store::MessageKind::Note,
+                    super::brief::describe(&saved),
+                );
+                let _ = runner::record(app, line);
+                saved
+            }
+            Err(e) => return error(e.to_string()),
+        }
+    } else {
+        now
+    };
+    let mut told = format!(
+        "{} Tell the user in one line.",
+        super::brief::describe(&saved)
+    );
+    if args.get("now").and_then(Value::as_bool) == Some(true) {
+        match super::brief::post_now(app).await {
+            Ok(true) => {
+                told = format!(
+                    "{} Today's brief is posted in your chat; don't repeat it.",
+                    super::brief::describe(&saved)
+                )
+            }
+            Ok(false) => told = "There was nothing for a brief.".to_string(),
+            Err(e) => return error(format!("Couldn't post the brief: {e}")),
+        }
+    }
+    text(told)
+}
+
 pub(super) fn refused_reply(answer: &Answer, what: &str) -> Option<String> {
     match answer {
         Answer::Allowed => None,

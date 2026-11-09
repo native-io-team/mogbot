@@ -2563,6 +2563,49 @@ pub(crate) fn set_quiet_hours(
     Ok(window)
 }
 
+/// Settings → Agents → Notifications, "Morning brief": on or off, its
+/// time, whether it posts on days with nothing to say, and the user's own
+/// read-only checks (`agents::brief`).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_morning_brief() -> Result<agents::brief::View, CommandError> {
+    blocking(|| Ok(agents::brief::view())).await
+}
+
+/// Change the morning brief from Settings or the phone: the user's own
+/// choice, applied at once. `checks` absent keeps them as they are.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_set_morning_brief(
+    app: AppHandle,
+    on: bool,
+    at: u32,
+    always: bool,
+    checks: Option<Vec<agents::brief::Check>>,
+) -> Result<agents::brief::View, CommandError> {
+    let view = blocking(move || set_morning_brief(on, at, always, checks)).await?;
+    let _ = app.emit(agents::brief::EVENT, ());
+    Ok(view)
+}
+
+/// The one write behind Settings and the phone.
+pub(crate) fn set_morning_brief(
+    on: bool,
+    at: u32,
+    always: bool,
+    checks: Option<Vec<agents::brief::Check>>,
+) -> Result<agents::brief::View, CommandError> {
+    let now = agents::brief::get();
+    agents::brief::set(agents::brief::Settings {
+        on,
+        at,
+        always,
+        checks: checks.unwrap_or(now.checks),
+    })?;
+    tracing::info!(on, at, always, "[Agents] morning brief set from settings");
+    Ok(agents::brief::view())
+}
+
 /// "Free up space": an agent home's dependency and build folders, regenerable ones only.
 #[tauri::command]
 #[tracing::instrument]
