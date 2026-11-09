@@ -150,6 +150,11 @@ export function requestAccountsOnOpen(what: AgentEngine | 'show') {
   pendingAdd = what;
 }
 
+/** Whether the Accounts area was asked for, without taking it: Settings opens on its page. */
+export function peekAccountsRequest(): boolean {
+  return pendingAdd !== null;
+}
+
 export function takeAccountsRequest(): AgentEngine | 'show' | null {
   const what = pendingAdd;
   pendingAdd = null;

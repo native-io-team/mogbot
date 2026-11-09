@@ -158,10 +158,15 @@ export interface SettingsProposal {
   }[];
 }
 
+/**
+ * A preset is an independence stop plus the reach that goes with it, named
+ * by its stop (`independence.ts` is the one scale). Neither the desk nor the
+ * phone offers presets; the Chief reaches them when the user asks in words.
+ */
 export const PRESET_LABEL: Record<PolicyPreset, string> = {
-  trusted: 'I trust my agents',
-  balanced: 'Balanced',
-  locked: 'Locked down',
+  trusted: 'Bold',
+  balanced: 'Steady',
+  locked: 'Careful',
 };
 
 export const HOW_LABEL: Record<ProjectHow, string> = {
@@ -183,10 +188,8 @@ export function chatDraft(agentName: string | null): string {
   return agentName ? `Change what ${agentName} can do: ` : 'Change what my agents can do: ';
 }
 
-/** "Reset everyone to Balanced": what the button and its confirm say. */
-export function resetLabel(preset: PolicyPreset): string {
-  return `Reset everyone to ${PRESET_LABEL[preset]}`;
-}
+/** Every agent back to the team's settings: what the button and its confirm say. */
+export const RESET_EVERYONE_LABEL = 'Reset everyone to the team’s settings';
 
 /** A settings card's groups as lines: "Hiring: Can now … . Can no longer …." */
 export function settingsLines(p: Pick<SettingsProposal, 'groups'>): string[] {

@@ -18,9 +18,10 @@ use super::slack::{self, Conversation, Patch, Status};
 use super::store::{self, MessageKind};
 use super::wallet;
 
-/// The desk opens Settings at a section on this: `{ section, engine?, accountId? }`.
-/// Only for flows that need the user's own hands on the Mac (a masked token,
-/// an engine's browser sign-in).
+/// The desk opens Settings at a section on this: `{ section, engine?, accountId? }`,
+/// or at one of its pages: `{ section: "page", page }` (`open_settings`).
+/// Opening changes nothing; flows that need the user's own hands on the Mac
+/// (a masked token, an engine's browser sign-in) open here too.
 pub const EVENT_OPEN_SETTINGS: &str = "agents-open-settings";
 
 /// The desk's theme follows a change made from chat: payload is the theme.
@@ -86,6 +87,19 @@ pub const TOOLS: &[Def] = &[
         },
     },
     Def {
+        name: "open_settings",
+        description: "Open one page of Settings on the Mac, for when the user asks where a setting is or wants to look at it themselves (\"open my phone settings\", \"where do I see usage?\"). `page`: agents (this Mac, engines and models, disk), independence (the slider, what agents can reach, each agent's independence, admins), accounts (usage and accounts), phone (the phone and other assistants), notifications, chrome (the agents' browser and Your Chrome), apps (Slack and apps you said no to), projects, appearance, advanced. It only opens the page; it changes nothing. Changing a setting the user asked for is the tool for it (propose_settings_change, set_quiet_hours, change_app_setting…), not this. Say in one line that it's open on the Mac.",
+        schema: || {
+            json!({
+                "type": "object",
+                "properties": {
+                    "page": { "type": "string", "enum": SETTINGS_PAGES }
+                },
+                "required": ["page"]
+            })
+        },
+    },
+    Def {
         name: "free_up_space",
         description: "Free disk space in agents' own folders when the user asks (or disk is low and they agree): removes only dependency and build folders that rebuild themselves (node_modules, .next, .turbo, target), never a project, a report or anything git tracks. `agent`: a name, or \"everyone\". An agent working now is skipped. Applies at once with a line.",
         schema: || {
@@ -110,6 +124,36 @@ pub const TOOLS: &[Def] = &[
 
 /// The desk opens Import agents on this, at the copy-and-paste step.
 pub const EVENT_OPEN_IMPORT: &str = "agents-open-import";
+/// Settings' pages, as the desk's section list names them (`src/lib/settingsPages.ts`).
+pub const SETTINGS_PAGES: &[&str] = &[
+    "agents",
+    "independence",
+    "accounts",
+    "phone",
+    "notifications",
+    "chrome",
+    "apps",
+    "projects",
+    "appearance",
+    "advanced",
+];
+
+/// What `open_settings` says it opened: "Settings → Phone". Pure.
+pub fn settings_page_title(page: &str) -> Option<&'static str> {
+    Some(match page {
+        "agents" => "Agents",
+        "independence" => "Independence",
+        "accounts" => "Accounts & usage",
+        "phone" => "Phone",
+        "notifications" => "Notifications",
+        "chrome" => "Chrome",
+        "apps" => "Apps",
+        "projects" => "Projects",
+        "appearance" => "Appearance",
+        "advanced" => "Advanced",
+        _ => return None,
+    })
+}
 
 pub fn find(name: &str) -> Option<&'static Def> {
     TOOLS.iter().find(|t| t.name == name)
@@ -200,6 +244,7 @@ pub async fn call(
             }
             bring_agents_over(app, args).await
         }
+        "open_settings" => open_settings(app, caller, args),
         _ => error("Unknown tool"),
     }
 }
@@ -616,6 +661,25 @@ async fn slack_settings(app: &AppHandle, caller: &store::Agent, args: &Value) ->
         }
         Err(e) => error(e.to_string()),
     }
+}
+
+/* ------------------------------------------------------- opening a page */
+
+fn open_settings(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
+    let page = arg(args, "page").unwrap_or_default().to_ascii_lowercase();
+    let Some(title) = settings_page_title(&page) else {
+        return error(format!(
+            "There's no Settings page called {page:?}: {}.",
+            SETTINGS_PAGES.join(", ")
+        ));
+    };
+    let _ = app.emit(
+        EVENT_OPEN_SETTINGS,
+        json!({ "section": "page", "page": page }),
+    );
+    let line = format!("Opened Settings → {title} on the Mac");
+    said(app, caller, "open_settings", &line);
+    text(format!("{line}. Say so in one line."))
 }
 
 /* ------------------------------------------------- the app's own switches */

@@ -77,14 +77,18 @@ export interface OnItsOwnTeam {
 
 /* ------------------------------------------------------------ words */
 
-/** The view's title, and how ⌘K and the agent's menu name it. */
-export const onItsOwnTitle = (name: string) => `What can ${name} do on its own?`;
+/**
+ * The view's title, and how ⌘K names it. Independence is the one name for
+ * "how much an agent does on its own" (`independence.ts`): its level, and
+ * what it may do beyond it.
+ */
+export const onItsOwnTitle = (name: string) => `${name}’s independence`;
 
-/** The team's: Settings → Agents and the phone's Settings. */
-export const ON_ITS_OWN_TEAM_TITLE = 'What your agents do on their own';
+/** The team's: Settings → Independence and the phone's Settings. */
+export const ON_ITS_OWN_TEAM_TITLE = 'Each agent’s independence';
 
 /** The menu item on an agent's controls. */
-export const ON_ITS_OWN_MENU = 'What it does on its own…';
+export const ON_ITS_OWN_MENU = 'Independence…';
 
 /** Its level, and whose: "Bold · the team's level". */
 export function onItsOwnLevel(level: AgentIndependence, own: boolean): string {

@@ -1,7 +1,7 @@
 //! How much the user's agents do on their own: one choice for the whole team,
-//! asked once in onboarding and kept in Settings → Agents (and the phone).
+//! asked once in onboarding and kept in Settings → Independence (and the phone).
 //!
-//! **Levels**, shown as a four-stop slider ("How much it does on its own",
+//! **Levels**, shown as a four-stop slider titled "Independence" (from
 //! "Asks a lot" to "Just does it"). The stored ids are unchanged; only the
 //! names shown are new ([`Level::label`]), and the old names still parse.
 //! `Often` ("Careful", once "Check with me often"): plans are confirmed

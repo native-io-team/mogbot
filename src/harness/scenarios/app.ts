@@ -110,7 +110,7 @@ export const appScenarios: Scenario[] = [
     looksRightWhen:
       'With feedback and release notes switched off by brand.json, the row opens Settings directly; there is no menu of one item. With them on, it opens a compact menu instead.',
     openSelector: '[data-education-id="settings-button"]',
-    requires: '.settings-modal',
+    requires: '.settings-window',
     commands: {},
   },
   {
@@ -120,7 +120,7 @@ export const appScenarios: Scenario[] = [
       'The bottom-left Settings control opens Settings directly while feedback and release notes are switched off by brand.json.',
     project: WORKSPACE_PROJECT,
     openSelector: '[aria-label="Settings & Help"]',
-    requires: '.settings-modal',
+    requires: '.settings-window',
     commands: { ...workspaceCommands },
   },
   {

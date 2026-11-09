@@ -10,6 +10,8 @@
  *   Slack token pasted into a masked field, an engine account's browser
  *   sign-in. The Chief's `slack_settings connect` and `manage_account add`
  *   emit {@link OPEN_SETTINGS_EVENT}; nothing secret ever passes through chat.
+ *   Its `open_settings` emits the same event to open one page
+ *   ("Open Settings → Phone").
  *
  * @module lib/settingsFromChat
  */
@@ -43,7 +45,9 @@ export const setLowPower = (enabled: boolean) =>
 /** What the Chief asked the desk to open (`settings_tools::EVENT_OPEN_SETTINGS`). */
 export type OpenSettingsRequest =
   | { section: 'slack' }
-  | { section: 'accounts'; engine?: AgentEngine; accountId?: string };
+  | { section: 'accounts'; engine?: AgentEngine; accountId?: string }
+  /** The Chief's `open_settings`: one page, opened to look at; nothing changes. */
+  | { section: 'page'; page: string };
 
 export const onOpenSettings = (fn: (request: OpenSettingsRequest) => void): Promise<UnlistenFn> =>
   listen<OpenSettingsRequest>(OPEN_SETTINGS_EVENT, (e) => fn(e.payload));

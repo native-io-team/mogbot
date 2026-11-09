@@ -787,7 +787,7 @@ function EngineChip({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={says}
-      accessibilityHint="Opens Agent controls: model, effort and how much it does on its own"
+      accessibilityHint="Opens Agent controls: model, effort and independence"
       onPress={() => {
         haptic.light();
         onPress();

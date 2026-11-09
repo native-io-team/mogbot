@@ -9,6 +9,7 @@
  */
 
 import {
+  ON_ITS_OWN_STANDING,
   describeCheckInTime,
   stepsLine,
   describeWatchStatus,
@@ -211,7 +212,7 @@ function AgentSheet() {
           )}
           {canCall('agents.onItsOwn', welcome) && (
             <Row
-              label="What it does on its own"
+              label={ON_ITS_OWN_STANDING}
               leading={
                 <Icon name="checkmark.shield" size={iconSize.body} color={colors.textSecondary} />
               }

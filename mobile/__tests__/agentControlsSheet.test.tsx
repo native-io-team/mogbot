@@ -97,7 +97,10 @@ describe('Agent controls', () => {
     expect(screen.getByText('MODEL')).toBeTruthy();
     expect(screen.getByText('Switch to Codex…')).toBeTruthy();
     expect(screen.getByText('EFFORT')).toBeTruthy();
-    expect(screen.getByText('HOW MUCH IT DOES ON ITS OWN')).toBeTruthy();
+    expect(screen.getByText('INDEPENDENCE')).toBeTruthy();
+    // One control: "Same as team" and the slider, never a list of the four levels.
+    expect(screen.getByText('Same as team (Steady)')).toBeTruthy();
+    expect(screen.getByTestId('independence-slider')).toBeTruthy();
     expect(screen.getByText(/^Save my limits, for the whole team/)).toBeTruthy();
     expect(screen.getByText('More about Designer')).toBeTruthy();
   });
@@ -118,7 +121,7 @@ describe('Agent controls', () => {
     mockState.welcome = { methods: ['agents.update'], features: ['agents.engine'] };
     await sheet();
     expect(screen.queryByText('EFFORT')).toBeNull();
-    expect(screen.queryByText('HOW MUCH IT DOES ON ITS OWN')).toBeNull();
+    expect(screen.queryByText('INDEPENDENCE')).toBeNull();
     expect(screen.getByText('MODEL')).toBeTruthy();
     // No usage plan served: the row is there, without a mode.
     expect(screen.queryByText(/Save my limits/)).toBeNull();
@@ -133,7 +136,16 @@ describe('Agent controls', () => {
     });
     expect(mockSetEngine).not.toHaveBeenCalled();
     await act(async () => {
-      fireEvent.press(screen.getByText('Careful'));
+      // The one control for it: the slider's stop, as everywhere.
+      // The slider lays its stops out once it knows its width.
+      fireEvent(screen.getByTestId('independence-slider'), 'layout', {
+        nativeEvent: { layout: { width: 320, height: 44, x: 0, y: 0 } },
+      });
+    });
+    await act(async () => {
+      fireEvent.press(
+        screen.getByTestId('independence-stop-often', { includeHiddenElements: true })
+      );
     });
     expect(mockCall).toHaveBeenCalledWith('agents.setAgentIndependence', {
       agentId: 'design',
@@ -145,7 +157,15 @@ describe('Agent controls', () => {
     const alert = jest.spyOn(Alert, 'alert').mockImplementation(() => {});
     await sheet();
     await act(async () => {
-      fireEvent.press(screen.getByText('Unleashed'));
+      // The slider lays its stops out once it knows its width.
+      fireEvent(screen.getByTestId('independence-slider'), 'layout', {
+        nativeEvent: { layout: { width: 320, height: 44, x: 0, y: 0 } },
+      });
+    });
+    await act(async () => {
+      fireEvent.press(
+        screen.getByTestId('independence-stop-full_send', { includeHiddenElements: true })
+      );
     });
     expect(alert).toHaveBeenCalledWith(
       'Let Designer do more than the team?',

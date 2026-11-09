@@ -3,6 +3,7 @@ import { useCommands } from './useCommands';
 import { useMigrationCommands } from './useMigrationCommands';
 import { useIssueReportCommands } from './useIssueReportCommands';
 import { useThemeCommands } from './useThemeCommands';
+import { useSettingsPageCommands } from './useSettingsPageCommands';
 import type { PaletteCtx } from './types';
 import { useOpenModal } from '../contexts/ModalContext';
 import { getDashboardProjects, type DashboardProject, type Project } from '../lib/project';
@@ -98,6 +99,7 @@ export function useAppCommands({
   useMigrationCommands({ openCreateFromUrl: handleCreateProjectFromUrl });
   useIssueReportCommands();
   useThemeCommands();
+  useSettingsPageCommands();
 
   // IDE availability — fetched once so we can hide commands for tools the
   // user doesn't have installed. A silent failure leaves both enabled
@@ -447,7 +449,7 @@ export function useAppCommands({
       },
       {
         id: 'agents.independence',
-        title: 'How independent your agents are…',
+        title: 'Independence…',
         icon: <SettingsIcon size={14} />,
         category: 'settings',
         keywords: [
@@ -465,6 +467,8 @@ export function useAppCommands({
           'go hard',
           'full send',
           'on their own',
+          'how independent',
+          'what it does on its own',
         ],
         run: () => {
           requestSettingsTabOnOpen('agents');
@@ -474,7 +478,7 @@ export function useAppCommands({
       },
       {
         id: 'agents.policyDefaults',
-        title: 'What agents can do…',
+        title: 'What agents can reach…',
         icon: <SettingsIcon size={14} />,
         category: 'settings',
         keywords: [
@@ -499,7 +503,7 @@ export function useAppCommands({
       },
       {
         id: 'agents.onItsOwnTeam',
-        title: 'What your agents do on their own…',
+        title: 'Each agent’s independence…',
         icon: <SettingsIcon size={14} />,
         category: 'settings',
         keywords: [

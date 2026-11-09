@@ -364,6 +364,39 @@ fn presets_reset_everyone_and_make_one_like_another() {
             ..Default::default()
         }
     );
+
+    // Everyone back to the team's settings (Settings → Independence's one
+    // reset): every agent's own settings go, admin roles stay, and the
+    // team's own settings and level are left as they are.
+    let team_before = saved.team.clone();
+    let level = apply(
+        &mut saved,
+        &Target::Team { everyone: true },
+        &Change {
+            same_as_team: true,
+            ..Default::default()
+        },
+        Level::GoHard,
+    )
+    .unwrap();
+    assert_eq!(level, None, "the team's level isn't touched");
+    assert_eq!(saved.team, team_before);
+    assert!(
+        saved.agents["s"].is_empty(),
+        "Sales's own settings are gone"
+    );
+    assert_eq!(saved.agents["h"].admin, Some(true), "admin kept");
+    // The team's defaults still can't be made "the team's".
+    assert!(apply(
+        &mut saved,
+        &Target::Team { everyone: false },
+        &Change {
+            same_as_team: true,
+            ..Default::default()
+        },
+        Level::GoHard,
+    )
+    .is_err());
 }
 
 #[test]

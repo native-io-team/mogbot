@@ -6,8 +6,10 @@
  * The picker only appears once two engines are installed: most people have
  * one, and a choice between one thing and a greyed-out other is noise. One
  * that's installed but not signed in is disabled, with the reason and the way
- * to fix it underneath. The protections line says what that engine actually
- * enforces, no more (`engineProtections`).
+ * to fix it underneath. What the engine itself enforces under the agent's
+ * independence (`engineProtections`) is the engine's own detail, low in the
+ * editor (`AgentEngineMore`), never beside the choice or the level, where it
+ * read as a second answer to "what does it do on its own".
  *
  * @module components/agents/AgentEngine
  */
@@ -67,7 +69,6 @@ export function AgentEngineField({
   // Before the overview arrives there is nothing true to show.
   if (engines.length === 0) return null;
   const shown = offered(engines, value, current);
-  const selected = engines.find((e) => e.id === value);
   const blocked = shown.flatMap((info) => {
     const need = engineUnavailable(info);
     return need ? [{ info, need }] : [];
@@ -107,18 +108,14 @@ export function AgentEngineField({
         aria-label="Runs on"
       />
       {note && <p className="agent-editor__hint">{note}</p>}
-      <p className="agent-editor__hint" data-testid="agent-engine-protections">
-        {engineProtections(value, selected)}
-      </p>
       {reasons}
     </div>
   );
 }
 
 /**
- * The quiet half, in the editor's details: what protects an agent on its one
- * engine, and a link to set up an engine that isn't installed yet. Nothing
- * when the picker above already says all of it.
+ * The quiet half, in the editor's details: what the engine enforces under
+ * the agent's independence, and (with one engine) a link to set up another.
  */
 export function AgentEngineMore({
   engines,
@@ -129,9 +126,11 @@ export function AgentEngineMore({
   value: AgentEngine;
   onSetUp?: SetUp;
 }) {
-  if (engines.length === 0 || showsEnginePicker(engines)) return null;
+  if (engines.length === 0) return null;
   const selected = engines.find((e) => e.id === value);
-  const missing = engines.filter((e) => !e.installed && e.id !== value);
+  const missing = showsEnginePicker(engines)
+    ? []
+    : engines.filter((e) => !e.installed && e.id !== value);
   return (
     <>
       {selected?.installed && (

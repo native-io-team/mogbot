@@ -213,11 +213,16 @@ impl Preset {
         }
     }
 
+    /// Named by the independence stop it sets: there is one scale
+    /// (Careful, Steady, Bold, Unleashed), and a preset is that stop plus the
+    /// reach that goes with it, never a second scale beside it. The desk
+    /// shows no presets; the Chief reaches them when the user asks in words
+    /// ("lock everyone down", "I trust my agents").
     pub fn label(self) -> &'static str {
         match self {
-            Preset::Trusted => "I trust my agents",
-            Preset::Balanced => "Balanced",
-            Preset::Locked => "Locked down",
+            Preset::Trusted => "Bold",
+            Preset::Balanced => "Steady",
+            Preset::Locked => "Careful",
         }
     }
 
@@ -286,11 +291,11 @@ impl Preset {
     /// One line for the presets picker.
     pub fn blurb(self) -> &'static str {
         match self {
-            Preset::Trusted => "Change projects directly, every app, your browser, at Bold.",
+            Preset::Trusted => "Bold, changing projects directly, with every app and your browser.",
             Preset::Balanced => {
-                "Its own copy of the project it works in, your apps and browser, at Steady."
+                "Steady, in its own copy of the project it works in, with your apps and browser."
             }
-            Preset::Locked => "Read projects only, no apps, no browser, at Careful.",
+            Preset::Locked => "Careful, reading projects only, with no apps and no browser.",
         }
     }
 
@@ -1473,7 +1478,7 @@ impl Change {
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum Target {
     /// The team's defaults. `everyone`: every agent's own settings go too
-    /// ("Reset everyone to Balanced").
+    /// (Settings → Independence: "Reset everyone to the team’s settings").
     Team {
         #[serde(default)]
         everyone: bool,
@@ -1633,8 +1638,8 @@ pub fn apply(
     match target {
         Target::Team { everyone } => {
             let mut level = None;
-            // Everyone: a preset resets every agent's own settings (their
-            // admin role stays); a field resets only that field.
+            // Everyone: a preset, or "same as team", resets every agent's own
+            // settings (their admin role stays); a field resets only that field.
             if *everyone {
                 let projects = change.scope.is_some()
                     || !change.add_projects.is_empty()
@@ -1649,7 +1654,7 @@ pub fn apply(
                     if change.outward_text_needs_ok.is_some() {
                         o.outward_text_needs_ok = None;
                     }
-                    if change.preset.is_some() {
+                    if change.preset.is_some() || change.same_as_team {
                         // A preset is about reach; the exact-text rule stays.
                         *o = Overrides {
                             admin: o.admin,
@@ -1683,8 +1688,10 @@ pub fn apply(
                 };
                 level = Some(p.level());
             }
-            if change.like.is_some() || change.same_as_team {
-                return Err("The team's defaults can't copy an agent; change them field by field or pick a preset.".into());
+            if change.like.is_some() || (change.same_as_team && !*everyone) {
+                return Err(
+                    "The team's defaults can't copy an agent; change them field by field.".into(),
+                );
             }
             if change.admin.is_some() {
                 return Err("Admin is set per agent, not for the team.".into());

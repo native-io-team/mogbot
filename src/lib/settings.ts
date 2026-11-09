@@ -7,6 +7,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import type { SettingsPage } from './settingsPages';
 
 /** Event fired after a dashboard visibility preference is persisted. */
 export const DASHBOARD_VISIBILITY_CHANGED_EVENT = 'shipstudio:dashboard-visibility-changed';
@@ -333,8 +334,12 @@ export async function moveProjectsToRoot(from: string, to: string): Promise<Move
   return invoke<MoveReport>('move_projects_to_root', { from, to });
 }
 
-/** A Settings tab a command asked to land on, consumed when the modal opens. */
-export type SettingsTabRequest = 'agents' | 'general' | 'projects' | 'appearance' | 'experimental';
+/**
+ * A Settings page a command asked to land on, consumed when Settings opens
+ * (`lib/settingsPages.ts`). `general` and `experimental` are the old tabs'
+ * names, both on Advanced now.
+ */
+export type SettingsTabRequest = SettingsPage | 'general' | 'experimental';
 let settingsTabOnOpen: SettingsTabRequest | null = null;
 
 /** Ask the next Settings open to show `tab` (e.g. ⌘K → "Accent color…"). */
@@ -373,6 +378,15 @@ let settingsSectionOnOpen: SettingsSectionRequest | null = null;
 
 export function requestSettingsSectionOnOpen(section: SettingsSectionRequest) {
   settingsSectionOnOpen = section;
+}
+
+/** The part asked for, without taking it: Settings opens on its page. */
+export function peekSettingsSectionOnOpen(): SettingsSectionRequest | null {
+  return settingsSectionOnOpen;
+}
+
+export function clearSettingsSectionOnOpen() {
+  settingsSectionOnOpen = null;
 }
 
 /** Whether `section` was asked for; asking again is needed to see it twice. */

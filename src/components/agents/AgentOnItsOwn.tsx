@@ -6,11 +6,11 @@
  *   what always asks, then every standing rule in plain words, grouped
  *   (rules, plans you OK'd with time left, apps, browser, team and
  *   accounts), each with the one tap that takes it away. Opened from the
- *   agent's … menu and right-click menu, and ⌘K "What can <agent> do on its
- *   own?".
- * - **Settings → Agents** (`OnItsOwnTeamSettings`): the team's level, the
- *   rules every agent shares, and each agent in a line that opens to its
- *   own list.
+ *   agent's … menu ("Independence…") and right-click menu, and ⌘K
+ *   "<agent>'s independence".
+ * - **Settings → Independence** (`OnItsOwnTeamSettings`): under the team's
+ *   slider, the rules every agent shares, and each agent in a line that opens
+ *   to its own list.
  *
  * Nothing here gives: each button narrows, applied at once by the Mac with a
  * line in the agent's chat. Giving more stays on cards and in Settings.
@@ -28,7 +28,6 @@ import { usePolling } from '../../hooks/usePolling';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import { takeSettingsSectionRequest } from '../../lib/settings';
-import { INDEPENDENCE_LABEL } from '../../../packages/companion-protocol/src/independence';
 import {
   ON_ITS_OWN_ALWAYS_ASKS,
   ON_ITS_OWN_FOOT,
@@ -269,11 +268,7 @@ export function OnItsOwnTeamSettings() {
       )}
       {data && (
         <div className="on-its-own">
-          <section className="on-its-own__level" aria-label="The team’s level">
-            <span className="on-its-own__level-name">{INDEPENDENCE_LABEL[data.level]}</span>
-            <span className="on-its-own__level-line">{data.levelLine}</span>
-            <span className="on-its-own__level-line">{data.alwaysAsks.join(' ')}</span>
-          </section>
+          {/* The team's level is the slider at the top of this page. */}
           {data.teamRules.length > 0 && (
             <section className="on-its-own__section" aria-label="Rules for every agent">
               <h5 className="on-its-own__subheading">Rules for every agent</h5>

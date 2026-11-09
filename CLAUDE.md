@@ -39,7 +39,7 @@ Chief of Staff (see "Agents Flow", [docs/agents.md](docs/agents.md)):
 - **Slack** - Start an agent from a Slack message (`mogbot:` …) and get the answer in the thread, polled from this Mac with the user's own Slack app's token (Keychain); only the user's own messages are instructions, anyone else's is sealed outside text, and every reply waits on a "Reply in Slack?" card with the exact words unless Unleashed + the user's own message + no outside text + exact-text off (`agents/slack.rs`; docs/agents.md, "Slack")
 - **Phone** - The companion app (`mobile/`, [docs/mobile.md](docs/mobile.md)) is the primary way in away from the desk: chats, approvals, result cards, the timeline, and starting things (new agents, routines, dictation, Send to agent). It pairs by QR and talks to this Mac over the user's own Tailscale
 - **Import** - From Ship Studio on this Mac (a preview, then a copy), or from Grok Bot or any other assistant over Remote Access: a sealed interview that ends on one review card in the Chief's chat; or, with no Remote Access, an export file or folder (Grok Bot, OpenBot, OpenClaw, Hermes) or a reply pasted back, parsed by plain code and ending on the same review card (`agents/import_export.rs`)
-- **Settings → Agents** - The first tab: keeping this Mac on, which engine new agents start on, notifications, phone and other assistants
+- **Settings** - A window of its own (`dashboard/SettingsModal.tsx`, a window-sized `ModalFrame`): a section list down the left (Agents, Independence, Accounts & usage, Phone, Notifications, Chrome, Apps, then Projects, Appearance, Advanced; `lib/settingsPages.ts`), one page at a time, each reachable from ⌘K ("Settings → Phone"), from a chat note's button and from the Chief (`open_settings`); Esc goes back. **Independence** is one idea with one name and one control, the four-stop slider, everywhere
 - **One look** - Every non-message surface is a Line, a Card or a Bar; affirmative answers are neutral, never accent; one word per idea (see [docs/agents.md](docs/agents.md), "Lines, cards and bars"), on desk and phone
 
 **Projects underneath.** When work becomes a site or an app it lives in the workspace inherited from Ship Studio, which agents create, run sessions in and push from (with approval):
@@ -236,7 +236,7 @@ Command modules in `src-tauri/src/commands/`. Domains with submodules are direct
 Single-file domains:
 - `agent_bridge.rs` - Commands for the agent preview bridge (the loopback MCP server in `src-tauri/src/agent_bridge.rs` that lets the workspace agent read the preview's console/network/DOM, navigate it, and take screenshots)
 - `agents.rs` - Agents mode commands (overview, messages, send, create/update/delete, approvals, focus). The engine is `src-tauri/src/agents/`
-- `agents_usage.rs` - Settings → Agents → Usage: the capacity inventory, the usage mode and the spare-capacity list
+- `agents_usage.rs` - Settings → Accounts & usage: the capacity inventory, the usage mode and the spare-capacity list
 - `ai.rs` - AI-powered PR title/description generation via the agent CLI
 - `analytics.rs` - PostHog event tracking (API key stays in Rust; see `docs/analytics.md`)
 - `assets.rs` - Assets panel file management (configurable root, default `/public`)

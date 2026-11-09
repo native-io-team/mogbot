@@ -1,7 +1,7 @@
 /**
- * Settings → Agents → Independence: how much every agent does on its own
- * (`agents::independence`). Read from the overview; ⌘K "How independent your
- * agents are…" scrolls here.
+ * Settings → Independence, the team's level: how much every agent does on its
+ * own (`agents::independence`), on the one four-stop slider. Read from the
+ * overview; ⌘K "Independence…" scrolls here.
  *
  * @module components/agents/AgentIndependenceSettings
  */
@@ -67,10 +67,13 @@ export function AgentIndependenceSettings() {
       ref={ref}
     >
       <h3 className="settings-group__title" id="agents-settings-independence">
-        Independence
+        Your team
       </h3>
       <div className="settings-section agent-independence-settings__body">
-        <IndependenceSlider value={value} onChange={(l) => void choose(l)} />
+        <span className="settings-row-description">
+          Every agent runs at this, unless it has a level of its own.
+        </span>
+        <IndependenceSlider value={value} onChange={(l) => void choose(l)} showTitle={false} />
         {own > 0 && <p className="agent-independence-settings__own">{ownIndependenceLine(own)}</p>}
       </div>
     </section>

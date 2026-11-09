@@ -160,7 +160,8 @@
   gap: var(--spacing-md);
 }
 
-/* Portalled out of the agent editor: above the dialog it opens from. */
-.ss-dropdown__menu.agent-level-menu {
-  z-index: var(--z-modal-menu);
+/* Following the team: said, quietly, where the way back would be. */
+.agent-level-picker__follows {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
 }

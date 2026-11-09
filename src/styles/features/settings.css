@@ -19,24 +19,126 @@
   padding: var(--settings-body-inset);
 }
 
-.settings-modal > .tabs {
+/* The Settings window (SettingsModal): a sheet the size of the window, a
+   section list down the left, one page at a time on the right. The list
+   holds still; only the page scrolls. */
+:root {
+  --settings-window-inset: var(--spacing-xl);
+  --settings-window-max-width: 1120px;
+  --settings-nav-width: 208px;
+  --settings-page-max-width: 680px;
+}
+
+.modal-frame-overlay:has(> .settings-window) {
+  padding: var(--settings-window-inset);
+}
+
+.settings-window {
+  width: 100%;
+  max-width: var(--settings-window-max-width);
+  height: 100%;
+  max-height: none;
+  overflow: hidden;
+  background: var(--surface-panel);
+}
+
+.settings-window__layout {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+
+.settings-window__nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+  flex: 0 0 var(--settings-nav-width);
+  padding: var(--spacing-md) var(--spacing-sm);
+  border-right: var(--border-width-default) solid var(--border-subtle);
+  background: var(--surface-recessed);
+  overflow-y: auto;
+}
+
+.settings-window__nav-entry {
   display: contents;
 }
 
-/* Section tabs: left-aligned at their natural width, the first label's text
-   on the same edge as the content below (the tab's own inset is taken back
-   out of the body's), the active bar resting on the panel's hairline. */
-.settings-tabs.tabs__list {
-  flex-shrink: 0;
-  align-self: flex-start;
-  align-items: flex-end;
-  /* The band the stretched tabs used to fill, so the modal's rhythm holds. */
-  min-height: calc(var(--spacing-lg) * 2 + var(--font-size-body-lg));
-  margin-inline: calc(var(--settings-body-inset) - var(--tabs-underline-inset));
+.settings-window__nav-divider {
+  display: block;
+  height: var(--border-width-default);
+  margin: var(--spacing-sm) var(--spacing-sm);
+  background: var(--border-subtle);
 }
 
-.settings-tab-panel {
-  border-top: var(--border-width-default) solid var(--border-subtle);
+/* A row of the list: left-aligned, the open page held (ghost's own pressed
+   surface, neutral, never the accent). */
+.settings-window__nav-item.button {
+  justify-content: flex-start;
+  color: var(--text-secondary);
+}
+
+.settings-window__nav-item.button[aria-current='page'] {
+  color: var(--text-primary);
+}
+
+.settings-window__page {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  padding: var(--spacing-xl) var(--spacing-2xl) var(--spacing-2xl);
+}
+
+.settings-window__page > * {
+  max-width: var(--settings-page-max-width);
+}
+
+.settings-window__page-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin-bottom: var(--spacing-xl);
+}
+
+.settings-window__page-title {
+  margin: 0;
+  font-size: var(--font-size-h3);
+  font-weight: var(--font-weight-heading);
+  letter-spacing: var(--tracking-name);
+  color: var(--text-primary);
+}
+
+.settings-window__page-lead {
+  margin: 0;
+  font-size: var(--font-size-body-md);
+  color: var(--text-muted);
+}
+
+/* A narrow window: the list goes across the top and scrolls sideways. */
+@media (max-width: 720px) {
+  .settings-window__layout {
+    flex-direction: column;
+  }
+
+  .settings-window__nav {
+    flex: 0 0 auto;
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: var(--border-width-default) solid var(--border-subtle);
+  }
+
+  .settings-window__nav-divider {
+    display: none;
+  }
+
+  .settings-window__nav-item.button {
+    width: auto;
+    white-space: nowrap;
+  }
+
+  .settings-window__page {
+    padding: var(--spacing-lg);
+  }
 }
 
 .settings-section {

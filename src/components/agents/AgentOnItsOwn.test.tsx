@@ -86,7 +86,7 @@ describe('AgentOnItsOwnModal', () => {
   it('shows its level, what always asks and every standing item from the Mac', async () => {
     render(<AgentOnItsOwnModal agentId="a1" onClose={() => {}} />);
     expect(await screen.findByText('Unleashed · its own level')).toBeTruthy();
-    expect(screen.getByRole('dialog', { name: 'What can Finance do on its own?' })).toBeTruthy();
+    expect(screen.getByRole('dialog', { name: 'Finance’s independence' })).toBeTruthy();
     expect(screen.getByText(view.levelLine)).toBeTruthy();
     for (const line of view.alwaysAsks) expect(screen.getByText(line)).toBeTruthy();
     for (const item of view.items) expect(screen.getByText(item.text)).toBeTruthy();

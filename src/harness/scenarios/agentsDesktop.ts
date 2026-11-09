@@ -209,7 +209,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'agents-desktop-settings',
     title: 'Settings — Agents in the menu bar, Quick message',
     looksRightWhen:
-      'Settings opens on its Agents tab; under “On this Mac”, two rows in the same style as the others, each with a one-line description: “Agents in the menu bar” (off) and “Quick message” (on), whose line names ⌥Space and @name, with a small field showing ⌥Space under it.',
+      'Settings opens on its Agents page; under “On this Mac”, two rows in the same style as the others, each with a one-line description: “Agents in the menu bar” (off) and “Quick message” (on), whose line names ⌥Space and @name, with a small field showing ⌥Space under it.',
     command: 'agents.desktopSettings',
     requires: '.agents-desktop-settings .agents-shortcut-field',
     clipSelector: '.agents-desktop-settings',
@@ -225,12 +225,12 @@ export const agentsDesktopScenarios: Scenario[] = [
   },
   {
     id: 'settings-agents',
-    title: 'Settings — the Agents tab',
+    title: 'Settings — the Agents page',
     looksRightWhen:
-      'Settings opens on Agents, the first of five tabs (Agents, General, Projects, Appearance, Experimental). Four quiet groups, each a small muted heading: On this Mac (menu bar, quick message, keep awake, keep running when closed, open at login, each with a switch), Engines and models (“New agents start on” with a Claude Code | Codex control, Claude Code pressed, the engines’ states on one line; “Model on Claude Code” and “Model on Codex”, each a menu button showing “Engine’s default”; Routines), Notifications (two plain rows), Away from your desk (Phone and Other assistants, each with Open). Every description is one short sentence; no paragraph anywhere.',
+      'The Settings window opens on Agents, first in the section list down the left. Quiet groups, each a small heading: On this Mac (menu bar, quick message, keep awake, keep running when closed, open at login, each with a switch), Engines and models (“New agents start on” with a Claude Code | Codex control, Claude Code pressed, the engines’ states on one line; “Model on Claude Code” and “Model on Codex”, each a menu button showing “Engine’s default”; Routines), Bring agents in (Import…). Every description is one short sentence; no paragraph anywhere.',
     command: 'agents.desktopSettings',
     requires: '.agents-settings .settings-group__title',
-    clipSelector: '.settings-modal',
+    clipSelector: '.settings-window',
     commands: {
       agents_overview: overview(),
       agents_desktop_settings: DESKTOP_SETTINGS,
@@ -378,9 +378,9 @@ export const agentsDesktopScenarios: Scenario[] = [
   },
   {
     id: 'settings-agents-independence',
-    title: 'Settings — how independent agents are, set to Bold',
+    title: 'Settings — Independence, set to Bold',
     looksRightWhen:
-      'Opened from ⌘K “How independent your agents are…”, scrolled to Independence: the slider “How much it does on its own”, “Asks a lot” left and “Just does it” right, four stops Careful, Steady, Bold, Unleashed with the neutral thumb on Bold (never the accent), Bold’s line “Does local work on this Mac; asks before anything leaves it.”, and under it “Always asks before spending money, using your passwords, or deleting for good.”',
+      'Opened from ⌘K “Independence…”, on the Independence page: “Your team” and one line, then the slider (the page’s title names it), “Asks a lot” left and “Just does it” right, four stops Careful, Steady, Bold, Unleashed with the neutral thumb on Bold (never the accent), Bold’s line “Does local work on this Mac; asks before anything leaves it.”, and under it “Always asks before spending money, using your passwords, or deleting for good.”',
     command: 'agents.independence',
     requires:
       '.agent-independence-settings .independence-slider[data-level="go_hard"] [role="slider"]',
@@ -604,9 +604,9 @@ export const agentsDesktopScenarios: Scenario[] = [
   },
   {
     id: 'settings-agents-page',
-    title: 'Settings — Agents, the whole tab',
+    title: 'Settings — Accounts & usage, the whole page',
     looksRightWhen:
-      'Every group of Settings → Agents in one tall shot: On this Mac, Engines and models, Usage, Accounts, Notifications, Away from your desk. Each group has the same small muted heading, the same air above and below, and one full-width divider under it that never touches the last control. Rows line up on one left edge; every description is one muted line. Both themes readable; nothing accent-coloured except chosen state.',
+      'Opened from ⌘K “Usage accounts…” on the Accounts & usage page, in one tall shot: Usage, then Accounts. Each group has the same small muted heading, the same air above and below, and one full-width divider under it that never touches the last control. Rows line up on one left edge; every description is one muted line. Both themes readable; nothing accent-coloured except chosen state.',
     command: 'agents.accounts',
     requires: '.agent-accounts .agent-account',
     clipSelector: '.agents-settings',

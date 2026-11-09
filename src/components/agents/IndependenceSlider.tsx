@@ -1,9 +1,11 @@
 /**
- * How much agents do on their own: a four-stop slider titled "How much it
- * does on its own", from "Asks a lot" (Careful) to "Just does it" (Unleashed).
- * Under it, the chosen stop's one line, then the line true at every stop. The
- * control in Settings → Agents (`AgentIndependenceSettings`);
- * the phone draws the same stops from the same strings (`IndependenceSetting`).
+ * Independence, how much agents do on their own: the one control for it, a
+ * four-stop slider titled "Independence", from "Asks a lot" (Careful) to
+ * "Just does it" (Unleashed). Under it, the chosen stop's one line, then the
+ * line true at every stop. The same control in Settings →
+ * Independence (`AgentIndependenceSettings`) and an agent's editor
+ * (`AgentLevelPicker`); the phone draws the same stops from the same strings
+ * (`IndependenceSetting`).
  *
  * One `role="slider"` carries the value for the keyboard and screen readers
  * (arrows, Home/End, the stop's name and line as its value text). The stop
