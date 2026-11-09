@@ -28,6 +28,7 @@ import {
   declineLogin,
   loginCardView,
   loginNotNeeded,
+  retriesPrimary,
   saveLoginKey,
   startLogin,
   type LoginOption,
@@ -137,7 +138,9 @@ export const LoginCard = memo(function LoginCard({ message, agentName, arrived }
           {...keyProps}
           onClick={guard(() => choose(view.primary!))}
         >
-          {view.phase === 'failed' || view.phase === 'cancelled' ? 'Try again' : view.primary.label}
+          {retriesPrimary(view.phase, login?.flow?.option, view.primary.id)
+            ? 'Try again'
+            : view.primary.label}
         </Button>
       )}
     </>

@@ -211,7 +211,7 @@
 }
 
 .project-card-changes {
-  color: var(--accent-warning);
+  color: var(--text-secondary); /* a count, not a call for you: amber means "needs you" only */
   flex-shrink: 0;
   white-space: nowrap;
 }

@@ -347,7 +347,7 @@ export const agentsLoginsScenarios: Scenario[] = [
   recruiterScenario(
     'agents-login-failed',
     'Agents — a login that didn’t connect',
-    'The card with a red error line “Gmail didn’t show up as connected within ten minutes. Try again once it’s added on claude.ai.”, the other way in still offered, and a neutral “Try again” beside “Not now”.',
+    'The card with a red error line “Gmail didn’t show up as connected within ten minutes. Try again once it’s added on claude.ai.”, and the lead button still “Use my browser” (neutral, beside Not now and Not needed), since claude.ai is what failed: “Try again” is only ever on the button that retries the failed way in.',
     loginCard('hiring', 'Recruiter needs your Gmail (work)', {
       ...GMAIL_LOGIN,
       flow: {

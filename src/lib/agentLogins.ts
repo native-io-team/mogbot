@@ -324,6 +324,21 @@ export function loginCardView(approval: ApprovalLike, agentName: string): LoginC
 }
 
 /**
+ * Whether the card's lead button retries what just failed. Only when the way
+ * in that failed *is* the lead one: after claude.ai fails on a card that leads
+ * with the browser, "Try again" on the browser button would say one thing and
+ * do another (and the error line itself says "Choose Use my browser").
+ */
+export function retriesPrimary(
+  phase: LoginPhase,
+  failedOption: string | undefined,
+  primaryId: string
+): boolean {
+  if (phase !== 'failed' && phase !== 'cancelled') return false;
+  return failedOption === undefined || failedOption === primaryId;
+}
+
+/**
  * A sign-in opened in this Mac's browser that nothing has come back from
  * for `NO_CALLBACK_MS`: the card says so plainly, with Open again · Copy link.
  */
