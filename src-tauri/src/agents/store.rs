@@ -1003,20 +1003,32 @@ pub fn get(id: &str) -> Result<Agent, CommandError> {
 }
 
 /// Find an agent the way another agent names it: by id, or by name ignoring case.
+/// A name is only ever a name here: creating, renaming and importing check
+/// it, so "Chief" and "Chief of Staff" stay names anyone can have.
 pub fn find(name_or_id: &str) -> Result<Option<Agent>, CommandError> {
     let needle = name_or_id.trim();
     let agents = list()?;
     if let Some(found) = agents.iter().find(|a| a.id == needle) {
         return Ok(Some(found.clone()));
     }
-    if let Some(found) = agents.iter().find(|a| a.name.eq_ignore_ascii_case(needle)) {
-        return Ok(Some(found.clone()));
+    Ok(agents
+        .into_iter()
+        .find(|a| a.name.eq_ignore_ascii_case(needle)))
+}
+
+/// [`find`] for an agent being addressed (a message, a read of its notes):
+/// the Chief can be renamed ("Dash"), and notes and memories written before
+/// that still say "Chief of Staff", so its old names keep reaching it while
+/// no agent has that exact name. Nothing else (create, rename, import,
+/// admin actions) goes by an old name.
+pub fn find_addressed(name_or_id: &str) -> Result<Option<Agent>, CommandError> {
+    if let Some(found) = find(name_or_id)? {
+        return Ok(Some(found));
     }
-    // The Chief can be renamed ("Dash"); notes and memories written before
-    // that still say "Chief of Staff", so its old names keep reaching it.
-    Ok(chief_alias(needle)
-        .then(|| agents.into_iter().find(|a| a.is_main))
-        .flatten())
+    if !chief_alias(name_or_id) {
+        return Ok(None);
+    }
+    Ok(list()?.into_iter().find(|a| a.is_main))
 }
 
 /// Names that always mean the Chief, whatever it is called now.
@@ -3247,6 +3259,32 @@ mod tests {
     fn rejects_path_like_ids() {
         assert!(agent_home("../etc").is_err());
         assert!(agent_home("").is_err());
+    }
+
+    /// The Chief's old names reach it only when addressed (a message, a
+    /// read) and only while no agent has that exact name; everywhere else
+    /// a name is a name, so "Chief" and "Chief of Staff" stay creatable.
+    #[test]
+    fn the_chiefs_old_names_reach_it_only_where_no_agent_has_them() {
+        with_root(|| {
+            let mut main = new("Dash");
+            main.is_main = true;
+            let chief = create(main).unwrap();
+            assert!(find("Chief of Staff").unwrap().is_none());
+            assert_eq!(
+                find_addressed("Chief of Staff").unwrap().unwrap().id,
+                chief.id
+            );
+            let other = create(new("Chief")).unwrap();
+            assert_eq!(find("chief").unwrap().unwrap().id, other.id);
+            assert_eq!(find_addressed("chief").unwrap().unwrap().id, other.id);
+            assert_eq!(find_addressed("the Chief").unwrap().unwrap().id, chief.id);
+            assert!(create(new("Chief of Staff")).is_ok());
+            assert_ne!(
+                find_addressed("Chief of Staff").unwrap().unwrap().id,
+                chief.id
+            );
+        });
     }
 
     #[test]

@@ -1301,7 +1301,32 @@ dlx`/`exec`, `npm exec`, `yarn dlx`/`exec`, `yarn <bin>`, `bun x`) like `npx`.
 `cd` (a `cd` it can't follow makes a relative `rm -r` ask). Quoted text kept
 in a variable or given to `echo` is data unless a shell reads the line,
 wherever it stands (`timeout 5 sh -c "$X"`, `find -exec sh`, `$SHELL -c`,
-`python3 -c "os.system(…)"`). Here-document bodies stay data.
+`python3 -c "os.system(…)"`). Here-document bodies stay data, except a
+script the line writes and then runs (`cat > a.sh <<EOF … EOF; sh a.sh`,
+`echo '…' > a.sh && ./a.sh`), which is judged by what it says, and so is a
+shell script on disk written in the last 30 minutes that a shell runs; an
+older one, or a Python or Node file, runs as before. A program word that
+can't be read (`$X push`, `$(cat p) publish`) is judged by its arguments:
+it asks when they would ask for `git`, `gh`, `npm`, `rm`, `curl`, `stripe` or
+a deploy CLI (so `$PY render.py` and `$(npm bin)/eslint .` run); `$(echo
+git)`, `$(which git)` and `$(pwd)` are read as what they print. A name set
+more than once on the line (or with `export` / `declare`) is judged at each
+value it was given. A git alias runs what it stands for (`-c alias.x=…`, a
+`git config alias.x` earlier on the line, the repo's and the user's git
+config), and `npm run` / `pnpm` / `yarn` / `bun run` / `make` what the
+folder's `package.json` script (with its `pre`/`post`) or Makefile target
+(with its prerequisites' recipes) says, one level read from disk; an
+unknown script runs as before. `ssh host git push` is judged like `ssh host
+"git push"`. `curl -K` / `--config` (a request the line doesn't show) and
+`osascript` sending System Events keystrokes or clicks ask at every level.
+`mv` / `trash` of the home or one of the user's own folders (Documents,
+Desktop, Downloads, Pictures, Movies, Music, Library…), `rsync --delete`
+into a folder `rm -r` would ask for and `--remove-source-files` from one ask
+like `rm -r`. A relative path whose folder isn't known for sure is resolved
+against the folder the line is in, and asks when it lands on something in a
+credential store or the app's data that is there (`cd .. && cat
+../bridge.json` from an agent's home); a guess naming nothing there was made
+from the wrong folder and runs.
 `go_hard_hardening_tests.rs` holds the owner's everyday work (git, builds,
 project installs, dev servers, local scripts, network reads, here-document
 scripts) card-free, after outside content too.
@@ -3478,7 +3503,10 @@ what comes after it, and that earlier steps' output is just above.
   survives a restart: the card is in the log and `waiting` is on the routine.
   Answering checks the card is still the one `waiting` names and that the
   next step's words are still what the card showed; an edited step is not
-  run blind.
+  run blind. The answer takes the waiting run under the registry lock
+  (`routine_steps::settle`), and so does the next run closing it
+  (`close_waiting`): exactly one of them gets it, so a Go ahead on a card the
+  next run already closed starts nothing.
 - **Go ahead is exactly as wide as the card.** It is kept as the user's yes
   to what the card showed (`plan_grant::note_chat_yes`, with the card's
   summary and detail), and the step's wake is marked as one the user OK'd
@@ -5428,7 +5456,9 @@ removed. A folder is removed only when all of these hold:
   for `.turbo` also `turbo.json`; `Cargo.toml` for `target`). A `target` folder
   of notes is not a build folder;
 - it is a real folder inside the agent's home, found without following a link
-  or entering a `.git` folder, and it holds no `.git` of its own;
+  or entering a `.git` folder, and nothing anywhere inside it is a `.git` or
+  was changed within the age limit (a folder's own date moves only with its
+  direct entries; a walk past 250,000 entries keeps it);
 - inside a working copy, git ignores it (`check-ignore`) and tracks nothing in
   it (`ls-files`), so removing it changes nothing git would call a change. Any
   doubt (git missing, an error, a timeout) keeps it;

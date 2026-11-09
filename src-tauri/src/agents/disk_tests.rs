@@ -349,3 +349,27 @@ fn prune_leaves_a_folder_a_kept_dev_server_runs_from() {
     );
     assert!(!home.join("old/other/node_modules").exists(), "{freed:?}");
 }
+
+/// A folder whose own date is old can still hold a working copy someone
+/// cloned into it, or a file written a minute ago (a linked package being
+/// edited): either keeps the whole folder.
+#[test]
+fn a_candidate_holding_a_repo_or_a_fresh_file_is_kept() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = dir.path();
+    npm_package(&home.join("a"));
+    npm_package(&home.join("b"));
+    write(&home.join("b/node_modules/linked-kit/.git/HEAD"), "ref");
+    npm_package(&home.join("c"));
+    std::fs::File::options()
+        .write(true)
+        .open(home.join("c/node_modules/left-kit/index.js"))
+        .unwrap()
+        .set_modified(later() - Duration::from_secs(60))
+        .unwrap();
+    let rel: Vec<String> = candidates(home, H, later())
+        .iter()
+        .map(|p| p.strip_prefix(home).unwrap().to_string_lossy().to_string())
+        .collect();
+    assert_eq!(rel, vec!["a/node_modules"]);
+}

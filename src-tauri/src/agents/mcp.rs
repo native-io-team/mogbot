@@ -1232,7 +1232,7 @@ fn search_my_chat(caller: &store::Agent, args: &Value) -> Value {
     }
     let whose = match arg(args, "agent") {
         None => caller.clone(),
-        Some(name) => match store::find(name) {
+        Some(name) => match store::find_addressed(name) {
             Ok(Some(agent)) => agent,
             _ => {
                 return error(format!(
@@ -1301,7 +1301,7 @@ fn read_agent(args: &Value) -> Value {
     let Some(name) = arg(args, "agent") else {
         return error("`agent` is required.");
     };
-    match store::find(name) {
+    match store::find_addressed(name) {
         Ok(Some(agent)) => text(super::team_setup::read_agent_text(&agent)),
         _ => error(format!(
             "There's no agent called {name}. list_agents shows who exists."
@@ -1320,7 +1320,7 @@ fn message_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value 
     let (Some(target_name), Some(body)) = (arg(args, "agent"), arg(args, "message")) else {
         return error("Both `agent` and `message` are required.");
     };
-    let target = match store::find(target_name) {
+    let target = match store::find_addressed(target_name) {
         Ok(Some(t)) => t,
         _ => {
             return error(format!(

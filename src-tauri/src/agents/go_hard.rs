@@ -234,6 +234,24 @@ fn protected(p: &Path, ctx: &Ctx, outside: bool) -> bool {
     if credential_store(p, ctx) || PROFILES.iter().any(|s| p.starts_with(ctx.home.join(s))) {
         return true;
     }
+    if own_files(p, ctx, outside) {
+        return true;
+    }
+    // Outside the home and temporary folders: the Mac's own files.
+    !p.starts_with(&ctx.home) && !in_temp(p) && !p.starts_with("/dev")
+}
+
+/// [`protected`], less "outside the home": what a path only guessed at
+/// (relative, with the shell's folder not known for sure) is held to. A
+/// guess that lands outside the home is likelier wrong than the Mac's own
+/// files, but one that lands in a credential store or the app's data (`cd
+/// .. && cat ../bridge.json` from the agent's home) is judged as there.
+fn guarded(p: &Path, ctx: &Ctx, outside: bool) -> bool {
+    protected(p, ctx, outside) && (p.starts_with(&ctx.home) || in_temp(p))
+}
+
+/// The app's own files in the agent's home ([`protected`]).
+fn own_files(p: &Path, ctx: &Ctx, outside: bool) -> bool {
     // The app's own files in the agent's home: its log always, and its
     // instructions in a turn answering outside text. Its own turn keeps its
     // memory however it edits the file: observed, a `sed -i` saving the
@@ -246,8 +264,7 @@ fn protected(p: &Path, ctx: &Ctx, outside: bool) -> bool {
             }
         }
     }
-    // Outside the home and temporary folders: the Mac's own files.
-    !p.starts_with(&ctx.home) && !in_temp(p) && !p.starts_with("/dev")
+    false
 }
 
 fn write_asks(raw: &str, ctx: &Ctx, outside: bool) -> bool {
@@ -831,6 +848,61 @@ fn awk_is_text(program: &str) -> bool {
         && !code.contains("getline")
 }
 
+/// A command a `$(…)` or backticks interrupted, waiting for the word the
+/// substitution makes.
+struct Held {
+    words: Vec<String>,
+    word: String,
+    started: bool,
+    /// The substitution stands where the program goes.
+    program: bool,
+    /// Where its own commands start in the output.
+    from: usize,
+}
+
+enum Sub {
+    Dollar(Held),
+    Backtick(Held),
+    Paren,
+}
+
+/// What a program word from a substitution or a variable that can't be
+/// read stands for (`$X push`, `$(cat prog) push`).
+pub(super) const UNKNOWN: &str = "$(…)";
+
+/// The words a command substitution makes, where they can be known: what
+/// `echo` prints (`$(echo git)` is `git`), the name `which` / `command -v` /
+/// `type -p` looks up, and `pwd` (`.`). Anything else makes no word, as
+/// before, except in the program's place, where it is [`UNKNOWN`]: the
+/// command is then judged by its arguments (`unknown_asks`).
+fn substitution_words(inner: &[Vec<String>], program: bool) -> Vec<String> {
+    let unknown = || {
+        if program {
+            vec![UNKNOWN.to_string()]
+        } else {
+            Vec::new()
+        }
+    };
+    let [cmd] = inner else {
+        return unknown();
+    };
+    let words: Vec<&str> = cmd.iter().map(String::as_str).collect();
+    match words.as_slice() {
+        ["echo", rest @ ..] => rest
+            .iter()
+            .skip_while(|w| matches!(**w, "-n" | "-e" | "-E"))
+            .map(|w| w.to_string())
+            .collect(),
+        ["which" | "whence", name]
+        | ["command", "-v" | "-V", name]
+        | ["type", "-p" | "-P", name] => {
+            vec![name.to_string()]
+        }
+        ["pwd"] | ["pwd", "-P" | "-L"] => vec![".".into()],
+        _ => unknown(),
+    }
+}
+
 fn lex_into(src: &str, out: &mut Vec<Vec<String>>, depth: u8, text: Text) {
     // Text a shell runs may spell words with `$'…'` too (`bash -c "git \$'push'"`).
     let src = &ansi_c_quoted(src);
@@ -849,9 +921,58 @@ fn lex_into(src: &str, out: &mut Vec<Vec<String>>, depth: u8, text: Text) {
             *started = false;
         }
     };
+    // Open `$(…)`, backticks and plain `(`, innermost last.
+    let mut subs: Vec<Sub> = Vec::new();
     let mut i = 0;
     while i < chars.len() {
         let c = chars[i];
+        // A substitution opens: the command around it waits while its own
+        // command is read, then gets back the word it makes.
+        let opens = (c == '$' && chars.get(i + 1) == Some(&'('))
+            || (c == '`' && !matches!(subs.last(), Some(Sub::Backtick(_))));
+        if opens {
+            let held = Held {
+                program: !started
+                    && words.iter().all(|w| {
+                        is_assignment(w)
+                            || KEYWORDS.contains(&w.as_str())
+                            || WRAPPERS.contains(&base(w))
+                    }),
+                words: std::mem::take(&mut words),
+                word: std::mem::take(&mut word),
+                started: std::mem::take(&mut started),
+                from: out.len(),
+            };
+            subs.push(if c == '`' {
+                Sub::Backtick(held)
+            } else {
+                Sub::Dollar(held)
+            });
+            i += if c == '`' { 1 } else { 2 };
+            continue;
+        }
+        let closes = c == '`' || (c == ')' && !matches!(subs.last(), Some(Sub::Backtick(_))));
+        if closes {
+            flush_word(&mut word, &mut started, &mut words);
+            if !words.is_empty() {
+                out.push(std::mem::take(&mut words));
+            }
+            if let Some(Sub::Dollar(held) | Sub::Backtick(held)) = subs.pop() {
+                let made = substitution_words(&out[held.from..], held.program);
+                words = held.words;
+                word = held.word;
+                started = held.started;
+                for (n, w) in made.into_iter().enumerate() {
+                    if n > 0 {
+                        flush_word(&mut word, &mut started, &mut words);
+                    }
+                    word.push_str(&w);
+                    started = true;
+                }
+            }
+            i += 1;
+            continue;
+        }
         match c {
             '\\' if i + 1 < chars.len() => {
                 word.push(chars[i + 1]);
@@ -895,10 +1016,13 @@ fn lex_into(src: &str, out: &mut Vec<Vec<String>>, depth: u8, text: Text) {
             }
             '<' | '>' if text == Text::Data => flush_word(&mut word, &mut started, &mut words),
             ' ' | '\t' => flush_word(&mut word, &mut started, &mut words),
-            ';' | '&' | '|' | '\n' | '(' | ')' | '`' | '{' | '}' => {
+            ';' | '&' | '|' | '\n' | '(' | ')' | '{' | '}' => {
                 flush_word(&mut word, &mut started, &mut words);
                 if !words.is_empty() {
                     out.push(std::mem::take(&mut words));
+                }
+                if c == '(' {
+                    subs.push(Sub::Paren);
                 }
             }
             '$' if chars.get(i + 1) == Some(&'{') => {
@@ -907,14 +1031,6 @@ fn lex_into(src: &str, out: &mut Vec<Vec<String>>, depth: u8, text: Text) {
                 word.extend(&chars[i..=end]);
                 started = true;
                 i = end + 1;
-                continue;
-            }
-            '$' if chars.get(i + 1) == Some(&'(') => {
-                flush_word(&mut word, &mut started, &mut words);
-                if !words.is_empty() {
-                    out.push(std::mem::take(&mut words));
-                }
-                i += 2;
                 continue;
             }
             '>' | '<' => {
@@ -944,6 +1060,17 @@ fn lex_into(src: &str, out: &mut Vec<Vec<String>>, depth: u8, text: Text) {
     flush_word(&mut word, &mut started, &mut words);
     if !words.is_empty() {
         out.push(words);
+    }
+    // Substitutions never closed: the commands they interrupted, as read.
+    while let Some(sub) = subs.pop() {
+        if let Sub::Dollar(mut held) | Sub::Backtick(mut held) = sub {
+            if held.started {
+                held.words.push(held.word);
+            }
+            if !held.words.is_empty() {
+                out.push(held.words);
+            }
+        }
     }
     // A line that hands text to a shell (`echo "…" | sh`, `eval "$X"`,
     // `ssh box "$CMD"`): its data may be parsed as commands after all.
@@ -1030,7 +1157,29 @@ fn plan_covers(words: &[String]) -> bool {
 }
 
 fn command_asks(command: &str, ctx: &Ctx, outside: bool) -> bool {
+    command_asks_at(command, ctx, outside, 0)
+}
+
+/// How deep a script, an alias or a project script is followed into the
+/// ones it runs (`npm run deploy` running `npm run build` …).
+const MAX_SCRIPT_DEPTH: u8 = 3;
+
+/// Scripting another app's interface (`System Events` keystrokes and
+/// clicks) types and clicks as the user in whatever is in front, where no
+/// rule can see what it does: it asks at every level.
+fn ui_scripting(lower: &str) -> bool {
+    lower.contains("osascript")
+        && lower.contains("system events")
+        && ["keystroke", "key code", "click"]
+            .iter()
+            .any(|w| lower.contains(w))
+}
+
+fn command_asks_at(command: &str, ctx: &Ctx, outside: bool, depth: u8) -> bool {
     let lower = command.to_ascii_lowercase();
+    if ui_scripting(&lower) {
+        return true;
+    }
     // `osascript` reading its script from a here-document or a pipe: the
     // script is not its arguments, so look at the whole line.
     let plan_osascript = COVERED.with(|c| {
@@ -1065,11 +1214,18 @@ fn command_asks(command: &str, ctx: &Ctx, outside: bool) -> bool {
     let mut here = ctx.clone();
     let mut known = false;
     let mut vars = Vars::new(&without_heredoc_data(command));
+    let written = written_scripts(command);
+    let mut git_aliases: Vec<(String, String)> = Vec::new();
     for words in commands(command) {
         if vars.assigns(&words) {
             continue;
         }
+        // A name set more than once is judged at each value it may hold.
+        let variants = vars.variants(&words);
         let words = vars.expand(&words);
+        if let Some(alias) = git_config_alias(&words) {
+            git_aliases.push(alias);
+        }
         // `pushd` moves like `cd`. Found in review (2026-11-08): `pushd ~ &&
         // rm -rf Documents` resolved against the turn's folder and ran, and
         // so did a `cd` to a folder that couldn't be read (`cd "$D"`, `cd -P
@@ -1107,11 +1263,633 @@ fn command_asks(command: &str, ctx: &Ctx, outside: bool) -> bool {
             }
             continue;
         }
-        if simple_asks(&words, &here, outside, known) {
-            return true;
+        let deeper = depth < MAX_SCRIPT_DEPTH;
+        for words in &variants {
+            if simple_asks(words, &here, outside, known) {
+                return true;
+            }
+            if !deeper {
+                continue;
+            }
+            // What it runs that the line or the folder spells out: a
+            // script it wrote, a git alias, a project script or target.
+            if let Some((body, at)) = script_run(words, &written, &here)
+                .map(|b| (b, here.clone()))
+                .or_else(|| project_script(words, &here))
+            {
+                if command_asks_at(&body, &at, outside, depth + 1) {
+                    return true;
+                }
+            }
+            match git_alias(words, &git_aliases, &here) {
+                Some(Alias::Words(w)) if simple_asks(&w, &here, outside, known) => return true,
+                Some(Alias::Shell(line)) if command_asks_at(&line, &here, outside, depth + 1) => {
+                    return true
+                }
+                _ => {}
+            }
         }
     }
     false
+}
+
+/* ------------------------------------------- scripts the line runs */
+
+/// Scripts this line writes before it runs them: a here-document sent to a
+/// file (`cat > a.sh <<EOF`, `cat <<EOF > a.sh`, `tee a.sh <<EOF`), or what
+/// `echo` / `printf` write to one. Keyed by the path as written, without a
+/// leading `./`; the body is the script's text.
+fn written_scripts(command: &str) -> std::collections::HashMap<String, String> {
+    let mut out: std::collections::HashMap<String, String> = Default::default();
+    let key = |t: &str| t.trim_start_matches("./").to_string();
+    let lines: Vec<&str> = command.split('\n').collect();
+    let mut i = 0;
+    while i < lines.len() {
+        let line = lines[i];
+        if let Some((delim, tabs)) = heredoc_delim(line) {
+            let mut body = String::new();
+            let mut j = i + 1;
+            let mut closed = false;
+            while j < lines.len() {
+                let l = lines[j].trim_end_matches('\r');
+                let l = if tabs { l.trim_start_matches('\t') } else { l };
+                if l == delim {
+                    closed = true;
+                    break;
+                }
+                body.push_str(lines[j]);
+                body.push('\n');
+                j += 1;
+            }
+            if !closed {
+                break;
+            }
+            if let Some(t) = heredoc_target(line) {
+                out.insert(key(&t), body);
+            }
+            i = j + 1;
+            continue;
+        }
+        i += 1;
+    }
+    for words in commands(command) {
+        let w: Vec<&str> = words.iter().map(String::as_str).collect();
+        let rest = unwrapped(&w);
+        let Some((&prog, args)) = rest.split_first() else {
+            continue;
+        };
+        if !matches!(base(prog), "echo" | "printf") {
+            continue;
+        }
+        let mut text = Vec::new();
+        let mut target = None;
+        let mut append = false;
+        let mut n = 0;
+        while n < args.len() {
+            let a = args[n];
+            if a.starts_with('>') && a.chars().all(|c| matches!(c, '>' | '|' | '&')) {
+                target = args.get(n + 1).copied();
+                append = a.starts_with(">>");
+                n += 2;
+                continue;
+            }
+            if !(base(prog) == "echo" && text.is_empty() && matches!(a, "-n" | "-e" | "-E")) {
+                text.push(a);
+            }
+            n += 1;
+        }
+        let Some(t) = target else {
+            continue;
+        };
+        let body = if base(prog) == "printf" {
+            text.first()
+                .map(|f| f.replace("\\n", "\n").replace("\\t", "\t"))
+                .unwrap_or_default()
+        } else {
+            text.join(" ").replace("\\n", "\n")
+        };
+        let entry = out.entry(key(t)).or_default();
+        if !append {
+            entry.clear();
+        }
+        entry.push_str(&body);
+        entry.push('\n');
+    }
+    out
+}
+
+/// A here-document's closing word on this line (`<<'EOF'`, `<<-EOF`), and
+/// whether its body may be indented with tabs. `<<<` is a here-string.
+fn heredoc_delim(line: &str) -> Option<(String, bool)> {
+    let chars: Vec<char> = line.chars().collect();
+    let mut quote: Option<char> = None;
+    let mut i = 0;
+    while i + 1 < chars.len() {
+        let c = chars[i];
+        match quote {
+            Some(q) if c == q => quote = None,
+            Some(_) => {}
+            None if c == '\'' || c == '"' => quote = Some(c),
+            None if c == '<' && chars[i + 1] == '<' => {
+                if chars.get(i + 2) == Some(&'<') {
+                    i += 3;
+                    continue;
+                }
+                let mut j = i + 2;
+                let tabs = chars.get(j) == Some(&'-');
+                if tabs {
+                    j += 1;
+                }
+                while chars.get(j).is_some_and(|c| *c == ' ' || *c == '\t') {
+                    j += 1;
+                }
+                let mut delim = String::new();
+                while let Some(&d) = chars.get(j) {
+                    if d.is_whitespace() || matches!(d, ';' | '&' | '|' | '<' | '>' | '(' | ')') {
+                        break;
+                    }
+                    if d != '\'' && d != '"' && d != '\\' {
+                        delim.push(d);
+                    }
+                    j += 1;
+                }
+                return (!delim.is_empty()).then_some((delim, tabs));
+            }
+            None => {}
+        }
+        i += 1;
+    }
+    None
+}
+
+/// The file a here-document's line sends it to: its `>` target, or the
+/// file `tee` writes.
+fn heredoc_target(line: &str) -> Option<String> {
+    for words in commands(line) {
+        let w: Vec<&str> = words.iter().map(String::as_str).collect();
+        if !w.iter().any(|x| x.starts_with("<<")) {
+            continue;
+        }
+        if let Some(n) = w
+            .iter()
+            .position(|x| x.starts_with('>') && x.chars().all(|c| matches!(c, '>' | '|' | '&')))
+        {
+            if let Some(t) = w.get(n + 1).filter(|t| **t != "/dev/null") {
+                return Some(t.to_string());
+            }
+        }
+        let rest = unwrapped(&w);
+        if rest.first().is_some_and(|p| base(p) == "tee") {
+            let mut skip = false;
+            for a in &rest[1..] {
+                if skip {
+                    skip = false;
+                    continue;
+                }
+                if a.starts_with('>') || a.starts_with('<') {
+                    skip = !a.starts_with("<<");
+                    continue;
+                }
+                if !a.starts_with('-') {
+                    return Some(a.to_string());
+                }
+            }
+        }
+    }
+    None
+}
+
+/// How recently a script on disk was written for it to be taken as written
+/// in this turn, and judged by what it says.
+const FRESH_SCRIPT: std::time::Duration = std::time::Duration::from_secs(30 * 60);
+/// A script longer than this on disk keeps today's behaviour.
+const MAX_SCRIPT_BYTES: u64 = 64 * 1024;
+
+/// The text of a shell script `words` run: one this line wrote
+/// ([`written_scripts`]), or one on disk written in the last
+/// [`FRESH_SCRIPT`] (by this turn, as a rule). A script run by its path
+/// counts only when it is a shell script (a shell `#!`, or none). Anything
+/// else (an older script, a Python file, one it can't read) keeps today's
+/// behaviour.
+fn script_run(
+    words: &[String],
+    written: &std::collections::HashMap<String, String>,
+    ctx: &Ctx,
+) -> Option<String> {
+    const SHELLS: &[&str] = &["sh", "bash", "zsh", "dash", "ksh", "source", "."];
+    let w: Vec<&str> = words.iter().map(String::as_str).collect();
+    let rest = unwrapped(&w);
+    let (&prog, args) = rest.split_first()?;
+    let (path, by_shell) = if SHELLS.contains(&base(prog)) {
+        if args
+            .iter()
+            .any(|a| a.starts_with('-') && !a.starts_with("--") && a.contains('c'))
+        {
+            return None;
+        }
+        (*args.iter().find(|a| !a.starts_with('-'))?, true)
+    } else if prog.contains('/') {
+        (prog, false)
+    } else {
+        return None;
+    };
+    if let Some(body) = written.get(path.trim_start_matches("./")) {
+        return Some(body.clone());
+    }
+    if !ctx.cwd.is_absolute() {
+        return None;
+    }
+    let file = resolve(path, ctx)?;
+    let meta = std::fs::metadata(&file).ok()?;
+    let age = meta.modified().ok()?.elapsed().unwrap_or_default();
+    if !meta.is_file() || meta.len() > MAX_SCRIPT_BYTES || age > FRESH_SCRIPT {
+        return None;
+    }
+    let text = std::fs::read_to_string(&file).ok()?;
+    let shell_bang = |first: &str| {
+        let first = first.trim();
+        !first.starts_with("#!")
+            || ["sh", "bash", "zsh", "dash", "ksh"].iter().any(|s| {
+                first.ends_with(&format!("/{s}"))
+                    || first.ends_with(&format!(" {s}"))
+                    || first.contains(&format!("/{s} "))
+                    || first.contains(&format!(" {s} "))
+            })
+    };
+    (by_shell || shell_bang(text.lines().next().unwrap_or(""))).then_some(text)
+}
+
+/* -------------------------------------------------- git aliases */
+
+/// What a git alias stands for: more words for `git`, or (`!…`) a line
+/// for the shell.
+enum Alias {
+    Words(Vec<String>),
+    Shell(String),
+}
+
+/// `git config [--local|--global|…] alias.NAME VALUE` on the line.
+fn git_config_alias(words: &[String]) -> Option<(String, String)> {
+    let w: Vec<&str> = words.iter().map(String::as_str).collect();
+    let rest = unwrapped(&w);
+    if rest.first().is_none_or(|p| base(p) != "git") {
+        return None;
+    }
+    let at = rest.iter().position(|a| *a == "config")?;
+    let pos: Vec<&str> = rest[at + 1..]
+        .iter()
+        .copied()
+        .filter(|a| !a.starts_with('-'))
+        .collect();
+    let name = pos.first()?.strip_prefix("alias.")?;
+    Some((name.to_ascii_lowercase(), pos.get(1..)?.join(" ")))
+}
+
+/// Git's own commands: an alias of the same name is never used.
+const GIT_BUILTINS: &[&str] = &[
+    "add",
+    "am",
+    "apply",
+    "bisect",
+    "blame",
+    "branch",
+    "checkout",
+    "cherry-pick",
+    "clean",
+    "clone",
+    "commit",
+    "config",
+    "describe",
+    "diff",
+    "fetch",
+    "format-patch",
+    "grep",
+    "init",
+    "log",
+    "ls-files",
+    "ls-remote",
+    "merge",
+    "mv",
+    "pull",
+    "push",
+    "rebase",
+    "reflog",
+    "remote",
+    "reset",
+    "restore",
+    "rev-parse",
+    "revert",
+    "rm",
+    "send-email",
+    "show",
+    "stash",
+    "status",
+    "switch",
+    "tag",
+    "worktree",
+];
+
+/// The alias a `git` command runs, from `-c alias.x=…` on it, a `git config
+/// alias.x …` earlier on the line, or the repo's and the user's git config.
+fn git_alias(words: &[String], line: &[(String, String)], ctx: &Ctx) -> Option<Alias> {
+    let w: Vec<&str> = words.iter().map(String::as_str).collect();
+    let rest = unwrapped(&w);
+    if rest.first().is_none_or(|p| base(p) != "git") {
+        return None;
+    }
+    let lead = w.len() - rest.len();
+    let mut given: Vec<(String, String)> = Vec::new();
+    let mut dir = None;
+    let mut i = 1;
+    while i < rest.len() {
+        let a = rest[i];
+        if a == "-c" {
+            if let Some((k, v)) = rest.get(i + 1).and_then(|kv| kv.split_once('=')) {
+                if let Some(name) = k.strip_prefix("alias.") {
+                    given.push((name.to_ascii_lowercase(), v.to_string()));
+                }
+            }
+            i += 2;
+        } else if a == "-C" {
+            dir = rest.get(i + 1).and_then(|d| resolve(d, ctx));
+            i += 2;
+        } else if matches!(a, "--git-dir" | "--work-tree" | "--namespace") {
+            i += 2;
+        } else if a.starts_with('-') {
+            i += 1;
+        } else {
+            break;
+        }
+    }
+    let sub = *rest.get(i)?;
+    if GIT_BUILTINS.contains(&sub) {
+        return None;
+    }
+    let name = sub.to_ascii_lowercase();
+    let find = |list: &[(String, String)]| {
+        list.iter()
+            .rev()
+            .find(|(n, _)| *n == name)
+            .map(|(_, v)| v.clone())
+    };
+    let value = find(&given)
+        .or_else(|| find(line))
+        .or_else(|| find(&config_aliases(dir.as_deref().unwrap_or(&ctx.cwd), ctx)))?;
+    let after: Vec<String> = rest[i + 1..].iter().map(|a| a.to_string()).collect();
+    if let Some(shell) = value.trim().strip_prefix('!') {
+        return Some(Alias::Shell(format!("{shell} {}", after.join(" "))));
+    }
+    let mut out: Vec<String> = w[..lead + i].iter().map(|a| a.to_string()).collect();
+    out.extend(commands(&value).into_iter().next().unwrap_or_default());
+    out.extend(after);
+    Some(Alias::Words(out))
+}
+
+/// `[alias]` entries in the repo at `dir` and the user's git config files.
+fn config_aliases(dir: &Path, ctx: &Ctx) -> Vec<(String, String)> {
+    let mut files = vec![
+        ctx.home.join(".gitconfig"),
+        ctx.home.join(".config/git/config"),
+    ];
+    if dir.is_absolute() {
+        if let Some(repo) = repo_of(dir) {
+            let dot = repo.join(".git");
+            let gitdir = match std::fs::read_to_string(&dot) {
+                Ok(text) => text
+                    .trim()
+                    .strip_prefix("gitdir:")
+                    .map(|g| repo.join(g.trim())),
+                Err(_) => Some(dot),
+            };
+            if let Some(g) = gitdir {
+                files.push(g.join("config"));
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for f in files {
+        let Ok(text) = std::fs::read_to_string(&f) else {
+            continue;
+        };
+        let mut in_alias = false;
+        for line in text.lines() {
+            let line = line.trim();
+            if line.starts_with('[') {
+                in_alias = line
+                    .trim_matches(['[', ']'])
+                    .trim()
+                    .eq_ignore_ascii_case("alias");
+                continue;
+            }
+            if !in_alias || line.starts_with('#') || line.starts_with(';') {
+                continue;
+            }
+            if let Some((k, v)) = line.split_once('=') {
+                let v = v.trim();
+                let v = v
+                    .strip_prefix('"')
+                    .and_then(|v| v.strip_suffix('"'))
+                    .unwrap_or(v);
+                out.push((k.trim().to_ascii_lowercase(), v.to_string()));
+            }
+        }
+    }
+    out
+}
+
+/* --------------------------------------------- project scripts */
+
+/// What a package manager's script or a `make` target runs, one level
+/// read from the folder's `package.json` or Makefile, and the folder it
+/// runs in. Its `pre` and `post` scripts too, and a target's
+/// prerequisites' recipes. An unknown script or target is `None`.
+fn project_script(words: &[String], ctx: &Ctx) -> Option<(String, Ctx)> {
+    let w: Vec<&str> = words.iter().map(String::as_str).collect();
+    let rest = unwrapped(&w);
+    let (&prog, args) = rest.split_first()?;
+    let prog = base(prog);
+    // A folder named with `--prefix`, `-C`, `--dir`, `--cwd` or `--directory`.
+    let mut dir: Option<&str> = None;
+    let mut pos: Vec<&str> = Vec::new();
+    let mut i = 0;
+    while i < args.len() {
+        let a = args[i];
+        if matches!(
+            a,
+            "--prefix" | "-C" | "--dir" | "--cwd" | "--directory" | "-f" | "--file"
+        ) {
+            if a != "-f" && a != "--file" {
+                dir = args.get(i + 1).copied();
+            }
+            i += 2;
+            continue;
+        }
+        if let Some(d) = ["--prefix=", "--dir=", "--cwd=", "--directory="]
+            .iter()
+            .find_map(|f| a.strip_prefix(f))
+        {
+            dir = Some(d);
+        } else if a == "--" {
+            break;
+        } else if !a.starts_with('-') {
+            pos.push(a);
+        }
+        i += 1;
+    }
+    let folder = match dir {
+        Some(d) => resolve(d, ctx)?,
+        None => ctx.cwd.clone(),
+    };
+    if !folder.is_absolute() {
+        return None;
+    }
+    let at = Ctx {
+        cwd: folder.clone(),
+        ..ctx.clone()
+    };
+    let body = match prog {
+        "npm" | "pnpm" | "yarn" | "bun" => {
+            const OWN: &[&str] = &[
+                "install",
+                "i",
+                "add",
+                "remove",
+                "rm",
+                "uninstall",
+                "up",
+                "update",
+                "upgrade",
+                "exec",
+                "dlx",
+                "x",
+                "init",
+                "create",
+                "info",
+                "why",
+                "list",
+                "ls",
+                "outdated",
+                "audit",
+                "link",
+                "unlink",
+                "pack",
+                "publish",
+                "config",
+                "cache",
+                "store",
+                "import",
+                "rebuild",
+                "prune",
+                "dedupe",
+                "setup",
+                "env",
+                "patch",
+                "root",
+                "bin",
+                "help",
+                "version",
+                "fetch",
+                "licenses",
+                "deploy",
+                "ci",
+                "login",
+                "logout",
+                "whoami",
+                "workspace",
+                "workspaces",
+            ];
+            let name = match pos.as_slice() {
+                ["run" | "run-script", name, ..] => *name,
+                [sub, ..] if prog == "npm" => match *sub {
+                    "start" | "test" | "stop" | "restart" => *sub,
+                    "t" => "test",
+                    _ => return None,
+                },
+                [sub, ..] if !OWN.contains(sub) => *sub,
+                _ => return None,
+            };
+            let text = std::fs::read_to_string(folder.join("package.json")).ok()?;
+            let json: Value = serde_json::from_str(&text).ok()?;
+            let scripts = json.get("scripts")?;
+            let get = |n: &str| scripts.get(n).and_then(Value::as_str).map(str::to_string);
+            get(name)?;
+            [
+                format!("pre{name}"),
+                name.to_string(),
+                format!("post{name}"),
+            ]
+            .iter()
+            .filter_map(|n| get(n))
+            .collect::<Vec<_>>()
+            .join("\n")
+        }
+        "make" | "gmake" => {
+            let text = ["GNUmakefile", "makefile", "Makefile"]
+                .iter()
+                .find_map(|f| std::fs::read_to_string(folder.join(f)).ok())?;
+            let rules = make_rules(&text);
+            let targets: Vec<&str> = pos.iter().copied().filter(|t| !t.contains('=')).collect();
+            let targets = if targets.is_empty() {
+                vec![rules.first()?.0.as_str()]
+            } else {
+                targets
+            };
+            let recipe = |t: &str| {
+                rules
+                    .iter()
+                    .find(|(n, _, _)| n == t)
+                    .map(|(_, _, r)| r.join("\n"))
+            };
+            let mut lines = Vec::new();
+            for t in targets {
+                let (_, prereqs, own) = rules.iter().find(|(n, _, _)| n == t)?;
+                lines.extend(prereqs.iter().filter_map(|p| recipe(p)));
+                lines.push(own.join("\n"));
+            }
+            lines.join("\n")
+        }
+        _ => return None,
+    };
+    Some((body, at))
+}
+
+/// A Makefile's rules, in order: target, prerequisites, recipe lines
+/// (without their `@`, `-` and `+`). Special targets (`.PHONY`) and
+/// variable assignments are left out.
+fn make_rules(text: &str) -> Vec<(String, Vec<String>, Vec<String>)> {
+    let mut rules: Vec<(String, Vec<String>, Vec<String>)> = Vec::new();
+    let mut current: Vec<usize> = Vec::new();
+    for line in text.lines() {
+        if let Some(recipe) = line.strip_prefix('\t') {
+            let r = recipe.trim_start_matches(['@', '-', '+', ' ']).to_string();
+            for &n in &current {
+                rules[n].2.push(r.clone());
+            }
+            continue;
+        }
+        if line.trim().is_empty() || line.trim_start().starts_with('#') {
+            continue;
+        }
+        current.clear();
+        let Some((names, prereqs)) = line.split_once(':') else {
+            continue;
+        };
+        if prereqs.starts_with('=') || names.contains('=') {
+            continue;
+        }
+        let prereqs: Vec<String> = prereqs
+            .split(';')
+            .next()
+            .unwrap_or("")
+            .split_whitespace()
+            .map(str::to_string)
+            .collect();
+        for name in names.split_whitespace().filter(|n| !n.starts_with('.')) {
+            current.push(rules.len());
+            rules.push((name.to_string(), prereqs.clone(), Vec::new()));
+        }
+    }
+    rules
 }
 
 /// Shell variables a line sets on their own (`D=~/p/.shots; rm -rf $D`),
@@ -1129,6 +1907,9 @@ struct Vars {
     /// whole (`D=/p$(cmd)` lexes as `D=/p`, and isn't).
     raw: String,
     set: std::collections::HashMap<String, Option<String>>,
+    /// Every value each name was given, in order (`None`: one it can't
+    /// read), so a name set twice is judged at each ([`Vars::variants`]).
+    seen: std::collections::HashMap<String, Vec<Option<String>>>,
 }
 
 impl Vars {
@@ -1136,6 +1917,7 @@ impl Vars {
         Vars {
             raw: raw.to_string(),
             set: Default::default(),
+            seen: Default::default(),
         }
     }
 
@@ -1143,6 +1925,12 @@ impl Vars {
     /// in one pair of quotes, then the end of the word. One that goes on
     /// (`D=/p$(cmd)`, which lexes as `D=/p`) means the value isn't known.
     fn written(&self, name: &str, value: &str) -> bool {
+        self.written_as(name, value, true)
+    }
+
+    /// [`Vars::written`] for one `name=` in the line rather than every one
+    /// (`every` false): this value was given to it somewhere, whole.
+    fn written_as(&self, name: &str, value: &str, every: bool) -> bool {
         let ends = |c: char| c.is_whitespace() || matches!(c, ';' | '&' | '|' | '(' | ')');
         let forms = [
             value.to_string(),
@@ -1161,42 +1949,98 @@ impl Vars {
                 rest.strip_prefix(f.as_str())
                     .is_some_and(|after| after.chars().next().is_none_or(ends))
             });
-            if !whole {
-                return false;
+            if whole != every {
+                return whole;
             }
         }
-        seen
+        seen && every
     }
 
-    /// Records a command made only of assignments; `false` for any other.
+    /// Records a command made only of assignments (`export`, `declare` and
+    /// the like in front count too); `false` for any other.
     fn assigns(&mut self, words: &[String]) -> bool {
+        let words = match words.first() {
+            Some(s) if SETTERS.contains(&s.as_str()) => {
+                let rest: Vec<String> = words[1..]
+                    .iter()
+                    .skip_while(|w| w.starts_with('-'))
+                    .cloned()
+                    .collect();
+                if rest.is_empty() {
+                    return false;
+                }
+                rest
+            }
+            _ => words.to_vec(),
+        };
         if words.is_empty() || !words.iter().all(|w| is_assignment(w)) {
             return false;
         }
-        for w in words {
+        for w in &words {
             let (name, value) = w.split_once('=').unwrap_or((w, ""));
             let written = self.written(name, value);
+            let once = self.written_as(name, value, false);
             let value = self.fill(value);
             let rest = value.replace("${HOME}", "").replace("$HOME", "");
-            let plain = written
-                && !value.is_empty()
+            let readable = !value.is_empty()
                 && !rest.contains('$')
                 && !value.contains('`')
                 && !value
                     .chars()
                     .any(|c| c.is_whitespace() || matches!(c, '*' | '?' | '[' | '{'));
+            let plain = written && readable;
             let entry = if self.set.contains_key(name) || !plain {
                 None
             } else {
-                Some(value)
+                Some(value.clone())
             };
             self.set.insert(name.to_string(), entry);
+            self.seen
+                .entry(name.to_string())
+                .or_default()
+                .push((once && readable).then_some(value));
         }
         true
     }
 
     /// `$NAME` and `${NAME}` replaced where the line set them plainly.
     fn fill(&self, word: &str) -> String {
+        self.fill_with(word, None)
+    }
+
+    /// The command at each value its names may hold: one set more than once
+    /// is filled with each plain value it was given in turn (and left as
+    /// written as well when one of them can't be read). Always at least
+    /// [`Vars::expand`]; at most eight.
+    fn variants(&self, words: &[String]) -> Vec<Vec<String>> {
+        let mut out = vec![self.expand(words)];
+        for (name, values) in &self.seen {
+            if values.len() < 2 && values.iter().all(Option::is_some) {
+                continue;
+            }
+            let used = words
+                .iter()
+                .any(|w| w.contains(&format!("${name}")) || w.contains(&format!("${{{name}}}")));
+            if !used {
+                continue;
+            }
+            for v in values.iter().flatten() {
+                if out.len() >= 8 {
+                    return out;
+                }
+                out.push(
+                    words
+                        .iter()
+                        .map(|w| self.fill_with(w, Some((name, v))))
+                        .collect(),
+                );
+            }
+        }
+        out
+    }
+
+    /// [`Vars::fill`], with `name` taken to hold `value` this once.
+    fn fill_with(&self, word: &str, pick: Option<(&str, &str)>) -> String {
         if !word.contains('$') {
             return word.to_string();
         }
@@ -1214,7 +2058,11 @@ impl Vars {
                 }
                 let closed = !braced || chars.get(end) == Some(&'}');
                 let name: String = chars[start..end].iter().collect();
-                if let (true, Some(Some(v))) = (closed && end > start, self.set.get(&name)) {
+                let value = match pick {
+                    Some((n, v)) if n == name => Some(v),
+                    _ => self.set.get(&name).and_then(|v| v.as_deref()),
+                };
+                if let (true, Some(v)) = (closed && end > start, value) {
                     out.push_str(v);
                     i = end + usize::from(braced);
                     continue;
@@ -1314,6 +2162,42 @@ fn resolve_known(raw: &str, ctx: &Ctx, known: bool) -> Option<PathBuf> {
     (known || is_abs(raw)).then(|| resolve(raw, ctx)).flatten()
 }
 
+/// Writing `raw` asks: [`protected`] where it surely points, [`guarded`]
+/// where a relative path only probably does (the folder the line moved to,
+/// or the turn's). Found in review (2026-11-08): `cd .. && echo x >>
+/// a2/CLAUDE.md` from an agent's home wrote another agent's instructions,
+/// while the absolute path asked.
+fn write_guarded(raw: &str, ctx: &Ctx, known: bool, outside: bool) -> bool {
+    match resolve_known(raw, ctx, known) {
+        Some(p) => protected(&p, ctx, outside),
+        None => guessed(raw, ctx, true).is_some_and(|p| guarded(&p, ctx, outside)),
+    }
+}
+
+/// A relative path resolved against the folder the line is in, when that
+/// is a folder at all (a `cd` it couldn't follow leaves none) and the guess
+/// lands somewhere real: the file, or (`for_write`) the folder it would go
+/// in. The engine's shell keeps its folder between calls, so a guess that
+/// names nothing there was made from the wrong folder: observed, `cp
+/// ../site-marketing/.env.local .` from a project the shell had moved to.
+fn guessed(raw: &str, ctx: &Ctx, for_write: bool) -> Option<PathBuf> {
+    let p = ctx.cwd.is_absolute().then(|| resolve(raw, ctx)).flatten()?;
+    let there = if for_write {
+        p.parent().is_some_and(Path::is_dir)
+    } else {
+        p.exists()
+    };
+    there.then_some(p)
+}
+
+/// Reading `raw` asks ([`secret_to_read`]), wherever it surely or probably
+/// points.
+fn read_guarded(raw: &str, ctx: &Ctx, known: bool) -> bool {
+    resolve_known(raw, ctx, known)
+        .or_else(|| guessed(raw, ctx, false))
+        .is_some_and(|p| secret_to_read(&p, ctx))
+}
+
 fn simple_asks(words: &[String], ctx: &Ctx, outside: bool, known: bool) -> bool {
     let planned = plan_covers(words);
     let mut words: Vec<&str> = words.iter().map(String::as_str).collect();
@@ -1337,7 +2221,7 @@ fn simple_asks(words: &[String], ctx: &Ctx, outside: bool, known: bool) -> bool 
     }
     if targets
         .iter()
-        .any(|t| resolve_known(t, ctx, known).is_some_and(|p| protected(&p, ctx, outside)))
+        .any(|t| write_guarded(t, ctx, known, outside))
     {
         return true;
     }
@@ -1355,7 +2239,7 @@ fn simple_asks(words: &[String], ctx: &Ctx, outside: bool, known: bool) -> bool 
         && args
             .iter()
             .filter(|a| !a.starts_with('-'))
-            .any(|a| resolve_known(a, ctx, known).is_some_and(|p| secret_to_read(&p, ctx)))
+            .any(|a| read_guarded(a, ctx, known))
     {
         return true;
     }
@@ -1366,11 +2250,88 @@ fn simple_asks(words: &[String], ctx: &Ctx, outside: bool, known: bool) -> bool 
     if base(prog) == "find" {
         return find_asks(args, ctx, outside, known);
     }
+    // `ssh host git push`: the words after the host are a command for the
+    // shell over there, judged like `ssh host "git push"` is.
+    if base(prog) == "ssh" {
+        let remote = ssh_command(args);
+        let quoted_one = remote.len() == 1 && remote[0].contains(char::is_whitespace);
+        if !remote.is_empty() && !quoted_one && simple_asks(&remote, ctx, outside, false) {
+            return true;
+        }
+    }
     // In the plan the user allowed (`plan_grant` never covers the floor).
     if planned {
         return false;
     }
+    if unknown_program(prog) {
+        return unknown_asks(args, ctx, outside, known);
+    }
     program(base(prog), args, ctx, outside, known)
+}
+
+/// A program word that can't be read: a variable the line didn't set (or
+/// set to something it can't read), or a command substitution
+/// ([`UNKNOWN`]). `$HOME/bin/x` is a path.
+fn unknown_program(prog: &str) -> bool {
+    let rest = prog.replace("${HOME}", "").replace("$HOME", "");
+    rest.contains('$') || rest.contains('`')
+}
+
+/// Programs an unreadable program word is tried as.
+const UNKNOWN_AS: &[&str] = &[
+    "git", "gh", "npm", "rm", "curl", "netlify", "fly", "firebase", "wrangler", "stripe",
+];
+
+/// An unreadable program (`$X push origin main`, `$(cat p) publish`) asks
+/// when its arguments would ask for one of the programs on the ask list
+/// that takes arguments like those: `git push`, `gh pr create`, `npm
+/// publish`, `rm -rf ~`, a `curl` write, a deploy. Whatever else it is
+/// runs, as unreadable programs did: `$PY render.py`, `$(npm bin)/eslint .`.
+/// The program a substitution only echoes or looks up is read as that
+/// program ([`substitution_words`]), and one the line set is filled in
+/// ([`Vars`]). At "Full send" each is judged by its own Full send rule.
+fn unknown_asks(args: &[&str], ctx: &Ctx, outside: bool, known: bool) -> bool {
+    const DEPLOYS: &[&str] = &[
+        "deploy",
+        "--prod",
+        "--production",
+        "promote",
+        "alias",
+        "rollback",
+        "redeploy",
+    ];
+    UNKNOWN_AS
+        .iter()
+        .any(|p| program(p, args, ctx, outside, known))
+        || (has(args, DEPLOYS) && program("vercel", args, ctx, outside, known))
+}
+
+/// The command `ssh` runs on the other host: the words after its host.
+fn ssh_command(args: &[&str]) -> Vec<String> {
+    const TAKES: &[&str] = &[
+        "-B", "-b", "-c", "-D", "-E", "-e", "-F", "-I", "-i", "-J", "-L", "-l", "-m", "-O", "-o",
+        "-p", "-Q", "-R", "-S", "-W", "-w",
+    ];
+    let mut i = 0;
+    while i < args.len() {
+        let a = args[i];
+        if a == "--" {
+            i += 1;
+            break;
+        }
+        if TAKES.contains(&a) {
+            i += 2;
+        } else if a.starts_with('-') {
+            i += 1;
+        } else {
+            break;
+        }
+    }
+    args.get(i + 1..)
+        .unwrap_or(&[])
+        .iter()
+        .map(|a| a.to_string())
+        .collect()
 }
 
 /// `find`: each `-exec` / `-execdir` / `-ok` / `-okdir` command is judged as
@@ -2002,21 +2963,22 @@ fn program(prog: &str, args: &[&str], ctx: &Ctx, outside: bool, known: bool) -> 
         && edits_in_place
         && targets
             .iter()
-            .any(|a| resolve_known(a, ctx, known).is_some_and(|p| protected(&p, ctx, outside)))
+            .any(|a| write_guarded(a, ctx, known, outside))
     {
         // Copying *from* the Mac's own files into the home is fine; only a
         // protected destination or a credential source asks.
         let dest_or_secret = targets.iter().enumerate().any(|(n, a)| {
-            resolve_known(a, ctx, known).is_some_and(|p| {
-                secret_to_read(&p, ctx)
-                    || (protected(&p, ctx, outside)
-                        && (n + 1 == targets.len()
-                            || !matches!(prog, "cp" | "rsync" | "ditto" | "ln" | "install")))
-            })
+            read_guarded(a, ctx, known)
+                || (write_guarded(a, ctx, known, outside)
+                    && (n + 1 == targets.len()
+                        || !matches!(prog, "cp" | "rsync" | "ditto" | "ln" | "install")))
         });
         if dest_or_secret {
             return true;
         }
+    }
+    if moves_away(prog, args, ctx) {
+        return true;
     }
     if ctx.full_send {
         if let Some(asks) = full_send_program(prog, args, ctx) {
@@ -2244,6 +3206,70 @@ fn runner_runs<'a>(prog: &str, args: &[&'a str]) -> Option<(&'a str, Vec<&'a str
     Some((p, a.to_vec()))
 }
 
+/// The folders a person keeps their own things in, below the home.
+const USER_FOLDERS: &[&str] = &[
+    "Documents",
+    "Desktop",
+    "Downloads",
+    "Pictures",
+    "Movies",
+    "Music",
+    "Library",
+    "Public",
+    "Applications",
+];
+
+/// `p` is the home, a folder above it, or one of [`USER_FOLDERS`] itself.
+fn users_folder(p: &Path, ctx: &Ctx) -> bool {
+    ctx.home.starts_with(p) || USER_FOLDERS.iter().any(|f| p == ctx.home.join(f))
+}
+
+/// The folder a path names before any glob (`~/Downloads/*` is Downloads).
+fn before_glob(raw: &str, ctx: &Ctx) -> Option<PathBuf> {
+    let prefix = raw.split(['*', '?', '[']).next().unwrap_or("");
+    resolve(if prefix.is_empty() { "." } else { prefix }, ctx)
+}
+
+/// Moving data away as good as deletes it, like `rm -r`: `mv` or `trash`
+/// of the home, a folder above it or one of the user's own folders
+/// (Documents, Desktop, Downloads…), or everything in one; `rsync` with
+/// `--delete` into a folder `rm -r` would ask for, or with
+/// `--remove-source-files` from one. Moving a file out of Downloads, or a
+/// project's folders around, runs. Found in review (2026-11-08): `mv
+/// ~/Documents /tmp/x` ran at Full send while `rm -rf ~/Documents` asked.
+fn moves_away(prog: &str, args: &[&str], ctx: &Ctx) -> bool {
+    let pos = positional(args);
+    match prog {
+        "mv" | "trash" => {
+            let sources = if prog == "mv" {
+                &pos[..pos.len().saturating_sub(1)]
+            } else {
+                &pos[..]
+            };
+            sources
+                .iter()
+                .any(|a| before_glob(a, ctx).is_some_and(|p| users_folder(&p, ctx)))
+        }
+        "rsync" => {
+            let local = |a: &&str| {
+                !a.starts_with("rsync://")
+                    && !a
+                        .split_once(':')
+                        .is_some_and(|(host, _)| !host.is_empty() && !host.contains('/'))
+            };
+            let not_deletable =
+                |a: &&str| local(a) && before_glob(a, ctx).is_none_or(|p| !deletable(&p, ctx));
+            let deletes = args
+                .iter()
+                .any(|a| *a == "--del" || a.starts_with("--delete"));
+            let removes = args.contains(&"--remove-source-files");
+            (deletes && pos.last().is_some_and(not_deletable))
+                || (removes && pos[..pos.len().saturating_sub(1)].iter().any(not_deletable))
+        }
+        _ => false,
+    }
+}
+
 fn installs_package(_prog: &str, args: &[&str]) -> bool {
     let pos = positional(args);
     let Some((sub, rest)) = pos.split_first() else {
@@ -2426,7 +3452,24 @@ fn all_local(args: &[&str]) -> bool {
         && urls.iter().all(|a| named.contains(a) || !a.contains("://"))
 }
 
+/// `curl -K file` / `--config file`: the request (address, method, body,
+/// headers) is in a file the line doesn't show.
+fn curl_config(args: &[&str]) -> bool {
+    args.iter().any(|a| {
+        a.starts_with("--config")
+            || (a.starts_with('-')
+                && !a.starts_with("--")
+                && a[1..]
+                    .chars()
+                    .take_while(|c| !"oHuAebcxmXrCEUYyzwdFT".contains(*c))
+                    .any(|c| c == 'K'))
+    })
+}
+
 fn curl(args: &[&str], outside: bool) -> bool {
+    if curl_config(args) {
+        return true;
+    }
     let mut write = false;
     // A method named outright (`-X POST`), a file or form going up, `-G`
     // (the data goes in the address: a read), and the inline bodies.
@@ -2673,7 +3716,8 @@ fn full_send_program(prog: &str, args: &[&str], ctx: &Ctx) -> Option<bool> {
                 full_send: false,
                 ..ctx.clone()
             };
-            program(prog, args, &go_hard, false, true) && args.iter().any(|a| pay_api(a))
+            (program(prog, args, &go_hard, false, true) && args.iter().any(|a| pay_api(a)))
+                || (prog == "curl" && curl_config(args))
         }
         "vercel" => {
             let pos = positional(args);
@@ -3462,3 +4506,7 @@ mod review_tests;
 #[cfg(test)]
 #[path = "go_hard_words_tests.rs"]
 mod words_tests;
+
+#[cfg(test)]
+#[path = "go_hard_gaps_tests.rs"]
+mod gaps_tests;

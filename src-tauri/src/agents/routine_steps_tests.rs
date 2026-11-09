@@ -202,3 +202,68 @@ fn routine_names_are_short() {
     assert_eq!(routine_name("Weekly report"), "Weekly report");
     assert!(routine_name(&"z".repeat(80)).ends_with('…'));
 }
+
+/// Go ahead on a card and the routine's next run closing that card race
+/// for the same waiting run: exactly one of them takes it, and a Go ahead
+/// that lost (a stale card) starts nothing.
+#[test]
+fn go_ahead_and_the_next_run_never_both_take_the_waiting_run() {
+    use std::sync::{Arc, Barrier};
+    let _serial = store::tests_lock();
+    let dir = tempfile::tempdir().unwrap();
+    store::set_root_for_tests(Some(dir.path().to_path_buf()));
+    let setup = |name: &str| {
+        let agent = store::create(store::NewAgent {
+            name: name.into(),
+            role: String::new(),
+            instructions: String::new(),
+            shape: None,
+            avatar: None,
+            color: None,
+            is_main: false,
+        })
+        .unwrap();
+        let mut c = routine(post());
+        let a = card(&c, 1, "draft", 7);
+        c.waiting = Some(Waiting {
+            run_at: 7,
+            step: 2,
+            request_id: a.request_id.clone(),
+            asked_at: 8,
+        });
+        store::update(&agent.id, |x| x.check_ins = vec![c]).unwrap();
+        (agent.id, a)
+    };
+    for round in 0..40 {
+        let (id, a) = setup(&format!("Reporter {round}"));
+        let gate = Arc::new(Barrier::new(2));
+        let go = {
+            let (gate, id, a) = (gate.clone(), id.clone(), a.clone());
+            std::thread::spawn(move || {
+                gate.wait();
+                matches!(settle(&id, &a, true), Ok(Answer::Go(..)))
+            })
+        };
+        let next_run = {
+            let (gate, id) = (gate.clone(), id.clone());
+            std::thread::spawn(move || {
+                gate.wait();
+                close_waiting(&id, "r1").is_some()
+            })
+        };
+        let (went, closed) = (go.join().unwrap(), next_run.join().unwrap());
+        assert!(went ^ closed, "round {round}: went {went}, closed {closed}");
+        assert!(store::get(&id).unwrap().check_ins[0].waiting.is_none());
+        // Whoever lost, a second Go ahead on the same card starts nothing.
+        assert!(settle(&id, &a, true).is_err());
+    }
+    // The next run first: the stale card's Go ahead is refused.
+    let (id, a) = setup("Late reader");
+    assert!(close_waiting(&id, "r1").is_some());
+    let err = settle(&id, &a, true).unwrap_err();
+    assert!(err.to_string().contains("moved on"), "{err}");
+    let runs = &store::get(&id).unwrap().check_ins[0].runs;
+    assert_eq!(runs.len(), 1);
+    assert_eq!(runs[0].outcome, runs::Outcome::Declined);
+    store::set_root_for_tests(None);
+}
