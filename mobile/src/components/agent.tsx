@@ -7,6 +7,7 @@
 
 import {
   AVATAR_MOTION,
+  blinks,
   DEBOSS_DEPTH,
   FACE_SPECS,
   KEY,
@@ -31,6 +32,7 @@ import {
   type FaceKey,
   type ValueKey,
 } from '@shipstudio/companion-protocol';
+import { useEyeBlink } from '../lib/avatarBlink';
 import { useEffect, useId, useMemo, useState, type ReactNode } from 'react';
 import { StyleSheet, View } from 'react-native';
 import Svg, {
@@ -158,6 +160,11 @@ export function AgentAvatar({
   const moving = useMoving(still);
   const mood = useMood(givenMood ?? (working ? 'working' : 'idle'));
   const motion = useMotion(moving ? mood : null, size, cap, lit, id);
+  // Blinking: the eyes on a layer of their own, squashed about their line.
+  const blinking = !still && blinks(look.face, size);
+  const eyeCy = FACE_SPECS[look.face].eyes[0].cy;
+  const eyeY = ((cap ? KEY.top.y + (eyeCy - 16) * KEY.top.scale : eyeCy) * size) / 32;
+  const blink = useEyeBlink(blinking && moving, size, eyeY);
   return (
     <View
       style={{ width: size, height: size }}
@@ -216,9 +223,34 @@ export function AgentAvatar({
         <Animated.View style={[StyleSheet.absoluteFill, motion.face]}>
           <Layer size={size}>
             <G transform={top}>
-              <Face look={look} name={name} px={size} paint={paint} ink={ink} selected={selected} />
+              <Face
+                look={look}
+                name={name}
+                px={size}
+                paint={paint}
+                ink={ink}
+                selected={selected}
+                part={blinking ? 'rest' : 'all'}
+              />
             </G>
           </Layer>
+          {blinking && (
+            <Animated.View style={[StyleSheet.absoluteFill, blink]} testID="agent-eyes">
+              <Layer size={size}>
+                <G transform={top}>
+                  <Face
+                    look={look}
+                    name={name}
+                    px={size}
+                    paint={paint}
+                    ink={ink}
+                    selected={selected}
+                    part="eyes"
+                  />
+                </G>
+              </Layer>
+            </Animated.View>
+          )}
         </Animated.View>
       </Animated.View>
     </View>
@@ -286,6 +318,7 @@ export function Face({
   paint,
   ink,
   selected,
+  part = 'all',
 }: {
   look: Required<AgentLook>;
   name: string;
@@ -293,6 +326,8 @@ export function Face({
   paint: AvatarPaint;
   ink: string;
   selected: boolean;
+  /** The eyes alone, everything but them, or all: the eyes blink on their own layer. */
+  part?: 'all' | 'eyes' | 'rest';
 }) {
   const spec = FACE_SPECS[look.face];
   const pressed = isPressed(look.face, px, selected);
@@ -300,6 +335,7 @@ export function Face({
   const lip = alpha(keyLight.light, paint.lip);
   const d = pressed ? DEBOSS_DEPTH : 0;
   if (spec.monogram) {
+    if (part === 'eyes') return null;
     const letter = monogramLetter(name);
     const text = (c: string, dy: number) => (
       <SvgText
@@ -336,14 +372,15 @@ export function Face({
   );
   return (
     <>
-      {eyes.map((e) => (
-        <G key={e.cx}>
-          {d > 0 && <Ellipse cx={e.cx} cy={e.cy + d} rx={e.rx} ry={e.ry} fill={lip} />}
-          <Ellipse cx={e.cx} cy={e.cy} rx={e.rx} ry={e.ry} fill={fill} />
-        </G>
-      ))}
-      {mouth && d > 0 && stroke(mouth, lip, d)}
-      {mouth && stroke(mouth, fill, 0)}
+      {part !== 'rest' &&
+        eyes.map((e) => (
+          <G key={e.cx}>
+            {d > 0 && <Ellipse cx={e.cx} cy={e.cy + d} rx={e.rx} ry={e.ry} fill={lip} />}
+            <Ellipse cx={e.cx} cy={e.cy} rx={e.rx} ry={e.ry} fill={fill} />
+          </G>
+        ))}
+      {part !== 'eyes' && mouth && d > 0 && stroke(mouth, lip, d)}
+      {part !== 'eyes' && mouth && stroke(mouth, fill, 0)}
     </>
   );
 }

@@ -15,17 +15,24 @@ const mockRepeat = jest.fn((to: number) => to);
 jest.mock('react-native-reanimated', () =>
   require('./reanimatedStub').reanimated({
     withRepeat: (anim: number) => mockRepeat(anim),
-    Easing: { linear: (t: number) => t },
+    Easing: { linear: (t: number) => t, inOut: () => (t: number) => t, quad: (t: number) => t },
+    withDelay: (_: number, a: unknown) => a,
+    withSequence: (...s: unknown[]) => s,
   })
 );
+// The blink has its own test (avatarBlink.test.tsx); here only the press runs.
+jest.mock('../src/lib/avatarBlink', () => ({ useEyeBlink: () => ({}) }));
 jest.mock('../src/lib/moving', () => ({ useMoving: (still: boolean) => mockMoving(still) }));
 jest.mock('../src/components/agent', () => {
   const { View } = jest.requireActual<typeof import('react-native')>('react-native');
   return {
     useLook: () => ({ shape: 'hexagon', face: 'smile', finish: 'embossed' }),
     RimFilter: () => null,
-    Face: (p: { px: number; selected: boolean; look: { face: string } }) => (
-      <View testID="face" accessibilityLabel={`${p.look.face}:${p.px}:${p.selected}`} />
+    Face: (p: { px: number; selected: boolean; part?: string; look: { face: string } }) => (
+      <View
+        testID={p.part === 'eyes' ? 'eyes' : 'face'}
+        accessibilityLabel={`${p.look.face}:${p.px}:${p.selected}`}
+      />
     ),
   };
 });

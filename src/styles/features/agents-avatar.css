@@ -9,12 +9,14 @@
  * Motion is a small state language and nothing else: the face moves within
  * the key's top (in grid units: a CSS transform on an SVG group is in its
  * user units, so it scales with the avatar), the top presses, and while it
- * works a faint extra rim light breathes. Never a ring, never a blink.
+ * works a faint extra rim light breathes. Now and then the eyes blink (a
+ * timer sets data-blinking, avatarBlink.ts). Never a ring.
  */
 
 :root {
   --agents-avatar-idle: calc(var(--duration-loader-standard) * 40 / 3); /* 16s */
   --agents-avatar-look: calc(var(--duration-loader-standard) * 4); /* 4.8s */
+  --agents-avatar-blink: calc(var(--duration-loader-fast) * 7 / 45); /* 140ms */
   --agents-avatar-needs: calc(var(--duration-loader-fast) * 7 / 15); /* 420ms */
   --agents-avatar-done: calc(var(--duration-loader-fast) * 28 / 45); /* 560ms */
   --agents-avatar-failed: calc(var(--duration-loader-fast) * 7 / 9); /* 700ms */
@@ -164,6 +166,18 @@
   animation: agents-avatar-fail var(--agents-avatar-failed) ease-out forwards;
 }
 
+/* Blink: each eye squashes about its own centre and reopens. A timer sets
+   data-blinking for BLINK.closeMs + openMs (140ms), closed at 43% of it. */
+.agent-avatar__eye {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.agent-avatar[data-blinking] .agent-avatar__eye,
+.agent-key[data-blinking] .agent-avatar__eye {
+  animation: agents-avatar-blink var(--agents-avatar-blink) ease-in-out;
+}
+
 /* Off-screen, or the window hidden: hold still where it is. */
 .agent-avatar[data-offscreen] *,
 :root[data-avatars-hidden] .agent-avatar * {
@@ -236,6 +250,20 @@
   }
 }
 
+@keyframes agents-avatar-blink {
+  0% {
+    transform: scaleY(1);
+  }
+
+  43% {
+    transform: scaleY(0.08);
+  }
+
+  100% {
+    transform: scaleY(1);
+  }
+}
+
 @keyframes agents-avatar-glow {
   0% {
     opacity: 0;
@@ -303,7 +331,8 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .agent-avatar * {
+  .agent-avatar *,
+  .agent-key .agent-avatar__eye {
     animation: none !important;
   }
 }
