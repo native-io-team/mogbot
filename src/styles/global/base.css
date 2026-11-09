@@ -424,6 +424,40 @@ code,
   box-shadow: var(--button-strong-shadow-pressed);
 }
 
+/* Inside an agent whose colour is a status hue (red = failed, green = done,
+   amber and orange = needs you), the primary key is the neutral one: a red
+   Save read as danger, a green one as success. The accent still marks
+   selection and "on" there; only the button gives it up. */
+:is(
+    [data-accent-scope='red'],
+    [data-accent-scope='green'],
+    [data-accent-scope='amber'],
+    [data-accent-scope='orange']
+  )
+  .button--primary {
+  background: var(--button-strong-surface);
+  color: var(--button-strong-text);
+  box-shadow: var(--button-strong-shadow);
+}
+:is(
+    [data-accent-scope='red'],
+    [data-accent-scope='green'],
+    [data-accent-scope='amber'],
+    [data-accent-scope='orange']
+  )
+  .button--primary:hover:not(:disabled) {
+  background: var(--button-strong-surface-hover);
+}
+:is(
+    [data-accent-scope='red'],
+    [data-accent-scope='green'],
+    [data-accent-scope='amber'],
+    [data-accent-scope='orange']
+  )
+  .button--primary:active:not(:disabled) {
+  box-shadow: var(--button-strong-shadow-pressed);
+}
+
 /* A key that can't be pressed sits flat on the desk: no side, no drop. */
 .button--primary:disabled,
 .button--strong:disabled {

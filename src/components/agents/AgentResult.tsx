@@ -41,6 +41,7 @@ import { useImageViewer } from './AgentGallery';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { readResultCard } from '../../lib/cardShapes';
+import { repeatsName } from '../../lib/resultItems';
 import {
   CHECKED_HEADING,
   CHECKPOINT_LABEL,
@@ -133,7 +134,7 @@ function ItemRow({
         </span>
         <span className="agent-result__item-text">
           <span className="agent-result__item-name">{name}</span>
-          {meta !== name && <span className="agent-result__item-meta">{meta}</span>}
+          {!repeatsName(meta, name) && <span className="agent-result__item-meta">{meta}</span>}
         </span>
         <span className="agent-result__open-word">
           Open
@@ -163,19 +164,8 @@ function ResultBody({ agent, card }: ResultBodyProps) {
     <>
       {changes && <p className="agent-result__changes">{changes}</p>}
       {card.summary && <p className="agent-result__summary">{card.summary}</p>}
-      {notVerified.length > 0 && (
-        <div className="agent-result__unverified" role="group" aria-label="Not verified">
-          <h4 className="agent-result__unverified-title">
-            <HelpIcon size={14} />
-            Not verified
-          </h4>
-          <ul>
-            {notVerified.map((line, i) => (
-              <li key={`${i}:${line}`}>{line}</li>
-            ))}
-          </ul>
-        </div>
-      )}
+      {/* The work first; what it checked and what it didn't come after it,
+          together, so the caveats are read beside the claims they qualify. */}
       <ResultCompare agent={agent} pages={pages} onView={setViewing} />
       {items.length > 0 && (
         <ul className="agent-result__items" aria-label="What it made">
@@ -190,16 +180,33 @@ function ResultBody({ agent, card }: ResultBodyProps) {
         </ul>
       )}
       {card.test && <TestReportView agent={agent} report={card.test} />}
-      {checked.length > 0 && (
-        // The agent's claims, not the app's findings: attributed, and a plain
-        // bullet rather than a tick that would read as verified.
-        <div className="agent-result__checked" role="group" aria-label={CHECKED_HEADING}>
-          <h4 className="agent-result__checked-title">{CHECKED_HEADING}</h4>
-          <ul>
-            {checked.map((line, i) => (
-              <li key={`${i}:${line}`}>{line}</li>
-            ))}
-          </ul>
+      {(checked.length > 0 || notVerified.length > 0) && (
+        <div className="agent-result__checks">
+          {checked.length > 0 && (
+            // The agent's claims, not the app's findings: attributed, and a plain
+            // bullet rather than a tick that would read as verified.
+            <div className="agent-result__checked" role="group" aria-label={CHECKED_HEADING}>
+              <h4 className="agent-result__checked-title">{CHECKED_HEADING}</h4>
+              <ul>
+                {checked.map((line, i) => (
+                  <li key={`${i}:${line}`}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          {notVerified.length > 0 && (
+            <div className="agent-result__unverified" role="group" aria-label="Not verified">
+              <h4 className="agent-result__unverified-title">
+                <HelpIcon size={14} />
+                Not verified
+              </h4>
+              <ul>
+                {notVerified.map((line, i) => (
+                  <li key={`${i}:${line}`}>{line}</li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
       )}
       {viewer}

@@ -57,6 +57,8 @@ function open(engines: EngineInfo[], onSetUpEngine = vi.fn()) {
       <AgentEditorModal isOpen onClose={vi.fn()} onSaved={vi.fn()} onSetUpEngine={onSetUpEngine} />
     </ModalProvider>
   );
+  // New agent opens on describing; these tests are about the form under it.
+  fireEvent.click(screen.getByRole('button', { name: 'fill it in yourself' }));
   fireEvent.change(screen.getByLabelText('Agent name'), { target: { value: 'Finance' } });
   return { created, onSetUpEngine };
 }

@@ -1122,6 +1122,24 @@ The **header is identity only** (badge, name, role, project chip). What an
 agent is doing is said once in its sidebar row and once in the conversation
 (a bar or the working line) — never a third time up there.
 
+### Needs you: one place per surface
+
+One pending request is said once per surface, by one signal that means one
+thing:
+
+| Surface | Where "needs you" shows | Not also |
+| --- | --- | --- |
+| Sidebar | The bell beside the sidebar toggle counts it (`InFlightBell`, the amber pill wash; it opens What's in flight). Each waiting agent's row says it once, in its **Needs your OK** pill | No "Needs your OK · N" row in the list; no amber dot at the row's right |
+| Open chat | The card itself in its own chat; in any other chat the requests bar above the composer | Not in the header |
+| What's in flight | Its row under Needs you, with the cards answerable in place | |
+
+The sidebar's right-hand column has one meaning: **unread** (the dot), with
+the working spinner as its only other mark. A row's state (waiting on you,
+didn't finish) is in its pill, never also a dot beside it. On the collapsed
+rail, where pills aren't shown, the state dot rides on the agent's badge
+instead. The row is name + one status line; its role is in the chat header
+and the row's tooltip, never cut to a few letters beside the name.
+
 Another agent's request shows in a chat one way: the requests bar above the
 composer ("Lead Gen needs your OK", "16 agents need your OK"), whose Review
 panel opens the same cards in place. A session's question reaches every chat
@@ -3002,10 +3020,15 @@ Esc in an empty composer stops a working agent only when pressed twice within
 reflexive Esc never drops a turn. ⌘K also lists "Stop <agent>" for every agent
 that isn't idle (with a confirm), Allow / Deny for the oldest card waiting on
 you, "Next agent that needs you" (⌘J: a card, or a turn that didn't finish;
-the Needs you row's tooltip says ⌘J too), and the open agent's own actions,
+the sidebar bell's tooltip says ⌘J too), and the open agent's own actions,
 everything in its … menu by name: Edit, Pin / Unpin, Mute / Unmute, Hide /
 Show, Mark as unread, Start fresh, Open <agent>'s project (when it works in
-one) and Delete (with the same confirm). The stop control is a square glyph,
+one) and Delete (with the same confirm). The … menu holds actions only, in
+short groups with Delete last on its own; the agent's model, effort, account
+and routines model are settings, in the header's **Model** menu (and Edit
+agent → Advanced). Every portalled menu stays inside the window: it opens on
+the side with room and scrolls inside rather than running off the edge
+(`fitMenu` in `primitives/Dropdown.tsx`). The stop control is a square glyph,
 "Stop (Esc twice)".
 
 **Activity, in words** (`plainActivity`). The engine's activity line
@@ -3142,7 +3165,7 @@ The backend decides, since it knows when a message is recorded and when a turn e
 - A reply or error off screen notifies with the agent's name and the first line. Inside a turn they are held and posted once when it ends, with the latest text. An approval posts at once, with a sound.
 - Bursts across agents are capped (3 per 20s); the rest stay silent but still count.
 - **Mute** (row context menu) stops OS notifications for that agent; a bell-off mark shows in its row. Unread and the badge still count it.
-- **Dock badge** = how many agents need you, the one count every surface shows: the sidebar's "Needs your OK · N", the review bar in the Chief's chat, the phone's Home bar, tab badge and icon badge (`needsYouCount`, `packages/companion-protocol/src/attention.ts`; Rust mirrors it in `notify::needs_you`, and both run `attention-cases.json`). The Chief counts like anyone; unread replies and usage limits don't. The mode toggle's badge is on whenever any non-hidden agent is waiting or unread. Approval cards don't add to unread; they count as pending until answered.
+- **Dock badge** = how many agents need you, the one count every surface shows: the sidebar bell's count, the review bar in the Chief's chat, the phone's Home bar, tab badge and icon badge (`needsYouCount`, `packages/companion-protocol/src/attention.ts`; Rust mirrors it in `notify::needs_you`, and both run `attention-cases.json`). The Chief counts like anyone; unread replies and usage limits don't. The mode toggle's badge is on whenever any non-hidden agent is waiting or unread. Approval cards don't add to unread; they count as pending until answered.
 - Clicking a notification focuses a window and emits `agents://open`; the app switches to Agents and opens that agent. Focusing a window clears the unread of the agent it shows.
 - Uses `tauri-plugin-notification` (2.8, click reporting on macOS). Not verified in a real build yet: the dev binary posts under another app's identity, so click-through should be checked in a signed build.
 
@@ -3470,7 +3493,7 @@ chats.
   greeted, gaps, steps done/skipped). Everything else is read from the store
   each time, so a login saved in an agent's own chat ticks it off here. Its
   logins are left out of the requests bar's counts, What's in flight's
-  Needs your OK, the sidebar's rows and its "Needs your OK · N" row
+  Needs your OK, the sidebar's rows and its bell's count
   (`withoutHeldLogins`), and the dock and phone push badges
   (`team_setup::hold`, which also holds the agents not met yet): the checklist holds them, so an import of
   sixteen agents isn't sixteen amber rows. The import's line in the Chief's
@@ -5271,8 +5294,8 @@ cards.
   recipient does it with `message_agent`. The bubble tints each recorded
   `@Name` in that agent's colour. A name typed without the menu still counts
   if it matches an agent exactly.
-- **What's in flight** (⌘K, id `agents.team`, or the "Needs you · N" row at
-  the top of the agent list while anything waits on you) shows,
+- **What's in flight** (⌘K, id `agents.team`, or the bell beside the sidebar
+  toggle, which counts what waits on you) shows,
   in a fixed order and present even when empty: who needs you (with their
   pending approval cards, answerable in place, and turns that didn't finish,
   with Retry or Sign in), who is paused by a usage limit (only when someone
@@ -5549,7 +5572,11 @@ chat.
   with an honest error (`files::is_secret_file`), here and for `share_file`.
   Links are http/https with no sign-in details in them. `checked`
   and `not_verified` are the agent's own words; the app never fills either,
-  and shows each only when given.
+  and shows each only when given. On the desk the card reads work first:
+  summary, before/after, files and links, then one Checks row with "It says
+  it checked" and "Not verified" side by side (stacked when narrow), all at
+  the chat's reading size. A link's subtitle is left out when it only repeats
+  the title's host (`lib/resultItems.ts`).
 - **Refused, never trimmed.** Title 120, summary 2,000, each line 300, 12
   lines per list, 12 items (files also ≤ 10, 25 MB each). Cutting a "not
   verified" list would hide exactly what matters, so too much is an error the

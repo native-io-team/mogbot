@@ -501,6 +501,26 @@
     0 var(--space-02) var(--space-04) var(--color-black-o08);
 }
 
+/* Switches (settings.css .settings-toggle). Off is a light knob on a grey
+   track, as on macOS: a dark knob on a pale track read as on. On is the
+   accent track with the knob in its ink. */
+:root {
+  --switch-off-track: var(--color-gray-750);
+  /* The ring carries the shape at 3:1 against the panel (theme.test.ts). */
+  --switch-off-track-border: var(--color-gray-600);
+  --switch-off-knob: var(--color-gray-300);
+  --switch-knob-shadow: 0 var(--stroke-1) var(--space-02) var(--color-black-o30);
+}
+
+:root[data-theme='light'] {
+  --switch-off-track: var(--color-paper-400);
+  --switch-off-track-border: var(--color-gray-500);
+  --switch-off-knob: var(--color-white);
+  --switch-knob-shadow:
+    0 0 0 var(--stroke-hairline) var(--color-black-o12),
+    0 var(--stroke-1) var(--space-02) var(--color-black-o12);
+}
+
 /* Status pills (components/status-pill.css): one calm look for a state. The
    hue is a status role, never the accent; the words are ordinary ink on a
    wash of the hue, so they clear AA on every surface (theme.test.ts). Amber

@@ -199,7 +199,11 @@ agent's colour instead.
   `--accent-success`, informational is `--status-info`, and the current
   branch or row is neutral (`--text-primary` on `--surface-selected`). A
   red, amber or green accent must never be readable as error, warning or
-  success, and the Chief's colour may be any of them.
+  success, and the Chief's colour may be any of them. Inside an agent's own
+  scope (`data-accent-scope` red, green, amber or orange) the primary button
+  is drawn as the neutral `strong` key (`base.css`), and text actions on a
+  status line (a usage limit's "Retry at …") are `TextButton variant="strong"`
+  (full ink, underline on hover), never the agent's colour.
 - **Answers are neutral.** The affirmative answer on any request or
   decision card — Allow, Save (a secret), Keep changes (a copy), Import (an
   import review), Keep there too — is `variant="strong"` (the strongest

@@ -109,6 +109,9 @@ describe('AgentEditorModal: starting from a ready-made agent', () => {
 
   it('creating blank sends no template', async () => {
     const { created } = openOn(null);
+    // New agent opens on describing; the form is one quiet link away.
+    expect(screen.queryByRole('button', { name: 'Create' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'fill it in yourself' }));
     fireEvent.change(screen.getByLabelText('Agent name'), { target: { value: 'Finance' } });
     await create();
     await waitFor(() => expect(created).toHaveLength(1));

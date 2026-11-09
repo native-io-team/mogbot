@@ -77,9 +77,11 @@ export function draftAppsLine(apps: string[]): string | null {
   return `Uses ${names}. It asks you to connect ${apps.length === 1 ? 'it' : 'them'} the first time it needs ${apps.length === 1 ? 'it' : 'them'}.`;
 }
 
-/** Placeholder for the one prompt: a real, specific example. */
-export const DESCRIBE_PLACEHOLDER =
-  'Every weekday at 8, read the newsletters in my inbox and send me the five things worth knowing. On Fridays, draft a weekly recap and post it to #team once I OK it.';
+/**
+ * Placeholder for the one prompt: short, and plainly an example. A full,
+ * realistic brief at the size of real text made the empty box read as filled.
+ */
+export const DESCRIBE_PLACEHOLDER = 'For example: “Brief me on my inbox every weekday at 8.”';
 
 const DAY_WORDS = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december)\b/g;
 

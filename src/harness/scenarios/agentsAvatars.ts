@@ -84,7 +84,11 @@ export const agentsAvatarsScenarios: Scenario[] = [
     looksRightWhen:
       'New agent. The avatar beside Name has been clicked: under it, the key at 96px on a quiet band, then Shape (four), Face (four: dot eyes, eyes and mouth, debossed, monogram), Finish (key cap, embossed), Color (eleven swatches). The new agent starts on a shape nobody else wears; the Chief’s squircle isn’t offered as a default. Nothing in accent; nothing in the picker moves.',
     requires: '.agent-look__preview .agent-avatar--xl',
-    steps: [{ click: '.agents-list__new' }, { click: '.agent-editor__look-toggle' }],
+    steps: [
+      { click: '.agents-list__new' },
+      { click: '.agent-editor__fill-in' },
+      { click: '.agent-editor__look-toggle' },
+    ],
     commands: {
       agents_overview: overview(TWELVE),
       agents_messages: messagesFor,

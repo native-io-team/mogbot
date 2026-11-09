@@ -10,8 +10,8 @@
  *
  * The figures and words are the phone's (`companion-protocol/usageSheet.ts`):
  * one source, so the two never disagree. Nothing is filled in: no reading,
- * no section; no 5-hour reading, the ring is an empty dashed outline rather
- * than a 0% that wasn't reported.
+ * no section; no 5-hour reading, the control is the word "Usage" rather than
+ * a 0% ring that wasn't reported.
  *
  * ⌘K "Show usage" opens it.
  *
@@ -20,6 +20,7 @@
 
 import type { CSSProperties, ReactNode } from 'react';
 import { Dropdown } from '../primitives/Dropdown';
+import { Button } from '../primitives/Button';
 import { IconButton } from '../primitives/IconButton';
 import { ENGINE_LABEL, type Agent, type Quota } from '../../lib/agents';
 import {
@@ -55,25 +56,40 @@ export function AgentUsageRing({ agent, open, onOpenChange }: AgentUsageRingProp
       open={open}
       onOpenChange={onOpenChange}
       menuClassName="agent-usage"
-      trigger={(p) => (
-        <IconButton
-          {...p}
-          tabIndex={0}
-          variant="ghost"
-          className="agent-usage-ring"
-          title={label}
-          aria-label={label}
-          icon={
-            <span
-              className="agent-usage-ring__dial"
-              data-tone={ring?.tone}
-              data-empty={ring ? undefined : true}
-              style={{ '--agent-usage-ring-percent': ring?.percent ?? 0 } as CSSProperties}
-              aria-hidden
-            />
-          }
-        />
-      )}
+      trigger={(p) =>
+        // No 5-hour reading yet: the word, not an empty dashed ring (it read
+        // as a spinner). The ring comes back with the first reading.
+        !ring ? (
+          <Button
+            {...p}
+            tabIndex={0}
+            variant="ghost"
+            className="agent-usage-ring agent-usage-ring--word"
+            title={label}
+            aria-label={label}
+          >
+            Usage
+          </Button>
+        ) : (
+          <IconButton
+            {...p}
+            tabIndex={0}
+            variant="ghost"
+            className="agent-usage-ring"
+            title={label}
+            aria-label={label}
+            icon={
+              <span
+                className="agent-usage-ring__dial"
+                data-tone={ring?.tone}
+                data-empty={ring ? undefined : true}
+                style={{ '--agent-usage-ring-percent': ring?.percent ?? 0 } as CSSProperties}
+                aria-hidden
+              />
+            }
+          />
+        )
+      }
     >
       {open && <UsageBody agent={agent} quotas={quotas} quotasNow={now} />}
     </Dropdown>

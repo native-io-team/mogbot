@@ -68,7 +68,7 @@ export function AgentDescribe({
       <TextArea
         id="agent-describe-text"
         ref={ref}
-        rows={3}
+        rows={5}
         value={text}
         onChange={(e) => setText(e.target.value)}
         onKeyDown={onKeyDown}
@@ -78,9 +78,11 @@ export function AgentDescribe({
         disabled={draft.isLoading}
       />
       <div className="agent-describe__actions">
+        {/* The dialog's one strong button until there's a draft: neutral,
+            so it never looks like the agent's colour or a status. */}
         <Button
           tabIndex={0}
-          size="compact"
+          variant="strong"
           disabled={!ready}
           leftIcon={draft.isLoading ? <Spinner size="sm" /> : undefined}
           onClick={() => void draft.execute()}
