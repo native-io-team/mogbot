@@ -140,8 +140,7 @@ fn path() -> Result<std::path::PathBuf, CommandError> {
 fn load() -> Saved {
     path()
         .ok()
-        .and_then(|p| std::fs::read(p).ok())
-        .and_then(|raw| serde_json::from_slice(&raw).ok())
+        .and_then(|p| super::survive::read_kept(&p, "Your quiet hours"))
         .unwrap_or_default()
 }
 

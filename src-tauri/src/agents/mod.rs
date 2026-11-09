@@ -157,6 +157,7 @@ pub mod slack_api;
 pub mod step_in;
 pub mod store;
 pub mod stream;
+pub mod survive;
 pub mod takeover;
 pub mod task;
 pub mod team_reach;

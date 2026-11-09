@@ -1837,7 +1837,7 @@ pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(STARTUP_GRACE).await;
         loop {
-            tick(&app).await;
+            super::survive::tick("watch", tick(&app)).await;
             // On the minute, with the other minute loops (one wake-up).
             crate::power::sleep_aligned(TICK).await;
         }

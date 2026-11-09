@@ -333,8 +333,7 @@ fn read_json<T: Default + for<'de> Deserialize<'de>>(
     path: Result<std::path::PathBuf, CommandError>,
 ) -> T {
     path.ok()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .and_then(|p| super::survive::read_kept(&p, "Your usage settings"))
         .unwrap_or_default()
 }
 

@@ -196,10 +196,13 @@ fn path() -> Result<std::path::PathBuf, CommandError> {
     Ok(store::agents_root()?.join("slack.json"))
 }
 
+/// Damaged, the file is set aside (and the Chief told) before the empty
+/// default is used, so the next change can't write over it.
 fn read() -> Result<Settings, CommandError> {
-    match std::fs::read_to_string(path()?) {
+    let path = path()?;
+    match std::fs::read_to_string(&path) {
         Ok(raw) => Ok(serde_json::from_str(&raw).unwrap_or_else(|e| {
-            tracing::warn!("[Slack] slack.json unreadable ({e}); starting empty");
+            super::survive::set_aside(&path, "Your Slack set-up", &e.to_string());
             Settings::default()
         })),
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Settings::default()),
@@ -1273,8 +1276,11 @@ pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         tokio::time::sleep(STARTUP_GRACE).await;
         loop {
-            check(&app, false).await;
-            settle(&app).await;
+            super::survive::tick("slack", async {
+                check(&app, false).await;
+                settle(&app).await;
+            })
+            .await;
             let wait = next_wait(&load(), store::now_ms(), poll_every_ms());
             tokio::select! {
                 _ = tokio::time::sleep(wait) => {}

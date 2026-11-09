@@ -133,8 +133,7 @@ const OFTEN: &str = "The user chose \"Careful\". Before a change with several st
 or anything that's hard to undo, say your plan in a few lines and wait for their go-ahead. \
 Answering, reading and looking things up don't need it. If you can't finish, say exactly what's left and why.";
 
-const JUDGEMENT: &str =
-    "The user chose \"Steady\". Do what you're asked through to the end. \
+const JUDGEMENT: &str = "The user chose \"Steady\". Do what you're asked through to the end. \
 Ask when a choice is really theirs, or a step needs their money, their identity, or sending or \
 publishing as them.";
 
@@ -218,8 +217,7 @@ pub fn level() -> Level {
     let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     path()
         .ok()
-        .and_then(|p| std::fs::read(p).ok())
-        .and_then(|bytes| serde_json::from_slice::<Saved>(&bytes).ok())
+        .and_then(|p| super::survive::read_kept::<Saved>(&p, "How much agents do on their own"))
         .map(|s| s.level)
         .unwrap_or_default()
 }
@@ -347,7 +345,13 @@ mod tests {
         assert_eq!(Level::parse("Bold").unwrap(), Level::GoHard);
         assert_eq!(Level::parse("Unleashed").unwrap(), Level::FullSend);
         assert_eq!(
-            [Level::Often, Level::Judgement, Level::GoHard, Level::FullSend].map(Level::label),
+            [
+                Level::Often,
+                Level::Judgement,
+                Level::GoHard,
+                Level::FullSend
+            ]
+            .map(Level::label),
             ["Careful", "Steady", "Bold", "Unleashed"]
         );
         assert_eq!(Level::FullSend.short(), "Unleashed");

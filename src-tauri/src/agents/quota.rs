@@ -273,8 +273,7 @@ fn path() -> Result<std::path::PathBuf, crate::errors::CommandError> {
 fn read_all() -> Vec<Quota> {
     path()
         .ok()
-        .and_then(|p| std::fs::read_to_string(p).ok())
-        .and_then(|raw| serde_json::from_str(&raw).ok())
+        .and_then(|p| super::survive::read_kept(&p, "The saved plan-usage readings"))
         .unwrap_or_default()
 }
 

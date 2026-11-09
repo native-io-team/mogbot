@@ -1458,7 +1458,10 @@ async fn uploads_hold_their_room_first_and_http_counts_against_the_limit() {
     let results = futures_util::future::join_all(all).await;
     let staged = results.iter().filter(|s| **s == 200).count();
     assert!(staged <= crate::companion::blobs::MAX_BLOBS_PER_DEVICE);
-    assert!(results.iter().all(|s| *s == 200 || *s == 429), "{results:?}");
+    assert!(
+        results.iter().all(|s| *s == 200 || *s == 429),
+        "{results:?}"
+    );
     assert!(staged >= 1);
 
     // Every route shares the per-minute budget the socket has.
@@ -1635,4 +1638,21 @@ async fn a_token_used_by_another_tailnet_user_is_refused() {
         .await
         .unwrap();
     assert_eq!(res.status(), 404);
+}
+
+/// A request whose handler panics still gets an answer, so the phone isn't
+/// left waiting on it; one that doesn't is answered as before.
+#[tokio::test]
+async fn a_panicking_request_is_answered_with_an_error() {
+    let answer = super::caught("agents.overview", async {
+        if true {
+            panic!("bad card");
+        }
+        Ok(json!(null))
+    })
+    .await;
+    let err = answer.unwrap_err();
+    assert!(err.summary().contains("fault"), "{}", err.summary());
+    let fine = super::caught("agents.overview", async { Ok(json!({"ok": true})) }).await;
+    assert_eq!(fine.unwrap(), json!({"ok": true}));
 }

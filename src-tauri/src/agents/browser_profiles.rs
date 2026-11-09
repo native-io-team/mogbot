@@ -152,8 +152,7 @@ fn clip(s: &str, max: usize) -> String {
 pub fn load() -> Book {
     store::agents_root()
         .ok()
-        .and_then(|r| std::fs::read(r.join(FILE)).ok())
-        .and_then(|raw| serde_json::from_slice(&raw).ok())
+        .and_then(|r| super::survive::read_kept(&r.join(FILE), "The browser accounts agents use"))
         .unwrap_or_default()
 }
 
