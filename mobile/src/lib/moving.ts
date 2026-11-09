@@ -1,6 +1,8 @@
 /**
- * Whether something on screen should move: shared by the avatar and the
- * typing key (components/agent.tsx, components/AgentKey.tsx).
+ * Whether something on screen should move: shared by every loop on the
+ * phone (the avatar, the typing key, the spinner, the typing dots, the
+ * shimmer) and the "2 min ago" clocks. Nothing runs on the UI thread for a
+ * screen nobody is looking at, or while the app is in the background.
  */
 
 import { useIsFocused } from 'expo-router';
@@ -30,9 +32,12 @@ export function useReduceMotion(): boolean {
   return reduced;
 }
 
-/** False with Reduce Motion, in the background, on a screen that isn't showing, or `still`. */
-export function useMoving(still: boolean): boolean {
-  const reduced = useReduceMotion();
+/**
+ * Whether anyone can see this: the app is in front and this screen is the
+ * one showing (a screen under a pushed chat, or another tab, stays mounted).
+ * Clocks and loops hold while it's false.
+ */
+export function useShowing(): boolean {
   const [active, setActive] = useState(AppState.currentState === 'active');
   useEffect(() => {
     const sub = AppState.addEventListener('change', (s) => setActive(s === 'active'));
@@ -48,5 +53,12 @@ export function useMoving(still: boolean): boolean {
   } catch {
     focused = true;
   }
-  return !still && !reduced && active && focused;
+  return active && focused;
+}
+
+/** False with Reduce Motion, in the background, on a screen that isn't showing, or `still`. */
+export function useMoving(still: boolean): boolean {
+  const reduced = useReduceMotion();
+  const showing = useShowing();
+  return !still && !reduced && showing;
 }

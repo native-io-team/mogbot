@@ -387,13 +387,14 @@ fn check(app: &AppHandle) {
     }
 }
 
-/// On open and every [`EVERY`] while the app is open.
+/// On open and every [`EVERY`] while the app is open (5 min on battery,
+/// `power::Poll::Disk`; every turn and approval still reads it fresh).
 pub fn spawn(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         loop {
             let a = app.clone();
             let _ = tokio::task::spawn_blocking(move || check(&a)).await;
-            tokio::time::sleep(EVERY).await;
+            tokio::time::sleep(crate::power::every(crate::power::Poll::Disk)).await;
         }
     });
 }

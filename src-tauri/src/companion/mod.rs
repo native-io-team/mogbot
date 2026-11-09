@@ -612,6 +612,9 @@ pub struct Companion {
     pub blobs: blobs::Blobs,
     pub push: push::Push,
     conns: Mutex<HashMap<u64, Conn>>,
+    /// A phone came to the foreground: the projects watch wakes (it sleeps
+    /// without a timer while no phone is looking).
+    pub foreground_changed: tokio::sync::Notify,
     next_conn: AtomicU64,
     requests: Mutex<HashMap<String, VecDeque<u64>>>,
     creates: Mutex<HashMap<String, VecDeque<u64>>>,
@@ -658,6 +661,7 @@ impl Companion {
             sends: router::SendCache::default(),
             push: push::Push::default(),
             conns: Mutex::new(HashMap::new()),
+            foreground_changed: tokio::sync::Notify::new(),
             next_conn: AtomicU64::new(1),
             requests: Mutex::new(HashMap::new()),
             creates: Mutex::new(HashMap::new()),
@@ -718,6 +722,9 @@ impl Companion {
                 since: now_ms(),
             },
         );
+        if foreground {
+            self.foreground_changed.notify_one();
+        }
         Some(id)
     }
 
@@ -730,6 +737,9 @@ impl Companion {
             if c.foreground != foreground {
                 c.foreground = foreground;
                 c.since = now_ms();
+                if foreground {
+                    self.foreground_changed.notify_one();
+                }
             }
         }
     }

@@ -16,13 +16,13 @@ import Animated, {
   Easing,
   cancelAnimation,
   useAnimatedStyle,
-  useReducedMotion,
   useSharedValue,
   withRepeat,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
 import { useColors } from '../lib/appearance';
+import { useMoving } from '../lib/moving';
 import { typingDot } from '../lib/theme';
 import {
   TYPING_DOTS,
@@ -38,15 +38,16 @@ const INDEXES = Array.from({ length: TYPING_DOTS }, (_, i) => i);
 export function TypingDots({ color, label }: { color?: string; label?: string }) {
   const colors = useColors();
   color ??= colors.textMuted;
-  const still = useReducedMotion();
+  // Reduce Motion, the background, or a screen not showing: hold still.
+  const moving = useMoving(false);
   const clock = useSharedValue(0);
   useEffect(() => {
-    if (still) return;
+    if (!moving) return;
     clock.set(
       withRepeat(withTiming(1, { duration: TYPING_PERIOD_MS, easing: Easing.linear }), -1, false)
     );
     return () => cancelAnimation(clock);
-  }, [clock, still]);
+  }, [clock, moving]);
   return (
     <View
       accessible={!!label}
@@ -62,7 +63,7 @@ export function TypingDots({ color, label }: { color?: string; label?: string })
       }}
     >
       {INDEXES.map((i) => (
-        <Dot key={i} index={i} clock={clock} color={color} still={still} />
+        <Dot key={i} index={i} clock={clock} color={color} still={!moving} />
       ))}
     </View>
   );

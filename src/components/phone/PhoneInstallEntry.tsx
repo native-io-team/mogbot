@@ -62,5 +62,10 @@ export function PhoneInstallEntry({ now, onInstall, onReinstall }: EntryProps) {
 
 /** Checks hourly, app-wide, whether the build on the phone stops tomorrow. */
 export function useCompanionInstallReminder() {
-  usePolling(() => remindIfDue(), { intervalMs: 60 * 60 * 1000, name: 'companion-expiry' });
+  // A system notification: it must reach the user with the window hidden.
+  usePolling(() => remindIfDue(), {
+    intervalMs: 60 * 60 * 1000,
+    name: 'companion-expiry',
+    whileHidden: true,
+  });
 }

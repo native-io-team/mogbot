@@ -218,7 +218,13 @@ export function UpdateBanner() {
     async () => {
       if ((await agentsBusy()) === 0) await restart();
     },
-    { intervalMs: 3000, enabled: waitingForAgents, name: 'update-wait-for-agents' }
+    // Restarts the app once agents are done, whether or not anyone is looking.
+    {
+      intervalMs: 3000,
+      enabled: waitingForAgents,
+      name: 'update-wait-for-agents',
+      whileHidden: true,
+    }
   );
 
   const handleLater = useCallback(() => {

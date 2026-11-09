@@ -36,6 +36,8 @@ jest.mock('react-native-reanimated', () => {
   };
 });
 jest.mock('expo-haptics', () => ({}));
+// The loops ask whether their screen is showing (lib/moving.ts).
+jest.mock('expo-router', () => ({ useIsFocused: () => true }));
 jest.mock('../src/lib/haptics', () => ({
   haptic: {
     light: jest.fn(),

@@ -40,6 +40,10 @@ export class ExponentialPoller<T> {
   private attempt = 0;
   private timeoutId: ReturnType<typeof setTimeout> | null = null;
   private isRunning = false;
+  private isPaused = false;
+  private inFlight = false;
+  /** When the next poll is due (Date.now() ms), for resuming on time. */
+  private dueAt = 0;
   private options: Required<PollingOptions>;
 
   constructor(
@@ -73,8 +77,46 @@ export class ExponentialPoller<T> {
   /**
    * Stop polling
    */
+  /**
+   * Hold the next poll (the window is hidden: nothing it fetches can be
+   * seen). A poll already running finishes; nothing is scheduled after it.
+   */
+  pause() {
+    if (!this.isRunning || this.isPaused) return;
+    this.isPaused = true;
+    if (this.timeoutId) {
+      clearTimeout(this.timeoutId);
+      this.timeoutId = null;
+    }
+  }
+
+  /**
+   * Carry on after `pause`, on the original cadence: a poll that came due
+   * while paused runs now, otherwise the next one waits out what is left of
+   * its interval (an hourly check doesn't run every time the window shows).
+   */
+  resume() {
+    if (!this.isRunning || !this.isPaused) return;
+    this.isPaused = false;
+    if (this.inFlight || this.timeoutId) return;
+    this.schedule(Math.max(0, this.dueAt - Date.now()));
+  }
+
+  private schedule(delay: number) {
+    this.dueAt = Date.now() + delay;
+    if (delay <= 0) {
+      void this.poll();
+      return;
+    }
+    this.timeoutId = setTimeout(() => {
+      this.timeoutId = null;
+      void this.poll();
+    }, delay);
+  }
+
   stop() {
     this.isRunning = false;
+    this.isPaused = false;
     if (this.timeoutId) {
       clearTimeout(this.timeoutId);
       this.timeoutId = null;
@@ -105,10 +147,11 @@ export class ExponentialPoller<T> {
   }
 
   private async poll() {
-    if (!this.isRunning) return;
+    if (!this.isRunning || this.isPaused) return;
 
     this.attempt++;
 
+    this.inFlight = true;
     try {
       const data = await this.fetcher();
 
@@ -151,10 +194,13 @@ export class ExponentialPoller<T> {
         logger.warn(`${this.options.name}: Max retries reached, stopping`, {
           maxRetries: this.options.maxRetries,
         });
+        this.inFlight = false;
         this.stop();
         return;
       }
     }
+    this.inFlight = false;
+    if (!this.isRunning) return;
 
     // Schedule next poll with optional jitter
     let delay = this.interval;
@@ -163,7 +209,14 @@ export class ExponentialPoller<T> {
       delay = delay * (0.75 + Math.random() * 0.5);
     }
 
+    if (this.isPaused) {
+      // Held: `resume` picks it up when it falls due.
+      this.dueAt = Date.now() + delay;
+      return;
+    }
+    this.dueAt = Date.now() + delay;
     this.timeoutId = setTimeout(() => {
+      this.timeoutId = null;
       void this.poll();
     }, delay);
   }

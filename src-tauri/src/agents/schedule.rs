@@ -1799,7 +1799,8 @@ pub fn spawn(app: AppHandle) {
             if let Err(err) = tick(&app) {
                 tracing::warn!(error = %err, "agent check-in tick failed");
             }
-            tokio::time::sleep(TICK).await;
+            // On the minute, with the other minute loops (one wake-up).
+            crate::power::sleep_aligned(TICK).await;
         }
     });
 }

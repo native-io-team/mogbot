@@ -222,6 +222,17 @@ body.compact-mode-active html {
 }
 
 /* Spinner */
+/* Nobody can see the window (minimised, another Space, closed to the menu
+   bar, fully covered; lib/appActivity): every animation holds where it is
+   and carries on when it is seen again. A loop that restyles on the main
+   thread (a shimmer, a background sweep) would otherwise keep waking the CPU
+   to draw nothing. */
+:root[data-app-hidden] *,
+:root[data-app-hidden] *::before,
+:root[data-app-hidden] *::after {
+  animation-play-state: paused !important; /* css-ok: wins over every shorthand */
+}
+
 /* Shared keyframes — keyframe names are GLOBAL in CSS. Define shared ones
    here only; a feature-file duplicate silently overrides every consumer
    app-wide depending on import order. */

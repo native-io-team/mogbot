@@ -1,4 +1,5 @@
-import type { CSSProperties, HTMLAttributes } from 'react';
+import { useEffect, useRef, type CSSProperties, type HTMLAttributes } from 'react';
+import { watchOffscreen } from '../../lib/offscreen';
 
 export type PixelLoaderSize = 'sm' | 'md' | 'lg';
 export type PixelLoaderVariant =
@@ -65,6 +66,9 @@ export function PixelLoader({
   style,
   ...rest
 }: PixelLoaderProps) {
+  // Scrolled out of sight (a working row far down the sidebar), it holds still.
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => (ref.current ? watchOffscreen(ref.current) : undefined), []);
   const usesQuadCore = variant === 'ripple-quad' || variant === 'ripple-quad-tight';
   const resolvedGridSize = clampInteger(gridSize ?? (usesQuadCore ? 6 : 5), 1, 16);
   const resolvedCoreSize = clampInteger(coreSize ?? (usesQuadCore ? 2 : 1), 1, resolvedGridSize);
@@ -114,7 +118,14 @@ export function PixelLoader({
   if (variant === 'rings') {
     const rings = [...new Set(pixels.map((p) => p.ring))];
     return (
-      <div className={classes} role="status" aria-label={label} style={gridStyle} {...rest}>
+      <div
+        ref={ref}
+        className={classes}
+        role="status"
+        aria-label={label}
+        style={gridStyle}
+        {...rest}
+      >
         {rings.map((ring) => (
           <span
             key={ring}
@@ -130,7 +141,7 @@ export function PixelLoader({
   }
 
   return (
-    <div className={classes} role="status" aria-label={label} style={gridStyle} {...rest}>
+    <div ref={ref} className={classes} role="status" aria-label={label} style={gridStyle} {...rest}>
       {pixels.map((p) => pixel(p))}
     </div>
   );

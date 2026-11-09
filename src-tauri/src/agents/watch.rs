@@ -1838,7 +1838,8 @@ pub fn spawn(app: AppHandle) {
         tokio::time::sleep(STARTUP_GRACE).await;
         loop {
             tick(&app).await;
-            tokio::time::sleep(TICK).await;
+            // On the minute, with the other minute loops (one wake-up).
+            crate::power::sleep_aligned(TICK).await;
         }
     });
 }

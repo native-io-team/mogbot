@@ -213,3 +213,10 @@
     opacity: var(--pixel-loader-mid-opacity);
   }
 }
+
+/* Scrolled out of sight (PixelLoader marks itself, lib/offscreen): hold still.
+   !important: every variant sets the `animation` shorthand, which resets the
+   play state, at an equal or higher specificity. */
+.ss-pixel-loader[data-offscreen] * {
+  animation-play-state: paused !important; /* css-ok: beats each variant's shorthand */
+}

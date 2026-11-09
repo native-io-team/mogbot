@@ -145,23 +145,26 @@ fn subscribe(app: &AppHandle, c: &Arc<Companion>) {
     });
 }
 
-/// How often the projects are looked at while a phone has the app open.
-const PROJECTS_EVERY: Duration = Duration::from_secs(2);
 /// Git (branch, uncommitted count) is asked every this many looks.
 const GIT_EVERY: u32 = 5;
 
 /// Journal `projects.changed` / `projects.removed` while a phone is in the
-/// foreground (see `companion/projects.rs`). Tabs are read every look; git
-/// every [`GIT_EVERY`]th, its answer reused in between.
+/// foreground (see `companion/projects.rs`). Tabs are read every look (2 s,
+/// 4 s on battery: `power::Poll::PhoneProjects`); git every [`GIT_EVERY`]th,
+/// its answer reused in between. With no phone in the foreground the loop
+/// sleeps a whole look and touches nothing.
 async fn watch_projects(c: Arc<Companion>) {
     use crate::remote_access::tools::{project_git, project_name, project_sessions, ProjectView};
     let mut watch = super::projects::ProjectsWatch::default();
     let mut git: std::collections::HashMap<String, (Option<String>, usize)> = Default::default();
     let mut tick: u32 = 0;
-    let mut every = tokio::time::interval(PROJECTS_EVERY);
-    every.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
     loop {
-        every.tick().await;
+        if !c.any_foreground() {
+            // No timer at all until a phone opens the app.
+            c.foreground_changed.notified().await;
+            continue;
+        }
+        tokio::time::sleep(crate::power::every(crate::power::Poll::PhoneProjects)).await;
         if !c.any_foreground() {
             continue;
         }

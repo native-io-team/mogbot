@@ -13,6 +13,8 @@
 import { lazyReactErrorHandler } from './instrument';
 // Before any React root: keeps infinite CSS animations on the compositor.
 import './lib/noAnimationIterationListeners';
+// The root's data-app-hidden / data-app-background, which pause loops and polling.
+import './lib/appActivity';
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';

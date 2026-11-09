@@ -17,6 +17,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { logger } from './logger';
+import { appActivity } from './appActivity';
 import type { InboxItem, ProgressLine, Workflow, WorkflowDraft, WorkflowRun } from './workflows';
 
 /** Emitted by the backend whenever runs or the inbox change. */
@@ -94,7 +95,11 @@ function start(): void {
   const generation = ++subscriptionGeneration;
   void refresh();
   if (pollTimer === null) {
-    pollTimer = window.setInterval(() => void refresh(), POLL_MS);
+    // Nothing to show while the window is hidden; the next tick after it is
+    // seen again catches up.
+    pollTimer = window.setInterval(() => {
+      if (!appActivity().hidden) void refresh();
+    }, POLL_MS);
   }
   if (unlisten === null) {
     void listen(CHANGED_EVENT, () => void refresh())

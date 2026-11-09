@@ -12,18 +12,30 @@ import { useShallow } from 'zustand/react/shallow';
 import { pill, problemBody } from '../lib/connection';
 import { retryNow } from '../lib/session';
 import { useApp } from '../lib/store';
+import { useShowing } from '../lib/moving';
 import { chromeScale, radius, space, PRESSED } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { Spinner } from './agent';
 import { Button, Dot, T, useToneColor } from './ui';
 
-/** Re-render every `ms` while mounted, for "last seen 2 min ago". */
+/**
+ * Re-render every `ms` for "last seen 2 min ago", while anyone can see it:
+ * the clock stops in the background and on a screen under another (a stack
+ * keeps them mounted), and catches up at once when it shows again.
+ */
 export function useNow(ms = 15_000) {
   const [now, setNow] = useState(Date.now);
+  const showing = useShowing();
   useEffect(() => {
-    const id = setInterval(() => setNow(Date.now()), ms);
-    return () => clearInterval(id);
-  }, [ms]);
+    if (!showing) return;
+    const tick = () => setNow(Date.now());
+    const catchUp = setTimeout(tick, 0);
+    const id = setInterval(tick, ms);
+    return () => {
+      clearTimeout(catchUp);
+      clearInterval(id);
+    };
+  }, [ms, showing]);
   return now;
 }
 

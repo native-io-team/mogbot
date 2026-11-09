@@ -59,7 +59,8 @@ import {
   type AvatarPaint,
 } from '../../../packages/companion-protocol/src/avatar';
 import { getAgentsSnapshot, subscribeAgents } from '../../lib/agentsStore';
-import { startBlinking } from '../../lib/avatarBlink';
+import { blinkVisibilityChanged, startBlinking } from '../../lib/avatarBlink';
+import { watchOffscreen } from '../../lib/offscreen';
 import { useResolvedTheme } from '../../lib/theme';
 
 /**
@@ -551,26 +552,13 @@ function useMood(mood: AvatarMood): AvatarMood {
 
 /**
  * Off-screen avatars hold still: one observer for all of them marks each
- * one's element (`data-offscreen`), and the CSS pauses its animations. A
- * hidden window pauses every one (`data-avatars-hidden` on the root).
+ * one's element (`data-offscreen`), the CSS pauses its animations and the
+ * blink clock leaves it out. A hidden window pauses every one, and one in the
+ * background their drift and blinks (`data-app-hidden` /
+ * `data-app-background` on the root, from lib/appActivity).
  */
-let observer: IntersectionObserver | null = null;
 function watch(el: Element): () => void {
-  if (typeof IntersectionObserver === 'undefined') return () => {};
-  observer ??= new IntersectionObserver((entries) => {
-    for (const e of entries) {
-      if (e.isIntersecting) e.target.removeAttribute('data-offscreen');
-      else e.target.setAttribute('data-offscreen', '');
-    }
-  });
-  observer.observe(el);
-  return () => observer?.unobserve(el);
-}
-
-if (typeof document !== 'undefined') {
-  document.addEventListener('visibilitychange', () =>
-    document.documentElement.toggleAttribute('data-avatars-hidden', document.hidden)
-  );
+  return watchOffscreen(el, () => blinkVisibilityChanged(el));
 }
 
 function useOffscreen<T extends Element>(enabled: boolean) {
