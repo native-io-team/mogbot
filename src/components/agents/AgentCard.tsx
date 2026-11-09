@@ -24,15 +24,22 @@
  *   Stopping an import, taking over or quitting lose nothing: `secondary`.
  * - Secondary is `secondary`, rarer is a `TextButton`, rarest a ⋯ menu.
  *
+ * For assistive tech a card is a named group (its title is the name and a
+ * level-3 heading, so VoiceOver's rotor lists every request in a chat), and
+ * answering one never drops focus: when the actions that held focus give way
+ * to the outcome, focus moves to the outcome, which then reads itself.
+ *
  * @module components/agents/AgentCard
  */
 
 import {
   Children,
   isValidElement,
+  useId,
   useLayoutEffect,
   useRef,
   useState,
+  type FocusEvent,
   type FormEventHandler,
   type ReactNode,
 } from 'react';
@@ -91,6 +98,32 @@ export function AgentCard({
   ...aria
 }: AgentCardProps) {
   const [showRequest, setShowRequest] = useState(false);
+  const titleId = useId();
+  const outcomeRef = useRef<HTMLDivElement>(null);
+  // Whether focus was in this card when it was last seen: a button that is
+  // disabled (busy) or removed (answered) takes focus to <body> with it.
+  const focusInside = useRef(false);
+  const hadActions = useRef(hasContent(actions));
+  const showsActions = hasContent(actions);
+  useLayoutEffect(() => {
+    const had = hadActions.current;
+    hadActions.current = showsActions;
+    if (!had || showsActions || !focusInside.current) return;
+    const active = document.activeElement;
+    if (active && active !== document.body) return;
+    outcomeRef.current?.focus({ preventScroll: true });
+  }, [showsActions]);
+  const focusProps = {
+    onFocus: () => {
+      focusInside.current = true;
+    },
+    onBlur: (e: FocusEvent<HTMLElement>) => {
+      const to = e.relatedTarget as Node | null;
+      focusInside.current = to
+        ? e.currentTarget.contains(to)
+        : e.target.matches(':disabled, [aria-disabled="true"]');
+    },
+  };
   // Answered, a card becomes its outcome line: the title and what was
   // decided, with the request one click away. One answered while on screen
   // (`resolved`) stays whole, so the answer eases in where it was given.
@@ -106,7 +139,9 @@ export function AgentCard({
   const body = answered ? (
     <>
       <div className="agent-card__answered">
-        <span className="agent-card__answered-title">{title}</span>
+        <span className="agent-card__answered-title" id={titleId}>
+          {title}
+        </span>
         <span className="agent-card__outcome agent-card__outcome--inline" data-tone={outcomeTone}>
           {outcome}
         </span>
@@ -137,7 +172,9 @@ export function AgentCard({
             {icon}
           </span>
         )}
-        <span className="agent-card__title-text">{title}</span>
+        <span className="agent-card__title-text" id={titleId} role="heading" aria-level={3}>
+          {title}
+        </span>
         {meta && <span className="agent-card__meta">{meta}</span>}
       </div>
       {source && <p className="agent-card__source">{source}</p>}
@@ -150,6 +187,8 @@ export function AgentCard({
       )}
       {outcome && (
         <div
+          ref={outcomeRef}
+          tabIndex={-1}
           className="agent-card__outcome"
           data-resolved={resolved || undefined}
           data-tone={outcomeTone}
@@ -160,29 +199,35 @@ export function AgentCard({
     </>
   );
   const cls = className ? `agent-card ${className}` : 'agent-card';
+  // A group named by its title, unless the caller named it.
+  const group = {
+    role: as === 'div' ? 'group' : undefined,
+    'aria-labelledby': aria['aria-label'] ? undefined : titleId,
+    ...focusProps,
+  };
   if (as === 'form') {
     return (
-      <form className={cls} onSubmit={onSubmit} {...dataAttrs} {...aria}>
+      <form className={cls} onSubmit={onSubmit} {...dataAttrs} {...group} {...aria}>
         {body}
       </form>
     );
   }
   if (as === 'section') {
     return (
-      <section className={cls} {...dataAttrs} {...aria}>
+      <section className={cls} {...dataAttrs} {...group} {...aria}>
         {body}
       </section>
     );
   }
   if (as === 'article') {
     return (
-      <article className={cls} {...dataAttrs} {...aria}>
+      <article className={cls} {...dataAttrs} {...group} {...aria}>
         {body}
       </article>
     );
   }
   return (
-    <div className={cls} {...dataAttrs} {...aria}>
+    <div className={cls} {...dataAttrs} {...group} {...aria}>
       {body}
     </div>
   );

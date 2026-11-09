@@ -494,3 +494,9 @@
     width: 100%;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .demo-agent-cursor {
+    animation: none;
+  }
+}

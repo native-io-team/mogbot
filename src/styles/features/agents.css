@@ -298,8 +298,11 @@
   text-overflow: ellipsis;
 }
 
-.agents-list__row.is-current .agents-list__preview {
-  color: var(--text-secondary);
+/* The selected fill is lighter than the panel: secondary is 4.3:1 on it and
+   muted 2.6:1 (dark), so the current row's quieter words step up together. */
+.agents-list__row.is-current .agents-list__preview,
+.agents-list__row.is-current .agents-list__role {
+  color: color-mix(in srgb, var(--text-secondary) 55%, var(--text-primary));
 }
 
 /* Waiting on you is attention, not success: the label takes the amber of its

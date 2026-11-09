@@ -14,6 +14,7 @@
  * @module components/agents/AgentChat
  */
 
+import { ChatAnnouncer } from './ChatAnnouncer';
 import {
   memo,
   useCallback,
@@ -1581,6 +1582,7 @@ export const AgentChat = memo(function AgentChat({
           {...accentScope}
           {...dropHandlers}
         >
+          <ChatAnnouncer chatId={agent.id} messages={messages} agentName={agent.name} />
           <header className="agent-chat__header">
             {compact && (
               <CompactModeToggle

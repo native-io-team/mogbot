@@ -22,7 +22,9 @@
   --text-white: var(--color-white);
   --text-primary: var(--color-gray-200);
   --text-secondary: var(--color-gray-400);
-  --text-muted: var(--color-gray-600);
+  /* AA (4.5:1) on app and panel: gray-600 was 3.8:1 on the panel, and muted
+     carries real words (an agent's role, a routine's next run, the divider). */
+  --text-muted: var(--color-gray-500);
   --text-faint: var(--color-gray-700);
   /* Between secondary and muted: dense labels that must stay quieter than
      their values (the visual editor's spacing box). */

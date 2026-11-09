@@ -232,9 +232,9 @@ describe('contrast (WCAG AA) in both themes', () => {
     }
   });
 
-  it('muted text clears AA on the light theme’s app and panel surfaces', () => {
+  it.each(themes)('muted text clears AA on app and panel surfaces (%s)', (theme) => {
     for (const bg of ['--surface-app', '--surface-panel']) {
-      expect(ratio('--text-muted', bg, 'light'), bg).toBeGreaterThanOrEqual(AA_TEXT);
+      expect(ratio('--text-muted', bg, theme), bg).toBeGreaterThanOrEqual(AA_TEXT);
     }
   });
 
