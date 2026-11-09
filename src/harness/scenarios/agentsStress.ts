@@ -112,7 +112,11 @@ const COPY = {
   createdAt: now - 60 * MIN,
 };
 
-const N = 2000;
+// `?lines=5000` for the long-chat measurements (scripts/perf-agents.mjs --lines).
+const N =
+  (typeof window !== 'undefined' &&
+    Number(new URLSearchParams(window.location.search).get('lines'))) ||
+  2000;
 const T0 = now - N * 3 * MIN;
 const chiefLine = (i: number): Record<string, unknown> => {
   const base = { id: `s${i}`, agentId: 'chief', ts: T0 + i * 3 * MIN };
@@ -220,6 +224,7 @@ declare global {
       stop: () => void;
       counts: Record<string, number>;
       stream: (o?: { agentId?: string; blocks?: number; every?: number }) => Promise<number>;
+      arrive: (id: string) => void;
     };
   }
 }
@@ -237,6 +242,20 @@ const isThisScenario =
 if (isThisScenario) {
   window.__stress = {
     counts,
+    // One finished reply with its timeline landing in the open chat.
+    arrive: (id) => {
+      const m = {
+        id,
+        agentId: 'chief',
+        ts: Date.now(),
+        kind: 'agent',
+        text: MD(7),
+        work: work(Date.now() - 60_000, 60),
+      };
+      logFor('chief').push(m);
+      counts.message++;
+      void emit('agents://message', m);
+    },
     // A reply streamed the way the backend sends it: the whole text so far every `every` ms.
     stream: ({ agentId = 'chief', blocks = 12, every = 40 } = {}) =>
       new Promise((resolve) => {

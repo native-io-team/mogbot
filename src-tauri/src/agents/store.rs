@@ -2032,6 +2032,148 @@ pub(crate) fn read_back(
     Ok(read)
 }
 
+/// A log's lines from its end backwards, newest first, read in growing
+/// chunks only as far back as they are asked for. Lines come back raw: the
+/// caller parses only those it keeps.
+struct BackLines {
+    file: Option<std::fs::File>,
+    /// Where the bytes not yet read end (they start at 0).
+    pos: u64,
+    /// Read but not yet handed out: whole lines, and a cut one at the front.
+    buf: Vec<u8>,
+    chunk: u64,
+}
+
+impl BackLines {
+    fn open(path: &Path) -> Result<Self, CommandError> {
+        let file = match std::fs::File::open(path) {
+            Ok(f) => Some(f),
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => None,
+            Err(e) => return Err(super::err_io(e.to_string())),
+        };
+        let pos = match &file {
+            Some(f) => f
+                .metadata()
+                .map_err(|e| super::err_io(e.to_string()))?
+                .len(),
+            None => 0,
+        };
+        Ok(Self {
+            file,
+            pos,
+            buf: Vec::new(),
+            chunk: 64 * 1024,
+        })
+    }
+
+    /// The next line back, raw, or `None` at the log's start. Empty lines
+    /// are skipped.
+    fn next_line(&mut self) -> Result<Option<Vec<u8>>, CommandError> {
+        use std::io::{Read, Seek, SeekFrom};
+        loop {
+            while matches!(self.buf.last(), Some(b'\n' | b'\r')) {
+                self.buf.pop();
+            }
+            if let Some(at) = self.buf.iter().rposition(|b| *b == b'\n') {
+                let line = self.buf.split_off(at + 1);
+                self.buf.truncate(at);
+                return Ok(Some(line));
+            }
+            if self.pos == 0 {
+                if self.buf.is_empty() {
+                    return Ok(None);
+                }
+                return Ok(Some(std::mem::take(&mut self.buf)));
+            }
+            let Some(file) = self.file.as_mut() else {
+                return Ok(None);
+            };
+            let from = self.pos.saturating_sub(self.chunk);
+            let mut more = vec![0u8; (self.pos - from) as usize];
+            file.seek(SeekFrom::Start(from))
+                .and_then(|_| file.read_exact(&mut more))
+                .map_err(|e| super::err_io(e.to_string()))?;
+            more.extend_from_slice(&self.buf);
+            self.buf = more;
+            self.pos = from;
+            self.chunk = self.chunk.saturating_mul(2).min(4 * 1024 * 1024);
+        }
+    }
+}
+
+/// A raw log line as a message; invalid UTF-8 is replaced, as `read_text` does.
+fn parse_line(line: &[u8]) -> serde_json::Result<AgentMessage> {
+    serde_json::from_str(&String::from_utf8_lossy(line))
+}
+
+/// What a raw log line holds if it could be the message `id`: its
+/// `"id":"…"`. Cheap, so lines newer than a page are never parsed; a hit is
+/// confirmed by parsing (a peer or a result card has an id too).
+fn id_needle(id: &str) -> String {
+    format!("\"id\":{}", serde_json::to_string(id).unwrap_or_default())
+}
+
+/// [`messages_page`]'s read, for any log of messages (an agent's, a room's):
+/// the `limit` messages before `before` (from the end if absent), reaching
+/// back to `through` when that is older, at most `cap` in all. Read from the
+/// end; lines after `before` are scanned, never parsed, and only the page is.
+/// A `before` that isn't a message in the log yields nothing.
+pub(crate) fn page_back(
+    path: &Path,
+    limit: usize,
+    before: Option<&str>,
+    through: Option<(&str, usize)>,
+) -> Result<Vec<AgentMessage>, CommandError> {
+    let mut lines = BackLines::open(path)?;
+    if let Some(id) = before {
+        let needle = id_needle(id);
+        loop {
+            let Some(line) = lines.next_line()? else {
+                return Ok(Vec::new());
+            };
+            let line = String::from_utf8_lossy(&line);
+            if line.contains(needle.as_str())
+                && serde_json::from_str::<AgentMessage>(&line).is_ok_and(|m| m.id == id)
+            {
+                break;
+            }
+        }
+    }
+    // Newest first while reading.
+    let mut page: Vec<AgentMessage> = Vec::new();
+    while page.len() < limit {
+        let Some(line) = lines.next_line()? else {
+            break;
+        };
+        if let Ok(m) = parse_line(&line) {
+            page.push(m);
+        }
+    }
+    if let Some((id, cap)) = through {
+        if page.len() == limit && !page.iter().any(|m| m.id == id) {
+            let mut further: Vec<AgentMessage> = Vec::new();
+            let mut found = false;
+            while let Some(line) = lines.next_line()? {
+                let Ok(m) = parse_line(&line) else {
+                    continue;
+                };
+                let hit = m.id == id;
+                further.push(m);
+                if hit {
+                    found = true;
+                    break;
+                }
+            }
+            if found {
+                page.extend(further);
+                page.truncate(cap);
+            }
+        }
+    }
+    page.reverse();
+    Ok(page)
+}
+
 fn read_answers(agent_id: &str) -> Result<HashMap<String, Answer>, CommandError> {
     Ok(read_text(&answers_path(agent_id)?)?
         .lines()
@@ -2100,34 +2242,22 @@ pub fn messages_page(
     let lock = log_lock(agent_id);
     let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
     let path = log_path(agent_id)?;
-    let end_of = |read: &[AgentMessage]| match before {
-        Some(id) => read.iter().position(|m| m.id == id),
-        None => Some(read.len()),
-    };
-    let mut all = if limit == usize::MAX {
+    let mut page = if limit == usize::MAX {
         let raw = read_text(&path)?;
-        raw.lines()
+        let all: Vec<AgentMessage> = raw
+            .lines()
             .filter_map(|l| serde_json::from_str(l).ok())
-            .collect()
+            .collect();
+        let end = match before {
+            Some(id) => all.iter().position(|m| m.id == id).unwrap_or(0),
+            None => all.len(),
+        };
+        let mut all = all;
+        all.truncate(end);
+        all
     } else {
-        read_back(&path, |read| {
-            let Some(end) = end_of(read) else {
-                return false;
-            };
-            // A `through` further back than the cap still caps the page at
-            // `cap`, but only once it's known to be there: read back to it.
-            end >= limit && through.is_none_or(|(id, _)| read[..end].iter().any(|m| m.id == id))
-        })?
+        page_back(&path, limit, before, through)?
     };
-    let end = end_of(&all).unwrap_or(0);
-    let mut start = end.saturating_sub(limit);
-    if let Some((id, cap)) = through {
-        if let Some(at) = all[..start].iter().position(|m| m.id == id) {
-            start = at.max(end.saturating_sub(cap));
-        }
-    }
-    all.truncate(end);
-    let mut page = all.split_off(start);
     apply_answers(agent_id, &mut page)?;
     Ok(page)
 }

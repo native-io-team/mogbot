@@ -41,7 +41,8 @@ const opt = (name, fallback) => {
 const PORT = Number(opt('port', 1805));
 const CDP_PORT = Number(opt('cdp', 9711));
 const OUT = opt('out', path.join(os.tmpdir(), 'perf-agents'));
-const VALUE_FLAGS = new Set(['--port', '--cdp', '--out', '--css']);
+const LINES = Number(opt('lines', 2000));
+const VALUE_FLAGS = new Set(['--port', '--cdp', '--out', '--css', '--lines']);
 const positional = argv.filter((a, i) => !a.startsWith('--') && !VALUE_FLAGS.has(argv[i - 1]));
 const PHASES = (positional[0] ?? 'all').split(',');
 const want = (p) => PHASES.includes('all') || PHASES.includes(p);
@@ -197,11 +198,26 @@ const PRELUDE = `
     onCommitFiberRoot(_id, root) { if (w.__rcOn) walk(root.current.child); },
   };
   w.__marks = {};
+  // When the chat's first rows appear after navigation (cold open).
+  const mo = new MutationObserver(() => {
+    if (w.__firstRows === undefined && document.querySelector('.agent-chat [data-message-ids]')) {
+      w.__firstRows = performance.now();
+      mo.disconnect();
+    }
+  });
+  document.addEventListener('DOMContentLoaded', () => mo.observe(document.body, { childList: true, subtree: true }));
+  // Input to next paint, per key event (Event Timing; 16 ms is its floor).
+  w.__evt = [];
+  try {
+    new PerformanceObserver((l) => { for (const e of l.getEntries()) w.__evt.push({ n: e.name, d: e.duration, s: e.startTime }); })
+      .observe({ type: 'event', durationThreshold: 16, buffered: true });
+  } catch {}
 })();
 `;
 await send('Page.enable');
 await send('Runtime.enable');
 await send('Performance.enable', { timeDomain: 'timeTicks' });
+await send('HeapProfiler.enable');
 await send('Page.addScriptToEvaluateOnNewDocument', { source: PRELUDE });
 // `--css "<rules>"`: added to every page, for trying a change without a rebuild.
 const EXTRA_CSS = opt('css', '');
@@ -211,7 +227,7 @@ if (EXTRA_CSS) {
   });
 }
 
-const URL = `http://127.0.0.1:${PORT}/harness.html?scenario=agents-stress&chrome=off&freeze=off`;
+const URL = `http://127.0.0.1:${PORT}/harness.html?scenario=agents-stress&chrome=off&freeze=off&lines=${LINES}`;
 const metrics = async () =>
   Object.fromEntries((await send('Performance.getMetrics')).metrics.map((m) => [m.name, m.value]));
 const pct = (a, z, key, secs) => +(((z[key] - a[key]) / secs) * 100).toFixed(1);
@@ -254,10 +270,11 @@ async function load() {
   await sleep(800);
 }
 async function loadAllRows() {
-  for (let p = 0; p < 25; p++) {
+  for (let p = 0; p < Math.ceil(LINES / 100) + 5; p++) {
     const n = await rows();
     await ev(
-      `(() => { const el = document.querySelector('.agent-chat__scroll'); el.scrollTop = 0; el.dispatchEvent(new Event('scroll')); })()`
+      // A wheel first: the chat follows the bottom unless the reader moved it.
+      `(() => { const el = document.querySelector('.agent-chat__scroll'); el.dispatchEvent(new WheelEvent('wheel', { deltaY: -100 })); el.scrollTop = 0; el.dispatchEvent(new Event('scroll')); })()`
     );
     for (let i = 0; i < 30 && (await rows()) === n; i++) await sleep(50);
     if ((await rows()) === n) break;
@@ -496,6 +513,203 @@ if (want('idle')) {
       `document.getAnimations().filter(a => a.playState === 'running').length`
     );
     report(`idle_six_working_${all ? 2000 : 150}`, { rows: n, runningAnimations: anims, ...c });
+  }
+}
+
+// ---------- 5. long chats (`--lines 5000`): cold open, scrolling, memory,
+// typing and a new line arriving. Each phase starts from a fresh page.
+const heap = async () => {
+  await send('HeapProfiler.collectGarbage');
+  return ev(`({ heapMB: +(performance.memory.usedJSHeapSize / 1048576).toFixed(1),
+    domNodes: document.getElementsByTagName('*').length })`);
+};
+const frameStats = (ft) => {
+  const s = [...ft].sort((a, b) => a - b);
+  const q = (p) => +(s[Math.min(s.length - 1, Math.floor(s.length * p))] ?? 0).toFixed(1);
+  const total = ft.reduce((a, b) => a + b, 0);
+  return {
+    frames: ft.length,
+    fps: +((ft.length / total) * 1000).toFixed(1),
+    p50: q(0.5),
+    p95: q(0.95),
+    max: q(1),
+    over33ms: ft.filter((f) => f > 33.4).length,
+  };
+};
+/**
+ * Scroll the chat by `step` px a frame, recording frame times, until it has
+ * stood still for 90 frames (the end, with nothing more paging in).
+ */
+const scrollFrames = (step, maxMs = 90000) =>
+  ev(`(async () => {
+    const el = document.querySelector('.agent-chat__scroll');
+    const ft = [];
+    let last = performance.now();
+    const t0 = last;
+    let still = 0;
+    while (still < 90 && performance.now() - t0 < ${maxMs}) {
+      const before = el.scrollTop;
+      el.dispatchEvent(new WheelEvent('wheel', { deltaY: ${step} }));
+      el.scrollTop += ${step};
+      await new Promise((r) => requestAnimationFrame(r));
+      const t = performance.now();
+      if (el.scrollTop === before) still++;
+      else still = 0;
+      ft.push(t - last);
+      last = t;
+    }
+    // The standing-still frames at the end are not scrolling.
+    return { ft: ft.slice(0, Math.max(1, ft.length - still)), t0 };
+  })()`);
+
+if (want('cold')) {
+  const runs = [];
+  for (let i = 0; i < 3; i++) {
+    await load();
+    runs.push({
+      firstRowsMs: Math.round(await ev('window.__firstRows')),
+      mounted: await rows(),
+      ...(await heap()),
+    });
+  }
+  report(`cold_open_${LINES}`, { runs });
+}
+
+if (want('scroll')) {
+  await load();
+  const opened = await heap();
+  const t0 = await now();
+  // Up through every line (paging older ones in), then back down.
+  const up = await scrollFrames(-120);
+  report(`scroll_${LINES}_up`, {
+    ...frameStats(up.ft),
+    longTasks: await longTasksSince(t0),
+    mounted: await rows(),
+  });
+  const loaded = await heap();
+  const t1 = await now();
+  const down = await scrollFrames(120);
+  report(`scroll_${LINES}_down`, {
+    ...frameStats(down.ft),
+    longTasks: await longTasksSince(t1),
+    mounted: await rows(),
+  });
+  // Left at the newest line: what is still held a few seconds later.
+  const t2 = await now();
+  const letGo = await cpu(`let-go-${LINES}`, async () => {}, 20);
+
+  report(`memory_${LINES}`, {
+    opened,
+    afterScrollingAll: loaded,
+    backAtNewest20s: {
+      ...(await heap()),
+      mounted: await rows(),
+      longTasks: await longTasksSince(t2),
+      letGo,
+    },
+  });
+}
+
+if (want('typing')) {
+  for (const all of [false, true]) {
+    await load();
+    if (all) await loadAllRows();
+    await ev(`document.querySelector('.agent-chat textarea')?.focus()`);
+    await sleep(300);
+    await ev('window.__evt = []');
+    const t0 = await now();
+    const text = 'Can you check the invoices from last week and tell me what is missing?';
+    const rc = await renders(async () => {
+      for (const ch of text) {
+        await send('Input.dispatchKeyEvent', {
+          type: 'keyDown',
+          key: ch,
+          text: ch,
+          unmodifiedText: ch,
+        });
+        await send('Input.dispatchKeyEvent', { type: 'keyUp', key: ch });
+        await sleep(30);
+      }
+    });
+    await sleep(500);
+    const evts = await ev(`window.__evt.filter(e => e.s >= ${t0})`);
+    const d = evts.map((e) => e.d).sort((a, b) => a - b);
+    // Main-thread time the same keys cost, counting off.
+    await ev(`(() => { const t = document.querySelector('.agent-chat textarea'); t.select(); })()`);
+    await send('Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key: 'Backspace',
+      code: 'Backspace',
+      windowsVirtualKeyCode: 8,
+    });
+    await sleep(300);
+    const c = await cpu(
+      `typing-${all ? LINES : 'reopened'}`,
+      async () => {
+        for (const ch of text) {
+          await send('Input.dispatchKeyEvent', {
+            type: 'keyDown',
+            key: ch,
+            text: ch,
+            unmodifiedText: ch,
+          });
+          await send('Input.dispatchKeyEvent', { type: 'keyUp', key: ch });
+          await sleep(30);
+        }
+      },
+      0.2
+    );
+    report(`typing_${all ? LINES : 'reopened'}`, {
+      mounted: await rows(),
+      keys: text.length,
+      scriptMsPerKey: +(((c.scriptPct / 100) * c.secs * 1000) / text.length).toFixed(2),
+      mainThreadMsPerKey: +(((c.mainThreadPct / 100) * c.secs * 1000) / text.length).toFixed(2),
+      eventsOver16ms: d.length,
+      worstEventMs: Math.round(d[d.length - 1] ?? 0),
+      longTasks: await longTasksSince(t0),
+      agentChatRenders: rc.AgentChat ?? 0,
+      perKeyRenders: Object.fromEntries(Object.entries(rc).slice(0, 8)),
+    });
+    await ev(
+      `(() => { const t = document.querySelector('.agent-chat textarea'); if (t) { t.select(); } })()`
+    );
+    await send('Input.dispatchKeyEvent', {
+      type: 'keyDown',
+      key: 'Backspace',
+      code: 'Backspace',
+      windowsVirtualKeyCode: 8,
+    });
+  }
+}
+
+if (want('arrive')) {
+  for (const all of [false, true]) {
+    await load();
+    if (all) await loadAllRows();
+    await sleep(500);
+    const runs = [];
+    const rc = await renders(async () => {
+      for (let i = 0; i < 5; i++) {
+        runs.push(
+          await ev(`(async () => {
+            const id = 'arrive-' + ${i} + '-' + Date.now();
+            const t0 = performance.now();
+            window.__stress.arrive(id);
+            while (!document.querySelector('[data-message-ids~="' + id + '"]')) await new Promise(r => setTimeout(r, 0));
+            await new Promise(r => requestAnimationFrame(() => requestAnimationFrame(r)));
+            return { ms: Math.round(performance.now() - t0), t0 };
+          })()`)
+        );
+        await sleep(700);
+      }
+    });
+    report(`arrive_${all ? LINES : 'reopened'}`, {
+      mounted: await rows(),
+      ms: runs.map((r) => r.ms),
+      worstLongTask: (await longTasksSince(runs[0].t0)).max,
+      rendersFor5: pick(rc, WATCH),
+      topRenders: Object.fromEntries(Object.entries(rc).slice(0, 8)),
+    });
   }
 }
 

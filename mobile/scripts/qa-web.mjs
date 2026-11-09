@@ -18,6 +18,7 @@
  *   pnpm qa:web --phases heavy           # only these phases (demo,fresh,live,cached,impostor,bars,usage-accounts,heavy,importing,team-setup,live-work,engine,probe,torture)
  *   pnpm qa:web --themes dark            # one theme
  *   pnpm qa:web --phases send            # a send, frame by frame (not in the default run)
+ *   pnpm qa:web --phases perf            # a 5,000-line chat: first render and scroll jank (not in the default run)
  *   pnpm qa:web --out /tmp/shots
  *   pnpm qa:web --web-port 8098 --mock-port 47498 --cdp-port 9681
  *   QA_WEB_PORT=… QA_MOCK_PORT=… QA_CDP_PORT=… pnpm qa:web
@@ -2519,6 +2520,128 @@ async function sendFrames(page, theme) {
   page.errors = [];
   log(`send frames ${theme}: ${frames.length} pictures, ${lines.length} changes`);
 }
+// ---- Long-chat timings (`--phases perf`) ---------------------------------------------
+
+/**
+ * Before any page script: long tasks, and when the newest line of the
+ * 5,000-line "Long Rich" chat first shows (`dev/mock-torture.ts`).
+ */
+const PERF_PRELUDE = `(() => {
+  window.__lt = [];
+  try {
+    new PerformanceObserver((l) => { for (const e of l.getEntries()) window.__lt.push({ s: e.startTime, d: e.duration }); })
+      .observe({ type: 'longtask', buffered: true });
+  } catch {}
+  const mo = new MutationObserver(() => {
+    if (window.__newest === undefined && location.pathname.includes('longrich') && document.body.innerText.includes('Question 4995:')) {
+      window.__newest = performance.now();
+      mo.disconnect();
+    }
+  });
+  document.addEventListener('DOMContentLoaded', () => mo.observe(document.body, { childList: true, subtree: true, characterData: true }));
+})()`;
+const longTasksSince = (page, t0) =>
+  page.eval(`(() => { const l = window.__lt.filter((e) => e.s + e.d >= ${t0});
+    return { count: l.length, totalMs: Math.round(l.reduce((a, e) => a + e.d, 0)), max: Math.round(Math.max(0, ...l.map((e) => e.d))) }; })()`);
+const frameStats = (ft) => {
+  const s = [...ft].sort((a, b) => a - b);
+  const q = (p) => +(s[Math.min(s.length - 1, Math.floor(s.length * p))] ?? 0).toFixed(1);
+  const total = ft.reduce((a, b) => a + b, 0) || 1;
+  return {
+    frames: ft.length,
+    fps: +((ft.length / total) * 1000).toFixed(1),
+    p50: q(0.5),
+    p95: q(0.95),
+    max: q(1),
+    over33ms: ft.filter((f) => f > 33.4).length,
+  };
+};
+
+async function perfLongChat(page) {
+  const results = {};
+  await page.send('Page.addScriptToEvaluateOnNewDocument', { source: PERF_PRELUDE });
+  // Cold: a deep link straight into the chat (the app starts, reconnects, reads the newest page).
+  const cold = [];
+  for (let i = 0; i < 3; i++) {
+    await page.goto(`${WEB}/chat/longrich`);
+    await page.waitFor('window.__newest !== undefined', 60_000, 'the newest line');
+    await sleep(1500);
+    cold.push({
+      newestMs: Math.round(await page.eval('window.__newest')),
+      longTasks: await longTasksSince(page, 0),
+    });
+  }
+  results.cold = cold;
+  // Warm: the app already running on the agents list, then into the chat
+  // (an in-app navigation, as a tap makes it).
+  const warm = [];
+  for (let i = 0; i < 3; i++) {
+    await page.goto(`${WEB}/agents`);
+    await page.waitFor(`document.body.innerText.includes('Long Rich')`, 60_000, 'the agents list');
+    await sleep(2500);
+    const t0 = await page.eval('performance.now()');
+    await page.eval(
+      `history.pushState(null, '', '/chat/longrich'); dispatchEvent(new PopStateEvent('popstate'))`
+    );
+    await page.waitFor(
+      `location.pathname.includes('longrich') && document.body.innerText.includes('Question 4995:')`,
+      30_000,
+      'the chat'
+    );
+    const t1 = await page.eval(
+      'new Promise((r) => requestAnimationFrame(() => requestAnimationFrame(() => r(performance.now()))))'
+    );
+    await sleep(1000);
+    warm.push({ openMs: Math.round(t1 - t0), longTasks: await longTasksSince(page, t0) });
+  }
+  results.warm = warm;
+  // Scrolling up (older lines: further on in the inverted list), 30 s at 250 px a frame.
+  // The chat's own list: the agents list stays mounted under it in the stack.
+  await page.eval(`(() => {
+    const els = [...document.querySelectorAll('div')].filter((e) =>
+      e.scrollHeight > e.clientHeight + 20 && ['auto', 'scroll'].includes(getComputedStyle(e).overflowY) &&
+      e.innerText.includes('Question 4995:'));
+    els.sort((a, b) => a.innerText.length - b.innerText.length);
+    window.__qaScroller = els[0] ?? null;
+  })()`);
+  const t0 = await page.eval('performance.now()');
+  // `QA_PROFILE=1`: a .cpuprofile of the scroll beside the numbers.
+  const profile = !!process.env.QA_PROFILE;
+  if (profile) {
+    await page.send('Profiler.enable');
+    await page.send('Profiler.start');
+  }
+  const scroll = await page.eval(`(async () => {
+    const el = window.__qaScroller;
+    const ft = [];
+    let last = performance.now();
+    const start = last;
+    while (performance.now() - start < 30000) {
+      el.scrollTop += 250;
+      await new Promise((r) => requestAnimationFrame(r));
+      const t = performance.now();
+      ft.push(t - last);
+      last = t;
+    }
+    const q = [...document.body.innerText.matchAll(/Question (\\d+):/g)].map((x) => +x[1]);
+    return { ft, oldestShown: Math.min(...q), domNodes: document.getElementsByTagName('*').length };
+  })()`);
+  if (profile) {
+    const { profile: p } = await page.send('Profiler.stop');
+    await writeFile(path.join(OUT, 'perf-scroll.cpuprofile'), JSON.stringify(p));
+  }
+  results.scroll = {
+    ...frameStats(scroll.ft),
+    longTasks: await longTasksSince(page, t0),
+    oldestQuestionReached: scroll.oldestShown,
+
+    domNodes: scroll.domNodes,
+    heapMB: +((await page.eval('performance.memory?.usedJSHeapSize ?? 0')) / 1048576).toFixed(1),
+  };
+  await writeFile(path.join(OUT, 'perf-long-chat.json'), JSON.stringify(results, null, 2));
+  log('perf', JSON.stringify(results));
+}
+
 async function main() {
   for (const p of [WEB_PORT, MOCK_PORT, CDP_PORT]) {
     if (!(await portFree(p)))
@@ -2699,6 +2822,13 @@ async function main() {
       path.join(OUT, 'report.md'),
       report(`Unfinished: ${Math.round((Date.now() - started) / 1000)} s so far.`)
     );
+  }
+
+  if (phase('perf')) {
+    await startMock('--torture');
+    await page.goto(`${WEB}/agents`);
+    await sleep(4000);
+    await perfLongChat(page);
   }
 
   if (phase('torture')) {

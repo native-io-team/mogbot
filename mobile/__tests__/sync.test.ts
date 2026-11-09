@@ -16,6 +16,8 @@ import {
   confirmSend,
   emptySync,
   mergePage,
+  upsert,
+  upsertAll,
   type SyncState,
 } from '../src/lib/sync';
 import { msg } from './helpers';
@@ -50,6 +52,43 @@ describe('messages', () => {
     );
     expect(s.chats.a.messages.find((m) => m.id === 'card')?.approval?.status).toBe('allowed');
     expect(s.chats.a.messages.map((m) => m.id)).toEqual(['m0', 'card']);
+  });
+
+  it('pages a 5,000-line chat back to its first line, every line once and in order', () => {
+    const log = Array.from({ length: 5000 }, (_, i) => msg(`m${String(i).padStart(4, '0')}`, i));
+    const page = (before?: string) => {
+      const end = before ? log.findIndex((m) => m.id === before) : log.length;
+      const start = Math.max(0, end - 50);
+      return { messages: log.slice(start, end), asOf: { epoch, seq: 7 }, more: start > 0 };
+    };
+    let s = applyEvent(emptySync(), { type: 'sync.caughtUp', cursor: { epoch, seq: 7 } });
+    s = mergePage(s, 'a', page(), false);
+    // A line arrives while you read back: it stays at the foot.
+    s = at(s, 8, msg('live', 9999));
+    let pages = 1;
+    while (s.chats.a.more) {
+      s = mergePage(s, 'a', page(s.chats.a.messages[0].id), true);
+      pages++;
+    }
+    expect(pages).toBe(100);
+    expect(s.chats.a.messages.map((m) => m.id)).toEqual([...log.map((m) => m.id), 'live']);
+  });
+
+  it('merges a page exactly as upserting its lines one by one would', () => {
+    // Pseudo-random, so the run is the same every time.
+    let seed = 7;
+    const rand = (n: number) => (seed = (seed * 16807) % 2147483647) % n;
+    for (let round = 0; round < 200; round++) {
+      const held = Array.from({ length: rand(30) }, (_, i) => msg(`h${i}`, rand(40)));
+      const sorted = held.reduce(upsert, [] as AgentMessage[]);
+      const incoming = Array.from({ length: rand(20) }, () => {
+        const id = rand(2) ? `h${rand(30)}` : `p${rand(30)}`;
+        return msg(id, rand(3) ? (sorted.find((m) => m.id === id)?.ts ?? rand(40)) : rand(40), {
+          text: `v${round}`,
+        });
+      });
+      expect(upsertAll(sorted, incoming)).toEqual(incoming.reduce(upsert, sorted));
+    }
   });
 
   it('lets a newer read overwrite an older event', () => {

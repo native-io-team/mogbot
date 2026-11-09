@@ -170,19 +170,24 @@ export function chatItems(
  * message of a day, the time alone after a pause of `GAP_MS` or more.
  */
 export function timeLabel(ts: number, prevTs: number | undefined, now = Date.now()): string | null {
-  const day = dayLabel(ts, now);
-  if (prevTs === undefined || dayLabel(prevTs, now) !== day) return `${day} ${formatClock(ts)}`;
+  // Days compared by their midnight; only a line that shows is worded. Wording
+  // both sides of every message (a locale lookup each) was most of what a
+  // 5,000-line chat cost to lay out, on every page and every status.
+  if (prevTs === undefined || dayStart(prevTs) !== dayStart(ts))
+    return `${dayLabel(ts, now)} ${formatClock(ts)}`;
   if (ts - prevTs >= GAP_MS) return formatClock(ts);
   return null;
 }
 
+/** Local midnight of the day `t` falls on. */
+function dayStart(t: number): number {
+  const d = new Date(t);
+  return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+}
+
 /** "Today", "Yesterday", "Tuesday", "Nov 3" (`formatDate`): a day separator. */
 export function dayLabel(ts: number, now = Date.now()): string {
-  const day = (t: number) => {
-    const d = new Date(t);
-    return new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
-  };
-  const days = Math.round((day(now) - day(ts)) / 86_400_000);
+  const days = Math.round((dayStart(now) - dayStart(ts)) / 86_400_000);
   if (days === 0) return 'Today';
   if (days === 1) return 'Yesterday';
   const d = new Date(ts);

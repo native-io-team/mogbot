@@ -327,6 +327,24 @@ profile and `--cdp` port (default 9711). Results land in `--out` (default
 | `reopened` | `openEvents` and `stream` again after reopening the chat | as above |
 | `idle` | Six agents left "working", nothing else happening | < 3% main thread |
 
+Long chats: `--lines 5000` serves a chat that long (the scenario reads
+`?lines=`), and five more phases, not in `all`, measure what a long chat costs:
+
+| Phase | What it does |
+| --- | --- |
+| `cold` | Page load to the chat's first rows; heap and DOM size |
+| `scroll` | 120 px a frame up through every line (paging in), then down; frame times, long tasks; heap and DOM after, and 20 s after landing back on the newest line |
+| `typing` | 70 keys into the composer, newest page and all lines mounted: main-thread ms per key, `AgentChat` renders |
+| `arrive` | A reply with a timeline lands, five times: ms to on screen, what re-rendered |
+
+```bash
+node scripts/perf-agents.mjs --build --lines 5000 cold,scroll,typing,arrive,open
+```
+
+Scrolling, here and in `open`'s set-up, dispatches a `wheel` before moving the
+scroll: the chat follows the bottom unless the reader moved it. The phone's
+counterpart is `pnpm qa:web --phases perf` (docs/mobile.md).
+
 `openEvents` and `stream` scroll through all 2,000 lines first, so every one
 of them is mounted: the worst case. A reopened chat mounts only its newest
 lines (more come in as you scroll up), which is what `reopened` measures.

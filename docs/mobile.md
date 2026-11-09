@@ -1207,6 +1207,13 @@ pnpm qa:web --phases heavy          # demo,fresh,live,cached,impostor,bars,usage
 pnpm qa:web --web-port 8098 --mock-port 47498 --cdp-port 9681   # the defaults
 ```
 
+`--phases perf` (not in the default run) times the torture mock's "Long Rich"
+chat, 5,000 lines of every kind (markdown, code, timelines, result and
+approval cards, pictures): a deep link's cold open to the newest line, a tap
+in from the agents list, and 20 s of scrolling back (frame times, long tasks,
+how far it got), into `perf-long-chat.json` in `--out`. It runs against Metro's
+development build, so read the numbers as relative.
+
 The ports also read `QA_WEB_PORT`, `QA_MOCK_PORT` and `QA_CDP_PORT`; `--verbose`
 streams the mock's and Expo's output. With a `TMPDIR` longer than 60 characters
 (a sandbox's), it works under `/tmp/qa-web-*` and gives its children a `TMPDIR`

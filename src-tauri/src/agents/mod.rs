@@ -445,3 +445,5 @@ mod audit_tests;
 mod avatar_tests;
 #[cfg(test)]
 mod brand_copy_tests;
+#[cfg(test)]
+mod long_chat_tests;

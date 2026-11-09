@@ -727,15 +727,7 @@ pub fn messages_page(
     let mut page = {
         let lock = room_lock(id);
         let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
-        let path = log_path(id)?;
-        let end_of = |read: &[AgentMessage]| match before {
-            Some(b) => read.iter().position(|m| m.id == b),
-            None => Some(read.len()),
-        };
-        let mut all = store::read_back(&path, |read| end_of(read).is_some_and(|end| end >= limit))?;
-        let end = end_of(&all).unwrap_or(0);
-        all.truncate(end);
-        all.split_off(end.saturating_sub(limit))
+        store::page_back(&log_path(id)?, limit, before, None)?
     };
     let mut by_agent: HashMap<String, Vec<usize>> = HashMap::new();
     for (i, m) in page.iter().enumerate() {
