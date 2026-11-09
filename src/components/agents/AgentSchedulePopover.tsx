@@ -138,6 +138,8 @@ export function AgentSchedulePopover({
     <Dropdown
       align="right"
       portal
+      presentation="popover"
+      ariaLabel={`Routines for ${agent.name}`}
       open={open}
       onOpenChange={onOpenChange}
       menuClassName="agent-schedule"

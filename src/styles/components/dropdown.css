@@ -121,7 +121,8 @@
    says nothing when the accent is white (docs/design-system.md, "Selected
    needs a second cue"). */
 .ss-dropdown__item--active {
-  color: var(--accent-active);
+  /* The readable accent: a raw pink or green on the selected fill was 3:1. */
+  color: var(--accent-text);
   font-weight: var(--font-weight-label);
   background: var(--surface-selected);
 }

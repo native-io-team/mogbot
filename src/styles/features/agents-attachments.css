@@ -469,7 +469,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: var(--spacing-3xs);
+  /* 20px buttons 24px apart, centre to centre (WCAG 2.5.8). */
+  gap: var(--spacing-xs);
 }
 
 .agent-lightbox__zoom-readout {

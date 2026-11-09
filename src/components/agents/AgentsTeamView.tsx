@@ -509,7 +509,12 @@ export function AgentsTeamView({
         )}
       </header>
 
-      <div className="agent-chat__scroll">
+      <div
+        className="agent-chat__scroll"
+        tabIndex={0}
+        role="region"
+        aria-label="Everything in flight, by agent"
+      >
         <div className="agents-team__column" ref={columnRef}>
           {setup && chief && (
             <button

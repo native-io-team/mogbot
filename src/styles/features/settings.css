@@ -578,6 +578,8 @@
 .agent-account__order-controls {
   display: inline-flex;
   align-items: center;
+  /* 24px between the arrows' centres (WCAG 2.5.8). */
+  gap: var(--spacing-xs);
   margin-left: var(--spacing-xs);
 }
 

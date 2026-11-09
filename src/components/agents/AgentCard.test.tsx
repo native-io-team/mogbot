@@ -48,3 +48,49 @@ describe('ConversationBars', () => {
     expect(screen.getByRole('button', { name: '1 more' })).toBeInTheDocument();
   });
 });
+
+describe('AgentCard, for assistive tech', () => {
+  it('is a group named by its title, which is a heading', () => {
+    render(
+      <AgentCard title="Push to main?" actions={<button type="button">Allow</button>}>
+        <p>3 commits</p>
+      </AgentCard>
+    );
+    expect(screen.getByRole('group', { name: 'Push to main?' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 3, name: 'Push to main?' })).toBeInTheDocument();
+  });
+
+  it('moves focus to the outcome when the answered button goes away', () => {
+    const card = (answered: boolean) => (
+      <AgentCard
+        title="Push to main?"
+        resolved={answered}
+        outcome={answered ? 'Allowed' : undefined}
+        actions={answered ? undefined : <button type="button">Allow</button>}
+      />
+    );
+    const { rerender } = render(card(false));
+    screen.getByRole('button', { name: 'Allow' }).focus();
+    rerender(card(true));
+    expect(document.activeElement).toHaveTextContent('Allowed');
+  });
+
+  it('leaves focus alone when it was elsewhere (answered from the phone)', () => {
+    const card = (answered: boolean) => (
+      <>
+        <input aria-label="Composer" />
+        <AgentCard
+          title="Push to main?"
+          resolved={answered}
+          outcome={answered ? 'Allowed' : undefined}
+          actions={answered ? undefined : <button type="button">Allow</button>}
+        />
+      </>
+    );
+    const { rerender } = render(card(false));
+    const composer = screen.getByRole('textbox', { name: 'Composer' });
+    composer.focus();
+    rerender(card(true));
+    expect(document.activeElement).toBe(composer);
+  });
+});

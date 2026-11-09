@@ -164,7 +164,7 @@ function ResultBody({ agent, card }: ResultBodyProps) {
       {changes && <p className="agent-result__changes">{changes}</p>}
       {card.summary && <p className="agent-result__summary">{card.summary}</p>}
       {notVerified.length > 0 && (
-        <section className="agent-result__unverified" aria-label="Not verified">
+        <div className="agent-result__unverified" role="group" aria-label="Not verified">
           <h4 className="agent-result__unverified-title">
             <HelpIcon size={14} />
             Not verified
@@ -174,7 +174,7 @@ function ResultBody({ agent, card }: ResultBodyProps) {
               <li key={`${i}:${line}`}>{line}</li>
             ))}
           </ul>
-        </section>
+        </div>
       )}
       <ResultCompare agent={agent} pages={pages} onView={setViewing} />
       {items.length > 0 && (
@@ -193,14 +193,14 @@ function ResultBody({ agent, card }: ResultBodyProps) {
       {checked.length > 0 && (
         // The agent's claims, not the app's findings: attributed, and a plain
         // bullet rather than a tick that would read as verified.
-        <section className="agent-result__checked" aria-label={CHECKED_HEADING}>
+        <div className="agent-result__checked" role="group" aria-label={CHECKED_HEADING}>
           <h4 className="agent-result__checked-title">{CHECKED_HEADING}</h4>
           <ul>
             {checked.map((line, i) => (
               <li key={`${i}:${line}`}>{line}</li>
             ))}
           </ul>
-        </section>
+        </div>
       )}
       {viewer}
     </>

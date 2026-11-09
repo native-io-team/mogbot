@@ -118,3 +118,10 @@
     transform: scale(0.95);
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .ss-context-menu,
+  .ss-context-menu[data-state='closed'] {
+    animation: none;
+  }
+}

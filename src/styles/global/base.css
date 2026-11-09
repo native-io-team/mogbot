@@ -555,6 +555,12 @@ code,
   height: var(--button-height-compact);
 }
 
+.button--icon-only.button--size-medium {
+  width: var(--size-control-medium);
+  min-width: var(--size-control-medium);
+  height: var(--size-control-medium);
+}
+
 .button--icon-only.button--size-large {
   width: var(--control-height-large);
   min-width: var(--control-height-large);
@@ -595,4 +601,18 @@ code,
   flex-shrink: 0;
   margin-right: var(--spacing-2xs);
   vertical-align: -0.125em;
+}
+
+/* Read by screen readers, never drawn: live regions with nowhere visible to
+   put their words. */
+.sr-only {
+  position: absolute;
+  width: 1px; /* css-ok: the smallest box assistive tech still reads */
+  height: 1px; /* css-ok: the smallest box assistive tech still reads */
+  margin: -1px; /* css-ok: pulls the 1px box out of flow */
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
 }

@@ -14,6 +14,7 @@
  * @module components/agents/AgentChat
  */
 
+import { ChatAnnouncer } from './ChatAnnouncer';
 import {
   memo,
   useCallback,
@@ -1581,6 +1582,7 @@ export const AgentChat = memo(function AgentChat({
           {...accentScope}
           {...dropHandlers}
         >
+          <ChatAnnouncer chatId={agent.id} messages={messages} agentName={agent.name} />
           <header className="agent-chat__header">
             {compact && (
               <CompactModeToggle
@@ -1666,7 +1668,15 @@ export const AgentChat = memo(function AgentChat({
             </div>
           )}
 
-          <div className="agent-chat__scroll" ref={scrollRef} onScroll={onScroll}>
+          {/* Focusable, so the history scrolls with the keyboard (arrows, Page Up). */}
+          <div
+            className="agent-chat__scroll"
+            ref={scrollRef}
+            onScroll={onScroll}
+            tabIndex={0}
+            role="region"
+            aria-label="Messages"
+          >
             <div
               className="agent-chat__messages"
               ref={messagesRef}

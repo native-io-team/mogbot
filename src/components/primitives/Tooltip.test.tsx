@@ -217,5 +217,22 @@ describe('Tooltip', () => {
 
     expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
     expect(screen.getByTestId('live-preview')).not.toHaveAttribute('title');
+    // Its title was its name: VoiceOver still has one.
+    expect(screen.getByTestId('live-preview')).toHaveAttribute('aria-label', 'Preview');
+  });
+
+  it('keeps a wordless control named when its title becomes the shared tooltip', async () => {
+    render(
+      <TooltipProvider>
+        <button title="Show in Finder">
+          <svg aria-hidden />
+        </button>
+        <button title="Opens it">Open</button>
+      </TooltipProvider>
+    );
+    await act(async () => {});
+    expect(screen.getByRole('button', { name: 'Show in Finder' })).not.toHaveAttribute('title');
+    // One with words of its own keeps them as its name.
+    expect(screen.getByRole('button', { name: 'Open' })).not.toHaveAttribute('aria-label');
   });
 });

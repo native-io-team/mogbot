@@ -108,7 +108,7 @@ export function AgentFilesModal({ agent, isOpen, onClose }: AgentFilesModalProps
                 </button>
                 <IconButton
                   variant="ghost"
-                  size="compact"
+                  size="medium"
                   icon={<FolderOpenIcon size={14} />}
                   onClick={() => void open(file, true)}
                   aria-label={`Show ${file.name} in Finder`}
@@ -116,7 +116,7 @@ export function AgentFilesModal({ agent, isOpen, onClose }: AgentFilesModalProps
                 />
                 <IconButton
                   variant="ghost"
-                  size="compact"
+                  size="medium"
                   icon={<ExternalLinkIcon size={14} />}
                   onClick={() => void open(file)}
                   aria-label={`Open ${file.name}`}

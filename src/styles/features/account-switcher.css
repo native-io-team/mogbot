@@ -234,6 +234,9 @@
 
 .account-switcher__order {
   display: inline-flex;
+  /* Two 20px arrows need 24px between centres to be told apart by a finger
+     or a shaky pointer (WCAG 2.5.8). */
+  gap: var(--spacing-xs);
 }
 
 .account-switcher__add {

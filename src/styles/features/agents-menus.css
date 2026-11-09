@@ -291,3 +291,9 @@
   font-weight: var(--font-weight-label);
   color: color-mix(in srgb, var(--agents-tint, var(--text-secondary)) 70%, var(--text-primary));
 }
+
+/* Light's tints are the dark theme's: at 70% a green @name was 3:1 on your
+   bubble. 40%, as a room's speaker names take, clears AA. */
+:root[data-theme='light'] .agent-mention {
+  color: color-mix(in srgb, var(--agents-tint, var(--text-secondary)) 40%, var(--text-primary));
+}

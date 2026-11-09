@@ -298,6 +298,26 @@
   text-overflow: ellipsis;
 }
 
+/* The selected fill (the open row, your own bubble, the current search hit)
+   is lighter than the panel in dark: secondary is 4.3:1 on it and muted 2.6:1.
+   Words sitting on it step up to one shade that clears AA. */
+:root[data-theme='dark']
+  :is(
+    .agents-list__row.is-current,
+    .agents-list__needs-you.is-current,
+    .agents-search__hit.is-current,
+    .agent-bubble--user,
+    .account-switcher__row[aria-expanded='true']
+  ) {
+  --text-secondary: var(--color-gray-300);
+  --text-muted: var(--color-gray-300);
+}
+
+/* In light the selected fill darkens the amber "Needs you" to 3.8:1. */
+:root[data-theme='light'] :is(.agents-list__row.is-current, .agents-list__needs-you.is-current) {
+  --accent-warning: var(--color-orange-900);
+}
+
 .agents-list__row.is-current .agents-list__preview {
   color: var(--text-secondary);
 }
@@ -439,9 +459,19 @@
   padding: 0;
 }
 
-.workspace-sidebar.is-hidden .agents-list__needs-you-label,
 .workspace-sidebar.is-hidden .agents-list__needs-you-chevron {
   display: none;
+}
+
+.workspace-sidebar.is-hidden .agents-list__needs-you-label {
+  /* Out of sight, still the button's name for VoiceOver (display: none left
+     every collapsed row nameless). */
+  position: absolute;
+  width: 1px; /* css-ok: visually hidden, still read */
+  height: 1px; /* css-ok: visually hidden, still read */
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .workspace-sidebar:not(.is-hidden) .agents-list__new > svg,
@@ -499,9 +529,19 @@
   padding: var(--spacing-sm);
 }
 
-.workspace-sidebar.is-hidden .agents-list__text,
 .workspace-sidebar.is-hidden .agents-list__hidden-toggle {
   display: none;
+}
+
+.workspace-sidebar.is-hidden .agents-list__text {
+  /* Out of sight, still the button's name for VoiceOver (display: none left
+     every collapsed row nameless). */
+  position: absolute;
+  width: 1px; /* css-ok: visually hidden, still read */
+  height: 1px; /* css-ok: visually hidden, still read */
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 .workspace-sidebar.is-hidden .agents-list__status {

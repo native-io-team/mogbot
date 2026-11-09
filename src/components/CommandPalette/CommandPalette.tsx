@@ -248,7 +248,7 @@ export function CommandPalette({
           ))}
         </TabsList>
         <TabsPanel value={activeTab} className="command-palette-list-panel">
-          <div className="command-palette-list" role="listbox" ref={listRef}>
+          <div className="command-palette-list" role="listbox" aria-label="Commands" ref={listRef}>
             {filtered.length === 0 ? (
               <div className="command-palette-empty">
                 {query ? `No matches for "${query}"` : 'No commands available here yet'}

@@ -240,7 +240,14 @@
 }
 
 .workspace-sidebar.is-hidden .workspace-sidebar-add-project > span:last-child {
-  display: none;
+  /* Out of sight, still the button's name for VoiceOver (display: none left
+     every collapsed row nameless). */
+  position: absolute;
+  width: 1px; /* css-ok: visually hidden, still read */
+  height: 1px; /* css-ok: visually hidden, still read */
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
 }
 
 /* Home row — height matches the workspace header band so the navigation

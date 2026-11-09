@@ -109,6 +109,13 @@
   color: var(--text-primary);
 }
 
+/* Muted is 4.1:1 on the tinted fill: the chosen (or hovered) preset's line
+   steps up to secondary. */
+.agent-team-policy__preset[aria-checked='true'] .agent-team-policy__preset-detail,
+.agent-team-policy__preset:hover:not(:disabled) .agent-team-policy__preset-detail {
+  color: var(--text-secondary);
+}
+
 .agent-team-policy__preset:disabled {
   cursor: default;
   opacity: var(--button-disabled-opacity);
