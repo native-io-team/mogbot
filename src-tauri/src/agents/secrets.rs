@@ -675,6 +675,7 @@ mod tests {
             decide: Vec::new(),
             local_links: Vec::new(),
             remembered: None,
+            via: None,
         };
         let request_id = store::new_id();
         card.approval = Some(Approval {
@@ -704,6 +705,7 @@ mod tests {
             step_in: None,
             crossover: None,
             account_switch: None,
+            slack_reply: None,
         });
         store::append_message(&card).unwrap();
         (request_id, request)

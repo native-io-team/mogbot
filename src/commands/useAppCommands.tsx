@@ -19,6 +19,7 @@ import { COMPANION_INSTALL_ENABLED, requestInstallOnOpen } from '../lib/companio
 import { fileManagerName } from '../lib/setup';
 import { BRAND } from '../lib/brand';
 import { requestSettingsSectionOnOpen, requestSettingsTabOnOpen } from '../lib/settings';
+import { checkSlackNow } from '../lib/slack';
 import { requestAccountsOnOpen, requestSwitcher } from '../lib/agentAccounts';
 import {
   CodeIcon,
@@ -391,6 +392,36 @@ export function useAppCommands({
         },
       },
       {
+        id: 'agents.slack',
+        title: 'Talk to your agents from Slack…',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: ['slack', 'message', 'thread', 'dm', 'channel', 'connect', 'reply', 'trigger'],
+        run: () => {
+          requestSettingsTabOnOpen('agents');
+          requestSettingsSectionOnOpen('agent-slack');
+          openModal('settings');
+        },
+      },
+      {
+        id: 'agents.slackCheckNow',
+        title: 'Check Slack for new asks now',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: ['slack', 'check', 'poll', 'refresh'],
+        run: async () => {
+          try {
+            const s = await checkSlackNow();
+            if (!s.connected)
+              showToast('Slack isn’t connected. Connect it in Settings → Agents.', 'info');
+            else if (s.lastError) showToast(s.lastError, 'error');
+            else showToast('Checked Slack', 'success');
+          } catch (e) {
+            showToast(e instanceof Error ? e.message : String(e), 'error');
+          }
+        },
+      },
+      {
         id: 'agents.independence',
         title: 'How independent your agents are…',
         icon: <SettingsIcon size={14} />,
@@ -673,6 +704,7 @@ export function useAppCommands({
       setCompactWorkspaceToolbarEnabled,
       openModal,
       runCheckUpdates,
+      showToast,
     ]
   );
 

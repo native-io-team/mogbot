@@ -1525,6 +1525,10 @@ pub(crate) fn answer_card(
     if approval.account_switch.is_some() {
         return agents::usage_tools::answer_switch(app, agent_id, &approval, allow);
     }
+    // "Reply in Slack?": Allow posts the exact words shown, as the user.
+    if approval.slack_reply.is_some() {
+        return agents::slack::answer_card(app, agent_id, &approval, allow);
+    }
     // "Do these under your name?": Allow is the user's OK for each listed
     // action, here and only here (`plan_grant`).
     if let (true, Some(plan)) = (allow, &approval.plan) {

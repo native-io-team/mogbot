@@ -1780,6 +1780,7 @@ pub fn new_message(agent_id: &str, kind: MessageKind, text: impl Into<String>) -
         decide: Vec::new(),
         local_links: Vec::new(),
         remembered: None,
+        via: None,
     }
 }
 
@@ -2978,6 +2979,8 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     runtime.outside =
         batch.iter().any(|m| m.outside) || (runtime.outside && runtime.interrupted.is_some());
     runtime.typed = typed_of(&batch, runtime.outside);
+    // Whether the turn answering a Slack ask read outside text (`slack::decide`).
+    super::slack::note_batch(&runtime.batch_ids, runtime.outside);
     let request = batch.first().map(|m| m.text.clone()).unwrap_or_default();
     let user_said = batch
         .iter()
@@ -6932,6 +6935,7 @@ mod tests {
                 step_in: None,
                 crossover: None,
                 account_switch: None,
+                slack_reply: None,
             });
             store::append_message(&card).unwrap();
             let err = begin_fresh(&a.id).unwrap_err().to_string();

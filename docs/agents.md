@@ -3745,6 +3745,112 @@ Not verified against live accounts: a model check through a real connector,
 and the GitHub search source (pagination included). The notifications
 call's shape was checked with one read-only `gh api notifications` call.
 
+## Slack (`agents/slack.rs`, `agents/slack_api.rs`)
+
+Answers: **can I start my agents, and get their answer, from the Slack
+thread where the work came up, with no server in between?**
+
+**Connect (Settings → Agents → Slack, ⌘K "Talk to your agents from
+Slack…").** There is no server of ours, so there is no Slack app of ours: an
+OAuth app needs a client secret and an HTTPS redirect, both of which would
+have to live somewhere we run (and Slack's own MCP server has no dynamic
+client registration, so `oauth.rs` can't sign in to it). Instead:
+
+1. **Open Slack…** opens `api.slack.com/apps?new_app=1&manifest_json=…`,
+   prefilled (`slack_api::manifest_url`): user scopes only
+   (`channels/groups/im/mpim:history` and `:read`, `im:write` for the user's
+   own DM, `users:read`, `chat:write`), no bot user, no events, no socket
+   mode, no token rotation.
+2. The user installs it to their workspace and copies the **User OAuth
+   Token** (`xoxp-…`).
+3. They paste it into a masked field. `auth.test` checks it, then it goes
+   into the Keychain (`<slug>-slack`, key `user-token`), is added to
+   redaction, and never appears in `slack.json`, a chat, a log or the phone.
+   A bot token (`xoxb-`) is refused with the reason.
+
+An app installed only in its own workspace is internal, so the 2025 limits
+on `conversations.history`/`.replies` for unlisted distributed apps don't
+apply. A user token both reads as the user and posts as the user: that is
+what "under your name" means here. Disconnect deletes the Keychain item;
+Slack keeps the app (the user removes it there).
+
+**Listening.** Every 30 s while connected and on (a 5 s tick also settles
+replies), this Mac reads each chosen conversation (at most 20):
+`conversations.history` (newest 30), plus `conversations.replies` for a
+thread whose `latest_reply` is past the cursor. The first read of a
+conversation is a baseline (nothing already there starts anything); a
+conversation added later starts from then. `channel:ts` of what was read is
+kept (500) so nothing fires twice. A refused token stops checks and says so
+on the row; a rate limit waits `Retry-After`; other failures back off
+(doubling, at most 15 minutes); a conversation Slack won't show is skipped
+with a warning. Default listening place: the user's DM to themself.
+
+**The trigger.** A message counts only when it starts with the trigger
+(`<slug>:`, so `dashbot:`, changeable, 2–24 characters, not `/ @ # ! <`),
+case aside: ordinary chatter never starts a turn. Someone else's counts only
+when the user turned on **Let others start it** (off by default), and then
+only when it @-mentions the user first, then the trigger; in a DM to the
+user, the trigger alone. At most 5 asks start per check; the rest get one
+line in the chat.
+
+**Whose words.** A message is the user's instruction only when Slack says the
+user wrote it: `user` equals the token's own id (from `auth.test`), no
+`bot_id` / `bot_profile` / `app_id`, no subtype other than
+`thread_broadcast`, and not a `ts` the app posted (`posted`, kept 200, since
+our own replies show up as the user's). Anything else is **outside text**:
+it reaches the agent in the `<external_items>` envelope (`watch::envelope`,
+tag neutralised inside), queued with `runner::enqueue_assistant` (the
+outside taint: sealed memory, cards to change the team, connection reads
+ask), and its chat line is a note ("Sam asked in Slack (#launch): …"), never a
+bubble that looks like the user's. The user's own message is a user line
+labelled "From Slack · #launch" (`AgentMessage::via`, desk and phone), queued
+with `enqueue_user(.., typed: None)`: it is their request, but not *typed in
+this chat*, so a Slack "yes" never answers a card and `remember_permission`
+can't be satisfied from Slack.
+
+**The reply.** When the agent is idle again, its last reply in its own chat
+after the ask (a result card's title when the reply is only a card) is cut to
+3,000 characters at a line ("… the rest is in the app.") and, by
+`slack::decide`:
+
+- **refused** (a line in the chat) if it's empty or holds anything shaped
+  like a secret or a known Keychain value (`egress::holds_secret`), card or no
+  card;
+- **posted by itself** only when all four hold: the user wrote the Slack
+  message themself; the turn that took it read no outside text
+  (`runner::take_batch` → `slack::note_batch`; unknown after a restart counts
+  as outside) and no other user message came between; the agent's own level
+  is **Unleashed** (which already lets it send what the user asked for); and
+  the exact-text switch is **off**;
+- otherwise a **"Reply in Slack?" card** in the agent's chat (desk and
+  phone): where it goes, then `outward::card_block`'s "Goes out under your
+  name, exactly: “…”". No Always allow; nothing waits on it; it never expires
+  (`expiry.rs`). Allow (or a typed yes in the chat) posts exactly those words
+  in the thread (`chat.postMessage`, `&<>` escaped, unfurls off) and leaves
+  "Posted in Slack (#launch)."; Deny leaves "Not posted in Slack.".
+
+So the default, at Steady, is a card for every reply. Agents get no Slack
+tool and never hold the token; a turn told "don't post to Slack yourself"
+that tries anyway goes through the usual `outward` rules (a `curl` to
+`slack.com` is a send).
+
+When one turn answers two asks, the later ask's thread gets the reply and the
+earlier gets nothing. A reply that never comes is dropped after 2 minutes of
+idleness or 6 hours of work, with a line.
+
+**Not verified** (no live Slack calls were made building this): the prefilled
+manifest link against Slack's current "Create app" page; that an app with
+only user scopes and no bot installs with an "Install to Workspace" button;
+that Slack marks a user-token `chat.postMessage` with `app_id` (the `posted`
+list covers it either way); thread pickup through `latest_reply` on a real
+workspace; Slack's rate limits at 20 conversations every 30 s. Everything
+else is tested against a fake Web API (`slack_tests.rs`).
+
+**Known limits / next.** No thread context is passed with an ask (only the
+message itself); messages edited to add the trigger don't count; DMs with
+others are named with one `users.info` each (60 at most per listing); the
+phone shows the labels and answers the card but has no Slack settings yet.
+
 ## Usage before the wall (`agents/usage.rs`, `agents/quota.rs`)
 
 Grok Bot's bots went silent at the usage limit. Here the limit is said

@@ -172,6 +172,10 @@ pub fn verdict(a: &Approval, age_ms: i64, waited_on: bool, moment: Moment) -> Op
     if a.account_switch.is_some() {
         return None;
     }
+    // "Reply in Slack?": nothing waits on it; it stays until answered.
+    if a.slack_reply.is_some() {
+        return None;
+    }
     if let Some(s) = &a.secret {
         // An import's old-style secure input (before sign-in cards, which
         // replaced it): nothing raises these any more and nothing waits on

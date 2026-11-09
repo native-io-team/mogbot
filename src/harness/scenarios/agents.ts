@@ -693,6 +693,34 @@ export const HANDOFF_CARD = () =>
     },
   });
 
+/** A Slack ask, its answer, and the card holding the reply's exact words (fictional). */
+const SLACK_REPLY_TEXT =
+  'Drafted. Launch is Friday at 10:00; Sam owns the checklist and the post goes out at 10:30.';
+export const SLACK_CHAT = [
+  msg('user', 'draft the launch note for #launch from the doc Sam shared', 6, {
+    via: { source: 'slack', place: '#launch' },
+  }),
+  msg('agent', `Here is the note.\n\n${SLACK_REPLY_TEXT}`, 4),
+  msg('approval', '', 3, {
+    approval: {
+      requestId: 'slack1',
+      title: 'Reply in Slack?',
+      summary: `In #launch, in the thread it was asked in. Goes out under your name, exactly:\n“${SLACK_REPLY_TEXT}”`,
+      detail: SLACK_REPLY_TEXT,
+      status: 'pending',
+      slackReply: {
+        channel: 'C0LAUNCH',
+        threadTs: '1700000004.000100',
+        place: '#launch',
+        text: SLACK_REPLY_TEXT,
+      },
+    },
+  }),
+  msg('note', 'Sam asked in Slack (your DM with Sam): “what’s the ETA on the launch note?”', 1, {
+    via: { source: 'slack', place: 'your DM with Sam', from: 'Sam' },
+  }),
+];
+
 export const REVIEW_CHAT = [
   ...IMPORT_TALK_CHAT,
   msg(
@@ -1925,6 +1953,20 @@ export const agentsScenarios: Scenario[] = [
     commands: {
       agents_overview: overview(),
       agents_messages: messagesFor,
+    },
+  },
+  {
+    id: 'agents-slack-reply',
+    title: 'Agents — an ask from Slack, and its reply waiting for your OK',
+    looksRightWhen:
+      'The Chief’s chat: your bubble “draft the launch note…” with a small muted “From Slack · #launch” under it; the Chief’s reply; then a card “Reply in Slack?” whose lead says “In #launch, in the thread it was asked in. Goes out under your name, exactly:” and quotes the reply word for word, with neutral Allow / Deny (never accent) and no Always allow; last, a quiet centred line “Sam asked in Slack (your DM with Sam): …”, not a bubble of yours.',
+    requires: '.agent-chat__row--user',
+    openSelector: AGENTS_TAB,
+    steps: [{ click: '[data-agent-id="chief"]' }],
+    commands: {
+      agents_overview: overview(),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? SLACK_CHAT : messagesFor(args),
     },
   },
   {

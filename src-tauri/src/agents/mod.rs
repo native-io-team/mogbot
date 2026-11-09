@@ -148,6 +148,8 @@ pub mod runs;
 pub mod schedule;
 pub mod search;
 pub mod secrets;
+pub mod slack;
+pub mod slack_api;
 pub mod sessions;
 pub mod share_text;
 pub mod step_in;
@@ -222,6 +224,7 @@ fn greet(agent_id: &str) {
         decide: Vec::new(),
         local_links: Vec::new(),
         remembered: None,
+        via: None,
     };
     if let Err(e) = store::append_message(&message) {
         tracing::warn!("[Agents] Couldn't write the Chief's greeting: {e}");

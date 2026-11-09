@@ -7,6 +7,7 @@ pub mod agent_bridge;
 pub mod agent_rooms;
 pub mod agents;
 pub mod agents_preview;
+pub mod agents_slack;
 pub mod agents_usage;
 pub mod ai;
 pub mod analytics;

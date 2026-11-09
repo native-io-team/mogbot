@@ -623,3 +623,25 @@
   align-items: center;
   gap: var(--spacing-sm);
 }
+
+/* Settings → Agents → Slack: the trigger word's short field, and the
+   conversations to listen in, one tickable line each. */
+.agents-slack-trigger {
+  width: calc(var(--spacing-xl) * 6);
+}
+
+.agents-slack-conversations {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-xs) 0 var(--spacing-md);
+}
+
+.agents-slack-conversation {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  font-size: var(--font-size-body-md);
+  color: var(--text-primary);
+  cursor: pointer;
+}

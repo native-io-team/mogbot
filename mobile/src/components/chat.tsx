@@ -9,6 +9,7 @@
 import {
   revisingLabel,
   splitQuotes,
+  viaLabel,
   type Agent,
   type AgentMessage,
   type ResultRef,
@@ -187,6 +188,11 @@ export const MessageRow = memo(function MessageRow({
               )}
               <Bubble text={message.text} />
             </Pressable>
+          )}
+          {!!viaLabel(message.via) && (
+            <T variant="caption" color={colors.textSecondary} style={styles.meta}>
+              {viaLabel(message.via)}
+            </T>
           )}
           {queued && (
             <T variant="caption" color={colors.textSecondary} style={styles.meta}>

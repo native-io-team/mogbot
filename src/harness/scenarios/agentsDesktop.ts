@@ -293,6 +293,50 @@ export const agentsDesktopScenarios: Scenario[] = [
     },
   },
   {
+    id: 'settings-agents-slack-setup',
+    title: 'Settings — Slack, not connected yet',
+    looksRightWhen:
+      'Opened from ⌘K “Talk to your agents from Slack…”, scrolled to Slack: “Talk to your agents from Slack” with one line saying this Mac reads Slack and nothing runs on a server; then three numbered rows, one short line each: “1. Create the Slack app” with a neutral “Open Slack…” button, “2. Install it” (copy the User OAuth Token, xoxp-…), “3. Paste the token” with a masked field and a neutral, disabled “Connect”. Nothing in the accent colour.',
+    command: 'agents.slack',
+    requires: '[data-testid="slack-setup"]',
+    clipSelector: 'section[aria-labelledby="agents-settings-slack"]',
+    commands: {
+      agents_overview: overview(TEAM),
+      agents_desktop_settings: DESKTOP_SETTINGS,
+    },
+  },
+  {
+    id: 'settings-agents-slack',
+    title: 'Settings — Slack, connected and listening',
+    looksRightWhen:
+      'Scrolled to Slack: “Listen in Slack” on, “On in Northwind as robin. Checked just now.”; “Who answers” with a menu button showing the Chief’s name; “Where it listens” — “Your own DM and #launch” with Choose…; “Trigger” with a short field holding “dashbot:”; “Let others start it” off, its line saying their words are outside text and replies always ask; “Replies” saying a reply is posted under your name after you OK the exact words; “Disconnect” with a neutral button. No token anywhere, nothing in the accent colour.',
+    command: 'agents.slack',
+    requires: '[data-testid="slack-connected"]',
+    clipSelector: 'section[aria-labelledby="agents-settings-slack"]',
+    commands: {
+      agents_overview: overview(TEAM),
+      agents_desktop_settings: DESKTOP_SETTINGS,
+      agents_slack_status: {
+        connected: true,
+        enabled: true,
+        needsSignIn: false,
+        team: 'Northwind',
+        user: 'robin',
+        agentName: 'Chief of Staff',
+        conversations: [
+          { id: 'D0SELF', kind: 'self', name: 'Your own DM' },
+          { id: 'C0LAUNCH', kind: 'channel', name: '#launch' },
+        ],
+        trigger: 'dashbot:',
+        defaultTrigger: 'dashbot:',
+        othersCanStart: false,
+        lastCheckAt: Date.now(),
+        waiting: 0,
+        setupUrl: 'https://api.slack.com/apps?new_app=1&manifest_json=%7B%7D',
+      },
+    },
+  },
+  {
     id: 'settings-agents-independence',
     title: 'Settings — how independent agents are, set to Bold',
     looksRightWhen:

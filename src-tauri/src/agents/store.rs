@@ -617,6 +617,24 @@ pub struct Approval {
     /// Older clients show a plain Allow / Deny over the same title and detail.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub account_switch: Option<super::usage_tools::AccountSwitch>,
+    /// "Reply in Slack?" (`agents/slack.rs`): the exact words, and the
+    /// thread they go to. Nothing waits on it; Allow posts it as the user.
+    /// Older clients show a plain Allow / Deny over the same summary.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub slack_reply: Option<super::slack::ReplyCard>,
+}
+
+/// Where a message came in from, when not this app (`AgentMessage::via`).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Via {
+    /// `slack`.
+    pub source: String,
+    /// "#launch", "your own DM".
+    pub place: String,
+    /// Someone other than the user wrote it: their name.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub from: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -698,6 +716,11 @@ pub struct AgentMessage {
     /// while it is in force. Older builds show the note alone.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub remembered: Option<super::remember::Remembered>,
+    /// Came in from outside the app: a Slack message (`agents/slack.rs`),
+    /// shown with "From Slack · #launch". On the user's own message it is
+    /// theirs, written in Slack; on a note, someone else's (`from`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub via: Option<Via>,
 }
 
 /// `agents.json`. Read and written losslessly: an entry this build can't
@@ -2497,6 +2520,7 @@ mod tests {
                     decide: Vec::new(),
                     local_links: Vec::new(),
                     remembered: None,
+                    via: None,
                 })
                 .unwrap();
             }
@@ -2568,6 +2592,7 @@ mod tests {
                         step_in: None,
                         crossover: None,
                         account_switch: None,
+                        slack_reply: None,
                     });
                 }
                 append_message(&line).unwrap();
@@ -2782,6 +2807,7 @@ mod tests {
                     step_in: None,
                     crossover: None,
                     account_switch: None,
+                    slack_reply: None,
                 }),
                 attachments: Vec::new(),
                 check_in: None,
@@ -2800,6 +2826,7 @@ mod tests {
                 decide: Vec::new(),
                 local_links: Vec::new(),
                 remembered: None,
+                via: None,
             };
             append_message(&pending("r1")).unwrap();
             append_message(&pending("r2")).unwrap();
@@ -2849,6 +2876,7 @@ mod tests {
             decide: Vec::new(),
             local_links: Vec::new(),
             remembered: None,
+            via: None,
         }
     }
 
@@ -2907,6 +2935,7 @@ mod tests {
                 step_in: None,
                 crossover: None,
                 account_switch: None,
+                slack_reply: None,
             });
             append_message(&card).unwrap();
             let raw = std::fs::read(log_path(&a.id).unwrap()).unwrap();

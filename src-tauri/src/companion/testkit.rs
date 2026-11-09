@@ -2356,6 +2356,7 @@ pub fn settings_card() -> crate::agents::store::AgentMessage {
         step_in: None,
         crossover: None,
         account_switch: None,
+        slack_reply: None,
     });
     m
 }
@@ -2472,6 +2473,7 @@ pub fn login_card() -> crate::agents::store::AgentMessage {
         step_in: None,
         crossover: None,
         account_switch: None,
+        slack_reply: None,
         from_outside: None,
         login: Some(LoginRequest {
             service: "gmail".into(),
