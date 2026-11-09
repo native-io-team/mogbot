@@ -339,7 +339,7 @@ pub fn claude_results(value: &Value) -> Vec<CallResult> {
         .filter(|b| b.get("type").and_then(Value::as_str) == Some("tool_result"))
         .filter_map(|b| {
             let id = b.get("tool_use_id")?.as_str()?;
-            let outcome = if rejected.contains(id) {
+            let outcome = if rejected.contains(id) && !unavailable(b) {
                 Outcome::Declined
             } else if b.get("is_error").and_then(Value::as_bool) == Some(true) {
                 Outcome::Failed
@@ -353,6 +353,17 @@ pub fn claude_results(value: &Value) -> Vec<CallResult> {
             })
         })
         .collect()
+}
+
+/// Claude Code reports a tool it can't reach as a rejection by config (Claude
+/// in Chrome with no extension connected): that's a failure, not a refusal.
+/// Observed: "Asked to work in Chrome — it wasn't allowed" when the user's
+/// Chrome simply wasn't connected, which read as the app saying no.
+fn unavailable(block: &Value) -> bool {
+    result_text(block).is_some_and(|t| {
+        t.to_ascii_lowercase()
+            .contains("extension is not connected")
+    })
 }
 
 fn file_name(path: &str) -> &str {

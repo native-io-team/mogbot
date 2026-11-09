@@ -76,13 +76,22 @@ pub fn ways(facts: &Facts, service: &Service) -> Vec<String> {
     }
     if let Some(site) = service.site {
         if facts.chrome {
-            out.push(format!("the user's own Chrome, on {site}"));
+            out.push(format!("{USER_CHROME}, on {site}"));
         }
         if facts.agents_browser {
-            out.push(format!("the agents' browser, on {site}"));
+            out.push(format!("{AGENTS_BROWSER}, on {site}"));
         }
     }
     out
+}
+
+const USER_CHROME: &str = "the user's own Chrome";
+const AGENTS_BROWSER: &str = "the agents' browser";
+
+/// Whether one of [`ways`] is a browser: switched on for the agent, which
+/// says nothing about whether it's connected or signed in right now.
+pub fn is_browser_way(way: &str) -> bool {
+    way.starts_with(USER_CHROME) || way.starts_with(AGENTS_BROWSER)
 }
 
 fn connector_name(service: &Service) -> &'static str {

@@ -124,6 +124,21 @@ fn claude_says_which_calls_failed_and_which_were_refused() {
     );
 }
 
+/// Claude Code rejects a Claude in Chrome call "by config" when no extension
+/// is connected: the step failed, nobody said no.
+#[test]
+fn chrome_not_being_connected_is_a_failure_not_a_refusal() {
+    let line = json!({
+        "type": "user",
+        "message": { "content": [
+            { "type": "tool_result", "tool_use_id": "a", "is_error": true,
+              "content": "Browser extension is not connected. Please ensure the extension is running." }
+        ]},
+        "tool_result_meta": [{ "id": "a", "permission_decision": { "decision": "reject" } }]
+    });
+    assert_eq!(claude_results(&line)[0].outcome, Outcome::Failed);
+}
+
 #[test]
 fn a_real_codex_exec_turn_maps_onto_the_same_steps() {
     let mut live = Live::default();

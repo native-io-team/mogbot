@@ -567,7 +567,11 @@ fn main() {
             let typed = eval_in(&browser, &url, "document.getElementById('q').value");
             println!(
                 "    field now {typed} · focus {} · page focused {}",
-                eval_in(&browser, &url, "document.activeElement && document.activeElement.id"),
+                eval_in(
+                    &browser,
+                    &url,
+                    "document.activeElement && document.activeElement.id"
+                ),
                 eval_in(&browser, &url, "document.hasFocus()")
             );
             check(
@@ -668,7 +672,10 @@ fn main() {
         Err(_) => check("worker stopped mid-step: the step answers", false),
     }
     let start = Instant::now();
-    while user_chrome::registry().conns().first().is_none_or(|c| Some(c.serial) == before)
+    while user_chrome::registry()
+        .conns()
+        .first()
+        .is_none_or(|c| Some(c.serial) == before)
         && start.elapsed() < Duration::from_secs(90)
     {
         std::thread::sleep(Duration::from_millis(250));
@@ -766,9 +773,7 @@ fn ref_in(tree: &str, label: &str) -> Option<String> {
 /// The window holding the first page tab at `url`.
 fn window_of(browser: &cdp::Browser, url: &str) -> Option<i64> {
     let t = Duration::from_secs(5);
-    let targets = browser
-        .call("Target.getTargets", json!({}), None, t)
-        .ok()?;
+    let targets = browser.call("Target.getTargets", json!({}), None, t).ok()?;
     let target = targets["targetInfos"]
         .as_array()?
         .iter()
