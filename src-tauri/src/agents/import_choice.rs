@@ -66,8 +66,12 @@ fn path() -> Result<std::path::PathBuf, CommandError> {
 fn read() -> Choice {
     path()
         .ok()
-        .and_then(|p| std::fs::read(p).ok())
-        .and_then(|bytes| serde_json::from_slice::<Saved>(&bytes).ok())
+        .and_then(|p| {
+            super::survive::read_kept::<Saved>(
+                &p,
+                "Your answer to \"bring your agents or start fresh\"",
+            )
+        })
         .map(|s| s.choice)
         .unwrap_or_default()
 }

@@ -35,8 +35,7 @@ fn path() -> Option<PathBuf> {
 
 pub fn load() -> Stored {
     path()
-        .and_then(|p| std::fs::read(p).ok())
-        .and_then(|raw| serde_json::from_slice(&raw).ok())
+        .and_then(|p| crate::agents::survive::read_kept(&p, "The agents' own browser setting"))
         .unwrap_or_default()
 }
 

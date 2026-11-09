@@ -172,6 +172,41 @@ fn damaged_slack_quiet_hours_and_quota_files_load_as_empty_and_are_kept() {
 }
 
 #[test]
+fn every_other_damaged_agents_file_is_kept_aside_and_said() {
+    with_root(|root| {
+        let files = [
+            ("import-choice.json", "bring your agents or start fresh"),
+            ("declined-services.json", "The list of apps you said no to"),
+            ("team-setup.json", "The team set-up in progress"),
+            (
+                "login-waiters.json",
+                "The list of agents waiting on a login",
+            ),
+            ("browser.json", "Your browser setting for agents"),
+            ("user-chrome.json", "The \"Your Chrome\" setting"),
+            ("agent-browser.json", "The agents' own browser setting"),
+        ];
+        for (f, _) in files {
+            std::fs::write(root.join(f), b"{\"torn\": ").unwrap();
+        }
+        assert_eq!(
+            crate::agents::import_choice::choice(),
+            crate::agents::import_choice::Choice::Undecided
+        );
+        assert!(crate::agents::declined::list().is_empty());
+        assert!(crate::agents::team_setup::load().is_none());
+        assert!(crate::agents::access_chain::load_waiters().cards.is_empty());
+        let _ = crate::agents::browser::load();
+        assert!(!crate::user_chrome::settings::load().enabled);
+        assert!(crate::agent_browser::settings::load().enabled);
+        for (f, what) in files {
+            assert_eq!(kept(root, &format!("{f}.corrupt-")).len(), 1, "{f}");
+            assert_eq!(said(what).len(), 1, "{what}");
+        }
+    });
+}
+
+#[test]
 fn an_empty_file_counts_as_damaged_too() {
     with_root(|root| {
         std::fs::write(root.join("connections.json"), b"").unwrap();

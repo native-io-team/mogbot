@@ -916,10 +916,7 @@ fn recover_registry(path: &Path, why: &str) -> Result<Registry, CommandError> {
         .and_then(|b| serde_json::from_str(&b).ok())
         .and_then(Registry::from_value)
     else {
-        return Err(super::err_other(format!(
-            "The agents registry at {} is unreadable: {why}",
-            path.display()
-        )));
+        return rebuild_registry(path, why);
     };
     let aside = path.with_extension(format!("json.corrupt-{}", now_ms()));
     std::fs::copy(path, &aside).map_err(|e| super::err_io(e.to_string()))?;
@@ -931,6 +928,44 @@ fn recover_registry(path: &Path, why: &str) -> Result<Registry, CommandError> {
     write_registry(&recovered)?;
     Ok(recovered)
 }
+
+/// No `.bak` either: put back every agent whose folder still says who it is
+/// ([`rebuild::from_homes`]), with the damaged file copied aside first and a
+/// line in the Chief's chat. With no folder to go on it stays an error, and
+/// nothing is written: an empty list must never replace one it couldn't read.
+fn rebuild_registry(path: &Path, why: &str) -> Result<Registry, CommandError> {
+    let unreadable = || {
+        super::err_other(format!(
+            "Your agents list ({}) is damaged and has no backup, so nothing was changed. Move it aside to start a new list; the app's log has the detail ({why}).",
+            path.display()
+        ))
+    };
+    let root = path.parent().ok_or_else(unreadable)?;
+    let rebuilt = rebuild::from_homes(root);
+    if rebuilt.agents.is_empty() {
+        // No line queued: with no Chief to post it to, it would pile up on
+        // every read. The error itself is what the app shows.
+        tracing::error!("[Agents] registry unreadable ({why}), no backup and no agent folders");
+        return Err(unreadable());
+    }
+    let aside = path.with_extension(format!("json.corrupt-{}", now_ms()));
+    std::fs::copy(path, &aside).map_err(|e| super::err_io(e.to_string()))?;
+    tracing::error!(
+        "[Agents] registry unreadable ({why}) with no backup; rebuilt {} agents from their folders, damaged copy kept at {}",
+        rebuilt.agents.len(),
+        aside.display()
+    );
+    write_registry(&rebuilt)?;
+    let kept = aside
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    super::survive::say(rebuild::line(rebuilt.agents.len(), &kept));
+    Ok(rebuilt)
+}
+
+#[path = "store_rebuild.rs"]
+mod rebuild;
 
 pub(crate) fn write_atomic(path: &Path, bytes: &[u8]) -> Result<(), CommandError> {
     if let Some(dir) = path.parent() {
@@ -3268,15 +3303,102 @@ mod tests {
     #[test]
     fn an_unrecoverable_registry_is_an_error_not_an_empty_list() {
         with_root(|| {
-            create(new("Finance")).unwrap();
+            let finance = create(new("Finance")).unwrap();
             let path = registry_path().unwrap();
             std::fs::write(&path, b"{\"agents\": [").unwrap();
             std::fs::remove_file(path.with_extension("json.bak")).unwrap();
+            // No folder to rebuild from either.
+            std::fs::remove_dir_all(agent_home(&finance.id).unwrap()).unwrap();
             assert!(list().is_err());
             assert!(
                 create(new("Travel")).is_err(),
                 "must not overwrite what it couldn't read"
             );
+        });
+    }
+
+    #[test]
+    fn a_damaged_registry_with_no_copy_is_rebuilt_from_the_agents_folders() {
+        with_root(|| {
+            let _ = crate::agents::survive::take_pending();
+            let chief = create(NewAgent {
+                is_main: true,
+                ..new(crate::agents::prompts::CHIEF_NAME)
+            })
+            .unwrap();
+            let finance = create(new("Finance")).unwrap();
+            let path = registry_path().unwrap();
+            std::fs::write(&path, b"{\"agents\": [").unwrap();
+            std::fs::remove_file(path.with_extension("json.bak")).unwrap();
+            // A folder that isn't an agent's is left alone.
+            std::fs::create_dir_all(agents_root().unwrap().join("stray")).unwrap();
+            let finance_md =
+                std::fs::read(agent_home(&finance.id).unwrap().join("CLAUDE.md")).unwrap();
+
+            let back = list().unwrap();
+            let mut names: Vec<&str> = back.iter().map(|a| a.name.as_str()).collect();
+            names.sort();
+            assert_eq!(names, [crate::agents::prompts::CHIEF_NAME, "Finance"]);
+            let rebuilt_chief = back.iter().find(|a| a.is_main).unwrap();
+            assert_eq!(rebuilt_chief.id, chief.id);
+            let rebuilt_finance = back.iter().find(|a| a.id == finance.id).unwrap();
+            assert_eq!(rebuilt_finance.role, "Does things");
+            assert!(!rebuilt_finance.is_main);
+            // The folder itself is untouched.
+            assert_eq!(
+                std::fs::read(agent_home(&finance.id).unwrap().join("CLAUDE.md")).unwrap(),
+                finance_md
+            );
+            // The damaged list is kept, the Chief told once.
+            let kept: Vec<_> = std::fs::read_dir(agents_root().unwrap())
+                .unwrap()
+                .flatten()
+                .filter(|e| {
+                    e.file_name()
+                        .to_string_lossy()
+                        .starts_with("agents.json.corrupt-")
+                })
+                .collect();
+            assert_eq!(kept.len(), 1);
+            assert_eq!(std::fs::read(kept[0].path()).unwrap(), b"{\"agents\": [");
+            let rebuilt = |lines: Vec<String>| -> Vec<String> {
+                lines
+                    .into_iter()
+                    .filter(|l| l.contains("rebuilt from the agents' folders"))
+                    .collect()
+            };
+            let lines = rebuilt(crate::agents::survive::take_pending());
+            assert_eq!(lines.len(), 1, "{lines:?}");
+            assert!(lines[0].contains("2 agents back"), "{}", lines[0]);
+            // Repaired on disk: the next read neither rebuilds nor says it again.
+            assert_eq!(list().unwrap().len(), 2);
+            assert!(rebuilt(crate::agents::survive::take_pending()).is_empty());
+        });
+    }
+
+    #[test]
+    fn a_rebuild_keeps_two_folders_with_one_name_apart() {
+        with_root(|| {
+            let root = agents_root().unwrap();
+            for id in ["aaa1", "bbb2"] {
+                std::fs::create_dir_all(root.join(id)).unwrap();
+                std::fs::write(
+                    root.join(id).join("CLAUDE.md"),
+                    "# Finance\n\n## Instructions\n\nBe brief.\n",
+                )
+                .unwrap();
+            }
+            std::fs::create_dir_all(root.join("ccc3")).unwrap();
+            std::fs::write(root.join("ccc3").join("CLAUDE.md"), "no heading").unwrap();
+            std::fs::write(registry_path().unwrap(), b"\0\0\0").unwrap();
+            let mut names: Vec<String> = list().unwrap().into_iter().map(|a| a.name).collect();
+            names.sort();
+            assert_eq!(names, ["Finance", "Finance 2"]);
+            assert!(list()
+                .unwrap()
+                .iter()
+                .all(|a| a.role.is_empty() && !a.is_main));
+            let _ = crate::agents::survive::take_pending();
         });
     }
 

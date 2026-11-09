@@ -659,9 +659,17 @@ build doesn't know (on an agent, a check-in, a rule), unknown top-level keys,
 and whole entries it can't read (a newer build's) are kept and written back
 untouched, so running an older build never deletes what a newer one saved.
 Only a file that isn't JSON counts as damage: the backup is loaded and written
-back, and the damaged file is kept as `agents.json.corrupt-<ms>`; with no
-readable backup it is an error, never an empty list that would be saved over
-it. A chat line of a kind this build doesn't know is skipped on read and stays
+back, and the damaged file is kept as `agents.json.corrupt-<ms>`. With no
+readable backup the list is rebuilt from the agents' folders
+(`store_rebuild.rs`: each folder's `# Name` heading and role; the Chief is
+the one with the Chief's role or name), the damaged file copied aside first,
+no folder changed, and the Chief's chat says how many came back and that
+engine, routines, project and logins start at defaults. With no folder to go
+on either it is an error, never an empty list that would be saved over it.
+The app's other saved files in the agents folder (wallet, Slack, connections,
+import choice, declined apps, team set-up, login waiters, browser settings…)
+are read through `survive::read_kept`: a damaged one is set aside as
+`<name>.corrupt-<ms>` and named in the Chief's chat. A chat line of a kind this build doesn't know is skipped on read and stays
 on disk, since the log is append-only. A torn last line in
 `messages.jsonl` is skipped on read, and the next append starts a new line
 instead of fusing into it. Opening a chat and paging back through it
