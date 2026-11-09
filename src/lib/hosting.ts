@@ -151,12 +151,6 @@ export interface HostingProjectChoice {
   scope_name?: string | null;
 }
 
-export interface TokenCheck {
-  auth: Auth;
-  token_source?: TokenSource | null;
-  account_label?: string | null;
-}
-
 // ---------------------------------------------------------------------------
 // Commands
 // ---------------------------------------------------------------------------

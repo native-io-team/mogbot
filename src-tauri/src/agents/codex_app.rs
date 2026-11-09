@@ -984,7 +984,10 @@ mod tests {
         let (c, _) = conversation(None);
         assert!(turn_of(c).pointer("/params/effort").is_none());
         let (c, _) = conversation(None);
-        assert_eq!(turn_of(c.with_effort(Some("high")))["params"]["effort"], "high");
+        assert_eq!(
+            turn_of(c.with_effort(Some("high")))["params"]["effort"],
+            "high"
+        );
         let (c, _) = conversation(None);
         assert!(turn_of(c.with_effort(Some("--x")))
             .pointer("/params/effort")

@@ -6,7 +6,6 @@
  */
 
 import type {
-  Agent,
   AgentEngine,
   EngineInfo,
   NewAgentDefaults,
@@ -101,19 +100,3 @@ export const canChooseEngine = (defaults: NewAgentDefaults, choice: EngineChoice
 /** The change a tap on a model row makes. */
 export const modelChange = (engine: AgentEngine, value: string): NewAgentDefaultsChange =>
   engine === 'claude' ? { claudeModel: value } : { codexModel: value };
-
-/**
- * What an agent runs on, for the chip in the message card: the engine, and
- * its model by the name the engine lists it under (as the Mac said it when
- * the engine doesn't list it). No model when it's on the engine's default.
- */
-export function engineChip(
-  agent: Pick<Agent, 'engine' | 'model'>,
-  engines: EngineInfo[]
-): { engine: string; model: string | null } {
-  const info = engines.find((e) => e.id === agent.engine);
-  const engine = ENGINE_NAME[agent.engine] ?? info?.label ?? agent.engine;
-  if (!agent.model) return { engine, model: null };
-  const listed = info?.models.find((m) => m.value === agent.model)?.label;
-  return { engine, model: listed ?? agent.model };
-}

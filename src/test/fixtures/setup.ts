@@ -170,33 +170,6 @@ export function makeSetupStatus(overrides?: Partial<FullSetupStatus>): FullSetup
   };
 }
 
-/** Convenience: status for a fresh install (nothing ready) */
-export const FRESH_STATUS: FullSetupStatus = makeSetupStatus();
-
-/** Convenience: status with everything ready + Claude only */
-export const CLAUDE_ONLY_STATUS: FullSetupStatus = makeSetupStatus({
-  allReady: true,
-  items: ALL_READY_CLAUDE_ONLY,
-  optionalAuths: { githubAuthenticated: true },
-  detectedAgents: ['claude-code'],
-});
-
-/** Convenience: status with everything ready + both agents */
-export const BOTH_AGENTS_STATUS: FullSetupStatus = makeSetupStatus({
-  allReady: true,
-  items: ALL_READY_BOTH_AGENTS,
-  optionalAuths: { githubAuthenticated: true },
-  detectedAgents: ['claude-code', 'codex'],
-});
-
-/** Convenience: status with everything ready + Codex only */
-export const CODEX_ONLY_STATUS: FullSetupStatus = makeSetupStatus({
-  allReady: true,
-  items: ALL_READY_CODEX_ONLY,
-  optionalAuths: { githubAuthenticated: true },
-  detectedAgents: ['codex'],
-});
-
 // ============ Wizard-specific fixtures ============
 
 /** Step 1 complete (homebrew + node ready), rest missing */
@@ -216,11 +189,6 @@ export const STEP1_COMPLETE_ITEMS: SetupItem[] = [
   VERCEL_AUTH_MISSING,
 ];
 
-export const STEP1_COMPLETE_STATUS: FullSetupStatus = makeSetupStatus({
-  items: STEP1_COMPLETE_ITEMS,
-  detectedAgents: [],
-});
-
 /** Steps 1+2 complete (homebrew, node, git, gh, gh_auth ready) — lands on step 3 */
 export const HAS_BASE_NO_AGENTS_ITEMS: SetupItem[] = [
   HOMEBREW_READY,
@@ -238,12 +206,6 @@ export const HAS_BASE_NO_AGENTS_ITEMS: SetupItem[] = [
   VERCEL_AUTH_MISSING,
 ];
 
-export const HAS_BASE_NO_AGENTS_STATUS: FullSetupStatus = makeSetupStatus({
-  items: HAS_BASE_NO_AGENTS_ITEMS,
-  optionalAuths: { githubAuthenticated: true },
-  detectedAgents: [],
-});
-
 /** Has Claude Code installed but not GitHub auth — lands on step 2 */
 export const HAS_CLAUDE_NO_GITHUB_ITEMS: SetupItem[] = [
   HOMEBREW_READY,
@@ -260,8 +222,3 @@ export const HAS_CLAUDE_NO_GITHUB_ITEMS: SetupItem[] = [
   VERCEL_MISSING,
   VERCEL_AUTH_MISSING,
 ];
-
-export const HAS_CLAUDE_NO_GITHUB_STATUS: FullSetupStatus = makeSetupStatus({
-  items: HAS_CLAUDE_NO_GITHUB_ITEMS,
-  detectedAgents: ['claude-code'],
-});

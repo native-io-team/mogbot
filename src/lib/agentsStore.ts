@@ -241,8 +241,6 @@ function scheduleRefresh() {
 
 /** Lines a chat opens with; older ones load a page at a time as you scroll up. */
 export const MESSAGE_PAGE = 150;
-/** The most `agents_messages` returns in one call. */
-export const MESSAGE_MAX = 5000;
 
 function setMessages(agentId: string, messages: AgentMessage[], older: boolean) {
   emit({

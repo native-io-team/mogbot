@@ -40,8 +40,6 @@ export const saveSecret = (agentId: string, requestId: string, values: string[])
   invoke<AgentSecret>('agents_save_secret', { agentId, requestId, values });
 export const addSecret = (agentId: string, name: string, kind: SecretKind, value: string) =>
   invoke<AgentSecret>('agents_add_secret', { agentId, name, kind, value });
-export const revokeSecret = (agentId: string, secretId: string) =>
-  invoke<void>('agents_revoke_secret', { agentId, secretId });
 
 /** A secret's name as a person says it ("CRM API key"): one rule, shared with the phone. */
 export { secretTitle } from '../../packages/companion-protocol/src/secretName';

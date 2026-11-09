@@ -61,7 +61,10 @@ pub(super) fn args(
     // user's other assistants through Remote Access, never by messaging other
     // Claude sessions on this Mac: a Chief that did took the developer's
     // coding session for Grok Bot and handed it its whole job.
-    args.push(format!("--disallowedTools={}", CROSS_SESSION_TOOLS.join(",")));
+    args.push(format!(
+        "--disallowedTools={}",
+        CROSS_SESSION_TOOLS.join(",")
+    ));
     if let Some(model) = model {
         args.extend(["--model".to_string(), model.to_string()]);
     }
@@ -173,7 +176,10 @@ mod tests {
         let turn = args(None, "sid", false, "/s/mcp.json", "be you", &dirs);
         let deny = denied(&turn).join(",");
         for tool in CROSS_SESSION_TOOLS {
-            assert!(deny.split(',').any(|t| t == *tool), "{tool} is denied: {deny}");
+            assert!(
+                deny.split(',').any(|t| t == *tool),
+                "{tool} is denied: {deny}"
+            );
         }
     }
 

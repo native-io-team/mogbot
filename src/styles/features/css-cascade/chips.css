@@ -163,10 +163,6 @@
   background: var(--surface-control-hover);
 }
 
-.ss-media-query__chunk.is-editing {
-  background: var(--surface-control);
-}
-
 .ss-media-query__chunk--at-rule.is-editing,
 .ss-media-query__chunk--value.is-editing {
   color: var(--text-inverse);

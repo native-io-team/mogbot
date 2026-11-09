@@ -531,21 +531,6 @@ export function suggestProperties(query: string, limit = 8): string[] {
   return [...new Set([...starts, ...contains])].slice(0, limit);
 }
 
-/** Common at-rule preludes offered when adding/wrapping with an `@` affordance. */
-export const COMMON_AT_RULES: string[] = [
-  '@media (max-width: 768px)',
-  '@media (min-width: 768px)',
-  '@media (max-width: 480px)',
-  '@media (min-width: 1024px)',
-  '@media (min-width: 1280px)',
-  '@media (prefers-color-scheme: dark)',
-  '@media (prefers-color-scheme: light)',
-  '@media (prefers-reduced-motion: reduce)',
-  '@media (hover: hover)',
-  '@media print',
-  '@supports (display: grid)',
-];
-
 /** Common `@media` conditions (without the `@media` keyword) for editing an at-rule. */
 export const COMMON_MEDIA_CONDITIONS: string[] = [
   '(max-width: 768px)',
@@ -559,10 +544,3 @@ export const COMMON_MEDIA_CONDITIONS: string[] = [
   '(hover: hover)',
   'print',
 ];
-
-/** Suggest media conditions for a typed fragment. */
-export function suggestMediaConditions(query: string, limit = 8): string[] {
-  const q = query.trim().toLowerCase();
-  if (!q) return COMMON_MEDIA_CONDITIONS.slice(0, limit);
-  return COMMON_MEDIA_CONDITIONS.filter((a) => a.toLowerCase().includes(q)).slice(0, limit);
-}

@@ -24,7 +24,7 @@ mod window_registry;
 pub use detection::*;
 pub use dev_consent::*;
 pub use dev_server::*;
-pub use metadata::*;
+pub(crate) use metadata::*;
 pub use pins::*;
 pub use sessions::*;
 pub use templates::*;

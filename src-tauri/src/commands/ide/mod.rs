@@ -1,15 +1,12 @@
 //! # IDE, Browser, and Webview Commands
 //!
-//! Commands for IDE integration, browser selection, preview webviews, and screenshots.
+//! Commands for IDE integration, browser selection, and screenshots.
 //!
 //! Organized into submodules:
-//! - `preview` — preview webview creation, navigation, resize, scroll, and JS evaluation
 //! - `screenshots` — project thumbnails, Playwright captures, image comparison, cropping, and stitching
 
-mod preview;
 mod screenshots;
 
-pub use preview::*;
 pub use screenshots::*;
 
 use crate::errors::CommandError;

@@ -58,9 +58,6 @@ export function projectFlatOrder<T>(
   return without;
 }
 
-/** Stable-ID convenience alias used by feature adapters. */
-export const moveFlat = projectFlatOrder;
-
 export type GroupedItems<T> = Readonly<Record<string, readonly T[]>>;
 
 /** Immutable move between named groups, including empty destination groups. */
@@ -92,8 +89,6 @@ export function projectGroupedOrder<T>(
   destination.splice(index, 0, active);
   return result;
 }
-
-export const moveGrouped = projectGroupedOrder;
 
 export interface DragSortTreeNode<T = unknown> {
   id: DragSortId;
@@ -150,5 +145,3 @@ export function projectTree<T>(
     });
   return insert(without);
 }
-
-export const moveTree = projectTree;

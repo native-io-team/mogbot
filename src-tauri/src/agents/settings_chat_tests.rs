@@ -7,7 +7,7 @@
 use super::*;
 use crate::agents::engine::Engine;
 use crate::agents::mcp::{chat_model, run_settings};
-use crate::agents::policy::{self, AppsMode, Change, Saved, Target};
+use crate::agents::policy::{self, AppsMode, Change, Target};
 use serde_json::json;
 
 fn agent(id: &str, name: &str, main: bool) -> Agent {

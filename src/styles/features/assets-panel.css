@@ -376,18 +376,6 @@
   min-width: 0;
 }
 
-.assets-item-icon {
-  color: var(--text-muted);
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.assets-item.is-folder .assets-item-icon {
-  color: var(--accent-active);
-}
-
 /* Image thumbnail */
 .assets-item-thumbnail {
   width: 32px;

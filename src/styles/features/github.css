@@ -6,45 +6,6 @@
   margin-bottom: 32px;
 }
 
-.github-status {
-  margin-left: auto;
-}
-
-.github-status-btn {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  font-size: var(--font-size-body-lg);
-  border-radius: var(--radius-control);
-}
-
-.github-status-btn.not-installed {
-  background: var(--surface-control);
-  color: var(--text-secondary);
-}
-
-.github-status-btn.not-connected {
-  background: var(--surface-control);
-  color: var(--text-secondary);
-}
-
-.github-status-btn svg {
-  flex-shrink: 0;
-}
-
-.github-status-connected {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-secondary);
-  font-size: var(--font-size-body-lg);
-}
-
-.github-status-connected svg {
-  color: var(--accent-success);
-}
-
 .github-button {
   display: flex;
   align-items: center;
@@ -60,71 +21,6 @@
     background-color var(--transition),
     color var(--transition),
     border-color var(--transition);
-}
-
-.github-button.github-install,
-.github-button.github-connect {
-  background: var(--surface-control);
-  color: var(--text-secondary);
-}
-
-.github-button.github-install:hover,
-.github-button.github-connect:hover {
-  background: var(--border-default);
-  color: var(--text-primary);
-}
-
-.github-button.github-create {
-  background: var(--button-surface-default);
-  color: var(--button-text-default);
-}
-
-.github-button.github-create:hover {
-  background: var(--button-surface-hover);
-  color: var(--button-text-hover);
-}
-
-.github-button.github-publish {
-  background: var(--accent-active);
-  color: var(--text-on-accent);
-  font-weight: 600;
-  margin-left: auto;
-}
-
-.github-button.github-publish:hover:not(:disabled) {
-  background: var(--accent-active-hover);
-}
-
-.github-button.github-publish:disabled,
-.github-button.github-publish.disabled {
-  background: var(--surface-control);
-  color: var(--text-muted);
-  cursor: not-allowed;
-  opacity: 0.7;
-}
-
-.github-button.github-link {
-  padding: 0 8px;
-  background: var(--surface-control);
-}
-
-.github-button.github-link:hover {
-  background: var(--border-default);
-}
-
-.github-button.github-link svg {
-  color: var(--text-muted);
-}
-
-.github-button.github-link:hover svg {
-  color: var(--text-secondary);
-}
-
-.github-button.github-creating,
-.github-button.github-checking {
-  background: var(--surface-control);
-  color: var(--text-muted);
-  cursor: not-allowed;
 }
 
 .github-error {

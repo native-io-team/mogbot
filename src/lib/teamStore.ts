@@ -44,11 +44,9 @@ import { asCommandError, formatCommandError } from './errors';
 import { logger } from './logger';
 import {
   actorKey,
-  lastMessageAt,
   type TeamActor,
   type TeamMessage,
   type TeamSnapshot,
-  type TeamThread,
   type TeamThreadAnchor,
   type TeamUpdate,
 } from './team';
@@ -683,11 +681,6 @@ function reportThreadFailure(error: unknown, action: string): void {
   emit({ ...state, sync: { ...state.sync, error: `Couldn't ${action}. ${message}` } });
 }
 
-/** Test seam: replace the whole snapshot. */
-export function __setTeamState(next: TeamSnapshot): void {
-  emit(next);
-}
-
 /** Test seam: back to an empty store, as if no project were open. */
 export function __resetTeamState(): void {
   seq = 0;
@@ -701,17 +694,4 @@ export function __resetTeamState(): void {
     selectedThreadIds: [],
   };
   emit(emptySnapshot());
-}
-
-/** Threads for one project, unresolved first, most recently active first. */
-export function threadsForProject(
-  snapshot: TeamSnapshot,
-  projectPath: string | null
-): TeamThread[] {
-  return snapshot.threads
-    .filter((thread) => projectPath === null || thread.projectPath === projectPath)
-    .sort((a, b) => {
-      if (a.resolved !== b.resolved) return a.resolved ? 1 : -1;
-      return lastMessageAt(b) - lastMessageAt(a);
-    });
 }

@@ -26,41 +26,6 @@
   --team-review-surface: var(--color-purple-500-o15);
 }
 
-/* Panel cells may be shorter than their content when stacked. Keep the outer
-   panel bounded so each tab/body can scroll inside the height it is given. */
-.team-panel {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-width: 0;
-  min-height: 0;
-}
-
-.team-panel-body {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 0;
-  min-width: 0;
-  min-height: 0;
-}
-
-/* `tabs__panel`, not `tabs-panel` — the primitive is BEM. Getting this wrong
-   silently drops the whole flex chain, and the feed's inner scroller then has
-   no bounded height to scroll inside, so it grows straight through the bottom
-   of the card. */
-.team-panel-body > .tabs,
-.team-panel-body .tabs__panel {
-  display: flex;
-  flex-direction: column;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-/* `hidden` on an inactive panel has to beat the `display: flex` above. */
-.team-panel-body .tabs__panel[hidden] {
-  display: none;
-}
-
 /* Shared by long update summaries and comment descriptions. */
 .team-expandable-text {
   display: flex;
@@ -211,71 +176,6 @@
 
 .team-avatar-stack > .team-avatar + .team-avatar {
   margin-left: -6px;
-}
-
-/* ------------------------------------------------------------- sync row */
-
-.team-sync {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-sm);
-  flex-wrap: wrap;
-  padding: var(--spacing-xs) var(--spacing-md);
-  margin-bottom: var(--spacing-sm);
-  background: var(--surface-recessed);
-  border: var(--border-width-default) solid var(--border-subtle);
-  border-radius: var(--radius-card);
-  color: var(--text-muted);
-  font-size: var(--font-size-body-md);
-  line-height: var(--line-height-compact);
-}
-
-.team-sync-repo {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  min-width: 0;
-  color: var(--text-secondary);
-  font-family: var(--font-code);
-  font-size: var(--font-size-body-sm);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* A project with no remote has nothing after the repo name, so the row reads
-   as one sentence rather than as a control strip with its controls missing. */
-.team-sync[data-state='local'] .team-sync-repo {
-  font-family: var(--font-ui);
-  color: var(--text-muted);
-}
-
-.team-sync-sep {
-  width: var(--border-width-default);
-  height: 12px;
-  background: var(--border-subtle);
-}
-
-.team-sync-state {
-  white-space: nowrap;
-}
-
-.team-sync-error {
-  color: var(--accent-error);
-}
-
-/* Unpushed work is the one number in this row that changes what someone should
-   do, so it is the one thing tinted. */
-.team-sync-pending {
-  padding: var(--spacing-2xs) var(--spacing-xs);
-  border-radius: var(--radius-sm);
-  background: rgba(var(--accent-warning-rgb), 0.12);
-  color: var(--accent-warning);
-  white-space: nowrap;
-}
-
-.team-sync > .button:last-child {
-  margin-left: auto;
 }
 
 /* ------------------------------------------------------------ how it works */

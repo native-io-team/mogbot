@@ -167,15 +167,6 @@ code,
   background: transparent;
 }
 
-/* Compact mode wrapper - transparent background to show rounded corners */
-body.compact-mode-active {
-  background: transparent;
-}
-
-body.compact-mode-active html {
-  background: transparent;
-}
-
 /* App Container */
 .app {
   height: 100%;
@@ -249,53 +240,6 @@ body.compact-mode-active html {
   to {
     opacity: 1;
   }
-}
-
-/* Toggle pill button — label + iOS-style switch pill on the right.
-   Use for boolean feature toggles (Inspect, Split, etc.). Pair the
-   button with a child `.toggle-pill-switch` span that gets `.is-on`
-   when the feature is active. */
-.toggle-pill-btn {
-  appearance: none;
-  -webkit-appearance: none;
-  box-sizing: border-box;
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-xs);
-  height: var(--button-height);
-  min-height: var(--button-height);
-  padding: 0 var(--button-padding);
-  background: var(--button-surface-default);
-  border: var(--stroke-1) solid var(--button-border-solid);
-  border-radius: var(--button-radius);
-  color: var(--button-text-default);
-  font-family: var(--font-ui);
-  font-size: var(--button-font-size);
-  line-height: var(--line-height-default);
-  font-weight: var(--button-font-weight);
-  cursor: pointer;
-  box-shadow: var(--button-shadow);
-  white-space: nowrap;
-  transition:
-    background-color var(--transition),
-    color var(--transition),
-    border-color var(--transition),
-    opacity var(--transition),
-    transform var(--transition);
-}
-
-.toggle-pill-btn:hover {
-  background: var(--button-surface-hover);
-  color: var(--text-primary);
-}
-
-.toggle-pill-btn:disabled {
-  opacity: var(--button-disabled-opacity);
-  cursor: not-allowed;
-}
-
-.toggle-pill-btn:active:not(:disabled) {
-  transform: scale(var(--button-active-scale));
 }
 
 .toggle-pill-switch {

@@ -452,12 +452,6 @@
   background: var(--accent-active);
 }
 
-.terminal-logs-tabs {
-  display: flex;
-  gap: 6px;
-  margin-left: auto;
-}
-
 /* Toolbar Dropdown.
    The Agent Settings dropdown (ToolbarDropdown) and the split-pane tab
    picker (TerminalSplitHeaders) are built on the Dropdown primitive in

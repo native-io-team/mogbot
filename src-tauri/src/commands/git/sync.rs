@@ -112,32 +112,6 @@ fn clean_locked_paths(stderr: &str) -> Option<Vec<String>> {
     saw_failure.then_some(paths)
 }
 
-/// Fetch all branches from remotes
-#[tauri::command]
-#[tracing::instrument(skip(project_path), fields(project = %project_path))]
-pub async fn fetch_all_branches(project_path: String) -> Result<(), CommandError> {
-    let validated_path = validate_project_path(&project_path)?;
-
-    let output = run_git_net(
-        &["fetch", "--all", "--prune"],
-        &validated_path,
-        "fetch --all",
-    )
-    .await?;
-
-    if !output.status.success() {
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        // A vanished remote / auth gap / network blip is the environment, not
-        // a malfunction — same classifier the other net call sites use (#868).
-        if let Some(err) = super::classify_git_net_error(&stderr) {
-            return Err(err);
-        }
-        return Err((format!("Failed to fetch: {stderr}")).into());
-    }
-
-    Ok(())
-}
-
 /// Pull latest changes from remote for current branch
 #[tauri::command]
 #[tracing::instrument(skip(project_path), fields(project = %project_path))]

@@ -48,13 +48,6 @@ export function clearInvokeMocks() {
 }
 
 /**
- * Get the mock IPC calls made during the current test, optionally filtered by command.
- */
-export function getInvokeCalls(command?: string) {
-  return command ? invokeCalls.filter((call) => call.command === command) : [...invokeCalls];
-}
-
-/**
  * Install the Tauri window + IPC mocks.
  *
  * Registered per-test rather than once, because `clearMocks()` in `afterEach`

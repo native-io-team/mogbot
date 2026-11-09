@@ -1,15 +1,5 @@
 /* Merge Conflict Resolution Modal */
 
-.conflict-modal {
-  position: fixed;
-  inset: 0;
-  background: var(--scrim-modal);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-app-modal);
-}
-
 .conflict-content {
   width: 480px;
   max-height: 85vh;
@@ -260,17 +250,6 @@
 .conflict-btn.secondary:hover:not(:disabled) {
   background: var(--border-default);
   color: var(--text-primary);
-}
-
-.conflict-btn.danger-outline {
-  background: transparent;
-  border: 1px solid rgba(var(--accent-error-light-rgb), 0.3);
-  color: var(--accent-error-light);
-}
-
-.conflict-btn.danger-outline:hover:not(:disabled) {
-  background: rgba(var(--accent-error-light-rgb), 0.1);
-  border-color: rgba(var(--accent-error-light-rgb), 0.5);
 }
 
 .conflict-btn:disabled {

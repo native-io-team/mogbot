@@ -9,20 +9,6 @@
   overflow-y: auto;
 }
 
-.settings-modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 20px 0;
-}
-
-.settings-modal-header h2 {
-  font-size: var(--font-size-h4);
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-}
-
 /* The body's own inset, named so a full-bleed child can cancel it. */
 :root {
   --settings-body-inset: 20px;
@@ -90,15 +76,6 @@
   display: flex;
   flex-shrink: 0;
   gap: var(--spacing-sm);
-}
-
-/* The Experimental tab when the platform has nothing to offer it. Not an error
-   and not a call to action — just an answer, so the tab is never blank. */
-.settings-empty-note {
-  margin: 0;
-  font-size: var(--font-size-body-md);
-  color: var(--text-muted);
-  line-height: 1.4;
 }
 
 /* Projects folder row (stacked: label/description/path above the actions) */

@@ -1081,7 +1081,10 @@ fn tool_renames() -> Vec<(String, String)> {
         ("mcp__shipstudio-local__".into(), format!("mcp__{app}__")),
         ("mcp__shipstudio_local__".into(), format!("mcp__{app}__")),
         (
-            format!("mcp__{}__", crate::preview_isolation::SHIP_STUDIO_PREVIEW_MCP),
+            format!(
+                "mcp__{}__",
+                crate::preview_isolation::SHIP_STUDIO_PREVIEW_MCP
+            ),
             format!("mcp__{preview}__"),
         ),
         ("shipstudio_agents".into(), app.clone()),
@@ -1153,9 +1156,13 @@ pub fn migrate_names() -> usize {
             deferred = true;
             continue;
         }
-        let Ok(home) = store::agent_home(&a.id) else { continue };
+        let Ok(home) = store::agent_home(&a.id) else {
+            continue;
+        };
         let path = home.join(CLAUDE_MD);
-        let Ok(raw) = std::fs::read_to_string(&path) else { continue };
+        let Ok(raw) = std::fs::read_to_string(&path) else {
+            continue;
+        };
         if !names_other_app(&raw) {
             continue;
         }
@@ -1653,7 +1660,10 @@ mod tests {
         };
         assert_eq!(said(&old.id), 1);
         assert_eq!(said(&fine.id), 0);
-        assert_eq!(store::read_instructions(&fine.id).unwrap(), "Read the inbox.");
+        assert_eq!(
+            store::read_instructions(&fine.id).unwrap(),
+            "Read the inbox."
+        );
         // A second launch does nothing.
         store::write_instructions(
             &store::agent_home(&old.id).unwrap(),

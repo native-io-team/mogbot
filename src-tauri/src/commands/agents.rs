@@ -1441,18 +1441,6 @@ pub async fn agents_connections() -> Result<Vec<agents::connections::Connection>
     blocking(agents::connections::list).await
 }
 
-#[tauri::command]
-#[tracing::instrument(skip(app))]
-pub async fn agents_connection_rename(
-    app: AppHandle,
-    connection_id: String,
-    account: String,
-) -> Result<agents::connections::Connection, CommandError> {
-    let c = blocking(move || agents::connections::rename(&connection_id, &account)).await?;
-    emit_registry(&app);
-    Ok(c)
-}
-
 /// Disconnect for every agent, deleting its Keychain item.
 #[tauri::command]
 #[tracing::instrument(skip(app))]
@@ -1724,19 +1712,6 @@ pub async fn agents_add_secret(
     let secret = blocking(move || secrets::add(&agent_id, &name, &kind, &value)).await?;
     emit_registry(&app);
     Ok(secret)
-}
-
-/// Delete a secret from the Keychain and from the agent.
-#[tauri::command]
-#[tracing::instrument(skip(app, secret_id), fields(agent = %agent_id))]
-pub async fn agents_revoke_secret(
-    app: AppHandle,
-    agent_id: String,
-    secret_id: String,
-) -> Result<(), CommandError> {
-    blocking(move || secrets::revoke(&agent_id, &secret_id)).await?;
-    emit_registry(&app);
-    Ok(())
 }
 
 /// A "Deny with note…" is a steer, not an essay.
@@ -2942,13 +2917,6 @@ pub async fn agents_browser_enable(
     // Now that it's on, the checklist's rows can be checked in the browser too.
     agents::access_check::spawn(&app);
     Ok(st)
-}
-
-/// Switch the team's browser off (every agent's, at once).
-#[tauri::command]
-#[tracing::instrument(skip(app))]
-pub async fn agents_browser_disable(app: AppHandle) -> Result<(), CommandError> {
-    blocking(move || agents::browser::disable(&app)).await
 }
 
 /// The phone signing in through this Mac's Chrome right now, for the desk's

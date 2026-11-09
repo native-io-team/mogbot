@@ -24,15 +24,6 @@
 }
 
 /* Header */
-.diff-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border-default);
-  flex-shrink: 0;
-}
-
 .diff-header-info {
   display: flex;
   align-items: center;
@@ -94,25 +85,6 @@
 .diff-status-renamed {
   background: rgba(var(--purple-rgb), 0.2);
   color: var(--purple);
-}
-
-.diff-close-btn {
-  padding: 6px;
-  background: transparent;
-  border: none;
-  border-radius: var(--radius-control);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    background-color var(--transition),
-    color var(--transition),
-    border-color var(--transition);
-  flex-shrink: 0;
-}
-
-.diff-close-btn:hover {
-  background: var(--surface-control);
-  color: var(--text-primary);
 }
 
 /* Stats */

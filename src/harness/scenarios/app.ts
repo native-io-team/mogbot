@@ -148,7 +148,6 @@ export const appScenarios: Scenario[] = [
     commands: {
       get_dashboard_projects: neverAnswers(),
       list_projects: neverAnswers(),
-      get_projects: neverAnswers(),
       get_agents_status: neverAnswers(),
       get_account_credential_status: neverAnswers(),
     },
@@ -179,8 +178,6 @@ export const appScenarios: Scenario[] = [
     commands: {
       get_dashboard_projects: [],
       list_projects: [],
-      get_projects: [],
-      get_pinned_projects: [],
     },
   },
   {
@@ -200,11 +197,6 @@ export const appScenarios: Scenario[] = [
         thumbnail: null,
       })),
       list_projects: Array.from({ length: 24 }, (_, i) => ({
-        name: `project-${String(i + 1).padStart(2, '0')}`,
-        path: `/Users/harness/ShipStudio/project-${i + 1}`,
-        thumbnail: null,
-      })),
-      get_projects: Array.from({ length: 24 }, (_, i) => ({
         name: `project-${String(i + 1).padStart(2, '0')}`,
         path: `/Users/harness/ShipStudio/project-${i + 1}`,
         thumbnail: null,

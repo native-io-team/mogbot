@@ -245,7 +245,3 @@ export function useDragSortContext(): DragSortContextValue {
   if (!value) throw new Error('useDragSortContext must be used inside a DragSortScope');
   return value;
 }
-
-export function useOptionalDragSortContext(): DragSortContextValue | null {
-  return useContext(DragSortContext);
-}

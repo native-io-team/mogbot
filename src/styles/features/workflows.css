@@ -885,25 +885,6 @@
    Mirrors the primitive lab's overlay geometry so the prototype can be
    reviewed in a browser without booting a project. */
 
-.dev-workflows-preview {
-  position: fixed;
-  inset: var(--spacing-lg);
-  /* Below the modal tier: the harness is a fullscreen stand-in for the app
-     window, and dialogs opened inside it must still stack above. */
-  z-index: var(--z-preview-fullscreen);
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-  min-width: 0;
-  min-height: 0;
-  overflow: hidden;
-  color: var(--text-primary);
-  background: var(--surface-app);
-  border: var(--border-width-default) solid var(--border-strong);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-lg);
-  font-family: var(--font-ui);
-}
-
 .dev-workflows-preview__header {
   display: flex;
   align-items: center;

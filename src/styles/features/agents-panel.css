@@ -299,19 +299,6 @@ button.dashboard-card-row {
   color: var(--accent-success);
 }
 
-.dashboard-card-row-chevron {
-  color: var(--text-muted);
-  flex-shrink: 0;
-}
-
-.dashboard-card-row-menu {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  color: var(--text-muted);
-}
-
 /* A reconnect is the only account state that changes the row itself. Valid
    connections use the same neutral surface as Figma, with an outlined label. */
 .agents-panel-row.needs-reconnect {

@@ -112,12 +112,8 @@ export const baseCommands: CommandMap = {
   // ---- dashboard --------------------------------------------------------
   get_dashboard_projects: projects,
   list_projects: projects,
-  get_projects: projects,
-  list_external_projects: [],
   list_folders: [],
   list_pinned_projects: [],
-  get_pinned_projects: [],
-  get_settings: {},
   get_keep_dev_servers_running: true,
   get_agents_fix_previews: true,
   get_low_power_on_battery: true,
@@ -145,7 +141,6 @@ export const baseCommands: CommandMap = {
     architecture: 'aarch64',
     defaultAgent: 'Claude Code',
   },
-  get_app_icon: 'brand',
   // The harness's `?theme=` param overrides this (fakeBackend.ts).
   get_app_theme: 'dark',
   set_app_theme: null,
@@ -172,8 +167,6 @@ export const baseCommands: CommandMap = {
   // ---- CLI status --------------------------------------------------------
   check_github_cli_status: { installed: true, authenticated: true },
   check_claude_cli_status: { installed: true, version: '2.1.0' },
-  check_codex_cli_status: { installed: false, version: null },
-  check_opencode_cli_status: { installed: false, version: null },
 
   // ---- workflows & inbox --------------------------------------------------
   list_all_workflows: [],

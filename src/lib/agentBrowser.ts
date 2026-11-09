@@ -39,12 +39,9 @@ export interface BrowserStatus {
   codexAgents: number;
 }
 
-export const BROWSER_EVENT = 'agents://browser';
-
 export const getBrowserStatus = () => invoke<BrowserStatus>('agents_browser_status');
 /** On only once a browser answers; the error names the step still to do. */
 export const enableBrowser = () => invoke<BrowserStatus>('agents_browser_enable');
-export const disableBrowser = () => invoke<void>('agents_browser_disable');
 /** Opens the extension's page in this Mac's browser (the URL lives in Rust). */
 export const openBrowserInstall = () => invoke<void>('agents_browser_open_install');
 
@@ -66,8 +63,3 @@ export function browserLine(status: BrowserStatus | null): string {
 /** The consent line on the setup checklist, before the check uses it. */
 export const BROWSER_CHECK_CONSENT =
   'Let your team use your signed-in browser to check what it can reach? It only looks: nothing is sent or changed.';
-
-/** The first step still to do, if any. */
-export function nextBrowserStep(status: BrowserStatus): BrowserStep | undefined {
-  return status.steps.find((s) => !s.done);
-}

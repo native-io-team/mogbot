@@ -15,7 +15,6 @@ import type { Agent, AgentRef } from './agents';
 
 export { isAdmin } from '../../packages/companion-protocol/src/model';
 
-export const ADMIN_LABEL = 'Admin';
 export const ADMIN_DETAIL =
   'Can manage and approve for other agents: answers their local work, clears logins nobody needs, pauses, briefs and removes them. Spending, sending, publishing, pushing, sharing and keys still come to you.';
 

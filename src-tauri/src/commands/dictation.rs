@@ -127,24 +127,6 @@ pub fn clean_contextual_strings(strings: Vec<String>) -> Vec<String> {
     out
 }
 
-#[tauri::command]
-#[tracing::instrument]
-pub fn get_dictation_status() -> Result<DictationStatus, CommandError> {
-    #[cfg(target_os = "macos")]
-    {
-        Ok(macos::status())
-    }
-    #[cfg(not(target_os = "macos"))]
-    Ok(DictationStatus {
-        supported: false,
-        reason: Some("Dictation is only available on macOS for now.".into()),
-        microphone: Permission::NotDetermined,
-        speech_recognition: Permission::NotDetermined,
-        on_device: false,
-        locale: None,
-    })
-}
-
 /// Start listening. Prompts for microphone and speech-recognition access the
 /// first time; a denied permission comes back as `Blocked`, not an error.
 #[tauri::command]

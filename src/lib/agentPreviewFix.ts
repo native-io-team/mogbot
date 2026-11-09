@@ -70,10 +70,6 @@ export function onPreviewFix(handler: (fix: PreviewFix) => void): Promise<() => 
   return listen<PreviewFix>(EVENT_PREVIEW_FIX, (event) => handler(event.payload));
 }
 
-export function getFixPreviews(): Promise<boolean> {
-  return invoke<boolean>('get_agents_fix_previews');
-}
-
 export function setFixPreviews(enabled: boolean): Promise<void> {
   return invoke('set_agents_fix_previews', { enabled });
 }

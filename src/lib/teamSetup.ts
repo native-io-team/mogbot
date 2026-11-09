@@ -241,14 +241,6 @@ export async function resumeTeamSetup(): Promise<void> {
   showTeamSetup();
 }
 
-/** Tests: forget what was read. */
-export function resetTeamSetupForTests() {
-  stop?.();
-  current = null;
-  loaded = false;
-  revealAsk = 0;
-}
-
 /**
  * Logins the checklist holds, per agent. While a setup isn't finished they
  * live in its one card, so the sidebar, its "Needs your OK · N" row and the

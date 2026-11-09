@@ -246,8 +246,6 @@ export const agentReach = (agentId: string) => invoke<Reach>('agents_reach', { a
 export const removeReach = (agentId: string, removal: Removal) =>
   invoke<Reach>('agents_reach_remove', { agentId, removal });
 export const listConnections = () => invoke<Connection[]>('agents_connections');
-export const renameConnection = (connectionId: string, account: string) =>
-  invoke<Connection>('agents_connection_rename', { connectionId, account });
 export const deleteConnection = (connectionId: string) =>
   invoke<void>('agents_connection_delete', { connectionId });
 
@@ -345,10 +343,6 @@ export function quietLine(flow: LoginFlow): string {
     ? 'Still not connected. If Claude’s connectors page didn’t open, open it again or copy the link.'
     : 'Nothing has come back yet. If no sign-in page opened, open it again or copy the link.';
 }
-
-/** Any card on screen waiting on claude.ai: re-check when the window comes back. */
-export const waitsOnClaudeAi = (flow: LoginFlow | undefined) =>
-  flow?.state === 'waiting' && flow.option === 'claude_ai' && !flow.onPhone;
 
 /** "Gmail's sign-in is open in this Mac's browser." */
 export function flowLine(flow: LoginFlow, title: string): string {

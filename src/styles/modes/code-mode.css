@@ -336,36 +336,3 @@
   gap: var(--button-gap);
   padding: 8px 12px;
 }
-
-.code-selection-cancel {
-  padding: 4px 10px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--text-muted);
-  font-size: var(--font-size-body-md);
-  font-family: inherit;
-  cursor: pointer;
-}
-
-.code-selection-cancel:hover {
-  color: var(--text-primary);
-}
-
-.code-selection-copy {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 4px 12px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: var(--accent-active);
-  color: var(--text-on-accent);
-  font-size: var(--font-size-body-md);
-  font-family: inherit;
-  cursor: pointer;
-}
-
-.code-selection-copy:hover {
-  background: var(--accent-active-hover);
-}

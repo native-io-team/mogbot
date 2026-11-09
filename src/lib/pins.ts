@@ -15,18 +15,6 @@
 
 import { invoke } from '@tauri-apps/api/core';
 
-/** Per-pin session metadata persisted across app restarts. */
-export interface PinLastSession {
-  /** Per-tab Claude/Codex session IDs in tab order. Used with `--resume`. */
-  tabSessionIds: string[];
-  /** Index of the last active tab. */
-  activeTabIndex: number;
-  /** Last agent ID (e.g. "claude-code", "codex"). */
-  lastAgent: string | null;
-  /** Unix millis when the session was last suspended/quit. */
-  suspendedAt: number | null;
-}
-
 /** Add a project to the pinned list. Returns the updated ordered list. */
 export async function pinProject(projectPath: string): Promise<string[]> {
   return invoke<string[]>('pin_project', { projectPath });

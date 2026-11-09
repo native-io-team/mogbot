@@ -118,17 +118,9 @@ Core pieces:
   `set_declaration(css, span, property, value)` that updates an existing
   declaration in place, appends if missing, or removes if `value: None`, all
   while preserving surrounding formatting.
-- **Commands** (`Result<T, CommandError>`, `validate_project_path`,
-  `#[tracing::instrument]`):
-  - `resolve_css_rule(project_path, signature, breakpoint_min_px?)` →
-    `CssResolution` (`Resolved` with declarations | `Multiple` | `Inline` |
-    `NeedsClass` | `NotFound`).
-  - `set_css_declaration(project_path, file, selector, breakpoint_min_px?,
-    property, value?)` → surgical write to that rule's block.
-  - `create_css_class(project_path, authored_sheet, selector, declarations)` →
-    append a rule to the authored stylesheet (element class-attribute attach
-    reuses the existing class-attr surgery once `.html` is added to the source
-    set).
+- **Commands** — the Phase 1 commands `resolve_css_rule` and `set_css_declaration` were
+  removed (as was `make_css_selector_independent`): the editor writes CSS through the rule-text commands
+  in `commands/edit_css.rs` (`apply_css_rule_text`, `wrap_css_rule`, `rename_css_selector`, ...) and `create_css_class`, and nothing called those.
 
 Out of scope for Phase 1: any frontend wiring, gating changes, the prep prompt,
 expanded controls. Those are Phases 2–4.

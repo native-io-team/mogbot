@@ -208,8 +208,6 @@ const IMPORTED_CHATS: Record<string, ReturnType<typeof msg>[]> = Object.fromEntr
   ])
 );
 
-export const IMPORTED_REQUESTS = IMPORTED.reduce((n, a) => n + a.logins.length, 0);
-
 /** The Chief two steps into a turn, so its working line sits above the bar. */
 const CHIEF_WORK = {
   startedAt: now - MIN,
