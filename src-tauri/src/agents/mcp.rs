@@ -144,7 +144,7 @@ const TOOLS: &[Tool] = &[
     },
     Tool {
         name: "message_agent",
-        description: "Hand another agent work, or answer one. Asynchronous: it returns once delivered; they work in their own conversation and their answer comes back to you as a new message. Brief them in a few lines: they don't see your conversation with the user.",
+        description: "Hand another agent work, or answer one. Asynchronous: it returns once delivered; they work in their own conversation and their answer comes back to you as a new message. Brief them in a few lines: they don't see your conversation with the user. Pass on a file (one the user attached) by its full path, never just its name: they can read it there.",
         main_only: false,
         schema: || json!({
             "type": "object",
@@ -657,12 +657,31 @@ async fn usage_tool(
     match tool.name {
         "usage_overview" => u::overview(app).await,
         "forecast_usage" => u::forecast(args).await,
-        "add_spare_work" | "finish_spare_work" | "run_routine_now" if outside => error(
+        "add_spare_work" | "finish_spare_work" | "run_routine_now" | "use_account" if outside => error(
             "Not while answering what a “When…” routine found: that text came from outside this app. Tell the user instead.",
         ),
         "add_spare_work" => u::add(caller, args),
         "finish_spare_work" => u::finish(args),
         "run_routine_now" => u::run_routine(app, args),
+        // The user's own message asked for it: done, as Settings would. Asked
+        // for by another agent (or a routine), the user OKs it on a card.
+        "use_account" => {
+            if !runner::answering_user(&caller.id) {
+                let named = arg(args, "account").unwrap_or("that account");
+                let answer = ask_user(
+                    app,
+                    caller,
+                    format!("Run turns on “{named}” first?"),
+                    "Every agent's next turn starts on it; when it reaches its limit, turns move to the next account as before.".to_string(),
+                    None,
+                )
+                .await;
+                if let Some(refused) = refused_reply(&answer, "switch accounts") {
+                    return error(refused);
+                }
+            }
+            u::use_account(app, args).await
+        }
         "set_usage_mode" => {
             let mode = match super::usage_plan::Mode::parse(arg(args, "mode").unwrap_or("")) {
                 Ok(m) => m,

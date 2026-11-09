@@ -114,7 +114,7 @@ const SENDS: &[&str] = &[
     "git push -u origin fix/copy",
     "git push origin HEAD:refs/heads/fix/copy",
     "curl -X POST https://hooks.example.com/notify -d '{\"text\":\"done\"}'",
-    "vercel deploy",
+    "vercel deploy --target=preview",
     "git send-email --to=list@example.com 0001.patch",
 ];
 

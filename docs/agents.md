@@ -4648,12 +4648,13 @@ Tests: `agents/settings_chat_tests.rs`.
 | An app already connected here, per agent ("let Outreach use Linear") | `propose_settings_change` `changes.connections {give, take}` | giving or widening to full yes; taking away or down to read no |
 | Fix stopped previews; Keep this Mac awake; Keep running when closed; Open at login | `propose_settings_change` `fix_previews` / `keep_awake` / `keep_running` / `open_at_login`, admins only, on their own | on yes (open at login is a LaunchAgent); off no |
 | Usage mode | `set_usage_mode` (Chief) | yes |
+| Which account turns start on ("use my personal plan") | `use_account` (Chief): puts that signed-in account first in the order (`wallet::reorder`), failover unchanged | no when the user's own message asked; a card when another agent or a routine did; never for outside text |
 | Engine, model, effort, routines' model | `update_agent` (Chief) | no: what its turns run on, not what they may do; one "Now on Opus · High from its next message" line, as the editor leaves |
 | Mute an agent's notifications | `update_agent` `muted` (Chief) | no; unread and the badge still count it |
 | Name, role, instructions, project, look | `update_agent` / `create_agent` (Chief) | no (a card in a turn answering outside text, as before) |
 | Admin switch | `propose_settings_change` `admin` (admins) | yes |
 | Logins and secrets | `request_login`, `request_secret` | their own cards; never a value in chat |
-| Not from chat | the phone pairing and revoking, Remote Access on/off and its push PIN, account order (`wallet`), quick-entry shortcut and menu-bar icon, new agents' default engine/model, the agents' browser switch | each is either a security wall that must be confirmed on the desk (pairing, Remote Access, PIN) or rarely asked for; the desk is the way in |
+| Not from chat | the phone pairing and revoking, Remote Access on/off and its push PIN, adding or removing an account (`wallet`), quick-entry shortcut and menu-bar icon, new agents' default engine/model, the agents' browser switch | each is either a security wall that must be confirmed on the desk (pairing, Remote Access, PIN) or rarely asked for; the desk is the way in |
 
 **An app already connected** (`policy_card::GrantChange`). No sign-in and no
 token: the tool finds the one connection for that app (service id or title,

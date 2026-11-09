@@ -976,6 +976,12 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
             "Changing how your limits are used",
             "change how your limits are used",
         ),
+        "use_account" => act(
+            StepKind::Plan,
+            "Switched the account turns run on",
+            "Switching the account turns run on",
+            "switch the account turns run on",
+        ),
         "add_spare_work" => act(
             StepKind::Plan,
             "Added to the spare-time list",
