@@ -327,7 +327,7 @@ function Legend({
       testID={lit ? 'agent-key-legend-lit' : 'agent-key-legend'}
       style={styles.legend}
     >
-      {lit && strokes(keyLit.glow, g.stroke * (g.small ? 1.8 : 2.4), g.small ? 0.3 : 0.35)}
+      {lit && strokes(keyLit.glow, g.stroke * (g.small ? 1.6 : 1.7), g.small ? 0.3 : 0.45)}
       {strokes(lit ? keyLit.legend : paint.legend, g.stroke)}
     </Svg>
   );
