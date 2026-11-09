@@ -11,6 +11,7 @@ import {
   runsOnDetail,
 } from '../src/lib/accountsView';
 import * as real from '../../packages/companion-protocol/src/fixtures.gen';
+import { setApp } from '../src/lib/store';
 
 jest.mock('../src/lib/session', () => ({
   call: jest.fn(),
@@ -105,6 +106,19 @@ describe('usage accounts, on the phone', () => {
     expect(screen.getByText('Work')).toBeTruthy();
     expect(screen.queryByLabelText('Use Work now')).toBeNull();
     expect(screen.queryByLabelText('Try Work earlier')).toBeNull();
+  });
+
+  it('while its agents carry on with the other engine, the section says so, as the desk does', async () => {
+    setApp({
+      overview: {
+        agents: [{ id: 'fin', engine: 'claude', away: { engine: 'codex', since: 1 } }],
+      } as never,
+    });
+    await render(<AccountsSections state={state([mac, work])} />);
+    expect(screen.getByText('Claude Code out · on Codex')).toBeTruthy();
+    expect(screen.getByLabelText('Use Work now')).toBeTruthy();
+    expect(screen.getByText('Use this one now')).toBeTruthy();
+    setApp({ overview: null as never });
   });
 
   it('a refusal is said under the list', async () => {

@@ -1,7 +1,10 @@
 /**
  * Settings → Accounts: each engine's accounts, in the order turns try them,
  * with which one is in use, its room, and who is set to run only on it.
- * "Use now" puts one first; the arrows move one earlier or later. Adding
+ * "Use this one now" puts one first; the arrows move one earlier or later.
+ * While every account of an engine is out and its agents carry on with the
+ * other, one muted line under the section says so, as the desk's Usage
+ * does ("Claude Code out · on Codex until 4:00 PM"). Adding
  * an account or signing one in happens on the Mac (`ADD_ON_MAC`).
  *
  * Every row is a Line (docs/agents.md, "Lines, cards and bars"): the name,
@@ -12,13 +15,17 @@
 import {
   ADD_ACCOUNT_WHY,
   ADD_ON_MAC,
+  awayLine,
+  awayStateOf,
   pinnedLine,
+  USE_THIS_ONE_NOW,
   type SwitcherEngine,
   type SwitcherRow,
 } from '@shipstudio/companion-protocol';
 import { View } from 'react-native';
 import { makeStyles, useColors } from '../lib/appearance';
 import type { AccountsState } from '../lib/accounts';
+import { useApp } from '../lib/store';
 import { iconSize, space } from '../lib/theme';
 import { Button, Icon, IconButton, InsetDivider, Section, StatusPill, T } from './ui';
 
@@ -47,6 +54,7 @@ export function shownEngines(view: SwitcherEngine[]): SwitcherEngine[] {
 export function AccountsSections({ state }: { state: AccountsState }) {
   const colors = useColors();
   const styles = useStyles();
+  const agents = useApp((s) => s.overview?.agents);
   const engines = shownEngines(state.view);
   if (!state.serves || engines.length === 0) return null;
   const several = engines.length > 1;
@@ -58,6 +66,15 @@ export function AccountsSections({ state }: { state: AccountsState }) {
           title={several ? `${e.label} accounts` : 'Accounts'}
           footer={ei === engines.length - 1 ? `${ADD_ACCOUNT_WHY} ${ADD_ON_MAC}` : undefined}
         >
+          {(() => {
+            // Every account out and its agents carrying on with the other engine.
+            const away = awayStateOf(e.engine, agents ?? []);
+            return away ? (
+              <View style={styles.away}>
+                <StatusPill tone="out" label={awayLine(away)} />
+              </View>
+            ) : null;
+          })()}
           {e.rows.map((r, i) => (
             <AccountLine
               key={r.key}
@@ -81,7 +98,7 @@ export function AccountsSections({ state }: { state: AccountsState }) {
 
 /**
  * One account: its name over muted lines, the full width, and under them
- * what can be done (Use now, earlier, later), so neither squeezes the other.
+ * what can be done (Use this one now, earlier, later), so neither squeezes the other.
  */
 function AccountLine({
   row: r,
@@ -135,7 +152,7 @@ function AccountLine({
           <View style={styles.actions}>
             {use && (
               <Button
-                title="Use now"
+                title={USE_THIS_ONE_NOW}
                 size="compact"
                 variant="secondary"
                 disabled={state.busy}
@@ -195,5 +212,10 @@ const useStyles = makeStyles(() => ({
   order: { flexDirection: 'row', alignItems: 'center' },
   // An arrow that isn't there keeps its 44pt place, so the rows line up.
   slot: { width: 44 },
+  away: {
+    flexDirection: 'row',
+    paddingHorizontal: space.lg,
+    paddingTop: space.md,
+  },
   error: { marginHorizontal: space.lg, marginTop: -space.md, marginBottom: space.lg },
 }));

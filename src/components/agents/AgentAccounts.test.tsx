@@ -76,13 +76,13 @@ describe('accountDetail', () => {
   it('shows who each account is, This Mac included, only as reported', () => {
     const signed = { ...mac('claude'), email: 'sam@example.com', plan: 'Max' };
     expect(accountDetail(signed, NOW)).toEqual({
-      state: 'Signed in',
+      state: 'Ready',
       email: 'sam@example.com',
       plan: 'Max plan',
       note: undefined,
     });
-    // Nothing reported: just "Signed in", never a made-up address or plan.
-    expect(accountDetail(mac('claude'), NOW)).toMatchObject({ state: 'Signed in' });
+    // Nothing reported: just "Ready", never a made-up address or plan.
+    expect(accountDetail(mac('claude'), NOW)).toMatchObject({ state: 'Ready' });
     expect(accountDetail(mac('claude'), NOW).email).toBeUndefined();
     expect(accountDetail(mac('claude'), NOW).plan).toBeUndefined();
     // A file that outlived a sign-out isn't shown.
@@ -96,7 +96,7 @@ describe('accountDetail', () => {
     expect(out.note).toBeUndefined();
     // The email comes before a past limit, so it's what truncates.
     const past = accountDetail({ ...work, out: false, email: 'w@example.com' }, NOW);
-    expect(past.state).toBe('Signed in');
+    expect(past.state).toBe('Ready');
     expect(past.email).toBe('w@example.com');
     expect(past.note).toMatch(/^last limit /);
   });

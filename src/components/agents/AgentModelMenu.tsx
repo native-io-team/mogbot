@@ -31,6 +31,11 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { accountsOf } from '../../lib/agentAccounts';
 import { useUsageAccounts } from './useUsageAccounts';
+import {
+  RUNS_ON_ANY,
+  RUNS_ON_ANY_DETAIL,
+  runsOnDetail,
+} from '../../../packages/companion-protocol/src/cardWords';
 
 /**
  * "Runs on": any account (the default: the team's order, carrying on with
@@ -49,14 +54,15 @@ export function AgentAccountItems({
   if (mine.length < 2) return null;
   const current = agent.account ?? '';
   const choices = [
-    { value: '', label: 'Any account', detail: 'Carries on when one runs out' },
+    // Worded once with the phone's Runs on (`cardWords`).
+    { value: '', label: RUNS_ON_ANY, detail: RUNS_ON_ANY_DETAIL },
     ...mine.map((a) => ({
       value: a.id,
       label: a.name,
-      detail: a.signedIn ? (a.out ? 'Out of usage now' : undefined) : 'Not signed in',
+      detail: runsOnDetail(a),
     })),
   ];
-  const named = choices.find((c) => c.value === current)?.label ?? 'Any account';
+  const named = choices.find((c) => c.value === current)?.label ?? RUNS_ON_ANY;
   return (
     <>
       <DropdownDivider />

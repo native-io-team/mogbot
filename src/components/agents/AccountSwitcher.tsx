@@ -66,6 +66,8 @@ import {
   type WorkingLine,
 } from '../../../packages/companion-protocol/src/accountSwitcher';
 import { awayStateOf } from '../../../packages/companion-protocol/src/crossover';
+import { USE_THIS_ONE_NOW } from '../../../packages/companion-protocol/src/cardWords';
+import { StatusPill } from '../primitives/StatusPill';
 
 const ENGINE_ICON: Record<AgentEngine, typeof ClaudeIcon> = {
   claude: ClaudeIcon,
@@ -393,9 +395,14 @@ function Row({
           ) : (
             <span className="account-switcher__account-name">{row.name}</span>
           )}
-          <span className="account-switcher__state" data-tone={row.tone}>
+          {/* The state as the Settings list and the phone draw it: one calm
+              pill; in use is done, out of usage neutral (it resets by itself). */}
+          <StatusPill
+            className="account-switcher__state"
+            tone={row.tone === 'out' ? 'out' : row.inUse && row.tone === 'ok' ? 'done' : 'idle'}
+          >
             {row.state}
-          </span>
+          </StatusPill>
         </div>
         {row.detail.length > 0 && (
           <span className="account-switcher__muted">{row.detail.join(' · ')}</span>
@@ -439,7 +446,7 @@ function Row({
           <div className="account-switcher__actions">
             {row.canUse && (
               <Button size="compact" variant="secondary" onClick={onUse}>
-                Use this one now
+                {USE_THIS_ONE_NOW}
               </Button>
             )}
             {!row.signedIn && (

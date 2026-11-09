@@ -40,7 +40,7 @@ export function activeStepIn(messages: readonly AgentMessage[]): Approval | null
 export const stepInBarTitle = (agentName: string) => `You’re in ${agentName}’s browser`;
 
 /** What the bar adds: the site, and when it hands back by itself. */
-export function stepInBarDetail(card: StepInCard, now: number): string {
+export function stepInBarDetail(card: StepInCard, now = Date.now()): string {
   const left = card.until ? Math.max(0, Math.ceil((card.until - now) / 60_000)) : null;
   const ends =
     left === null
@@ -51,16 +51,12 @@ export function stepInBarDetail(card: StepInCard, now: number): string {
   return `${card.site}${ends}`;
 }
 
-/** A step-in card once it's closed, in one line. */
-export function stepInOutcome(approval: Approval): string {
-  if (approval.status === 'allowed') return 'Handed back';
-  if (approval.status === 'denied') return 'Not now';
-  return approval.setAside ?? 'Expired';
-}
+export {
+  STEP_IN_ON_YOUR_MAC,
+  stepInOutcome,
+  stepInSource,
+} from '../../packages/companion-protocol/src/cardWords';
 
 /** What the card says about where it opens, and what the agent sees. */
 export const STEP_IN_NOTE =
   'Its tab opens in a window on this Mac. Do it there, then Hand back here. It never sees what you type, only where the page ends up.';
-
-/** The phone's card (no remote control of the tab yet). */
-export const STEP_IN_ON_YOUR_MAC = 'Step in on your Mac: its tab opens there.';

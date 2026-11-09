@@ -472,7 +472,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'settings-agents-accounts',
     title: 'Settings — Agents → Accounts (usage wallets)',
     looksRightWhen:
-      'Under “Accounts”, one muted sentence (“When one runs out of usage, agents carry on with the next, in this order.”), then Claude Code and Codex, each a bordered list of numbered lines. Claude Code: 1 “This Mac” signed in, 2 “Work” in amber “Out of usage until …” with the reset time, then its email, 3 “Personal” “Signed in · me@example.com · last limit …”; Codex: 1 “This Mac”, 2 “ChatGPT Plus” “Not signed in” with Sign in. Each line has a “…” menu (Rename, Sign in again, Remove…) and the up/down pair, the first up and last down disabled; a signed-out line also has one secondary Sign in. Under each list a secondary “Add a … account”, with air before the next engine. Neutral buttons only, no accent.',
+      'Under “Accounts”, one muted sentence (“When one runs out of usage, agents carry on with the next, in this order.”), then Claude Code and Codex, each a bordered list of numbered lines. Claude Code: 1 “This Mac” signed in, 2 “Work” with a neutral “Out of usage until …” pill, then its email, 3 “Personal” with a “Ready” pill (the popover’s and the phone’s word), its email and “last limit …”; Codex: 1 “This Mac”, 2 “ChatGPT Plus” “Not signed in” with Sign in. Each line has a “…” menu (Rename, Sign in again, Remove…) and the up/down pair, the first up and last down disabled; a signed-out line also has one secondary Sign in. Under each list a secondary “Add a … account”, with air before the next engine. Neutral buttons only, no accent.',
     command: 'agents.accounts',
     requires: '.agent-accounts .agent-account',
     clipSelector: '.agent-accounts',
@@ -541,7 +541,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'settings-agents-accounts-two-claude',
     title: 'Settings — Agents → Accounts: two Claude Code sign-ins, Codex signed out',
     looksRightWhen:
-      'Claude Code lists two lines, each with its name in full on the first line and “Signed in · <email>” on the second: 1 “This Mac” with sam@example.com and “Max plan” (read from Claude Code’s own file), and 2 “Personal Account” with sam.personal@example.net. Neither name is cut off; a long email is the thing that truncates. Codex: 1 “This Mac” “Not signed in” with one Sign in button. Row actions are quiet compact buttons on one baseline, the reorder arrows grouped together, Rename, Sign in again and Remove… are in each row’s “…” menu (This Mac’s Remove is greyed, its hover saying why). Each “Add a … account” button has air above the next engine’s heading. Neutral only, no accent.',
+      'Claude Code lists two lines, each with its name in full on the first line and a “Ready” or “In use” pill and the email on the second: 1 “This Mac” with sam@example.com and “Max plan” (read from Claude Code’s own file), and 2 “Personal Account” with sam.personal@example.net. Neither name is cut off; a long email is the thing that truncates. Codex: 1 “This Mac” “Not signed in” with one Sign in button. Row actions are quiet compact buttons on one baseline, the reorder arrows grouped together, Rename, Sign in again and Remove… are in each row’s “…” menu (This Mac’s Remove is greyed, its hover saying why). Each “Add a … account” button has air above the next engine’s heading. Neutral only, no accent.',
     command: 'agents.accounts',
     requires: '.agent-accounts .agent-account',
     clipSelector: '.agent-accounts',

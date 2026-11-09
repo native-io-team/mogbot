@@ -1,6 +1,6 @@
 /**
  * The Mac's usage accounts (`agents.accounts`), read while Settings or an
- * agent's controls are in front, and swapped from here: "Use now" puts one
+ * agent's controls are in front, and swapped from here: "Use this one now" puts one
  * first (`agents.accounts.use`), the arrows reorder (`agents.accounts.reorder`).
  * Both are audited on the Mac and never carry a token: the phone names an
  * account only by its id. Adding one, or signing one in, happens on the Mac,
@@ -38,7 +38,7 @@ export interface AccountsState {
   serves: boolean;
   accounts: UsageAccount[] | null;
   view: SwitcherEngine[];
-  /** The Mac takes "Use now" / the arrows from here. */
+  /** The Mac takes "Use this one now" / the arrows from here. */
   canSwap: boolean;
   canReorder: boolean;
   error: string | null;

@@ -32,6 +32,7 @@ import {
   stepInBarTitle,
   stepIntoAgentBrowser,
   stepInOutcome,
+  stepInSource,
 } from '../../lib/agentStepIn';
 
 /** Run a step-in action, saying what went wrong in a toast. */
@@ -84,7 +85,7 @@ export function StepInCard({
         data={{ status: approval.status, in: inNow || undefined }}
         icon={<GlobeIcon size={14} />}
         title={approval.title}
-        source={card.pageTitle ? `${card.site} · ${card.pageTitle}` : card.site}
+        source={stepInSource(card)}
         note={
           !pending
             ? undefined
@@ -151,7 +152,7 @@ export function StepInCard({
 export function StepInBar({
   agent,
   messages,
-  now = Date.now(),
+  now,
 }: {
   agent: Agent;
   messages: readonly AgentMessage[];
@@ -159,8 +160,10 @@ export function StepInBar({
   now?: number;
 }) {
   const active = activeStepIn(messages);
-  const { busy, run } = useStepInAction();
   const requestId = active?.requestId;
+  // Read before any hook, so nothing after them touches `active`.
+  const detail = active?.stepIn ? stepInBarDetail(active.stepIn, now) : null;
+  const { busy, run } = useStepInAction();
   const handBack = useCallback(() => {
     if (requestId) void run(() => handBackAgentBrowser(agent.id, requestId));
   }, [agent.id, requestId, run]);
@@ -180,14 +183,14 @@ export function StepInBar({
         : [],
     [agent.id, agent.name, requestId, handBack]
   );
-  if (!active?.stepIn) return null;
+  if (!detail) return null;
   return (
     <ConversationBar
       state="active"
       icon={<GlobeIcon size={12} />}
       data-testid="agent-step-in-bar"
       title={stepInBarTitle(agent.name)}
-      detail={stepInBarDetail(active.stepIn, now)}
+      detail={detail}
       actions={
         <>
           <TextButton

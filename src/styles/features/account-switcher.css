@@ -164,18 +164,11 @@
   min-width: 0;
 }
 
+/* The state is a StatusPill, as in Settings → Accounts and on the phone:
+   in use done, out of usage neutral (it resets by itself), never amber. */
 .account-switcher__state {
   flex: none;
-  font-size: var(--font-size-body-sm);
-  color: var(--text-muted);
-}
-
-.account-switcher__account[data-in-use] .account-switcher__state {
-  color: var(--text-primary);
-}
-
-.account-switcher__state[data-tone='out'] {
-  color: var(--accent-warning);
+  align-self: center;
 }
 
 .account-switcher__muted {

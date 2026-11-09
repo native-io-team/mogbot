@@ -117,8 +117,9 @@ export function accountDetail(
 ): { state: string; email?: string; plan?: string; note?: string } {
   if (!a.signedIn) return { state: accountState({ ...a, email: undefined }, now) };
   return {
-    // Out now says so with its reset; otherwise a past limit goes last.
-    state: accountState({ ...a, email: undefined, limit: a.out ? a.limit : undefined }, now),
+    // Out now says so with its reset; otherwise "Ready", as the popover and
+    // the phone say it (a past limit goes last, in `note`).
+    state: a.out ? accountState({ ...a, email: undefined }, now) : 'Ready',
     email: a.email,
     plan: a.plan ? planLabel(a.plan) : undefined,
     note: !a.out && a.limit ? `last limit ${readDay(a.limit.at, now)}` : undefined,

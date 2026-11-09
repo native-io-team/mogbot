@@ -202,5 +202,7 @@ export function askAction(m: AgentMessage | undefined): AskAction {
   if (a.front) return { kind: 'answer', allow: 'Check again', deny: 'Not now' };
   // Step in happens at the Mac: open the card, which says so.
   if (a.stepIn) return { kind: 'open', label: 'Open' };
+  // Three answers (Wait, Just this time, Always): the card in its chat has them.
+  if (a.crossover) return { kind: 'open', label: 'Answer' };
   return { kind: 'answer', allow: 'Allow', deny: 'Deny' };
 }

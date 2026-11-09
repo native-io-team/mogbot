@@ -55,6 +55,7 @@ import {
   type UsageAccount,
 } from '../../lib/agentAccounts';
 import { inUseOf } from '../../../packages/companion-protocol/src/accountSwitcher';
+import { USE_THIS_ONE_NOW } from '../../../packages/companion-protocol/src/cardWords';
 import { AccountSignIn } from './AccountSignIn';
 
 const say = (e: unknown) => formatCommandError(asCommandError(e));
@@ -157,7 +158,7 @@ function AccountRow({
             )}
             {account.signedIn && !account.out && !inUse && (
               <Button size="compact" variant="secondary" onClick={onUse}>
-                Use this one now
+                {USE_THIS_ONE_NOW}
               </Button>
             )}
             <Dropdown

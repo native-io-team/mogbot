@@ -10,6 +10,7 @@ import {
   revisingLabel,
   splitQuotes,
   viaLabel,
+  checkInHead,
   type Agent,
   type AgentMessage,
   type ResultRef,
@@ -473,9 +474,8 @@ function SessionCard({
 
 /** A routine's line: what found it (a "When…" routine), or that it ran by hand. */
 function checkInText(message: AgentMessage): string {
-  const c = message.checkIn;
-  const what = c?.manual ? 'Ran now' : c?.found ? `Routine · ${c.found}` : 'Routine';
-  return `${what} · ${message.text}`;
+  // Worded once with the desk: "Routine · late, was due today at 9:00 AM".
+  return `${checkInHead(message.checkIn)} · ${message.text}`;
 }
 
 /** What changed, in a line of its own: "Changed 2 files in acme-site · +3 −1", opening the diff. */

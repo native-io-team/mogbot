@@ -49,6 +49,8 @@ import { SecretCard } from './AgentSecretCard';
 import { LoginCard } from './AgentLoginCard';
 import { StepInCard } from './AgentStepIn';
 import { CrossoverCard } from './AgentCrossoverCard';
+import { checkInHead } from '../../../packages/companion-protocol/src/cardWords';
+import { viaLabel } from '../../../packages/companion-protocol/src/model';
 import { AgentSettingsChange } from './AgentSettingsChange';
 import { AgentPlanList } from './AgentPlanList';
 import { AgentGateBody } from './AgentRoutineSteps';
@@ -63,7 +65,6 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useHeightReveal } from './useAgentMotion';
 import { useCardGuard } from './useCardGuard';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
-import { viaLabel } from '../../lib/slack';
 import {
   connectorTextParts,
   GATE_ALLOW,
@@ -79,7 +80,6 @@ import {
   retryPhrase,
   formatDivider,
   formatExactTime,
-  formatWhenInline,
   localPathFromHref,
   openLocalPath,
   peerGroupLabel,
@@ -559,8 +559,8 @@ export const CheckInLine = memo(function CheckInLine({
   message,
   arrived,
 }: { message: AgentMessage } & Arrival) {
-  const mark = message.checkIn;
-  const label = mark?.repeats ? 'Routine' : 'Scheduled';
+  // Worded once for the desk and the phone (`checkInHead`).
+  const [label, ...rest] = checkInHead(message.checkIn).split(' · ');
   return (
     <div
       className="agent-checkin"
@@ -570,13 +570,7 @@ export const CheckInLine = memo(function CheckInLine({
       <span className="agent-peer__line">
         <HistoryIcon size={12} />
         {label}
-        {mark?.found && <span className="agent-checkin__late">· {mark.found}</span>}
-        {mark?.manual && <span className="agent-checkin__late">· run now</span>}
-        {mark?.late && (
-          <span className="agent-checkin__late">
-            · late, was due {formatWhenInline(mark.dueAt)}
-          </span>
-        )}
+        {rest.length > 0 && <span className="agent-checkin__late">· {rest.join(' · ')}</span>}
       </span>
       <span className="agent-checkin__note">{message.text}</span>
     </div>

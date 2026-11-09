@@ -104,9 +104,5 @@ export function whereLine(conversations: SlackConversation[]): string {
   return `${names.slice(0, 2).join(', ')} and ${names.length - 2} more`;
 }
 
-/** What a Slack-originated chat line is labelled with: "From Slack · #launch". */
-export function viaLabel(via: { source: string; place: string } | undefined | null): string | null {
-  if (!via) return null;
-  const source = via.source === 'slack' ? 'Slack' : via.source;
-  return via.place ? `From ${source} · ${via.place}` : `From ${source}`;
-}
+/** What a Slack-originated chat line is labelled with: "From Slack · #launch" (worded once, with the phone). */
+export { viaLabel } from '../../packages/companion-protocol/src/model';

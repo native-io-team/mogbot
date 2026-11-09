@@ -22,6 +22,7 @@ export const MATERIAL: Partial<Record<SFName, string>> = {
   puzzlepiece: 'extension',
   'arrow.down': 'arrow_downward',
   'arrow.clockwise': 'refresh',
+  'arrow.left.arrow.right': 'swap_horiz',
   'arrow.counterclockwise': 'restart_alt',
   'arrow.trianglehead.2.clockwise': 'sync',
   'arrow.uturn.left': 'undo',

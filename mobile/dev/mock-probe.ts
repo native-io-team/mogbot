@@ -13,11 +13,17 @@
  * - Quiet hours: the Chief setting them, and a routine that waited for them.
  * - Three Claude accounts: this Mac's, Work out of usage, Personal signed
  *   out; Builder runs only on Work ("Runs on"), and its last turn ran there.
+ * - Codex's one account out: Courier carries on with Claude Code meanwhile
+ *   ("Codex out · on Claude Code until …"), and Ledger's card asks whether
+ *   to (Wait / Just this time / Always, as on the desk).
+ * - Slack: an ask that came in from Slack, and its reply's exact words on a
+ *   "Reply in Slack?" card.
  *
  * Every name, address and number is made up.
  */
 
 import type { Agent, AgentMessage, UsageAccount } from '@shipstudio/companion-protocol';
+import { resetPhrase } from '@shipstudio/companion-protocol';
 
 type Base = (id: string, name: string, role: string, color: string, extra: Partial<Agent>) => Agent;
 
@@ -65,6 +71,12 @@ const LONG_REPLY = [
   'Nothing has been sent. Say which quote to accept and I’ll draft the reply for you to check.',
 ].join('\n\n');
 
+/** When Codex's account says it is back. */
+const CODEX_BACK = () => Math.ceil((Date.now() + 90 * MIN) / (15 * MIN)) * 15 * MIN;
+
+const SLACK_REPLY =
+  'Drafted. Launch is Friday at 10:00; Sam owns the checklist and the post goes out at 10:30.';
+
 const LONG_ASK = `Can you go through the whole supplier thread ${'and every reply in it '.repeat(12)}and tell me what changed?`;
 
 /** Three Claude accounts and Codex's own, as `agents.accounts` serves them. */
@@ -109,7 +121,8 @@ export function probeAccounts(): UsageAccount[] {
       named: false,
       thisMac: true,
       signedIn: true,
-      out: false,
+      out: true,
+      limit: { at: Date.now() - 20 * MIN, resetsAt: CODEX_BACK() },
     },
   ];
 }
@@ -153,12 +166,13 @@ export function addProbeAccount(
         text: '',
         approval: {
           requestId: 'req_stepin',
-          title: 'Browser Helper needs you in its browser',
-          detail: 'The portal asks for a code sent to your phone before it shows the booking page.',
+          title:
+            'Browser Helper needs you in its browser: enter the code the portal sent to your phone',
+          detail:
+            "Its tab on portal.northwind.example opens on this Mac for you to do this yourself; Hand back when you're done. It never sees what you type, only where the page ends up.",
           status: 'pending',
           stepIn: {
-            reason:
-              'The portal asks for a code sent to your phone before it shows the booking page.',
+            reason: 'enter the code the portal sent to your phone',
             site: 'portal.northwind.example',
             url: 'https://portal.northwind.example/login/verify',
             pageTitle: 'Verify it’s you',
@@ -267,6 +281,101 @@ export function addProbeAccount(
     [
       { ts: now - 12 * MIN, kind: 'user', text: LONG_ASK },
       { ts: now - 8 * MIN, kind: 'agent', text: LONG_REPLY },
+    ]
+  );
+
+  // Codex is out: the first time, a card asks whether to carry on with Claude Code.
+  const back = CODEX_BACK();
+  put(
+    base('ledger', 'Ledger', 'Invoices and spend', 'green', {
+      engine: 'codex',
+      pendingApprovals: 1,
+      status: { state: 'waiting', activity: null, since: now - 2 * MIN },
+      lastActivityAt: now - 2 * MIN,
+      preview: 'Needs your OK',
+    }),
+    [
+      {
+        ts: now - 3 * MIN,
+        kind: 'user',
+        text: 'Draft the reminder to Globex and send it to me first.',
+      },
+      {
+        ts: now - 2 * MIN,
+        kind: 'approval',
+        text: '',
+        approval: {
+          requestId: 'req_crossover',
+          title: `Your Codex account is out until ${resetPhrase(back, now)}. Carry on with Claude Code until then?`,
+          detail: '',
+          summary:
+            "Claude Code can't open Codex's conversation, so Ledger starts there from your chat and its memory. When Codex has room again, Ledger goes back to it and is told what happened meanwhile. Always: whenever every Codex account is out. Change it in Settings → Agents → Usage.",
+          status: 'pending',
+          crossover: { from: 'codex', to: 'claude', until: back, resume: true },
+        },
+      },
+    ]
+  );
+
+  // Carrying on meanwhile: Settings → Accounts says "Codex out · on Claude Code until …".
+  put(
+    base('courier', 'Courier', 'Shipping labels and tracking', 'blue', {
+      engine: 'codex',
+      away: { engine: 'claude', since: now - 11 * MIN, until: back },
+      lastActivityAt: now - 10 * MIN,
+      preview: 'Two labels printed; tracking is in the sheet.',
+    }),
+    [
+      { ts: now - 12 * MIN, kind: 'user', text: 'Print the labels for today’s two orders.' },
+      {
+        ts: now - 11 * MIN,
+        kind: 'note',
+        text: `Carried on with Claude Code (Codex is out until ${resetPhrase(back, now)}).`,
+      },
+      { ts: now - 10 * MIN, kind: 'agent', text: 'Two labels printed; tracking is in the sheet.' },
+    ]
+  );
+
+  // An ask from Slack, and the reply's exact words waiting for your OK.
+  put(
+    base('launch', 'Launch Desk', 'Launch notes and the #launch channel', 'pink', {
+      pendingApprovals: 1,
+      status: { state: 'waiting', activity: null, since: now - 3 * MIN },
+      lastActivityAt: now - MIN,
+      preview: 'Needs your OK',
+    }),
+    [
+      {
+        ts: now - 6 * MIN,
+        kind: 'user',
+        text: 'draft the launch note for #launch from the doc Sam shared',
+        via: { source: 'slack', place: '#launch' },
+      },
+      { ts: now - 4 * MIN, kind: 'agent', text: `Here is the note.\n\n${SLACK_REPLY}` },
+      {
+        ts: now - 3 * MIN,
+        kind: 'approval',
+        text: '',
+        approval: {
+          requestId: 'req_slack',
+          title: 'Reply in Slack?',
+          summary: `In #launch, in the thread it was asked in. Goes out under your name, exactly:\n“${SLACK_REPLY}”`,
+          detail: SLACK_REPLY,
+          status: 'pending',
+          slackReply: {
+            channel: 'C0LAUNCH',
+            threadTs: '1700000004.000100',
+            place: '#launch',
+            text: SLACK_REPLY,
+          },
+        },
+      },
+      {
+        ts: now - MIN,
+        kind: 'note',
+        text: 'Sam asked in Slack (your DM with Sam): “what’s the ETA on the launch note?”',
+        via: { source: 'slack', place: 'your DM with Sam', from: 'Sam' },
+      },
     ]
   );
 
