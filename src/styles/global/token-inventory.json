@@ -2603,7 +2603,7 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "consumerCount": 25
+      "consumerCount": 24
     },
     {
       "name": "--agents-motion-flash",
@@ -5107,7 +5107,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 563
+      "consumerCount": 559
     },
     {
       "name": "--text-muted",
@@ -6379,7 +6379,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 563
+      "consumerCount": 559
     },
     {
       "name": "--text-quiet",

@@ -434,6 +434,15 @@ pub async fn snapshot_start_watching(project_path: String) -> Result<(), Command
     let validated = validate_project_path(&project_path)?;
     let key = validated.clone();
 
+    // Snapshots are `git stash create`: outside a repository every one fails.
+    // Watching anyway ran a failing git (and logged a warning) after every
+    // burst of file changes, all the while an agent edited the project.
+    // `snapshot_status` already reports `is_git_repo: false` for the UI.
+    if !is_git_repo(&validated) {
+        debug!("[snapshots] not a git repository, not watching");
+        return Ok(());
+    }
+
     // Seed initial snapshot before locking — capture_snapshot shells out.
     let initial_sha = capture_snapshot(&validated).unwrap_or_default();
 

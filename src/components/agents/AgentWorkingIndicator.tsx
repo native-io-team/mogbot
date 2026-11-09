@@ -82,6 +82,7 @@ export function WorkingIndicator({
   // While it collapses the time holds where it was.
   if (!leaving && frozen !== meta) setFrozen(meta);
   const tail = leaving ? frozen : meta;
+  const shimmering = !step.quiet && !leaving;
 
   const text = (
     <span className="agent-working__text">
@@ -89,10 +90,19 @@ export function WorkingIndicator({
         <span
           key={words}
           className="agent-working__activity"
-          data-live={!step.quiet && !leaving ? true : undefined}
+          data-live={shimmering || undefined}
           data-changed={words !== first || undefined}
         >
           {words}
+          {/* The light passing over the words: a brighter copy of them seen
+              through a moving band, all transforms, so the compositor runs it
+              (agents-work.css, "The shimmer"). The copy is CSS content, so the
+              words are in the DOM once. */}
+          {shimmering && (
+            <span className="agent-working__glint" aria-hidden="true">
+              <span className="agent-working__glint-band" data-text={words} />
+            </span>
+          )}
         </span>
       )}
       {/* The time ticks every second: read when asked, never announced. */}

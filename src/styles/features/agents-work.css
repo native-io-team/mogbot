@@ -361,36 +361,71 @@
   text-overflow: ellipsis;
 }
 
-/* Live: a soft light passes over the words, the way a thinking line does.
-   Stalled ("No progress for 5 min") or leaving, it holds still. */
+/* The shimmer. Live, a soft light passes over the words, the way a thinking
+   line does; stalled ("No progress for 5 min") or leaving, it isn't drawn.
+
+   It used to be a gradient clipped to the text with its background-position
+   animated. A background can't be handed to the compositor: WebKit restyled
+   the line, re-checked compositing for the whole page and repainted the text
+   every frame, about 3% of a core in the page and 6% in WebKit's GPU process
+   for one line, more with a long chat (measured in a WKWebView). Now the
+   words in --text-primary sit over themselves, seen through a band that is
+   bright in the middle (40% / 50% / 60%, as the gradient was) and slides
+   across the line, while the copy slides back by the same amount so it stays
+   on the words. Both moves are transforms, so the compositor runs them and
+   the page itself does nothing per frame. The band is 250% of the line, as
+   the gradient was, and travels the same 150% of the line per period. */
 .agent-working__activity[data-live] {
-  color: transparent;
-  background: linear-gradient(
-      90deg,
-      var(--text-secondary) 0%,
-      var(--text-secondary) 40%,
-      var(--text-primary) 50%,
-      var(--text-secondary) 60%,
-      var(--text-secondary) 100%
-    )
-    0 0 / 250% 100%;
-  -webkit-background-clip: text;
-  background-clip: text;
-  animation: agents-work-shimmer var(--agents-work-shimmer-period) linear infinite;
+  position: relative;
 }
 
-/* A new step eases in and keeps shimmering. */
-.agent-working__activity[data-live][data-changed] {
-  animation:
-    agents-motion-swap-in var(--agents-motion-enter) backwards,
-    agents-work-shimmer var(--agents-work-shimmer-period) linear infinite;
+.agent-working__glint {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  user-select: none;
 }
 
-/* The shimmer animates a background, which no browser can hand to the
-   compositor: it restyles the line every frame on the main thread (~60
-   restyles a second, measured). In the background it holds still; the key
-   and the words still say it is working. */
-:root[data-app-background] .agent-working__activity[data-live] {
+.agent-working__glint-band {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 250%;
+  -webkit-mask-image: linear-gradient(
+    90deg,
+    transparent 40%,
+    black 50%,
+    transparent 60%
+  ); /* css-ok: a mask's alpha, not a colour */
+  mask-image: linear-gradient(
+    90deg,
+    transparent 40%,
+    black 50%,
+    transparent 60%
+  ); /* css-ok: a mask's alpha, not a colour */
+  animation: agents-work-shimmer-band var(--agents-work-shimmer-period) linear infinite;
+}
+
+/* The copy: one line's width (40% of the band), clipped the way the words are. */
+.agent-working__glint-band::after {
+  content: attr(data-text);
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 40%;
+  overflow: hidden;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  animation: agents-work-shimmer-copy var(--agents-work-shimmer-period) linear infinite;
+}
+
+/* In the background it holds still; the key and the words still say it is
+   working. Band and copy pause together, so the copy stays on the words. */
+:root[data-app-background] .agent-working__glint-band,
+:root[data-app-background] .agent-working__glint-band::after {
   animation-play-state: paused;
 }
 
@@ -398,13 +433,23 @@
   --agents-work-shimmer-period: calc(var(--duration-loader-isolated) * 1.5);
 }
 
-@keyframes agents-work-shimmer {
+@keyframes agents-work-shimmer-band {
   from {
-    background-position: 100% 0;
+    transform: translateX(-60%);
   }
 
   to {
-    background-position: 0 0;
+    transform: none;
+  }
+}
+
+@keyframes agents-work-shimmer-copy {
+  from {
+    transform: translateX(150%);
+  }
+
+  to {
+    transform: none;
   }
 }
 
