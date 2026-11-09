@@ -3792,8 +3792,10 @@ their cursors have moved past it, so it would otherwise be lost. Default listeni
 case aside: ordinary chatter never starts a turn. Someone else's counts only
 when the user turned on **Let others start it** (off by default), and then
 only when it @-mentions the user first, then the trigger; in a DM to the
-user, the trigger alone. At most 5 asks start per check; the rest get one
-line in the chat.
+user, the trigger alone. At most 5 of the user's asks start per check; other
+people's have their own budget (2 per check, 10 an hour, `outside_started`),
+so a colleague can neither crowd out the user's asks nor run turns on the
+user's plan all day. The rest get one line in the chat.
 
 **Whose words.** A message is the user's instruction only when Slack says the
 user wrote it: `user` equals the token's own id (from `auth.test`), no

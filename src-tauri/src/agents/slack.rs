@@ -61,6 +61,13 @@ pub const MAX_CONVERSATIONS: usize = 20;
 const HISTORY_LIMIT: u32 = 30;
 /// Messages one check starts turns for; the rest are dropped, with a line.
 pub const MAX_ASKS_PER_CHECK: usize = 5;
+/// Other people's asks one check starts turns for: their own budget, so
+/// they never crowd out the user's.
+pub const MAX_OUTSIDE_PER_CHECK: usize = 2;
+/// Other people's asks that start turns in any hour: each one runs a turn
+/// on the user's own plan, and anyone in a listened-to channel can post.
+pub const MAX_OUTSIDE_PER_HOUR: usize = 10;
+const HOUR_MS: i64 = 60 * 60_000;
 const SEEN_CAP: usize = 500;
 const POSTED_CAP: usize = 200;
 const NAMES_CAP: usize = 200;
@@ -137,6 +144,9 @@ pub struct Settings {
     pub others_can_start: bool,
     #[serde(default)]
     pub needs_sign_in: bool,
+    /// When other people's asks started turns, within the last hour.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub outside_started: Vec<i64>,
     /* what the checks keep */
     /// Per conversation, the newest `ts` read: nothing at or before it is new.
     #[serde(default)]
@@ -365,8 +375,11 @@ pub struct Found {
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Checked {
     pub found: Vec<Found>,
-    /// Asks past [`MAX_ASKS_PER_CHECK`], left alone.
+    /// The user's asks past [`MAX_ASKS_PER_CHECK`], left alone.
     pub dropped: usize,
+    /// Other people's asks past their own limits
+    /// ([`MAX_OUTSIDE_PER_CHECK`], [`MAX_OUTSIDE_PER_HOUR`]), left alone.
+    pub limited: usize,
     /// A conversation that couldn't be read, in words (the rest still were).
     pub warning: Option<String>,
     /// What ended the check early (a refused sign-in, a rate limit, no
@@ -496,9 +509,21 @@ pub async fn check_once(api: &dyn Api, s: &mut Settings, now_ms: i64) -> Checked
             let Some(raw) = ask_in(&m.text, &trigger, &account.user_id, own, conv.is_dm()) else {
                 continue;
             };
-            if out.found.len() >= MAX_ASKS_PER_CHECK {
-                out.dropped += 1;
-                continue;
+            if own {
+                if out.found.iter().filter(|f| f.own).count() >= MAX_ASKS_PER_CHECK {
+                    out.dropped += 1;
+                    continue;
+                }
+            } else {
+                s.outside_started
+                    .retain(|t| now_ms - t < HOUR_MS && *t <= now_ms);
+                if out.found.iter().filter(|f| !f.own).count() >= MAX_OUTSIDE_PER_CHECK
+                    || s.outside_started.len() >= MAX_OUTSIDE_PER_HOUR
+                {
+                    out.limited += 1;
+                    continue;
+                }
+                s.outside_started.push(now_ms);
             }
             for id in mentioned_ids(&raw).into_iter().take(5) {
                 if id == account.user_id {
@@ -1056,6 +1081,7 @@ fn save_check(checked: &Settings, result: &Checked, now: i64) {
         }
         s.seen = checked.seen.clone();
         s.names = checked.names.clone();
+        s.outside_started = checked.outside_started.clone();
         match &result.stopped {
             None => {
                 s.failures = 0;
@@ -1131,6 +1157,14 @@ pub async fn check(app: &AppHandle, force: bool) {
                 if r.dropped == 1 { "was" } else { "were" },
             ),
             );
+        }
+        if r.limited > 0 {
+            note(app, &agent.id, format!(
+                "{} Slack {} from other people {} left alone: at most {MAX_OUTSIDE_PER_CHECK} at once and {MAX_OUTSIDE_PER_HOUR} an hour start a turn.",
+                r.limited,
+                if r.limited == 1 { "message" } else { "messages" },
+                if r.limited == 1 { "was" } else { "were" },
+            ));
         }
         if !added.is_empty() {
             let _ = change(|s| s.pending.extend(added));

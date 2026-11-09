@@ -394,6 +394,57 @@ fn a_refused_sign_in_ends_the_check_and_a_missing_channel_is_only_a_warning() {
     assert!(e.words().contains("Connect Slack again"));
 }
 
+/// With "Let others start it" on, Sam posts eight mention-asks in #launch
+/// ahead of Robin's own one in his DM. Robin's is never crowded out, and
+/// Sam can't run more than a few turns on Robin's plan.
+#[test]
+fn other_peoples_asks_never_crowd_out_the_users_and_are_capped_per_hour() {
+    let fake = Fake::default();
+    let mut s = primed(&fake);
+    s.others_can_start = true;
+    for i in 1..=8 {
+        fake.say(
+            LAUNCH,
+            msg(
+                &format!("17000000{i:02}.000100"),
+                SAM,
+                &format!("<@{ME}> dashbot: job {i}"),
+            ),
+        );
+    }
+    fake.say(SELF_DM, msg("1700000020.000100", ME, "dashbot: mine"));
+    let r = block(check_once(&fake, &mut s, NOW + 30_000));
+    let own: Vec<&str> = r
+        .found
+        .iter()
+        .filter(|f| f.own)
+        .map(|f| f.ask.as_str())
+        .collect();
+    assert_eq!(own, vec!["mine"]);
+    assert_eq!(
+        r.found.iter().filter(|f| !f.own).count(),
+        MAX_OUTSIDE_PER_CHECK
+    );
+    assert_eq!((r.dropped, r.limited), (0, 8 - MAX_OUTSIDE_PER_CHECK));
+
+    // Every check after, within the hour: at most the hourly budget in all.
+    let mut started = MAX_OUTSIDE_PER_CHECK;
+    for n in 0..20u64 {
+        let ts = format!("17000001{n:02}.000100");
+        fake.say(LAUNCH, msg(&ts, SAM, &format!("<@{ME}> dashbot: more {n}")));
+        let r = block(check_once(&fake, &mut s, NOW + 60_000 + n as i64 * 30_000));
+        started += r.found.len();
+    }
+    assert_eq!(started, MAX_OUTSIDE_PER_HOUR);
+    // An hour on, there's room again.
+    fake.say(
+        LAUNCH,
+        msg("1700009000.000100", SAM, &format!("<@{ME}> dashbot: later")),
+    );
+    let r = block(check_once(&fake, &mut s, NOW + 2 * 60 * 60_000));
+    assert_eq!(r.found.len(), 1);
+}
+
 /// Robin asks in #launch; Slack rate-limits the next conversation in the
 /// same check. The #launch ask was read (its cursor moved past it), so it
 /// must come back with the stopped check, once, and never again.
