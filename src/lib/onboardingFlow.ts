@@ -4,7 +4,8 @@
  *
  * 1. Welcome — what this is, in a line.
  * 2. Engine — Claude Code or Codex, then each install / sign-in as its own
- *    screen, ticked by the app's own checks.
+ *    screen, ticked by the app's own checks; then, optionally, another
+ *    account (Claude or Codex), so agents carry on when one runs out.
  * 3. Independence — how much agents do on their own.
  * 4. Your phone (skippable) — Tailscale on this Mac, Tailscale on the phone
  *    (same account), the phone app, then scan and Allow.
@@ -35,6 +36,7 @@ import { SETUP_DEPENDENCIES, type SetupItem } from './setup';
 export const FLOW_STEPS = [
   'welcome',
   'engine',
+  'accounts',
   'independence',
   'phone',
   'tailscaleMac',
@@ -69,6 +71,8 @@ const PHONE_STEPS: readonly FlowStep[] = [
 const IMPORT_STEPS: readonly FlowStep[] = ['importRemote', 'importConnect', 'importStart'];
 
 export function sectionOf(step: FlowStep): FlowSection {
+  // Another account is part of "Your AI".
+  if (step === 'accounts') return 'engine';
   if (step === 'phone' || PHONE_STEPS.includes(step)) return 'phone';
   if (step === 'ready' || IMPORT_STEPS.includes(step)) return 'ready';
   return step as FlowSection;

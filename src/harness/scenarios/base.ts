@@ -289,17 +289,29 @@ export const baseCommands: CommandMap = {
   },
   // No engine has reported its plan: no usage line anywhere (agents::quota).
   agents_quota: [],
-  // Usage wallets (agents::wallet::AccountView): only this Mac's own sign-ins.
+  // Usage wallets (agents::wallet::AccountView): only this Mac's own sign-ins,
+  // unnamed, so each is shown as who it is signed in as (or as this Mac's
+  // own when its engine doesn't record who).
   agents_accounts: [
     {
       id: 'default',
       engine: 'claude',
-      name: 'This Mac',
+      name: 'sam@example.com',
+      named: false,
+      email: 'sam@example.com',
       thisMac: true,
       signedIn: true,
       out: false,
     },
-    { id: 'default', engine: 'codex', name: 'This Mac', thisMac: true, signedIn: true, out: false },
+    {
+      id: 'default',
+      engine: 'codex',
+      name: 'Signed in on this Mac',
+      named: false,
+      thisMac: true,
+      signedIn: true,
+      out: false,
+    },
   ],
   // The capacity inventory (agents::inventory::Inventory): Normal, this Mac's
   // own sign-ins with no reading yet, no history to estimate from, nothing else

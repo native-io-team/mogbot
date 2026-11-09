@@ -213,13 +213,75 @@ export const onboardingFlowScenarios: Scenario[] = [
     {}
   ),
   flow(
+    'onboarding-accounts',
+    'accounts',
+    '2b. Add another account? (optional)',
+    'Still the second segment, “Your AI”. “Add another account?”, one line on why (“When one account runs out of usage, agents carry on with the next, so nothing stops.”) and that it is optional. One Line: a check, “sam@example.com”, muted “Claude Code · this Mac’s own sign-in”. A big “Add a Claude Code account”, a quiet “Or a Codex account” under it, and a quiet Skip. Never “This Mac” as a name.',
+    {
+      agents_accounts: [
+        {
+          id: 'default',
+          engine: 'claude',
+          name: 'sam@example.com',
+          named: false,
+          email: 'sam@example.com',
+          thisMac: true,
+          signedIn: true,
+          out: false,
+        },
+        {
+          id: 'default',
+          engine: 'codex',
+          name: 'Signed in on this Mac',
+          named: false,
+          thisMac: true,
+          signedIn: false,
+          out: false,
+        },
+      ],
+    },
+    { requires: '[data-flow-step="accounts"] .flow-accounts__row' }
+  ),
+  flow(
+    'onboarding-accounts-added',
+    'accounts',
+    '2b. Another account added',
+    'Two Lines, each ticked: “sam@example.com” (Claude Code · this Mac’s own sign-in) and “Work” (Claude Code · signed in). The big button is now Continue; quiet “Add another Claude Code account” and “Add a Codex account” under the list. No Skip.',
+    {
+      agents_accounts: [
+        {
+          id: 'default',
+          engine: 'claude',
+          name: 'sam@example.com',
+          named: false,
+          email: 'sam@example.com',
+          thisMac: true,
+          signedIn: true,
+          out: false,
+        },
+        {
+          id: 'a1work',
+          engine: 'claude',
+          name: 'Work',
+          named: true,
+          email: 'sam@northwind.example',
+          thisMac: false,
+          signedIn: true,
+          out: false,
+        },
+      ],
+    },
+    { requires: '[data-flow-step="accounts"] .flow-accounts__row + .flow-accounts__row' }
+  ),
+  flow(
     'onboarding-independence',
     'independence',
     '3. How much agents do on their own',
     'The third segment lit. The question, one line that it applies to every agent, then the four-stop slider: “Asks a lot” and “Just does it” at its ends, stops Careful, Steady, Bold, Unleashed under the track with Steady chosen (neutral thumb, never the accent), Steady’s one line, the always-asks line, a big Continue and a quiet Skip.',
     {},
     {
-      requires: '[data-flow-step="independence"] .independence-slider[data-level="judgement"] [role="slider"]',
+      requires:
+        '[data-flow-step="independence"] .independence-slider[data-level="judgement"] [role="slider"]',
     }
   ),
   flow(

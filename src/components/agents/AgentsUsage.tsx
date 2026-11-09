@@ -42,6 +42,7 @@ import {
   computeView,
   estimateLine,
   getUsageInventory,
+  glanceUsageInventory,
   localLine,
   onUsagePlanChanged,
   paceLine,
@@ -71,8 +72,11 @@ const stop = (fn: () => void) => {
 };
 
 /** The inventory, re-read when the plan or a reading changes, and every minute. */
-export function useUsageInventory() {
-  const state = useAsyncState<UsageInventory>(getUsageInventory, { immediate: true });
+/** `glance`: shown all the time (the sidebar's account row), so it never asks for a read. */
+export function useUsageInventory({ glance = false }: { glance?: boolean } = {}) {
+  const state = useAsyncState<UsageInventory>(glance ? glanceUsageInventory : getUsageInventory, {
+    immediate: true,
+  });
   const [now, setNow] = useState(() => Date.now());
   const { execute } = state;
   const reload = useCallback(() => {

@@ -42,6 +42,36 @@ export const reorderUsageAccounts = (engine: AgentEngine, ids: string[]) =>
 export const removeUsageAccount = (engine: AgentEngine, id: string) =>
   invoke<void>('agents_account_remove', { engine, id });
 
+/**
+ * "Use this one now": it goes first in its engine's order, so every turn
+ * that starts from now on tries it first. A turn already running finishes
+ * on its account; an agent set to one account stays on it. Answers the
+ * accounts in their new order.
+ */
+export const putAccountFirst = (engine: AgentEngine, id: string) =>
+  invoke<UsageAccount[]>('agents_account_use', { engine, id });
+
+/* The sidebar's account row, opened from ⌘K ("Switch account…", "Add an account…"). */
+export type SwitcherRequest = 'open' | 'add';
+const switcherListeners = new Set<(what: SwitcherRequest) => void>();
+
+/** Whether the account row is on screen to open (Agents is showing). */
+export function switcherMounted(): boolean {
+  return switcherListeners.size > 0;
+}
+
+export function onSwitcherRequest(fn: (what: SwitcherRequest) => void): () => void {
+  switcherListeners.add(fn);
+  return () => switcherListeners.delete(fn);
+}
+
+/** Open the account row's popover; false when it isn't on screen. */
+export function requestSwitcher(what: SwitcherRequest): boolean {
+  if (switcherListeners.size === 0) return false;
+  switcherListeners.forEach((fn) => fn(what));
+  return true;
+}
+
 export const onUsageAccountsChanged = (fn: () => void): Promise<UnlistenFn> =>
   listen(ACCOUNTS_EVENT, fn);
 

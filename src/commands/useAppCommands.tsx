@@ -19,7 +19,7 @@ import { COMPANION_INSTALL_ENABLED, requestInstallOnOpen } from '../lib/companio
 import { fileManagerName } from '../lib/setup';
 import { BRAND } from '../lib/brand';
 import { requestSettingsSectionOnOpen, requestSettingsTabOnOpen } from '../lib/settings';
-import { requestAccountsOnOpen } from '../lib/agentAccounts';
+import { requestAccountsOnOpen, requestSwitcher } from '../lib/agentAccounts';
 import {
   CodeIcon,
   CloseIcon,
@@ -542,25 +542,48 @@ export function useAppCommands({
         },
       },
       {
-        id: 'agents.addClaudeAccount',
-        title: 'Add a Claude Code account…',
+        id: 'agents.switchAccount',
+        title: 'Switch account…',
         icon: <SettingsIcon size={14} />,
         category: 'settings',
-        keywords: ['account', 'usage limit', 'subscription', 'second', 'sign in'],
+        keywords: [
+          'account',
+          'use this account',
+          'swap',
+          'change account',
+          'usage limit',
+          'subscription',
+          'claude',
+          'codex',
+          'chatgpt',
+        ],
+        // The sidebar's account row when Agents shows it; else Settings.
         run: () => {
-          requestAccountsOnOpen('claude');
+          if (requestSwitcher('open')) return;
+          requestAccountsOnOpen('show');
           requestSettingsTabOnOpen('agents');
           openModal('settings');
         },
       },
       {
-        id: 'agents.addCodexAccount',
-        title: 'Add a Codex account…',
+        id: 'agents.addAccount',
+        title: 'Add an account…',
         icon: <SettingsIcon size={14} />,
         category: 'settings',
-        keywords: ['account', 'chatgpt', 'usage limit', 'subscription', 'second', 'sign in'],
+        keywords: [
+          'account',
+          'second account',
+          'another account',
+          'usage limit',
+          'subscription',
+          'sign in',
+          'claude',
+          'codex',
+          'chatgpt',
+        ],
         run: () => {
-          requestAccountsOnOpen('codex');
+          if (requestSwitcher('add')) return;
+          requestAccountsOnOpen('show');
           requestSettingsTabOnOpen('agents');
           openModal('settings');
         },

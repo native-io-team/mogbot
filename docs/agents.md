@@ -3718,11 +3718,45 @@ in `clock_phrase` for the Mac's own sentences.
 
 Answers: **when one subscription runs out, can the agents keep going on
 another?** Each engine has an ordered list of accounts (Settings → Agents →
-Accounts; ⌘K "Usage accounts…", "Add a Claude Code account…", "Add a Codex
-account…"). The first is always **This Mac**: the `claude` / `codex` login
-already on the machine (`id: "default"`), which every turn used before
-wallets and still uses while it is the only one. It can be renamed and moved
-down, not removed (its row's menu says why). Every row, This Mac included,
+Accounts; the account row at the foot of the Agents sidebar; ⌘K "Switch
+account…", "Add an account…", "Usage accounts…"). One of them is always
+**this Mac's own sign-in**: the `claude` / `codex` login already on the
+machine (`id: "default"`), which every turn used before wallets and still
+uses while it is the only one. It can be renamed and moved down, not
+removed. Until the user names it, it is shown as who it is signed in as
+(the email below), else "Signed in on this Mac", and in a sentence "this
+Mac's own sign-in" (`wallet::shown_name`, `line_name`); "This Mac" read as
+a place, not an account, so it is never shown as a name.
+
+**Which account is working, always in sight** (`AccountSwitcher`, words
+shared with the phone in `companion-protocol/src/accountSwitcher.ts`): a
+row at the sidebar's foot names the account the team's next turn starts on
+and its tighter room ("Work · 39% left", "All out", "Not signed in"),
+without asking for a reading itself (`agents_usage_overview` with `look:
+false`). It opens one popover with every account: name, who and plan,
+"In use" (a neutral check), its 5-hour and weekly room with resets, who is
+set to it, and per row "Use this one now", the order arrows, Rename, Sign
+in again, Remove, plus "+ Add account" (name, then the engine's own sign-in
+in a terminal). Onboarding offers the same right after the engine's
+sign-in ("Add another account?", skippable).
+
+**"Use this one now"** (`agents_account_use` → `wallet::use_first`; the
+phone's `agents.accounts.use`, audited) puts the account first in its
+engine's order: every turn that *starts* from then on tries it first; a
+turn already running finishes on the account it started on; it is refused
+for an account that isn't signed in. Nothing else moves, and failover
+carries on down the order as before. The conversation follows by the same
+`carry_session` as any switch, and Chrome/MCP reach by `account_reach`.
+
+**Runs on, per agent** (`Agent.account`, the … menu's "Runs on"; the
+phone's agent controls): Any account (the default) or one account. Set to
+one, its turns run only there (`wallet::for_agent`), never failing over to
+another: when that one is out, the turn ends on the engine's usage-limit
+line plus one Note saying how to let it use any account
+(`runner::pinned_out_line`). Moving engine clears it; removing the account
+clears it with a Note. The chat header's chip names the account its last
+turn ran on (`AgentView.ranOn`, only while its engine has 2+ accounts),
+"· only" when set there. Every row, This Mac included,
 says who it is signed in as and its plan only as the engine's own files
 record them (`agents/identity.rs`: Claude Code's `.claude.json`
 `oauthAccount.emailAddress` / `planDisplayName`; Codex's `auth.json`

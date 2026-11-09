@@ -29,6 +29,55 @@ import {
 import { refreshAgents, useAgentsSelector } from '../../lib/agentsStore';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
+import { accountsOf } from '../../lib/agentAccounts';
+import { useUsageAccounts } from './useUsageAccounts';
+
+/**
+ * "Runs on": any account (the default: the team's order, carrying on with
+ * the next when one runs out), or one account only. Shown once its engine
+ * has more than one; from its next message.
+ */
+export function AgentAccountItems({
+  agent,
+  save,
+}: {
+  agent: Agent;
+  save: (change: UpdateAgentInput) => Promise<void>;
+}) {
+  const { accounts } = useUsageAccounts();
+  const mine = accountsOf(accounts ?? [], agent.engine);
+  if (mine.length < 2) return null;
+  const current = agent.account ?? '';
+  const choices = [
+    { value: '', label: 'Any account', detail: 'Carries on when one runs out' },
+    ...mine.map((a) => ({
+      value: a.id,
+      label: a.name,
+      detail: a.signedIn ? (a.out ? 'Out of usage now' : undefined) : 'Not signed in',
+    })),
+  ];
+  const named = choices.find((c) => c.value === current)?.label ?? 'Any account';
+  return (
+    <>
+      <DropdownDivider />
+      <p className="agent-model-menu__heading">Runs on · {named}</p>
+      {choices.map((c) => (
+        <DropdownItem
+          key={c.value || 'any'}
+          onSelect={() => c.value !== current && void save({ account: c.value })}
+        >
+          <span className="agent-model-menu__label">
+            {c.label}
+            {c.detail && <span className="agent-model-menu__detail">{c.detail}</span>}
+          </span>
+          <span className="agent-model-menu__check" aria-hidden="true">
+            {c.value === current && <CheckIcon size={12} />}
+          </span>
+        </DropdownItem>
+      ))}
+    </>
+  );
+}
 
 export function AgentModelItems({ agent }: { agent: Agent }) {
   const { showToast } = useOptionalToast();
@@ -79,6 +128,7 @@ export function AgentModelItems({ agent }: { agent: Agent }) {
           </span>
         </DropdownItem>
       ))}
+      <AgentAccountItems agent={agent} save={save} />
       {hasRoutine && (
         <>
           <DropdownDivider />
