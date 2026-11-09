@@ -1,6 +1,8 @@
 /* ===== Primitive: Spinner ===== */
 /* Arc color comes from currentColor — set `color` on the spinner or parent. */
 .ss-spinner {
+  /* A span (valid inside a <p>), laid out as the div it used to be. */
+  display: block;
   width: 20px;
   height: 20px;
   flex-shrink: 0;

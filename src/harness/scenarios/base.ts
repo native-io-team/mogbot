@@ -386,6 +386,33 @@ export const baseCommands: CommandMap = {
   agents_phone_signin_stop: null,
   // The agents' own browser: on, Chrome here, the phone's Google sign-in
   // permissions not yet given (`AgentsBrowserSettings`).
+  // Claude in Chrome (`agentBrowser.ts`): off, as it ships; Claude Code is
+  // signed in and nothing else is done yet.
+  agents_browser_status: {
+    enabled: false,
+    ready: false,
+    account: 'robin@example.com',
+    browsers: 0,
+    codexAgents: 0,
+    steps: [
+      {
+        id: 'claude_code',
+        done: true,
+        title: 'Claude Code, signed in with your Claude account',
+        detail: 'Signed in (robin@example.com).',
+      },
+      {
+        id: 'extension',
+        done: false,
+        title: 'Add Claude in Chrome to Chrome',
+        detail:
+          'Anthropic’s extension. It lets your agents use the sites you’re signed in to, as you; it never sees your passwords.',
+      },
+    ],
+  },
+  // "Check what your team can reach" (`access_check::run`): no setup list
+  // with anything open, so it reached nothing, as the backend answers then.
+  agents_access_check: 0,
   // "Your Chrome" (`AgentsUserChromeSettings`): off, as it ships.
   agents_user_chrome_status: {
     supported: true,

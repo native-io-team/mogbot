@@ -46,7 +46,9 @@ describe('AgentIndependenceSettings', () => {
       expect(screen.getByText(name)).toBeInTheDocument();
     }
     expect(
-      screen.getByText('Always asks before spending money, using your passwords, or deleting for good.')
+      screen.getByText(
+        'Always asks before spending money, using your passwords, or deleting for good.'
+      )
     ).toBeInTheDocument();
   });
 
@@ -54,7 +56,9 @@ describe('AgentIndependenceSettings', () => {
     store.value = { loaded: true, independence: 'often' };
     render(<AgentIndependenceSettings />);
     expect(slider()).toHaveAttribute('aria-valuenow', '0');
-    expect(screen.getByText('Reads and looks around; asks before bigger changes.')).toBeInTheDocument();
+    expect(
+      screen.getByText('Reads and looks around; asks before bigger changes.')
+    ).toBeInTheDocument();
     await act(async () => {
       fireEvent.click(stop('go_hard'));
       await Promise.resolve();
@@ -97,7 +101,9 @@ describe('AgentIndependenceSettings', () => {
     store.value = { loaded: true, independence: 'full_send' };
     render(<AgentIndependenceSettings />);
     expect(slider()).toHaveAttribute('aria-valuenow', '3');
-    expect(screen.getByText(/only stops for money, logins, deleting for good or going live/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/only stops for money, logins, deleting for good or going live/)
+    ).toBeInTheDocument();
   });
 
   it('a failed save says why and goes back to what is saved', async () => {
@@ -110,6 +116,33 @@ describe('AgentIndependenceSettings', () => {
     });
     expect(showToast).toHaveBeenCalledWith(expect.stringContaining('Disk full'), 'error');
     expect(slider()).toHaveAttribute('aria-valuenow', '1');
+  });
+
+  it('two quick presses: the first save finishing never snaps the slider back', async () => {
+    store.value = { loaded: true, independence: 'often' };
+    const pending: Array<() => void> = [];
+    setIndependence.mockImplementation(
+      (l: string) => new Promise((resolve) => pending.push(() => resolve(l)))
+    );
+    render(<AgentIndependenceSettings />);
+    fireEvent.keyDown(slider(), { key: 'ArrowRight' });
+    fireEvent.keyDown(slider(), { key: 'ArrowRight' });
+    expect(setIndependence).toHaveBeenLastCalledWith('go_hard');
+    expect(slider()).toHaveAttribute('aria-valuenow', '2');
+    // The first (Steady) answers while Bold is still saving.
+    await act(async () => {
+      pending[0]();
+      await Promise.resolve();
+    });
+    expect(slider()).toHaveAttribute('aria-valuenow', '2');
+    expect(refreshAgents).not.toHaveBeenCalled();
+    store.value = { loaded: true, independence: 'go_hard' };
+    await act(async () => {
+      pending[1]();
+      await Promise.resolve();
+    });
+    expect(refreshAgents).toHaveBeenCalledTimes(1);
+    expect(slider()).toHaveAttribute('aria-valuenow', '2');
   });
 
   it('says how many agents are set on their own, only when any are', () => {

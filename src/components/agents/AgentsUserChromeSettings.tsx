@@ -36,7 +36,16 @@ const act = (a: Act): Promise<UserChromeStatus> =>
 export function AgentsUserChromeSettings() {
   const { showToast } = useOptionalToast();
   const onError = useCallback((e: Error) => showToast(e.message, 'error'), [showToast]);
-  const { data: status, execute } = useAsyncState<UserChromeStatus, [Act]>(act, { onError });
+  // One call at a time, in the order asked. Otherwise a read the poll (or a
+  // window focus) started just before the switch was pressed answers after
+  // it, with the old state, and flips the switch back.
+  const queue = useRef<Promise<unknown>>(Promise.resolve());
+  const serial = useCallback((a: Act) => {
+    const next = queue.current.catch(() => {}).then(() => act(a));
+    queue.current = next;
+    return next;
+  }, []);
+  const { data: status, execute } = useAsyncState<UserChromeStatus, [Act]>(serial, { onError });
   const run = useCallback((a: Act) => void execute(a).catch(() => {}), [execute]);
   const tryIt = useCallback(
     (f: () => Promise<void>) => () =>

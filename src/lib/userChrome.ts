@@ -61,7 +61,7 @@ export function userChromeLine(s: UserChromeStatus | null): string {
   if (!s?.enabled) {
     return 'Let agents on any engine use the sites you’re signed in to in Chrome, through this app’s own extension. Anything that sends, posts, pays or deletes still asks you first.';
   }
-  if (s.error) return `On, but it couldn’t start: ${s.error}.`;
+  if (s.error) return `On, but it couldn’t start: ${s.error.trim().replace(/[.!]+$/, '')}.`;
   if (s.browsers.length === 1) {
     return 'On. Agents can use your Chrome, in tabs of their own.';
   }
