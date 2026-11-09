@@ -646,6 +646,36 @@
       "example": "docs/design-system.md#development-primitive-lab",
       "tests": ["src/components/primitives/ValueField.test.tsx"],
       "lifecycle": "canonical"
+    },
+    {
+      "name": "AreaBoundary",
+      "file": "src/components/primitives/AreaBoundary.tsx",
+      "exports": ["AreaBoundary", "AreaError"],
+      "purpose": "Error boundary for one area of the window, so a broken component shows a calm fallback instead of blanking the app.",
+      "owner": "primitives/status",
+      "props": ["label", "children", "fallback"],
+      "variants": ["default"],
+      "states": ["ok", "error"],
+      "accessibility": "The fallback is a plain message with a retry button that has an accessible name.",
+      "style": "src/styles/components/error-boundary.css",
+      "example": "docs/design-system.md#development-primitive-lab",
+      "tests": ["src/components/primitives/AreaBoundary.test.tsx"],
+      "lifecycle": "canonical"
+    },
+    {
+      "name": "StatusPill",
+      "file": "src/components/primitives/StatusPill.tsx",
+      "exports": ["StatusPill"],
+      "purpose": "One calm pill for statuses (working, waiting on you, out of usage, done, failed) using status roles, never the accent.",
+      "owner": "primitives/status",
+      "props": ["tone", "children"],
+      "variants": ["running", "waiting", "neutral", "success", "danger"],
+      "states": ["default"],
+      "accessibility": "The status is written in words; the dot is decorative.",
+      "style": "src/styles/components/status-pill.css",
+      "example": "docs/design-system.md#development-primitive-lab",
+      "tests": [],
+      "lifecycle": "canonical"
     }
   ]
 }
