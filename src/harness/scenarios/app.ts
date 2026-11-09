@@ -11,6 +11,12 @@ import { messagesFor, overview } from './agents';
 import { neverAnswers } from '../reject';
 import { FLOW_STORAGE_KEY } from '../../lib/onboardingFlow';
 
+/** Answers like a real backend: after a beat, not in the same tick. */
+const afterABeat =
+  <T>(value: T, ms = 120) =>
+  () =>
+    new Promise<T>((resolve) => setTimeout(() => resolve(value), ms));
+
 const notInstalled = (id: string, friendlyName: string) => ({
   id,
   friendlyName,
@@ -276,6 +282,24 @@ export const appScenarios: Scenario[] = [
       'A real returning user, with a team and history: the app opens on Agents with the Chief of Staff’s ongoing conversation (not the first-run greeting), the team listed in the sidebar, not on the projects dashboard. The sidebar top row is the toggle and an activity icon (What’s in flight); New agent / Import agents start on the rows’ left edge. Projects is one click away in the toggle.',
     requires: '.agents-mode .agent-chat .agent-chat__messages',
     commands: { agents_overview: overview(), agents_messages: messagesFor },
+  },
+  {
+    id: 'mode-switch',
+    title: 'Agents | Projects — switching with a project open and a real backend’s latency',
+    looksRightWhen:
+      'Opens on Agents. Each command answers after a beat, as a real backend does, and a dev server is running for this window. The Agents | Projects switch moves on the first click every time: Projects returns to the open project’s workspace, Agents stays on Agents (it never bounces back to the workspace), and the selected segment always matches the screen.',
+    requires: '.agents-mode .agent-chat',
+    commands: {
+      ...workspaceCommands,
+      agents_overview: overview(),
+      agents_messages: messagesFor,
+      // A dev server is running for this window, so the backend reports its
+      // reserved port, as it does after any project has been opened.
+      get_reserved_port_for_window: 3000,
+      ensure_external_project_registered: afterABeat(null),
+      get_workspace_subpath: afterABeat('.'),
+      get_auto_accept_mode: afterABeat(false),
+    },
   },
   {
     id: 'project-tools',

@@ -1,13 +1,13 @@
 /**
- * Regression coverage for the "closing a project re-opens it" bug.
+ * Regression coverage for HMR recovery putting the workspace back.
  *
- * `useAppSetup`'s HMR-recovery effect re-runs on every `view` change. It
- * restores the workspace whenever two things are still true: the window's
- * sessionStorage sentinel names a project, and the backend still holds a
- * port reservation for it. Closing the current project navigates to
- * `projects` — which is a view change — so unless the close clears that
- * sentinel, the effect immediately re-opens the project that was just
- * closed. The sidebar row survives, and the whole thing reads as a flicker.
+ * `useAppSetup`'s HMR-recovery effect restores the workspace when two things
+ * are true: the window's sessionStorage sentinel names a project, and the
+ * backend still holds a port reservation for it. Both outlive any visit to a
+ * project. The effect used to re-run on every `view` change, so the first
+ * switch from a project to Agents (or closing it, or going home) in a window
+ * put the workspace straight back: "the Agents | Projects switch works
+ * sometimes". It now asks once, on the page load it exists to recover.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, waitFor } from '@testing-library/react';
@@ -74,11 +74,9 @@ describe('useAppSetup HMR recovery vs. closing a project', () => {
     sessionStorage.clear();
   });
 
-  it('re-opens the project when the sentinel outlives the session (the bug)', async () => {
+  it('restores the workspace on a reload (what it is for)', async () => {
     const params = makeParams();
-    const { toProjectsView } = renderAcrossClose(params);
-
-    toProjectsView();
+    renderHook(() => useAppSetup({ ...params, view: 'loading' }));
 
     await waitFor(() => {
       expect(params.setCurrentProject).toHaveBeenCalledWith(
@@ -88,6 +86,35 @@ describe('useAppSetup HMR recovery vs. closing a project', () => {
     expect(params.setView).toHaveBeenCalledWith('workspace');
     expect(params.setWorkspaceTab).toHaveBeenCalledWith('preview');
     expect(params.setIsPreviewHidden).toHaveBeenCalledWith(false);
+  });
+
+  it('never puts the workspace back when the user switches to Agents', async () => {
+    const params = makeParams();
+    const { rerender } = renderHook(
+      ({ view }: { view: AppView }) => useAppSetup({ ...params, view }),
+      { initialProps: { view: 'workspace' as AppView } }
+    );
+
+    // The sentinel and the reservation are both still there, as they are
+    // after opening any project in this window.
+    for (const view of ['agents', 'workflows', 'agents', 'inbox', 'agents'] as AppView[]) {
+      rerender({ view });
+    }
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(params.setCurrentProject).not.toHaveBeenCalled();
+    expect(params.setView).not.toHaveBeenCalledWith('workspace');
+  });
+
+  it('does not re-open a closed project even if the sentinel survived', async () => {
+    const params = makeParams();
+    const { toProjectsView } = renderAcrossClose(params);
+
+    toProjectsView();
+
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(params.setCurrentProject).not.toHaveBeenCalled();
+    expect(params.setView).not.toHaveBeenCalledWith('workspace');
   });
 
   it('leaves the user on the dashboard once the close clears the sentinel', async () => {

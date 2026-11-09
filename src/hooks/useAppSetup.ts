@@ -107,6 +107,8 @@ export function useAppSetup({
 }: UseAppSetupParams) {
   // Track if auto-open has been attempted this session (protects against StrictMode double-invoke)
   const autoOpenAttemptedRef = useRef(false);
+  // HMR recovery is a question about the page load, asked once.
+  const hmrRecoveryCheckedRef = useRef(false);
 
   const [projectsLoading, setProjectsLoading] = useState(true);
   const [bootProgress, setBootProgress] = useState<number>(BOOT_PROGRESS.initial);
@@ -238,7 +240,15 @@ export function useAppSetup({
   // HMR Recovery for ALL windows (main window and project windows)
   // Checks backend port reservation to detect HMR and restore UI state without restarting dev server
   // This runs BEFORE the auto-open effect and handles the "already have a project open" case
+  //
+  // Once per page load, on the first view: a reload is the only thing it
+  // recovers from. It used to re-run on every view change, and the sentinel
+  // and the port reservation both outlive any visit to a project, so the first
+  // switch from a project to Agents (or Workflows, the Inbox, the dashboard)
+  // in a window put the workspace straight back.
   useEffect(() => {
+    if (hmrRecoveryCheckedRef.current) return;
+    hmrRecoveryCheckedRef.current = true;
     const windowLabel = getWindowLabel();
     const storageKey = `ship-studio-project-loaded-${windowLabel}`;
     const dismissedKey = `ship-studio-auto-open-dismissed-${windowLabel}`;
@@ -307,8 +317,8 @@ export function useAppSetup({
         // If backend check fails, let normal flow continue
       }
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- fetchBranchInfo is stable, don't re-run on change
-  }, [view]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once per page load (see above)
+  }, []);
 
   // Auto-open project if initialProjectPath is provided (multi-window support)
   // This handles the case where a NEW project window is opened (not HMR recovery)

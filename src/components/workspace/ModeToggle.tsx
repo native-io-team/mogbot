@@ -58,6 +58,11 @@ export function ModeToggle({
   const showDot = attention !== null && mode !== 'agents';
   const iconOnly = layout !== 'labels';
   const tabClass = `mode-toggle__tab${iconOnly ? ' button--icon-only' : ''}`;
+  const choose = (next: string) => {
+    if (next === mode) return;
+    if (next === 'agents') onAgents();
+    else onProjects();
+  };
 
   return (
     <Tabs
@@ -66,16 +71,20 @@ export function ModeToggle({
       // that was only meant to look is disorienting. Enter or Space switches.
       activation="manual"
       value={mode}
-      onValueChange={(next) => {
-        if (next === mode) return;
-        if (next === 'agents') onAgents();
-        else onProjects();
-      }}
+      onValueChange={choose}
     >
       <TabsList
         aria-label="Mode"
         appearance="segmented"
         className={`mode-toggle mode-toggle--${layout} ${className ?? ''}`}
+        // The whole control is the target: a click in its rim or in the
+        // hairline between the segments went to the list and did nothing.
+        onClick={(event) => {
+          const target = event.target as Element;
+          if (target.closest('[data-tab-value]')) return;
+          const next = nearestSegment(event.currentTarget, event.clientX, event.clientY);
+          if (next) choose(next);
+        }}
       >
         {/* The app's tooltip, not a native `title`: WKWebView draws native
             tooltips at the window's top-left, under the traffic lights. */}
@@ -103,6 +112,20 @@ export function ModeToggle({
       </TabsList>
     </Tabs>
   );
+}
+
+/** The segment nearest a point in the control, for clicks between or around them. */
+export function nearestSegment(list: Element, x: number, y: number): string | null {
+  let best: { value: string; distance: number } | null = null;
+  for (const tab of list.querySelectorAll<HTMLElement>('[data-tab-value]')) {
+    const r = tab.getBoundingClientRect();
+    const dx = Math.max(r.left - x, 0, x - r.right);
+    const dy = Math.max(r.top - y, 0, y - r.bottom);
+    const distance = Math.hypot(dx, dy);
+    const value = tab.dataset.tabValue;
+    if (value && (!best || distance < best.distance)) best = { value, distance };
+  }
+  return best?.value ?? null;
 }
 
 const noop = () => {};
