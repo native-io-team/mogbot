@@ -453,6 +453,17 @@ export const agentsQuietHours = {
 export const agentsSetQuietHours = {
   "window": null
 } satisfies Result<'agents.setQuietHours'>;
+export const agentsMorningBrief = {
+  "always": false,
+  "at": 480,
+  "lastPostedAt": 1762675200000,
+  "on": true
+} satisfies Result<'agents.morningBrief'>;
+export const agentsSetMorningBrief = {
+  "always": false,
+  "at": 450,
+  "on": true
+} satisfies Result<'agents.setMorningBrief'>;
 export const agentsSetImportChoice = {
   "choice": "declined"
 } satisfies Result<'agents.setImportChoice'>;
@@ -4319,6 +4330,8 @@ export const frames = [
       "agents.usagePlan",
       "agents.quietHours",
       "agents.setQuietHours",
+      "agents.morningBrief",
+      "agents.setMorningBrief",
       "agents.changeDiff",
       "agents.keepCopy",
       "agents.discardCopy",

@@ -88,6 +88,8 @@ pub const METHODS: &[&str] = &[
     "agents.usagePlan",
     "agents.quietHours",
     "agents.setQuietHours",
+    "agents.morningBrief",
+    "agents.setMorningBrief",
     "agents.changeDiff",
     "agents.keepCopy",
     "agents.discardCopy",
@@ -145,6 +147,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.accounts",
     "agents.usagePlan",
     "agents.quietHours",
+    "agents.morningBrief",
     "agents.import.status",
     "agents.teamSetup",
     "agents.templates",
@@ -649,6 +652,18 @@ pub trait Backend: Send + Sync + 'static {
     async fn set_quiet_hours(
         &self,
         window: Option<crate::agents::quiet::Window>,
+    ) -> Result<Value, CommandError>;
+    /// `agents_morning_brief`: on or off, its time (minutes after midnight),
+    /// `always`, the user's checks, and when one was last posted.
+    async fn morning_brief(&self) -> Result<Value, CommandError>;
+    /// `agents_set_morning_brief`: on or off, its time and `always`. The
+    /// checks stay as they are (they're set on the Mac or from chat).
+    /// Answers as `morning_brief`.
+    async fn set_morning_brief(
+        &self,
+        on: bool,
+        at: u32,
+        always: bool,
     ) -> Result<Value, CommandError>;
     /// An import from another assistant, as the phone follows it: whether
     /// this Mac's Remote access is on and has been reached, whether an import
@@ -1688,6 +1703,20 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             ),
             None => "quiet hours: off".to_string(),
         },
+        "agents.setMorningBrief" => match params.get("on").and_then(Value::as_bool) {
+            Some(true) => format!(
+                "morning brief: {}{}",
+                crate::agents::brief::clock_label(
+                    params.get("at").and_then(Value::as_u64).unwrap_or(0) as u32
+                ),
+                if params.get("always").and_then(Value::as_bool) == Some(true) {
+                    ", every day"
+                } else {
+                    ""
+                }
+            ),
+            _ => "morning brief: off".to_string(),
+        },
         "agents.setImportChoice" => format!("import: {}", preview(field("choice"))),
         "agents.setAgentIndependence" => format!(
             "{} independence: {}",
@@ -2233,6 +2262,24 @@ async fn run(
                 ),
             };
             Ok(b.set_quiet_hours(window).await?)
+        }
+        "agents.morningBrief" => Ok(b.morning_brief().await?),
+        "agents.setMorningBrief" => {
+            let on = params.get("on").and_then(Value::as_bool);
+            let at = params
+                .get("at")
+                .and_then(Value::as_u64)
+                .filter(|m| *m < 24 * 60);
+            let always = params
+                .get("always")
+                .and_then(Value::as_bool)
+                .unwrap_or(false);
+            let (Some(on), Some(at)) = (on, at) else {
+                return Err(bad_params(
+                    "The morning brief takes `on` (true or false) and `at`, minutes after midnight (0 to 1439).",
+                ));
+            };
+            Ok(b.set_morning_brief(on, at as u32, always).await?)
         }
         "agents.import.status" => Ok(b.import_status().await?),
         "agents.import.start" => Ok(b.import_start().await?),
@@ -3659,6 +3706,38 @@ mod tests {
             .any(|(_, m, detail, ok)| m == "agents.setQuietHours"
                 && *ok
                 && detail == "quiet hours: off"));
+    }
+
+    #[tokio::test]
+    async fn a_phone_reads_and_sets_the_morning_brief() {
+        use crate::companion::testkit::Stub;
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let read = dispatch(&c, &me, "agents.morningBrief", json!({}))
+            .await
+            .unwrap();
+        assert_eq!(read["on"], true);
+        assert_eq!(read["at"], 480);
+        assert!(READ_ONLY_METHODS.contains(&"agents.morningBrief"));
+        let set = |params: Value| dispatch(&c, &me, "agents.setMorningBrief", params);
+        assert!(set(json!({ "on": true })).await.is_err());
+        assert!(set(json!({ "on": true, "at": 1440 })).await.is_err());
+        assert!(set(json!({ "on": "yes", "at": 450 })).await.is_err());
+        let on = set(json!({ "on": true, "at": 450 })).await.unwrap();
+        assert_eq!(on["at"], 450);
+        let off = set(json!({ "on": false, "at": 450 })).await.unwrap();
+        assert_eq!(off["on"], false);
+        let audited = stub.audited();
+        assert!(audited
+            .iter()
+            .any(|(_, m, detail, ok)| m == "agents.setMorningBrief"
+                && *ok
+                && detail == "morning brief: 07:30"));
+        assert!(audited
+            .iter()
+            .any(|(_, m, detail, ok)| m == "agents.setMorningBrief"
+                && *ok
+                && detail == "morning brief: off"));
     }
 
     #[tokio::test]

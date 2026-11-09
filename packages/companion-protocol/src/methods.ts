@@ -11,6 +11,7 @@ import type { Cursor } from './frames';
 import type { AgentPolicyView } from './policy';
 import type { OnItsOwn, OnItsOwnNarrow, OnItsOwnTeam } from './onItsOwn';
 import type { QuietHours, QuietWindow } from './quiet';
+import type { MorningBrief } from './brief';
 import type {
   AgentDraft,
   AgentEngine,
@@ -440,6 +441,20 @@ export interface Methods {
    */
   'agents.setQuietHours': { params: { window: QuietWindow | null }; result: QuietHours };
   /**
+   * `agents_morning_brief`: the morning brief's settings (Settings → Agents
+   * → Notifications) and when one was last posted. Read-only. Newer Macs only.
+   */
+  'agents.morningBrief': { params: Record<string, never>; result: MorningBrief };
+  /**
+   * `agents_set_morning_brief`: on or off, its time (minutes after
+   * midnight) and whether it posts on quiet days. The user's checks stay as
+   * they are. Audited. Newer Macs only.
+   */
+  'agents.setMorningBrief': {
+    params: { on: boolean; at: number; always: boolean };
+    result: MorningBrief;
+  };
+  /**
    * `agents_set_import_choice`: "bring your agents from another assistant,
    * or start fresh?" answered (the phone home's one-time card), read back
    * from `agents.overview`'s `importChoice`. An import that brings anything
@@ -693,6 +708,7 @@ export const READ_ONLY_METHODS = [
   'agents.accounts',
   'agents.usagePlan',
   'agents.quietHours',
+  'agents.morningBrief',
   'agents.import.status',
   'agents.teamSetup',
   'agents.templates',

@@ -1322,6 +1322,7 @@ export function createMockServer(opts: MockOptions = {}) {
   let independence: AgentIndependence = 'judgement';
   // Quiet hours (`agents::quiet`): on, 22:00–07:00, until the phone changes them.
   let quietWindow: { start: number; end: number } | null = { start: 22 * 60, end: 7 * 60 };
+  let morningBrief = { on: true, at: 8 * 60, always: false };
   const overview = (): AgentsOverview => ({
     agents: structuredClone(agents),
     engineReady: !opts.codexOnly,
@@ -3050,6 +3051,21 @@ function reachOf(agentId: string): AgentReach {
       return defaults();
     },
     'agents.quietHours': () => ({ window: quietWindow }),
+    'agents.morningBrief': () => morningBrief,
+    // As the router does: `on` and `at` (0 to 1439) required.
+    'agents.setMorningBrief': (p) => {
+      const at = p.at as unknown;
+      if (typeof p.on !== 'boolean' || !Number.isInteger(at) || (at as number) < 0 || (at as number) >= 1440) {
+        return fail({
+          type: 'Protocol',
+          code: 'bad_params',
+          message:
+            'The morning brief takes `on` (true or false) and `at`, minutes after midnight (0 to 1439).',
+        });
+      }
+      morningBrief = { on: p.on, at: at as number, always: p.always === true };
+      return morningBrief;
+    },
     // As `quiet::checked` does: whole minutes in a day, start ≠ end.
     'agents.setQuietHours': (p) => {
       const w = p.window as { start: number; end: number } | null | undefined;

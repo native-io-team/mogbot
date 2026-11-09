@@ -607,6 +607,19 @@ impl Backend for DesktopBackend {
         Ok(serde_json::json!({ "window": window }))
     }
 
+    async fn morning_brief(&self) -> Result<Value, CommandError> {
+        json(cmd::agents_morning_brief().await?)
+    }
+
+    async fn set_morning_brief(
+        &self,
+        on: bool,
+        at: u32,
+        always: bool,
+    ) -> Result<Value, CommandError> {
+        json(cmd::agents_set_morning_brief(self.app.clone(), on, at, always, None).await?)
+    }
+
     async fn import_status(&self) -> Result<Value, CommandError> {
         import_status_now().await
     }
