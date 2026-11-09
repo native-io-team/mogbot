@@ -30,7 +30,7 @@ const TEAM = BASE_TEAM.map((a) => (RENAMED[a.id] ? { ...a, name: RENAMED[a.id] }
 const CLAUDE_AI = {
   id: 'claude_ai',
   method: 'claude_ai',
-  label: 'Connect in Claude instead',
+  label: 'Connect on claude.ai',
   detail:
     'Connect Gmail in Claude: it opens Claude’s connectors page; turn on Gmail, then come back. The sign-in stays with your Claude account and Recruiter never sees a password.',
 };
@@ -258,7 +258,7 @@ export const agentsLoginsScenarios: Scenario[] = [
   recruiterScenario(
     'agents-login-card',
     'Agents — a login card (Gmail: Connect, or use my browser)',
-    'Recruiter’s chat: a lock card “Recruiter needs your Gmail (work)”, a muted “Asked for “Gmail work””, the reason, then two bullet lines: “Read and search your email” and “Draft and send email — it asks you on a card each time”. A muted line saying Recruiter works in your own Chrome where you’re signed in, asking before every click, post, send or payment. Under a hairline, “Connect in Claude instead” as a quiet text action with “Connect Gmail in Claude: it opens Claude’s connectors page; turn on Gmail, then come back.” Right-aligned: secondary “Not now”, secondary “Not needed”, neutral (not accent) “Use my browser”. No password field anywhere.',
+    'Recruiter’s chat: a lock card “Recruiter needs your Gmail (work)”, a muted “Asked for “Gmail work””, the reason, then one quiet line “Read and search your email · Draft and send email — it asks you on a card each time”. One short muted line “Uses your Chrome on this Mac. It asks before anything it sends.”, then a quiet “Other ways” text action (collapsed). Right-aligned: secondary “Not now” and neutral (not accent) “Use my browser”, nothing else. No password field anywhere.',
     loginCard('hiring', 'Recruiter needs your Gmail (work)', GMAIL_LOGIN)
   ),
   recruiterScenario(
@@ -347,7 +347,7 @@ export const agentsLoginsScenarios: Scenario[] = [
   recruiterScenario(
     'agents-login-failed',
     'Agents — a login that didn’t connect',
-    'The card with a red error line “Gmail didn’t show up as connected within ten minutes. Try again once it’s added on claude.ai.”, and the lead button still “Use my browser” (neutral, beside Not now and Not needed), since claude.ai is what failed: “Try again” is only ever on the button that retries the failed way in.',
+    'The card with a red error line “Gmail didn’t show up as connected within ten minutes. Try again once it’s added on claude.ai.”, and the lead button still “Use my browser” (neutral, beside Not now), since claude.ai is what failed; Other ways is open, showing “Connect on claude.ai” where its retry is: “Try again” is only ever on the button that retries the failed way in.',
     loginCard('hiring', 'Recruiter needs your Gmail (work)', {
       ...GMAIL_LOGIN,
       flow: {

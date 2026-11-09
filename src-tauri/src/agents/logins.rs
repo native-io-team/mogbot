@@ -663,10 +663,10 @@ pub fn build(agent: &Agent, ask: &Ask) -> Result<LoginRequest, CommandError> {
         }
     }
     // Beside the user's own signed-in Chrome (sorted first below), claude.ai's
-    // connector is the secondary way in: "Connect in Claude instead".
+    // connector is the secondary way in: "Connect on claude.ai".
     if options.iter().any(|o| o.method == Method::Browser) {
         if let Some(o) = options.iter_mut().find(|o| o.method == Method::ClaudeAi) {
-            o.label = "Connect in Claude instead".into();
+            o.label = "Connect on claude.ai".into();
         }
     }
     // A key only where a raw API key is a real way in, or for a service
@@ -2904,7 +2904,7 @@ mod tests {
             assert_eq!(gmail.options[1].method, Method::Browser);
             assert_eq!(gmail.options[1].label, "Use my browser");
             assert_eq!(gmail.options[2].method, Method::ClaudeAi);
-            assert_eq!(gmail.options[2].label, "Connect in Claude instead");
+            assert_eq!(gmail.options[2].label, "Connect on claude.ai");
             assert!(gmail.key.is_none(), "no password field for Gmail");
             assert_eq!(gmail.access(), Access::Full);
             assert!(gmail.abilities[1].label.contains("asks you"));

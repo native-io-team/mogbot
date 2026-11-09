@@ -31,6 +31,8 @@ import {
   retriesPrimary,
   saveLoginKey,
   startLogin,
+  abilitiesLine,
+  wayLine,
   type LoginOption,
 } from '../../lib/agentLogins';
 import type { AgentMessage } from '../../lib/agents';
@@ -49,6 +51,7 @@ export const LoginCard = memo(function LoginCard({ message, agentName, arrived }
   const [error, setError] = useState<string | null>(null);
   const [keyOpen, setKeyOpen] = useState(false);
   const [keyValue, setKeyValue] = useState('');
+  const [othersOpen, setOthersOpen] = useState(false);
   const [openedPending] = useState(approval?.status === 'pending');
   const { guard, keyProps } = useCardGuard(approval?.status === 'pending');
   const notNeeded = useNotNeeded();
@@ -81,6 +84,11 @@ export const LoginCard = memo(function LoginCard({ message, agentName, arrived }
   const signingIn = view.phase === 'signing-in';
   const chooseable = pending && !signingIn;
   const keyField = login.key?.fields[0];
+  // A way in that failed, other than the lead one, is shown where its retry is.
+  const failedElsewhere =
+    view.phase === 'failed' && !!login.flow && login.flow.option !== view.primary?.id;
+  const showOthers = othersOpen || failedElsewhere;
+  const othersId = `login-others-${approval.requestId}`;
 
   const actions = !pending ? undefined : signingIn ? (
     <Button
@@ -112,21 +120,10 @@ export const LoginCard = memo(function LoginCard({ message, agentName, arrived }
         tabIndex={0}
         variant="secondary"
         disabled={busy}
+        title={`Tells ${agentName} no, this time. It can ask again later.`}
         onClick={() => void run(() => declineLogin(message.agentId, approval.requestId))}
       >
         Not now
-      </Button>
-      <Button
-        tabIndex={0}
-        variant="secondary"
-        data-not-needed
-        disabled={busy}
-        title={`No agent asks for ${login.title} again. Turn it back on from “What it can reach”.`}
-        onClick={() =>
-          void run(() => notNeeded(() => loginNotNeeded(message.agentId, approval.requestId)))
-        }
-      >
-        Not needed
       </Button>
       {view.primary && (
         <Button
@@ -134,6 +131,7 @@ export const LoginCard = memo(function LoginCard({ message, agentName, arrived }
           variant="strong"
           data-allow
           data-option={view.primary.id}
+          title={view.primary.detail}
           disabled={busy}
           {...keyProps}
           onClick={guard(() => choose(view.primary!))}
@@ -179,14 +177,12 @@ export const LoginCard = memo(function LoginCard({ message, agentName, arrived }
         <p className="agent-secret__purpose">{login.why}</p>
         {pending && (
           <>
-            <ul className="agent-login__abilities" aria-label="What it will be able to do">
-              {view.abilities.map((a) => (
-                <li key={a.id} data-ability={a.id}>
-                  {a.label}
-                </li>
-              ))}
-            </ul>
-            {login.noConnector && <p className="agent-card__note">{login.noConnector}</p>}
+            <p className="agent-login__abilities" aria-label="What it will be able to do">
+              {abilitiesLine(view.abilities)}
+            </p>
+            {login.noConnector && !view.primary && (
+              <p className="agent-card__note">{login.noConnector}</p>
+            )}
             {signingIn && (
               <p className="agent-login__flow" role="status">
                 <Spinner size="sm" />
@@ -216,23 +212,57 @@ export const LoginCard = memo(function LoginCard({ message, agentName, arrived }
               </p>
             )}
             {chooseable && !keyOpen && view.primary && (
-              <p className="agent-card__note">{view.primary.detail}</p>
+              <p className="agent-card__note" data-lead-line>
+                {wayLine(view.primary, login.title)}
+              </p>
             )}
-            {chooseable && !keyOpen && view.others.length > 0 && (
-              <div className="agent-login__others" aria-label="Other ways in">
+            {chooseable && !keyOpen && (
+              <TextButton
+                tabIndex={0}
+                className="agent-login__more"
+                aria-expanded={showOthers}
+                aria-controls={othersId}
+                onClick={() => setOthersOpen(!showOthers)}
+              >
+                {showOthers ? 'Fewer ways' : 'Other ways'}
+              </TextButton>
+            )}
+            {chooseable && !keyOpen && showOthers && (
+              <div id={othersId} className="agent-login__others" aria-label="Other ways">
+                {login.noConnector && view.primary && (
+                  <p className="agent-login__other-detail">{login.noConnector}</p>
+                )}
                 {view.others.map((o) => (
                   <div key={o.id} className="agent-login__other" data-option={o.id}>
                     <TextButton
                       tabIndex={0}
                       disabled={busy}
+                      title={o.detail}
                       {...keyProps}
                       onClick={guard(() => choose(o))}
                     >
                       {o.label}
                     </TextButton>
-                    <span className="agent-login__other-detail">{o.detail}</span>
+                    <span className="agent-login__other-detail">{wayLine(o, login.title)}</span>
                   </div>
                 ))}
+                <div className="agent-login__other" data-not-needed-row>
+                  <TextButton
+                    tabIndex={0}
+                    data-not-needed
+                    disabled={busy}
+                    onClick={() =>
+                      void run(() =>
+                        notNeeded(() => loginNotNeeded(message.agentId, approval.requestId))
+                      )
+                    }
+                  >
+                    Not needed
+                  </TextButton>
+                  <span className="agent-login__other-detail">
+                    No agent asks for {login.title} again. Turn it back on from “What it can reach”.
+                  </span>
+                </div>
               </div>
             )}
             {chooseable && keyOpen && keyField && (

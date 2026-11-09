@@ -373,6 +373,37 @@ export function flowLine(flow: LoginFlow, title: string): string {
   );
 }
 
+/**
+ * One short line under the card's lead button, and beside each of "Other
+ * ways": what that way in does, in a sentence. The backend's `detail` (the
+ * long account of it) stays on the button's tooltip. The phone says the same
+ * for its own ways (`phoneLine`, `mobile/src/lib/loginState.ts`).
+ */
+export function wayLine(option: LoginOption, title: string): string {
+  switch (option.method) {
+    case 'browser':
+      return 'Uses your Chrome on this Mac. It asks before anything it sends.';
+    case 'agent_browser':
+      return `You sign in to ${title} in the agents’ own Chrome here. It never sees your password.`;
+    case 'oauth':
+      return `Opens ${title}’s sign-in in your browser. The token stays on this Mac.`;
+    case 'claude_ai':
+      return `Adds ${title} to your Claude account on claude.ai.`;
+    case 'gh':
+      return 'Uses the GitHub sign-in on this Mac. Anything that changes GitHub asks first.';
+    case 'existing':
+      return 'Already connected. It gets its own permission, which you can take back.';
+    case 'key':
+      return 'A key made for apps, never a password. Kept in this Mac’s Keychain.';
+    default:
+      return option.detail;
+  }
+}
+
+/** "Read and search your email · Draft and send email — it asks you on a card each time". */
+export const abilitiesLine = (abilities: LoginAbility[]) =>
+  abilities.map((a) => a.label).join(' · ');
+
 /** The ability that sends or changes anything, if it asked for one. */
 export const writes = (login: Pick<LoginRequest, 'abilities'>) =>
   login.abilities.some((a) => a.id === 'write');

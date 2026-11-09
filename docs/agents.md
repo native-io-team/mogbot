@@ -2087,8 +2087,18 @@ to do (read; and, when `scopes` asks for more, send/post/change, which
 | 1 | **Connect** (ours, `oauth.rs`): the app's own OAuth in the Mac's browser | this Mac's Keychain, `<slug>-connection-<id>` | both |
 | 1 | **Use GitHub on this Mac**: the `gh` sign-in | `gh`'s own Keychain item | both |
 | 2 | **Use my browser**: Claude in Chrome, in the user's own Chrome where they're signed in; every click/post/send/pay asks. The default for every service without our own OAuth (Gmail, Calendar, Drive, Slack, LinkedIn, X…) | nowhere new | Claude Code |
-| 3 | **Connect in Claude instead** (optional, after the browser): "Connect Gmail in Claude: it opens Claude's connectors page; turn on Gmail, then come back." Opens Claude's connectors page (Customize → Connectors, below) in the Mac's browser if it isn't added yet; the card watches `claude mcp list` (every 20 s, and at once when the window or the phone app comes back, `agents_logins_recheck`) until it's connected. If it doesn't, the card says to use the browser instead: never a dead end. A claude.ai connection made for another agent sits here too | claude.ai | Claude Code |
+| 3 | **Connect on claude.ai** (optional, after the browser): "Connect Gmail in Claude: it opens Claude's connectors page; turn on Gmail, then come back." Opens Claude's connectors page (Customize → Connectors, below) in the Mac's browser if it isn't added yet; the card watches `claude mcp list` (every 20 s, and at once when the window or the phone app comes back, `agents_logins_recheck`) until it's connected. If it doesn't, the card says to use the browser instead: never a dead end. A claude.ai connection made for another agent sits here too | claude.ai | Claude Code |
 | 4 | **Enter an API key**: the masked field (`secrets.rs`), only where a key made for programs is a real way in (X API, Stripe restricted key, an app we don't know) | this Mac's Keychain | both |
+
+**How the card reads, desk and phone alike.** The reason, one quiet line of
+what it may do, then one answer: **Not now** and the best way in (the first
+row above that applies), with one short line saying what that way does
+(`wayLine` on the desk, `phoneLine` on the phone; the backend's full
+`detail` is the button's tooltip on the desk). Every other way, why there's
+no connector, and **Not needed** wait behind a quiet **Other ways**. Not now
+answers this card only (the agent can ask again later); Not needed puts the
+app away for the whole team (below). A failed way in other than the lead one
+opens Other ways, where its retry is.
 
 A service with no connector says so in one line on the card ("LinkedIn has
 no connector agents can sign in to."), instead of a password field. A Codex
@@ -2168,8 +2178,9 @@ failure, the card stays waiting with the link rather than failing.
 
 ### "Not needed": an app the user doesn't want connected (`agents/declined.rs`)
 
-Every login card and every row of "What your team needs" offers **Not
-needed** beside its main action, and the list has **Skip the rest**. It is
+Every login card (under Other ways) and every row of "What your team needs"
+(beside its main action) offers **Not needed**, and the list has **Skip the
+rest**. It is
 for the app, across the team, and it is remembered
 (`<agents root>/declined-services.json`):
 
