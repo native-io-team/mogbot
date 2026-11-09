@@ -206,11 +206,6 @@
 /* "Recommended" star — a quiet grey marker, deliberately NOT the accent
    used for selection, so on the pre-selected default tile it stays a separate
    signal from the accent selected border/check. */
-.stack-card-star {
-  flex-shrink: 0;
-  color: var(--create-recommended-star);
-}
-
 .stack-card-desc {
   width: 100%;
   font-size: var(--font-size-body-sm);

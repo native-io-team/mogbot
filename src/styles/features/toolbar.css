@@ -22,39 +22,6 @@
   white-space: nowrap;
 }
 
-.terminal-capture {
-  padding: 6px 8px;
-  background: transparent;
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
-}
-
-.terminal-capture svg {
-  display: block;
-}
-
-.terminal-capture:hover:not(:disabled) {
-  background: var(--surface-control);
-  color: var(--text-secondary);
-}
-
-.terminal-capture:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.terminal-capture.capturing {
-  color: var(--accent-active);
-  animation: pulse 1s infinite;
-}
-
 @keyframes pulse {
   0%,
   100% {

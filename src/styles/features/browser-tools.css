@@ -86,31 +86,6 @@
   gap: var(--spacing-sm);
 }
 
-.browser-tools-send,
-.browser-tools-clear {
-  padding: 4px 10px;
-  background: transparent;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  font-size: var(--font-size-body-sm);
-  cursor: pointer;
-  transition:
-    color var(--transition),
-    border-color var(--transition);
-}
-
-.browser-tools-send:hover:not(:disabled),
-.browser-tools-clear:hover {
-  color: var(--text-primary);
-  border-color: var(--accent-active);
-}
-
-.browser-tools-send:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
 /* Body stacks Console / Network / Elements in a single grid cell.
    Active slot is visible; inactive slots keep their full layout and
    state but are hidden — no remount on tab switch, no scroll loss. */

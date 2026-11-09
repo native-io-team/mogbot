@@ -151,11 +151,6 @@
 }
 
 /* An interrupted run's score covers only the widths it reached. */
-.mig-panel__partial {
-  font-size: var(--font-size-label);
-  color: var(--mig-band-off);
-}
-
 .mig-panel__actions {
   display: flex;
   gap: var(--spacing-sm);

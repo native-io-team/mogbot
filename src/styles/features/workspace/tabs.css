@@ -69,17 +69,6 @@
   color: var(--text-primary);
 }
 
-.workspace-focus-tab.button[aria-pressed='true']::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 2px;
-  background: currentColor;
-  border-radius: 2px 2px 0 0;
-}
-
 .workspace-tab.button.attention {
   color: var(--accent-success);
 }
@@ -92,65 +81,6 @@
   display: flex;
   align-items: center;
   gap: var(--button-gap);
-}
-
-/* Open in Browser Button */
-.open-in-browser-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-control);
-  color: var(--text-muted);
-  font-size: var(--font-size-body-md);
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
-  outline: none;
-  margin-left: auto;
-}
-
-.open-in-browser-btn:hover {
-  color: var(--text-primary);
-  background: var(--surface-control);
-  border-color: var(--border-default);
-}
-
-.open-in-browser-btn svg {
-  flex-shrink: 0;
-}
-
-/* Hide Preview Button */
-.hide-preview-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: var(--radius-control);
-  color: var(--text-muted);
-  cursor: pointer;
-  transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
-  outline: none;
-  margin-left: 8px;
-  flex-shrink: 0;
-}
-
-.hide-preview-btn:hover {
-  color: var(--text-primary);
-  background: var(--surface-control);
-  border-color: var(--border-default);
 }
 
 /* Preview Tabs Divider */
@@ -231,50 +161,4 @@
   display: flex;
   align-items: center;
   gap: var(--button-gap);
-}
-
-/* Show Preview Button (when preview is hidden) */
-.show-preview-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: var(--surface-control);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-control);
-  color: var(--text-secondary);
-  font-size: var(--font-size-body-md);
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    background-color 0.15s,
-    color 0.15s,
-    border-color 0.15s;
-  outline: none;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-
-.show-preview-btn:hover {
-  color: var(--text-primary);
-  background: var(--surface-control-hover);
-}
-
-.show-preview-btn svg {
-  flex-shrink: 0;
-}
-
-/* Icon-only variant of show-preview-btn */
-.show-preview-btn.icon-only {
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  justify-content: center;
-  gap: 0;
-  color: var(--text-muted);
-}
-
-.show-preview-btn.icon-only:hover {
-  color: var(--text-secondary);
-  border-color: var(--text-muted);
 }

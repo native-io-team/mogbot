@@ -124,45 +124,6 @@
   white-space: nowrap;
 }
 
-/* Subtle bordered action button — identical treatment to .dev-server-logs-send. */
-.device-mirror-build-send {
-  flex-shrink: 0;
-  padding: 4px 10px;
-  background: transparent;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-sm);
-  color: var(--text-muted);
-  font-size: var(--font-size-body-sm);
-  cursor: pointer;
-  white-space: nowrap;
-  transition:
-    color var(--transition),
-    border-color var(--transition);
-}
-
-.device-mirror-build-send:hover {
-  color: var(--text-primary);
-  border-color: var(--accent-active);
-}
-
-.device-mirror-build-chevron {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 2px;
-  border: none;
-  border-radius: var(--radius-sm);
-  background: transparent;
-  color: var(--text-muted);
-  cursor: pointer;
-}
-
-.device-mirror-build-chevron:hover {
-  color: var(--text-primary);
-  background: none;
-}
-
 .device-mirror-build-header > .button--icon-only svg {
   transition: transform var(--transition);
 }

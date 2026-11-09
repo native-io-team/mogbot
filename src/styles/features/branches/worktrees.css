@@ -115,11 +115,6 @@
   color: var(--text-primary);
 }
 
-.worktree-row-icon-btn.is-danger:hover {
-  background: rgba(var(--accent-error-rgb), 0.1);
-  color: var(--accent-error);
-}
-
 .worktree-remove-error {
   margin-top: var(--spacing-md);
   padding: var(--spacing-sm) var(--spacing-md);

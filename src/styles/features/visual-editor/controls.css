@@ -957,11 +957,6 @@
   border-radius: var(--radius-control);
   box-shadow: inset 0 0 0 var(--border-width-default) var(--surface-panel);
 }
-.ss-color-picker__recent-empty {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: var(--font-size-body-sm);
-}
 .ss-color-picker__channel-fields {
   grid-column: 3;
   display: grid;

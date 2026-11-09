@@ -34,12 +34,6 @@
   border-radius: var(--radius-full);
 }
 
-.hosting-row-spinner {
-  position: absolute;
-  right: -2px;
-  bottom: -2px;
-}
-
 .hosting-row-dot {
   position: absolute;
   right: -2px;

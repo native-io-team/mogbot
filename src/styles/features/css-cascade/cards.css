@@ -662,23 +662,6 @@
   margin-block-start: calc(var(--spacing-sm) + var(--border-width-default) - var(--spacing-2xs));
 }
 
-/* Main class tag */
-.ss-cascade-card__selector-chip {
-  display: inline-flex;
-  /* The selector is the rule's identity — show it in full, literally, never truncated.
-     The media/layer condition is its own context line above, so nothing competes. */
-  flex: 0 1 auto;
-  min-width: var(--cascade-selector-chip-min-width);
-  white-space: normal;
-  overflow-wrap: break-word;
-  word-break: normal;
-}
-.is-readonly .ss-cascade-card__selector-chip {
-  background: transparent;
-  color: var(--text-secondary);
-  font-weight: 500;
-}
-
 .ss-cascade-card__draft-status {
   flex: 0 0 auto;
   min-width: max-content;
@@ -763,14 +746,6 @@
 .is-nested .ss-cascade-card__chip {
   background: var(--surface-panel);
 }
-.ss-cascade-card__selector-chip.ss-cascade-card__selector-chip--tag {
-  padding: 0;
-  background: transparent;
-  color: var(--tag-text);
-  font-family: var(--font-code);
-  box-shadow: none;
-}
-
 /* The selector field takes the lead role in the header while editing. */
 .ss-cascade-card__selector-edit {
   flex: 0 1 auto;
@@ -1125,9 +1100,6 @@
 }
 .ss-cascade-card__note--pending {
   color: var(--accent-warning);
-}
-.ss-cascade-card.is-draft .ss-cascade-card__selector-chip {
-  opacity: 0.85;
 }
 .ss-cascade-card__chip--new {
   color: var(--text-primary);

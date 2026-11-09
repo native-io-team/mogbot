@@ -1,15 +1,4 @@
 /* Notification Settings Modal */
-.notification-settings-modal {
-  position: fixed;
-  inset: 0;
-  background: var(--scrim-modal);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: var(--z-app-modal);
-  padding: 20px;
-}
-
 .notification-settings-content {
   width: 420px;
   max-width: 100%;
@@ -20,24 +9,6 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-}
-
-.notification-settings-header {
-  padding: 20px 24px 16px;
-  border-bottom: 1px solid var(--border-default);
-}
-
-.notification-settings-header h2 {
-  margin: 0 0 4px 0;
-  font-size: var(--font-size-h3);
-  font-weight: 600;
-  color: var(--text-primary);
-}
-
-.notification-settings-header p {
-  margin: 0;
-  font-size: var(--font-size-body-lg);
-  color: var(--text-secondary);
 }
 
 .notification-settings-body {
@@ -175,29 +146,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.notification-preview-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  font-size: var(--font-size-body-md);
-  background: none;
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-control);
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition:
-    background-color var(--transition),
-    color var(--transition),
-    border-color var(--transition);
-  width: fit-content;
-}
-
-.notification-preview-btn:hover {
-  background: var(--surface-control);
-  color: var(--text-primary);
 }
 
 /* Footer */

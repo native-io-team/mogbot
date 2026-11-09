@@ -116,19 +116,6 @@
   white-space: nowrap;
 }
 
-.team-person-login {
-  color: var(--text-muted);
-  font-family: var(--font-code);
-  font-size: var(--font-size-body-sm);
-  line-height: var(--line-height-compact);
-}
-
-.team-person-login.is-unknown {
-  font-family: var(--font-ui);
-  color: var(--text-faint);
-  font-style: italic;
-}
-
 .team-person-work {
   display: flex;
   align-items: center;

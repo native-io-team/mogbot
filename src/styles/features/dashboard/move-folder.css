@@ -99,13 +99,6 @@
   color: var(--text-muted);
 }
 
-.move-folder-empty {
-  text-align: center;
-  padding: 24px;
-  color: var(--text-muted);
-  font-size: var(--font-size-body-lg);
-}
-
 .move-folder-item.move-folder-new-btn {
   border-style: dashed;
   border-color: var(--border-default);

@@ -222,15 +222,6 @@
   margin-right: var(--spacing-xs);
 }
 
-.team-thread-eyebrow {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-md);
-  color: var(--text-muted);
-  font-size: var(--font-size-body-sm);
-  font-weight: var(--font-weight-label);
-}
-
 .team-thread-heading {
   display: flex;
   align-items: center;

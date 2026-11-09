@@ -31,13 +31,6 @@
 }
 
 /* Connections Dashboard */
-.connections-dashboard {
-  display: flex;
-  gap: 12px;
-  margin-bottom: 24px;
-  flex-wrap: wrap;
-}
-
 .connection-card {
   display: flex;
   align-items: center;

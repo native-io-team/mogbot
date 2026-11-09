@@ -54,63 +54,11 @@
 }
 
 /*
- * Drop target indicator: a thin horizontal bar in the gap above or below
- * the target item, depending on which half of the target the cursor is on.
- * Using ::before so it doesn't disturb item layout. The `gap` between
- * items is `var(--spacing-sm)` (8px), so an offset of -6px centers the
- * 2px bar nicely in the gap.
- */
-.project-rail-item-wrapper.is-drop-target::before {
-  content: '';
-  position: absolute;
-  left: -4px;
-  right: -4px;
-  height: 2px;
-  border-radius: var(--radius-sm);
-  background: var(--accent-active);
-  pointer-events: none;
-}
-
-.project-rail-item-wrapper.is-drop-target.drop-before::before {
-  top: -6px;
-}
-
-.project-rail-item-wrapper.is-drop-target.drop-after::before {
-  bottom: -6px;
-}
-
-/*
- * Grab cursor on a reorderable item. Falls back to default pointer when
- * the rail is rendered without onReorder (e.g. in tests).
- */
-.project-rail-item.is-reorderable {
-  cursor: grab;
-  /* Disable native text selection so pointer-down on the thumb starts a
-   * pointer drag instead of trying to highlight content. */
-  -webkit-user-select: none;
-  user-select: none;
-  /* Disable native touch behaviors (text selection, callouts, image
-   * dragging) so our pointer event handlers control the gesture. */
-  -webkit-touch-callout: none;
-  -webkit-user-drag: none;
-  touch-action: none;
-}
-
-.project-rail-item-wrapper.is-dragging .project-rail-item.is-reorderable {
-  cursor: grabbing;
-}
-
-/*
  * While a rail drag is active, disable pointer events inside iframes
  * (preview iframe, plugin iframes, etc.) so the user doesn't accidentally
  * start text selection in the preview when dragging across it. Restored
  * automatically when the drag ends and the body class is removed.
  */
-body.rail-drag-active iframe {
-  pointer-events: none;
-  user-select: none;
-}
-
 .project-rail-item {
   position: relative;
   width: 48px;
