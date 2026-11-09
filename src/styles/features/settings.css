@@ -85,6 +85,13 @@
   line-height: 1.4;
 }
 
+/* More than one action beside a row (Settings → Agents → Your Chrome). */
+.settings-row-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--spacing-sm);
+}
+
 /* The Experimental tab when the platform has nothing to offer it. Not an error
    and not a call to action — just an answer, so the tab is never blank. */
 .settings-empty-note {
