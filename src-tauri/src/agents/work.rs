@@ -611,6 +611,15 @@ pub const OWN_BROWSER: &str = "its own browser";
 pub const YOUR_CHROME: &str = "your Chrome";
 
 fn own_browser(which: &str, tool: &str, url: Option<&str>) -> Action {
+    // Its card is what the user sees; the step says it asked.
+    if tool == crate::agent_browser::tools::STEP_IN_TOOL {
+        return act(
+            StepKind::Approval,
+            "Asked you to step into its browser",
+            "Asking you to step into its browser",
+            "ask you to step into its browser",
+        );
+    }
     let kind = match tool {
         "screenshot" => StepKind::Screenshot,
         _ => StepKind::Web,

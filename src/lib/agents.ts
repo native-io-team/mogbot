@@ -8,7 +8,12 @@ import type { AgentReachSettings, LoginRequest } from './agentLogins';
 import { convertFileSrc, invoke } from '@tauri-apps/api/core';
 import type { FileDiff } from './git';
 import type { AgentSecret, SecretRequest } from './agentSecrets';
-import type { LocalLink, Watch, WatchSource } from '../../packages/companion-protocol/src/model';
+import type {
+  LocalLink,
+  StepInCard,
+  Watch,
+  WatchSource,
+} from '../../packages/companion-protocol/src/model';
 import type { SettingsProposal } from '../../packages/companion-protocol/src/policy';
 import type {
   AgentDraft,
@@ -572,6 +577,8 @@ export interface Approval {
   handoff?: HandoffCard;
   /** "OK to go on?" between a routine's steps: Allow is Go ahead, Deny is Stop here. */
   gate?: RoutineGate;
+  /** "<Agent> needs you in its browser: <reason>": Step in, Hand back, Not now (`lib/agentStepIn`). */
+  stepIn?: StepInCard;
   /**
    * "Bring your work Chrome window to the front so I can use it": answered
    * with Check again (allow) or Not now, never a login.

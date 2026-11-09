@@ -202,6 +202,8 @@ pub async fn agents_messages(
         crate::agents::work::apply(&agent_id, &mut page);
         // A login card's sign-in under way, as it is now.
         crate::agents::logins::apply(&mut page);
+        // A step-in the user is in right now.
+        crate::agents::step_in::apply(&mut page);
         // Every card in plain words; an admin's batch as it is now.
         crate::agents::admin::apply(&mut page);
         // A remembered rule's line: still in force, or undone.
@@ -1084,6 +1086,18 @@ pub async fn agents_answer_approval(
     if front.is_some() {
         return agents::browser_profiles::answer(&app, &agent_id, &request_id, allow).await;
     }
+    // "Needs you in its browser": Not now from anywhere; Step in only from
+    // the desk's own button (`agents_step_in`), never a plain Allow.
+    let step_in = {
+        let (a, r) = (agent_id.clone(), request_id.clone());
+        blocking(move || Ok(agents::step_in::is_step_in(&a, &r))).await?
+    };
+    if step_in {
+        if allow {
+            return Err(CommandError::expected(agents::step_in::ON_YOUR_MAC));
+        }
+        return agents::step_in::decline(&app, &agent_id, &request_id).await;
+    }
     if login.is_some() {
         return if allow {
             agents::logins::allow_from_old_client(&app, &agent_id, &request_id).await
@@ -1096,6 +1110,44 @@ pub async fn agents_answer_approval(
         };
     }
     blocking(move || answer_card(&app, &agent_id, &request_id, allow, always, note, choice)).await
+}
+
+/* --------------------------------------------------------------- step in */
+
+/// Step into an agent's browser for its card: the tab's window comes
+/// forward on this Mac and the agent can't use that tab until Hand back.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_step_in(
+    app: AppHandle,
+    agent_id: String,
+    request_id: String,
+) -> Result<(), CommandError> {
+    agents::step_in::step_in(&app, &agent_id, &request_id).await
+}
+
+/// Bring the tab the user stepped into forward again.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_step_in_show(agent_id: String) -> Result<(), CommandError> {
+    agents::step_in::show(&agent_id).await
+}
+
+/// Hand the agent its browser back: it's woken with where the page is now.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_step_in_hand_back(
+    app: AppHandle,
+    agent_id: String,
+    request_id: String,
+) -> Result<(), CommandError> {
+    agents::step_in::hand_back(
+        &app,
+        &agent_id,
+        &request_id,
+        crate::agent_browser::step_in::How::HandedBack,
+    )
+    .await
 }
 
 /* ---------------------------------------------------------------- logins */

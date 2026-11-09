@@ -493,6 +493,7 @@ mod tests {
             plan: None,
             handoff: None,
             gate: None,
+            step_in: None,
         });
         message
     }

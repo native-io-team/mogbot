@@ -6532,6 +6532,7 @@ mod tests {
                 plan: None,
                 handoff: None,
                 gate: None,
+                step_in: None,
             });
             store::append_message(&card).unwrap();
             let err = begin_fresh(&a.id).unwrap_err().to_string();

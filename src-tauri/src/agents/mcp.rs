@@ -2426,6 +2426,7 @@ pub(crate) fn new_card(
         plan: None,
         handoff: None,
         gate: None,
+        step_in: None,
     }
 }
 

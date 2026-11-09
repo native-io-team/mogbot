@@ -151,6 +151,7 @@ pub mod sessions;
 pub mod share_text;
 pub mod store;
 pub mod stream;
+pub mod step_in;
 pub mod takeover;
 pub mod task;
 pub mod team_reach;

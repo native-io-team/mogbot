@@ -160,6 +160,9 @@ pub fn classify_in(
     if card.login.is_some() || card.secret.is_some() {
         return (Kind::Login, "it's a login or key");
     }
+    if card.step_in.is_some() {
+        return (Kind::Yours, "only you can step into its browser");
+    }
     if card.prompt.is_some() || card.connector.is_some() {
         return (Kind::Yours, "it's a question only you can answer");
     }

@@ -17,6 +17,11 @@ fn gate(level: Level, name: &str, input: Value, page: &Page) -> Gate {
 #[test]
 fn the_agents_browser_tools_are_all_here_with_the_same_arguments() {
     for t in crate::agent_browser::tools::TOOLS {
+        // Step in is for the agents' own browser: this one is already the
+        // user's, and they're in it whenever they look at it.
+        if t.name == crate::agent_browser::tools::STEP_IN_TOOL {
+            continue;
+        }
         let ours = TOOLS
             .iter()
             .find(|o| o.name == t.name)

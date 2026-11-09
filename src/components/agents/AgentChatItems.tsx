@@ -47,6 +47,7 @@ import { MentionText } from './AgentMentions';
 import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
 import { LoginCard } from './AgentLoginCard';
+import { StepInCard } from './AgentStepIn';
 import { AgentSettingsChange } from './AgentSettingsChange';
 import { AgentPlanList } from './AgentPlanList';
 import { AgentGateBody } from './AgentRoutineSteps';
@@ -1044,6 +1045,16 @@ export const ApprovalCard = memo(function ApprovalCard({
       >
         {expired}
       </div>
+    );
+  }
+  // "Needs you in its browser": Step in / Not now, then Hand back.
+  if (approval.stepIn) {
+    return (
+      <StepInCard
+        message={message}
+        onAnswer={(id, allow) => onAnswer(id, allow)}
+        arrived={arrived}
+      />
     );
   }
   if (approval.prompt) {

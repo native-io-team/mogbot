@@ -28,6 +28,9 @@ use super::keys::Key;
 use super::service::{self, Owner, Service, Tab};
 use crate::agents::browser_gate::{self, Gate, AGENTS_SERVER};
 
+/// "Step in": the user takes the agent's tab for a step only a person can pass.
+pub const STEP_IN_TOOL: &str = "ask_user_to_step_in";
+
 /// The server's name in a turn's MCP config (tools are `mcp__browser__*`).
 pub const SERVER_KEY: &str = "browser";
 /// Its path on the agent bridge.
@@ -113,13 +116,18 @@ pub const TOOLS: &[ToolDef] = &[
         schema: || json!({ "type": "object", "properties": { "text": { "type": "string" }, "seconds": { "type": "number" }, "tab": tab_prop() } }),
     },
     ToolDef {
+        name: STEP_IN_TOOL,
+        description: "When the page in your tab needs a person for one step you can't pass (an SSO or \"verify it's you\" page, a passkey, a 2FA or emailed code, a CAPTCHA): one card asks the user to step into that tab on this Mac, do the step themselves, and hand it back. You never see what they type, only where the page ended up. Use it instead of asking for a password or a code, or failing. A plain sign-in on a site you're signed out of is request_login with signed_out: true instead. It returns at once: stop and say in one line what you need them for; you're woken when they hand back, with the page's new address and title.",
+        schema: || json!({ "type": "object", "properties": { "reason": { "type": "string", "description": "What they need to do, in a few words, shown on the card: \"approve the Okta sign-in\", \"the CAPTCHA on checkout\", \"the 6-digit code from your phone\"." }, "tab": tab_prop() }, "required": ["reason"] }),
+    },
+    ToolDef {
         name: "close_tab",
         description: "Close one of your tabs.",
         schema: || json!({ "type": "object", "properties": { "tab": tab_prop() }, "required": ["tab"] }),
     },
 ];
 
-const INSTRUCTIONS: &str = "The agents' browser: a real Google Chrome on this Mac with a profile of the team's own (\"Agents\"), separate from the user's personal Chrome. Sites the user signed in to there stay signed in. Use it first for any website except Gmail, Google and Slack, which go to the user's own Chrome (Claude in Chrome), where they're signed in; that Chrome also for a site signed in only there, or when they ask. Read with read_page or find (refs) before you click or type; reading is free. Before anything that sends, posts, publishes, pays, deletes or shares, say exactly what will go and from which account: that click or key asks the user on a card. Never type a password or a code. If a page asks you to sign in (or shows a signed-out product page), stop and call request_login for that service with signed_out: true: it moves you to the user's Chrome when you have it, else the user signs in from their phone (or here). If a site says it won't work with this browser, say so in a line; don't try to get around it. For web search use your own search tool, not a search site.";
+const INSTRUCTIONS: &str = "The agents' browser: a real Google Chrome on this Mac with a profile of the team's own (\"Agents\"), separate from the user's personal Chrome. Sites the user signed in to there stay signed in. Use it first for any website except Gmail, Google and Slack, which go to the user's own Chrome (Claude in Chrome), where they're signed in; that Chrome also for a site signed in only there, or when they ask. Read with read_page or find (refs) before you click or type; reading is free. Before anything that sends, posts, publishes, pays, deletes or shares, say exactly what will go and from which account: that click or key asks the user on a card. Never type a password or a code. When a page needs a person for one step (SSO or \"verify it's you\", a passkey, a 2FA code, a CAPTCHA), call ask_user_to_step_in and stop. If a page asks you to sign in (or shows a signed-out product page), stop and call request_login for that service with signed_out: true: it moves you to the user's Chrome when you have it, else the user signs in from their phone (or here). If a site says it won't work with this browser, say so in a line; don't try to get around it. For web search use your own search tool, not a search site.";
 
 /* ---------------------------------------------------- one-time passes */
 
@@ -227,6 +235,16 @@ fn web_url(u: &str) -> Result<String, String> {
         .ok_or_else(|| "Only http and https pages open here.".to_string())
 }
 
+/// The tab a call names (or the one it used last), unless the user is in it
+/// ([`super::step_in`]): then nothing on it is read or done.
+fn tab_of(svc: &Service, agent: &str, args: &Value) -> Result<Tab, String> {
+    let tab = svc.tab_for(agent, tab_arg(args))?;
+    match super::step_in::refusal(agent, &tab) {
+        Some(why) => Err(why.into()),
+        None => Ok(tab),
+    }
+}
+
 fn tab_arg(args: &Value) -> Option<u32> {
     args.get("tab")
         .and_then(Value::as_u64)
@@ -284,6 +302,13 @@ pub fn run(agent: &str, name: &str, args: &Value) -> Result<Vec<Value>, String> 
             let lines: Vec<String> = tabs
                 .iter()
                 .map(|t| {
+                    // A tab the user is in: named, never read.
+                    if super::step_in::refusal(agent, t).is_some() {
+                        return format!(
+                            "{} · (the user is in this tab; wait for them to hand it back)",
+                            t.id
+                        );
+                    }
                     let t = svc.refreshed(t);
                     format!("{} · {} · {}", t.id, t.title, t.url)
                 })
@@ -303,7 +328,7 @@ pub fn run(agent: &str, name: &str, args: &Value) -> Result<Vec<Value>, String> 
         }
         "navigate" => {
             let url = web_url(args.get("url").and_then(Value::as_str).unwrap_or(""))?;
-            let tab = svc.tab_for(agent, tab_arg(args))?;
+            let tab = tab_of(&svc, agent, args)?;
             svc.navigate(&tab, &url)?;
             clear_refs(agent, &tab);
             svc.set_active(agent, &tab);
@@ -312,7 +337,7 @@ pub fn run(agent: &str, name: &str, args: &Value) -> Result<Vec<Value>, String> 
             Ok(vec![text(line)])
         }
         "read_page" | "find" => {
-            let tab = svc.tab_for(agent, tab_arg(args))?;
+            let tab = tab_of(&svc, agent, args)?;
             svc.set_active(agent, &tab);
             let interactive = name == "read_page"
                 && args.get("interactive").and_then(Value::as_bool) == Some(true);
@@ -333,12 +358,12 @@ pub fn run(agent: &str, name: &str, args: &Value) -> Result<Vec<Value>, String> 
             Ok(vec![text(out)])
         }
         "get_text" => {
-            let tab = svc.tab_for(agent, tab_arg(args))?;
+            let tab = tab_of(&svc, agent, args)?;
             svc.set_active(agent, &tab);
             Ok(vec![text(svc.text(&tab, MAX_TEXT))])
         }
         "screenshot" => {
-            let tab = svc.tab_for(agent, tab_arg(args))?;
+            let tab = tab_of(&svc, agent, args)?;
             svc.set_active(agent, &tab);
             let (jpeg, w, h) = svc.screenshot(&tab)?;
             use base64::Engine as _;
@@ -348,7 +373,7 @@ pub fn run(agent: &str, name: &str, args: &Value) -> Result<Vec<Value>, String> 
             ])
         }
         "click" => {
-            let tab = svc.tab_for(agent, tab_arg(args))?;
+            let tab = tab_of(&svc, agent, args)?;
             svc.set_active(agent, &tab);
             let (x, y) = match args.get("ref").and_then(Value::as_str) {
                 Some(r) => svc.center_of(&tab, ref_of(agent, &tab, r)?.backend_node_id)?,
@@ -375,7 +400,7 @@ pub fn run(agent: &str, name: &str, args: &Value) -> Result<Vec<Value>, String> 
             if t.chars().count() > MAX_TYPE {
                 return Err(format!("Type at most {MAX_TYPE} characters at a time."));
             }
-            let tab = svc.tab_for(agent, tab_arg(args))?;
+            let tab = tab_of(&svc, agent, args)?;
             svc.set_active(agent, &tab);
             if let Some(r) = args.get("ref").and_then(Value::as_str) {
                 let node = ref_of(agent, &tab, r)?;
@@ -396,7 +421,7 @@ pub fn run(agent: &str, name: &str, args: &Value) -> Result<Vec<Value>, String> 
         "press" => {
             let k = args.get("key").and_then(Value::as_str).unwrap_or("");
             let key = Key::parse(k).ok_or_else(|| format!("\"{k}\" isn't a key this browser presses. One of: Enter, Tab, Escape, Backspace, Delete, Space, the arrows, PageUp, PageDown, Home, End."))?;
-            let tab = svc.tab_for(agent, tab_arg(args))?;
+            let tab = tab_of(&svc, agent, args)?;
             svc.set_active(agent, &tab);
             svc.key(&tab, key)?;
             if key == Key::Enter {
@@ -409,7 +434,7 @@ pub fn run(agent: &str, name: &str, args: &Value) -> Result<Vec<Value>, String> 
             Ok(vec![text(format!("Pressed {}.", key.name()))])
         }
         "scroll" => {
-            let tab = svc.tab_for(agent, tab_arg(args))?;
+            let tab = tab_of(&svc, agent, args)?;
             svc.set_active(agent, &tab);
             let amount = args
                 .get("amount")
@@ -439,7 +464,7 @@ pub fn run(agent: &str, name: &str, args: &Value) -> Result<Vec<Value>, String> 
             )])
         }
         "wait_for" => {
-            let tab = svc.tab_for(agent, tab_arg(args))?;
+            let tab = tab_of(&svc, agent, args)?;
             let secs = args
                 .get("seconds")
                 .and_then(Value::as_f64)
@@ -470,7 +495,7 @@ pub fn run(agent: &str, name: &str, args: &Value) -> Result<Vec<Value>, String> 
         }
         "close_tab" => {
             let id = tab_arg(args).ok_or("Which tab?")?;
-            let tab = svc.tab_for(agent, Some(id))?;
+            let tab = tab_of(&svc, agent, args)?;
             clear_refs(agent, &tab);
             svc.close_tab(&tab);
             note_where(agent, &svc, None);
@@ -487,6 +512,7 @@ pub const NO_PASSWORDS: &str ="That's a password or code field: agents never typ
 
 /// An agent was deleted, or its browser taken away: its windows close.
 pub fn close_agent(agent: &str) {
+    super::step_in::forget(agent);
     if let Some(svc) = service::running() {
         svc.close_all_of(&Owner::Agent(agent.to_string()));
     }
@@ -592,6 +618,20 @@ pub async fn dispatch(
                         }
                     }
                 }
+            }
+            // "Step in": a card, not a browser action. Never in a take-over
+            // (the user is at the keyboard already) or with nobody to ask.
+            if name == STEP_IN_TOOL {
+                let (Some(app), Some(_)) = (app, turn) else {
+                    return ok(result(
+                        vec![text("Nobody can be asked to step in here.")],
+                        true,
+                    ));
+                };
+                return match crate::agents::step_in::ask(app, agent, &args, outside).await {
+                    Ok(said) => ok(result(vec![text(said)], false)),
+                    Err(why) => ok(result(vec![text(why)], true)),
+                };
             }
             // What it types, for a later send card's exact words.
             browser_gate::note_typed_agents(agent_id, &name, &args);

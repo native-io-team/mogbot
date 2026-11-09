@@ -20,7 +20,11 @@ import { agentsUsageScenarios } from './agentsUsage';
 import { agentsLoginsScenarios } from './agentsLogins';
 import { agentsPolicyScenarios } from './agentsPolicy';
 import { agentsStepsScenarios } from './agentsSteps';
+<<<<<<< HEAD
 import { agentsProbeScenarios } from './agentsProbe';
+=======
+import { agentsStepInScenarios } from './agentsStepIn';
+>>>>>>> step-in-browser
 import { agentsHeavyScenarios } from './agentsHeavy';
 import { agentsTeamSetupScenarios } from './agentsTeamSetup';
 import { agentsHeaderScenarios } from './agentsHeader';
@@ -62,7 +66,11 @@ export const scenarios: Scenario[] = [
   ...agentsLoginsScenarios,
   ...agentsPolicyScenarios,
   ...agentsStepsScenarios,
+<<<<<<< HEAD
   ...agentsProbeScenarios,
+=======
+  ...agentsStepInScenarios,
+>>>>>>> step-in-browser
   ...agentsHeavyScenarios,
   ...agentsTeamSetupScenarios,
   ...agentsHeaderScenarios,

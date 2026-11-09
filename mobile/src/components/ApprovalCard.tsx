@@ -7,6 +7,7 @@
 
 import type { Agent, AgentMessage, Approval, ImportProposal } from '@shipstudio/companion-protocol';
 import { GATE_ALLOW, GATE_DENY } from '@shipstudio/companion-protocol';
+import { STEP_IN_AT_MAC, STEP_IN_ON_YOUR_MAC } from '../lib/agents';
 import {
   Children,
   createContext,
@@ -256,16 +257,22 @@ export function ApprovalCard({
 
   // "<source> sent what it knows": Ignore / Save to memory, nothing else.
   const handoff = !!approval.handoff;
-  const consentCard = approval.connector?.kind === 'consent' || !!approval.front || handoff;
+  // "Needs you in its browser": only Not now here; Step in is at the Mac
+  // (no remote control of the tab from the phone yet).
+  const stepIn = approval.stepIn;
+  const consentCard =
+    approval.connector?.kind === 'consent' || !!approval.front || handoff || !!stepIn;
   // "OK to go on?" between a routine's steps: Stop here / Go ahead, nothing broader.
   const gate = approval.gate;
   const [denyWord, allowWord] = approval.front
     ? ['Not now', 'Check again']
-    : handoff
-      ? ['Ignore', 'Save to memory']
-      : gate
-        ? [GATE_DENY, GATE_ALLOW]
-        : ['Deny', 'Allow'];
+    : stepIn
+      ? ['Not now', '']
+      : handoff
+        ? ['Ignore', 'Save to memory']
+        : gate
+          ? [GATE_DENY, GATE_ALLOW]
+          : ['Deny', 'Allow'];
   // Deny and Allow share the row beside ⋯ while both say their word whole.
   const share = useActionShare([denyWord, allowWord], consentCard || gate ? 0 : 44);
 
@@ -327,16 +334,18 @@ export function ApprovalCard({
         onPress={() => void answer(false)}
         style={share}
       />
-      <Button
-        title={allowWord}
-        variant="answer"
-        busy={busy === 'allow'}
-        disabled={off}
-        focusable={armed}
-        onPress={() => void answer(true)}
-        accessibilityHint={approval.detail || undefined}
-        style={share}
-      />
+      {!stepIn && (
+        <Button
+          title={allowWord}
+          variant="answer"
+          busy={busy === 'allow'}
+          disabled={off}
+          focusable={armed}
+          onPress={() => void answer(true)}
+          accessibilityHint={approval.detail || undefined}
+          style={share}
+        />
+      )}
     </Animated.View>
   );
 
@@ -367,13 +376,17 @@ export function ApprovalCard({
       note={
         !connected
           ? OFFLINE_NOTE
-          : gate
-            ? 'It waits for you, and closes if the routine runs again first.'
-            : paused && !fit.pinned && !consent && !approval.settings
-              ? 'It paused here for you. Allow it and it picks up where it left off.'
-              : undefined
+          : stepIn
+            ? stepIn.inSince
+              ? STEP_IN_AT_MAC
+              : STEP_IN_ON_YOUR_MAC
+            : gate
+              ? 'It waits for you, and closes if the routine runs again first.'
+              : paused && !fit.pinned && !consent && !approval.settings
+                ? 'It paused here for you. Allow it and it picks up where it left off.'
+                : undefined
       }
-      actions={answers ? actions : undefined}
+      actions={answers && !stepIn?.inSince ? actions : undefined}
     >
       {!!approval.detail && (
         <FittedDetail fit={fit}>
