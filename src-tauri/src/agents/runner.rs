@@ -4956,33 +4956,11 @@ pub fn answer_crossover(
     allow: bool,
     always: bool,
 ) -> Result<(), CommandError> {
-    use super::crossover::{self, Answer};
-    let Some(ask) = approval.crossover.clone() else {
-        return Err(CommandError::expected(
-            "That isn't a card about carrying on.",
-        ));
-    };
-    let answer = crossover::answer_of(allow, always);
-    match answer {
-        Answer::Always => crossover::set_mode(ask.from, crossover::Mode::Carry)?,
-        Answer::JustThisTime => crossover::grant_once(ask.from, store::now_ms())?,
-        Answer::Wait => {}
-    }
-    crossover::clear_asking(&approval.request_id);
-    let status = if allow {
-        store::ApprovalStatus::Allowed
-    } else {
-        store::ApprovalStatus::Denied
-    };
-    if let Some(updated) = store::answer_prompt(
-        agent_id,
-        &approval.request_id,
-        status,
-        crossover::answer_word(answer),
-    )? {
-        let _ = app.emit(EVENT_MESSAGE, &updated);
-    }
-    if allow && ask.resume {
+    use super::crossover;
+    // Only the answer that closes the card sets anything or runs the turn.
+    let settled = crossover::settle(agent_id, approval, allow, always, store::now_ms())?;
+    let _ = app.emit(EVENT_MESSAGE, &settled.message);
+    if let (true, Some(ask)) = (settled.resume, approval.crossover.as_ref()) {
         enqueue(
             app,
             agent_id,

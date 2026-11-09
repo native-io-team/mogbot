@@ -477,6 +477,51 @@ pub fn answer_word(answer: Answer) -> &'static str {
     }
 }
 
+/// An answer that closed the card.
+#[derive(Debug, Clone)]
+pub struct Settled {
+    /// The card as answered, for the chat.
+    pub message: super::store::AgentMessage,
+    /// Run the turn again on the other engine.
+    pub resume: bool,
+}
+
+/// Answer the card: close it first, and only the answer that closed it sets
+/// anything. Two answers at once (the desk and the phone, a typed yes and a
+/// tap) used to both set the choice and both run the turn again.
+pub fn settle(
+    agent_id: &str,
+    approval: &super::store::Approval,
+    allow: bool,
+    always: bool,
+    now: i64,
+) -> Result<Settled, CommandError> {
+    let Some(ask) = approval.crossover.clone() else {
+        return Err(CommandError::expected(
+            "That isn't a card about carrying on.",
+        ));
+    };
+    let answer = answer_of(allow, always);
+    let status = if allow {
+        super::store::ApprovalStatus::Allowed
+    } else {
+        super::store::ApprovalStatus::Denied
+    };
+    let message =
+        super::store::answer_prompt(agent_id, &approval.request_id, status, answer_word(answer))?
+            .ok_or_else(|| CommandError::expected("That request was already answered."))?;
+    clear_asking(&approval.request_id);
+    match answer {
+        Answer::Always => set_mode(ask.from, Mode::Carry)?,
+        Answer::JustThisTime => grant_once(ask.from, now)?,
+        Answer::Wait => {}
+    }
+    Ok(Settled {
+        message,
+        resume: allow && ask.resume,
+    })
+}
+
 /// What the turn run again after a yes is told (it is never shown).
 pub fn resume_prompt(from: Engine) -> String {
     format!(

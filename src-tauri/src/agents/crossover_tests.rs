@@ -609,3 +609,44 @@ fn review_a_hard_linked_or_huge_agents_md_is_never_folded_into_memory() {
     let claude = std::fs::read_to_string(home.join("CLAUDE.md")).unwrap();
     assert!(!claude.contains("line of junk"), "{claude}");
 }
+
+/// Review: two answers to one "Carry on with Codex?" card at once (the desk
+/// and the phone, or a typed yes and a tap) each set the team's choice and
+/// each queued the turn again, so it ran twice. Only the answer that closes
+/// the card counts.
+#[test]
+fn review_only_the_answer_that_closes_the_card_counts() {
+    in_scratch(|| {
+        let a = store::create(store::NewAgent {
+            name: "Riley".into(),
+            role: String::new(),
+            instructions: String::new(),
+            shape: None,
+            avatar: None,
+            color: None,
+            is_main: false,
+        })
+        .unwrap();
+        let ask = Ask {
+            from: Engine::Claude,
+            to: Engine::Codex,
+            until: None,
+            resume: true,
+        };
+        let approval = card(ask, "Riley", 1, None, &Utc, now());
+        let mut m = runner::new_message(&a.id, MessageKind::Approval, "");
+        m.approval = Some(approval.clone());
+        store::append_message(&m).unwrap();
+
+        let first = settle(&a.id, &approval, true, false, now()).unwrap();
+        assert!(first.resume, "a yes to a turn that hadn't started runs it");
+        assert!(once(Engine::Claude, now()));
+        // The second answer, read before the first closed it: nothing.
+        assert!(settle(&a.id, &approval, true, true, now()).is_err());
+        assert_eq!(
+            mode(Engine::Claude),
+            Mode::Ask,
+            "the late Always didn't stick"
+        );
+    });
+}
