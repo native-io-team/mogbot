@@ -4,7 +4,15 @@
 //! instructions, memory) and its chat. That is enough to put each agent back
 //! in the list with its own words; what lived only in the registry (engine,
 //! routines, check-ins, logins granted, project binding) starts at defaults,
-//! and the line in the Chief's chat says so. Nothing in a folder is changed,
+//! and the line in the Chief's chat says so.
+//!
+//! Except where the default is the wider side. A folder is anyone's to write
+//! (any agent with a card for it, a hand copy), so it never decides how much
+//! room an agent has: every rebuilt agent starts with its browser off and as
+//! no admin, the Chief included (its default is on), until the user turns
+//! them back on. Otherwise a browser the user took away, or the Chief's admin
+//! switched off, would come back on their own, and a folder dressed as the
+//! Chief would be one with admin powers. Nothing in a folder is changed,
 //! and the damaged registry is copied aside before the rebuilt one is written.
 
 use std::path::Path;
@@ -74,7 +82,10 @@ pub(super) fn from_homes(root: &Path) -> Registry {
             routine_model: None,
             account: None,
             template: None,
-            reach: Default::default(),
+            reach: super::AgentReach {
+                browser_off: true,
+                ..Default::default()
+            },
             muted: false,
             check_ins: Vec::new(),
             usage: Default::default(),
@@ -85,10 +96,21 @@ pub(super) fn from_homes(root: &Path) -> Registry {
             work_directly: false,
             capabilities: None,
             secrets: Vec::new(),
-            extra: Default::default(),
+            extra: no_admin(),
         });
     }
     registry
+}
+
+/// The registry's own fields for a rebuilt agent: not an admin, said
+/// outright so the Chief's default (on) doesn't apply.
+fn no_admin() -> serde_json::Map<String, serde_json::Value> {
+    let mut extra = serde_json::Map::new();
+    extra.insert(
+        super::super::admin::ADMIN_KEY.to_string(),
+        serde_json::Value::Bool(false),
+    );
+    extra
 }
 
 /// `# Name`, then the role: the paragraph(s) before the first `##` section,
@@ -140,6 +162,6 @@ pub(super) fn line(count: usize, kept: &str) -> String {
         format!("{count} agents")
     };
     format!(
-        "Your agents list was damaged and had no backup, so it was rebuilt from the agents' folders: {agents} back, with their instructions, memory and chats. Their engine, routines, project and logins start at the defaults, so set those again. The damaged list is kept as {kept}."
+        "Your agents list was damaged and had no backup, so it was rebuilt from the agents' folders: {agents} back, with their instructions, memory and chats. Their engine, routines, project and logins start at the defaults, so set those again. Their browser and the Chief's admin are off until you turn them back on in Settings → Agents. The damaged list is kept as {kept}."
     )
 }

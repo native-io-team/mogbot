@@ -3376,6 +3376,50 @@ mod tests {
         });
     }
 
+    /// What lived only in the list can't be read back from a folder, and a
+    /// folder anyone can write must not decide it: a rebuild starts every
+    /// agent with less room, never more. The user had taken the Chief's
+    /// admin away and Finance's browser; neither comes back on its own, and
+    /// no agent (a folder dressed as the Chief included) is an admin.
+    #[test]
+    fn a_rebuild_never_gives_back_room_the_user_took_away() {
+        with_root(|| {
+            let _ = crate::agents::survive::take_pending();
+            let chief = create(NewAgent {
+                is_main: true,
+                ..new(crate::agents::prompts::CHIEF_NAME)
+            })
+            .unwrap();
+            crate::agents::admin::set_admin(&chief.id, false).unwrap();
+            let finance = create(new("Finance")).unwrap();
+            update(&finance.id, |a| a.reach.browser_off = true).unwrap();
+            let path = registry_path().unwrap();
+            std::fs::write(&path, b"{\"agents\": [").unwrap();
+            std::fs::remove_file(path.with_extension("json.bak")).unwrap();
+
+            let back = list().unwrap();
+            let rebuilt_chief = back.iter().find(|a| a.id == chief.id).unwrap();
+            assert!(rebuilt_chief.is_main);
+            assert!(
+                !crate::agents::admin::is_admin(rebuilt_chief),
+                "the Chief's admin came back on"
+            );
+            let rebuilt_finance = back.iter().find(|a| a.id == finance.id).unwrap();
+            assert!(
+                rebuilt_finance.reach.browser_off,
+                "Finance's browser came back"
+            );
+            assert!(back.iter().all(|a| !crate::agents::admin::is_admin(a)));
+            let lines = crate::agents::survive::take_pending();
+            assert!(
+                lines
+                    .iter()
+                    .any(|l| l.contains("browser") && l.contains("admin")),
+                "{lines:?}"
+            );
+        });
+    }
+
     #[test]
     fn a_rebuild_keeps_two_folders_with_one_name_apart() {
         with_root(|| {
