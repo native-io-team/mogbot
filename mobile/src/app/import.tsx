@@ -15,6 +15,9 @@
  * 3. **Follow it in the Chief's chat.** The consent card, the plan played
  *    back ("anything I'm missing?") and the review card are all answerable
  *    there, from this phone.
+ *
+ * Without Remote access, a Mac with `import.export` also takes a reply pasted
+ * here (`ImportPaste`): it ends on the same review card in the Chief's chat.
  */
 
 import * as Clipboard from 'expo-clipboard';
@@ -32,6 +35,7 @@ import { useApp, useServed } from '../lib/store';
 import { space, typingDot } from '../lib/theme';
 import { TypingDots } from '../components/TypingDots';
 import { phoneImportStep } from '../lib/importChoice';
+import { ImportPaste } from '../components/ImportPaste';
 
 /** How often the screen asks the Mac where the import has got to. */
 const POLL_MS = 3000;
@@ -83,6 +87,7 @@ export default function ImportScreen() {
   const router = useRouter();
   const connected = useApp((s) => s.link.kind === 'connected');
   const servesTeam = useServed('agents.loginsTeam', MAC_FEATURES.logins);
+  const servesPaste = useServed('agents.import.exportReview', MAC_FEATURES.importExport);
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
   const chief = useApp((s) => s.overview?.agents.find((a) => a.isMain));
   const chiefName = chief?.name ?? 'Chief of Staff';
@@ -158,6 +163,12 @@ export default function ImportScreen() {
             </T>
             {status && <TypingDots color={colors.textMuted} />}
           </View>
+        )}
+        {step.id === 'connect' && servesPaste && connected && (
+          <ImportPaste
+            chiefName={chiefName}
+            onPosted={(id) => router.replace({ pathname: '/chat/[id]', params: { id } })}
+          />
         )}
 
         {step.id === 'start' && (

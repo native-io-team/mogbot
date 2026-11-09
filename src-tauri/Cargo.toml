@@ -57,6 +57,9 @@ sentry-tracing = "0.49"
 once_cell = "1.19"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 zip = "9"
+# Reading Hermes and OpenClaw .tar.gz exports (agents/import_formats.rs).
+tar = "0.4"
+flate2 = "1"
 tauri-plugin-dialog = "2"
 walkdir = "2"
 ignore = "0.4"

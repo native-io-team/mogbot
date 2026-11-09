@@ -1077,3 +1077,67 @@
   font-weight: var(--font-weight-label);
   color: var(--text-primary);
 }
+
+/* ------------------------------------------- an export file or folder */
+
+/* Where an export is dropped or chosen. Dashed while empty; solid once a
+   file is in, which then names it. */
+.agents-import-drop {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--spacing-xs);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border: var(--border-width-default) dashed var(--border-default);
+  border-radius: var(--radius-card);
+  transition:
+    background var(--transition-interaction),
+    border-color var(--transition-interaction);
+}
+
+.agents-import-drop[data-over] {
+  background: var(--surface-recessed);
+  border-color: var(--border-strong);
+}
+
+.agents-import-drop[data-file] {
+  border-style: solid;
+  border-color: var(--border-subtle);
+  background: var(--surface-recessed);
+}
+
+.agents-import-drop__title {
+  font-weight: var(--font-weight-label);
+  color: var(--text-primary);
+}
+
+.agents-import-drop__hint {
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
+}
+
+.agents-import-drop__actions {
+  display: flex;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-xs);
+}
+
+.agents-import__or {
+  font-size: var(--font-size-body-md);
+  color: var(--text-secondary);
+}
+
+/* What a reply still lacks, and the message that asks for it. */
+.agents-import-followup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-top: var(--spacing-md);
+}
+
+.agents-import-followup__title {
+  font-size: var(--font-size-body-md);
+  color: var(--text-secondary);
+}

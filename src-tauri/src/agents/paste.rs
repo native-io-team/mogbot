@@ -109,7 +109,7 @@ pub struct Preview {
 
 /// The JSON candidates in a reply: every ```json (or untagged JSON-looking)
 /// fenced block; failing that, the reply itself if it is bare JSON.
-fn extract_blocks(text: &str) -> Vec<String> {
+pub(crate) fn extract_blocks(text: &str) -> Vec<String> {
     let mut blocks = Vec::new();
     let mut lines = text.lines();
     while let Some(line) = lines.next() {
@@ -154,7 +154,7 @@ fn extract_blocks(text: &str) -> Vec<String> {
 const CURLY_DOUBLE: [char; 4] = ['\u{201C}', '\u{201D}', '\u{201E}', '\u{201F}'];
 
 /// Parse one block, reporting a failure in words the user can act on.
-fn parse_block(raw: &str, label: &str) -> Result<Value, String> {
+pub(crate) fn parse_block(raw: &str, label: &str) -> Result<Value, String> {
     // Trimmed, so a block cut off mid-string reads as cut off rather than as
     // a line break inside that string.
     let raw = raw.trim_start_matches('\u{FEFF}').trim();

@@ -1227,6 +1227,8 @@ export const AGENT_EVENTS = {
   open: 'agents://open',
   /** The import over the connector changed: an `ImportGate`. */
   importTalk: 'agents://import-talk',
+  /** The Chief's `bring_agents_over` with no file: open Import at an export or a paste. */
+  openImport: 'agents-open-import',
   /** How far a copy from the other app has got: `OtherAppProgress`. */
   importProgress: 'agents://import-progress',
   /**
@@ -1761,6 +1763,63 @@ export const getPasteImportPrompt = () => invoke<string>('agents_import_paste_pr
 export const previewPasteImport = (text: string) =>
   invoke<PasteImportPreview>('agents_import_paste_preview', { text });
 export const importPaste = (text: string) => invoke<ImportSummary>('agents_import_paste', { text });
+
+/* ------------------------- import from an export file or a pasted reply */
+
+/** One agent an export or reply holds, as the review card will show it (`agents/import_export.rs`). */
+export interface ExportImportAgent {
+  name: string;
+  role: string;
+  instructionsChars: number;
+  memoryLines: number;
+  routines: number;
+  watches: number;
+  apps: number;
+}
+
+/**
+ * What an export file, folder or pasted reply holds. `problems` block the
+ * review; `gaps` don't, and `followUp` is the message that asks for them.
+ */
+export interface ExportImportPreview {
+  source: string;
+  /** "OpenClaw workspace", "Pasted reply"… */
+  format: string;
+  /** Read the way that app's own docs or source describe it. */
+  verified: boolean;
+  agents: ExportImportAgent[];
+  /** The other app's main agent: offered as notes for the Chief, never an agent. */
+  main: string | null;
+  /** `[area label, facts]` about the user. */
+  about: [string, number][];
+  problems: string[];
+  /** Agents the card won't hold, and why. */
+  refused: string[];
+  gaps: string[];
+  followUp: string | null;
+  /** Credentials replaced with "[removed]" before anything was staged. */
+  masked: number;
+  /** Files read, and left alone, by name. */
+  read: string[];
+  skipped: string[];
+}
+
+/** Where the review card went. */
+export interface ExportImportPosted {
+  chiefId: string;
+  requestId: string;
+  agents: number;
+}
+
+export const getExportImportPrompt = () => invoke<string>('agents_import_export_prompt');
+export const previewTextImport = (text: string) =>
+  invoke<ExportImportPreview>('agents_import_text_preview', { text });
+export const reviewTextImport = (text: string) =>
+  invoke<ExportImportPosted>('agents_import_text_review', { text });
+export const previewFileImport = (path: string) =>
+  invoke<ExportImportPreview>('agents_import_file_preview', { path });
+export const reviewFileImport = (path: string) =>
+  invoke<ExportImportPosted>('agents_import_file_review', { path });
 /* ------------------------------------------ import from the other app */
 
 /**

@@ -7,6 +7,7 @@ import { emit } from '@tauri-apps/api/event';
 import type { Scenario } from '../types';
 import { workspaceCommands, WORKSPACE_PROJECT } from './workspace';
 import { remoteStatus } from './remote';
+import { EMPTY_EXPORT_PREVIEW } from './base';
 
 export const MIN = 60_000;
 const DEMO_HOME = '/harness/agents-demo';
@@ -58,157 +59,75 @@ const PASTED_REPLY = [
   '```',
 ].join('\n');
 
-type PreviewRoutine = { when: string; what: string; schedule?: string; refused?: string };
+/** One agent as `agents_import_*_preview` describes it (`import_export::PreviewAgent`). */
+const exportAgent = (name: string, role: string, routines = 1, memoryLines = 2) => ({
+  name,
+  role,
+  instructionsChars: 640,
+  memoryLines,
+  routines,
+  watches: name === 'Inbox' ? 2 : 0,
+  apps: name === 'Inbox' ? 1 : 0,
+});
 
-/** One agent as `agents_import_paste_preview` describes it. */
-const previewAgent = (
-  name: string,
-  role: string,
-  color: string,
-  routines: PreviewRoutine[] = [],
-  over: { isMain?: boolean; existing?: boolean; memory?: string[]; instructions?: string } = {}
-) => {
-  const instructions =
-    over.instructions ??
-    `You are my ${name.toLowerCase()} agent. ${role}.\n\nKeep replies short, ask before spending money or sending anything on my behalf, and tell me when something needs a decision.`;
-  const memory = over.memory ?? [
-    'Prefers mornings for anything that needs focus',
-    'Lives in Lisbon',
-  ];
-  return {
-    name,
-    role,
-    isMain: over.isMain ?? false,
-    existing: over.existing ?? false,
-    instructionsChars: instructions.length,
-    memoryLines: memory.length,
-    routines,
-    color,
-    instructions,
-    memory,
-  };
-};
-
-const PASTE_PREVIEW = {
+/** A reply with three agents and its main one, four things still missing. */
+const EXPORT_PREVIEW_GAPS = {
+  ...EMPTY_EXPORT_PREVIEW,
   source: 'Grok Bot',
-  blocks: 2,
+  format: 'Pasted reply',
   agents: [
-    previewAgent(
-      'Chief',
-      'Runs my week and keeps the others on track',
-      'white',
-      [
-        {
-          when: 'every weekday at 8am',
-          what: 'Brief me on the day.',
-          schedule: 'every weekday at 08:00',
-        },
-        {
-          when: 'every sunday at 6pm',
-          what: 'Plan the week with me.',
-          schedule: 'every Sunday at 18:00',
-        },
-      ],
-      {
-        isMain: true,
-        memory: [
-          'Week starts Monday; protect Friday afternoons',
-          'Partner is Ana; her birthday is 12 March',
-          'Hates long meeting invites without an agenda',
-        ],
-      }
-    ),
-    previewAgent(
-      'Finance',
-      'Tracks spending, invoices and rent',
-      'teal',
-      [
-        {
-          when: 'whenever rent is due',
-          what: 'Remind me to pay rent.',
-          refused: 'Give it a day and a time.',
-        },
-      ],
-      { existing: true }
-    ),
-    previewAgent('Travel', 'Books flights and hotels within my rules', 'blue'),
-    previewAgent(
-      'Inbox',
-      'Triages email and drafts replies for me to send',
-      'orange',
-      [{ when: 'every 2 hours', what: 'Triage new email.', schedule: 'every 2 hours' }],
-      { memory: [] }
-    ),
+    exportAgent('Finance', 'Tracks spending, invoices and rent'),
+    exportAgent('Travel', 'Books flights and hotels within my rules', 0),
+    exportAgent('Inbox', 'Triages email and drafts replies for me to send', 2, 0),
   ],
-  problems: [] as string[],
+  main: 'Atlas',
+  about: [
+    ['People and contacts', 3],
+    ['Preferences and standing rules', 1],
+  ] as [string, number][],
+  masked: 1,
+  gaps: [
+    'part 2 of 2',
+    'Travel: what it watches for and the apps it uses',
+    'my ongoing tasks and projects ("about_me"."tasks")',
+    'the conversations still open ("about_me"."threads")',
+  ],
+  followUp:
+    'Thanks. Some things are still missing:\n- part 2 of 2\n- Travel: what it watches for and the apps it uses\n- my ongoing tasks and projects ("about_me"."tasks")\n- the conversations still open ("about_me"."threads")\n\nSend just these as another ```json block in the same shape as before, using the same agent names ("agents" with only the fields that were missing, "about_me" with only the missing lists). Word for word, [] where there\'s truly nothing, no passwords or keys. Set "complete": true only when nothing at all is left out.',
 };
 
-/** A big team: twelve agents, most with routines, two that can't be set. */
-const LONG_PREVIEW = {
-  source: 'Grok Bot',
-  blocks: 3,
+/** A big team: twelve agents. */
+const EXPORT_PREVIEW_LONG = {
+  ...EXPORT_PREVIEW_GAPS,
+  gaps: [] as string[],
+  followUp: null as string | null,
   agents: [
-    PASTE_PREVIEW.agents[0],
-    PASTE_PREVIEW.agents[1],
-    ...(
-      [
-        ['Travel', 'Books flights and hotels within my rules', 'blue'],
-        ['Inbox', 'Triages email and drafts replies for me to send', 'orange'],
-        ['Health', 'Keeps my training plan and appointments', 'green'],
-        ['Research', 'Digs into anything I ask and cites sources', 'purple'],
-        ['Home', 'Bills, repairs and the cleaner’s schedule', 'brown'],
-        ['Writing', 'Edits drafts in my voice', 'pink'],
-        ['Investor Updates', 'Drafts the monthly update from the metrics', 'amber'],
-        ['Hiring', 'Screens candidates and books interviews', 'red'],
-        ['Reading List', 'Saves and summarises long reads for the weekend', 'gray'],
-        ['Family', 'Birthdays, school dates and gifts', 'teal'],
-      ] as const
-    ).map(([name, role, color], i) =>
-      previewAgent(
-        name,
-        role,
-        color,
-        i % 3 === 2
-          ? [
-              {
-                when: 'when it feels right',
-                what: 'Check in.',
-                refused: 'Give it a day and a time.',
-              },
-            ]
-          : [
-              {
-                when: 'every friday at 5pm',
-                what: 'Weekly recap.',
-                schedule: 'every Friday at 17:00',
-              },
-            ]
-      )
-    ),
-  ],
-  problems: [] as string[],
+    'Finance',
+    'Travel',
+    'Inbox',
+    'Health',
+    'Research',
+    'Home',
+    'Writing',
+    'Investor Updates',
+    'Hiring',
+    'Reading List',
+    'Family',
+    'Garden',
+  ].map((name, i) => exportAgent(name, `Looks after ${name.toLowerCase()}`, i % 3)),
 };
 
-const IMPORTED = {
-  created: ['Travel', 'Inbox'],
-  updated: ['Chief of Staff', 'Finance'],
-  skipped: [] as [string, string][],
-  routinesSet: [
-    {
-      agent: 'Chief of Staff',
-      when: 'every weekday at 8am',
-      what: 'Brief me on the day.',
-      detail: 'every weekday at 08:00',
-    },
-    {
-      agent: 'Chief of Staff',
-      when: 'every sunday at 6pm',
-      what: 'Plan the week with me.',
-      detail: 'every Sunday at 18:00',
-    },
-    { agent: 'Inbox', when: 'every 2 hours', what: 'Triage new email.', detail: 'every 2 hours' },
+/** `~/.openclaw` with two workspaces. */
+const EXPORT_PREVIEW_OPENCLAW = {
+  ...EMPTY_EXPORT_PREVIEW,
+  source: 'OpenClaw',
+  format: 'OpenClaw workspace',
+  agents: [exportAgent('Molty', '', 0, 14), exportAgent('Desk', '', 1, 3)],
+  about: [['Personal facts', 1]] as [string, number][],
+  read: ['openclaw.json (agent names only)', 'workspace/AGENTS.md', 'workspace/SOUL.md'],
+  skipped: [
+    'OpenClaw’s scheduled jobs: it keeps them in a database since 2026.6.1. Ask OpenClaw to list them, then add them here',
   ],
-  routinesRefused: [] as { agent: string; when: string; what: string; detail: string }[],
 };
 
 /** The connector panel's way to the fallback: pasting a reply. */
@@ -2777,11 +2696,11 @@ export const agentsScenarios: Scenario[] = [
   },
   {
     id: 'agents-import',
-    title: 'Agents — import, remote access off (talk over the connector)',
+    title: 'Agents — import, remote access off (an export or a pasted reply)',
     looksRightWhen:
-      'Opens on the conversation path even with remote access off: the lede and the “It can / It can’t” box, then step 1 “Connect your assistant” current with “Set up Remote access…”; step 2 “Start, then send it a message” with Start disabled until it’s connected; step 3 “Allow it, then review in Chief of Staff’s chat” muted. Footer: “Can’t connect? Paste a reply instead” on the left, Done on the right.',
+      'Remote access is off, so it opens on the path that needs nothing set up. The lede names Grok Bot, OpenBot, OpenClaw and Hermes and says you check everything in Chief of Staff’s chat first; a quiet link “Connect your assistant over Remote access instead”. A dashed drop area: “Drop an export here”, a hint naming the file kinds and ~/.openclaw, ~/.hermes, with “Choose a file…” and “Choose a folder…”. Then “No export? Ask your assistant for one.” and two numbered steps (the message with Copy message; the paste field). Footer: the note about passwords and paused routines, Cancel, and a disabled “Review in Chief of Staff’s chat”.',
     command: 'agents.import',
-    requires: '.agents-import-steps',
+    requires: '.agents-import-drop',
     clipSelector: '.agents-import',
     commands: {},
   },
@@ -2789,154 +2708,85 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-copied',
     title: 'Agents — import, message copied',
     looksRightWhen:
-      'On the paste fallback, after Copy message: the button reads “Copied” with a check, the hint beside it says to paste it into a chat with your assistant, step 1’s marker is a check and step 2’s number is ringed.',
+      'After Copy message: the button reads “Copied” with a check, the hint beside it says to paste it into a chat with your assistant, step 1’s marker is a check and step 2’s number is ringed.',
     openSelector: AGENTS_TAB,
     requires: '.agents-import-message__copy[data-copied]',
     clipSelector: '.agents-import',
-    steps: [
-      { click: IMPORT_STARTER },
-      { click: PASTE_LINK },
-      { click: '.agents-import-message__copy' },
-    ],
+    steps: [{ click: IMPORT_STARTER }, { click: '.agents-import-message__copy:not(:disabled)' }],
     commands: { ...UNDECIDED },
   },
   {
-    id: 'agents-import-paste-preview',
-    title: 'Agents — import, a pasted reply previewed',
+    id: 'agents-import-paste-gaps',
+    title: 'Agents — import, a pasted reply with things still missing',
     looksRightWhen:
-      'Step 1 has folded to a ticked line with “Show message”; the paste field is shorter. Under it: “4 agents from Grok Bot, in 2 parts · 1 routine can’t be set as written” (the tail amber). One sidebar-style row per agent: its badge in the colour it will have (the main one wears the Chief of Staff’s badge), the name with a chip (Merges into Chief of Staff, Updates, New in green), the role, and compact counts (Instructions · 3 memories · 2 routines). Finance’s counts end in amber “1 won’t be set”. Each row has a chevron. The primary button reads “Import 4 agents”.',
-    // Steps run before a palette command, so these walk in: Agents mode, then
-    // the sidebar note's Import agents.
+      'Step 1 folded to a ticked line with “Show message”, and the drop area gone. Right under the paste, first: “Still missing: 4 things. Send this, then paste the answer under the last one.” with the follow-up message (part 2 of 2, Travel’s watches and apps, tasks, open conversations) and a secondary Copy message. Then “3 agents from Grok Bot”, three rows (Finance, Travel, Inbox) with neutral New chips and counts (Instructions · 2 memories · 1 routine…). A neutral note: Atlas was the main agent there and is offered as notes for Chief of Staff, 4 facts about you, 1 password or key left out. Review in Chief of Staff’s chat is enabled.',
+    requires: '.agents-import-followup',
+    clipSelector: '.agents-import',
+    openSelector: AGENTS_TAB,
+    steps: [{ click: IMPORT_STARTER }, { fill: '.agents-import__paste', value: PASTED_REPLY }],
+    commands: { ...UNDECIDED, agents_import_text_preview: EXPORT_PREVIEW_GAPS },
+  },
+  {
+    id: 'agents-import-paste-complete',
+    title: 'Agents — import, a pasted reply with everything',
+    looksRightWhen:
+      'As agents-import-paste-gaps, but nothing is missing: no follow-up box. The primary “Review in Chief of Staff’s chat” is enabled.',
     requires: '.agents-import-agent',
     clipSelector: '.agents-import',
     openSelector: AGENTS_TAB,
-    steps: [
-      { click: IMPORT_STARTER },
-      { click: PASTE_LINK },
-      { fill: '.agents-import__paste', value: PASTED_REPLY },
-    ],
+    steps: [{ click: IMPORT_STARTER }, { fill: '.agents-import__paste', value: PASTED_REPLY }],
     commands: {
       ...UNDECIDED,
-      agents_import_paste_preview: PASTE_PREVIEW,
-    },
-  },
-  {
-    id: 'agents-import-paste-expanded',
-    title: 'Agents — import, reading what came across',
-    looksRightWhen:
-      'Finance’s row is open (chevron turned down): under its name, small uppercase Instructions, Memory and Routines headings, the instructions word for word in a recessed box, memory as a dotted list, and the routine in amber with a warning mark: Won’t be set: “whenever rent is due”. Give it a day and a time.',
-    requires: '.agents-import-agent[data-open]',
-    clipSelector: '.agents-import',
-    openSelector: AGENTS_TAB,
-    steps: [
-      { click: IMPORT_STARTER },
-      { click: PASTE_LINK },
-      { fill: '.agents-import__paste', value: PASTED_REPLY },
-      { click: '.agents-import-agent:nth-child(2) .agents-import-agent__row' },
-    ],
-    commands: {
-      ...UNDECIDED,
-      agents_import_paste_preview: PASTE_PREVIEW,
+      agents_import_text_preview: { ...EXPORT_PREVIEW_GAPS, gaps: [], followUp: null },
     },
   },
   {
     id: 'agents-import-long',
-    title: 'Agents — import, a twelve-agent team with routines',
+    title: 'Agents — import, a twelve-agent team',
     looksRightWhen:
-      '“12 agents from Grok Bot, in 3 parts · 4 routines can’t be set as written”. The list shows about five rows and scrolls inside itself; the dialog does not grow past the window and the footer with “Import 12 agents” stays in view.',
+      '“12 agents from Grok Bot”. The list scrolls inside the dialog; the dialog does not grow past the window and the footer with “Review in Chief of Staff’s chat” stays in view.',
     requires: '.agents-import-agent',
     clipSelector: '.agents-import',
     openSelector: AGENTS_TAB,
-    steps: [
-      { click: IMPORT_STARTER },
-      { click: PASTE_LINK },
-      { fill: '.agents-import__paste', value: PASTED_REPLY },
-    ],
-    commands: {
-      ...UNDECIDED,
-      agents_import_paste_preview: LONG_PREVIEW,
-    },
+    steps: [{ click: IMPORT_STARTER }, { fill: '.agents-import__paste', value: PASTED_REPLY }],
+    commands: { ...UNDECIDED, agents_import_text_preview: EXPORT_PREVIEW_LONG },
   },
   {
     id: 'agents-import-paste-problems',
     title: 'Agents — import, a pasted reply with mistakes',
     looksRightWhen:
-      'A calm amber-edged note under the paste, not a JSON debugger: a warning mark and one plain sentence (“That reply isn’t in the format we asked for — copy the message again and ask your assistant to reply with just the code block.”), then a quiet “Show details”. No line numbers, field names or “trailing comma” on screen until Show details is clicked. The agents that did read fine are still listed below. Import stays disabled.',
+      'A calm amber-edged note under the paste, not a JSON debugger: one plain sentence and a quiet “Show details”. No line numbers on screen until Show details is clicked. Review stays disabled.',
     requires: '.agents-import-problems',
     clipSelector: '.agents-import',
     openSelector: AGENTS_TAB,
     steps: [
       { click: IMPORT_STARTER },
-      { click: PASTE_LINK },
       { fill: '.agents-import__paste', value: '```json\n{"agents":[{"name":"Finance",},]}\n```' },
     ],
     commands: {
       ...UNDECIDED,
-      agents_import_paste_preview: {
-        ...PASTE_PREVIEW,
-        agents: PASTE_PREVIEW.agents.slice(0, 2),
+      agents_import_text_preview: {
+        ...EMPTY_EXPORT_PREVIEW,
+        format: 'Pasted reply',
         problems: [
-          'Block 2 has a trailing comma at line 14 (a comma right before a } or ]). Delete that comma, or ask the assistant to send it again as valid JSON.',
-          'Agent 3 in block 1 has no "name".',
-          '“Travel”: "is_main" should be true or false, not text.',
+          'The JSON has a trailing comma at line 1 (a comma right before a } or ]). Delete that comma, or ask the assistant to send it again as valid JSON.',
         ],
       },
     },
   },
   {
-    id: 'agents-import-done',
-    title: 'Agents — import, done',
+    id: 'agents-import-file',
+    title: 'Agents — import, an OpenClaw folder picked',
     looksRightWhen:
-      'The tabs and steps are gone. Centred: a green check in a soft green circle, “Your team is here”, one muted line “2 new agents · 2 updated · 3 routines set”, the four agents as pills with their badges (the main one as Chief of Staff), and “Say hi to your team.” with when they start. The footer: Close, and a primary “Open Chief of Staff”.',
-    requires: '.agents-import-done',
+      'The drop area shows the folder’s name (.openclaw) with its path under it and “Use something else”; the message and paste steps are gone. “2 agents from OpenClaw”, rows for Molty and Desk with counts, and a neutral note: 1 fact about you offered as notes for Chief of Staff, and “Not read: OpenClaw’s scheduled jobs: it keeps them in a database…”. Review in Chief of Staff’s chat is enabled.',
+    requires: '.agents-import-drop[data-file]',
     clipSelector: '.agents-import',
     openSelector: AGENTS_TAB,
-    steps: [
-      { click: IMPORT_STARTER },
-      { click: PASTE_LINK },
-      { fill: '.agents-import__paste', value: PASTED_REPLY },
-      { click: IMPORT_BUTTON },
-    ],
+    steps: [{ click: IMPORT_STARTER }, { click: '.agents-import-drop__folder' }],
     commands: {
       ...UNDECIDED,
-      agents_import_paste_preview: PASTE_PREVIEW,
-      agents_import_paste: IMPORTED,
-    },
-  },
-  {
-    id: 'agents-import-done-refused',
-    title: 'Agents — import, done with routines that weren’t set',
-    looksRightWhen:
-      'As agents-import-done, plus the same calm amber note as a pasted mistake: “A few things didn’t come across”, one line per routine naming the agent, its phrase and why, and a muted last line asking Finance and Inbox to schedule them in plain words.',
-    requires: '.agents-import-done .agents-import-problems',
-    clipSelector: '.agents-import',
-    openSelector: AGENTS_TAB,
-    steps: [
-      { click: IMPORT_STARTER },
-      { click: PASTE_LINK },
-      { fill: '.agents-import__paste', value: PASTED_REPLY },
-      { click: IMPORT_BUTTON },
-    ],
-    commands: {
-      ...UNDECIDED,
-      agents_import_paste_preview: PASTE_PREVIEW,
-      agents_import_paste: {
-        ...IMPORTED,
-        routinesRefused: [
-          {
-            agent: 'Finance',
-            when: 'whenever rent is due',
-            what: 'Remind me to pay rent.',
-            detail: 'Give it a day and a time.',
-          },
-          {
-            agent: 'Inbox',
-            when: 'whenever something urgent arrives',
-            what: 'Ping me.',
-            detail: 'Give it a day and a time.',
-          },
-        ],
-      },
+      'plugin:dialog|open': '/Users/ana/.openclaw',
+      agents_import_file_preview: EXPORT_PREVIEW_OPENCLAW,
     },
   },
   {
@@ -3050,15 +2900,17 @@ export const agentsScenarios: Scenario[] = [
   },
   {
     id: 'agents-import-paste-fallback',
-    title: 'Agents — import, pasting a reply instead (the fallback)',
+    title: 'Agents — import, remote access on, choosing an export or a paste instead',
     looksRightWhen:
-      'The paste path, reached from “Can’t connect? Paste a reply instead”: its lede, then a quiet text link “Connect your assistant instead” under it, then the two numbered steps (the message to copy, the paste field) and the footer with Cancel and a disabled Import.',
-    // Steps run before a palette command, so this walks in from the sidebar note.
+      'Reached from “No Remote access? Use an export or paste a reply” on the connector path: the export and paste path, with the quiet link back “Connect your assistant over Remote access instead” under the lede.',
     openSelector: AGENTS_TAB,
-    requires: '.agents-import__paste',
+    requires: '.agents-import-drop',
     clipSelector: '.agents-import',
     steps: [{ click: IMPORT_STARTER }, { click: PASTE_LINK }],
-    commands: { ...UNDECIDED },
+    commands: {
+      ...UNDECIDED,
+      get_remote_access_status: remoteStatus({ enabled: true, serverRunning: true }),
+    },
   },
   {
     id: 'agents-import-consent',

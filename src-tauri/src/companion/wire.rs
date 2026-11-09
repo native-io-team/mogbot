@@ -377,6 +377,9 @@ pub const MAC_FEATURE_DRAFT: &str = "agents.draft";
 /// `agents.schedule.create|update` take `then`, routines carry `then` and
 /// `waiting`, and "OK to go on?" cards carry `gate`.
 pub const MAC_FEATURE_STEPS: &str = "routines.steps";
+/// Import without Remote access: `agents.import.exportPrompt|exportPreview|exportReview`
+/// (a reply pasted back from the old assistant, read on the Mac, ending on the review card).
+pub const MAC_FEATURE_IMPORT_EXPORT: &str = "import.export";
 
 /// Everything `welcome.features` lists.
 pub const MAC_FEATURES: &[&str] = &[
@@ -393,6 +396,7 @@ pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_EFFORT,
     MAC_FEATURE_DRAFT,
     MAC_FEATURE_STEPS,
+    MAC_FEATURE_IMPORT_EXPORT,
 ];
 
 /// What one connected app said it shows (`hello.features`).

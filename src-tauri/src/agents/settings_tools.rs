@@ -96,7 +96,20 @@ pub const TOOLS: &[Def] = &[
             })
         },
     },
+    Def {
+        name: "bring_agents_over",
+        description: "The user wants agents from another app (Grok Bot, OpenBot, OpenClaw, Hermes…) without Remote Access. `path`: an export file or folder they named; the app reads it (you never see what's in it) and puts one review card in this chat, nothing made until they press Import. No `path`: opens Import on the Mac at copy and paste. Only on the user's own message.",
+        schema: || {
+            json!({
+                "type": "object",
+                "properties": { "path": { "type": "string", "description": "A file or folder on this Mac (~ is fine)." } }
+            })
+        },
+    },
 ];
+
+/// The desk opens Import agents on this, at the copy-and-paste step.
+pub const EVENT_OPEN_IMPORT: &str = "agents-open-import";
 
 pub fn find(name: &str) -> Option<&'static Def> {
     TOOLS.iter().find(|t| t.name == name)
@@ -181,7 +194,45 @@ pub async fn call(
         "slack_settings" => slack_settings(app, caller, args).await,
         "change_app_setting" => change_app_setting(app, caller, args).await,
         "free_up_space" => free_up_space(app, caller, args).await,
+        "bring_agents_over" => {
+            if !super::runner::answering_user(&caller.id) {
+                return error(NOT_THE_USERS);
+            }
+            bring_agents_over(app, args).await
+        }
         _ => error("Unknown tool"),
+    }
+}
+
+/// An export read by the app (`import_export`), never by the model: the
+/// Chief hears only counts and what blocked it, in the app's own words.
+async fn bring_agents_over(app: &AppHandle, args: &Value) -> Value {
+    let Some(path) = arg(args, "path") else {
+        let _ = app.emit(EVENT_OPEN_IMPORT, "paste");
+        return text("Opened Import agents on the Mac at copy and paste: the user sends their old assistant the message there and pastes its reply back. Tell them in a line.");
+    };
+    let path = match path.strip_prefix("~/") {
+        Some(rest) => dirs::home_dir().unwrap_or_default().join(rest),
+        None => std::path::PathBuf::from(path),
+    };
+    let app = app.clone();
+    let posted = tokio::task::spawn_blocking(move || {
+        let export = super::import_export::read_path(&path);
+        let format = export.format.label();
+        super::import_export::post(&app, &export).map(|p| (p, format))
+    })
+    .await;
+    match posted {
+        Ok(Ok((p, format))) => text(format!(
+            "Read it as {format} and put a review card in this chat with {} agent{}. Nothing is made until the user presses Import there; routines arrive paused. Point to the card in a line; don't repeat what's on it.",
+            p.agents,
+            if p.agents == 1 { "" } else { "s" }
+        )),
+        Ok(Err(e)) => error(format!(
+            "Couldn't put a review up: {}. Tell the user, or open Import (no path) to paste instead.",
+            e
+        )),
+        Err(_) => error("Couldn't read it."),
     }
 }
 

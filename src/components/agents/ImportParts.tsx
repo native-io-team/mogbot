@@ -13,7 +13,12 @@ import { Checkbox } from '../primitives/Checkbox';
 import { TextButton } from '../primitives/TextButton';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { useAgentsList } from '../../lib/agentsStore';
-import type { ImportSummary, PasteImportAgent, PasteImportPreview } from '../../lib/agents';
+import type {
+  ExportImportPreview,
+  ImportSummary,
+  PasteImportAgent,
+  PasteImportPreview,
+} from '../../lib/agents';
 import { AgentAvatar } from './AgentAvatar';
 
 export const plural = (n: number, word: string) =>
@@ -405,6 +410,110 @@ export function ImportPreview({ preview }: { preview: PasteImportPreview }) {
           </ul>
         </>
       )}
+    </div>
+  );
+}
+
+/**
+ * What an export or a pasted reply holds, before its review card goes up:
+ * the agents, what it read, and, for a reply, what's still missing with
+ * the message that asks for it (paste the answer under the last one).
+ */
+export function ExportPreview({
+  preview,
+  pasted,
+}: {
+  preview: ExportImportPreview;
+  /** A reply: missing things can be asked for again. */
+  pasted: boolean;
+}) {
+  const { agents, problems, source, format, main, about, refused, gaps, followUp, masked } =
+    preview;
+  const mainName = useAgentsList().find((a) => a.isMain)?.name ?? 'Chief of Staff';
+  const facts = about.reduce((n, [, count]) => n + count, 0);
+  return (
+    <div className="agents-import-preview" aria-live="polite">
+      {problems.length > 0 &&
+        (pasted ? (
+          <PasteProblems problems={problems} />
+        ) : (
+          <ImportProblems title="This can’t be read as it is" items={problems} />
+        ))}
+      {/* First, so going round again is the obvious next step. */}
+      {pasted && gaps.length > 0 && followUp && (
+        <div className="agents-import-followup">
+          <p className="agents-import-followup__title">
+            Still missing: {gaps.length === 1 ? gaps[0] : plural(gaps.length, 'thing')}. Send this,
+            then paste the answer under the last one.
+          </p>
+          <MessageCard message={followUp} lead={false} />
+        </div>
+      )}
+      {(agents.length > 0 || main) && (
+        <>
+          <p className="agents-import-preview__found">
+            <strong>{plural(agents.length, 'agent')}</strong>
+            {source ? ` from ${source}` : ''}
+            {format && !pasted && !format.startsWith(source) ? ` · read as ${format}` : ''}
+          </p>
+          <ul className="agents-import-preview__list">
+            {agents.map((a) => (
+              <ImportAgentRow
+                key={a.name}
+                name={a.name}
+                color="gray"
+                chip={{ kind: 'new', label: 'New' }}
+                role={a.role || undefined}
+                counts={[
+                  a.instructionsChars ? 'Instructions' : 'No instructions',
+                  a.memoryLines
+                    ? `${a.memoryLines.toLocaleString()} ${a.memoryLines === 1 ? 'memory' : 'memories'}`
+                    : 'no memory',
+                  a.routines ? plural(a.routines, 'routine') : '',
+                  a.watches ? `watches for ${a.watches}` : '',
+                  a.apps ? plural(a.apps, 'app') : '',
+                ]
+                  .filter(Boolean)
+                  .join(' · ')}
+                detail={() => (
+                  <p className="agents-import-agent__none">
+                    The review card in {mainName}’s chat shows everything it says, word for word.
+                  </p>
+                )}
+              />
+            ))}
+          </ul>
+        </>
+      )}
+      <ImportNotes
+        items={[
+          ...(main
+            ? [
+                <>
+                  {main} was the main agent there: what it knew is offered as notes for {mainName},
+                  who isn’t changed.
+                </>,
+              ]
+            : []),
+          ...(facts
+            ? [
+                <>
+                  {plural(facts, 'fact')} about you, offered as notes for {mainName}.
+                </>,
+              ]
+            : []),
+          ...(masked
+            ? [
+                <>
+                  {masked === 1 ? '1 password or key' : `${masked} passwords or keys`} left out,
+                  replaced with [removed].
+                </>,
+              ]
+            : []),
+          ...refused.map((r) => <>Not coming: {r}</>),
+          ...preview.skipped.map((s) => <>Not read: {s}</>),
+        ]}
+      />
     </div>
   );
 }

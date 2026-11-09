@@ -216,6 +216,10 @@ export const MAC_FEATURES = {
    * carry `then` and `waiting`, and "OK to go on?" cards carry `gate`.
    */
   steps: 'routines.steps',
+  /**
+   * Import without Remote access: `agents.import.exportPrompt|exportPreview|exportReview`.
+   */
+  importExport: 'import.export',
 } as const;
 export type MacFeature = (typeof MAC_FEATURES)[keyof typeof MAC_FEATURES];
 

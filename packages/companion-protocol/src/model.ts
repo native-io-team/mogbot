@@ -2017,6 +2017,41 @@ export interface PasteImportPreview {
   problems: string[];
 }
 
+/** One agent an export or pasted reply holds (`agents/import_export.rs`). Identical to src/lib/agents.ts. */
+export interface ExportImportAgent {
+  name: string;
+  role: string;
+  instructionsChars: number;
+  memoryLines: number;
+  routines: number;
+  watches: number;
+  apps: number;
+}
+
+/** What a pasted reply holds, what's still missing and the message that asks for it. */
+export interface ExportImportPreview {
+  source: string;
+  format: string;
+  verified: boolean;
+  agents: ExportImportAgent[];
+  main: string | null;
+  about: [string, number][];
+  problems: string[];
+  refused: string[];
+  gaps: string[];
+  followUp: string | null;
+  masked: number;
+  read: string[];
+  skipped: string[];
+}
+
+/** Where the review card went. */
+export interface ExportImportPosted {
+  chiefId: string;
+  requestId: string;
+  agents: number;
+}
+
 export interface ImportSummary {
   created: string[];
   updated: string[];

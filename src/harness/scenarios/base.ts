@@ -94,6 +94,23 @@ export const unlinkedHostingStatus = {
   detected: [],
 };
 
+/** `agents_import_*_preview` with nothing read yet (`import_export::Preview`). */
+export const EMPTY_EXPORT_PREVIEW = {
+  source: '',
+  format: '',
+  verified: true,
+  agents: [] as unknown[],
+  main: null as string | null,
+  about: [] as [string, number][],
+  problems: [] as string[],
+  refused: [] as string[],
+  gaps: [] as string[],
+  followUp: null as string | null,
+  masked: 0,
+  read: [] as string[],
+  skipped: [] as string[],
+};
+
 export const baseCommands: CommandMap = {
   // ---- boot gates -------------------------------------------------------
   quick_setup_check: { allPresent: true, setupCompleteCached: true },
@@ -535,6 +552,13 @@ export const baseCommands: CommandMap = {
     routinesRefused: [],
   },
 
+  // Copied from PROMPT in src-tauri/src/agents/import_export.rs.
+  agents_import_export_prompt:
+    'I\'m moving to a new app on my computer and I want to bring everything you do for me. Please give me a complete copy: every agent, bot or persona you run for me (including the main one that manages the others), and everything you know about me that they need.\n\nReply with ```json code blocks in exactly this shape:\n\n{\n  "source": "your product\'s name, e.g. Grok Bot",\n  "part": 1,\n  "parts": 1,\n  "agents": [\n    {\n      "name": "the agent\'s name",\n      "role": "one line: what it does",\n      "is_main": false,\n      "instructions": "its full instructions or system prompt, word for word",\n      "memory": ["everything it remembers that it still needs, one fact each"],\n      "routines": [{ "when": "every weekday at 9am", "what": "what it does then" }],\n      "watches": [{ "when": "an invoice email arrives", "what": "what it does then" }],\n      "apps": [{ "name": "Gmail", "purpose": "what it uses it for" }],\n      "logins": [{ "name": "Stripe", "purpose": "reads invoices", "kind": "api_key" }],\n      "preferences": ["how I like this agent\'s work done, one each"],\n      "context": ["people, projects and facts it works with, one each"]\n    }\n  ],\n  "about_me": {\n    "people": ["everyone you know about: name, who they are to me, what\'s open with them"],\n    "tasks": ["every ongoing task or project: where it stands, the next step, deadlines"],\n    "preferences": ["every standing rule or preference I gave you, word for word"],\n    "accounts": ["every account, app and tool you use for me, by name, and what for"],\n    "personal": ["saved facts: family, home, vehicles, money, dates that matter"],\n    "threads": ["conversations still open: what was asked, what you promised, what\'s waiting"]\n  },\n  "complete": false\n}\n\nRules:\n- Include every agent, each in full. Copy instructions and memory word for word: don\'t summarize or shorten. Long is fine.\n- Set "is_main": true on the one that manages the others (at most one).\n- "routines": everything it does on a schedule, with the exact time ("every monday at 8:30am", "every 2 hours", "every month on the 1st at 9am"). "watches": everything it does when something happens. Use [] for none, so I know there are none.\n- Fill every list in "about_me", or [] if there\'s truly nothing.\n- Never include passwords, API keys, tokens or card numbers: name the login in "logins" instead, and write [removed] where one appeared in any text.\n- Valid JSON only: straight double quotes, \\n for line breaks inside text, no comments, no trailing commas.\n- If it\'s long, split it into parts ("part": 1, "parts": 3, ...), each a whole ```json block in the same shape, never splitting one agent. Send the next part when I say "continue".\n- Set "complete": true in the last part only when nothing at all is left out.',
+  agents_import_text_preview: EMPTY_EXPORT_PREVIEW,
+  agents_import_file_preview: EMPTY_EXPORT_PREVIEW,
+  agents_import_text_review: { chiefId: 'chief', requestId: 'export-review', agents: 0 },
+  agents_import_file_review: { chiefId: 'chief', requestId: 'export-review', agents: 0 },
   // Copied from PASTE_PROMPT in src-tauri/src/agents/paste.rs.
   agents_import_paste_prompt:
     'I\'m moving my agents to a new app on my computer. Please give me a complete copy of every agent you run for me, including the main one that manages the others.\n\nReply with one ```json code block in exactly this shape:\n\n{\n  "source": "your product\'s name, e.g. Grok Bot",\n  "agents": [\n    {\n      "name": "the agent\'s name",\n      "role": "one line: what it does",\n      "instructions": "its full instructions, word for word",\n      "memory": "everything it remembers that it still needs, one fact per line",\n      "is_main": false,\n      "color": "red",\n      "routines": [\n        { "when": "every weekday at 9am", "what": "what it does then, in a sentence or two" }\n      ]\n    }\n  ]\n}\n\nRules:\n- Include every agent. Set "is_main": true on the one that manages the others (at most one), false on the rest.\n- Copy instructions and memory in full, word for word. Don\'t summarize, shorten or paraphrase them. Long is fine.\n- "routines": everything the agent does on its own on a schedule (routines, automations, reminders, recurring check-ins), one entry each. Write "when" in plain words, like "every weekday at 9am", "every monday at 8:30am", "every day at 7pm", "every 2 hours" or, for a one-off, "friday at 2pm". Start repeating ones with "every". Write "what" so the agent knows exactly what to do when it fires. Use [] if it has none.\n- "color" is optional: if the agent has one, use the closest of white, brown, red, orange, amber, green, teal, blue, purple, pink, gray. Otherwise leave it out.\n- Never include passwords, API keys, tokens, card numbers or any other credentials. If an instruction or memory contains one, write [removed] in its place.\n- Valid JSON only: straight double quotes, line breaks written as \\n inside strings, no comments, no trailing commas.\n- If it\'s too long for one message, split it into numbered ```json blocks (Part 1 of 3, Part 2 of 3, ...), each in the same shape and each holding whole agents. Never split one agent across blocks. Send the next part when I say "continue".\n- Put nothing but the JSON inside each code block.',

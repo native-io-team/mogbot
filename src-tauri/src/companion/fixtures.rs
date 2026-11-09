@@ -523,6 +523,29 @@ async fn generate() -> String {
         .await,
     );
     out += &entry(
+        "agentsImportExportPrompt",
+        "Result<'agents.import.exportPrompt'>",
+        call("agents.import.exportPrompt", json!({})).await,
+    );
+    out += &entry(
+        "agentsImportExportPreview",
+        "Result<'agents.import.exportPreview'>",
+        call(
+            "agents.import.exportPreview",
+            json!({ "text": "```json\n{}\n```" }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsImportExportReview",
+        "Result<'agents.import.exportReview'>",
+        call(
+            "agents.import.exportReview",
+            json!({ "text": "```json\n{}\n```" }),
+        )
+        .await,
+    );
+    out += &entry(
         "agentsTeamSetup",
         "Result<'agents.teamSetup'>",
         call("agents.teamSetup", json!({})).await,

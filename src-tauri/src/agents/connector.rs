@@ -1015,7 +1015,14 @@ pub fn apply_review(
                 s.remove();
             }
         }
-        state.armed = false;
+        // A card from a file or a paste was never armed: an import the user
+        // started over the connector meanwhile stays armed.
+        if !super::import_export::is_export_card(&card.talk_id) {
+            state.armed = false;
+        }
+    }
+    if !applied.agents.is_empty() {
+        super::import_choice::record_import(store::now_ms());
     }
     let mut line = if applied.agents.is_empty() {
         format!("Nothing imported from {}.", card.source)
@@ -1101,7 +1108,9 @@ fn dismiss_review(
                 s.remove();
             }
         }
-        state.armed = false;
+        if !super::import_export::is_export_card(&card.talk_id) {
+            state.armed = false;
+        }
     }
     note(
         app,
@@ -1687,6 +1696,30 @@ fn post_review(app: &AppHandle, talk_id: &str) {
         return;
     };
     let review = review::with_arrival(review::with_clashes(review_draft(&t)), &t.source);
+    if let Some(request_id) = post_review_card(app, &t.chief_id, &t.id, &t.source, review) {
+        if let Some(t) = lock().talk.as_mut().filter(|t| t.id == talk_id) {
+            t.review_card = Some(request_id);
+        }
+    }
+    audit(
+        &t.source,
+        &format!("staged {} for review", t.staged.join(", ")),
+        true,
+    );
+    emit(app, Some(&t.chief_id));
+}
+
+/// One review card in the Chief's chat for `review` (clashes and arrival
+/// already read), and its request id. The interview and an export file or
+/// pasted reply (`agents/import_export.rs`) both end here, and both are answered
+/// by the same [`apply_review`] / [`dismiss_review`].
+pub(crate) fn post_review_card(
+    app: &AppHandle,
+    chief_id: &str,
+    talk_id: &str,
+    source: &str,
+    review: Review,
+) -> Option<String> {
     let count = review.proposals.len();
     let mut approval = super::mcp::new_card(
         store::new_id(),
@@ -1697,35 +1730,26 @@ fn post_review(app: &AppHandle, talk_id: &str) {
             } else {
                 format!("{count} agents")
             },
-            t.source
+            source
         ),
         review::detail(&review),
         None,
     );
     approval.connector = Some(ConnectorCard {
         kind: CardKind::Review,
-        talk_id: t.id.clone(),
-        source: t.source.clone(),
+        talk_id: talk_id.to_string(),
+        source: source.to_string(),
         review: Some(review),
         playback: None,
     });
     let request_id = approval.request_id.clone();
-    let mut card = runner::new_message(&t.chief_id, MessageKind::Approval, "");
+    let mut card = runner::new_message(chief_id, MessageKind::Approval, "");
     card.approval = Some(approval);
-    if runner::record_own(app, card).is_ok() {
-        if let Some(t) = lock().talk.as_mut().filter(|t| t.id == talk_id) {
-            t.review_card = Some(request_id);
-        }
-    }
-    store::refresh_pending(&t.chief_id);
+    let posted = runner::record_own(app, card).is_ok();
+    store::refresh_pending(chief_id);
     super::notify::refresh_badge(app);
     let _ = app.emit(runner::EVENT_REGISTRY, ());
-    audit(
-        &t.source,
-        &format!("staged {} for review", t.staged.join(", ")),
-        true,
-    );
-    emit(app, Some(&t.chief_id));
+    posted.then_some(request_id)
 }
 
 /// The plan, played back in the Chief's chat: "Here's what I'll do for you

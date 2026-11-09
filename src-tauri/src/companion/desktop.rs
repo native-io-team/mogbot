@@ -616,6 +616,18 @@ impl Backend for DesktopBackend {
         import_status_now().await
     }
 
+    async fn import_export(
+        &self,
+        action: super::router::ImportExportAction,
+    ) -> Result<Value, CommandError> {
+        use super::router::ImportExportAction as A;
+        match action {
+            A::Prompt => json(cmd::agents_import_export_prompt().await?),
+            A::Preview(text) => json(cmd::agents_import_text_preview(text).await?),
+            A::Review(text) => json(cmd::agents_import_text_review(self.app.clone(), text).await?),
+        }
+    }
+
     async fn import_stop(&self) -> Result<Value, CommandError> {
         crate::agents::connector::stop(&self.app);
         import_status_now().await
