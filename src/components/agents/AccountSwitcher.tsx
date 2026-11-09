@@ -49,6 +49,15 @@ const STATUS: Record<UsageGlance['tone'], FooterRowStatus> = {
 };
 
 /**
+ * The row's corner dot. Nothing read yet is no dot: a green one would say
+ * "fine" about limits nobody has seen.
+ */
+export function glanceStatus(glance: Pick<UsageGlance, 'tone' | 'keys'>): FooterRowStatus {
+  if (glance.tone === 'calm' && glance.keys.every((k) => k.left === null)) return 'off';
+  return STATUS[glance.tone];
+}
+
+/**
  * A working line's room as the same pill as everywhere else: out of usage is
  * neutral (it resets by itself), carrying on with the other engine is
  * running. A plain "62% left" stays text.
@@ -159,7 +168,7 @@ export function AccountSwitcher({
       data-testid="account-switcher"
       data-tone={glance.tone}
       onClick={() => onOpen?.()}
-      leftIcon={<FooterRowIcon icon={<Icon size={14} />} status={STATUS[glance.tone]} />}
+      leftIcon={<FooterRowIcon icon={<Icon size={14} />} status={glanceStatus(glance)} />}
     >
       {!collapsed && (
         <span className="usage-glance__body">

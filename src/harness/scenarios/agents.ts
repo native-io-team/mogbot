@@ -1906,7 +1906,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-usage-limit',
     title: 'Agents — a usage limit with a reset time Claude Code reported',
     looksRightWhen:
-      'Finance’s chat ends in a quiet amber notice (not a red alarm): “Claude Code is out of usage until <time>.” with one text action, “Retry at <time>”, in full neutral ink (never the agent’s colour: a red or green agent’s accent read as error or success). Finance’s sidebar row reads “Usage limit · resets <time>” in muted text with no dot (amber is for needs-you only); Lead Gen’s row reads “<reason> · didn’t finish” in red, over two lines if needed, with a red dot.',
+      'Finance’s chat ends in a quiet amber notice (not a red alarm): “Claude Code is out of usage until <time>.” with one text action, “Retry at <time>”, in full neutral ink (never the agent’s colour: a red or green agent’s accent read as error or success). Finance’s sidebar row reads “Out of usage” as a neutral pill then “until <time>” (amber is for needs-you only); Lead Gen’s row reads “<reason> · didn’t finish” in red, over two lines if needed, with a red dot.',
     requires: '.agent-bubble--error[data-failure="usage_limit"]',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="finance"]' }],
@@ -1931,9 +1931,9 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-quota-calm',
     title: 'Agents — plan usage Claude Code reported, below 90%',
     looksRightWhen:
-      'At the foot of the sidebar, above the phone row, one quiet muted line: “Claude usage 85% · resets <weekday>” (the fuller of the two windows Claude Code reported, never the 5-hour 22%). Nothing about Codex: it reported nothing. The rest of the sidebar is unchanged.',
+      'The chat header’s usage control is a ring a fifth full (the 5-hour 22% Claude Code reported), not the word “Usage”. Nothing about Codex: it reported nothing. (The sidebar’s usage row reads the account inventory, which this scenario does not serve; see the agents-usage-* scenarios.)',
     command: 'agents.open',
-    requires: '.agents-quota__line[data-tone="calm"]',
+    requires: '.agent-usage-ring__dial',
     commands: {
       agents_overview: liveOverview,
       agents_messages: messagesFor,
@@ -1944,10 +1944,10 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-sidebar-overflow',
     title: 'Agents — a list longer than the sidebar, with the usage line at its foot',
     looksRightWhen:
-      'A short window: the agent list runs past the sidebar. Its last visible rows fade out softly into the footer; no hard edge, no hairline and no solid block cuts a row in half above “Claude usage 85% · resets <weekday>”. Scrolled to the end, the last row sits fully clear of the fade.',
+      'A short window: the agent list runs past the sidebar. Its last visible rows fade out softly into the footer; no hard edge, no hairline and no solid block cuts a row in half above the usage row. Scrolled to the end, the last row sits fully clear of the fade.',
     command: 'agents.open',
     viewport: { width: 1440, height: 640 },
-    requires: '.agents-quota__line[data-tone="calm"]',
+    requires: '[data-agent-id="social"]',
     commands: {
       agents_overview: liveOverview,
       agents_messages: messagesFor,
@@ -1984,9 +1984,9 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-quota-limited',
     title: 'Agents — the weekly limit hit: the same reset everywhere',
     looksRightWhen:
-      'Finance’s chat ends in the quiet usage-limit notice (“Claude Code is out of usage until <weekday> at <time>.”, the same weekday as everywhere else) with “Retry <weekday> <time>” (a day, not just a clock time, since it resets days from now) as its one action. Finance’s sidebar row reads “Out of usage until <weekday> <time>” muted. The sidebar foot reads “Claude out of usage until <weekday>” in amber.',
+      'Finance’s chat ends in the quiet usage-limit notice (“Claude Code is out of usage until <weekday> at <time>.”, the same weekday as everywhere else) with “Retry <weekday> <time>” (a day, not just a clock time, since it resets days from now) as its one action. Finance’s sidebar row reads “Out of usage” (a neutral pill) then “until <weekday> <time>”: the one phrase, never “resets”.',
     openSelector: AGENTS_TAB,
-    requires: '.agents-quota__line[data-tone="limited"]',
+    requires: '[data-agent-id="finance"]',
     steps: [{ click: '[data-agent-id="finance"]' }],
     commands: {
       agents_overview: weeklyLimitOverview,
@@ -2192,7 +2192,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-model-menu',
     title: 'Agents — model menu, with what routines run on',
     looksRightWhen:
-      'Finance’s header has a quiet “Model ⌄” button left of the … menu. Open, it starts with a quiet “Model · runs on Claude Code” line, then Default (checked), Most capable (Opus), Balanced (Sonnet), Fastest (Haiku) with the engine’s names small; Finance has a routine, so a divider, “Routines run on Fastest”, then Automatic (checked), Same as its chats and the three models. The menu never runs past the window: it stops above the bottom edge and scrolls inside.',
+      'Finance’s header has a quiet “Model ⌄” button left of the … menu. Open, it starts with a quiet “Model · runs on Claude Code” line, then Default (checked), Most capable (Opus), Balanced (Sonnet), Fastest (Haiku) with the engine’s names small; Finance has a routine, so a divider, “Routines · the model they wake on”, then Automatic (checked) with “Fastest” small beside it, Same as its chats with what its chats run on, and the three models. The menu never runs past the window: it stops above the bottom edge and scrolls inside.',
     requires: '.agent-model-menu__heading',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="finance"]' }, { click: '.agent-chat__model button' }],

@@ -81,8 +81,9 @@ const radio = (name: string) => screen.getByRole('radio', { name: new RegExp(nam
 describe('WhenComposer', () => {
   it('offers the free sources, says what each costs, and adds a GitHub one', async () => {
     const { calls, onDone } = mount();
-    expect(radio('Someone mentions me on GitHub')).toHaveAttribute('aria-checked', 'true');
-    expect(radio('Someone mentions me on GitHub')).toHaveTextContent(
+    // The choice and the readback speak in one person.
+    expect(radio('Someone mentions you on GitHub')).toHaveAttribute('aria-checked', 'true');
+    expect(radio('Someone mentions you on GitHub')).toHaveTextContent(
       'Free · checked from this Mac'
     );
     expect(screen.queryByRole('radio', { name: /Linear/ })).toBeNull();
@@ -112,8 +113,8 @@ describe('WhenComposer', () => {
 
   it('offers Linear only when a Linear app is there, and says a check costs a call', async () => {
     mount({ linear: true });
-    await waitFor(() => expect(radio('A Linear issue is assigned to me')).toBeInTheDocument());
-    fireEvent.click(radio('A Linear issue is assigned to me'));
+    await waitFor(() => expect(radio('A Linear issue is assigned to you')).toBeInTheDocument());
+    fireEvent.click(radio('A Linear issue is assigned to you'));
     expect(
       screen.getByText(
         /uses a little of Finance’s Claude usage and can only read that app, up to 24 a day/
@@ -132,7 +133,7 @@ describe('WhenComposer', () => {
 
   it('offers Linear connected under Apps for this agent, with no Claude Code server', async () => {
     mount({ connections: [ours('linear', 'linear', 'Linear', ['a1'])] });
-    await waitFor(() => expect(radio('A Linear issue is assigned to me')).toBeInTheDocument());
+    await waitFor(() => expect(radio('A Linear issue is assigned to you')).toBeInTheDocument());
   });
 
   it('doesn’t offer Linear connected only for another agent', async () => {

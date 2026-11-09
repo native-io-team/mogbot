@@ -51,17 +51,18 @@ interface SourceChoice {
 const SOURCES: SourceChoice[] = [
   {
     kind: 'github_mentions',
-    label: 'Someone mentions me on GitHub',
+    // "you", as the routine reads back once added ("When someone mentions you…").
+    label: 'Someone mentions you on GitHub',
     how: 'Free · checked from this Mac',
   },
   {
     kind: 'github_assigned',
-    label: 'An issue or PR is assigned to me',
+    label: 'An issue or PR is assigned to you',
     how: 'Free · checked from this Mac',
   },
   {
     kind: 'linear_assigned',
-    label: 'A Linear issue is assigned to me',
+    label: 'A Linear issue is assigned to you',
     how: 'Through your Linear app · uses a little of your Claude usage each check',
   },
   { kind: 'new_file', label: 'A new file appears in a folder', how: 'Free · reads the folder' },

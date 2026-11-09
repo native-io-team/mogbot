@@ -585,7 +585,8 @@ export const agentsUsageScenarios: Scenario[] = [
     title: 'Settings — Agents → Usage: modes, what you have, spare capacity',
     looksRightWhen:
       'A “Usage” group. “How agents use your limits” with a three-way control (Normal | Save my limits | Use it all before reset), the last pressed, neutral not accent, and one muted line under it saying Allow cards still apply. “What you have”: Claude Code’s list — This Mac “5-hour 38% · resets <time> · Weekly 61% · resets <weekday>”, an amber “Weekly: At this pace you’ll hit the limit <weekday> <part of day>, before it resets … · Estimate from 14 readings over 23 hours”, and “Next turns run here”; Work in amber “Out of usage until …”; Personal “No reading yet”; then a muted “About 48k tokens a turn · estimate from 212 past runs”. Codex’s list: ChatGPT Plus “Primary 92% …” in amber, tagged “Plus plan · Next turns run here”, and no estimate line. A muted line “Claude 5-hour limit resets <time> · 62% unused”. “Other compute on this Mac”: Opencode installed; Ollama running with two models. “Spare-capacity list”: two lines (one “Added by you · for Research”, one “Added by Finance · Started”), each with a remove ×, and a field with a secondary Add. Readable in both themes; nothing is accent-coloured.',
-    command: 'agents.usage',
+    // ⌘K "Usage and accounts…" opens Agents' Usage view now; Settings has its own page.
+    command: 'settings.page.accounts',
     requires: '.agents-usage .agents-compute__row',
     clipSelector: '.agents-usage',
     commands: {
@@ -599,7 +600,8 @@ export const agentsUsageScenarios: Scenario[] = [
     title: 'Settings — Agents → Usage: Claude runs out on every account at this pace',
     looksRightWhen:
       '“What you have”: the headline “Room now on all 3 accounts”, then in amber “At this pace you’ll run out of Claude on every account in about 3 hours; Codex has room.” over a muted “Estimate from 13 readings across 2 accounts”. No counts or per-limit summary lines. Cards: Codex · ChatGPT Plus first (most room), then Claude · This Mac (Max plan · Used next) and Claude · Work, each with a 5-hour row and a Weekly row; each Claude 5-hour bar amber with its own short amber pace line and basis right under it. Nothing accent-coloured.',
-    command: 'agents.usage',
+    // ⌘K "Usage and accounts…" opens Agents' Usage view now; Settings has its own page.
+    command: 'settings.page.accounts',
     requires: '.agents-usage .agents-compute__pace',
     clipSelector: '.agents-usage',
     commands: {
@@ -613,7 +615,8 @@ export const agentsUsageScenarios: Scenario[] = [
     title: 'Settings — Agents → Usage: two Claude accounts read, Codex not signed in',
     looksRightWhen:
       '“What you have”: one short headline “Room now on Claude · This Mac” (no “has room again”, no counts, no Weekly summary line). Then one card: Claude · This Mac (“Max plan · Used next”, muted, no pill), a 5-hour row at 7% in the muted ink, and a Weekly row at 71% in amber with “At this pace it runs out tomorrow night” right under its reset line, over its muted estimate basis. Then two compact muted lines: Claude · Personal “Out of usage until …” and Codex · This Mac “Not signed in”. Nothing accent-coloured.',
-    command: 'agents.usage',
+    // ⌘K "Usage and accounts…" opens Agents' Usage view now; Settings has its own page.
+    command: 'settings.page.accounts',
     requires: '.agents-usage .agents-compute__row',
     clipSelector: '.agents-usage',
     commands: {
@@ -627,7 +630,8 @@ export const agentsUsageScenarios: Scenario[] = [
     title: 'Settings — Agents → Usage: one account read, one that can’t be',
     looksRightWhen:
       '“What you have”: “Room now on Claude · This Mac” on one line, nothing under it. One card: Claude · This Mac (“Max plan”, no “Used next”) with a 5-hour row at 7% muted and a Weekly row at 71% in amber, the amber “At this pace it runs out <when>” and a muted “Estimate from 200 readings over 10 hours” under that bar, said once. Then two compact muted lines: Claude · Personal saying why it can’t be read between turns and that its limits show after a turn runs on it; Codex · This Mac “Not signed in”.',
-    command: 'agents.usage',
+    // ⌘K "Usage and accounts…" opens Agents' Usage view now; Settings has its own page.
+    command: 'settings.page.accounts',
     requires: '.agents-usage .agents-compute__row',
     clipSelector: '.agents-usage',
     commands: {
@@ -641,7 +645,8 @@ export const agentsUsageScenarios: Scenario[] = [
     title: 'Settings — Agents → Usage with no reading and no history',
     looksRightWhen:
       'The Usage group with Normal pressed and its line (“Agents never slow down for limits…”). “What you have”: “No limits read yet”, no cards, and one compact muted line: Claude · This Mac “Not checked yet” — no bars, no estimate line at all, never a made-up figure. No “Other compute” group. The spare-capacity list shows only its sentence and the field.',
-    command: 'agents.usage',
+    // ⌘K "Usage and accounts…" opens Agents' Usage view now; Settings has its own page.
+    command: 'settings.page.accounts',
     requires: '.agents-usage .agents-compute__quiet-row',
     clipSelector: '.agents-usage',
     commands: {

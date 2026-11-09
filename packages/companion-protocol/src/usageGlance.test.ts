@@ -165,6 +165,32 @@ describe('usageGlance', () => {
     expect(g.estimate).toBe('Estimate from 9 readings across 2 accounts');
   });
 
+  it('a run-out within the hour says "in about" once, never "~in about"', () => {
+    const g = usageGlance(
+      [acct('default')],
+      inv([line('default', { windows: [week(90, 3 * 24 * H)] })], {
+        totals: {
+          accounts: 1,
+          engines: [],
+          read: 1,
+          room: 1,
+          windows: [],
+          runOut: [
+            {
+              estimate: true,
+              engine: 'claude',
+              reachesAt: NOW + 50 * 60_000,
+              readings: 9,
+              accounts: 1,
+            },
+          ],
+        },
+      }),
+      { now: NOW }
+    );
+    expect(g.headline).toBe('Runs out in about 50 minutes, 3 days before reset');
+  });
+
   it('a reset soon with lots left nudges, with what it would spend it on', () => {
     const g = usageGlance(
       [acct('default', { name: 'Work' })],
@@ -191,6 +217,29 @@ describe('usageGlance', () => {
     expect(g.nudge?.text).toBe('62% of Work’s week resets in 9 h');
     expect(g.nudge?.items).toEqual(['Tidy the docs']);
     expect(g.nudge?.empty).toBe(false);
+  });
+
+  it('the nudge names the account as its key does, not the inventory’s “This Mac”', () => {
+    const g = usageGlance(
+      [acct('default', { name: 'sam@example.com' })],
+      inv([line('default', { name: 'This Mac', next: true, windows: [week(38, 9 * H)] })], {
+        spare: [
+          {
+            engine: 'claude',
+            accountId: 'default',
+            accountName: 'This Mac',
+            next: true,
+            kind: 'seven_day',
+            usedPercent: 38,
+            resetsAt: NOW + 9 * H,
+            observedAt: NOW,
+          },
+        ],
+      }),
+      { now: NOW }
+    );
+    expect(g.keys[0].name).toBe('sam@example.com');
+    expect(g.nudge?.text).toBe('62% of sam@example.com’s week resets in 9 h');
   });
 
   it('two accounts with one name never read the same', () => {

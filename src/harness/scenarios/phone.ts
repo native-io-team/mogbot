@@ -284,6 +284,7 @@ export const phoneScenarios: Scenario[] = [
       command: undefined,
       openSelector: '[data-settings-menu-trigger]',
       steps: [
+        { click: '[data-settings-nav="phone"]' },
         { click: 'button[data-settings-open="phone"]' },
         { click: '.phone-device .phone-device__actions button' },
       ],

@@ -359,14 +359,22 @@ function distinct(keys: StackKey[]): StackKey[] {
   });
 }
 
-function nudgeOf(inv: UsageInventory | null | undefined, now: number): SpareNudge | null {
+function nudgeOf(
+  inv: UsageInventory | null | undefined,
+  now: number,
+  keys: StackKey[] = []
+): SpareNudge | null {
   const s = inv?.spare.find((w) => w.next && w.resetsAt > now);
   if (!inv || !s) return null;
+  // The account by the name its key shows (an email, "Work"), never the
+  // inventory's own ("This Mac") two lines under the key that says otherwise.
+  const name =
+    keys.find((k) => k.engine === s.engine && k.id === s.accountId)?.name ?? s.accountName;
   const unused = Math.max(0, Math.floor(100 - s.usedPercent));
   const what = isSession(s) ? '5-hour limit' : isWeek(s) ? 'week' : s.kind.replace(/_/g, ' ');
   const waiting = inv.backlog.filter((i) => i.state === 'waiting');
   return {
-    text: `${unused}% of ${s.accountName}’s ${what} resets ${relativeIn(s.resetsAt, now)}`,
+    text: `${unused}% of ${name}’s ${what} resets ${relativeIn(s.resetsAt, now)}`,
     question:
       waiting.length > 0
         ? 'Give agents something to do before it goes?'
@@ -463,7 +471,9 @@ export function usageGlance(
       .map((x) => x.w.resetsAt as number);
     const after = engineResets.length ? Math.max(...engineResets) : undefined;
     const gap = after ? Math.round((after - r.reachesAt) / DAY_MS) : 0;
-    headline = `Runs out ~${roughWhen(r.reachesAt, now)}${gap >= 1 ? `, ${plural(gap, 'day')} before reset` : ''}`;
+    // "~" marks the estimate, unless the phrase says so itself ("in about an hour").
+    const when = roughWhen(r.reachesAt, now);
+    headline = `Runs out ${when.startsWith('in about') ? when : `~${when}`}${gap >= 1 ? `, ${plural(gap, 'day')} before reset` : ''}`;
     estimate = `Estimate from ${r.readings} readings across ${plural(r.accounts, 'account')}`;
     tone = 'warning';
   } else if (read.every((k) => (k.left ?? 0) <= LOW_LEFT)) {
@@ -530,7 +540,7 @@ export function usageGlance(
     tone,
     summary,
     soonest,
-    nudge: nudgeOf(inventory, now),
+    nudge: nudgeOf(inventory, now, keys),
     low,
   };
 }

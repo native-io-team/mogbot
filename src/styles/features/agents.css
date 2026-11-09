@@ -308,11 +308,6 @@
   color: var(--accent-warning);
 }
 
-/* …and what it's asking, after the label, in the row's ordinary ink. */
-.agents-list__row .agents-list__asking {
-  color: var(--text-secondary);
-}
-
 /* A state in a pill, then its words: one line, the words cut first. The pill
    sits in the line's own height (no vertical padding here), so a row that
    turns amber or red never grows. */

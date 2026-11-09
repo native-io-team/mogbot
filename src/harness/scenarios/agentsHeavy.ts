@@ -574,7 +574,7 @@ export const agentsHeavyScenarios: Scenario[] = [
     title: 'Settings → Agents with 22 agents',
     looksRightWhen:
       'Settings on its Agents tab with the heavy roster behind it: nothing in Settings lists every agent, so 22 agents change nothing here; the Usage group reads as in settings-agents-usage.',
-    command: 'agents.usage',
+    command: 'settings.page.accounts',
     requires: '.agents-usage .agents-usage__line',
     commands: {
       ...commands,

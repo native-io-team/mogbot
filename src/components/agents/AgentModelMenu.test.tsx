@@ -23,12 +23,17 @@ vi.mock('../../lib/agentsStore', () => ({
           installed: true,
           signedIn: true,
           asks: true,
-          models: [{ value: 'opus', label: 'Opus' }],
+          models: [
+            { value: 'opus', label: 'Opus' },
+            { value: 'haiku', label: 'Haiku' },
+          ],
         },
       ],
     }),
 }));
-vi.mock('../../contexts/ToastContext', () => ({ useOptionalToast: () => ({ showToast: vi.fn() }) }));
+vi.mock('../../contexts/ToastContext', () => ({
+  useOptionalToast: () => ({ showToast: vi.fn() }),
+}));
 
 import { AgentModelItems } from './AgentModelMenu';
 
@@ -63,5 +68,20 @@ describe('AgentModelItems effort', () => {
       await Promise.resolve();
     });
     expect(updateAgent).toHaveBeenCalledWith('a1', { effort: '' });
+  });
+});
+
+describe('AgentModelItems routines', () => {
+  it('heads the section like the others and says what Automatic comes to beside it', () => {
+    const repeating = { id: 'r', note: 'x', nextAt: 0, createdAt: 0, paused: false, repeat: {} };
+    render(
+      <AgentModelItems
+        agent={{ ...finance, model: null, checkIns: [repeating] } as unknown as Agent}
+      />
+    );
+    // Never "Routines run on Fastest" above a ticked "Automatic".
+    expect(screen.getByText('Routines · the model they wake on')).toBeInTheDocument();
+    expect(screen.queryByText(/^Routines run on/)).toBeNull();
+    expect(screen.getByRole('menuitem', { name: /^Automatic/ })).toHaveTextContent('Fastest');
   });
 });

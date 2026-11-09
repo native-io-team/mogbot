@@ -102,7 +102,7 @@ export function rowPill(
     return {
       tone: 'out',
       label: 'Out of usage',
-      rest: failure.resetsAt ? `resets ${resetPhrase(failure.resetsAt)}` : '',
+      rest: failure.resetsAt ? `until ${resetPhrase(failure.resetsAt)}` : '',
     };
   }
   if (failure.kind === 'signed_out') {
