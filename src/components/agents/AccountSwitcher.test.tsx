@@ -25,7 +25,7 @@ vi.mock('../../lib/agentsStore', () => ({
   useAgentsSelector: (select: (s: unknown) => unknown) => select(store),
 }));
 
-import { AccountSwitcher, AgentAccountChip } from './AccountSwitcher';
+import { AccountSwitcher, AgentAccountChip, rowPill } from './AccountSwitcher';
 import { AgentAccountItems } from './AgentModelMenu';
 import { requestSwitcher, switcherMounted } from '../../lib/agentAccounts';
 
@@ -224,5 +224,23 @@ describe('Runs on, per agent', () => {
       />
     );
     expect(screen.getByTestId('agent-account-chip')).toHaveTextContent('Work· only');
+  });
+});
+
+describe('the sidebar row pill', () => {
+  const line = (over: object) =>
+    ({
+      engine: 'claude',
+      name: 'Work',
+      tone: 'ok',
+      detail: '',
+      several: false,
+      ...over,
+    }) as Parameters<typeof rowPill>[0];
+  it('is the shared StatusPill tone: out of usage neutral, carrying on running', () => {
+    expect(rowPill(line({ tone: 'out', room: 'Out until 3:20 PM' }))).toBe('out');
+    expect(rowPill(line({ tone: 'warning', away: true, room: 'on Codex' }))).toBe('running');
+    expect(rowPill(line({ tone: 'warning', room: '12% left' }))).toBeNull();
+    expect(rowPill(line({ room: '62% left' }))).toBeNull();
   });
 });

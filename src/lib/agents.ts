@@ -2595,6 +2595,7 @@ export {
   itemName,
   listedItems,
   newestResults,
+  foldResultReplies,
   revisingLabel,
   supersededLine,
 } from '../../packages/companion-protocol/src/results';

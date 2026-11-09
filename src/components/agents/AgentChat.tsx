@@ -115,6 +115,7 @@ import {
   approvalSeries,
   withQuotes,
   newestResults,
+  foldResultReplies,
   sendAgentMessage,
   stopAgent,
   type Agent,
@@ -642,7 +643,7 @@ export const AgentChat = memo(function AgentChat({
   // can be before the send call returns (the backend's event can win). The
   // persisted message then renders under the pending bubble's key.
   const { shown, aliases, failed, sending } = useMemo(() => {
-    const list = messages ?? [];
+    const list = foldResultReplies(messages ?? []);
     const aliases = new Map<string, string>();
     const local: AgentMessage[] = [];
     const failed = new Set<string>();

@@ -961,3 +961,57 @@ fn a_page_can_leave_steps_out_and_say_so() {
     omit_steps_json(&mut json_page);
     assert_eq!(json_page[0]["work"], value["work"]);
 }
+
+/// `use_account` from a check-in only raises a card; the timeline must not
+/// say the account was switched.
+#[test]
+fn a_settings_call_that_only_asked_says_it_asked() {
+    let said = |tool: &str, outcome: Outcome, out: &str| {
+        let mut live = Live::default();
+        live.action(call(&ours(tool), "c", json!({})), 1);
+        live.result(CallResult {
+            id: "c".into(),
+            outcome,
+            output: Some(out.into()),
+        });
+        let s = &live.work.steps[0];
+        (s.label.clone(), s.outcome)
+    };
+    assert_eq!(
+        said(
+            "use_account",
+            Outcome::Done,
+            "Claude Code turns now start on “Work”."
+        ),
+        ("Switched the account turns run on".into(), None)
+    );
+    assert_eq!(
+        said(
+            "use_account",
+            Outcome::Done,
+            &super::super::usage_tools::switch_asked("Work", false)
+        ),
+        (
+            "Asked you to switch the account turns run on — waiting for your OK".into(),
+            None
+        )
+    );
+    assert_eq!(
+        said(
+            "set_usage_mode",
+            Outcome::Failed,
+            "The user said no. Don't change it."
+        ),
+        (
+            "Asked to change how your limits are used — you said no".into(),
+            Some(StepOutcome::Declined)
+        )
+    );
+    assert_eq!(
+        said("use_account", Outcome::Failed, "“Work” isn't signed in"),
+        (
+            "Tried to switch the account turns run on".into(),
+            Some(StepOutcome::Failed)
+        )
+    );
+}
