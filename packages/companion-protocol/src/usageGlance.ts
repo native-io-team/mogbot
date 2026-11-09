@@ -30,7 +30,12 @@ import type {
 import { QUOTA_WARN_PERCENT, resetPhrase } from './quota';
 import { planLabel } from './usage';
 import { roughWhen } from './usageSheet';
-import { ACCOUNT_ENGINE_LABEL, switcherView, type SwitcherRow } from './accountSwitcher';
+import {
+  ACCOUNT_ENGINE_LABEL,
+  accountLabel,
+  switcherView,
+  type SwitcherRow,
+} from './accountSwitcher';
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -139,6 +144,11 @@ export interface UsageGlance {
   headline: string;
   /** The headline is an estimate: what it rests on. */
   estimate: string | null;
+  /**
+   * Warning only when the user has a choice to make (nearly out everywhere,
+   * nothing signed in); an estimate or a handover to the next account is
+   * calm. Amber means "needs you".
+   */
   tone: 'calm' | 'warning' | 'limited';
   /** "2 accounts · resets Sat 10:00 AM". */
   summary: string;
@@ -211,7 +221,8 @@ function limitsOf(line: UsageAccountLine | undefined, now: number): KeyLimit[] {
       key: `${line.engine}:${line.id}:${pick.kind}`,
       label,
       left,
-      tone: left <= 0 ? 'limited' : 100 - left >= QUOTA_WARN_PERCENT || pace ? 'warning' : 'calm',
+      // Amber only when nearly out: a pace estimate is information, never an alarm.
+      tone: left <= 0 ? 'limited' : 100 - left >= QUOTA_WARN_PERCENT ? 'warning' : 'calm',
       ...(pick.resetsAt
         ? { resetsIn: relativeIn(pick.resetsAt, now), resetsAt: resetPhrase(pick.resetsAt, now) }
         : {}),
@@ -254,14 +265,21 @@ export function changeLines(
   });
 }
 
-function detailOf(a: UsageAccount, line: UsageAccountLine | undefined): string[] {
+function detailOf(a: UsageAccount, line: UsageAccountLine | undefined, name: string): string[] {
   const out: string[] = [];
   const plan = a.plan ?? line?.plan;
-  if (plan) out.push(planLabel(plan));
-  if (line?.orgName && !/'s Organization$|’s Organization$/.test(line.orgName)) {
+  // Each detail once, and never what the name already says ("Claude Max").
+  if (plan && !name.endsWith(` ${plan.charAt(0).toUpperCase()}${plan.slice(1)}`)) {
+    out.push(planLabel(plan));
+  }
+  if (
+    line?.orgName &&
+    line.orgName !== name &&
+    !/'s Organization$|’s Organization$/.test(line.orgName)
+  ) {
     out.push(line.orgName);
   }
-  if (a.email && a.email !== a.name) out.push(a.email);
+  if (a.email && a.email !== name) out.push(a.email);
   if (a.thisMac) out.push('this Mac’s own sign-in');
   return out;
 }
@@ -272,11 +290,12 @@ function keyOf(
   a: UsageAccount,
   line: UsageAccountLine | undefined,
   nextId: string | undefined,
-  now: number
+  now: number,
+  /** The account it's a second sign-in of, by the name its own key shows. */
+  same: string | undefined
 ): StackKey {
   const limits = limitsOf(line, now);
   const read = limits.length > 0;
-  const same = line?.sameAs;
   const left =
     !row.signedIn || same
       ? null
@@ -333,7 +352,7 @@ function keyOf(
     id: row.id,
     name: row.name,
     position,
-    detail: detailOf(a, line),
+    detail: detailOf(a, line, row.name),
     state,
     stateLabel,
     left,
@@ -408,6 +427,17 @@ export function usageGlance(
   const engines: StackEngine[] = view.map((e) => {
     const lines = (id: string) =>
       inventory?.accounts.find((l) => l.engine === e.engine && l.id === id);
+    // The Mac names the first sign-in by its own name for it ("This Mac"):
+    // said here by the name that account's key shows.
+    const sameName = (id: string) => {
+      const said = lines(id)?.sameAs;
+      if (!said) return undefined;
+      const first = inventory?.accounts.find((l) => l.engine === e.engine && l.name === said);
+      return (
+        (first && e.rows.find((r) => r.id === first.id)?.name) ??
+        accountLabel({ engine: e.engine, name: said })
+      );
+    };
     // "Next": the one turns move to when the one in use runs out.
     const inUse = e.rows.findIndex((r) => r.inUse);
     const next = e.rows.find(
@@ -420,7 +450,8 @@ export function usageGlance(
         accounts.find((a) => a.engine === e.engine && a.id === row.id) as UsageAccount,
         lines(row.id),
         next?.id,
-        now
+        now,
+        sameName(row.id)
       )
     );
     return { engine: e.engine, label: e.label, keys: distinct(keys) };
@@ -475,7 +506,7 @@ export function usageGlance(
     const when = roughWhen(r.reachesAt, now);
     headline = `Runs out ${when.startsWith('in about') ? when : `~${when}`}${gap >= 1 ? `, ${plural(gap, 'day')} before reset` : ''}`;
     estimate = `Estimate from ${r.readings} readings across ${plural(r.accounts, 'account')}`;
-    tone = 'warning';
+    // An estimate is information: in ink, never the colour that says "needs you".
   } else if (read.every((k) => (k.left ?? 0) <= LOW_LEFT)) {
     headline = 'Nearly out on every account';
     tone = 'warning';
@@ -483,8 +514,8 @@ export function usageGlance(
     const using = read.find((k) => k.state === 'in_use');
     const nextUp = read.find((k) => k.state === 'next' && (k.left ?? 0) > LOW_LEFT);
     if (using && (using.left ?? 0) <= LOW_LEFT && nextUp) {
+      // Turns move on by themselves: nothing for the user to do.
       headline = `${using.name} is low · ${nextUp.name} is next`;
-      tone = 'warning';
     } else if (using && (using.left ?? 0) >= PLENTY_LEFT) {
       headline = 'Plenty of room';
     } else {
