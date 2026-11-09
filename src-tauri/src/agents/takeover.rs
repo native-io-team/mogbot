@@ -86,6 +86,8 @@ struct Driving {
     _access: super::broker::Access,
     /// Claude Code's config file holding it, removed with it.
     _mcp_config: Option<super::reach::ConfigFile>,
+    /// The account it runs on, held: removing it waits for the hand-back.
+    _account: super::wallet::InUse,
 }
 
 static DRIVING: LazyLock<Mutex<HashMap<String, Driving>>> =
@@ -423,7 +425,21 @@ async fn open(
         system_prompt.push_str(&reach.prompt);
     }
     // The terminal drives the session on the account its turns last ran on.
-    let account = super::wallet::last_account(agent.engine, &agent.id);
+    // Held while the terminal is open: removing the account waits for it.
+    let (account, held) = {
+        let first = super::wallet::last_account(agent.engine, &agent.id);
+        match super::wallet::hold(&first, &agent.id) {
+            Some(held) => (first, held),
+            // Removed just now: the account it falls back to.
+            None => {
+                let next = super::wallet::last_account(agent.engine, &agent.id);
+                let held = super::wallet::hold(&next, &agent.id).ok_or_else(|| {
+                    CommandError::expected("Its account was just removed. Try again.")
+                })?;
+                (next, held)
+            }
+        }
+    };
     super::wallet::prepare(&account);
     super::transcript::ensure(&account, &layout.cwd, &home, session);
     let account_env = super::wallet::env_for(&account);
@@ -498,6 +514,7 @@ async fn open(
             transcript,
             _access: access,
             _mcp_config: mcp_config,
+            _account: held,
         },
     );
     tracing::info!(agent = %agent.id, pid = opened.pid, "[Agents] taken over in a terminal");

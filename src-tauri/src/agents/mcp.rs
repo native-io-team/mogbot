@@ -666,7 +666,7 @@ async fn usage_tool(
         // The user's own message asked for it: done, as Settings would. Asked
         // for by another agent (or a routine), the user OKs it on a card.
         "use_account" => {
-            if !runner::answering_user(&caller.id) {
+            if use_account_asks(&caller.id) {
                 let named = arg(args, "account").unwrap_or("that account");
                 let answer = ask_user(
                     app,
@@ -2519,7 +2519,7 @@ pub fn answer_late(
                 app,
                 agent_id,
                 super::plan_grant::late_line(plan),
-                runner::From::User,
+                runner::From::App,
             );
         }
         return Ok(());
@@ -2540,7 +2540,7 @@ pub fn answer_late(
             "[The user has now approved this, which you asked for earlier: {} — {}. It will go through without asking if you run it exactly as before. Carry on with what you were doing.]",
             approval.title, approval.detail
         ),
-        runner::From::User,
+        runner::From::App,
     );
     Ok(())
 }
@@ -2803,6 +2803,23 @@ pub(super) async fn decide(
 /// Whether this call goes out under the user's name while they hold sends
 /// for the exact text's OK (`outward`): then no level, rule or plan without
 /// the words answers it, and its card shows the words.
+/// `use_account` needs a card: the turn isn't answering the user's own
+/// message (another agent, a routine, or a note the app queued).
+pub(super) fn use_account_asks(caller_id: &str) -> bool {
+    !runner::answering_user(caller_id)
+}
+
+/// The owner's own request at Go hard or above (`direct`): after outside
+/// content, only data leaving and new packages ask. Never a turn answering
+/// outside text, an agent, or a note the app queued.
+pub(super) fn owner_direct(
+    level: super::independence::Level,
+    outside: bool,
+    caller_id: &str,
+) -> bool {
+    level.goes_hard() && !outside && runner::answering_user(caller_id)
+}
+
 fn holds_for_exact_text(caller: &store::Agent, tool: &str, input: &Value) -> bool {
     super::outward::required(caller) && super::outward::sends_as_user(caller, tool, input)
 }
@@ -2977,7 +2994,7 @@ async fn decide_inner(
     let full_send = level == super::independence::Level::FullSend;
     // The owner's own request at Go hard or above: the conversation's mark
     // stays, but asks only for data leaving and new packages.
-    let direct = level.goes_hard() && !outside && runner::answering_user(&caller.id);
+    let direct = owner_direct(level, outside, &caller.id);
     let guarded = browser_asks
         || exact
         || disk_floor

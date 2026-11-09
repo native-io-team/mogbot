@@ -322,7 +322,7 @@ fn finish(app: &AppHandle, agent: &store::Agent, request_id: &str, card: &StepIn
         app,
         &agent.id,
         hold::resume_note(&card.reason, e),
-        runner::From::User,
+        runner::From::App,
     );
 }
 
@@ -346,12 +346,7 @@ pub async fn decline(
     store::refresh_pending(agent_id);
     super::notify::refresh_badge(app);
     emit_card(app, agent_id, request_id);
-    runner::enqueue(
-        app,
-        agent_id,
-        not_now_note(&card.reason),
-        runner::From::User,
-    );
+    runner::enqueue(app, agent_id, not_now_note(&card.reason), runner::From::App);
     Ok(())
 }
 

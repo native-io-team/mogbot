@@ -465,7 +465,7 @@ pub fn answer_card(
     let _ = app.emit(runner::EVENT_REGISTRY, ());
     super::notify::refresh_badge(app);
     if let Some(turn) = turn {
-        runner::enqueue(app, chief_id, turn, runner::From::User);
+        runner::enqueue(app, chief_id, turn, runner::From::App);
     }
     Ok(())
 }

@@ -1595,7 +1595,7 @@ fn wake(
                     "[The user declined what you asked for earlier: {} — {}. They said: \"{note}\". Do that instead.]",
                     approval.title, approval.detail
                 ),
-                runner::From::User,
+                runner::From::App,
             );
         }
     }
@@ -1627,7 +1627,7 @@ fn decline_secret(
             app,
             agent_id,
             secrets::denied_prompt(request, note),
-            runner::From::User,
+            runner::From::App,
         );
     }
     Ok(())
@@ -1674,7 +1674,7 @@ pub async fn agents_save_secret(
             &app,
             &agent_id,
             secrets::saved_prompt(&secret),
-            runner::From::User,
+            runner::From::App,
         );
     }
     Ok(secret)
@@ -2619,19 +2619,59 @@ pub async fn agents_account_reorder(
     Ok(accounts)
 }
 
-/// Remove an added account and its sign-in from this Mac.
+/// What removing an account did, for the UI: `waiting` is the line saying
+/// it goes when the turns running on it end ("Removing after Finance's turn
+/// ends."); absent when it went at once.
+#[derive(Debug, Clone, serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountRemoval {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub waiting: Option<String>,
+}
+
+/// Remove an added account and its sign-in from this Mac. A turn running on
+/// it finishes first: the account leaves the list now, and its folder and
+/// sign-in go when that turn ends (`wallet::remove`).
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn agents_account_remove(
     app: AppHandle,
     engine: String,
     id: String,
-) -> Result<(), CommandError> {
+) -> Result<AccountRemoval, CommandError> {
     let engine = Engine::parse(&engine)?;
     let gone = id.clone();
-    tokio::task::spawn_blocking(move || agents::wallet::remove(engine, &id))
-        .await
-        .map_err(agents::err_other)??;
+    let removed = {
+        let id = id.clone();
+        tokio::task::spawn_blocking(move || agents::wallet::remove(engine, &id))
+            .await
+            .map_err(agents::err_other)??
+    };
+    let waiting = match removed {
+        agents::wallet::Removed::Now => None,
+        agents::wallet::Removed::After(agent_ids) => {
+            let names: Vec<String> = agent_ids
+                .iter()
+                .map(|a| {
+                    store::get(a)
+                        .map(|a| a.name)
+                        .unwrap_or_else(|_| "an agent".into())
+                })
+                .collect();
+            let finisher = app.clone();
+            tauri::async_runtime::spawn(async move {
+                agents::wallet::wait_unused(engine, &id).await;
+                let done =
+                    tokio::task::spawn_blocking(move || agents::wallet::finish_remove(engine, &id))
+                        .await;
+                if let Err(e) = done {
+                    tracing::warn!("[Agents] finishing an account's removal failed: {e}");
+                }
+                let _ = finisher.emit(EVENT_ACCOUNTS, ());
+            });
+            Some(agents::wallet::removing_after_line(&names))
+        }
+    };
     // An agent set to run on it runs on any account again.
     for agent in store::list()?
         .into_iter()
@@ -2650,7 +2690,7 @@ pub async fn agents_account_remove(
     }
     emit_registry(&app);
     let _ = app.emit(EVENT_ACCOUNTS, ());
-    Ok(())
+    Ok(AccountRemoval { waiting })
 }
 
 /// "Use this one now": the account goes first in its engine's order, so

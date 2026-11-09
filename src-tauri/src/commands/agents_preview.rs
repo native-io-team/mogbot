@@ -109,7 +109,7 @@ pub async fn agents_preview_test_start(
         &app,
         &agent_id,
         preview_test::test_prompt(&run),
-        runner::From::User,
+        runner::From::App,
     );
     let _ = app.emit(preview_test::EVENT_TEST, &run);
     Ok(run)

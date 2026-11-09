@@ -549,7 +549,7 @@ pub async fn nudge(app: &AppHandle) {
     );
     let line = super::runner::new_message(&chief.id, store::MessageKind::Note, note);
     let _ = super::runner::record(app, line);
-    super::runner::enqueue(app, &chief.id, prompt, super::runner::From::User);
+    super::runner::enqueue(app, &chief.id, prompt, super::runner::From::App);
 }
 
 #[cfg(test)]

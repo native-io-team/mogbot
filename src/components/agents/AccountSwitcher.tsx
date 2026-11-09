@@ -48,7 +48,6 @@ import { ENGINE_LABEL, type Agent, type AgentEngine, type EngineInfo } from '../
 import {
   addUsageAccount,
   onSwitcherRequest,
-  removeUsageAccount,
   requestSwitcher,
   renameUsageAccount,
   reorderUsageAccounts,
@@ -100,7 +99,7 @@ export function shownEngines(
 }
 
 export function AccountSwitcher({ collapsed }: { collapsed: boolean }) {
-  const { accounts, attempt } = useUsageAccounts();
+  const { accounts, attempt, remove } = useUsageAccounts();
   const engines = useAgentsSelector(selectEngines);
   const agents = useAgentsSelector(selectAgents);
   const [open, setOpen] = useState(false);
@@ -211,7 +210,7 @@ export function AccountSwitcher({ collapsed }: { collapsed: boolean }) {
             onUse={(row) => void attempt(() => putAccountFirst(row.engine, row.id))}
             onMove={(engine, ids) => void attempt(() => reorderUsageAccounts(engine, ids))}
             onRename={(row, name) => attempt(() => renameUsageAccount(row.engine, row.id, name))}
-            onRemove={(row) => void attempt(() => removeUsageAccount(row.engine, row.id))}
+            onRemove={(row) => void remove(row.engine, row.id)}
             onSignIn={(row) => {
               const account = all.find((a) => a.engine === row.engine && a.id === row.id);
               close();
