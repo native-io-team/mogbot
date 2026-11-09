@@ -779,8 +779,56 @@ fn pattern_text(words: &[String], inner: &str) -> bool {
         "perl" => !["system", "exec", "qx", "`", "open", "fork"]
             .iter()
             .any(|w| inner.contains(w)),
+        // A web request never runs its arguments: a `-w` format or a header
+        // is text. Observed (2026-11-08): `curl -w "site/slack -> %{…}"`
+        // read as a command named `slack`, a messenger, and held a link
+        // check for "exact text".
+        "curl" | "wget" | "http" | "https" | "xh" | "xhs" => true,
+        "awk" | "gawk" | "nawk" | "mawk" => awk_is_text(inner),
         _ => false,
     }
+}
+
+/// An awk program that only reads and prints: no `system()`, no pipe to or
+/// from a command, no `getline`, no output redirect. Regular expressions
+/// (`/<\/style>/`) and strings are skipped first, so the `>` in a tag isn't
+/// taken for a redirect; a `/` after an operand is division, and anything
+/// left that could be a redirect or a comparison (`>`) keeps the old reading.
+/// Observed (2026-11-08): `awk '/<style/{s=1} !s{print} /<\/style>/{s=0}'`
+/// was lexed as shell, with `>` a redirect into `/`, and asked at Full send.
+fn awk_is_text(program: &str) -> bool {
+    let chars: Vec<char> = program.chars().collect();
+    let mut code = String::new();
+    let mut i = 0;
+    // Whether a `/` here would start a regular expression: nothing yet, or
+    // after an operator or an opening bracket.
+    let regex_can_start = |code: &str| {
+        code.trim_end()
+            .chars()
+            .last()
+            .is_none_or(|c| "{}();,!&|~=?:".contains(c) || c == '\n')
+    };
+    while i < chars.len() {
+        let c = chars[i];
+        if c == '"' || (c == '/' && regex_can_start(&code)) {
+            let mut j = i + 1;
+            while j < chars.len() && chars[j] != c {
+                j += if chars[j] == '\\' { 2 } else { 1 };
+            }
+            if j >= chars.len() {
+                return false;
+            }
+            code.push(' ');
+            i = j + 1;
+            continue;
+        }
+        code.push(c);
+        i += 1;
+    }
+    !code.contains('>')
+        && !code.contains('|')
+        && !code.contains("system")
+        && !code.contains("getline")
 }
 
 fn lex_into(src: &str, out: &mut Vec<Vec<String>>, depth: u8, text: Text) {
@@ -1016,7 +1064,12 @@ fn command_asks(command: &str, ctx: &Ctx, outside: bool) -> bool {
     // absolute and `~` paths.
     let mut here = ctx.clone();
     let mut known = false;
+    let mut vars = Vars::new(&without_heredoc_data(command));
     for words in commands(command) {
+        if vars.assigns(&words) {
+            continue;
+        }
+        let words = vars.expand(&words);
         // `pushd` moves like `cd`. Found in review (2026-11-08): `pushd ~ &&
         // rm -rf Documents` resolved against the turn's folder and ran, and
         // so did a `cd` to a folder that couldn't be read (`cd "$D"`, `cd -P
@@ -1059,6 +1112,123 @@ fn command_asks(command: &str, ctx: &Ctx, outside: bool) -> bool {
         }
     }
     false
+}
+
+/// Shell variables a line sets on their own (`D=~/p/.shots; rm -rf $D`),
+/// so a later `$D` is judged as where it points rather than asking because
+/// it can't be read. Observed (2026-11-08): `D=<project>/.shots/r10c; rm
+/// -rf $D` asked at Full send while `rm -rf <project>/.shots/r10c` didn't.
+///
+/// Only a value that is one plain word is kept: nothing from `$(…)` or a
+/// backtick, no spaces (the shell would split it) or glob characters, no
+/// variable it can't fill in itself. A name set twice on a line is never
+/// filled in (which value holds depends on what ran), and a name it can't
+/// fill in stays as written, so it asks as before.
+struct Vars {
+    /// The line as written: a value is kept only where it appears there
+    /// whole (`D=/p$(cmd)` lexes as `D=/p`, and isn't).
+    raw: String,
+    set: std::collections::HashMap<String, Option<String>>,
+}
+
+impl Vars {
+    fn new(raw: &str) -> Self {
+        Vars {
+            raw: raw.to_string(),
+            set: Default::default(),
+        }
+    }
+
+    /// Every `name=` in the line is `name=value` written out whole: bare or
+    /// in one pair of quotes, then the end of the word. One that goes on
+    /// (`D=/p$(cmd)`, which lexes as `D=/p`) means the value isn't known.
+    fn written(&self, name: &str, value: &str) -> bool {
+        let ends = |c: char| c.is_whitespace() || matches!(c, ';' | '&' | '|' | '(' | ')');
+        let forms = [
+            value.to_string(),
+            format!("\"{value}\""),
+            format!("'{value}'"),
+        ];
+        let lead = format!("{name}=");
+        let mut seen = false;
+        for (at, _) in self.raw.match_indices(lead.as_str()) {
+            if !self.raw[..at].chars().last().is_none_or(ends) {
+                continue;
+            }
+            seen = true;
+            let rest = &self.raw[at + lead.len()..];
+            let whole = forms.iter().any(|f| {
+                rest.strip_prefix(f.as_str())
+                    .is_some_and(|after| after.chars().next().is_none_or(ends))
+            });
+            if !whole {
+                return false;
+            }
+        }
+        seen
+    }
+
+    /// Records a command made only of assignments; `false` for any other.
+    fn assigns(&mut self, words: &[String]) -> bool {
+        if words.is_empty() || !words.iter().all(|w| is_assignment(w)) {
+            return false;
+        }
+        for w in words {
+            let (name, value) = w.split_once('=').unwrap_or((w, ""));
+            let written = self.written(name, value);
+            let value = self.fill(value);
+            let rest = value.replace("${HOME}", "").replace("$HOME", "");
+            let plain = written
+                && !value.is_empty()
+                && !rest.contains('$')
+                && !value.contains('`')
+                && !value
+                    .chars()
+                    .any(|c| c.is_whitespace() || matches!(c, '*' | '?' | '[' | '{'));
+            let entry = if self.set.contains_key(name) || !plain {
+                None
+            } else {
+                Some(value)
+            };
+            self.set.insert(name.to_string(), entry);
+        }
+        true
+    }
+
+    /// `$NAME` and `${NAME}` replaced where the line set them plainly.
+    fn fill(&self, word: &str) -> String {
+        if !word.contains('$') {
+            return word.to_string();
+        }
+        let chars: Vec<char> = word.chars().collect();
+        let mut out = String::new();
+        let mut i = 0;
+        while i < chars.len() {
+            if chars[i] == '$' {
+                let braced = chars.get(i + 1) == Some(&'{');
+                let start = i + 1 + usize::from(braced);
+                let mut end = start;
+                while end < chars.len() && (chars[end].is_ascii_alphanumeric() || chars[end] == '_')
+                {
+                    end += 1;
+                }
+                let closed = !braced || chars.get(end) == Some(&'}');
+                let name: String = chars[start..end].iter().collect();
+                if let (true, Some(Some(v))) = (closed && end > start, self.set.get(&name)) {
+                    out.push_str(v);
+                    i = end + usize::from(braced);
+                    continue;
+                }
+            }
+            out.push(chars[i]);
+            i += 1;
+        }
+        out
+    }
+
+    fn expand(&self, words: &[String]) -> Vec<String> {
+        words.iter().map(|w| self.fill(w)).collect()
+    }
 }
 
 /// Whether one command of a line (its words, from [`commands`]) asks at
@@ -1641,6 +1811,44 @@ fn vercel_prod(args: &[&str]) -> bool {
             .windows(2)
             .any(|w| w[0] == "--target" && w[1] == "production");
     prod && positional(args).first().is_none_or(|s| !LOOKS.contains(s))
+}
+
+/// A `vercel deploy` (or bare `vercel`) from a folder not yet linked to a
+/// Vercel project: it links or creates one, and a new project's first
+/// deployment is its production one, public at the project's own address.
+/// Observed (2026-11-08): `vercel project add … && vercel link --yes … &&
+/// vercel deploy --yes` ran at Full send as "deployed a preview", and the
+/// site went public at its production address.
+fn vercel_first_deploy(args: &[&str], ctx: &Ctx) -> bool {
+    let words = vercel_words(args);
+    let (sub, rest) = match words.split_first() {
+        Some((&"deploy", rest)) => ("deploy", rest),
+        Some((first, _)) if first.contains('/') || *first == "." => ("deploy", &words[..]),
+        Some(_) => ("", &words[..0]),
+        None => ("deploy", &words[..0]),
+    };
+    if sub != "deploy"
+        || args.iter().any(|a| {
+            a.starts_with("--target") || matches!(*a, "--version" | "-v" | "--help" | "-h")
+        })
+    {
+        return false;
+    }
+    let dir = args
+        .windows(2)
+        .find(|w| matches!(w[0], "--cwd"))
+        .map(|w| w[1])
+        .or_else(|| args.iter().find_map(|a| a.strip_prefix("--cwd=")))
+        .or_else(|| rest.first().copied());
+    let folder = match dir {
+        Some(d) => resolve(d, ctx),
+        None => Some(ctx.cwd.clone()),
+    };
+    let Some(folder) = folder else {
+        return true;
+    };
+    let vercel = folder.join(".vercel");
+    !vercel.join("project.json").is_file() && !vercel.join("repo.json").is_file()
 }
 
 /// A `vercel` command that changes a project's settings: what others see
@@ -2475,6 +2683,7 @@ fn full_send_program(prog: &str, args: &[&str], ctx: &Ctx) -> Option<bool> {
             vercel_prod(args)
                 || pos.first().is_some_and(|s| ASKS.contains(s))
                 || vercel_settings(args)
+                || vercel_first_deploy(args, ctx)
                 || (vercel_words(args)
                     .first()
                     .is_some_and(|s| matches!(*s, "curl" | "api"))
@@ -3249,3 +3458,7 @@ mod full_send_tests;
 #[cfg(test)]
 #[path = "go_hard_review_tests.rs"]
 mod review_tests;
+
+#[cfg(test)]
+#[path = "go_hard_words_tests.rs"]
+mod words_tests;

@@ -148,11 +148,11 @@ pub fn saved_native_theme() -> Option<tauri::Theme> {
 }
 
 const LIGHT_WINDOW_BACKGROUND: tauri::utils::config::Color =
-    tauri::utils::config::Color(245, 245, 245, 255);
-/// `--surface-app` in each theme (#f5f5f5 / #141414), so the native fill under
+    tauri::utils::config::Color(244, 242, 238, 255);
+/// `--surface-app` in each theme (#f4f2ee / #151413), so the native fill under
 /// the webview is the colour the app paints over it.
 const DARK_WINDOW_BACKGROUND: tauri::utils::config::Color =
-    tauri::utils::config::Color(20, 20, 20, 255);
+    tauri::utils::config::Color(21, 20, 19, 255);
 
 /// Whether macOS's global `AppleInterfaceStyle` value means dark. The key is
 /// absent in light mode and `"Dark"` in dark mode (Auto updates it as it flips).

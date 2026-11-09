@@ -76,6 +76,19 @@ pub const TOOLS: &[Def] = &[
         }),
     },
     Def {
+        name: "use_account",
+        description: "Switch which account turns run on, when the user asks (\"use my personal Claude plan\"): puts the account they name first for its engine, so every agent's next turn starts on it. When it reaches its limit, turns move to the next account as before. `account` is its name as usage_overview lists it, or its id. Only signed-in accounts; adding or signing in to one is in Settings → Agents.",
+        main_only: true,
+        schema: || json!({
+            "type": "object",
+            "properties": {
+                "account": { "type": "string", "description": "The account's name (\"Personal Account\", \"This Mac\") or id." },
+                "engine": { "type": "string", "enum": ["claude", "codex"], "description": "Which engine's account, when the name is on both." }
+            },
+            "required": ["account"]
+        }),
+    },
+    Def {
         name: "run_routine_now",
         description: "Run one of the user's routines now, without moving its next time: only in \"Use it all before reset\" mode, to use capacity that would otherwise expire. Its usual approvals still apply.",
         main_only: true,
@@ -278,6 +291,98 @@ pub fn set_mode(app: &AppHandle, mode: Mode) -> Value {
     }
 }
 
+/// The account the user named, among `accounts` (every engine's, in
+/// order): its id or its name (any case, or the one name containing it).
+/// Observed (2026-11-08): asked to "switch to my personal Claude plan", the
+/// Chief said nothing it had could change the account, twice.
+pub fn pick_account(
+    accounts: &[super::wallet::Account],
+    named: &str,
+    engine: Option<Engine>,
+) -> Result<super::wallet::Account, String> {
+    let want = named.trim().to_lowercase();
+    let mine: Vec<&super::wallet::Account> = accounts
+        .iter()
+        .filter(|a| engine.is_none_or(|e| a.engine == e))
+        .collect();
+    let exact: Vec<&&super::wallet::Account> = mine
+        .iter()
+        .filter(|a| a.id == named.trim() || a.name.to_lowercase() == want)
+        .collect();
+    let found: Vec<&&super::wallet::Account> = if exact.is_empty() && !want.is_empty() {
+        mine.iter()
+            .filter(|a| a.name.to_lowercase().contains(&want))
+            .collect()
+    } else {
+        exact
+    };
+    let names = || {
+        mine.iter()
+            .map(|a| format!("“{}” ({})", a.name, a.engine.label()))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    match found.as_slice() {
+        [one] => Ok((**one).clone()),
+        [] => Err(format!(
+            "There's no account called “{}”. The accounts are: {}.",
+            named.trim(),
+            names()
+        )),
+        _ => Err(format!(
+            "More than one account matches “{}”: {}. Say which, with `engine` or the full name.",
+            named.trim(),
+            names()
+        )),
+    }
+}
+
+/// The engine's account ids with `first` moved to the front.
+pub fn order_with_first(accounts: &[super::wallet::Account], first: &str) -> Vec<String> {
+    std::iter::once(first.to_string())
+        .chain(
+            accounts
+                .iter()
+                .map(|a| a.id.clone())
+                .filter(|id| id != first),
+        )
+        .collect()
+}
+
+/// `use_account`: put the named account first for its engine. Only a
+/// signed-in one: a turn on an account it can't use would just fail over.
+pub async fn use_account(app: &AppHandle, args: &Value) -> Value {
+    let Some(named) = arg(args, "account") else {
+        return error("`account` is required: its name as usage_overview lists it.");
+    };
+    let engine = match arg(args, "engine").map(Engine::parse).transpose() {
+        Ok(e) => e,
+        Err(e) => return error(e.to_string()),
+    };
+    let account = match pick_account(&super::wallet::list(), named, engine) {
+        Ok(a) => a,
+        Err(e) => return error(e),
+    };
+    if !super::wallet::signed_in(&account).await {
+        return error(format!(
+            "“{}” isn't signed in on this Mac. Ask the user to sign it in under Settings → Agents → Usage; nothing changed.",
+            account.name
+        ));
+    }
+    let order = order_with_first(&super::wallet::of(account.engine), &account.id);
+    match super::wallet::reorder(account.engine, &order) {
+        Ok(_) => {
+            let _ = tauri::Emitter::emit(app, "agents-accounts-changed", ());
+            text(format!(
+                "{} turns now start on “{}”. If it reaches its limit they move to the next account, as before.",
+                account.engine.label(),
+                account.name
+            ))
+        }
+        Err(e) => error(e.to_string()),
+    }
+}
+
 pub fn run_routine(app: &AppHandle, args: &Value) -> Value {
     if usage_plan::mode().0 != Mode::UseItAll {
         return error("Only in “Use it all before reset”. Otherwise ask the user to press Run now on the routine.");
@@ -459,6 +564,53 @@ mod tests {
         assert!(planned(&inv(), &agents, &json!({})).is_err());
     }
 
+    /// "Switch to my personal Claude plan": the account is found by its
+    /// name and put first; nothing else moves.
+    #[test]
+    fn use_account_finds_the_named_account_and_puts_it_first() {
+        use crate::agents::wallet::Account;
+        let acct = |id: &str, engine: Engine, name: &str| Account {
+            id: id.into(),
+            engine,
+            name: name.into(),
+            added_at: 0,
+            limit: None,
+        };
+        let all = vec![
+            acct("default", Engine::Claude, "This Mac"),
+            acct("a1", Engine::Claude, "Personal Account"),
+            acct("a2", Engine::Claude, "Work Account"),
+            acct("default", Engine::Codex, "This Mac"),
+        ];
+        let picked = pick_account(&all, "personal", None).unwrap();
+        assert_eq!(picked.id, "a1");
+        assert_eq!(pick_account(&all, "Work Account", None).unwrap().id, "a2");
+        assert_eq!(
+            pick_account(&all, "a2", Some(Engine::Claude)).unwrap().id,
+            "a2"
+        );
+        // On both engines: say which.
+        assert!(pick_account(&all, "This Mac", None)
+            .unwrap_err()
+            .contains("More than one"));
+        assert_eq!(
+            pick_account(&all, "this mac", Some(Engine::Codex))
+                .unwrap()
+                .engine,
+            Engine::Codex
+        );
+        // "account" matches all of Claude Code's added ones.
+        assert!(pick_account(&all, "account", Some(Engine::Claude)).is_err());
+        let none = pick_account(&all, "Family", None).unwrap_err();
+        assert!(none.contains("“Personal Account” (Claude Code)"), "{none}");
+        let claude: Vec<Account> = all[..3].to_vec();
+        assert_eq!(order_with_first(&claude, "a2"), ["a2", "default", "a1"]);
+        assert_eq!(
+            order_with_first(&claude, "default"),
+            ["default", "a1", "a2"]
+        );
+    }
+
     #[test]
     fn every_tool_is_read_only_or_guarded() {
         let names: Vec<&str> = TOOLS.iter().map(|t| t.name).collect();
@@ -470,6 +622,7 @@ mod tests {
                 "add_spare_work",
                 "finish_spare_work",
                 "set_usage_mode",
+                "use_account",
                 "run_routine_now"
             ]
         );
@@ -477,7 +630,7 @@ mod tests {
         for t in TOOLS {
             assert_eq!(
                 t.main_only,
-                matches!(t.name, "set_usage_mode" | "run_routine_now"),
+                matches!(t.name, "set_usage_mode" | "use_account" | "run_routine_now"),
                 "{}",
                 t.name
             );
