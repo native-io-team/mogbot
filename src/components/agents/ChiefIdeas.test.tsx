@@ -8,8 +8,8 @@ import { BRAND } from '../../lib/brand';
 
 describe('the Chief’s ideas: the catalogue', () => {
   it('puts three things that run without you on the chips', () => {
-    expect(CHIEF_CHIPS.map((i) => i.id)).toEqual(['ship-fixes', 'launch', 'client-brief']);
-    // Overnight, every morning, on a trigger: one from each group.
+    expect(CHIEF_CHIPS.map((i) => i.id)).toEqual(['morning-brief', 'inbox', 'launch']);
+    // Every morning, on a trigger, a team: one from each group.
     expect(new Set(CHIEF_CHIPS.map((i) => i.group))).toEqual(
       new Set(['schedule', 'together', 'trigger'])
     );

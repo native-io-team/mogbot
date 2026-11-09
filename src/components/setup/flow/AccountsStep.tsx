@@ -1,9 +1,10 @@
 /**
  * Onboarding, right after the engine is signed in: "Add another account?"
  * One line on why (agents carry on with the next when one runs out of
- * usage), then the accounts there are, each a line, and one big button to
- * add one. Skip is always there; the same thing is in the account row at
- * the foot of Agents (and ⌘K "Add an account…") later.
+ * usage), then the accounts there are, each a line, a quiet line per
+ * engine to add one, and one big Continue: most people have one account,
+ * so going on is the default. The same thing is in the account row at the
+ * foot of Agents (and ⌘K "Add an account…") later.
  *
  * Adding names the account, then runs its engine's own sign-in in a
  * terminal (`AccountSignIn`): Claude Code's `setup-token`, captured in
@@ -63,7 +64,6 @@ export function AccountsStep({
       (a.engine === engine && a.thisMac && a.signedIn) ||
       (!a.thisMac && installed.includes(a.engine))
   );
-  const added = listed.some((a) => !a.thisMac && a.signedIn);
 
   const start = (e: AgentEngine) => {
     setName(suggestName(all, e));
@@ -92,13 +92,11 @@ export function AccountsStep({
     >
       Add and sign in
     </Button>
-  ) : added ? (
+  ) : (
+    // Optional, and most people have one account: going on is the big
+    // button, adding one is the quiet line under the list.
     <Button variant="primary" size="large" onClick={onNext} autoFocus data-flow-primary>
       Continue
-    </Button>
-  ) : (
-    <Button variant="primary" size="large" onClick={() => start(engine)} data-flow-primary>
-      Add a {ENGINE_LABEL[engine]} account
     </Button>
   );
 
@@ -114,11 +112,7 @@ export function AccountsStep({
           <Button variant="ghost" onClick={() => setNaming(null)}>
             Cancel
           </Button>
-        ) : added ? undefined : (
-          <Button variant="ghost" onClick={onNext}>
-            Skip
-          </Button>
-        )
+        ) : undefined
       }
     >
       {listed.length > 0 && (
@@ -165,17 +159,13 @@ export function AccountsStep({
       )}
       {!naming && (
         <div className="flow-accounts__more">
-          {installed
-            .filter((e) => added || e !== engine)
-            .map((e) => (
-              <TextButton key={e} onClick={() => start(e)}>
-                {!added
-                  ? `Or a ${ENGINE_LABEL[e]} account`
-                  : e === engine
-                    ? `Add another ${ENGINE_LABEL[e]} account`
-                    : `Add a ${ENGINE_LABEL[e]} account`}
-              </TextButton>
-            ))}
+          {installed.map((e) => (
+            <TextButton key={e} onClick={() => start(e)}>
+              {e === engine
+                ? `Add another ${ENGINE_LABEL[e]} account`
+                : `Add a ${ENGINE_LABEL[e]} account`}
+            </TextButton>
+          ))}
         </div>
       )}
       {signingIn && (

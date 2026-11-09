@@ -171,12 +171,12 @@ const SITE_HANDED_BACK = [
 
 export const agentsFirstWinScenarios: Scenario[] = [
   {
-    id: 'agents-first-win-ship-fixes',
-    title: 'Agents — first run: “Ship fixes while I sleep…”',
+    id: 'agents-first-win-morning-brief',
+    title: 'Agents — first run: “Brief me every morning…”',
     looksRightWhen:
-      'The greeting with its starters still under it (Ship fixes while I sleep…, Run my launch as a team…, Turn client briefs into sites…, all neutral outline buttons, then a quieter More ideas…), and the composer holding the whole brief, “Every night at 1am, have one agent take the top open GitHub issue in my repo … The repo: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
+      'The greeting with its starters still under it (Brief me every morning…, Run an inbox triage crew…, Run my launch as a team…, all neutral outline buttons, then a quieter More ideas…), and the composer holding the whole brief, “Every weekday at 8am, have a researcher read what’s new … My topics: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
     command: 'agents.open',
-    steps: [{ click: '.agent-chat__starters > [data-idea="ship-fixes"]' }],
+    steps: [{ click: '.agent-chat__starters > [data-idea="morning-brief"]' }],
     requires: '.agent-chat__messages > .agent-chat__starters',
     commands: {},
   },
@@ -191,12 +191,12 @@ export const agentsFirstWinScenarios: Scenario[] = [
     commands: {},
   },
   {
-    id: 'agents-first-win-client-brief',
-    title: 'Agents — first run: “Turn client briefs into sites…”',
+    id: 'agents-first-win-inbox',
+    title: 'Agents — first run: “Run an inbox triage crew…”',
     looksRightWhen:
-      'The composer holds the whole brief, “When a new client brief lands in a folder … The folder to watch: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
+      'The composer holds the whole brief, “Set up an inbox crew: through the day, one agent sorts my new email … My email is in: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
     command: 'agents.open',
-    steps: [{ click: '.agent-chat__starters > [data-idea="client-brief"]' }],
+    steps: [{ click: '.agent-chat__starters > [data-idea="inbox"]' }],
     requires: '.agent-chat__messages > .agent-chat__starters',
     commands: {},
   },

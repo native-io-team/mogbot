@@ -116,8 +116,8 @@ export default function Settings() {
       connected
         ? 'This phone stops reaching your agents, and the Mac removes it from its paired devices. You can pair again any time.'
         : !credentials?.fingerprint
-          ? `This phone stops reaching your agents now. This pairing is from before the app checked your Mac’s identity, so this phone won’t contact ${macName} to remove it: remove it on the Mac, in Settings → Phone.`
-          : `This phone stops reaching your agents now. ${macName} can’t be reached, so it keeps this phone in its paired devices until it can: the next time this phone reaches it, it asks the Mac to remove it. You can also remove it on the Mac, in Settings → Phone.`,
+          ? `This phone stops reaching your agents now. This pairing is from before the app checked your Mac’s identity, so this phone won’t contact ${macName} to remove it: remove it on the Mac, in Settings → Agents → Phone.`
+          : `This phone stops reaching your agents now. ${macName} can’t be reached, so it keeps this phone in its paired devices until it can: the next time this phone reaches it, it asks the Mac to remove it. You can also remove it on the Mac, in Settings → Agents → Phone.`,
       [
         { text: 'Cancel', style: 'cancel' },
         {
@@ -128,7 +128,7 @@ export default function Settings() {
             if (result === 'queued' && connected) {
               Alert.alert(
                 'Forgotten on this phone',
-                `${macName} didn’t answer, so it still lists this phone. It’s asked again the next time this phone reaches it; or remove it on the Mac, in Settings → Phone.`
+                `${macName} didn’t answer, so it still lists this phone. It’s asked again the next time this phone reaches it; or remove it on the Mac, in Settings → Agents → Phone.`
               );
             }
             router.replace('/pair');

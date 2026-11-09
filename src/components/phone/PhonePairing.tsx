@@ -56,11 +56,25 @@ interface CodeProps {
   tailscale: TailscaleState;
   /** When a device on the tailnet first reached this Mac with the code out. */
   reachedAt?: number;
+  /**
+   * The phone's Tailscale was already checked on an earlier screen (onboarding),
+   * so the steps start at opening the app instead of repeating it.
+   */
+  tailscaleChecked?: boolean;
   onCopy: () => void;
   onCancel: () => void;
 }
 
-export function PairCode({ code, now, busy, tailscale, reachedAt, onCopy, onCancel }: CodeProps) {
+export function PairCode({
+  code,
+  now,
+  busy,
+  tailscale,
+  reachedAt,
+  tailscaleChecked = false,
+  onCopy,
+  onCancel,
+}: CodeProps) {
   const left = expiresIn(code.expiresAt, now);
   return (
     <div className="phone-code" data-testid="phone-pair-code">
@@ -72,14 +86,17 @@ export function PairCode({ code, now, busy, tailscale, reachedAt, onCopy, onCanc
       <div className="phone-code__side">
         <span className="phone-code__title">Scan with the {BRAND.name} app</span>
         <ol className="phone-code__steps">
-          <li data-tailscale>
-            <span className="phone-code__step-strong">{phoneTailscaleText(tailscale)}</span> It’s
-            how the phone reaches this Mac; turn it on before you scan.
-            <TailscaleStoreLinks />
-          </li>
+          {!tailscaleChecked && (
+            <li data-tailscale>
+              <span className="phone-code__step-strong">{phoneTailscaleText(tailscale)}</span> It’s
+              how the phone reaches this Mac; turn it on before you scan.
+              <TailscaleStoreLinks />
+            </li>
+          )}
           <li>Open {BRAND.name} on your phone.</li>
-          <li>Tap Pair, then point the camera at this code.</li>
-          <li>Allow the phone here when it asks.</li>
+          {/* The phone's own words: its button is "Scan the code", then "Pair". */}
+          <li>Tap Scan the code, then point the camera at this code.</li>
+          <li>Tap Pair, then allow the phone here when it asks.</li>
         </ol>
         {reachedAt !== undefined && (
           <span className="phone-code__reached" role="status" data-testid="phone-code-reached">

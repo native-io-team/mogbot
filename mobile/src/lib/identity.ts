@@ -136,7 +136,7 @@ export const MAC_RESET =
   'The Mac at this address has a different identity from the one this phone paired with, so this phone sent it nothing private. That happens when the app on your Mac lost its key and started over, which removes every paired phone. Pair again from your Mac.';
 
 export const PAIR_AGAIN =
-  'This pairing was made before the app checked your Mac’s identity, so it can’t be trusted any more. Pair again from your Mac: Settings → Phone → Pair a phone.';
+  'This pairing was made before the app checked your Mac’s identity, so it can’t be trusted any more. Pair again from your Mac: Settings → Agents → Phone → Pair a phone.';
 
 export const UPDATE_MAC =
   'The app on your Mac is too old for this phone. Update it on the Mac, then try again.';

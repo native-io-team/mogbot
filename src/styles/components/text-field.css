@@ -97,8 +97,10 @@
   color: var(--text-primary);
 }
 
+/* Muted, a step below a value: at the value's own colour a placeholder read
+   as something already typed (the New agent dialog looked filled in). */
 .ss-text-field::placeholder {
-  color: var(--text-secondary);
+  color: var(--text-muted);
 }
 
 .ss-text-field:disabled {

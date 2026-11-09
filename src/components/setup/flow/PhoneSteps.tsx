@@ -79,7 +79,7 @@ export function PhoneIntroStep({ onNext, onBack, onSkip }: StepProps) {
     <FlowShell
       step="phone"
       title="Use your agents from your phone?"
-      lede="Chat, answer and approve from anywhere. Your phone talks only to this Mac, over your own Tailscale. About ten minutes."
+      lede="Chat, answer and approve from anywhere. Your phone talks only to this Mac, through Tailscale, a free app that links your own devices privately. About ten minutes."
       onBack={onBack}
       primary={
         paired ? (
@@ -95,7 +95,7 @@ export function PhoneIntroStep({ onNext, onBack, onSkip }: StepProps) {
       secondary={
         !paired && (
           <Button variant="ghost" onClick={onSkip} data-flow-skip>
-            Skip for now
+            Skip phone setup
           </Button>
         )
       }
@@ -211,6 +211,7 @@ export function PhoneAppStep({ onNext, onBack, onSkip }: StepProps) {
         step="phoneApp"
         title={`Build the ${BRAND.name} app on this Mac`}
         lede="Plug your phone in with a cable. Your agent builds the app and installs it; each step ticks when the app has checked it."
+        onBack={() => setBuilding(null)}
         wide
         secondary={skipButton(onSkip)}
       >
@@ -390,7 +391,7 @@ export function PhonePairStep({ onNext, onBack, onSkip }: StepProps) {
         stage.kind === 'confirm'
           ? 'Check it’s your phone and the code ending matches, then allow it.'
           : stage.kind === 'code'
-            ? `Open the ${BRAND.name} app on your phone, tap Pair, and point the camera here.`
+            ? `Open the ${BRAND.name} app on your phone, tap Scan the code, and point the camera here.`
             : stage.kind === 'paired'
               ? 'It reaches this Mac over your own Tailscale.'
               : 'This Mac gets a private address your phone can reach. The code shows when it’s ready.'
@@ -421,6 +422,7 @@ export function PhonePairStep({ onNext, onBack, onSkip }: StepProps) {
           busy={busy !== null}
           tailscale={status.tailscale}
           reachedAt={status.pairing.reachedAt}
+          tailscaleChecked
           onCopy={() => void copy(code.link)}
           onCancel={() => {
             void cancelPairing().finally(onBack);

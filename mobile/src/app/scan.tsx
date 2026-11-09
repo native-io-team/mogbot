@@ -71,7 +71,7 @@ export default function Scan() {
         <View pointerEvents="none" style={styles.frameWrap}>
           <View style={styles.frame} />
           <T color={colors.onMedia} style={styles.caption}>
-            {wrong ?? 'Point at the code in Settings → Phone on your Mac'}
+            {wrong ?? 'Point at the code in Settings → Agents → Phone on your Mac'}
           </T>
         </View>
       )}
