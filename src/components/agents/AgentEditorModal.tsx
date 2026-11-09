@@ -591,7 +591,7 @@ export function AgentEditorModal({
         manual && (
           <p className="agent-editor__hint agent-editor__ask-chief">
             Not sure what to write?{' '}
-            <TextButton tabIndex={0} variant="primary" onClick={onAskChief}>
+            <TextButton tabIndex={0} onClick={onAskChief}>
               Ask your Chief of Staff to set it up
             </TextButton>
           </p>

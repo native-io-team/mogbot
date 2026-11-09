@@ -630,6 +630,10 @@ describe('failure lines', () => {
       label: 'Out of usage',
       rest: '',
     });
+    // The pill and its words read as the one phrase: "Out of usage until …".
+    expect(
+      failurePill({ kind: 'usage_limit', resetsAt: Date.now() + 3_600_000 }, 'x').rest
+    ).toMatch(/^until /);
     expect(failurePill({ kind: 'signed_out' }, 'x', 'codex')).toEqual({
       tone: 'failed',
       label: 'Signed out',

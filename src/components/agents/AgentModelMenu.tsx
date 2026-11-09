@@ -137,23 +137,32 @@ export function AgentModelItems({ agent }: { agent: Agent }) {
       {hasRoutine && (
         <>
           <DropdownDivider />
-          <p className="agent-model-menu__heading">
-            Routines run on {modelLabel(routineModelOf(agent), choices)}
-          </p>
-          {routineModelChoices(agent.engine, choices).map((m) => (
-            <DropdownItem
-              key={m.value}
-              onSelect={() => m.value !== routine && void save({ routineModel: m.value })}
-            >
-              <span className="agent-model-menu__label" title={m.hint ?? undefined}>
-                {m.label}
-                {m.detail && <span className="agent-model-menu__detail">{m.detail}</span>}
-              </span>
-              <span className="agent-model-menu__check" aria-hidden="true">
-                {m.value === routine && <CheckIcon size={12} />}
-              </span>
-            </DropdownItem>
-          ))}
+          {/* The heading names the section the way the two above do; what
+              Automatic or Same comes to sits beside it, as the engine's
+              names sit beside the models ("Automatic  Fastest"), so the
+              heading never names one choice while another is ticked. */}
+          <p className="agent-model-menu__heading">Routines · the model they wake on</p>
+          {routineModelChoices(agent.engine, choices).map((m) => {
+            const resolved =
+              m.value === '' || m.value === 'same'
+                ? modelLabel(routineModelOf({ ...agent, routineModel: m.value }), choices)
+                : null;
+            const detail = m.detail ?? resolved;
+            return (
+              <DropdownItem
+                key={m.value}
+                onSelect={() => m.value !== routine && void save({ routineModel: m.value })}
+              >
+                <span className="agent-model-menu__label" title={m.hint ?? undefined}>
+                  {m.label}
+                  {detail && <span className="agent-model-menu__detail">{detail}</span>}
+                </span>
+                <span className="agent-model-menu__check" aria-hidden="true">
+                  {m.value === routine && <CheckIcon size={12} />}
+                </span>
+              </DropdownItem>
+            );
+          })}
         </>
       )}
     </>

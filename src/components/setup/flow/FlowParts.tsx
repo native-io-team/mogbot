@@ -7,7 +7,7 @@
  * @module components/setup/flow/FlowParts
  */
 
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { openUrl } from '@tauri-apps/plugin-opener';
 import { Button } from '../../primitives/Button';
 import { Spinner } from '../../primitives/Spinner';
@@ -98,6 +98,9 @@ export function FlowShell({
         </div>
         <div
           className="flow-progress"
+          // One column per section: a fixed count left the bar off-centre, and
+          // its label under the last segment, when the line got shorter.
+          style={{ '--flow-progress-sections': sections } as CSSProperties}
           role="progressbar"
           aria-valuemin={1}
           aria-valuemax={sections}

@@ -505,6 +505,7 @@
 .usage-key__pace {
   color: var(--text-muted);
   font-size: var(--font-size-caption);
+  line-height: var(--line-height-help);
   font-variant-numeric: tabular-nums;
 }
 
@@ -544,6 +545,8 @@
   padding: 0;
   color: var(--text-secondary);
   font-size: var(--font-size-body-sm);
+  /* Its own leading: inherited, the lines touched (a wrapped pace line too). */
+  line-height: var(--line-height-help);
   font-variant-numeric: tabular-nums;
   list-style: none;
 }

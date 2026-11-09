@@ -135,7 +135,7 @@ export const agentsCrossoverScenarios: Scenario[] = [
     title: 'Settings — Agents → Usage: when every account of an engine is out',
     looksRightWhen:
       'Under “How agents use your limits”, two more blocks: “When every Claude Code account is out” with a three-way control (Ask first | Carry on with Codex | Wait for the reset), Carry on pressed, neutral not accent, a muted line that turns move to Codex until Claude Code has room and never for an agent set to one account, then one amber status line “Claude Code out · on Codex until <time>”. Then “When every Codex account is out” with Ask first pressed and its muted line. Readable in both themes.',
-    command: 'agents.usage',
+    command: 'settings.page.accounts',
     requires: '.agents-usage [data-crossover="claude"] .agents-usage__state',
     clipSelector: '[data-crossover="claude"]',
     commands: {

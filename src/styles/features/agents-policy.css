@@ -71,67 +71,6 @@
   color: var(--text-muted);
 }
 
-.agent-team-policy__presets {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-3xs);
-}
-
-.agent-team-policy__preset {
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-3xs);
-  padding: var(--spacing-xs) var(--spacing-sm);
-  border: var(--border-width-default) solid transparent;
-  border-radius: var(--radius-sm);
-  background: none;
-  color: var(--text-secondary);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-  transition:
-    background var(--transition-interaction),
-    border-color var(--transition-interaction);
-}
-
-.agent-team-policy__preset:hover:not(:disabled) {
-  background: var(--tint-subtle);
-}
-
-.agent-team-policy__preset:focus-visible {
-  outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
-}
-
-.agent-team-policy__preset[aria-checked='true'] {
-  border-color: var(--border-strong);
-  background: var(--tint-subtle);
-  color: var(--text-primary);
-}
-
-/* Muted is 4.1:1 on the tinted fill: the chosen (or hovered) preset's line
-   steps up to secondary. */
-.agent-team-policy__preset[aria-checked='true'] .agent-team-policy__preset-detail,
-.agent-team-policy__preset:hover:not(:disabled) .agent-team-policy__preset-detail {
-  color: var(--text-secondary);
-}
-
-.agent-team-policy__preset:disabled {
-  cursor: default;
-  opacity: var(--button-disabled-opacity);
-}
-
-.agent-team-policy__preset-label {
-  font-size: var(--font-size-body-md);
-  line-height: var(--line-height-help);
-}
-
-.agent-team-policy__preset-detail {
-  font-size: var(--font-size-body-sm);
-  line-height: var(--line-height-help);
-  color: var(--text-muted);
-}
-
 .agent-team-policy__lines {
   display: flex;
   flex-direction: column;

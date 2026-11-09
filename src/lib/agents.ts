@@ -2305,7 +2305,7 @@ export function failurePill(
     return {
       tone: 'out',
       label: 'Out of usage',
-      rest: failure.resetsAt ? `resets ${resetWords(failure.resetsAt)}` : '',
+      rest: failure.resetsAt ? `until ${resetWords(failure.resetsAt)}` : '',
     };
   }
   if (failure.kind === 'signed_out') {

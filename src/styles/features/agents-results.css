@@ -61,10 +61,10 @@
   align-items: start;
 }
 
-.agent-result__checked {
-  padding: var(--spacing-sm) 0;
-}
-
+/* The two halves are one Checks block: the same box, so side by side their
+   titles and first lines line up (an unboxed half sat a box-inset to the left
+   and read as a different kind of thing). The titles tell them apart. */
+.agent-result__checked,
 .agent-result__unverified {
   padding: var(--spacing-sm) var(--spacing-md);
   border: var(--border-width-default) solid var(--border-subtle);
@@ -109,7 +109,7 @@
 }
 
 /* One size for both lists (as on the phone), the chat's body size like the
-   summary: the box and the title already set "Not verified" apart. */
+   summary: the title and its icon set "Not verified" apart. */
 .agent-result__unverified li,
 .agent-result__checked li {
   font-size: var(--font-size-subhead-lg);

@@ -646,22 +646,27 @@
   color: var(--text-secondary);
 }
 
-/* "Or fill it in yourself, start from Research…": links in a sentence, so
-   they read as links (full ink, underlined), not as the hint around them. */
-.agent-editor__other-ways .text-button.button {
+/* The dialog's other ways in ("Or fill it in yourself, start from Research…",
+   "Or describe it instead", "Ask your Chief of Staff to set it up"): one link
+   style, so each reads as a link (full ink, underlined), not as the hint
+   around it, and never as a label or in the new agent's colour. */
+.agent-editor__other-ways .text-button.button,
+.agent-editor__ask-chief .text-button.button,
+.agent-editor__describe.button {
   color: var(--text-primary);
   text-decoration: underline;
   text-decoration-color: var(--border-strong);
   text-underline-offset: 0.2em;
 }
 
-.agent-editor__other-ways .text-button.button:hover:not(:disabled) {
+.agent-editor__other-ways .text-button.button:hover:not(:disabled),
+.agent-editor__ask-chief .text-button.button:hover:not(:disabled),
+.agent-editor__describe.button:hover:not(:disabled) {
   text-decoration-color: currentColor;
 }
 
-/* "Or describe it instead", under Start from: quiet, on the choices' left edge. */
+/* "Or describe it instead", under Start from: on the choices' left edge. */
 .agent-editor__describe.button {
   align-self: flex-start;
   font-size: var(--font-size-body-sm);
-  color: var(--text-muted);
 }

@@ -25,7 +25,7 @@ vi.mock('../../lib/agentsStore', () => ({
   useAgentsSelector: (select: (s: unknown) => unknown) => select(store),
 }));
 
-import { AccountSwitcher, AgentAccountChip, rowPill } from './AccountSwitcher';
+import { AccountSwitcher, AgentAccountChip, glanceStatus, rowPill } from './AccountSwitcher';
 import { AgentsUsageView } from './AgentsUsageView';
 import { AgentAccountItems } from './AgentModelMenu';
 import { requestSwitcher, switcherMounted, takeUsageAdd } from '../../lib/agentAccounts';
@@ -273,5 +273,17 @@ describe('the sidebar row pill', () => {
     expect(rowPill(line({ tone: 'warning', away: true, room: 'on Codex' }))).toBe('running');
     expect(rowPill(line({ tone: 'warning', room: '12% left' }))).toBeNull();
     expect(rowPill(line({ room: '62% left' }))).toBeNull();
+  });
+});
+
+describe('glanceStatus (the usage row’s corner dot)', () => {
+  const key = (left: number | null) => ({ left }) as never;
+  it('shows no dot before anything was read: a green one would claim the limits are fine', () => {
+    expect(glanceStatus({ tone: 'calm', keys: [key(null), key(null)] })).toBe('off');
+  });
+  it('is green once a reading says there is room, amber and red as before', () => {
+    expect(glanceStatus({ tone: 'calm', keys: [key(null), key(60)] })).toBe('ok');
+    expect(glanceStatus({ tone: 'warning', keys: [key(null)] })).toBe('warn');
+    expect(glanceStatus({ tone: 'limited', keys: [key(0)] })).toBe('down');
   });
 });
