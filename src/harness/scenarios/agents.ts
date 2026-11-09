@@ -3698,7 +3698,6 @@ export const agentsScenarios: Scenario[] = [
       agents_messages: messagesFor,
       agents_instructions: 'Invoices, expenses and the books.',
       agents_usage: { week: totals(6, 120_000, 1.2, 9), allTime: totals(40, 900_000, 9.4, 70) },
-      agents_revoke_secret: null,
       agents_reach: {
         connections: [],
         browser: { on: true, sites: [], helperInstalled: true },

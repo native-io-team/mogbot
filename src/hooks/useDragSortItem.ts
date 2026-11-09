@@ -235,14 +235,3 @@ export function useDragSortItemContext(): DragSortItemBinding {
   if (!value) throw new Error('useDragSortItemContext must be used inside a DragSortItem');
   return value;
 }
-
-/** Subscribe only this item's transform/target state to the manager store. */
-export function useDragSortItemSnapshot(id: DragSortId) {
-  const { manager } = useDragSortContext();
-  const subscribe = useCallback(
-    (listener: () => void) => manager.subscribe(listener, id),
-    [id, manager]
-  );
-  useSyncExternalStore(subscribe, manager.getSnapshot, manager.getSnapshot);
-  return manager.getItemState(id);
-}

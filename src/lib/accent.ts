@@ -412,14 +412,6 @@ export function useChiefColor(): string | null {
   return useAgentsSelector(selectChiefColor);
 }
 
-/** The app accent as hex, for the few consumers that need a literal colour. */
-export function useAppAccentHex(): string {
-  const chief = useChiefColor();
-  const theme = useResolvedTheme();
-  if (chief !== null) return accentHex(chief, theme);
-  return readCachedAccent(theme)?.['--accent-user'] ?? accentHex(null, theme);
-}
-
 /**
  * The cached app accent, if one was saved and every value in it is
  * well-formed (same rules as the boot script). An entry from an older build

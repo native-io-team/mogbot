@@ -52,11 +52,3 @@ export function subscribeActiveProjectOrder(listener: Listener): () => void {
   listeners.add(listener);
   return () => listeners.delete(listener);
 }
-
-export function resetActiveProjectOrderForTests(): void {
-  cachedOrder = null;
-  cachedRaw = null;
-  listeners.clear();
-}
-
-export const ACTIVE_PROJECT_ORDER_STORAGE_KEY = STORAGE_KEY;

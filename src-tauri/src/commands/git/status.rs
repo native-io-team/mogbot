@@ -2,13 +2,9 @@
 
 use crate::cache::GIT_CACHE;
 use crate::errors::CommandError;
-use crate::types::{BranchStatus, ChangedFile};
+use crate::types::ChangedFile;
 use crate::utils::validate_project_path;
 use tracing::warn;
-
-// Network git ops (fetch) go through the workspace-scoped helper in the parent
-// module, so they authenticate as the project's workspace GitHub login.
-use super::run_git_net;
 
 use super::git_has_uncommitted_changes;
 
@@ -270,91 +266,6 @@ pub async fn get_file_diff(
         content: diff_content,
         additions,
         deletions,
-    })
-}
-
-#[tauri::command]
-#[tracing::instrument(fields(project = %project_path))]
-pub async fn get_branch_status(project_path: String) -> Result<BranchStatus, CommandError> {
-    let validated_path = validate_project_path(&project_path)?;
-
-    // Check for local changes (tracked files only)
-    let local_changes = git_has_uncommitted_changes(&validated_path)?;
-
-    // Fetch latest from origin (log errors but don't fail)
-    match run_git_net(&["fetch", "origin"], &validated_path, "fetch origin").await {
-        Ok(output) if !output.status.success() => {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            // Don't log if it's just a network issue or no remote
-            if !stderr.contains("Could not resolve host")
-                && !stderr.contains("Could not read from remote")
-            {
-                warn!(error = %stderr, "git fetch failed");
-            }
-        }
-        Err(e) => {
-            warn!(error = %e, "git fetch failed/timed out");
-        }
-        _ => {}
-    }
-
-    // Check if staging branch exists on remote
-    let staging_check = crate::utils::git_command_in(&validated_path)?
-        .args(["ls-remote", "--heads", "origin", "staging"])
-        .output()
-        .map_err(|e| e.to_string())?;
-
-    let staging_exists = !String::from_utf8_lossy(&staging_check.stdout)
-        .trim()
-        .is_empty();
-
-    // Get commits ahead/behind for staging
-    let (staging_ahead, staging_behind) = if staging_exists {
-        let output = crate::utils::git_command_in(&validated_path)?
-            .args([
-                "rev-list",
-                "--left-right",
-                "--count",
-                "HEAD...origin/staging",
-            ])
-            .output()
-            .map_err(|e| e.to_string())?;
-
-        let counts = String::from_utf8_lossy(&output.stdout);
-        let parts: Vec<&str> = counts.trim().split('\t').collect();
-        if parts.len() == 2 {
-            (parts[0].parse().unwrap_or(0), parts[1].parse().unwrap_or(0))
-        } else {
-            (0, 0)
-        }
-    } else {
-        (0, 0)
-    };
-
-    // Get commits ahead/behind for main
-    let output = crate::utils::git_command_in(&validated_path)?
-        .args(["rev-list", "--left-right", "--count", "HEAD...origin/main"])
-        .output();
-
-    let (main_ahead, main_behind) = if let Ok(output) = output {
-        let counts = String::from_utf8_lossy(&output.stdout);
-        let parts: Vec<&str> = counts.trim().split('\t').collect();
-        if parts.len() == 2 {
-            (parts[0].parse().unwrap_or(0), parts[1].parse().unwrap_or(0))
-        } else {
-            (0, 0)
-        }
-    } else {
-        (0, 0)
-    };
-
-    Ok(BranchStatus {
-        local_changes,
-        staging_ahead,
-        staging_behind,
-        main_ahead,
-        main_behind,
-        staging_exists,
     })
 }
 

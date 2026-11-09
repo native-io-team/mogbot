@@ -359,14 +359,6 @@ export function dockedPanels(layout: WorkspaceLayout): PanelId[] {
   );
 }
 
-export function visibleDockedPanels(
-  layout: WorkspaceLayout,
-  visible?: Iterable<PanelId>
-): PanelId[] {
-  const visibleSet = visible === undefined ? undefined : new Set(visible);
-  return dockedPanels(layout).filter((panel) => visibleSet === undefined || visibleSet.has(panel));
-}
-
 /** A render projection; omitted panels retain their source placement in layout. */
 export function visibleColumns(
   layout: WorkspaceLayout,
@@ -584,8 +576,6 @@ export function reorderPanelInStack(
   return withColumns(layout, columns);
 }
 
-export const reorderInStack = reorderPanelInStack;
-
 /** Descriptive alias used by the drag/drop layer for a vertical move. */
 export const movePanelWithinStack = reorderPanelInStack;
 
@@ -640,9 +630,6 @@ export function setAdjacentPanelWeights(
   next.panels[afterIndex].weight = currentTotal * (1 - ratio);
   return withColumns(layout, columns);
 }
-
-/** Alias that makes the vertical nature explicit at call sites. */
-export const setAdjacentVerticalWeights = setAdjacentPanelWeights;
 
 /** Set supplied weights and normalize the containing column. */
 export function setPanelWeights(

@@ -503,8 +503,6 @@ const commands = {
   agents_usage_overview: FULL_INVENTORY,
 };
 
-export const HEAVY_NEEDS_YOU = SEATS.filter((s) => pending(s) > 0).length;
-
 const NARROW = { width: 1100, height: 760 };
 
 const base = {

@@ -41,18 +41,6 @@ pub fn get_app_icon() -> Result<String, CommandError> {
     Ok(normalized_app_icon(read_app_state().app_icon.as_deref()).to_string())
 }
 
-/// Persist the app icon choice and update the native Dock icon immediately.
-#[tauri::command]
-#[tracing::instrument(skip(app))]
-pub fn set_app_icon(app: AppHandle, icon: String) -> Result<(), CommandError> {
-    validate_app_icon(&icon)?;
-    apply_app_icon(&app, &icon)?;
-
-    let mut state = read_app_state();
-    state.app_icon = Some(icon);
-    write_app_state(&state).map_err(CommandError::from)
-}
-
 /// Apply a saved icon during startup or after a settings change.
 pub fn apply_app_icon(app: &AppHandle, icon: &str) -> Result<(), CommandError> {
     validate_app_icon(icon)?;
@@ -260,23 +248,6 @@ pub fn set_app_theme(app: AppHandle, theme: String) -> Result<(), CommandError> 
     Ok(())
 }
 
-/// Get whether the GitHub contribution calendar is hidden on the dashboard.
-#[tauri::command]
-#[tracing::instrument]
-pub fn get_calendar_hidden() -> Result<bool, CommandError> {
-    let state = read_app_state();
-    Ok(state.calendar_hidden.unwrap_or(false))
-}
-
-/// Set whether the GitHub contribution calendar is hidden (persisted to app state).
-#[tauri::command]
-#[tracing::instrument]
-pub fn set_calendar_hidden(hidden: bool) -> Result<(), CommandError> {
-    let mut state = read_app_state();
-    state.calendar_hidden = Some(hidden);
-    write_app_state(&state).map_err(CommandError::from)
-}
-
 /// Get whether the macOS Spotify widget is enabled.
 ///
 /// Opt-in: defaults to `false` so no existing install starts talking to
@@ -362,23 +333,6 @@ pub fn get_slack_cta_hidden() -> Result<bool, CommandError> {
 pub fn set_slack_cta_hidden(hidden: bool) -> Result<(), CommandError> {
     let mut state = read_app_state();
     state.slack_cta_hidden = Some(hidden);
-    write_app_state(&state).map_err(CommandError::from)
-}
-
-/// Get whether the dashboard home header is hidden.
-#[tauri::command]
-#[tracing::instrument]
-pub fn get_dashboard_header_hidden() -> Result<bool, CommandError> {
-    let state = read_app_state();
-    Ok(state.dashboard_header_hidden.unwrap_or(false))
-}
-
-/// Set whether the dashboard home header is hidden (persisted to app state).
-#[tauri::command]
-#[tracing::instrument]
-pub fn set_dashboard_header_hidden(hidden: bool) -> Result<(), CommandError> {
-    let mut state = read_app_state();
-    state.dashboard_header_hidden = Some(hidden);
     write_app_state(&state).map_err(CommandError::from)
 }
 

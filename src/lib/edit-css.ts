@@ -9,7 +9,6 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
-import type { ElementSignature } from './edit';
 
 /** One CSS declaration on a rule (mirrors the Rust `Declaration`). */
 export interface CssDeclaration {
@@ -59,53 +58,6 @@ export interface CssSignature {
   /** Pseudo-class / state to target (without colon, e.g. "hover"). Resolves
    *  `.class:hover` — states are selectors in CSS. */
   pseudo?: string;
-}
-
-/** Build a `CssSignature` from the iframe selection signature. */
-export function toCssSignature(
-  sig: ElementSignature,
-  targetClass?: string | null,
-  pseudo?: string | null
-): CssSignature {
-  return {
-    className: sig.className,
-    tagName: sig.tagName,
-    targetClass: targetClass ?? undefined,
-    pseudo: pseudo ?? undefined,
-  };
-}
-
-/** Resolve a clicked element to the CSS rule that styles its class. */
-export function resolveCssRule(
-  projectPath: string,
-  signature: CssSignature,
-  breakpointMinPx?: number | null
-): Promise<CssResolution> {
-  return invoke<CssResolution>('resolve_css_rule', {
-    projectPath,
-    signature,
-    breakpointMinPx: breakpointMinPx ?? null,
-  });
-}
-
-/** Surgically set (or remove, when `value` is null) one declaration on the rule
- *  for `selector`. Fail-closed if the rule can't be pinned to one block. */
-export function setCssDeclaration(
-  projectPath: string,
-  file: string,
-  selector: string,
-  property: string,
-  value: string | null,
-  breakpointMinPx?: number | null
-): Promise<void> {
-  return invoke<void>('set_css_declaration', {
-    projectPath,
-    file,
-    selector,
-    breakpointMinPx: breakpointMinPx ?? null,
-    property,
-    value,
-  });
 }
 
 /** Add a new custom property to the base `:root` scope, reusing an existing rule. */
@@ -196,23 +148,6 @@ export function deleteCssVariable(
     replacementValue,
     expectedUsageCount: impact.usageCount,
     expectedDefinitionCount: impact.definitionCount,
-  });
-}
-
-/** Append a new rule for `selector` to the authored stylesheet `file`. */
-export function createCssClass(
-  projectPath: string,
-  file: string,
-  selector: string,
-  declarations: CssDeclaration[],
-  breakpointMinPx?: number | null
-): Promise<void> {
-  return invoke<void>('create_css_class', {
-    projectPath,
-    file,
-    selector,
-    declarations,
-    breakpointMinPx: breakpointMinPx ?? null,
   });
 }
 

@@ -303,7 +303,9 @@ mod tests {
                 .collect::<Vec<_>>()
         };
         // None: nothing passed, the engine's own default.
-        assert!(!Driver::ClaudePrint.args(&s).contains(&"--effort".to_string()));
+        assert!(!Driver::ClaudePrint
+            .args(&s)
+            .contains(&"--effort".to_string()));
         assert!(!Driver::CodexExec
             .args(&s)
             .iter()
@@ -319,10 +321,15 @@ mod tests {
             .unwrap();
         assert!(at < exec.iter().position(|a| a == "-").unwrap_or(exec.len()));
         // The app-server takes it on turn/start, not the command line.
-        assert!(!Driver::CodexApp.args(&s).iter().any(|a| a.contains("effort")));
+        assert!(!Driver::CodexApp
+            .args(&s)
+            .iter()
+            .any(|a| a.contains("effort")));
         // Anything else never reaches a command line.
         s.effort = Some("max --x");
-        assert!(!Driver::ClaudePrint.args(&s).contains(&"--effort".to_string()));
+        assert!(!Driver::ClaudePrint
+            .args(&s)
+            .contains(&"--effort".to_string()));
     }
 
     #[test]

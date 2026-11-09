@@ -49,9 +49,6 @@ export const AGENT_COLORS = [
 ] as const;
 export type AgentColor = (typeof AGENT_COLORS)[number];
 
-/** Number of avatar shapes; must match `SHAPE_COUNT` in store.rs. */
-export const AGENT_SHAPE_COUNT = 14;
-
 export interface AgentStatus {
   state: 'idle' | 'working' | 'waiting';
   activity: string | null;
@@ -1259,9 +1256,6 @@ export interface SharedFile extends Attachment {
   ts: number;
   from: 'user' | 'agent';
 }
-
-/** Everything shared in a conversation, both ways, newest first. */
-export const getAgentFiles = (agentId: string) => invoke<SharedFile[]>('agents_files', { agentId });
 
 /**
  * A path from an agent's reply. Documents, images and text open in their default app;

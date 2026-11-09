@@ -6,20 +6,7 @@ use crate::types::RestoreResult;
 use crate::utils::validate_project_path;
 use tracing::{info, instrument, warn};
 
-use super::{
-    get_current_branch_sync, git_has_any_changes, git_stage_and_commit, load_project_metadata,
-};
-
-/// Get stash info for a project (if any auto-stash exists)
-#[tauri::command]
-#[tracing::instrument(fields(project = %project_path))]
-pub async fn get_stash_info(
-    project_path: String,
-) -> Result<Option<crate::types::StashInfo>, CommandError> {
-    let validated_path = validate_project_path(&project_path)?;
-    let metadata = load_project_metadata(&validated_path);
-    Ok(metadata.stash_info)
-}
+use super::{get_current_branch_sync, git_has_any_changes, git_stage_and_commit};
 
 /// Stash all current changes (tracked + untracked) so the working tree is clean.
 ///

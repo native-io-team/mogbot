@@ -3142,15 +3142,30 @@ mod outside_mark_tests {
         let gh_comment = "gh issue comment 4 --body done";
         // Not the owner's own words: as before, every network write asks.
         for cmd in [webhook, upload, package, gh_comment] {
-            assert!(outside_mark_asks("Bash", &bash(cmd), &c, false, false), "{cmd}");
+            assert!(
+                outside_mark_asks("Bash", &bash(cmd), &c, false, false),
+                "{cmd}"
+            );
         }
         // The owner asked: `gh` writes are the level's own business (Go hard
         // asks for them anyway), while data leaving and new packages ask.
-        assert!(!outside_mark_asks("Bash", &bash(gh_comment), &c, false, true));
+        assert!(!outside_mark_asks(
+            "Bash",
+            &bash(gh_comment),
+            &c,
+            false,
+            true
+        ));
         assert!(outside_mark_asks("Bash", &bash(upload), &c, false, true));
         assert!(outside_mark_asks("Bash", &bash(webhook), &c, false, true));
         assert!(outside_mark_asks("Bash", &bash(package), &c, false, true));
-        assert!(!outside_mark_asks("Bash", &bash("ls -la && pnpm build"), &c, false, true));
+        assert!(!outside_mark_asks(
+            "Bash",
+            &bash("ls -la && pnpm build"),
+            &c,
+            false,
+            true
+        ));
     }
 }
 
@@ -3161,7 +3176,13 @@ mod outside_mark_tests {
 /// content: raw data leaving for another host and packages new to the
 /// project. Reading x.com once no longer puts cards on the owner's own later
 /// requests; pushes and `gh` writes still follow the level's own rules.
-pub fn outside_mark_asks(tool: &str, input: &Value, ctx: &Ctx, full_send: bool, direct: bool) -> bool {
+pub fn outside_mark_asks(
+    tool: &str,
+    input: &Value,
+    ctx: &Ctx,
+    full_send: bool,
+    direct: bool,
+) -> bool {
     let ctx = Ctx {
         full_send: full_send || direct,
         ..ctx.clone()

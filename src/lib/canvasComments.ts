@@ -42,12 +42,7 @@ export interface CommentAgent {
   isActive?: boolean;
 }
 export const COMMENT_DEVICES: CommentDevice[] = ['Desktop', 'Tablet', 'Mobile'];
-export function commentScopeDevices(scope: CommentScope): CommentDevice[] {
-  return COMMENT_DEVICES.filter(
-    (device) =>
-      scope === 'All sizes' || (Array.isArray(scope) ? scope.includes(device) : scope === device)
-  );
-} /** The viewport a note was written at, which is the context an agent needs. */
+/** The viewport a note was written at, which is the context an agent needs. */
 export function commentViewportLabel(target: CommentTarget): string {
   return `${target.viewport.width} × ${target.viewport.height}`;
 }
@@ -122,7 +117,6 @@ export function isCommentPlacement(value: unknown): value is CommentPlacement {
 
 /** How much captured context each comment carries into the prompt. */
 export type CommentDetail = 'compact' | 'standard' | 'detailed';
-export const COMMENT_DETAILS: CommentDetail[] = ['compact', 'standard', 'detailed'];
 
 /** Validate messages from the preview and persisted targets before using them. */
 export function isCommentTarget(value: unknown): value is CommentTarget {

@@ -483,20 +483,6 @@ export function deleteCssRules(
   return invoke<void>('delete_css_rules', { projectPath, file, sourceIdentities });
 }
 
-export function makeCssSelectorIndependent(
-  projectPath: string,
-  file: string,
-  selector: string,
-  sourceIdentity: CssRuleSourceIdentity
-): Promise<CssRuleSourceIdentity> {
-  return invoke<CssRuleSourceIdentity>('make_css_selector_independent', {
-    projectPath,
-    file,
-    selector,
-    sourceIdentity,
-  });
-}
-
 /** Split all members in one exact selector-list source rule. */
 export function splitCssSelectorList(
   projectPath: string,

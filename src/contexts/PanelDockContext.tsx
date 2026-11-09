@@ -286,10 +286,6 @@ interface PanelDockValue {
 
 const PanelDockContext = createContext<PanelDockValue | null>(null);
 
-export function labelOfRailItem(item: RailItem): string {
-  return item === PREVIEW ? 'Preview' : PANEL_META[item].label;
-}
-
 function columnHint(layout: WorkspaceLayout, columnIndex: number | null): string {
   if (columnIndex === null) return 'at the far right';
   const column = layout.columns[columnIndex];
