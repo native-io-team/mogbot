@@ -5811,7 +5811,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 575
+      "consumerCount": 576
     },
     {
       "name": "--spacing-lg",
@@ -5827,7 +5827,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 152
+      "consumerCount": 153
     },
     {
       "name": "--spacing-2xl",
