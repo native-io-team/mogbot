@@ -1294,7 +1294,7 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
     let shape = new
         .shape
         .filter(|s| *s < SHAPE_COUNT)
-        .unwrap_or((index as u8 * 5 + 1) % SHAPE_COUNT);
+        .unwrap_or(((index * 5 + 1) % SHAPE_COUNT as usize) as u8);
     let now = now_ms();
     let agent = Agent {
         id: new_id(),
