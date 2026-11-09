@@ -88,9 +88,19 @@ export function getAgentsSnapshot(): AgentsState {
   return state;
 }
 
+// Reads overlap (every event, every change, focus) and can answer out of
+// order: a read lands only if none started after it has landed already, so
+// an older list (a rename, a new agent, a level) never comes back. Newest
+// started wins rather than newest only, so a stream of reads still shows.
+let refreshStarted = 0;
+let refreshLanded = 0;
+
 export async function refreshAgents(): Promise<void> {
+  const mine = ++refreshStarted;
   try {
     const overview = await getAgentsOverview();
+    if (mine < refreshLanded) return;
+    refreshLanded = mine;
     emit({
       ...state,
       agents: keepUnchanged(state.agents, readableAgents(overview.agents)),
@@ -107,6 +117,8 @@ export async function refreshAgents(): Promise<void> {
     });
   } catch (error) {
     logger.error('[Agents] overview failed', { error: String(error) });
+    if (mine < refreshLanded) return;
+    refreshLanded = mine;
     emit({ ...state, loaded: true, error: formatCommandError(asCommandError(error)) });
   }
 }
@@ -725,6 +737,8 @@ const sameAttention = (a: AgentsAttention, b: AgentsAttention) =>
 /** Test hook. */
 export function __resetAgentsStore() {
   stop();
+  refreshStarted = 0;
+  refreshLanded = 0;
   state = {
     agents: [],
     engineReady: true,
