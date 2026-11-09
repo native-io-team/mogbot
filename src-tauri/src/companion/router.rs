@@ -82,6 +82,8 @@ pub const METHODS: &[&str] = &[
     "agents.accounts.use",
     "agents.accounts.reorder",
     "agents.usagePlan",
+    "agents.quietHours",
+    "agents.setQuietHours",
     "agents.changeDiff",
     "agents.keepCopy",
     "agents.discardCopy",
@@ -135,6 +137,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.quota",
     "agents.accounts",
     "agents.usagePlan",
+    "agents.quietHours",
     "agents.import.status",
     "agents.teamSetup",
     "agents.templates",
@@ -605,6 +608,15 @@ pub trait Backend: Send + Sync + 'static {
     async fn account_reorder(&self, engine: &str, ids: Vec<String>) -> Result<Value, CommandError>;
     /// `agents_usage_overview`: the capacity inventory, read-only.
     async fn usage_plan(&self) -> Result<Value, CommandError>;
+    /// `agents_quiet_hours`: the team's quiet hours, `{ window }` (null when off).
+    async fn quiet_hours(&self) -> Result<Value, CommandError>;
+    /// `agents_set_quiet_hours`: set them, or `None` for off. They only
+    /// hold things back, so the user's choice applies at once. Answers as
+    /// `quiet_hours`.
+    async fn set_quiet_hours(
+        &self,
+        window: Option<crate::agents::quiet::Window>,
+    ) -> Result<Value, CommandError>;
     /// An import from another assistant, as the phone follows it: whether
     /// this Mac's Remote access is on and has been reached, whether an import
     /// may begin, the one going on, and the message to send. Never the link:
@@ -1597,6 +1609,15 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             format!("new agents: {}", said.join(", "))
         }
         "agents.setIndependence" => format!("independence: {}", preview(field("level"))),
+        "agents.setQuietHours" => match params.get("window").filter(|w| !w.is_null()) {
+            Some(w) => format!(
+                "quiet hours: {}",
+                serde_json::from_value::<crate::agents::quiet::Window>(w.clone())
+                    .map(|w| w.label())
+                    .unwrap_or_else(|_| "?".into())
+            ),
+            None => "quiet hours: off".to_string(),
+        },
         "agents.setImportChoice" => format!("import: {}", preview(field("choice"))),
         "agents.setAgentIndependence" => format!(
             "{} independence: {}",
@@ -2118,6 +2139,23 @@ async fn run(
             Ok(b.account_reorder(engine, ids).await?)
         }
         "agents.usagePlan" => Ok(b.usage_plan().await?),
+        "agents.quietHours" => Ok(b.quiet_hours().await?),
+        "agents.setQuietHours" => {
+            let window = match params.get("window") {
+                None | Some(Value::Null) => None,
+                Some(w) => Some(
+                    serde_json::from_value::<crate::agents::quiet::Window>(w.clone())
+                        .ok()
+                        .and_then(|w| crate::agents::quiet::checked(w).ok())
+                        .ok_or_else(|| {
+                            bad_params(
+                                "Quiet hours take a window {start, end} in minutes after midnight, different times, or null for off.",
+                            )
+                        })?,
+                ),
+            };
+            Ok(b.set_quiet_hours(window).await?)
+        }
         "agents.import.status" => Ok(b.import_status().await?),
         "agents.import.start" => Ok(b.import_start().await?),
         "agents.import.stop" => Ok(b.import_stop().await?),
@@ -3424,6 +3462,45 @@ mod tests {
         assert!(audited
             .iter()
             .any(|(_, m, _, ok)| m == "agents.setDefaults" && !ok));
+    }
+
+    #[tokio::test]
+    async fn a_phone_reads_and_sets_quiet_hours() {
+        use crate::companion::testkit::Stub;
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let read = dispatch(&c, &me, "agents.quietHours", json!({}))
+            .await
+            .unwrap();
+        assert_eq!(read["window"]["start"], 1320);
+        assert!(READ_ONLY_METHODS.contains(&"agents.quietHours"));
+        let set = |params: Value| dispatch(&c, &me, "agents.setQuietHours", params);
+        // The same window twice, or a minute past the day: refused.
+        assert!(set(json!({ "window": { "start": 600, "end": 600 } }))
+            .await
+            .is_err());
+        assert!(set(json!({ "window": { "start": 1440, "end": 60 } }))
+            .await
+            .is_err());
+        assert!(set(json!({ "window": "late" })).await.is_err());
+        let on = set(json!({ "window": { "start": 1320, "end": 420 } }))
+            .await
+            .unwrap();
+        assert_eq!(on["window"]["end"], 420);
+        let off = set(json!({ "window": null })).await.unwrap();
+        assert!(off["window"].is_null());
+        // Audited in plain words.
+        let audited = stub.audited();
+        assert!(audited
+            .iter()
+            .any(|(_, m, detail, ok)| m == "agents.setQuietHours"
+                && *ok
+                && detail == "quiet hours: 22:00–07:00"));
+        assert!(audited
+            .iter()
+            .any(|(_, m, detail, ok)| m == "agents.setQuietHours"
+                && *ok
+                && detail == "quiet hours: off"));
     }
 
     #[tokio::test]

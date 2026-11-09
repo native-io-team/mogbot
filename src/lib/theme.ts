@@ -24,6 +24,7 @@
 
 import { useSyncExternalStore } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 export type ThemePreference = 'system' | 'light' | 'dark';
 export type ResolvedTheme = 'light' | 'dark';
@@ -157,6 +158,17 @@ export function initTheme() {
       for (const listener of listeners) listener();
     }
   });
+
+  // The Chief changed it from chat (`change_app_setting`).
+  try {
+    void listen<string>('app-theme-changed', (event) => {
+      if (isThemePreference(event.payload) && event.payload !== preference) {
+        setPreferenceLocal(event.payload);
+      }
+    }).catch(() => {});
+  } catch {
+    /* no event bridge (tests, the harness): Settings still works */
+  }
 
   void invoke<string>('get_app_theme')
     .then((saved) => {

@@ -8,12 +8,14 @@
  */
 
 import { useCallback, useEffect, useRef } from 'react';
+import { listen } from '@tauri-apps/api/event';
 import { Button } from '../primitives/Button';
 import { Row, Toggle } from './AgentSettingsRows';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { usePolling } from '../../hooks/usePolling';
 import { takeSettingsSectionRequest } from '../../lib/settings';
+import { POLICY_EVENT } from '../../lib/agentPolicy';
 import {
   USER_CHROME_TITLE,
   addUserChromeFromStore,
@@ -59,7 +61,15 @@ export function AgentsUserChromeSettings() {
     run({ kind: 'read' });
     const onFocus = () => run({ kind: 'read' });
     window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    // Chat turns it on (on a card) or off (`propose_settings_change`).
+    let off: (() => void) | undefined;
+    void listen(POLICY_EVENT, onFocus)
+      .then((u) => (off = u))
+      .catch(() => {});
+    return () => {
+      window.removeEventListener('focus', onFocus);
+      off?.();
+    };
   }, [run]);
 
   // Opened from ⌘K "Let agents use your Chrome…": scrolled to here.

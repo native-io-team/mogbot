@@ -84,6 +84,7 @@ import type { AppView } from './lib/types';
 import type { AgentPreviewServer } from './lib/agentPreview';
 import { findAndReservePort, getWindowLabel } from './lib/window';
 import { useAgentDevServerControl } from './hooks/useAgentDevServerControl';
+import { useOpenSettingsFromChat } from './hooks/useOpenSettingsFromChat';
 import { startPreviewProxyFor } from './lib/agentDevServer';
 import './styles/index.css';
 
@@ -586,6 +587,9 @@ function AppContents({ initialProjectPath }: AppProps) {
     activeAccountId: activeAccount?.id ?? null,
     handleSelectWorkspace: handleSelectWorkspaceShortcut,
   });
+
+  // The Chief opened Slack's setup or an account's sign-in from chat.
+  useOpenSettingsFromChat();
 
   // Palette commands with real handlers — see src/commands/useAppCommands.tsx
   useAppCommands({

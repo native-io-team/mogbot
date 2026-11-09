@@ -1682,6 +1682,17 @@ impl Backend for Stub {
         Ok(())
     }
 
+    async fn quiet_hours(&self) -> Result<Value, CommandError> {
+        Ok(json!({ "window": { "start": 22 * 60, "end": 7 * 60 } }))
+    }
+
+    async fn set_quiet_hours(
+        &self,
+        window: Option<crate::agents::quiet::Window>,
+    ) -> Result<Value, CommandError> {
+        Ok(json!({ "window": window }))
+    }
+
     async fn usage_plan(&self) -> Result<Value, CommandError> {
         use crate::agents::engine::Engine;
         use crate::agents::forecast::PerRun;

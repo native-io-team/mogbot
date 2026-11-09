@@ -67,7 +67,7 @@ pub const TOOLS: &[Def] = &[
     },
     Def {
         name: "set_usage_mode",
-        description: "Change how the user's usage limits are used, when they ask: `normal` (never slow down for limits), `save` (Save my limits: ask before heavy work, send light work to lighter models or engines) or `use_it_all` (Use it all before reset: their standing OK to spend capacity that would otherwise expire on the spare-capacity list). The user confirms on a card first.",
+        description: "Change how the user's usage limits are used, when they ask: `normal` (never slow down for limits), `save` (Save my limits: ask before heavy work, send light work to lighter models or engines) or `use_it_all` (Use it all before reset: their standing OK to spend capacity that would otherwise expire on the spare-capacity list). Spending more is a card first; save, or normal from use_it_all, applies at once with a line.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -77,7 +77,7 @@ pub const TOOLS: &[Def] = &[
     },
     Def {
         name: "use_account",
-        description: "Switch which account turns run on, when the user asks (\"use my personal Claude plan\"): puts the account they name first for its engine, so every agent's next turn starts on it. When it reaches its limit, turns move to the next account as before. `account` is its name as usage_overview lists it, or its id. Only signed-in accounts; adding or signing in to one is in Settings → Agents.",
+        description: "Switch which account turns run on, when the user asks (\"use my personal Claude plan\"): puts the account they name first for its engine, so every agent's next turn starts on it. When it reaches its limit, turns move to the next account as before. `account` is its name as usage_overview lists it, or its id. Only signed-in accounts; adding one, renaming or reordering is manage_account.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -90,7 +90,7 @@ pub const TOOLS: &[Def] = &[
     },
     Def {
         name: "set_engine_fallback",
-        description: "Change what happens when every account of an engine is out of usage, when the user asks (\"carry on with Codex when Claude runs out\", \"just wait for the reset\"): `carry` moves agents' turns to the other engine until it has room again (never for an agent set to one account), `wait` waits for the reset, `ask` asks the user first with a card. `engine` is the one that runs out. The user confirms on a card first.",
+        description: "Change what happens when every account of an engine is out of usage, when the user asks (\"carry on with Codex when Claude runs out\", \"just wait for the reset\"): `carry` moves agents' turns to the other engine until it has room again (never for an agent set to one account), `wait` waits for the reset, `ask` asks the user first with a card. `engine` is the one that runs out. `carry` is a card first; wait and ask apply at once with a line.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -330,6 +330,35 @@ pub fn mode_card(mode: Mode) -> (String, String) {
         format!("Set usage to “{}”?", mode.label()),
         detail.to_string(),
     )
+}
+
+/// Whether moving from `from` to `to` only holds agents back: "Save my
+/// limits" from anything, or "Normal" from "Use it all". Applied with a
+/// line; anything that spends more is a card. Pure.
+pub fn mode_lowers(from: Mode, to: Mode) -> bool {
+    from != to && (to == Mode::Save || (to == Mode::Normal && from == Mode::UseItAll))
+}
+
+/// Whether a crossover choice only spends less: waiting, or asking first,
+/// never moves turns to the other engine on its own. Pure.
+pub fn fallback_lowers(_from: super::crossover::Mode, to: super::crossover::Mode) -> bool {
+    to != super::crossover::Mode::Carry
+}
+
+/// The audit for a usage setting that applied: one quiet line in the
+/// caller's chat with what the tool answered, and the log.
+pub fn note_change(app: &AppHandle, caller: &store::Agent, done: &Value) {
+    if done.get("isError").and_then(Value::as_bool) == Some(true) {
+        return;
+    }
+    let Some(said) = done["content"][0]["text"].as_str() else {
+        return;
+    };
+    tracing::info!(agent = %caller.id, said, "[Agents] usage setting changed from chat");
+    let _ = super::runner::record(
+        app,
+        super::runner::new_message(&caller.id, store::MessageKind::Note, said.to_string()),
+    );
 }
 
 pub fn set_mode(app: &AppHandle, mode: Mode) -> Value {

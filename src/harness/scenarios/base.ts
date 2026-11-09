@@ -120,6 +120,11 @@ export const baseCommands: CommandMap = {
   get_settings: {},
   get_keep_dev_servers_running: true,
   get_agents_fix_previews: true,
+  get_low_power_on_battery: true,
+  set_low_power_on_battery: null,
+  // Quiet hours on, 22:00–07:00, so Settings shows the times.
+  agents_quiet_hours: { start: 22 * 60, end: 7 * 60 },
+  agents_set_quiet_hours: null,
   agents_preview_fix_state: null,
   agents_dev_server_exited: null,
   get_compact_workspace_toolbar_enabled: false,

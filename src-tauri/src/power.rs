@@ -15,6 +15,11 @@
 //! The power source is IOKit's (`IOPSGetProvidingPowerSourceType`), no
 //! process spawned, read at most once per [`FRESH_FOR`]. Off macOS, and when
 //! IOKit gives no answer, it counts as mains power: nothing changes.
+//!
+//! **The switch.** "Slow down on battery" (Settings → Agents → On this Mac,
+//! or the Chief's `change_app_setting`) is on unless the user turned it off
+//! ([`low_power_enabled`], `low_power_on_battery` in the app state). Off,
+//! every poll keeps its mains pace on battery too.
 
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
@@ -72,7 +77,42 @@ pub const fn interval(kind: Poll, on_battery: bool) -> Duration {
 
 /// How long `kind` waits now.
 pub fn every(kind: Poll) -> Duration {
-    interval(kind, on_battery())
+    interval(kind, slows_down(on_battery(), low_power_enabled()))
+}
+
+/// Whether polls stretch: on battery, with the switch on. Pure.
+pub const fn slows_down(on_battery: bool, enabled: bool) -> bool {
+    on_battery && enabled
+}
+
+/// The switch, cached: 0 not read yet, 1 on, 2 off.
+static SWITCH: std::sync::atomic::AtomicU8 = std::sync::atomic::AtomicU8::new(0);
+
+/// Whether "Slow down on battery" is on (the default).
+pub fn low_power_enabled() -> bool {
+    use std::sync::atomic::Ordering;
+    match SWITCH.load(Ordering::Relaxed) {
+        1 => true,
+        2 => false,
+        _ => {
+            let on = crate::commands::setup::read_app_state()
+                .low_power_on_battery
+                .unwrap_or(true);
+            SWITCH.store(if on { 1 } else { 2 }, Ordering::Relaxed);
+            on
+        }
+    }
+}
+
+/// Turn "Slow down on battery" on or off; saved, and in effect at each
+/// poll's next wait.
+pub fn set_low_power(on: bool) -> Result<(), crate::errors::CommandError> {
+    let mut state = crate::commands::setup::read_app_state();
+    state.low_power_on_battery = Some(on);
+    crate::commands::setup::write_app_state(&state)?;
+    SWITCH.store(if on { 1 } else { 2 }, std::sync::atomic::Ordering::Relaxed);
+    tracing::info!(on, "[Power] slow down on battery switched");
+    Ok(())
 }
 
 /// How long until the next whole multiple of `period` on the wall clock.
@@ -189,6 +229,17 @@ pub fn set_for_tests(battery: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_switch_off_keeps_the_mains_pace_on_battery() {
+        assert!(slows_down(true, true));
+        assert!(!slows_down(true, false));
+        assert!(!slows_down(false, true));
+        assert_eq!(
+            interval(Poll::Slack, slows_down(true, false)),
+            Poll::Slack.on_ac()
+        );
+    }
 
     #[test]
     fn on_mains_power_nothing_changes() {

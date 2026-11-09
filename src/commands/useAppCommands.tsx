@@ -404,6 +404,30 @@ export function useAppCommands({
         },
       },
       {
+        id: 'agents.quietHours',
+        title: 'Quiet hours…',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: ['quiet', 'do not disturb', 'night', 'sleep', 'notifications', 'mute', 'hold'],
+        run: () => {
+          requestSettingsTabOnOpen('agents');
+          requestSettingsSectionOnOpen('agent-quiet');
+          openModal('settings');
+        },
+      },
+      {
+        id: 'agents.lowPower',
+        title: 'Slow down on battery…',
+        icon: <SettingsIcon size={14} />,
+        category: 'settings',
+        keywords: ['battery', 'power', 'energy', 'low power', 'polling', 'laptop'],
+        run: () => {
+          requestSettingsTabOnOpen('agents');
+          requestSettingsSectionOnOpen('agent-low-power');
+          openModal('settings');
+        },
+      },
+      {
         id: 'agents.slackCheckNow',
         title: 'Check Slack for new asks now',
         icon: <SettingsIcon size={14} />,

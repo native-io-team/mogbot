@@ -293,6 +293,46 @@ export const agentsDesktopScenarios: Scenario[] = [
     },
   },
   {
+    id: 'settings-agents-quiet',
+    title: 'Settings — Quiet hours, on',
+    looksRightWhen:
+      'Opened from ⌘K “Quiet hours…”, scrolled to Notifications: a “Quiet hours” row whose one line says nothing scheduled runs and only requests for your OK notify; on the right, two short time fields “22:00” to “07:00” and the switch, on. Calm: no accent colour except the switch’s on state.',
+    command: 'agents.quietHours',
+    requires: '.agents-quiet',
+    clipSelector: 'section[aria-labelledby="agents-settings-notify"]',
+    commands: {
+      agents_overview: overview(TEAM),
+      agents_desktop_settings: DESKTOP_SETTINGS,
+    },
+  },
+  {
+    id: 'settings-agents-quiet-off',
+    title: 'Settings — Quiet hours, off',
+    looksRightWhen:
+      'Notifications: the “Quiet hours” row with its one line and only the switch, off. No time fields.',
+    command: 'agents.quietHours',
+    requires: 'section[aria-labelledby="agents-settings-notify"] [role="switch"]',
+    clipSelector: 'section[aria-labelledby="agents-settings-notify"]',
+    commands: {
+      agents_overview: overview(TEAM),
+      agents_desktop_settings: DESKTOP_SETTINGS,
+      agents_quiet_hours: null,
+    },
+  },
+  {
+    id: 'settings-agents-low-power',
+    title: 'Settings — Slow down on battery',
+    looksRightWhen:
+      'Opened from ⌘K “Slow down on battery…”, scrolled to On this Mac: beside “Fix stopped previews”, a “Slow down on battery” row with one line (“On battery, background checks wait longer. Agents’ work never does.”) and its switch on.',
+    command: 'agents.lowPower',
+    requires: '[aria-label="Slow down on battery"]',
+    clipSelector: 'section[aria-labelledby="agents-settings-mac"]',
+    commands: {
+      agents_overview: overview(TEAM),
+      agents_desktop_settings: DESKTOP_SETTINGS,
+    },
+  },
+  {
     id: 'settings-agents-slack-setup',
     title: 'Settings — Slack, not connected yet',
     looksRightWhen:

@@ -1,4 +1,4 @@
-/** The paired Mac, alerts (with the honest limit), haptics, updates, and about. */
+/** The paired Mac, alerts (with the honest limit), quiet hours, haptics, updates, and about. */
 
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
@@ -8,6 +8,7 @@ import { Alert, AppState, Linking, ScrollView, StyleSheet, Switch, View } from '
 import { Icon, Row, Section, T, tap } from '../components/ui';
 import { NewAgentDefaults } from '../components/NewAgentDefaults';
 import { IndependenceSetting } from '../components/IndependenceSetting';
+import { QuietHoursSetting } from '../components/QuietHoursSetting';
 import { formatDate } from '../lib/agents';
 import { useQuotaLines } from '../lib/quota';
 import { useAccounts } from '../lib/accounts';
@@ -263,6 +264,8 @@ export default function Settings() {
           <Row label="When the app is closed" value={pushInfo.value} last />
         )}
       </Section>
+
+      <QuietHoursSetting />
 
       <Section title="Appearance">
         {APPEARANCE.map((o, i) => {

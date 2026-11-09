@@ -435,6 +435,15 @@ export const agentsSetDefaults = {
 export const agentsSetIndependence = {
   "level": "go_hard"
 } satisfies Result<'agents.setIndependence'>;
+export const agentsQuietHours = {
+  "window": {
+    "end": 420,
+    "start": 1320
+  }
+} satisfies Result<'agents.quietHours'>;
+export const agentsSetQuietHours = {
+  "window": null
+} satisfies Result<'agents.setQuietHours'>;
 export const agentsSetImportChoice = {
   "choice": "declined"
 } satisfies Result<'agents.setImportChoice'>;
@@ -3283,6 +3292,8 @@ export const frames = [
       "agents.accounts.use",
       "agents.accounts.reorder",
       "agents.usagePlan",
+      "agents.quietHours",
+      "agents.setQuietHours",
       "agents.changeDiff",
       "agents.keepCopy",
       "agents.discardCopy",

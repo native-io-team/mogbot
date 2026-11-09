@@ -309,7 +309,7 @@ runs). Never present one as the other, and never invent either.
 - Work wanted \"sometime\" or \"when there's spare capacity\" goes on the list with `add_spare_work`.";
 
 const USAGE_CHIEF: &str = "\
-- `set_usage_mode` changes the mode when the user asks (they confirm on a card).";
+- `set_usage_mode` changes the mode when the user asks (spending more is a card).";
 
 /// The usage section, with the user's mode. App-owned, built every turn
 /// from code, so every agent (whenever it was created or imported) has it,

@@ -1317,6 +1317,8 @@ export function createMockServer(opts: MockOptions = {}) {
 
   // How much agents do on their own (`agents::independence`).
   let independence: AgentIndependence = 'judgement';
+  // Quiet hours (`agents::quiet`): on, 22:00–07:00, until the phone changes them.
+  let quietWindow: { start: number; end: number } | null = { start: 22 * 60, end: 7 * 60 };
   const overview = (): AgentsOverview => ({
     agents: structuredClone(agents),
     engineReady: !opts.codexOnly,
@@ -2985,6 +2987,21 @@ export function createMockServer(opts: MockOptions = {}) {
       if (typeof p.codexModel === 'string') saved.codexModel = p.codexModel || null;
       emit({ type: 'agents.registry', overview: overview() });
       return defaults();
+    },
+    'agents.quietHours': () => ({ window: quietWindow }),
+    // As `quiet::checked` does: whole minutes in a day, start ≠ end.
+    'agents.setQuietHours': (p) => {
+      const w = p.window as { start: number; end: number } | null | undefined;
+      const inDay = (n: unknown) => Number.isInteger(n) && (n as number) >= 0 && (n as number) < 1440;
+      if (w && (!inDay(w.start) || !inDay(w.end) || w.start === w.end)) {
+        return fail({
+          type: 'Protocol',
+          code: 'bad_params',
+          message: 'Quiet hours take a window {start, end} in minutes after midnight, different times, or null for off.',
+        });
+      }
+      quietWindow = w ?? null;
+      return { window: quietWindow };
     },
     // As `agents::independence::Level::parse` does.
     'agents.setIndependence': (p) => {

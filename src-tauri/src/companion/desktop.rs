@@ -576,6 +576,19 @@ impl Backend for DesktopBackend {
         json(crate::commands::agents_usage::agents_usage_overview(self.app.clone(), None).await?)
     }
 
+    async fn quiet_hours(&self) -> Result<Value, CommandError> {
+        let window = cmd::agents_quiet_hours().await?;
+        Ok(serde_json::json!({ "window": window }))
+    }
+
+    async fn set_quiet_hours(
+        &self,
+        window: Option<crate::agents::quiet::Window>,
+    ) -> Result<Value, CommandError> {
+        let window = cmd::agents_set_quiet_hours(self.app.clone(), window).await?;
+        Ok(serde_json::json!({ "window": window }))
+    }
+
     async fn import_status(&self) -> Result<Value, CommandError> {
         import_status_now().await
     }

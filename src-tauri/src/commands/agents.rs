@@ -2442,6 +2442,43 @@ pub async fn agents_disk_overview() -> Result<agents::disk::Overview, CommandErr
     blocking(|| Ok(agents::disk::overview())).await
 }
 
+/// Settings → Agents → Notifications, "Quiet hours": the team's window, or
+/// `None` when off (`agents::quiet`).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_quiet_hours() -> Result<Option<agents::quiet::Window>, CommandError> {
+    blocking(|| Ok(agents::quiet::get())).await
+}
+
+/// Set (or with `None`, turn off) quiet hours from Settings or the phone:
+/// the user's own choice, applied at once. They only hold things back.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_set_quiet_hours(
+    app: AppHandle,
+    window: Option<agents::quiet::Window>,
+) -> Result<Option<agents::quiet::Window>, CommandError> {
+    let saved = set_quiet_hours(window)?;
+    let _ = app.emit(agents::quiet::EVENT, ());
+    Ok(saved)
+}
+
+/// The one write behind Settings and the phone.
+pub(crate) fn set_quiet_hours(
+    window: Option<agents::quiet::Window>,
+) -> Result<Option<agents::quiet::Window>, CommandError> {
+    let window = window
+        .map(agents::quiet::checked)
+        .transpose()
+        .map_err(CommandError::expected)?;
+    agents::quiet::set(window, store::now_ms())?;
+    tracing::info!(
+        on = window.is_some(),
+        "[Agents] quiet hours set from settings"
+    );
+    Ok(window)
+}
+
 /// "Free up space": an agent home's dependency and build folders, regenerable ones only.
 #[tauri::command]
 #[tracing::instrument]

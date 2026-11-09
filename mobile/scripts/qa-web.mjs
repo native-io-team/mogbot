@@ -1651,6 +1651,14 @@ const LIVE = [
       'HOW MUCH IT DOES ON ITS OWN over one card: “Asks a lot” and “Just does it” at the ends, a track with four dots and a neutral thumb (never the accent), Careful · Steady · Bold · Unleashed under it with the chosen one stronger, the chosen stop’s line, then “Always asks before spending money, using your passwords, or deleting for good.” and the count set on their own',
   },
   {
+    name: 'settings-quiet-hours',
+    route: '/settings',
+    ready: '22:00–07:00',
+    act: scrollToText('22:00–07:00'),
+    check:
+      'QUIET HOURS over one row: “Quiet hours” with “22:00–07:00” on the right and a chevron, then the footer “Nothing scheduled runs; only requests for your OK notify.”',
+  },
+  {
     name: 'settings-text-size',
     route: '/settings',
     ready: 'Largest',

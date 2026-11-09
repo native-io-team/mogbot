@@ -179,3 +179,23 @@ fn the_scheduler_holds_a_sweep_and_lets_a_chosen_time_through() {
     );
     assert!(!p.contains("wasn't running"), "{p}");
 }
+
+#[test]
+fn settings_windows_are_checked_like_chats() {
+    use super::{checked, Window};
+    assert!(checked(Window {
+        start: 22 * 60,
+        end: 7 * 60
+    })
+    .is_ok());
+    assert!(checked(Window {
+        start: 600,
+        end: 600
+    })
+    .is_err());
+    assert!(checked(Window {
+        start: 24 * 60,
+        end: 60
+    })
+    .is_err());
+}

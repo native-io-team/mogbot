@@ -250,7 +250,7 @@ fn the_tool_tells_the_chief_how_to_set_one_agent() {
     assert!(schema.contains("put Social Posts on Unleashed"));
     assert!(schema.contains("make Finance careful"));
     // The names the user sees, and the old ones they may still type.
-    assert!(schema.contains("often = Careful, judgement = Steady, go_hard = Bold, full_send = Unleashed"));
+    assert!(schema.contains("Careful, Steady, Bold, Unleashed (often, judgement, go_hard, full_send are the same stops)"));
     assert!(schema.contains("\\\"go hard\\\", \\\"full send\\\""));
     assert!(schema.contains("Raising needs the user's card; lowering"));
 }
