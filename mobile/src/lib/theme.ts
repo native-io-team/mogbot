@@ -568,9 +568,6 @@ export const TEXT_SIZE_KEYS = Object.keys(TEXT_SIZES) as TextSize[];
 
 let textScale: number = TEXT_SIZES.default;
 
-/** The phone's text size in force, as a multiplier. */
-export const currentTextScale = () => textScale;
-
 /** The multiplier for a saved choice; anything unknown is Default. */
 export const textScaleOf = (size: string | undefined): number =>
   (size && TEXT_SIZES[size as TextSize]) || TEXT_SIZES.default;

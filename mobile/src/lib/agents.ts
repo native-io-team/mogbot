@@ -279,13 +279,6 @@ export function distinctInitials(name: string, names: string[]): string {
     : own;
 }
 
-/** Visible agents' names in creation order, Chief first: what `distinctInitials` compares. */
-export const teamNames = (agents: Agent[]) =>
-  agents
-    .filter((a) => !a.hidden)
-    .sort((a, b) => Number(b.isMain) - Number(a.isMain) || a.createdAt - b.createdAt)
-    .map((a) => a.name);
-
 /**
  * What "Always allow" will stop asking about, in a sentence. `revocable`:
  * end by saying where it can be taken back (not needed beside Revoke itself).

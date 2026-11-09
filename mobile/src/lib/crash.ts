@@ -99,13 +99,6 @@ export function installCrashHandler(
   });
 }
 
-/** Tests only. */
-export function resetCrashHandlerForTests() {
-  installed = false;
-  watching = null;
-  told = false;
-}
-
 let watching: Promise<boolean> | null = null;
 
 /**
