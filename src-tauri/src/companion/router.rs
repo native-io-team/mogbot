@@ -319,6 +319,14 @@ pub struct PhoneNewAgent {
     /// Routines to set up with it, the ones the user kept from a draft.
     #[serde(default)]
     pub routines: Vec<crate::agents::draft::NewRoutine>,
+    /// The draft's welcome, first tasks and the apps its job needs
+    /// (`agents::starters`).
+    #[serde(default)]
+    pub welcome: Option<String>,
+    #[serde(default)]
+    pub starters: Vec<crate::agents::starters::Idea>,
+    #[serde(default)]
+    pub apps: Vec<String>,
 }
 
 /// "What should it do?" is one line, as the desk's field is.
@@ -428,6 +436,21 @@ fn check_new_agent(input: PhoneNewAgent) -> Result<PhoneNewAgent, WireError> {
             refuse_unsafe_text(&step.text, "A routine's step")?;
         }
     }
+    // A starter is sent as the user's message when tapped.
+    use crate::agents::starters::{MAX_IDEAS, MAX_WELCOME};
+    if input.starters.len() > MAX_IDEAS || input.apps.len() > crate::agents::draft::MAX_APPS {
+        return Err(bad_params("Too many first tasks or apps for a new agent."));
+    }
+    for text in input
+        .welcome
+        .iter()
+        .chain(input.starters.iter().map(|s| &s.text))
+    {
+        refuse_unsafe_text(text, "Its first words")?;
+        if text.chars().count() > MAX_WELCOME {
+            return Err(bad_params("Keep its first words short."));
+        }
+    }
     Ok(PhoneNewAgent {
         name,
         role,
@@ -436,6 +459,9 @@ fn check_new_agent(input: PhoneNewAgent) -> Result<PhoneNewAgent, WireError> {
         template,
         instructions,
         routines: input.routines,
+        welcome: input.welcome,
+        starters: input.starters,
+        apps: input.apps,
     })
 }
 

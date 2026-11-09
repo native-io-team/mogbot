@@ -446,6 +446,11 @@ impl Backend for DesktopBackend {
             project: None,
             template: template.map(|t| t.id.clone()),
             routines: input.routines,
+            opening: crate::agents::starters::Opening {
+                welcome: input.welcome,
+                starters: input.starters,
+                apps: input.apps,
+            },
         };
         // Read before, as `agents_create` reads it, so its first line can say
         // where it went and, on a fallback, why: the header's badge leaves

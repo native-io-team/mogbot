@@ -48,6 +48,7 @@ import {
   getAgentInstructions,
   getAgentUsage,
   keptRoutines,
+  openingOf,
   modelChoices,
   onClaudePlan,
   revokePermission,
@@ -380,7 +381,7 @@ export function AgentEditorModal({
           model,
           project,
           ...(template ? { template: template.id } : {}),
-          ...(draft ? { routines: keptRoutines(draft, kept) } : {}),
+          ...(draft ? { routines: keptRoutines(draft, kept), ...openingOf(draft) } : {}),
         });
         if (project && workDirectly) await updateAgent(created.id, { workDirectly });
         onSaved(created.id);

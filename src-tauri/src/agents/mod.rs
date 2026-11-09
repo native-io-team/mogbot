@@ -158,6 +158,7 @@ pub mod settings_tools;
 pub mod share_text;
 pub mod slack;
 pub mod slack_api;
+pub mod starters;
 pub mod step_in;
 pub mod store;
 pub mod stream;

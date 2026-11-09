@@ -1567,6 +1567,10 @@ pub fn record(app: &AppHandle, message: AgentMessage) -> Result<AgentMessage, Co
     // The user wrote: a new task, in which an ask that expired may be raised again.
     if message.kind == MessageKind::User && !message.agent_id.is_empty() {
         super::expiry::new_task(&message.agent_id);
+        // Its first-open starters go once the user says anything.
+        if super::starters::clear(&message.agent_id) {
+            let _ = tauri::Emitter::emit(app, EVENT_REGISTRY, ());
+        }
     }
     record_as(app, message, true, Tag::ByKind)
 }

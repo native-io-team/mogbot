@@ -249,6 +249,15 @@ export const agentsOverview = {
       ],
       "sessionId": "8c1d7a52-0000-4000-8000-000000000001",
       "shape": 2,
+      "starters": [
+        {
+          "connect": "Gmail",
+          "text": "Help me connect Gmail"
+        },
+        {
+          "text": "Plan my week"
+        }
+      ],
       "status": {
         "activity": "Running npm test",
         "since": 1762290000000,
@@ -5058,6 +5067,15 @@ export const frames = [
             ],
             "sessionId": "8c1d7a52-0000-4000-8000-000000000001",
             "shape": 2,
+            "starters": [
+              {
+                "connect": "Gmail",
+                "text": "Help me connect Gmail"
+              },
+              {
+                "text": "Plan my week"
+              }
+            ],
             "status": {
               "activity": "Running npm test",
               "since": 1762290000000,
@@ -5482,6 +5500,15 @@ export const frames = [
             ],
             "sessionId": "8c1d7a52-0000-4000-8000-000000000001",
             "shape": 2,
+            "starters": [
+              {
+                "connect": "Gmail",
+                "text": "Help me connect Gmail"
+              },
+              {
+                "text": "Plan my week"
+              }
+            ],
             "status": {
               "activity": "Running npm test",
               "since": 1762290000000,

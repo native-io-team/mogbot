@@ -227,6 +227,11 @@ export interface Agent {
   routineModel?: string;
   /** The ready-made agent it was made from (`agents.templates`), if any. */
   template?: string;
+  /**
+   * Its first-open starters (`agents/starters.rs`): three tasks under its
+   * welcome, until the user sends anything. Older Macs never send it.
+   */
+  starters?: AgentStarter[];
   muted: boolean;
   checkIns?: CheckIn[];
   /**
@@ -386,6 +391,53 @@ export interface AgentDraft {
   routines: DraftRoutine[];
   /** Apps it will ask to connect when it first needs them. Never a claim that one is connected. */
   apps: string[];
+  /** What it says first, in its own voice. Older Macs never send it. */
+  welcome?: string;
+  /** First tasks to offer, each with the apps it needs; the Mac picks three it can reach. */
+  starters?: StarterIdea[];
+}
+
+/** A first task its creator suggested; mirrors `starters::Idea`. */
+export interface StarterIdea {
+  text: string;
+  /** Apps (from the draft's `apps`) it can't be done without. */
+  needs: string[];
+}
+
+/**
+ * One first-open starter; mirrors `starters::Starter`. Tapping it sends
+ * `text` as the user's message.
+ */
+export interface AgentStarter {
+  text: string;
+  /** The app it asks to connect: the one login ask. */
+  connect?: string;
+}
+
+/** What a draft passes on to Create: its welcome, first tasks and apps. */
+export function openingOf(draft: AgentDraft | null | undefined): {
+  welcome?: string;
+  starters?: StarterIdea[];
+  apps?: string[];
+} {
+  if (!draft) return {};
+  return {
+    ...(draft.welcome ? { welcome: draft.welcome } : {}),
+    ...(draft.starters?.length ? { starters: draft.starters } : {}),
+    ...(draft.apps.length ? { apps: draft.apps } : {}),
+  };
+}
+
+/**
+ * Whether a chat still shows its starters: it has some and the user hasn't
+ * said anything in it (the Mac clears them on the first message; this
+ * covers the moment before the registry catches up).
+ */
+export function showsStarters(
+  agent: { starters?: AgentStarter[] },
+  messages: readonly { kind: string }[]
+): boolean {
+  return !!agent.starters?.length && !messages.some((m) => m.kind === 'user');
 }
 
 /** What a "When…" routine waits for; mirrors `watch::Source`. */
@@ -1580,6 +1632,10 @@ export interface NewAgentInput {
   template?: string;
   /** Routines to set up with it (the ones kept from a draft). */
   routines?: NewRoutine[];
+  /** From a draft: its welcome, first tasks and the apps its job needs (`openingOf`). */
+  welcome?: string;
+  starters?: StarterIdea[];
+  apps?: string[];
 }
 
 /** A ready-made agent, as `agents.templates` offers it (its briefing stays on the Mac). */

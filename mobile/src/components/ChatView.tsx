@@ -12,6 +12,7 @@ import { headerSubtitle, headerSubtitleParts } from '../lib/accountsView';
 import {
   newestResults,
   foldResultReplies,
+  showsStarters,
   type Agent,
   type AgentMessage,
 } from '@shipstudio/companion-protocol';
@@ -70,6 +71,7 @@ import {
   loadLatest,
   loadOlder,
   loadUntil,
+  send,
   setOpenChat,
 } from '../lib/session';
 import { useAccent } from '../lib/accent';
@@ -120,6 +122,7 @@ import { useQuotas } from '../lib/quota';
 import { ringPercent } from '../lib/usageSheet';
 import { showActions } from './menu';
 import { SelectSheet } from './SelectSheet';
+import { Starters } from './Starters';
 import { Button, Dot, Icon, IconButton, useRipple, T } from './ui';
 
 const NONE: never[] = [];
@@ -295,6 +298,13 @@ export function ChatView({
   // pinned at the top, so the answers at the bottom never stand alone. Only
   // a card this phone can answer: an import's review is answered on the Mac.
   const card = useMemo(() => pendingApproval(messages), [messages]);
+  // A new agent's welcome is up and you haven't said anything: its starters.
+  const firstOpen =
+    !!agent &&
+    !agent.isMain &&
+    agent.status.state === 'idle' &&
+    pending.length === 0 &&
+    showsStarters(agent, messages);
   // The header must agree with the card: an approval in the chat is "needs you",
   // even in the beat before the status event says so.
   const asking = !!card;
@@ -693,6 +703,18 @@ export function ChatView({
                 initialNumToRender={16}
                 maxToRenderPerBatch={12}
                 windowSize={13}
+                // Inverted: the header sits at the newest end, under the welcome.
+                ListHeaderComponent={
+                  firstOpen && agent.starters ? (
+                    <Starters
+                      starters={agent.starters}
+                      onSend={(text) => {
+                        haptic.light();
+                        send(agent.id, text).catch((e: unknown) => showError(describeError(e)));
+                      }}
+                    />
+                  ) : undefined
+                }
                 ListFooterComponent={
                   chat?.loaded && !chat.more ? (
                     <Line text={`Start of your conversation with ${agent.name}`} />

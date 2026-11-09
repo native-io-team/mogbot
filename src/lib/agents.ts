@@ -18,7 +18,9 @@ import type { SettingsProposal } from '../../packages/companion-protocol/src/pol
 import type { CrossoverAsk, CrossoverAway } from '../../packages/companion-protocol/src/crossover';
 import type {
   AgentDraft,
+  AgentStarter,
   NewRoutine,
+  StarterIdea,
   PlanCard,
   Repeat,
   RoutineGate,
@@ -210,6 +212,8 @@ export interface Agent {
   routineModel?: string;
   /** The ready-made agent it was made from (`agentTemplates.ts`), if any. */
   template?: string;
+  /** Its first-open starters, until the user sends anything (`agents/starters.rs`). */
+  starters?: AgentStarter[];
   /** No OS notifications; unread and the Dock badge still count it. */
   muted: boolean;
   /** Omitted by the backend when there are none. */
@@ -308,8 +312,11 @@ export interface CheckIn {
 }
 
 /** Routines in steps and drafted agents; shared with the phone. */
+export { openingOf, showsStarters } from '../../packages/companion-protocol/src/model';
 export type {
   AgentDraft,
+  AgentStarter,
+  StarterIdea,
   DraftRoutine,
   NewRoutine,
   RoutineGate,
@@ -928,6 +935,10 @@ export interface NewAgentInput {
   template?: string;
   /** Routines to set up with it (the ones kept from a draft). */
   routines?: NewRoutine[];
+  /** From a draft: its welcome, first tasks and the apps its job needs (`openingOf`). */
+  welcome?: string;
+  starters?: StarterIdea[];
+  apps?: string[];
 }
 
 export interface UpdateAgentInput {
