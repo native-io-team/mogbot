@@ -38,3 +38,32 @@ describe('the board of keys, to a screen reader', () => {
     expect(screen.getByRole('button', { name: 'New agent' })).toBeInTheDocument();
   });
 });
+
+describe('a paused key', () => {
+  it('says when it is back, run on from the word', () => {
+    const resetsAt = Date.now() + 90 * 60_000;
+    render(
+      <AgentsBoard
+        agents={[
+          agent('n', 'Native App', {
+            failure: { kind: 'usage_limit', resetsAt },
+          } as Partial<Agent>),
+        ]}
+        onOpenAgent={() => {}}
+      />
+    );
+    const line = document.querySelector('.agents-board__state')?.textContent ?? '';
+    expect(line).toMatch(/^Paused until /);
+    expect(line).not.toContain('·');
+  });
+
+  it('says only the word when the reset is not known', () => {
+    render(
+      <AgentsBoard
+        agents={[agent('n', 'Native App', { failure: { kind: 'usage_limit' } } as Partial<Agent>)]}
+        onOpenAgent={() => {}}
+      />
+    );
+    expect(document.querySelector('.agents-board__state')?.textContent).toBe('Paused');
+  });
+});
