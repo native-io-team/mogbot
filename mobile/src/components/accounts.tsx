@@ -19,12 +19,13 @@ import {
   awayStateOf,
   pinnedLine,
   USE_THIS_ONE_NOW,
+  type AgentEngine,
   type SwitcherEngine,
   type SwitcherRow,
 } from '@shipstudio/companion-protocol';
 import { usageGlance } from '@shipstudio/companion-protocol';
 import { View } from 'react-native';
-import { GlanceCard } from './usageStack';
+import { TotalCard } from './usageStack';
 import { makeStyles, useColors } from '../lib/appearance';
 import type { AccountsState } from '../lib/accounts';
 import { useApp } from '../lib/store';
@@ -53,7 +54,14 @@ export function shownEngines(view: SwitcherEngine[]): SwitcherEngine[] {
   return view.filter((e) => e.rows.length > 1 || e.rows.some((r) => r.signedIn));
 }
 
-export function AccountsSections({ state }: { state: AccountsState }) {
+export function AccountsSections({
+  state,
+  onOpenAccount,
+}: {
+  state: AccountsState;
+  /** Open one account's usage screen (a segment of the total). */
+  onOpenAccount?: (engine: AgentEngine, id: string) => void;
+}) {
   const colors = useColors();
   const styles = useStyles();
   const agents = useApp((s) => s.overview?.agents);
@@ -67,7 +75,7 @@ export function AccountsSections({ state }: { state: AccountsState }) {
     <>
       {glance && glance.keys.length > 0 && (
         <View style={styles.glance}>
-          <GlanceCard glance={glance} />
+          <TotalCard glance={glance} onOpen={onOpenAccount} />
         </View>
       )}
       {engines.map((e, ei) => (

@@ -167,9 +167,11 @@ export interface MockOptions {
   /**
    * Two Claude accounts and a Codex one not signed in, in the Usage sheet:
    * `two-claude`, both Claude accounts read (one by its rate-limit headers,
-   * at its weekly limit); `one-read`, the second one can't be read.
+   * at its weekly limit); `one-read`, the second one can't be read; `room`,
+   * the account in use at 44% of its week and the other untouched (the
+   * owner's "100% and 44%": the total reads 72%).
    */
-  usage?: 'two-claude' | 'one-read';
+  usage?: 'two-claude' | 'one-read' | 'room';
   /** Answer CORS preflights and tag every response, for the web build (dev only). */
   cors?: boolean;
   /**
@@ -332,7 +334,7 @@ function claudeWindows(now: number): Quota['windows'] {
  */
 function twoClaudeUsage(
   plan: typeof real.agentsUsagePlan,
-  variant: 'two-claude' | 'one-read',
+  variant: 'two-claude' | 'one-read' | 'room',
   now: number
 ): typeof real.agentsUsagePlan {
   const hour = 3_600_000;
@@ -353,7 +355,10 @@ function twoClaudeUsage(
     out: false,
     next: true,
     plan: 'max',
-    windows: [w('five_hour', 7, now + 3 * hour), w('seven_day', 71, weekReset)],
+    windows: [
+      w('five_hour', 7, now + 3 * hour),
+      w('seven_day', variant === 'room' ? 56 : 71, weekReset),
+    ],
     learned: ['five_hour', 'seven_day'],
     pace: [
       {
@@ -365,25 +370,16 @@ function twoClaudeUsage(
         spanMinutes: 600,
       },
     ],
+    spent: [
+      { agentId: 'site', name: 'Acme Site', turns: 23, tokens: 4_800_000 },
+      { agentId: 'main', name: 'Chief of Staff', turns: 9, tokens: 1_350_000 },
+    ],
     check: { at: now - 4 * 60_000, outcome: 'read' as const },
   };
   const personalReset = now + 52 * hour;
   const personal =
-    variant === 'two-claude'
+    variant === 'room'
       ? {
-          engine: 'claude' as const,
-          id: 'p1',
-          name: 'Personal',
-          thisMac: false,
-          signedIn: true,
-          out: true,
-          outUntil: personalReset,
-          next: false,
-          windows: [w('seven_day', 100, personalReset)],
-          learned: [],
-          check: { at: now - 4 * 60_000, outcome: 'read' as const, via: 'headers' as const },
-        }
-      : {
           engine: 'claude' as const,
           id: 'p1',
           name: 'Personal',
@@ -391,14 +387,44 @@ function twoClaudeUsage(
           signedIn: true,
           out: false,
           next: false,
-          windows: [],
+          windows: [
+            w('five_hour', 0, now + 5 * hour),
+            w('seven_day', 0, personalReset + 90 * hour),
+          ],
           learned: [],
-          check: {
-            at: now - 4 * 60_000,
-            outcome: 'cant_read' as const,
-            why: 'Can’t read its limits between turns with the token it was added with. They show after a turn runs on it',
-          },
-        };
+          spent: [{ agentId: 'site', name: 'Acme Site', turns: 6, tokens: 820_000 }],
+          check: { at: now - 4 * 60_000, outcome: 'read' as const },
+        }
+      : variant === 'two-claude'
+        ? {
+            engine: 'claude' as const,
+            id: 'p1',
+            name: 'Personal',
+            thisMac: false,
+            signedIn: true,
+            out: true,
+            outUntil: personalReset,
+            next: false,
+            windows: [w('seven_day', 100, personalReset)],
+            learned: [],
+            check: { at: now - 4 * 60_000, outcome: 'read' as const, via: 'headers' as const },
+          }
+        : {
+            engine: 'claude' as const,
+            id: 'p1',
+            name: 'Personal',
+            thisMac: false,
+            signedIn: true,
+            out: false,
+            next: false,
+            windows: [],
+            learned: [],
+            check: {
+              at: now - 4 * 60_000,
+              outcome: 'cant_read' as const,
+              why: 'Can’t read its limits between turns with the token it was added with. They show after a turn runs on it',
+            },
+          };
   const codex = {
     engine: 'codex' as const,
     id: 'default',

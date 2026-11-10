@@ -89,8 +89,10 @@ function selfSigned(dir: string) {
     liveWork: args.includes('--live-work'),
     probe: args.includes('--probe'),
     restarted: args.includes('--restarted'),
-    ...(arg('--usage') === 'two-claude' || arg('--usage') === 'one-read'
-      ? { usage: arg('--usage') as 'two-claude' | 'one-read' }
+    ...(arg('--usage') === 'two-claude' ||
+    arg('--usage') === 'one-read' ||
+    arg('--usage') === 'room'
+      ? { usage: arg('--usage') as 'two-claude' | 'one-read' | 'room' }
       : {}),
     identityFile: path.join(state, 'identity.pem'),
     // The same server id and paired phones, a different key: what a phone

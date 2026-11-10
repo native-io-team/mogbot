@@ -88,7 +88,7 @@ export interface ChangeLine {
   title: string;
   /** "Sat 11:40 PM – Sun 7:10 AM". */
   when: string;
-  /** "Riley · 3 turns · 1.2M tokens", "Max: Morning brief · 1 turn · 300k tokens". */
+  /** "Riley · 3 messages · 1.2M tokens", "Max: Morning brief · 1 message · 300k tokens". */
   runs: string[];
   /** When nothing this app ran explains it. */
   elsewhere: string | null;
@@ -105,7 +105,7 @@ export interface StackKey {
   /** What tells it apart: plan, organization, who it's signed in as, this Mac's own. */
   detail: string[];
   state: AccountKeyState;
-  /** "In use", "Next", "Ready", "Out of usage until Sat 10:00 AM", "Not signed in", "Same account", "No reading yet". */
+  /** "In use", "Next", "Ready", "Out of usage until Sat 10:00 AM", "Not signed in", "Same account", "Not read yet". */
   stateLabel: string;
   /** The account it is a second sign-in of, by the name that one's key shows. */
   sameAs: string | null;
@@ -115,7 +115,7 @@ export interface StackKey {
   left: number | null;
   tone: KeyTone;
   limits: KeyLimit[];
-  /** "Riley · 1.2M tokens · 14 turns", this week, most first. */
+  /** "Riley · 1.2M tokens · 14 messages", this week, most first. */
   spent: string[];
   /** The same, one row each for a table: who used this account this week, most first. */
   agents: AgentSpend[];
@@ -156,7 +156,7 @@ export interface AgentSpend {
   turns: number;
   /** "1.2M". */
   tokensText: string;
-  /** "14 turns". */
+  /** "14 messages". */
   turnsText: string;
   /** Of this account's tokens this week, 0–100. */
   share: number;
@@ -191,7 +191,7 @@ export interface TotalSegment {
 export interface UsageTotal {
   /** 0–100, the mean of each read account's share; null when none is read. */
   left: number | null;
-  /** "72% left", "Not checked yet". */
+  /** "72% left", "Not read yet". */
   figure: string;
   /** "across 2 accounts", "across 2 Max accounts", "this week", "for now". */
   across: string;
@@ -246,7 +246,7 @@ export interface SignInChangedNotice {
  * reads. "Usage" is the label the row carries; these are its figures.
  */
 export interface GlanceRowWords {
-  /** "57% left this week", "57% left for now", "Out of usage", "Not checked yet". */
+  /** "57% left this week", "57% left for now", "Out of usage", "Not read yet". */
   figure: string;
   /** "Refills in 3d 12h" ("Refills Sat 10:00 AM" when out); absent when no reset was reported. */
   refill: string | null;
@@ -278,7 +278,7 @@ function rowWords(
       needsYou: true,
     };
   }
-  if (read.length === 0) return { figure: 'Not checked yet', refill: null, count, needsYou };
+  if (read.length === 0) return { figure: 'Not read yet', refill: null, count, needsYou };
   if (roomy.length === 0) {
     const at = back ? resetPhrase(back, now) : (soonest?.resetsAt ?? null);
     return { figure: OUT_OF_USAGE, refill: at ? `Refills ${at}` : null, count, needsYou };
@@ -501,7 +501,7 @@ function limitsOf(line: UsageAccountLine | undefined, now: number): KeyLimit[] {
 
 function runLine(r: UsageRun): string {
   const who = r.routine ? `${r.name}: ${r.routine}` : r.name;
-  return `${who} · ${plural(r.turns, 'turn')} · ${tokensShortly(r.tokens)} tokens`;
+  return `${who} · ${plural(r.turns, 'message')} · ${tokensShortly(r.tokens)} tokens`;
 }
 
 /** Where an account is used outside these agents, by engine. */
@@ -601,7 +601,7 @@ function keyOf(
     stateLabel = 'Next';
   } else {
     state = read ? 'ready' : 'unread';
-    stateLabel = read ? 'Ready' : 'No reading yet';
+    stateLabel = read ? 'Ready' : 'Not read yet';
   }
   const tone: KeyTone =
     state === 'off' || state === 'same' || left === null
@@ -634,7 +634,7 @@ function keyOf(
     limits: same ? [] : limits,
     spent: (line?.spent ?? [])
       .slice(0, 5)
-      .map((r) => `${r.name} · ${tokensShortly(r.tokens)} tokens · ${plural(r.turns, 'turn')}`),
+      .map((r) => `${r.name} · ${tokensShortly(r.tokens)} tokens · ${plural(r.turns, 'message')}`),
     agents: agentsOf(line),
     share: shareLimit ? shareLimit.left : left,
     shareOf: shareLimit ? (week ? 'week' : 'tight') : null,
@@ -665,7 +665,7 @@ function agentsOf(line: UsageAccountLine | undefined): AgentSpend[] {
     tokens: r.tokens,
     turns: r.turns,
     tokensText: tokensShortly(r.tokens),
-    turnsText: plural(r.turns, 'turn'),
+    turnsText: plural(r.turns, 'message'),
     share: all > 0 ? Math.round((r.tokens / all) * 100) : 0,
   }));
 }
@@ -692,7 +692,7 @@ export function totalOf(
   const segment = (k: StackKey): TotalSegment => {
     const l = k.refillLimit;
     const refill = l?.countdown ?? null;
-    const room = k.share === null ? 'no reading yet' : `${k.share}% left`;
+    const room = k.share === null ? 'shows after its first reply' : `${k.share}% left`;
     return {
       key: k.key,
       engine: k.engine,
@@ -738,7 +738,7 @@ export function totalOf(
   return {
     left,
     figure:
-      left !== null ? `${left}% left` : real.length === 0 ? 'Not signed in' : 'Not checked yet',
+      left !== null ? `${left}% left` : real.length === 0 ? 'Not signed in' : 'Not read yet',
     across: left === null ? '' : across,
     unread:
       unread.length > 0 && read.length > 0
@@ -797,7 +797,7 @@ export interface BurnLine {
   /** "Chief of Staff", "Finance: Monday numbers". */
   name: string;
   tokens: number;
-  /** "4.8M tokens · 23 turns". */
+  /** "4.8M tokens · 23 messages". */
   detail: string;
   /** Of everyone's tokens this week, 0–100. */
   share: number;
@@ -825,7 +825,7 @@ function burningOf(inv: UsageInventory | null | undefined, keys: StackKey[]): Bu
       key,
       name: b.name,
       tokens: b.tokens,
-      detail: `${tokensShortly(b.tokens)} tokens · ${plural(b.turns, 'turn')}`,
+      detail: `${tokensShortly(b.tokens)} tokens · ${plural(b.turns, 'message')}`,
       share: total > 0 ? Math.round((b.tokens / total) * 100) : 0,
     }))
     .sort((a, b) => b.tokens - a.tokens);
@@ -916,7 +916,7 @@ export function usageGlance(
     headline = keys.length === 0 ? 'No accounts yet' : 'No account is signed in';
     tone = 'warning';
   } else if (read.length === 0) {
-    headline = 'No usage reading yet';
+    headline = 'Your usage shows here after an agent’s first reply.';
   } else if (roomy.length === 0) {
     tone = 'limited';
     headline = back

@@ -70,7 +70,7 @@ describe('usageGlance', () => {
     const g = usageGlance([acct('default')], inv([line('default')]), { now: NOW });
     expect(g.keys[0].left).toBeNull();
     expect(g.keys[0].tone).toBe('quiet');
-    expect(g.headline).toBe('No usage reading yet');
+    expect(g.headline).toBe('Your usage shows here after an agent’s first reply.');
   });
 
   it('a second sign-in of the same account adds no room and says how to fix it', () => {
@@ -344,7 +344,7 @@ describe('where did my usage go', () => {
     );
     expect(lines[0].title).toBe('Weekly 68% → 33% left');
     expect(lines[0].elsewhere).toMatch(/^Nothing these agents ran explains this/);
-    expect(lines[1].runs).toEqual(['Riley: Morning brief · 3 turns · 1.2M tokens']);
+    expect(lines[1].runs).toEqual(['Riley: Morning brief · 3 messages · 1.2M tokens']);
     expect(lines[1].elsewhere).toBeNull();
   });
 
@@ -380,7 +380,7 @@ describe('the row, in plain words', () => {
   it('says plainly when nothing has been read, and never a figure', () => {
     const g = usageGlance([acct('default')], inv([line('default')]), { now: NOW });
     expect(g.row).toEqual({
-      figure: 'Not checked yet',
+      figure: 'Not read yet',
       refill: null,
       count: null,
       needsYou: false,
@@ -468,7 +468,7 @@ describe('every limit, against pace', () => {
       { now: NOW }
     );
     expect(g.burning).toEqual([
-      { key: 'c', name: 'Chief', tokens: 3000, detail: '3k tokens · 3 turns', share: 100 },
+      { key: 'c', name: 'Chief', tokens: 3000, detail: '3k tokens · 3 messages', share: 100 },
     ]);
   });
 });
@@ -606,11 +606,11 @@ describe('the total, across every account', () => {
       ['Work', null],
       ['New', null],
     ]);
-    expect(g.total.segments[1].words).toBe('Work: no reading yet');
+    expect(g.total.segments[1].words).toBe('Work: shows after its first reply');
 
     const none = usageGlance([acct('default')], inv([line('default')]), { now: NOW });
     expect(none.total.left).toBeNull();
-    expect(none.total.figure).toBe('Not checked yet');
+    expect(none.total.figure).toBe('Not read yet');
     expect(none.total.across).toBe('');
   });
 
@@ -663,8 +663,8 @@ describe('the total, across every account', () => {
       { now: NOW }
     );
     expect(g.keys[0].agents.map((a) => [a.name, a.tokensText, a.turnsText, a.share])).toEqual([
-      ['Chief', '750k', '9 turns', 75],
-      ['Finance', '250k', '2 turns', 25],
+      ['Chief', '750k', '9 messages', 75],
+      ['Finance', '250k', '2 messages', 25],
     ]);
   });
 });

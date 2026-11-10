@@ -405,8 +405,8 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
               </div>
               <p className="usage-section__muted">
                 {glance.keys.length > 1
-                  ? 'Turns start on the first with room and carry on down. Open one to change its place.'
-                  : `Turns run on this one. ${ADD_ACCOUNT_WHY}`}
+                  ? 'Work starts on the first account with room and carries on down. Open one to change its place.'
+                  : `Your agents use this one. ${ADD_ACCOUNT_WHY}`}
               </p>
               {glance.engines.map((e) => (
                 <div key={e.engine} className="usage-rows" data-engine={e.engine}>
@@ -559,7 +559,11 @@ function TotalHero({
 }) {
   const { total } = glance;
   const out = glance.tone === 'limited';
-  const figure = out || total.left === null ? glance.row.figure : total.figure;
+  const figure = glance.unread
+    ? glance.headline
+    : out || total.left === null
+      ? glance.row.figure
+      : total.figure;
   const refill = out
     ? glance.row.refill
     : total.refill

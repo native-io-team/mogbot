@@ -102,7 +102,7 @@ export function TotalBar({
             <span className="usage-total__name">{s.name}</span>
             <span className="usage-total__room">
               <span className="usage-total__left">
-                {s.left === null ? 'No reading yet' : `${s.left}% left`}
+                {s.left === null ? 'Not read yet' : `${s.left}% left`}
               </span>
               {s.refill && (
                 <span
@@ -174,7 +174,7 @@ export const PILL: Record<AccountKeyState, StatusTone> = {
 export function roomWords(k: StackKey): string {
   if (k.state === 'same') return 'Adds no room';
   if (k.state === 'off') return 'Not signed in';
-  if (k.share === null) return 'No reading yet';
+  if (k.share === null) return 'Not read yet';
   return `${k.share}% left`;
 }
 
@@ -594,7 +594,7 @@ export function AccountDetail({
             <p className="usage-section__muted">
               {k.state === 'out'
                 ? k.stateLabel
-                : 'No usage reading yet. It shows after its next check or turn.'}
+                : 'Your usage shows here after an agent’s first reply.'}
             </p>
           )}
         </Section>
@@ -625,8 +625,8 @@ export function AccountDetail({
             ))}
           </ol>
           <p className="usage-section__muted">
-            Turns are listed with the tokens their engine reported; the points aren’t split between
-            them. Use of the same plan outside these agents counts too.
+            Each task is listed with the tokens Claude Code or Codex reported; the points aren’t
+            split between them. Use of the same plan outside these agents counts too.
           </p>
         </Section>
       )}
@@ -634,7 +634,7 @@ export function AccountDetail({
   );
 }
 
-/** Who used this account this week: agent key, name, tokens, turns, in aligned columns. */
+/** Who used this account this week: agent key, name, tokens, messages, in aligned columns. */
 function AgentsTable({ k }: { k: StackKey }) {
   return (
     <div className="usage-table" role="table" aria-label={`Who used ${k.name} this week`}>
@@ -646,7 +646,7 @@ function AgentsTable({ k }: { k: StackKey }) {
           Tokens
         </span>
         <span role="columnheader" className="usage-table__num">
-          Turns
+          Messages
         </span>
       </div>
       {k.agents.map((a) => (
@@ -670,8 +670,8 @@ function AgentsTable({ k }: { k: StackKey }) {
         </div>
       ))}
       <p className="usage-section__muted usage-table__note">
-        Tokens as the engine reported them for turns these agents ran. Not a cost: your plan isn’t
-        billed per token.
+        Tokens as Claude Code or Codex reported them for what these agents did. Not a cost: your
+        plan isn’t billed per token.
       </p>
     </div>
   );

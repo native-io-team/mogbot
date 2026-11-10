@@ -145,7 +145,7 @@ describe('AccountSwitcher (the sidebar’s usage glance)', () => {
     // One segment per account: Work has no reading, so its slot is empty, never full.
     const meter = within(row).getByRole('img', { name: /Room left/ });
     expect(meter).toHaveAccessibleName(
-      /sam@example.com: 62% left, refills in .+; Work: no reading yet/
+      /sam@example.com: 62% left, refills in .+; Work: shows after its first reply/
     );
     // The row itself never asks for a reading: a glance.
     expect(
@@ -196,7 +196,7 @@ describe('Usage view', () => {
     // The bar: the account with a reading first, the unread one an empty slot.
     const parts = within(hero).getAllByRole('button');
     expect(parts[0]).toHaveAccessibleName(/^sam@example.com: 62% left/);
-    expect(parts[1]).toHaveAccessibleName(/^Work: no reading yet/);
+    expect(parts[1]).toHaveAccessibleName(/^Work: shows after its first reply/);
     await waitFor(() => expect(rows()[0]).toHaveTextContent('In use'));
     expect(rows()[0]).toHaveTextContent('sam@example.com');
     expect(rows()[1]).toHaveTextContent('Next');

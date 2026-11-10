@@ -596,7 +596,7 @@ export const agentsUsageViewScenarios: Scenario[] = [
   ...trio(
     'unknown',
     'no readings yet',
-    'The hero says “Not checked yet” in secondary ink (no big figure). Every segment is an empty dashed slot, never full. Rows say “No reading yet” / “Not signed in”.',
+    'The hero says “Your usage shows here after an agent’s first reply.” in secondary ink (no big figure). Every segment is an empty dashed slot, never full. Rows say “Not read yet”; the signed-out one only its “Not signed in” pill.',
     UNKNOWN,
     {
       account: 'a3new',
