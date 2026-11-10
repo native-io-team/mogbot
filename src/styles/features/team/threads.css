@@ -70,7 +70,39 @@
   display: none;
 }
 
+.team-thread-list {
+  margin: 0;
+  list-style: none;
+}
+
+/* The row's button lies under its content, covering the whole card: it is
+   positioned and the words are not, so it takes every click, while the tick
+   box (positioned, later in the row) stays on top and clickable. */
+.team-thread-item-hit {
+  position: absolute;
+  inset: 0;
+  padding: 0;
+  background: none;
+  border: none;
+  border-radius: inherit;
+  cursor: pointer;
+}
+
+.team-thread-item-hit:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.team-thread-item > :not(.team-thread-item-hit) {
+  pointer-events: none;
+}
+
+.team-thread-item .checkbox {
+  pointer-events: auto;
+}
+
 .team-thread-item {
+  position: relative;
   display: flex;
   flex-direction: column;
   gap: var(--spacing-xs);
@@ -247,8 +279,11 @@
   font-size: var(--font-size-body-sm);
 }
 
+/* On the selected fill, muted ink was 3.6:1 in dark; the tag takes the row's
+   ink like the rest of a selected row. */
 .team-thread-item:is(.is-selected, :hover) .team-thread-context-tag {
   background: var(--surface-selected);
+  color: var(--text-primary);
 }
 
 .team-thread-context-tag {

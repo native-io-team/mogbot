@@ -212,42 +212,53 @@ export function TeamThreadsPanel({
         />
       ) : (
         <div className={`team-threads-body${selected ? '' : ' is-detail-closed'}`}>
-          <div className="team-thread-list" role="listbox" aria-label="Comment threads">
+          {/* A row is the visual card; the button that opens it covers the row
+              from underneath, so the tick box beside it is a sibling rather
+              than a control nested in a button (axe nested-interactive). */}
+          <ul className="team-thread-list" aria-label="Comment threads">
             {visible.map((thread) => {
               const last = thread.messages[thread.messages.length - 1];
+              const isOpen = thread.id === selected?.id;
+              const nameId = `team-thread-${thread.id}`;
               return (
-                <button
+                <li
                   key={thread.id}
-                  type="button"
-                  role="option"
-                  aria-selected={thread.id === selected?.id}
-                  className={`team-thread-item${thread.id === selected?.id ? ' is-selected' : ''}${
+                  className={`team-thread-item${isOpen ? ' is-selected' : ''}${
                     thread.resolved ? ' is-resolved' : ''
                   }`}
-                  onClick={() => {
-                    const currentId = selected?.id ?? selectedId;
-                    if (thread.id === currentId) {
-                      setIsDetailOpen(!isDetailOpen);
-                    } else {
-                      setSelectedId(thread.id);
-                      setIsDetailOpen(true);
-                      setDraft('');
-                    }
-                  }}
                 >
+                  <button
+                    type="button"
+                    className="team-thread-item-hit"
+                    aria-current={isOpen ? 'true' : undefined}
+                    aria-labelledby={`${nameId}-pin ${nameId}-target ${nameId}-preview`}
+                    onClick={() => {
+                      const currentId = selected?.id ?? selectedId;
+                      if (thread.id === currentId) {
+                        setIsDetailOpen(!isDetailOpen);
+                      } else {
+                        setSelectedId(thread.id);
+                        setIsDetailOpen(true);
+                        setDraft('');
+                      }
+                    }}
+                  />
                   <span className="team-thread-item-top">
                     {selectable && (
                       <Checkbox
                         checked={selectedIds.has(thread.id)}
                         onChange={() => toggleThreadSelected(thread.id)}
                         label={`Send comment #${thread.pin} to an agent`}
-                        stopPropagation
                       />
                     )}
-                    <span className="team-thread-pin team-status team-status--label">
+                    <span
+                      id={`${nameId}-pin`}
+                      className="team-thread-pin team-status team-status--label"
+                    >
                       #{thread.pin}
                     </span>
                     <span
+                      id={`${nameId}-target`}
                       className="team-thread-target"
                       aria-label={thread.target.replace(' · ', ': ')}
                     >
@@ -255,7 +266,11 @@ export function TeamThreadsPanel({
                     </span>
                     <span className="team-thread-age">{formatAgo(lastMessageAt(thread), now)}</span>
                   </span>
-                  {last && <span className="team-thread-preview">{last.body}</span>}
+                  {last && (
+                    <span id={`${nameId}-preview`} className="team-thread-preview">
+                      {last.body}
+                    </span>
+                  )}
                   <span className="team-thread-item-meta">
                     <TeamAvatarStack actors={threadParticipants(thread)} />
                     <span className="team-thread-count">
@@ -264,10 +279,10 @@ export function TeamThreadsPanel({
                         `, ${thread.messages.length - 1} ${thread.messages.length === 2 ? 'reply' : 'replies'}`}
                     </span>
                   </span>
-                </button>
+                </li>
               );
             })}
-          </div>
+          </ul>
 
           <div className="team-thread-pane">
             {selected && (
