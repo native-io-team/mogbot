@@ -13,6 +13,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import type { ChromeRouteNow } from './userChrome';
 import type { AgentSecret, SecretRequest } from './agentSecrets';
 
 /** `agent_browser`: the agents' own Chrome on this Mac, signed in by the person (here or from the phone). */
@@ -149,7 +150,7 @@ export interface ReachConnection {
 
 export interface Reach {
   connections: ReachConnection[];
-  /** Absent for an agent on Codex. */
+  /** Absent for an agent on Codex unless Your Chrome is on. */
   /**
    * `on`: its turns get the user's Chrome (the team's browser is set up and on,
    * and this agent's wasn't taken away; never for outside text). `teamOn`: the
@@ -163,6 +164,8 @@ export interface Reach {
     /** The Chrome profile (and account) each site was last found signed in to. */
     accounts?: { site: string; browser: string; account?: string }[];
     helperInstalled: boolean;
+    /** The way its turns reach your Chrome now, and why (`agents::chrome_route`). */
+    route?: ChromeRouteNow;
   };
   secrets: {
     secretId: string;

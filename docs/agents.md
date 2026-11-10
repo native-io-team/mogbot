@@ -2551,8 +2551,14 @@ equivalent here: Codex agents never get the browser and ask instead.
 native host (the app's own binary) and the app's MV3 extension, and every
 turn, on any engine and any account, gets `mcp__user_chrome__*` with the
 agents' browser's tool names. The same gate decides it (below), outside text
-never gets it, and a turn that has it runs `--no-chrome`. Design, trust and
-what's verified: docs/internal/own-browser-layer.md.
+never gets it, and a turn that has it runs `--no-chrome`. **It wins whenever
+it's connected** (`agents/chrome_route.rs`): every engine, every account, so
+switching Claude accounts never needs the Claude extension signed in again;
+Claude in Chrome is only the fallback. Settings → Chrome says which way
+agents use now and why, and each agent's "What it can reach" says its own. A
+Chrome profile managed by work (Developer mode off) is detected and the page
+offers a personal profile instead (`user_chrome/managed.rs`). Design, trust,
+install routes and what's verified: docs/internal/own-browser-layer.md.
 
 **Set up once, checked by the app.** ⌘K "Let agents use your browser…", the
 setup checklist and "What it can reach" open one guided card: Claude Code

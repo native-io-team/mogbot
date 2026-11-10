@@ -504,6 +504,8 @@ export const baseCommands: CommandMap = {
     extensionId: 'acpipahophpoekcmokoejnkooedofagk',
     browsers: [],
     updateNeeded: false,
+    management: { machine: [], profiles: [] },
+    route: { route: 'none', why: 'not_set_up' },
   },
   agents_user_chrome_set_enabled: {
     supported: true,
@@ -518,6 +520,8 @@ export const baseCommands: CommandMap = {
     extensionId: 'acpipahophpoekcmokoejnkooedofagk',
     browsers: [],
     updateNeeded: false,
+    management: { machine: [], profiles: [] },
+    route: { route: 'none', why: 'your_chrome_not_connected' },
   },
   // "Slack" (`AgentsSlackSettings`): not connected, as it ships.
   agents_slack_status: {
