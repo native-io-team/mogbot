@@ -167,17 +167,29 @@ impl Driver {
 
     /// What the agent can use, when the engine doesn't announce it during the
     /// turn. Claude Code's `init` event does (`Step::Capabilities`); Codex
-    /// announces no tools, so they are read before the turn.
+    /// announces no tools, so they are read before the turn, with the
+    /// servers `access` gives it (which Claude Code's `init` lists itself).
     pub async fn capabilities_before(
         self,
         agent: &Agent,
         binary: &Path,
         now: i64,
+        access: &super::connections::TurnAccess,
     ) -> Option<Capabilities> {
         match self {
             Driver::ClaudePrint => None,
             Driver::CodexApp | Driver::CodexExec => {
-                Some(super::codex::capabilities(agent, binary, now, self == Driver::CodexApp).await)
+                let given: Vec<String> = access.servers.iter().map(|s| s.key.clone()).collect();
+                Some(
+                    super::codex::capabilities(
+                        agent,
+                        binary,
+                        now,
+                        self == Driver::CodexApp,
+                        &given,
+                    )
+                    .await,
+                )
             }
         }
     }
