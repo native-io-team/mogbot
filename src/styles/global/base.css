@@ -650,3 +650,21 @@ code,
   white-space: nowrap;
   border: 0;
 }
+
+/* Reduce Motion, everywhere: the floor under each feature's own rules. Motion
+   ends at once (so transitionend and animationend still fire and nothing waits
+   on them); a loop runs once and stops. A spinner keeps turning, and so does
+   anything marked `data-motion="essential"`: there the motion is the message.
+   Held by the harness a11y scan, which reports any loop still running. */
+@media (prefers-reduced-motion: reduce) {
+  *:not(.ss-spinner):not([data-motion='essential']),
+  *:not(.ss-spinner):not([data-motion='essential'])::before,
+  *:not(.ss-spinner):not([data-motion='essential'])::after {
+    animation-duration: var(--duration-reduced) !important;
+    animation-iteration-count: 1 !important;
+    animation-delay: 0s !important;
+    transition-duration: var(--duration-reduced) !important;
+    transition-delay: 0s !important;
+    scroll-behavior: auto !important;
+  }
+}

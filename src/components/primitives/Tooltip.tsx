@@ -94,20 +94,61 @@ function tooltipAnchor(target: EventTarget | null): Element | null {
  * icon-only button, an iframe). Taking it away for the shared tooltip left
  * those nameless to VoiceOver, so the words move to `aria-label` first.
  * Anything already named, or with text inside, keeps its own name.
+ *
+ * A plain span or div can't carry a name (ARIA prohibits `aria-label` on the
+ * generic role, and screen readers ignore it there), so its words become its
+ * description instead, which is what the title was to them anyway.
  */
 function dropTitle(anchor: Element, title: string | null) {
-  if (title) {
-    const ours = anchor.hasAttribute('data-tooltip-named');
-    const named = anchor.hasAttribute('aria-label') || anchor.hasAttribute('aria-labelledby');
-    const wordless =
-      anchor.tagName === 'IFRAME' ||
-      (!(anchor.textContent ?? '').trim() && !anchor.querySelector('img[alt]:not([alt=""])'));
-    if (ours || (!named && wordless)) {
-      anchor.setAttribute('aria-label', title);
-      anchor.setAttribute('data-tooltip-named', '');
-    }
-  }
+  if (title) nameWordless(anchor, title, true);
   anchor.removeAttribute('title');
+}
+
+/**
+ * Name a wordless anchor from its tooltip's words, unless it is named
+ * already. `describeGeneric`: a generic element gets the words as its
+ * description instead (a promoted title); an explicit `<Tooltip>` already
+ * describes it through `aria-describedby`.
+ */
+function nameWordless(anchor: Element, text: string, describeGeneric: boolean) {
+  const ours = anchor.hasAttribute('data-tooltip-named');
+  const named = anchor.hasAttribute('aria-label') || anchor.hasAttribute('aria-labelledby');
+  const wordless =
+    anchor.tagName === 'IFRAME' ||
+    (!shownText(anchor).trim() && !anchor.querySelector('img[alt]:not([alt=""])'));
+  if (!ours && (named || !wordless)) return;
+  if (nameable(anchor)) anchor.setAttribute('aria-label', text);
+  else if (describeGeneric) anchor.setAttribute('aria-description', text);
+  else return;
+  anchor.setAttribute('data-tooltip-named', '');
+}
+
+/**
+ * The words a screen reader would find inside: `innerText` skips a label the
+ * stylesheet hides (a toolbar button's words in a narrow window), which
+ * `textContent` counts. jsdom has no `innerText`; there it is the text.
+ */
+function shownText(el: Element): string {
+  const shown = (el as HTMLElement).innerText;
+  return typeof shown === 'string' ? shown : (el.textContent ?? '');
+}
+
+/** Elements that may be named by `aria-label`: anything but the generic role. */
+const NAMEABLE_TAGS = new Set([
+  'A',
+  'BUTTON',
+  'IFRAME',
+  'IMG',
+  'INPUT',
+  'SELECT',
+  'TEXTAREA',
+  'svg',
+]);
+
+function nameable(el: Element): boolean {
+  const role = el.getAttribute('role');
+  if (role) return !['generic', 'presentation', 'none'].includes(role);
+  return NAMEABLE_TAGS.has(el.tagName);
 }
 
 function readTooltipContent(anchor: Element): TooltipContent | null {
@@ -132,6 +173,9 @@ function readTooltipContent(anchor: Element): TooltipContent | null {
     // tooltip has already claimed this anchor. Always remove it, even when
     // the shared content attribute is already present.
     if (title) dropTitle(anchor, title);
+    // An icon-only control wrapped in <Tooltip> had a description and no name:
+    // VoiceOver said "button". Its tooltip's words are its name.
+    else nameWordless(anchor, explicit, false);
     const contentId = anchor.getAttribute('data-tooltip-content-id');
     return {
       text: explicit,
@@ -159,7 +203,8 @@ function readTooltipDelay(anchor: Element): number {
 }
 
 function promoteTitleAttributes(root: Element) {
-  const anchors = [...(root.matches('[title]') ? [root] : []), ...root.querySelectorAll('[title]')];
+  const which = '[title], [data-tooltip-content]';
+  const anchors = [...(root.matches(which) ? [root] : []), ...root.querySelectorAll(which)];
 
   anchors.forEach((anchor) => {
     readTooltipContent(anchor);

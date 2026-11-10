@@ -7,7 +7,6 @@ import {
   useRef,
   useState,
   useSyncExternalStore,
-  type KeyboardEvent,
   type MouseEvent,
   type CSSProperties,
   type ReactNode,
@@ -2401,23 +2400,19 @@ function ProjectGroup({
     <>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <div
-            className="sidebar-project-row"
-            data-parked={isParked || undefined}
-            role="button"
-            tabIndex={0}
-            aria-current={isCurrent ? 'true' : undefined}
-            aria-label={`${row.fallbackName}; ${accessibleStatus}${isCurrent ? '; current project' : ''}`}
-            onClick={() => {
-              if (!isCurrent) onSelectProject(row.projectPath);
-            }}
-            onKeyDown={(e) => {
-              if ((e.key === 'Enter' || e.key === ' ') && !isCurrent) {
-                e.preventDefault();
-                onSelectProject(row.projectPath);
-              }
-            }}
-          >
+          <div className="sidebar-project-row" data-parked={isParked || undefined}>
+            {/* The row's own action is a real button stretched under its
+                controls: a role="button" row holding buttons hid them from
+                screen readers (nested-interactive). */}
+            <button
+              type="button"
+              className="sidebar-row-hit"
+              aria-current={isCurrent ? 'true' : undefined}
+              aria-label={`${row.fallbackName}; ${accessibleStatus}${isCurrent ? '; current project' : ''}`}
+              onClick={() => {
+                if (!isCurrent) onSelectProject(row.projectPath);
+              }}
+            />
             {sortable && (
               <DragSortHandle
                 className="sidebar-project-drag-handle"
@@ -2851,14 +2846,6 @@ function SidebarRow({ item }: { item: SidebarItem }) {
     inputRef.current.select();
   }, [isEditing]);
 
-  const handleKeyDown = (e: KeyboardEvent<HTMLLIElement>) => {
-    if (isEditing) return;
-    if ((e.key === 'Enter' || e.key === ' ') && item.onSelect) {
-      e.preventDefault();
-      item.onSelect();
-    }
-  };
-
   const handleClose = (e: MouseEvent<HTMLButtonElement>) => {
     e.stopPropagation();
     item.onClose?.();
@@ -2902,12 +2889,19 @@ function SidebarRow({ item }: { item: SidebarItem }) {
       ]
         .filter(Boolean)
         .join(' ')}
-      role={item.onSelect && !isEditing ? 'button' : undefined}
-      tabIndex={item.onSelect && !isEditing ? 0 : -1}
-      onClick={isEditing ? undefined : item.onSelect}
       onDoubleClick={item.onRename ? enterEditMode : undefined}
-      onKeyDown={handleKeyDown}
     >
+      {item.onSelect && !isEditing && (
+        // The row's action as a real button under its controls (see the
+        // project row): the list stays a list of items, each control reachable.
+        <button
+          type="button"
+          className="sidebar-row-hit"
+          aria-current={item.isActive ? 'true' : undefined}
+          aria-label={item.label}
+          onClick={item.onSelect}
+        />
+      )}
       <span className="sidebar-row-status">
         {item.leading ? (
           item.leading

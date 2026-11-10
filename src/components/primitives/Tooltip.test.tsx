@@ -235,4 +235,37 @@ describe('Tooltip', () => {
     // One with words of its own keeps them as its name.
     expect(screen.getByRole('button', { name: 'Open' })).not.toHaveAttribute('aria-label');
   });
+
+  it('an icon-only control wrapped in <Tooltip> is named by its words', async () => {
+    render(
+      <TooltipProvider>
+        <Tooltip content="Take a screenshot">
+          <button type="button">
+            <svg aria-hidden />
+          </button>
+        </Tooltip>
+        <Tooltip content="Opens it">
+          <button type="button">Open</button>
+        </Tooltip>
+      </TooltipProvider>
+    );
+    await act(async () => {});
+    expect(screen.getByRole('button', { name: 'Take a screenshot' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open' })).not.toHaveAttribute('aria-label');
+  });
+
+  it('a plain span keeps its words as a description, never a prohibited name', async () => {
+    render(
+      <TooltipProvider>
+        <span title="Work: 40% left" data-testid="seg" />
+        <span title="Room left" role="img" data-testid="meter" />
+      </TooltipProvider>
+    );
+    await act(async () => {});
+    const seg = screen.getByTestId('seg');
+    expect(seg).not.toHaveAttribute('aria-label');
+    expect(seg).toHaveAttribute('aria-description', 'Work: 40% left');
+    // A role that takes a name gets one.
+    expect(screen.getByTestId('meter')).toHaveAttribute('aria-label', 'Room left');
+  });
 });

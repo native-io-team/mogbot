@@ -14,6 +14,7 @@ import { useEffect, useState } from 'react';
 import type { Agent, AgentMessage, Approval } from '../../lib/agents';
 import { Button } from '../primitives/Button';
 import { ConversationBar } from './AgentCard';
+import { scrollMotion } from '../../lib/motion';
 
 /**
  * The newest open card the turn is stopped on: a permission or the app's
@@ -63,7 +64,7 @@ export function WaitingForYouBar({
     const target = document.querySelector<HTMLElement>(
       `[data-message-ids~="${CSS.escape(message.id)}"]`
     );
-    target?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    target?.scrollIntoView({ block: 'center', behavior: scrollMotion() });
   };
   return (
     <ConversationBar

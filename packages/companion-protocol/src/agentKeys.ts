@@ -71,6 +71,19 @@ export const KEY_STATE_LABEL: Record<KeyState, string> = {
   new: 'New agent',
 };
 
+/**
+ * What a screen reader calls a key: its agent's name, then its state when the
+ * state is news ("Finance, needs your OK"). Idle says nothing more; a key with
+ * no agent yet is "New agent". Desk and phone both, so the two never disagree.
+ */
+export function keyAccessibleName(name: string | null | undefined, state?: KeyState | null): string {
+  const who = name?.trim();
+  if (!who) return KEY_STATE_LABEL.new;
+  if (!state || state === 'idle') return who;
+  const said = KEY_STATE_LABEL[state];
+  return `${who}, ${said.charAt(0).toLowerCase()}${said.slice(1)}`;
+}
+
 /** Pips lit on the front edge for each independence level: Careful 1 … Unleashed 4. */
 export const KEY_PIPS: Record<AgentIndependence, number> = data.pips as Record<
   AgentIndependence,

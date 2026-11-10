@@ -73,6 +73,7 @@ import {
 import { useInFlight } from '../../../lib/once';
 import { useRefresh } from '../../../lib/refresh';
 import { answerApproval, canCall, describeError, loadLatest } from '../../../lib/session';
+import { announce } from '../../../lib/a11y';
 import { useApp } from '../../../lib/store';
 import { progress as setupProgress } from '../../../lib/teamSetup';
 import {
@@ -467,7 +468,10 @@ function Row({ item, agent }: { item: FeedItem; agent: Agent }) {
         else haptic.warning();
       } catch (e) {
         haptic.error();
-        setError(describeError(e));
+        const said = describeError(e);
+        setError(said);
+        // iOS has no live regions: say the failure, or it lands in silence.
+        announce(said);
       } finally {
         setBusy(null);
       }

@@ -18,6 +18,10 @@
   --team-swatch-5: var(--color-swatch-sky);
   --team-swatch-6: var(--color-swatch-indigo);
   --team-swatch-7: var(--color-swatch-red);
+  /* Initials on a swatch, theme-independent like the swatch itself: dark ink
+     clears AA on every swatch but indigo (white was 1.5-4.1:1 on six of them). */
+  --team-swatch-ink: var(--color-ink-950);
+  --team-swatch-ink-indigo: var(--color-white);
 
   /* The Review category has no semantic role of its own — purple is already
      spoken for by the variables system — so it gets a feature-local pair
@@ -50,7 +54,7 @@
 }
 
 .team-expandable-text .team-expandable-text__toggle.button {
-  color: var(--text-faint);
+  color: var(--text-muted);
   text-decoration: none;
   transition: color var(--transition-interaction);
 }
@@ -101,10 +105,13 @@
   background: var(--team-swatch-7);
 }
 
-/* The swatches are mid-tone fills chosen to carry white text in both themes;
-   letting the initials inherit would put muted grey on them in light mode. */
+/* The swatches are fixed fills in both themes, so their initials take a fixed
+   ink, never a theme text role (muted grey on them in light mode). */
 .team-avatar[data-swatch] .team-avatar-initials {
-  color: var(--text-white);
+  color: var(--team-swatch-ink);
+}
+.team-avatar[data-swatch='6'] .team-avatar-initials {
+  color: var(--team-swatch-ink-indigo);
 }
 
 .team-avatar--sm {

@@ -159,3 +159,9 @@
   margin: var(--spacing-xs) 0;
   background: var(--border-default);
 }
+
+/* The list under a search field carries the menu role (a menu may not hold
+   the field); it adds no box of its own. */
+.ss-dropdown__items {
+  display: contents;
+}

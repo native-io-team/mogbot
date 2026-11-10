@@ -309,14 +309,15 @@
   --border-accent: var(--color-ink-500);
 
   --accent-success: var(--color-green-900);
-  --accent-warning: var(--color-orange-800);
+  /* orange-800 was 4.1:1 on its own 10% tint (the main-branch banner). */
+  --accent-warning: var(--color-orange-900);
   --accent-error: var(--color-red-700);
   --accent-error-light: var(--color-red-700);
   --accent-error-deep: var(--color-red-800);
-  --accent-warning-light-rgb: 154, 98, 0;
+  --accent-warning-light-rgb: 138, 88, 0;
   --accent-scope-project: var(--color-purple-800);
   --accent-success-rgb: 21, 117, 50;
-  --accent-warning-rgb: 154, 98, 0;
+  --accent-warning-rgb: 138, 88, 0;
   --accent-error-rgb: 207, 34, 46;
   --accent-error-light-rgb: 207, 34, 46;
   --accent-error-deep-rgb: 164, 14, 38;

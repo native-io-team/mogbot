@@ -147,6 +147,8 @@ export function IndependenceSlider({
                 key={level}
                 disabled={disabled}
                 onPress={() => commit(level)}
+                // The slider above is the one element; its stops are touch only.
+                accessible={false}
                 hitSlop={space.sm}
                 style={[styles.stop, { left, width: box }]}
                 testID={`independence-stop-${level}`}

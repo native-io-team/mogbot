@@ -52,7 +52,7 @@
   height: var(--size-sidebar-project-row);
   min-height: var(--size-sidebar-project-row);
   border-radius: 0;
-  color: var(--text-faint);
+  color: var(--text-muted);
   justify-content: center;
 }
 
