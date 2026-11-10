@@ -107,10 +107,17 @@ const savedId = () => {
   const c = getApp().credentials;
   return c && !isDemo(c) ? c.serverId : null;
 };
+/**
+ * At most one write of the copy every few seconds while things happen: it is
+ * every opened chat as JSON, built on the JS thread, and a turn's events
+ * came a second apart, so a reply streaming in rewrote it every second.
+ * Going to the background writes it at once (`flushCache`).
+ */
+const CACHE_WRITE_MS = 4000;
 const saver = debounced(async () => {
   const id = savedId();
   if (id) await writeJson(fileFor(id), toCache(getApp()));
-}, 1000);
+}, CACHE_WRITE_MS);
 const outboxSaver = debounced(async () => {
   const id = savedId();
   if (id) await writeJson(outboxFor(id), toOutbox(getApp()));
@@ -134,7 +141,7 @@ export async function loadCache(serverId: string): Promise<boolean> {
   return !!state;
 }
 
-/** Keep the copy current: written a second after the synced state settles. */
+/** Keep the copy current: written within a few seconds of the synced state changing. */
 export function watchCache(): () => void {
   return useApp.subscribe((s, prev) => {
     if (s.pending !== prev.pending) outboxSaver.schedule();
