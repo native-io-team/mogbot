@@ -2639,12 +2639,15 @@ fn resolve_approval_as(
     Ok(changed)
 }
 
+/// Cards that wait on the user. A "Save … as a skill?" card is an offer that
+/// says "Nothing waits on it", so it never makes an agent "Needs your OK",
+/// the Dock badge or the phone's Catch up count (`skills_learn`).
 fn count_pending(log: &[AgentMessage]) -> u32 {
     log.iter()
         .filter(|m| {
             m.approval
                 .as_ref()
-                .is_some_and(|a| a.status == ApprovalStatus::Pending)
+                .is_some_and(|a| a.status == ApprovalStatus::Pending && a.skill.is_none())
         })
         .count() as u32
 }
@@ -2792,6 +2795,35 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn a_skill_offer_never_counts_as_waiting_on_the_user() {
+        use crate::agents::skills_learn::{card, Skill, SkillCard};
+        let line = |approval: Approval| {
+            let mut m = crate::agents::runner::new_message("a1", MessageKind::Approval, "");
+            m.approval = Some(approval);
+            m
+        };
+        let skill = line(card(SkillCard {
+            skill: Skill {
+                slug: "export-invoices".into(),
+                name: "Export invoices".into(),
+                when: "When asked for invoices".into(),
+                steps: "1. Export them.".into(),
+            },
+            removed: 0,
+            outside: false,
+            replaces: false,
+        }));
+        let ask = line(crate::agents::mcp::new_card(
+            new_id(),
+            "Run a command".into(),
+            "rm -rf build".into(),
+            None,
+        ));
+        assert_eq!(count_pending(std::slice::from_ref(&skill)), 0);
+        assert_eq!(count_pending(&[skill, ask]), 1);
+    }
 
     #[test]
     fn routines_run_on_haiku_only_while_the_agent_is_on_the_default_model() {
