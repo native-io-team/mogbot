@@ -60,7 +60,7 @@ jest.mock('../src/lib/haptics', () => ({
   haptic: { select: () => {}, success: () => {}, warning: () => {}, error: () => {} },
 }));
 jest.mock('../src/components/ConnectionPill', () => ({
-  ConnectionNotice: () => null,
+  ConnectionBar: () => null,
   useNow: () => Date.now(),
 }));
 jest.mock('../src/components/AgentKey', () => ({ AgentKey: () => null }));

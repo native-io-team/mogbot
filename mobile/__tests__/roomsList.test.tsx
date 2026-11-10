@@ -48,7 +48,7 @@ jest.mock('../src/lib/quota', () => ({ useQuotaLines: () => [] }));
 jest.mock('../src/lib/glance', () => ({ useGlance: () => null }));
 jest.mock('../src/components/ChatView', () => ({ ChatView: () => null }));
 jest.mock('../src/components/ConnectionPill', () => ({
-  ConnectionNotice: () => null,
+  ConnectionBar: () => null,
   useLinkState: () => null,
   useNow: () => Date.now(),
 }));

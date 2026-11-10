@@ -41,7 +41,7 @@ generated fixtures (`packages/companion-protocol/src/fixtures.gen.ts`); the hidd
 Flags for states a Mac causes: `--codex-only`, `--takeover` (Designer driven
 on the Mac), `--bars` (three bars in the Chief's chat, so "1 more" shows),
 `--impostor` (signs with a stranger's key: "This isn't your Mac"), `--solo` (only the
-Chief and no rooms: a Mac just set up), and `--cors` for the web build.
+Chief, its stored greeting and nothing else: a Mac just set up), `--hung` (sockets taken, nothing said: the app on the Mac stuck), and `--cors` for the web build.
 
 Things to try against it: send a message (a streamed reply), send "deploy"
 (an approval card first), Stop while it streams, open Chief of Staff and scroll

@@ -4,7 +4,7 @@
  */
 
 import { useRouter } from 'expo-router';
-import { StyleSheet } from 'react-native';
+import { StyleSheet, type StyleProp, type ViewStyle } from 'react-native';
 import { isDemo } from '../lib/demo';
 import { unpair } from '../lib/session';
 import { useApp } from '../lib/store';
@@ -12,7 +12,8 @@ import { space } from '../lib/theme';
 import { Card } from './surfaces';
 import { Button } from './ui';
 
-export function DemoCard() {
+/** `style` replaces its margins, for a screen that already pads its content. */
+export function DemoCard({ style }: { style?: StyleProp<ViewStyle> } = {}) {
   const router = useRouter();
   const demo = useApp((s) => isDemo(s.credentials));
   if (!demo) return null;
@@ -22,7 +23,7 @@ export function DemoCard() {
       title="This is the demo"
       testID="demo-card"
       note="Sample agents with made-up work, so you can look around. Nothing here reaches a Mac or anyone else, and nothing is kept."
-      style={styles.card}
+      style={style ?? styles.card}
       actions={
         <Button
           title="Pair your Mac"

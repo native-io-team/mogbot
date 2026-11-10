@@ -224,6 +224,12 @@ export class DirectTransport implements Transport {
   private challenge = '';
   /** This socket opened and the Mac hasn't said anything on it yet. */
   private silent = false;
+  /** This try's socket opened: something at the Mac's address took it. */
+  private opened = false;
+  /** Since when a request went unanswered with the heartbeat still coming. */
+  private stuckSince = 0;
+  /** In this spell of trouble, the app was seen stuck (`LinkState.appStuck`). */
+  private appStuck = false;
   /** An old-Mac probe already ran (once per transport is plenty). */
   private probed = false;
 
@@ -246,6 +252,7 @@ export class DirectTransport implements Transport {
       const secs = (this.opts.requestTimeoutMs ?? 30_000) / 1000;
       const timer = setTimeout(() => {
         this.pending.delete(id);
+        this.noAnswer();
         reject(new WireFailure({ type: 'Timeout', cmd: method, secs }));
       }, secs * 1000);
       this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
@@ -369,6 +376,18 @@ export class DirectTransport implements Transport {
     this.connect();
   }
 
+  /**
+   * A request timed out. With the Mac's heartbeat still arriving, the link is
+   * fine and the app on the Mac isn't answering: say so (`connected.stuck`).
+   */
+  private noAnswer() {
+    if (!this.ready || this.state.kind !== 'connected') return;
+    if (Date.now() - this.lastSeenAt > HEARTBEAT_MS + 5000) return;
+    if (!this.stuckSince) this.stuckSince = Date.now();
+    this.appStuck = true;
+    this.setState({ ...this.state, stuck: this.stuckSince });
+  }
+
   private probe() {
     if (!this.ready) return;
     this.pingSentAt = Date.now();
@@ -392,7 +411,12 @@ export class DirectTransport implements Transport {
     this.retryTimer = null;
     if (!this.troubleSince) this.troubleSince = Date.now();
     if (!this.everConnected) {
-      this.setState({ kind: 'connecting', attempt: this.attempt, since: this.troubleSince });
+      this.setState({
+        kind: 'connecting',
+        attempt: this.attempt,
+        since: this.troubleSince,
+        ...(this.appStuck ? { appStuck: true } : {}),
+      });
     }
     const Impl = this.opts.WebSocketImpl ?? WebSocket;
     const url = this.route.url.replace(/^http/, 'ws').replace(/\/$/, '') + HTTP.ws;
@@ -403,7 +427,9 @@ export class DirectTransport implements Transport {
     this.connectTimer = setTimeout(() => {
       if (ws === this.ws && !this.ready) this.lost();
     }, connectTimeoutMs(this.attempt));
+    this.opened = false;
     ws.onopen = () => {
+      this.opened = true;
       this.armDeadTimer();
       // Nothing private until the Mac proves itself: just a challenge.
       this.challenge = this.opts.challenge();
@@ -492,6 +518,8 @@ export class DirectTransport implements Transport {
         this.attempt = 0;
         this.troubleSince = 0;
         this.macClosing = false;
+        this.appStuck = false;
+        this.stuckSince = 0;
         if (this.connectTimer) clearTimeout(this.connectTimer);
         this.connectTimer = null;
         this.welcome = frame;
@@ -516,6 +544,13 @@ export class DirectTransport implements Transport {
         if (!p) return;
         this.pending.delete(frame.id);
         clearTimeout(p.timer);
+        // An answer: whatever held the app up has let go.
+        if (this.stuckSince && this.state.kind === 'connected') {
+          this.stuckSince = 0;
+          this.appStuck = false;
+          const { stuck: _done, ...state } = this.state;
+          this.setState(state);
+        }
         if (frame.ok) p.resolve(frame.result);
         else p.reject(new WireFailure(frame.error));
         return;
@@ -544,6 +579,9 @@ export class DirectTransport implements Transport {
   private lost() {
     const unanswered = this.silent;
     const wasReady = this.ready;
+    // Took the connection and said nothing: the Mac is there, its app isn't answering.
+    if (this.opened && unanswered) this.appStuck = true;
+    this.stuckSince = 0;
     this.teardown();
     if (this.closed || this.refused) return;
     if (unanswered && !this.probed) void this.probeOldMac(this.route.url);
@@ -563,8 +601,14 @@ export class DirectTransport implements Transport {
             nextTryAt: Date.now() + delay,
             since: this.troubleSince,
             ...(this.macClosing ? { macClosing: true } : {}),
+            ...(this.appStuck && !this.macClosing ? { appStuck: true } : {}),
           }
-        : { kind: 'connecting', attempt: this.attempt, since: this.troubleSince }
+        : {
+            kind: 'connecting',
+            attempt: this.attempt,
+            since: this.troubleSince,
+            ...(this.appStuck ? { appStuck: true } : {}),
+          }
     );
     this.retryTimer = setTimeout(() => this.connect(), delay);
   }

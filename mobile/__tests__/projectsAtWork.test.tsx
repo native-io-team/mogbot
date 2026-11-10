@@ -40,7 +40,7 @@ jest.mock('../src/lib/session', () => ({
   refreshProjects: jest.fn(() => Promise.resolve()),
 }));
 jest.mock('../src/components/ConnectionPill', () => ({
-  ConnectionNotice: () => null,
+  ConnectionBar: () => null,
   LinkProblem: () => null,
   useNow: () => 0,
 }));

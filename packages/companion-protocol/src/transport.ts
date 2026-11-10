@@ -16,9 +16,14 @@ export type LinkState =
   /**
    * Trying routes in order. `since`: when this spell of trying began (or the
    * app last came forward during it), so a short one reads as calm.
+   * `appStuck`: as for `reconnecting`.
    */
-  | { kind: 'connecting'; attempt: number; since?: number }
-  | { kind: 'connected'; route: RouteKind | 'relay'; since: number }
+  | { kind: 'connecting'; attempt: number; since?: number; appStuck?: boolean }
+  /**
+   * `stuck`: since when a request went unanswered though the Mac's heartbeat
+   * still arrives. Its connection is fine; the app on it isn't answering.
+   */
+  | { kind: 'connected'; route: RouteKind | 'relay'; since: number; stuck?: number }
   /**
    * Was connected; retrying with backoff. `lastSeenAt` is the last frame from
    * the Mac; `since` as for `connecting`. `macClosing`: the Mac's app said
@@ -30,6 +35,13 @@ export type LinkState =
       nextTryAt: number;
       since?: number;
       macClosing?: boolean;
+      /**
+       * In this spell, something at the Mac's address took the connection but
+       * the app on it didn't answer (a request timed out with the heartbeat
+       * still coming, or a socket opened and stayed silent): the Mac is on and
+       * reachable, the app is stuck. Absent when nothing answered at all.
+       */
+      appStuck?: boolean;
     }
   /** The Mac said no for good: re-pair (revoked) or update a side. */
   | {
