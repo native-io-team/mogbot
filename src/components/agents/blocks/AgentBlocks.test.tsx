@@ -37,6 +37,32 @@ const choices: Block = {
 };
 
 describe('AgentBlocks', () => {
+  it('draws records and notes in a row as one page, a section each', () => {
+    const { container } = draw([
+      {
+        kind: 'facts',
+        title: 'Needs you',
+        summary: '',
+        items: [{ label: 'Lead Gen', value: 'Send' }],
+      },
+      { kind: 'callout', tone: 'warning', title: 'Didn’t work', summary: '', text: 'Gmail.' },
+      {
+        kind: 'table',
+        title: 'Today',
+        summary: '',
+        columns: [{ label: 'Time' }, { label: 'Runs', numeric: true }],
+        rows: [['10:30 AM', 2]],
+      },
+    ]);
+    const pages = container.querySelectorAll('.agent-blocks__page');
+    expect(pages).toHaveLength(1);
+    expect(within(pages[0] as HTMLElement).getByRole('heading', { name: 'Today' })).toBeTruthy();
+    // No card of its own inside the page.
+    expect(pages[0].querySelectorAll('.agent-card')).toHaveLength(0);
+    // A time never breaks over two lines.
+    expect(screen.getByText('10:30 AM').closest('[data-short]')).toBeTruthy();
+  });
+
   it('draws the intro and a chart as an image with a name, its numbers a click away', () => {
     draw([
       {

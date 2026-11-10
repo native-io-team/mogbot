@@ -3,6 +3,7 @@ import {
   answerAfter,
   attachmentsOutsideBlocks,
   badNumbers,
+  blockRuns,
   chartModel,
   domainOf,
   formReply,
@@ -15,7 +16,9 @@ import {
   niceTicks,
   pickedReply,
   readBlocks,
+  shortColumns,
   sortRows,
+  type Block,
   type ChartBlock,
   type FormBlock,
 } from './blocks';
@@ -218,5 +221,30 @@ describe('tables and answers', () => {
     const set = readBlocks({ blocks: { v: 1, items: [{ kind: 'image', summary: '', file }] } })!;
     expect(attachmentsOutsideBlocks([file, other], set)).toEqual([other]);
     expect(domainOf('https://www.Example.com/x')).toBe('example.com');
+  });
+});
+
+describe('layout', () => {
+  const facts = (title: string): Block => ({ kind: 'facts', title, summary: '', items: [] });
+  const note: Block = { kind: 'callout', tone: 'warning', summary: '', text: 't' };
+  const chart: Block = line;
+
+  it('puts a run of records and notes on one page, and leaves the rest alone', () => {
+    const runs = blockRuns([facts('a'), note, facts('b'), chart, facts('c'), note, note]);
+    expect(runs.map((r) => r.length)).toEqual([3, 1, 3]);
+    // One record alone, or notes alone, stay as they are.
+    expect(blockRuns([facts('a'), chart]).map((r) => r.length)).toEqual([1, 1]);
+    expect(blockRuns([note, note]).map((r) => r.length)).toEqual([1, 1]);
+  });
+
+  it('keeps times, names and numbers on one line, lets long text wrap', () => {
+    const short = shortColumns({
+      columns: [{ label: 'Time' }, { label: 'What' }, { label: 'Runs', numeric: true }],
+      rows: [
+        ['10:30 AM', 'Read what’s new and write up the three that matter', 1234567],
+        ['9:00 AM', 'Sweep', null],
+      ],
+    });
+    expect(short).toEqual([true, false, true]);
   });
 });
