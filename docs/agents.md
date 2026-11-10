@@ -345,7 +345,15 @@ From the stream:
   is reached. It resets at 3:00 PM." (`usage_limit`, with `resetsAt` only when
   Claude Code printed an epoch, or a clock time in this Mac's zone; a time in
   another zone is quoted, never converted) and "Claude Code is signed out."
-  (`signed_out`). Anything else is shown as it came. The agent's registry entry
+  (`signed_out`), and an engine that's gone from the Mac as `engine_missing`
+  ("Claude Code isn't on this Mac any more…", with **Install Claude Code**).
+  The network ("couldn't reach Anthropic over the network"), the provider's
+  own trouble and a conversation too long to carry on are worded too; a
+  sentence the app already wrote is kept, and raw output (exit codes, stack
+  traces, JSON, os errors) is logged and said as "stopped with an error it
+  didn't explain", never shown. The row's words and each kind's one button
+  are shared with the phone (`companion-protocol/src/failures.ts`); the whole
+  list is docs/internal/failure-states.md. The agent's registry entry
   carries the tag while the error is the newest line (`Agent.failure`, cleared
   by anything said after it), so the sidebar shows "<reason> · didn't finish"
   (the reason first, over up to two lines) with a red dot, or "Out of usage until
