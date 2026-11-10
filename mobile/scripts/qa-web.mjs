@@ -1934,6 +1934,21 @@ const LIVE = [
       'Finance’s sheet: “Skills” with “Save new skills · Ask me” (a menu of Automatically, Ask me, Off), then “Export invoices from Xero” with when to use it, and a muted line saying anything that read outside content asks first',
   },
   {
+    name: 'skill-editor',
+    route: '/skill?id=fin&slug=export-invoices',
+    ready: 'When to use it',
+    check:
+      'The skill editor: “Skill” with Save (off: nothing changed yet), then Name, When to use it and Steps, each labelled above its field and still labelled while filled, and “Saved on your Mac with personal details and secrets taken out.”',
+  },
+  {
+    name: 'share-sheet',
+    route:
+      '/share?title=Launch%20checklist&url=https%3A%2F%2Fexample.com%2Flaunch&text=Ship%20the%20pricing%20page%20Thursday%20and%20email%20the%20waitlist%20first.',
+    ready: 'Send to agent…',
+    check:
+      'Send to agent: what was shared, “from a link. Read it before you send it.”, then “Put it in a chat for you to send” in sentence case over the agents, one grouped list',
+  },
+  {
     name: 'agent-sheet-site',
     route: '/agent/site',
     ready: 'Acme Site',
