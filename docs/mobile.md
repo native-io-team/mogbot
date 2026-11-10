@@ -1672,7 +1672,7 @@ behind them.
 
 There is no App Store listing yet. The store build (`COMPANION_STORE_BUILD=1`),
 what was checked, the review notes, listing drafts and what only the owner
-can do are in [app-store.md](app-store.md). `TESTFLIGHT_URL` and `ANDROID_APK_URL` in
+can do are in [app-store.md](app-store.md); Google Play (the bundle, upload-key signing, what Android does instead of each iOS-only feature, the listing and policy answers) is [play-store.md](play-store.md). `TESTFLIGHT_URL` and `ANDROID_APK_URL` in
 `src/lib/companionInstall.ts` are unset, so those cards say "Not available
 yet"; when set, maintainers ship through EAS (`eas.json` profiles map to
 `expo-updates` channels), with a build at least every 60 days because

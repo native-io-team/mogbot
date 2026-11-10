@@ -9,6 +9,7 @@ import appConfig, {
   PRIVACY_MANIFEST,
   STORE_PUBLISHER,
   UPLOAD_SIGNING_MARK,
+  androidNamespace,
   pushEntitlement,
   storeBuild,
   versionCode,
@@ -188,5 +189,13 @@ android {
     // Running it twice changes nothing.
     expect(withUploadSigning(out)).toBe(out);
     expect(() => withUploadSigning('android {\n}\n')).toThrow(/release signingConfig/);
+  });
+});
+
+describe('the Android namespace', () => {
+  it('keeps the package but makes the Java package keyword-free', () => {
+    expect(androidNamespace(brand.companion.bundleId)).toBe('io.native_.mogbot.companion');
+    expect(androidNamespace('com.example.app')).toBe('com.example.app');
+    expect(androidNamespace('io.native.mogbot.companion.self')).toBe('io.native_.mogbot.companion.self');
   });
 });

@@ -21,6 +21,7 @@ App Signing**, required for new apps). The store build is the same
 | | Google Play build | Self-build |
 | --- | --- | --- |
 | Package | `brand.json` `companion.bundleId`: **`io.native.mogbot.companion`** (permanent once uploaded) | `<bundleId>.self` |
+| Gradle namespace | `io.native_.mogbot.companion`: `native` is a Java keyword, so the Java package of R, BuildConfig and MainActivity gets an underscore (`androidNamespace`, `withJavaSafeNamespace`). Users and Play never see it; the package above is unchanged. AGP refused to build without it | same rule |
 | `versionName` | `1.0.0` (`APP_VERSION`) | same |
 | `versionCode` | `COMPANION_BUILD_NUMBER` (default 1), a whole number that goes up with every upload; the same number as the iOS build number. EAS keeps it remotely (`appVersionSource: remote`, `autoIncrement`) | 1 |
 | `extra.official` | true | false |

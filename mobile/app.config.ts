@@ -1,5 +1,10 @@
 import type { ExpoConfig } from 'expo/config';
-import { withAppBuildGradle, withDangerousMod, type ConfigPlugin } from 'expo/config-plugins';
+import {
+  withAppBuildGradle,
+  withDangerousMod,
+  withFinalizedMod,
+  type ConfigPlugin,
+} from 'expo/config-plugins';
 import * as fs from 'fs';
 import * as path from 'path';
 // The app's name, scheme and bundle id live only in the repo-root brand.json.
@@ -140,6 +145,60 @@ const withUploadKey: ConfigPlugin = (config) =>
     c.modResults.contents = withUploadSigning(c.modResults.contents);
     return c;
   });
+/**
+ * The Android package (applicationId, what Play and the phone see) is
+ * brand.json's id, but the Gradle namespace (the Java package the R and
+ * BuildConfig classes are generated in, and where MainActivity lives) can't
+ * have a Java keyword in it, and `io.native.…` does. So the namespace gets an
+ * underscore after any keyword segment (`io.native_.mogbot.companion`), which
+ * nobody sees; the applicationId is unchanged. AGP refuses to build otherwise
+ * ("'native' is a Java keyword").
+ */
+const JAVA_KEYWORDS = new Set(
+  (
+    'abstract assert boolean break byte case catch char class const continue default do double ' +
+    'else enum extends final finally float for goto if implements import instanceof int interface ' +
+    'long native new package private protected public return short static strictfp super switch ' +
+    'synchronized this throw throws transient try void volatile while true false null var record yield'
+  ).split(' ')
+);
+export const androidNamespace = (id: string): string =>
+  id
+    .split('.')
+    .map((seg) => (JAVA_KEYWORDS.has(seg) ? `${seg}_` : seg))
+    .join('.');
+export const withJavaSafeNamespace: ConfigPlugin = (config) =>
+  withFinalizedMod(config, [
+    'android',
+    async (c) => {
+      const id = c.android?.package;
+      if (!id) return c;
+      const ns = androidNamespace(id);
+      if (ns === id) return c;
+      const root = c.modRequest.platformProjectRoot;
+      const gradlePath = path.join(root, 'app', 'build.gradle');
+      const gradle = fs.readFileSync(gradlePath, 'utf8');
+      const nextGradle = gradle.replace(`namespace '${id}'`, `namespace '${ns}'`);
+      if (nextGradle === gradle && !gradle.includes(`namespace '${ns}'`))
+        throw new Error(`app/build.gradle: no namespace '${id}' to make Java-safe.`);
+      fs.writeFileSync(gradlePath, nextGradle);
+      const src = path.join(root, 'app', 'src', 'main', 'java');
+      const from = path.join(src, ...id.split('.'));
+      const to = path.join(src, ...ns.split('.'));
+      if (fs.existsSync(from)) {
+        fs.mkdirSync(to, { recursive: true });
+        for (const f of fs.readdirSync(from)) {
+          const text = fs.readFileSync(path.join(from, f), 'utf8');
+          fs.writeFileSync(path.join(to, f), text.replace(`package ${id}`, `package ${ns}`));
+          fs.rmSync(path.join(from, f));
+        }
+        // Drop the now-empty folders of the old path, deepest first.
+        for (let d = from; d !== src && fs.readdirSync(d).length === 0; d = path.dirname(d))
+          fs.rmdirSync(d);
+      }
+      return c;
+    },
+  ]);
 // A build on the user's own Mac signs with their team (the desktop app's
 // Phone → Install on my phone sets it); unset, Xcode's own signing settings apply.
 const updatesUrl = process.env.UPDATES_URL ?? (projectId ? `https://u.expo.dev/${projectId}` : '');
@@ -430,6 +489,6 @@ export default (): ExpoConfig => {
       ...(projectId ? { eas: { projectId } } : {}),
     },
   };
-  const signed = withUploadKey(config);
+  const signed = withJavaSafeNamespace(withUploadKey(config));
   return liveActivity() ? signed : withoutWidgets(signed);
 };
