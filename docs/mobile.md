@@ -873,6 +873,20 @@ conversation per agent and the chat is as it was.
   `routineConversationLine`), and its menu has "Run it in another
   conversation" on a Mac that lists `agents.conversationRoutine` (the most
   recent six, `routineMoveChoices`).
+- **Rewind, fork and edit** (docs/agents.md, "Rewind, fork and edit").
+  Long-press one of your own messages for Edit and resend, Fork from here
+  and Rewind to here (on a Mac that serves `agents.conversationRewind` and
+  `agents.conversationFork`). Rewind and Fork confirm first, in the desk's
+  words (`rewindConfirm` / `forkConfirm`), naming the agent's copy when it
+  has one. Edit puts the message back in the field under an "Editing your
+  message" bar; sending goes back to just before it (`sendEdited`: the
+  rewind first, then the send), and a refused rewind leaves the words in the
+  field. Going back in place waits while the agent works or you drive it; a
+  fork never does, and opens the new conversation. What a rewind passed over
+  folds into one "Rewound · N messages" row that opens in place
+  (`lib/goBack.ts`, `foldRewound`). On the web build, rows that rise in while
+  a rewind reshapes the list can overlap until the chat is drawn again;
+  qa:web's `goback-rewound` reloads before its shot.
 
 ### Rooms
 
