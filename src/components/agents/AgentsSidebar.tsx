@@ -213,7 +213,8 @@ function onListKeyDown(event: KeyboardEvent<HTMLDivElement>) {
 }
 
 /**
- * What's in flight, beside the sidebar toggle: the one place the sidebar
+ * Needs you, beside the sidebar toggle (it opens What's in flight, whose
+ * first section is Needs you): the one place the sidebar
  * counts what waits on you. Each waiting row says so once more in its pill;
  * nothing else in the list repeats it (docs/agents.md, "Needs you: one place
  * per surface").
@@ -229,10 +230,9 @@ export function InFlightBell({
   current: boolean;
   onOpen: () => void;
 }) {
-  const label =
-    count > 0
-      ? `What’s in flight · ${count} ${count === 1 ? 'needs' : 'need'} you`
-      : 'What’s in flight';
+  // "Needs you", as the phone's tab says it: what the bell counts. The view
+  // it opens leads with its Needs you section (What's in flight is the rest).
+  const label = count > 0 ? `Needs you · ${count}` : 'Needs you · nothing right now';
   return (
     <span className="workspace-sidebar-inbox agents-inflight">
       <IconButton

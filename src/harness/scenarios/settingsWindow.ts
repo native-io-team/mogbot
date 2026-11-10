@@ -20,7 +20,8 @@ const WHAT_EACH_SHOWS: Record<SettingsPage, string> = {
     'Your team: one line, then the four-stop slider (no title of its own, the page says Independence) on Steady with a neutral thumb, its line and the always-asks line. Then What agents can reach: the lead, the team’s lines with no Independence line, the enforced note, and no presets anywhere. Then Each agent’s independence with no level box (the slider above is it), then Admins.',
   accounts:
     'The usage and accounts groups exactly as they are elsewhere: this page only places them.',
-  phone: 'Away from your desk: Phone and Other assistants, each with Open.',
+  phone:
+    'Your phone: the phone panel itself (get the app, or turn on phone access, pair and the paired phones) right on the page; then Other assistants: Remote access’s own setup or live view. No Open buttons and no dialog on top.',
   notifications: 'From your agents: Replies and requests, Quiet hours, and Mute an agent.',
   chrome: 'The agents’ own browser, then Your Chrome with its switch.',
   apps: 'Slack, then apps you said no to when there are any.',

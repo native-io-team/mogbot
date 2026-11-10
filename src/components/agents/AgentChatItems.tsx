@@ -28,6 +28,7 @@ import {
   ErrorIcon,
   FolderIcon,
   HistoryIcon,
+  RoutineIcon,
   MoreHorizontalIcon,
   PinIcon,
   SettingsSlidersIcon,
@@ -596,7 +597,7 @@ export const CheckInLine = memo(function CheckInLine({
       data-message-ids={message.id}
     >
       <span className="agent-peer__line">
-        <HistoryIcon size={12} />
+        <RoutineIcon size={12} />
         {label}
         {rest.length > 0 && <span className="agent-checkin__late">· {rest.join(' · ')}</span>}
       </span>
@@ -1197,7 +1198,7 @@ const ApprovalCardBody = memo(function ApprovalCard({
           ) : handoff ? (
             <DownloadIcon size={14} />
           ) : gate ? (
-            <HistoryIcon size={14} />
+            <RoutineIcon size={14} />
           ) : plainDeny ? (
             <DownloadIcon size={14} />
           ) : approval.settings ? (

@@ -530,14 +530,19 @@
 }
 
 /* Login cards (`AgentLoginCard`): what it may do, the ways in, a sign-in under way. */
+/* What it may do, one quiet line under the reason. */
 .agent-login__abilities {
   margin: 0;
-  padding-left: var(--spacing-lg);
-  display: flex;
-  flex-direction: column;
-  gap: var(--spacing-2xs);
-  font-size: var(--font-size-body-md);
-  color: var(--text-primary);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-secondary);
+}
+
+/* "Other ways": a quiet disclosure, never a second row of buttons. */
+.agent-login__more {
+  align-self: flex-start;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
 }
 
 .agent-login__flow {

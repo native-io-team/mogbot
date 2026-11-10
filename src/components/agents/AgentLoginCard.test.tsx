@@ -102,6 +102,11 @@ describe('LoginCard', () => {
     expect(connect.className).not.toMatch(/primary/);
     expect(connect.className).toMatch(/strong/);
     expect(screen.getByText(/asks you on a card each time/)).toBeInTheDocument();
+    expect(screen.getByText('Adds Gmail to your Claude account on claude.ai.')).toBeInTheDocument();
+    // One answer and one dismiss; every other way waits behind "Other ways".
+    expect(screen.queryByRole('button', { name: 'Use my browser' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Not needed' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Other ways' }));
     expect(screen.getByRole('button', { name: 'Use my browser' })).toBeInTheDocument();
     expect(document.querySelector('input[type="password"]')).toBeNull();
   });
@@ -180,6 +185,7 @@ describe('LoginCard', () => {
     act(() => {
       vi.advanceTimersByTime(ARM_MS + 10);
     });
+    fireEvent.click(screen.getByRole('button', { name: 'Other ways' }));
     fireEvent.click(screen.getByRole('button', { name: 'Enter an API key' }), { detail: 1 });
     const field = screen.getByLabelText('X API bearer token');
     expect(field).toHaveAttribute('type', 'password');
@@ -193,16 +199,28 @@ describe('LoginCard', () => {
     ]);
   });
 
-  it('a card nothing here can answer says why and offers Not now and Not needed', () => {
+  it('a card nothing here can answer says why and offers Not now, Not needed behind Other ways', () => {
     renderCard(card({ ...GMAIL, options: [], noConnector: 'Recruiter runs on Codex.' }));
     expect(screen.getByText('Recruiter runs on Codex.')).toBeInTheDocument();
     expect(screen.getAllByRole('button').map((b) => b.textContent)).toEqual([
+      'Other ways',
       'Not now',
-      'Not needed',
     ]);
+    fireEvent.click(screen.getByRole('button', { name: 'Other ways' }));
+    expect(screen.getByRole('button', { name: 'Not needed' })).toBeInTheDocument();
   });
 
-  it('Not needed declines the app for the team, right beside the main action', async () => {
+  it('a failed way in other than the lead opens Other ways, where its retry is', () => {
+    renderCard(
+      card({
+        ...GMAIL,
+        flow: { state: 'failed', option: 'browser', message: 'Nope.', startedAt: Date.now() },
+      })
+    );
+    expect(screen.getByRole('button', { name: 'Use my browser' })).toBeInTheDocument();
+  });
+
+  it('Not needed declines the app for the team, from Other ways, and says what it does', async () => {
     const calls: [string, unknown][] = [];
     mockIPC((cmd, args) => {
       calls.push([cmd, args]);
@@ -215,8 +233,8 @@ describe('LoginCard', () => {
       return null;
     });
     renderCard(card(GMAIL));
-    const labels = screen.getAllByRole('button').map((b) => b.textContent);
-    expect(labels.indexOf('Not needed') + 1).toBe(labels.indexOf('Connect Gmail'));
+    fireEvent.click(screen.getByRole('button', { name: 'Other ways' }));
+    expect(screen.getByText(/No agent asks for Gmail again/)).toBeInTheDocument();
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Not needed' }));
       await Promise.resolve();

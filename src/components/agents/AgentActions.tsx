@@ -15,7 +15,7 @@ import {
   EditIcon,
   EyeIcon,
   EyeOffIcon,
-  HistoryIcon,
+  RoutineIcon,
   PaperclipIcon,
   PinIcon,
   ResetIcon,
@@ -93,7 +93,7 @@ export function AgentActionItems({
         ]
       : []),
     ...(onSchedule
-      ? [{ label: 'Schedule a routine…', icon: <HistoryIcon size={12} />, run: onSchedule }]
+      ? [{ label: 'Schedule a routine…', icon: <RoutineIcon size={12} />, run: onSchedule }]
       : []),
     ...(onFiles ? [{ label: 'Files', icon: <PaperclipIcon size={12} />, run: onFiles }] : []),
     {

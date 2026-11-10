@@ -550,7 +550,7 @@ export function LoginCard({
                 testID="login-not-needed"
               />
               <T variant="caption" color={colors.textMuted}>
-                Puts this away for {agent.name}. Nothing gets connected.
+                No agent asks for {login.title} again. Nothing gets connected.
               </T>
             </View>
           )}

@@ -34,8 +34,16 @@
  */
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { ChevronIcon, HistoryIcon, PlusIcon } from '@/components/icons';
-import { Dropdown } from '../primitives/Dropdown';
+import {
+  ArrowLeftIcon,
+  ChevronIcon,
+  RoutineIcon,
+  MoreHorizontalIcon,
+  PlusIcon,
+} from '@/components/icons';
+import { Dropdown, DropdownDivider, DropdownItem } from '../primitives/Dropdown';
+import { IconButton } from '../primitives/IconButton';
+import { Toggle } from './AgentSettingsRows';
 import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
 import { TextField } from '../primitives/TextField';
@@ -149,7 +157,7 @@ export function AgentSchedulePopover({
             tabIndex={0}
             variant="ghost"
             className="agent-chat__scheduled"
-            leftIcon={<HistoryIcon size={12} />}
+            leftIcon={<RoutineIcon size={12} />}
             title={`${count} scheduled ${count === 1 ? 'routine' : 'routines'}`}
             // Narrow, the word is hidden; the name keeps it.
             aria-label={`${count} scheduled`}
@@ -166,7 +174,7 @@ export function AgentSchedulePopover({
             tabIndex={0}
             variant="ghost"
             className="agent-chat__scheduled"
-            leftIcon={<HistoryIcon size={12} />}
+            leftIcon={<RoutineIcon size={12} />}
             title="Schedule a routine"
             aria-label={`Schedule a routine for ${agent.name}`}
           >
@@ -223,8 +231,90 @@ function ScheduleBody({
     }
   );
 
+  // Two surfaces, never both: the list, or the editor in its place.
+  if (composing) {
+    return (
+      <div className="agent-schedule__body" data-view="editor">
+        <div className="agent-schedule__editor-head">
+          {(items.length > 0 || editing) && (
+            <IconButton
+              tabIndex={0}
+              size="compact"
+              variant="ghost"
+              icon={<ArrowLeftIcon size={12} />}
+              aria-label="Back to routines"
+              onClick={close}
+            />
+          )}
+          <span className="agent-schedule__editor-title">
+            {editing ? 'Edit routine' : 'New routine'}
+          </span>
+        </div>
+        {!editing && (
+          <div className="agent-schedule__mode">
+            <SegmentedControl
+              aria-label="Kind of routine"
+              value={newMode}
+              onValueChange={(m) => {
+                setError(null);
+                setNewMode(m);
+              }}
+              options={[
+                { value: 'time', label: 'At a time' },
+                { value: 'when', label: 'When…' },
+              ]}
+            />
+          </div>
+        )}
+        {mode === 'when' ? (
+          <div className="agent-schedule__picker">
+            <WhenComposer
+              // A fresh composer for each row edited.
+              key={editing?.id ?? 'new'}
+              agent={agent}
+              editing={editing}
+              onCancel={items.length > 0 || editing ? close : undefined}
+              onDone={close}
+            />
+          </div>
+        ) : (
+          <RoutinePicker
+            // A fresh picker for each row edited.
+            key={editing?.id ?? 'new'}
+            agent={agent}
+            editing={editing}
+            busy={busy}
+            error={error}
+            onCancel={items.length > 0 || editing ? close : undefined}
+            onSave={(phrase, note, then) =>
+              void run(async () => {
+                if (editing) await updateCheckIn(agent.id, editing.id, phrase, note, then);
+                else await createCheckIn(agent.id, phrase, note, then);
+              }).then((ok) => ok && setComposing(null))
+            }
+          />
+        )}
+        <p className="agent-schedule__foot">
+          {mode === 'when' ? (
+            <>
+              Checks run only while the app is open and this Mac is awake; what arrives meanwhile is
+              found by the next check.
+              <KeepAwakeLink />
+            </>
+          ) : (
+            <>
+              Runs only while the app is open and this Mac is awake; a missed routine runs once when
+              it’s back.
+              <KeepAwakeLink />
+            </>
+          )}
+        </p>
+      </div>
+    );
+  }
+
   return (
-    <div className="agent-schedule__body">
+    <div className="agent-schedule__body" data-view="list">
       {items.length > 0 ? (
         <ul className="agent-schedule__list" aria-label="Scheduled">
           {items.map((c) => (
@@ -261,86 +351,30 @@ function ScheduleBody({
         <p className="agent-schedule__empty">Nothing scheduled for {agent.name} yet.</p>
       )}
 
-      {composing && !editing && (
-        <div className="agent-schedule__mode">
-          <SegmentedControl
-            aria-label="Kind of routine"
-            value={newMode}
-            onValueChange={(m) => {
-              setError(null);
-              setNewMode(m);
-            }}
-            options={[
-              { value: 'time', label: 'At a time' },
-              { value: 'when', label: 'When…' },
-            ]}
-          />
-        </div>
-      )}
-
-      {composing && mode === 'when' ? (
-        <div className="agent-schedule__picker">
-          <WhenComposer
-            // A fresh composer for each row edited.
-            key={editing?.id ?? 'new'}
-            agent={agent}
-            editing={editing}
-            onCancel={items.length > 0 || editing ? close : undefined}
-            onDone={close}
-          />
-        </div>
-      ) : composing ? (
-        <RoutinePicker
-          // A fresh picker for each row edited.
-          key={editing?.id ?? 'new'}
-          agent={agent}
-          editing={editing}
-          busy={busy}
-          error={error}
-          onCancel={items.length > 0 || editing ? close : undefined}
-          onSave={(phrase, note, then) =>
-            void run(async () => {
-              if (editing) await updateCheckIn(agent.id, editing.id, phrase, note, then);
-              else await createCheckIn(agent.id, phrase, note, then);
-            }).then((ok) => ok && setComposing(null))
-          }
-        />
-      ) : (
-        <div className="agent-schedule__add">
-          <Button
-            tabIndex={0}
-            variant="secondary"
-            size="compact"
-            leftIcon={<PlusIcon size={12} />}
-            onClick={() => {
-              setError(null);
-              setComposing('new');
-            }}
-          >
-            New routine
-          </Button>
-          {error && (
-            <p className="agent-schedule__readback" data-invalid>
-              {error}
-            </p>
-          )}
-        </div>
-      )}
+      <div className="agent-schedule__add">
+        <Button
+          tabIndex={0}
+          variant="secondary"
+          size="compact"
+          leftIcon={<PlusIcon size={12} />}
+          onClick={() => {
+            setError(null);
+            setComposing('new');
+          }}
+        >
+          New routine
+        </Button>
+        {error && (
+          <p className="agent-schedule__readback" data-invalid>
+            {error}
+          </p>
+        )}
+      </div>
 
       <p className="agent-schedule__foot">
-        {composing && mode === 'when' ? (
-          <>
-            Checks run only while the app is open and this Mac is awake; what arrives meanwhile is
-            found by the next check.
-            <KeepAwakeLink />
-          </>
-        ) : (
-          <>
-            Runs only while the app is open and this Mac is awake; a missed routine runs once when
-            it’s back.
-            <KeepAwakeLink />
-          </>
-        )}
+        Runs only while the app is open and this Mac is awake; a missed routine runs once when it’s
+        back.
+        <KeepAwakeLink />
       </p>
     </div>
   );
@@ -594,7 +628,7 @@ function RoutinePicker({
             Cancel
           </Button>
         )}
-        <Button tabIndex={0} variant="primary" size="compact" disabled={!ready} onClick={save}>
+        <Button tabIndex={0} variant="strong" size="compact" disabled={!ready} onClick={save}>
           {editing ? 'Save' : 'Schedule'}
         </Button>
       </div>
@@ -676,6 +710,7 @@ function ScheduleRow({
 }) {
   const runs = item.runs ?? [];
   const [showRuns, setShowRuns] = useState(false);
+  const [confirming, setConfirming] = useState(false);
   // A repeating routine on its schedule reads as two lines that each stay
   // whole: how often, then "Next: tomorrow at 9:00 AM".
   const plain = item.repeat && !item.paused && !item.retry;
@@ -752,55 +787,72 @@ function ScheduleRow({
           </TextButton>
         )}
       </div>
-      {/* Labelled, not four bare glyphs: each says what it does. */}
-      <div className="agent-schedule__actions">
-        {watch ? (
-          <TextButton
-            tabIndex={0}
-            onClick={() => void checkNow()}
-            disabled={busy || checking}
-            aria-label={`Check now for “${item.note}”`}
-          >
-            Check now
-          </TextButton>
-        ) : (
-          <TextButton
-            tabIndex={0}
-            onClick={onRunNow}
-            disabled={busy}
-            aria-label={`Run “${item.note}” now`}
-          >
-            Run now
-          </TextButton>
-        )}
-        <TextButton
-          tabIndex={0}
-          onClick={onEdit}
-          disabled={busy}
-          aria-label={`Edit “${item.note}”`}
-        >
-          Edit
-        </TextButton>
+      {/* On/off, then one menu for the rest: nothing red until asked for. */}
+      <div className="agent-schedule__controls">
         {(item.repeat || watch) && (
-          <TextButton
-            tabIndex={0}
-            onClick={onTogglePause}
-            disabled={busy}
-            aria-label={item.paused ? `Resume “${item.note}”` : `Pause “${item.note}”`}
-          >
-            {item.paused ? 'Resume' : 'Pause'}
-          </TextButton>
+          <Toggle
+            on={!item.paused}
+            label={item.paused ? `Turn on “${item.note}”` : `Turn off “${item.note}”`}
+            onChange={() => !busy && onTogglePause()}
+          />
         )}
-        <TextButton
-          tabIndex={0}
-          variant="danger"
-          onClick={onCancel}
-          disabled={busy}
-          aria-label={`Delete “${item.note}”`}
+        <Dropdown
+          align="right"
+          portal
+          menuClassName="agent-schedule__row-menu"
+          ariaLabel={`More for “${item.note}”`}
+          trigger={(p) => (
+            <IconButton
+              {...p}
+              tabIndex={0}
+              size="compact"
+              variant="ghost"
+              icon={<MoreHorizontalIcon size={14} />}
+              aria-label={`More for “${item.note}”`}
+              disabled={busy}
+            />
+          )}
         >
-          Delete
-        </TextButton>
+          {watch ? (
+            <DropdownItem onSelect={() => void checkNow()} disabled={checking}>
+              Check now
+            </DropdownItem>
+          ) : (
+            <DropdownItem onSelect={onRunNow}>Run now</DropdownItem>
+          )}
+          <DropdownItem onSelect={onEdit}>Edit</DropdownItem>
+          <DropdownDivider />
+          <DropdownItem variant="danger" onSelect={() => setConfirming(true)}>
+            Delete…
+          </DropdownItem>
+        </Dropdown>
       </div>
+      {confirming && (
+        <div className="agent-schedule__confirm" role="group" aria-label="Delete this routine?">
+          <span>Delete this routine? It won’t run again.</span>
+          <Button
+            tabIndex={0}
+            size="compact"
+            variant="ghost"
+            onClick={() => setConfirming(false)}
+            autoFocus
+          >
+            Keep it
+          </Button>
+          <Button
+            tabIndex={0}
+            size="compact"
+            variant="danger"
+            disabled={busy}
+            onClick={() => {
+              setConfirming(false);
+              onCancel();
+            }}
+          >
+            Delete
+          </Button>
+        </div>
+      )}
       {showRuns && <RunHistory runs={runs} />}
     </li>
   );

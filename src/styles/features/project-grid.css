@@ -63,10 +63,9 @@
   min-height: calc(var(--spacing-2xl) + var(--spacing-xs));
   background: var(--surface-control);
   color: var(--text-muted);
-  font-size: var(--font-size-badge);
+  font-size: var(--font-size-body-sm);
   font-weight: 600;
   letter-spacing: 0;
-  text-transform: uppercase;
 }
 
 .project-table-heading {

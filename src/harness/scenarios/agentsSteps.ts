@@ -159,7 +159,8 @@ export const agentsStepsScenarios: Scenario[] = [
     steps: [
       { click: '[data-agent-id="finance"]' },
       { click: '.agent-chat__scheduled' },
-      { click: '[aria-label^="Edit “Draft this week"]' },
+      { click: '[aria-label^="More for “Draft this week"]' },
+      { click: '.agent-schedule__row-menu [role="menuitem"]:nth-of-type(2)' },
     ],
     commands: {
       agents_overview: withWeekly,

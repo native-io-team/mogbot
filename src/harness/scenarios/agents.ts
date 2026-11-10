@@ -1795,7 +1795,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-team',
     title: 'Agents — a working team, Chief of Staff open',
     looksRightWhen:
-      'Agent list under the Agents | Projects toggle and conversation search. Beside the sidebar toggle, a bell with a small “1” on an amber wash (What’s in flight); no “Needs your OK · N” row in the list. The agents (pinned first, then most recent): each row is the name alone (no role cut to a few letters) and one status line; Lead Gen’s says “Needs your OK” in its pill with no amber dot at the right; the right-hand column shows only Finance’s unread dot and Acme Site’s spinner; pin marks small and faint. The header’s controls are words: Usage, Routines, Model ⌄, then … The Chief of Staff conversation with its name and role centred in the header band, no engine control. “4 messages with Acme Site · working on the pricing table” sits centred, no empty slot after the dot. Above the composer, one bar: an amber dot, “Lead Gen needs your OK”, “1 request”, Review. New agent / Import agents are short rows in secondary text, with no gap between them.',
+      'Agent list under the Agents | Projects toggle and conversation search. Beside the sidebar toggle, a bell with a small “1” on an amber wash (labelled “Needs you · 1”; it opens What’s in flight); no “Needs your OK · N” row in the list. The agents (pinned first, then most recent): each row is the name alone (no role cut to a few letters) and one status line; Lead Gen’s says “Needs your OK” in its pill with no amber dot at the right; the right-hand column shows only Finance’s unread dot and Acme Site’s spinner; pin marks small and faint. The header’s controls are words: Usage, Routines, Model ⌄, then … The Chief of Staff conversation with its name and role centred in the header band, no engine control. “4 messages with Acme Site · working on the pricing table” sits centred, no empty slot after the dot. Above the composer, one bar: an amber dot, “Lead Gen needs your OK”, “1 request”, Review. New agent / Import agents are short rows in secondary text, with no gap between them.',
     command: 'agents.open',
     requires: '.agent-chat .agent-bubble--agent',
     commands: {
@@ -1931,7 +1931,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-quota-calm',
     title: 'Agents — plan usage Claude Code reported, below 90%',
     looksRightWhen:
-      'The chat header’s usage control is a ring four-fifths full (78% of the 5-hour window left, from the 22% Claude Code reported), not the word “Usage”. Nothing about Codex: it reported nothing. (The sidebar’s usage row reads the account inventory, which this scenario does not serve; see the agents-usage-* scenarios.)',
+      'The chat header’s usage control is a static meter (a full-contrast circle, not a spinner) with four-fifths filled as a wedge (78% of the 5-hour window left, from the 22% Claude Code reported), not the word “Usage”. Nothing about Codex: it reported nothing. (The sidebar’s usage row reads the account inventory, which this scenario does not serve; see the agents-usage-* scenarios.)',
     command: 'agents.open',
     requires: '.agent-usage-ring__dial',
     commands: {
@@ -2205,13 +2205,51 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-schedule-edit',
     title: 'Agents — editing a routine in the schedule popover',
     looksRightWhen:
-      'Each row carries a line of labelled text actions under its words: Run now, Edit, Pause for routines, and Delete in red. After Edit on the weekday brief, that row stays highlighted and the picker below opens on it: Weekdays selected, At 09:00, What holding the brief’s own words, the echo of the routine and its first run, and Cancel / Save.',
-    requires: '.agent-schedule__item[data-editing]',
+      'The editor stands in for the list (the list is gone while it is open): a back arrow and “Edit routine” at the top, then the picker on the weekday brief: Weekdays selected, At 09:00, What holding the brief’s own words, the echo of the routine and its first run, and Cancel / Save, Save neutral (dark keycap in light, light in dark), never Finance’s colour.',
+    requires: '.agent-schedule__editor-head',
     openSelector: AGENTS_TAB,
     steps: [
       { click: '[data-agent-id="finance"]' },
       { click: '.agent-chat__scheduled' },
-      { click: '.agent-schedule__item:nth-child(2) [aria-label^="Edit"]' },
+      { click: '.agent-schedule__item:nth-child(2) [aria-label^="More for"]' },
+      { click: '.agent-schedule__row-menu [role="menuitem"]:nth-of-type(2)' },
+    ],
+    commands: {
+      agents_overview: overview(),
+      agents_messages: messagesFor,
+      agents_schedule_preview: schedulePreview,
+    },
+  },
+  {
+    id: 'agents-schedule-row-menu',
+    title: 'Agents — a routine’s row menu',
+    looksRightWhen:
+      'Each routine row is its words (what, how often, next) with an on/off switch and a quiet ⋯ at its top right; no row has text actions under it and nothing on the list is red. The second row’s ⋯ is open: Run now, Edit, a divider, then Delete… (the only red, and it asks first).',
+    requires: '.agent-schedule__row-menu',
+    openSelector: AGENTS_TAB,
+    steps: [
+      { click: '[data-agent-id="finance"]' },
+      { click: '.agent-chat__scheduled' },
+      { click: '.agent-schedule__item:nth-child(2) [aria-label^="More for"]' },
+    ],
+    commands: {
+      agents_overview: overview(),
+      agents_messages: messagesFor,
+      agents_schedule_preview: schedulePreview,
+    },
+  },
+  {
+    id: 'agents-schedule-delete',
+    title: 'Agents — deleting a routine asks first',
+    looksRightWhen:
+      'Under the second routine’s words, a line “Delete this routine? It won’t run again.” with a quiet “Keep it” and a red “Delete”. Nothing is deleted until that Delete.',
+    requires: '.agent-schedule__confirm',
+    openSelector: AGENTS_TAB,
+    steps: [
+      { click: '[data-agent-id="finance"]' },
+      { click: '.agent-chat__scheduled' },
+      { click: '.agent-schedule__item:nth-child(2) [aria-label^="More for"]' },
+      { click: '.agent-schedule__row-menu [role="menuitem"]:nth-of-type(3)' },
     ],
     commands: {
       agents_overview: overview(),
@@ -2306,10 +2344,26 @@ export const agentsScenarios: Scenario[] = [
     },
   },
   {
+    id: 'agents-when-list',
+    title: 'Agents — “When…” routines listed in the schedule popover',
+    looksRightWhen:
+      'Lead Gen’s routines popover lists four “When…” rows, each with an on/off switch and a quiet ⋯ top right and no red anywhere: “When someone mentions you on GitHub” with what it does under it, “Checks every 10 min · checked 4 min ago · last found 2 …” and its week in tokens; “When a new email from billing@northwind.com” with “46 checks · $0.19 at API prices this week”; the assigned-on-GitHub one saying it covers the newest 300 of 412; and the paused folder one, muted and last with its switch off, saying it paused itself after 5 failed checks and why. Below, a neutral “New routine”.',
+    requires: '.agent-schedule__controls',
+    openSelector: AGENTS_TAB,
+    steps: [{ click: '[data-agent-id="leadgen"]' }, { click: '.agent-chat__scheduled' }],
+    commands: {
+      agents_overview: overview(WHEN_TEAM),
+      agents_messages: messagesFor,
+      agents_apps_list: agentApps(CONNECTED_APPS),
+      agents_usage: WHEN_USAGE,
+      agents_schedule_preview: schedulePreview,
+    },
+  },
+  {
     id: 'agents-when-routines',
     title: 'Agents — “When…” routines in the schedule popover',
     looksRightWhen:
-      'Lead Gen’s  opens a popover listing four “When…” rows: “When someone mentions you on GitHub” with what it does under it, “Checks every 10 min · checked 4 min ago · last found 2 …” and its week in tokens; “When a new email from billing@northwind.com” with “46 checks · $0.19 at API prices this week” (one cost line, from the routine’s usage: checks are not turns); the assigned-on-GitHub one saying it covers the newest 300 of 412; and the paused folder one, muted and last, saying it paused itself after 5 failed checks and why. Below, after “New routine”, “At a time / When…” with When… pressed and the composer: five plain sources (Linear among them, since Linear is set up in Claude Code itself, not only as a claude.ai connector), each with how it’s checked and its cost; a “Then what?” field; Check every 5/10/30 min/every hour; and the cost sentence. Readable in light and dark.',
+      'New routine on Lead Gen’s routines: the editor stands in for the list (a back arrow and “New routine” at the top), then “At a time / When…” with When… pressed and the composer: five plain sources (Linear among them, since Linear is set up in Claude Code itself, not only as a claude.ai connector), each with how it’s checked and its cost; a “Then what?” field; Check every 5/10/30 min/every hour; the cost sentence; Cancel and a neutral Add (never Lead Gen’s teal). Readable in light and dark.',
     requires: '.agent-when__sources',
     openSelector: AGENTS_TAB,
     steps: [
@@ -2639,7 +2693,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-first-run',
     title: 'Agents — first open: the Chief of Staff says hello',
     looksRightWhen:
-      'The Chief’s chat opens on its greeting, centred on the page as an empty state: the greeting text block, its timestamp and the starters share one centre line. Under it, centred, three starters (Build me a team…, Brief me every morning…, Make me a one-page site…), all neutral outline buttons, then a quieter borderless More ideas…. No power-management note and no import pitch in the sidebar yet. The composer is ready.',
+      'The Chief’s chat opens on its greeting, laid out as the Chief’s first message like any other (left-aligned, where the conversation starts, under its timestamp). Under it, at the same left edge, three starters with no trailing “…” (Brief me every morning, Run an inbox triage crew, Run my launch as a team), all neutral outline buttons, then a quieter borderless More ideas…. No power-management note and no import pitch in the sidebar yet. The composer is ready.',
     command: 'agents.open',
     requires: '.agent-chat__messages > .agent-chat__starters',
     commands: {},

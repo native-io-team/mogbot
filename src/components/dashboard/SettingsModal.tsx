@@ -516,18 +516,7 @@ export function SettingsModal({
       case 'accounts':
         return <AccountsPage />;
       case 'phone':
-        return (
-          <PhonePage
-            onOpenPhone={() => {
-              onClose();
-              openModal('phone');
-            }}
-            onOpenRemote={() => {
-              onClose();
-              openModal('remoteAccess');
-            }}
-          />
-        );
+        return <PhonePage />;
       case 'notifications':
         return <NotificationsPage />;
       case 'chrome':

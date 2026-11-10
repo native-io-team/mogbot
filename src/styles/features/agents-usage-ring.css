@@ -9,23 +9,24 @@
   --agent-usage-bar-height: var(--spacing-xs);
 }
 
-/* A conic fill masked to a ring, so no inline SVG is needed for a dynamic dial. */
+/* A static meter, not an arc: a full-contrast outline with the used share
+   as a pie inside it. A thin arc a fifth round read as a loading spinner;
+   a filled wedge in a whole circle reads as a gauge. A conic fill, so no
+   inline SVG is needed for a dynamic dial. */
 .agent-usage-ring__dial {
   --agent-usage-ring-ink: var(--text-secondary);
   display: block;
+  box-sizing: border-box;
   width: var(--size-icon-sm);
   height: var(--size-icon-sm);
+  padding: var(--agent-usage-ring-stroke);
+  border: var(--border-width-default) solid var(--text-secondary);
   border-radius: var(--radius-pill);
   background: conic-gradient(
-    var(--agent-usage-ring-ink) calc(var(--agent-usage-ring-percent) * 1%),
-    var(--border-strong) 0
-  );
-  /* Only the mask's alpha matters: any opaque colour cuts the same hole. */
-  mask: radial-gradient(
-    farthest-side,
-    transparent calc(100% - var(--agent-usage-ring-stroke)),
-    var(--text-primary) calc(100% - var(--agent-usage-ring-stroke))
-  );
+      var(--agent-usage-ring-ink) calc(var(--agent-usage-ring-percent) * 1%),
+      transparent 0
+    )
+    content-box;
 }
 
 .agent-usage-ring__dial[data-tone='warning'] {

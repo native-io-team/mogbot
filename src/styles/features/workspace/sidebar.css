@@ -435,10 +435,11 @@
   color: var(--text-muted);
   cursor: pointer;
   font: inherit;
-  font-size: var(--font-size-11);
+  /* Sentence case, as written ("Pinned", "Active"): the design system's
+     labels, not the older tracked capitals. */
+  font-size: var(--font-size-body-md);
   font-weight: var(--font-weight-semibold);
   letter-spacing: 0;
-  text-transform: uppercase;
   text-align: left;
 }
 
@@ -840,10 +841,10 @@
 }
 
 .sidebar-section-label {
-  font-size: var(--font-size-11);
-  font-weight: var(--font-weight-regular);
+  /* Sentence case, as written ("Sessions", "Dev server"). */
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-medium);
   letter-spacing: 0;
-  text-transform: uppercase;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

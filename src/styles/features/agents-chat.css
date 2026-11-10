@@ -180,7 +180,6 @@
     .agent-peer__toggle,
     .agent-peer__name,
     .agent-schedule__last,
-    .agent-schedule__actions > .text-button,
     .agent-steps__add > .text-button,
     .agent-apps__quiet > .text-button,
     .agent-work__toggle,
@@ -342,37 +341,15 @@
   margin-top: var(--spacing-md);
 }
 
-/* Only the Chief's greeting so far: it and its starters sit in the middle of
-   the page, as an empty state, rather than at the foot of an empty screen. */
-.agent-chat__messages[data-greeting] {
-  justify-content: center;
-  align-items: center;
-  text-align: center;
-}
-
+/* Only the Chief's greeting so far: it is the Chief's first message, laid out
+   like every other one (left-aligned, where the conversation starts), with
+   its starters at the message column's leading edge under it. It used to be
+   a centred paragraph in the middle of the page, unlike anything after it. */
 .agent-chat__messages[data-greeting] > :first-child {
   margin-top: 0;
 }
 
-/* The greeting keeps an agent message's measure; its box is centred in the
-   row, not only its text, so it shares the column's centre with the time and
-   the starters. */
-.agent-chat__messages[data-greeting] > .agent-chat__row--agent {
-  position: relative;
-  align-self: stretch;
-  justify-content: center;
-}
-
-/* Its hover actions sit out of flow, so they don't pull the text off-centre. */
-.agent-chat__messages[data-greeting] > .agent-chat__row--agent > .agent-message__actions {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-}
-
 .agent-chat__messages[data-greeting] > .agent-chat__starters {
-  justify-content: center;
-  max-width: 480px;
   margin-top: var(--spacing-md);
 }
 
@@ -479,7 +456,7 @@
   position: relative;
 }
 
-.agent-chat__messages:not([data-greeting])
+.agent-chat__messages
   > .agent-chat__row--agent:not(.agent-chat__row--card)
   > .agent-message__actions {
   position: absolute;

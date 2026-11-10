@@ -16,7 +16,7 @@
  *   `agents/on_its_own.rs`), and admins (`AgentAdminSettings`).
  * - **Accounts & usage** (`AccountsPage`): the Usage view's own panel
  *   (`AgentsUsageView` `UsagePanel`), the one rendering of usage and accounts.
- * - **Phone** (`PhonePage`): the phone app and other assistants.
+ * - **Phone** (`PhonePage`): the phone panel and Remote access, drawn on the page.
  * - **Notifications** (`NotificationsPage`): what notifies, quiet hours
  *   (`agents/quiet.rs`), the morning brief
  *   (`AgentMorningBriefSetting`, `agents/brief.rs`), and where to mute one agent.
@@ -47,6 +47,8 @@ import { AgentPreviewFixSetting } from './AgentPreviewFixSetting';
 import { AgentLowPowerSetting } from './AgentLowPowerSetting';
 import { AgentQuietHoursSetting } from './AgentQuietHoursSetting';
 import { AgentMorningBriefSetting } from './AgentMorningBriefSetting';
+import { PhoneSettingsPanel } from '../phone/PhoneModal';
+import { RemoteAccessSettingsPanel } from '../remote/RemoteAccessModal';
 import { useStayOn } from '../../hooks/useStayOn';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import type { EngineInfo } from '../../lib/agents';
@@ -193,35 +195,28 @@ export function AccountsPage() {
   );
 }
 
-/** Away from the desk: the phone app and other assistants. */
-export function PhonePage({
-  onOpenPhone,
-  onOpenRemote,
-}: {
-  onOpenPhone: () => void;
-  onOpenRemote: () => void;
-}) {
+/**
+ * Away from the desk: the phone panel and Remote access, on the page itself
+ * (they used to be two "Open" buttons, each a dialog on top of this one).
+ */
+export function PhonePage() {
   return (
     <div className="agents-settings">
-      <section className="settings-group" aria-labelledby="agents-settings-away">
-        <h3 className="settings-group__title" id="agents-settings-away">
-          Away from your desk
+      <section className="settings-group" aria-labelledby="agents-settings-phone">
+        <h3 className="settings-group__title" id="agents-settings-phone">
+          Your phone
         </h3>
-        <div className="settings-section">
-          <Row label="Phone" description="Talk to your agents and answer them from your phone.">
-            <Button variant="secondary" data-settings-open="phone" onClick={onOpenPhone}>
-              Open
-            </Button>
-          </Row>
-          <Row
-            label="Other assistants"
-            description="Drive your agents from ChatGPT, Claude, Grok and others."
-          >
-            <Button variant="secondary" data-settings-open="remote" onClick={onOpenRemote}>
-              Open
-            </Button>
-          </Row>
-        </div>
+        <SectionBoundary name="phone">
+          <PhoneSettingsPanel />
+        </SectionBoundary>
+      </section>
+      <section className="settings-group" aria-labelledby="agents-settings-remote">
+        <h3 className="settings-group__title" id="agents-settings-remote">
+          Other assistants
+        </h3>
+        <SectionBoundary name="remote">
+          <RemoteAccessSettingsPanel />
+        </SectionBoundary>
       </section>
     </div>
   );

@@ -19,12 +19,16 @@
   padding: var(--settings-body-inset);
 }
 
-/* The Settings window (SettingsModal): a sheet the size of the window, a
-   section list down the left, one page at a time on the right. The list
-   holds still; only the page scrolls. */
+/* The Settings window (SettingsModal): one fixed size wherever it opens
+   from (Agents, Projects, a workspace), shrinking only when the window is
+   smaller than it; a section list down the left, one page at a time on the
+   right. The list holds still; only the page scrolls. It used to fill the
+   window up to 1120px wide, so it opened near full-window on a laptop and
+   as a smaller centred sheet on a wider one. */
 :root {
   --settings-window-inset: var(--spacing-xl);
-  --settings-window-max-width: 1120px;
+  --settings-window-max-width: 960px;
+  --settings-window-max-height: 760px;
   --settings-nav-width: 208px;
   --settings-page-max-width: 680px;
 }
@@ -37,7 +41,7 @@
   width: 100%;
   max-width: var(--settings-window-max-width);
   height: 100%;
-  max-height: none;
+  max-height: var(--settings-window-max-height);
   overflow: hidden;
   background: var(--surface-panel);
 }
@@ -613,4 +617,16 @@
   font-size: var(--font-size-body-md);
   color: var(--text-primary);
   cursor: pointer;
+}
+
+/* Settings → Phone: the phone panel and Remote access drawn on the page
+   itself, not as dialogs on top of it. Their bodies keep their own spacing;
+   only the dialog's inset goes. */
+.settings-inline-panel > .settings-modal-body {
+  padding: 0;
+}
+
+/* The dialog's own widths don't apply on the page: it takes the column. */
+.settings-inline-panel:is(.phone-modal, .phone-modal--install) {
+  width: auto;
 }

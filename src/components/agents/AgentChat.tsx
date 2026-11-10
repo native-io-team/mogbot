@@ -29,7 +29,7 @@ import {
 import {
   ActivityIcon,
   ArrowDownIcon,
-  HistoryIcon,
+  RoutineIcon,
   InfoIcon,
   MoreHorizontalIcon,
   PaperclipIcon,
@@ -536,7 +536,7 @@ export const AgentChat = memo(function AgentChat({
       {
         id: 'agents.scheduleCheckIn',
         title: `Schedule a routine for ${agent.name}…`,
-        icon: <HistoryIcon size={14} />,
+        icon: <RoutineIcon size={14} />,
         category: 'action',
         keywords: ['routine', 'remind', 'every', 'recurring', 'later', 'scheduled'],
         when: () => engineReady,
@@ -545,7 +545,7 @@ export const AgentChat = memo(function AgentChat({
       {
         id: 'agents.whenRoutine',
         title: `Start work for ${agent.name} when something happens…`,
-        icon: <HistoryIcon size={14} />,
+        icon: <RoutineIcon size={14} />,
         category: 'action',
         keywords: [
           'when',
