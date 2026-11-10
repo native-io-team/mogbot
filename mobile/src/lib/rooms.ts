@@ -19,7 +19,8 @@ import {
   type RoomView,
   type WelcomeFrame,
 } from '@shipstudio/companion-protocol';
-import { previewText } from '@shipstudio/companion-protocol';
+import { conversationOf, previewText } from '@shipstudio/companion-protocol';
+import { conversationKey } from './conversations';
 import { formatClock, workingLine } from './agents';
 import type { PendingSend } from './sync';
 import { messageKey, pendingItems, timeLabel, type Item } from './timeline';
@@ -33,7 +34,8 @@ export const roomIdOf = (key: string) => (isRoomKey(key) ? key.slice(PREFIX.leng
 
 /** Every chat a line belongs in: its room's thread, and its agent's own chat. */
 export function chatKeysOf(m: AgentMessage): string[] {
-  if (!m.room) return [m.agentId];
+  // And the conversation it was said in (`lib/conversations`).
+  if (!m.room) return m.agentId ? [m.agentId, conversationKey(m.agentId, conversationOf(m))] : [];
   return m.agentId ? [roomKey(m.room), m.agentId] : [roomKey(m.room)];
 }
 

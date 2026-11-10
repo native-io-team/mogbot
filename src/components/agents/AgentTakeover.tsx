@@ -100,7 +100,9 @@ export function TakeoverProvider({ children }: { children: ReactNode }) {
       if (opening.current.has(agent.id)) return;
       opening.current.add(agent.id);
       try {
-        const view = await takeOverAgent(agent.id, START_COLS, START_ROWS, stopFirst);
+        // The conversation on screen is the one driven.
+        const conversation = getAgentsSnapshot().viewing[agent.id];
+        const view = await takeOverAgent(agent.id, START_COLS, START_ROWS, stopFirst, conversation);
         await refreshAgents();
         // The backend answers with the take-over or an error; never read a blank.
         if (view && !showInWorkspace(view)) {

@@ -159,6 +159,7 @@ fn chief_asks(text: &str) -> Inbound {
         outside: false,
         resume: 0,
         typed: None,
+        conversation: None,
     }
 }
 
@@ -174,6 +175,7 @@ fn user_says(text: &str) -> Inbound {
         outside: false,
         resume: 0,
         typed: None,
+        conversation: None,
     }
 }
 

@@ -31,6 +31,7 @@ fn users(text: &str) -> Inbound {
         outside: false,
         resume: 0,
         typed: Some(text.into()),
+        conversation: None,
     }
 }
 

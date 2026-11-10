@@ -703,17 +703,35 @@ function Conversation({
   const colors = useColors();
   const styles = useStyles();
   const [busy, setBusy] = useState(false);
+  const router = useRouter();
   const context = contextLine(agent);
   const percent = contextPercent(agent);
-  const freshable = canFresh && canStartFresh(agent);
+  // A Mac with several conversations: a new one any time, nothing left
+  // behind (the others stay a tap away), so no confirm and no waiting.
+  const several = canCall('agents.conversationNew');
+  const freshable = canFresh && (several || canStartFresh(agent));
   if (!context && !freshable) return null;
-  const idle = agent.status.state === 'idle';
+  const idle = several || agent.status.state === 'idle';
   // Why it can't be tapped right now, in one line; nothing when it can.
   const unavailable = !idle
     ? `Available once ${agent.name} is done`
     : !live
       ? 'Available once your Mac is connected'
       : undefined;
+  const startNew = () => {
+    setBusy(true);
+    onError(null);
+    startFresh(agent.id)
+      .then(() => {
+        haptic.success();
+        router.push({ pathname: '/chat/[id]', params: { id: agent.id } });
+      })
+      .catch((e: unknown) => {
+        haptic.error();
+        onError(describeError(e));
+      })
+      .finally(() => setBusy(false));
+  };
   const confirm = () =>
     Alert.alert(
       `Start ${agent.name} fresh?`,
@@ -742,7 +760,15 @@ function Conversation({
         {!!context && <Row label="Conversation" value={context} last={!freshable} />}
         {freshable && (
           <Row
-            label={busy ? 'Starting fresh…' : 'Start fresh'}
+            label={
+              several
+                ? busy
+                  ? 'Starting a new conversation…'
+                  : 'New conversation'
+                : busy
+                  ? 'Starting fresh…'
+                  : 'Start fresh'
+            }
             leading={
               <Icon
                 name="arrow.counterclockwise"
@@ -751,7 +777,7 @@ function Conversation({
               />
             }
             // Its turn is in the conversation it would leave.
-            onPress={busy ? undefined : confirm}
+            onPress={busy ? undefined : several ? startNew : confirm}
             disabled={!!unavailable}
             detail={unavailable}
             last
@@ -760,8 +786,9 @@ function Conversation({
       </View>
       {freshable && percent !== null && percent >= CONTEXT_SUGGEST_AT && (
         <T variant="small" color={colors.textMuted} style={styles.note}>
-          This conversation is getting long — {agent.name} may lose track of early details. Start
-          fresh to give it a new one; its memory is kept.
+          This conversation is getting long — {agent.name} may lose track of early details.{' '}
+          {several ? 'Start a new conversation' : 'Start fresh'} to give it a new one; its memory is
+          kept.
         </T>
       )}
     </>

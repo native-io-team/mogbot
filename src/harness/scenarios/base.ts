@@ -17,6 +17,7 @@ import type { CommandMap } from '../types';
 import { BALANCED_TEAM, BALANCED_VIEW } from '../fixtures/policy';
 import { onItsOwnFor, TEAM_ON_ITS_OWN } from '../fixtures/onItsOwn';
 import { recipePreviewFor } from '../fixtures/recipe';
+import { onlyFirst } from '../fixtures/conversations';
 
 export const HARNESS_ROOT = '/Users/harness/ShipStudio';
 
@@ -246,6 +247,9 @@ export const baseCommands: CommandMap = {
   agents_messages: (args: Record<string, unknown>) =>
     args.agentId === 'chief' ? [chiefGreeting('chief')] : [],
   agents_search: [],
+  // Every agent has its one conversation until it's given another.
+  agents_conversations: onlyFirst,
+  agents_conversation_select: onlyFirst,
   // The palette sweep now starts in Agents, where ⌘K → Apps opens this.
   agents_apps_list: { connected: [] },
   agents_app_connections: { apps: [], connections: [], flows: [] },

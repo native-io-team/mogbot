@@ -316,7 +316,7 @@ fn run_step(
         step: n,
         row_at: run_at,
     });
-    let line = runner::new_message(
+    let mut line = runner::new_message(
         agent_id,
         MessageKind::Note,
         format!(
@@ -328,7 +328,16 @@ fn run_step(
     if approved {
         runner::approve_ticket(&ticket);
     }
-    runner::enqueue_scheduled(app, agent_id, prompt, c.repeat.is_some(), ticket);
+    let conversation = super::conversations::routine_in(agent_id, &c.id);
+    line.conversation = Some(conversation.clone());
+    runner::enqueue_scheduled_in(
+        app,
+        agent_id,
+        prompt,
+        c.repeat.is_some(),
+        ticket,
+        Some(conversation),
+    );
     runner::record(app, line).map(|_| ())
 }
 

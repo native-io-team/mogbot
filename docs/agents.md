@@ -436,21 +436,91 @@ as tried and failed, never "it wasn't allowed".
 **Stop** ends the turn and drops the queue; it leaves a quiet
 "Stopped" note (your doing, not a failure). A turn is capped at 3 hours.
 
-**Start fresh, keep memory.** The agent menu, ⌘K and the phone's agent sheet
-offer "Start fresh" (`agents_start_fresh` / `agents.startFresh`): the next
-message begins a new conversation on the same engine, through the same path an
-engine switch takes. Instructions and `## Memory` carry over; the session
-doesn't, and nothing is recapped into the new one. The chat stays, with a
-"Started fresh · memory kept" note (`fresh: true`) drawn as a divider. It's
-refused while the agent is working, while a card in its chat waits on an
-answer, while another agent still owes it the answer to something it delegated
-(that answer would land in a conversation that never asked), and when its next
-message already starts a new conversation. The check and the reset happen under
-the inbox lock, so a message sent at the same moment either starts first (and
-the fresh start is refused) or starts in the new conversation; two at once
-record one divider. Any later recap (an engine switch, a vanished session) only
-carries what came after the last divider. The prompts tell agents this can
-happen, so anything they'll need later belongs in memory.
+### Several conversations with one agent (`src-tauri/src/agents/conversations.rs`)
+
+Answers: **can I keep several threads going with one agent, each its own
+chat, without it forgetting what it knows?** An agent has a list of
+conversations. Each has its own engine session and its own chat; the agent's
+instructions and `## Memory` (its CLAUDE.md, read by every turn) are shared by
+all of them, so whatever it remembers in one it knows in the others.
+
+- **The log stays one file.** Every line in `messages.jsonl` says which
+  conversation it was said in (`AgentMessage::conversation`, stamped by
+  `store::append_message` when a line doesn't say: the conversation the
+  agent's engine has loaded). A line written before conversations says nothing
+  and is the first conversation's (`conversations::FIRST`), so the existing
+  chat *is* the first conversation: no migration step, nothing moved, nothing
+  lost, and an older build still reads the whole log (interleaved). Cards,
+  answers, search and the recap keep working on the one log. A conversation's
+  chat is `store::conversation_page` (`agents_messages` with `conversation`;
+  without it, every line, as an older phone asks).
+- **The list** is `<home>/conversations.json`: title, `named` (the user renamed
+  it), when it started and last moved, a preview line, which routines belong
+  to which conversation, and `current` (where the user is: what a chat opens
+  on, and where a message sent without naming one goes). Absent, the list is
+  the first conversation alone, titled from the first thing the user said in
+  it. A conversation is named by the first message the user sends in it
+  (`title_from`: first line, quotes stripped, 60 characters at a word) until
+  they rename it; renaming to nothing gives it back to its first message. At
+  most 200 per agent (refused past that; nothing is ever dropped).
+- **Sessions.** The agent's own session fields (`session_id`, `new_engine`,
+  `context`, its session on the other engine while `away`) belong to the
+  *loaded* conversation (`Agent.conversations.loaded`, absent for the first);
+  the others' are parked beside them (`Agent.conversations.parked`). A turn
+  for another conversation swaps them (`conversations::swap`) in one registry
+  write, by the agent's own worker before anything reads the session. So
+  resume, crossover, take over, tidy, the context meter and what outside text
+  a conversation read (`exposure`, kept per session) all work per conversation
+  without knowing there are several. An engine switch clears every parked
+  session and marks it for a recap of its own chat; a model change clears
+  every parked reading.
+- **One turn at a time per agent**, as before. Engines would run two sessions
+  at once, but the agent wouldn't stay one agent: its home and CLAUDE.md (both
+  turns writing memory), its open project copy, its turn mark and inbox, its
+  slot in the approval broker and a take-over are all the agent's, not a
+  conversation's. What arrives for another conversation waits in the queue
+  (`Inbound.conversation`), is never batched with what was said in a different
+  one (`runner::same_place_prefix`, the same rule rooms use), and runs in its
+  own conversation's session when its turn comes. An interruption's note is
+  told only to the next turn in the same conversation (`interrupted_in`).
+- **Where a line goes.** The user's message goes where they sent it (the
+  conversation on screen; `agents_send` / `agents.send` `conversation`; none
+  named, `current`). Anything the turn or the app records goes to the loaded
+  conversation, which is the turn's while one runs. Another agent's answer
+  goes back to the conversation that asked (`note_asked` / `asked_in`, in
+  memory: after a restart it goes where the asker is). A routine runs in the
+  conversation it was set up in (`note_routine`: the turn's when the agent set
+  it up, else where the user is; one made before conversations, the first's),
+  its firing line and its turn alike.
+- **Safety is per conversation, because it is per turn.** Approvals, sealed
+  outside text and take over are unchanged: a card is raised by a turn and
+  stamped with its conversation, and a typed "yes" only answers a card in the
+  conversation it was typed in (`cards_in`), never one in another. Take over
+  drives the conversation on screen (`agents_take_over` `conversation`, loaded
+  under the claim, while no turn can start). A recap (an engine switch, a
+  vanished session, carrying on with or back from the other engine) is read
+  from that conversation's lines only (`runner::recap_log`).
+- **New conversation** replaces Start fresh (`agents_conversation_new`, and
+  `agents_start_fresh` / `agents.startFresh` now do the same, so an older
+  phone's Start fresh makes one): nothing is reset and nothing waits on a turn
+  in progress, which stays in its own conversation. Its first message starts
+  a new session with the agent's instructions and memory and no recap. When
+  the conversation the user is in has nothing in it yet, that one is it. The
+  context tidy's own fallback (`tidy`) still starts the loaded conversation
+  fresh in place, with its "Started fresh · memory kept" divider.
+- **Desk.** The chat header has a compact switcher beside the agent's name
+  (`ConversationSwitcher`): the conversation on screen (just an icon while
+  there is only one), an amber dot when another one has a card waiting, and a
+  menu with a search, New conversation, the recent ones newest first (a check
+  on the one on screen, "Needs your OK", "Working", or how long ago) and
+  Rename this conversation. ⌘K has "New conversation with <agent>" and "Rename
+  this conversation…"; the … menu's New conversation says how full this one
+  is. The sidebar stays one row per agent. A conversation's chat is kept in
+  the store under `conversationKey(agent, id)`; `messages[agentId]` stays every
+  line, because What's in flight, the sidebar and the request bars read the
+  agent's cards there. A reply streaming in another conversation isn't drawn
+  in this one; its working line says "in another conversation".
+- **Phone.** See docs/mobile.md, "Conversations".
 
 **Context meter.** `agents/context.rs` stores one reading per agent
 (`Agent.context`: `used`, `window`, the engine's `model` id) from the engine's

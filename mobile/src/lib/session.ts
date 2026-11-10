@@ -5,6 +5,7 @@
 
 import { shareStructure } from './structure';
 import type {
+  Conversations,
   Alert,
   AgentMessage,
   MemoryChange,
@@ -25,7 +26,9 @@ import * as Crypto from 'expo-crypto';
 import * as Notifications from 'expo-notifications';
 import * as SecureStore from 'expo-secure-store';
 import * as Updates from 'expo-updates';
+import { FIRST_CONVERSATION } from '@shipstudio/companion-protocol';
 import { announce } from './a11y';
+import { conversationOfKey } from './conversations';
 import { needsYou } from './agents';
 import {
   badgeCount,
@@ -361,6 +364,16 @@ const loading = new Map<string, Promise<void>>();
 function readPage(key: string, before?: string) {
   const roomId = roomIdOf(key);
   const at = before ? { before } : {};
+  // One conversation's chat: its own lines (`lib/conversations`).
+  const conv = conversationOfKey(key);
+  if (conv)
+    return call('agents.messages', {
+      agentId: conv.agentId,
+      limit: PAGE,
+      work: 'summary',
+      conversation: conv.conversation,
+      ...at,
+    });
   return roomId
     ? call('rooms.messages', { roomId, limit: PAGE, ...at })
     : // Timelines as their folded lines: the steps were most of a page, and
@@ -519,6 +532,8 @@ export async function send(
         : {}),
       ...(mentions.length ? { mentions } : {}),
       ...(revises ? { revises: revises.id } : {}),
+      // The conversation on screen; an older Mac has one and ignores it.
+      ...(getApp().viewing[agentId] ? { conversation: getApp().viewing[agentId] } : {}),
     });
   } catch (error) {
     const retry = unreached(error);
@@ -782,9 +797,62 @@ export async function createAgent(
   return stored;
 }
 
-/** A new conversation from its next message; memory kept. The registry event redraws the sheet. */
+/**
+ * A new conversation, memory kept: on a Mac with several, the one opened in
+ * the chat; on an older one, its next message starts one (Start fresh).
+ */
 export async function startFresh(agentId: string) {
+  if (canCall('agents.conversationNew')) {
+    await newConversation(agentId);
+    return;
+  }
   await call('agents.startFresh', { agentId });
+}
+
+// ---- Conversations ------------------------------------------------------------
+
+function setConversations(list: Conversations) {
+  setApp((s) => ({ conversations: { ...s.conversations, [list.agentId]: list } }));
+}
+
+/** An agent's conversations, read again (null on a Mac without them). */
+export async function refreshConversations(agentId: string): Promise<Conversations | null> {
+  if (!canCall('agents.conversations')) return null;
+  const list = await call('agents.conversations', { agentId });
+  setConversations(list);
+  return list;
+}
+
+/** Which conversation the chat opens on: where the user last was, on any device. */
+export async function ensureViewing(agentId: string): Promise<void> {
+  if (getApp().viewing[agentId]) return;
+  // The Mac couldn't say: the first conversation, which every agent has,
+  // rather than a chat that never opens.
+  const list = await refreshConversations(agentId).catch(() => null);
+  const id = list?.current ?? FIRST_CONVERSATION;
+  setApp((s) => (s.viewing[agentId] ? {} : { viewing: { ...s.viewing, [agentId]: id } }));
+}
+
+/** Show one of an agent's conversations, and tell the Mac the user is in it. */
+export async function openConversation(agentId: string, conversation: string) {
+  setApp((s) => ({ viewing: { ...s.viewing, [agentId]: conversation } }));
+  setConversations(
+    await call('agents.conversationSelect', { agentId, conversationId: conversation })
+  );
+}
+
+/** "New conversation": opened at once (or the empty one already open). */
+export async function newConversation(agentId: string) {
+  const list = await call('agents.conversationNew', { agentId });
+  setConversations(list);
+  setApp((s) => ({ viewing: { ...s.viewing, [agentId]: list.current } }));
+}
+
+/** Name one; empty gives it back to its first message. */
+export async function renameConversation(agentId: string, conversation: string, title: string) {
+  setConversations(
+    await call('agents.conversationRename', { agentId, conversationId: conversation, title })
+  );
 }
 
 export async function markUnread(agentId: string) {

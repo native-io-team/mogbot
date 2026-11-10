@@ -53,6 +53,7 @@ fn msg(agent: &store::Agent, ts: i64, text: &str) -> AgentMessage {
         remembered: None,
         via: None,
         fix: None,
+        conversation: None,
     }
 }
 

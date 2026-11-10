@@ -7,6 +7,7 @@
  * Where a method differs from its command, the comment says how and why.
  */
 
+import type { Conversations } from './conversations';
 import type { Cursor } from './frames';
 import type { AgentPolicyView } from './policy';
 import type { OnItsOwn, OnItsOwnNarrow, OnItsOwnTeam } from './onItsOwn';
@@ -118,8 +119,30 @@ export interface Methods {
        * `stepsOmitted`, never the Mac's version.
        */
       work?: 'summary';
+      /**
+       * One of the agent's conversations (`agents.conversations`); absent,
+       * all of them interleaved, as an older Mac always sends.
+       */
+      conversation?: string;
     };
     result: { messages: AgentMessage[]; asOf: Cursor; more: boolean };
+  };
+  /**
+   * `agents_conversations`: the agent's conversations, newest first, and
+   * which one the user is in. Newer Macs only: check `welcome.methods`.
+   */
+  'agents.conversations': { params: { agentId: string }; result: Conversations };
+  /** "New conversation": the list after, `current` the new one (or the empty one it was already in). */
+  'agents.conversationNew': { params: { agentId: string }; result: Conversations };
+  /** The user opened one: the desk and an older phone's sends follow it. */
+  'agents.conversationSelect': {
+    params: { agentId: string; conversationId: string };
+    result: Conversations;
+  };
+  /** Name one; an empty title gives it back to its first message. */
+  'agents.conversationRename': {
+    params: { agentId: string; conversationId: string; title: string };
+    result: Conversations;
   };
   /**
    * `agents_turn_work`: what the turn ending on `messageId` did, steps and
@@ -151,6 +174,8 @@ export interface Methods {
        * Send only to a Mac whose `welcome.features` has `results.revise`.
        */
       revises?: string;
+      /** The conversation on screen; absent, the one the user is in on the Mac. */
+      conversation?: string;
     };
     result: AgentMessage;
   };
@@ -716,6 +741,7 @@ export const READ_ONLY_METHODS = [
   'devices.self',
   'agents.overview',
   'agents.messages',
+  'agents.conversations',
   'agents.workSteps',
   'agents.instructions',
   'agents.memory',

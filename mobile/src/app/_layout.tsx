@@ -91,6 +91,7 @@ function Screens() {
               <Stack.Screen name="start" options={sheet(colors, [0.6, 0.9])} />
               <Stack.Screen name="instructions" options={sheet(colors, [0.9])} />
               <Stack.Screen name="memory" options={sheet(colors, [0.9])} />
+              <Stack.Screen name="conversations" options={sheet(colors, [0.9])} />
               <Stack.Screen name="on-its-own" options={sheet(colors, [0.9])} />
               <Stack.Screen name="remember" options={sheet(colors, [0.5, 0.9])} />
               <Stack.Screen name="session/[id]" options={{ title: '' }} />

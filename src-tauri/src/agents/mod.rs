@@ -86,6 +86,7 @@ pub mod conn_relay;
 pub mod connections;
 pub mod connector;
 pub mod context;
+pub mod conversations;
 pub mod coverage;
 pub mod crossover;
 pub mod decisions;
@@ -242,6 +243,7 @@ fn greet(agent_id: &str) {
         remembered: None,
         via: None,
         fix: None,
+        conversation: None,
     };
     if let Err(e) = store::append_message(&message) {
         tracing::warn!("[Agents] Couldn't write the Chief's greeting: {e}");

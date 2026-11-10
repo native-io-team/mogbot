@@ -35,6 +35,8 @@ use crate::errors::CommandError;
 pub const EVENT_MESSAGE: &str = "agents://message";
 pub const EVENT_STATUS: &str = "agents://status";
 pub const EVENT_REGISTRY: &str = "agents://registry";
+/// An agent's list of conversations changed (one named, one started); the agent's id.
+pub const EVENT_CONVERSATIONS: &str = "agents://conversations";
 /// A reply being written: `{agentId, id, text}`, the text so far. The message
 /// that completes it arrives on [`EVENT_MESSAGE`] with the same id.
 pub const EVENT_DRAFT: &str = "agents://draft";
@@ -166,6 +168,13 @@ struct Inbound {
     /// `remember_permission` checks the user's words against (`remember`).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     typed: Option<String>,
+    /// Which of the agent's conversations it was said in, or is for
+    /// (`conversations`): its turn runs in that conversation's session and
+    /// is never batched with another's. Given when it is queued (`push`);
+    /// absent in an inbox written before conversations, and on a room's
+    /// ask: the turn runs in whichever is loaded.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    conversation: Option<String>,
 }
 
 fn is_zero(n: &u8) -> bool {
@@ -265,6 +274,8 @@ struct Runtime {
     turn_mixed: bool,
     /// The room the turn in progress answers in, if it was asked in one.
     room: Option<super::rooms::RoomRef>,
+    /// The conversation the turn in progress answers in (`conversations`).
+    conversation: Option<String>,
     /// The turn in progress (or one it replaced) answers text from outside.
     outside: bool,
     /// A quiet note for the next turn in the agent's own chat
@@ -1455,6 +1466,7 @@ fn resume_inbounds(took: &[Inbound], resume: u8, note: String) -> Vec<Inbound> {
             outside: false,
             resume,
             typed: None,
+            conversation: None,
         });
     }
     out[0].text = note;
@@ -1608,6 +1620,11 @@ fn record_as(
 ) -> Result<AgentMessage, CommandError> {
     let mut message = super::secrets::redact_message(message);
     tag_room(&mut message, tag);
+    // Which conversation it was said in, so the UI that's told places it
+    // where the log does (`conversations::stamped`).
+    if message.conversation.is_none() && !message.agent_id.is_empty() {
+        message = super::conversations::stamped(&message);
+    }
     if let Err(e) = store::append_message(&message) {
         // A deleted agent's dying turn: nothing to show, nowhere to show it.
         if !store::is_gone(&message.agent_id) {
@@ -1638,6 +1655,10 @@ fn announce(
     let wants_user = message.kind.wants_user() && !notify::on_screen(app, &message.agent_id);
     let counts_as_unread = wants_user && message.kind != MessageKind::Approval;
     let preview = preview_for(&message);
+    // Its conversation moved (and is named by the first thing said in it).
+    if super::conversations::touch(&message, preview.as_deref()) {
+        let _ = app.emit(EVENT_CONVERSATIONS, &message.agent_id);
+    }
     let ts = message.ts;
     let updated = store::update(&message.agent_id, |agent| {
         agent.last_activity_at = ts;
@@ -1847,6 +1868,7 @@ pub fn new_message(agent_id: &str, kind: MessageKind, text: impl Into<String>) -
         remembered: None,
         via: None,
         fix: None,
+        conversation: None,
     }
 }
 
@@ -1867,6 +1889,7 @@ pub fn enqueue(app: &AppHandle, agent_id: &str, text: String, from: From) {
             outside: false,
             resume: 0,
             typed: None,
+            conversation: None,
         },
     );
 }
@@ -1884,6 +1907,19 @@ pub fn enqueue_user(
     text: String,
     typed: Option<String>,
 ) {
+    enqueue_user_in(app, agent_id, message_id, text, typed, None);
+}
+
+/// [`enqueue_user`] in one of the agent's conversations: the one the user
+/// sent it in (`None`: the one its engine has loaded).
+pub fn enqueue_user_in(
+    app: &AppHandle,
+    agent_id: &str,
+    message_id: &str,
+    text: String,
+    typed: Option<String>,
+    conversation: Option<String>,
+) {
     // They're up: quiet hours hold nothing for a while (`quiet`).
     if typed.is_some() {
         super::quiet::user_wrote(store::now_ms());
@@ -1893,7 +1929,9 @@ pub fn enqueue_user(
             let _ = app.emit(EVENT_REGISTRY, ());
         }
     }
-    push(app, agent_id, user_inbound(message_id, text, typed));
+    let mut inbound = user_inbound(message_id, text, typed);
+    inbound.conversation = conversation;
+    push(app, agent_id, inbound);
 }
 
 fn user_inbound(message_id: &str, text: String, typed: Option<String>) -> Inbound {
@@ -1908,6 +1946,7 @@ fn user_inbound(message_id: &str, text: String, typed: Option<String>) -> Inboun
         outside: false,
         resume: 0,
         typed,
+        conversation: None,
     }
 }
 
@@ -1975,6 +2014,25 @@ pub fn enqueue_scheduled(
     routine: bool,
     ticket: String,
 ) {
+    enqueue_scheduled_in(app, agent_id, text, routine, ticket, None);
+}
+
+/// [`enqueue_scheduled`] in the conversation the routine was set up in
+/// (`CheckIn::conversation`; `None`: the first, where every routine made
+/// before conversations was).
+pub fn enqueue_scheduled_in(
+    app: &AppHandle,
+    agent_id: &str,
+    text: String,
+    routine: bool,
+    ticket: String,
+    conversation: Option<String>,
+) {
+    let conversation = Some(
+        conversation
+            .filter(|c| super::conversations::exists(agent_id, c))
+            .unwrap_or_else(|| super::conversations::FIRST.to_string()),
+    );
     push(
         app,
         agent_id,
@@ -1989,6 +2047,7 @@ pub fn enqueue_scheduled(
             outside: false,
             resume: 0,
             typed: None,
+            conversation,
         },
     );
 }
@@ -2018,6 +2077,7 @@ pub fn enqueue_assistant_for(app: &AppHandle, agent_id: &str, message_id: &str, 
             outside: true,
             resume: 0,
             typed: None,
+            conversation: None,
         },
     );
 }
@@ -2025,6 +2085,17 @@ pub fn enqueue_assistant_for(app: &AppHandle, agent_id: &str, message_id: &str, 
 /// Queue a "When…" routine's wake: like a scheduled one, but what it
 /// carries came from outside (see [`from_outside`]).
 pub fn enqueue_from_outside(app: &AppHandle, agent_id: &str, text: String, ticket: String) {
+    enqueue_from_outside_in(app, agent_id, text, ticket, None);
+}
+
+/// [`enqueue_from_outside`] in the conversation the routine was set up in.
+pub fn enqueue_from_outside_in(
+    app: &AppHandle,
+    agent_id: &str,
+    text: String,
+    ticket: String,
+    conversation: Option<String>,
+) {
     push(
         app,
         agent_id,
@@ -2039,6 +2110,7 @@ pub fn enqueue_from_outside(app: &AppHandle, agent_id: &str, text: String, ticke
             outside: true,
             resume: 0,
             typed: None,
+            conversation,
         },
     );
 }
@@ -2071,6 +2143,7 @@ fn room_inbound(text: String, room: super::rooms::RoomRef, outside: bool) -> Inb
         outside,
         resume: 0,
         typed: None,
+        conversation: None,
     }
 }
 
@@ -2246,8 +2319,11 @@ fn give_answer(
     if store::get(&to.id).is_err() {
         return;
     }
+    // In the conversation that asked, wherever the asker is now.
+    let asked = super::conversations::asked_in(&to.id, &sender.id);
     let mut line = new_message(&to.id, MessageKind::FromAgent, text.clone());
     line.peer = Some(sender.clone());
+    line.conversation = asked.clone();
     let _ = record(app, line);
     match answer_way(hop) {
         AnswerWay::Turn(next) => {
@@ -2256,7 +2332,9 @@ fn give_answer(
         AnswerWay::ShowOnly => {
             tracing::info!(to = %to.id, from = %sender.id, "[Agents] answer past the hop cap shown, not run");
             let note = chain_end_line(&to.name, &sender.name);
-            let _ = record(app, new_message(&to.id, MessageKind::Note, note));
+            let mut note = new_message(&to.id, MessageKind::Note, note);
+            note.conversation = asked;
+            let _ = record(app, note);
         }
     }
 }
@@ -2271,6 +2349,8 @@ pub fn enqueue_request(
     hop: u8,
     outside: bool,
 ) {
+    // Its answer goes back to the conversation asking now.
+    super::conversations::note_asked(&sender.id, agent_id);
     push(
         app,
         agent_id,
@@ -2291,6 +2371,7 @@ fn agent_inbound(text: String, sender: AgentRef, hop: u8, reply: bool, outside: 
         outside,
         resume: 0,
         typed: None,
+        conversation: None,
     }
 }
 
@@ -2331,6 +2412,9 @@ fn push(app: &AppHandle, agent_id: &str, mut inbound: Inbound) {
     if inbound.id.is_empty() {
         inbound.id = store::new_id();
     }
+    if inbound.room.is_none() && inbound.conversation.is_none() {
+        inbound.conversation = Some(conversation_for(agent_id, &inbound));
+    }
     let admitted = {
         let mut runtimes = RUNTIMES.lock().unwrap_or_else(|e| e.into_inner());
         let runtime = runtimes.entry(agent_id.to_string()).or_default();
@@ -2345,6 +2429,32 @@ fn push(app: &AppHandle, agent_id: &str, mut inbound: Inbound) {
         Ok(false) => {}
         // Being deleted: whoever asked hears it won't be done.
         Err(refused) => tell_dropped(app, agent_id, vec![*refused], Dropped::Deleting),
+    }
+}
+
+/// The conversation a message that didn't say goes to: an answer to the
+/// conversation that asked for it, anything else to the one the agent's
+/// engine has loaded (where it was working).
+fn conversation_for(agent_id: &str, inbound: &Inbound) -> String {
+    if let (From::Agent { sender, .. }, true) = (&inbound.from, inbound.reply) {
+        if let Some(asked) = super::conversations::asked_in(agent_id, &sender.id) {
+            return asked;
+        }
+    }
+    store::get(agent_id)
+        .map(|a| super::conversations::loaded(&a).to_string())
+        .unwrap_or_else(|_| super::conversations::FIRST.to_string())
+}
+
+/// Load conversation `to`'s session for the turn about to start. Whatever
+/// the next turn was to be told first belonged to the one left, so it
+/// waits there (`interrupted_in` is per place).
+fn load_conversation(app: &AppHandle, agent_id: &str, to: &str) {
+    let mut swapped = false;
+    let _ = store::update(agent_id, |a| swapped = super::conversations::swap(a, to));
+    if swapped {
+        tracing::info!(agent = %agent_id, conversation = %to, "[Agents] loaded a conversation for its turn");
+        let _ = app.emit(EVENT_REGISTRY, ());
     }
 }
 
@@ -2792,7 +2902,7 @@ fn take_interrupt(agent_id: &str) -> bool {
         Some(_) => prompts::interrupted_in_room(was, activity.as_deref()),
         None => prompts::interrupted(was, activity.as_deref()),
     });
-    runtime.interrupted_in = runtime.room.as_ref().map(|r| r.room_id.clone());
+    runtime.interrupted_in = place_of(runtime.room.as_ref(), runtime.conversation.as_deref());
     true
 }
 
@@ -3008,6 +3118,8 @@ struct Batch {
     user_said: String,
     /// Asked in a room: the prompt is the room's, written as the turn starts.
     room: Option<RoomBatch>,
+    /// The conversation it answers in, when its messages said.
+    conversation: Option<String>,
 }
 
 /// Take everything queued as the next turn, or `None` when the queue was
@@ -3040,6 +3152,7 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     let batch: Vec<Inbound> = runtime.queue.drain(..take).collect();
     save_inbox(agent_id, &runtime.queue);
     runtime.batch_ids = batch.iter().map(|m| m.id.clone()).collect();
+    runtime.conversation = batch.first().and_then(|m| m.conversation.clone());
     runtime.room = batch.first().and_then(|m| m.room.clone()).map(|mut room| {
         // The deepest hop the turn answers, like an agent's request.
         room.hop = batch
@@ -3195,7 +3308,7 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     runtime.prompt = Some(prompt.clone());
     // What an interrupted turn left is told only to a turn in the same place;
     // otherwise it waits for one (or goes when the agent is idle again).
-    let place = runtime.room.as_ref().map(|r| r.room_id.clone());
+    let place = place_of(runtime.room.as_ref(), runtime.conversation.as_deref());
     let preamble = if runtime.interrupted.is_some() && runtime.interrupted_in == place {
         runtime.interrupted_in = None;
         runtime.interrupted.take().unwrap_or_default()
@@ -3203,13 +3316,14 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
         String::new()
     };
     // The labels-only note belongs to the agent's own chat, where it was earned.
-    let nudge = if place.is_none() {
+    let nudge = if runtime.room.is_none() {
         // And the Chief's notes about a level the user plainly wants changed (`level_hint`).
         runtime.nudge.take().unwrap_or_default() + &super::level_hint::take(agent_id)
     } else {
         String::new()
     };
     let room = runtime.room.clone();
+    let conversation = runtime.conversation.clone();
     // Disk low: every turn opens with it, wherever it answers (`disk`).
     let disk = super::disk::turn_note();
     let prompt = format!("{nudge}{disk}{preamble}{prompt}");
@@ -3219,6 +3333,7 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
         resume,
         request,
         user_said,
+        conversation,
         room: room.map(|room| RoomBatch {
             room,
             preamble,
@@ -3227,10 +3342,21 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     })
 }
 
-/// How many of the queue's first messages were said in the same place (the
-/// agent's own chat, or one room): what one turn takes.
+/// Where something was said, as one key: a room, one of the agent's own
+/// conversations other than the first, or `None` for the first (and an
+/// inbox from before conversations, which is where it was said).
+fn place_of(room: Option<&super::rooms::RoomRef>, conversation: Option<&str>) -> Option<String> {
+    match (room, conversation) {
+        (Some(r), _) => Some(r.room_id.clone()),
+        (None, Some(c)) if c != super::conversations::FIRST => Some(format!("conversation:{c}")),
+        _ => None,
+    }
+}
+
+/// How many of the queue's first messages were said in the same place (one
+/// of the agent's own conversations, or one room): what one turn takes.
 fn same_place_prefix(queue: &VecDeque<Inbound>) -> usize {
-    let place = |m: &Inbound| m.room.as_ref().map(|r| r.room_id.clone());
+    let place = |m: &Inbound| place_of(m.room.as_ref(), m.conversation.as_deref());
     let Some(first) = queue.front().map(place) else {
         return 0;
     };
@@ -3693,7 +3819,13 @@ async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mut bool) {
             request,
             user_said,
             room,
+            conversation,
         } = batch;
+        // Its conversation's session, loaded before anything reads the
+        // agent's session for this turn (`conversations::swap`).
+        if let Some(to) = conversation.as_deref() {
+            load_conversation(&app, &agent_id, to);
+        }
         let room_ref = room.as_ref().map(|r| r.room.clone());
         let prompt = match room {
             // A room deleted while this waited: nothing to answer, nowhere to say it.
@@ -4325,7 +4457,7 @@ const RECAP_SCAN: usize = 400;
 
 /// A prompt for a fresh session, prefixed with the visible conversation.
 fn with_recap(agent_id: &str, prompt: &str) -> String {
-    let Ok(log) = store::messages(agent_id, RECAP_SCAN) else {
+    let Ok(log) = recap_log(agent_id) else {
         return prompt.to_string();
     };
     // What this turn is sent, and what waits behind it, are already on their
@@ -4343,7 +4475,7 @@ pub(super) fn with_recap_as(
     since: Option<i64>,
     prompt: &str,
 ) -> String {
-    let Ok(mut log) = store::messages(agent_id, RECAP_SCAN) else {
+    let Ok(mut log) = recap_log(agent_id) else {
         return prompt.to_string();
     };
     if let Some(since) = since {
@@ -4351,6 +4483,15 @@ pub(super) fn with_recap_as(
     }
     let lines = recap_lines_except(&log, &on_the_way(agent_id));
     recap_prompt_with(header, &lines, &recap_open(&log), prompt)
+}
+
+/// What a recap is read from: the newest of the conversation the agent's
+/// engine has loaded (the turn's), never what was said in its others.
+fn recap_log(agent_id: &str) -> Result<Vec<store::AgentMessage>, CommandError> {
+    let conversation = store::get(agent_id)
+        .map(|a| super::conversations::loaded(&a).to_string())
+        .unwrap_or_else(|_| super::conversations::FIRST.to_string());
+    store::conversation_page(agent_id, &conversation, RECAP_SCAN, None, None)
 }
 
 const LOST_HEADER: &str = "[Your previous working session was lost. This is the recent conversation from your own chat, newest last: what \"You\" said, you said, and you know it. Pick up from here without mentioning the loss unless asked; never ask the user to repeat or paste anything in it. search_my_chat finds anything older.]";
@@ -6389,6 +6530,7 @@ mod tests {
             outside: false,
             resume: 0,
             typed: None,
+            conversation: None,
         }
     }
 
@@ -6456,6 +6598,7 @@ mod tests {
                 outside: false,
                 resume: 0,
                 typed: None,
+                conversation: None,
             }),
             Ok(false)
         ));
@@ -6558,6 +6701,7 @@ mod tests {
                 outside: false,
                 resume: 0,
                 typed: None,
+                conversation: None,
             },
             Inbound {
                 id: String::new(),
@@ -6576,6 +6720,7 @@ mod tests {
                 outside: false,
                 resume: 0,
                 typed: None,
+                conversation: None,
             },
         ];
         let prompt = compose(&batch, &HashMap::new());
@@ -6832,6 +6977,7 @@ mod tests {
                 outside: false,
                 resume: 0,
                 typed: None,
+                conversation: None,
             },
             Inbound {
                 id: String::new(),
@@ -6850,6 +6996,7 @@ mod tests {
                 outside: false,
                 resume: 0,
                 typed: None,
+                conversation: None,
             },
         ]
         .into();
@@ -7000,6 +7147,7 @@ mod tests {
                     outside: false,
                     resume: 0,
                     typed: None,
+                    conversation: None,
                 });
             let err = begin_fresh_as(&a.id, super::super::tidy::LINE, true)
                 .unwrap_err()
@@ -7059,6 +7207,7 @@ mod tests {
                     outside: false,
                     resume: 0,
                     typed: None,
+                    conversation: None,
                 });
             }
             assert!(begin_fresh(&a.id).is_err());
@@ -7351,6 +7500,7 @@ mod tests {
             outside: false,
             resume: 0,
             typed: Some(m.text.clone()),
+            conversation: None,
         };
         {
             let mut rt = RUNTIMES.lock().unwrap();
@@ -7437,3 +7587,7 @@ mod app_note_runner_tests;
 #[cfg(test)]
 #[path = "breaks_runner_tests.rs"]
 mod breaks_runner_tests;
+
+#[cfg(test)]
+#[path = "conversations_runner_tests.rs"]
+mod conversations_runner_tests;

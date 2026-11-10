@@ -290,6 +290,7 @@ pub async fn begin(
     agent_id: &str,
     cols: u16,
     rows: u16,
+    conversation: Option<&str>,
 ) -> Result<View, CommandError> {
     if let Some(view) = view(agent_id) {
         return Ok(view);
@@ -307,6 +308,13 @@ pub async fn begin(
             }
         }
         return Err(refused(&name, claim));
+    }
+    // The conversation on screen is the one driven: its session is loaded
+    // while the claim keeps every turn out (`conversations::swap`).
+    if let Some(c) = conversation.filter(|c| super::conversations::exists(agent_id, c)) {
+        let _ = store::update(agent_id, |a| {
+            super::conversations::swap(a, c);
+        });
     }
     // Read under the claim: an engine or project change is refused from
     // here on (`runner::update_settings`), so this is what it stays.

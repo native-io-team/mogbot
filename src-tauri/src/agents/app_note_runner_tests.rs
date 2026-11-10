@@ -40,6 +40,7 @@ fn plain(text: &str, from: From) -> Inbound {
         outside: false,
         resume: 0,
         typed: None,
+        conversation: None,
     }
 }
 

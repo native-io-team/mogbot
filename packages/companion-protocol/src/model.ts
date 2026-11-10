@@ -280,6 +280,11 @@ export interface Agent {
   context?: ContextFill;
   /** You're driving its session in a terminal on the Mac; omitted otherwise. */
   takeover?: AgentTakeover;
+  /**
+   * The conversation its session (and a turn in progress) belongs to
+   * (`conversations.rs`); absent, the first. Omitted while it only ever used the first.
+   */
+  conversations?: { loaded?: string };
 }
 
 /**
@@ -1465,6 +1470,11 @@ export interface AgentMessage {
    * shows the note's text, which names where. Older Macs never send it.
    */
   fix?: 'user_chrome';
+  /**
+   * Which of the agent's conversations it was said in (`conversationOf`).
+   * Absent on lines from before there were several: the first one's.
+   */
+  conversation?: string;
   /**
    * Links in the reply to a server on this Mac (`http://localhost:3400`),
    * taken out of the text by the Mac (`agents/local_links.rs`). One the Mac

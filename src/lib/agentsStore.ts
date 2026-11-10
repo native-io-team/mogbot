@@ -34,6 +34,17 @@ import {
 import { asCommandError, formatCommandError } from './errors';
 import { logger } from './logger';
 import { getRoomMessages, getRooms, roomIdOf, roomKey, ROOMS_EVENT, type Room } from './agentRooms';
+import {
+  FIRST_CONVERSATION,
+  conversationKey,
+  conversationOfKey,
+  getConversations,
+  lineConversation,
+  newConversation as createConversation,
+  renameConversation as renameOnMac,
+  selectConversation,
+  type Conversations,
+} from './agentConversations';
 
 export interface AgentsState {
   agents: Agent[];
@@ -57,6 +68,13 @@ export interface AgentsState {
   rooms: Room[];
   /** The rooms have been read once (an open room that isn't there is gone). */
   roomsLoaded: boolean;
+  /**
+   * Each agent's conversations, once read (`agentConversations`). A
+   * conversation's own chat is `messages[conversationKey(agent, id)]`.
+   */
+  conversations: Record<string, Conversations>;
+  /** The conversation on screen in each agent's chat on this desk. */
+  viewing: Record<string, string>;
 }
 
 let state: AgentsState = {
@@ -73,6 +91,8 @@ let state: AgentsState = {
   drafts: {},
   rooms: [],
   roomsLoaded: false,
+  conversations: {},
+  viewing: {},
 };
 const listeners = new Set<() => void>();
 let unlistens: UnlistenFn[] = [];
@@ -352,9 +372,17 @@ function loadNewest(
   return request;
 }
 
-/** (Re)load a chat's newest page. */
-export function loadMessages(agentId: string): Promise<void> {
-  return loadNewest(agentId, () => getAgentMessages(agentId, MESSAGE_PAGE), { agentId });
+/** (Re)load a chat's newest page: an agent's whole log, or one conversation's (its key). */
+export function loadMessages(key: string): Promise<void> {
+  const conv = conversationOfKey(key);
+  if (conv) {
+    return loadNewest(
+      key,
+      () => getAgentMessages(conv.agentId, MESSAGE_PAGE, { conversation: conv.conversation }),
+      { ...conv }
+    );
+  }
+  return loadNewest(key, () => getAgentMessages(key, MESSAGE_PAGE), { agentId: key });
 }
 
 /** One request per chat at a time: a scroll and a search jump can both ask. */
@@ -372,7 +400,12 @@ export function loadOlderMessages(agentId: string, through?: string): Promise<vo
   if (!loaded || !state.older[agentId] || (through && loaded.some((m) => m.id === through))) {
     return Promise.resolve();
   }
-  const request = getAgentMessages(agentId, MESSAGE_PAGE, { before: loaded[0]?.id, through })
+  const conv = conversationOfKey(agentId);
+  const request = getAgentMessages(conv?.agentId ?? agentId, MESSAGE_PAGE, {
+    before: loaded[0]?.id,
+    through,
+    conversation: conv?.conversation,
+  })
     .then((page) => {
       const current = state.messages[agentId] ?? [];
       const have = new Set(current.map((m) => m.id));
@@ -402,8 +435,21 @@ function withoutDraft(agentId: string, id?: string): AgentsState['drafts'] {
 export function upsertMessage(message: AgentMessage) {
   noteFinished(message.id);
   const drafts = message.agentId ? withoutDraft(message.agentId, message.id) : state.drafts;
-  // A member's line said in a room is in both its own chat and the room's thread.
-  const keys = [message.agentId, message.room ? roomKey(message.room) : ''].filter(Boolean);
+  // A member's line said in a room is in both its own chat and the room's
+  // thread; a line in the agent's own chat, in its conversation's too.
+  const keys = [
+    message.agentId,
+    message.room ? roomKey(message.room) : '',
+    message.agentId && !message.room
+      ? conversationKey(
+          message.agentId,
+          lineConversation(
+            message,
+            state.agents.find((a) => a.id === message.agentId)
+          )
+        )
+      : '',
+  ].filter(Boolean);
   let messages = state.messages;
   for (const key of keys) {
     // A page is being read: this line may be newer than what it returns.
@@ -645,6 +691,13 @@ function start() {
         : resync('draft')
     ),
     listen(ROOMS_EVENT, () => scheduleRoomsRefresh()),
+    listen<unknown>(AGENT_EVENTS.conversations, (e) =>
+      safely('conversations', () => {
+        if (typeof e.payload === 'string' && state.conversations[e.payload]) {
+          void refreshConversations(e.payload);
+        }
+      })
+    ),
   ]).then((handles) => {
     if (mine !== generation) {
       handles.forEach((h) => h());
@@ -753,6 +806,8 @@ export function __resetAgentsStore() {
     drafts: {},
     rooms: [],
     roomsLoaded: false,
+    conversations: {},
+    viewing: {},
   };
   if (resyncTimer !== null) clearTimeout(resyncTimer);
   resyncTimer = null;
@@ -760,4 +815,72 @@ export function __resetAgentsStore() {
   loadingNewest.clear();
   arriving.clear();
   finished.clear();
+}
+
+/* ---------------------------------------------------- conversations */
+
+function setConversations(list: Conversations) {
+  if (sameJson(state.conversations[list.agentId], list)) return;
+  emit({ ...state, conversations: { ...state.conversations, [list.agentId]: list } });
+}
+
+/** Read an agent's conversations again. */
+export async function refreshConversations(agentId: string): Promise<Conversations | null> {
+  try {
+    const list = await getConversations(agentId);
+    if (!list || !Array.isArray(list.items)) return null;
+    setConversations(list);
+    return list;
+  } catch (error) {
+    logger.error('[Agents] conversations failed', { agentId, error: String(error) });
+    return null;
+  }
+}
+
+/**
+ * The conversation an agent's chat opens on: the one the user was last in
+ * (the Mac's `current`), or the first when the Mac can't say.
+ */
+export async function ensureViewing(agentId: string): Promise<string> {
+  const known = state.viewing[agentId];
+  if (known) return known;
+  const list = await refreshConversations(agentId);
+  const id = state.viewing[agentId] ?? list?.current ?? FIRST_CONVERSATION;
+  if (state.viewing[agentId] !== id) {
+    emit({ ...state, viewing: { ...state.viewing, [agentId]: id } });
+  }
+  return id;
+}
+
+/** Show one of an agent's conversations, and tell the Mac the user is in it. */
+export async function openConversation(agentId: string, conversation: string): Promise<void> {
+  if (state.viewing[agentId] !== conversation) {
+    emit({ ...state, viewing: { ...state.viewing, [agentId]: conversation } });
+  }
+  const key = conversationKey(agentId, conversation);
+  if (!state.messages[key]) void loadMessages(key);
+  try {
+    setConversations(await selectConversation(agentId, conversation));
+  } catch (error) {
+    logger.error('[Agents] couldn’t open the conversation', { agentId, error: String(error) });
+  }
+}
+
+/** "New conversation": opens it (or the empty one already open). */
+export async function startConversation(agentId: string): Promise<string> {
+  const list = await createConversation(agentId);
+  setConversations(list);
+  emit({ ...state, viewing: { ...state.viewing, [agentId]: list.current } });
+  const key = conversationKey(agentId, list.current);
+  if (!state.messages[key]) void loadMessages(key);
+  return list.current;
+}
+
+/** Name a conversation; empty gives it back to its first message. */
+export async function renameConversation(
+  agentId: string,
+  conversation: string,
+  title: string
+): Promise<void> {
+  setConversations(await renameOnMac(agentId, conversation, title));
 }

@@ -8,6 +8,7 @@ import type { Scenario } from '../types';
 import { workspaceCommands, WORKSPACE_PROJECT } from './workspace';
 import { remoteStatus } from './remote';
 import { EMPTY_EXPORT_PREVIEW } from './base';
+import { onlyFirst, several } from '../fixtures/conversations';
 
 export const MIN = 60_000;
 const DEMO_HOME = '/harness/agents-demo';
@@ -1411,6 +1412,52 @@ const ACME_FRESH = {
 
 const acmeWith = (over: Record<string, unknown>) =>
   overview(TEAM.map((a) => (a.id === 'acme' ? { ...a, ...over } : a)));
+
+/** Acme Site's launch email conversation (`agents/conversations.rs`). */
+const LAUNCH_CHAT = [
+  msg('user', 'Plan the November launch email: who it goes to, three sections, one ask.', 9, {
+    agentId: 'acme',
+    conversation: 'c-launch',
+  }),
+  msg(
+    'agent',
+    'Here’s the outline, three sections:\n\n1. What’s new (the pricing page and dark mode)\n2. One customer story\n3. The ask: book a demo\n\nIt goes to everyone who signed up since June.',
+    4,
+    { agentId: 'acme', conversation: 'c-launch' }
+  ),
+];
+
+/** One agent, several conversations: each chat its own, the invoices one waiting on you. */
+const CONVERSATIONS = {
+  agents_overview: acmeWith({ status: status('idle'), conversations: { loaded: 'c-launch' } }),
+  agents_messages: (args: Record<string, unknown>) => {
+    if (args.agentId !== 'acme') return messagesFor(args);
+    if (args.conversation === 'c-launch') return LAUNCH_CHAT;
+    if (args.conversation === 'first' || args.conversation === undefined) return ACME_CHAT;
+    return [];
+  },
+  agents_conversations: (args: Record<string, unknown>) =>
+    args.agentId === 'acme' ? several('acme', now) : onlyFirst(args),
+  agents_conversation_select: (args: Record<string, unknown>) =>
+    several('acme', now, String(args.conversationId)),
+  agents_conversation_new: () => ({
+    ...several('acme', now, 'c-new'),
+    items: [
+      {
+        id: 'c-new',
+        title: '',
+        named: false,
+        createdAt: now,
+        lastActivityAt: now,
+        current: true,
+        loaded: false,
+        waiting: 0,
+      },
+      ...several('acme', now, 'c-new').items,
+    ],
+  }),
+  agents_conversation_rename: () => several('acme', now),
+};
 
 const financeWith = (over: Record<string, unknown>) =>
   overview(TEAM.map((a) => (a.id === 'finance' ? { ...a, ...over } : a)));
@@ -3326,7 +3373,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-fresh-suggested',
     title: 'Agents — a nearly full conversation suggests starting fresh',
     looksRightWhen:
-      'Acme Site is idle. Under its last reply, one quiet centred line: “This conversation is getting long — Acme Site may lose track of early details. Start fresh (memory is kept)”, the last part an underlined, brighter link. Nothing else changed in the chat.',
+      'Acme Site is idle. Under its last reply, one quiet centred line: “This conversation is getting long — Acme Site may lose track of early details. Start a new conversation (memory is kept)”, the last part an underlined, brighter link. Nothing else changed in the chat.',
     openSelector: AGENTS_TAB,
     requires: '.agent-fresh-hint',
     steps: [{ click: '[data-agent-id="acme"]' }],
@@ -3337,9 +3384,9 @@ export const agentsScenarios: Scenario[] = [
   },
   {
     id: 'agents-fresh-menu',
-    title: 'Agents — Start fresh in the agent’s … menu',
+    title: 'Agents — New conversation in the agent’s … menu',
     looksRightWhen:
-      'The header’s … menu is open. After “Edit agent…” comes “Start fresh (87% full)…” with a reload icon, then the divider, Hide from sidebar and Delete…',
+      'The header’s … menu is open. After “Edit agent…” comes “New conversation (this one 87% full)” with a plus icon, then the divider, Hide from sidebar and Delete…',
     openSelector: AGENTS_TAB,
     requires: '.ss-dropdown__item',
     steps: [
@@ -3352,17 +3399,61 @@ export const agentsScenarios: Scenario[] = [
     },
   },
   {
-    id: 'agents-fresh-confirm',
-    title: 'Agents — confirming a fresh start',
+    id: 'agents-conversations',
+    title: 'Agents — several conversations with one agent, the switcher open',
     looksRightWhen:
-      'A small dialog: “Start Acme Site fresh?”, then that its next message starts a new conversation, its instructions and memory carry over, and anything it only knew from this conversation doesn’t. The hint says the chat stays. Cancel and a primary (not red) “Start fresh”.',
+      'Acme Site’s chat. Beside its name in the header, a quiet button with a speech-bubble icon, “Plan the November launch email” (cut with … if it must) and an amber dot. Open under it, a menu: a search field, “New conversation” with a plus, a divider, the small heading “Conversations · memory is shared by all of them”, then four rows newest first: the launch email (a check, “4m ago”), “Chase the two overdue invoices” (“Needs your OK” and an amber dot), “Set up the weekly metrics report” (“3d ago”), “Draft the job post for a designer” (“6d ago”); then a divider and “Rename this conversation…” with a pencil. The chat shows only the launch conversation’s lines.',
     openSelector: AGENTS_TAB,
-    requires: '.modal-frame-content',
+    requires: '.agent-conversations__menu',
+    steps: [{ click: '[data-agent-id="acme"]' }, { click: '.agent-conversations__trigger' }],
+    commands: CONVERSATIONS,
+  },
+  {
+    id: 'agents-conversations-header',
+    title: 'Agents — the conversation on screen, named in the header',
+    looksRightWhen:
+      'Acme Site’s chat, its header: the badge and name, then a quiet “Plan the November launch email” button with a speech-bubble icon and an amber dot (another conversation waits on you), then the usual usage, routines and model controls on the right. The chat holds only the launch email conversation: your ask and its outline reply. Nothing from the invoices or the first conversation.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-conversations__title',
+    steps: [{ click: '[data-agent-id="acme"]' }],
+    commands: CONVERSATIONS,
+  },
+  {
+    id: 'agents-conversations-search',
+    title: 'Agents — searching an agent’s conversations',
+    looksRightWhen:
+      'The conversation menu is open with “invoice” typed in its search field. One row is left: “Chase the two overdue invoices”, “Needs your OK”, an amber dot. New conversation and Rename stay.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-conversations__menu',
     steps: [
       { click: '[data-agent-id="acme"]' },
-      { click: '.agent-chat__menu [aria-label^="Actions for"]' },
-      { click: '[role="menuitem"]', text: 'Start fresh' },
+      { click: '.agent-conversations__trigger' },
+      { fill: '.ss-dropdown__search-input', value: 'invoice' },
     ],
+    commands: CONVERSATIONS,
+  },
+  {
+    id: 'agents-conversations-rename',
+    title: 'Agents — renaming a conversation',
+    looksRightWhen:
+      'A small dialog “Rename conversation”: a text field holding “Plan the November launch email” (selected), under it “Leave it empty to name it by its first message again.”, then Cancel and Rename on the right.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-conversations__rename-form',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-conversations__trigger' },
+      { click: '[role="menuitem"]', text: 'Rename this conversation' },
+    ],
+    commands: CONVERSATIONS,
+  },
+  {
+    id: 'agents-conversations-one',
+    title: 'Agents — an agent with only its first conversation',
+    looksRightWhen:
+      'Acme Site’s chat as ever. Beside its name, only a small speech-bubble icon with a chevron (no title: there is nothing to tell apart yet). Everything else in the header and chat unchanged.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-conversations__trigger',
+    steps: [{ click: '[data-agent-id="acme"]' }],
     commands: {
       agents_overview: acmeWith(ACME_FULL),
       agents_messages: messagesFor,

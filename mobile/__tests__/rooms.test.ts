@@ -90,7 +90,8 @@ describe('a room’s lines in the store', () => {
     const [yours, reply] = thread;
     expect(chatKeysOf(yours)).toEqual([roomKey(room.id)]);
     expect(chatKeysOf(reply)).toEqual([roomKey(room.id), 'a1']);
-    expect(chatKeysOf(msg('x', 1))).toEqual(['a']);
+    // A line in an agent's own chat is in its conversation's too (lib/conversations).
+    expect(chatKeysOf(msg('x', 1))).toEqual(['a', 'a#conversation:first']);
     let s = emptySync();
     s = applyEvent(s, { type: 'agents.message', message: yours });
     s = applyEvent(s, { type: 'agents.message', message: reply });

@@ -4,8 +4,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
 use crate::agents::{
-    self, apps, attachments, engine, files, import, mcp, memory, notify, paste, project, prompts,
-    runner, schedule, search, secrets, store, takeover, templates, usage,
+    self, apps, attachments, conversations, engine, files, import, mcp, memory, notify, paste,
+    project, prompts, runner, schedule, search, secrets, store, takeover, templates, usage,
 };
 use crate::errors::CommandError;
 use engine::Engine;
@@ -195,15 +195,17 @@ pub async fn agents_messages(
     before: Option<String>,
     through: Option<String>,
     lazy_work: Option<bool>,
+    conversation: Option<String>,
 ) -> Result<Vec<store::AgentMessage>, CommandError> {
     const MAX: usize = 5000;
     blocking(move || {
-        let mut page = store::messages_page(
-            &agent_id,
-            limit.unwrap_or(400).min(MAX),
-            before.as_deref(),
-            through.as_deref().map(|id| (id, MAX)),
-        )?;
+        let limit = limit.unwrap_or(400).min(MAX);
+        let through = through.as_deref().map(|id| (id, MAX));
+        // One conversation's lines; without one (an older client), all of them.
+        let mut page = match conversation.as_deref() {
+            Some(c) => store::conversation_page(&agent_id, c, limit, before.as_deref(), through)?,
+            None => store::messages_page(&agent_id, limit, before.as_deref(), through)?,
+        };
         // What each turn did, read after the log's lock is let go.
         crate::agents::work::apply(&agent_id, &mut page);
         // A login card's sign-in under way, as it is now.
@@ -242,6 +244,7 @@ pub async fn agents_turn_work(
 
 #[tauri::command]
 #[tracing::instrument(skip(app, text, attachments))]
+#[allow(clippy::too_many_arguments)]
 pub async fn agents_send(
     app: AppHandle,
     agent_id: String,
@@ -250,8 +253,9 @@ pub async fn agents_send(
     mentions: Option<Vec<String>>,
     client_id: Option<String>,
     revises: Option<String>,
+    conversation: Option<String>,
 ) -> Result<store::AgentMessage, CommandError> {
-    send_as(
+    send_in(
         app,
         agent_id,
         text,
@@ -260,6 +264,7 @@ pub async fn agents_send(
         client_id,
         revises,
         true,
+        conversation,
     )
     .await
 }
@@ -278,6 +283,35 @@ pub(crate) async fn send_as(
     client_id: Option<String>,
     revises: Option<String>,
     typed: bool,
+) -> Result<store::AgentMessage, CommandError> {
+    send_in(
+        app,
+        agent_id,
+        text,
+        attachments,
+        mentions,
+        client_id,
+        revises,
+        typed,
+        None,
+    )
+    .await
+}
+
+/// [`send_as`] in one of the agent's conversations: the one on screen.
+/// `None` (an older phone, a button that writes for the user) is the one
+/// the user is in (`conversations::current`).
+#[allow(clippy::too_many_arguments)]
+pub(crate) async fn send_in(
+    app: AppHandle,
+    agent_id: String,
+    text: String,
+    attachments: Option<Vec<attachments::OutgoingAttachment>>,
+    mentions: Option<Vec<String>>,
+    client_id: Option<String>,
+    revises: Option<String>,
+    typed: bool,
+    conversation: Option<String>,
 ) -> Result<store::AgentMessage, CommandError> {
     let text = text.trim().to_string();
     let said = text.clone();
@@ -301,7 +335,23 @@ pub(crate) async fn send_as(
     }
     let says_yes = agents::typed_answer::approves(&text);
     let home = store::agent_home(&agent_id)?;
+    let conversation = {
+        let of = agent_id.clone();
+        tokio::task::spawn_blocking(move || match conversation {
+            Some(c) if conversations::exists(&of, &c) => c,
+            Some(_) => String::new(),
+            None => conversations::current(&of),
+        })
+        .await
+        .map_err(agents::err_other)?
+    };
+    if conversation.is_empty() {
+        return Err(CommandError::expected(
+            "That conversation isn't there any more.",
+        ));
+    }
     let mut message = runner::new_message(&agent_id, store::MessageKind::User, text.clone());
+    message.conversation = Some(conversation.clone());
     // "Ask for changes": pinned to the result as the log has it, never as
     // the client named it, and refused if it isn't in this conversation.
     if let Some(id) = revises.filter(|r| !r.trim().is_empty()) {
@@ -373,13 +423,18 @@ pub(crate) async fn send_as(
     // card is allowed as their answer (`typed_answer`). Only this, the user's
     // own send, gets here.
     if typed_yes {
-        let open = store::pending_approvals(&agent_id).unwrap_or_default();
+        // Only a card in this conversation: a yes typed in one is never an
+        // answer to a request made in another.
+        let open = cards_in(&agent_id, &conversation);
         // No card to answer: the yes may be to a plan the agent's last reply
         // listed, which `ask_plan` then grants without a card (`plan_grant`).
         if open.is_empty() {
             let log_of = agent_id.clone();
-            if let Ok(Ok(log)) =
-                tokio::task::spawn_blocking(move || store::messages(&log_of, 40)).await
+            let in_conversation = conversation.clone();
+            if let Ok(Ok(log)) = tokio::task::spawn_blocking(move || {
+                store::conversation_page(&log_of, &in_conversation, 40, None, None)
+            })
+            .await
             {
                 if let Some(reply) = agents::plan_grant::last_reply(&log) {
                     agents::plan_grant::note_chat_yes(&agent_id, &reply, store::now_ms());
@@ -411,9 +466,26 @@ pub(crate) async fn send_as(
         agents::level_hint::on_user_message(&recipient, &said, store::now_ms());
     }
     let typed = typed.then_some(said);
-    runner::enqueue_user(&app, &agent_id, &message.id, prompt, typed);
+    runner::enqueue_user_in(
+        &app,
+        &agent_id,
+        &message.id,
+        prompt,
+        typed,
+        Some(conversation),
+    );
     agents::tray::mark_used(&app);
     Ok(message)
+}
+
+/// The cards waiting on the user in one of the agent's conversations.
+fn cards_in(agent_id: &str, conversation: &str) -> Vec<store::Approval> {
+    store::pending_card_messages(agent_id)
+        .unwrap_or_default()
+        .into_iter()
+        .filter(|m| conversations::of(m) == conversation)
+        .filter_map(|m| m.approval)
+        .collect()
 }
 
 /// How far back a resent message is looked for: far more than a phone can
@@ -1111,6 +1183,7 @@ pub async fn agents_take_over(
     cols: u16,
     rows: u16,
     stop_first: Option<bool>,
+    conversation: Option<String>,
 ) -> Result<takeover::View, CommandError> {
     if stop_first.unwrap_or(false) && takeover::view(&agent_id).is_none() {
         runner::stop(&app, &agent_id);
@@ -1121,7 +1194,7 @@ pub async fn agents_take_over(
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;
         }
     }
-    takeover::begin(&app, &agent_id, cols, rows).await
+    takeover::begin(&app, &agent_id, cols, rows, conversation.as_deref()).await
 }
 
 /// Give the session back: the terminal's process ends, the agent resumes,
@@ -1146,10 +1219,68 @@ pub async fn agents_start_fresh(
     app: AppHandle,
     agent_id: String,
 ) -> Result<store::Agent, CommandError> {
-    let app2 = app.clone();
-    let agent = blocking(move || runner::start_fresh(&app2, &agent_id)).await?;
+    let id = agent_id.clone();
+    let agent = blocking(move || {
+        conversations::create(&id)?;
+        store::get(&id)
+    })
+    .await?;
+    let _ = app.emit(runner::EVENT_CONVERSATIONS, &agent_id);
     emit_registry(&app);
     Ok(agent)
+}
+
+/// The agent's conversations, newest activity first, and which one the
+/// user is in.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_conversations(
+    agent_id: String,
+) -> Result<conversations::Conversations, CommandError> {
+    blocking(move || conversations::list(&agent_id)).await
+}
+
+/// "New conversation": its first message starts a new session with the
+/// agent's instructions and memory. Never waits on a turn in another one.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_conversation_new(
+    app: AppHandle,
+    agent_id: String,
+) -> Result<conversations::Conversations, CommandError> {
+    let id = agent_id.clone();
+    let list = blocking(move || conversations::create(&id)).await?;
+    let _ = app.emit(runner::EVENT_CONVERSATIONS, &agent_id);
+    Ok(list)
+}
+
+/// The user opened one of the agent's conversations.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_conversation_select(
+    app: AppHandle,
+    agent_id: String,
+    conversation_id: String,
+) -> Result<conversations::Conversations, CommandError> {
+    let id = agent_id.clone();
+    let list = blocking(move || conversations::select(&id, &conversation_id)).await?;
+    let _ = app.emit(runner::EVENT_CONVERSATIONS, &agent_id);
+    Ok(list)
+}
+
+/// Name a conversation; an empty title gives it back to its first message.
+#[tauri::command]
+#[tracing::instrument(skip(app, title))]
+pub async fn agents_conversation_rename(
+    app: AppHandle,
+    agent_id: String,
+    conversation_id: String,
+    title: String,
+) -> Result<conversations::Conversations, CommandError> {
+    let id = agent_id.clone();
+    let list = blocking(move || conversations::rename(&id, &conversation_id, &title)).await?;
+    let _ = app.emit(runner::EVENT_CONVERSATIONS, &agent_id);
+    Ok(list)
 }
 
 /// "Stop this step": end the command the agent is running and let its turn

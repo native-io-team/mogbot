@@ -33,6 +33,7 @@ import {
   InfoIcon,
   MoreHorizontalIcon,
   PaperclipIcon,
+  PencilIcon,
 } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { Dropdown } from '../primitives/Dropdown';
@@ -72,6 +73,8 @@ import {
   type DraftAttachment,
 } from './useComposerAttachments';
 import { AgentSwitcher } from './AgentSwitcher';
+import { ConversationSwitcher } from './ConversationSwitcher';
+import { conversationKey, loadedConversation } from '../../lib/agentConversations';
 import { useQuoteSelection } from './useQuoteSelection';
 import { useCommands } from '../../commands/useCommands';
 import {
@@ -136,7 +139,9 @@ import {
 import { AgentStarters } from './AgentStarters';
 import {
   agentIn,
+  ensureViewing,
   getAgentsSnapshot,
+  loadMessages,
   loadOlderMessages,
   markSent,
   refreshAgents,
@@ -434,8 +439,20 @@ export const AgentChat = memo(function AgentChat({
 }: AgentChatProps) {
   // Everything in this conversation takes on the agent's colour.
   const accentScope = useAccentScope(agent.color);
+  // The conversation on screen (`agentConversations`): its own lines, kept
+  // under its own key. Unknown for a moment on first open, while the Mac
+  // says which one the user was last in.
+  const viewing = useAgentsSelector((s) => s.viewing[agent.id]);
+  useEffect(() => {
+    void ensureViewing(agent.id);
+  }, [agent.id]);
+  const chatKey = viewing ? conversationKey(agent.id, viewing) : null;
+  const chatLoaded = useAgentsSelector((s) => (chatKey ? Boolean(s.messages[chatKey]) : true));
+  useEffect(() => {
+    if (chatKey && !chatLoaded) void loadMessages(chatKey);
+  }, [chatKey, chatLoaded]);
   // This chat's slices only: another agent's reply streaming doesn't touch it.
-  const messages = useAgentsSelector((s) => s.messages[agent.id]);
+  const messages = useAgentsSelector((s) => (chatKey ? s.messages[chatKey] : undefined));
   const importChoice = useAgentsSelector((s) => s.importChoice);
   const draftHead = useAgentsSelector((s) => draftHeadOf(s, agent.id), sameDraftHead);
   const engineReady = useAgentsSelector((s) =>
@@ -447,15 +464,24 @@ export const AgentChat = memo(function AgentChat({
   );
   // An engine whose turns can't stop to ask refuses instead: said where you talk to it.
   const cantAsk = useAgentsSelector((s) => engineCantAsk(agent.engine, s.engines));
-  const hasOlder = useAgentsSelector((s) => s.older[agent.id] ?? false);
+  const hasOlder = useAgentsSelector((s) => (chatKey ? (s.older[chatKey] ?? false) : false));
   // A reply streaming in a room is the room's: shown there, not here as if
-  // it were for you (the working line says where it is answering).
+  // it were for you (the working line says where it is answering). So is
+  // one streaming in another of its conversations.
   const inRoom = agent.status.state !== 'idle' ? agent.status.room : undefined;
+  const elsewhere =
+    agent.status.state !== 'idle' &&
+    !inRoom &&
+    Boolean(viewing) &&
+    loadedConversation(agent) !== viewing;
+  // Every line it has, whatever the conversation: what waits on you (its
+  // cards) is the agent's, said in every conversation.
+  const allLines = useAgentsSelector((s) => s.messages[agent.id]);
   // The streaming bubble's place in the history: the same object for the
   // whole reply, so the history is built once when it starts, not per word.
   const streaming = useMemo(
-    () => (!inRoom && draftHead ? { ...draftHead, text: '' } : null),
-    [draftHead, inRoom]
+    () => (!inRoom && !elsewhere && draftHead ? { ...draftHead, text: '' } : null),
+    [draftHead, inRoom, elsewhere]
   );
   const { showToast } = useOptionalToast();
   // Kept outside the component: an agent opening a project switches this
@@ -511,6 +537,16 @@ export const AgentChat = memo(function AgentChat({
     if (!open) setScheduleWhen(false);
   }, []);
   const [filesOpen, setFilesOpen] = useState(false);
+  const [renamingConversation, setRenamingConversation] = useState(false);
+  // Which of its conversations is on screen, beside its name.
+  const conversationSwitcher = viewing ? (
+    <ConversationSwitcher
+      agent={agent}
+      viewing={viewing}
+      renaming={renamingConversation}
+      onRenamingChange={setRenamingConversation}
+    />
+  ) : null;
   const [usageOpen, setUsageOpen] = useState(false);
   // While you drive an agent with no project to open, its session is shown
   // here in place of the conversation, until you ask for the chat.
@@ -586,6 +622,15 @@ export const AgentChat = memo(function AgentChat({
         run: () => setUsageOpen(true),
       },
       {
+        id: 'agents.renameConversation',
+        title: 'Rename this conversation…',
+        icon: <PencilIcon size={14} />,
+        category: 'action',
+        keywords: ['conversation', 'thread', 'title', 'name', 'chat'],
+        when: () => Boolean(viewing),
+        run: () => setRenamingConversation(true),
+      },
+      {
         id: 'agents.files',
         title: `Files shared with ${agent.name}`,
         icon: <PaperclipIcon size={14} />,
@@ -594,7 +639,7 @@ export const AgentChat = memo(function AgentChat({
         run: () => setFilesOpen(true),
       },
     ],
-    [agent.name, engineReady]
+    [agent.name, engineReady, viewing]
   );
 
   const toastError = useCallback((message: string) => showToast(message, 'error'), [showToast]);
@@ -935,7 +980,8 @@ export const AgentChat = memo(function AgentChat({
     // to ours, so it's off until the page is in.
     const el = scrollRef.current;
     if (el) el.style.overflowAnchor = 'none';
-    void loadOlderMessages(agent.id).then(() =>
+    if (!chatKey) return;
+    void loadOlderMessages(chatKey).then(() =>
       // Nothing came (a failed read): stand down.
       requestAnimationFrame(() => {
         if (anchorRef.current?.firstId !== firstId) return;
@@ -943,7 +989,7 @@ export const AgentChat = memo(function AgentChat({
         if (el) el.style.overflowAnchor = '';
       })
     );
-  }, [agent.id, messages]);
+  }, [chatKey, messages]);
   useLayoutEffect(() => {
     const anchor = anchorRef.current;
     const el = scrollRef.current;
@@ -1063,7 +1109,7 @@ export const AgentChat = memo(function AgentChat({
       if (load?.id !== jumpTo && hasOlder) {
         const entry = { id: jumpTo, done: false };
         jumpLoad.current = entry;
-        void loadOlderMessages(agent.id, jumpTo).then(() => {
+        void loadOlderMessages(chatKey ?? agent.id, jumpTo).then(() => {
           entry.done = true;
         });
       } else if (load?.id !== jumpTo || load.done) {
@@ -1087,7 +1133,7 @@ export const AgentChat = memo(function AgentChat({
     // Typing goes on in this conversation, not into whatever was clicked.
     inputRef.current?.focus({ preventScroll: true });
     onJumped?.();
-  }, [jumpTo, messages, hasOlder, agent.id, onJumped, items, startIndex]);
+  }, [jumpTo, messages, hasOlder, agent.id, chatKey, onJumped, items, startIndex]);
 
   // Continue (the bar, ⌘K, What's in flight): go to the card where it was
   // posted, mounting or loading back to it first, and flash it.
@@ -1105,8 +1151,8 @@ export const AgentChat = memo(function AgentChat({
           return;
         }
       }
-      if (setupAt < 0 && hasOlder) {
-        void loadOlderMessages(agent.id);
+      if (setupAt < 0 && hasOlder && chatKey) {
+        void loadOlderMessages(chatKey);
         return;
       }
       setupRevealed.current = ask;
@@ -1126,7 +1172,7 @@ export const AgentChat = memo(function AgentChat({
       row.removeEventListener('animationend', clear);
     };
     row.addEventListener('animationend', clear);
-  }, [setupReveal, setupHere, setupAt, startIndex, items, hasOlder, agent.id]);
+  }, [setupReveal, setupHere, setupAt, startIndex, items, hasOlder, chatKey]);
 
   const scrollToBottom = () => {
     const el = scrollRef.current;
@@ -1152,7 +1198,8 @@ export const AgentChat = memo(function AgentChat({
         entry.text,
         entry.resend,
         ids,
-        entry.revises?.id
+        entry.revises?.id,
+        viewing
       );
       setPending((list) => list.map((p) => (p.key === entry.key ? { ...p, id: message.id } : p)));
       upsertMessage(message);
@@ -1183,7 +1230,7 @@ export const AgentChat = memo(function AgentChat({
     try {
       const outgoing = await toOutgoing(files);
       const ids = entry.mentions.map((m) => m.id);
-      const message = await sendAgentMessage(agent.id, text, outgoing, ids, asked?.id);
+      const message = await sendAgentMessage(agent.id, text, outgoing, ids, asked?.id, viewing);
       setPending((list) =>
         list.map((p) => (p.key === entry.key ? { ...p, id: message.id, files: undefined } : p))
       );
@@ -1576,7 +1623,13 @@ export const AgentChat = memo(function AgentChat({
           activity={activity}
           work={work}
           agent={rowAgent}
-          place={inRoom && <RoomWorkingPlace roomId={inRoom} onOpenRoom={onOpenAgent} />}
+          place={
+            inRoom ? (
+              <RoomWorkingPlace roomId={inRoom} onOpenRoom={onOpenAgent} />
+            ) : elsewhere ? (
+              <span className="agent-conversations__elsewhere">in another conversation</span>
+            ) : undefined
+          }
           entering={indicator.entering}
           leaving={indicator.leaving}
           onExited={indicator.onExited}
@@ -1620,9 +1673,12 @@ export const AgentChat = memo(function AgentChat({
                 {/* Not in the compact switcher: it's a button already. */}
                 <AgentProjectChip agent={agent} />
                 <AgentAccountChip agent={agent} />
+                {conversationSwitcher}
               </div>
             )}
             <div className="agent-chat__actions">
+              {/* Compact: the title is the agent menu, so it sits with the actions. */}
+              {compact && conversationSwitcher}
               {/* Nothing to schedule or pick a model for until Claude Code is here. */}
               {engineReady && (
                 <>
@@ -1804,10 +1860,10 @@ export const AgentChat = memo(function AgentChat({
                   // The phone is driving a tab in this Mac's Chrome: said in every conversation.
                   { id: 'phoneSignin', node: <PhoneSigninBar /> },
                   // You're in its browser right now (Step in): Hand back from here.
-                  { id: 'stepIn', node: <StepInBar agent={agent} messages={messages} /> },
+                  { id: 'stepIn', node: <StepInBar agent={agent} messages={allLines ?? []} /> },
                   {
                     id: 'waiting',
-                    node: <WaitingForYouBar agent={agent} messages={messages} />,
+                    node: <WaitingForYouBar agent={agent} messages={allLines ?? []} />,
                   },
                   {
                     id: 'takeover',

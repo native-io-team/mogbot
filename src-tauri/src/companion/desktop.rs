@@ -234,12 +234,17 @@ impl Backend for DesktopBackend {
         agent_id: &str,
         limit: usize,
         before: Option<&str>,
+        conversation: Option<&str>,
     ) -> Result<(Vec<Value>, bool), CommandError> {
         let (agent_id, before) = (agent_id.to_string(), before.map(str::to_string));
+        let conversation = conversation.map(str::to_string);
         // One past the page says whether older messages exist.
         let (page, more) = tokio::task::spawn_blocking(move || {
-            let mut page =
-                store::messages_page(&agent_id, limit.saturating_add(1), before.as_deref(), None)?;
+            let n = limit.saturating_add(1);
+            let mut page = match conversation.as_deref() {
+                Some(c) => store::conversation_page(&agent_id, c, n, before.as_deref(), None)?,
+                None => store::messages_page(&agent_id, n, before.as_deref(), None)?,
+            };
             let more = page.len() > limit;
             if more {
                 page.drain(..page.len() - limit);
@@ -284,6 +289,39 @@ impl Backend for DesktopBackend {
                 mentions,
                 extras.client_id,
                 extras.revises,
+                extras.conversation,
+            )
+            .await?,
+        )
+    }
+
+    async fn conversations(&self, agent_id: &str) -> Result<Value, CommandError> {
+        json(cmd::agents_conversations(agent_id.to_string()).await?)
+    }
+
+    async fn conversation_new(&self, agent_id: &str) -> Result<Value, CommandError> {
+        json(cmd::agents_conversation_new(self.app.clone(), agent_id.to_string()).await?)
+    }
+
+    async fn conversation_select(&self, agent_id: &str, id: &str) -> Result<Value, CommandError> {
+        json(
+            cmd::agents_conversation_select(self.app.clone(), agent_id.to_string(), id.to_string())
+                .await?,
+        )
+    }
+
+    async fn conversation_rename(
+        &self,
+        agent_id: &str,
+        id: &str,
+        title: String,
+    ) -> Result<Value, CommandError> {
+        json(
+            cmd::agents_conversation_rename(
+                self.app.clone(),
+                agent_id.to_string(),
+                id.to_string(),
+                title,
             )
             .await?,
         )

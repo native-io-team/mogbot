@@ -66,6 +66,10 @@ pub const METHODS: &[&str] = &[
     "agents.focus",
     "agents.markUnread",
     "agents.startFresh",
+    "agents.conversations",
+    "agents.conversationNew",
+    "agents.conversationSelect",
+    "agents.conversationRename",
     "agents.create",
     "agents.draft",
     "agents.templates",
@@ -136,6 +140,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "devices.self",
     "agents.overview",
     "agents.messages",
+    "agents.conversations",
     "agents.workSteps",
     "agents.instructions",
     "agents.memory",
@@ -201,6 +206,9 @@ pub struct SendExtras {
     pub client_id: Option<String>,
     /// "Ask for changes": the result this message asks to revise.
     pub revises: Option<String>,
+    /// The conversation it was sent in; `None` from an older phone (the one
+    /// the user is in).
+    pub conversation: Option<String>,
 }
 
 /// What `rooms.send` carries besides the room and the text.
@@ -583,7 +591,20 @@ pub trait Backend: Send + Sync + 'static {
         agent_id: &str,
         limit: usize,
         before: Option<&str>,
+        conversation: Option<&str>,
     ) -> Result<(Vec<Value>, bool), CommandError>;
+    /// `agents_conversations`: the agent's conversations and which one the
+    /// user is in.
+    async fn conversations(&self, agent_id: &str) -> Result<Value, CommandError>;
+    /// `agents_conversation_new`, `_select` and `_rename`: the list after.
+    async fn conversation_new(&self, agent_id: &str) -> Result<Value, CommandError>;
+    async fn conversation_select(&self, agent_id: &str, id: &str) -> Result<Value, CommandError>;
+    async fn conversation_rename(
+        &self,
+        agent_id: &str,
+        id: &str,
+        title: String,
+    ) -> Result<Value, CommandError>;
     async fn send(
         &self,
         agent_id: &str,
@@ -1112,6 +1133,24 @@ struct MessagesParams {
     /// with `agents.workSteps` as one opens. An older Mac ignores it and
     /// sends them inline, as it does for a phone that doesn't ask.
     work: Option<String>,
+    /// One of the agent's conversations; absent (an older phone): all of them.
+    #[serde(default)]
+    conversation: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConversationParams {
+    agent_id: String,
+    conversation_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ConversationRenameParams {
+    agent_id: String,
+    conversation_id: String,
+    title: String,
 }
 
 #[derive(Deserialize)]
@@ -1418,6 +1457,8 @@ struct SendParams {
     mentions: Vec<String>,
     #[serde(default)]
     revises: Option<String>,
+    #[serde(default)]
+    conversation: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -1926,7 +1967,14 @@ async fn run(
             // phone as an event with a higher seq, which the merge keeps.
             let as_of = c.hub.cursor();
             let limit = p.limit.unwrap_or(MESSAGES_DEFAULT).clamp(1, MESSAGES_MAX);
-            let (mut messages, more) = b.messages(&p.agent_id, limit, p.before.as_deref()).await?;
+            let (mut messages, more) = b
+                .messages(
+                    &p.agent_id,
+                    limit,
+                    p.before.as_deref(),
+                    p.conversation.as_deref(),
+                )
+                .await?;
             if p.work.as_deref() == Some("summary") {
                 crate::agents::work::omit_steps_json(&mut messages);
             }
@@ -1963,6 +2011,7 @@ async fn run(
                         attachments,
                         client_id: Some(client_id),
                         revises: p.revises.filter(|r| !r.trim().is_empty()),
+                        conversation: p.conversation.filter(|c| !c.trim().is_empty()),
                     };
                     let sent = b.send(&p.agent_id, text, extras).await?;
                     c.blobs.consume(&blob_ids);
@@ -2099,6 +2148,29 @@ async fn run(
             let p: AgentParam = parse(params)?;
             b.mark_unread(&p.agent_id).await?;
             Ok(Value::Null)
+        }
+        "agents.conversations" => {
+            let p: AgentParam = parse(params)?;
+            Ok(b.conversations(&p.agent_id).await?)
+        }
+        "agents.conversationNew" => {
+            let p: AgentParam = parse(params)?;
+            Ok(b.conversation_new(&p.agent_id).await?)
+        }
+        "agents.conversationSelect" => {
+            let p: ConversationParams = parse(params)?;
+            Ok(b.conversation_select(&p.agent_id, &p.conversation_id)
+                .await?)
+        }
+        "agents.conversationRename" => {
+            let p: ConversationRenameParams = parse(params)?;
+            if p.title.chars().count() > crate::agents::conversations::TITLE_CHARS {
+                return Err(bad_params("title is too long."));
+            }
+            Ok(
+                b.conversation_rename(&p.agent_id, &p.conversation_id, p.title)
+                    .await?,
+            )
         }
         "agents.startFresh" => {
             let p: AgentParam = parse(params)?;

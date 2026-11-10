@@ -316,7 +316,9 @@ describe('Start fresh', () => {
     expect(container).toHaveTextContent(
       'This conversation is getting long — Acme may lose track of early details.'
     );
-    fireEvent.click(screen.getByRole('button', { name: 'Start fresh (memory is kept)' }));
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Start a new conversation (memory is kept)' })
+    );
     expect(onStartFresh).toHaveBeenCalledTimes(1);
 
     // Nothing reported: nothing shown, never a guess.

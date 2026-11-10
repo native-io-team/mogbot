@@ -582,6 +582,8 @@ pub struct Stub {
     pub account_orders: Mutex<Vec<(String, Vec<String>)>>,
     /// Agents started fresh, by id.
     pub fresh: Mutex<Vec<String>>,
+    /// The agent's conversations: (id, title), the first first; and the current one.
+    pub conversations: Mutex<(Vec<(String, String)>, String)>,
     /// What reached a session: `(session id, text or "key:<key>")`.
     pub typed: Mutex<Vec<(String, String)>>,
     /// Permission rules revoked, by id.
@@ -599,6 +601,46 @@ pub struct Stub {
     pub hosts: Mutex<Vec<String>>,
     /// "Setting up your team" calls, as the router handed them over.
     pub team_setup: Mutex<Vec<super::router::TeamSetupAction>>,
+}
+
+impl Stub {
+    /// The stub's conversations, as the desk's `agents_conversations` serializes them.
+    fn conversation_list(&self) -> Value {
+        use crate::agents::conversations::{ConversationView, Conversations};
+        let (items, current) = self.conversations.lock().unwrap().clone();
+        let n = items.len() as i64;
+        let views = items
+            .iter()
+            .enumerate()
+            .rev()
+            .map(|(i, (id, title))| ConversationView {
+                id: id.clone(),
+                title: title.clone(),
+                named: i == 1,
+                created_at: 1_762_200_000_000 + i as i64 * 1000,
+                last_activity_at: 1_762_290_000_000 + i as i64 * 1000,
+                preview: (i > 0 || n == 1).then(|| "On it".to_string()),
+                current: *id == current,
+                loaded: i + 1 == items.len(),
+                waiting: u32::from(i == 0),
+                context: (i == 0).then(|| crate::agents::context::ContextFill {
+                    used: 64_000,
+                    window: 200_000,
+                    at: 1_762_290_000_000,
+                    model: Some("claude-opus-5-5".into()),
+                }),
+            })
+            .collect();
+        serde_json::to_value(Conversations {
+            agent_id: AGENT.into(),
+            current,
+            items: views,
+            routines: [("ci_1".to_string(), "c2".to_string())]
+                .into_iter()
+                .collect(),
+        })
+        .unwrap()
+    }
 }
 
 /// The host the stub Mac serves on (its Tailscale route's).
@@ -627,6 +669,13 @@ impl Stub {
             admins: Mutex::new(Vec::new()),
             account_orders: Mutex::new(Vec::new()),
             fresh: Mutex::new(Vec::new()),
+            conversations: Mutex::new((
+                vec![
+                    ("first".into(), "Fix the login page".into()),
+                    ("c2".into(), "Plan the launch".into()),
+                ],
+                "c2".into(),
+            )),
             typed: Mutex::new(Vec::new()),
             revoked: Mutex::new(Vec::new()),
             narrowed: Mutex::new(Vec::new()),
@@ -840,11 +889,15 @@ impl Backend for Stub {
         agent_id: &str,
         limit: usize,
         before: Option<&str>,
+        conversation: Option<&str>,
     ) -> Result<(Vec<Value>, bool), CommandError> {
         if agent_id != AGENT {
             return Err(CommandError::expected("No such agent."));
         }
-        let all = self.messages.lock().unwrap().clone();
+        let mut all = self.messages.lock().unwrap().clone();
+        if let Some(c) = conversation {
+            all.retain(|m| crate::agents::conversations::of(m) == c);
+        }
         let end = before
             .and_then(|id| all.iter().position(|m| m.id == id))
             .unwrap_or(all.len());
@@ -868,6 +921,7 @@ impl Backend for Stub {
         let mut mine = crate::agents::runner::new_message(agent_id, MessageKind::User, text);
         mine.id = format!("u{n}");
         mine.client_id = extras.client_id;
+        mine.conversation = extras.conversation;
         // The desk's own save: limits, names and all.
         mine.attachments = crate::agents::attachments::save(
             self.home.path(),
@@ -1088,6 +1142,57 @@ impl Backend for Stub {
 
     async fn mark_unread(&self, _agent_id: &str) -> Result<(), CommandError> {
         Ok(())
+    }
+
+    async fn conversations(&self, agent_id: &str) -> Result<Value, CommandError> {
+        if agent_id != AGENT {
+            return Err(CommandError::expected("No such agent."));
+        }
+        Ok(self.conversation_list())
+    }
+
+    async fn conversation_new(&self, agent_id: &str) -> Result<Value, CommandError> {
+        self.conversations(agent_id).await?;
+        {
+            let mut list = self.conversations.lock().unwrap();
+            let id = format!("c{}", list.0.len() + 1);
+            list.0.push((id.clone(), String::new()));
+            list.1 = id;
+        }
+        Ok(self.conversation_list())
+    }
+
+    async fn conversation_select(&self, agent_id: &str, id: &str) -> Result<Value, CommandError> {
+        self.conversations(agent_id).await?;
+        {
+            let mut list = self.conversations.lock().unwrap();
+            if !list.0.iter().any(|(c, _)| c == id) {
+                return Err(CommandError::expected(
+                    "That conversation isn't there any more.",
+                ));
+            }
+            list.1 = id.to_string();
+        }
+        Ok(self.conversation_list())
+    }
+
+    async fn conversation_rename(
+        &self,
+        agent_id: &str,
+        id: &str,
+        title: String,
+    ) -> Result<Value, CommandError> {
+        self.conversations(agent_id).await?;
+        {
+            let mut list = self.conversations.lock().unwrap();
+            let Some(item) = list.0.iter_mut().find(|(c, _)| c == id) else {
+                return Err(CommandError::expected(
+                    "That conversation isn't there any more.",
+                ));
+            };
+            item.1 = title;
+        }
+        Ok(self.conversation_list())
     }
 
     async fn start_fresh(&self, agent_id: &str) -> Result<Value, CommandError> {

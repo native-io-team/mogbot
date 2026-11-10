@@ -3989,6 +3989,78 @@ export const agentsUpdate = {
   "unread": 2,
   "workDirectly": true
 } satisfies Result<'agents.update'>;
+export const agentsConversations = {
+  "agentId": "a1",
+  "current": "c2",
+  "items": [
+    {
+      "createdAt": 1762200001000,
+      "current": true,
+      "id": "c2",
+      "lastActivityAt": 1762290001000,
+      "loaded": true,
+      "named": true,
+      "preview": "On it",
+      "title": "Plan the launch",
+      "waiting": 0
+    },
+    {
+      "context": {
+        "at": 1762290000000,
+        "model": "claude-opus-5-5",
+        "used": 64000,
+        "window": 200000
+      },
+      "createdAt": 1762200000000,
+      "current": false,
+      "id": "first",
+      "lastActivityAt": 1762290000000,
+      "loaded": false,
+      "named": false,
+      "title": "Fix the login page",
+      "waiting": 1
+    }
+  ],
+  "routines": {
+    "ci_1": "c2"
+  }
+} satisfies Result<'agents.conversations'>;
+export const agentsConversationRename = {
+  "agentId": "a1",
+  "current": "c2",
+  "items": [
+    {
+      "createdAt": 1762200001000,
+      "current": true,
+      "id": "c2",
+      "lastActivityAt": 1762290001000,
+      "loaded": true,
+      "named": true,
+      "preview": "On it",
+      "title": "Launch plan",
+      "waiting": 0
+    },
+    {
+      "context": {
+        "at": 1762290000000,
+        "model": "claude-opus-5-5",
+        "used": 64000,
+        "window": 200000
+      },
+      "createdAt": 1762200000000,
+      "current": false,
+      "id": "first",
+      "lastActivityAt": 1762290000000,
+      "loaded": false,
+      "named": false,
+      "title": "Fix the login page",
+      "waiting": 1
+    }
+  ],
+  "routines": {
+    "ci_1": "c2"
+  }
+} satisfies Result<'agents.conversationRename'>;
 export const agentsStartFresh = {
   "account": "a1work",
   "capabilities": {
@@ -4374,6 +4446,10 @@ export const frames = [
       "agents.focus",
       "agents.markUnread",
       "agents.startFresh",
+      "agents.conversations",
+      "agents.conversationNew",
+      "agents.conversationSelect",
+      "agents.conversationRename",
       "agents.create",
       "agents.draft",
       "agents.templates",
