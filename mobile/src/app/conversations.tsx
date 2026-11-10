@@ -17,7 +17,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
-import { Button, Icon, Row, SheetPage, T } from '../components/ui';
+import { Button, Icon, Row, SheetPage, T, groupSurface } from '../components/ui';
 import { SheetTitle } from '../components/SheetTitle';
 import { haptic } from '../lib/haptics';
 import {
@@ -35,6 +35,12 @@ import { fonts, iconSize, radius, space, type } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
 
 export default withAgentAccent(ConversationsSheet);
+
+/**
+ * Below this many there's nothing to find: the whole list is in view, and a
+ * field over two rows only pushed them down.
+ */
+const FIND_FROM = 7;
 
 function ConversationsSheet() {
   const colors = useColors();
@@ -119,17 +125,19 @@ function ConversationsSheet() {
             last
           />
         </View>
-        <TextInput
-          value={query}
-          onChangeText={setQuery}
-          placeholder="Find a conversation"
-          placeholderTextColor={colors.textMuted}
-          keyboardAppearance={appearance}
-          selectionColor={accent.accent}
-          accessibilityLabel="Find a conversation"
-          autoCorrect={false}
-          style={styles.input}
-        />
+        {((list?.items.length ?? 0) >= FIND_FROM || query !== '') && (
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Find a conversation"
+            placeholderTextColor={colors.textMuted}
+            keyboardAppearance={appearance}
+            selectionColor={accent.accent}
+            accessibilityLabel="Find a conversation"
+            autoCorrect={false}
+            style={styles.input}
+          />
+        )}
         <View style={styles.list}>
           {items.length === 0 && (
             <T variant="small" color={colors.textMuted} style={styles.none}>
@@ -143,10 +151,14 @@ function ConversationsSheet() {
               detail={detail(c)}
               selected={c.id === viewing}
               warning={c.waiting > 0}
+              // A choice, as iOS lists one: a check on the one shown, no
+              // chevrons (picking one goes back to the chat, not deeper in).
               trailing={
                 c.id === viewing ? (
                   <Icon name="checkmark" size={iconSize.body} color={colors.textStrong} />
-                ) : undefined
+                ) : (
+                  <View style={styles.check} />
+                )
               }
               onPress={() => run(() => openConversation(id, c.id))}
               disabled={!connected || busy}
@@ -213,8 +225,9 @@ function ConversationsSheet() {
 
 const useStyles = makeStyles((colors) => ({
   content: { padding: space.lg, paddingTop: space.xl, gap: space.md, paddingBottom: space['2xl'] },
-  list: { backgroundColor: colors.surfaceGroup, borderRadius: radius.card, overflow: 'hidden' },
+  list: groupSurface(colors),
   none: { padding: space.lg },
+  check: { width: iconSize.body },
   input: {
     minHeight: 44,
     fontFamily: fonts.regular,
