@@ -93,7 +93,7 @@ import http from 'node:http';
 import https from 'node:https';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { cafePage, iconSheet, pdf, signinPage, siteScreenshot } from './mock-assets';
-import { blocksMessages } from './mock-blocks';
+import { blocksMessages, briefMessages } from './mock-blocks';
 import { addHeavyAccount, heavyImportTalk } from './mock-heavy';
 import { addTortureAccount, tortureAction } from './mock-torture';
 import { STEP_IN_ON_YOUR_MAC, addProbeAccount, probeAccounts } from './mock-probe';
@@ -978,6 +978,18 @@ export function createMockServer(opts: MockOptions = {}) {
     unread: 0,
   });
   messages.set('blocks', blocksMessages(now, attach));
+  // The morning brief as blocks (`brief::compose_blocks`), under one agent.
+  agents.push({
+    ...structuredClone(sample),
+    id: 'brief',
+    name: 'Brief',
+    pinned: false,
+    hidden: true,
+    status: { state: 'idle', activity: null, since: null },
+    pendingApprovals: 0,
+    unread: 0,
+  });
+  messages.set('brief', briefMessages(now));
 
   const projects: ProjectSummary[] = seedProjects(now);
   const instructions = new Map<string, string>();

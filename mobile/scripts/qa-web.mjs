@@ -1170,6 +1170,14 @@ const LIVE = [
       'Every block kind: metric tiles with deltas and a sparkline, a two-series line chart with a legend, a stacked bar, a donut with its slices listed, a sortable table with Show all, facts, a checklist with its count, steps with done/current/failed marks, two callouts with icon and word, link chips with their domain, a tinted diff, an image; the comparison answered (Picked on Vercel), the choices and form still live with neutral answers',
   },
   {
+    name: 'blocks-brief',
+    route: '/chat/brief',
+    ready: 'Brief',
+    pages: 4,
+    check:
+      'The morning brief as one calm page: the gist, Needs you, an amber Didn’t work note, Today and Since yesterday tables (times and names never broken mid-word, counts under right-aligned headers), Usage, Your checks',
+  },
+  {
     name: 'blocks-tooltip',
     route: '/chat/blocks',
     ready: 'Blocks',
