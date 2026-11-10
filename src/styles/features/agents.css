@@ -381,27 +381,6 @@
   color: var(--status-running);
 }
 
-/* New agent / New room start on the rows' column, not centred in space:
-   the icon sits in a badge-wide box so its label lines up with the names.
-   Actions, not rows: shorter than an agent, one after the other with no gap,
-   and in the secondary text colour so they read as available. Pinned under
-   the list, outside its scroller (AgentsSidebarActions), so a long list or
-   project groups never push them under the footer (round 4, #10). */
-.workspace-sidebar:not(.is-hidden) .agents-list__new,
-.workspace-sidebar:not(.is-hidden) .agents-list__new-room {
-  justify-content: flex-start;
-  gap: var(--spacing-sm);
-  height: var(--control-height-standard);
-  min-height: var(--control-height-standard);
-  padding: 0 var(--spacing-md) 0 var(--spacing-sm);
-  color: var(--text-secondary);
-}
-
-.workspace-sidebar:not(.is-hidden) .agents-list__new:hover:not(:disabled),
-.workspace-sidebar:not(.is-hidden) .agents-list__new-room:hover:not(:disabled) {
-  color: var(--text-primary);
-}
-
 /* Pinned under the scroller, the actions sit on the list's hairline. */
 .workspace-sidebar-pinned-actions {
   flex-shrink: 0;
@@ -463,12 +442,6 @@
 
 .agents-list__rail-mark {
   display: contents;
-}
-
-.workspace-sidebar:not(.is-hidden) .agents-list__new > svg,
-.workspace-sidebar:not(.is-hidden) .agents-list__new-room > svg {
-  box-sizing: content-box;
-  padding: 0 calc((var(--size-sidebar-project-shortcut) - 16px) / 2); /* css-ok: centre a 16px icon in the badge width */
 }
 
 /* "Hidden (2)": a quiet disclosure at the end of the list, not a footer. */
@@ -695,38 +668,4 @@
 .workspace-sidebar.is-hidden
   :is(.agents-list__group-toggle, .agents-list__group-empty, .agents-list__group-new) {
   display: none;
-}
-
-/* New agent | New room, one row of two in the foot (`AgentsSidebarActions`).
-   Too narrow for both side by side, they wrap into a stack. */
-.workspace-sidebar:not(.is-hidden) .agents-list__actions--pair {
-  display: flex;
-  flex-wrap: wrap;
-}
-
-.workspace-sidebar:not(.is-hidden) .agents-list__actions--pair > .button {
-  flex: 1 1 calc(var(--control-height-standard) * 3);
-  width: auto;
-  min-width: 0;
-}
-
-.workspace-sidebar:not(.is-hidden) .agents-list__actions--pair > .button > span {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Side by side, each half centres its icon and label: the badge-wide icon
-   box of a full-width row would leave the label no room. */
-.workspace-sidebar:not(.is-hidden) .agents-list__actions--pair > .agents-list__new,
-.workspace-sidebar:not(.is-hidden) .agents-list__actions--pair > .agents-list__new-room {
-  justify-content: center;
-  gap: var(--spacing-xs);
-  padding-inline: var(--spacing-xs);
-}
-
-.workspace-sidebar:not(.is-hidden) .agents-list__actions--pair > .button > svg {
-  flex-shrink: 0;
-  padding: 0;
 }

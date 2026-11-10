@@ -1104,18 +1104,12 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                   onOpen={focusSearch}
                 />
               }
-              // The foot, compact (owner, round 5: "getting tall"): usage
-              // first, then New agent | New room as one row, then Routines
-              // sharing the last row with the phone, remote and Settings.
+              // The foot, one block on the agent rows' grid: New agent (with
+              // New room as its second half) under the list it adds to, then
+              // Usage, then Routines sharing the last row with the phone,
+              // remote and Settings.
               footerContent={
                 <>
-                  <SidebarBoundary part="accounts" message="Accounts couldn’t be shown.">
-                    <AccountSwitcher
-                      collapsed={sidebarProps.isSidebarHidden ?? false}
-                      open={usageOpen}
-                      onOpen={openUsage}
-                    />
-                  </SidebarBoundary>
                   {(query.trim().length === 0 || popoverSearch) && (
                     <AgentsSidebarActions
                       agentCount={listed.length}
@@ -1124,6 +1118,13 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                       onNewRoom={openNewRoom}
                     />
                   )}
+                  <SidebarBoundary part="accounts" message="Accounts couldn’t be shown.">
+                    <AccountSwitcher
+                      collapsed={sidebarProps.isSidebarHidden ?? false}
+                      open={usageOpen}
+                      onOpen={openUsage}
+                    />
+                  </SidebarBoundary>
                 </>
               }
               footerLead={

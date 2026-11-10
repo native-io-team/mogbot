@@ -1884,7 +1884,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
 
         {listActions && <div className="workspace-sidebar-pinned-actions">{listActions}</div>}
 
-        <div className="workspace-sidebar-footer">
+        <div className={`workspace-sidebar-footer${footerLead ? ' is-agents-foot' : ''}`}>
           <UpdateBanner />
           {footerContent}
           {!compactFoot && footerLead}
@@ -2057,7 +2057,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                   return (
                     <MenuButton
                       // Beside the phone and remote icons in the Agents foot: the same weight.
-                      variant={compactFoot ? 'ghost' : 'default'}
+                      variant={footerLead ? 'ghost' : 'default'}
                       className={`button--icon-only workspace-sidebar-settings${
                         compactFoot ? ' workspace-sidebar-footer-icon' : ''
                       }`}

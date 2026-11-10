@@ -1,7 +1,7 @@
 /**
- * The Agents sidebar's foot, whole: usage first (said as what is used, its
- * bar filling with use), then New agent · New room, then Routines with the
- * phone, remote and Settings beside it. Light use, heavy use, out, no phone,
+ * The Agents sidebar's foot, whole: New agent (a split button, New room its
+ * icon half), then usage (said as what is used, its bar filling with use),
+ * then Routines with the phone, remote and Settings beside it. Light use, heavy use, out, no phone,
  * a phone paired, remote on, and a narrow sidebar. Built on the Agents team
  * fixture (`./agents`); every name and address is fictional.
  */
@@ -136,10 +136,12 @@ function foot(
 }
 
 const BASE =
-  'The foot, top to bottom: Usage as two lines (“N% used · refills in 6d”, then a thin bar ' +
-  'that fills with use), then one row “New agent” | “New room”, then one row with Routines ' +
-  'and, at its end, small icon buttons for the phone (and remote, when on) and Settings. ' +
-  'Nothing wraps, nothing accent-coloured.';
+  'The foot, top to bottom: one neutral split button, “New agent” with a people icon as its ' +
+  'second half (New room); then Usage (“N% used · refills in 6d” over a thin bar that fills ' +
+  'with use); then Routines and, at its end, icon buttons for the phone (and remote, when on) ' +
+  'and Settings. Every row the same height; every icon on the agent keys’ column and every ' +
+  'label on the names’ column; New room’s half sits over the Settings gear. Nothing wraps, ' +
+  'nothing accent-coloured.';
 
 export const agentsSidebarFootScenarios: Scenario[] = [
   foot(
@@ -188,7 +190,7 @@ export const agentsSidebarFootScenarios: Scenario[] = [
   foot(
     'agents-foot-collapsed',
     'Agents sidebar foot — the sidebar collapsed to its rail',
-    'The rail keeps one icon per row, usage first: the usage icon, New agent, New room, Routines, the phone, the globe, then Settings. Each has its name as a tooltip.',
+    'The rail keeps one icon per row: New agent (the one solid key), New room, the usage icon, Routines, the phone, the globe, then Settings (flat, like the others). Each has its name as a tooltip.',
     { remote: REMOTE_ON, extra: { steps: [{ click: '[aria-label="Hide sidebar"]' }] } }
   ),
 ];

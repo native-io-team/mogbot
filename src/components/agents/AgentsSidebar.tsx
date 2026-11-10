@@ -5,10 +5,10 @@
  * shared status dots — so it reads as the same sidebar, not a second app.
  *
  * There is one group, so there is no group header: the Projects | Agents
- * toggle above it says where you are. The foot, outside the scroller: Usage
- * first, then "New agent" | "New room" as one row (`AgentsSidebarActions`),
- * then Routines (`RoutinesRow`) sharing the last row with the phone, remote
- * and Settings icons. The sidebar's top field searches
+ * toggle above it says where you are. The foot, outside the scroller, on the
+ * rows' grid: New agent as the neutral key with New room as its second half
+ * (`AgentsSidebarActions`), then Usage, then Routines (`RoutinesRow`) sharing
+ * the last row with the phone, remote and Settings icons. The sidebar's top field searches
  * conversations here; while it has a query the results take the list's place.
  *
  * Right-click a row (or Shift+F10 on it) for Pin, Mark as unread, Mute notifications, Edit, Hide
@@ -61,6 +61,7 @@ import { Button } from '../primitives/Button';
 import { FooterRowIcon } from '../workspace/FooterRowIcon';
 import { IconButton } from '../primitives/IconButton';
 import { StatusPill } from '../primitives/StatusPill';
+import { Tooltip } from '../primitives/Tooltip';
 import { AgentKey } from './AgentKey';
 import { AgentWorkingLine } from './AgentWorkingLine';
 import { AgentEngineBadge } from './AgentEngine';
@@ -468,10 +469,12 @@ export function AgentsSidebar({
 }
 
 /**
- * The create actions, in the foot under Usage: New agent and New room side
- * by side as one row (two half-width buttons), so the foot stays short; a
- * sidebar too narrow for both stacks them. Outside the list's scroller, so
- * ten agents or project groups never push them away (round 4, #10).
+ * The create actions, first in the foot, under the list they add to: one
+ * split button, New agent with New room as its icon half (the room half only
+ * once there are two agents to talk to). Neutral `default`, never the accent;
+ * its icon and label sit on the agent rows' key and name columns. Collapsed,
+ * the two stack as icons. Outside the list's scroller, so ten agents or
+ * project groups never push them away (round 4, #10).
  */
 export function AgentsSidebarActions({
   agentCount,
@@ -486,35 +489,46 @@ export function AgentsSidebarActions({
 }) {
   // A room needs two agents to talk to.
   const room = agentCount >= 2;
+  const newAgentTip = `New agent (${kbd('mod', 'N')})`;
   return (
     <div
-      className={`workspace-sidebar-active-actions agents-list__actions${
-        room && !collapsed ? ' agents-list__actions--pair' : ''
-      }`}
+      className={`agents-foot__new${room && !collapsed ? ' button-group--split' : ''}`}
+      role="group"
+      aria-label="Start something new"
     >
-      <Button
-        variant="ghost"
-        width="fill"
-        className="workspace-sidebar-add-project agents-list__new"
-        onClick={onNew}
-        aria-label="New agent"
-        title={`New agent (${kbd('mod', 'N')})`}
-      >
-        <AddIcon size={16} />
-        <span>New agent</span>
-      </Button>
-      {room && (
+      {collapsed ? (
+        <Tooltip content={newAgentTip}>
+          <IconButton
+            variant="default"
+            className="agents-list__new"
+            icon={<AddIcon size={14} />}
+            onClick={onNew}
+            aria-label="New agent"
+          />
+        </Tooltip>
+      ) : (
         <Button
-          variant="ghost"
+          variant="default"
           width="fill"
-          className="workspace-sidebar-add-project agents-list__new-room"
-          onClick={onNewRoom}
-          aria-label="New room"
-          title={ROOM_WHAT}
+          className="agents-list__new"
+          leftIcon={<AddIcon size={14} />}
+          onClick={onNew}
+          aria-label="New agent"
+          title={newAgentTip}
         >
-          <CollaboratorsIcon size={16} />
-          <span>New room</span>
+          <span className="agents-foot__new-label">New agent</span>
         </Button>
+      )}
+      {room && (
+        <Tooltip content={`New room. ${ROOM_WHAT}`}>
+          <IconButton
+            variant={collapsed ? 'ghost' : 'default'}
+            className="agents-list__new-room"
+            icon={<CollaboratorsIcon size={14} />}
+            onClick={onNewRoom}
+            aria-label="New room"
+          />
+        </Tooltip>
       )}
     </div>
   );

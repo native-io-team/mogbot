@@ -162,3 +162,108 @@
   > .button__icon {
   padding-inline: 0;
 }
+
+/* ---- The Agents foot, one block on the agent rows' grid ----------------
+   Every row is a control's height, every icon is the button's 16px icon,
+   centred in a key-wide column from the footer's inset (where the agent keys
+   sit), and every label starts on the names' column. New agent is the
+   neutral key with New room as its second half; the right-hand icons share
+   that half's column. */
+.workspace-sidebar-footer.is-agents-foot {
+  --agents-foot-col: var(--agent-key-size-md);
+  --agents-foot-icon-inset: calc((var(--agents-foot-col) - var(--size-icon-button)) / 2);
+
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  padding-top: var(--spacing-sm);
+}
+
+.agents-foot__new {
+  display: flex;
+  min-width: 0;
+}
+
+.workspace-sidebar:not(.is-hidden) .agents-foot__new {
+  width: 100%;
+  margin-bottom: var(--spacing-xs);
+}
+
+/* The label button and the rows share one geometry: icon on the keys'
+   column, label on the names'. Every button has a 1px border (transparent on
+   a ghost row), taken out of the inset so the icons land where the keys do. */
+.workspace-sidebar:not(.is-hidden) .agents-foot__new > .agents-list__new,
+.workspace-sidebar:not(.is-hidden) .is-agents-foot .remote-indicator:not(.remote-indicator--icon) {
+  min-width: 0;
+  height: var(--control-height-standard);
+  min-height: var(--control-height-standard);
+  justify-content: flex-start;
+  gap: calc(var(--agents-foot-icon-inset) + var(--spacing-sm));
+  padding-inline: calc(var(--agents-foot-icon-inset) - var(--border-width-default))
+    var(--spacing-sm);
+}
+
+.workspace-sidebar:not(.is-hidden)
+  .is-agents-foot
+  .remote-indicator:not(.remote-indicator--icon)
+  > .button__icon {
+  padding-inline: 0;
+}
+
+.agents-foot__new-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workspace-sidebar:not(.is-hidden) .agents-foot__new > .agents-list__new {
+  flex: 1 1 auto;
+}
+
+.workspace-sidebar:not(.is-hidden) .agents-foot__new > .agents-list__new-room {
+  flex: 0 0 var(--control-height-standard);
+  width: var(--control-height-standard);
+  padding: 0;
+  justify-content: center;
+}
+
+/* Split, the halves share one border. */
+.agents-foot__new.button-group--split > .agents-list__new-room {
+  margin-inline-start: calc(var(--border-width-default) * -1);
+}
+
+/* Usage's two lines fit the row's height: the figure, then its bar. */
+.workspace-sidebar:not(.is-hidden) .is-agents-foot .usage-glance.account-switcher__row {
+  align-items: center;
+  padding-block: 0;
+}
+
+.workspace-sidebar:not(.is-hidden) .is-agents-foot .usage-used {
+  margin-block-end: 0;
+}
+
+/* The last row: Routines, then the icons, Settings last, on one line (with
+   "Pair your phone" wrapped above, Settings stays down beside Routines). */
+.is-agents-foot .workspace-sidebar-footer-actions.is-compact-foot {
+  gap: var(--button-group-spacing);
+}
+
+.is-agents-foot
+  .workspace-sidebar-footer-actions.is-compact-foot
+  > .workspace-sidebar-settings-menu:not(.is-open) {
+  align-self: end;
+  margin-bottom: 0;
+}
+
+.is-agents-foot .workspace-sidebar-footer-lead {
+  row-gap: var(--spacing-2xs);
+}
+
+/* Collapsed to the rail: one centred icon per row, New agent still the key. */
+.workspace-sidebar.is-hidden .agents-foot__new {
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-2xs);
+  margin-bottom: var(--spacing-xs);
+}
