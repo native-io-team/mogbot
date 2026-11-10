@@ -6433,7 +6433,8 @@ of their own is open.
   section (`prompts::CHIEF`, built every turn), so Chiefs made by older
   builds have it without touching their CLAUDE.md.
 - **Managing.** "New room" at the foot of the agent list (once there are two
-  agents), ⌘K → New room…, Open <room>, <room>: members and name…,
+  agents; its tooltip and the editor's lead start with what a room is, "Talk
+  to several agents at once, in one conversation.", `ROOM_WHAT`), ⌘K → New room…, Open <room>, <room>: members and name…,
   Mute/Unmute, Delete…. Rooms sit in a "Rooms" section right after the
   agents (above Hidden, as on the phone), under a folding header with their
   count, like a group's. A room's badge is its own: its

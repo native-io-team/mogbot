@@ -23,6 +23,7 @@ import {
   defaultRoomName,
   MAX_ROOM_MEMBERS,
   MIN_ROOM_MEMBERS,
+  ROOM_WHAT,
   updateRoom,
   type Room,
 } from '../../lib/agentRooms';
@@ -118,8 +119,8 @@ export function RoomEditorModal({ isOpen, room, agents, onClose, onSaved }: Room
         }}
       >
         <p className="agent-room-editor__lead">
-          A group conversation with two to six agents. Each keeps its own memory; you @ who should
-          answer, or @everyone.
+          {ROOM_WHAT} Two to six agents, each with its own memory; you @ who should answer, or
+          @everyone.
         </p>
         <label className="agent-room-editor__label" htmlFor="room-name">
           Name
