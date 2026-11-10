@@ -69,4 +69,20 @@ describe('AgentsQuota', () => {
       )
     );
   });
+
+  it('reads once on mount, not once for the state and again for the poll', async () => {
+    const asked: string[] = [];
+    mockIPC(
+      (cmd) => {
+        if (cmd !== 'agents_quota') return null;
+        asked.push(cmd);
+        return [claude(85)];
+      },
+      { shouldMockEvents: true }
+    );
+    render(<AgentsQuota place="sidebar" />);
+    await screen.findByText(/^Claude usage 85%/);
+    await new Promise((r) => setTimeout(r, 20));
+    expect(asked).toHaveLength(1);
+  });
 });

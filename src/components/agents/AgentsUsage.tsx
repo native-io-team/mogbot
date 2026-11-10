@@ -46,9 +46,8 @@ const stop = (fn: () => void) => {
 /** The inventory, re-read when the plan or a reading changes, and every minute. */
 /** `glance`: shown all the time (the sidebar's account row), so it never asks for a read. */
 export function useUsageInventory({ glance = false }: { glance?: boolean } = {}) {
-  const state = useAsyncState<UsageInventory>(glance ? glanceUsageInventory : getUsageInventory, {
-    immediate: true,
-  });
+  // No `immediate`: the poll below reads on mount, and both made it two reads at once.
+  const state = useAsyncState<UsageInventory>(glance ? glanceUsageInventory : getUsageInventory);
   const [now, setNow] = useState(() => Date.now());
   const { execute } = state;
   const reload = useCallback(() => {
