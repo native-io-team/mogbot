@@ -6539,7 +6539,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 21
+      "consumerCount": 23
     },
     {
       "name": "--shadow-md",
@@ -6547,7 +6547,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 35
+      "consumerCount": 34
     },
     {
       "name": "--shadow-lg",
@@ -6555,7 +6555,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 18
+      "consumerCount": 17
     },
     {
       "name": "--shadow-card",
@@ -7139,7 +7139,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 21
+      "consumerCount": 23
     },
     {
       "name": "--shadow-md",
@@ -7147,7 +7147,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 35
+      "consumerCount": 34
     },
     {
       "name": "--shadow-lg",
@@ -7155,7 +7155,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 18
+      "consumerCount": 17
     },
     {
       "name": "--shadow-card",
