@@ -107,3 +107,53 @@
   color: var(--text-secondary);
   font-size: var(--font-size-caption);
 }
+
+/* The icon picker (AgentKeyIconPicker.tsx): a search, the categories as a
+ * strip of quick filters, then the icons as keys in a grid that scrolls on
+ * its own, so two thousand of them never stretch the dialog. */
+.agent-icons {
+  gap: var(--spacing-xs);
+}
+
+.agent-icons__filters {
+  display: flex;
+  gap: var(--spacing-3xs);
+  overflow-x: auto;
+  scrollbar-width: thin;
+  padding-bottom: var(--spacing-3xs);
+}
+
+.agent-icons__filters > * {
+  flex: 0 0 auto;
+}
+
+.agent-icons__count {
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+}
+
+.agent-icons__scroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  max-height: calc(var(--spacing-lg) * 14);
+  overflow-y: auto;
+  border-radius: var(--radius-control);
+}
+
+.agent-icons__section {
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+}
+
+.agent-icons__grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--spacing-2xs);
+}
+
+.agent-icons__more {
+  display: flex;
+  justify-content: center;
+  padding: var(--spacing-xs) 0;
+}

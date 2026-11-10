@@ -19,9 +19,11 @@ import {
   KEY_ICON_GRID,
   KEY_PIP_COUNT,
   colorwayOf,
-  iconDrawing,
   keyLookFor,
+  legendDrawing,
+  packDrawingsVersion,
   pipsFor,
+  subscribePackDrawings,
   type AgentKeyLook,
   type KeyState,
 } from '../../../packages/companion-protocol/src/agentKeys';
@@ -116,7 +118,10 @@ export function AgentKey({
   const big = BIG.has(size);
   const socket = state === 'paused' || state === 'new';
   const pips = pipsFor(look.level);
-  const drawing = iconDrawing(look.icon);
+  // A pack icon's drawing arrives with its file (agentKeyPack.ts): until
+  // then the face is blank, and the version bump re-draws it.
+  useSyncExternalStore(subscribePackDrawings, packDrawingsVersion);
+  const drawing = legendDrawing(look.icon);
   return (
     <span
       className={`agent-key agent-key--${size}${className ? ` ${className}` : ''}`}
@@ -136,14 +141,15 @@ export function AgentKey({
             <svg
               data-dynamic-svg="agent-key"
               className="agent-key__legend"
+              data-round={drawing?.round || undefined}
               viewBox={`0 0 ${KEY_ICON_GRID} ${KEY_ICON_GRID}`}
               focusable="false"
             >
-              {drawing.paths.map((d) => (
-                <path key={d} d={d} />
+              {drawing?.paths.map((d, i) => (
+                <path key={`${i}:${d}`} d={d} />
               ))}
-              {drawing.circles?.map(([cx, cy, r]) => (
-                <circle key={`${cx},${cy}`} cx={cx} cy={cy} r={r} />
+              {drawing?.circles?.map(([cx, cy, r], i) => (
+                <circle key={`${i}:${cx},${cy}`} cx={cx} cy={cy} r={r} />
               ))}
             </svg>
             {big && look.boundKey && <span className="agent-key__sub">{look.boundKey}</span>}

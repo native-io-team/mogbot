@@ -1,9 +1,10 @@
 /**
  * How an agent looks: its key's colourway, its legend and the keyboard key
  * it's bound to, with the key itself at full size (112px) changing as you
- * pick. Colours and legends are radio groups with one Tab stop each, the
- * arrows moving focus and the choice together, as radios do; each choice is
- * drawn as the key it would make. The bound key is a press-to-bind field: a
+ * pick. Colours are a radio group with one Tab stop, the arrows moving focus
+ * and the choice together, as radios do; the legend is searched from every
+ * icon there is (`AgentKeyIconPicker`). Each choice is drawn as the key it
+ * would make. The bound key is a press-to-bind field: a
  * letter or digit binds it, and one another agent has is refused with a line
  * saying whose (docs/internal/agent-keys.md).
  *
@@ -11,13 +12,10 @@
  */
 
 import { useState, type KeyboardEvent, type ReactNode } from 'react';
-import {
-  COLORWAYS,
-  KEY_ICONS,
-  normalizeBoundKey,
-} from '../../../packages/companion-protocol/src/agentKeys';
+import { COLORWAYS, normalizeBoundKey } from '../../../packages/companion-protocol/src/agentKeys';
 import type { AgentIndependence } from '../../../packages/companion-protocol/src/model';
 import { AgentKey } from './AgentKey';
+import { AgentKeyIconPicker } from './AgentKeyIconPicker';
 
 export interface KeyTaken {
   key: string;
@@ -36,6 +34,8 @@ interface AgentKeyPickerProps {
   onColorwayChange: (colorway: string) => void;
   onIconChange: (icon: string) => void;
   onBoundKeyChange: (key: string) => void;
+  /** Focus the icon search when it opens (opened by hand). */
+  autoFocusSearch?: boolean;
 }
 
 /** Why a typed key can't be this agent's, or nothing. */
@@ -58,6 +58,7 @@ export function AgentKeyPicker({
   onColorwayChange,
   onIconChange,
   onBoundKeyChange,
+  autoFocusSearch = false,
 }: AgentKeyPickerProps) {
   return (
     <div className="agent-look">
@@ -80,13 +81,12 @@ export function AgentKeyPicker({
           name={(id) => COLORWAYS.find((c) => c.id === id)?.name ?? id}
           render={(id) => <AgentKey name={name} colorway={id} icon={icon} size="md" />}
         />
-        <RadioRow
-          label="Icon"
-          values={KEY_ICONS.map((i) => i.id)}
-          value={icon}
+        <AgentKeyIconPicker
+          name={name}
+          colorway={colorway}
+          icon={icon}
           onChange={onIconChange}
-          name={(id) => KEY_ICONS.find((i) => i.id === id)?.name ?? id}
-          render={(id) => <AgentKey name={name} colorway={colorway} icon={id} size="md" />}
+          autoFocus={autoFocusSearch}
         />
         <BindField boundKey={boundKey} taken={taken} onChange={onBoundKeyChange} />
       </div>

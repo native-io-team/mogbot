@@ -18,7 +18,7 @@
  */
 
 :root {
-  /* The eight colourways (agent-keys.json, value for value; agentKey.test.ts
+  /* The fourteen colourways (agent-keys.json, value for value; agentKey.test.ts
      reads both and compares): face, skirt, depth, legend. */
   --agent-key-blue-face: #3f6fd8;
   --agent-key-blue-skirt: #3159b4;
@@ -52,6 +52,30 @@
   --agent-key-sage-skirt: #8c9d5c;
   --agent-key-sage-depth: #5f6e38;
   --agent-key-sage-legend: #1a2108;
+  --agent-key-brick-face: #b5452c;
+  --agent-key-brick-skirt: #963722;
+  --agent-key-brick-depth: #632314;
+  --agent-key-brick-legend: #fff1e8;
+  --agent-key-plum-face: #7a3e6e;
+  --agent-key-plum-skirt: #62305a;
+  --agent-key-plum-depth: #3f1c3a;
+  --agent-key-plum-legend: #fbeaf5;
+  --agent-key-navy-face: #27395e;
+  --agent-key-navy-skirt: #1d2c4a;
+  --agent-key-navy-depth: #0e172c;
+  --agent-key-navy-legend: #eee7d8;
+  --agent-key-forest-face: #2f6148;
+  --agent-key-forest-skirt: #244d39;
+  --agent-key-forest-depth: #123021;
+  --agent-key-forest-legend: #eaf2e2;
+  --agent-key-sky-face: #9dc8ea;
+  --agent-key-sky-skirt: #7eabd0;
+  --agent-key-sky-depth: #4c7ba3;
+  --agent-key-sky-legend: #0e2538;
+  --agent-key-lilac-face: #c3b4e2;
+  --agent-key-lilac-skirt: #a696c8;
+  --agent-key-lilac-depth: #6c5d95;
+  --agent-key-lilac-legend: #1f1734;
 
   /* The lit legend: a backlit shine-through cap. */
   --agent-key-lit: #fff6dc;
@@ -150,6 +174,43 @@
   --agent-key-skirt: var(--agent-key-sage-skirt);
   --agent-key-depth: var(--agent-key-sage-depth);
   --agent-key-legend: var(--agent-key-sage-legend);
+}
+
+.agent-key[data-colorway='brick'] {
+  --agent-key-face: var(--agent-key-brick-face);
+  --agent-key-skirt: var(--agent-key-brick-skirt);
+  --agent-key-depth: var(--agent-key-brick-depth);
+  --agent-key-legend: var(--agent-key-brick-legend);
+}
+.agent-key[data-colorway='plum'] {
+  --agent-key-face: var(--agent-key-plum-face);
+  --agent-key-skirt: var(--agent-key-plum-skirt);
+  --agent-key-depth: var(--agent-key-plum-depth);
+  --agent-key-legend: var(--agent-key-plum-legend);
+}
+.agent-key[data-colorway='navy'] {
+  --agent-key-face: var(--agent-key-navy-face);
+  --agent-key-skirt: var(--agent-key-navy-skirt);
+  --agent-key-depth: var(--agent-key-navy-depth);
+  --agent-key-legend: var(--agent-key-navy-legend);
+}
+.agent-key[data-colorway='forest'] {
+  --agent-key-face: var(--agent-key-forest-face);
+  --agent-key-skirt: var(--agent-key-forest-skirt);
+  --agent-key-depth: var(--agent-key-forest-depth);
+  --agent-key-legend: var(--agent-key-forest-legend);
+}
+.agent-key[data-colorway='sky'] {
+  --agent-key-face: var(--agent-key-sky-face);
+  --agent-key-skirt: var(--agent-key-sky-skirt);
+  --agent-key-depth: var(--agent-key-sky-depth);
+  --agent-key-legend: var(--agent-key-sky-legend);
+}
+.agent-key[data-colorway='lilac'] {
+  --agent-key-face: var(--agent-key-lilac-face);
+  --agent-key-skirt: var(--agent-key-lilac-skirt);
+  --agent-key-depth: var(--agent-key-lilac-depth);
+  --agent-key-legend: var(--agent-key-lilac-legend);
 }
 
 /* ── the key ─────────────────────────────── */
@@ -266,6 +327,12 @@
   stroke-linecap: square;
   stroke-linejoin: miter;
   transition: stroke var(--transition-interaction-fast);
+}
+
+/* A pack icon (Lucide) keeps the round caps and joins it was drawn with. */
+.agent-key__legend[data-round] {
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 /* The bound key, small, bottom right of the face: big keys only. */
