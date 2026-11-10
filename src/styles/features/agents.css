@@ -161,16 +161,6 @@
 
 /* The key itself (colourway, legend, states) is agent-key.css. */
 
-/* A colour where letters would be too small to read (the peer line, menus). */
-.agent-dot {
-  display: inline-block;
-  flex: 0 0 auto;
-  width: var(--size-sidebar-status-indicator);
-  height: var(--size-sidebar-status-indicator);
-  background: var(--agents-tint, var(--text-muted));
-  border-radius: var(--radius-pill);
-}
-
 /* ---------------------------------------------------------- agent list */
 
 .agents-list {

@@ -563,7 +563,7 @@
       "layer": "components",
       "owner": "WorkspaceSidebar",
       "status": "canonical",
-      "consumerCount": 6
+      "consumerCount": 4
     },
     {
       "name": "--size-sidebar-server-glow-rest-inner-radius",
@@ -5315,7 +5315,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 938
+      "consumerCount": 937
     },
     {
       "name": "--text-faint",
@@ -6251,7 +6251,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 84
+      "consumerCount": 83
     },
     {
       "name": "--mask-opaque",
@@ -6763,7 +6763,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 938
+      "consumerCount": 937
     },
     {
       "name": "--text-faint",
