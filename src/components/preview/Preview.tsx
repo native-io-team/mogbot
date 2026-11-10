@@ -1871,7 +1871,7 @@ export const Preview = forwardRef<PreviewHandle, PreviewProps>(function Preview(
                 ref={iframeRef}
                 src={conn.serverReady ? conn.currentUrl : 'about:blank'}
                 className="preview-iframe"
-                title=""
+                title="Preview of your site"
                 data-tooltip-disabled
                 onLoad={conn.handleIframeLoad}
                 // Scale-to-fit (Chrome-DevTools style): lay the page out at the

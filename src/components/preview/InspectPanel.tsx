@@ -48,7 +48,8 @@ export const InspectPanel = forwardRef<HTMLDivElement, InspectPanelProps>(functi
   const setActiveTab = onActiveTabChange ?? setActiveTabLocal;
 
   return (
-    <div ref={ref} className="preview-logs-panel" aria-hidden={hidden}>
+    // Hidden, it is out of the tab order too (inert), not just out of the tree.
+    <div ref={ref} className="preview-logs-panel" aria-hidden={hidden} inert={hidden}>
       <Tabs value={activeTab} onValueChange={(next) => setActiveTab(next as InspectTab)}>
         <div className="preview-logs-header">
           {/* The underline appearance is the primitive's own — the strip used

@@ -299,10 +299,10 @@ function PanelTile({
               className="workspace-layout-menu__icon-action workspace-layout-menu__move--pin panel-pin-toggle workspace-layout-menu__hit-target"
               icon={<PinIcon size={12} />}
               onClick={() => onAction('dock', panel, column.sourceIndex, index)}
-              aria-pressed={false}
+              aria-checked={false}
               title={`Dock ${panelLabel(panel)}`}
               aria-label={`Dock ${panelLabel(panel)}`}
-              role="menuitem"
+              role="menuitemcheckbox"
               data-layout-hit-target="true"
             />
             <span className="workspace-layout-menu__tile-name">{panelLabel(panel)}</span>
@@ -315,10 +315,10 @@ function PanelTile({
               className="workspace-layout-menu__icon-action workspace-layout-menu__move--pin panel-pin-toggle workspace-layout-menu__hit-target is-on"
               icon={<PinIcon size={12} />}
               onClick={() => onAction('float', panel, column.sourceIndex, index)}
-              aria-pressed
+              aria-checked
               title={`Float ${panelLabel(panel)}`}
               aria-label={`Float ${panelLabel(panel)}`}
-              role="menuitem"
+              role="menuitemcheckbox"
               data-layout-hit-target="true"
             />
             <span className="workspace-layout-menu__tile-name">{panelLabel(panel)}</span>
