@@ -594,18 +594,23 @@ carries the same conversation on from just before it.
 - **Where the engine picks up.** At the start of every turn the app notes
   where its conversation stood (`turn_points.jsonl`, at most 400 kept): on
   Claude Code the session and its last main-chain entry
-  (`transcript::claude_leaf`), a new session handed nothing (blank), or
-  anything else (a recap, another engine). Going back to before a message is
-  that point exactly: Claude Code starts a new session with `--resume <s>
-  --resume-session-at <entry> --fork-session` (hidden flags, verified on
-  2.1.322: the new session knows only what came before, and the original
-  transcript is untouched), a blank point starts blank, and the rest start a
-  new session handed a recap of what is left of the chat
-  (`rewind::RECAP_HEADER`), which the line says. That covers Codex and
-  OpenCode today, and a message that was batched behind another in one turn.
-  (Codex's app-server has `thread/fork` with `lastTurnId`; not wired yet.)
-  The branch waits in `branches.json` until the conversation has a session
-  again.
+  (`transcript::claude_leaf`); on Codex's app-server the thread and the last
+  turn the app saw in it (`codex_turns.json`, from `turn/start`); a new
+  session handed nothing (blank); or anything else (a recap, `codex exec`,
+  OpenCode). Going back to before a message is that point exactly: Claude
+  Code starts a new session with `--resume <s> --resume-session-at <entry>
+  --fork-session` (hidden flags, verified on 2.1.322: the new session knows
+  only what came before, and the original transcript is untouched); Codex
+  starts its turn with `thread/fork` and `lastTurnId` (inclusive, schema of
+  0.166) in place of `thread/start`; a blank point starts blank; and the
+  rest start a new session handed a recap of what is left of the chat
+  (`rewind::RECAP_HEADER`), which the line says. That covers OpenCode, the
+  exec fallback and a message batched behind another in one turn. If the
+  engine refuses the fork before starting a session (a Claude Code update
+  that drops the hidden flag, a Codex that won't fork the thread), the turn
+  runs again from a recap with the same line (`rewind::fell_back`), so an
+  engine update never breaks going back. The branch waits in
+  `branches.json` until the conversation has a session again.
 - **Never mid-turn.** Rewind and Edit are refused while the agent has a turn
   running or the user is driving its session; Fork is allowed (it changes
   nothing in the running conversation).

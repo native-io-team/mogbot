@@ -284,6 +284,23 @@ impl Conversation {
         (conversation, first)
     }
 
+    /// Start as a fork of `thread` through its turn `last_turn` (`rewind`):
+    /// `thread/fork` with `lastTurnId` (inclusive) and the same settings a
+    /// new thread gets, in place of `thread/start`. Schema of 0.166: the
+    /// response carries `thread` and `model` as `thread/start`'s does.
+    pub fn forking(mut self, thread: &str, last_turn: &str) -> Self {
+        let mut params = self.start["params"].clone();
+        params["threadId"] = json!(thread);
+        params["lastTurnId"] = json!(last_turn);
+        self.start = request(START, "thread/fork", params);
+        self
+    }
+
+    /// The id of this conversation's turn, once `turn/start` said it.
+    pub fn turn_id(&self) -> Option<&str> {
+        self.turn.as_deref()
+    }
+
     /// This conversation compacts its thread rather than taking a turn: it
     /// ends when Codex reports the compaction (`tidy`). Schema of 0.166:
     /// `thread/compact/start {threadId}`, then a `contextCompaction` item
@@ -967,6 +984,27 @@ mod tests {
         assert!(args
             .windows(2)
             .any(|w| w == ["-c", "sandbox_workspace_write.network_access=false"]));
+    }
+
+    #[test]
+    fn a_fork_starts_as_the_thread_through_a_turn_and_names_its_new_thread() {
+        let (c, _) = Conversation::new(None, Path::new("/h/a"), Some("gpt-5"), "dev", "hi", false);
+        let mut c = c.forking("t-old", "turn-7");
+        assert_eq!(c.start["method"], "thread/fork");
+        assert_eq!(c.start["params"]["threadId"], "t-old");
+        assert_eq!(c.start["params"]["lastTurnId"], "turn-7");
+        // The settings a new thread gets come along.
+        assert_eq!(c.start["params"]["developerInstructions"], "dev");
+        assert_eq!(c.start["params"]["model"], "gpt-5");
+        let out = c.on_message(
+            &json!({ "id": START, "result": { "thread": { "id": "t-new" }, "model": "gpt-5" } }),
+        );
+        assert!(out
+            .iter()
+            .any(|o| matches!(o, Out::Step(Step::Session(t)) if t == "t-new")));
+        assert_eq!(c.turn_id(), None);
+        c.on_message(&json!({ "id": TURN, "result": { "turn": { "id": "turn-8" } } }));
+        assert_eq!(c.turn_id(), Some("turn-8"));
     }
 
     #[test]

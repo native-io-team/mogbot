@@ -1002,6 +1002,56 @@ async fn rewind(h: &H) -> Check {
     )
 }
 
+/// A Claude Code that refuses `--resume-session-at` (an update dropped the
+/// hidden flag): the turn runs again from a recap, says so in one quiet
+/// line, and nothing fails.
+async fn rewind_fallback(h: &H) -> Check {
+    let first = agents::conversations::FIRST;
+    let a = h.agent("Rewinder2");
+    h.send(&a.id, &fake(json!([{"say": "a {turn}"}]))).await?;
+    h.turn(&a.id).await?;
+    let m2 = h.send(&a.id, &fake(json!([{"say": "b {turn}"}]))).await?;
+    h.turn(&a.id).await?;
+    cmd::agents_conversation_rewind(h.app.clone(), a.id.clone(), first.into(), m2.id.clone())
+        .await
+        .map_err(|e| e.to_string())?;
+    std::env::set_var("FAKE_CLAUDE_NO_RESUME_AT", "1");
+    let sent = h
+        .send(&a.id, &fake(json!([{"say": "c {session} {turn}"}])))
+        .await;
+    let ran = h.turn(&a.id).await;
+    std::env::remove_var("FAKE_CLAUDE_NO_RESUME_AT");
+    sent?;
+    ran?;
+    no_errors(&a.id)?;
+    let s = store::get(&a.id).unwrap().session_id.ok_or("no session")?;
+    ensure(
+        last_reply(&a.id) == format!("c {s} 1"),
+        format!("after the fallback: {:?}", last_reply(&a.id)),
+    )?;
+    ensure(
+        notes(&a.id)
+            .iter()
+            .any(|n| n == agents::rewind::RECAP_CLAUSE),
+        format!("no line saying so: {:?}", notes(&a.id)),
+    )?;
+    let recapped = h.turns_with("\"c {session}").last().and_then(|t| {
+        t["prompt"]
+            .as_str()
+            .map(|p| p.contains("went back to an earlier point"))
+    });
+    ensure(recapped == Some(true), "the retry wasn't handed a recap")?;
+    // The next turn resumes the recap's session as any other.
+    h.send(&a.id, &fake(json!([{"say": "d {session} {turn}"}])))
+        .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        last_reply(&a.id) == format!("d {s} 2"),
+        format!("next turn: {:?}", last_reply(&a.id)),
+    )
+}
+
 /// The engine's copy of the conversation goes missing: the app puts its own
 /// back and the turn resumes it.
 async fn lost_transcript(h: &H) -> Check {
@@ -2528,6 +2578,7 @@ const ALL: &[&str] = &[
     "queue",
     "conversations",
     "rewind",
+    "rewind-fallback",
     "lost-transcript",
     "failover-acted",
     "crash-twice",
@@ -2665,6 +2716,7 @@ fn main() {
                 "queue" => queueing(&h).await,
                 "conversations" => conversations(&h).await,
                 "rewind" => rewind(&h).await,
+                "rewind-fallback" => rewind_fallback(&h).await,
                 "lost-transcript" => lost_transcript(&h).await,
                 "brief" => brief(&h).await,
                 "failover-acted" => failover_after_acting(&h).await,

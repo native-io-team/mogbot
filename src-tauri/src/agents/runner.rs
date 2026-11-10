@@ -5711,27 +5711,41 @@ async fn run_turn(
         Some(id) => (id.clone(), true),
         None => (driver.new_session(), false),
     };
+    // What was asked, before any recap: a fork that falls back asks again.
+    let asked = prompt;
     // Gone back to an earlier point (`rewind`): where this conversation's
-    // new session starts. Only Claude Code resumes at an entry, and only a
-    // session still on this Mac; anything else picks up from a recap.
+    // new session starts. Claude Code resumes at an entry, Codex's
+    // app-server forks a thread through a turn, each only from a session
+    // still on this Mac; anything else picks up from a recap.
+    let loaded_conversation = super::conversations::loaded(&agent).to_string();
     let branch = if crossed || quiet {
         None
     } else {
-        let conversation = super::conversations::loaded(&agent).to_string();
-        super::rewind::pending(agent_id, &conversation, agent.session_id.is_some()).map(|p| match p
-            .branch
-        {
-            super::rewind::Branch::Fork { session, at }
-                if engine == Engine::Claude
-                    && super::wallet::valid_session(&session)
-                    && super::wallet::valid_session(&at)
-                    && super::transcript::resumable(agent_id, engine, &session) =>
-            {
+        super::rewind::pending(agent_id, &loaded_conversation, agent.session_id.is_some()).map(
+            |p| match p.branch {
                 super::rewind::Branch::Fork { session, at }
-            }
-            super::rewind::Branch::Fork { .. } => super::rewind::Branch::Recap,
-            b => b,
-        })
+                    if engine == Engine::Claude
+                        && super::wallet::valid_session(&session)
+                        && super::wallet::valid_session(&at)
+                        && super::transcript::resumable(agent_id, engine, &session) =>
+                {
+                    super::rewind::Branch::Fork { session, at }
+                }
+                super::rewind::Branch::CodexFork { thread, turn }
+                    if engine == Engine::Codex
+                        && driver == Driver::CodexApp
+                        && super::wallet::valid_session(&thread)
+                        && !turn.is_empty()
+                        && super::transcript::resumable(agent_id, engine, &thread) =>
+                {
+                    super::rewind::Branch::CodexFork { thread, turn }
+                }
+                super::rewind::Branch::Fork { .. } | super::rewind::Branch::CodexFork { .. } => {
+                    super::rewind::Branch::Recap
+                }
+                b => b,
+            },
+        )
     };
     let recapped = !resuming
         && (agent.new_engine || !retry_fresh || branch == Some(super::rewind::Branch::Recap));
@@ -5780,14 +5794,26 @@ async fn run_turn(
         tracing::info!("[Agents] put {agent_id}'s conversation back where its engine looks for it");
     }
     // A fork's source, likewise.
-    if let Some(super::rewind::Branch::Fork { session, .. }) = &branch {
-        super::transcript::ensure(account, &layout.cwd, &home, session);
+    match &branch {
+        Some(super::rewind::Branch::Fork { session, .. })
+        | Some(super::rewind::Branch::CodexFork {
+            thread: session, ..
+        }) => {
+            super::transcript::ensure(account, &layout.cwd, &home, session);
+        }
+        _ => {}
     }
     // Where this conversation stands before the turn, for going back to
     // before what it answers (`rewind`).
-    let resumed_at = (resuming && engine == Engine::Claude && !crossed && !quiet)
-        .then(|| super::transcript::claude_leaf(&home, &session_id))
-        .flatten();
+    let resumed_at = if !resuming || crossed || quiet {
+        None
+    } else if engine == Engine::Claude {
+        super::transcript::claude_leaf(&home, &session_id)
+    } else if engine == Engine::Codex && driver == Driver::CodexApp {
+        super::rewind::codex_last_turn(agent_id, &session_id)
+    } else {
+        None
+    };
     if let Some(caps) = driver
         .capabilities_before(&agent, &binary, store::now_ms(), &access)
         .await
@@ -6068,6 +6094,13 @@ async fn run_turn(
                 profiles,
             );
             let conversation = conversation.with_effort(effort);
+            // Gone back to an earlier point: a fork of the thread (`rewind`).
+            let conversation = match &branch {
+                Some(super::rewind::Branch::CodexFork { thread, turn }) => {
+                    conversation.forking(thread, turn)
+                }
+                _ => conversation,
+            };
             let conversation = if super::tidy::is_compacting(agent_id) {
                 conversation.compacting()
             } else {
@@ -6615,6 +6648,14 @@ async fn run_turn(
     timing.log(agent_id);
     // The app's own copy of the conversation, so a deleted transcript never
     // costs the agent its memory of this chat (`transcript`).
+    // A Codex app-server turn's id, for forking its thread through it later.
+    if engine == Engine::Codex && !crossed && !quiet {
+        if let (Some(Conversation::Codex(c)), Some(thread)) = (&conversation, &this_session) {
+            if let Some(turn) = c.turn_id() {
+                super::rewind::note_codex_turn(agent_id, thread, turn);
+            }
+        }
+    }
     let kept = this_session
         .clone()
         .or_else(|| (!session_id.is_empty()).then(|| session_id.clone()));
@@ -6679,6 +6720,28 @@ async fn run_turn(
             None => {}
         }
         return Ok(Ended::Stopped(note));
+    }
+
+    // Going back to the exact point failed before the engine started a
+    // session (a Claude Code that no longer takes `--resume-session-at`, a
+    // Codex that won't fork the thread): nothing ran, so this turn runs
+    // again from a recap, and the chat says so. An engine update never
+    // breaks going back.
+    let forked = matches!(
+        branch,
+        Some(super::rewind::Branch::Fork { .. }) | Some(super::rewind::Branch::CodexFork { .. })
+    );
+    if forked && !session_confirmed && !saw_result && !said_anything && !quiet {
+        tracing::warn!(
+            "[Agents] {agent_id}'s engine couldn't go back to the exact point; picking up from a recap: {}",
+            stderr_text.lines().last().unwrap_or("")
+        );
+        super::rewind::fell_back(agent_id, &loaded_conversation);
+        let _ = record_in_turn(
+            app,
+            new_message(agent_id, MessageKind::Note, super::rewind::RECAP_CLAUSE),
+        );
+        return Box::pin(run_turn(app, agent_id, asked, routine, false, account)).await;
     }
 
     let missing_session =
