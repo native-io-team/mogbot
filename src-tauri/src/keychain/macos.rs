@@ -132,18 +132,14 @@ impl Store for MacStore {
         use std::io::Write;
         use std::process::Stdio;
         // The secret goes on stdin, never argv (visible to every user via
-        // `ps`). With `-w` last and no value, `security` asks for it and a
-        // confirmation, so it is sent twice; values are a single line.
+        // `ps`). Not through `-w`'s own prompt: that reads with
+        // readpassphrase and silently keeps only the first 128 characters,
+        // so a long API token (Sanity's are ~180) was stored cut short and
+        // failed the read-back. `security -i` reads whole command lines from
+        // stdin instead, with the value quoted (`interactive_put_line`).
+        let line = interactive_put_line(service, account, value)?;
         let mut child = create_command("security")
-            .args([
-                "add-generic-password",
-                "-U",
-                "-a",
-                account,
-                "-s",
-                service,
-                "-w",
-            ])
+            .arg("-i")
             .stdin(Stdio::piped())
             .stdout(Stdio::null())
             .stderr(Stdio::null())
@@ -153,10 +149,7 @@ impl Store for MacStore {
             .stdin
             .take()
             .ok_or_else(|| "no stdin handle".to_string())
-            .and_then(|mut s| {
-                s.write_all(format!("{value}\n{value}\n").as_bytes())
-                    .map_err(|e| e.to_string())
-            });
+            .and_then(|mut s| s.write_all(line.as_bytes()).map_err(|e| e.to_string()));
         let status = child.wait().map_err(|e| e.to_string())?;
         wrote?;
         if status.success() {
@@ -180,6 +173,52 @@ impl Store for MacStore {
     }
 }
 
+/// One `security -i` command line that stores `value`: every argument in
+/// double quotes, with `\` and `"` escaped, so the value arrives whole and
+/// unexpanded at any length. A line break can't be carried on one line, so a
+/// value with one is refused rather than stored differently.
+fn interactive_put_line(service: &str, account: &str, value: &str) -> Result<String, String> {
+    if [service, account, value]
+        .iter()
+        .any(|s| s.contains(['\n', '\r', '\0']))
+    {
+        return Err("a secret can't contain a line break".into());
+    }
+    let q = |s: &str| format!("\"{}\"", s.replace('\\', "\\\\").replace('"', "\\\""));
+    Ok(format!(
+        "add-generic-password -U -a {} -s {} -w {}\n",
+        q(account),
+        q(service),
+        q(value)
+    ))
+}
+
+#[cfg(test)]
+mod interactive_put_line_tests {
+    use super::interactive_put_line;
+
+    #[test]
+    fn quotes_and_escapes_every_argument() {
+        assert_eq!(
+            interactive_put_line("svc", "ACCT", r#"a"b\c $d"#).unwrap(),
+            "add-generic-password -U -a \"ACCT\" -s \"svc\" -w \"a\\\"b\\\\c $d\"\n"
+        );
+    }
+
+    #[test]
+    fn a_long_value_is_carried_whole() {
+        let long = "x".repeat(400);
+        assert!(interactive_put_line("svc", "A", &long)
+            .unwrap()
+            .contains(&long));
+    }
+
+    #[test]
+    fn a_line_break_is_refused() {
+        assert!(interactive_put_line("svc", "A", "one\ntwo").is_err());
+    }
+}
+
 /// Against the real login Keychain, with throwaway items only (their own
 /// service name, deleted at the end). Never `security -w` on an app-owned
 /// item: that is exactly the prompt this design avoids. Run by hand:
@@ -188,6 +227,27 @@ impl Store for MacStore {
 mod keychain_live_tests {
     use super::super::{Mode, Read, Vault, MOVED, V2_SUFFIX, WRITTEN};
     use super::*;
+
+    /// The bug this guards: `-w`'s prompt kept 128 characters of a 180-character
+    /// Sanity token, and the save failed "didn't read back the same".
+    #[test]
+    #[ignore = "touches the real keychain (temporary items it creates and deletes)"]
+    fn keychain_live_long_and_quoted_values_round_trip() {
+        let service = format!(
+            "{}selftest-{}",
+            crate::brand::keychain_prefix("account"),
+            uuid::Uuid::new_v4().simple()
+        );
+        let store = MacStore;
+        for value in [
+            "k".repeat(300),
+            r#"sk"quote\back slash $HOME 'x'"#.to_string(),
+        ] {
+            store.cli_put(&service, "SELFTEST", &value).unwrap();
+            assert_eq!(store.cli_get(&service, "SELFTEST").unwrap(), Some(value));
+        }
+        store.cli_delete(&service, "SELFTEST").unwrap();
+    }
 
     #[test]
     #[ignore = "touches the real keychain (temporary items it creates and deletes)"]
