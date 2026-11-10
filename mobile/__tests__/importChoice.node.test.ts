@@ -5,7 +5,12 @@
  */
 
 import type { ImportTalk, PhoneImportStatus } from '@shipstudio/companion-protocol';
-import { asksImportChoice, phoneImportStep } from '../src/lib/importChoice';
+import {
+  asksImportChoice,
+  importedHere,
+  phoneImportStep,
+  phoneTalkHeading,
+} from '../src/lib/importChoice';
 
 const SERVES = { methods: ['agents.import.status', 'agents.setImportChoice'] };
 
@@ -54,5 +59,40 @@ describe('phoneImportStep', () => {
       imported: [],
     } as unknown as ImportTalk;
     expect(phoneImportStep(status({ talk }))).toMatchObject({ id: 'follow', index: 3 });
+  });
+});
+
+describe('phoneTalkHeading', () => {
+  const talk = (state: ImportTalk['state'], imported: string[] = []): ImportTalk => ({
+    id: 't',
+    source: 'Grok',
+    chiefId: 'chief',
+    state,
+    startedAt: 0,
+    lastAt: 0,
+    exchanges: 0,
+    staged: [],
+    imported,
+    busy: false,
+  });
+
+  it('never asks the user to answer while the other assistant is sending', () => {
+    expect(phoneTalkHeading(talk('interviewing'), 'Ada')).toBe('Grok is sending everything');
+    expect(phoneTalkHeading(talk('awaiting_consent'), 'Ada')).toBe('Allow Grok in Ada’s chat');
+    expect(phoneTalkHeading(talk('playback'), 'Ada')).toBe('Check the plan in Ada’s chat');
+    expect(phoneTalkHeading(talk('review'), 'Ada')).toBe('Review them in Ada’s chat');
+    expect(phoneTalkHeading(talk('imported', ['Travel']), 'Ada')).toBe('Your team is here');
+    expect(phoneTalkHeading(talk('stopped'), 'Ada')).toBe('Nothing was imported');
+  });
+
+  it('ends on the imported agents that are here, to open', () => {
+    const agents = [
+      { id: 'a1', name: 'Travel' },
+      { id: 'a2', name: 'Finance' },
+    ];
+    expect(importedHere(talk('imported', ['Finance (from Grok)', 'Travel']), agents)).toEqual([
+      { id: 'a1', name: 'Travel' },
+    ]);
+    expect(importedHere(talk('review', ['Travel']), agents)).toEqual([]);
   });
 });

@@ -4,7 +4,7 @@
  * and which one of the import screen's three steps shows.
  */
 
-import type { AgentsOverview, PhoneImportStatus } from '@shipstudio/companion-protocol';
+import type { AgentsOverview, ImportTalk, PhoneImportStatus } from '@shipstudio/companion-protocol';
 
 /** Whether the home asks: undecided, and this Mac can both import and take the answer. */
 export function asksImportChoice(
@@ -37,4 +37,40 @@ export function phoneImportStep(status: PhoneImportStatus | null): {
     return { id: 'connect', index: 1, reachable };
   }
   return { id: 'start', index: 2, reachable };
+}
+
+/**
+ * The follow step's heading: what the user does now, if anything. While the
+ * other assistant is sending, there is nothing to answer, so it never says so.
+ */
+export function phoneTalkHeading(talk: ImportTalk, chief: string): string {
+  switch (talk.state) {
+    case 'awaiting_consent':
+      return `Allow ${talk.source} in ${chief}’s chat`;
+    case 'interviewing':
+      return `${talk.source} is sending everything`;
+    case 'playback':
+      return `Check the plan in ${chief}’s chat`;
+    case 'review':
+      return `Review them in ${chief}’s chat`;
+    case 'imported':
+      return talk.imported.length ? 'Your team is here' : 'Done';
+    default:
+      return 'Nothing was imported';
+  }
+}
+
+/**
+ * The imported agents that are on the Mac now, to open their chats: an
+ * import ends with the user talking to them. A name not found is left out.
+ */
+export function importedHere(
+  talk: ImportTalk,
+  agents: { id: string; name: string }[]
+): { id: string; name: string }[] {
+  if (talk.state !== 'imported') return [];
+  return talk.imported.flatMap((name) => {
+    const found = agents.find((a) => a.name === name);
+    return found ? [{ id: found.id, name: found.name }] : [];
+  });
 }
