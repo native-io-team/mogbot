@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use tauri::{AppHandle, Emitter};
 
 use crate::agents::{
-    self, apps, attachments, conversations, engine, files, import, mcp, memory, notify, paste,
-    project, prompts, runner, schedule, search, secrets, store, takeover, templates, usage,
+    self, apps, attachments, conversations, engine, files, import, mcp, memory, notify, project,
+    prompts, runner, schedule, search, secrets, store, takeover, templates, usage,
 };
 use crate::errors::CommandError;
 use engine::Engine;
@@ -245,16 +245,8 @@ pub async fn agents_messages(
             Some(c) => store::conversation_page(&agent_id, c, limit, before.as_deref(), through)?,
             None => store::messages_page(&agent_id, limit, before.as_deref(), through)?,
         };
-        // What each turn did, read after the log's lock is let go.
-        crate::agents::work::apply(&agent_id, &mut page);
-        // A login card's sign-in under way, as it is now.
-        crate::agents::logins::apply(&mut page);
-        // A step-in the user is in right now.
-        crate::agents::step_in::apply(&mut page);
-        // Every card in plain words; an admin's batch as it is now.
-        crate::agents::admin::apply(&mut page);
-        // A remembered rule's line: still in force, or undone.
-        crate::agents::remember::apply(&agent_id, &mut page);
+        // As the phone shows it too, read after the log's lock is let go.
+        agents::as_shown(&agent_id, &mut page);
         // Timelines as their folded lines only: the steps come one turn at
         // a time when one is opened (`agents_turn_work`).
         if lazy_work.unwrap_or(false) {
@@ -2326,23 +2318,6 @@ pub async fn agents_import_review_current(
     request_id: String,
 ) -> Result<agents::review::Review, CommandError> {
     blocking(move || agents::review::current(&agent_id, &request_id)).await
-}
-
-/// What the user sends their other assistant to get its agents back as JSON
-/// they can paste here: the import path that needs no remote access.
-#[tauri::command]
-#[tracing::instrument]
-pub async fn agents_import_paste_prompt() -> Result<String, CommandError> {
-    Ok(paste::PASTE_PROMPT.to_string())
-}
-
-/// What importing a pasted reply would do: its agents, and what's wrong with it.
-#[tauri::command]
-#[tracing::instrument(skip(text))]
-pub async fn agents_import_paste_preview(text: String) -> Result<paste::Preview, CommandError> {
-    tokio::task::spawn_blocking(move || paste::preview(&text))
-        .await
-        .map_err(agents::err_other)?
 }
 
 /// What the user sends their old assistant for a reply that covers

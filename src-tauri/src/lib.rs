@@ -199,6 +199,9 @@ pub fn run() {
                 .build(),
         )
         .setup(|_app| {
+            // Launch cost, in the log: how long setup held the window back,
+            // and how long the agents' launch chores took behind it.
+            let setup_started = std::time::Instant::now();
             // Auto-update only when brand.json names an update feed of our own
             // (`links.updates`), which also needs `plugins.updater` (endpoints
             // + our signing pubkey) in tauri.conf.json. Without it the plugin
@@ -225,6 +228,7 @@ pub fn run() {
             agents::reach::sweep();
             let badge_app = _app.handle().clone();
             tauri::async_runtime::spawn(async move {
+                let chores_started = std::time::Instant::now();
                 // Agents' folders owner-only (0700 / 0600), whatever an
                 // older build or an agent's own CLI left.
                 let _ =
@@ -307,6 +311,10 @@ pub fn run() {
                     .await;
                 }
                 agents::notify::refresh_badge(&badge_app);
+                tracing::info!(
+                    ms = chores_started.elapsed().as_millis() as u64,
+                    "[Startup] agents' launch chores done"
+                );
             });
             // The phone server and the agent bridge, asked every 10 s from a
             // thread of their own: a hang is logged loudly, never silent.
@@ -453,6 +461,10 @@ pub fn run() {
                 dock_menu::install(_app.handle());
             }
 
+            tracing::info!(
+                ms = setup_started.elapsed().as_millis() as u64,
+                "[Startup] setup done"
+            );
             Ok(())
         })
         .on_window_event(|window, event| {
@@ -719,8 +731,6 @@ pub fn run() {
             commands::agents::agents_import_review_apply,
             commands::agents::agents_import_review_current,
             commands::agents::agents_import_playback_answer,
-            commands::agents::agents_import_paste_prompt,
-            commands::agents::agents_import_paste_preview,
             commands::agents::agents_import_export_prompt,
             commands::agents::agents_import_text_preview,
             commands::agents::agents_import_text_review,

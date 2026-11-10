@@ -296,6 +296,21 @@ fn greet(agent_id: &str) {
     }
 }
 
+/// A page of the log as a chat shows it now, on the desk and the phone
+/// alike. Call after the log's lock is let go: each reads state of its own.
+pub fn as_shown(agent_id: &str, page: &mut [store::AgentMessage]) {
+    // What each turn did.
+    work::apply(agent_id, page);
+    // A login card's sign-in under way, as it is now.
+    logins::apply(page);
+    // A step-in the user is in right now.
+    step_in::apply(page);
+    // Every card in plain words; an admin's batch as it is now.
+    admin::apply(page);
+    // A remembered rule's line: still in force, or undone.
+    remember::apply(agent_id, page);
+}
+
 /// The Chief of Staff exists from the first time anyone looks.
 pub fn ensure_main() -> Result<store::Agent, CommandError> {
     if let Some(main) = store::list()?.into_iter().find(|a| a.is_main) {

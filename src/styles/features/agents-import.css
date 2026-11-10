@@ -10,8 +10,6 @@
 :root {
   /* The rail and its marker: shared geometry with Remote access setup. */
   --agents-import-marker: var(--size-sidebar-project-shortcut);
-  /* Room for the reply someone just pasted, before the preview takes over. */
-  --agents-import-detail-max: calc(var(--font-size-body-md) * var(--line-height-help) * 9);
 }
 
 .modal-frame-content.agents-import {
@@ -464,23 +462,11 @@
   color: var(--text-muted);
 }
 
-.agents-import-agent__instructions {
-  max-height: var(--agents-import-detail-max);
-  padding: var(--spacing-sm) var(--spacing-md);
-  overflow-y: auto;
-  white-space: pre-wrap;
-  background: var(--surface-recessed);
-  border-radius: var(--radius-control);
-  -webkit-user-select: text;
-  user-select: text;
-}
-
 .agents-import-agent__none {
   color: var(--text-muted);
 }
 
-.agents-import-agent__memory,
-.agents-import-agent__routines {
+.agents-import-agent__memory {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-2xs);
@@ -502,31 +488,6 @@
   width: var(--spacing-md);
   text-indent: 0;
   color: var(--text-muted);
-}
-
-.agents-import-agent__routines li {
-  display: flex;
-  align-items: baseline;
-  gap: var(--spacing-sm);
-}
-
-.agents-import-agent__routines li > svg {
-  flex: none;
-  color: var(--accent-success);
-  transform: translateY(var(--spacing-3xs));
-}
-
-.agents-import-agent__routines li[data-refused] {
-  color: var(--accent-warning);
-}
-
-.agents-import-agent__routines li[data-refused] > svg {
-  color: var(--accent-warning);
-}
-
-.agents-import-agent__routines strong {
-  font-weight: var(--font-weight-label);
-  color: var(--text-primary);
 }
 
 /* ---------------------------------------------------------- problems */

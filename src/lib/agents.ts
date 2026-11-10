@@ -1499,10 +1499,6 @@ export const revokePermission = (agentId: string, ruleId: string) =>
   invoke<void>('agents_revoke_permission', { agentId, ruleId });
 export const focusAgent = (agentId: string | null) => invoke<void>('agents_focus', { agentId });
 export const markAgentUnread = (agentId: string) => invoke<void>('agents_mark_unread', { agentId });
-/** A new conversation from its next message: instructions and memory carry over, the chat stays. */
-export const startAgentFresh = (agentId: string) =>
-  invoke<Agent>('agents_start_fresh', { agentId });
-
 /** Whether its next message would continue a conversation (one there is to leave). */
 export const canStartFresh = (agent: Pick<Agent, 'sessionId' | 'newEngine'>) =>
   Boolean(agent.sessionId || agent.newEngine);
@@ -1855,14 +1851,6 @@ export interface ImportRoutineOutcome {
   detail: string;
 }
 
-/** What importing a pasted reply would do. Any problem blocks the import. */
-export interface PasteImportPreview {
-  source: string;
-  blocks: number;
-  agents: PasteImportAgent[];
-  problems: string[];
-}
-
 export interface ImportSummary {
   created: string[];
   updated: string[];
@@ -1871,10 +1859,6 @@ export interface ImportSummary {
   routinesSet: ImportRoutineOutcome[];
   routinesRefused: ImportRoutineOutcome[];
 }
-
-export const getPasteImportPrompt = () => invoke<string>('agents_import_paste_prompt');
-export const previewPasteImport = (text: string) =>
-  invoke<PasteImportPreview>('agents_import_paste_preview', { text });
 
 /* ------------------------- import from an export file or a pasted reply */
 

@@ -188,11 +188,6 @@ pub fn remember_agents_browser(site: &str) {
     });
 }
 
-/// `site` was last found signed in in the agents' browser.
-pub fn in_agents_browser(r: Option<&Remembered>) -> bool {
-    r.is_some_and(|r| r.browser == AGENTS_BROWSER)
-}
-
 /// `site` was last found signed in in one of the user's own Chrome profiles.
 pub fn in_personal_chrome(r: Option<&Remembered>) -> bool {
     r.is_some_and(|r| r.browser != AGENTS_BROWSER)

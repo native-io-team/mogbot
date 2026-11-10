@@ -60,7 +60,6 @@ export type Conformance = [
   Assert<Same<Wire.SearchHit, Desktop.SearchHit>>,
   Assert<Same<Wire.UsageSummary, Desktop.UsageSummary>>,
   Assert<Same<Wire.Quota, Desktop.Quota>>,
-  Assert<Same<Wire.PasteImportPreview, Desktop.PasteImportPreview>>,
   Assert<Same<Wire.ExportImportPreview, Desktop.ExportImportPreview>>,
   Assert<Same<Wire.ExportImportPosted, Desktop.ExportImportPosted>>,
   Assert<Same<Wire.ImportSummary, Desktop.ImportSummary>>,

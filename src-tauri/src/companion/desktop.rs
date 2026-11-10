@@ -249,12 +249,8 @@ impl Backend for DesktopBackend {
             if more {
                 page.drain(..page.len() - limit);
             }
-            // What each turn did, read after the log's lock is let go.
-            crate::agents::work::apply(&agent_id, &mut page);
-            crate::agents::logins::apply(&mut page);
-            crate::agents::step_in::apply(&mut page);
-            crate::agents::admin::apply(&mut page);
-            crate::agents::remember::apply(&agent_id, &mut page);
+            // As the desk shows it, read after the log's lock is let go.
+            crate::agents::as_shown(&agent_id, &mut page);
             Ok::<_, CommandError>((page, more))
         })
         .await

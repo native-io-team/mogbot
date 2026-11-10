@@ -75,14 +75,6 @@ pub struct ConnectorCard {
     pub playback: Option<Vec<super::harvest::PlaybackAgent>>,
 }
 
-/// Whether this card is an import review (kept across restarts).
-pub fn is_review(approval: &Approval) -> bool {
-    approval
-        .connector
-        .as_ref()
-        .is_some_and(|c| c.kind == CardKind::Review)
-}
-
 #[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub struct Review {

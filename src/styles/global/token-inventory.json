@@ -5243,7 +5243,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 73
+      "consumerCount": 72
     },
     {
       "name": "--surface-terminal-input",
@@ -5299,7 +5299,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 615
+      "consumerCount": 614
     },
     {
       "name": "--text-secondary",
@@ -5499,7 +5499,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 92
+      "consumerCount": 91
     },
     {
       "name": "--text-success",
@@ -5539,7 +5539,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 114
+      "consumerCount": 112
     },
     {
       "name": "--accent-error",
@@ -5939,7 +5939,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 172
+      "consumerCount": 171
     },
     {
       "name": "--font-weight-heading",
@@ -6139,7 +6139,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 94
+      "consumerCount": 93
     },
     {
       "name": "--spacing-2xs",
@@ -6163,7 +6163,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 941
+      "consumerCount": 939
     },
     {
       "name": "--spacing-md",
@@ -6171,7 +6171,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 617
+      "consumerCount": 616
     },
     {
       "name": "--spacing-lg",
@@ -6219,7 +6219,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 156
+      "consumerCount": 155
     },
     {
       "name": "--radius-card",
@@ -6699,7 +6699,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 73
+      "consumerCount": 72
     },
     {
       "name": "--surface-terminal-input",
@@ -6739,7 +6739,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 615
+      "consumerCount": 614
     },
     {
       "name": "--text-secondary",
@@ -6875,7 +6875,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 92
+      "consumerCount": 91
     },
     {
       "name": "--text-success",
@@ -6915,7 +6915,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 114
+      "consumerCount": 112
     },
     {
       "name": "--accent-error",

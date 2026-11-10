@@ -1,58 +1,26 @@
-//! Importing by copy and paste, for when remote access isn't set up.
+//! Reading agents out of a pasted reply: its fenced JSON blocks
+//! ([`extract_blocks`]) and each block's JSON ([`parse_block`]), which the
+//! export-or-reply import (`import_export.rs`) and the file formats
+//! (`import_formats.rs`) read with.
 //!
-//! The user sends their other assistant [`PASTE_PROMPT`], it replies with its
-//! agents as one or more fenced JSON blocks, and the user pastes the whole
-//! reply back. This finds the JSON in that reply, checks it, and hands it to
-//! the same [`super::import::import`] the `import_agents` tool uses, so both paths
-//! merge the same way.
+//! [`parse`] and [`for_import`] are the first paste import's own checks. Its
+//! prompt, preview and commands are gone (that path is `import_export.rs`
+//! now); these stay only for their tests, which pin the error wording the
+//! block reader gives. Fold them into `import_export.rs`'s tests and delete.
 //!
 //! Nothing here guesses. A trailing comma or a cut-off block is reported with
 //! where it is, not repaired; the one thing accepted as-is is curly quotes
 //! standing in for JSON's straight ones, and only when the text doesn't parse
 //! without that (chat apps and notes "smarten" quotes on copy).
 
-use serde::Serialize;
 use serde_json::{Map, Value};
 
 use super::import::{ImportedAgent, ImportedRoutine};
-use super::{schedule, store};
 use crate::errors::CommandError;
 
 /// The most agents one import takes (the same cap [`super::import::import`] applies).
 const MAX_AGENTS: usize = 50;
 const MAX_NAME_CHARS: usize = 40;
-
-/// What the user sends their other assistant to get its agents back as JSON.
-pub const PASTE_PROMPT: &str = r#"I'm moving my agents to a new app on my computer. Please give me a complete copy of every agent you run for me, including the main one that manages the others.
-
-Reply with one ```json code block in exactly this shape:
-
-{
-  "source": "your product's name, e.g. Grok Bot",
-  "agents": [
-    {
-      "name": "the agent's name",
-      "role": "one line: what it does",
-      "instructions": "its full instructions, word for word",
-      "memory": "everything it remembers that it still needs, one fact per line",
-      "is_main": false,
-      "color": "red",
-      "routines": [
-        { "when": "every weekday at 9am", "what": "what it does then, in a sentence or two" }
-      ]
-    }
-  ]
-}
-
-Rules:
-- Include every agent. Set "is_main": true on the one that manages the others (at most one), false on the rest.
-- Copy instructions and memory in full, word for word. Don't summarize, shorten or paraphrase them. Long is fine.
-- "routines": everything the agent does on its own on a schedule (routines, automations, reminders, recurring check-ins), one entry each. Write "when" in plain words, like "every weekday at 9am", "every monday at 8:30am", "every day at 7pm", "every 2 hours", "every month on the 1st at 9am", "every month on the last friday at 4pm" or, for a one-off, "friday at 2pm". Start repeating ones with "every". Write "what" so the agent knows exactly what to do when it fires. Use [] if it has none.
-- "color" is optional: if the agent has one, use the closest of white, brown, red, orange, amber, green, teal, blue, purple, pink, gray. Otherwise leave it out.
-- Never include passwords, API keys, tokens, card numbers or any other credentials. If an instruction or memory contains one, write [removed] in its place.
-- Valid JSON only: straight double quotes, line breaks written as \n inside strings, no comments, no trailing commas.
-- If it's too long for one message, split it into numbered ```json blocks (Part 1 of 3, Part 2 of 3, ...), each in the same shape and each holding whole agents. Never split one agent across blocks. Send the next part when I say "continue".
-- Put nothing but the JSON inside each code block."#;
 
 /// The agents found in a pasted reply, and everything wrong with it.
 #[derive(Debug, Default)]
@@ -62,49 +30,6 @@ pub struct Parsed {
     /// Each names the block, the agent and the field. Any problem blocks the import.
     pub problems: Vec<String>,
     pub blocks: usize,
-}
-
-/// One agent as the paste preview lists it.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PreviewAgent {
-    pub name: String,
-    pub role: String,
-    pub is_main: bool,
-    /// Non-main agents only: an agent with this name already exists and is updated.
-    pub existing: bool,
-    pub instructions_chars: usize,
-    pub memory_lines: usize,
-    pub routines: Vec<PreviewRoutine>,
-    /// The badge colour it will have here: its own if it exists, else what
-    /// import gives it. None only if there's no Chief of Staff yet.
-    pub color: Option<String>,
-    /// What came across, word for word, for the preview to show on request.
-    pub instructions: String,
-    pub memory: Vec<String>,
-}
-
-/// One routine as the preview lists it: what it becomes, or why it won't be set.
-/// A refused routine doesn't block the import; it's listed so it isn't lost.
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct PreviewRoutine {
-    pub when: String,
-    pub what: String,
-    /// "every weekday at 09:00" or "once, Fri 6 Nov 2026, 14:00 (UTC-05:00)".
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub schedule: Option<String>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub refused: Option<String>,
-}
-
-#[derive(Debug, Serialize)]
-#[serde(rename_all = "camelCase")]
-pub struct Preview {
-    pub source: String,
-    pub blocks: usize,
-    pub agents: Vec<PreviewAgent>,
-    pub problems: Vec<String>,
 }
 
 /// The JSON candidates in a reply: every ```json (or untagged JSON-looking)
@@ -311,7 +236,7 @@ fn read_agent(value: &Value, position: &str, problems: &mut Vec<String>) -> Opti
 }
 
 /// The `routines` list. Its shape must be right (a list of `{when, what}`);
-/// whether each phrase can be scheduled is the preview's business, not a problem.
+/// whether each phrase can be scheduled is the import's business, not a problem.
 fn read_routines(
     obj: &Map<String, Value>,
     who: &str,
@@ -357,30 +282,6 @@ fn read_routines(
         }
     }
     routines
-}
-
-/// What each routine would become, checked the way the import will check it.
-fn preview_routines(routines: &[ImportedRoutine]) -> Vec<PreviewRoutine> {
-    let tz = chrono::Local;
-    let now = store::now_ms();
-    routines
-        .iter()
-        .map(|r| {
-            let (schedule, refused) = match schedule::check(&tz, &r.when, &r.what, now) {
-                Ok((repeat, next_at)) => (
-                    Some(schedule::describe_schedule(&tz, repeat.as_ref(), next_at)),
-                    None,
-                ),
-                Err(why) => (None, Some(why.plain())),
-            };
-            PreviewRoutine {
-                when: r.when.clone(),
-                what: r.what.clone(),
-                schedule,
-                refused,
-            }
-        })
-        .collect()
 }
 
 /// Everything in a pasted reply: the agents from every block, merged in order.
@@ -492,66 +393,6 @@ pub fn parse(text: &str) -> Parsed {
     parsed
 }
 
-/// What importing this paste would do, for the modal to show before it does it.
-pub fn preview(text: &str) -> Result<Preview, CommandError> {
-    let parsed = parse(text);
-    let team = store::list()?;
-    // Import creates new agents in paste order, each taking the next registry
-    // slot; a name repeated in the paste updates the one created before it.
-    let mut created: Vec<(String, String)> = Vec::new();
-    let mut agents = Vec::with_capacity(parsed.agents.len());
-    for a in &parsed.agents {
-        let here = |name: &str| {
-            team.iter()
-                .find(|t| {
-                    if a.is_main {
-                        t.is_main
-                    } else {
-                        t.name.eq_ignore_ascii_case(name)
-                    }
-                })
-                .map(|t| t.color.clone())
-        };
-        let earlier = created
-            .iter()
-            .find(|(n, _)| !a.is_main && n.eq_ignore_ascii_case(a.name.trim()))
-            .map(|(_, c)| c.clone());
-        let (existing, color) = match (here(a.name.trim()), earlier) {
-            (Some(c), _) => (!a.is_main, Some(c)),
-            (None, Some(c)) => (true, Some(c)),
-            (None, None) if a.is_main => (false, None),
-            (None, None) => {
-                let c = store::color_for(a.color.as_deref(), team.len() + created.len());
-                created.push((a.name.trim().to_string(), c.clone()));
-                (false, Some(c))
-            }
-        };
-        agents.push(PreviewAgent {
-            existing,
-            name: a.name.clone(),
-            role: a.role.trim().to_string(),
-            is_main: a.is_main,
-            instructions_chars: a.instructions.trim().chars().count(),
-            memory_lines: a.memory.lines().filter(|l| !l.trim().is_empty()).count(),
-            routines: preview_routines(&a.routines),
-            color,
-            instructions: a.instructions.trim().to_string(),
-            memory: a
-                .memory
-                .lines()
-                .map(|l| l.trim().to_string())
-                .filter(|l| !l.is_empty())
-                .collect(),
-        });
-    }
-    Ok(Preview {
-        source: parsed.source,
-        blocks: parsed.blocks,
-        agents,
-        problems: parsed.problems,
-    })
-}
-
 /// The agents and source to import, or every problem as one Validation error.
 pub fn for_import(text: &str) -> Result<(Vec<ImportedAgent>, String), CommandError> {
     let parsed = parse(text);
@@ -564,7 +405,7 @@ pub fn for_import(text: &str) -> Result<(Vec<ImportedAgent>, String), CommandErr
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::agents::import;
+    use crate::agents::{import, store};
 
     const ONE: &str = r#"{"source":"Grok Bot","agents":[
         {"name":"Chief","role":"Runs things","instructions":"Keep me on track.","memory":"- Likes mornings","is_main":true},
@@ -676,7 +517,7 @@ mod tests {
     }
 
     #[test]
-    fn routines_are_read_and_previewed_and_refused_phrases_are_listed_not_blocking() {
+    fn routines_are_read_and_refused_phrases_dont_block() {
         let reply = r#"```json
 {"source":"Grok Bot","agents":[
   {"name":"Finance","routines":[
@@ -691,15 +532,6 @@ mod tests {
         assert_eq!(p.agents[0].routines.len(), 2);
         assert!(p.agents[1].routines.is_empty());
 
-        let shown = preview_routines(&p.agents[0].routines);
-        assert_eq!(
-            shown[0].schedule.as_deref(),
-            Some("every weekday at 9:00 AM")
-        );
-        assert!(shown[0].refused.is_none());
-        assert!(shown[1].schedule.is_none());
-        let why = shown[1].refused.as_deref().unwrap();
-        assert!(!why.is_empty() && !why.contains("Examples:"), "{why}");
         assert!(for_import(reply).is_ok(), "a refused phrase doesn't block");
 
         // A wrong shape does block, and says where.
@@ -746,16 +578,6 @@ mod tests {
         store::set_root_for_tests(Some(dir.path().to_path_buf()));
 
         let reply = format!("Here it is:\n```json\n{ONE}\n```");
-        let before = preview(&reply).unwrap();
-        assert!(!before.agents[1].existing);
-        assert_eq!(before.agents[1].memory_lines, 2);
-        assert_eq!(before.agents[1].color.as_deref(), Some("teal"));
-        assert_eq!(
-            before.agents[1].memory,
-            ["Accountant is Sam", "Pays rent on the 1st"]
-        );
-        assert_eq!(before.agents[1].instructions, "Log every expense.");
-
         let (agents, source) = for_import(&reply).unwrap();
         let summary = import::import(agents, &source).unwrap();
         assert_eq!(summary.created, ["Finance"]);
@@ -767,25 +589,18 @@ mod tests {
         assert!(md.contains("### Imported from Grok Bot"));
         assert!(md.contains("Pays rent on the 1st"));
 
-        // Pasting again updates rather than duplicating, and the preview says so.
-        assert!(preview(&reply).unwrap().agents[1].existing);
+        // Pasting again updates rather than duplicating.
         let (agents, source) = for_import(&reply).unwrap();
         let again = import::import(agents, &source).unwrap();
         assert!(again.created.is_empty());
         assert_eq!(store::list().unwrap().len(), 2);
 
-        // A new agent with no colour of its own: the preview shows the badge import gives it.
+        // New agents with no colour of their own each get one.
         let more = "```json\n{\"agents\":[{\"name\":\"Travel\"},{\"name\":\"Inbox\"}]}\n```";
-        let shown: Vec<_> = preview(more)
-            .unwrap()
-            .agents
-            .into_iter()
-            .map(|a| a.color)
-            .collect();
         let (agents, source) = for_import(more).unwrap();
         import::import(agents, &source).unwrap();
-        for (name, color) in ["Travel", "Inbox"].iter().zip(shown) {
-            assert_eq!(Some(store::find(name).unwrap().unwrap().color), color);
+        for name in ["Travel", "Inbox"] {
+            assert!(!store::find(name).unwrap().unwrap().color.is_empty());
         }
 
         // Anything wrong blocks the whole import.

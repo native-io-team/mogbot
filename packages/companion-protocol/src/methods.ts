@@ -42,13 +42,11 @@ import type {
   Device,
   FileDiff,
   ImportApplied,
-  ImportSummary,
   PhoneImportStatus,
   KeptCopy,
   MacStatus,
   MemoryChange,
   MemoryView,
-  PasteImportPreview,
   ExportImportPreview,
   ExportImportPosted,
   ProjectSummary,
@@ -793,9 +791,6 @@ export interface Methods {
   'agents.import.exportPrompt': { params: Record<string, never>; result: string };
   'agents.import.exportPreview': { params: { text: string }; result: ExportImportPreview };
   'agents.import.exportReview': { params: { text: string }; result: ExportImportPosted };
-  'agents.import.pastePrompt': { params: Record<string, never>; result: string };
-  'agents.import.pastePreview': { params: { text: string }; result: PasteImportPreview };
-  'agents.import.paste': { params: { text: string }; result: ImportSummary };
 
   // ---- Rooms (a Mac whose welcome.features has `rooms`) --------------------
   'rooms.list': { params: Record<string, never>; result: RoomView[] };
@@ -890,8 +885,6 @@ export const READ_ONLY_METHODS = [
   'agents.watch.options',
   'rooms.list',
   'rooms.messages',
-  'agents.import.pastePrompt',
-  'agents.import.pastePreview',
   'projects.list',
   'sessions.read',
 ] as const satisfies readonly MethodName[];
