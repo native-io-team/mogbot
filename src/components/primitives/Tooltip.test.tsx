@@ -236,6 +236,24 @@ describe('Tooltip', () => {
     expect(screen.getByRole('button', { name: 'Open' })).not.toHaveAttribute('aria-label');
   });
 
+  it('an icon-only control wrapped in <Tooltip> is named by its words', async () => {
+    render(
+      <TooltipProvider>
+        <Tooltip content="Take a screenshot">
+          <button type="button">
+            <svg aria-hidden />
+          </button>
+        </Tooltip>
+        <Tooltip content="Opens it">
+          <button type="button">Open</button>
+        </Tooltip>
+      </TooltipProvider>
+    );
+    await act(async () => {});
+    expect(screen.getByRole('button', { name: 'Take a screenshot' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Open' })).not.toHaveAttribute('aria-label');
+  });
+
   it('a plain span keeps its words as a description, never a prohibited name', async () => {
     render(
       <TooltipProvider>

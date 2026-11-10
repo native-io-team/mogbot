@@ -100,18 +100,27 @@ function tooltipAnchor(target: EventTarget | null): Element | null {
  * description instead, which is what the title was to them anyway.
  */
 function dropTitle(anchor: Element, title: string | null) {
-  if (title) {
-    const ours = anchor.hasAttribute('data-tooltip-named');
-    const named = anchor.hasAttribute('aria-label') || anchor.hasAttribute('aria-labelledby');
-    const wordless =
-      anchor.tagName === 'IFRAME' ||
-      (!(anchor.textContent ?? '').trim() && !anchor.querySelector('img[alt]:not([alt=""])'));
-    if (ours || (!named && wordless)) {
-      anchor.setAttribute(nameable(anchor) ? 'aria-label' : 'aria-description', title);
-      anchor.setAttribute('data-tooltip-named', '');
-    }
-  }
+  if (title) nameWordless(anchor, title, true);
   anchor.removeAttribute('title');
+}
+
+/**
+ * Name a wordless anchor from its tooltip's words, unless it is named
+ * already. `describeGeneric`: a generic element gets the words as its
+ * description instead (a promoted title); an explicit `<Tooltip>` already
+ * describes it through `aria-describedby`.
+ */
+function nameWordless(anchor: Element, text: string, describeGeneric: boolean) {
+  const ours = anchor.hasAttribute('data-tooltip-named');
+  const named = anchor.hasAttribute('aria-label') || anchor.hasAttribute('aria-labelledby');
+  const wordless =
+    anchor.tagName === 'IFRAME' ||
+    (!(anchor.textContent ?? '').trim() && !anchor.querySelector('img[alt]:not([alt=""])'));
+  if (!ours && (named || !wordless)) return;
+  if (nameable(anchor)) anchor.setAttribute('aria-label', text);
+  else if (describeGeneric) anchor.setAttribute('aria-description', text);
+  else return;
+  anchor.setAttribute('data-tooltip-named', '');
 }
 
 /** Elements that may be named by `aria-label`: anything but the generic role. */
@@ -154,6 +163,9 @@ function readTooltipContent(anchor: Element): TooltipContent | null {
     // tooltip has already claimed this anchor. Always remove it, even when
     // the shared content attribute is already present.
     if (title) dropTitle(anchor, title);
+    // An icon-only control wrapped in <Tooltip> had a description and no name:
+    // VoiceOver said "button". Its tooltip's words are its name.
+    else nameWordless(anchor, explicit, false);
     const contentId = anchor.getAttribute('data-tooltip-content-id');
     return {
       text: explicit,
@@ -181,7 +193,8 @@ function readTooltipDelay(anchor: Element): number {
 }
 
 function promoteTitleAttributes(root: Element) {
-  const anchors = [...(root.matches('[title]') ? [root] : []), ...root.querySelectorAll('[title]')];
+  const which = '[title], [data-tooltip-content]';
+  const anchors = [...(root.matches(which) ? [root] : []), ...root.querySelectorAll(which)];
 
   anchors.forEach((anchor) => {
     readTooltipContent(anchor);
