@@ -31,6 +31,8 @@ use app_lib::commands::agents as cmd;
 use store::{AgentMessage, MessageKind};
 use tauri::{AppHandle, Listener};
 
+mod real_chief;
+
 type Check = Result<(), String>;
 
 fn ensure(cond: bool, what: impl Into<String>) -> Check {
@@ -2490,6 +2492,7 @@ fn main() {
                 "untrusted-init" => untrusted_init(&h).await,
                 "blocks" => blocks(&h).await,
                 "real-blocks" => real_blocks(&h).await,
+                "real-chief" => real_chief::real_chief(&h).await,
                 other => Err(format!("unknown scenario {other}")),
             };
             let took = t.elapsed().as_secs_f32();
