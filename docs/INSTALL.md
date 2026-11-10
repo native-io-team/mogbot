@@ -355,7 +355,7 @@ browser page that opens. Tell me when it's listed."*
 
 **Check:** the human sees the account in the popover (and Settings → Agents →
 Accounts), below this Mac's own sign-in from Step 10, shown by its email.
-Accounts are tried in that order ("Use this one now" puts one first); when
+Accounts are tried in that order ("Use for new work" puts one first); when
 one hits its usage limit the chat shows a quiet note like "Switched to Work:
 sam@example.com is out of usage until 10:00 AM." There is no
 terminal check for this; the list in Settings is the answer.

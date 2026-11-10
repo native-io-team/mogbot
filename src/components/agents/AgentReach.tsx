@@ -1,8 +1,8 @@
 /**
  * The agent editor's "What it can reach": every app it was connected to on a
  * login card (which account, read or also send, where the sign-in is kept),
- * its browser (Claude in Chrome: on or off, and the sites it was given it
- * for), its API keys in the Keychain, and the Claude Code apps kept from it.
+ * its browser (which way it reaches your Chrome now, Your Chrome or Claude
+ * in Chrome, and why; the sites it was given it for), its API keys in the Keychain, and the Claude Code apps kept from it.
  * Each comes off in one click (`agents_reach_remove`), from its next turn.
  * Removing a connection here takes it from this agent only; the account stays
  * connected for the others.
@@ -28,6 +28,7 @@ import {
   type Removal,
 } from '../../lib/agentLogins';
 import type { Agent } from '../../lib/agents';
+import { routeName, routeWhy } from '../../lib/userChrome';
 
 export function AgentReach({
   agent,
@@ -158,7 +159,9 @@ export function AgentReach({
               <span className="agent-secrets__text">
                 <span className="agent-secrets__name">
                   {reach.browser.on
-                    ? 'Chrome, through Claude in Chrome'
+                    ? reach.browser.route
+                      ? routeName(reach.browser.route)
+                      : 'Chrome, through Claude in Chrome'
                     : reach.browser.teamOn
                       ? 'Off'
                       : 'Not set up'}
@@ -170,6 +173,11 @@ export function AgentReach({
                       ? `${agent.name} can’t use your browser.`
                       : 'Your team’s browser isn’t on yet, so it asks you instead.'}
                 </span>
+                {reach.browser.on && reach.browser.route && (
+                  <span className="agent-secrets__meta" data-testid="reach-browser-route">
+                    {routeWhy(reach.browser.route, agent.name)}
+                  </span>
+                )}
                 {reach.browser.on &&
                   reach.browser.accounts?.map((a) => (
                     <span key={a.site} className="agent-secrets__meta">
@@ -183,11 +191,13 @@ export function AgentReach({
                       </TextButton>
                     </span>
                   ))}
-                {reach.browser.on && !reach.browser.helperInstalled && (
-                  <span className="agent-secrets__meta agent-reach__warn">
-                    The Claude in Chrome extension isn’t set up on this Mac yet.
-                  </span>
-                )}
+                {reach.browser.on &&
+                  reach.browser.route?.route !== 'your_chrome' &&
+                  !reach.browser.helperInstalled && (
+                    <span className="agent-secrets__meta agent-reach__warn">
+                      The Claude in Chrome extension isn’t set up on this Mac yet.
+                    </span>
+                  )}
               </span>
               {reach.browser.on && (
                 <TextButton

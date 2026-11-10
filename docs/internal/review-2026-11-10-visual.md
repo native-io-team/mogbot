@@ -122,7 +122,7 @@ The acceptance test said "44 header/phone row". The desk chat header is 24 (its 
 deliberately smaller than a list key), the phone chat header 30, the phone agent row 44. The doc
 now lists every size where it is used.
 
-## 9. Projects still looks like Ship Studio (open)
+## 9. Projects still looks like Ship Studio (fixed after review)
 
 **Where.** `dashboard*`: grey letter-monogram thumbnails ("A", "D", "P"), `create-modal` at 16px
 radius and `tg-card`/`publish-dropdown-menu`/`setup-item` at raw 10px (`--radius-card` elsewhere),
@@ -132,12 +132,23 @@ radius and `tg-card`/`publish-dropdown-menu`/`setup-item` at raw 10px (`--radius
 key language. Not fixed: radii and weights there are a mechanical sweep, but the thumbnails are a
 design question (a project could wear its bound agent's key, or none).
 
-## 10. A lit Finance legend blooms into a blank tile at list size (open, not a redesign)
+**Fixed after review.** Project and folder cards are drawn as the agent cards are (surface, hairline
+shadow, `--radius-lg`, no border); a project with no screenshot sits on the Agents board's warm plate
+with a title-sized initial; names use the Agents list's weight and tracking; the dashboard, list,
+folder, import and new-project CSS read the type roles, radii and spacing scale. Left for the
+`remove-legacy` merge: the template gallery's rules it deletes. Still open: whether a project wears
+its bound agent's key instead of an initial.
+
+## 10. A lit Finance legend blooms into a blank tile at list size (fixed after review)
 
 **Where.** `agents-requests-two-open`, the sidebar at 30px: Finance (the banknote legend) in
 Needs your OK. The amber glow fills the rectangle so the legend reads as a lit blank. Pack icons
 with a filled-looking outline (banknote, receipt) are the worst; the mark is fine. A per-size glow
 radius on md/sm would fix it; left alone since the brief was not to touch the keys' look.
+
+**Fixed after review.** At 30 and under the legend drops its glow and the face its amber wash, and
+sits on a dark keyline in its depth shade (agent-keys.md, States), desk and phone; the spill still
+pulses. Checked on all 14 colourways at 30/24/20, light and dark (`harness-keys.html?only=needsok`).
 
 ## Smaller notes
 

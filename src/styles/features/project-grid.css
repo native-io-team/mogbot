@@ -5,6 +5,19 @@
   --project-table-menu-w: calc(var(--spacing-2xl) + var(--spacing-xs));
   /* A card narrower than this can't hold a branch name beside its counts. */
   --project-card-min-w: 220px;
+  /* A project card is drawn as the Agents view draws its cards (agents.css,
+     --agents-card-*): one step forward of the canvas, a hairline shadow, no
+     border, one radius step rounder than a control. */
+  --project-card-surface: var(--surface-control);
+  --project-card-surface-hover: var(--surface-control-hover);
+  --project-card-shadow: var(--shadow-card);
+  --project-card-radius: var(--radius-lg);
+  --project-card-thumb-h: 150px;
+  --project-card-info-min-h: 52px;
+}
+
+:root[data-theme='light'] {
+  --project-card-surface: var(--surface-panel);
 }
 
 /* As many columns as the panel holds, never a card under its minimum. The
@@ -65,7 +78,7 @@
   background: var(--surface-control);
   color: var(--text-muted);
   font-size: var(--font-size-body-sm);
-  font-weight: 600;
+  font-weight: var(--font-weight-label);
   letter-spacing: 0;
 }
 
@@ -149,7 +162,8 @@
   overflow: hidden;
   color: var(--text-primary);
   font-size: var(--font-size-body-lg);
-  font-weight: 600;
+  font-weight: var(--font-weight-label);
+  letter-spacing: var(--tracking-name);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -205,30 +219,26 @@
 }
 
 .project-card {
-  --preview-thumbnail-height: 150px;
+  --preview-thumbnail-height: var(--project-card-thumb-h);
 
   display: flex;
   flex-direction: column;
-  background: var(--surface-control);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
+  background: var(--project-card-surface);
+  border-radius: var(--project-card-radius);
   overflow: visible;
-  transition: border-color var(--transition);
   min-width: 0;
   min-height: 0;
-  box-shadow: var(--button-shadow);
+  box-shadow: var(--project-card-shadow);
   cursor: pointer;
   transition:
-    background-color var(--transition),
-    color var(--transition),
-    border-color var(--transition),
-    opacity var(--transition),
-    transform var(--transition);
+    background-color var(--transition-interaction),
+    color var(--transition-interaction),
+    opacity var(--transition-interaction),
+    transform var(--transition-interaction);
 }
 .project-card:hover {
-  background: var(--surface-control-hover);
+  background: var(--project-card-surface-hover);
   color: var(--button-text-hover);
-  border-color: var(--button-border-solid);
 }
 
 /* Keep the nested menu trigger's hover state visible after the card itself
@@ -240,12 +250,12 @@
 .project-card-thumbnail {
   position: relative;
   width: 100%;
-  height: 150px;
-  flex: 0 0 150px;
+  height: var(--project-card-thumb-h);
+  flex: 0 0 var(--project-card-thumb-h);
   padding: 0;
   border: none;
-  border-bottom: 1px solid var(--border-default);
-  border-radius: var(--radius-card) var(--radius-card) 0 0;
+  border-bottom: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--project-card-radius) var(--project-card-radius) 0 0;
   background: var(--surface-selected);
   cursor: pointer;
   overflow: hidden;
@@ -266,16 +276,22 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  /* No screenshot yet: the warm plate the Agents board's keys sit on
+     (agents-team.css), not a flat grey, so the two screens read as one. */
+  background: linear-gradient(var(--agent-key-plate-top), var(--agent-key-plate-bottom));
+  box-shadow: inset 0 var(--space-02) var(--space-06) var(--agent-key-plate-shade);
   /* Decorative (aria-hidden; the thumbnail is labelled "Open <name>"), so it
      can sit back in muted instead of shouting the same words on every card. */
   color: var(--text-muted);
 }
 
+/* The initial set as a title, not a poster: the type scale's largest step
+   with the title role's weight and tracking. */
 .project-card-monogram {
-  font-size: var(--font-size-display);
-  font-weight: var(--font-weight-semibold);
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-title);
   line-height: 1;
-  letter-spacing: 0;
+  letter-spacing: var(--tracking-title);
 }
 
 .project-card-info {
@@ -283,26 +299,28 @@
   align-items: start;
   justify-content: space-between;
   padding: var(--spacing-md);
-  gap: 8px;
+  gap: var(--spacing-sm);
   overflow: visible;
   /* Grows for the team line (ProjectTeam) rather than spilling under the card. */
-  min-height: 52px;
+  min-height: var(--project-card-info-min-h);
   flex: 0 0 auto;
   box-sizing: border-box;
-  border-radius: 0 0 var(--radius-card) var(--radius-card);
+  border-radius: 0 0 var(--project-card-radius) var(--project-card-radius);
 }
 
 .project-card-details {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-2xs);
   min-width: 0;
   overflow: hidden;
 }
 
+/* A name as the Agents list sets one (agents.css, .agents-list__name). */
 .project-card-name {
-  font-weight: var(--font-weight-semibold);
-  font-size: var(--font-size-12);
+  font-weight: var(--font-weight-label);
+  font-size: var(--font-size-body-lg);
+  letter-spacing: var(--tracking-name);
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -336,7 +354,7 @@
   justify-content: center;
   flex: 1;
   min-height: 300px;
-  gap: 16px;
+  gap: var(--spacing-lg);
 }
 
 /* The spinner draws its arc in currentColor, so the muted tone belongs here
@@ -369,15 +387,15 @@
 .project-card-name-row {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--spacing-tight);
 }
 
 .project-card-auto-accept-badge {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 16px;
-  height: 16px;
+  width: var(--spacing-lg);
+  height: var(--spacing-lg);
   border-radius: var(--radius-sm);
   background: rgba(var(--accent-warning-rgb), 0.2);
   color: var(--accent-warning);
@@ -400,19 +418,19 @@
   justify-content: center;
   width: 64px;
   height: 64px;
-  margin: 0 auto 16px;
+  margin: 0 auto var(--spacing-lg);
   border-radius: var(--radius-full);
   background: rgba(var(--accent-warning-rgb), 0.15);
   color: var(--accent-warning);
 }
 
 .auto-accept-warning-modal h3 {
-  margin: 0 0 12px;
+  margin: 0 0 var(--spacing-md);
   font-size: var(--font-size-h3);
 }
 
 .auto-accept-warning-modal p {
-  margin: 0 0 12px;
+  margin: 0 0 var(--spacing-md);
   color: var(--text-secondary);
   text-align: left;
   font-size: var(--font-size-body-lg);
@@ -421,23 +439,23 @@
 
 .auto-accept-warning-list {
   text-align: left;
-  margin: 0 0 16px;
-  padding-left: 24px;
+  margin: 0 0 var(--spacing-lg);
+  padding-left: var(--spacing-xl);
   color: var(--text-secondary);
   font-size: var(--font-size-body-lg);
   line-height: var(--line-height-compact);
 }
 
 .auto-accept-warning-list li {
-  margin: 4px 0;
+  margin: var(--spacing-xs) 0;
 }
 
 .auto-accept-warning-disclaimer {
-  padding: 12px;
+  padding: var(--spacing-md);
   background: var(--surface-control);
   border-radius: var(--radius-card);
   font-size: var(--font-size-body-lg);
-  margin-bottom: 20px;
+  margin-bottom: var(--spacing-xl);
 }
 
 /* ============ Responsive Project Grid ============ */
@@ -474,7 +492,7 @@
   }
 
   .folder-card-info {
-    padding: 10px 12px;
+    padding: var(--spacing-sm) var(--spacing-md);
   }
 
   .folder-card-name {
@@ -506,12 +524,8 @@
     font-size: var(--font-size-body-sm);
   }
 
-  .project-card-deployment {
-    font-size: var(--font-size-body-sm);
-  }
-
   .folder-card-info {
-    padding: 10px 12px;
+    padding: var(--spacing-sm) var(--spacing-md);
   }
 
   .folder-card-name {

@@ -773,7 +773,7 @@
     {
       "path": "src/styles/features/dashboard/folders.css",
       "token": "--transition",
-      "count": 8,
+      "count": 7,
       "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
     },
     {
@@ -840,6 +840,12 @@
       "path": "src/styles/features/dashboard/projects.css",
       "token": "--space-04",
       "count": 1,
+      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
+    },
+    {
+      "path": "src/styles/features/dashboard/projects.css",
+      "token": "--space-06",
+      "count": 2,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
@@ -1132,18 +1138,6 @@
     },
     {
       "path": "src/styles/features/project-grid.css",
-      "token": "--font-size-12",
-      "count": 1,
-      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
-    },
-    {
-      "path": "src/styles/features/project-grid.css",
-      "token": "--font-weight-semibold",
-      "count": 2,
-      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
-    },
-    {
-      "path": "src/styles/features/project-grid.css",
       "token": "--info-rgb",
       "count": 2,
       "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
@@ -1156,15 +1150,15 @@
     },
     {
       "path": "src/styles/features/project-grid.css",
-      "token": "--transition",
-      "count": 6,
-      "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
+      "token": "--space-02",
+      "count": 1,
+      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
-      "path": "src/styles/features/project-list.css",
-      "token": "--transition",
-      "count": 3,
-      "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
+      "path": "src/styles/features/project-grid.css",
+      "token": "--space-06",
+      "count": 1,
+      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
       "path": "src/styles/features/project-rail.css",

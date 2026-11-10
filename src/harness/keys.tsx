@@ -8,6 +8,7 @@
  *   harness-keys.html?theme=light
  *   harness-keys.html?theme=dark&freeze=off   (watch the Needs-your-OK pulse)
  *   harness-keys.html?only=squint             (the at-a-glance test alone)
+ *   harness-keys.html?only=needsok            (Needs your OK, small, every colourway)
  *
  * Served only by the harness's Vite server. The real component and the real
  * stylesheet; nothing here is a mock-up.
@@ -106,9 +107,56 @@ function Squint() {
   );
 }
 
+/**
+ * Needs your OK at list sizes (30, the 24 header, 20) on every colourway,
+ * each with a legend that has a filled-looking outline (the banknote, a
+ * receipt) and a plain one: the lit legend must stay legible on the lit cap,
+ * never bloom into a blank tile.
+ */
+const NEEDS_OK_ICONS = ['money', 'lucide:receipt', 'inbox', 'mogbot'];
+const NEEDS_OK_SIZES: [AgentKeySize, string, boolean][] = [
+  ['md', '30', false],
+  ['md', '24', true],
+  ['sm', '20', false],
+];
+
+function NeedsOk() {
+  return (
+    <section data-section="needsok" className="key-gallery__squint">
+      {NEEDS_OK_SIZES.map(([size, label, header]) => (
+        <div key={label}>
+          <h2>Needs your OK · {label}px</h2>
+          {NEEDS_OK_ICONS.map((icon) => (
+            <div key={icon} className="key-gallery__row key-gallery__row--tight">
+              {COLORWAYS.map((c) => (
+                <AgentKey
+                  key={c.id}
+                  name={c.name}
+                  colorway={c.id}
+                  icon={icon}
+                  state="needsOk"
+                  size={size}
+                  className={header ? 'key-gallery__header-key' : undefined}
+                />
+              ))}
+            </div>
+          ))}
+        </div>
+      ))}
+    </section>
+  );
+}
+
 const inbox = { name: 'Inbox', colorway: 'blue', icon: 'inbox', boundKey: 'I' } as const;
 
 function Gallery() {
+  if (params.get('only') === 'needsok') {
+    return (
+      <main className="key-gallery">
+        <NeedsOk />
+      </main>
+    );
+  }
   if (params.get('only') === 'squint') {
     return (
       <main className="key-gallery">

@@ -100,3 +100,8 @@ body {
   grid-template-columns: repeat(11, max-content);
   gap: var(--spacing-lg) var(--spacing-md);
 }
+
+/* The chat header's 24px key (agents-chat.css draws it the same way). */
+.agent-key.key-gallery__header-key {
+  --agent-key-s: var(--agent-key-size-header);
+}

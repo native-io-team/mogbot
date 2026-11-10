@@ -1,6 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import type { UsageAccount, UsageAccountLine, UsageInventory } from './model';
-import { changeLines, relativeIn, totalWords, usageGlance } from './usageGlance';
+import {
+  changeLines,
+  relativeIn,
+  runsOnRows,
+  totalWords,
+  usageGlance,
+  usersLine,
+  weightingOf,
+} from './usageGlance';
 
 const NOW = new Date(2026, 10, 9, 12, 0).getTime();
 const H = 3_600_000;
@@ -426,6 +434,7 @@ describe('the row, in plain words', () => {
       figure: 'Not read yet',
       refill: null,
       count: null,
+      notRead: null,
       needsYou: false,
     });
   });
@@ -709,6 +718,110 @@ describe('the total, across every account', () => {
       ['Chief', '750k', '9 messages', 75],
       ['Finance', '250k', '2 messages', 25],
     ]);
+  });
+});
+
+describe('the one bar: a total across accounts, never a segment each', () => {
+  const two = (a: number, b: number, plans: [string?, string?] = []) =>
+    usageGlance(
+      [
+        acct('default', { name: 'sam@example.com', plan: plans[0] }),
+        acct('work', { name: 'Work', plan: plans[1] }),
+      ],
+      inv([line('default', { windows: [week(a)] }), line('work', { windows: [week(b)] })]),
+      { now: NOW }
+    );
+
+  it('two Max plans at 50% each are 50% in total, one bar half full', () => {
+    const g = two(50, 50, ['max', 'max']);
+    expect(g.total.left).toBe(50);
+    expect(g.total.figure).toBe('50% left');
+    expect(g.total.tone).toBe('calm');
+    expect(g.row.figure).toBe('50% left');
+    expect(g.row.count).toBe('2 accounts');
+    expect(g.total.weighting).toBe('Both on Max, so each counts the same.');
+  });
+
+  it('one at 0% and one at 100% are 50%', () => {
+    const g = two(100, 0);
+    expect(g.total.left).toBe(50);
+    expect(g.row.figure).toBe('50% left');
+  });
+
+  it('leaves an unread account out of the total and says so, short', () => {
+    const g = usageGlance(
+      [acct('default'), acct('work', { name: 'Work' })],
+      inv([line('default', { windows: [week(40)] }), line('work')]),
+      { now: NOW }
+    );
+    expect(g.total.left).toBe(60);
+    expect(g.total.counted).toBe(1);
+    expect(g.total.notRead).toBe('1 account not read');
+    expect(g.row.notRead).toBe('1 account not read');
+    expect(g.total.weighting).toBeNull();
+  });
+
+  it('different plans: an average, said honestly; unknown plans the same', () => {
+    const g = two(20, 60, ['max', 'pro']);
+    expect(g.total.left).toBe(60);
+    expect(g.total.weighting).toBe(
+      'An average of each account’s % left. Plan sizes aren’t reported, so Max and Pro count the same here.'
+    );
+    expect(two(20, 60).total.weighting).toBe(
+      'An average of each account’s % left: plan sizes aren’t reported, so each counts the same.'
+    );
+    expect(weightingOf(['Max', 'Max', 'Max'])).toBe('All 3 on Max, so each counts the same.');
+    expect(weightingOf(['Max'])).toBeNull();
+  });
+
+  it('the bar turns amber only when the total is low, and quiet with nothing read', () => {
+    expect(two(95, 95).total.tone).toBe('warning');
+    expect(two(100, 100).total.tone).toBe('limited');
+    const none = usageGlance([acct('default')], inv([line('default')]), { now: NOW });
+    expect(none.total.tone).toBe('quiet');
+  });
+});
+
+describe('who uses an account, and switching', () => {
+  it('says who runs only on it and who used it this week', () => {
+    const g = usageGlance(
+      [acct('default', { name: 'sam@example.com' }), acct('work', { name: 'Work' })],
+      inv([
+        line('default', {
+          windows: [week(20)],
+          spent: [
+            { agentId: 'f', name: 'Finance', turns: 2, tokens: 250_000 },
+            { agentId: 'c', name: 'Chief', turns: 9, tokens: 750_000 },
+            { agentId: 'f', name: 'Finance', routine: 'Monday', turns: 1, tokens: 600_000 },
+          ],
+        }),
+        line('work', { windows: [week(40)] }),
+      ]),
+      { now: NOW, pins: [{ engine: 'claude', account: 'work', name: 'Riley' }] }
+    );
+    expect(g.keys[0].usedBy).toEqual(['Finance', 'Chief']);
+    expect(usersLine(g.keys[0])).toBe('Used by Finance and Chief this week');
+    expect(usersLine(g.keys[1])).toBe('Only Riley runs here');
+  });
+
+  it('lists each agent of an engine with two accounts and what it runs on', () => {
+    const g = usageGlance(
+      [acct('default', { name: 'sam@example.com' }), acct('work', { name: 'Work' })],
+      inv([line('default', { windows: [week(20)] }), line('work', { windows: [week(40)] })]),
+      { now: NOW }
+    );
+    const rows = runsOnRows(g, [
+      { id: 'r', name: 'Riley', engine: 'claude', account: 'work' },
+      { id: 'c', name: 'Chief', engine: 'claude' },
+      { id: 'x', name: 'Coder', engine: 'codex' },
+      { id: 'g', name: 'Gone', engine: 'claude', account: 'removed' },
+    ]);
+    expect(rows.map((r) => [r.name, r.current, r.currentLabel])).toEqual([
+      ['Riley', 'work', 'Work'],
+      ['Chief', '', 'Any account'],
+      ['Gone', '', 'Any account'],
+    ]);
+    expect(rows[0].choices.map((c) => c.label)).toEqual(['Any account', 'sam@example.com', 'Work']);
   });
 });
 

@@ -53,6 +53,8 @@ import Svg, {
 } from 'react-native-svg';
 import { useAppearance } from '../lib/appearance';
 import {
+  askKeyline,
+  KEY_ASK_KEYLINE,
   KEY_BREATHE_LOW,
   KEY_BREATHE_MS,
   KEY_PULSE_LOW,
@@ -163,8 +165,18 @@ export function AgentKey({
   const pose = keyPose(g, state, pressed);
   const pips = g.details ? pipsFor(look.level) : 0;
   const paused = state === 'paused';
+  // Needs your OK at list size: steady and sharp on a dark keyline, with no
+  // glow and no amber wash, which fill a small icon's gaps (agent-key.css).
+  const sharp = state === 'needsOk' && g.small;
   const legend = (
-    <Legend icon={look.icon} g={g} ink={paint.legend} light={pose.light} dim={paused} />
+    <Legend
+      icon={look.icon}
+      g={g}
+      ink={paint.legend}
+      light={pose.light}
+      dim={paused}
+      keyline={sharp ? askKeyline(base) : undefined}
+    />
   );
   return (
     <View
@@ -242,8 +254,10 @@ export function AgentKey({
                 <FaceGlow g={g} color={keyLit.breath} opacity={0.33} />
               </Breathing>
             )}
-            {state === 'needsOk' && <FaceGlow g={g} color={keyLit.askFace} opacity={0.24} />}
-            {state === 'needsOk' ? <Breathing kind="pulse">{legend}</Breathing> : legend}
+            {state === 'needsOk' && !sharp && (
+              <FaceGlow g={g} color={keyLit.askFace} opacity={0.24} />
+            )}
+            {state === 'needsOk' && !sharp ? <Breathing kind="pulse">{legend}</Breathing> : legend}
             {g.details && look.boundKey && (
               <Text
                 testID="agent-key-sub"
@@ -375,12 +389,15 @@ function Legend({
   ink,
   light,
   dim,
+  keyline,
 }: {
   icon: string;
   g: KeyGeometry;
   ink: string;
   light: KeyLight;
   dim: boolean;
+  /** A small Needs-your-OK key: drawn on this dark keyline instead of a glow. */
+  keyline?: string;
 }) {
   // A pack icon's drawing arrives with its file (agentKeyPack.ts): until
   // then the face is blank, and the version bump re-draws it.
@@ -390,19 +407,21 @@ function Legend({
   const cap = drawing?.round ? 'round' : 'square';
   const join = drawing?.round ? 'round' : 'miter';
   // `glowPass`: a ring of glow drawn under the legend, not the legend itself.
-  const strokes = (stroke: string, width: number, opacity = 1, glowPass = false) => (
+  // `solid`: a keyline pass, the filled mark filled under its outline too.
+  const strokes = (stroke: string, width: number, opacity = 1, glowPass = false, solid = false) => (
     <>
       {drawing?.paths.map((d, i) =>
         drawing.fill ? (
           // The app's mark, the one filled legend (agentKeyIcons.ts): the
-          // ink as a fill; a glow pass outlines the shape under it.
+          // ink as a fill; a glow pass outlines the shape under it (a
+          // keyline reaches as far past the edge as past a stroke).
           <Path
             key={`${i}:${d}`}
             d={d}
-            fill={glowPass ? 'none' : stroke}
+            fill={glowPass && !solid ? 'none' : stroke}
             fillRule="evenodd"
             stroke={glowPass ? stroke : 'none'}
-            strokeWidth={width}
+            strokeWidth={solid ? width - g.stroke : width}
             strokeOpacity={opacity}
             strokeLinejoin="round"
           />
@@ -451,8 +470,14 @@ function Legend({
       }
       style={[styles.legend, dim && { opacity: KEY_GEOMETRY.paused.legendOpacity }]}
     >
-      {lit && strokes(glow, g.stroke * wide, light === 'ask' ? 0.2 : 0.16, true)}
-      {lit && strokes(glow, g.stroke * 1.7, light === 'ask' ? 0.45 : 0.35, true)}
+      {keyline
+        ? strokes(keyline, g.stroke + 2 * KEY_ASK_KEYLINE, 1, true, true)
+        : lit && (
+            <>
+              {strokes(glow, g.stroke * wide, light === 'ask' ? 0.2 : 0.16, true)}
+              {strokes(glow, g.stroke * 1.7, light === 'ask' ? 0.45 : 0.35, true)}
+            </>
+          )}
       {strokes(ink, g.stroke)}
     </Svg>
   );

@@ -144,11 +144,10 @@ describe('usage at a glance, on the phone', () => {
     // One headline, as the desk's hero: the figure, then of what.
     expect(screen.getByRole('header').props.children[0]).toBe('60% left');
     expect(screen.getByText('across 2 accounts')).toBeTruthy();
-    // The bar says each account in the work order; the card doesn't list them
-    // again (the account rows under it do).
-    expect(screen.getByLabelText(/^Room left\. /).props.accessibilityLabel).toMatch(
-      /^Room left\. Claude Code account: 70% left.*; Work: 50% left/
-    );
+    // ONE bar of the total (never a segment per account); the card doesn't
+    // list the accounts (the rows under it do).
+    const bar = screen.getByLabelText('Usage left, across accounts');
+    expect(bar.props.accessibilityValue).toMatchObject({ now: 60, text: '60% left' });
     expect(screen.queryAllByRole('button')).toHaveLength(0);
     expect(screen.queryByText('70% left')).toBeNull();
     expect(screen.queryByText(/This Mac|Signed in on t/)).toBeNull();

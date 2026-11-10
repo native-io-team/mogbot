@@ -4207,7 +4207,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-secrets-editor',
     title: 'Agents — keys under “What it can reach” in Edit agent',
     looksRightWhen:
-      'Editing Finance, continuing “What it can reach” (no second heading of its own): “Keys in your Keychain” listing each key by what it’s for (no $VARIABLES or stored names on the row; those are in the row’s hover title), then “Used <when>” (or “Not used yet”), hairline-separated, each with a quiet Remove on the right.',
+      'Editing Finance, continuing “What it can reach” (no second heading of its own): “Keys in your Keychain” listing each key by what it’s for (no $VARIABLES or stored names on the row; those are in the row’s hover title), then “Used <when>” (or “Not used yet”), hairline-separated, each with a quiet Remove on the right. Above the keys, “Your browser”: “Chrome, through Your Chrome” and the line that the app’s own extension is the same on any account and engine, so switching accounts never needs a browser sign-in.',
     openSelector: AGENTS_TAB,
     requires: '.agent-secrets__row',
     clipSelector: '.agent-editor .agent-reach',
@@ -4245,7 +4245,14 @@ export const agentsScenarios: Scenario[] = [
       agents_usage: { week: totals(6, 120_000, 1.2, 9), allTime: totals(40, 900_000, 9.4, 70) },
       agents_reach: {
         connections: [],
-        browser: { on: true, sites: [], helperInstalled: true },
+        browser: {
+          on: true,
+          teamOn: true,
+          ownOff: false,
+          sites: [],
+          helperInstalled: true,
+          route: { route: 'your_chrome', why: 'your_chrome_connected' },
+        },
         secrets: [
           {
             secretId: 's1',

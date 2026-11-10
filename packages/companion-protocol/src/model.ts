@@ -1028,6 +1028,20 @@ export interface AgentReach {
     /** The Chrome profile (and account) each site was last found signed in to. */
     accounts?: { site: string; browser: string; account?: string }[];
     helperInstalled: boolean;
+    /** The way its turns reach your Chrome now, and why (`agents::chrome_route`). */
+    route?: {
+      route: 'your_chrome' | 'claude_in_chrome' | 'none';
+      why:
+        | 'your_chrome_connected'
+        | 'your_chrome_not_connected'
+        | 'your_chrome_off'
+        | 'claude_in_chrome_down'
+        | 'not_set_up'
+        | 'codex_needs_your_chrome'
+        | 'off_for_agent'
+        | 'not_allowed'
+        | 'outside_text';
+    };
   };
   secrets: {
     secretId: string;

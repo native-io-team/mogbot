@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { render } from '@testing-library/react';
 import { AgentKey } from './AgentKey';
-import { COLORWAYS } from '../../../packages/companion-protocol/src/agentKeys';
+import { COLORWAYS, KEY_GEOMETRY } from '../../../packages/companion-protocol/src/agentKeys';
 
 // Paths from the repo root, where Vitest runs.
 const css = readFileSync('src/styles/features/agent-key.css', 'utf8');
@@ -136,6 +136,38 @@ describe('AgentKey', () => {
     // No keyframes move a filter: that repaints on the main thread every frame.
     const frames = [...css.matchAll(/@keyframes [\w-]+ \{([\s\S]*?)\n\}/g)].map((m) => m[1]);
     for (const f of frames) expect(f).not.toMatch(/^\s*filter:/m);
+  });
+
+  it('keeps a small Needs-your-OK legend sharp: a keyline under it, no glow on it', () => {
+    const small = render(
+      <AgentKey name="Finance" icon="money" state="needsOk" size="md" />
+    ).container;
+    const keyline = small.querySelector('.agent-key__keyline')!;
+    expect(keyline).not.toBeNull();
+    // Under the legend that draws the amber, never on top of it.
+    expect(small.querySelector('.agent-key__face > .agent-key__legend:last-of-type')).not.toBe(
+      keyline
+    );
+    for (const size of ['xl', 'lg'] as const) {
+      const big = render(<AgentKey name="Finance" state="needsOk" size={size} />).container;
+      expect(big.querySelector('.agent-key__keyline')).toBeNull();
+    }
+    const idle = render(<AgentKey name="Finance" size="md" />).container;
+    expect(idle.querySelector('.agent-key__keyline')).toBeNull();
+    const smallOk =
+      ".agent-key:is(.agent-key--md, .agent-key--sm, .agent-key--xs)[data-state='needsOk']";
+    const rule = (sel: string) => {
+      const at = css.indexOf(`${smallOk}\n  ${sel} {`);
+      expect(at).toBeGreaterThan(-1);
+      return css.slice(at, css.indexOf('}', at));
+    };
+    expect(rule('.agent-key__legend')).toMatch(/filter: none;[\s\S]*animation: none;/);
+    expect(rule('.agent-key__face::after')).toContain('content: none');
+    // The shared numbers (KEY_GEOMETRY.needsOk), the phone's too.
+    expect(css).toContain(`--agent-key-keyline: ${KEY_GEOMETRY.needsOk.smallKeyline};`);
+    expect(css).toContain(
+      `color-mix(in srgb, var(--agent-key-depth), var(--agent-key-black) ${KEY_GEOMETRY.needsOk.smallKeylineShade * 100}%)`
+    );
   });
 
   it('holds every looping animation still in a hidden window', () => {

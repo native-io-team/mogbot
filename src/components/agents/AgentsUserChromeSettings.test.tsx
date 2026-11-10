@@ -1,7 +1,15 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { AgentsUserChromeSettings } from './AgentsUserChromeSettings';
-import { USER_CHROME_CONNECTED, userChromeLine, type UserChromeStatus } from '../../lib/userChrome';
+import {
+  USER_CHROME_CONNECTED,
+  managedAdvice,
+  routeLine,
+  routeWhy,
+  userChromeLine,
+  type ChromeProfile,
+  type UserChromeStatus,
+} from '../../lib/userChrome';
 import { ToastContext } from '../../contexts/ToastContext';
 
 const invoke = vi.hoisted(() => vi.fn());
@@ -23,8 +31,24 @@ const status = (over: Partial<UserChromeStatus> = {}): UserChromeStatus => ({
   extensionId: 'id',
   browsers: [],
   updateNeeded: false,
+  management: { machine: [], profiles: [] },
+  route: { route: 'claude_in_chrome', why: 'your_chrome_not_connected' },
   ...over,
 });
+
+const work: ChromeProfile = {
+  dir: 'Profile 1',
+  name: 'Work',
+  domain: 'example.com',
+  managed: true,
+  lastUsed: true,
+};
+const personal: ChromeProfile = {
+  dir: 'Default',
+  name: 'Personal',
+  managed: false,
+  lastUsed: false,
+};
 
 const deferred = <T,>() => {
   let resolve!: (v: T) => void;
@@ -148,5 +172,85 @@ describe('userChromeLine', () => {
     expect(userChromeLine(status({ error: 'Port in use' }))).toBe(
       'On, but it couldn’t start: Port in use.'
     );
+  });
+});
+
+describe('which way agents use, and why', () => {
+  it('says Your Chrome needs no sign-in on an account switch, and Claude in Chrome might', () => {
+    expect(routeLine({ route: 'your_chrome', why: 'your_chrome_connected' })).toMatch(
+      /any account\. Switching accounts never needs a browser sign-in/
+    );
+    expect(routeLine({ route: 'claude_in_chrome', why: 'your_chrome_off' })).toMatch(
+      /switching accounts can mean signing in again/
+    );
+    expect(routeLine({ route: 'claude_in_chrome', why: 'your_chrome_not_connected' })).toMatch(
+      /^Claude in Chrome for now, because Your Chrome isn’t connected/
+    );
+    expect(routeWhy({ route: 'none', why: 'off_for_agent' }, 'Ops')).toBe(
+      'None: you took the browser away from Ops.'
+    );
+  });
+
+  it('shows the route under the switch, even while Your Chrome is off', async () => {
+    invoke.mockResolvedValue(
+      status({ enabled: false, route: { route: 'claude_in_chrome', why: 'your_chrome_off' } })
+    );
+    render(<AgentsUserChromeSettings />);
+    expect(await screen.findByText('Agents use now')).toBeTruthy();
+    expect(screen.getByText(/tied to the Claude account signed in to its extension/)).toBeTruthy();
+  });
+});
+
+describe('a Chrome profile managed by work', () => {
+  it('names the managed profile and offers a personal one, or a new one', async () => {
+    invoke.mockImplementation((cmd: string) =>
+      Promise.resolve(
+        cmd === 'agents_user_chrome_status'
+          ? status({ management: { machine: [], profiles: [work, personal] } })
+          : 'Default'
+      )
+    );
+    render(<AgentsUserChromeSettings />);
+    expect(
+      await screen.findByText(
+        /This Chrome profile \(“Work”, example\.com\) is managed by your work, so it can’t add the app’s extension\. Use a personal Chrome profile for your agents’ browsing\./
+      )
+    ).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Open “Personal”' }));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('agents_user_chrome_open_profile', { dir: 'Default' })
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Open a new Chrome profile' }));
+    await waitFor(() =>
+      expect(invoke).toHaveBeenCalledWith('agents_user_chrome_open_profile', { dir: null })
+    );
+  });
+
+  it('this Mac’s policy: every profile, so no profile buttons', () => {
+    const a = managedAdvice(status({ management: { machine: ['developer_mode'], profiles: [] } }));
+    expect(a?.everyProfile).toBe(true);
+    expect(a?.line).toMatch(/turns off Developer mode in every profile/);
+  });
+
+  it('says nothing until something says it’s in the way, then believes the user', async () => {
+    expect(managedAdvice(status({ management: { machine: [], profiles: [personal] } }))).toBeNull();
+    invoke.mockResolvedValue(status());
+    render(<AgentsUserChromeSettings />);
+    fireEvent.click(
+      await screen.findByRole('button', { name: 'Developer mode greyed out in Chrome?' })
+    );
+    expect(await screen.findByRole('button', { name: 'Open a new Chrome profile' })).toBeTruthy();
+  });
+
+  it('a connected extension needs no advice', async () => {
+    invoke.mockResolvedValue(
+      status({
+        management: { machine: [], profiles: [work] },
+        browsers: [{ profileId: 'p', label: '', extensionVersion: '0.1.0', connectedAt: 1 }],
+      })
+    );
+    render(<AgentsUserChromeSettings />);
+    await screen.findByText('Done. The extension is connected.');
+    expect(screen.queryByText('Chrome is managed by your work')).toBeNull();
   });
 });

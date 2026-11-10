@@ -2498,7 +2498,7 @@ const LIVE = [
       await page.clickLabel('Use sam@example.com now').catch(() => undefined);
       await sleep(600);
     },
-    check: 'After Use this one now on Work’s page: its keycap 1 and “In use”, no Use this one now',
+    check: 'After Use for new work on Work’s page: its keycap 1 and “In use”, no Use for new work',
   },
   {
     name: 'controls-runs-on',
@@ -4018,14 +4018,14 @@ async function main() {
         route: '/agents',
         ready: 'Agents',
         check:
-          'Under the Agents title, one compact card before the first row: "Usage" over "72% left · 2 accounts", a refill chip and a chevron at the right, then a bar of one segment per account in the work order, with gaps and rounded ends; air above and below, neutral ink',
+          'Under the Agents title, one compact card before the first row: "Usage" over "72% left · 2 accounts", a refill chip and a chevron at the right, then ONE ordinary bar filled to 72% (never a segment per account); air above and below, neutral ink',
       },
       {
         name: 'usage-total',
         route: '/usage',
         ready: 'Usage',
         check:
-          'The total first: "All accounts", a large "72% left", "across 2 accounts", "Next refill in …". One bar, a segment per account in the work order (the one in use first); nothing listed under it in the card. Then "ACCOUNTS": one grouped card with a row each (keycap 1 filled for the one in use, name, % left, a thin bar, the pill and ⟳ countdown, a chevron).',
+          'The total first: "All accounts", a large "72% left", "across 2 accounts", "Next refill in …". ONE bar filled to 72%, then how it is averaged; nothing listed under it in the card. Then "Accounts": one grouped card with a row each (keycap 1 filled for the one in use, name, % left, a thin bar, the pill and ⟳ countdown, who used it, a ticked "New work starts here" on the one in use and "Use for new work" on the others, a chevron).',
       },
       {
         name: 'usage-account',
@@ -4051,7 +4051,19 @@ async function main() {
         ready: 'Usage',
         act: scrollToText('Accounts'),
         check:
-          '"Accounts" as a heading with "Work starts on the first account with room …" under it; one list per engine when there are two, each row: keycap, name and % left, its plan, a thin bar, the pill and a ⟳ chip, a chevron.',
+          '"Accounts" as a heading with "Work starts on the first account with room …" under it; one list per engine when there are two, each row: keycap, name and % left, its plan, a thin bar, the pill and a ⟳ chip, who used it, "New work starts here" or "Use for new work", a chevron. Then "Runs on": each agent with its account at the right.',
+      },
+      {
+        name: 'usage-runs-on',
+        route: '/usage',
+        ready: 'Usage',
+        act: async (page) => {
+          await scrollToText('Runs on')(page);
+          await page.clickText('Any account');
+          await sleep(500);
+        },
+        check:
+          '"Runs on" with one line under it, then a card with one row per agent (its key, name, the account it runs on at the right); the first opened in place: "Any account" ticked, then each account with "Only this one, never another".',
       },
     ]);
     for (const variant of ['two-claude', 'one-read']) {
@@ -4065,7 +4077,7 @@ async function main() {
           ready: 'Usage',
           act: scrollToText('Accounts'),
           check:
-            'Your accounts: a sheet with one headline, the stack as a segmented meter (one segment per account in order; an unread one an empty outlined slot, never full) and the next refill; then each account as a card: a numbered keycap (the one in use filled), its name, plan and who, a state pill ("In use", "Out of usage until …", "Not signed in"), its 5-hour and Weekly bars with "Resets in …", and a pace line in secondary ink (never amber) when the Mac sent one; no account named "This Mac"',
+            'Your accounts: a sheet with one headline, ONE bar of the total (an unread account left out of it and said so, never a segment per account) and the next refill; then each account as a card: a numbered keycap (the one in use filled), its name, plan and who, a state pill ("In use", "Out of usage until …", "Not signed in"), its 5-hour and Weekly bars with "Resets in …", and a pace line in secondary ink (never amber) when the Mac sent one; no account named "This Mac"',
         },
       ]);
     }
