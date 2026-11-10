@@ -4168,7 +4168,7 @@ every few minutes:
 | Someone mentions me on GitHub | `gh api notifications` (all, participating), reason `mention`/`team_mention`; one firing per new mention (thread id + latest comment, or `updated_at`) | free |
 | An issue or PR is assigned to me | `gh api search/issues -f q="assignee:@me is:open"`, 100 a page, up to 300 | free |
 | A new file appears in a folder | the folder's listing (not hidden, not `.crdownload`/`.part`/…, not modified in the last 5 s; symlinks skipped); folders of at most 2,000 entries | free |
-| A Linear issue is assigned to me | one sealed headless Claude Code call on Haiku through Linear: ours first (connected under Apps or on a login card, given to this agent, reached through the relay with a secret that opens only that connection, for reads only, never a card: `conn_relay::Via::Sealed`), else the Linear server set up in Claude Code | a model call |
+| A Linear issue is assigned to me | one sealed headless model call through Linear (Claude Code on Haiku, or Codex on a small model: see "Which engine runs a check" below): ours first (connected under Apps or on a login card, given to this agent, reached through the relay with a secret that opens only that connection, for reads only, never a card: `conn_relay::Via::Sealed`), else the Linear server set up in Claude Code | a model call |
 | Something else… (in the user's words, through one named app) | the same sealed call, through that app | a model call |
 
 **The rules.** The first check is a baseline (it notes what's there and
@@ -4253,6 +4253,77 @@ the flags was needed. **Not verified:** a real Linear or Gmail app,
 including whether an OAuth app's saved sign-in is found when its config is
 passed this way.
 
+**The relay's side of the seal** (`conn_relay`, `Via::Sealed`, any engine).
+A check's own secret opens one connection, and through it the check may only
+start a session, list tools and call them (`sealed_method_allowed`: no
+resources, prompts or answers to the app's own requests). Its tool list is
+read whole and passed on holding only the read tools, each marked
+`readOnlyHint: true` (`sealed_tool_list`; an unreadable list is an error,
+never the app's own list), and any call that isn't a read is refused
+(`sealed_refusal`). So neither engine is ever offered a write tool, and a
+write called anyway is refused here.
+
+**The sealed check on Codex** (`watch_seal_codex.rs`). For someone with
+Codex and no Claude Code. `codex exec --json --skip-git-repo-check
+--ephemeral --strict-config --ignore-user-config --ignore-rules --sandbox
+read-only`, `--disable` for `shell_tool`, `unified_exec`, `view_image`,
+`image_generation`, `multi_agent`, `apps`, `plugins`, `browser_use`,
+`browser_use_external`, `computer_use`, `in_app_browser`, `goals`, `hooks`,
+`memories`, `skill_search`, `skill_mcp_dependency_install`, `tool_suggest`,
+`sleep_tool` and `workspace_dependencies`, and `-c approval_policy="never"`,
+`web_search="disabled"`, `project_doc_max_bytes=0`,
+`skills.include_instructions=false`, `skills.bundled.enabled=false`,
+`model_reasoning_effort="low"`, `developer_instructions=<the same system
+prompt>` and one server: `mcp_servers.<key>={url=<the relay>,
+bearer_token_env_var=SHIPSTUDIO_AGENTS_CHECK_TOKEN, startup_timeout_sec=30,
+tool_timeout_sec=120}` (the secret in the environment, never argv). The
+model is the first one Codex's own list describes as fast, efficient or
+affordable (`small_model`), else Codex's default; the prompt and the JSON it
+must answer with are the Claude check's. It runs in the same empty folder,
+for at most 3 minutes, and only on Codex 0.166 or later (`SINCE`).
+Afterwards, any step in its answer that isn't a message, reasoning or a call
+to that one server fails the check and nothing it said is used
+(`parse_result`).
+
+Codex runs an MCP tool under `never` only when the server marks it
+read-only; everything else is refused before it reaches the server. That,
+with the relay's filtered list, is two walls where Claude Code has its
+`--allowedTools` and the relay. Only our own connections can be checked on
+Codex: a server from Codex's or Claude Code's own config would need that
+config, with any token or key in it, on Codex's command line
+(`--ignore-user-config` keeps the user's own config.toml servers out).
+
+Verified on Codex 0.166 (`codex-cli 0.166.0`) with the exact command line
+(`cargo test print_codex_check_args -- --ignored --nocapture`), a throwaway
+`CODEX_HOME`, a scripted Responses model and a stub HTTP server offering
+`list_items` (marked read-only) and `create_item` (marked destructive): the
+read tool ran, with the secret arriving as its bearer token; `create_item`
+failed with "MCP tool call requires approval, but approval policy is never"
+and never reached the stub; an unmarked read tool was refused the same way
+(which is why the relay marks reads); `exec_command` (with or without asking
+to escalate), `exec`, `web_search`, `view_image` and `spawn_agent` were
+"unsupported call"; `request_user_input` was unavailable; `apply_patch` was
+"rejected: writing is blocked by read-only sandbox"; `read_mcp_resource`
+went through to the stub (the relay now refuses it); a server in the
+`CODEX_HOME` config.toml, a folder AGENTS.md and the skill list didn't load;
+an unknown `--disable` feature or `-c` key stops Codex before it starts.
+What still loads is `$CODEX_HOME/AGENTS.md`, the user's own global
+instructions, which Codex has no switch for; it gives the check no tool.
+**Not verified:** a signed-in account's real model, a real app through the
+relay, and the small-model choice's actual price.
+
+**Which engine runs a check** (`watch::pick_engine`). The agent's own
+engine when it is ready and can seal the route, else the other: Claude Code
+seals either route; Codex only our own connections, and only when it is
+installed, signed in and 0.166 or later. Nothing ready says so in one line
+("This routine's check runs on Claude Code or Codex, and neither is set up
+on this Mac.", "Checks on Codex need Codex 0.166 or later. Update Codex.",
+or, for an app set up only in Claude Code on a Mac without it, "Connect it
+in Apps so Codex can check it."). Check now ends with the engine ("Nothing
+new. Checked on Codex."), as does a morning-brief check line ("(Google
+Calendar, on Codex)"); usage is counted as a check either way, in tokens
+on a ChatGPT plan.
+
 **Cost.** A model check is counted as a *check*, not a turn
 (`UsageTotals::checks`/`priced_checks`), in the agent's usage and the
 routine's own (`CheckIn::usage`, the one store runs use too), so the row
@@ -4311,9 +4382,10 @@ the desk banner and the phone notification say.
   room anywhere is.
 - **The user's own checks** (opt-in, at most 4): "events on my calendar
   today" through Google Calendar, say. Each runs exactly as a "When…"
-  routine's connector check does (`watch::check`, sealed by `watch_seal`:
-  no shell, files or web, only that connector's read tools, on the Chief's
-  grant). What comes back is outside text: titles only, escaped by
+  routine's connector check does (`watch::check`, sealed by `watch_seal` on
+  Claude Code or `watch_seal_codex` on Codex: no shell, files or web, only
+  that connector's read tools, on the Chief's grant), on the Chief's engine
+  when it can, and its line names a Codex run. What comes back is outside text: titles only, escaped by
   `brief::plain` so nothing in them can become a link (not even a bare
   address), a list or bold, and never given to a turn. A check that can't
   run says why in one line ("Gmail isn't connected. Connect it in Apps.").
