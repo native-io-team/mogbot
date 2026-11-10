@@ -5091,7 +5091,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 587
+      "consumerCount": 588
     },
     {
       "name": "--text-secondary",
@@ -5851,7 +5851,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 711
+      "consumerCount": 712
     },
     {
       "name": "--spacing-sm",
@@ -6363,7 +6363,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 587
+      "consumerCount": 588
     },
     {
       "name": "--text-secondary",
