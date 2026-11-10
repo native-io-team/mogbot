@@ -17,6 +17,7 @@
  *   pnpm qa:web --only chat-,composer-   # shots whose name starts with chat- or composer-
  *   pnpm qa:web --phases heavy           # only these phases (demo,fresh,first-run,live,cached,impostor,bars,usage-accounts,heavy,importing,team-setup,live-work,engine,probe,torture)
  *   pnpm qa:web --themes dark            # one theme
+ *   pnpm qa:web --size 375x667           # another phone (default 402x874)
  *   pnpm qa:web --phases send            # a send, frame by frame (not in the default run)
  *   pnpm qa:web --phases perf            # a 5,000-line chat: first render and scroll jank (not in the default run)
  *   pnpm qa:web --phases net             # requests the Mac sees and React renders: cold start, tabs, chats, reconnect, a streaming reply (not in the default run)
@@ -69,7 +70,9 @@ for (const p of [WEB_PORT, MOCK_PORT, CDP_PORT]) {
 }
 const WEB = `http://localhost:${WEB_PORT}`;
 const MOCK = `http://localhost:${MOCK_PORT}`;
-const VIEWPORT = { width: 402, height: 874, deviceScaleFactor: 3, mobile: true };
+// `--size 375x667` (or QA_SIZE) captures at another phone, e.g. a small one.
+const [SIZE_W, SIZE_H] = opt('--size', 'QA_SIZE', '402x874').split('x').map(Number);
+const VIEWPORT = { width: SIZE_W || 402, height: SIZE_H || 874, deviceScaleFactor: 3, mobile: true };
 const CHROME = [
   '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   '/Applications/Chromium.app/Contents/MacOS/Chromium',
