@@ -3,7 +3,7 @@
 //! This module contains shared utility functions used across the Ship Studio backend.
 
 use std::process::Command;
-use std::sync::{LazyLock, Mutex, RwLock};
+use std::sync::{Mutex, RwLock};
 use std::time::Instant;
 
 /// Creates a `Command` that won't spawn a visible console window on Windows.
@@ -28,35 +28,108 @@ fn get_path_separator() -> &'static str {
     }
 }
 
-/// Cache for `get_extended_path()` — avoids scanning NVM/Claude directories on every call.
-/// TTL of 60 seconds; tools are rarely installed mid-session.
-static EXTENDED_PATH_CACHE: LazyLock<Mutex<Option<(String, Instant)>>> =
-    LazyLock::new(|| Mutex::new(None));
+/// The extended PATH, built once and kept. Building it runs the user's login
+/// shell (`$SHELL -lic`, which sources their rc files: easily 100–500 ms of
+/// CPU), and PATH almost never changes while the app runs. It is rebuilt in
+/// the background once it is [`EXTENDED_PATH_TTL`] old, and on demand when a
+/// binary can't be found ([`refresh_extended_path_after_miss`]).
+struct ExtendedPathCache {
+    /// The PATH and when it was built.
+    built: Option<(String, Instant)>,
+    /// A background rebuild is under way.
+    refreshing: bool,
+}
 
-const EXTENDED_PATH_TTL_SECS: u64 = 60;
+static EXTENDED_PATH_CACHE: Mutex<ExtendedPathCache> = Mutex::new(ExtendedPathCache {
+    built: None,
+    refreshing: false,
+});
+
+/// Held while a PATH is being built, so concurrent callers wait for the one
+/// build instead of each running the login shell.
+static EXTENDED_PATH_BUILD: Mutex<()> = Mutex::new(());
+
+#[cfg(test)]
+static EXTENDED_PATH_BUILDS: std::sync::atomic::AtomicUsize =
+    std::sync::atomic::AtomicUsize::new(0);
+
+/// How old the PATH may get before it is rebuilt (in the background; callers
+/// keep getting the one they have meanwhile).
+const EXTENDED_PATH_TTL: std::time::Duration = std::time::Duration::from_secs(30 * 60);
+
+/// A binary that can't be found rebuilds the PATH only when it is at least
+/// this old, so something simply not installed, asked about on a timer,
+/// costs no more than the old one-minute expiry did.
+const EXTENDED_PATH_MISS_REFRESH: std::time::Duration = std::time::Duration::from_secs(60);
+
+fn extended_path_cache() -> std::sync::MutexGuard<'static, ExtendedPathCache> {
+    EXTENDED_PATH_CACHE
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+}
 
 /// Builds an extended PATH that includes common tool installation locations.
 /// macOS apps launched from Finder don't inherit the user's shell PATH,
 /// so we need to explicitly add Homebrew, npm global, and NVM paths.
 /// On Windows, adds common program installation paths.
 ///
-/// Results are cached for 60 seconds to avoid repeated filesystem scanning.
+/// Built once and cached (see [`ExtendedPathCache`]): one build at a time,
+/// however many callers ask at once.
 pub fn get_extended_path() -> String {
-    if let Ok(cache) = EXTENDED_PATH_CACHE.lock() {
-        if let Some((ref cached_path, ref created_at)) = *cache {
-            if created_at.elapsed().as_secs() < EXTENDED_PATH_TTL_SECS {
-                return cached_path.clone();
+    {
+        let mut cache = extended_path_cache();
+        if let Some((path, built_at)) = cache.built.as_ref() {
+            let path = path.clone();
+            if built_at.elapsed() >= EXTENDED_PATH_TTL && !cache.refreshing {
+                cache.refreshing = true;
+                drop(cache);
+                let asked_at = Instant::now();
+                let spawned = std::thread::Builder::new()
+                    .name("extended-path".into())
+                    .spawn(move || {
+                        rebuild_extended_path(asked_at);
+                    });
+                if spawned.is_err() {
+                    extended_path_cache().refreshing = false;
+                }
             }
+            return path;
         }
     }
+    rebuild_extended_path(Instant::now())
+}
 
-    let result = build_extended_path();
-
-    if let Ok(mut cache) = EXTENDED_PATH_CACHE.lock() {
-        *cache = Some((result.clone(), Instant::now()));
+/// Builds the PATH and stores it, unless a build that finished after
+/// `asked_at` is already there (another caller's, which this one waited on).
+fn rebuild_extended_path(asked_at: Instant) -> String {
+    let _build = EXTENDED_PATH_BUILD
+        .lock()
+        .unwrap_or_else(|e| e.into_inner());
+    if let Some((path, built_at)) = extended_path_cache().built.as_ref() {
+        if *built_at >= asked_at {
+            return path.clone();
+        }
     }
+    let path = build_extended_path();
+    #[cfg(test)]
+    EXTENDED_PATH_BUILDS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    let mut cache = extended_path_cache();
+    cache.built = Some((path.clone(), Instant::now()));
+    cache.refreshing = false;
+    path
+}
 
-    result
+/// A binary wasn't found on the PATH: rebuild it (it may have just been
+/// installed, or a version manager switched) unless it is too fresh for a
+/// rebuild to find anything new. Returns whether the PATH changed.
+pub fn refresh_extended_path_after_miss() -> bool {
+    let before = match extended_path_cache().built.as_ref() {
+        Some((_, built_at)) if built_at.elapsed() < EXTENDED_PATH_MISS_REFRESH => return false,
+        Some((path, _)) => Some(path.clone()),
+        None => None,
+    };
+    let after = rebuild_extended_path(Instant::now());
+    before.as_deref() != Some(after.as_str())
 }
 
 /// Query the user's login shell for its PATH so we detect tools installed by
@@ -921,12 +994,19 @@ pub fn find_executable(cmd: &str) -> Option<std::path::PathBuf> {
     // Then search the extended PATH — which now includes the user's login-shell
     // PATH, so we find tools installed by any version manager their terminal
     // sees, even though a bundled app didn't inherit that PATH.
-    let separator = get_path_separator();
-    for dir in get_extended_path().split(separator) {
-        if dir.is_empty() {
-            continue;
-        }
-        if let Some(found) = resolve_executable_in_dir(std::path::Path::new(dir), cmd) {
+    let search = |path: &str| {
+        path.split(get_path_separator())
+            .filter(|dir| !dir.is_empty())
+            .find_map(|dir| resolve_executable_in_dir(std::path::Path::new(dir), cmd))
+    };
+    if let Some(found) = search(&get_extended_path()) {
+        return Some(found);
+    }
+    // The PATH is kept for a long time; a miss may be something installed
+    // since it was built (onboarding installs Node and Git), so look again
+    // on a rebuilt one.
+    if refresh_extended_path_after_miss() {
+        if let Some(found) = search(&get_extended_path()) {
             return Some(found);
         }
     }
@@ -2832,6 +2912,44 @@ mod tests {
                     path.contains("WindowsApps") || path.contains("npm") || path.contains("Git")
                 );
             }
+        }
+
+        /// Callers that ask together share one build (one login shell), and
+        /// all get the same PATH.
+        #[test]
+        fn concurrent_rebuilds_share_one_build() {
+            let first = get_extended_path();
+            let builds_before = EXTENDED_PATH_BUILDS.load(std::sync::atomic::Ordering::SeqCst);
+            let asked_at = Instant::now();
+            let paths: Vec<String> = (0..8)
+                .map(|_| std::thread::spawn(move || rebuild_extended_path(asked_at)))
+                .collect::<Vec<_>>()
+                .into_iter()
+                .map(|t| t.join().unwrap())
+                .collect();
+            assert!(paths.iter().all(|p| *p == paths[0]));
+            assert_eq!(get_extended_path(), paths[0]);
+            // One build for the eight (another test running alongside may
+            // add one of its own).
+            let builds = EXTENDED_PATH_BUILDS.load(std::sync::atomic::Ordering::SeqCst);
+            assert!(
+                builds - builds_before <= 2,
+                "{} builds",
+                builds - builds_before
+            );
+            assert!(!first.is_empty());
+        }
+
+        /// A fresh PATH isn't rebuilt for a miss.
+        #[test]
+        fn a_miss_on_a_fresh_path_does_not_rebuild() {
+            rebuild_extended_path(Instant::now());
+            let built_at = extended_path_cache().built.as_ref().map(|(_, at)| *at);
+            assert!(!refresh_extended_path_after_miss());
+            assert_eq!(
+                extended_path_cache().built.as_ref().map(|(_, at)| *at),
+                built_at
+            );
         }
 
         #[test]

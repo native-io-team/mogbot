@@ -774,6 +774,7 @@ export const baseCommands: CommandMap = {
 
   // ---- git --------------------------------------------------------------
   get_current_branch: 'main',
+  git_is_repository: true,
   check_git_has_changes: false,
   list_branches: [
     {

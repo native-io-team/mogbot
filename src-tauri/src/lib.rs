@@ -724,6 +724,7 @@ pub fn run() {
             commands::git::get_shipstudio_dir,
             commands::git::ensure_shipstudio_dir,
             commands::git::check_git_has_changes,
+            commands::git::git_is_repository,
             commands::git::get_changed_files,
             commands::git::get_file_diff,
             commands::git::list_branches,

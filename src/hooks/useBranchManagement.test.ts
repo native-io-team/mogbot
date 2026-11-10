@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act } from '@testing-library/react';
-import { useBranchManagement, type UseBranchManagementParams } from './useBranchManagement';
+import {
+  useBranchManagement,
+  NOT_A_REPO_RECHECK_MS,
+  type UseBranchManagementParams,
+} from './useBranchManagement';
 import type { RefObject } from 'react';
 import type { PreviewHandle } from '../components/preview/Preview';
 import type { HealthTabPanelRef } from '../components/code/HealthTabPanel';
@@ -16,6 +20,7 @@ vi.mock('../lib/branches', () => ({
 
 vi.mock('../lib/git', () => ({
   getChangedFiles: vi.fn().mockResolvedValue([]),
+  isGitRepository: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock('../lib/conflicts', () => ({
@@ -84,6 +89,7 @@ describe('useBranchManagement', () => {
     vi.mocked(branches.listBranches).mockResolvedValue([defaultBranch]);
     vi.mocked(branches.listPullRequests).mockResolvedValue([]);
     vi.mocked(git.getChangedFiles).mockResolvedValue([]);
+    vi.mocked(git.isGitRepository).mockResolvedValue(true);
     vi.mocked(core.invoke).mockImplementation((cmd: string) => {
       if (cmd === 'check_git_has_changes')
         return Promise.resolve(false) as ReturnType<typeof core.invoke>;
@@ -295,6 +301,33 @@ describe('useBranchManagement', () => {
       });
 
       expect(vi.mocked(branches.getCurrentBranch).mock.calls.length).toBeGreaterThan(callCount);
+    });
+
+    it('runs no git on a folder that is not a repository, and checks again rarely', async () => {
+      vi.mocked(git.isGitRepository).mockResolvedValue(false);
+      renderHook(() => useBranchManagement(createParams()));
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(0);
+      });
+      expect(git.isGitRepository).toHaveBeenCalledTimes(1);
+
+      // Several polling ticks inside the re-check window: nothing asked.
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(NOT_A_REPO_RECHECK_MS - 1000);
+      });
+      expect(git.isGitRepository).toHaveBeenCalledTimes(1);
+      expect(branches.getCurrentBranch).not.toHaveBeenCalled();
+      expect(conflicts.hasConflicts).not.toHaveBeenCalled();
+      expect(git.getChangedFiles).not.toHaveBeenCalled();
+
+      // `git init` happened: the next re-check finds it and polling starts.
+      vi.mocked(git.isGitRepository).mockResolvedValue(true);
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10000);
+      });
+      expect(git.isGitRepository).toHaveBeenCalledTimes(2);
+      expect(branches.getCurrentBranch).toHaveBeenCalled();
     });
 
     it('does not poll when no project is set', async () => {

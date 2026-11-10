@@ -17,7 +17,9 @@
 //!
 //! Read on every Settings listing, so a new sign-in shows on the next one.
 
-use std::path::Path;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::{LazyLock, Mutex};
 
 use base64::Engine as _;
 use serde_json::Value;
@@ -47,12 +49,21 @@ fn email(v: Option<&Value>) -> Option<String> {
     text(v).filter(|s| s.contains('@') && !s.contains(char::is_whitespace))
 }
 
+/// The one part of `.claude.json` read here. The file also holds every
+/// project's history (hundreds of KB): deserialized into this, the rest is
+/// skipped without being built into a tree.
+#[derive(serde::Deserialize)]
+struct ClaudeSettings {
+    #[serde(rename = "oauthAccount", default)]
+    oauth_account: Option<Value>,
+}
+
 /// Claude Code's settings file (`.claude.json`) contents.
 pub fn claude(raw: &str) -> Identity {
-    let Ok(root) = serde_json::from_str::<Value>(raw) else {
+    let Ok(root) = serde_json::from_str::<ClaudeSettings>(raw) else {
         return Identity::default();
     };
-    let Some(account) = root.get("oauthAccount").filter(|a| a.is_object()) else {
+    let Some(account) = root.oauth_account.filter(|a| a.is_object()) else {
         return Identity::default();
     };
     Identity {
@@ -108,10 +119,43 @@ fn jwt_claims(token: &str) -> Option<Value> {
 }
 
 /// Read `path` and parse it with `parse`; nothing when it can't be read.
+///
+/// The answer is kept until the file changes (its modified time or size):
+/// the agents list asks once per agent on every refresh, and parsing a
+/// large `.claude.json` each time was most of the app's own CPU.
 pub fn read(path: Option<&Path>, parse: fn(&str) -> Identity) -> Identity {
-    path.and_then(|p| std::fs::read_to_string(p).ok())
+    let Some(path) = path else {
+        return Identity::default();
+    };
+    let Ok(meta) = std::fs::metadata(path) else {
+        return Identity::default();
+    };
+    let stamp = meta
+        .modified()
+        .ok()
+        .map(|at| (at, meta.len(), parse as usize));
+    if let Some(stamp) = stamp {
+        if let Some((kept_stamp, who)) = kept().get(path) {
+            if *kept_stamp == stamp {
+                return who.clone();
+            }
+        }
+    }
+    let who = std::fs::read_to_string(path)
         .map(|raw| parse(&raw))
-        .unwrap_or_default()
+        .unwrap_or_default();
+    if let Some(stamp) = stamp {
+        kept().insert(path.to_path_buf(), (stamp, who.clone()));
+    }
+    who
+}
+
+type Stamp = (std::time::SystemTime, u64, usize);
+
+fn kept() -> std::sync::MutexGuard<'static, HashMap<PathBuf, (Stamp, Identity)>> {
+    static KEPT: LazyLock<Mutex<HashMap<PathBuf, (Stamp, Identity)>>> =
+        LazyLock::new(Default::default);
+    KEPT.lock().unwrap_or_else(|e| e.into_inner())
 }
 
 #[cfg(test)]
@@ -197,6 +241,37 @@ mod tests {
             Identity::default()
         );
         assert_eq!(codex("{"), Identity::default());
+    }
+
+    #[test]
+    fn a_kept_answer_follows_the_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let file = dir.path().join(".claude.json");
+        std::fs::write(
+            &file,
+            r#"{"oauthAccount":{"emailAddress":"a@example.com"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            read(Some(&file), claude).email.as_deref(),
+            Some("a@example.com")
+        );
+        assert_eq!(
+            read(Some(&file), claude).email.as_deref(),
+            Some("a@example.com")
+        );
+        // Signed in as someone else: the next read says so.
+        std::fs::write(
+            &file,
+            r#"{"oauthAccount":{"emailAddress":"bee@example.com"}}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            read(Some(&file), claude).email.as_deref(),
+            Some("bee@example.com")
+        );
+        std::fs::remove_file(&file).unwrap();
+        assert_eq!(read(Some(&file), claude), Identity::default());
     }
 
     #[test]
