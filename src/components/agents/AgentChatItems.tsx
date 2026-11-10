@@ -327,7 +327,7 @@ interface UserBubbleProps extends Arrival {
   /** Called with this message's id. */
   onRetry?: (id: string) => void;
   /** An agent's colour, for tinting the names you @mentioned. */
-  colorOf: (agentId: string) => string | undefined;
+  colorwayOf: (agentId: string) => string | undefined;
   /**
    * The newest message waiting for the turn in progress to end. It says so,
    * and offers to interrupt that turn to send it now.
@@ -352,7 +352,7 @@ export const UserBubble = memo(function UserBubble({
   arrived,
   failed,
   onRetry,
-  colorOf,
+  colorwayOf,
   queued,
   onInterrupt,
   driven,
@@ -384,7 +384,7 @@ export const UserBubble = memo(function UserBubble({
           </blockquote>
         ) : (
           <p key={i} className="agent-bubble__text">
-            <MentionText text={part.text} mentions={message.mentions} colorOf={colorOf} />
+            <MentionText text={part.text} mentions={message.mentions} colorwayOf={colorwayOf} />
           </p>
         )
       )}

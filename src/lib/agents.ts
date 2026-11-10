@@ -29,7 +29,11 @@ import type {
   RoutineStep,
   RoutineWaiting,
 } from '../../packages/companion-protocol/src/model';
-import { keyStateOf, type KeyState } from '../../packages/companion-protocol/src/agentKeys';
+import {
+  keyLookFor,
+  keyStateOf,
+  type KeyState,
+} from '../../packages/companion-protocol/src/agentKeys';
 import { MODEL_DEFAULT, MODEL_PURPOSE } from '../../packages/companion-protocol/src/cardWords';
 
 export type { Watch, WatchEvent, WatchSource } from '../../packages/companion-protocol/src/model';
@@ -2356,6 +2360,16 @@ export function needsYou(agent: Agent): boolean {
 export function failedTurn(agent: Agent): Failure | null {
   return agent.failure && agent.status.state === 'idle' ? agent.failure : null;
 }
+
+/**
+ * The colourway an agent's key wears, for anything tinted in its colour (a
+ * name, an @mention, a quote bar): the key's, never the older avatar colour,
+ * so the name beside a key is the key's hue (agents.css, `--agents-ink-*`).
+ */
+export const agentColorway = (
+  agent: Pick<Agent, 'name' | 'color'> &
+    Partial<Pick<Agent, 'role' | 'colorway' | 'isMain' | 'icon'>>
+): string => keyLookFor(agent).colorway;
 
 /**
  * The state its key shows (`keyStateOf` in agentKeys.ts), from what its row

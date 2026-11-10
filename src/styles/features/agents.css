@@ -23,6 +23,25 @@
   --agents-tint-purple: #9471f5;
   --agents-tint-pink: #e45a9f;
   --agents-tint-gray: #8a8a8a;
+  /* A name, @mention or quote bar in its agent's colour takes the key's
+     colourway (`data-colorway`, agent-keys.json), not the older avatar hue
+     above, which stays the accent's: Sage is olive, never success green.
+     The key faces, lifted just enough on dark to clear AA once mixed toward
+     the text (agents-rooms.css, theme.test.ts). */
+  --agents-ink-blue: #3f6fd8;
+  --agents-ink-orange: #ec6a2e;
+  --agents-ink-putty: #e6decc;
+  --agents-ink-teal: #6fc2b6;
+  --agents-ink-graphite: #b4b8bf;
+  --agents-ink-mustard: #e8b93f;
+  --agents-ink-pink: #efa9a2;
+  --agents-ink-sage: #a9ba78;
+  --agents-ink-brick: #c4604a;
+  --agents-ink-plum: #9c6a92;
+  --agents-ink-navy: #6d7a96;
+  --agents-ink-forest: #5e8a73;
+  --agents-ink-sky: #9dc8ea;
+  --agents-ink-lilac: #c3b4e2;
 
   --agents-header-height: calc(var(--control-height-standard) + (var(--spacing-sm) * 2));
   /* The collapsed home rail floats its nav row over the top-left of the
@@ -50,6 +69,12 @@
    accent itself is (LIGHT_THEME_WHITE in accent.ts). */
 :root[data-theme='light'] {
   --agents-tint-white: #1c1c1c;
+  /* On light the deep faces read as they are. */
+  --agents-ink-graphite: #4a4e55;
+  --agents-ink-brick: #b5452c;
+  --agents-ink-plum: #7a3e6e;
+  --agents-ink-navy: #27395e;
+  --agents-ink-forest: #2f6148;
   --agents-card-surface: var(--surface-panel);
   --agents-card-shadow: var(--shadow-card);
 }
@@ -86,6 +111,50 @@
 }
 [data-color='gray'] {
   --agents-tint: var(--agents-tint-gray);
+}
+
+/* The key's colourway wins over the older colour where both are given. */
+[data-colorway='blue'] {
+  --agents-tint: var(--agents-ink-blue);
+}
+[data-colorway='orange'] {
+  --agents-tint: var(--agents-ink-orange);
+}
+[data-colorway='putty'] {
+  --agents-tint: var(--agents-ink-putty);
+}
+[data-colorway='teal'] {
+  --agents-tint: var(--agents-ink-teal);
+}
+[data-colorway='graphite'] {
+  --agents-tint: var(--agents-ink-graphite);
+}
+[data-colorway='mustard'] {
+  --agents-tint: var(--agents-ink-mustard);
+}
+[data-colorway='pink'] {
+  --agents-tint: var(--agents-ink-pink);
+}
+[data-colorway='sage'] {
+  --agents-tint: var(--agents-ink-sage);
+}
+[data-colorway='brick'] {
+  --agents-tint: var(--agents-ink-brick);
+}
+[data-colorway='plum'] {
+  --agents-tint: var(--agents-ink-plum);
+}
+[data-colorway='navy'] {
+  --agents-tint: var(--agents-ink-navy);
+}
+[data-colorway='forest'] {
+  --agents-tint: var(--agents-ink-forest);
+}
+[data-colorway='sky'] {
+  --agents-tint: var(--agents-ink-sky);
+}
+[data-colorway='lilac'] {
+  --agents-tint: var(--agents-ink-lilac);
 }
 
 /* ---------------------------------------------------------------- badge */

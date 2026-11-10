@@ -123,6 +123,7 @@ import { SessionCard } from './AgentSession';
 import { RoomFoldLine, RoomWorkingPlace } from './AgentRoomParts';
 import { takeHandedRevision } from '../../lib/agentRooms';
 import {
+  agentColorway,
   answerApproval,
   buildChatItems,
   createCheckIn,
@@ -837,9 +838,12 @@ export const AgentChat = memo(function AgentChat({
     (id: string) => (id === rowAgent.id ? rowAgent : agentIn(getAgentsSnapshot().agents, id)),
     [rowAgent]
   );
-  // Tints for @mentions, keyed by the colours themselves: a status event
-  // elsewhere gives a new agents list but the same colours.
-  const colorKey = useAgentsSelector((s) => s.agents.map((a) => `${a.id}:${a.color}`).join(' '));
+  // Tints for @mentions (each agent's key colourway), keyed by the
+  // colourways themselves: a status event elsewhere gives a new agents list
+  // but the same colourways.
+  const colorKey = useAgentsSelector((s) =>
+    s.agents.map((a) => `${a.id}:${agentColorway(a)}`).join(' ')
+  );
   // Who exists, and who is visible, as strings: the same for every status event.
   const allIds = useAgentsSelector((s) => s.agents.map((a) => a.id).join(' '));
   const visibleIds = useAgentsSelector((s) =>
@@ -850,7 +854,7 @@ export const AgentChat = memo(function AgentChat({
   );
   const existing = useMemo(() => new Set(allIds.split(' ')), [allIds]);
   const visible = useMemo(() => new Set(visibleIds.split(' ')), [visibleIds]);
-  const colorOf = useMemo(() => {
+  const colorwayOf = useMemo(() => {
     const colors = new Map(colorKey.split(' ').map((pair) => pair.split(':') as [string, string]));
     return (id: string) => colors.get(id);
   }, [colorKey]);
@@ -1712,7 +1716,7 @@ export const AgentChat = memo(function AgentChat({
                 queued={m.id === queuedId}
                 onInterrupt={interruptNow}
                 driven={driven}
-                colorOf={colorOf}
+                colorwayOf={colorwayOf}
                 onRemember={setRemembering}
                 goBack={localIds.has(m.id) ? undefined : goBack}
                 onGoBack={onGoBack}
@@ -1844,7 +1848,7 @@ export const AgentChat = memo(function AgentChat({
       queuedId,
       interruptNow,
       driven,
-      colorOf,
+      colorwayOf,
       streaming,
       rowsPaused,
       onAnswer,
@@ -1922,6 +1926,7 @@ export const AgentChat = memo(function AgentChat({
               ref={sectionRef}
               className="agent-chat"
               data-color={agent.color}
+              data-colorway={agentColorway(agent)}
               data-dropping={dropping || undefined}
               data-takeover-terminal={terminalShown || undefined}
               aria-label={`Conversation with ${agent.name}`}

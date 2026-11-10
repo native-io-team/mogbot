@@ -153,16 +153,18 @@ const RESULT: AgentMessage = {
 describe('RoomChat', () => {
   it('shows each agent under its own name and who your message was for', async () => {
     await open(room());
-    // Finance's @Ops is tinted in Ops's colour, as your own mentions are.
+    // Finance's @Ops is tinted in Ops's key colourway, as your own mentions are.
     const tinted = document.querySelector('.agent-room__prose .agent-mention');
     expect(tinted?.textContent).toBe('@Ops');
-    expect(tinted?.getAttribute('data-color')).toBe('teal');
+    expect(tinted?.getAttribute('data-colorway')).toBe('teal');
     expect(tinted?.parentElement?.textContent).toBe('Not yet. @Ops can chase.');
     const names = [...document.querySelectorAll('.agent-room__speaker-name')].map(
       (n) => n.textContent
     );
     expect(names).toEqual(['Finance', 'Ops']);
-    expect(document.querySelector('.agent-room__speaker-name[data-color="orange"]')).toBeTruthy();
+    expect(
+      document.querySelector('.agent-room__speaker-name[data-colorway="orange"]')
+    ).toBeTruthy();
     expect(screen.getByText('To Finance')).toBeTruthy();
   });
 

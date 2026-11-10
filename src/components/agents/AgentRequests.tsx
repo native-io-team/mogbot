@@ -52,6 +52,7 @@ import { AgentKey } from './AgentKey';
 import { ConversationBar } from './AgentCard';
 import { ApprovalCard } from './AgentChatItems';
 import {
+  agentColorway,
   answerApproval,
   needsYou,
   promptAnswer,
@@ -510,7 +511,11 @@ function Group({
   const cardsId = useId();
   const waiting = group.pending + older > 0;
   return (
-    <div className="agent-requests-panel__group" data-color={agent.color}>
+    <div
+      className="agent-requests-panel__group"
+      data-color={agent.color}
+      data-colorway={agentColorway(agent)}
+    >
       <div className="agent-requests-panel__row">
         <button
           type="button"

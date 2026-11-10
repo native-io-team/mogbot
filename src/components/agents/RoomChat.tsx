@@ -70,6 +70,7 @@ import { ResultCardView } from './AgentResult';
 import { ChangeCard, useAgentProjects } from './AgentProject';
 import { SessionCard } from './AgentSession';
 import {
+  agentColorway,
   answerApproval,
   buildChatItems,
   engineIsReady,
@@ -406,7 +407,13 @@ export function RoomChat({
   };
 
   // Tints for @mentions in your lines.
-  const colorOf = useCallback((id: string) => agentsById.get(id)?.color, [agentsById]);
+  const colorwayOf = useCallback(
+    (id: string) => {
+      const a = agentsById.get(id);
+      return a ? agentColorway(a) : undefined;
+    },
+    [agentsById]
+  );
   const anyMember = members[0];
 
   const rowFor = (item: (typeof items)[number], index: number): ReactElement | ReactElement[] => {
@@ -427,7 +434,7 @@ export function RoomChat({
               arrived={arrived}
               failed={failed.has(m.id)}
               onRetry={retry}
-              colorOf={colorOf}
+              colorwayOf={colorwayOf}
               sending={sending.get(m.id)}
             />
           )}
@@ -935,7 +942,11 @@ function SpeakerBlock({
   return (
     <div className="agent-room__speaker" data-continued={!showName || undefined} {...scope}>
       {showName && (
-        <div className="agent-room__speaker-name" data-color={speaker?.color ?? 'gray'}>
+        <div
+          className="agent-room__speaker-name"
+          data-color={speaker?.color ?? 'gray'}
+          data-colorway={speaker ? agentColorway(speaker) : undefined}
+        >
           <AgentKey
             id={speaker?.id}
             name={speaker?.name ?? '?'}
@@ -1100,7 +1111,7 @@ function MemberNote({
       ) : (
         <>
           {m.text.slice(0, at)}
-          <span className="agent-mention" data-color={speaker.color}>
+          <span className="agent-mention" data-colorway={agentColorway(speaker)}>
             {speaker.name}
           </span>
           {m.text.slice(at + speaker.name.length)}
@@ -1173,7 +1184,11 @@ function WorkingFor({
   const scope = useMemo(() => accentScopeProps(agent.color, theme), [agent.color, theme]);
   return (
     <div className="agent-room__speaker" {...scope}>
-      <div className="agent-room__speaker-name" data-color={agent.color}>
+      <div
+        className="agent-room__speaker-name"
+        data-color={agent.color}
+        data-colorway={agentColorway(agent)}
+      >
         {/* Its key cap looks around here; the line under it doesn't repeat it. */}
         <AgentKey id={agent.id} name={agent.name} color={agent.color} state="working" size="sm" />
         <span>{agent.name}</span>

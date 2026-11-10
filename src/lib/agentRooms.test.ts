@@ -183,13 +183,13 @@ describe('a member’s @mentions in its reply', () => {
     root.innerHTML = html;
     tintMentionsIn(root, members);
     return [...root.querySelectorAll('.agent-mention')].map(
-      (el) => `${el.textContent}:${el.getAttribute('data-color')}`
+      (el) => `${el.textContent}:${el.getAttribute('data-colorway')}`
     );
   };
   it('tints whole member names, longest first', () => {
     expect(tint('<p>@Finance can you check? Then @acme site ships.</p>')).toEqual([
       '@Finance:orange',
-      '@acme site:green',
+      '@acme site:sage',
     ]);
   });
   it('leaves emails, partial names, links and code alone', () => {
