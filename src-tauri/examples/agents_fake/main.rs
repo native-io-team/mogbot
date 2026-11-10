@@ -298,7 +298,7 @@ async fn normal(h: &H) -> Check {
             {"say": "Looking into it."},
             {"bash": "echo hello-from-bash", "ask": false},
             {"write": "notes.txt", "text": "remember this"},
-            {"say": "Done: session {session}, turn {turn}."}
+            {"slow": "Done: session {session}, turn {turn}.", "every": 0.1}
         ])),
     )
     .await?;
@@ -1547,6 +1547,25 @@ async fn crossover(h: &H) -> Check {
                 "its own engine's session wasn't kept: {:?} {:?}",
                 agent.engine, agent.session_id
             ),
+        )?;
+
+        // Its own engine has room again: back in the session it left, with
+        // one line saying so.
+        accounts_have_room();
+        h.send(&a.id, &fake(json!([{"say": "back in {session}"}])))
+            .await?;
+        h.turn(&a.id).await?;
+        ensure(
+            last_reply(&a.id) == format!("back in {claude_session}"),
+            format!(
+                "not back in its own session: {:?}, notes {:?}",
+                replies(&a.id),
+                notes(&a.id)
+            ),
+        )?;
+        ensure(
+            notes(&a.id).iter().any(|n| n.starts_with("Back on")),
+            format!("no line about coming back: {:?}", notes(&a.id)),
         )
     }
     .await;
@@ -1744,10 +1763,18 @@ async fn two_cards(h: &H) -> Check {
 /// makes no second card. Declining it wakes the agent.
 async fn login(h: &H) -> Check {
     let a = h.agent("Needy");
-    let ask = json!({"tool": "request_login", "args": {
+    // Just try first: the app points it at the agents' browser; the page
+    // asks for a sign-in, so it asks again saying so, and gets a card.
+    let first = json!({"tool": "request_login", "args": {
         "service": "linear", "scopes": ["read"], "why": "Read the open issues"}});
-    h.send(&a.id, &fake(json!([ask, {"say": "asked for Linear"}])))
-        .await?;
+    let ask = json!({"tool": "request_login", "args": {
+        "service": "linear", "scopes": ["read"], "why": "Read the open issues",
+        "signed_out": true, "browser": "agents"}});
+    h.send(
+        &a.id,
+        &fake(json!([first, ask, {"say": "asked for Linear"}])),
+    )
+    .await?;
     h.turn(&a.id).await?;
     no_errors(&a.id)?;
     let logins = || {

@@ -312,6 +312,23 @@ pnpm rust:test        # or: cd src-tauri && cargo test
 
 Unit tests are colocated in source files, or in `*_tests.rs` files beside them, using `#[cfg(test)]` modules.
 
+**Whole agent turns, no model (macOS, needs python3):**
+```bash
+scripts/agents-fake-e2e.sh            # every scenario, about two minutes
+scripts/agents-fake-e2e.sh stop codex # some of them
+```
+
+Runs real agent turns (runner, agent bridge, approval cards, accounts,
+conversations, the morning brief) against a scripted stand-in for Claude
+Code and Codex (`scripts/fake-engine/fake_claude.py`), in a throwaway HOME
+with the Keychain kept in memory: free, offline and deterministic. Each
+test message carries the turn's script (`#fake [{"say": "hi"}, …]`; the
+steps are listed at the top of the script). Run it after changing anything
+in `src-tauri/src/agents/` that a turn goes through; add a scenario to
+`src-tauri/examples/agents_fake/` for a bug a turn can reproduce. The
+opt-in `scripts/agents-e2e.sh` runs real turns on Haiku (costs money); see
+docs/agents.md, "Testing".
+
 **Phone app (Jest):**
 ```bash
 cd mobile && pnpm test        # unit and node tests
