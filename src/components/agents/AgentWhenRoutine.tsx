@@ -133,8 +133,19 @@ export function WhenComposer({ agent, editing, onDone, onCancel }: WhenComposerP
     }
   }, []);
   useEffect(() => {
-    if (readsMac) void askMac();
-  }, [readsMac, askMac]);
+    if (!readsMac) return;
+    let live = true;
+    getWatchMacAccess()
+      .then((m) => {
+        if (live) setMac(m);
+      })
+      .catch(() => {
+        // Unknown: the routine's own check says so if it can't read.
+      });
+    return () => {
+      live = false;
+    };
+  }, [readsMac]);
   usePolling(askMac, {
     intervalMs: 3000,
     enabled: readsMac && access !== null,
