@@ -9,6 +9,7 @@ import turn from '../../packages/companion-protocol/src/blocks-turn.json';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { Blocks, STAGED_NOTE } from '../src/components/blocks/Blocks';
+import { fitColumns } from '../src/components/blocks/BlockTable';
 import { BlockRepliesContext, blockAnswers, type BlockReplies } from '../src/lib/blocks';
 import { asMessage } from '../src/lib/wellFormed';
 
@@ -237,6 +238,74 @@ describe('a table', () => {
     expect(screen.getAllByTestId('table-row')).toHaveLength(8);
     await fireEvent.press(screen.getByText('Show all 12 rows'));
     expect(screen.getAllByTestId('table-row')).toHaveLength(12);
+  });
+});
+
+describe('fitting a table to the phone', () => {
+  const brief = {
+    columns: [{ label: 'Time' }, { label: 'Agent' }, { label: 'What' }],
+    rows: [
+      ['10:30 AM', 'Acme Site', 'Read what’s new on AI agents and write up the three that matter'],
+      ['9:00 AM', 'Finance', 'Sweep the invoices inbox (every 2 hours)'],
+    ],
+  };
+
+  it('wraps the long column, never the short ones, and fills the card without scrolling', () => {
+    const w = fitColumns(brief, 330);
+    expect(w.reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(330);
+    // A time and a name keep the width their words need.
+    expect(w[0]).toBeGreaterThanOrEqual(8 * 14 * 0.57);
+    expect(w[1]).toBeGreaterThanOrEqual(9 * 14 * 0.57);
+  });
+
+  it('wraps number headers at their words before it scrolls', () => {
+    const counts = {
+      columns: [
+        { label: 'Agent' },
+        { label: 'Results', numeric: true },
+        { label: 'Routines run', numeric: true },
+        { label: 'Replies', numeric: true },
+      ],
+      rows: [['Acme Site', 1, 0, 6]],
+    };
+    expect(fitColumns(counts, 300).reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(300);
+  });
+
+  it('scrolls only when even wrapped it cannot fit', () => {
+    const wide = {
+      columns: Array.from({ length: 8 }, (_, i) => ({ label: `Column ${i}` })),
+      rows: [Array.from({ length: 8 }, () => 'a value')],
+    };
+    expect(fitColumns(wide, 300).reduce((a, b) => a + b, 0)).toBeGreaterThan(300);
+  });
+});
+
+describe('a page', () => {
+  it('puts records and notes in a row on one card, a section each', async () => {
+    await draw(
+      message([
+        S({
+          kind: 'facts',
+          title: 'Needs you',
+          items: [{ label: 'Lead Gen', value: 'Send the first of 12 lead emails' }],
+        } as Partial<Block> & { kind: 'facts' }),
+        S({ kind: 'callout', tone: 'warning', text: 'Gmail.' } as Partial<Block> & {
+          kind: 'callout';
+        }),
+        S({
+          kind: 'table',
+          title: 'Today',
+          columns: [{ label: 'Time' }],
+          rows: [['9:00 AM']],
+        } as Partial<Block> & { kind: 'table' }),
+      ]),
+      null
+    );
+    expect(screen.getAllByTestId('block-page')).toHaveLength(1);
+    expect(screen.getAllByTestId('block-section')).toHaveLength(3);
+    expect(screen.queryAllByTestId('block-card')).toHaveLength(0);
+    // A value too long to sit beside its label goes under it.
+    expect(screen.getByTestId('facts-stacked')).toBeTruthy();
   });
 });
 

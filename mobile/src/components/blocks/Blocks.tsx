@@ -11,13 +11,14 @@
  */
 
 import {
+  blockRuns,
   isInteractive,
   type AgentMessage,
   type Block,
   type BlockSet,
 } from '@shipstudio/companion-protocol';
 import { useState } from 'react';
-import { View } from 'react-native';
+import { StyleSheet, View } from 'react-native';
 import { haptic } from '../../lib/haptics';
 import { useBlockReplies } from '../../lib/blocks';
 import { makeStyles, useColors } from '../../lib/appearance';
@@ -69,9 +70,13 @@ export function Blocks({ message, set }: { message: AgentMessage; set: BlockSet 
   return (
     <View style={styles.blocks} testID="blocks">
       {!!set.intro && <Markdown text={set.intro} />}
-      {set.items.map((b, i) => (
-        <BlockView key={i} block={b} agentId={message.agentId} answering={answering} />
-      ))}
+      {blockRuns(set.items).map((run, i) =>
+        run.length > 1 ? (
+          <Page key={i} blocks={run} agentId={message.agentId} answering={answering} />
+        ) : (
+          <BlockView key={i} block={run[0]} agentId={message.agentId} answering={answering} />
+        )
+      )}
       {outside && asks && (
         <View style={styles.note} testID="blocks-outside">
           <Icon name="info.circle" size={iconSize.inline} color={colors.textMuted} />
@@ -222,6 +227,70 @@ function BlockView({
   }
 }
 
+/**
+ * Records and notes in a row (`blockRuns`): one card, a section each, split
+ * by a hairline, so a brief reads as one page rather than a pile of boxes.
+ */
+function Page({
+  blocks,
+  agentId,
+  answering,
+}: {
+  blocks: Block[];
+  agentId: string;
+  answering: Answering;
+}) {
+  const styles = useStyles();
+  const colors = useColors();
+  return (
+    <Card icon="list.bullet" title="" hideHead testID="block-page">
+      {blocks.map((b, i) => {
+        const title = b.title?.trim();
+        const ruled = i > 0 && b.kind !== 'callout' && blocks[i - 1].kind !== 'callout';
+        return (
+          <View key={i} style={[styles.section, ruled && styles.ruled]} testID="block-section">
+            {b.kind === 'callout' ? (
+              <BlockView block={b} agentId={agentId} answering={answering} />
+            ) : (
+              <>
+                {(!!title || b.kind === 'checklist') && (
+                  <View style={styles.sectionHead}>
+                    <View style={styles.flex}>
+                      <Heading text={title || 'Checklist'} />
+                    </View>
+                    {b.kind === 'checklist' && (
+                      <T variant="caption" color={colors.textMuted}>
+                        {checklistMeta(b)}
+                      </T>
+                    )}
+                  </View>
+                )}
+                <SectionBody block={b} />
+              </>
+            )}
+          </View>
+        );
+      })}
+    </Card>
+  );
+}
+
+/** A page section's contents: what its card would hold, without the card. */
+function SectionBody({ block }: { block: Block }) {
+  switch (block.kind) {
+    case 'table':
+      return <BlockTable block={block} />;
+    case 'facts':
+      return <BlockFacts block={block} />;
+    case 'checklist':
+      return <BlockChecklist block={block} />;
+    case 'steps':
+      return <BlockSteps block={block} />;
+    default:
+      return null;
+  }
+}
+
 function Heading({ text }: { text: string }) {
   const colors = useColors();
   return (
@@ -231,8 +300,16 @@ function Heading({ text }: { text: string }) {
   );
 }
 
-const useStyles = makeStyles(() => ({
+const useStyles = makeStyles((colors) => ({
   blocks: { gap: space.md },
   bare: { gap: space.sm },
+  section: { gap: space.xs },
+  sectionHead: { flexDirection: 'row', alignItems: 'baseline', gap: space.sm },
+  flex: { flex: 1 },
+  ruled: {
+    paddingTop: space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderDefault,
+  },
   note: { flexDirection: 'row', alignItems: 'flex-start', gap: space.tight },
 }));
