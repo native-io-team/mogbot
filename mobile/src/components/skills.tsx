@@ -167,16 +167,39 @@ export function WhatItKnows({
   );
 }
 
-/** One skill, for the editor page. */
-export function useSkill(agentId: string, slug: string): Skill | null | undefined {
-  const [skill, setSkill] = useState<Skill | null | undefined>(undefined);
+/**
+ * One skill, for the editor page, as far as it is known: still being read,
+ * read, not there any more, or not readable right now (and why). A failed
+ * read is never "not there": it reads again when the Mac is back.
+ */
+export type SkillReading =
+  | { kind: 'reading' }
+  | { kind: 'read'; skill: Skill }
+  | { kind: 'gone' }
+  | { kind: 'failed'; reason: string };
+
+export function useSkill(agentId: string, slug: string): SkillReading {
+  const live = useApp((s) => s.link.kind === 'connected');
+  const [reading, setReading] = useState<SkillReading>({ kind: 'reading' });
+  const known = reading.kind === 'read' || reading.kind === 'gone';
   useEffect(() => {
+    // Read once it can be; once known, a reconnect doesn't read it again
+    // under an edit in progress.
+    if (!live || known) return;
+    let on = true;
     readSkills(agentId).then(
-      (v) => setSkill(v.skills.find((s) => s.slug === slug) ?? null),
-      () => setSkill(null)
+      (v) => {
+        if (!on) return;
+        const skill = v.skills.find((s) => s.slug === slug);
+        setReading(skill ? { kind: 'read', skill } : { kind: 'gone' });
+      },
+      (e: unknown) => on && setReading({ kind: 'failed', reason: describeError(e) })
     );
-  }, [agentId, slug]);
-  return skill;
+    return () => {
+      on = false;
+    };
+  }, [agentId, slug, live, known]);
+  return reading;
 }
 
 const useStyles = makeStyles((colors) => ({

@@ -7,7 +7,7 @@
 
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useState } from 'react';
-import { StyleSheet, TextInput } from 'react-native';
+import { StyleSheet, TextInput, View } from 'react-native';
 import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import { Spinner } from '../components/agent';
 import { useSkill } from '../components/skills';
@@ -31,7 +31,8 @@ function SkillPage() {
   const router = useRouter();
   const { id, slug } = useLocalSearchParams<{ id: string; slug: string }>();
   const connected = useApp((s) => s.link.kind === 'connected');
-  const skill = useSkill(id, slug);
+  const reading = useSkill(id, slug);
+  const skill = reading.kind === 'read' ? reading.skill : null;
   // Filled from the skill once it's read; until then, empty.
   const [edited, setEdited] = useState<{ name?: string; when?: string; steps?: string }>({});
   const name = edited.name ?? skill?.name ?? '';
@@ -58,19 +59,27 @@ function SkillPage() {
       .finally(() => setBusy(false));
   };
 
+  const changed =
+    !!skill && (name !== skill.name || when !== (skill.when ?? '') || steps !== skill.steps);
+
+  // Each field keeps its label once it's filled, as Schedule's What does.
   const field = (value: string, set: (v: string) => void, label: string, multiline = false) => (
-    <TextInput
-      value={value}
-      onChangeText={set}
-      multiline={multiline}
-      maxLength={multiline ? 6_000 : 300}
-      style={[styles.input, multiline && styles.steps]}
-      keyboardAppearance={appearance}
-      selectionColor={accent.accent}
-      accessibilityLabel={label}
-      placeholder={label}
-      placeholderTextColor={colors.textMuted}
-    />
+    <View style={styles.group}>
+      <T variant="caption" color={colors.textMuted} nativeID={`skill-${label}`}>
+        {label}
+      </T>
+      <TextInput
+        value={value}
+        onChangeText={set}
+        multiline={multiline}
+        maxLength={multiline ? 6_000 : 300}
+        style={[styles.input, multiline && styles.steps]}
+        keyboardAppearance={appearance}
+        selectionColor={accent.accent}
+        accessibilityLabel={label}
+        accessibilityLabelledBy={`skill-${label}`}
+      />
+    </View>
   );
 
   return (
@@ -87,7 +96,7 @@ function SkillPage() {
                 size="compact"
                 variant="answer"
                 busy={busy}
-                disabled={!connected || !name.trim() || !steps.trim()}
+                disabled={!connected || !changed || !name.trim() || !steps.trim()}
                 onPress={save}
               />
             )
@@ -100,12 +109,29 @@ function SkillPage() {
             {error}
           </T>
         )}
-        {skill === undefined ? (
-          <Spinner />
-        ) : skill === null ? (
+        {reading.kind === 'reading' ? (
+          <View style={styles.center}>
+            {connected ? (
+              <Spinner />
+            ) : (
+              <T color={colors.textSecondary}>Reading it needs your Mac.</T>
+            )}
+          </View>
+        ) : reading.kind === 'failed' ? (
+          <T color={colors.textSecondary}>
+            {connected
+              ? `Couldn’t read it: ${reading.reason}`
+              : 'Reading it needs your Mac. It reads again once it’s back.'}
+          </T>
+        ) : reading.kind === 'gone' ? (
           <T color={colors.textSecondary}>That skill isn’t there any more.</T>
         ) : (
           <>
+            {!connected && (
+              <T variant="small" color={colors.textMuted}>
+                As it was last read. Changing it needs your Mac.
+              </T>
+            )}
             {field(name, setName, 'Name')}
             {field(when, setWhen, 'When to use it')}
             {field(steps, setSteps, 'Steps', true)}
@@ -121,6 +147,8 @@ function SkillPage() {
 
 const useStyles = makeStyles((colors) => ({
   content: { padding: space.lg, paddingTop: space.xl, gap: space.md, paddingBottom: space['2xl'] },
+  group: { gap: space.xs },
+  center: { paddingVertical: space.xl, alignItems: 'center' },
   input: {
     color: colors.textBody,
     fontSize: type.body,

@@ -77,7 +77,7 @@ function Remember() {
             setText(t);
           }}
           maxLength={2_000}
-          placeholder={summarising ? 'Summarizing…' : `What should ${name} remember?`}
+          placeholder={summarising ? 'Summarising…' : `What should ${name} remember?`}
           placeholderTextColor={colors.textMuted}
           keyboardAppearance={appearance}
           selectionColor={accent.accent}
@@ -88,6 +88,11 @@ function Remember() {
           Added to {name}’s memory, which it reads at the start of every conversation. Edit or
           forget it any time from its sheet.
         </T>
+        {!connected && (
+          <T variant="small" color={colors.textMuted}>
+            Remembering it needs your Mac.
+          </T>
+        )}
         {error && (
           <T variant="small" color={colors.accentErrorLight}>
             {error}
