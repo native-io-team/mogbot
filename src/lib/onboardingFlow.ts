@@ -209,6 +209,13 @@ export function engineItemCopy(
       action: `Install ${engine.name}`,
     };
   }
+  if (itemId === 'opencode_auth') {
+    return {
+      title: 'Connect OpenCode to a provider',
+      lede: 'Pick a provider in the window and sign in to it, then come back here.',
+      action: 'Connect',
+    };
+  }
   if (itemId === `${engine.binaryId}_auth`) {
     return {
       title: `Sign in to ${engine.name}`,

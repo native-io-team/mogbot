@@ -28,6 +28,7 @@ import { engineItemCheck, engineItemCopy, engineScreens } from '../../../lib/onb
 const ENGINES: Record<AgentCardKey, { binaryId: string; name: string; account: string }> = {
   claude: { binaryId: 'claude', name: 'Claude Code', account: 'Claude Pro or Max' },
   codex: { binaryId: 'codex', name: 'Codex', account: 'ChatGPT Plus or Pro' },
+  opencode: { binaryId: 'opencode', name: 'OpenCode', account: 'AI provider' },
 };
 
 export const engineName = (key: AgentCardKey) => ENGINES[key].name;

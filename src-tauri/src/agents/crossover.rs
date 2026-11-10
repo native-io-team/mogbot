@@ -63,19 +63,18 @@ impl Mode {
     }
 }
 
-/// The other engine.
+/// The other engine. OpenCode has no plan to run out of, so it has none
+/// (itself): carrying on is only between Claude Code and Codex.
 pub fn other(engine: Engine) -> Engine {
     match engine {
         Engine::Claude => Engine::Codex,
         Engine::Codex => Engine::Claude,
+        Engine::OpenCode => Engine::OpenCode,
     }
 }
 
 fn word(engine: Engine) -> &'static str {
-    match engine {
-        Engine::Claude => "claude",
-        Engine::Codex => "codex",
-    }
+    engine.word()
 }
 
 /* -------------------------------------------------------------- the agent */

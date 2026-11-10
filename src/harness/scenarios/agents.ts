@@ -1033,7 +1033,11 @@ export const ENGINES = [
  */
 export const DEFAULTS = {
   engine: null as 'claude' | 'codex' | null,
-  models: { claude: null as string | null, codex: null as string | null },
+  models: {
+    claude: null as string | null,
+    codex: null as string | null,
+    opencode: null as string | null,
+  },
   startsOn: 'claude' as 'claude' | 'codex',
   model: null as string | null,
 };

@@ -6,6 +6,7 @@
  */
 
 import {
+  MODEL_CHANGE_KEY,
   MODEL_DEFAULT,
   MODEL_PURPOSE,
   type AgentEngine,
@@ -17,7 +18,11 @@ import {
 /** No model or effort chosen: Claude Code's or Codex's own pick (the desk's word, `cardWords`). */
 export const ENGINE_DEFAULT = MODEL_DEFAULT;
 
-const ENGINE_NAME: Record<AgentEngine, string> = { claude: 'Claude Code', codex: 'Codex' };
+const ENGINE_NAME: Record<AgentEngine, string> = {
+  claude: 'Claude Code',
+  codex: 'Codex',
+  opencode: 'OpenCode',
+};
 
 /** Claude Code's aliases said by what they're for, worded once with the desk. */
 const CLAUDE_PURPOSE: Readonly<Record<string, string>> = MODEL_PURPOSE;
@@ -97,5 +102,6 @@ export const canChooseEngine = (defaults: NewAgentDefaults, choice: EngineChoice
   choice.ready && choice.id !== defaults.engine;
 
 /** The change a tap on a model row makes. */
-export const modelChange = (engine: AgentEngine, value: string): NewAgentDefaultsChange =>
-  engine === 'claude' ? { claudeModel: value } : { codexModel: value };
+export const modelChange = (engine: AgentEngine, value: string): NewAgentDefaultsChange => ({
+  [MODEL_CHANGE_KEY[engine]]: value,
+});

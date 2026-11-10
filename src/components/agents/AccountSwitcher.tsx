@@ -21,7 +21,7 @@
  */
 
 import { useEffect, useMemo } from 'react';
-import { ActivityIcon, ClaudeIcon, CodexIcon } from '@/components/icons';
+import { ActivityIcon, ClaudeIcon, CodexIcon, OpencodeIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { Tooltip } from '../primitives/Tooltip';
 import { FooterRowIcon, type FooterRowStatus } from '../workspace/FooterRowIcon';
@@ -46,6 +46,7 @@ import type { StatusTone } from '../primitives/StatusPill';
 const ENGINE_ICON: Record<AgentEngine, typeof ClaudeIcon> = {
   claude: ClaudeIcon,
   codex: CodexIcon,
+  opencode: OpencodeIcon,
 };
 
 /**

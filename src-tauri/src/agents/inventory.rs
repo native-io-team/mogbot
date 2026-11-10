@@ -542,7 +542,7 @@ fn sign_in_changes(
     now: i64,
 ) -> Vec<sign_in_change::SignInChange> {
     let mut out = Vec::new();
-    for engine in Engine::ALL {
+    for engine in Engine::PLANS {
         let Some(mac) = inv
             .accounts
             .iter()
@@ -627,7 +627,7 @@ pub async fn local_compute() -> Vec<LocalCompute> {
     let mut found = Vec::new();
     if find("opencode").await {
         found.push(LocalCompute {
-            name: "Opencode",
+            name: "OpenCode",
             running: None,
             models: Vec::new(),
         });
@@ -659,11 +659,14 @@ pub async fn local_compute() -> Vec<LocalCompute> {
 pub async fn read() -> Inventory {
     // The engines, each engine's accounts and this Mac's other compute are
     // asked about at once: each waits on CLIs or the Keychain, not on the others.
+    // Accounts and limits are the plan engines' (OpenCode reports none; it is
+    // listed with the other compute on this Mac).
     let (engines, accounts, local) = tokio::join!(
         super::engine::overview(),
-        futures_util::future::join_all(Engine::ALL.map(wallet::candidates)),
+        futures_util::future::join_all(Engine::PLANS.map(wallet::candidates)),
         local_compute()
     );
+    let engines: Vec<_> = engines.into_iter().filter(|e| e.id.has_plan()).collect();
     let candidates: Vec<_> = accounts.into_iter().flatten().collect();
     let now = super::store::now_ms();
     tokio::task::spawn_blocking(move || {
@@ -687,7 +690,7 @@ pub async fn read() -> Inventory {
             engines,
             candidates,
             engine_readings: super::quota::shown(&super::quota::load(), now),
-            reading_from: Engine::ALL
+            reading_from: Engine::PLANS
                 .iter()
                 .map(|e| (*e, wallet::reading_from(*e)))
                 .collect(),

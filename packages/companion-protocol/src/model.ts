@@ -559,7 +559,7 @@ export interface SchedulePreview {
   repeat: Repeat | null;
 }
 
-export type AgentEngine = 'claude' | 'codex';
+export type AgentEngine = 'claude' | 'codex' | 'opencode';
 
 /** Mirrors `store::EFFORTS`: the levels both engines take. */
 export type AgentEffort = 'low' | 'medium' | 'high';
@@ -593,7 +593,7 @@ export interface NewAgentDefaults {
   /** The engine the user chose; null when they never have (the rule decides). */
   engine: AgentEngine | null;
   /** Each engine's chosen model while it still offers it; null is the engine's own default. */
-  models: { claude: string | null; codex: string | null };
+  models: { claude: string | null; codex: string | null; opencode: string | null };
   /** Where a new agent starts now: the chosen engine when it's ready, else the first that is. */
   startsOn: AgentEngine;
   /** The model it starts on there; null is that engine's default. */
@@ -605,7 +605,15 @@ export interface NewAgentDefaultsChange {
   engine?: AgentEngine;
   claudeModel?: string;
   codexModel?: string;
+  opencodeModel?: string;
 }
+
+/** The change field for one engine's default model. */
+export const MODEL_CHANGE_KEY: Record<AgentEngine, 'claudeModel' | 'codexModel' | 'opencodeModel'> = {
+  claude: 'claudeModel',
+  codex: 'codexModel',
+  opencode: 'opencodeModel',
+};
 
 export interface AgentsOverview {
   agents: Agent[];

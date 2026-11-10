@@ -625,7 +625,8 @@ pub async fn check_all() -> bool {
         .await
         .unwrap_or_default();
     let mut changed = false;
-    for engine in Engine::ALL {
+    // Only engines with a plan report limits (OpenCode has none to read).
+    for engine in Engine::PLANS {
         let Some(binary) = super::engine::binary(engine).await else {
             continue;
         };
@@ -643,6 +644,7 @@ pub async fn check_all() -> bool {
                 match engine {
                     Engine::Claude => read_claude(&c.account, CLAUDE_USAGE_URL, now).await,
                     Engine::Codex => read_codex(&binary, &c.account, now).await,
+                    Engine::OpenCode => Answer::NoPlan,
                 }
             };
             if let Answer::Failed(why) | Answer::CantRead(why) = &answer {
@@ -663,6 +665,9 @@ pub async fn check_all() -> bool {
 /// for is then known, so a second sign-in of an account already here shows
 /// at once. True when what's shown changed.
 pub async fn check_one(engine: Engine, id: &str) -> bool {
+    if !engine.has_plan() {
+        return false;
+    }
     let Some(binary) = super::engine::binary(engine).await else {
         return false;
     };
@@ -678,6 +683,7 @@ pub async fn check_one(engine: Engine, id: &str) -> bool {
     let answer = match engine {
         Engine::Claude => read_claude(&c.account, CLAUDE_USAGE_URL, now).await,
         Engine::Codex => read_codex(&binary, &c.account, now).await,
+        Engine::OpenCode => Answer::NoPlan,
     };
     let account = c.account;
     tokio::task::spawn_blocking(move || record(&account, answer, of_engine, now))

@@ -48,7 +48,11 @@ export const USAGE_MODE_DETAIL: Record<UsageMode, string> = {
     'Near a reset with capacity left, the Chief starts your spare-capacity list. Allow cards still apply.',
 };
 
-const ENGINE_SHORT: Record<AgentEngine, string> = { claude: 'Claude', codex: 'Codex' };
+const ENGINE_SHORT: Record<AgentEngine, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  opencode: 'OpenCode',
+};
 
 function compact(n: number): string {
   if (n < 1000) return String(Math.round(n));

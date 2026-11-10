@@ -1270,16 +1270,19 @@ pub fn pick_engine(
     route: &Route,
     ready: impl Fn(Engine) -> Ready,
 ) -> Result<Engine, String> {
+    // OpenCode has no sealed check yet: an agent on it checks on Claude
+    // Code, else Codex.
     let can_seal = |e: Engine| match (e, route) {
         (Engine::Claude, _) => true,
         (Engine::Codex, Route::Ours { .. }) => true,
         (Engine::Codex, Route::ClaudeCode(_)) => false,
+        (Engine::OpenCode, _) => false,
     };
     let other = match preferred {
         Engine::Claude => Engine::Codex,
-        Engine::Codex => Engine::Claude,
+        Engine::Codex | Engine::OpenCode => Engine::Claude,
     };
-    if let Some(e) = [preferred, other]
+    if let Some(e) = [preferred, other, Engine::Codex]
         .into_iter()
         .find(|e| can_seal(*e) && ready(*e) == Ready::Yes)
     {
@@ -1341,6 +1344,7 @@ async fn model_check(
     let engine = match pick_engine(preferred, &route, |e| match e {
         Engine::Claude => claude_ready,
         Engine::Codex => codex_ready,
+        Engine::OpenCode => Ready::No,
     }) {
         Ok(e) => e,
         Err(why) => return (Err(why), None),

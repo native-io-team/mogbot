@@ -125,9 +125,9 @@ export function workingLine(agent: Agent, brief = false): string {
   return agent.status.activity ?? 'Thinking';
 }
 
-/** "Claude Code" / "Codex": what the agent's turns run on. */
+/** "Claude Code" / "Codex" / "OpenCode": what the agent's turns run on. */
 export const engineName = (agent: Pick<Agent, 'engine'>) =>
-  agent.engine === 'codex' ? 'Codex' : 'Claude Code';
+  agent.engine === 'codex' ? 'Codex' : agent.engine === 'opencode' ? 'OpenCode' : 'Claude Code';
 
 /** Its model as its engine names it ("Opus"), or "Default". */
 export function modelName(agent: Agent, engines: EngineInfo[] | undefined): string {
@@ -142,7 +142,9 @@ export function modelName(agent: Agent, engines: EngineInfo[] | undefined): stri
  */
 export function engineLine(agent: Agent, engines: EngineInfo[] | undefined): string | null {
   if (!agent.engine) return null;
-  return `${agent.engine === 'codex' ? 'Codex' : 'Claude'} · ${modelName(agent, engines)}`;
+  const engine =
+    agent.engine === 'codex' ? 'Codex' : agent.engine === 'opencode' ? 'OpenCode' : 'Claude';
+  return `${engine} · ${modelName(agent, engines)}`;
 }
 
 /**

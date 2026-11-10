@@ -28,10 +28,15 @@ import { awayRoom, type AwayState } from './crossover';
 export const ACCOUNT_ENGINE_LABEL: Record<AgentEngine, string> = {
   claude: 'Claude Code',
   codex: 'Codex',
+  opencode: 'OpenCode',
 };
 
 /** The short engine name a place is numbered by: "Claude 2", "Codex 1". */
-const PLACE_ENGINE: Record<AgentEngine, string> = { claude: 'Claude', codex: 'Codex' };
+const PLACE_ENGINE: Record<AgentEngine, string> = {
+  claude: 'Claude',
+  codex: 'Codex',
+  opencode: 'OpenCode',
+};
 
 /**
  * An account's place in its engine's order, as a label. Places restart per
@@ -58,7 +63,11 @@ export const ADD_ON_MAC = 'Add or sign in to accounts on your Mac: Agents → Us
 const DEFAULT_ORG = /['’]s Organization$/;
 
 /** Whose plan it is, for a name made from it: "Claude Max", "ChatGPT Plus". */
-const PLAN_OWNER: Record<AgentEngine, string> = { claude: 'Claude', codex: 'ChatGPT' };
+const PLAN_OWNER: Record<AgentEngine, string> = {
+  claude: 'Claude',
+  codex: 'ChatGPT',
+  opencode: 'OpenCode',
+};
 
 const capital = (s: string) => `${s.charAt(0).toUpperCase()}${s.slice(1)}`;
 

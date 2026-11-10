@@ -136,6 +136,7 @@ pub mod narration;
 pub mod notify;
 pub mod oauth;
 pub mod on_its_own;
+pub mod opencode;
 pub mod other_app;
 pub mod outward;
 pub mod paste;

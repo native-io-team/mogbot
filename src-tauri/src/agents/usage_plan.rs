@@ -228,11 +228,7 @@ pub enum CheckVia {
 }
 
 pub fn account_key(engine: Engine, id: &str) -> String {
-    let word = match engine {
-        Engine::Claude => "claude",
-        Engine::Codex => "codex",
-    };
-    format!("{word}:{id}")
+    format!("{}:{id}", engine.word())
 }
 
 /* ------------------------------------------------------------- spare */

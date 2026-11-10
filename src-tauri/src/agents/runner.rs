@@ -23,7 +23,7 @@ use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::sync::{Notify, OwnedSemaphorePermit, Semaphore};
 
 use super::codex_app::Out;
-use super::driver::{Driver, TurnSpec};
+use super::driver::{Conversation, Driver, TurnSpec};
 use super::engine::Engine;
 use super::notify;
 use super::procs;
@@ -4140,8 +4140,9 @@ async fn tidy(app: &AppHandle, agent_id: &str, agent: &store::Agent) {
         let quiet = QuietTurn::begin(agent_id, true);
         let prompt = match agent.engine {
             Engine::Claude => super::tidy::claude_compact_prompt(),
-            // Codex is asked with `thread/compact/start`, not a prompt.
-            Engine::Codex => String::new(),
+            // Codex is asked with `thread/compact/start`, not a prompt;
+            // OpenCode tidies by starting fresh (`tidy::way`).
+            Engine::Codex | Engine::OpenCode => String::new(),
         };
         let result = run_on_accounts(app, agent_id, &prompt, false, 0).await;
         let compacted = quiet.compacted();
@@ -5589,8 +5590,11 @@ async fn run_turn(
     // How this turn runs it (Codex speaks app-server when it can).
     let driver = Driver::pick(engine, &binary).await;
     driver.ready_as(account).await?;
-    // Only the app server streams what a command prints as it runs.
-    super::work::set_streams(agent_id, driver == Driver::CodexApp);
+    // Only the app server and OpenCode stream what a command prints as it runs.
+    super::work::set_streams(
+        agent_id,
+        matches!(driver, Driver::CodexApp | Driver::OpenCodeAcp),
+    );
     super::wallet::prepare(account);
     let (port, _) = crate::agent_bridge::start_global_agent_bridge(app.clone())
         .await
@@ -5636,7 +5640,7 @@ async fn run_turn(
         Engine::Claude => Some(super::reach::write_config(
             &super::reach::claude_config_with(&url, turn.secret(), claude_servers),
         )?),
-        Engine::Codex => None,
+        Engine::Codex | Engine::OpenCode => None,
     };
 
     let (session_id, resuming) = match &agent.session_id {
@@ -5813,6 +5817,22 @@ async fn run_turn(
         // policy leaves any `*TOKEN*` variable out of the commands it runs.
         cmd.env(super::reach::TOKEN_ENV, turn.secret());
     }
+    // OpenCode: what it is told as instruction files (the prompt in a 0600
+    // file of the turn's), its permissions and model in its inline config,
+    // project config off (`opencode`). The secret goes over stdin only.
+    let _opencode_prompt = if engine == Engine::OpenCode {
+        let file = super::reach::write_instructions(&system_prompt)?;
+        let instructions = super::opencode::instruction_files(file.path(), &layout.cwd);
+        let given: Vec<String> = access.servers.iter().map(|s| s.key.clone()).collect();
+        cmd.envs(super::opencode::env(super::opencode::config(
+            model,
+            &instructions,
+            &given,
+        )));
+        Some(file)
+    } else {
+        None
+    };
     cmd.env("PATH", crate::utils::get_extended_path())
         // Claude Code gives an MCP tool call ~60s by default, and the approval
         // tool waits for a person. Verified: with the default, a card left for
@@ -5872,19 +5892,60 @@ async fn run_turn(
     // An app-server conversation: stdin stays open for the turn, written by
     // one task (approval answers come from tasks of their own); `None` closes it.
     let (writer, mut conversation) = if driver.converses() {
-        let (conversation, first) = super::codex_app::Conversation::new(
-            resuming.then_some(session_id.as_str()),
-            &layout.cwd,
-            model,
-            &system_prompt,
-            &prompt,
-            profiles,
-        );
-        let conversation = conversation.with_effort(effort);
-        let conversation = if super::tidy::is_compacting(agent_id) {
-            conversation.compacting()
+        let (conversation, first) = if driver == Driver::OpenCodeAcp {
+            let mut servers = vec![super::opencode::McpServer {
+                name: super::prompts::SERVER_KEY.to_string(),
+                url: url.clone(),
+            }];
+            servers.extend(
+                access
+                    .servers
+                    .iter()
+                    .filter(|s| s.key != super::prompts::SERVER_KEY)
+                    .map(|s| super::opencode::McpServer {
+                        name: s.key.clone(),
+                        url: s.url.clone(),
+                    }),
+            );
+            let mut writable: Vec<std::path::PathBuf> = layout
+                .add_dirs
+                .iter()
+                .map(std::path::PathBuf::from)
+                .collect();
+            writable.push(layout.cwd.clone());
+            let mut read_only = dirs.read_only.clone();
+            // A turn answering outside text can't write its own instructions.
+            if outside {
+                read_only.extend(["CLAUDE.md", "AGENTS.md"].map(|f| home.join(f)));
+            }
+            let (conversation, first) = super::opencode::Conversation::new(
+                resuming.then_some(session_id.as_str()),
+                &layout.cwd,
+                &prompt,
+                &servers,
+                turn.secret(),
+                super::opencode::Scope {
+                    writable,
+                    read_only,
+                },
+            );
+            (Conversation::OpenCode(conversation), first)
         } else {
-            conversation
+            let (conversation, first) = super::codex_app::Conversation::new(
+                resuming.then_some(session_id.as_str()),
+                &layout.cwd,
+                model,
+                &system_prompt,
+                &prompt,
+                profiles,
+            );
+            let conversation = conversation.with_effort(effort);
+            let conversation = if super::tidy::is_compacting(agent_id) {
+                conversation.compacting()
+            } else {
+                conversation
+            };
+            (Conversation::Codex(conversation), first)
         };
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<Option<String>>();
         let mut stdin = child.stdin.take();
@@ -6066,7 +6127,7 @@ async fn run_turn(
                         super::exposure::observe_codex(agent_id, &value);
                         super::codex::steps(&value)
                     }
-                    Driver::CodexApp => match conversation.as_mut() {
+                    Driver::CodexApp | Driver::OpenCodeAcp => match conversation.as_mut() {
                         Some(conversation) => {
                             let mut steps = Vec::new();
                             for out in conversation.on_message(&value) {
@@ -6084,6 +6145,16 @@ async fn run_turn(
                                             }
                                         });
                                     }
+                                    Out::AskOpenCode(ask) => {
+                                        let (app, id, tx, turn) = (app.clone(), agent_id.to_string(), writer.clone(), turn.id());
+                                        if let Some((gate, round)) = conversation.opencode_gate() {
+                                            tokio::spawn(async move {
+                                                for msg in super::opencode::answer(&app, &id, turn, round, *ask, gate).await {
+                                                    send(&tx, Some(msg));
+                                                }
+                                            });
+                                        }
+                                    }
                                 }
                             }
                             steps
@@ -6093,6 +6164,12 @@ async fn run_turn(
                 };
                 if driver == Driver::CodexApp {
                     super::exposure::observe_codex(agent_id, &value);
+                }
+                // Outside content it reads: the rest of the turn asks.
+                if let Some(conversation) = conversation.as_mut() {
+                    for (tool, input) in conversation.take_calls() {
+                        super::exposure::note(agent_id, &tool, &input);
+                    }
                 }
                 progress_dirty |= !steps.is_empty();
                 for step in steps {

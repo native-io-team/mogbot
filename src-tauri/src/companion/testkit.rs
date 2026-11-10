@@ -460,6 +460,7 @@ pub fn defaults() -> crate::agents::defaults::View {
             engine: Some(Engine::Codex),
             claude_model: Some("opus".into()),
             codex_model: Some("gpt-5-codex".into()),
+            opencode_model: None,
         },
         &engines(),
     )

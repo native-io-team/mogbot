@@ -1371,8 +1371,9 @@ export function createMockServer(opts: MockOptions = {}) {
   const defaults = (): NewAgentDefaults => {
     const list = engines();
     const ready = (id: string) => list.some((e) => e.id === id && e.installed && e.signedIn);
-    const offered = (id: 'claude' | 'codex') => {
-      const model = id === 'claude' ? saved.claudeModel : saved.codexModel;
+    const offered = (id: 'claude' | 'codex' | 'opencode') => {
+      const model =
+        id === 'claude' ? saved.claudeModel : id === 'codex' ? saved.codexModel : null;
       const info = list.find((e) => e.id === id);
       return model && info?.models.some((m) => m.value === model) ? model : null;
     };
@@ -1382,7 +1383,11 @@ export function createMockServer(opts: MockOptions = {}) {
         : ready('claude')
           ? 'claude'
           : (list.find((e) => ready(e.id))?.id ?? 'claude');
-    const models = { claude: offered('claude'), codex: offered('codex') };
+    const models = {
+      claude: offered('claude'),
+      codex: offered('codex'),
+      opencode: offered('opencode'),
+    };
     return { engine: saved.engine, models, startsOn, model: models[startsOn] };
   };
 

@@ -1,6 +1,8 @@
 /**
  * The engine picker: one card per engine Agents can run on (Claude Code,
- * Codex). Clicking a card enters that engine's install → sign-in flow. Cards
+ * Codex, and OpenCode once it is installed here: it runs on whatever
+ * providers it is set up with, so it is offered to people who already use
+ * it rather than as a first choice). Clicking a card enters that engine's install → sign-in flow. Cards
  * say what clicking does next, from what's already detected on the machine
  * ("Ready →", "Sign in →", "Install & sign in →"), so every card reads as
  * something to press rather than a status to worry about.
@@ -13,7 +15,7 @@
 import { ReactNode } from 'react';
 import { SetupItem } from '../../../lib/setup';
 import { isEnginePairReady, type AgentsEngineBinaryId } from '../../../lib/agentOnboarding';
-import { ClaudeIcon, CodexIcon, ArrowRightIcon } from '@/components/icons';
+import { ClaudeIcon, CodexIcon, OpencodeIcon, ArrowRightIcon } from '@/components/icons';
 
 /** Card key: the engine's setup binary id. */
 export type AgentCardKey = AgentsEngineBinaryId;
@@ -26,6 +28,8 @@ interface CardDef {
   account: string;
   /** The one to pick if you don't know which. */
   recommended?: boolean;
+  /** Offered only once it is installed on this Mac. */
+  ifInstalled?: boolean;
   icon: ReactNode;
 }
 
@@ -44,6 +48,14 @@ const CARDS: CardDef[] = [
     description: 'ChatGPT’s models, by OpenAI. It also does any job, not only code.',
     account: 'Needs a ChatGPT Plus or Pro plan',
     icon: <CodexIcon size={28} />,
+  },
+  {
+    key: 'opencode',
+    name: 'OpenCode',
+    description: 'Open source. Runs on the AI providers you set up in it, or models on this Mac.',
+    account: 'Uses a provider you sign in to in OpenCode',
+    ifInstalled: true,
+    icon: <OpencodeIcon size={28} />,
   },
 ];
 
@@ -71,6 +83,7 @@ export function AgentPickGrid({ items, onSelect, disabled }: AgentPickGridProps)
     <div className="agent-pick-grid" role="list">
       {CARDS.map((card) => {
         const state = detectionState(items, card.key);
+        if (card.ifInstalled && state === 'missing') return null;
         return (
           <button
             key={card.key}

@@ -252,10 +252,7 @@ pub fn notice(
 }
 
 fn engine_word(engine: Engine) -> &'static str {
-    match engine {
-        Engine::Claude => "claude",
-        Engine::Codex => "codex",
-    }
+    engine.word()
 }
 
 #[cfg(test)]

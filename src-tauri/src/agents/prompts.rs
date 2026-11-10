@@ -197,9 +197,25 @@ artifact link opens only in the browser: say so in one line.";
 pub fn links_section(engine: super::engine::Engine) -> &'static str {
     match engine {
         super::engine::Engine::Codex => LINKS_CODEX,
+        super::engine::Engine::OpenCode => LINKS_OPENCODE,
         _ => LINKS_CLAUDE,
     }
 }
+
+/// OpenCode has no `Artifact` tool either.
+const LINKS_OPENCODE: &str = "\
+Read a link directly (`gh`, `curl`) before any browser. On OpenCode a claude.ai \
+artifact link opens only in the browser: say so in one line.";
+
+/// On OpenCode every command, web fetch and edit outside its folders asks
+/// the app (`opencode`); a no ends its round, and the app's note follows.
+const OPENCODE_ASKS: &str = "\
+You run on OpenCode. Edits in your own folder and the user's projects go \
+ahead; every shell command, web fetch or search, and edit anywhere else is \
+decided by the user's settings, or put to them as a card in this chat. If \
+one is refused, you'll get a note from the app saying why: don't retry it, \
+say in one line what you were trying to do and carry on with the rest. \
+Sub-agents and question forms aren't available: ask the user in your reply.";
 
 /// Codex's sandbox is the guard, and going past it asks the user through a
 /// card (see `codex_app`). The agent is told so rather than left to find out.
@@ -419,6 +435,9 @@ pub fn system_prompt(agent: &Agent, bound: Option<&Bound>) -> String {
     ];
     if agent.engine == super::engine::Engine::Codex {
         sections.push(CODEX_SANDBOX.to_string());
+    }
+    if agent.engine == super::engine::Engine::OpenCode {
+        sections.push(OPENCODE_ASKS.to_string());
     }
     sections.extend([
         PROJECTS.to_string(),

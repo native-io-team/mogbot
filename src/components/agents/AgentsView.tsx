@@ -1287,10 +1287,10 @@ function NoEngine({
   return (
     <div className="agents-main__state">
       <div className="agents-no-engine">
-        <h2 className="agents-no-engine__title">Agents run on Claude Code or Codex</h2>
+        <h2 className="agents-no-engine__title">Agents run on Claude Code, Codex or OpenCode</h2>
         <p className="agents-no-engine__body">
-          Each agent runs on Claude Code or Codex on this Mac, with your own account. Set one up and
-          your Chief of Staff is ready to talk.
+          Each agent runs on Claude Code, Codex or OpenCode on this Mac, with your own account or
+          models. Set one up and your Chief of Staff is ready to talk.
         </p>
         <div className="agents-no-engine__actions">
           <Button variant="primary" onClick={() => onSetUp('claude')}>
@@ -1298,6 +1298,9 @@ function NoEngine({
           </Button>
           <Button variant="secondary" onClick={() => onSetUp('codex')}>
             Set up Codex
+          </Button>
+          <Button variant="secondary" onClick={() => onSetUp('opencode')}>
+            Set up OpenCode
           </Button>
         </div>
         <TextButton onClick={onGoProjects}>Open projects</TextButton>

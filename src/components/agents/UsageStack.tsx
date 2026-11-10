@@ -25,6 +25,7 @@ import {
   ChevronRightIcon,
   ClaudeIcon,
   CodexIcon,
+  OpencodeIcon,
   EditIcon,
   MoreHorizontalIcon,
   ResetIcon,
@@ -55,6 +56,7 @@ import { AgentKey } from './AgentKey';
 export const ENGINE_ICON: Record<AgentEngine, typeof ClaudeIcon> = {
   claude: ClaudeIcon,
   codex: CodexIcon,
+  opencode: OpencodeIcon,
 };
 
 /* ------------------------------------------------------------ the total */

@@ -189,6 +189,8 @@ pub fn spawn_for(ctx: &Context) -> Spawn {
             args.splice(at..at, servers);
             args
         }
+        // Never reached: `begin` refuses an OpenCode agent.
+        Engine::OpenCode => Vec::new(),
     };
     let mut env = BTreeMap::new();
     env.insert("PATH".to_string(), ctx.path.clone());
@@ -310,7 +312,14 @@ pub async fn begin(
     if let Some(view) = view(agent_id) {
         return Ok(view);
     }
-    let name = store::get(agent_id)?.name;
+    let agent = store::get(agent_id)?;
+    if agent.engine == Engine::OpenCode {
+        return Err(CommandError::expected(format!(
+            "Take over isn't available for {} yet: it runs on OpenCode.",
+            agent.name
+        )));
+    }
+    let name = agent.name;
     if let Err(claim) = runner::claim_for_takeover(agent_id) {
         if claim == Claim::Driven {
             // Another call is opening it: that one's view is this one's.
@@ -417,7 +426,7 @@ async fn open(
     let reach = super::connections::for_turn(agent, port, false).await;
     let codex_servers = match agent.engine {
         Engine::Codex => reach.codex_config(),
-        Engine::Claude => Vec::new(),
+        Engine::Claude | Engine::OpenCode => Vec::new(),
     };
     let mcp_config = match agent.engine {
         Engine::Claude => Some(super::reach::write_config(
@@ -427,7 +436,7 @@ async fn open(
                 reach.claude_servers(access.secret()),
             ),
         )?),
-        Engine::Codex => None,
+        Engine::Codex | Engine::OpenCode => None,
     };
     let mcp_config_arg = mcp_config
         .as_ref()
@@ -529,6 +538,7 @@ async fn open(
         cli: match agent.engine {
             Engine::Claude => "claude-code",
             Engine::Codex => "codex",
+            Engine::OpenCode => "opencode",
         },
         trust_prompt,
     };
@@ -794,6 +804,7 @@ fn transcript_len(engine: Engine, session: &str) -> Option<u64> {
         .filter_map(|root| match engine {
             Engine::Claude => claude_transcript_len(root, session),
             Engine::Codex => codex_transcript_len(root, session),
+            Engine::OpenCode => None,
         })
         .reduce(|a, b| a + b)
 }
