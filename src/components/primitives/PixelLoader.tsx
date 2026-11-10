@@ -1,5 +1,6 @@
 import { useEffect, useRef, type CSSProperties, type HTMLAttributes } from 'react';
 import { watchOffscreen } from '../../lib/offscreen';
+import { colorwayOf } from '../../../packages/companion-protocol/src/agentKeys';
 
 export type PixelLoaderSize = 'sm' | 'md' | 'lg';
 export type PixelLoaderVariant =
@@ -23,6 +24,12 @@ export interface PixelLoaderProps extends HTMLAttributes<HTMLDivElement> {
   coreSize?: number;
   /** Accessible status announced to screen readers. */
   label?: string;
+  /**
+   * The key colourway of the agent whose work this shows (`keyLookFor`), so
+   * it lights in that agent's colour. Without one it takes the accent in
+   * scope: the agent whose context it sits in (pixel-loader.css).
+   */
+  colorway?: string | null;
 }
 
 type PixelStyle = CSSProperties &
@@ -62,6 +69,7 @@ export function PixelLoader({
   gridSize,
   coreSize,
   label = 'Loading',
+  colorway,
   className,
   style,
   ...rest
@@ -73,6 +81,7 @@ export function PixelLoader({
   const resolvedGridSize = clampInteger(gridSize ?? (usesQuadCore ? 6 : 5), 1, 16);
   const resolvedCoreSize = clampInteger(coreSize ?? (usesQuadCore ? 2 : 1), 1, resolvedGridSize);
   const pixels = createPixels(resolvedGridSize, resolvedCoreSize);
+  const agentColorway = colorway ? colorwayOf(colorway).id : undefined;
   const gridStyle = {
     ...style,
     '--pixel-loader-grid-size': resolvedGridSize,
@@ -123,6 +132,7 @@ export function PixelLoader({
         className={classes}
         role="status"
         aria-label={label}
+        data-colorway={agentColorway}
         style={gridStyle}
         {...rest}
       >
@@ -141,7 +151,15 @@ export function PixelLoader({
   }
 
   return (
-    <div ref={ref} className={classes} role="status" aria-label={label} style={gridStyle} {...rest}>
+    <div
+      ref={ref}
+      className={classes}
+      role="status"
+      aria-label={label}
+      data-colorway={agentColorway}
+      style={gridStyle}
+      {...rest}
+    >
       {pixels.map((p) => pixel(p))}
     </div>
   );

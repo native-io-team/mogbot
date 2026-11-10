@@ -94,10 +94,6 @@
   flex-shrink: 0;
 }
 
-.sidebar-row-pixel-loader {
-  color: var(--pixel-loader-color);
-}
-
 .sidebar-row-dot.dot-idle {
   --sidebar-row-dot-color: var(--text-muted);
 }

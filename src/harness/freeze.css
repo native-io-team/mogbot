@@ -48,3 +48,21 @@
 [data-harness-freeze] .agent-key__glow[data-glow='high'] {
   opacity: 0 !important;
 }
+
+/*
+ * The rings loader is blank between pulses, so a frozen one drew nothing and
+ * no capture showed whose colour it is. Frozen, it holds the frame Reduce
+ * Motion shows: the centre lit, the inner ring mid, the outer ring faint.
+ */
+[data-harness-freeze] .ss-pixel-loader--rings .ss-pixel-loader__ring {
+  opacity: var(--pixel-loader-bright-opacity) !important;
+}
+[data-harness-freeze] .ss-pixel-loader--rings .ss-pixel-loader__pixel {
+  opacity: var(--pixel-loader-reduced-motion-opacity);
+}
+[data-harness-freeze] .ss-pixel-loader--rings .ss-pixel-loader__pixel[data-ring='0'] {
+  opacity: var(--pixel-loader-bright-opacity);
+}
+[data-harness-freeze] .ss-pixel-loader--rings .ss-pixel-loader__pixel[data-ring='1'] {
+  opacity: var(--pixel-loader-mid-opacity);
+}

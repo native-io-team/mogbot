@@ -138,6 +138,8 @@ interface SidebarItem {
   meta?: string;
   /** Replaces the status dot (an agent's avatar). */
   leading?: ReactNode;
+  /** The key colourway of the agent this row's work is, for its loader; else the accent. */
+  colorway?: string;
   /** After the label, muted and steadied so a live step doesn't flicker: an agent's current step. */
   detail?: string;
   /** Optional inline action button (e.g. restart) rendered before the close
@@ -1446,7 +1448,10 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                 addLabel="New session"
                 addShortcut={kbd('mod', 'T')}
                 addFooterLabel={atMaxTabs ? undefined : 'New session'}
-                items={[...workItems.filter((i) => matchesFilter(i.label)), ...filteredAgents]}
+                items={[
+                  ...workItems.filter((i) => matchesFilter(i.label)),
+                  ...withAgentColors(filteredAgents, atWork),
+                ]}
                 emptyHint={filter ? 'No matches' : 'No sessions running'}
               />
               <SidebarSection
@@ -1475,6 +1480,7 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
               <InactiveProjectSections
                 snapshot={sessionRegistry.snapshot(row.projectPath)}
                 workItems={workItems}
+                atWork={atWork}
                 worktreeItems={familyWorktreeItems}
                 filterLower={filterLower}
                 serverSnapshot={serverSnapshot}
@@ -2188,6 +2194,7 @@ function SidebarGroupHeader({
 function InactiveProjectSections({
   snapshot,
   workItems = [],
+  atWork = [],
   worktreeItems,
   filterLower,
   serverSnapshot,
@@ -2196,6 +2203,8 @@ function InactiveProjectSections({
   snapshot: SessionSnapshot | undefined;
   /** Agents working in this project, listed first among its sessions. */
   workItems?: SidebarItem[];
+  /** The same agents, so a session that is one of theirs takes its colour. */
+  atWork?: AtWorkLine[];
   /** Hot worktree sessions in this project's family (empty when none). */
   worktreeItems?: SidebarItem[];
   filterLower: string;
@@ -2256,7 +2265,7 @@ function InactiveProjectSections({
         total={workItems.length + agents.length}
         collapsed={false}
         onToggle={() => {}}
-        items={[...workItems.filter((i) => matches(i.label)), ...agents]}
+        items={[...workItems.filter((i) => matches(i.label)), ...withAgentColors(agents, atWork)]}
         emptyHint={filterLower ? 'No matches' : 'No sessions running'}
       />
       <SidebarSection
@@ -2477,6 +2486,7 @@ function ProjectGroup({
                   <PixelLoaderRings
                     className="sidebar-project-pixel-loader"
                     size="sm"
+                    colorway={workingColorway(snap?.terminalTabs, atWork)}
                     label={`Working on ${row.fallbackName}`}
                   />
                 ) : (
@@ -2808,6 +2818,42 @@ function SteadyDetail({ name, step }: { name: string; step: string }) {
 }
 
 /**
+ * A session that is an agent's (a taken-over one, titled with its name, the
+ * same match `agentWorkItems` makes) carries that agent's colourway, so its
+ * loader lights in the agent's colour; any other session keeps the accent.
+ */
+function agentColorwayFor(label: string, lines: readonly AtWorkLine[]): string | undefined {
+  const name = label.trim().toLowerCase();
+  return lines.find((l) => l.name.trim().toLowerCase() === name)?.colorway;
+}
+
+function withAgentColors(items: SidebarItem[], lines: readonly AtWorkLine[]): SidebarItem[] {
+  if (lines.length === 0) return items;
+  return items.map((i) => {
+    const colorway = agentColorwayFor(i.label, lines);
+    return colorway ? { ...i, colorway } : i;
+  });
+}
+
+/**
+ * A collapsed project row's loader: the colour of the agent whose work it is.
+ * A thinking session that is an agent's names it; else, with only agents at
+ * work (no thinking session), the first of them (the lead avatar in the
+ * row's stack). A plain session working on its own takes the accent.
+ */
+function workingColorway(
+  tabs: ReadonlyArray<SessionTerminalTab> | undefined,
+  lines: readonly AtWorkLine[]
+): string | undefined {
+  const thinking = (tabs ?? []).filter((t) => t.status === 'thinking');
+  for (const t of thinking) {
+    const colorway = agentColorwayFor(t.customTitle?.trim() || t.title?.trim() || '', lines);
+    if (colorway) return colorway;
+  }
+  return thinking.length === 0 ? lines[0]?.colorway : undefined;
+}
+
+/**
  * Agents working in a project, as rows among its sessions: avatar, name and
  * the live step. An agent that already has a session tab here (a taken-over
  * one, titled with its name) is that one row, not two.
@@ -2917,6 +2963,7 @@ function SidebarRow({ item }: { item: SidebarItem }) {
           <PixelLoaderRings
             className="sidebar-row-pixel-loader"
             size="sm"
+            colorway={item.colorway}
             label={`Working on ${item.label}`}
           />
         ) : (

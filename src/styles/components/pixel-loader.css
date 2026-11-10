@@ -10,6 +10,24 @@
   color: var(--pixel-loader-color);
 }
 
+/* An agent's work: its key colourway. `[data-colorway]` (agents.css) sets
+   `--agents-tint` to the colourway's ink, the key face lifted where a deep one
+   would sink into the dark theme. The faint unlit pixels are this colour at
+   rest opacity, so they read as a tint of it, never another hue. */
+.ss-pixel-loader[data-colorway] {
+  color: var(--agents-tint, var(--pixel-loader-color));
+}
+
+@supports (color: color-mix(in oklch, red, blue)) {
+  :root[data-theme='light'] .ss-pixel-loader[data-colorway] {
+    color: color-mix(
+      in oklch,
+      var(--agents-tint, var(--pixel-loader-color)) var(--pixel-loader-agent-share-light),
+      var(--text-primary)
+    );
+  }
+}
+
 .ss-pixel-loader--sm {
   width: var(--pixel-loader-size-sm);
   height: var(--pixel-loader-size-sm);

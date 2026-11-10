@@ -32,6 +32,7 @@ import {
   atWorkText,
   sameFolder,
 } from '../../../packages/companion-protocol/src/work';
+import { keyLookFor } from '../../../packages/companion-protocol/src/agentKeys';
 
 export interface ProjectAgentRow {
   key: string;
@@ -50,6 +51,8 @@ export interface AtWorkLine {
   agentId: string;
   name: string;
   color: string;
+  /** Its key colourway, so what shows its work lights in its colour. */
+  colorway: string;
   text: string;
   waiting: boolean;
 }
@@ -59,6 +62,7 @@ export function atWorkLines(agents: Agent[], projectPath: string, now: number): 
     agentId: a.id,
     name: a.name,
     color: a.color,
+    colorway: keyLookFor(a).colorway,
     text: atWorkText(a, plainActivity(a.status.activity), now),
     waiting: needsYou(a),
   }));
