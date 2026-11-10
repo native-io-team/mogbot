@@ -1252,9 +1252,15 @@ at once still reads as one product:
   around it. A bar says the state, never repeats the card's question, and
   never points at "the card". Nothing spans the pane under the header.
 
-The **header is identity only** (badge, name, role, project chip). What an
-agent is doing is said once in its sidebar row and once in the conversation
-(a bar or the working line) — never a third time up there.
+The **header is identity only**, at its leading edge: key and name, then
+quiet chips (project, the account its last turn ran on as an email's name
+part, the conversation). The role is the name's tooltip and in the agent's
+sheet, not a line in the band. At the trailing edge Usage, Routines and Model
+are one family (a ghost button each, an icon and a word, one height, 4px
+apart) and the … menu; narrow, the account chip goes, then the words, then
+the project chip. What an agent is doing is said once in its sidebar row and
+once in the conversation (a bar or the working line) — never a third time up
+there.
 
 ### Needs you: one place per surface
 
@@ -1272,7 +1278,7 @@ The sidebar's right-hand column has one meaning: **unread** (the dot), with
 the working spinner as its only other mark. A row's state (waiting on you,
 didn't finish) is in its pill, never also a dot beside it. On the collapsed
 rail, where pills aren't shown, the state dot rides on the agent's badge
-instead. The row is name + one status line; its role is in the chat header
+instead. The row is name + one status line; its role is the chat header name's tooltip
 and the row's tooltip, never cut to a few letters beside the name.
 
 Another agent's request shows in a chat one way: the requests bar above the
@@ -5692,8 +5698,8 @@ time. The e2e Codex scenarios run on the account when one is signed in.
   text beside it; passed as `--model` from the next turn. Set it when creating
   the agent (it starts on the default for its engine, Settings → Agents),
   in the editor, or at the foot of the chat header's … menu, which
-  also names the engine. The header itself shows the agent's role (idle) or
-  what it's doing, never the engine. Only Claude Code's own aliases are accepted, and the backend
+  also names the engine. The header itself shows who the agent is, never
+  what it's doing or the engine. Only Claude Code's own aliases are accepted, and the backend
   enforces that too. Default means no `--model`, so whatever Claude Code
   defaults to.
 - **Effort.** How hard its conversation turns think: Engine's default, Low,
