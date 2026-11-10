@@ -15,7 +15,7 @@
 
 import { execFileSync } from 'node:child_process';
 
-const GENERATED_PREFIXES = ['harness/shots/'];
+const GENERATED_PREFIXES = ['harness/shots/', 'harness/a11y/'];
 
 export function checkDocPaths(docs, { trackedFiles } = {}) {
   const tracked = new Set(
