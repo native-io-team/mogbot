@@ -345,7 +345,11 @@ pub fn is_recipe(value: &Value) -> bool {
     value.get("format").and_then(Value::as_str) == Some(FORMAT)
 }
 
-fn text_field(obj: &serde_json::Map<String, Value>, key: &str, problems: &mut Vec<String>) -> String {
+fn text_field(
+    obj: &serde_json::Map<String, Value>,
+    key: &str,
+    problems: &mut Vec<String>,
+) -> String {
     match obj.get(key) {
         None | Some(Value::Null) => String::new(),
         Some(Value::String(s)) => s.trim().to_string(),
@@ -356,7 +360,11 @@ fn text_field(obj: &serde_json::Map<String, Value>, key: &str, problems: &mut Ve
     }
 }
 
-fn pairs(obj: &serde_json::Map<String, Value>, key: &str, problems: &mut Vec<String>) -> Vec<(String, String)> {
+fn pairs(
+    obj: &serde_json::Map<String, Value>,
+    key: &str,
+    problems: &mut Vec<String>,
+) -> Vec<(String, String)> {
     let Some(v) = obj.get(key).filter(|v| !v.is_null()) else {
         return Vec::new();
     };
@@ -478,7 +486,10 @@ pub fn apply_look(agent_id: &str, look: &ProposedLook) -> Vec<String> {
         match level_to_apply(suggested, team) {
             Some(level) => {
                 let set = super::policy::modify(|s| {
-                    s.agents.entry(agent_id.to_string()).or_default().independence = Some(level);
+                    s.agents
+                        .entry(agent_id.to_string())
+                        .or_default()
+                        .independence = Some(level);
                     Ok(())
                 });
                 if set.is_ok() {

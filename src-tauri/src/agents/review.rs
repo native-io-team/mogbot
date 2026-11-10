@@ -177,8 +177,7 @@ impl ProposedLook {
             colorway: id(colorway).filter(|c| super::keys::is_colorway(c)),
             icon: id(icon).filter(|i| super::keys::is_icon(i)),
             key: key.and_then(super::keys::normalize_bound_key),
-            independence: independence
-                .and_then(|l| super::independence::Level::parse(l).ok()),
+            independence: independence.and_then(|l| super::independence::Level::parse(l).ok()),
         };
         (look != ProposedLook::default()).then_some(look)
     }

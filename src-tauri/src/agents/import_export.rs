@@ -541,7 +541,9 @@ pub fn read_text(text: &str) -> Export {
             "The JSON".to_string()
         };
         match super::paste::parse_block(raw, &label) {
-            Ok(v) if super::recipe::is_recipe(&v) => super::recipe::read_value(&v, &label, &mut out),
+            Ok(v) if super::recipe::is_recipe(&v) => {
+                super::recipe::read_value(&v, &label, &mut out)
+            }
             Ok(v) => out.add_value(v, &label),
             Err(p) => out.problems.push(p),
         }

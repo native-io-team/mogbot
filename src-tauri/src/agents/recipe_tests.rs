@@ -32,7 +32,8 @@ fn finance() -> store::Agent {
     .expect("an agent")
 }
 
-const INSTRUCTIONS: &str = "Log expenses from /Users/sam/Documents/ledger.xlsx and ~/Desktop/bills.\n\
+const INSTRUCTIONS: &str =
+    "Log expenses from /Users/sam/Documents/ledger.xlsx and ~/Desktop/bills.\n\
 Email the accountant at accountant@example.com, or call (415) 555-0134.\n\
 Stripe key: sk_live_abcdefghijklmnopqrstuvwx1234 password: hunter22hunter\n\
 Every weekday at 09:00, total yesterday's spend.";
@@ -71,7 +72,10 @@ fn emails_paths_phones_and_secrets_are_scrubbed_and_counted() {
     assert_eq!(b.removed.personal(), 7);
     // What's left reads as it did, with a marker where each thing was.
     assert!(b.recipe.instructions.contains("[removed: a file path]"));
-    assert!(b.recipe.instructions.contains("[removed: an email address]"));
+    assert!(b
+        .recipe
+        .instructions
+        .contains("[removed: an email address]"));
     assert!(b.recipe.instructions.contains("total yesterday's spend"));
     // A time isn't a phone number.
     assert!(b.recipe.instructions.contains("09:00"));
@@ -110,10 +114,7 @@ fn memory_history_logins_and_project_are_never_in_it() {
     assert!(!json.contains("ShipStudio/books"), "the project stays here");
     assert!(b.left_out.iter().any(|l| l.contains("memory")));
     assert!(b.left_out.iter().any(|l| l.contains("project")));
-    assert!(b
-        .left_out
-        .iter()
-        .any(|l| l == "1 one-time reminder"));
+    assert!(b.left_out.iter().any(|l| l == "1 one-time reminder"));
     // Routines as words; the app's own follow-up isn't one.
     assert_eq!(b.recipe.routines.len(), 1);
     assert_eq!(b.recipe.routines[0].when, "every weekday at 09:00");
