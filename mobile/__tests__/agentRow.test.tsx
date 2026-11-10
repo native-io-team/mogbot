@@ -90,7 +90,7 @@ jest.mock('../src/lib/session', () => ({
   call: jest.fn(),
 }));
 jest.mock('../src/lib/quota', () => ({ useQuotaLines: () => [] }));
-jest.mock('../src/components/QuotaLines', () => ({ QuotaLines: () => null }));
+jest.mock('../src/lib/glance', () => ({ useGlance: () => null }));
 jest.mock('../src/components/ChatView', () => ({ ChatView: () => null }));
 jest.mock('../src/components/ConnectionPill', () => ({
   ConnectionNotice: () => null,

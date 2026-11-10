@@ -39,8 +39,8 @@ import { ImportChoiceCard } from '../../../components/ImportChoiceCard';
 import { RoomRow } from '../../../components/RoomRow';
 import { pendingHere, roomKey, roomsOffered, sortRooms } from '../../../lib/rooms';
 import { ChatView } from '../../../components/ChatView';
-import { QuotaLines } from '../../../components/QuotaLines';
-import { useQuotaLines } from '../../../lib/quota';
+import { GlanceRow } from '../../../components/usageStack';
+import { useGlance } from '../../../lib/glance';
 import { AgentAccent } from '../../../lib/accent';
 import { ConnectionNotice, LinkProblem, useNow } from '../../../components/ConnectionPill';
 import { DemoCard } from '../../../components/DemoCard';
@@ -289,7 +289,8 @@ export default function Agents() {
         null)
       : null;
 
-  const quota = useQuotaLines();
+  // Usage at a glance, as the desk sidebar's row says it.
+  const glance = useGlance();
   // Memoised on what the buttons depend on, not rebuilt each render: see `largeTitle`.
   const hasList = !!overview && !removed;
   const screenOptions = useMemo(
@@ -350,7 +351,11 @@ export default function Agents() {
           <ConnectionNotice />
           <Refused />
           <ImportChoiceCard />
-          {!removed && <QuotaLines lines={quota} style={styles.quota} />}
+          {!removed && glance && (
+            <View style={styles.quota}>
+              <GlanceRow glance={glance} onPress={() => router.push('/usage')} />
+            </View>
+          )}
         </>
       }
       ListEmptyComponent={

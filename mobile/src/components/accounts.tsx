@@ -65,7 +65,7 @@ export function AccountsSections({ state }: { state: AccountsState }) {
     state.accounts && state.inventory ? usageGlance(state.accounts, state.inventory) : null;
   return (
     <>
-      {glance && glance.keys.length > 1 && (
+      {glance && glance.keys.length > 0 && (
         <View style={styles.glance}>
           <GlanceCard glance={glance} />
         </View>

@@ -29,11 +29,13 @@ describe('total compute, on the phone', () => {
     const view = computeView(served, served.now);
     const [mac, work] = view?.rows ?? [];
     await render(<ComputeAccount row={mac} />);
-    expect(screen.getByText('Claude · This Mac')).toBeTruthy();
+    // Named as its key is, never "This Mac".
+    expect(screen.queryByText(/This Mac/)).toBeNull();
     expect(screen.getByText(/Used next/)).toBeTruthy();
     expect(screen.queryByText('Next turn')).toBeNull();
     expect(screen.getByText('5-hour')).toBeTruthy();
-    expect(screen.getByText('38%')).toBeTruthy();
+    // Said as what is left, as every usage figure is.
+    expect(screen.getByText('62% left')).toBeTruthy();
     expect(screen.getByText(/^At this pace it runs out /)).toBeTruthy();
 
     await render(<ComputeAccount row={work} />);

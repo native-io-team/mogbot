@@ -91,13 +91,13 @@ describe('total compute', () => {
 
   it('names the one account read, and says nothing the cards already do', () => {
     const v = computeView(inventory([mac, unread, codexOut], one()), NOW);
-    expect(v?.headline).toBe('Room now on Claude · This Mac');
+    expect(v?.headline).toBe('Room now on Claude Max');
     expect(v?.detail).toBeNull();
     expect(v?.tone).toBe('calm');
     expect(v?.estimate).toBeNull();
     // A card for the account with bars; the rest compact and quiet.
-    expect(v?.rows.map((r) => r.title)).toEqual(['Claude · This Mac']);
-    expect(v?.quiet.map((r) => r.title)).toEqual(['Claude · Personal', 'Codex · This Mac']);
+    expect(v?.rows.map((r) => r.title)).toEqual(['Claude Max']);
+    expect(v?.quiet.map((r) => r.title)).toEqual(['Claude · Personal', 'Codex account']);
   });
 
   it('says an account’s run-out estimate under the bar it is about, and tints that bar', () => {
@@ -115,11 +115,11 @@ describe('total compute', () => {
       ],
     };
     const v = computeView(inventory([paced, unread, codexOut], one()), NOW);
-    expect(v?.headline).toBe('Room now on Claude · This Mac');
+    expect(v?.headline).toBe('Room now on Claude Max');
     // Not in the headline: under its own bar, short, said as an estimate.
     expect(v?.estimate).toBeNull();
     const row = v?.rows[0];
-    expect(row?.title).toBe('Claude · This Mac');
+    expect(row?.title).toBe('Claude Max');
     expect(row?.weekly?.pace).toEqual({
       text: 'At this pace it runs out tomorrow night',
       basis: 'Estimate from 200 readings over 10 hours',
@@ -152,7 +152,7 @@ describe('total compute', () => {
     expect(v).not.toHaveProperty('summary');
     expect(v).not.toHaveProperty('windows');
     // "Used next" only where its engine has a choice of account.
-    expect(v?.rows.find((r) => r.title === 'Claude · This Mac')?.tags).toEqual([
+    expect(v?.rows.find((r) => r.title === 'Claude Max')?.tags).toEqual([
       'Max plan',
       'Used next',
     ]);
@@ -175,7 +175,7 @@ describe('total compute', () => {
     ]);
     const tight = { ...personal, windows: [win('five_hour', 100, 2 * HOUR)] };
     expect(computeView(inventory([mac, tight], totals()), NOW)?.headline).toBe(
-      'Room now on Claude · This Mac'
+      'Room now on Claude Max'
     );
     const third = acct({ id: 'x', name: 'X', windows: [win('five_hour', 100, HOUR)] });
     expect(computeView(inventory([mac, personal, third], totals()), NOW)?.headline).toBe(
@@ -363,7 +363,7 @@ describe('total compute', () => {
     expect(v?.headline).toBe('Room now on 2 of 3 accounts');
     expect(v?.estimate?.text).toMatch(/^At this pace you’ll run out of Claude on every account /);
     expect(v?.estimate?.basis).toBe('Estimate from 11 readings across 2 accounts');
-    expect(v?.rows.map((r) => r.title)).toEqual(['Claude · This Mac', 'Claude · Work']);
+    expect(v?.rows.map((r) => r.title)).toEqual(['Claude · Example', 'Claude · Work']);
     expect(v?.quiet.map((r) => r.title)).toEqual(['Codex · Plus']);
   });
 });

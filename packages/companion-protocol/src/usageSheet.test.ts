@@ -126,7 +126,7 @@ describe('the Usage sheet shows each reading once', () => {
   it('puts the account turns run on at the top, and never lists it again', () => {
     const inv = inventory([account({ pace: [pace()] }), work, codex]);
     const sheet = usageSheet(quotas, 'claude', inv, NOW);
-    expect(sheet.active?.account).toBe('This Mac · Next turns run here');
+    expect(sheet.active?.account).toBe('Claude Code account · Next turns run here');
     expect(sheet.active?.meters.map((m) => m.label)).toEqual([
       '5-hour limit',
       'Weekly · All models',
@@ -148,7 +148,7 @@ describe('the Usage sheet shows each reading once', () => {
     expect(sheet.active?.account).toBe('Work · Next turns run here');
     expect(sheet.active?.meters).toEqual([]);
     expect(sheet.active?.state).toBe('No reading yet');
-    expect(sheet.others.map((b) => b.title)).toEqual(['Claude · This Mac']);
+    expect(sheet.others.map((b) => b.title)).toEqual(['Claude Code account']);
   });
 
   it('draws the plan’s own windows only when no account has the reading, unnamed', () => {
@@ -163,7 +163,7 @@ describe('the Usage sheet shows each reading once', () => {
     const unattributed = inventory([account({ windows: [] }), codex]);
     const top = usageSheet(quotas, 'claude', unattributed, NOW);
     expect(top.active?.account).toBeNull();
-    expect(top.others.map((b) => b.title)).toEqual(['Claude · This Mac', 'Codex · Personal']);
+    expect(top.others.map((b) => b.title)).toEqual(['Claude Code account', 'Codex · Personal']);
   });
 
   it('is empty with nothing reported', () => {

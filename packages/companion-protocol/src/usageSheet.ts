@@ -36,6 +36,7 @@ import {
   windowName,
 } from './quota';
 import { accountTags, accountUsage, planLabel, type UsageTone } from './usage';
+import { accountLabel } from './accountSwitcher';
 
 /** When a window runs out at the recent rate: always with what it rests on. */
 export interface PaceLine {
@@ -306,8 +307,8 @@ export function accountBlocks(
     return {
       key: `${a.engine}:${a.id}`,
       engine: a.engine,
-      title: `${ENGINE_NAME[a.engine] ?? a.engine} · ${a.name}`,
-      name: a.name,
+      title: accountName(a.engine, accountLabel(a, a)),
+      name: accountLabel(a, a),
       next: a.next,
       tags: accountTags(a),
       meters: a.out ? [] : meters,
@@ -473,8 +474,9 @@ function rank(a: UsageAccountLine, now: number): number {
   return r > 0 ? r : -2;
 }
 
+/** "Claude · Work"; a name that already says whose ("Claude Max", "Claude Code account") stands alone. */
 const accountName = (engine: AgentEngine, name: string) =>
-  `${ENGINE_NAME[engine] ?? engine} · ${name}`;
+  /^(Claude|ChatGPT|Codex)\b/.test(name) ? name : `${ENGINE_NAME[engine] ?? engine} · ${name}`;
 
 /**
  * A limit's pace, said under its own bar, so short: the bar already says
@@ -535,7 +537,7 @@ export function computeRows(
     return {
       key: `${a.engine}:${a.id}`,
       engine: a.engine,
-      title: accountName(a.engine, a.name),
+      title: accountName(a.engine, accountLabel(a, a)),
       next: a.next,
       tags,
       session,
@@ -601,10 +603,10 @@ export function computeView(
     tone = 'limited';
     headline = 'No room right now';
     detail = back
-      ? `${accountName(back.engine, back.accountName)} has room again ${retryPhrase(back.at, now)}`
+      ? `${accountName(back.engine, accountLabel({ engine: back.engine, name: back.accountName }))} has room again ${retryPhrase(back.at, now)}`
       : null;
   } else if (roomy.length === 1) {
-    headline = `Room now on ${accountName(roomy[0].engine, roomy[0].name)}`;
+    headline = `Room now on ${accountName(roomy[0].engine, accountLabel(roomy[0], roomy[0]))}`;
   } else if (roomy.length === read.length) {
     headline =
       roomy.length === 2 ? 'Room now on both accounts' : `Room now on all ${roomy.length} accounts`;
