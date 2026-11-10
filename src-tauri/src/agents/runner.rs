@@ -11,6 +11,27 @@
 //! the model writes streams in as a draft (see [`super::stream`]) and becomes
 //! a chat message under the same id when it completes; tool calls only ever
 //! update the "working" line under the agent's name.
+//!
+//! The parts, in the order a message travels through them:
+//!
+//! - `state`: where a message came from, the inbox, the status shown and
+//!   each agent's runtime under one lock
+//! - `inbox`: every way a message reaches an agent, and the seal on its
+//!   memory while it answers outside text
+//! - `now`: questions about the turn in flight (whom it answers, its hop,
+//!   whether it is busy)
+//! - `drain`: the worker, which takes batches and runs turns until the
+//!   queue is empty
+//! - `slots`: waiting for a free slot or memory, and the waiting-on-a-card guard
+//! - `prompt`: what a turn is told
+//! - `accounts`: which account and engine it runs on, failing over between them
+//! - `turn`: one turn on one account, its stream turned into chat and timeline
+//! - `record`: recording and announcing what the user sees
+//! - `after_turn`: bookkeeping between and after turns
+//! - `control`: take over, stop, start fresh, interrupt
+//! - `mark`, `recovery`, `recap`, `panic`: a turn on disk, and picking
+//!   up after a restart, a lost conversation or a panic
+//! - `session_env`: the inherited Claude Code session variables, stripped
 
 use crate::agents::store::OrLog;
 use serde::Serialize;
@@ -33,9 +54,9 @@ use super::store::{self, AgentMessage, AgentRef, MessageKind};
 use super::stream::{self, Drafts, Step};
 use crate::errors::CommandError;
 
-// This file split by concern. Each part sees everything here (`use
-// super::*`) and is re-exported whole, so `runner::x` paths stay as they
-// were; its `super::x` paths reach `agents::x` through this import.
+// Each part sees everything here (`use super::*`) and is re-exported whole,
+// so `runner::x` paths stay as they were; its `super::x` paths reach
+// `agents::x` through this import.
 use super::{
     account_reach, admin, agency, apps, attachments, blocks, briefing, broker, browser,
     browser_gate, capabilities, capacity, chrome_health, claude, codex, codex_app, connections,
@@ -47,17 +68,23 @@ use super::{
     workplace, DISK_FULL_LINE,
 };
 
-mod recovery;
-pub use recovery::*;
+mod state;
+pub use state::*;
 
-mod panic;
-use panic::*;
+mod inbox;
+pub use inbox::*;
 
-mod recap;
-pub(in crate::agents) use recap::*;
+mod now;
+pub use now::*;
 
-mod after_turn;
-use after_turn::*;
+mod drain;
+use drain::*;
+
+mod slots;
+pub use slots::*;
+
+mod prompt;
+pub use prompt::*;
 
 mod accounts;
 pub use accounts::*;
@@ -68,32 +95,26 @@ use turn::*;
 mod record;
 pub use record::*;
 
+mod after_turn;
+use after_turn::*;
+
 mod control;
 pub use control::*;
-
-mod prompt;
-pub use prompt::*;
-
-mod session_env;
-pub use session_env::*;
-
-mod drain;
-use drain::*;
-
-mod slots;
-pub use slots::*;
-
-mod inbox;
-pub use inbox::*;
 
 mod mark;
 pub(in crate::agents) use mark::*;
 
-mod now;
-pub use now::*;
+mod recovery;
+pub use recovery::*;
 
-mod state;
-pub use state::*;
+mod recap;
+pub(in crate::agents) use recap::*;
+
+mod panic;
+use panic::*;
+
+mod session_env;
+pub use session_env::*;
 
 pub const EVENT_MESSAGE: &str = "agents://message";
 pub const EVENT_STATUS: &str = "agents://status";
