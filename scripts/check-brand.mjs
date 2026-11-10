@@ -18,7 +18,8 @@
  *   - src-tauri/tauri.conf.json — productName, identifier, deep-link scheme,
  *     and updater config present exactly when brand.json names an update feed
  *     (the updater plugin is only registered when links.updates is set, and
- *     it fails app setup without its config)
+ *     it fails app setup without its config); that config's one endpoint is
+ *     links.updates, its key a minisign public key, requireSignedVersion on
  *   - src-tauri/Cargo.toml and package.json — package name = slug, and one
  *     version: tauri.conf.json reads package.json, Cargo.toml matches it
  *   - mobile/app.config.ts — reads ../brand.json rather than hardcoding, and
@@ -70,7 +71,8 @@ if (brand.previous !== undefined) {
       if (v !== null && typeof v !== 'string')
         fail(`brand.json: "previous.${k}" must be a string or null`);
     }
-    if (prev.slug && prev.slug === brand.slug) fail('brand.json: "previous.slug" is the current slug');
+    if (prev.slug && prev.slug === brand.slug)
+      fail('brand.json: "previous.slug" is the current slug');
     if (prev.appDirName && prev.appDirName === brand.appDirName)
       fail('brand.json: "previous.appDirName" is the current appDirName');
   }
@@ -196,6 +198,41 @@ else if (read(GEN_PATH) !== gen)
     fail(
       'brand.json names an update feed (links.updates) but tauri.conf.json has no plugins.updater — the app would fail to start'
     );
+  }
+  const updater = conf.plugins?.updater;
+  if (brand.links?.updates != null && updater) {
+    // The app asks exactly the feed brand.json names, and nothing else.
+    const endpoints = updater.endpoints ?? [];
+    if (endpoints.length !== 1 || endpoints[0] !== brand.links.updates) {
+      fail(
+        `tauri.conf.json plugins.updater.endpoints ${JSON.stringify(endpoints)} ≠ ["${brand.links.updates}"] (links.updates)`
+      );
+    }
+    if (!brand.links.updates.startsWith('https://')) {
+      fail('brand.json: "links.updates" must be an https:// URL');
+    }
+    // A minisign public key, base64 of "untrusted comment: …\n<RW…>": the
+    // updater refuses every update whose signature it can't check against it.
+    let decoded = '';
+    try {
+      decoded = Buffer.from(String(updater.pubkey ?? ''), 'base64').toString('utf8');
+    } catch {
+      decoded = '';
+    }
+    if (!/^untrusted comment: .*\nRW[A-Za-z0-9+/=]{54}\s*$/.test(decoded)) {
+      fail(
+        'tauri.conf.json plugins.updater.pubkey is not a minisign public key (pnpm tauri signer generate)'
+      );
+    }
+    // Refuse a manifest that pairs a newer version number with an older
+    // release's (genuinely signed) bundle: scripts/release-mac.sh signs with
+    // --app-version, so every release carries the version it was signed for.
+    if (updater.requireSignedVersion !== true) {
+      fail('tauri.conf.json plugins.updater.requireSignedVersion must be true');
+    }
+    for (const k of Object.keys(updater)) {
+      if (k.startsWith('dangerous')) fail(`tauri.conf.json plugins.updater.${k} must not be set`);
+    }
   }
 }
 

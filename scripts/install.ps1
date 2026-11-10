@@ -18,7 +18,7 @@ $ErrorActionPreference = 'Stop'
 # --- brand (generated from brand.json by `node scripts/check-brand.mjs --write`) ---
 $BrandName       = 'Mogbot'
 $BrandAppDirName = 'Mogbot'
-$BrandReleases   = ''
+$BrandReleases   = 'https://github.com/native-io-team/mogbot-releases/releases'
 # --- end brand ---
 
 if (-not $BrandReleases) {
@@ -39,7 +39,12 @@ Say "Downloading $BrandName..."
 # TLS 1.2 for older PowerShell; turning the progress UI off makes IWR far faster.
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 $ProgressPreference = 'SilentlyContinue'
-Invoke-WebRequest -Uri $url -OutFile $out
+try {
+  Invoke-WebRequest -Uri $url -OutFile $out
+} catch {
+  # The releases may carry only a Mac build (this app is macOS-only so far).
+  throw "$BrandName has no Windows download yet ($url). $($_.Exception.Message)"
+}
 
 Say 'Preparing installer...'
 Unblock-File -Path $out   # strip Mark-of-the-Web so SmartScreen does not block it

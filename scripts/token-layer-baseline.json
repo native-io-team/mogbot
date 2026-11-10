@@ -1307,19 +1307,19 @@
     {
       "path": "src/styles/features/update-banner.css",
       "token": "--space-04",
-      "count": 9,
+      "count": 5,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
       "path": "src/styles/features/update-banner.css",
       "token": "--space-06",
-      "count": 5,
+      "count": 4,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
       "path": "src/styles/features/update-banner.css",
       "token": "--space-08",
-      "count": 5,
+      "count": 4,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
@@ -1331,7 +1331,7 @@
     {
       "path": "src/styles/features/update-banner.css",
       "token": "--space-16",
-      "count": 5,
+      "count": 4,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
@@ -1367,7 +1367,7 @@
     {
       "path": "src/styles/features/update-banner.css",
       "token": "--transition-slow",
-      "count": 14,
+      "count": 6,
       "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
     },
     {

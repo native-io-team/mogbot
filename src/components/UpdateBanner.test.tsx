@@ -1,14 +1,19 @@
-import { act, render, screen, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Update } from '@tauri-apps/plugin-updater';
 import { UpdateBanner, parseReleaseNotes } from './UpdateBanner';
-import { checkForUpdate, downloadAndInstall, restartApp } from '../lib/updater';
+import { checkForUpdate, downloadUpdate, installUpdate, restartApp } from '../lib/updater';
+import { checkForUpdatesNow, resetUpdateStoreForTests } from '../lib/updateStore';
 import { agentsBusy } from '../lib/agents';
 
 vi.mock('../lib/updater', () => ({
+  UPDATES_ENABLED: true,
+  isMockUpdateSimulationEnabled: () => false,
   checkForUpdate: vi.fn(),
-  downloadAndInstall: vi.fn(),
+  downloadUpdate: vi.fn(),
+  installUpdate: vi.fn(),
+  releaseUpdate: vi.fn(() => Promise.resolve()),
   restartApp: vi.fn(),
 }));
 
@@ -21,12 +26,14 @@ vi.mock('../lib/analytics', () => ({
   trackError: vi.fn(),
 }));
 
-describe('UpdateBanner', () => {
-  beforeEach(() => {
-    sessionStorage.clear();
-    vi.mocked(downloadAndInstall).mockReset();
+function offer(version: string, body = '') {
+  vi.mocked(checkForUpdate).mockResolvedValue({
+    update: { version } as unknown as Update,
+    info: { version, date: undefined, body },
   });
+}
 
+describe('parseReleaseNotes', () => {
   it('parses only the available version into titles and full details', () => {
     const body = `
 ## What's New in v0.18.0
@@ -46,8 +53,6 @@ describe('UpdateBanner', () => {
   });
 
   it('strips markdown from the published manifest body (bullet-dot notes, no heading)', () => {
-    // Verbatim shape of latest.json's `notes`: a leading blank line, "•"
-    // bullets, bold titles and backticked paths — no version heading at all.
     const body =
       '\n• **Visual editor breakthroughs** - Elements without a class can finally be inserted\n' +
       '• **Pages Router discovery** - Next.js projects with routes in `pages/` now show their pages\n';
@@ -76,9 +81,7 @@ describe('UpdateBanner', () => {
 
 A second paragraph mentioning \`pages/\` and a [link](https://example.com).`;
 
-    const notes = parseReleaseNotes(body, '0.19.0');
-
-    expect(notes).toEqual([
+    expect(parseReleaseNotes(body, '0.19.0')).toEqual([
       {
         title: 'Visual editor breakthroughs',
         detail: 'elements without a class can be inserted.',
@@ -87,111 +90,221 @@ A second paragraph mentioning \`pages/\` and a [link](https://example.com).`;
     ]);
   });
 
-  it('never renders raw bold markers in the modal', async () => {
-    vi.mocked(checkForUpdate).mockResolvedValue({
-      update: {} as Update,
-      info: {
-        version: '0.18.7',
-        date: undefined,
-        body: '\n• **Visual editor breakthroughs** - Elements without a class can be inserted\n',
+  it('reads the bullets of a whole docs/release-notes file (what latest.json carries)', () => {
+    // The shape scripts/release-mac.sh publishes: the release page's notes,
+    // prose and headings around one "What's in" list.
+    const body = `# App 1.0 for Mac
+
+An intro paragraph that is not a note.
+
+## What's in 1.0
+
+- **A Chief of Staff from the first launch.** It sets up the rest of your
+  team from a sentence.
+- **Agents that remember.** Each one keeps its own notes.
+
+## What you need
+
+- **A Mac with Apple Silicon**`;
+
+    expect(parseReleaseNotes(body, '1.0.0')).toEqual([
+      {
+        title: 'A Chief of Staff from the first launch.',
+        detail: 'It sets up the rest of your team from a sentence.',
       },
+      { title: 'Agents that remember.', detail: 'Each one keeps its own notes.' },
+    ]);
+  });
+});
+
+describe('UpdateBanner', () => {
+  beforeEach(() => {
+    vi.stubEnv('DEV', false);
+    localStorage.clear();
+    resetUpdateStoreForTests();
+    vi.mocked(checkForUpdate).mockReset();
+    vi.mocked(downloadUpdate).mockReset();
+    vi.mocked(installUpdate).mockReset();
+    vi.mocked(restartApp).mockReset();
+    vi.mocked(agentsBusy).mockResolvedValue(0);
+  });
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+  });
+
+  it('says nothing while the update downloads, then offers Restart to update', async () => {
+    offer('1.0.1', '## What’s new in 1.0.1\n\n- **Faster replies** - Less waiting.');
+    let finish: (() => void) | undefined;
+    vi.mocked(downloadUpdate).mockImplementation(
+      (_update, onProgress) =>
+        new Promise<void>((resolve) => {
+          onProgress?.(40);
+          finish = resolve;
+        })
+    );
+
+    const { container } = render(<UpdateBanner />);
+    let checked: Promise<unknown> = Promise.resolve();
+    await act(async () => {
+      checked = checkForUpdatesNow();
+      await Promise.resolve();
+    });
+    await waitFor(() => expect(downloadUpdate).toHaveBeenCalledTimes(1));
+    expect(container).toBeEmptyDOMElement();
+
+    await act(async () => {
+      finish?.();
+      await checked;
+    });
+
+    expect(await screen.findByText('Restart to update')).toBeVisible();
+    expect(screen.getByText('Version 1.0.1 is ready — view changes')).toBeInTheDocument();
+    expect(installUpdate).not.toHaveBeenCalled();
+  });
+
+  it('installs, then relaunches, on Restart to update', async () => {
+    offer('1.0.1');
+    vi.mocked(downloadUpdate).mockResolvedValue(undefined);
+    const order: string[] = [];
+    vi.mocked(installUpdate).mockImplementation(() => {
+      order.push('install');
+      return Promise.resolve();
+    });
+    vi.mocked(restartApp).mockImplementation(() => {
+      order.push('restart');
+      return Promise.resolve();
     });
 
     const user = userEvent.setup();
     render(<UpdateBanner />);
+    await act(async () => {
+      await checkForUpdatesNow();
+    });
 
-    await user.click(
-      await screen.findByRole('button', { name: "View what's new in version 0.18.7" })
+    await user.click(screen.getByRole('button', { name: 'Restart to update to version 1.0.1' }));
+    await waitFor(() => expect(order).toEqual(['install', 'restart']));
+  });
+
+  it('nags once per version: Later stays dismissed across remounts and checks', async () => {
+    offer('1.0.1');
+    vi.mocked(downloadUpdate).mockResolvedValue(undefined);
+
+    const user = userEvent.setup();
+    const first = render(<UpdateBanner />);
+    await act(async () => {
+      await checkForUpdatesNow();
+    });
+    await user.click(screen.getByRole('button', { name: 'Not now: hide until the next version' }));
+    expect(first.container).toBeEmptyDOMElement();
+    first.unmount();
+
+    // A new launch, the same version on the feed: still quiet.
+    resetUpdateStoreForTests();
+    const second = render(<UpdateBanner />);
+    await act(async () => {
+      await checkForUpdatesNow();
+    });
+    expect(second.container).toBeEmptyDOMElement();
+
+    // A newer version is a new question.
+    offer('1.0.2');
+    await act(async () => {
+      await checkForUpdatesNow();
+    });
+    expect(await screen.findByText('Version 1.0.2 is ready — view changes')).toBeInTheDocument();
+  });
+
+  it('a ⌘K check brings a dismissed update back', async () => {
+    offer('1.0.1');
+    vi.mocked(downloadUpdate).mockResolvedValue(undefined);
+    const user = userEvent.setup();
+    const { container } = render(<UpdateBanner />);
+    await act(async () => {
+      await checkForUpdatesNow();
+    });
+    await user.click(screen.getByRole('button', { name: 'Not now: hide until the next version' }));
+    expect(container).toBeEmptyDOMElement();
+
+    await act(async () => {
+      await checkForUpdatesNow({ manual: true });
+    });
+    expect(await screen.findByText('Restart to update')).toBeVisible();
+  });
+
+  it('keeps a background download failure quiet', async () => {
+    offer('1.0.1');
+    vi.mocked(downloadUpdate).mockRejectedValue(new Error('signature verification failed'));
+    const { container } = render(<UpdateBanner />);
+    await act(async () => {
+      await checkForUpdatesNow();
+    });
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it('says when installing failed and offers to try again', async () => {
+    offer('1.0.1');
+    vi.mocked(downloadUpdate).mockResolvedValue(undefined);
+    vi.mocked(installUpdate).mockRejectedValueOnce(new Error('Permission denied'));
+
+    const user = userEvent.setup();
+    render(<UpdateBanner />);
+    await act(async () => {
+      await checkForUpdatesNow();
+    });
+    await user.click(screen.getByRole('button', { name: 'Restart to update to version 1.0.1' }));
+
+    expect(await screen.findByText('Update needs attention')).toBeVisible();
+    expect(restartApp).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Try updating to version 1.0.1 again' }));
+    const dialog = screen.getByRole('dialog', { name: "What's new in 1.0.1" });
+    expect(within(dialog).getByRole('alert')).toHaveTextContent(
+      "Couldn't install the update: Permission denied"
     );
+    await user.click(within(dialog).getByRole('button', { name: 'Try again' }));
+    await waitFor(() => expect(restartApp).toHaveBeenCalledTimes(1));
+    expect(installUpdate).toHaveBeenCalledTimes(2);
+  });
 
-    const dialog = screen.getByRole('dialog', { name: "What's new in v0.18.7" });
+  it('opens the notes from the banner, with no raw markdown', async () => {
+    offer(
+      '1.0.1',
+      '\n• **Visual editor breakthroughs** - Elements without a class can be inserted\n'
+    );
+    vi.mocked(downloadUpdate).mockResolvedValue(undefined);
+
+    const user = userEvent.setup();
+    render(<UpdateBanner />);
+    await act(async () => {
+      await checkForUpdatesNow();
+    });
+    await user.click(screen.getByRole('button', { name: "View what's new in version 1.0.1" }));
+
+    const dialog = screen.getByRole('dialog', { name: "What's new in 1.0.1" });
     expect(
       within(dialog).getByRole('heading', { name: 'Visual editor breakthroughs' })
     ).toBeVisible();
     expect(dialog.textContent).not.toContain('**');
-  });
-
-  it('opens the release-specific modal from the sidebar indicator', async () => {
-    vi.mocked(checkForUpdate).mockResolvedValue({
-      update: {} as Update,
-      info: {
-        version: '0.18.0',
-        date: '2026-08-05',
-        body: `## What's New in v0.18.0\n\n- **Faster previews** - Preview startup now avoids duplicate work.`,
-      },
-    });
-
-    const user = userEvent.setup();
-    render(<UpdateBanner />);
-
-    await screen.findByRole('button', { name: 'Update to version 0.18.0' });
-    await user.click(screen.getByRole('button', { name: "View what's new in version 0.18.0" }));
-
-    expect(downloadAndInstall).not.toHaveBeenCalled();
-
-    const dialog = screen.getByRole('dialog', { name: "What's new in v0.18.0" });
-    expect(within(dialog).getByRole('heading', { name: 'Faster previews' })).toBeVisible();
-    expect(within(dialog).getByText('Preview startup now avoids duplicate work.')).toBeVisible();
     expect(within(dialog).getByRole('button', { name: 'Later' })).toBeVisible();
-    expect(within(dialog).getByRole('button', { name: 'Update Now' })).toBeVisible();
-  });
-
-  it('keeps download progress and the restart action in the banner', async () => {
-    vi.mocked(checkForUpdate).mockResolvedValue({
-      update: {} as Update,
-      info: {
-        version: '0.18.0',
-        date: '2026-08-05',
-        body: '- **Faster previews** - Preview startup now avoids duplicate work.',
-      },
-    });
-
-    let finishDownload: (() => void) | undefined;
-    vi.mocked(downloadAndInstall).mockImplementation((_update, onProgress) => {
-      onProgress?.(37);
-      return new Promise<void>((resolve) => {
-        finishDownload = resolve;
-      });
-    });
-
-    const user = userEvent.setup();
-    const { container } = render(<UpdateBanner />);
-
-    await user.click(await screen.findByRole('button', { name: 'Update to version 0.18.0' }));
-
-    expect(await screen.findByText('Downloading…')).toBeVisible();
-    expect(screen.getByLabelText('37% downloaded')).toHaveTextContent('37%');
-    expect(container.querySelector('.update-indicator-progress-fill')).toHaveStyle({
-      width: '37%',
-    });
-
-    act(() => {
-      finishDownload?.();
-    });
-
-    expect(await screen.findByText('Click to restart')).toBeVisible();
-    expect(screen.getByRole('button', { name: 'Restart to apply version 0.18.0' })).toBeEnabled();
+    expect(within(dialog).getByRole('button', { name: 'Restart to update' })).toBeVisible();
   });
 
   it('waits for working agents before restarting, unless asked again', async () => {
-    vi.mocked(checkForUpdate).mockResolvedValue({
-      update: {} as Update,
-      info: { version: '0.18.0', date: '2026-08-05', body: '' },
-    });
-    vi.mocked(downloadAndInstall).mockResolvedValue(undefined);
-    vi.mocked(restartApp).mockReset();
+    offer('1.0.1');
+    vi.mocked(downloadUpdate).mockResolvedValue(undefined);
     vi.mocked(agentsBusy).mockResolvedValue(2);
 
     const user = userEvent.setup();
     render(<UpdateBanner />);
-    await user.click(await screen.findByRole('button', { name: 'Update to version 0.18.0' }));
-    await user.click(
-      await screen.findByRole('button', { name: 'Restart to apply version 0.18.0' })
-    );
+    await act(async () => {
+      await checkForUpdatesNow();
+    });
+    await user.click(screen.getByRole('button', { name: 'Restart to update to version 1.0.1' }));
     expect(await screen.findByText('After agents finish')).toBeVisible();
+    expect(installUpdate).not.toHaveBeenCalled();
     expect(restartApp).not.toHaveBeenCalled();
 
     await user.click(screen.getByRole('button', { name: /once agents finish\. Restart now/ }));
-    expect(restartApp).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(restartApp).toHaveBeenCalledTimes(1));
   });
 });

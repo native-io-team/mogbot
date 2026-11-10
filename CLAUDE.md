@@ -62,7 +62,7 @@ Chief of Staff (see "Agents Flow", [docs/agents.md](docs/agents.md)):
 - **Site Migration** - Rebuild a live URL here, measured page by page against the original (see `docs/site-migration.md`)
 - **Assets, Skills & MCP, IDE integration** - As in Ship Studio (the plugin system was removed; a Ship Studio project's `.shipstudio/plugins/` folder is left on disk and ignored)
 
-**Across both:** the Cmd+K palette (every feature registers there), the macOS menu bar and Dock menu (`app_menu.rs`, `dock_menu.rs`: every item works where you are or is greyed out, every key is also in ⌘K; [docs/keyboard-shortcuts.md](docs/keyboard-shortcuts.md)), light and dark themes on desktop and phone, multi-window, and **Remote Access** — driving your agents from another MCP-capable assistant (Grok, Claude, ChatGPT…) over your own Tailscale Funnel (see "Remote Access Flow"). For the phone, the answer is the companion app; Remote Access answers a different question. Updates, telemetry, issue reporting and the template catalogue are off until `brand.json` names an endpoint for them. macOS only.
+**Across both:** the Cmd+K palette (every feature registers there), the macOS menu bar and Dock menu (`app_menu.rs`, `dock_menu.rs`: every item works where you are or is greyed out, every key is also in ⌘K; [docs/keyboard-shortcuts.md](docs/keyboard-shortcuts.md)), light and dark themes on desktop and phone, multi-window, and **Remote Access** — driving your agents from another MCP-capable assistant (Grok, Claude, ChatGPT…) over your own Tailscale Funnel (see "Remote Access Flow"). For the phone, the answer is the companion app; Remote Access answers a different question. Telemetry, issue reporting and the template catalogue are off until `brand.json` names an endpoint for them; updates come from the public releases repo (see "Releasing New Versions"). macOS only.
 
 **Compatible with Ship Studio, both directions:** the `~/ShipStudio` projects folder and the in-project `.shipstudio/` format are shared, so either app opens the other's projects; app state is this app's own, so both run side by side.
 
@@ -988,25 +988,23 @@ be verified in a production build.
 
 ## Releasing New Versions
 
-Use `scripts/release.sh` to automate the release process. The script bumps the version in all 3 files (`package.json`, `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json`), updates `Cargo.lock`, commits, and tags.
+Releases are made by hand on the owner's Mac and published to the public releases repo
+(`links.releases` in `brand.json`). Full process, the update key and troubleshooting: `RELEASING.md`.
 
 ```bash
-# Patch bump with release notes (most common)
-./scripts/release.sh -n "**Fixed bug X** - Description"
-
-# Minor or major bump
-./scripts/release.sh minor -n "**New feature** - Description"
-
-# Then push to trigger CI
-git push origin main && git push origin vX.Y.Z
+./scripts/release.sh patch -n "**Fixed bug X** - Description"   # bump, notes, commit, tag (local)
+./scripts/release-mac.sh                                         # build, notarize, staple, sign the update, latest.json, DMG
+./scripts/release-mac.sh --skip-build --publish                  # owner's go-ahead: GitHub release + README link
 ```
 
-The `-n` flag automatically adds notes to `RELEASE_NOTES.md`. Without `-n`, you must update `RELEASE_NOTES.md` manually before running the script.
+Notes live in `docs/release-notes-<version>.md` (`-n` writes it); they are what the update banner,
+`latest.json` and the release page show. Auto-update is on: the app checks `links.updates` at launch
+and every four hours, downloads in the background, verifies the signature against
+`plugins.updater.pubkey`, and offers "Restart to update" once per version (`src/lib/updateStore.ts`).
+The updater bundle is made by `release-mac.sh` from the **stapled** app, so
+`bundle.createUpdaterArtifacts` stays false (it would also break every build from source without
+the private key). Losing `~/.tauri/mogbot-updater.key` means installed copies can never update again.
 
-No update feed is configured yet (`links.updates` in `brand.json` is null, so the updater is off and the Ship Studio changelog is emptied); the steps below are inherited and apply once there is one.
-
-**IMPORTANT:** Also update the changelog data in `src/components/dashboard/Changelog.tsx` before each release — it displays "What's New" on the dashboard sidebar.
-
-For Windows builds, tag with a `-win` suffix (e.g. `v0.5.0-win`) — this triggers a separate workflow independent from the macOS pipeline.
-
-See `RELEASING.md` for the full process: secrets, two-repo strategy, auto-update flow, troubleshooting, and Windows release details.
+The dashboard's "What's new" (`src/components/dashboard/Changelog.tsx`) is empty by design and hidden
+while it is; once it has entries, `release.sh` requires one per release. macOS only: there is no
+Windows release.

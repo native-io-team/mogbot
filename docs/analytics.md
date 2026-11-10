@@ -243,7 +243,7 @@ Branch names are never sent. Every event here is shape-only.
 
 | Event | Properties |
 |---|---|
-| `update_started` / `update_downloaded` / `update_deferred` | `version` — the restart click is not an event; the next `app_launched` carries the new version |
+| `update_started` / `update_downloaded` / `update_deferred` | `version` — started and downloaded are the background download (`$screen_name: Background`), deferred is Later; the restart click is not an event, the next `app_launched` carries the new version |
 | `version_rewind_completed` | `target_version` — a failed rewind is an `error_occurred` with `action: 'version_rewind'` |
 | `help_opened` | — |
 | `support_article_viewed` | `article_slug` |

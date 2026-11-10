@@ -1,23 +1,41 @@
 #!/usr/bin/env bash
-# Build a signed (and, when the credentials exist, notarized and stapled) macOS
-# DMG of the desktop app, from the identity in the login keychain.
+# Build a signed, notarized and stapled macOS release of the desktop app from
+# the identity in the login keychain: the DMG people download, and the signed
+# updater bundle + latest.json that installed copies update from.
 #
-#   ./scripts/release-mac.sh              # Apple Silicon (aarch64)
-#   ./scripts/release-mac.sh --universal  # Apple Silicon + Intel in one binary (about twice the compile)
-#   ./scripts/release-mac.sh --skip-build # re-sign/notarize/verify the last build
+#   ./scripts/release-mac.sh                  # Apple Silicon (aarch64)
+#   ./scripts/release-mac.sh --universal      # Apple Silicon + Intel in one binary (about twice the compile)
+#   ./scripts/release-mac.sh --skip-build     # re-sign/notarize/verify the last build
+#   ./scripts/release-mac.sh --skip-notarize  # a dry run: everything but Apple's notarization
+#   ./scripts/release-mac.sh --publish        # ...then publish it (below). Never with --skip-notarize
 #
 # Environment (all optional):
 #   MOGBOT_SIGNING_IDENTITY   default "Developer ID Application: Galluzzo Conseil Inc. (N2VB8A88LB)"
 #   MOGBOT_NOTARY_PROFILE     default "mogbot-notary" (a notarytool keychain profile)
-#   CARGO_TARGET_DIR          where cargo builds; the DMG lands in $CARGO_TARGET_DIR/release-mac/
+#   MOGBOT_UPDATER_KEY        the updater's private key, default ~/.tauri/<slug>-updater.key
+#   CARGO_TARGET_DIR          where cargo builds; everything lands in $CARGO_TARGET_DIR/release-mac/
 #
 # Notarization uses a keychain profile, made once by the owner:
 #   xcrun notarytool store-credentials mogbot-notary --apple-id <id> --team-id N2VB8A88LB
 # Without that profile the script still builds and signs, says so, and skips
 # notarization. Such a DMG opens only through System Settings on other Macs.
 #
-# Never uploads or publishes anything. It builds, signs, notarizes (Apple's
-# service, nothing public) and verifies.
+# Updates (when brand.json names links.updates): the app is notarized and
+# stapled FIRST, then the updater bundle (<App>_darwin-<arch>.app.tar.gz) is
+# made from that stapled app and signed with the updater key. Its password is
+# the login-Keychain item "<slug>-updater-key-password" (account "release"),
+# or TAURI_SIGNING_PRIVATE_KEY_PASSWORD when already set. The signature is
+# checked against the public key in tauri.conf.json, and latest.json is
+# written with the notes from docs/release-notes-<version>.md (or
+# docs/release-notes-<major>.<minor>.md for x.y.0).
+#
+# --publish (opt-in, and only after a notarized run) puts it all on the
+# releases repo brand.json links.releases names, with `gh`: release
+# v<version> is made as a draft with every asset, latest.json goes up last,
+# then it is marked published and latest, so no installed copy ever reads a
+# manifest whose bundle isn't there yet. Then the repo README's download link
+# is pointed at the new DMG. Without --publish nothing leaves this Mac but
+# Apple's notarization upload.
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
@@ -31,16 +49,23 @@ die()  { echo -e "${RED}error:${NC} $*" >&2; exit 1; }
 
 UNIVERSAL=0
 SKIP_BUILD=0
+SKIP_NOTARIZE=0
+PUBLISH=0
 for arg in "$@"; do
   case "$arg" in
     --universal) UNIVERSAL=1 ;;
     --skip-build) SKIP_BUILD=1 ;;
-    -h|--help) sed -n 2,20p "$0"; exit 0 ;;
+    --skip-notarize) SKIP_NOTARIZE=1 ;;
+    --publish) PUBLISH=1 ;;
+    -h|--help) sed -n 2,38p "$0"; exit 0 ;;
     *) die "unknown argument: $arg (try --help)" ;;
   esac
 done
 
 [ "$(uname)" = "Darwin" ] || die "macOS only"
+if [ "$PUBLISH" = 1 ] && [ "$SKIP_NOTARIZE" = 1 ]; then
+  die "--publish needs a notarized build; drop --skip-notarize"
+fi
 
 IDENTITY="${MOGBOT_SIGNING_IDENTITY:-Developer ID Application: Galluzzo Conseil Inc. (N2VB8A88LB)}"
 NOTARY_PROFILE="${MOGBOT_NOTARY_PROFILE:-mogbot-notary}"
@@ -54,15 +79,31 @@ esac
 [[ "$IDENTITY" == "Developer ID Application:"* ]] || die "a public download needs a 'Developer ID Application' identity, got: $IDENTITY"
 
 APP_NAME="$(node -p "require('./brand.json').name")"
+APP_DIR_NAME="$(node -p "require('./brand.json').appDirName")"
+SLUG="$(node -p "require('./brand.json').slug")"
+UPDATES_FEED="$(node -p "require('./brand.json').links.updates || ''")"
+RELEASES="$(node -p "require('./brand.json').links.releases || ''")"
 VERSION="$(node -p "require('./package.json').version")"
 CARGO_VERSION="$(sed -n 's/^version = "\(.*\)"/\1/p' src-tauri/Cargo.toml | head -1)"
 [ "$VERSION" = "$CARGO_VERSION" ] || die "package.json says $VERSION but src-tauri/Cargo.toml says $CARGO_VERSION; run scripts/release.sh to line them up"
 
-if [ "$UNIVERSAL" = 1 ]; then TRIPLE="universal-apple-darwin"; ARCH="universal"; else TRIPLE="aarch64-apple-darwin"; ARCH="aarch64"; fi
+if [ "$UNIVERSAL" = 1 ]; then
+  TRIPLE="universal-apple-darwin"; ARCH="universal"; ARCH_LABEL="Apple Silicon and Intel"
+else
+  TRIPLE="aarch64-apple-darwin"; ARCH="aarch64"; ARCH_LABEL="Apple Silicon"
+fi
 TARGET_DIR="${CARGO_TARGET_DIR:-$REPO_ROOT/src-tauri/target}"
 APP_PATH="$TARGET_DIR/$TRIPLE/release/bundle/macos/$APP_NAME.app"
+APP_BASENAME="$(basename "$APP_PATH")"
 OUT_DIR="$TARGET_DIR/release-mac"
-DMG_PATH="$OUT_DIR/${APP_NAME}_${VERSION}_${ARCH}.dmg"
+DMG_NAME="${APP_NAME}_${VERSION}_${ARCH}.dmg"
+DMG_PATH="$OUT_DIR/$DMG_NAME"
+# The updater bundle's asset name. install_version (the Changelog's rewind,
+# src-tauri/src/commands/setup/auth.rs) downloads this same name per tag.
+UPDATER_NAME="${APP_DIR_NAME}_darwin-${ARCH}.app.tar.gz"
+UPDATER_PATH="$OUT_DIR/$UPDATER_NAME"
+LATEST_JSON="$OUT_DIR/latest.json"
+TAG="v$VERSION"
 
 say "$APP_NAME $VERSION for $ARCH"
 echo "    identity: $IDENTITY"
@@ -75,19 +116,63 @@ ok "signing identity found"
 
 # Off-by-default outside services must stay off in a public build unless the
 # owner turned them on in brand.json on purpose (CLAUDE.md, "Brand and identity").
+# The update feed is the one this script exists to publish; check:brand holds
+# its config (one endpoint = links.updates, a minisign pubkey, signed versions).
 node - <<'NODE' || die "brand.json turns on an outside service; check it is meant for this build"
 const b = require('./brand.json');
-const conf = require('./src-tauri/tauri.conf.json');
 const on = [];
 for (const [k, v] of Object.entries(b.telemetry || {})) if (v) on.push(`telemetry.${k}`);
-for (const k of ['updates', 'errorReports', 'templateApi', 'pushRelay']) if (b.links[k]) on.push(`links.${k}`);
-if (conf.plugins && conf.plugins.updater) on.push('tauri.conf.json plugins.updater');
-if (conf.bundle && conf.bundle.createUpdaterArtifacts) on.push('tauri.conf.json bundle.createUpdaterArtifacts');
+for (const k of ['errorReports', 'templateApi', 'pushRelay']) if (b.links[k]) on.push(`links.${k}`);
 if (on.length) { console.error('  on: ' + on.join(', ')); process.exit(1); }
 NODE
-ok "telemetry, error reports, updater and template API are off (brand.json)"
+ok "telemetry, error reports and template API are off (brand.json)"
+node scripts/check-brand.mjs >/dev/null || die "brand copies drift from brand.json (node scripts/check-brand.mjs)"
+ok "brand copies match brand.json"
 
-if xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
+UPDATER=0
+if [ -n "$UPDATES_FEED" ]; then
+  UPDATER=1
+  [ -n "$RELEASES" ] || die "brand.json names links.updates but no links.releases to host the bundle under"
+  [ "$UPDATES_FEED" = "${RELEASES%/}/latest/download/latest.json" ] \
+    || die "links.updates ($UPDATES_FEED) isn't latest.json on links.releases ($RELEASES): the bundle would go somewhere the app never looks"
+  UPDATER_KEY="${MOGBOT_UPDATER_KEY:-$HOME/.tauri/${SLUG}-updater.key}"
+  [ -f "$UPDATER_KEY" ] || die "no updater private key at $UPDATER_KEY (see RELEASING.md, 'The update key')"
+  # Never on argv: the Keychain hands it to this shell, which passes it on
+  # through the environment of the one command that signs.
+  if [ -z "${TAURI_SIGNING_PRIVATE_KEY_PASSWORD+set}" ]; then
+    TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$(security find-generic-password -a release -s "${SLUG}-updater-key-password" -w 2>/dev/null)" \
+      || die "no Keychain item '${SLUG}-updater-key-password' (account 'release') holding the updater key's password (RELEASING.md)"
+  fi
+  ok "updater key: $UPDATER_KEY"
+else
+  warn "brand.json names no update feed: no updater bundle or latest.json (installed copies won't update)"
+  [ "$PUBLISH" = 1 ] && die "--publish needs links.updates and links.releases in brand.json"
+fi
+
+# Release notes: what the update banner, latest.json and the release page show.
+NOTES_FILE=""
+if [ -f "docs/release-notes-$VERSION.md" ]; then
+  NOTES_FILE="docs/release-notes-$VERSION.md"
+elif [ "${VERSION##*.}" = 0 ] && [ -f "docs/release-notes-${VERSION%.*}.md" ]; then
+  NOTES_FILE="docs/release-notes-${VERSION%.*}.md"
+elif [ "$UPDATER" = 1 ]; then
+  die "no release notes: write docs/release-notes-$VERSION.md (scripts/release.sh -n does)"
+fi
+[ -n "$NOTES_FILE" ] && ok "release notes: $NOTES_FILE"
+
+RELEASES_REPO=""
+if [ "$PUBLISH" = 1 ]; then
+  RELEASES_REPO="$(sed -n 's#^https://github.com/\([^/]*/[^/]*\)/releases/*$#\1#p' <<<"$RELEASES")"
+  [ -n "$RELEASES_REPO" ] || die "links.releases isn't a GitHub releases page: $RELEASES"
+  gh auth status >/dev/null 2>&1 || die "gh isn't signed in (gh auth login)"
+  gh repo view "$RELEASES_REPO" >/dev/null 2>&1 || die "this gh account can't see $RELEASES_REPO"
+  ok "will publish to $RELEASES_REPO as $TAG"
+fi
+
+if [ "$SKIP_NOTARIZE" = 1 ]; then
+  NOTARIZE=0
+  warn "--skip-notarize: a dry run. Nothing it makes is fit to give anyone."
+elif xcrun notarytool history --keychain-profile "$NOTARY_PROFILE" >/dev/null 2>&1; then
   NOTARIZE=1
   ok "notary profile '$NOTARY_PROFILE' works"
 else
@@ -95,6 +180,7 @@ else
   warn "no working notary profile '$NOTARY_PROFILE': this run builds and signs only."
   warn "  To notarize, run once:  xcrun notarytool store-credentials $NOTARY_PROFILE --apple-id <apple id> --team-id ${TEAM_ID:-<team>}"
   warn "  (the password it asks for is an app-specific password from account.apple.com)"
+  [ "$PUBLISH" = 1 ] && die "--publish needs notarization"
 fi
 
 # ---------------------------------------------------------------- build
@@ -108,13 +194,16 @@ if [ "$SKIP_BUILD" = 0 ]; then
   # Tauri signs with APPLE_SIGNING_IDENTITY from the keychain, with the
   # hardened runtime and src-tauri/Entitlements.plist. Notarization is done
   # below with the keychain profile, so Tauri's own notarize env is cleared.
-  # The DMG is made below too, from the stapled app (Tauri's would hold the
-  # app as it was before notarization).
+  # The DMG and the updater bundle are made below too, from the stapled app
+  # (Tauri's would hold the app as it was before notarization), so Tauri's
+  # own updater artifacts are off and the update key isn't in its env.
   env -u APPLE_CERTIFICATE -u APPLE_CERTIFICATE_PASSWORD \
       -u APPLE_ID -u APPLE_PASSWORD -u APPLE_TEAM_ID \
       -u APPLE_API_KEY -u APPLE_API_ISSUER -u APPLE_API_KEY_PATH \
+      -u TAURI_SIGNING_PRIVATE_KEY -u TAURI_SIGNING_PRIVATE_KEY_PATH -u TAURI_SIGNING_PRIVATE_KEY_PASSWORD \
       APPLE_SIGNING_IDENTITY="$IDENTITY" \
-      pnpm tauri build --bundles app --target "$TRIPLE"
+      pnpm tauri build --bundles app --target "$TRIPLE" \
+        --config '{"bundle":{"createUpdaterArtifacts":false}}'
 fi
 [ -d "$APP_PATH" ] || die "no app at $APP_PATH"
 ok "app: $APP_PATH"
@@ -159,6 +248,17 @@ done < <(find "$APP_PATH/Contents" -type f -print0)
 [ ${#UNSIGNED[@]} -eq 0 ] || die "binaries in the bundle not signed by the identity: ${UNSIGNED[*]}"
 ok "every binary in the bundle is signed"
 
+# The update channel compiled into this app: the feed and key it will trust.
+if [ "$UPDATER" = 1 ]; then
+  APP_STRINGS="$(strings -a "$APP_PATH/Contents/MacOS/"* 2>/dev/null)"
+  grep -qF "$UPDATES_FEED" <<<"$APP_STRINGS" \
+    || die "the built app doesn't name the update feed $UPDATES_FEED (stale build? run without --skip-build)"
+  PUBKEY="$(node -p "require('./src-tauri/tauri.conf.json').plugins.updater.pubkey")"
+  grep -qF "$PUBKEY" <<<"$APP_STRINGS" \
+    || die "the built app doesn't carry tauri.conf.json's updater public key (stale build? run without --skip-build)"
+  ok "the app checks $UPDATES_FEED for updates, trusting this key"
+fi
+
 # What a public build reaches out to: report anything still naming Ship Studio
 # or a telemetry host, so it is looked at before release.
 say "Scanning the bundle for outside endpoints"
@@ -172,7 +272,9 @@ else
 fi
 
 # ---------------------------------------------------------------- notarize the app
-if [ "$NOTARIZE" = 1 ]; then
+if [ "$NOTARIZE" = 1 ] && xcrun stapler validate "$APP_PATH" >/dev/null 2>&1; then
+  ok "app is already notarized and stapled (an earlier run); not resubmitting"
+elif [ "$NOTARIZE" = 1 ]; then
   say "Notarizing the app (this waits on Apple, usually a few minutes)"
   ZIP="$OUT_DIR/.${APP_NAME}-notarize.zip"
   mkdir -p "$OUT_DIR"
@@ -184,6 +286,62 @@ if [ "$NOTARIZE" = 1 ]; then
     || die "Apple did not accept the app. Log: xcrun notarytool log <id> --keychain-profile $NOTARY_PROFILE"
   xcrun stapler staple "$APP_PATH"
   ok "app notarized and stapled"
+fi
+
+# ---------------------------------------------------------------- updater bundle
+# From the app as it is now: notarized and stapled (unless this is a dry run),
+# so an update is as trusted offline as the DMG. Tauri's updater unpacks the
+# archive's one top-level folder in place of the running .app.
+if [ "$UPDATER" = 1 ]; then
+  say "Making the updater bundle"
+  mkdir -p "$OUT_DIR"
+  rm -f "$UPDATER_PATH" "$UPDATER_PATH.sig" "$LATEST_JSON"
+  # No AppleDouble files or extended attributes (quarantine, Finder info).
+  COPYFILE_DISABLE=1 tar --no-mac-metadata -czf "$UPDATER_PATH" -C "$(dirname "$APP_PATH")" "$APP_BASENAME"
+  TAURI_SIGNING_PRIVATE_KEY_PATH="$UPDATER_KEY" \
+  TAURI_SIGNING_PRIVATE_KEY_PASSWORD="$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" \
+    pnpm --silent tauri signer sign --app-version "$VERSION" "$UPDATER_PATH" >/dev/null \
+    || die "signing the updater bundle failed (wrong key password?)"
+  [ -s "$UPDATER_PATH.sig" ] || die "no signature next to $UPDATER_PATH"
+  node scripts/verify-updater-sig.mjs "$UPDATER_PATH" "$UPDATER_PATH.sig" --version "$VERSION" \
+    || die "the updater bundle's signature doesn't verify against tauri.conf.json's public key"
+  ok "updater bundle: $UPDATER_PATH (+ .sig)"
+
+  # What an installed copy will unpack: the same app, still signed (and stapled).
+  UNPACK="$(mktemp -d "${TMPDIR:-/tmp}/${APP_DIR_NAME}-updater.XXXXXX")"
+  tar -xzf "$UPDATER_PATH" -C "$UNPACK"
+  [ -d "$UNPACK/$APP_BASENAME" ] || die "the updater bundle doesn't hold $APP_BASENAME at its top"
+  [ "$(find "$UNPACK" -mindepth 1 -maxdepth 1 | wc -l | tr -d ' ')" = 1 ] || die "the updater bundle holds more than the app at its top"
+  codesign --verify --deep --strict "$UNPACK/$APP_BASENAME" || die "the app inside the updater bundle fails codesign --verify"
+  if [ "$NOTARIZE" = 1 ]; then
+    xcrun stapler validate "$UNPACK/$APP_BASENAME" >/dev/null || die "the app inside the updater bundle isn't stapled"
+  fi
+  rm -rf "$UNPACK"
+  ok "it unpacks to the signed$( [ "$NOTARIZE" = 1 ] && echo ', stapled') app"
+
+  say "Writing latest.json"
+  [ "$NOTARIZE" = 1 ] || warn "latest.json points at an un-notarized bundle: a dry run, never publish it"
+  BUNDLE_URL="${RELEASES%/}/download/$TAG/$UPDATER_NAME"
+  VERSION="$VERSION" NOTES_FILE="$NOTES_FILE" PUB_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" ARCH="$ARCH" \
+  BUNDLE_URL="$BUNDLE_URL" SIG_FILE="$UPDATER_PATH.sig" OUT="$LATEST_JSON" node - <<'NODE' || die "couldn't write latest.json"
+const fs = require('fs');
+const e = process.env;
+const entry = { signature: fs.readFileSync(e.SIG_FILE, 'utf8').trim(), url: e.BUNDLE_URL };
+// A universal bundle runs on both; an aarch64 one only on Apple Silicon, so
+// an Intel copy finds no entry for itself and reports "no update".
+const platforms =
+  e.ARCH === 'universal'
+    ? { 'darwin-aarch64': entry, 'darwin-x86_64': entry }
+    : { 'darwin-aarch64': entry };
+const manifest = {
+  version: e.VERSION,
+  notes: fs.readFileSync(e.NOTES_FILE, 'utf8').trim(),
+  pub_date: e.PUB_DATE,
+  platforms,
+};
+fs.writeFileSync(e.OUT, JSON.stringify(manifest, null, 2) + '\n');
+NODE
+  ok "latest.json: $LATEST_JSON (bundle at $BUNDLE_URL)"
 fi
 
 # ---------------------------------------------------------------- DMG
@@ -223,7 +381,11 @@ if [ "$NOTARIZE" = 1 ]; then
   xcrun stapler validate "$APP_PATH" 2>&1 || FAIL=1
   xcrun stapler validate "$DMG_PATH" 2>&1 || FAIL=1
 fi
-shasum -a 256 "$DMG_PATH" | tee "$DMG_PATH.sha256"
+if [ "$UPDATER" = 1 ]; then
+  ( cd "$OUT_DIR" && shasum -a 256 "$DMG_NAME" "$UPDATER_NAME" ) | tee "$DMG_PATH.sha256"
+else
+  ( cd "$OUT_DIR" && shasum -a 256 "$DMG_NAME" ) | tee "$DMG_PATH.sha256"
+fi
 
 echo
 if [ "$FAIL" = 1 ]; then
@@ -235,3 +397,55 @@ else
   warn "Gatekeeper rejects it on other Macs until it is notarized. Store the '$NOTARY_PROFILE' profile and run:"
   warn "  ./scripts/release-mac.sh --skip-build$( [ "$UNIVERSAL" = 1 ] && echo ' --universal')"
 fi
+
+# ---------------------------------------------------------------- publish (opt-in)
+if [ "$PUBLISH" = 0 ]; then
+  if [ "$NOTARIZE" = 1 ] && [ "$UPDATER" = 1 ]; then
+    echo "    publish with: ./scripts/release-mac.sh --skip-build --publish$( [ "$UNIVERSAL" = 1 ] && echo ' --universal')"
+  fi
+  exit 0
+fi
+[ "$NOTARIZE" = 1 ] || die "not publishing a build that wasn't notarized"
+
+say "Publishing $TAG to $RELEASES_REPO"
+ASSETS=("$DMG_PATH" "$DMG_PATH.sha256" "$UPDATER_PATH" "$UPDATER_PATH.sig")
+if gh release view "$TAG" -R "$RELEASES_REPO" >/dev/null 2>&1; then
+  # Replacing a release's files: the bundle and its signature go up before
+  # the manifest that names them.
+  gh release upload "$TAG" -R "$RELEASES_REPO" --clobber "${ASSETS[@]}"
+  gh release upload "$TAG" -R "$RELEASES_REPO" --clobber "$LATEST_JSON"
+  gh release edit "$TAG" -R "$RELEASES_REPO" --title "$APP_NAME $VERSION" --notes-file "$NOTES_FILE" --draft=false --latest
+else
+  # A draft isn't "latest", so nobody reads its manifest until every file is up.
+  gh release create "$TAG" -R "$RELEASES_REPO" --draft --title "$APP_NAME $VERSION" \
+    --notes-file "$NOTES_FILE" "${ASSETS[@]}"
+  gh release upload "$TAG" -R "$RELEASES_REPO" "$LATEST_JSON"
+  gh release edit "$TAG" -R "$RELEASES_REPO" --draft=false --latest
+fi
+ok "release $TAG published"
+
+say "Pointing the README's download link at $DMG_NAME"
+DMG_URL="${RELEASES%/}/download/$TAG/$DMG_NAME"
+README_SHA="$(gh api "repos/$RELEASES_REPO/contents/README.md" --jq .sha)"
+README_NEW="$(gh api "repos/$RELEASES_REPO/contents/README.md" --jq .content \
+  | LABEL="$APP_NAME $VERSION for Mac ($ARCH_LABEL)" URL="$DMG_URL" node scripts/release-readme-link.mjs)" \
+  || README_NEW=""
+if [ -n "$README_NEW" ]; then
+  gh api -X PUT "repos/$RELEASES_REPO/contents/README.md" \
+    -f message="Download: $APP_NAME $VERSION" -f content="$README_NEW" -f sha="$README_SHA" >/dev/null
+  ok "README links to $DMG_URL"
+else
+  warn "README not updated: no download link under '## Download'. Point it at $DMG_URL by hand"
+fi
+
+say "Checking what installed copies will see"
+LIVE_VERSION="$(curl -fsSL "$UPDATES_FEED" 2>/dev/null | node -e 'let b="";process.stdin.on("data",c=>b+=c).on("end",()=>{try{process.stdout.write(String(JSON.parse(b).version))}catch{}})' || true)"
+if [ "$LIVE_VERSION" = "$VERSION" ]; then
+  ok "$UPDATES_FEED says $VERSION"
+else
+  warn "$UPDATES_FEED says '${LIVE_VERSION:-nothing}', not $VERSION yet (GitHub can take a minute); check again"
+fi
+for u in "$DMG_URL" "${RELEASES%/}/download/$TAG/$UPDATER_NAME"; do
+  code="$(curl -s -o /dev/null -w '%{http_code}' -L -r 0-0 "$u" || true)"
+  if [ "$code" = 206 ] || [ "$code" = 200 ]; then ok "$u"; else warn "$u -> HTTP $code"; fi
+done

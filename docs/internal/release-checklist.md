@@ -53,8 +53,6 @@ Every null link turns its feature off and the UI hides it.
 
 | Key | Null today means | Set it to turn on |
 | --- | --- | --- |
-| `links.updates` | No auto-update (updater plugin not registered; `pnpm check:brand` requires `plugins.updater` exactly when this is set) | The `latest.json` feed URL. Also needs `TAURI_SIGNING_PRIVATE_KEY` and `createUpdaterArtifacts: true` |
-| `links.releases` | No "install a specific version" (rewind); `scripts/install.sh` refuses | The releases page |
 | `links.issueRepo` | No in-app issue reports | `owner/repo` |
 | `links.securityAdvisories`, `links.discussions`, `links.community`, `links.website` | Those links and CTAs hidden, no PR footer credit | URLs |
 | `links.errorReports` | No automatic error reports (Rust) | Endpoint |
