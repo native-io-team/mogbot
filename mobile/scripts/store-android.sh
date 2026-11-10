@@ -20,6 +20,11 @@
 #   COMPANION_UPLOAD_STORE_PASSWORD
 #   COMPANION_UPLOAD_KEY_ALIAS
 #   COMPANION_UPLOAD_KEY_PASSWORD
+# or, instead of the two passwords, the login Keychain item that holds them:
+#   COMPANION_UPLOAD_KEYCHAIN_SERVICE   e.g. mogbot-android-upload
+#   COMPANION_UPLOAD_KEYCHAIN_ACCOUNT   (default: the key alias)
+# read here at build time and handed to Gradle in the environment only, so
+# the password is never on disk in plain text, on a command line or in a log.
 # Optional: GOOGLE_SERVICES_JSON=<path> compiles Firebase in for push (FCM).
 #
 # Needs: Node, JDK 17 (JAVA_HOME), the Android SDK (ANDROID_HOME, default
@@ -39,7 +44,7 @@ while [ $# -gt 0 ]; do
     --require-upload-key) require_key=1; shift ;;
     --out) out="$2"; shift 2 ;;
     --keep-native) keep_native=1; shift ;;
-    -h|--help) sed -n '2,27p' "$0"; exit 0 ;;
+    -h|--help) sed -n '2,32p' "$0"; exit 0 ;;
     *) echo "store-android: unknown option $1" >&2; exit 2 ;;
   esac
 done
@@ -69,6 +74,22 @@ prop() {
   fi
   printf '%s' "$v"
 }
+# The passwords from the Keychain (one item: a PKCS12 store and its key share
+# one password). Exported for Gradle's environment only, never printed.
+kc_service="$(prop COMPANION_UPLOAD_KEYCHAIN_SERVICE)"
+if [ -n "$kc_service" ] && [ -n "$(prop COMPANION_UPLOAD_STORE_FILE)" ] \
+  && { [ -z "$(prop COMPANION_UPLOAD_STORE_PASSWORD)" ] || [ -z "$(prop COMPANION_UPLOAD_KEY_PASSWORD)" ]; }; then
+  kc_account="$(prop COMPANION_UPLOAD_KEYCHAIN_ACCOUNT)"
+  [ -n "$kc_account" ] || kc_account="$(prop COMPANION_UPLOAD_KEY_ALIAS)"
+  [ -n "$kc_account" ] || fail "COMPANION_UPLOAD_KEYCHAIN_SERVICE is set but there's no account (COMPANION_UPLOAD_KEY_ALIAS)."
+  kc_pw="$(security find-generic-password -s "$kc_service" -a "$kc_account" -w 2>/dev/null)" \
+    || fail "No Keychain item $kc_service / $kc_account (or the Keychain is locked)."
+  [ -n "$kc_pw" ] || fail "The Keychain item $kc_service / $kc_account is empty."
+  [ -n "$(prop COMPANION_UPLOAD_STORE_PASSWORD)" ] || export COMPANION_UPLOAD_STORE_PASSWORD="$kc_pw"
+  [ -n "$(prop COMPANION_UPLOAD_KEY_PASSWORD)" ] || export COMPANION_UPLOAD_KEY_PASSWORD="$kc_pw"
+  unset kc_pw
+  echo "Upload key passwords: the Keychain ($kc_service / $kc_account)"
+fi
 if [ -n "$(prop COMPANION_UPLOAD_STORE_FILE)" ]; then
   for k in COMPANION_UPLOAD_STORE_PASSWORD COMPANION_UPLOAD_KEY_ALIAS COMPANION_UPLOAD_KEY_PASSWORD; do
     [ -n "$(prop "$k")" ] || fail "$k isn't set (COMPANION_UPLOAD_STORE_FILE is)."

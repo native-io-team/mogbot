@@ -75,21 +75,35 @@ Make the upload key once, keep it and its passwords out of the repo (the
 `.gitignore` ignores `*.keystore`, `*.jks` and `credentials/`), and back it
 up: if it's lost, Play can reset it, but only after the owner asks.
 
+The key on this Mac (made 10 November 2026): `~/.android-keys/mogbot-upload.jks`
+(the folder 700, the file 600), a PKCS12 store, alias `upload`, RSA 4096,
+valid 30 years, its one password (store and key) only in the login Keychain
+as `mogbot-android-upload` / `upload`. Made like this, the password passed
+to `keytool` through the environment (`-storepass:env`) and to the Keychain
+on `security -i`'s stdin, never on a command line:
+
 ```bash
-keytool -genkeypair -v -storetype JKS -keyalg RSA -keysize 2048 -validity 10000 \
-  -alias upload -keystore ~/keys/mogbot-upload.jks \
-  -dname "CN=Galluzzo Conseil Inc., O=Galluzzo Conseil Inc., C=CA"
+keytool -genkeypair -storetype PKCS12 -keyalg RSA -keysize 4096 -validity 10950 \
+  -alias upload -keystore ~/.android-keys/mogbot-upload.jks \
+  -dname "CN=Galluzzo Conseil Inc., O=Galluzzo Conseil Inc., L=Morin-Heights, ST=QC, C=CA" \
+  -storepass:env KS_PW -keypass:env KS_PW
 ```
 
 Then in `~/.gradle/gradle.properties` (never the project's), or the same
-names as environment variables:
+names as environment variables, either the passwords themselves or, as on
+this Mac, the Keychain item that holds them:
 
 ```properties
-COMPANION_UPLOAD_STORE_FILE=/Users/<you>/keys/mogbot-upload.jks
-COMPANION_UPLOAD_STORE_PASSWORD=…
+COMPANION_UPLOAD_STORE_FILE=/Users/<you>/.android-keys/mogbot-upload.jks
 COMPANION_UPLOAD_KEY_ALIAS=upload
-COMPANION_UPLOAD_KEY_PASSWORD=…
+COMPANION_UPLOAD_KEYCHAIN_SERVICE=mogbot-android-upload
+# COMPANION_UPLOAD_KEYCHAIN_ACCOUNT defaults to the key alias
+# or, without the Keychain: COMPANION_UPLOAD_STORE_PASSWORD / COMPANION_UPLOAD_KEY_PASSWORD
 ```
+
+`store-android.sh` reads the Keychain item at build time (`security
+find-generic-password -w`) and exports it as the two password variables for
+Gradle's environment only: never written to a file, printed or on argv.
 
 `app.config.ts`'s `withUploadSigning` gives the release build type
 `signingConfigs.upload` when `COMPANION_UPLOAD_STORE_FILE` is set and the
