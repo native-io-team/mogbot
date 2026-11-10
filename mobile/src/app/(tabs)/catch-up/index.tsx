@@ -49,7 +49,7 @@ import {
   failureLine,
   formatAgo,
 } from '../../../lib/agents';
-import { makeStyles, useColors } from '../../../lib/appearance';
+import { makeStyles, useColors, useLargeText } from '../../../lib/appearance';
 import {
   fromLine,
   groupByAgent,
@@ -501,6 +501,8 @@ function Row({ item, agent }: { item: FeedItem; agent: Agent }) {
   const command = !!whole && !card?.approval?.summary?.trim();
   // One action: beside the words. Two (Deny · Allow, Discard · Keep): under them.
   const single = !(inline && action.kind === 'answer') && !copy;
+  // At accessibility sizes the action goes under the words, which get the full width.
+  const large = useLargeText();
   const openLabel =
     item.kind === 'ask' && action.kind === 'answer'
       ? 'Review'
@@ -518,7 +520,7 @@ function Row({ item, agent }: { item: FeedItem; agent: Agent }) {
       renderRightActions={(progress) => <SwipeChat progress={progress} onPress={chat} />}
     >
       <View style={styles.row}>
-        <View style={styles.rowMain}>
+        <View style={[styles.rowMain, large && styles.rowStacked]}>
           <Pressable
             onPress={open}
             android_ripple={ripple}
@@ -527,7 +529,11 @@ function Row({ item, agent }: { item: FeedItem; agent: Agent }) {
             accessibilityHint={item.kind === 'ask' ? 'Opens the whole request' : 'Opens its chat'}
             accessibilityActions={[{ name: 'chat', label: 'Open chat' }]}
             onAccessibilityAction={(e) => e.nativeEvent.actionName === 'chat' && chat()}
-            style={({ pressed }) => [styles.rowText, pressed && PRESSED]}
+            style={({ pressed }) => [
+              styles.rowText,
+              large && styles.rowTextStacked,
+              pressed && PRESSED,
+            ]}
           >
             <View style={styles.rowTitle}>
               {risky && (
@@ -539,7 +545,7 @@ function Row({ item, agent }: { item: FeedItem; agent: Agent }) {
                   />
                 </View>
               )}
-              <T color={colors.textStrong} numberOfLines={2} style={styles.grow}>
+              <T color={colors.textStrong} numberOfLines={large ? 6 : 2} style={styles.grow}>
                 {title}
               </T>
             </View>
@@ -548,7 +554,7 @@ function Row({ item, agent }: { item: FeedItem; agent: Agent }) {
               <T
                 variant="small"
                 color={colors.textSecondary}
-                numberOfLines={inline ? 4 : 2}
+                numberOfLines={(inline ? 4 : 2) * (large ? 2 : 1)}
                 style={command ? styles.command : undefined}
               >
                 {line}
@@ -560,7 +566,11 @@ function Row({ item, agent }: { item: FeedItem; agent: Agent }) {
               </T>
             )}
           </Pressable>
-          {single && <Button title={openLabel} variant="secondary" size="compact" onPress={open} />}
+          {single && (
+            <View style={large && styles.stackedAction}>
+              <Button title={openLabel} variant="secondary" size="compact" onPress={open} />
+            </View>
+          )}
         </View>
         {!!error && (
           <T variant="small" color={colors.accentErrorLight} accessibilityLiveRegion="polite">
@@ -642,7 +652,9 @@ function SinceRow({ item, agent, first }: { item: SinceItem; agent: Agent; first
         }}
         android_ripple={ripple}
         accessibilityRole="button"
-        accessibilityLabel={`${agent.name}. ${item.title}. ${item.line ?? ''}. ${formatAgo(item.ts)}`}
+        accessibilityLabel={[agent.name, item.title, item.line, formatAgo(item.ts)]
+          .filter(Boolean)
+          .join('. ')}
         style={({ pressed }) => [styles.sinceRow, pressed && PRESSED]}
       >
         <View style={styles.sinceKey}>
@@ -703,6 +715,9 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.surfacePanel,
   },
   rowMain: { flexDirection: 'row', alignItems: 'center', gap: space.md },
+  rowStacked: { flexDirection: 'column', alignItems: 'stretch', gap: space.sm },
+  stackedAction: { alignSelf: 'flex-end' },
+  rowTextStacked: { flex: 0 },
   rowText: { flex: 1, gap: space['2xs'] },
   command: { fontFamily: fonts.mono },
   rowTitle: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },

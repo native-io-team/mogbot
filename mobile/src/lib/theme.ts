@@ -438,6 +438,18 @@ export const agentColorNames: Record<string, string> = {
 };
 
 /** `--spacing-*`. */
+/** The least a finger is given (Apple's 44pt, Android's 48dp sits inside its padding). */
+export const MIN_TAP = 44;
+
+/** A control drawn `height` tall, given a whole tap above and below it. */
+export const tapSlop = (height: number) => {
+  const v = Math.max(0, Math.ceil((MIN_TAP - height) / 2));
+  return { top: v, bottom: v };
+};
+
+/** A chip's drawn height: under `MIN_TAP`, so a chip carries `tapSlop(CHIP_H)`. */
+export const CHIP_H = 36;
+
 export const space = {
   '3xs': 1,
   '2xs': 2,
@@ -798,6 +810,13 @@ export const READ_MAX_SCALE = 2;
  * so far that the answers under them leave the screen.
  */
 export const CARD_TITLE_SCALE = 1.5;
+
+/**
+ * Dynamic Type from which a row stops sharing its line (accessibility
+ * sizes start at ×1.6 on iOS): words over the full width, the action under
+ * them, rather than both squeezed and the words cut short.
+ */
+export const LARGE_TEXT = 1.6;
 
 export const lineHeight = (size: number, ratio = 1.4) => Math.round(size * ratio);
 

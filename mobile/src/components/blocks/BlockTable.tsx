@@ -13,9 +13,19 @@ import {
   type TableBlock,
 } from '@shipstudio/companion-protocol';
 import { useMemo, useState } from 'react';
-import { Pressable, View } from 'react-native';
+import { Pressable, useWindowDimensions, View } from 'react-native';
 import { makeStyles, useColors } from '../../lib/appearance';
-import { fonts, iconSize, PRESSED, radius, space, type } from '../../lib/theme';
+import {
+  CHIP_H,
+  fonts,
+  READ_MAX_SCALE,
+  iconSize,
+  PRESSED,
+  radius,
+  space,
+  tapSlop,
+  type,
+} from '../../lib/theme';
 import { ShowAll } from '../ShowAll';
 import { SideScroll } from '../SideScroll';
 import { Icon, T } from '../ui';
@@ -41,10 +51,13 @@ const WRAP_MIN = 112;
  */
 export function fitColumns(
   table: Pick<TableBlock, 'columns' | 'rows'>,
-  available: number
+  available: number,
+  /** Dynamic Type now: the words are set at it (to their clamp), so they're measured at it. */
+  fontScale = 1
 ): number[] {
-  const GLYPH = type.small * GLYPH_EM;
-  const HEAD_GLYPH = type.caption * GLYPH_EM;
+  const scale = Math.min(Math.max(fontScale, 1), READ_MAX_SCALE);
+  const GLYPH = type.small * GLYPH_EM * scale;
+  const HEAD_GLYPH = type.caption * GLYPH_EM * scale;
   const short = shortColumns(table);
   const content = table.columns.map(
     (c, j) =>
@@ -89,7 +102,13 @@ export function BlockTable({ block }: { block: TableBlock }) {
     [block.rows, sort]
   );
   const [available, setAvailable] = useState(0);
-  const widths = useMemo(() => fitColumns(block, available), [block, available]);
+  // Measured at Dynamic Type's size: at AX sizes a header broke mid-word ("Res|ults")
+  // to fit the card; now the table keeps whole words and scrolls sideways.
+  const { fontScale } = useWindowDimensions();
+  const widths = useMemo(
+    () => fitColumns(block, available, fontScale),
+    [block, available, fontScale]
+  );
   const shown = open ? rows : rows.slice(0, TABLE_ROWS_SHOWN);
   const press = (col: number) => {
     const numeric = !!block.columns[col]?.numeric;
@@ -115,6 +134,7 @@ export function BlockTable({ block }: { block: TableBlock }) {
                   accessibilityRole="button"
                   accessibilityLabel={`${c.label}${on ? (sort!.dir === 'asc' ? ', sorted ascending' : ', sorted descending') : ''}. Sort`}
                   onPress={() => press(j)}
+                  hitSlop={tapSlop(CHIP_H)}
                   style={({ pressed }) => [
                     styles.cell,
                     styles.headCell,
@@ -190,6 +210,6 @@ const useStyles = makeStyles((colors) => ({
   head: { borderBottomWidth: 1, borderBottomColor: colors.borderDefault },
   divided: { borderBottomWidth: 1, borderBottomColor: colors.borderSubtle },
   cell: { paddingHorizontal: space.sm, paddingVertical: space.sm, justifyContent: 'center' },
-  headCell: { flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: 36 },
+  headCell: { flexDirection: 'row', alignItems: 'center', gap: space.xs, minHeight: CHIP_H },
   numeric: { textAlign: 'right', fontVariant: ['tabular-nums'] },
 }));

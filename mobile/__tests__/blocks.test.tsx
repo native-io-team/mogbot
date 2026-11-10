@@ -283,6 +283,17 @@ describe('fitting a table to the phone', () => {
     expect(fitColumns(counts, 300).reduce((a, b) => a + b, 0)).toBeLessThanOrEqual(300);
   });
 
+  it('measures at Dynamic Type: at AX sizes words stay whole and the table scrolls', () => {
+    const counts = {
+      columns: [{ label: 'Agent' }, { label: 'Results', numeric: true }],
+      rows: [['Research', 1]],
+    };
+    const big = fitColumns(counts, 300, 3.1);
+    // "Research" and "Results" at the reading clamp (×2), not at ×1.
+    expect(big[0]).toBeGreaterThanOrEqual(8 * 14 * 0.57 * 2);
+    expect(big[1]).toBeGreaterThanOrEqual(7 * 12 * 0.57 * 2);
+  });
+
   it('scrolls only when even wrapped it cannot fit', () => {
     const wide = {
       columns: Array.from({ length: 8 }, (_, i) => ({ label: `Column ${i}` })),
