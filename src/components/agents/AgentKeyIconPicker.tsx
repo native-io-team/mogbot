@@ -70,15 +70,7 @@ const FEATURED_ONLY: IconCatalog = {
  * the rest (Lucide's, alphabetical: Accessibility, Arrows…) wait in More, so
  * the row fits the dialog instead of running off its edge (round 4, #11).
  */
-const LEADING_CATEGORIES = [
-  FEATURED_CATEGORY,
-  'people',
-  'finance',
-  'communication',
-  'mail',
-  'files',
-  'time',
-];
+const LEADING_CATEGORIES = [FEATURED_CATEGORY, 'people', 'finance', 'mail', 'time'];
 
 /** The row's chips, then what's in More: the leading ones first, in their order. */
 export function splitCategories(categories: IconCatalog['categories']) {

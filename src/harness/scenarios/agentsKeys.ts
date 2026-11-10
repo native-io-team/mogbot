@@ -146,7 +146,7 @@ export const agentsKeysScenarios: Scenario[] = [
     id: 'agents-keys-icon-search',
     title: 'Agents — searching every icon for “money”',
     looksRightWhen:
-      'New agent, the key picker open, “money” typed into the icon search. Under it the categories as a strip that fits the dialog (All, Featured, People, Finance, Communication, Mail, File icons, Time & calendar, then More holding the rest), the line “N for “money””, then the matches as small keys in the chosen colourway: our Money legend first, then Lucide’s banknote, coins, currency, wallet, dollar sign… drawn in the same uniform stroke as the featured legends, round-capped. The key at 112px above wears whatever is picked. Readable in both themes.',
+      'New agent, the key picker open, “money” typed into the icon search. Under it the categories as a strip that fits the dialog (All, Featured, People, Finance, Mail, Time & calendar, then More holding the rest), nothing cut at the edge, the line “N for “money””, then the matches as small keys in the chosen colourway: our Money legend first, then Lucide’s banknote, coins, currency, wallet, dollar sign… drawn in the same uniform stroke as the featured legends, round-capped. The key at 112px above wears whatever is picked. Readable in both themes.',
     requires: '.agent-icons .agent-look__choice[data-value="lucide:banknote"]',
     steps: [
       { click: '.agents-list__new' },

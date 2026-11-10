@@ -330,7 +330,7 @@
 
 .agent-conversations__pill {
   flex: 0 0 auto;
-  margin-left: auto;
+  margin-left: var(--spacing-sm);
 }
 
 .agent-conversations__title {
