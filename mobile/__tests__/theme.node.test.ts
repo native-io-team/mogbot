@@ -242,7 +242,7 @@ describe('the scale', () => {
       /^squircle\([\w.]+\)$/,
       /^composer\.(corner|fieldCorner)$/,
       // An agent key's corners: its geometry, the desk's (lib/agentKey.ts).
-      /^g\.(corner|faceCorner|housingCorner)$/,
+      /^g\.(corner|faceCorner|socketCorner)$/,
     ];
     const found: string[] = [];
     for (const { at, line } of sourceLines()) {
@@ -312,7 +312,9 @@ describe('agent keys', () => {
         expect([role, COLOUR.test(value)]).toEqual([role, true]);
       }
     }
-    expect(luminance(keyNeutrals.light.socket)).toBeGreaterThan(luminance(keyNeutrals.dark.socket));
+    expect(luminance(keyNeutrals.light.socketTop)).toBeGreaterThan(
+      luminance(keyNeutrals.dark.socketTop)
+    );
   });
 });
 

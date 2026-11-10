@@ -1,18 +1,20 @@
 /**
- * An agent key's geometry on the phone (components/AgentKey.tsx), the desk's
- * numbers (`KEY_GEOMETRY` in the shared spec; agent-key.css): every length
- * a multiple of one unit, the key's size over 112, except the small key
- * (36pt and under), which is its own drawing on a 30pt unit: face, skirt, a
- * 3pt depth, a heavier legend, no sublegend or pips. Pure, so a test can
- * hold it to the desk's.
+ * An agent key's geometry and light on the phone (components/AgentKey.tsx),
+ * the desk's numbers (`KEY_GEOMETRY` in the shared spec; agent-key.css, the
+ * site's keys): every length a multiple of one unit, the key's size over 112,
+ * except the small key (36pt and under), which is its own drawing on a 30pt
+ * unit: face, skirt, a 3pt depth, a heavier legend, no sublegend or pips.
+ * Pure, so a test can hold it to the desk's.
  */
 
 import {
   KEY_GEOMETRY as G,
+  KEY_LIT_MIX,
   KEY_PIPS_MIN,
   KEY_SMALL_MAX,
   type KeyState,
 } from '@shipstudio/companion-protocol';
+import { keyLit, mix, saturate, type KeyColors } from './theme';
 
 export interface KeyGeometry {
   size: number;
@@ -25,6 +27,8 @@ export interface KeyGeometry {
   faceCorner: number;
   /** The depth under a key at rest: the box is the key plus this. */
   rest: number;
+  /** The depth left under a key pressed all the way. */
+  floor: number;
   icon: number;
   /** The legend's stroke, on the 24-unit grid. */
   stroke: number;
@@ -34,9 +38,9 @@ export interface KeyGeometry {
   details: boolean;
   sub: { right: number; bottom: number; size: number };
   pips: { bottom: number; width: number; height: number; gap: number; corner: number };
-  /** The socket a removed cap leaves: the housing and the switch stem's cross. */
-  housing: number;
-  housingCorner: number;
+  /** The empty socket: its inset, corner, and the switch stem's cross. */
+  socketInset: number;
+  socketCorner: number;
   stem: number;
   arm: number;
   stemDrop: number;
@@ -46,7 +50,7 @@ export function keyGeometry(size: number): KeyGeometry {
   const u = size / G.size;
   const v = size / 30;
   const small = size <= KEY_SMALL_MAX;
-  const big = {
+  const shared = {
     sub: {
       right: G.sublegend.right * u,
       bottom: G.sublegend.bottom * u,
@@ -55,10 +59,15 @@ export function keyGeometry(size: number): KeyGeometry {
     pips: {
       bottom: G.pips.bottom * u,
       width: G.pips.width * u,
-      height: G.pips.height * u,
+      height: Math.max(3, G.pips.height * u),
       gap: G.pips.gap * u,
       corner: (G.pips.height / 2) * u,
     },
+    socketInset: Math.max(1, 3 * u),
+    socketCorner: G.radius * u - 1,
+    stem: size * 0.27,
+    arm: size * 0.27 * 0.32,
+    stemDrop: Math.max(1, 3 * u),
   };
   if (small) {
     return {
@@ -70,18 +79,14 @@ export function keyGeometry(size: number): KeyGeometry {
       insetBottom: 5 * v,
       faceCorner: 4 * v,
       rest: 3 * v,
+      floor: Math.max(1, 0.6 * v),
       icon: 15 * v,
       // The desk's md is 2.6; its sm and xs, 2.9.
       stroke: size >= 30 ? 2.6 : 2.9,
       ambientY: 1 * v,
-      ambientBlur: 6 * v,
+      ambientBlur: 5 * v,
       details: false,
-      ...big,
-      housing: 16 * v,
-      housingCorner: 3.5 * v,
-      stem: 10 * v,
-      arm: 3 * v,
-      stemDrop: 1,
+      ...shared,
     };
   }
   return {
@@ -93,56 +98,90 @@ export function keyGeometry(size: number): KeyGeometry {
     insetBottom: G.face.bottom * u,
     faceCorner: G.face.radius * u,
     rest: G.depth * u,
+    floor: Math.max(1, G.working.floor * u),
     icon: G.icon * u,
     // A header's key strokes a little heavier, as the desk's lg does.
     stroke: size < KEY_PIPS_MIN ? 2.3 : G.stroke,
     ambientY: 6 * u,
-    ambientBlur: 16 * u,
+    ambientBlur: 13 * u,
     details: size >= KEY_PIPS_MIN,
-    ...big,
-    housing: 48 * u,
-    housingCorner: 9 * u,
-    stem: 26 * u,
-    arm: 8 * u,
-    stemDrop: 2 * u,
+    ...shared,
   };
 }
 
+/** How a state lights the legend: not at all, the warm white (working, live) or the amber of Needs your OK. */
+export type KeyLight = 'none' | 'warm' | 'ask';
+
 /**
  * Where a state puts the cap: how far down (negative is up, proud) and how
- * deep its shadow, and how dark a wash on its face. Down plus depth is
- * always the rest depth, so a key never moves what's beside it.
+ * deep its shadow, and how it's lit. Down plus depth is always the rest
+ * depth, so a key never moves what's beside it. `pressed`: a finger on it
+ * (the row it's in is held), all the way down.
  */
 export function keyPose(
   g: KeyGeometry,
   state: KeyState,
-  light: boolean
-): { down: number; depth: number; shade: number; lit: boolean } {
+  pressed = false
+): { down: number; depth: number; light: KeyLight } {
   const u = g.size / G.size;
   const v = g.size / 30;
-  const litShade = light ? G.live.darkenLight : G.live.darken;
+  const light: KeyLight =
+    state === 'needsOk' ? 'ask' : state === 'working' || state === 'live' ? 'warm' : 'none';
+  const all = { down: g.rest - g.floor, depth: g.floor };
+  if (pressed && state !== 'new') return { ...all, light };
   switch (state) {
     case 'working':
-      return g.small
-        ? { down: 2 * v, depth: 1 * v, shade: G.working.darken, lit: false }
-        : {
-            down: G.working.down * u,
-            depth: G.working.depth * u,
-            shade: G.working.darken,
-            lit: false,
-          };
-    case 'live':
-      return { down: 0, depth: g.rest, shade: litShade, lit: true };
-    case 'needsOk':
-      return g.small
-        ? { down: -2 * v, depth: 5 * v, shade: litShade, lit: true }
-        : { down: -G.needsOk.up * u, depth: G.needsOk.depth * u, shade: litShade, lit: true };
+      return { ...all, light };
+    case 'needsOk': {
+      const up = g.small ? 2 * v : G.needsOk.up * u;
+      return { down: -up, depth: g.rest + up, light };
+    }
+    case 'paused':
+      return { down: g.rest / 2, depth: g.rest / 2, light };
     default:
-      return { down: 0, depth: g.rest, shade: 0, lit: false };
+      return { down: 0, depth: g.rest, light };
   }
 }
 
-/** The pulse of a key that needs your OK: one breath of the lit legend, the desk's period. */
+/** A key's colours in a state: its face (deepened in its own hue when lit), skirt, depth and legend. */
+export function keyPaint(
+  colorway: string,
+  paint: KeyColors,
+  state: KeyState
+): KeyColors & { legendLit: boolean } {
+  if (state === 'paused') {
+    const keep = G.paused.saturate;
+    return {
+      face: saturate(paint.face, keep),
+      skirt: saturate(paint.skirt, keep),
+      depth: saturate(paint.depth, keep),
+      legend: saturate(paint.legend, keep),
+      legendLit: false,
+    };
+  }
+  const deepen = KEY_LIT_MIX[colorway] ?? 0.42;
+  if (state === 'working' || state === 'live') {
+    return {
+      ...paint,
+      face: mix(paint.depth, paint.face, deepen),
+      legend: keyLit.legend,
+      legendLit: true,
+    };
+  }
+  if (state === 'needsOk') {
+    return {
+      ...paint,
+      face: mix(paint.depth, paint.face, Math.min(1, deepen + G.needsOk.deeper)),
+      legend: keyLit.ask,
+      legendLit: true,
+    };
+  }
+  return { ...paint, legendLit: false };
+}
+
+/** The pulse of a key that needs your OK, and how low it fades: the desk's. */
 export const KEY_PULSE_MS = G.needsOk.pulseMs;
-/** How far the lit legend fades at the bottom of a breath. */
-export const KEY_PULSE_LOW = 0.6;
+export const KEY_PULSE_LOW = G.needsOk.pulseLow;
+/** The slow breath of a working key's light. */
+export const KEY_BREATHE_MS = G.working.breatheMs;
+export const KEY_BREATHE_LOW = 0.5;

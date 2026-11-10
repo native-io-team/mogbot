@@ -11,13 +11,7 @@
 import type { Agent } from '@shipstudio/companion-protocol';
 import { Link, type Href } from 'expo-router';
 import { memo, useRef } from 'react';
-import {
-  Platform,
-  Pressable,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { Platform, Pressable, StyleSheet, useWindowDimensions, View } from 'react-native';
 import ReanimatedSwipeable, {
   type SwipeableMethods,
 } from 'react-native-gesture-handler/ReanimatedSwipeable';
@@ -296,6 +290,20 @@ function RowBody({
   // Waiting on you, a turn that didn't finish, or out of usage: the state as
   // a pill, the rest in the line's own ink (one coloured thing per row).
   const pill = state && live ? rowPill(agent, line) : null;
+  // Unread is the line's ink, not a dot: the right edge is the key's and the time's.
+  const unread = agent.unread > 0;
+  // What the key says, in words for VoiceOver ("Inbox, working").
+  const keyState = live ? agentKeyState(agent, running) : 'idle';
+  const keyWords =
+    keyState === 'working'
+      ? ', working'
+      : keyState === 'live'
+        ? ', live'
+        : keyState === 'paused'
+          ? ', paused'
+          : '';
+  // You're driving it: "Live", in green, leads the line (as on the desk).
+  const driving = live && !!agent.takeover && !needsYou(agent);
   const cut = line.indexOf(' · ');
   // Steadied while it works, so step → "Thinking" → step doesn't flicker.
   const head = useSteadyLine(cut < 0 ? line : line.slice(0, cut), running);
@@ -328,7 +336,7 @@ function RowBody({
       ]}
       accessibilityRole="button"
       accessibilityState={{ selected: !!selected }}
-      accessibilityLabel={`${agent.name}. ${line}${agent.unread ? '. Unread' : ''}${
+      accessibilityLabel={`${agent.name}${keyWords}. ${line}${unread ? '. Unread' : ''}${
         live ? '' : '. Last known'
       }`}
       accessibilityActions={actions.map((a) => ({ name: a.id, label: a.title }))}
@@ -337,73 +345,87 @@ function RowBody({
         if (id) onAction(id);
       }}
     >
-      {/* The key says what it's doing by how it sits (pressed, lit, proud, a
+      {({ pressed }) => (
+        <>
+          {/* The key says what it's doing by how it sits (pressed, lit, proud, a
           socket); the line says what. Last known: it rests. */}
-      <View style={styles.key}>
-        <AgentKey
-          id={agent.id}
-          name={agent.name}
-          color={agent.color}
-          state={live ? agentKeyState(agent, running) : 'idle'}
-          size={keySize.lg}
-        />
-      </View>
-      <View style={styles.text}>
-        <View style={styles.nameLine}>
-          <T
-            variant="headline"
-            color={colors.textStrong}
-            numberOfLines={1}
-            // Names stop growing at twice the size, under Home's large title.
-            maxFontSizeMultiplier={NAME_SCALE}
-            style={styles.name}
-          >
-            {agent.name}
-          </T>
-          {/* No role here: beside the name it was cut to a stub on every row
-              ("Runs the other age…"). It's in the agent's sheet, as on the desk. */}
-          <View style={styles.role} />
-          {agent.pinned && <Icon name="pin.fill" size={iconSize.inline} color={colors.textMuted} />}
-          {agent.muted && (
-            <Icon name="bell.slash.fill" size={iconSize.inline} color={colors.textMuted} />
-          )}
-          {!!level && (
-            <T
-              variant="caption"
-              color={colors.textMuted}
-              numberOfLines={1}
-              maxFontSizeMultiplier={NAME_SCALE}
-              style={styles.level}
-            >
-              {/* Beside the time it reads as one quiet line: "Careful · 3 h ago". */}
-              {stacked ? level : `${level} ·`}
-            </T>
-          )}
-          {!stacked && time}
-        </View>
-        <View style={styles.nameLine}>
-          {pill && <StatusPill tone={pill.tone} label={pill.label} />}
-          <T
-            variant="small"
-            numberOfLines={stacked ? 3 : 1}
-            maxFontSizeMultiplier={NAME_SCALE}
-            color={colors.textSecondary}
-            style={{ flex: 1 }}
-          >
-            {/* Working: the steadied step, so step → "Thinking" → step doesn't flicker. */}
-            {pill ? pill.rest : `${head}${tail}`}
-          </T>
-          {/*
+          <View style={styles.key}>
+            <AgentKey
+              id={agent.id}
+              name={agent.name}
+              color={agent.color}
+              state={keyState}
+              size={keySize.lg}
+              pressed={pressed}
+            />
+          </View>
+          <View style={styles.text}>
+            <View style={styles.nameLine}>
+              <T
+                variant="headline"
+                color={colors.textStrong}
+                numberOfLines={1}
+                // Names stop growing at twice the size, under Home's large title.
+                maxFontSizeMultiplier={NAME_SCALE}
+                style={styles.name}
+              >
+                {agent.name}
+              </T>
+              {/* No role here: beside the name it was cut to a stub on every row
+                  ("Runs the other age…"). It's in the agent's sheet, as on the desk. */}
+              <View style={styles.role} />
+              {agent.pinned && (
+                <Icon name="pin.fill" size={iconSize.inline} color={colors.textMuted} />
+              )}
+              {agent.muted && (
+                <Icon name="bell.slash.fill" size={iconSize.inline} color={colors.textMuted} />
+              )}
+              {!!level && (
+                <T
+                  variant="caption"
+                  color={colors.textMuted}
+                  numberOfLines={1}
+                  maxFontSizeMultiplier={NAME_SCALE}
+                  style={styles.level}
+                >
+                  {/* Beside the time it reads as one quiet line: "Careful · 3 h ago". */}
+                  {stacked ? level : `${level} ·`}
+                </T>
+              )}
+              {!stacked && time}
+            </View>
+            <View style={styles.nameLine}>
+              {pill && <StatusPill tone={pill.tone} label={pill.label} />}
+              <T
+                variant="small"
+                numberOfLines={stacked ? 3 : 1}
+                maxFontSizeMultiplier={NAME_SCALE}
+                color={unread ? colors.textStrong : colors.textSecondary}
+                style={{ flex: 1 }}
+              >
+                {driving && <T color={colors.accentSuccess}>Live · </T>}
+                {/* Working: the steadied step, so step → "Thinking" → step doesn't flicker. */}
+                {pill ? pill.rest : `${head}${tail}`}
+              </T>
+              {/*
             Waiting on you is said once, in the row's words ("Needs your OK",
             or that it waits on your Mac) under the Needs you header: no dot
             beside them as well. Every other state keeps its mark.
           */}
-          <View style={styles.mark}>
-            {!needsYou(agent) && !running && <StatusMark agent={agent} live={live} onMac={onMac} />}
+              <View style={styles.mark}>
+                {!needsYou(agent) && !running && (
+                  <StatusMark
+                    agent={live ? { ...agent, unread: 0 } : agent}
+                    live={live}
+                    onMac={onMac}
+                  />
+                )}
+              </View>
+            </View>
+            {stacked && time}
           </View>
-        </View>
-        {stacked && time}
-      </View>
+        </>
+      )}
     </Pressable>
   );
 }

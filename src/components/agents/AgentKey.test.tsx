@@ -45,19 +45,23 @@ describe('AgentKey', () => {
     expect(container.querySelector('.agent-key__pips')).toBeNull();
   });
 
-  it('is a socket with no cap when paused, its stem in its colour', () => {
-    const { container } = render(
+  it('keeps a paused key drained but whole, and a new one an empty socket', () => {
+    const { container, rerender } = render(
       <AgentKey name="Inbox" colorway="teal" state="paused" size="xl" />
     );
-    expect(container.querySelector('.agent-key__face')).toBeNull();
-    expect(container.querySelector('.agent-key__stem')).not.toBeNull();
+    // Paused: you can still see whose key it is (the site's board).
+    expect(container.querySelector('.agent-key__cap .agent-key__face svg')).not.toBeNull();
+    expect(container.querySelector('.agent-key__socket')).toBeNull();
+    rerender(<AgentKey name="New" state="new" size="xl" />);
+    expect(container.querySelector('.agent-key__cap')).toBeNull();
+    expect(container.querySelector('.agent-key[data-state="new"] .agent-key__stem')).not.toBeNull();
   });
 
-  it('is an outlined plus for a new agent, never the paused socket', () => {
-    const { container } = render(<AgentKey name="New" state="new" size="xl" />);
-    expect(container.querySelector('.agent-key__plus')).not.toBeNull();
-    expect(container.querySelector('.agent-key__stem')).toBeNull();
-    expect(container.querySelector('.agent-key__face')).toBeNull();
+  it('carries its agent id (for the bound-key press) and a seat flag', () => {
+    const { container } = render(<AgentKey id="a1" name="Inbox" seat size="xl" />);
+    const key = container.querySelector('.agent-key')!;
+    expect(key.getAttribute('data-agent-id')).toBe('a1');
+    expect(key.hasAttribute('data-seat')).toBe(true);
   });
 
   it('draws an agent from an older Mac from its colour, name and role', () => {
@@ -78,12 +82,51 @@ describe('AgentKey', () => {
     }
   });
 
-  it('animates only Needs your OK, and not with Reduce Motion', () => {
+  it('animates only what needs it, with the site’s timings, and nothing with Reduce Motion', () => {
     const animations = [...css.matchAll(/animation:\s*([^;]+);/g)].map((m) => m[1]);
-    expect(animations.filter((a) => a !== 'none')).toEqual([
-      'agent-key-lit var(--agent-key-pulse) ease-in-out infinite',
-    ]);
+    expect(animations.filter((a) => a !== 'none').sort()).toEqual(
+      [
+        'agent-key-breathe var(--agent-key-breathe) ease-in-out infinite',
+        'agent-key-breathe var(--agent-key-breathe) ease-in-out infinite',
+        'agent-key-glow var(--agent-key-breathe) ease-in-out infinite',
+        'agent-key-pulse var(--agent-key-pulse) ease-in-out infinite',
+        'agent-key-pulse var(--agent-key-pulse) ease-in-out infinite',
+        'agent-key-seat var(--agent-key-seat) var(--agent-key-ease-arrive) both',
+        'agent-key-socket-in var(--agent-key-socket-in) var(--agent-key-ease-arrive) both',
+      ].sort()
+    );
+    expect(css).toMatch(/--agent-key-pulse: 1\.6s;/);
+    expect(css).toMatch(/--agent-key-breathe: 2\.4s;/);
+    // Keyframes move only opacity, translate and (on the legend) filter.
+    const frames = [...css.matchAll(/@keyframes [\w-]+ \{([\s\S]*?)\n\}/g)].map((m) => m[1]);
+    for (const f of frames) {
+      const props = [...f.matchAll(/^\s*([a-z-]+):/gm)].map((m) => m[1]);
+      for (const p of props) expect(['opacity', 'translate', 'filter']).toContain(p);
+    }
     const reduced = css.slice(css.indexOf('@media (prefers-reduced-motion: reduce)'));
-    expect(reduced).toMatch(/\[data-state='needsOk'\] \.agent-key__legend \{\s*animation: none;/);
+    expect(reduced).toMatch(
+      /\[data-state='needsOk'\] \.agent-key__legend,[\s\S]*?animation: none;/
+    );
+    expect(reduced).toContain(".agent-key[data-state='working']::before");
+  });
+
+  it('tells working, free and needs-you apart without motion', () => {
+    // Needs you: its own amber legend and spill, raised; working: pressed and warm-lit.
+    expect(css).toMatch(
+      /\[data-state='needsOk'\] \.agent-key__legend \{\s*stroke: var\(--agent-key-ask\)/
+    );
+    expect(css).toMatch(/\[data-state='needsOk'\]::before \{[^}]*--agent-key-ask-spill/);
+    expect(css).toMatch(
+      /\[data-state='working'\] \{\s*--agent-key-ty: calc\(var\(--agent-key-rest-depth\)/
+    );
+    expect(css).toMatch(/\[data-state='needsOk'\] \{\s*--agent-key-ty: calc\(-5/);
+  });
+
+  it('holds every looping animation still in a hidden window', () => {
+    const hidden = css.slice(css.indexOf(':root:is([data-app-hidden], [data-app-background])'));
+    expect(hidden).toContain("[data-state='working'], [data-state='needsOk'])::before");
+    expect(hidden).toContain('.agent-key__face::after');
+    expect(hidden).toContain("[data-state='needsOk']");
+    expect(hidden).toContain('animation-play-state: paused');
   });
 });
