@@ -13,9 +13,11 @@
 
 import { useState } from 'react';
 import { StatusPill } from '../primitives/StatusPill';
+import { Tooltip } from '../primitives/Tooltip';
 import {
   KEY_STATE_LABEL,
   keyAccessibleName,
+  keyLookFor,
   type KeyState,
 } from '../../../packages/companion-protocol/src/agentKeys';
 import { previewText } from '../../../packages/companion-protocol/src/preview';
@@ -34,7 +36,30 @@ interface AgentsBoardProps {
   onOpenAgent: (agentId: string) => void;
   /** The empty socket: make a new agent. Absent, no socket. */
   onNewAgent?: () => void;
+  /**
+   * `quiet`: the rest of the team under What's in flight's attention
+   * sections. Smaller keys, the name and its bound letter only; the line
+   * (state and what it last said) shows on hover or focus, never as a wall
+   * of cut-short previews.
+   */
+  variant?: 'full' | 'quiet';
+  /** Its name for a screen reader (the section's heading says it on screen). */
+  label?: string;
 }
+
+/** The quiet key's hover/focus line: the state's word, then what it's on or last said. */
+export function boardLine(agent: Agent, state: KeyState): string {
+  const word = state === 'idle' ? null : KEY_STATE_LABEL[state];
+  const detail = boardDetail(agent, state);
+  if (!word) return detail ?? agent.name;
+  if (!detail) return word;
+  if (detail.startsWith(`${word} `)) return detail;
+  if (detail.startsWith('until ')) return `${word} ${detail}`;
+  return `${word} · ${detail}`;
+}
+
+/** The quiet board's line comes quickly: it is the only place the preview is. */
+const QUIET_TOOLTIP_MS = 300;
 
 /** The words after the state: what it's on, or (idle) its last line. */
 export function boardDetail(agent: Agent, state: KeyState): string | null {
@@ -84,11 +109,80 @@ function useSeated(ids: string[]): ReadonlySet<string> {
   return seen.seated;
 }
 
-export function AgentsBoard({ agents, onOpenAgent, onNewAgent }: AgentsBoardProps) {
+export function AgentsBoard({
+  agents,
+  onOpenAgent,
+  onNewAgent,
+  variant = 'full',
+  label = 'Your team',
+}: AgentsBoardProps) {
   const shown = agents.filter((a) => !a.hidden);
   const seated = useSeated(shown.map((a) => a.id));
+  if (variant === 'quiet') {
+    return (
+      <div className="agents-board agents-board--quiet" role="group" aria-label={label}>
+        <div className="agents-board__plate">
+          {shown.map((agent) => {
+            const state = agentKeyState(agent);
+            const line = boardLine(agent, state);
+            const bound = keyLookFor(agent).boundKey;
+            // A state is news (paused until 5:02, you're driving it): said
+            // under the name. What it last said is the hover's.
+            const news = state === 'paused' || state === 'live' ? boardLine(agent, state) : null;
+            return (
+              <Tooltip key={agent.id} content={line} delayMs={QUIET_TOOLTIP_MS}>
+                <button
+                  type="button"
+                  className="agents-board__key"
+                  data-board-nav=""
+                  data-grid=""
+                  onClick={() => onOpenAgent(agent.id)}
+                  aria-label={line === agent.name ? agent.name : `${agent.name}. ${line}`}
+                  aria-keyshortcuts={bound ?? undefined}
+                  data-agent-id={agent.id}
+                  data-state={state}
+                >
+                  <span className="agents-board__cap">
+                    <AgentKey
+                      id={agent.id}
+                      name={agent.name}
+                      color={agent.color}
+                      state={state}
+                      size="lg"
+                      seat={seated.has(agent.id)}
+                    />
+                    {/* Its bound key, beside the cap: the small key's face has no room for it. */}
+                    {bound && (
+                      <kbd className="agents-board__bound" aria-hidden="true">
+                        {bound}
+                      </kbd>
+                    )}
+                  </span>
+                  <span className="agents-board__name">{agent.name}</span>
+                  {news && <span className="agents-board__news">{news}</span>}
+                </button>
+              </Tooltip>
+            );
+          })}
+          {onNewAgent && (
+            <button
+              type="button"
+              className="agents-board__key"
+              data-board-nav=""
+              data-grid=""
+              onClick={() => onNewAgent()}
+              aria-label="New agent"
+            >
+              <AgentKey name="New agent" state="new" size="lg" />
+              <span className="agents-board__name">New agent</span>
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
   return (
-    <section className="agents-board" aria-label="Your team">
+    <section className="agents-board" aria-label={label}>
       <div className="agents-board__plate">
         {shown.map((agent) => {
           const state = agentKeyState(agent);

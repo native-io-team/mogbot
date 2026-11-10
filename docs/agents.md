@@ -432,7 +432,7 @@ commitment to act now or next ("I'll check Slack for that thread next", "Let
 me run the audit") with no tool call after it, and nothing it waits on (no
 `message_agent` this turn, no check-in it scheduled, no open card), gets a
 **follow-up**: a one-time check-in a minute out, marked `followUp`, under
-"Scheduled next" in What's in flight as "Said it would: “…”". It fires like
+"Coming up" in What's in flight as "Said it would: “…”". It fires like
 any check-in (retries, quiet hours, take-over) with a wake that quotes the
 reply and says to do it now, or answer `[nothing new]` if done or no longer
 wanted. Not a promise: a question, anything waiting on someone else ("once
@@ -6540,13 +6540,22 @@ cards.
   `@Name` in that agent's colour. A name typed without the menu still counts
   if it matches an agent exactly.
 - **What's in flight** (⌘K, id `agents.team`, or the bell beside the sidebar
-  toggle, which counts what waits on you) shows,
-  in a fixed order and present even when empty: who needs you (with their
-  pending approval cards, answerable in place, and turns that didn't finish,
-  with Retry or Sign in), who is paused by a usage limit (only when someone
-  is, with Retry at the reset), who is working (their
-  activity line), the next five active check-ins, and the six latest
-  replies. Every row opens that chat; a reply opens it at that line. It
+  toggle, which counts what waits on you) is ordered by attention
+  (docs/internal/in-flight-board-2026-11-10.md), each heading with its count
+  ("Needs you · 5") and present even when empty: **Needs you** (pending
+  approval, login, question and step-in cards, answerable in place with the
+  card's own buttons, and turns that didn't finish, with Retry or Sign in;
+  the first two agents open with their cards, the rest wait one line each in
+  the order they asked and open as the ones above are answered; empty, one
+  line: "Nothing needs you"), **Working now** (the live step and elapsed
+  time, and Stop, which confirms first), **Finished recently** (agents with
+  unread replies, each by its result card's title or its reply's first
+  line), Paused (only while a usage limit has someone, with Retry at the
+  reset), then **Everyone else** as a quiet grid of small keys (the name, a
+  bound letter, a state only when it is news such as "Paused until 5:02 PM";
+  what it last said on hover or focus), and Coming up (the next three
+  routines). Arrow keys move between rows and keys (never j/k: a letter is
+  an agent's own key). Every row opens that chat; a reply opens it at that line. It
   reads only the store: statuses and check-ins from the registry, cards and
   replies from each chat's recent lines (live for chats open this session,
   otherwise the last 20 lines, re-read when that agent's row changes; a

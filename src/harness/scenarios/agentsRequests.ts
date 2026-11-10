@@ -406,7 +406,7 @@ export const agentsRequestsScenarios: Scenario[] = [
     id: 'agents-team-many',
     title: 'Agents — What’s in flight with sixteen agents waiting',
     looksRightWhen:
-      'Headed Needs you, one line per agent, never a wall of cards: its badge, the name, “· 4 logins: Slack bot token, Slack user token…” in quiet grey (not amber), the time at the right (“2h ago”) and a chevron, with a muted “Open chat” beside it. Every row folded; then Working and Done recently, one line each too.',
+      'Headed “Needs you · 16”, never a wall of cards: the first two agents open with their first two cards each (and “Show 2 more”), the other fourteen one line each: its key, the name, “· 4 logins: Slack bot token, Slack user token…”, the time at the right (“2h ago”) and a chevron, with a muted “Open chat” beside it; then Working now and Finished recently, one line each too, and Everyone else as small keys.',
     command: 'agents.team',
     requires: '.agents-team__row[aria-expanded="false"]',
     commands: {

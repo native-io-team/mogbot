@@ -117,6 +117,18 @@ describe('axe: no WCAG A/AA violations', () => {
     );
   });
 
+  it('the quiet board (everyone else in What’s in flight)', async () => {
+    await check(
+      <AgentsBoard
+        variant="quiet"
+        label="Everyone else"
+        agents={[agent('f', 'Finance', 'waiting'), agent('r', 'Research')]}
+        onOpenAgent={() => {}}
+        onNewAgent={() => {}}
+      />
+    );
+  });
+
   it('the total bar, an account row and an account’s page', async () => {
     const now = Date.now();
     const glance = usageGlance(

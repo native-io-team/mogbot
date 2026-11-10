@@ -111,8 +111,8 @@ export const agentsKeysScenarios: Scenario[] = [
     id: 'agents-keys-board',
     title: 'Agents — the team as a board of keys (What’s in flight)',
     looksRightWhen:
-      'What’s in flight opens on a warm plate of full-size keys, one per agent, its name in bold and a state line under it, then the dashed New agent key named just “New agent” (no second line). Each key: a top-lit skirt, a lighter inset face, a hard depth shadow, one legend centred, its bound letter small at the bottom right clear of the corner, independence pips on the front edge. Acme Site and Research are pressed and lit warm with a soft spill in their colour (“Working on …”); Lead Gen sits proud with an amber legend and an amber spill (Needs your OK, the word in amber), the loudest key; Hiring is lit and still (“Live · You’re driving it”, Live in green); Native App is drained grey and sunk (Paused); idle keys are at rest and unlit, with their last line. Readable in both themes; keys keep their colours.',
-    requires: '.agents-board .agent-key[data-state="needsOk"]',
+      'What’s in flight ordered by attention (docs/internal/in-flight-board-2026-11-10.md): Needs you · 1 leads with Lead Gen’s row (its key proud with an amber legend and spill, the loudest key) and its card; Working now has Acme Site and Research pressed and lit warm, each with Stop; Paused has Native App, drained grey and sunk; then Everyone else as a quiet well of small keys, each named with its bound letter at the top right (Hiring says “Live · You’re driving it” under its name), and the dashed New agent key. Readable in both themes; keys keep their colours.',
+    requires: '.agents-team .agent-key[data-state="needsOk"]',
     command: 'agents.team',
     viewport: { width: 1440, height: 1000 },
     commands,
