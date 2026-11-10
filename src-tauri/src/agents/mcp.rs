@@ -10,7 +10,7 @@
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::sync::{LazyLock, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tauri::AppHandle;
 use tokio::sync::oneshot;
 
@@ -44,24 +44,38 @@ pub(super) fn approval_wait() -> Duration {
     Duration::from_secs(override_secs.unwrap_or(APPROVAL_WAIT_SECS))
 }
 
-/// One-time grants from late Allows: (agent id, tool, input). The next
-/// matching `approve` call from that agent is allowed without a card.
-static GRANTS: LazyLock<Mutex<Vec<(String, String, Value)>>> =
-    LazyLock::new(|| Mutex::new(Vec::new()));
+/// (agent id, tool, input, when granted).
+type LateGrant = (String, String, Value, Instant);
+
+/// One-time grants from late Allows: (agent id, tool, input, when). The
+/// next matching `approve` call from that agent is allowed without a card.
+/// The Allow wakes the agent to retry at once, so a grant it never used
+/// (it went another way) lapses after [`LATE_GRANT_TTL`] rather than
+/// letting the same call through days later, and the list can't grow.
+static GRANTS: LazyLock<Mutex<Vec<LateGrant>>> = LazyLock::new(|| Mutex::new(Vec::new()));
+
+/// How long a late Allow's one call stays granted.
+const LATE_GRANT_TTL: Duration = Duration::from_secs(60 * 60);
 
 pub fn grant_once(agent_id: &str, tool: &str, input: &Value) {
+    grant_once_at(agent_id, tool, input, Instant::now());
+}
+
+fn grant_once_at(agent_id: &str, tool: &str, input: &Value, at: Instant) {
     GRANTS.lock().unwrap_or_else(|e| e.into_inner()).push((
         agent_id.to_string(),
         tool.to_string(),
         input.clone(),
+        at,
     ));
 }
 
 fn take_grant(agent_id: &str, tool: &str, input: &Value) -> bool {
     let mut grants = GRANTS.lock().unwrap_or_else(|e| e.into_inner());
+    grants.retain(|(.., at)| at.elapsed() < LATE_GRANT_TTL);
     match grants
         .iter()
-        .position(|(a, t, i)| a == agent_id && t == tool && i == input)
+        .position(|(a, t, i, _)| a == agent_id && t == tool && i == input)
     {
         Some(index) => {
             grants.remove(index);
@@ -4133,6 +4147,26 @@ mod tests {
         assert!(take_grant("agent-a", "Bash", &input));
         // Once.
         assert!(!take_grant("agent-a", "Bash", &input));
+    }
+
+    #[test]
+    fn a_late_allow_nobody_used_lapses() {
+        let input = json!({ "command": "ls lapsed" });
+        let Some(long_ago) = Instant::now().checked_sub(LATE_GRANT_TTL + Duration::from_secs(1))
+        else {
+            return; // A clock this young can't be wound back; nothing to test.
+        };
+        grant_once_at("agent-lapse", "Bash", &input, long_ago);
+        assert!(!take_grant("agent-lapse", "Bash", &input));
+        // And it's gone, not just skipped.
+        assert!(!GRANTS
+            .lock()
+            .unwrap()
+            .iter()
+            .any(|(a, ..)| a == "agent-lapse"));
+        // A fresh one still goes through.
+        grant_once("agent-lapse", "Bash", &input);
+        assert!(take_grant("agent-lapse", "Bash", &input));
     }
 
     #[test]

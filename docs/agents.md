@@ -2228,7 +2228,8 @@ call, so turning it off holds from the next call):
   or mark a login / key card **not_needed** (declined, the agent isn't woken)
   or **maybe_later** (closed with "Maybe later", not woken). Allow and deny go
   through the same path as the user's own answer (`answer_card`): a waiting
-  turn is woken, a late Allow grants that exact call once.
+  turn is woken, a late Allow grants that exact call once (for an hour; an
+  unused grant lapses, `mcp::LATE_GRANT_TTL`).
 - `bring_to_user {requests, intro}`: ONE message in the admin's chat, "3
   things only you can decide:", each card answerable in place for the agent
   that asked (`AgentMessage.decide`; desk `DecideCards`, phone
