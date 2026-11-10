@@ -33,6 +33,7 @@ import { TextButton } from '../primitives/TextButton';
 import { Dropdown, DropdownItem } from '../primitives/Dropdown';
 import { MenuButton } from '../primitives/MenuButton';
 import { ToggleButton } from '../primitives/ToggleButton';
+import { CheckIcon } from '@/components/icons';
 import { AgentKey } from './AgentKey';
 
 /** How many tiles are drawn at first, and how many more each time the end comes into view. */
@@ -385,6 +386,11 @@ function Tile({
       onClick={() => onPick(id)}
     >
       <AgentKey name={name} colorway={colorway} icon={id} size="md" />
+      {selected && (
+        <span className="agent-look__check" aria-hidden="true">
+          <CheckIcon size={8} />
+        </span>
+      )}
     </button>
   );
 }

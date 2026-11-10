@@ -14,6 +14,7 @@
 import { useState, type KeyboardEvent, type ReactNode } from 'react';
 import { COLORWAYS, normalizeBoundKey } from '../../../packages/companion-protocol/src/agentKeys';
 import type { AgentIndependence } from '../../../packages/companion-protocol/src/model';
+import { CheckIcon } from '@/components/icons';
 import { AgentKey } from './AgentKey';
 import { AgentKeyIconPicker } from './AgentKeyIconPicker';
 
@@ -212,6 +213,11 @@ function RadioRow({
             onClick={() => onChange(v)}
           >
             {render(v)}
+            {v === value && (
+              <span className="agent-look__check" aria-hidden="true">
+                <CheckIcon size={8} />
+              </span>
+            )}
           </button>
         ))}
       </div>

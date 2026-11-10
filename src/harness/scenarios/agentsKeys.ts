@@ -130,7 +130,7 @@ export const agentsKeysScenarios: Scenario[] = [
     id: 'agents-keys-picker',
     title: 'Agents — a new agent’s key: colourway, legend and shortcut key',
     looksRightWhen:
-      'New agent. Under the name, the key at 112px on a quiet band (its legend read from the name as you type, the first free letter as its sublegend), then Colour (fourteen small keys), Icon (a search box, the category filters, “2,052 icons” and the grid: the featured legends first as small keys in the chosen colourway, the app’s filled mark leading, then the pack), and Shortcut key: a field showing the letter, with the line “Press <letter> anywhere outside a text box to open this agent.” The pick is a neutral ring, never the accent.',
+      'New agent. Under the name, the key at 112px on a quiet band (its legend read from the name as you type, the first free letter as its sublegend), then Colour (fourteen small keys), Icon (a search box, the category filters, “2,052 icons” and the grid: the featured legends first as small keys in the chosen colourway, the app’s filled mark leading, then the pack), and Shortcut key: a field showing the letter, with the line “Press <letter> anywhere outside a text box to open this agent.” The pick sits pressed down with a small neutral check on its corner, never a box round it and never the accent; the rest are slightly quieter.',
     requires: '.agent-look__preview .agent-key--xl',
     steps: [
       { click: '.agents-list__new' },
@@ -141,6 +141,21 @@ export const agentsKeysScenarios: Scenario[] = [
       { fill: '.agent-editor__identity input', value: 'Bookings' },
     ],
     commands,
+  },
+  {
+    id: 'agents-keys-picker-edit',
+    title: 'Agents — editing an agent’s key: the pick among the colourways and icons',
+    looksRightWhen:
+      'Edit agent with its look open. In Colour and Icon the picked key sits pressed down, its own colour lit softly under it, with a small neutral check disc on its top-right corner (never a box round it, never the accent); the other keys are slightly quieter. Readable in both themes.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-look__preview .agent-key--xl',
+    steps: [
+      { click: '.agent-chat__menu [aria-label^="Actions for"]' },
+      { click: '[role="menuitem"]', text: 'Edit agent' },
+      { click: '.agent-editor__look-toggle' },
+    ],
+    clipSelector: '.agent-look',
+    commands: { ...commands, agents_instructions: 'Keep the team moving.' },
   },
   {
     id: 'agents-keys-icon-search',

@@ -1,7 +1,7 @@
 /* Agents mode: how an agent looks (AgentKeyPicker.tsx), in the editor.
  * Its key at full size on a quiet plate, then the choices: colourways and
- * legends as small keys on buttons that ring when they're the pick, and the
- * press-to-bind field for its shortcut key. */
+ * legends as small keys, the pick held down under a halo that follows its
+ * shape, and the press-to-bind field for its shortcut key. */
 
 .agent-look {
   display: flex;
@@ -37,44 +37,117 @@
 .agent-look__choices {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--spacing-2xs);
 }
 
+/* A choice is a small key on a bare button. Nothing is drawn round it: the
+   pick is told the way a keyboard tells it, the key held down, with a small
+   neutral check on its corner. The button's edge follows the key's rounded
+   shape at a gap (its radius is the key's plus the padding), so the focus
+   ring is that curve, never a box. */
 .agent-look__choice {
+  --agent-look-gap: calc(var(--spacing-2xs) + var(--focus-ring-width));
+  position: relative;
   display: inline-flex;
   align-items: flex-start;
   justify-content: center;
-  padding: var(--spacing-2xs) var(--spacing-2xs) 0;
+  padding: var(--agent-look-gap);
   color: inherit;
   background: none;
   border: none;
-  border-radius: var(--radius-control);
+  /* The small key's radius (16 units of 112, agent-key.css) plus the gap. */
+  border-radius: calc(var(--agent-key-size-md) * 16 / 112 + var(--agent-look-gap));
   cursor: pointer;
-  transition:
-    background var(--transition-interaction-fast),
-    box-shadow var(--transition-interaction-fast);
 }
 
-.agent-look__choice:hover {
-  background: var(--surface-control);
+/* The check: a neutral disc on the pick's top-right corner, cut out of the
+   key by a rim of the dialog's own surface. Neutral, never the accent
+   (answers are neutral); text-primary on the panel is well past 3:1. */
+.agent-look__check {
+  position: absolute;
+  z-index: 1;
+  top: calc(var(--agent-look-gap) - var(--spacing-xs));
+  right: calc(var(--agent-look-gap) - var(--spacing-xs));
+  display: grid;
+  place-items: center;
+  width: calc(var(--spacing-lg) * 0.75);
+  height: calc(var(--spacing-lg) * 0.75);
+  color: var(--surface-panel);
+  background: var(--text-primary);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--surface-panel);
+  pointer-events: none;
+  animation: agent-look-check-in var(--transition-interaction-fast) both;
 }
 
+.agent-look__check svg {
+  stroke-width: 2.5px;
+}
+
+@keyframes agent-look-check-in {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+/* The rest wait a little quieter, so the pick reads first; a hover brings a
+   key back up (and lifts it: the key's own hover). */
+.agent-look__choice .agent-key {
+  transition: opacity var(--transition-interaction-fast);
+}
+.agent-look__choice:not([data-selected]) .agent-key {
+  opacity: 0.78;
+}
+.agent-look__choice:hover .agent-key {
+  opacity: 1;
+}
+
+/* Focus: the neutral focus ring, on the curve the key's corners follow. */
 .agent-look__choice:focus-visible {
   outline: var(--focus-ring-width) solid var(--focus-ring);
-  outline-offset: 0;
+  outline-offset: calc(-1 * var(--spacing-3xs));
 }
 
-/* The pick: the key held pressed (the key's own state language) and a
-   neutral ring at 3:1, never the accent (answers are neutral). */
-.agent-look__choice[data-selected] {
-  background: var(--surface-control);
-  box-shadow: inset 0 0 0 var(--focus-ring-width) var(--text-secondary);
-}
+/* The pick: the key held down, its own colour lit softly under it (the
+   key's Live spill, drawn tighter), and the check. */
 
 .agent-look__choice[data-selected] .agent-key:not([data-state='new']) {
   --agent-key-ty: calc(var(--agent-key-rest-depth) - var(--agent-key-floor));
   --agent-key-d: var(--agent-key-floor);
   --agent-key-nudge: 0px; /* css-ok: a zero length */
+}
+
+.agent-look__choice[data-selected] .agent-key:not([data-state='new'])::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -12% -12% -22%;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(
+    closest-side,
+    color-mix(
+      in oklab,
+      var(--agent-key-face) var(--agent-key-spill-face),
+      var(--agent-key-spill-warm)
+    ),
+    transparent
+  );
+  opacity: var(--agent-key-spill);
+  filter: blur(max(2px, calc(6 * var(--agent-key-u))));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-look__choice .agent-key {
+    transition: none;
+  }
+  .agent-look__check {
+    animation: none;
+  }
 }
 
 .agent-look__bind {
@@ -165,10 +238,10 @@
   font-size: var(--font-size-caption);
 }
 
+/* No gap: each choice's padding is the room between keys (agent-look__choice). */
 .agent-icons__grid {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--spacing-2xs);
 }
 
 .agent-icons__more {
