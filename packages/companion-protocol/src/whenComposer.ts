@@ -189,6 +189,8 @@ export interface WhenClaudeApp {
   name: string;
   target: string;
   source: 'user' | 'claudeAi' | 'other' | string;
+  /** As Claude Code reported it: `connected`, `needs_auth`, `error` or `unknown`. */
+  status?: string;
 }
 
 /** A Claude Code app's name, as people say it ("google-drive" → "Google Drive"). */
@@ -239,4 +241,51 @@ export function whenSourceChoices(
   mac: 'this Mac' | 'your Mac' = 'this Mac'
 ): WhenSourceChoice[] {
   return whenSources(mac).filter((s) => s.kind !== 'linear_assigned' || hasLinear);
+}
+
+/* ------------------------------------------------- Check now */
+
+/** What Check now came to; mirrors `watch::CheckOutcome`. */
+export interface WatchCheckOutcome {
+  found: number;
+  baseline: boolean;
+  /** A model check found nothing before its baseline; the next check confirms it. */
+  unconfirmed?: boolean;
+  error?: string;
+  paused?: string;
+  /** A model check: what it ran on ("Claude Code", "Codex"). */
+  engine?: string;
+}
+
+/** What Check now came to, in a line; a model check says what it ran on. */
+export function describeWatchCheck(o: WatchCheckOutcome): string {
+  if (o.paused) return o.paused;
+  if (o.error) return `Check failed: ${o.error}`;
+  const on = o.engine ? ` Checked on ${o.engine}.` : '';
+  if (o.baseline) return `Noted what’s there now; anything new from here starts work.${on}`;
+  if (o.unconfirmed)
+    return `Found nothing. The next check confirms that before anything starts work.${on}`;
+  if (o.found > 0) return `Found ${o.found} new; it’s on it.${on}`;
+  return `Nothing new.${on}`;
+}
+
+/* ------------------------------------------------- what the Mac offers */
+
+/** A folder on the Mac a "new file" routine can watch, from the phone. */
+export interface WhenFolder {
+  /** Absolute, as the routine saves it. */
+  path: string;
+  /** "~/Downloads". */
+  label: string;
+}
+
+/**
+ * What the phone's composer may offer for one agent (`agents.watch.options`):
+ * the apps its check could read through (read by `whenApps`, as the desk
+ * does) and the folders on the Mac a phone may pick from.
+ */
+export interface WatchOptions {
+  connections: WhenConnection[];
+  claudeApps: WhenClaudeApp[];
+  folders: WhenFolder[];
 }

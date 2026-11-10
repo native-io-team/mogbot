@@ -940,6 +940,29 @@ async fn generate() -> String {
         .await,
     );
     out += &entry(
+        "watchOptions",
+        "Result<'agents.watch.options'>",
+        call("agents.watch.options", json!({ "agentId": AGENT })).await,
+    );
+    out += &entry(
+        "watchCreate",
+        "Result<'agents.watch.create'>",
+        call(
+            "agents.watch.create",
+            json!({ "agentId": AGENT, "source": { "kind": "github_mentions" }, "everyMinutes": 10, "note": "Triage it" }),
+        )
+        .await,
+    );
+    out += &entry(
+        "watchCheckNow",
+        "Result<'agents.watch.checkNow'>",
+        call(
+            "agents.watch.checkNow",
+            json!({ "agentId": AGENT, "id": "w9" }),
+        )
+        .await,
+    );
+    out += &entry(
         "scheduleCreateSteps",
         "Result<'agents.schedule.create'>",
         call(

@@ -4210,6 +4210,62 @@ export const scheduleCreate = {
     "minute": 0
   }
 } satisfies Result<'agents.schedule.create'>;
+export const watchOptions = {
+  "claudeApps": [
+    {
+      "name": "linear",
+      "source": "user",
+      "status": "connected",
+      "target": "https://mcp.linear.app/mcp"
+    }
+  ],
+  "connections": [
+    {
+      "account": "sam@example.com",
+      "grants": [
+        {
+          "agentId": "a1"
+        }
+      ],
+      "kind": {
+        "type": "oauth"
+      },
+      "needsSignIn": false,
+      "serverKey": "gmail",
+      "service": "gmail",
+      "title": "Gmail"
+    }
+  ],
+  "folders": [
+    {
+      "label": "~/Downloads",
+      "path": "/Users/sam/Downloads"
+    },
+    {
+      "label": "~/Desktop",
+      "path": "/Users/sam/Desktop"
+    }
+  ]
+} satisfies Result<'agents.watch.options'>;
+export const watchCreate = {
+  "createdAt": 1762290000000,
+  "id": "w9",
+  "nextAt": 1762290000000,
+  "note": "Triage it",
+  "paused": false,
+  "watch": {
+    "everyMinutes": 10,
+    "failures": 0,
+    "lastFound": 0,
+    "source": {
+      "kind": "github_mentions"
+    }
+  }
+} satisfies Result<'agents.watch.create'>;
+export const watchCheckNow = {
+  "baseline": true,
+  "found": 0
+} satisfies Result<'agents.watch.checkNow'>;
 export const scheduleCreateSteps = {
   "createdAt": 1762290000000,
   "id": "c9",
@@ -5118,6 +5174,10 @@ export const frames = [
       "agents.schedule.pause",
       "agents.schedule.cancel",
       "agents.schedule.runNow",
+      "agents.watch.options",
+      "agents.watch.create",
+      "agents.watch.update",
+      "agents.watch.checkNow",
       "rooms.list",
       "rooms.messages",
       "rooms.send",
