@@ -144,7 +144,7 @@ describe('AgentPolicy', () => {
 describe('AgentTeamPolicySettings', () => {
   it('shows the team’s lines and who has its own settings, with no presets', async () => {
     render(<AgentTeamPolicySettings />);
-    expect(await screen.findByText(/1 agent has settings of its own: Hiring/)).toBeInTheDocument();
+    expect(await screen.findByText(/1 agent has its own: Hiring/)).toBeInTheDocument();
     expect(screen.queryByRole('radio')).toBeNull();
     expect(screen.queryByText(/I trust my agents|Locked down|Balanced/)).toBeNull();
     expect(screen.getByText(/just ask your Chief of Staff in chat/)).toBeInTheDocument();

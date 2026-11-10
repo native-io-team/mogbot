@@ -292,7 +292,7 @@ export const agentsPolicyScenarios: Scenario[] = [
     id: 'settings-agents-policy',
     title: 'Settings — What agents can reach',
     looksRightWhen:
-      'Opened from ⌘K “What agents can reach…” on the Independence page: a lead that every agent starts from these and that the Chief of Staff can change them in chat; no presets and no second scale; the team’s lines without an Independence line; the note on what’s enforced; “1 agent has settings of its own: Hiring.” and a secondary “Reset everyone to the team’s settings”.',
+      'Opened from ⌘K “What agents can reach…” on the Independence page: a lead that every agent starts from these and that the Chief of Staff can change them in chat; no presets and no second scale; the team’s lines without an Independence line; the note on what’s enforced; “1 agent has its own: Hiring.” and a secondary “Reset everyone to the team’s settings”.',
     command: 'agents.policyDefaults',
     requires: '.agent-team-policy__reset button',
     clipSelector: 'section[aria-labelledby="agents-settings-policy"]',

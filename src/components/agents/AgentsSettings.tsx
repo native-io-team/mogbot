@@ -3,12 +3,12 @@
  * pages listed in `lib/settingsPages.ts`). Each page is its own scroll, so
  * nothing is twelve screens down; every group keeps its own component.
  *
- * - **Agents** (`AgentsPage`): this Mac (the menu-bar icon and quick message,
- *   `AgentsDesktopSettings`; keep awake, keep running when closed, open at
- *   login, read back from the thing itself, `useStayOn`; whether a stopped
- *   preview wakes its agent; slowing down on battery, `power.rs`), the
- *   engine and model new agents start on (`AgentDefaultsSettings`), disk
- *   space (`AgentsDiskSettings`), and importing agents.
+ * - **Agents** (`AgentsPage`): the engine and model new agents start on
+ *   (`AgentDefaultsSettings`), first; then this Mac (the menu-bar icon and
+ *   quick message, `AgentsDesktopSettings`; keep awake, keep running when
+ *   closed, open at login, read back from the thing itself, `useStayOn`;
+ *   whether a stopped preview wakes its agent; slowing down on battery,
+ *   `power.rs`), disk space (`AgentsDiskSettings`), and importing agents.
  * - **Independence** (`IndependencePage`): the one scale, the four-stop
  *   slider (Careful, Steady, Bold, Unleashed; `AgentIndependenceSettings`),
  *   what agents can reach (`AgentTeamPolicySettings`, `agents/policy.rs`),
@@ -17,9 +17,9 @@
  * - **Accounts & usage** (`AccountsPage`): the Usage view's own panel
  *   (`AgentsUsageView` `UsagePanel`), the one rendering of usage and accounts.
  * - **Phone** (`PhonePage`): the phone panel and Remote access, drawn on the page.
- * - **Notifications** (`NotificationsPage`): what notifies, quiet hours
- *   (`agents/quiet.rs`), the morning brief
- *   (`AgentMorningBriefSetting`, `agents/brief.rs`), and where to mute one agent.
+ * - **Notifications** (`NotificationsPage`): quiet hours (`agents/quiet.rs`)
+ *   and the morning brief (`AgentMorningBriefSetting`, `agents/brief.rs`)
+ *   first, then what notifies you and where to mute one agent.
  * - **Chrome** (`ChromePage`): the agents' own browser and Your Chrome.
  * - **Apps** (`AppsPage`): Slack (`agents/slack.rs`) and apps you said no to.
  *
@@ -55,7 +55,10 @@ import type { EngineInfo } from '../../lib/agents';
 
 const selectEngines = (s: { engines: EngineInfo[] }) => s.engines;
 
-/** This Mac, engines and models, disk space, and importing agents. */
+/**
+ * What new agents run on first (what people open this page for), then this
+ * Mac, disk space, and importing agents.
+ */
 export function AgentsPage({ onImport }: { onImport: () => void }) {
   const { state: stayOn, change } = useStayOn();
   const engines = useAgentsSelector(selectEngines);
@@ -63,6 +66,23 @@ export function AgentsPage({ onImport }: { onImport: () => void }) {
 
   return (
     <div className="agents-settings">
+      {engines.length > 0 && hasDefaults && (
+        <section className="settings-group" aria-labelledby="agents-settings-engines">
+          <h3 className="settings-group__title" id="agents-settings-engines">
+            What agents run on
+          </h3>
+          <SectionBoundary name="defaults">
+            <AgentDefaultsSettings />
+          </SectionBoundary>
+          <div className="settings-section">
+            <Row
+              label="Routines"
+              description="On Claude Code, routines run on the fastest model unless the agent has its own."
+            />
+          </div>
+        </section>
+      )}
+
       <section className="settings-group" aria-labelledby="agents-settings-mac">
         <h3 className="settings-group__title" id="agents-settings-mac">
           On this Mac
@@ -109,23 +129,6 @@ export function AgentsPage({ onImport }: { onImport: () => void }) {
           </SectionBoundary>
         </div>
       </section>
-
-      {engines.length > 0 && hasDefaults && (
-        <section className="settings-group" aria-labelledby="agents-settings-engines">
-          <h3 className="settings-group__title" id="agents-settings-engines">
-            What agents run on
-          </h3>
-          <SectionBoundary name="defaults">
-            <AgentDefaultsSettings />
-          </SectionBoundary>
-          <div className="settings-section">
-            <Row
-              label="Routines"
-              description="On Claude Code, routines run on the fastest model unless the agent has its own."
-            />
-          </div>
-        </section>
-      )}
 
       <SectionBoundary name="disk">
         <AgentsDiskSettings />
@@ -222,12 +225,29 @@ export function PhonePage() {
   );
 }
 
+/**
+ * What can be set first (quiet hours, the morning brief), then what notifies
+ * you and where, which are lines rather than switches.
+ */
 export function NotificationsPage() {
   return (
     <div className="agents-settings">
+      <section className="settings-group" aria-labelledby="agents-settings-quiet">
+        <h3 className="settings-group__title" id="agents-settings-quiet">
+          Quiet hours and the morning brief
+        </h3>
+        <div className="settings-section">
+          <SectionBoundary name="quiet-hours">
+            <AgentQuietHoursSetting />
+          </SectionBoundary>
+          <SectionBoundary name="morning-brief">
+            <AgentMorningBriefSetting />
+          </SectionBoundary>
+        </div>
+      </section>
       <section className="settings-group" aria-labelledby="agents-settings-notify">
         <h3 className="settings-group__title" id="agents-settings-notify">
-          From your agents
+          What notifies you
         </h3>
         <div className="settings-section">
           <Row
@@ -238,12 +258,6 @@ export function NotificationsPage() {
             label="Requests for your OK"
             description="At once, with a sound, even in quiet hours."
           />
-          <SectionBoundary name="quiet-hours">
-            <AgentQuietHoursSetting />
-          </SectionBoundary>
-          <SectionBoundary name="morning-brief">
-            <AgentMorningBriefSetting />
-          </SectionBoundary>
           <Row
             label="Your phone"
             description="While you’re using this Mac, only this Mac notifies. Away from it, a paired phone gets the same ones."
