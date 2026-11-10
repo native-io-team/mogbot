@@ -13,7 +13,8 @@
 //!   with the latest text: one notification per agent per turn.
 //! - An approval posts immediately (the agent is blocked on it), with a sound.
 //! - A burst across agents is capped ([`Limiter`]): past a few posts in a
-//!   short window the rest stay silent; the badge still counts them.
+//!   short window the rest stay silent; the badge still counts them. An
+//!   approval is never held back by it.
 //! - Clicking a notification focuses a window and emits [`EVENT_OPEN`]; the
 //!   frontend switches to Agents mode and opens that agent.
 //! - The Dock badge is how many agents need you: the one count every surface
@@ -309,10 +310,14 @@ fn post(app: &AppHandle, alert: &Alert, kind: PushKind) {
     if std::env::var_os("SHIPSTUDIO_AGENTS_SILENT").is_some() {
         return;
     }
-    if !LIMITER
-        .lock()
-        .unwrap_or_else(|e| e.into_inner())
-        .allow(Instant::now())
+    // An approval always goes, as it does to a phone (`companion/alerts.rs`):
+    // the agent is blocked on it, and five replies landing first mustn't
+    // leave it waiting on a banner that never came.
+    if kind != PushKind::NeedsYou
+        && !LIMITER
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .allow(Instant::now())
     {
         tracing::debug!(
             "[Agents] notification for {} held back (burst)",
@@ -337,12 +342,10 @@ fn post(app: &AppHandle, alert: &Alert, kind: PushKind) {
 /// Quiet hours ended (or the user is up): what they held, as one
 /// notification. Called every minute by the check-in tick.
 pub fn release_quiet(app: &AppHandle) {
-    let Some(held) = super::quiet::take_release() else {
+    // One agent's chat on screen drops only that agent from the summary.
+    let Some(held) = super::quiet::take_release(|id| on_screen(app, id)) else {
         return;
     };
-    if on_screen(app, &held.agent_id) {
-        return;
-    }
     let alert = Alert {
         agent_id: held.agent_id,
         title: held.title,
