@@ -44,7 +44,8 @@ export function Row({
   stacked,
 }: {
   label: ReactNode;
-  description: ReactNode;
+  /** Omitted when the control says it all (an off switch needs no "Not on"). */
+  description?: ReactNode;
   children?: ReactNode;
   /** Actions under the words rather than beside them (several buttons). */
   stacked?: boolean;
@@ -53,7 +54,7 @@ export function Row({
     <div className={stacked ? 'settings-row settings-row--stacked' : 'settings-row'}>
       <div className="settings-row-info">
         <span className="settings-row-label">{label}</span>
-        <span className="settings-row-description">{description}</span>
+        {description != null && <span className="settings-row-description">{description}</span>}
       </div>
       {children}
     </div>

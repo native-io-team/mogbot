@@ -135,9 +135,9 @@ export function AgentAdminSettings() {
           <Row
             key={a.id}
             label={a.name}
-            description={
-              isAdmin(a) ? 'Admin: manages and approves local work for the others' : 'Not an admin'
-            }
+            // Only an admin says so: the switch already says "off" for the rest,
+            // and six rows of "Not an admin" buried the one that is.
+            description={isAdmin(a) ? 'Manages and approves local work for the others' : undefined}
           >
             <Toggle
               on={isAdmin(a)}
@@ -154,7 +154,9 @@ export function AgentAdminSettings() {
       <h4 className="agent-admin-settings__heading">Admin activity</h4>
       <div className="settings-section">
         {activity === null ? null : activity.length === 0 ? (
-          <p className="agent-admin-settings__empty">Nothing yet.</p>
+          <p className="agent-admin-settings__empty">
+            Nothing yet. What an admin does for the others is listed here.
+          </p>
         ) : (
           <ul className="agent-admin-activity">
             {activity.map((a, i) => (

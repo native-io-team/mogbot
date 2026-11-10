@@ -401,7 +401,7 @@ export const agentsDesktopScenarios: Scenario[] = [
     id: 'settings-agents-admins',
     title: 'Settings — Admins, what they did, and Recently deleted',
     looksRightWhen:
-      'Opened from ⌘K “Admins: who manages and approves for your team…”: under Admins, one row per agent with a switch; Chief of Staff on (“Admin: manages and approves local work for the others”), the rest off, and a muted line “Spending, sending, publishing, pushing, sharing and keys always come to you.” Admin activity lists two lines newest first with a time. Recently deleted shows “Kite Watch” deleted by Chief of Staff, “Restorable for 29 more days”, and a Restore button.',
+      'Opened from ⌘K “Admins: who manages and approves for your team…”: under Admins, one row per agent with a switch; Chief of Staff on (“Manages and approves local work for the others”), the rest off with their names only (no “Not an admin” under each), and a muted line “Spending, sending, publishing, pushing, sharing and keys always come to you.” Admin activity lists two lines newest first with a time. Recently deleted shows “Kite Watch” deleted by Chief of Staff, “Restorable for 29 more days”, and a Restore button.',
     command: 'agents.admins',
     requires: '.agent-admin-settings .agent-admin-activity__line',
     clipSelector: 'section[aria-labelledby="agents-settings-admins"]',
