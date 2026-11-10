@@ -15,7 +15,12 @@
  *   legend shines warm white with a tight glow, a soft light breathes in the
  *   face and spills onto the surface under the key in the key's own colour.
  * - Live: lit and still (the same backlight and spill, no breathing).
- * - Needs your OK: lit, sitting proud, the legend pulsing (1.6s).
+ * - Needs your OK (the loudest): sitting proud, its face deepened further,
+ *   the legend backlit amber-gold with a wide glow, pulsing (1.6s).
+ * At a glance (the squint test, harness-keys.html?only=squint): working is
+ * pressed and softly lit, free is at rest and unlit, needs-you is raised and
+ * bright amber; paused is grey and sunk. Each still differs with Reduce
+ * Motion, where nothing moves.
  * - Paused: the cap stays (you can still tell whose it is), drained of
  *   colour and sunk halfway.
  * - New: an empty recessed socket with a neutral switch stem; it fades in.
@@ -65,7 +70,15 @@
   --agent-key-sage-legend: #1a2108;
 
   /* The lit legend: a backlit shine-through cap (the site's values). */
-  --agent-key-lit: #fff6dc;
+  --agent-key-lit: #ffe9b4;
+  /* Needs your OK: the loudest state, its legend backlit amber-gold (the
+     app's "needs you" hue), brighter and wider-glowing than a working key's
+     warm white, so the two never read alike at a glance. */
+  --agent-key-ask: #ffc94a;
+  --agent-key-ask-core: #ffe7a0;
+  --agent-key-ask-halo: rgba(255, 170, 40, 0.9);
+  --agent-key-ask-spill: #ffb02e;
+  --agent-key-ask-face: rgba(255, 196, 80, 0.38);
   --agent-key-lit-core: #ffe7a8;
   --agent-key-lit-core-bright: #fff0c8;
   --agent-key-lit-halo: rgba(255, 212, 122, 0.6);
@@ -93,7 +106,7 @@
   --agent-key-stem-depth: #45423c;
   --agent-key-stem-shadow: rgba(0, 0, 0, 0.3);
   --agent-key-spill: 0.42;
-  --agent-key-paused-opacity: 0.6;
+  --agent-key-paused-opacity: 0.5;
   /* The board the keys sit on (AgentsBoard): a warm neutral plate. */
   --agent-key-plate-top: #26241f;
   --agent-key-plate-bottom: #211f1b;
@@ -113,6 +126,9 @@
   --agent-key-travel: 180ms;
   --agent-key-socket-in: 500ms;
   --agent-key-seat: 750ms;
+  --agent-key-press: 70ms;
+  --agent-key-ease: cubic-bezier(0.3, 0.7, 0.4, 1);
+  --agent-key-ease-arrive: cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 :root[data-theme='light'] {
@@ -126,7 +142,7 @@
   --agent-key-stem-depth: #968c78;
   --agent-key-stem-shadow: rgba(0, 0, 0, 0.16);
   --agent-key-spill: 0.5;
-  --agent-key-paused-opacity: 0.72;
+  --agent-key-paused-opacity: 0.55;
   --agent-key-plate-top: #e2dbcb;
   --agent-key-plate-bottom: #ddd5c4;
   --agent-key-plate-shade: rgba(70, 55, 30, 0.18);
@@ -295,10 +311,10 @@
     0 calc(var(--agent-key-dd) + var(--agent-key-ambient-y)) var(--agent-key-ambient-blur)
       var(--agent-key-ambient-spread) var(--agent-key-ambient);
   transition:
-    transform var(--agent-key-travel) var(--ease-press),
-    box-shadow var(--agent-key-travel) var(--ease-press),
-    opacity var(--agent-key-travel) var(--ease-press),
-    filter var(--agent-key-travel) var(--ease-press);
+    transform var(--agent-key-travel) var(--agent-key-ease),
+    box-shadow var(--agent-key-travel) var(--agent-key-ease),
+    opacity var(--agent-key-travel) var(--agent-key-ease),
+    filter var(--agent-key-travel) var(--agent-key-ease);
 }
 
 .agent-key__face {
@@ -416,6 +432,28 @@
   filter: blur(max(3px, calc(9 * var(--agent-key-u))));
 }
 
+/* Needs your OK spills amber, wider and stronger, and pulses: the loudest
+   thing on a board or a list. */
+.agent-key[data-state='needsOk']::before {
+  content: '';
+  position: absolute;
+  z-index: -1;
+  inset: -40% -40% -50%;
+  border-radius: 50%;
+  pointer-events: none;
+  background: radial-gradient(closest-side, var(--agent-key-ask-spill), transparent);
+  filter: blur(max(3px, calc(9 * var(--agent-key-u))));
+  animation: agent-key-pulse var(--agent-key-pulse) ease-in-out infinite;
+}
+.agent-key[data-state='needsOk'] .agent-key__face::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: radial-gradient(70% 70% at 50% 45%, var(--agent-key-ask-face), transparent 75%);
+}
+
 /* Working: pressed down, backlit, breathing slowly. */
 .agent-key[data-state='working'] {
   --agent-key-ty: calc(var(--agent-key-rest-depth) - var(--agent-key-floor));
@@ -437,17 +475,29 @@
   animation: agent-key-glow var(--agent-key-breathe) ease-in-out infinite;
 }
 
-/* Needs your OK: lit, sitting proud, the legend pulsing. */
+/* Needs your OK, the loudest: proud, the face deeper still, the legend
+   backlit amber-gold with a wide glow, pulsing. */
 .agent-key[data-state='needsOk'] {
   --agent-key-ty: calc(-5 * var(--agent-key-u));
   --agent-key-d: calc(var(--agent-key-rest-depth) + 5 * var(--agent-key-u));
+  --agent-key-fc: color-mix(
+    in oklch,
+    var(--agent-key-face),
+    var(--agent-key-depth) calc(var(--agent-key-lit-mix) + 14%)
+  );
 }
 .agent-key[data-state='needsOk'] .agent-key__legend {
+  stroke: var(--agent-key-ask);
+  filter: drop-shadow(0 0 1px var(--agent-key-ask-core))
+    drop-shadow(0 0 var(--agent-key-glow-high) var(--agent-key-ask-halo));
   animation: agent-key-pulse var(--agent-key-pulse) ease-in-out infinite;
 }
+.agent-key[data-state='needsOk'] .agent-key__sub {
+  color: var(--agent-key-ask);
+}
 .agent-key:is(.agent-key--md, .agent-key--sm, .agent-key--xs)[data-state='needsOk'] {
-  --agent-key-ty: calc(-1.5 * var(--agent-key-v));
-  --agent-key-d: calc(var(--agent-key-rest-depth) + 1.5 * var(--agent-key-v));
+  --agent-key-ty: calc(-2 * var(--agent-key-v));
+  --agent-key-d: calc(var(--agent-key-rest-depth) + 2 * var(--agent-key-v));
 }
 
 /* Paused: the cap stays (you can see whose key it is), drained of colour
@@ -460,6 +510,10 @@
   filter: saturate(0.12) brightness(1.04);
   opacity: var(--agent-key-paused-opacity);
 }
+/* Its legend fades too, so a paused key never reads as one at rest. */
+.agent-key[data-state='paused'] .agent-key__legend {
+  opacity: 0.55;
+}
 
 @keyframes agent-key-pulse {
   0%,
@@ -467,13 +521,13 @@
     opacity: 1;
   }
   50% {
-    opacity: 0.45;
+    opacity: 0.6;
   }
 }
 @keyframes agent-key-breathe {
   0%,
   100% {
-    opacity: 0.35;
+    opacity: 0.5;
   }
   50% {
     opacity: 1;
@@ -507,7 +561,7 @@
     0 1px 0 var(--agent-key-socket-rim);
 }
 .agent-key[data-state='new'] {
-  animation: agent-key-socket-in var(--agent-key-socket-in) var(--ease-arrive) both;
+  animation: agent-key-socket-in var(--agent-key-socket-in) var(--agent-key-ease-arrive) both;
 }
 
 /* The switch stem: a cross with a hard drop under it. */
@@ -550,7 +604,7 @@
 /* A key just seated (a new agent on the board): the cap drops into its
    socket and settles. */
 .agent-key[data-seat] .agent-key__cap {
-  animation: agent-key-seat var(--agent-key-seat) var(--ease-arrive) both;
+  animation: agent-key-seat var(--agent-key-seat) var(--agent-key-ease-arrive) both;
 }
 @keyframes agent-key-seat {
   0% {
@@ -586,7 +640,7 @@
 :is(button, a, [role='button'], [role='option'], [role='menuitem']):not(:disabled):active
   .agent-key__cap,
 .agent-key[data-hit] .agent-key__cap {
-  transition-duration: var(--duration-press);
+  transition-duration: var(--agent-key-press);
 }
 
 /* A key that answers a click (a picker's swatch). */
@@ -613,13 +667,15 @@ button.agent-key-button:focus-visible {
   .agent-key[data-state='working'] .agent-key__face::after,
   .agent-key[data-state='working'] .agent-key__legend,
   .agent-key[data-state='needsOk'] .agent-key__legend,
+  .agent-key[data-state='needsOk']::before,
   .agent-key[data-seat] .agent-key__cap {
     animation: none;
   }
 }
 
 /* A hidden window, or one behind another app, holds every key still. */
-:root:is([data-app-hidden], [data-app-background]) .agent-key[data-state='working']::before,
+:root:is([data-app-hidden], [data-app-background])
+  .agent-key:is([data-state='working'], [data-state='needsOk'])::before,
 :root:is([data-app-hidden], [data-app-background])
   .agent-key[data-state='working']
   .agent-key__face::after,

@@ -90,8 +90,9 @@ describe('AgentKey', () => {
         'agent-key-breathe var(--agent-key-breathe) ease-in-out infinite',
         'agent-key-glow var(--agent-key-breathe) ease-in-out infinite',
         'agent-key-pulse var(--agent-key-pulse) ease-in-out infinite',
-        'agent-key-seat var(--agent-key-seat) var(--ease-arrive) both',
-        'agent-key-socket-in var(--agent-key-socket-in) var(--ease-arrive) both',
+        'agent-key-pulse var(--agent-key-pulse) ease-in-out infinite',
+        'agent-key-seat var(--agent-key-seat) var(--agent-key-ease-arrive) both',
+        'agent-key-socket-in var(--agent-key-socket-in) var(--agent-key-ease-arrive) both',
       ].sort()
     );
     expect(css).toMatch(/--agent-key-pulse: 1\.6s;/);
@@ -109,9 +110,21 @@ describe('AgentKey', () => {
     expect(reduced).toContain(".agent-key[data-state='working']::before");
   });
 
+  it('tells working, free and needs-you apart without motion', () => {
+    // Needs you: its own amber legend and spill, raised; working: pressed and warm-lit.
+    expect(css).toMatch(
+      /\[data-state='needsOk'\] \.agent-key__legend \{\s*stroke: var\(--agent-key-ask\)/
+    );
+    expect(css).toMatch(/\[data-state='needsOk'\]::before \{[^}]*--agent-key-ask-spill/);
+    expect(css).toMatch(
+      /\[data-state='working'\] \{\s*--agent-key-ty: calc\(var\(--agent-key-rest-depth\)/
+    );
+    expect(css).toMatch(/\[data-state='needsOk'\] \{\s*--agent-key-ty: calc\(-5/);
+  });
+
   it('holds every looping animation still in a hidden window', () => {
     const hidden = css.slice(css.indexOf(':root:is([data-app-hidden], [data-app-background])'));
-    expect(hidden).toContain("[data-state='working']::before");
+    expect(hidden).toContain("[data-state='working'], [data-state='needsOk'])::before");
     expect(hidden).toContain('.agent-key__face::after');
     expect(hidden).toContain("[data-state='needsOk']");
     expect(hidden).toContain('animation-play-state: paused');
