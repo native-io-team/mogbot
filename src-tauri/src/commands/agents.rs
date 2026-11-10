@@ -244,6 +244,7 @@ pub async fn agents_turn_work(
 
 #[tauri::command]
 #[tracing::instrument(skip(app, text, attachments))]
+#[allow(clippy::too_many_arguments)]
 pub async fn agents_send(
     app: AppHandle,
     agent_id: String,
