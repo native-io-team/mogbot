@@ -5866,6 +5866,9 @@ async fn run_turn(
         let file = super::reach::write_instructions(&system_prompt)?;
         let instructions = super::opencode::instruction_files(file.path(), &layout.cwd);
         let given: Vec<String> = access.servers.iter().map(|s| s.key.clone()).collect();
+        for key in super::opencode::ENV_REMOVED {
+            cmd.env_remove(key);
+        }
         cmd.envs(super::opencode::env(super::opencode::config(
             model,
             &instructions,

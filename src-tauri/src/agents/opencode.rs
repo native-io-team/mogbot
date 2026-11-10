@@ -122,8 +122,17 @@ pub fn config(model: Option<&str>, instructions: &[PathBuf], servers: &[String])
         "default_agent": "build",
         "instructions": instructions.iter().map(|p| p.to_string_lossy()).collect::<Vec<_>>(),
         "permission": permission,
-        // The user's own `build` agent can't loosen it either.
+        // The user's own `build` agent can't loosen it either; nor their
+        // `mode.build`, which OpenCode folds into the agent after every
+        // config file, this one included.
         "agent": { "build": { "permission": permission } },
+        "mode": { "build": { "permission": permission } },
+        // No language servers and no formatters, whatever the user's own
+        // config turns on: both run the project's own code (an ESLint
+        // config, a Prettier plugin) on a file read or an approved edit,
+        // with no card for running it. Claude Code and Codex run neither.
+        "lsp": false,
+        "formatter": false,
         // Our tools can wait on a card: past our own wait, so we answer first.
         "experimental": { "mcp_timeout": (mcp::APPROVAL_WAIT_SECS + 60) * 1000 },
     });
@@ -143,6 +152,12 @@ pub fn env(config: String) -> Vec<(&'static str, String)> {
         ("OPENCODE_DISABLE_SHARE", "1".into()),
     ]
 }
+
+/// Variables taken out of a turn's environment: `OPENCODE_PERMISSION` is
+/// merged over every config, the inline one included (checked in 1.18.29's
+/// `Config.loadInstanceState`), so one set in the app's environment would
+/// answer asks before they reach the broker.
+pub const ENV_REMOVED: &[&str] = &["OPENCODE_PERMISSION"];
 
 /// What it is told, as files OpenCode reads into its instructions: the
 /// turn's system prompt (a 0600 file of the turn's), then the folder's own
@@ -364,32 +379,79 @@ enum Place {
 }
 
 impl Scope {
+    /// Where an edit lands, judged on the path as written *and* on where it
+    /// really goes: a symlink in a writable folder (a repo's `notes.md`
+    /// pointing at `~/.zshrc`, or `hooks` at `.git/hooks`) is wherever it
+    /// points. A path that can't be followed (a dangling link, which a write
+    /// would create at its target) is never "ours": it asks.
     fn place(&self, path: &str) -> Place {
-        let path = normalize(Path::new(path));
-        if path.components().any(|c| {
-            super::reach::PROTECTED_DIRS
-                .iter()
-                .any(|d| c.as_os_str() == *d)
+        let lexical = normalize(Path::new(path));
+        let real = resolved(&lexical);
+        let seen: Vec<&Path> = std::iter::once(lexical.as_path())
+            .chain(real.as_deref())
+            .collect();
+        if seen.iter().any(|p| {
+            p.components().any(|c| {
+                super::reach::PROTECTED_DIRS
+                    .iter()
+                    .any(|d| c.as_os_str() == *d)
+            })
         }) {
             return Place::Kept(format!(
                 "{} is kept read-only for agents (git's and the app's own folders).",
-                path.display()
+                lexical.display()
             ));
         }
-        if self
-            .read_only
+        let read_only = roots(&self.read_only);
+        if seen
             .iter()
-            .any(|r| path.starts_with(normalize(r)))
+            .any(|p| read_only.iter().any(|r| p.starts_with(r)))
         {
             return Place::Kept(format!(
                 "{} is read-only for this agent in this turn.",
-                path.display()
+                lexical.display()
             ));
         }
-        if self.writable.iter().any(|w| path.starts_with(normalize(w))) {
-            return Place::Ours;
+        let writable = roots(&self.writable);
+        let inside = |p: &Path| writable.iter().any(|w| p.starts_with(w));
+        match &real {
+            Some(real) if inside(&lexical) && inside(real) => Place::Ours,
+            _ => Place::Elsewhere,
         }
-        Place::Elsewhere
+    }
+}
+
+/// Each folder as written and as it really is (`/var` is `/private/var`).
+fn roots(list: &[PathBuf]) -> Vec<PathBuf> {
+    list.iter()
+        .flat_map(|r| {
+            let r = normalize(r);
+            let real = resolved(&r);
+            std::iter::once(r).chain(real)
+        })
+        .collect()
+}
+
+/// `path` with every symlink on the way followed: its deepest part that
+/// exists, canonicalized, then the rest (not there yet) as written. `None`
+/// when a part is there but can't be followed (a dangling or looping link).
+fn resolved(path: &Path) -> Option<PathBuf> {
+    let mut existing = path.to_path_buf();
+    let mut rest: Vec<std::ffi::OsString> = Vec::new();
+    loop {
+        match existing.canonicalize() {
+            Ok(mut real) => {
+                for part in rest.iter().rev() {
+                    real.push(part);
+                }
+                return Some(real);
+            }
+            // There, but not followable: a link to nowhere.
+            Err(_) if existing.symlink_metadata().is_ok() => return None,
+            Err(_) => {}
+        }
+        rest.push(existing.file_name()?.to_os_string());
+        existing = existing.parent()?.to_path_buf();
     }
 }
 
