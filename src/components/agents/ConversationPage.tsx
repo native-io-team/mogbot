@@ -15,7 +15,8 @@
  */
 
 import { memo, useCallback, useEffect, useMemo, useState } from 'react';
-import { ChevronIcon, PinIcon } from '@/components/icons';
+import { ChevronIcon, HistoryIcon, PinIcon } from '@/components/icons';
+import { Button } from '../primitives/Button';
 import { IconButton } from '../primitives/IconButton';
 import { TextButton } from '../primitives/TextButton';
 import type { Agent } from '../../lib/agents';
@@ -109,6 +110,33 @@ function PagePanel({ agent, page }: { agent: Agent; page: Page }) {
     setFolded(!folded);
     writeFolded(id, !folded);
   };
+  const toggleHistory = () => {
+    setHistory(!history);
+    if (folded) fold();
+  };
+  // The bar's two controls by name: the page is new, and "Updated … · v4"
+  // doesn't read as the way to its versions until it's been pressed once.
+  useCommands(
+    () => [
+      {
+        id: 'agents.pageFold',
+        title: folded ? `Show the page “${page.title}”` : `Fold the page “${page.title}”`,
+        icon: <ChevronIcon size={14} />,
+        category: 'action' as const,
+        keywords: ['page', 'collapse', 'expand', 'hide', 'living'],
+        run: fold,
+      },
+      {
+        id: 'agents.pageVersions',
+        title: history ? 'Hide the page’s versions' : 'What changed on this page',
+        icon: <HistoryIcon size={14} />,
+        category: 'action' as const,
+        keywords: ['page', 'versions', 'history', 'changes', 'earlier', 'living'],
+        run: toggleHistory,
+      },
+    ],
+    [folded, history, page.title, fold, toggleHistory]
+  );
   const open = async (version: number) => {
     if (version === page.version) {
       setOlder(null);
@@ -143,10 +171,7 @@ function PagePanel({ agent, page }: { agent: Agent; page: Page }) {
         <TextButton
           className="agent-page__when"
           aria-expanded={history}
-          onClick={() => {
-            setHistory(!history);
-            if (folded) fold();
-          }}
+          onClick={toggleHistory}
           title="What changed"
         >
           {pageUpdatedLine(page, now)}
@@ -237,13 +262,20 @@ export function ConversationPagePin({ agent, conversation }: Props) {
     [has, pinned, pin]
   );
   if (!page || page.pinned) return null;
+  // A word beside the pin, as Routines and Model have: the pin alone also
+  // means "pin this agent" in the sidebar. Narrow, the word goes and the
+  // name keeps it.
   return (
-    <IconButton
+    <Button
+      tabIndex={0}
       variant="ghost"
-      icon={<PinIcon size={14} />}
+      className="agent-chat__action"
+      leftIcon={<PinIcon size={14} />}
       aria-label={`Pin the page “${page.title}”`}
       title={`Pin “${page.title}” above this conversation`}
       onClick={() => pin(true)}
-    />
+    >
+      <span className="agent-chat__action-word">Page</span>
+    </Button>
   );
 }
