@@ -167,6 +167,14 @@ and `prs-open` carried populated fixtures but never navigated to the surface
 they describe, so both were photographing the Preview tab. Both now reach their
 subject and assert it.
 
+### Edges that must line up
+
+`sameColumn: ['<selector>', '<selector>@content', …]` measures each element's
+left and right edges (`@content`: inside its padding and border) and fails the
+capture if any two differ by more than 1px. The report's "One column" section
+lists the numbers. The `agents-column-*` scenarios use it to hold the chat
+header's content, the messages, the bars and the composer to one column.
+
 ## Fixtures that fail
 
 A scenario's `commands` may hold a function, and a function that throws rejects

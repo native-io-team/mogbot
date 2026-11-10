@@ -29,9 +29,7 @@
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   align-items: end;
-  width: calc(100% - (var(--spacing-xl) * 2));
-  max-width: var(--agents-chat-width);
-  margin: 0 auto var(--spacing-lg);
+  margin: 0 var(--agents-column-inset) var(--spacing-lg);
   padding: var(--spacing-tight);
   background: var(--surface-panel);
   border: var(--border-width-default) solid var(--border-default);
@@ -233,9 +231,7 @@
   flex-wrap: wrap;
   gap: var(--spacing-xs) var(--spacing-md);
   align-items: baseline;
-  width: calc(100% - (var(--spacing-xl) * 2));
-  max-width: var(--agents-chat-width);
-  margin: 0 auto var(--spacing-sm);
+  margin: 0 var(--agents-column-inset) var(--spacing-sm);
   font-size: var(--font-size-caption);
   color: var(--text-secondary);
 }

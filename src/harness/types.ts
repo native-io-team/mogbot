@@ -134,6 +134,14 @@ export interface Scenario {
    */
   requires?: string;
   /**
+   * Elements that must share one column: their left edges, and their right
+   * edges, agree within 1px or the capture fails. A selector ending in
+   * `@content` is measured at its content box (inside padding and border),
+   * else at its border box; the first drawn match counts, and a selector
+   * with no drawn match fails too. The measured edges go in the report.
+   */
+  sameColumn?: string[];
+  /**
    * A Cmd+K command run once the app has settled, to navigate to the surface
    * this scenario is about. Reuses the same plumbing as `?command=`; a
    * scenario that needs a panel or modal open should say so here rather than
