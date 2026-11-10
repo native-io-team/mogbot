@@ -1,0 +1,64 @@
+/* Skills an agent saved (AgentSkills.tsx in the editor; the skill card in
+   the chat). Rows reuse the Permissions list's rhythm. Semantic tokens
+   only: both themes. */
+
+.agent-skills__title {
+  margin-top: var(--spacing-sm);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
+}
+
+.agent-skills__what {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-2xs);
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.agent-skills__when {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.agent-skills__actions {
+  display: inline-flex;
+  flex: 0 0 auto;
+  gap: var(--spacing-sm);
+}
+
+.agent-skills__editor {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  width: 100%;
+  padding: var(--spacing-sm) 0;
+}
+
+.agent-skills__editor-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--spacing-xs);
+}
+
+/* The card: when to use it first, then the steps as written. */
+.agent-skill-card__when {
+  margin: 0;
+  font-size: var(--font-size-body-md);
+  color: var(--text-primary);
+}
+
+.agent-skill-card__steps {
+  margin: var(--spacing-xs) 0 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-secondary);
+}
+
+.agent-skill-card__note {
+  margin: var(--spacing-xs) 0 0;
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}

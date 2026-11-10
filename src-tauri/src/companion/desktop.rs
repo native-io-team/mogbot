@@ -585,6 +585,7 @@ impl Backend for DesktopBackend {
             project: None,
             work_directly: None,
             account: toggles.account,
+            learn_skills: toggles.learn_skills,
         };
         json(cmd::agents_update(self.app.clone(), agent_id.to_string(), input).await?)
     }
@@ -880,6 +881,32 @@ impl Backend for DesktopBackend {
 
     async fn policy(&self, agent_id: &str) -> Result<Value, CommandError> {
         json(cmd::agents_policy(agent_id.to_string()).await?)
+    }
+
+    async fn skills(&self, agent_id: &str) -> Result<Value, CommandError> {
+        json(cmd::agents_skills(agent_id.to_string()).await?)
+    }
+
+    async fn skill_edit(
+        &self,
+        agent_id: &str,
+        edit: super::router::SkillEdit,
+    ) -> Result<Value, CommandError> {
+        json(
+            cmd::agents_skill_edit(
+                self.app.clone(),
+                agent_id.to_string(),
+                edit.slug,
+                edit.name,
+                edit.when,
+                edit.steps,
+            )
+            .await?,
+        )
+    }
+
+    async fn skill_remove(&self, agent_id: &str, slug: &str) -> Result<(), CommandError> {
+        cmd::agents_skill_remove(self.app.clone(), agent_id.to_string(), slug.to_string()).await
     }
 
     async fn on_its_own(&self, agent_id: &str) -> Result<Value, CommandError> {

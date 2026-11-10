@@ -18,6 +18,9 @@ import {
   GATE_ALLOW,
   GATE_DENY,
   MAC_FEATURES,
+  SKILL_NOT_NOW,
+  SKILL_SAVE,
+  skillCardNote,
   stepInSource,
 } from '@shipstudio/companion-protocol';
 import { router } from 'expo-router';
@@ -296,8 +299,10 @@ export function ApprovalCard({
       pathname: '/signin',
       params: { agentId: message.agentId, requestId: approval.requestId, stepIn: '1' },
     });
+  // "Save … as a skill?": Not now / Save, nothing behind ⋯.
+  const skill = approval.skill;
   const consentCard =
-    approval.connector?.kind === 'consent' || !!approval.front || handoff || !!stepIn;
+    approval.connector?.kind === 'consent' || !!approval.front || handoff || !!stepIn || !!skill;
   // "OK to go on?" between a routine's steps: Stop here / Go ahead, nothing broader.
   const gate = approval.gate;
   // "Carry on with Codex until then?": Wait, Just this time, Always; nothing behind ⋯.
@@ -313,7 +318,9 @@ export function ApprovalCard({
         ? ['Ignore', 'Save to memory']
         : gate
           ? [GATE_DENY, GATE_ALLOW]
-          : ['Deny', 'Allow'];
+          : skill
+            ? [SKILL_NOT_NOW, SKILL_SAVE]
+            : ['Deny', 'Allow'];
   // Deny and Allow share the row beside ⋯ while both say their word whole.
   const share = useActionShare(
     crossover ? [CROSSOVER_WAIT, CROSSOVER_ONCE, CROSSOVER_ALWAYS] : [denyWord, allowWord],
@@ -439,7 +446,9 @@ export function ApprovalCard({
           ? 'exclamationmark.triangle'
           : stepIn
             ? 'globe'
-            : crossover
+            : skill
+              ? 'graduationcap'
+              : crossover
               ? 'arrow.left.arrow.right'
               : consent
                 ? 'square.and.arrow.down'
@@ -478,7 +487,9 @@ export function ApprovalCard({
                 : STEP_IN_ON_YOUR_MAC
             : gate
               ? 'It waits for you, and closes if the routine runs again first.'
-              : paused &&
+              : skill
+                ? skillCardNote(skill) ?? undefined
+                : paused &&
                   !fit.pinned &&
                   !consent &&
                   !approval.settings &&
@@ -495,6 +506,13 @@ export function ApprovalCard({
         <FittedDetail fit={fit}>
           {crossover ? (
             <T color={colors.textBody}>{approval.summary}</T>
+          ) : skill ? (
+            // When to use it, then the steps as they'd be saved.
+            <T color={colors.textBody}>
+              {skill.when ? `${skill.when}
+
+${skill.steps}` : skill.steps}
+            </T>
           ) : consent ? (
             // Consent asks in sentences, not a command: prose that wraps.
             <T color={colors.textBody}>{approval.detail}</T>

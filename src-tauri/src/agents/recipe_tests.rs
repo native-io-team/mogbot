@@ -45,6 +45,7 @@ fn built() -> Built {
         instructions: INSTRUCTIONS,
         apps: vec!["Linear".into(), "Gmail".into(), "linear".into()],
         independence: Some(Level::Often),
+        skills: Vec::new(),
     })
 }
 

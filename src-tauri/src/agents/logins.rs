@@ -2040,6 +2040,7 @@ fn card_message(agent: &Agent, r: LoginRequest) -> AgentMessage {
         step_in: None,
         crossover: None,
         account_switch: None,
+        skill: None,
         slack_reply: None,
         risk: None,
     });
@@ -2161,6 +2162,7 @@ pub fn migrate_pending(app: Option<&AppHandle>) -> usize {
                 step_in: None,
                 crossover: None,
                 account_switch: None,
+                skill: None,
                 slack_reply: None,
                 risk: None,
             });
@@ -3060,6 +3062,7 @@ mod tests {
             step_in: None,
             crossover: None,
             account_switch: None,
+            skill: None,
             slack_reply: None,
             risk: None,
         });
@@ -3312,6 +3315,7 @@ mod tests {
             step_in: None,
             crossover: None,
             account_switch: None,
+            skill: None,
             slack_reply: None,
             risk: None,
         });

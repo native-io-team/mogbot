@@ -73,6 +73,7 @@ import { getAgentsSnapshot, useAgentsSelector } from '../../lib/agentsStore';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { AccentScope } from '../../contexts/AccentScopeContext';
 import { AdminSwitch } from './AgentAdmin';
+import { AgentSkills } from './AgentSkills';
 import {
   findTemplate,
   needsLine,
@@ -750,6 +751,7 @@ export function AgentEditorModal({
           <Permissions agent={agent} />
           <AgentPolicy agent={agent} onAskInChat={onAskInChat} />
           <AgentReach agent={agent} />
+          <AgentSkills agent={agent} />
         </div>
       )}
       {/* With one engine there's no "Runs on": what protects it, and the way to add another, live down here. */}

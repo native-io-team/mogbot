@@ -92,6 +92,7 @@ function Screens() {
               <Stack.Screen name="diff" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen name="start" options={sheet(colors, [0.6, 0.9])} />
               <Stack.Screen name="instructions" options={sheet(colors, [0.9])} />
+              <Stack.Screen name="skill" options={sheet(colors, [0.9])} />
               <Stack.Screen name="memory" options={sheet(colors, [0.9])} />
               <Stack.Screen name="conversations" options={sheet(colors, [0.9])} />
               <Stack.Screen name="on-its-own" options={sheet(colors, [0.9])} />

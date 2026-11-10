@@ -94,6 +94,18 @@ export function RecipeContents({ preview }: { preview: RecipePreview }) {
           </ul>
         </Section>
       )}
+      {!!r.skills?.length && (
+        <Section title="What it knows how to do">
+          <ul className="agent-recipe__list">
+            {r.skills.map((x, i) => (
+              <li key={i}>
+                <strong>{x.name}</strong>
+                {x.when ? ` · ${x.when}` : ''}
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
       {r.apps.length > 0 && (
         <Section title="Apps it needs · by name, never your sign-in">
           <p className="agent-recipe__line">{r.apps.join(', ')}</p>

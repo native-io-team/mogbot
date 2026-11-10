@@ -1830,6 +1830,21 @@ const LIVE = [
     check: 'Diff screen: row tints span the full box width',
   },
   {
+    name: 'chat-skill-card',
+    route: '/chat/fin',
+    ready: 'Not now',
+    check:
+      'Finance’s “Save “Reconcile Stripe payouts” as a skill?” card: a graduation-cap icon, when to use it, the numbered steps, a quiet “1 personal detail or secret removed.”, and Not now · Save (Save the neutral answer, no ⋯)',
+  },
+  {
+    name: 'agent-sheet-skills',
+    route: '/agent/fin',
+    ready: 'Finance',
+    act: scrollToText('WHAT IT KNOWS HOW TO DO'),
+    check:
+      'Finance’s sheet: “What it knows how to do” with “Save what it learns · Ask me” (a menu of Automatically, Ask me, Off), then “Export invoices from Xero” with when to use it, and a muted line saying anything that read outside content asks first',
+  },
+  {
     name: 'agent-sheet-site',
     route: '/agent/site',
     ready: 'Acme Site',

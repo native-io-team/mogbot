@@ -717,6 +717,11 @@ async fn generate() -> String {
         call("agents.policy", json!({ "agentId": AGENT })).await,
     );
     out += &entry(
+        "agentsSkills",
+        "Result<'agents.skills'>",
+        call("agents.skills", json!({ "agentId": AGENT })).await,
+    );
+    out += &entry(
         "agentsOnItsOwn",
         "Result<'agents.onItsOwn'>",
         call("agents.onItsOwn", json!({ "agentId": AGENT })).await,

@@ -305,6 +305,19 @@ export const baseCommands: CommandMap = {
   }),
   agents_policy_team: BALANCED_TEAM,
   agents_policy_set: null,
+  // Edit agent's "What it knows how to do" (`agents/skills_learn.rs`): Ask me, none yet.
+  agents_skills: (args: Record<string, unknown>) => ({
+    agentId: typeof args.agentId === 'string' ? args.agentId : '',
+    setting: 'ask',
+    skills: [],
+  }),
+  agents_skill_edit: (args: Record<string, unknown>) => ({
+    slug: args.slug,
+    name: args.name,
+    when: args.when,
+    steps: args.steps,
+  }),
+  agents_skill_remove: null,
   // "What can it do on its own?" (`agents/on_its_own.rs`). Narrowing answers
   // the same view without the item it took away.
   agents_on_its_own: onItsOwnFor,

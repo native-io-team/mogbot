@@ -149,6 +149,7 @@
 @import './features/agents-independence.css';
 @import './features/agents-admin.css';
 @import './features/agents-policy.css';
+@import './features/agents-skills.css';
 @import './features/agents-on-its-own.css';
 @import './features/agents-recipe.css';
 @import './features/agents-steps.css';

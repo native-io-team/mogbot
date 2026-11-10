@@ -834,6 +834,9 @@ pub struct UpdateAgentInput {
     /// string for any account.
     #[serde(default)]
     pub account: Option<String>,
+    /// "Save what it learns": `auto`, `ask` or `off` (`agents::skills_learn`).
+    #[serde(default)]
+    pub learn_skills: Option<agents::skills_learn::Learning>,
 }
 
 #[tauri::command]
@@ -959,6 +962,9 @@ pub async fn agents_update(
         }
         if let Some(m) = input.muted {
             a.muted = m;
+        }
+        if let Some(l) = input.learn_skills {
+            a.learn_skills = l;
         }
         if let Some(engine) = engine {
             a.switch_engine(engine);
@@ -1955,6 +1961,10 @@ pub(crate) fn answer_card(
     if approval.slack_reply.is_some() {
         return agents::slack::answer_card(app, agent_id, &approval, allow);
     }
+    // "Save “…” as a skill?": Save writes it, Not now saves nothing.
+    if approval.skill.is_some() {
+        return agents::skills_learn::answer_card(app, agent_id, &approval, allow);
+    }
     if let Some(request) = &approval.secret {
         if allow {
             return Err(CommandError::expected(
@@ -2422,6 +2432,39 @@ pub async fn agents_recipe_save(
     shown: String,
 ) -> Result<(), CommandError> {
     blocking(move || agents::recipe::save(&agent_id, std::path::Path::new(&path), &shown)).await
+}
+
+/// "What it knows how to do": its "Save what it learns" setting and the
+/// skills it saved (`agents::skills_learn`).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_skills(agent_id: String) -> Result<agents::skills_learn::View, CommandError> {
+    blocking(move || agents::skills_learn::view(&agent_id)).await
+}
+
+/// The user's edit of one skill, cleaned as a new one is.
+#[tauri::command]
+#[tracing::instrument(skip(app, name, when, steps))]
+pub async fn agents_skill_edit(
+    app: AppHandle,
+    agent_id: String,
+    slug: String,
+    name: String,
+    when: String,
+    steps: String,
+) -> Result<agents::skills_learn::Skill, CommandError> {
+    blocking(move || agents::skills_learn::edit(&app, &agent_id, &slug, &name, &when, &steps)).await
+}
+
+/// Remove one of its skills.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_skill_remove(
+    app: AppHandle,
+    agent_id: String,
+    slug: String,
+) -> Result<(), CommandError> {
+    blocking(move || agents::skills_learn::remove_one(&app, &agent_id, &slug)).await
 }
 
 /// The other app's agents on this Mac, and what importing them would do;

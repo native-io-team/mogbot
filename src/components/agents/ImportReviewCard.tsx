@@ -258,6 +258,7 @@ function ProposalRow({
   // "Ѕite" (Cyrillic Ѕ) is matched to your Site, and the card says so.
   const lookalike = !!p.clash?.name && p.clash.name.toLowerCase() !== p.name.toLowerCase();
   const watches = p.watches ?? [];
+  const skills = p.skills ?? [];
   const apps = p.apps ?? [];
   const keep = [p.preferences ?? '', p.context ?? '']
     .flatMap((t) => t.split('\n'))
@@ -270,6 +271,7 @@ function ProposalRow({
     memory.length && `${memory.length} ${memory.length === 1 ? 'memory' : 'memories'}`,
     p.routines.length && `${plural(p.routines.length, 'routine')} (paused)`,
     watches.length && `watches for ${plural(watches.length, 'thing')}`,
+    skills.length && plural(skills.length, 'skill'),
     p.logins.length && plural(p.logins.length, 'login'),
     history && plural(history, 'past conversation'),
   ]
@@ -352,6 +354,19 @@ function ProposalRow({
                 {watches.map((w, i) => (
                   <li key={i}>
                     <strong>When {w.when.replace(/^when\s+/i, '')}</strong> · {w.what}
+                  </li>
+                ))}
+              </ul>
+            </ImportSection>
+          )}
+          {skills.length > 0 && (
+            <ImportSection title="What it knows how to do · saved as its skills">
+              <ul className="agents-import-agent__memory">
+                {skills.map((s) => (
+                  <li key={s.slug}>
+                    <strong>{s.name}</strong>
+                    {s.when ? ` · ${s.when}` : ''}
+                    <pre className="agent-skill-card__steps">{s.steps}</pre>
                   </li>
                 ))}
               </ul>

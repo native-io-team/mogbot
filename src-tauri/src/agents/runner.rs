@@ -4786,6 +4786,12 @@ pub(super) fn system_prompt_for(
         prompt.push_str("\n\n");
         prompt.push_str(super::admin::PROMPT_SECTION);
     }
+    // Skills it saved, named with their files where its engine doesn't read
+    // them itself (Codex, OpenCode, a turn in a project): `skills_learn`.
+    if let Some(skills) = super::skills_learn::prompt_for(agent, home, layout.project.is_some()) {
+        prompt.push_str("\n\n");
+        prompt.push_str(&skills);
+    }
     // Apps the user chose not to connect: don't ask, work around them.
     if let Some(declined) = super::declined::prompt_section() {
         prompt.push_str("\n\n");
@@ -7535,6 +7541,7 @@ mod tests {
                 step_in: None,
                 crossover: None,
                 account_switch: None,
+                skill: None,
                 slack_reply: None,
                 risk: None,
             });

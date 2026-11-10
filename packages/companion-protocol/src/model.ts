@@ -17,6 +17,7 @@
 import type { ResultCard, ResultRef } from './results';
 import type { BlockSet } from './blocks';
 import type { SettingsProposal } from './policy';
+import type { LearnSkills, SkillCard } from './skills';
 import type { CrossoverAsk, CrossoverAway } from './crossover';
 
 /** What a planned action is (`agents/plan_grant.rs`, `Kind`). */
@@ -246,6 +247,8 @@ export interface Agent {
    */
   starters?: AgentStarter[];
   muted: boolean;
+  /** "Save what it learns" (`agents/skills_learn.rs`); absent is `ask`. */
+  learnSkills?: LearnSkills;
   checkIns?: CheckIn[];
   /**
    * Its "When…" routines (each a `CheckIn` with `watch`), apart from the
@@ -762,6 +765,8 @@ export interface Approval {
    * Macs never send it.
    */
   slackReply?: { channel: string; threadTs: string; place: string; text: string };
+  /** "Save “…” as a skill?": the skill as it would be saved; Allow is Save, Deny is Not now. Nothing waits on it. */
+  skill?: SkillCard;
   /**
    * How risky Allow is, decided on the Mac from the classifiers the levels
    * use (`mcp::risk_of`: Bold's floor for a tool call). Only `low` is
@@ -1374,6 +1379,8 @@ export interface ImportProposal {
   foreignTools?: { name: string; here?: string }[];
   /** A recipe's key look and the independence it suggests (applied only when stricter). */
   look?: { colorway?: string; icon?: string; key?: string; independence?: AgentIndependence };
+  /** Skills it comes with (a recipe's), cleaned on the Mac; saved into its home on Import. */
+  skills?: { slug: string; name: string; when: string; steps: string }[];
 }
 
 export interface ImportClash {
@@ -1744,6 +1751,8 @@ export interface UpdateAgentInput {
   workDirectly?: boolean;
   /** "Runs on": an account id of its engine, or '' for any account. */
   account?: string;
+  /** "Save what it learns", from a Mac that serves `agents.skills`. */
+  learnSkills?: LearnSkills;
 }
 
 /** What `agents.create` / `agents.update` return: the stored agent, no live state. */

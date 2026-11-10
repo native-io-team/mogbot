@@ -500,6 +500,7 @@ mod tests {
             away: None,
             context: None,
             routine_model: None,
+            learn_skills: Default::default(),
             account: None,
             template: None,
             reach: Default::default(),
@@ -547,6 +548,7 @@ mod tests {
             step_in: None,
             crossover: None,
             account_switch: None,
+            skill: None,
             slack_reply: None,
             risk: None,
         });
