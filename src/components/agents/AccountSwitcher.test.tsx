@@ -145,11 +145,12 @@ describe('AccountSwitcher (the sidebar’s usage glance)', () => {
     expect(row).toHaveTextContent(/^Usage/);
     expect(row).toHaveTextContent('Refills');
     expect(row).not.toHaveTextContent('2 accounts');
-    // One segment per account: Work has no reading, so its slot is empty, never full.
-    const meter = within(row).getByRole('img', { name: /Room left/ });
-    expect(meter).toHaveAccessibleName(
-      /sam@example.com: 62% left, refills in .+; Work: shows after its first reply/
-    );
+    // Work has no reading: left out of the figure, and the row says so.
+    expect(row).toHaveTextContent('1 account not read');
+    // ONE bar of the total, never a segment per account.
+    const meter = within(row).getByRole('meter');
+    expect(meter).toHaveAttribute('aria-valuenow', '62');
+    expect(row.querySelectorAll('.usage-total__fill')).toHaveLength(1);
     // The row itself never asks for a reading: a glance.
     expect(
       calls.some(
@@ -196,11 +197,21 @@ describe('Usage view', () => {
 
     const hero = await screen.findByTestId('usage-hero');
     await waitFor(() => expect(hero).toHaveTextContent('62% left'));
-    // The bar: the account with a reading first, the unread one an empty slot.
-    const parts = within(hero).getAllByRole('button');
-    expect(parts[0]).toHaveAccessibleName(/^sam@example.com: 62% left/);
-    expect(parts[1]).toHaveAccessibleName(/^Work: shows after its first reply/);
+    // One bar filled to the total; the accounts are the rows, not the bar.
+    expect(within(hero).getByRole('meter')).toHaveAttribute('aria-valuenow', '62');
+    expect(within(hero).queryAllByRole('button')).toHaveLength(0);
+    expect(hero).toHaveTextContent('1 account not read yet, not counted');
     await waitFor(() => expect(rows()[0]).toHaveTextContent('In use'));
+    // The one new work starts on is unmistakable; the other offers the switch.
+    const items = document.querySelectorAll('.usage-row__item');
+    expect(items[0]).toHaveTextContent('New work starts here');
+    expect(
+      within(items[1] as HTMLElement).getByRole('button', { name: /^Use for new work/ })
+    ).toBeInTheDocument();
+    expect(items[1]).toHaveTextContent('Only Riley runs here');
+    // Runs on: Riley, on Work only, changed in place.
+    const runsOn = screen.getByRole('list', { name: 'Which account each agent runs on' });
+    expect(within(runsOn).getByRole('button', { name: 'Riley runs on: Work' })).toBeInTheDocument();
     expect(rows()[0]).toHaveTextContent('sam@example.com');
     expect(rows()[1]).toHaveTextContent('Next');
     // Someone is looking: a full read.
