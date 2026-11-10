@@ -1625,6 +1625,58 @@ const LIVE = [
       await sleep(400);
     },
   },
+  // Talk (app/talk.tsx): the hands-free loop, against the scripted recognizer and the
+  // silent voice. The sentence takes about 4.5 s, then 1.2 s of quiet starts the countdown.
+  ...[
+    {
+      name: 'talk-listening',
+      wait: 2600,
+      check:
+        'Talk, listening: Brief’s big key and name, “Listening”, the waveform moving in the accent, the words arriving as the last line under “You”; Send now and End at the foot',
+    },
+    {
+      name: 'talk-countdown',
+      wait: 6400,
+      check:
+        'Counting down after the quiet: “Sending in 1” or “2”, a filling bar (none under Reduce Motion), Cancel and Send now side by side; the whole sentence as the last line',
+    },
+    {
+      name: 'talk-speaking',
+      wait: 15000,
+      check:
+        'The reply being read: “Brief is speaking · tap to talk”, the sent sentence and the reply as the last lines, Talk now and End; the waveform settled to dots',
+    },
+    {
+      name: 'talk-approval',
+      // Its own agent: the speaking shot's turn may still be landing on Brief.
+      agent: 'blocks',
+      words: 'Please deploy the new build',
+      wait: 9000,
+      check:
+        'A card paused it: “Blocks needs your OK”, the line saying approvals are answered with a tap, never by voice; Open the request (neutral) and End; no countdown, no listening',
+    },
+  ].map(({ name, wait, check, words, agent = 'brief' }) => ({
+    name,
+    // Brief and Blocks: no card waiting in the mock (most agents have one, which opens Talk paused).
+    // `qaSay`: what the scripted recognizer hears (dev/web/expo-speech-recognition.ts).
+    route: `/talk?id=${agent}${words ? `&qaSay=${encodeURIComponent(words)}` : ''}`,
+    ready: 'Talk',
+    act: async () => {
+      await sleep(wait);
+    },
+    check,
+    after: async (page) => {
+      // A card left waiting would pause the next shot: deny it, then end.
+      if (words) {
+        await page.clickText('Open the request').catch(() => {});
+        await sleep(600);
+        await page.clickText('Deny').catch(() => {});
+        await sleep(800);
+      }
+      await page.clickLabel('End Talk').catch(() => {});
+      await sleep(600);
+    },
+  })),
   // The composer's shapes, as Claude's own input: one capsule empty, a card with words.
   {
     name: 'composer-empty',

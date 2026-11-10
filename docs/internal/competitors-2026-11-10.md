@@ -42,7 +42,7 @@ voice messages, Listen, Siri and a Live Activity on the phone (`docs/mobile.md`)
 | Discord / Slack / Telegram / WhatsApp start workflows and get results; agents send files there | 0.59–0.62 | **Partial** (Slack only, `slack.rs`) | Medium |
 | Agents create, change and run workflows; deleting one asks even at full access | 0.61.0 | **Have** (routines set from chat behind cards) | Done |
 | Each routine runs in its own thread | 0.61.0 | Not checked whether ours do | Low |
-| Codex live voice (two-way) | 0.61.0 | **Lacks** (voice messages and Listen only; "a live two-way voice conversation" is listed as not built in `docs/mobile.md`) | Medium |
+| Codex live voice (two-way) | 0.61.0 | **Partial** (Talk on the phone, 11-10: a hands-free listen → send → read-aloud loop on the phone's own recognizer and voice, half duplex, not yet tried on a device) | Medium |
 | Usage-limit chip in the model picker; Kimi/OpenCode limits | 0.60–0.58 | **Have** (usage on sidebar, phone, per account) | Done |
 | Audit log, company sign-in (OIDC) for servers | 0.60.0 | Out of scope (single professional) | — |
 | Per-profile browser proxies; use your own computer as a profile's proxy | 0.62.0 | **Lacks**; per-agent browser profiles exist (`browser_profiles.rs`) | Low |
@@ -86,7 +86,7 @@ doors) faster than anyone; its weak spot is still safety (full access by default
 
 - **Muse Voice** (Nov 5): video chat with your agent and give it commands by voice; rollout
   appears US-first. [C: [TechCrunch](https://techcrunch.com/2026/11/06/meta-introduces-spaces-a-new-way-to-collaborate-with-your-muse-agent/)]
-  **Mogbot: lacks** live voice (has voice messages, Listen, Siri).
+  **Mogbot: partial** (Talk: a hands-free loop on the phone, voice only, no video; not yet on a device).
 - **Spaces** (Nov 6): a topic conversation in the sidebar (trip, wedding, gift tracker) where
   you describe an idea and Muse builds a tracker, planner or board, connected to apps and
   **updated in the background** (price changes, concert dates, savings).

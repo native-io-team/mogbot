@@ -1174,6 +1174,49 @@ The phone can start work as well as answer it. Each piece is gated by
   (dictation leaves it set for recording), so the Ring/Silent switch mutes
   it as it mutes a game, and the bar says so. Android has no silent switch
   for media and plays at media volume, which its bar says instead.
+- **Talk** (`app/talk.tsx`, the loop in `lib/talk.ts`). A hands-free
+  conversation with one agent: the waveform button in any chat's header
+  (the Chief's too, and on the Agents tab's embedded chat), or Home Screen →
+  **Talk to <Chief>** (`lib/quickActions.ts`). A whole screen, not a sheet,
+  so a request it opens goes on top of it: the agent's big key, a status
+  line, a level meter (the dictation `Waveform`: a thin bar under Reduce
+  Motion), the last four lines (what you said, what it answered, what it's
+  hearing now), and End. Nothing new underneath: listening is dictation's
+  recognizer (`useDictation`, held, so its own 3 s silence stop never ends
+  your turn), sending is `send` (the outbox while the Mac is away, and the
+  screen says so), speaking is Listen's voice (`readAloud`).
+  **The loop** is a pure reducer (`talkReducer`): listening → countdown →
+  sending → waiting → speaking → listening, until End or leaving. After you
+  speak, 1.2 s of quiet (`TALK_SILENCE_MS`) starts a visible countdown of
+  2 s (`TALK_COUNTDOWN_MS`, "Sending in 2" and a filling bar, the bar left
+  out under Reduce Motion) with **Cancel** (drops the words, listens again)
+  and **Send now**; talking again goes back to listening with the words
+  kept. Each reply is read once it lands (not word by word while it
+  streams), in order; a failed turn's line is read too; **Talk now** skips
+  the rest and listens. A turn that ends with nothing to read hands back to
+  you. What was in the chat when Talk opened is never read; a chat not yet
+  loaded counts from its first load. Three listening sessions in a row that
+  heard nothing (about 24 s) stop listening until you tap **Carry on**.
+  **Approvals are never answered by voice.** A card (or `needsYou`) pauses
+  the loop wherever it is: the mic stops and drops what it heard, a reply
+  being read stops (and is read again after), it says once, aloud, "<name>
+  needs your OK. Tap the screen to look at it. I won't answer it by voice",
+  and the only way on is **Open the request** (`/request`, Deny · Allow
+  under the thumb). Carry on does nothing while a card waits; once it's
+  answered, the loop carries on by itself. Talk opened on an agent that
+  already waits opens paused.
+  **Interruptions:** the recognizer's `interrupted` (a call, another app
+  taking the mic) and the app going to the background pause it with a line
+  and Carry on ("inactive" doesn't: the permission sheet and Control Center
+  cause it). A refused microphone or a failed send pauses with the plain
+  reason. **Silent mode** is Listen's: on iOS the Ring/Silent switch mutes
+  the replies (the screen says "On silent, replies show here but aren't
+  read aloud"); headphones and AirPods take the audio and the mic as the
+  system routes them; Android plays at media volume. Half duplex: it never
+  listens while it speaks, so the phone's own voice isn't heard as yours.
+  With no recognizer in the build (Expo Go) the screen says so instead of
+  listening. Recognition stays on the phone when it can (dictation's rule);
+  no new service, no audio kept.
 - **The composer** is the system's glass where the phone has it
   (`components/Glass.tsx`, expo-glass-effect: iOS 26 Liquid Glass, the tab
   bar's material), shaped as Claude's own input: empty or one line, a 48pt
@@ -1728,6 +1771,9 @@ build row says to unlock it rather than waiting silently.
   pause, stop, a stopped reading's late callbacks); `siri.node.test.ts` and
   `liveActivity.test.ts` what Siri sends and what the Lock Screen may show;
   `voiceBuild.node.test.ts` the app config for both.
+  `talk.test.ts` Talk's loop (round trip, countdown, Cancel, Send now, a
+  voice mid-countdown, skip, quiet, interruptions, a card pausing it and
+  never answered by voice, what's read and shown).
 - **Rooms:** `rooms.test.ts` (routing, gating, store keys, folding, the
   room's list), `roomParity.test.ts` (open copies, the foot line, @mentions,
   the intro's claim), `roomView.test.tsx` (the thread, Keep / Discard and Ask
@@ -1855,8 +1901,11 @@ the share extension, the camera, real keyboard behaviour).
   device, and can't update while the app is suspended (ActivityKit push
   through the relay). Siri and Shortcuts, holding the mic, Listen and the
   silent switch, and the attached recording are checked in tests and
-  prebuild only, not yet on a phone. A live two-way voice conversation with
-  an agent. The "Send to agent…" extension is
+  prebuild only, not yet on a phone. Talk is checked in jest and in
+  `qa:web` (`talk-*`, the scripted recognizer and the silent voice) only:
+  real end-of-speech timing, the recognizer and the voice taking turns on
+  one audio session, AirPods, a phone call mid-loop, and the silent switch
+  during Talk are not yet tried on a phone. The "Send to agent…" extension is
   configured behind `SHIPSTUDIO_SHARE_EXTENSION=1` but not yet built or
   tried on a device. Dictation's live waveform, streaming words and
   on-device → server fallback are checked on the simulator against fed

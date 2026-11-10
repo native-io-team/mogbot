@@ -120,6 +120,11 @@ function Screens() {
               <Stack.Screen name="connection" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen name="one-at-a-time" options={{ headerShown: false }} />
               <Stack.Screen name="request" options={{ headerShown: false }} />
+              {/* Talk: a whole screen, so a request it opens goes on top of it. */}
+              <Stack.Screen
+                name="talk"
+                options={{ headerShown: false, animation: 'slide_from_bottom' }}
+              />
               <Stack.Screen name="usage" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen name="usage-account" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen name="controls" options={sheet(colors, [0.75, 1])} />
@@ -250,6 +255,10 @@ export default function RootLayout() {
       };
       if (pathname.startsWith('/chat/')) router.replace(href);
       else router.navigate(href);
+      // Talk to the Chief: its chat underneath, Talk on top.
+      if (tapped.talk) {
+        setTimeout(() => router.push({ pathname: '/talk', params: { id: tapped.agentId } }), 300);
+      }
     });
     return () => cancelAnimationFrame(frame);
   }, [ready, tapped, paired, router, pathname]);

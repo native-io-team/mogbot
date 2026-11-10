@@ -74,6 +74,7 @@ export const MATERIAL: Partial<Record<SFName, string>> = {
   magnifyingglass: 'search',
   mic: 'mic',
   'mic.fill': 'mic',
+  waveform: 'graphic_eq',
   'speaker.wave.2': 'volume_up',
   'pause.fill': 'pause',
   network: 'lan',
