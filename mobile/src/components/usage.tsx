@@ -10,7 +10,7 @@
 import { Pressable, StyleSheet, View } from 'react-native';
 import { makeStyles, useColors, useLargeText } from '../lib/appearance';
 import type { ComputeRow, ComputeView, UsageMeter, UsageTone } from '../lib/usageSheet';
-import { depthOf, meter as meterSize, PRESSED, radius, space, type Palette } from '../lib/theme';
+import { depthOf, fonts, meter as meterSize, MIN_TAP, PRESSED, radius, space, type Palette } from '../lib/theme';
 import { T } from './ui';
 
 /** The warning role from 80% used and when used up (it refills by itself: never error red). */
@@ -48,7 +48,7 @@ export function UsageRing({
       style={({ pressed }) => [styles.ring, pressed && PRESSED]}
     >
       <T
-        variant="headline"
+        variant="small"
         color={inkOf(colors, tone, tint)}
         numberOfLines={1}
         maxFontSizeMultiplier={1.2}
@@ -247,9 +247,16 @@ const useStyles = makeStyles((colors) => ({
   },
   quietRow: { gap: space['2xs'], paddingHorizontal: space.lg, paddingVertical: space.md },
   divided: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderDefault },
-  ring: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: space['2xs'] },
+  // The size of the icon buttons beside it, so the group's three slots are even.
+  ring: {
+    minWidth: MIN_TAP,
+    height: MIN_TAP,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  // A step down and a weight up: as heavy as an icon beside it, no louder.
   // Figures that don't jiggle as the reading moves.
-  ringFigure: { fontVariant: ['tabular-nums'] },
+  ringFigure: { fontFamily: fonts.semibold, fontVariant: ['tabular-nums'] },
   // The one meter (theme `meter`, the desk's `--meter-*`), on its
   // see-through track, which shows on a dark group as on a light one.
   track: {
