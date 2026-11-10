@@ -21,6 +21,9 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import {
   ADD_ON_MAC,
   LOW_LEFT,
+  NEW_WORK_HERE,
+  usersLine,
+  type RunsOnRow,
   OUT_OF_USAGE,
   pinnedLine,
   placeLabel,
@@ -57,28 +60,34 @@ function roomWords(k: StackKey): string {
   return `${k.share}% left`;
 }
 
-/** The total as one bar: a segment per account, in the work order. */
+/**
+ * The total as ONE ordinary bar, filled to what is left across every
+ * account, as the figure says it ("55% left" is a bar 55% full). Never a
+ * segment per account: two at 50% read as one bar half full, not two
+ * quarter-bars. Nothing read: an empty outlined track, never a full one.
+ */
 export function TotalBar({ total, tall = false }: { total: UsageTotal; tall?: boolean }) {
   const colors = useColors();
   const styles = useStyles();
-  const words = total.segments.map((s) => s.words).join('; ');
+  if (total.segments.length === 0) return null;
+  const left = total.left;
   return (
-    <View style={styles.track} accessible accessibilityLabel={`Room left. ${words}`}>
-      {total.segments.map((s) => (
+    <View
+      style={[styles.total, tall && styles.segTall, left === null && styles.segEmpty]}
+      accessible
+      accessibilityRole="progressbar"
+      accessibilityLabel="Usage left, across accounts"
+      accessibilityValue={
+        left === null
+          ? { text: 'Not read yet' }
+          : { min: 0, max: 100, now: left, text: `${left}% left` }
+      }
+    >
+      {left !== null && (
         <View
-          key={s.key}
-          style={[styles.seg, tall && styles.segTall, s.left === null && styles.segEmpty]}
-        >
-          {s.left !== null && (
-            <View
-              style={[
-                styles.fill,
-                { width: `${s.left}%`, backgroundColor: fillOf(colors, s.tone) },
-              ]}
-            />
-          )}
-        </View>
-      ))}
+          style={[styles.fill, { width: `${left}%`, backgroundColor: fillOf(colors, total.tone) }]}
+        />
+      )}
     </View>
   );
 }
@@ -150,7 +159,8 @@ export function GlanceRow({ glance, onPress }: { glance: UsageGlance; onPress: (
   // Out everywhere, the refill is a moment ("Refills Sat 10:00 AM"); otherwise a countdown.
   const out = glance.tone === 'limited';
   const chip = out ? row.refill : total.refill ? total.refill.in : null;
-  const label = `Usage: ${[row.figure, count, row.refill].filter(Boolean).join('. ')}`;
+  const notRead = total.left !== null ? row.notRead : null;
+  const label = `Usage: ${[row.figure, count, notRead, row.refill].filter(Boolean).join('. ')}`;
   return (
     <Pressable
       accessibilityRole="button"
@@ -181,7 +191,12 @@ export function GlanceRow({ glance, onPress }: { glance: UsageGlance; onPress: (
         {!!chip && <RefillChip text={chip} />}
         <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
       </View>
-      {total.segments.length > 0 && <TotalBar total={total} />}
+      <TotalBar total={total} />
+      {!!notRead && (
+        <T variant="caption" color={colors.textMuted}>
+          {notRead}
+        </T>
+      )}
     </Pressable>
   );
 }
@@ -248,8 +263,13 @@ export function TotalCard({
         )}
       </View>
       <TotalBar total={total} tall />
-      {(glance.estimate || total.unread || glance.sameNotes.length > 0) && (
+      {(glance.estimate || total.unread || total.weighting || glance.sameNotes.length > 0) && (
         <View style={styles.notes}>
+          {total.weighting && (
+            <T variant="caption" color={colors.textMuted}>
+              {total.weighting}
+            </T>
+          )}
           {glance.estimate && (
             <T variant="caption" color={colors.textMuted}>
               {glance.headline}. {glance.estimate}: an estimate, not a reading.
@@ -309,11 +329,19 @@ export function AccountRows({
   keys,
   onOpen,
   all = keys,
+  onUse,
+  busy = false,
 }: {
   keys: StackKey[];
   onOpen: (k: StackKey) => void;
   /** Every account listed (across engines), so a place names its engine when both are there. */
   all?: readonly StackKey[];
+  /**
+   * "Use for new work" (puts it first), from a Mac that takes it and with
+   * another account to switch from; the one in use says so instead.
+   */
+  onUse?: (k: StackKey) => void;
+  busy?: boolean;
 }) {
   const colors = useColors();
   const styles = useStyles();
@@ -323,73 +351,205 @@ export function AccountRows({
       {keys.map((k, i) => {
         const refill = k.refillLimit?.countdown;
         const room = roomWords(k);
+        const users = usersLine(k);
+        const current = k.state === 'in_use';
         return (
-          <Pressable
-            key={k.key}
-            accessibilityRole="button"
-            accessibilityLabel={`${placeLabel(k, all)}. ${k.name}, ${room ? `${room}, ` : ''}${k.stateLabel}${
-              refill ? `, refills in ${refill}` : ''
-            }`}
-            onPress={() => onOpen(k)}
-            style={({ pressed }) => [
-              styles.accountRow,
-              i > 0 && styles.divided,
-              pressed && PRESSED,
-            ]}
-          >
-            <View style={[styles.cap, k.state === 'in_use' && styles.capOn]}>
-              <T
-                variant="caption"
-                color={k.state === 'in_use' ? colors.surfaceApp : colors.textPrimary}
-              >
-                {placeLabel(k, all)}
-              </T>
-            </View>
-            <View style={styles.rowBody}>
-              <View style={[styles.rowLine, large && styles.wrapRow]}>
+          <View key={k.key} style={i > 0 && styles.divided}>
+            <Pressable
+              accessibilityRole="button"
+              accessibilityLabel={`${placeLabel(k, all)}. ${k.name}, ${room ? `${room}, ` : ''}${k.stateLabel}${
+                refill ? `, refills in ${refill}` : ''
+              }`}
+              onPress={() => onOpen(k)}
+              style={({ pressed }) => [styles.accountRow, pressed && PRESSED]}
+            >
+              <View style={[styles.cap, k.state === 'in_use' && styles.capOn]}>
                 <T
-                  variant="headline"
-                  color={colors.textStrong}
-                  style={large ? styles.wholeLine : styles.grow}
-                  numberOfLines={large ? undefined : 1}
+                  variant="caption"
+                  color={k.state === 'in_use' ? colors.surfaceApp : colors.textPrimary}
                 >
-                  {k.name}
+                  {placeLabel(k, all)}
                 </T>
-                {!!room && (
-                  <T variant="small" color={colors.textPrimary} style={styles.figure}>
-                    {room}
+              </View>
+              <View style={styles.rowBody}>
+                <View style={[styles.rowLine, large && styles.wrapRow]}>
+                  <T
+                    variant="headline"
+                    color={colors.textStrong}
+                    style={large ? styles.wholeLine : styles.grow}
+                    numberOfLines={large ? undefined : 1}
+                  >
+                    {k.name}
+                  </T>
+                  {!!room && (
+                    <T variant="small" color={colors.textPrimary} style={styles.figure}>
+                      {room}
+                    </T>
+                  )}
+                </View>
+                {/* What tells it apart, as the desk's row: its plan first. */}
+                {k.detail.length > 0 && (
+                  <T variant="caption" color={colors.textMuted} numberOfLines={1}>
+                    {k.detail[0]}
+                  </T>
+                )}
+                <View style={[styles.miniBar, k.share === null && styles.segEmpty]}>
+                  {k.share !== null && (
+                    <View
+                      style={[
+                        styles.fill,
+                        { width: `${k.share}%`, backgroundColor: fillOf(colors, k.tone) },
+                      ]}
+                    />
+                  )}
+                </View>
+                <View style={styles.rowLine}>
+                  <StatusPill
+                    tone={pillOf(k)}
+                    label={k.state === 'out' ? OUT_OF_USAGE : k.stateLabel}
+                  />
+                  <View style={styles.grow} />
+                  {refill && <RefillChip text={refill} />}
+                </View>
+                {!!users && (
+                  <T variant="caption" color={colors.textMuted}>
+                    {users}
                   </T>
                 )}
               </View>
-              {/* What tells it apart, as the desk's row: its plan first. */}
-              {k.detail.length > 0 && (
-                <T variant="caption" color={colors.textMuted} numberOfLines={1}>
-                  {k.detail[0]}
-                </T>
-              )}
-              <View style={[styles.miniBar, k.share === null && styles.segEmpty]}>
-                {k.share !== null && (
-                  <View
-                    style={[
-                      styles.fill,
-                      { width: `${k.share}%`, backgroundColor: fillOf(colors, k.tone) },
-                    ]}
-                  />
+              <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
+            </Pressable>
+            {/* Outside the row's button: a button can't hold another. */}
+            {onUse && (current || k.canUse) && (
+              <View style={styles.foot}>
+                {current && (
+                  <View style={styles.current}>
+                    <Icon
+                      name="checkmark"
+                      size={iconSize.micro}
+                      color={colors.textStrong}
+                      fallback={
+                        <T variant="caption" color={colors.textStrong}>
+                          ✓
+                        </T>
+                      }
+                    />
+                    <T variant="small" color={colors.textStrong}>
+                      {NEW_WORK_HERE}
+                    </T>
+                  </View>
+                )}
+                {!current && (
+                  <View style={styles.useRow}>
+                    <Button
+                      title={USE_THIS_ONE_NOW}
+                      variant="secondary"
+                      size="compact"
+                      disabled={busy}
+                      accessibilityLabel={`${USE_THIS_ONE_NOW}: ${k.name}`}
+                      onPress={() => onUse(k)}
+                    />
+                  </View>
                 )}
               </View>
-              <View style={styles.rowLine}>
-                <StatusPill
-                  tone={pillOf(k)}
-                  label={k.state === 'out' ? OUT_OF_USAGE : k.stateLabel}
-                />
-                <View style={styles.grow} />
-                {refill && <RefillChip text={refill} />}
-              </View>
-            </View>
-            <Icon name="chevron.right" size={iconSize.inline} color={colors.textMuted} />
-          </Pressable>
+            )}
+          </View>
         );
       })}
+    </View>
+  );
+}
+
+/**
+ * "Runs on", for every agent whose engine has two or more accounts: any
+ * account (the order, carrying on when one runs out) or one only. A row
+ * opens its choices in place; the one chosen is ticked. The same choice as
+ * an agent's own controls (`agents.update` with `account`).
+ */
+export function RunsOnList({
+  rows,
+  onPick,
+  disabled = false,
+}: {
+  rows: RunsOnRow[];
+  onPick: (agentId: string, account: string) => void;
+  disabled?: boolean;
+}) {
+  const colors = useColors();
+  const styles = useStyles();
+  const [open, setOpen] = useState<string | null>(null);
+  if (rows.length === 0) return null;
+  return (
+    <View style={styles.rows}>
+      {rows.map((r, i) => (
+        <View key={r.agentId} style={i > 0 && styles.divided}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={`${r.name} runs on: ${r.currentLabel}`}
+            accessibilityHint="Choose the account it runs on"
+            accessibilityState={{ expanded: open === r.agentId }}
+            onPress={() => setOpen(open === r.agentId ? null : r.agentId)}
+            style={({ pressed }) => [styles.accountRow, pressed && PRESSED]}
+          >
+            <AgentKey id={r.agentId} name={r.name} size={keySize.sm} />
+            <T variant="headline" color={colors.textStrong} numberOfLines={1} style={styles.grow}>
+              {r.name}
+            </T>
+            <T
+              variant="small"
+              color={colors.textSecondary}
+              numberOfLines={1}
+              style={styles.runsOnNow}
+            >
+              {r.currentLabel}
+            </T>
+            <Icon
+              name={open === r.agentId ? 'chevron.down' : 'chevron.right'}
+              size={iconSize.inline}
+              color={colors.textMuted}
+            />
+          </Pressable>
+          {open === r.agentId &&
+            r.choices.map((c) => {
+              const on = c.id === r.current;
+              return (
+                <Pressable
+                  key={c.id || 'any'}
+                  accessibilityRole="radio"
+                  accessibilityState={{ checked: on, disabled }}
+                  accessibilityLabel={`${c.label}. ${c.detail}`}
+                  disabled={disabled}
+                  onPress={() => {
+                    if (!on) onPick(r.agentId, c.id);
+                    setOpen(null);
+                  }}
+                  style={({ pressed }) => [styles.choice, pressed && PRESSED]}
+                >
+                  <View style={styles.grow}>
+                    <T variant="small" color={colors.textStrong} numberOfLines={1}>
+                      {c.label}
+                    </T>
+                    <T variant="caption" color={colors.textMuted} numberOfLines={2}>
+                      {c.detail}
+                    </T>
+                  </View>
+                  {on && (
+                    <Icon
+                      name="checkmark"
+                      size={iconSize.inline}
+                      color={colors.textStrong}
+                      fallback={
+                        <T variant="small" color={colors.textStrong}>
+                          ✓
+                        </T>
+                      }
+                    />
+                  )}
+                </Pressable>
+              );
+            })}
+        </View>
+      ))}
     </View>
   );
 }
@@ -758,7 +918,23 @@ function ordinal(n: number): string {
 }
 
 const useStyles = makeStyles((colors) => ({
-  track: { flexDirection: 'row', gap: space.xs },
+  current: { flexDirection: 'row', alignItems: 'center', gap: space['2xs'] },
+  useRow: { flexDirection: 'row' },
+  foot: {
+    marginTop: -space.xs,
+    paddingBottom: space.md,
+    paddingLeft: space.lg + space.xl + space.md,
+    paddingRight: space.lg,
+  },
+  runsOnNow: { flexShrink: 1, maxWidth: '45%' },
+  choice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    paddingVertical: space.sm,
+    paddingLeft: space.lg + keySize.sm + space.md,
+    paddingRight: space.lg,
+  },
   glance: {
     gap: space.md,
     paddingVertical: space.md,
@@ -820,8 +996,8 @@ const useStyles = makeStyles((colors) => ({
   },
   num: { width: space['2xl'] * 1.5, textAlign: 'right', fontVariant: ['tabular-nums'] },
   numNarrow: { width: space['2xl'] * 2, textAlign: 'right', fontVariant: ['tabular-nums'] },
-  seg: {
-    flex: 1,
+  total: {
+    alignSelf: 'stretch',
     height: space.tight,
     borderRadius: radius.pill,
     backgroundColor: colors.surfaceControl,

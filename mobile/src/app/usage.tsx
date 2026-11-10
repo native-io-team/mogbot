@@ -15,6 +15,7 @@ import {
   ADD_ACCOUNT_WHY,
   awayLine,
   awayStateOf,
+  runsOnRows,
   type AccountBlock,
   type UsageInventory,
 } from '@shipstudio/companion-protocol';
@@ -25,7 +26,7 @@ import { Spinner } from '../components/agent';
 import { AgentKey } from '../components/AgentKey';
 import { SheetTitle } from '../components/SheetTitle';
 import { ComputeAccount, ComputeQuiet, ComputeSummary, MeterRow } from '../components/usage';
-import { AccountRows as StackRows, TotalCard } from '../components/usageStack';
+import { AccountRows as StackRows, RunsOnList, TotalCard } from '../components/usageStack';
 import { servesUsageChanges, UsagePlanControls } from '../components/usagePlanControls';
 import { useAccounts } from '../lib/accounts';
 import { glanceFor } from '../lib/glance';
@@ -34,7 +35,7 @@ import { engineName } from '../lib/agents';
 import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
 import { useQuotas } from '../lib/quota';
-import { call, canCall } from '../lib/session';
+import { call, canCall, describeError, setAgentAccount } from '../lib/session';
 import { asOverview } from '../lib/wellFormed';
 import { setApp, useApp } from '../lib/store';
 import { iconSize, keySize, space } from '../lib/theme';
@@ -96,7 +97,19 @@ export default function Usage() {
   const total = useMemo(() => computeView(inventory, now), [inventory, now]);
   // The stack of accounts, as the desk's Usage view says it: from a Mac
   // that serves its accounts and their readings.
-  const { accounts } = useAccounts({ room: false });
+  const { accounts, canSwap, swapTo, busy, error: swapError } = useAccounts({ room: false });
+  const [runsOnError, setRunsOnError] = useState<string | null>(null);
+  const pickRunsOn = (agentId: string, account: string) => {
+    haptic.select();
+    setRunsOnError(null);
+    setAgentAccount(agentId, account).then(
+      () => haptic.success(),
+      (e: unknown) => {
+        haptic.error();
+        setRunsOnError(describeError(e));
+      }
+    );
+  };
   const agents = useApp((s) => s.overview?.agents);
   // The same glance as the Agents list's card and the desk: the same accounts, the same pins.
   const glance = useMemo(
@@ -182,10 +195,49 @@ export default function Usage() {
                     keys={e.keys}
                     all={e.keys}
                     onOpen={(k) => openAccount(k.engine, k.id)}
+                    onUse={
+                      canSwap && e.keys.length > 1 ? (k) => void swapTo(k.engine, k.id) : undefined
+                    }
+                    busy={busy}
                   />
                 </View>
               );
             })}
+            {!!swapError && (
+              <T variant="small" color={colors.accentWarning}>
+                {swapError}
+              </T>
+            )}
+            {canSwap &&
+              agents &&
+              runsOnRows(
+                glance,
+                agents.filter((a) => !a.hidden)
+              ).length > 0 && (
+                <View style={styles.rowsHead}>
+                  <T variant="headline" color={colors.textStrong} accessibilityRole="header">
+                    Runs on
+                  </T>
+                  <T variant="small" color={colors.textMuted}>
+                    Any account follows the order above. Pick one to keep an agent on it, never
+                    another.
+                  </T>
+                </View>
+              )}
+            {canSwap && agents && (
+              <RunsOnList
+                rows={runsOnRows(
+                  glance,
+                  agents.filter((a) => !a.hidden)
+                )}
+                onPick={pickRunsOn}
+              />
+            )}
+            {!!runsOnError && (
+              <T variant="small" color={colors.accentWarning}>
+                {runsOnError}
+              </T>
+            )}
           </View>
         )}
 
