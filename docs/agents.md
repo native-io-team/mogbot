@@ -4687,7 +4687,13 @@ their link, else their id, else a hash of title and date (`stable_id`),
 because Haiku may name the same issue by key one time and uuid the next. An
 agent setting one up gets an Allow card first naming the app, the interval,
 checks a day, and what checks on this Mac have measured this week (or that
-nothing has been). Every routine created, by an agent or the user, leaves a
+nothing has been), in words a person can weigh (`mcp::watch_card`): on a
+plan, "about 1% of a week's usage a day", said as an estimate, when the
+share per token of the account's weekly window has been learned here
+(`forecast::rate`), else only that each check uses a little of the plan's
+usage, never tokens; off a plan, dollars at API prices. The card is all
+words, sent as its plain line with no raw detail (`ask_user_prose`), so desk
+and phone draw it as prose, not in a code box. Every routine created, by an agent or the user, leaves a
 line in the chat. At most one model check starts per tick.
 
 They're `CheckIn`s with a `watch` (no `repeat`; `next_at` is the next check),

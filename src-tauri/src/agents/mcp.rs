@@ -973,7 +973,13 @@ fn short_line(text: &str) -> String {
 
 /// The card for a "When…" routine an agent wants: what it waits for, how
 /// often, and for a model check what that costs, from what checks on this
-/// Mac have measured (never estimated from nothing).
+/// Mac have measured (never estimated from nothing), in words a person on a
+/// plan can weigh. On a plan that is a share of a week's usage, when the
+/// share per token of the plan's weekly window has been learned here
+/// (`week_rate`, `forecast::rate`), said as an estimate; else nothing more
+/// than "a little of your usage". Prices only off a plan; tokens only when
+/// there is neither a plan nor a price. Prose, on a card that shows it as
+/// prose (`ask_user_prose`), never in a code box.
 pub fn watch_card(
     agent: &str,
     source: &super::watch::Source,
@@ -981,6 +987,7 @@ pub fn watch_card(
     note: &str,
     measured: Option<&super::usage::UsageTotals>,
     on_plan: bool,
+    week_rate: Option<f64>,
 ) -> (String, String) {
     use super::watch::{describe, Source, DEFAULT_MAX_CHECKS_PER_DAY};
     let app = match source {
@@ -1003,7 +1010,23 @@ pub fn watch_card(
                 (m.input_tokens + m.output_tokens + m.cache_read_tokens + m.cache_write_tokens)
                     as f64
                     / n;
-            if m.priced_checks == m.checks && !on_plan {
+            if on_plan {
+                // Percentage points of a week, by estimate; nothing when not learned.
+                match week_rate.filter(|r| *r > 0.0) {
+                    Some(rate) => {
+                        let pct = tokens * f64::from(per_day) * rate;
+                        let pct = if pct < 1.0 {
+                            "under 1%".to_string()
+                        } else {
+                            format!("about {}%", pct.round() as u64)
+                        };
+                        format!(
+                            "By an estimate from checks on this Mac, that’s {pct} of a week’s usage a day."
+                        )
+                    }
+                    None => String::new(),
+                }
+            } else if m.priced_checks == m.checks {
                 let each = m.cost_usd / n;
                 format!(
                     "Checks on this Mac this week averaged {} at API prices each, so up to about {} a day.",
@@ -1022,11 +1045,21 @@ pub fn watch_card(
             "No check has been measured on this Mac yet, so what one costs isn't known.".to_string()
         }
     };
+    let usage = if on_plan {
+        "your plan’s usage"
+    } else {
+        "your Claude usage"
+    };
+    let line = format!(
+        "Each check uses a little of {usage} and can only read {app}: up to {per_day} a day."
+    );
     (
         format!("Let {agent} check {app} every {every} min?"),
-        format!(
-            "{when}.\n\nEach check uses a little of your Claude usage and can only read {app}: up to {per_day} a day. {cost}"
-        ),
+        if cost.is_empty() {
+            format!("{when}.\n\n{line}")
+        } else {
+            format!("{when}.\n\n{line} {cost}")
+        },
     )
 }
 
@@ -1065,6 +1098,23 @@ fn measured_checks() -> Option<super::usage::UsageTotals> {
         }
     }
     (total.checks > 0).then_some(total)
+}
+
+/// Percentage points of a week's usage per token on the account Claude's
+/// next turn runs on, as learned from this Mac's readings of its weekly
+/// window (`forecast::rate`). None until learned: an estimate is said only
+/// when there is something to base it on.
+async fn claude_week_rate() -> Option<f64> {
+    let inv = super::inventory::read().await;
+    let account = inv
+        .accounts
+        .iter()
+        .find(|a| a.engine == super::engine::Engine::Claude && a.next)?;
+    let key = super::usage_plan::account_key(account.engine, &account.id);
+    let (_, samples) = tokio::task::spawn_blocking(super::usage_plan::readings)
+        .await
+        .ok()?;
+    super::forecast::rate(samples.get(&key)?, "seven_day")
 }
 
 /// Claude has reported a plan (Pro or Max): its prices aren't the bill.
@@ -1135,19 +1185,28 @@ async fn check_ins(
             let outside =
                 runner::from_outside(&caller.id) && super::broker::is_live(&caller.id, turn);
             if source.uses_model() || outside {
+                let on_plan = on_claude_plan();
+                let measured = measured_checks();
+                let week_rate = if on_plan && source.uses_model() && measured.is_some() {
+                    claude_week_rate().await
+                } else {
+                    None
+                };
                 let (title, mut detail) = watch_card(
                     &target.name,
                     &source,
                     every,
                     note,
-                    measured_checks().as_ref(),
-                    on_claude_plan(),
+                    measured.as_ref(),
+                    on_plan,
+                    week_rate,
                 );
                 if outside {
                     detail.push_str("\n\n");
                     detail.push_str(OUTSIDE_WHY);
                 }
-                let answer = ask_user(app, caller, title, detail, None).await;
+                // Words for a person, not a command: drawn as prose.
+                let answer = ask_user_prose(app, caller, title, detail).await;
                 if let Some(refused) = refused_reply(&answer, "set it up") {
                     return error(refused);
                 }
@@ -2694,6 +2753,18 @@ pub(super) async fn ask_user(
     ask(app, caller, title, None, detail, call).await
 }
 
+/// `ask_user` for a card that is all words (a "When…" routine's): they are
+/// its plain line (`summary`), drawn as prose, with no raw detail behind
+/// them. Not a raw-detail card, so not `Risk::High` for being one.
+pub(super) async fn ask_user_prose(
+    app: &AppHandle,
+    caller: &store::Agent,
+    title: String,
+    text: String,
+) -> Answer {
+    ask(app, caller, title, Some(text), String::new(), None).await
+}
+
 /// `ask_user` for a card whose detail is raw (a push): it leads with `summary`
 /// and keeps the detail behind Details. Never tied to a tool call. Its
 /// callers act as the user off this Mac (publishing a branch, opening a pull
@@ -2744,6 +2815,10 @@ async fn ask_inner(
     // The same ask expired unanswered earlier in this task: not raised again.
     let key = match call {
         Some((tool, input)) => super::expiry::tool_key(tool, input),
+        // A card of words (`ask_user_prose`) is told apart by them.
+        None if detail.is_empty() => {
+            super::expiry::ask_key(&title, summary.as_deref().unwrap_or_default())
+        }
         None => super::expiry::ask_key(&title, &detail),
     };
     if super::expiry::already_expired(&caller.id, &key) {
@@ -2763,10 +2838,13 @@ async fn ask_inner(
         .insert(request_id.clone(), tx);
 
     let mut card = runner::new_message(&caller.id, MessageKind::Approval, "");
+    let detail_was_empty = detail.is_empty();
     let mut approval = new_card(request_id.clone(), title, detail, call);
-    // `new_card` gave a tool call its plain line; a caller's own wins.
-    let raw = summary.is_some();
-    if raw {
+    // `new_card` gave a tool call its plain line; a caller's own wins. A
+    // summary with raw lines behind it (a push) is a raw-detail card; one
+    // with none is a card of words (`ask_user_prose`).
+    let raw = summary.is_some() && !detail_was_empty;
+    if summary.is_some() {
         approval.summary = summary;
     }
     approval.risk = risk_of(caller, call, plan.is_some() || raw);
