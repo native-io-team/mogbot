@@ -87,7 +87,7 @@ describe('the capacity inventory, in words', () => {
   });
 
   it('says what other compute was detected, never more', () => {
-    expect(localLine({ name: 'Opencode', models: [] })).toBe('Opencode · installed');
+    expect(localLine({ name: 'OpenCode', models: [] })).toBe('OpenCode · installed');
     expect(localLine({ name: 'Ollama', running: false, models: [] })).toBe(
       'Ollama · installed, not running'
     );
@@ -134,7 +134,7 @@ describe('the capacity inventory, in words', () => {
       'est:claude',
       'backlog',
       'local:Ollama',
-      'local:Opencode',
+      'local:OpenCode',
     ]);
     expect(rows.find((r) => r.key === 'est:claude')?.detail).toContain(
       'estimate from 37 past runs'

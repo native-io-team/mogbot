@@ -204,7 +204,7 @@ describe('usage at a glance, on the phone', () => {
     expect(screen.getByRole('header', { name: 'Limits' })).toBeTruthy();
     expect(screen.queryByText('Messages')).toBeNull();
     await fireEvent.press(screen.getByRole('tab', { name: 'Tokens' }));
-    expect(screen.getByText('Used by these agents this week')).toBeTruthy();
+    expect(screen.getByText('This week')).toBeTruthy();
     expect(screen.getByText('Messages')).toBeTruthy();
     expect(screen.getByText('750k')).toBeTruthy();
     expect(screen.getByText(/^Tokens as Claude Code or Codex reported them/)).toBeTruthy();

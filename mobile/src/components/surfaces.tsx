@@ -317,13 +317,23 @@ export function Line({
       : null;
   const words = (
     <View style={styles.lineText}>
-      {icon && <Icon name={icon} size={iconSize.inline} color={mark} />}
+      {/* The icon and chevron run in the words, not beside them: a line that
+          wraps to two centred lines kept its tick at the far left and its
+          chevron at the far right, apart from the words they belong to. */}
       <T
         variant="caption"
         color={ink}
         maxFontSizeMultiplier={header ? chromeScale : CARD_TITLE_SCALE}
         style={styles.lineWords}
       >
+        {icon && (
+          <>
+            <View style={styles.lineGlyph}>
+              <Icon name={icon} size={iconSize.inline} color={mark} />
+            </View>
+            {'  '}
+          </>
+        )}
         {!!lead && (
           <T variant="caption" color={mark} style={{ fontFamily: fonts.medium }}>
             {lead}
@@ -332,8 +342,15 @@ export function Line({
         )}
         {text}
         {trail}
+        {chevron && (
+          <>
+            {'  '}
+            <View style={styles.lineGlyph}>
+              <Icon name={chevron} size={iconSize.inline} color={colors.textMuted} />
+            </View>
+          </>
+        )}
       </T>
-      {chevron && <Icon name={chevron} size={iconSize.inline} color={colors.textMuted} />}
     </View>
   );
   const hint =
@@ -627,6 +644,8 @@ const useLineStyles = makeStyles(() => ({
   // What a line was about: the card's own words, as written.
   lineDetail: { alignSelf: 'stretch', gap: space.sm, paddingTop: space.xs },
   lineWords: { textAlign: 'center', letterSpacing: 0.2, flexShrink: 1 },
+  // An inline glyph sits on the words' line.
+  lineGlyph: { width: iconSize.inline, height: iconSize.inline },
 }));
 
 const useBarStyles = makeStyles((colors) => ({

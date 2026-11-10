@@ -2665,7 +2665,7 @@ async function linkDownShots(page) {
       'link-stuck-chat',
       theme,
       '/chat/chief (the Mac’s app hung)',
-      'The chat’s bar over the composer says the same words'
+      'The bar says the app on your Mac isn’t responding; the empty chat says “Nothing saved on this phone yet”, never the same sentence twice'
     );
 
     // The app said goodbye as it closed (a quit, an update's restart).
@@ -3991,7 +3991,7 @@ async function main() {
           await sleep(700);
         },
         check:
-          '"Used by these agents this week" with Limits | Tokens; a table card: Agent / Tokens / Messages, each row an agent key, name, a thin share bar and right-aligned figures, then "Tokens as Claude Code or Codex reported them … Not a cost".',
+          '"This week" on one line with Limits | Tokens, so flipping them never moves the page; a table card: Agent / Tokens / Messages, each row an agent key, name, a thin share bar and right-aligned figures, then "Tokens as Claude Code or Codex reported them … Not a cost".',
       },
       {
         name: 'usage-total-accounts',

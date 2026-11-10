@@ -507,9 +507,12 @@ export function KeyCard({
               variant="headline"
               color={colors.textStrong}
               accessibilityRole="header"
+              numberOfLines={1}
               style={styles.grow}
             >
-              {tokens ? 'Used by these agents this week' : 'Limits'}
+              {/* One line either way: a long Tokens title wrapped beside the
+                  switch and the page jumped each time it was flipped. */}
+              {tokens ? 'This week' : 'Limits'}
             </T>
             {k.agents.length > 0 && (
               <View style={styles.switch}>

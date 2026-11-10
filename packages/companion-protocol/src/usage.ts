@@ -123,7 +123,7 @@ export function accountTags(a: UsageAccountLine): string[] {
   return tags;
 }
 
-/** "Ollama · running · llama3.2:3b", "Opencode · installed". */
+/** "Ollama · running · llama3.2:3b", "OpenCode · installed". */
 export function localLine(l: LocalCompute): string {
   if (l.running === undefined) return `${l.name} · installed`;
   if (!l.running) return `${l.name} · installed, not running`;

@@ -1019,7 +1019,7 @@ export const agentsUsagePlan = {
     },
     {
       "models": [],
-      "name": "Opencode"
+      "name": "OpenCode"
     }
   ],
   "mode": "use_it_all",
@@ -1298,7 +1298,7 @@ export const agentsUsageSetMode = {
     },
     {
       "models": [],
-      "name": "Opencode"
+      "name": "OpenCode"
     }
   ],
   "mode": "use_it_all",
@@ -1577,7 +1577,7 @@ export const agentsSpareAdd = {
     },
     {
       "models": [],
-      "name": "Opencode"
+      "name": "OpenCode"
     }
   ],
   "mode": "use_it_all",

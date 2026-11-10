@@ -255,6 +255,9 @@ export function ConnectionBar({ style }: { style?: StyleProp<ViewStyle> }) {
  * pill's words, what that means here, and what to do. Never a bare spinner:
  * while it's still connecting it says so, and past that it says why.
  */
+/** The empty page's title while the bar names the problem. */
+export const NOTHING_SAVED = 'Nothing saved on this phone yet';
+
 export function LinkProblem({ what, macName }: { what: string; macName: string }) {
   const colors = useColors();
   const styles = useStyles();
@@ -275,8 +278,11 @@ export function LinkProblem({ what, macName }: { what: string; macName: string }
   const refused = state.link.kind === 'refused';
   return (
     <View style={styles.problem}>
+      {/* With a bar on screen the bar says what's wrong ("The app on your Mac
+          isn't responding"); this says what that means for the page, so the
+          sentence isn't said twice one above the other. A refusal has no bar. */}
       <T variant="title" color={colors.textStrong} style={styles.center}>
-        {bar?.title ?? p.label}
+        {bar ? NOTHING_SAVED : p.label}
       </T>
       <T color={colors.textSecondary} style={styles.center}>
         {problemBody(state.link, macName, what)}
