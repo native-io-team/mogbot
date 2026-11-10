@@ -45,7 +45,22 @@ interface WorkingIndicatorProps {
   onExited?: () => void;
   /** Where the turn answers, when it isn't this chat (a room). */
   place?: ReactNode;
+  /**
+   * Nothing to say yet stays wordless (the import bar above the composer
+   * says what's happening). Otherwise a turn with no step yet says
+   * "Thinking", as its sidebar row does.
+   */
+  bare?: boolean;
 }
+
+/**
+ * What the line says before the engine has reported anything: the turn has
+ * started (the engine is loading, or reading the message). Measured on the
+ * fake engine and Claude Code, that is the first one to five seconds after
+ * Send, and a pressed key with no words read as nothing happening. The
+ * sidebar row has always said this word here (`workingRowLine`).
+ */
+export const NO_STEP_YET = 'Thinking';
 
 const plural = (n: number) => `${n} ${n === 1 ? 'step' : 'steps'}`;
 
@@ -57,6 +72,7 @@ export function WorkingIndicator({
   leaving,
   onExited,
   place,
+  bare,
 }: WorkingIndicatorProps) {
   // Each step holds a moment and a blink of "Thinking" between two never
   // shows (the sidebar's rule), so the line doesn't flicker step to step.
@@ -74,7 +90,7 @@ export function WorkingIndicator({
   const [opened, setOpened] = useState(false);
   if (!entering && opened) setOpened(false);
 
-  const words = step.text ?? shown;
+  const words = step.text ?? shown ?? (bare || leaving ? null : NO_STEP_YET);
   const steps = work && work.stepCount > 0 ? plural(work.stepCount) : null;
   const ticking = work && step.now - work.startedAt >= 1_000;
   const elapsed = ticking ? formatElapsed(step.now - work.startedAt) : null;

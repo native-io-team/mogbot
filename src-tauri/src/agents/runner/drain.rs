@@ -487,6 +487,25 @@ pub(super) async fn drain_turns(app: &AppHandle, agent_id: &str, progressed: &mu
             },
             None => prompt,
         };
+        // Working from the moment the turn is taken, not from when its
+        // engine is spawned: its copy, its account and its engine are made
+        // ready first, and that took 0.5 to 1.1s on the fake engine (more
+        // for a bound agent's first copy), with the chat showing nothing.
+        // The working line says "Thinking" until the first step. A room's
+        // turn says so in its room, once the engine runs (`turn.rs`).
+        if room_ref.is_none() {
+            set_status(
+                &app,
+                &agent_id,
+                Status {
+                    state: "working",
+                    activity: None,
+                    since: Some(store::now_ms()),
+                    work: None,
+                    room: None,
+                },
+            );
+        }
         // A bound agent works in its own copy of its project (`task`): the
         // open one, or one made now. Refused (too many copies, no disk) is
         // the turn's failure; it never falls back to the user's folder.

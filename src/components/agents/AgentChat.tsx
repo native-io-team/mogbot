@@ -1664,10 +1664,8 @@ export const AgentChat = memo(function AgentChat({
   const checkIns = agent.checkIns;
   // Mid-import the bar above the composer says what's happening: the
   // working line keeps its dots and doesn't repeat it.
-  const activity =
-    agent.isMain && isImportInterviewActivity(agent.status.activity)
-      ? null
-      : plainActivity(agent.status.activity);
+  const importTalking = agent.isMain && isImportInterviewActivity(agent.status.activity);
+  const activity = importTalking ? null : plainActivity(agent.status.activity);
   const work = agent.status.work;
   const history = useMemo(
     () =>
@@ -1903,6 +1901,7 @@ export const AgentChat = memo(function AgentChat({
           activity={activity}
           work={work}
           agent={rowAgent}
+          bare={importTalking}
           place={
             inRoom ? (
               <RoomWorkingPlace roomId={inRoom} onOpenRoom={onOpenAgent} />
@@ -2117,6 +2116,7 @@ export const AgentChat = memo(function AgentChat({
                       activity={activity}
                       work={agent.status.work}
                       agent={rowAgent}
+                      bare={importTalking}
                       entering={indicator.entering}
                       leaving={indicator.leaving}
                       onExited={indicator.onExited}

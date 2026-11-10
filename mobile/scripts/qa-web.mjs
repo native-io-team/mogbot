@@ -3334,7 +3334,7 @@ const FIRST_RUN = [
     ready: 'Tell me what’s on your plate',
     settle: 2500,
     check:
-      'The Chief’s greeting, then the desk’s three ideas as chips under it (Brief me every morning · Sort my inbox, draft replies · Research it and write it up), and the composer empty',
+      'The Chief’s greeting, then the desk’s four ideas as chips under it (Brief me every morning · Make me an agent · Research it and write it up · Plan a trip), and the composer empty',
   },
   {
     name: 'firstrun-chat-chief-idea',

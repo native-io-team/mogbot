@@ -7,12 +7,33 @@ import { CHIEF_CHIPS, CHIEF_IDEAS, findIdea, ideaGroups } from '../../lib/chiefI
 import { BRAND } from '../../lib/brand';
 
 describe('the Chief’s ideas: the catalogue', () => {
-  it('puts three things that run without you on the chips', () => {
-    expect(CHIEF_CHIPS.map((i) => i.id)).toEqual(['morning-brief', 'inbox', 'research']);
-    // Every morning, on a trigger, a team: one from each group.
-    expect(new Set(CHIEF_CHIPS.map((i) => i.group))).toEqual(
-      new Set(['schedule', 'together', 'trigger'])
-    );
+  it('puts four different ways in on the chips', () => {
+    expect(CHIEF_CHIPS.map((i) => i.id)).toEqual([
+      'morning-brief',
+      'make-agent',
+      'research',
+      'travel',
+    ]);
+    // Every morning, an agent of your own, work written up, something personal.
+    expect(findIdea('morning-brief')?.text).toMatch(/^Every weekday at 8am/);
+    expect(findIdea('make-agent')?.label).toBe('Make me an agent');
+    expect(findIdea('research')?.oneOff).toBe(true);
+    expect(findIdea('travel')?.label).toMatch(/trip/i);
+  });
+
+  it('a chip needs nothing set up first, so the first result comes in minutes', () => {
+    for (const chip of CHIEF_CHIPS) {
+      expect(chip.what).not.toMatch(/Your Chief helps you connect|folder you pick/);
+      expect(chip.text).not.toMatch(/email|GitHub|folder|invoices are in/i);
+    }
+  });
+
+  it('"Make me an agent" asks for a draft first, then the first run now', () => {
+    const make = findIdea('make-agent')!;
+    expect(make.text).toMatch(/Draft it first/);
+    expect(make.text).toMatch(/only when I say yes/);
+    expect(make.text).toMatch(/first run now/);
+    expect(make.what).toMatch(/Nothing is made until you say yes/);
   });
 
   it('every idea types a whole brief with one blank at its end, and never sends', () => {

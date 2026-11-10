@@ -23,6 +23,13 @@ pub enum Choice {
     Imported,
     /// "No thanks, start fresh".
     Declined,
+    /// The user went past the card: they spoke to the Chief without
+    /// answering it. It settles the question as Declined does (the card at
+    /// the top of the chat and the phone's stop asking), without putting
+    /// "no" in their mouth. Observed: a new user who typed a task instead
+    /// left the card pinned above the greeting for good, and the phone offer
+    /// waiting on it never came.
+    Skipped,
 }
 
 impl Choice {
@@ -31,6 +38,7 @@ impl Choice {
             "undecided" => Ok(Choice::Undecided),
             "imported" => Ok(Choice::Imported),
             "declined" => Ok(Choice::Declined),
+            "skipped" => Ok(Choice::Skipped),
             _ => Err(super::err_invalid(
                 "choice",
                 "Pick imported, declined or undecided.",
@@ -96,6 +104,22 @@ pub fn set(choice: Choice, now: i64) -> Result<(), CommandError> {
     write(choice, now)
 }
 
+/// The user spoke to the Chief with the question still open: it counts as
+/// gone past. Whether that changed anything (so the UI is told once).
+pub fn skip_if_undecided(now: i64) -> bool {
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    if read() != Choice::Undecided {
+        return false;
+    }
+    match write(Choice::Skipped, now) {
+        Ok(()) => true,
+        Err(e) => {
+            tracing::warn!("could not record the import choice: {e}");
+            false
+        }
+    }
+}
+
 /// An import that brought something across answers the question for good.
 /// "Declined" turns into "imported" too: they changed their mind and did it.
 pub fn record_import(now: i64) {
@@ -115,6 +139,7 @@ mod tests {
     #[test]
     fn choices_are_plain_words_and_unknown_ones_read_as_undecided() {
         assert_eq!(serde_json::to_value(Choice::Declined).unwrap(), "declined");
+        assert_eq!(serde_json::to_value(Choice::Skipped).unwrap(), "skipped");
         assert_eq!(Choice::parse("Imported").unwrap(), Choice::Imported);
         assert!(Choice::parse("maybe").is_err());
         let saved: Saved = serde_json::from_str(r#"{"choice":"later"}"#).unwrap();
@@ -132,6 +157,15 @@ mod tests {
         set(Choice::Declined, 5).unwrap();
         assert_eq!(choice(), Choice::Declined);
         record_import(6);
+        assert_eq!(choice(), Choice::Imported);
+        // Going past it settles only an open question, never an answer.
+        assert!(!skip_if_undecided(7));
+        assert_eq!(choice(), Choice::Imported);
+        std::fs::remove_file(root.path().join("import-choice.json")).unwrap();
+        assert!(skip_if_undecided(8));
+        assert_eq!(choice(), Choice::Skipped);
+        assert!(!skip_if_undecided(9));
+        record_import(10);
         assert_eq!(choice(), Choice::Imported);
         std::fs::write(root.path().join("import-choice.json"), "not json").unwrap();
         assert_eq!(choice(), Choice::Undecided);

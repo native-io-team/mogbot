@@ -8,7 +8,10 @@
  * Shown once per Mac's chat until it's answered: "Pair your phone" opens the
  * Phone panel (the same pairing the onboarding screens did), Not now puts it
  * away. Never while a phone is already paired, while the import question is
- * still open (one question at a time), or while a turn is running.
+ * still open (one question at a time), or while a turn is running. Typing to
+ * the Chief instead of answering it goes past that question (the Mac records
+ * `skipped`), so the most common first run, someone who ignores the import
+ * card and just asks for something, still gets this offer.
  *
  * The answer is kept in this window's storage: losing it costs one more
  * offer, never a wrong state, and "Pair your phone" at the sidebar's foot

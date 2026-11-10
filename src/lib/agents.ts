@@ -514,7 +514,7 @@ export interface AgentsOverview {
 }
 
 /** Mirrors `agents::import_choice::Choice`. */
-export type ImportChoice = 'undecided' | 'imported' | 'declined';
+export type ImportChoice = 'undecided' | 'imported' | 'declined' | 'skipped';
 
 /** Answer "bring your agents, or start fresh?" (an import sets `imported` itself). */
 export const setImportChoice = (choice: ImportChoice) =>
