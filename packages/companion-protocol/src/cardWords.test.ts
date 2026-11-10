@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   checkInHead,
+  IMPORT_CHOICE_DECLINE,
+  IMPORT_CHOICE_NOTE,
+  IMPORT_CHOICE_TITLE,
   runsOnDetail,
   stepInOutcome,
   stepInSource,
@@ -11,6 +14,12 @@ import {
 const NOW = new Date(2026, 10, 9, 15, 0).getTime();
 
 describe('the words the desk and the phone share', () => {
+  it('the import card asks people who already have agents, and tells a first-timer what to press', () => {
+    expect(IMPORT_CHOICE_TITLE).toMatch(/^Already have agents/);
+    expect(IMPORT_CHOICE_NOTE).toMatch(/New to agents\? Start fresh\.$/);
+    expect(IMPORT_CHOICE_DECLINE).toMatch(/start fresh/i);
+  });
+
   it('a routine line: Routine or Scheduled, then why, and late with when it was due', () => {
     expect(checkInHead({ dueAt: NOW, late: false, repeats: true }, NOW)).toBe('Routine');
     expect(checkInHead({ dueAt: NOW, late: false, repeats: false }, NOW)).toBe('Scheduled');

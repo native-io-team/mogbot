@@ -98,7 +98,7 @@ function UsageBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
     <div className="agent-usage__body">
       <p className="agent-usage__title">Usage</p>
       {context && (
-        <Section title="Context">
+        <Section title="Conversation length">
           <Meter meter={context} title={`${agent.name}’s conversation`} />
         </Section>
       )}

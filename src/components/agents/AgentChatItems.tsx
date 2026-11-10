@@ -500,12 +500,12 @@ export const ErrorLine = memo(function ErrorLine({
                 {scheduling ? 'Scheduling…' : `Retry ${retryPhrase(retryAt)}`}
               </TextButton>
             ))}
-          {/* Retry at the reset is the recommended one; "Try anyway" stays
+          {/* Retry at the reset is the recommended one; "Try now" stays
               beside it, quiet, because the limit may already have lifted
               (another plan, extra usage). Once the reset has passed, Retry. */}
           {onRetry && (
             <TextButton tabIndex={0} variant={retryAt ? 'default' : 'strong'} onClick={onRetry}>
-              {retryAt ? 'Try anyway' : 'Retry'}
+              {retryAt ? 'Try now' : 'Retry'}
             </TextButton>
           )}
           {/* The moment another account is worth having, so onboarding

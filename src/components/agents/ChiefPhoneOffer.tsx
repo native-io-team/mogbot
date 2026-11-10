@@ -27,6 +27,14 @@ import type { AgentMessage } from '../../lib/agents';
 export const PHONE_OFFER_KEY = 'shipstudio.chief.phoneOffer';
 
 /**
+ * Honest about the time: "about ten minutes" held only when the phone app
+ * was already on the phone. With no App Store build yet, a first-timer's
+ * phone app is built on this Mac (Expo Go in minutes, Xcode up to an hour).
+ */
+export const PHONE_OFFER_NOTE =
+  'Chat, answer and approve from anywhere. Your phone talks only to this Mac. There’s no App Store app yet, so setting it up takes ten minutes to an hour.';
+
+/**
  * Whether the conversation has reached its first result: the user has said
  * something, and the Chief has replied to the newest thing they said (a
  * result card arrives on a reply too).
@@ -84,7 +92,7 @@ export function ChiefPhoneOffer({ onSetUp }: { onSetUp: () => void }) {
       data-testid="chief-phone-offer"
       icon={<MobileIcon size={14} />}
       title="Use your agents from your phone?"
-      note="Chat, answer and approve from anywhere. Your phone talks only to this Mac. About ten minutes."
+      note={PHONE_OFFER_NOTE}
       actions={
         <>
           <Button variant="secondary" size="compact" onClick={() => answer('later')}>
