@@ -34,7 +34,6 @@
 
 /* Subheader splitting the card into "Coding agents" and "Services" tiers. */
 .agents-section-title {
-  text-transform: uppercase;
   color: var(--text-muted);
   margin: var(--spacing-md) 0 var(--spacing-sm);
 }

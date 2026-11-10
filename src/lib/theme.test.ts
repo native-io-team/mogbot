@@ -449,6 +449,15 @@ describe('component roles on fixed hues and light surfaces', () => {
     }
   );
 
+  it('the dark segmented key stands out from its tray: rim at 3:1, its words at AA', () => {
+    const tray = resolveComponent('--tabs-tray-surface', 'dark');
+    expect(contrast(resolveComponent('--tabs-key-rim', 'dark'), tray)).toBeGreaterThanOrEqual(3);
+    // The key's face (the gradient's top stop) carries the chosen tab's words.
+    expect(
+      contrast(resolveHex('--text-primary', 'dark'), resolveHex('--color-gray-700', 'dark'))
+    ).toBeGreaterThanOrEqual(AA_TEXT);
+  });
+
   it('media text and the warning hover read on light surfaces', () => {
     for (const fg of ['--media-text', '--button-warning-text-hover']) {
       for (const bg of ['--surface-app', '--surface-panel', '--surface-control']) {

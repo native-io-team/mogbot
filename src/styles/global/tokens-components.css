@@ -478,10 +478,14 @@
   --tabs-tray-shadow:
     inset 0 var(--stroke-1) var(--space-02) var(--color-black-o50),
     inset 0 calc(var(--stroke-1) * -1) 0 var(--color-white-o05);
-  --tabs-key-surface: linear-gradient(var(--color-gray-750), var(--color-gray-800));
+  /* Dark: a step lighter face than the old 750/800 (which sat at 1.6:1 on
+     the tray and barely read as chosen), a brighter lit top edge, and a
+     gray-600 rim that holds 3:1 against the tray (theme.test.ts). */
+  --tabs-key-surface: linear-gradient(var(--color-gray-700), var(--color-gray-750));
+  --tabs-key-rim: var(--color-gray-600);
   --tabs-key-shadow:
-    inset 0 var(--stroke-1) 0 var(--color-white-o08),
-    0 0 0 var(--stroke-hairline) var(--color-black), 0 var(--stroke-1) 0 var(--color-gray-950),
+    inset 0 var(--stroke-1) 0 var(--color-white-o15), 0 0 0 var(--stroke-1) var(--tabs-key-rim),
+    0 var(--stroke-1) 0 var(--color-gray-950),
     0 var(--space-02) var(--space-04) var(--color-black-o30);
 }
 
