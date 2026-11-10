@@ -88,6 +88,13 @@ export function HostingLinkPicker({
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   /**
+   * Why the list didn't come, said in the dialog with Try again beside it. It
+   * used to be a toast while the dialog quietly went back to the provider
+   * choice, so the reason vanished in seconds and the screen read as if the
+   * click had done nothing.
+   */
+  const [failure, setFailure] = useState<string | null>(null);
+  /**
    * Which provider request is current. Pick Vercel, go back, pick Netlify, and
    * Vercel's slower response could still land last — storing Vercel's projects
    * while the header says Netlify. Choosing a row then wrote a Vercel project
@@ -126,6 +133,7 @@ export function HostingLinkPicker({
 
       setProvider(next);
       setProjects(null);
+      setFailure(null);
       setLoading(true);
       try {
         const list = await listHostingProjects(projectPath, next);
@@ -139,13 +147,12 @@ export function HostingLinkPicker({
           onNeedsToken(next);
           return;
         }
-        showToast(formatCommandError(error), 'error');
-        setProvider(null);
+        setFailure(formatCommandError(error));
       } finally {
         if (isCurrent()) setLoading(false);
       }
     },
-    [projectPath, onNeedsToken, showToast]
+    [projectPath, onNeedsToken]
   );
 
   const link = useCallback(
@@ -216,6 +223,12 @@ export function HostingLinkPicker({
           </div>
         ) : null}
 
+        {provider && !loading && failure ? (
+          <p className="connect-modal-failure" role="alert">
+            Couldn’t load your {PROVIDER_LABELS[provider]} projects: {failure}
+          </p>
+        ) : null}
+
         {provider && !loading && projects ? (
           projects.length === 0 ? (
             <EmptyState
@@ -262,6 +275,7 @@ export function HostingLinkPicker({
                     requestRef.current += 1;
                     setProvider(null);
                     setProjects(null);
+                    setFailure(null);
                     setLoading(false);
                   }
                 : onClose
@@ -269,6 +283,11 @@ export function HostingLinkPicker({
           >
             {provider ? 'Back' : 'Cancel'}
           </Button>
+          {provider && !loading && failure ? (
+            <Button variant="strong" onClick={() => void choose(provider)}>
+              Try again
+            </Button>
+          ) : null}
         </div>
       </div>
     </ModalFrame>
