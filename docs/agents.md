@@ -5264,7 +5264,8 @@ Agents run inside the app, so staying alive, and being reachable while
 the window is closed, is part of the product.
 
 **Menu-bar icon.** A monochrome template image (`src-tauri/icons/tray/*.svg`,
-rasterised by `pnpm icons:tray`): a placeholder ring (until real branding), with a dot while
+drawn by `pnpm icons:build`, re-rasterised by `pnpm icons:tray`): the mark (the M on its own,
+on a pixel grid), with a dot while
 anything needs you. The menu is a pure function of the agents and their live
 status (`tray::menu_model`), rebuilt at most every 300ms on `agents://status`
 and `agents://registry`:

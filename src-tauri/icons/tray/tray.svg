@@ -1,4 +1,4 @@
 <svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
-  <!-- PLACEHOLDER mark (scripts/generate-placeholder-icons.sh), as a macOS template. -->
-  <circle cx="18" cy="18" r="11" fill="none" stroke="#000" stroke-width="4"/>
+  <!-- The mark as a macOS template (scripts/build-icons.mjs). -->
+  <path fill="#000" fill-rule="evenodd" d="M15,5 H21 A11,11 0 0 1 32,16 V31 H4 V16 A11,11 0 0 1 15,5 Z M10,28 V15.5 A2.5,2.5 0 0 1 15,15.5 V28 Z M21,28 V15.5 A2.5,2.5 0 0 1 26,15.5 V28 Z"/>
 </svg>

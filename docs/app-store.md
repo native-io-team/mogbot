@@ -258,7 +258,7 @@ companion app.
 | Push | `aps-environment` is in the store build. The App ID needs the Push Notifications capability (automatic signing adds it). Push stays dormant until the relay is deployed: the app asks for notification permission only when the user turns on alerts, and the Mac reports push as unavailable. |
 | Associated domains / universal links | None. Pairing uses the custom scheme `mogbot-companion://`. |
 | 2.3.7 / 5.2 Trademarks | Keep "Claude", "Claude Code", "Codex", "OpenAI", "Anthropic" and "Tailscale" out of the name, subtitle and keywords; naming them as compatible software in the description is fine. |
-| 4.0 Design | The icon is placeholder art (a white ring on black, unbranded): acceptable to Apple, but the owner may want the real mark before launch. |
+| 4.0 Design | The icon is the mark on a Graphite key, full bleed and opaque (`mobile/assets/icon.png`, drawn by `pnpm icons:build`). |
 
 ## Store listing (drafts, not published)
 

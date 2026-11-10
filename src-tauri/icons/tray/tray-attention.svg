@@ -1,11 +1,6 @@
 <svg width="36" height="36" viewBox="0 0 36 36" xmlns="http://www.w3.org/2000/svg">
-  <!-- tray.svg with a dot at the top right: something needs you. -->
-  <defs>
-    <mask id="cut">
-      <rect width="36" height="36" fill="#fff"/>
-      <circle cx="29" cy="7" r="7.5" fill="#000"/>
-    </mask>
-  </defs>
-  <circle cx="18" cy="18" r="11" fill="none" stroke="#000" stroke-width="4" mask="url(#cut)"/>
-  <circle cx="29" cy="7" r="5.5" fill="#000"/>
+  <!-- The mark as a macOS template (scripts/build-icons.mjs), with a dot at the top right: something needs you. -->
+  <defs><mask id="cut"><rect width="36" height="36" fill="#fff"/><circle cx="30" cy="6" r="7.5" fill="#000"/></mask></defs>
+  <path mask="url(#cut)" fill="#000" fill-rule="evenodd" d="M15,5 H21 A11,11 0 0 1 32,16 V31 H4 V16 A11,11 0 0 1 15,5 Z M10,28 V15.5 A2.5,2.5 0 0 1 15,15.5 V28 Z M21,28 V15.5 A2.5,2.5 0 0 1 26,15.5 V28 Z"/>
+  <circle cx="30" cy="6" r="5.5" fill="#000"/>
 </svg>
