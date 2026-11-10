@@ -59,7 +59,7 @@ export default function UsageAccount() {
         </Pressable>
         <SheetTitle numberOfLines={1}>{key?.name ?? 'Account'}</SheetTitle>
         {key ? (
-          <KeyCard k={key} />
+          <KeyCard k={key} titled={false} />
         ) : (
           <T color={colors.textSecondary}>
             {inventory ? 'This account isn’t on your Mac anymore.' : 'Reading it from your Mac…'}

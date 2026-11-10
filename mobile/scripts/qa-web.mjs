@@ -3222,7 +3222,7 @@ async function main() {
           name: `usage-accounts-${variant}`,
           route: '/usage?id=site',
           ready: 'Usage',
-          act: scrollToText('ACCOUNTS'),
+          act: scrollToText('Accounts'),
           check:
             'Your accounts: a sheet with one headline, the stack as a segmented meter (one segment per account in order; an unread one an empty outlined slot, never full) with each account named and its room under it, and the next reset; then each account as a card: a numbered keycap (the one in use filled), its name, plan and who, a state pill ("In use", "Out of usage until …", "Not signed in"), its 5-hour and Weekly bars with "Resets in …", and a pace line in secondary ink (never amber) when the Mac sent one; no account named "This Mac"',
         },

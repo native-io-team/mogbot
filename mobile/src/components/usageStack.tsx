@@ -352,7 +352,14 @@ export function AccountRows({ keys, onOpen }: { keys: StackKey[]; onOpen: (k: St
 }
 
 /** One account: its place, name, state, limits, who used it, and where its usage went. */
-export function KeyCard({ k }: { k: StackKey }) {
+export function KeyCard({
+  k,
+  titled = true,
+}: {
+  k: StackKey;
+  /** Its name is the screen's title already: the card leads with its place and state. */
+  titled?: boolean;
+}) {
   const colors = useColors();
   const styles = useStyles();
   const [story, setStory] = useState(false);
@@ -368,19 +375,22 @@ export function KeyCard({ k }: { k: StackKey }) {
           </T>
         </View>
         <View style={styles.title}>
-          <T variant="headline" color={colors.textStrong} numberOfLines={1}>
-            {k.name}
-          </T>
+          {titled && (
+            <T variant="headline" color={colors.textStrong} numberOfLines={1}>
+              {k.name}
+            </T>
+          )}
           {k.detail.length > 0 && (
             <T variant="caption" color={colors.textMuted} numberOfLines={2}>
               {k.detail.join(' · ')}
             </T>
           )}
         </View>
+        {!titled && <StatusPill tone={pillOf(k)} label={k.stateLabel} />}
       </View>
-      <StatusPill tone={pillOf(k)} label={k.stateLabel} style={styles.pill} />
-      {k.limits.map((l) => (
-        <View key={l.key} style={styles.limit}>
+      {titled && <StatusPill tone={pillOf(k)} label={k.stateLabel} style={styles.pill} />}
+      {k.limits.map((l, i) => (
+        <View key={l.key} style={[styles.limit, i > 0 && styles.limitNext]}>
           <View style={styles.limitHead}>
             <T variant="small" color={colors.textSecondary}>
               {l.label}
@@ -577,7 +587,7 @@ const useStyles = makeStyles((colors) => ({
     borderTopColor: colors.borderSubtle,
   },
   num: { width: space['2xl'] * 1.5, textAlign: 'right', fontVariant: ['tabular-nums'] },
-  numNarrow: { width: space['2xl'], textAlign: 'right', fontVariant: ['tabular-nums'] },
+  numNarrow: { width: space['2xl'] * 2, textAlign: 'right', fontVariant: ['tabular-nums'] },
   seg: {
     flex: 1,
     height: space.xs,
@@ -622,6 +632,11 @@ const useStyles = makeStyles((colors) => ({
   title: { flex: 1, minWidth: 0 },
   pill: { alignSelf: 'flex-start' },
   limit: { gap: space['2xs'] },
+  limitNext: {
+    paddingTop: space.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderSubtle,
+  },
   limitHead: { flexDirection: 'row', justifyContent: 'space-between' },
   bar: {
     height: space.xs,
