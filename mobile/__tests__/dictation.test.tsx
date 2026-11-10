@@ -11,6 +11,7 @@ import { act, renderHook } from '@testing-library/react-native';
 import {
   AUTO_STOP_SILENCE_MS,
   DICTATION_IDLE,
+  HOLD_CANCEL_DISTANCE,
   NOTHING_HEARD_MS,
   dictationDisplay,
   dictationHint,
@@ -18,10 +19,12 @@ import {
   dictationSupport,
   draftText,
   fallsBackToServer,
+  holdEnds,
   joinDictation,
   listeningNote,
   problemCopy,
   problemFromError,
+  sendsOnRelease,
   silenceStops,
   stablePrefix,
   useDictation,
@@ -488,5 +491,112 @@ describe('the hook', () => {
       expect(await hook.result.current.start()).toBe(false);
     });
     expect(hook.result.current.phase).toBe('idle');
+  });
+});
+
+describe('holding the mic (a voice message)', () => {
+  it('sends what it heard once you let go and its last words are in', () => {
+    let s = run([
+      { type: 'request', draft: '', held: true },
+      { type: 'began' },
+      { type: 'result', transcript: 'book the', isFinal: false },
+    ]);
+    expect(s.held).toBe(true);
+    expect(sendsOnRelease(s)).toBe(false);
+    s = run([{ type: 'release' }], s);
+    expect(s).toMatchObject({ phase: 'stopping', released: true });
+    expect(sendsOnRelease(s)).toBe(false);
+    s = run([{ type: 'result', transcript: 'book the flight', isFinal: true }, { type: 'end' }], s);
+    expect(draftText(s)).toBe('book the flight');
+    expect(sendsOnRelease(s)).toBe(true);
+  });
+
+  it('never sends a tap’s dictation, nothing heard, an error, or a hold slid away', () => {
+    const tap = run([
+      { type: 'request', draft: '' },
+      { type: 'began' },
+      { type: 'result', transcript: 'hi', isFinal: true },
+      { type: 'release' },
+      { type: 'stop' },
+      { type: 'end' },
+    ]);
+    expect(sendsOnRelease(tap)).toBe(false);
+    const silent = run([
+      { type: 'request', draft: 'typed', held: true },
+      { type: 'began' },
+      { type: 'release' },
+      { type: 'end' },
+    ]);
+    expect(silent.problem).toBe('nothing-heard');
+    expect(sendsOnRelease(silent)).toBe(false);
+    const failed = run([
+      { type: 'request', draft: '', held: true },
+      { type: 'began' },
+      { type: 'result', transcript: 'half a', isFinal: false },
+      { type: 'error', code: 'network' },
+      { type: 'release' },
+    ]);
+    expect(draftText(failed)).toBe('half a');
+    expect(sendsOnRelease(failed)).toBe(false);
+    const slid = run([
+      { type: 'request', draft: 'typed', held: true },
+      { type: 'began' },
+      { type: 'result', transcript: 'oops', isFinal: true },
+      { type: 'cancel' },
+    ]);
+    expect(draftText(slid)).toBe('typed');
+    expect(sendsOnRelease(slid)).toBe(false);
+  });
+
+  it('sends on letting go when the recognizer had already ended by itself', () => {
+    let s = run([
+      { type: 'request', draft: '', held: true },
+      { type: 'began' },
+      { type: 'result', transcript: 'a long thought', isFinal: true },
+      { type: 'end' },
+    ]);
+    // Still held: nothing goes yet.
+    expect(sendsOnRelease(s)).toBe(false);
+    s = run([{ type: 'release' }], s);
+    expect(sendsOnRelease(s)).toBe(true);
+    // A second release changes nothing.
+    expect(run([{ type: 'release' }], s)).toBe(s);
+  });
+
+  it('tells a let-go on the mic from a slide away', () => {
+    expect(holdEnds({ x: 100, y: 100 }, { x: 110, y: 95 })).toBe('send');
+    expect(holdEnds({ x: 100, y: 100 }, { x: 100 - HOLD_CANCEL_DISTANCE - 1, y: 100 })).toBe(
+      'cancel'
+    );
+    expect(holdEnds({ x: 100, y: 100 }, { x: 100, y: 100 - HOLD_CANCEL_DISTANCE - 1 })).toBe(
+      'cancel'
+    );
+  });
+
+  it('isn’t stopped by a pause while held, but still gives up on nothing', () => {
+    const at = { startedAt: 0, lastVoiceAt: 0 };
+    expect(silenceStops({ ...at, now: 60_000, heard: true, holding: true })).toBe(false);
+    expect(silenceStops({ ...at, now: NOTHING_HEARD_MS, heard: false, holding: true })).toBe(true);
+  });
+
+  it('the hook: hold listens, release stops the recognizer, then the draft is ready to send', async () => {
+    const r = fakeRecognizer();
+    // The fake's stop ends at once; hold the end back so the last words can land first.
+    r.stop.mockImplementation(() => undefined);
+    const { hook, draft } = await setup(r, '');
+    await act(async () => {
+      await hook.result.current.start({ held: true });
+    });
+    expect(hook.result.current.state.held).toBe(true);
+    await act(() => r.fire('result', { isFinal: false, results: [{ transcript: 'call mum' }] }));
+    await act(() => hook.result.current.release());
+    expect(r.stop).toHaveBeenCalled();
+    expect(sendsOnRelease(hook.result.current.state)).toBe(false);
+    await act(() =>
+      r.fire('result', { isFinal: true, results: [{ transcript: 'call mum back' }] })
+    );
+    await act(() => r.fire('end'));
+    expect(draft()).toBe('call mum back');
+    expect(sendsOnRelease(hook.result.current.state)).toBe(true);
   });
 });

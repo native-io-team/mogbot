@@ -17,6 +17,12 @@
  * build has it (docs/mobile.md, "Dictation"). The web QA build swaps in a
  * scripted stand-in (dev/web/expo-speech-recognition.ts).
  *
+ * **Hold to talk** (a voice message): hold the mic and it listens while you
+ * hold; let go and what it heard is sent, as if you'd pressed Send once it
+ * finished; slide away before letting go and nothing is sent (`held`,
+ * `release`, `sendsOnRelease`, `holdEnds`). Silence never stops a hold that
+ * has heard you: you decide when it ends.
+ *
  * The phases are a pure reducer (`dictationReducer`) so a test can walk
  * every path: idle → starting → listening → stopping → idle, with the way it
  * ended (`done`, `cancelled`, `sent`, `error`) and any problem to show.
@@ -254,6 +260,10 @@ export interface DictationState {
   /** How the last session ended, until the next one starts. */
   outcome: DictationOutcome | null;
   problem: DictationProblem | null;
+  /** Started by holding the mic: letting go sends what it heard. */
+  held: boolean;
+  /** The finger came off a held mic (and didn't slide away). */
+  released: boolean;
 }
 
 export const DICTATION_IDLE: DictationState = {
@@ -265,11 +275,13 @@ export const DICTATION_IDLE: DictationState = {
   heard: false,
   outcome: null,
   problem: null,
+  held: false,
+  released: false,
 };
 
 export type DictationEvent =
-  /** The mic was tapped with this draft. */
-  | { type: 'request'; draft: string }
+  /** The mic was tapped (or held: `held`) with this draft. */
+  | { type: 'request'; draft: string; held?: boolean }
   /** Permission refused, or no recognizer: it never started. */
   | { type: 'refused'; problem: DictationProblem }
   /** The recognizer is listening. */
@@ -277,6 +289,8 @@ export type DictationEvent =
   | { type: 'result'; transcript: string; isFinal: boolean }
   /** Stop, or the silence after speech: keep what was heard, to edit. */
   | { type: 'stop' }
+  /** The finger came off a held mic: stop, and send what it heard once it's in. */
+  | { type: 'release' }
   /** Send while listening: keep what's on screen now, and stop at once. */
   | { type: 'send' }
   /** ×: put the draft back. */
@@ -309,7 +323,13 @@ export function dictationReducer(s: DictationState, e: DictationEvent): Dictatio
   switch (e.type) {
     case 'request':
       if (active(s)) return s;
-      return { ...DICTATION_IDLE, phase: 'starting', original: e.draft, committed: e.draft };
+      return {
+        ...DICTATION_IDLE,
+        phase: 'starting',
+        original: e.draft,
+        committed: e.draft,
+        held: Boolean(e.held),
+      };
     case 'refused':
       if (s.phase !== 'starting') return s;
       return { ...s, phase: 'idle', outcome: 'error', problem: e.problem };
@@ -331,6 +351,15 @@ export function dictationReducer(s: DictationState, e: DictationEvent): Dictatio
     }
     case 'stop':
       return s.phase === 'starting' || s.phase === 'listening' ? { ...s, phase: 'stopping' } : s;
+    case 'release':
+      if (!s.held || s.released) return s;
+      // Ended by itself while still held (the recognizer's own limit): letting go sends it now.
+      if (!active(s)) return s.outcome === 'done' ? { ...s, released: true } : s;
+      return {
+        ...s,
+        released: true,
+        phase: s.phase === 'starting' || s.phase === 'listening' ? 'stopping' : s.phase,
+      };
     case 'cancel':
       if (!active(s)) return s;
       return {
@@ -399,14 +428,44 @@ export function silenceStops({
   startedAt,
   lastVoiceAt,
   heard,
+  holding = false,
 }: {
   now: number;
   startedAt: number;
   lastVoiceAt: number;
   heard: boolean;
+  /** The mic is being held: a pause isn't the end, letting go is. */
+  holding?: boolean;
 }): boolean {
-  if (heard) return now - Math.max(lastVoiceAt, startedAt) >= AUTO_STOP_SILENCE_MS;
+  if (heard) {
+    if (holding) return false;
+    return now - Math.max(lastVoiceAt, startedAt) >= AUTO_STOP_SILENCE_MS;
+  }
   return now - Math.max(lastVoiceAt, startedAt) >= NOTHING_HEARD_MS;
+}
+
+// ---- Holding the mic -------------------------------------------------------------
+
+/** Hold the mic this long and it's a voice message rather than a tap. */
+export const HOLD_DELAY_MS = 300;
+/** Let go this far from where the hold began and nothing is sent. */
+export const HOLD_CANCEL_DISTANCE = 64;
+
+/** Where the finger came off a held mic: on it sends, slid away cancels. */
+export function holdEnds(
+  from: { x: number; y: number },
+  to: { x: number; y: number }
+): 'send' | 'cancel' {
+  return Math.hypot(to.x - from.x, to.y - from.y) > HOLD_CANCEL_DISTANCE ? 'cancel' : 'send';
+}
+
+/**
+ * A held mic was let go and its words are all in: send the draft now. Only
+ * when it ended cleanly having heard something; an error keeps the words in
+ * the draft to read, as a tap's would.
+ */
+export function sendsOnRelease(s: DictationState): boolean {
+  return s.held && s.released && s.phase === 'idle' && s.outcome === 'done' && s.heard;
 }
 
 // ---- The hook --------------------------------------------------------------------
@@ -575,6 +634,7 @@ export function useDictation({
         startedAt: startedRef.current,
         lastVoiceAt: lastVoiceAt.current,
         heard: s.heard,
+        holding: s.held && !s.released,
       });
       if (stops) {
         apply({ type: 'stop' });
@@ -587,33 +647,48 @@ export function useDictation({
     return () => clearTimeout(timer);
   }, [phase, r, apply]);
 
-  const start = useCallback(async () => {
-    if (!r || active(stateRef.current)) return false;
-    const can = dictationSupport(r);
-    if (can === 'no-module' || can === 'unavailable') return false;
-    apply({ type: 'request', draft: getDraft() });
-    setStartedAt(0); // the clock reads 0:00 until the recognizer is listening
-    const permission = await r.requestPermissionsAsync().catch(() => null);
-    if (stateRef.current.phase !== 'starting' && stateRef.current.phase !== 'stopping') {
-      return false; // × while the permission sheet was up
-    }
-    if (!permission?.granted) {
-      apply({ type: 'refused', problem: 'permission' });
-      return false;
-    }
-    if (stateRef.current.phase === 'stopping') {
-      // Stop before the recognizer started: nothing to keep.
-      apply({ type: 'end' });
-      return false;
-    }
-    return listen.current(can === 'on-device' ? 'on-device' : 'server');
-  }, [r, getDraft, apply]);
+  /** Listen; `held` for a voice message, which `release` sends. */
+  const start = useCallback(
+    async ({ held = false }: { held?: boolean } = {}) => {
+      if (!r || active(stateRef.current)) return false;
+      const can = dictationSupport(r);
+      if (can === 'no-module' || can === 'unavailable') return false;
+      apply({ type: 'request', draft: getDraft(), held });
+      setStartedAt(0); // the clock reads 0:00 until the recognizer is listening
+      const permission = await r.requestPermissionsAsync().catch(() => null);
+      if (stateRef.current.phase !== 'starting' && stateRef.current.phase !== 'stopping') {
+        return false; // × while the permission sheet was up
+      }
+      if (!permission?.granted) {
+        apply({ type: 'refused', problem: 'permission' });
+        return false;
+      }
+      if (stateRef.current.phase === 'stopping') {
+        // Stop before the recognizer started: nothing to keep.
+        apply({ type: 'end' });
+        return false;
+      }
+      return listen.current(can === 'on-device' ? 'on-device' : 'server');
+    },
+    [r, getDraft, apply]
+  );
 
   /** Stop: keep what it heard; the last words are still on their way, then it ends. */
   const stop = useCallback(() => {
     if (!r || !active(stateRef.current)) return;
     const before = stateRef.current.phase;
     apply({ type: 'stop' });
+    if (before === 'listening') r.stop();
+  }, [r, apply]);
+
+  /**
+   * The finger came off a held mic: like Stop, the last words still land,
+   * and then `sendsOnRelease` is true for the caller to send the draft.
+   */
+  const release = useCallback(() => {
+    if (!r) return;
+    const before = stateRef.current.phase;
+    apply({ type: 'release' });
     if (before === 'listening') r.stop();
   }, [r, apply]);
 
@@ -664,6 +739,7 @@ export function useDictation({
     via,
     start,
     stop,
+    release,
     send,
     cancel,
     drop,

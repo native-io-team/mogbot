@@ -19,6 +19,11 @@
  *   while it listens. Nothing is sent unless you press Send. The
  *   keyboard steps away while it listens and comes back after if it was up;
  *   tapping the words is Stop and edit.
+ * - holding the mic: a voice message. It listens while you hold, the words
+ *   streaming into the field, which keeps its shape so the mic stays under
+ *   your finger; let go and what it heard is sent; slide away first and
+ *   nothing is (lib/dictation.ts, `holdEnds`). The mic is the accent while
+ *   it's held.
  *
  * The field is one piece of the system's glass (Glass.tsx) where the phone
  * has it, as the tab bar is; a theme surface where it doesn't. Everything is
@@ -65,11 +70,22 @@ import {
   TextInput,
   View,
   useWindowDimensions,
+  type GestureResponderEvent,
   type LayoutChangeEvent,
   type NativeScrollEvent,
   type NativeSyntheticEvent,
 } from 'react-native';
-import { dictationHint, listeningNote, problemCopy, useDictation } from '../lib/dictation';
+import {
+  HOLD_CANCEL_DISTANCE,
+  HOLD_DELAY_MS,
+  dictationHint,
+  holdEnds,
+  listeningNote,
+  problemCopy,
+  sendsOnRelease,
+  useDictation,
+  type DictationState,
+} from '../lib/dictation';
 import Animated, {
   FadeIn,
   FadeOut,
@@ -214,6 +230,8 @@ export function Composer({
   const onLevel = useCallback((l: number) => level.set(l), [level]);
   const dictation = useDictation({ getDraft, setDraft: putSpoken, vocabulary, onLevel });
   const listening = dictation.phase !== 'idle';
+  /** A voice message: the mic is held (or was, and its last words are landing). */
+  const held = listening && dictation.state.held;
   const problem = dictation.problem ? problemCopy(dictation.problem) : null;
   // A hint stays a few seconds: it's an answer to a tap, not a state.
   useEffect(() => {
@@ -240,20 +258,40 @@ export function Composer({
     const t = setTimeout(() => input.current?.focus(), 0);
     return () => clearTimeout(t);
   }, [listening]);
-  const mic = () => {
+  const mic = ({ hold = false }: { hold?: boolean } = {}) => {
     const hint = dictationHint(dictation.support);
     if (hint) {
       // No recognizer in this build: the keyboard has one.
       if (dictation.support === 'no-module') input.current?.focus();
       setMicHint(hint);
-      return;
+      return false;
     }
-    haptic.select();
+    if (hold) haptic.medium();
+    else haptic.select();
     setMicHint(null);
     setDictated(true);
     refocus.current = input.current?.isFocused() ?? false;
     Keyboard.dismiss();
-    void dictation.start();
+    void dictation.start({ held: hold });
+    return true;
+  };
+  /** Where a hold on the mic began, while it's held. */
+  const holdFrom = useRef<{ x: number; y: number } | null>(null);
+  const holdStart = (e: GestureResponderEvent) => {
+    if (!mic({ hold: true })) return;
+    holdFrom.current = { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY };
+  };
+  /** Let go on the mic: send; slid away from it: nothing is sent. */
+  const holdEnd = (e: GestureResponderEvent) => {
+    const from = holdFrom.current;
+    holdFrom.current = null;
+    if (!from) return;
+    if (holdEnds(from, { x: e.nativeEvent.pageX, y: e.nativeEvent.pageY }) === 'cancel') {
+      haptic.select();
+      dictation.cancel();
+      return;
+    }
+    dictation.release();
   };
   /** Stop: the words stay in the field, to read and edit. */
   const dictationStop = () => {
@@ -411,6 +449,16 @@ export function Composer({
     submit(false);
   };
 
+  // A voice message let go, its words all in: it sends, as Send would. Once per hold.
+  const sentHold = useRef<DictationState | null>(null);
+  useEffect(() => {
+    if (!sendsOnRelease(dictation.state) || sentHold.current === dictation.state) return;
+    sentHold.current = dictation.state;
+    submit(false);
+    // `submit` reads the draft from the store; only the session's end matters here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dictation.state]);
+
   const stopTurn = () => {
     haptic.medium();
     stop(agent.id).catch((error: unknown) => {
@@ -428,21 +476,25 @@ export function Composer({
         : `${agent.name} reads it when this turn ends`
       : null;
   // Listening while it works, the queued line stays, so Send now has its sentence.
-  const hint = listening
-    ? (listeningNote(dictation.via) ?? queued)
-    : problem
-      ? problem.text
-      : micHint
-        ? micHint
-        : restored
-          ? 'Restored your draft'
-          : !connected
-            ? hasContent
-              ? `Send waits up to ${OUTBOX_WAIT_MS / 60_000} min for ${macName}`
-              : 'What you type stays here'
-            : uploading
-              ? `Uploading ${staged.filter((f) => !f.error).length} of ${attached}…`
-              : queued;
+  const hint = held
+    ? dictation.state.released
+      ? 'Sending what you said…'
+      : (listeningNote(dictation.via) ?? 'Let go to send · slide away to cancel')
+    : listening
+      ? (listeningNote(dictation.via) ?? queued)
+      : problem
+        ? problem.text
+        : micHint
+          ? micHint
+          : restored
+            ? 'Restored your draft'
+            : !connected
+              ? hasContent
+                ? `Send waits up to ${OUTBOX_WAIT_MS / 60_000} min for ${macName}`
+                : 'What you type stays here'
+              : uploading
+                ? `Uploading ${staged.filter((f) => !f.error).length} of ${attached}…`
+                : queued;
 
   return (
     <View
@@ -582,6 +634,8 @@ export function Composer({
           label={`Message ${agent.name}`}
           inputRef={input}
           dictation={listening ? { ...dictation.display, onPress: editDictation } : undefined}
+          // Held, the field keeps the shape it had, so the mic stays under the finger.
+          hold={held}
           // The files ride at the card's top, as Claude's own, each with its ×.
           top={
             attached > 0 ? (
@@ -647,7 +701,7 @@ export function Composer({
           chip={!listening && chip ? <EngineChip {...chip} onPress={openControls} /> : undefined}
         >
           {/* Listening, the card's row: ×, the waveform filling the middle, Stop, Send. */}
-          {listening && (
+          {listening && !held && (
             <RoundButton
               key="dictation-cancel"
               label="Cancel dictation"
@@ -663,7 +717,7 @@ export function Composer({
               />
             </RoundButton>
           )}
-          {listening && (
+          {listening && !held && (
             <Waveform
               key="dictation-waveform"
               level={level}
@@ -672,7 +726,7 @@ export function Composer({
               style={field.wave}
             />
           )}
-          {listening && (
+          {listening && !held && (
             <RoundButton
               key="dictation-stop"
               label="Stop dictating"
@@ -684,7 +738,7 @@ export function Composer({
               <View style={styles.stopSquare} />
             </RoundButton>
           )}
-          {listening && (
+          {listening && !held && (
             <RoundButton
               key="dictation-send"
               label="Send"
@@ -702,13 +756,22 @@ export function Composer({
             </RoundButton>
           )}
           {/* The mic is always there: dictating while a turn runs queues, as typing does. */}
-          {!listening && controls.includes('mic') && (
-            <RoundButton key="mic" label="Dictate" onPress={mic} tone="quiet">
+          {/* Held, it's the same button (same key), so the press carries on. */}
+          {(!listening || held) && controls.includes('mic') && (
+            <RoundButton
+              key="mic"
+              label={held ? 'Recording a voice message' : 'Dictate'}
+              hint="Hold to talk, and let go to send"
+              onPress={() => void mic()}
+              onLongPress={holdStart}
+              onPressOut={holdEnd}
+              tone={held ? 'accent' : 'quiet'}
+            >
               <Icon
                 name="mic"
                 size={iconSize.button}
-                color={colors.textPrimary}
-                fallback={<T color={colors.textPrimary}>●</T>}
+                color={held ? accent.onAccent : colors.textPrimary}
+                fallback={<T color={held ? accent.onAccent : colors.textPrimary}>●</T>}
               />
             </RoundButton>
           )}
@@ -858,6 +921,7 @@ export function ComposerField({
   editable = true,
   inputRef,
   dictation,
+  hold = false,
   leading,
   chip,
   top,
@@ -876,6 +940,12 @@ export function ComposerField({
    * still being decided is lighter. A tap on them is `onPress`.
    */
   dictation?: { settled: string; deciding: string; onPress: () => void };
+  /**
+   * The mic is held (a voice message): the field keeps the shape it had when
+   * the hold began, pill or card, so the button under the finger isn't moved
+   * (moving it would end the press).
+   */
+  hold?: boolean;
   /** A round button at the field's left: the + (a 40pt `RoundButton`). */
   leading?: ReactNode;
   /** Beside `leading` in the card's row, never in the pill. */
@@ -950,7 +1020,18 @@ export function ComposerField({
     (leading ? composer.inset + slot + composer.afterLead : composer.padLeft) -
     composer.padRight -
     buttons * slot;
-  const card = fieldIsCard({ listening, hasTop: Boolean(top), value, width, oneLine, room });
+  const shape = fieldIsCard({
+    listening: listening && !hold,
+    hasTop: Boolean(top),
+    value,
+    width,
+    oneLine,
+    room,
+  });
+  const [frozen, setFrozen] = useState<boolean | null>(null);
+  if (hold && frozen === null) setFrozen(shape);
+  if (!hold && frozen !== null) setFrozen(null);
+  const card = hold && frozen !== null ? frozen : shape;
   // The words keep their place in the tree whichever shape it is, so the
   // input (and the keyboard) stays as the pill becomes a card and back.
   return (
@@ -1134,6 +1215,8 @@ export function RoundButton({
   hint,
   disabled,
   onPress,
+  onLongPress,
+  onPressOut,
   tone,
   children,
 }: {
@@ -1141,6 +1224,10 @@ export function RoundButton({
   hint?: string;
   disabled?: boolean;
   onPress: () => void;
+  /** A hold (the mic's voice message), after `HOLD_DELAY_MS`. */
+  onLongPress?: (e: GestureResponderEvent) => void;
+  /** The finger came off, or slid away past `HOLD_CANCEL_DISTANCE`. */
+  onPressOut?: (e: GestureResponderEvent) => void;
   tone: 'accent' | 'quiet' | 'off';
   children: ReactNode;
 }) {
@@ -1157,6 +1244,11 @@ export function RoundButton({
         accessibilityState={{ disabled: !!disabled }}
         disabled={disabled}
         onPress={onPress}
+        onLongPress={onLongPress}
+        onPressOut={onPressOut}
+        delayLongPress={onLongPress ? HOLD_DELAY_MS : undefined}
+        // Sliding this far off a held button ends the press there: that's the cancel.
+        pressRetentionOffset={onLongPress ? HOLD_CANCEL_DISTANCE : undefined}
         hitSlop={composer.inset}
       >
         {({ pressed }) => {
