@@ -17,6 +17,15 @@
   transform: translateX(-50%);
 }
 
+/* It floats over the conversation, so it reads as something lifted off it:
+   round, a full control's size, and a shadow. At 24px with no lift it sat
+   on a card's text and read as part of the card. */
+.agent-chat__footer > .agent-chat__jump.button--icon-only {
+  border-color: var(--border-strong);
+  border-radius: var(--radius-pill);
+  box-shadow: var(--shadow-md);
+}
+
 /* Same column as the messages, same field language as the sidebar search. */
 /* Same column as the messages. One slim row like a messaging app: the
    paperclip, the text, then [mic] [send], ~44px tall at one line. The text

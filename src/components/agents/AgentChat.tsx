@@ -1897,7 +1897,6 @@ export const AgentChat = memo(function AgentChat({
                 {jump.mounted && (
                   <IconButton
                     tabIndex={0}
-                    size="compact"
                     className="agent-chat__jump"
                     data-leaving={jump.leaving || undefined}
                     onAnimationEnd={jump.leaving ? jump.onExited : undefined}
