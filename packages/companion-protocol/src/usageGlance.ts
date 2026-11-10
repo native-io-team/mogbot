@@ -8,7 +8,11 @@
  *   stack, filled to what is left of its tighter limit (5-hour or weekly).
  *   An account with no reading is an empty, dashed segment, never full.
  * - **A second sign-in of the same account** (`UsageAccountLine.sameAs`,
- *   from the engines' own records) is drawn but adds no room, and says why.
+ *   from the engines' own records) adds no room: its key says so plainly
+ *   with the one fix, and the meter leaves it out, with one line under it
+ *   instead (`meterKeys`, `sameNotes`; words in `sameAccount.ts`).
+ * - **This Mac's sign-in became another account** and the one it was isn't
+ *   connected: said once, until answered (`signInChanged`).
  * - **Estimates say so.** The one forward-looking line ("Runs out ~Thu") is
  *   the Mac's estimate across accounts (`totals.runOut`), labelled, and
  *   absent with too little history.
@@ -30,12 +34,8 @@ import type {
 import { QUOTA_WARN_PERCENT, resetPhrase } from './quota';
 import { planLabel } from './usage';
 import { roughWhen } from './usageSheet';
-import {
-  ACCOUNT_ENGINE_LABEL,
-  accountLabel,
-  switcherView,
-  type SwitcherRow,
-} from './accountSwitcher';
+import { accountLabel, switcherView, type SwitcherRow } from './accountSwitcher';
+import { sameAccountLine, sameAccountNote, signInChangedText } from './sameAccount';
 
 const MINUTE_MS = 60_000;
 const HOUR_MS = 60 * MINUTE_MS;
@@ -66,6 +66,17 @@ export interface KeyLimit {
   resetsAt?: string;
   /** The Mac's estimate for this limit, said as one. */
   pace?: { text: string; basis: string };
+  /** A per-model limit ("Weekly · Opus"): it stops only that model, so the key's room leaves it out. */
+  model?: boolean;
+  /** "3d 12h" until it refills. */
+  countdown?: string;
+  /** What would be left now had it been spent evenly through the window (the pace marker), 0–100. */
+  evenLeft?: number;
+  paceState?: 'ahead' | 'on' | 'under';
+  /** "On pace — lasts until it refills", "Ahead of pace — at this rate it runs out Thu, 2 days before it refills". */
+  paceWord?: string;
+  /** The Mac's estimate of when it runs out, before the reset: `along` the time left, 0 now to 1 the reset. */
+  runOut?: { at: number; along: number; text: string };
 }
 
 /** One rise in a meter, said for "Where did my usage go". */
@@ -92,8 +103,12 @@ export interface StackKey {
   /** What tells it apart: plan, organization, who it's signed in as, this Mac's own. */
   detail: string[];
   state: AccountKeyState;
-  /** "In use", "Next", "Ready", "Out of usage until Sat 10:00 AM", "Not signed in", "Same account as …", "No reading yet". */
+  /** "In use", "Next", "Ready", "Out of usage until Sat 10:00 AM", "Not signed in", "Same account", "No reading yet". */
   stateLabel: string;
+  /** The account it is a second sign-in of, by the name that one's key shows. */
+  sameAs: string | null;
+  /** The limit that stops its turns first, with its pace marker and countdown; null when it has no room or no reading. */
+  tight: KeyLimit | null;
   /** Left of its tighter limit, 0–100; null with no reading (or adding no room). */
   left: number | null;
   tone: KeyTone;
@@ -101,7 +116,10 @@ export interface StackKey {
   /** "Riley · 1.2M tokens · 14 turns", this week, most first. */
   spent: string[];
   changes: ChangeLine[];
-  /** The one fix for a sign-in problem. */
+  /**
+   * The one fix for a sign-in problem. A duplicate's (`sign_in_other`) can
+   * also be removed, unless it is this Mac's own sign-in.
+   */
   fix: { action: 'sign_in' | 'sign_in_other' | 'remove'; text: string } | null;
   canUse: boolean;
   signedIn: boolean;
@@ -136,10 +154,80 @@ export interface LowBar {
   otherEngine: AgentEngine | null;
 }
 
+/** This Mac's own sign-in is another account now: said once, until answered. */
+export interface SignInChangedNotice {
+  engine: AgentEngine;
+  /** Sent back when it's answered (`agents_usage_sign_in_seen`). */
+  key: string;
+  text: string;
+}
+
+/**
+ * The glance in plain words, for the sidebar row and the phone's Agents
+ * list: what the agents can still do and when it refills, in words anyone
+ * reads. "Usage" is the label the row carries; these are its figures.
+ */
+export interface GlanceRowWords {
+  /** "57% left this week", "57% left for now", "Out of usage", "Not checked yet". */
+  figure: string;
+  /** "Refills in 3d 12h" ("Refills Sat 10:00 AM" when out); absent when no reset was reported. */
+  refill: string | null;
+  /** "2 accounts": only with more than one real account. */
+  count: string | null;
+  /** The user has something to do (nearly out everywhere, nothing signed in). */
+  needsYou: boolean;
+}
+
+/** The figure that matters: the tighter limit of the account in use (else the roomiest), and its refill. */
+function rowWords(
+  keys: StackKey[],
+  counted: StackKey[],
+  read: StackKey[],
+  roomy: StackKey[],
+  tone: 'calm' | 'warning' | 'limited',
+  back: number | null,
+  soonest: { resetsAt: string } | null,
+  now: number
+): GlanceRowWords {
+  const count = counted.length > 1 ? plural(counted.length, 'account') : null;
+  const needsYou = tone === 'warning';
+  if (counted.length === 0) {
+    return {
+      figure: keys.length === 0 ? 'No accounts yet' : 'Not signed in',
+      refill: null,
+      count,
+      needsYou: true,
+    };
+  }
+  if (read.length === 0) return { figure: 'Not checked yet', refill: null, count, needsYou };
+  if (roomy.length === 0) {
+    const at = back ? resetPhrase(back, now) : (soonest?.resetsAt ?? null);
+    return { figure: OUT_OF_USAGE, refill: at ? `Refills ${at}` : null, count, needsYou };
+  }
+  const using =
+    roomy.find((k) => k.state === 'in_use') ??
+    roomy.reduce((a, b) => ((b.left ?? 0) > (a.left ?? 0) ? b : a));
+  const tight = using.tight;
+  const left = tight?.left ?? using.left ?? 0;
+  return {
+    figure: `${left}% left ${tight?.label === 'Weekly' ? 'this week' : 'for now'}`,
+    refill: tight?.countdown ? `Refills in ${tight.countdown}` : null,
+    count,
+    needsYou,
+  };
+}
+
 export interface UsageGlance {
   engines: StackEngine[];
+  /** The row's plain words: what's left, when it refills. */
+  row: GlanceRowWords;
   /** Every key, engine by engine, in order. */
   keys: StackKey[];
+  /** The keys the meter draws: a second sign-in of an account adds no segment. */
+  meterKeys: StackKey[];
+  /** One line each for those left out: "Personal is the same Claude account as Work — adds no extra room". */
+  sameNotes: string[];
+  signInChanged: SignInChangedNotice | null;
   /** "Plenty of room", "Runs out ~Thu, 2 days before reset", "Out of usage until 3:20 PM". */
   headline: string;
   /** The headline is an estimate: what it rests on. */
@@ -155,6 +243,11 @@ export interface UsageGlance {
   /** The soonest reset of any read account's limit. */
   soonest: { label: string; resetsIn: string; resetsAt: string; account: string } | null;
   nudge: SpareNudge | null;
+  /**
+   * Who used the accounts this week, most first, from the turns this app ran
+   * (tokens as the engines reported them): the Tokens view. Never a cost.
+   */
+  burning: BurnLine[];
   low: LowBar | null;
 }
 
@@ -206,27 +299,118 @@ function paceFor(paces: UsagePace[] | undefined, w: QuotaWindow, now: number) {
   };
 }
 
+/** How long a window is, from what the engine said; null when it didn't. */
+export function windowLength(w: Pick<QuotaWindow, 'kind' | 'windowMinutes'>): number | null {
+  if (w.windowMinutes && w.windowMinutes > 0) return w.windowMinutes * MINUTE_MS;
+  if (w.kind === 'five_hour') return 5 * HOUR_MS;
+  if (w.kind.startsWith('seven_day')) return 7 * DAY_MS;
+  return null;
+}
+
+/** "3d 12h", "4h 20m", "35m": until a reset. */
+export function countdown(at: number, now: number): string {
+  const ms = Math.max(0, at - now);
+  const d = Math.floor(ms / DAY_MS);
+  const h = Math.floor((ms % DAY_MS) / HOUR_MS);
+  const m = Math.floor((ms % HOUR_MS) / MINUTE_MS);
+  if (d > 0) return `${d}d ${h}h`;
+  if (h > 0) return `${h}h ${m}m`;
+  return `${Math.max(1, m)}m`;
+}
+
+/** A per-model weekly limit's model: `seven_day_opus` → "Opus". */
+function modelOf(kind: string): string | null {
+  const m = /^seven_day_(.+)$/.exec(kind);
+  if (!m) return null;
+  return m[1]
+    .split('_')
+    .map((p) => p.charAt(0).toUpperCase() + p.slice(1))
+    .join(' ');
+}
+
+/** More than this many points from even, it is ahead or under pace. */
+const PACE_SLACK = 5;
+
+/**
+ * Where a limit stands against time: what would be left had it been spent
+ * evenly through the window (the pace marker), whether it is ahead (spent
+ * faster than time passed), on or under pace, and in words what that means.
+ * The run-out, when the Mac has one, is its estimate and says so.
+ */
+function paceOf(
+  w: QuotaWindow,
+  left: number,
+  estimate: UsagePace | undefined,
+  now: number
+): Pick<KeyLimit, 'evenLeft' | 'paceState' | 'paceWord' | 'runOut'> {
+  const length = windowLength(w);
+  if (!length || w.resetsAt === undefined || left <= 0) return {};
+  const remaining = Math.max(0, Math.min(1, (w.resetsAt - now) / length));
+  const evenLeft = Math.round(remaining * 100);
+  const gap = evenLeft - left; // positive: less left than even pace leaves
+  const paceState = gap > PACE_SLACK ? 'ahead' : gap < -PACE_SLACK ? 'under' : 'on';
+  const runOut =
+    estimate && estimate.reachesAt > now && estimate.reachesAt < w.resetsAt
+      ? {
+          at: estimate.reachesAt,
+          // Along the time left until the reset: 0 now, 1 the reset.
+          along: (estimate.reachesAt - now) / Math.max(1, w.resetsAt - now),
+          text: `Runs out ${roughWhen(estimate.reachesAt, now)}`,
+        }
+      : undefined;
+  let paceWord: string;
+  if (runOut) {
+    const early = Math.round((w.resetsAt - runOut.at) / DAY_MS);
+    const ahead = early >= 1 ? `${plural(early, 'day')} before it refills` : 'before it refills';
+    paceWord = `Ahead of pace — at this rate it runs out ${roughWhen(runOut.at, now)}, ${ahead}`;
+  } else if (paceState === 'ahead') {
+    paceWord = 'Ahead of pace — used faster than time has passed';
+  } else if (paceState === 'under') {
+    paceWord = 'Under pace — room to spare before it refills';
+  } else {
+    paceWord = 'On pace — lasts until it refills';
+  }
+  return { evenLeft, paceState, paceWord, ...(runOut ? { runOut } : {}) };
+}
+
 function limitsOf(line: UsageAccountLine | undefined, now: number): KeyLimit[] {
   if (!line || !line.signedIn) return [];
   const windows = line.windows.filter((w) => live(w, now));
+  const models = windows
+    .filter((w) => modelOf(w.kind) !== null)
+    .map((w) => [`Weekly · ${modelOf(w.kind)}`, w, true] as const);
   const out: KeyLimit[] = [];
-  for (const [label, pick] of [
-    ['5-hour', windows.find(isSession)],
-    ['Weekly', windows.find(isWeek)],
-  ] as const) {
+  for (const [label, pick, model] of [
+    ['5-hour', windows.find(isSession), false] as const,
+    ['Weekly', windows.find(isWeek), false] as const,
+    ...models,
+  ]) {
     if (!pick || (pick.usedPercent === undefined && !pick.limited)) continue;
-    const left = line.out ? 0 : leftOf(pick);
+    const left = line.out && !model ? 0 : leftOf(pick);
+    const estimate = line.pace?.find(
+      (x) =>
+        x.kind === pick.kind &&
+        x.estimate === true &&
+        pick.resetsAt !== undefined &&
+        Math.abs(x.resetsAt - pick.resetsAt) <= 30 * MINUTE_MS
+    );
     const pace = left > 0 && !line.out ? paceFor(line.pace, pick, now) : undefined;
     out.push({
       key: `${line.engine}:${line.id}:${pick.kind}`,
       label,
       left,
+      ...(model ? { model: true } : {}),
       // Amber only when nearly out: a pace estimate is information, never an alarm.
       tone: left <= 0 ? 'limited' : 100 - left >= QUOTA_WARN_PERCENT ? 'warning' : 'calm',
       ...(pick.resetsAt
-        ? { resetsIn: relativeIn(pick.resetsAt, now), resetsAt: resetPhrase(pick.resetsAt, now) }
+        ? {
+            resetsIn: relativeIn(pick.resetsAt, now),
+            resetsAt: resetPhrase(pick.resetsAt, now),
+            countdown: countdown(pick.resetsAt, now),
+          }
         : {}),
       ...(pace ? { pace } : {}),
+      ...paceOf(pick, left, line.out ? undefined : estimate, now),
     });
   }
   return out;
@@ -295,15 +479,21 @@ function keyOf(
   same: string | undefined
 ): StackKey {
   const limits = limitsOf(line, now);
-  const read = limits.length > 0;
+  // The limits that stop every turn; a per-model one stops only its model.
+  const general = limits.filter((l) => !l.model);
+  const read = general.length > 0;
   const left =
     !row.signedIn || same
       ? null
       : row.tone === 'out'
         ? 0
         : read
-          ? Math.min(...limits.map((l) => l.left))
+          ? Math.min(...general.map((l) => l.left))
           : null;
+  const tightest = general.reduce<KeyLimit | null>(
+    (a, l) => (a === null || l.left < a.left ? l : a),
+    null
+  );
   let state: AccountKeyState;
   let stateLabel: string;
   if (!row.signedIn) {
@@ -311,7 +501,7 @@ function keyOf(
     stateLabel = 'Not signed in';
   } else if (same) {
     state = 'same';
-    stateLabel = `Same account as ${same}`;
+    stateLabel = 'Same account';
   } else if (row.tone === 'out') {
     state = 'out';
     stateLabel = row.state;
@@ -341,10 +531,7 @@ function keyOf(
   const fix: StackKey['fix'] = !row.signedIn
     ? { action: 'sign_in', text: 'Sign in to use it.' }
     : same
-      ? {
-          action: 'sign_in_other',
-          text: `It’s signed in to the same ${ACCOUNT_ENGINE_LABEL[row.engine]} account as ${same}, so it adds no room. Sign it in again with a different account (sign out of ${row.engine === 'codex' ? 'ChatGPT' : 'claude.ai'} in your browser first), or remove it.`,
-        }
+      ? { action: 'sign_in_other', text: `${sameAccountLine(row.engine, same)}.` }
       : null;
   return {
     key: row.key,
@@ -355,7 +542,9 @@ function keyOf(
     detail: detailOf(a, line, row.name),
     state,
     stateLabel,
+    sameAs: same ?? null,
     left,
+    tight: same || left === null || left === 0 ? null : tightest,
     tone,
     limits: same ? [] : limits,
     spent: (line?.spent ?? [])
@@ -402,6 +591,46 @@ function nudgeOf(
     more: Math.max(0, waiting.length - 3),
     empty: waiting.length === 0,
   };
+}
+
+/** One agent (or one of its routines) and what it used this week. */
+export interface BurnLine {
+  key: string;
+  /** "Chief of Staff", "Finance: Monday numbers". */
+  name: string;
+  tokens: number;
+  /** "4.8M tokens · 23 turns". */
+  detail: string;
+  /** Of everyone's tokens this week, 0–100. */
+  share: number;
+}
+
+/** Every real account's `spent`, added up by agent: this week, most first. */
+function burningOf(inv: UsageInventory | null | undefined, keys: StackKey[]): BurnLine[] {
+  const real = new Set(keys.filter((k) => k.state !== 'same').map((k) => `${k.engine}:${k.id}`));
+  const by = new Map<string, { name: string; tokens: number; turns: number }>();
+  for (const line of inv?.accounts ?? []) {
+    if (!real.has(`${line.engine}:${line.id}`)) continue;
+    for (const r of line.spent ?? []) {
+      const key = r.routine ? `${r.agentId}:${r.routine}` : r.agentId;
+      const was = by.get(key) ?? {
+        name: r.routine ? `${r.name}: ${r.routine}` : r.name,
+        tokens: 0,
+        turns: 0,
+      };
+      by.set(key, { ...was, tokens: was.tokens + r.tokens, turns: was.turns + r.turns });
+    }
+  }
+  const total = [...by.values()].reduce((s, b) => s + b.tokens, 0);
+  return [...by.entries()]
+    .map(([key, b]) => ({
+      key,
+      name: b.name,
+      tokens: b.tokens,
+      detail: `${tokensShortly(b.tokens)} tokens · ${plural(b.turns, 'turn')}`,
+      share: total > 0 ? Math.round((b.tokens / total) * 100) : 0,
+    }))
+    .sort((a, b) => b.tokens - a.tokens);
 }
 
 /**
@@ -563,15 +792,34 @@ export function usageGlance(
     };
   }
 
+  const row = rowWords(keys, counted, read, roomy, tone, back?.at ?? null, soonest, now);
+
+  // This Mac's sign-in became another account: the first engine's, said once.
+  const change = (inventory?.signInChanges ?? []).find((c) =>
+    engines.some((e) => e.engine === c.engine)
+  );
+  const macName =
+    keys.find((k) => change && k.engine === change.engine && k.thisMac)?.name ??
+    'this Mac’s sign-in';
+
   return {
     engines,
     keys,
+    row,
+    meterKeys: keys.filter((k) => k.state !== 'same'),
+    sameNotes: keys
+      .filter((k) => k.state === 'same' && k.sameAs)
+      .map((k) => sameAccountNote(k.engine, k.name, k.sameAs as string)),
+    signInChanged: change
+      ? { engine: change.engine, key: change.key, text: signInChangedText(change, macName) }
+      : null,
     headline,
     estimate,
     tone,
     summary,
     soonest,
     nudge: nudgeOf(inventory, now, keys),
+    burning: burningOf(inventory, keys),
     low,
   };
 }

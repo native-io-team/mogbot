@@ -4603,11 +4603,45 @@ read answered with (`usage_read::ORG_HEADER`, kept per account in
 `usage-readings.json` `orgs`, forgotten on a new sign-in); Codex's
 `chatgpt_account_id` and user. A later account with the same organization
 on a plan that isn't shared by seats (not Team, Enterprise, Business, Edu)
-is `sameAs` the first: it counts once in totals (`compute::totals`), its
-segment is hatched and holds nothing, and its key says "Same account as …"
-with the fix (sign in again with another account, signing out of claude.ai
-first, or remove it). The header is in Claude Code's own code but was not
-yet observed on a setup token's answer here; without it nothing is marked.
+is `sameAs` the first: it counts once in totals (`compute::totals`), draws
+no segment of the meter (the glance's `meterKeys`; one line under the meter
+instead, `sameNotes`), and its key says plainly "Same Claude account as … —
+adds no extra room" with "Sign in with a different account" and "Remove"
+(words in `companion-protocol/sameAccount.ts`, shared with the phone). The
+header is in Claude Code's own code but was not yet observed on a setup
+token's answer here; without it nothing is marked.
+
+Adding guards the trap: before the sign-in opens the browser, the dialog
+says the browser signs in as whoever is logged into claude.ai (or
+chatgpt.com) and to sign out or use a private window; the moment it returns,
+`agents_usage_check_account` reads that account once (`usage_read::check_one`)
+and, when it is one already here, the dialog says so at once with "Try again
+with a different account" or "Remove it".
+
+**This Mac's sign-in became another account** (`agents/sign_in_change.rs`).
+Signing Claude Code in on this Mac as someone else swaps the account behind
+This Mac silently: on the owner's Mac (2026-11-09) it went from an account
+resetting Mondays 4 PM to the one "Personal Account" already was (Saturdays
+10 AM), so both entries became one account and the other was no longer
+connected. Each inventory read keeps the identity of This Mac's sign-in per
+engine (`usage-readings.json` `signIns`: the organization, else the email,
+with first/last seen and a weekly reset observed while it was signed in; a
+reading older than the identity is never credited to it). When it changes
+and the previous account isn't connected (no other account has its identity,
+or its weekly reset when its identity is unknown), Usage says once: "This
+Mac's Claude Code is now signed in as X. Your previous account (Y, resets
+Mondays 4 PM) isn't connected anymore — add it to keep stacking", with "Add
+it" (the add flow) and "Not now" (`agents_usage_sign_in_seen`). Before any
+history existed, the one record that tells accounts apart is This Mac's own
+weekly-reset samples: a reset that moved to another time of the week and
+stayed there is said as exactly that, naming nobody (`byReset`).
+
+**The sidebar row** says, in words anyone reads, what the agents can still
+do and when it refills (`usageGlance` `row`): "Usage 57% left this week" (the
+tighter limit of the account in use), a meter with one segment per real
+account, "Refills Sat 10:00 AM", and "2 accounts" only when there are. Its
+corner dot shows only when the user must act or agents are out; the phone's
+Agents list says the same.
 
 **Where did my usage go** (`agents/usage_story.rs`). Each turn's tokens are
 recorded per account with its agent, and its routine when it ran one alone

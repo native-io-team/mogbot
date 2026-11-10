@@ -2058,7 +2058,32 @@ export interface UsageInventory {
   routines: UsageRoutineLine[];
   /** Every account at once. Absent from Macs that predate it. */
   totals?: ComputeTotals;
+  /**
+   * This Mac's own sign-in became another account and the one it was isn't
+   * connected any more, until the user answers it. Absent when there is
+   * none, and from Macs that predate it.
+   */
+  signInChanges?: SignInChange[];
   now: number;
+}
+
+/** This Mac's own sign-in to an engine is now another account (`sameAccount.ts`). */
+export interface SignInChange {
+  engine: AgentEngine;
+  /** Answering it sends this back; it carries no account id. */
+  key: string;
+  /** When the new sign-in was first seen. */
+  at: number;
+  nowEmail?: string;
+  nowOrgName?: string;
+  /** Only when recorded while that account was the one signed in. */
+  beforeEmail?: string;
+  beforeOrgName?: string;
+  /** A weekly reset the previous account reported. */
+  beforeWeeklyReset?: number;
+  nowWeeklyReset?: number;
+  /** Nothing named the previous account: only its weekly reset, which moved. */
+  byReset: boolean;
 }
 
 export interface PasteImportAgent {

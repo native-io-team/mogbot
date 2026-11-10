@@ -40,5 +40,6 @@ export * from './crossover';
 export * from './cardWords';
 export * from './quiet';
 export * from './usageGlance';
+export * from './sameAccount';
 export * from './brief';
 export * from './conversations';

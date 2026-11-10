@@ -262,5 +262,6 @@ exports[`the words a person reads use the agreed words the way the snapshot hold
   "…’s sign-in opens here. The sign-in stays on your Mac.",
   "…’s sign-in opens in the agents’ own Chrome on your Mac and shows here: you sign in by touch, and nothing you type is kept. Your agents then use it signed in.",
   "…’s sign-in opens on your Mac. Finish there.",
+  "…… on your Mac: Agents → Usage.",
 ]
 `;

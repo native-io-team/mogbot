@@ -27,7 +27,7 @@
  * @module components/agents/AgentsUsageView
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 import { AddIcon, ZapIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { SegmentedControl } from '../primitives/SegmentedControl';
@@ -49,8 +49,11 @@ import {
   USAGE_MODES,
   USAGE_MODE_DETAIL,
   USAGE_MODE_LABEL,
+  ADD_IT,
+  NOT_NOW,
   estimateLine,
   localLine,
+  markSignInChangeSeen,
   setUsageMode,
   setCrossover,
   spendSpareNow,
@@ -65,7 +68,7 @@ import { EngineSignInModal } from './EngineSignInModal';
 import { AgentsCrossover } from './AgentsCrossover';
 import { SpareList } from './AgentsUsage';
 import { useUsageGlance } from './AccountSwitcher';
-import { StackMeter, UsageKey } from './UsageStack';
+import { SameNotes, StackMeter, UsageKey } from './UsageStack';
 
 const say = (e: unknown) => formatCommandError(asCommandError(e));
 
@@ -102,6 +105,7 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
   const [signingIn, setSigningIn] = useState<UsageAccount | null>(null);
   const [macSignIn, setMacSignIn] = useState<AgentEngine | null>(null);
   const [busy, setBusy] = useState(false);
+  const [view, setView] = useState<'limits' | 'tokens'>('limits');
   const installed = engines.filter((e) => e.installed).map((e) => e.id);
 
   const add = async (engine: AgentEngine) => {
@@ -185,19 +189,51 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
     }
   };
 
+  // "This Mac's Claude Code is now signed in as …": answered once, either way.
+  const answerChange = async (addIt: boolean) => {
+    const change = glance.signInChanged;
+    if (!change) return;
+    try {
+      await markSignInChangeSeen(change.key);
+    } catch (e) {
+      showToast(say(e), 'error');
+    }
+    if (addIt) void add(change.engine);
+    reload();
+  };
+
   return (
     <div className="usage-panel" ref={top} data-in-settings={inSettings || undefined}>
       {!accounts ? null : (
         <>
+          {glance.signInChanged && (
+            <div className="usage-bar" role="status" data-testid="usage-signin-changed">
+              <p className="usage-bar__text">{glance.signInChanged.text}</p>
+              <div className="usage-bar__actions">
+                <Button
+                  size="compact"
+                  variant="secondary"
+                  leftIcon={<AddIcon size={14} />}
+                  onClick={() => void answerChange(true)}
+                >
+                  {ADD_IT}
+                </Button>
+                <Button size="compact" variant="ghost" onClick={() => void answerChange(false)}>
+                  {NOT_NOW}
+                </Button>
+              </div>
+            </div>
+          )}
           <div className="usage-hero" data-tone={glance.tone} data-testid="usage-hero">
             <p className="usage-hero__eyebrow">
-              {glance.keys.length === 1 ? 'Your account' : 'Your accounts, together'}
+              {glance.meterKeys.length === 1 ? 'Your account' : 'Your accounts, together'}
             </p>
             <h2 className="usage-hero__headline">{glance.headline}</h2>
             {glance.estimate && (
               <p className="usage-hero__estimate">{glance.estimate}. An estimate, not a reading.</p>
             )}
-            <StackMeter keys={glance.keys} size="large" labelled />
+            <StackMeter keys={glance.meterKeys} size="large" labelled paced />
+            <SameNotes notes={glance.sameNotes} />
             {glance.soonest && (
               <p className="usage-hero__reset">
                 Next reset: {glance.soonest.account}’s {glance.soonest.label.toLowerCase()} limit,{' '}
@@ -288,18 +324,60 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
             </section>
           )}
 
-          {glance.engines.map((e) => (
-            <EngineStack
-              key={e.engine}
-              engine={e}
-              several={glance.engines.length > 1}
-              onReorder={(ids) => void attempt(() => reorderUsageAccounts(e.engine, ids))}
-              onUse={(id) => void attempt(() => putAccountFirst(e.engine, id))}
-              onSignIn={(id) => signIn(e.engine, id)}
-              onRename={(id, name) => attempt(() => renameUsageAccount(e.engine, id, name))}
-              onRemove={(id) => void remove(e.engine, id)}
-            />
-          ))}
+          {glance.burning.length > 0 && (
+            <div className="usage-switch" data-testid="usage-view-switch">
+              <SegmentedControl
+                aria-label="Show limits or tokens"
+                value={view}
+                size="default"
+                options={[
+                  { value: 'limits', label: 'Limits' },
+                  { value: 'tokens', label: 'Tokens' },
+                ]}
+                onValueChange={(v) => setView(v as 'limits' | 'tokens')}
+              />
+            </div>
+          )}
+
+          {view === 'tokens' && glance.burning.length > 0 && (
+            <section className="usage-section" aria-labelledby="usage-tokens">
+              <h3 className="usage-section__title" id="usage-tokens">
+                Who used it this week
+              </h3>
+              <p className="usage-section__muted">
+                Tokens as the engines reported them for turns these agents ran, across your
+                accounts. Not a cost: your plans aren’t billed per token.
+              </p>
+              <ol className="usage-burn" data-testid="usage-tokens">
+                {glance.burning.map((b) => (
+                  <li key={b.key} className="usage-burn__row">
+                    <span className="usage-burn__name">{b.name}</span>
+                    <span className="usage-burn__detail">{b.detail}</span>
+                    <span
+                      className="usage-burn__bar"
+                      style={{ '--usage-burn-share': `${b.share}%` } as CSSProperties}
+                      aria-label={`${b.share}% of this week’s tokens`}
+                      role="img"
+                    />
+                  </li>
+                ))}
+              </ol>
+            </section>
+          )}
+
+          {view === 'limits' &&
+            glance.engines.map((e) => (
+              <EngineStack
+                key={e.engine}
+                engine={e}
+                several={glance.engines.length > 1}
+                onReorder={(ids) => void attempt(() => reorderUsageAccounts(e.engine, ids))}
+                onUse={(id) => void attempt(() => putAccountFirst(e.engine, id))}
+                onSignIn={(id) => signIn(e.engine, id)}
+                onRename={(id, name) => attempt(() => renameUsageAccount(e.engine, id, name))}
+                onRemove={(id) => void remove(e.engine, id)}
+              />
+            ))}
 
           {installed.length > 0 && (
             <div className="usage-add">
@@ -359,6 +437,13 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
       {signingIn && (
         <AccountSignIn
           account={signingIn}
+          nameOf={(id) =>
+            glance.keys.find((k) => k.engine === signingIn.engine && k.id === id)?.name
+          }
+          onRemove={() => {
+            void remove(signingIn.engine, signingIn.id);
+            setSigningIn(null);
+          }}
           onDone={() => {
             setSigningIn(null);
             reload();

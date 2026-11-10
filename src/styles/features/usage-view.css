@@ -20,33 +20,129 @@
 
 /* ------------------------------------------------------- the sidebar row */
 
+/* Room to breathe: a small card of its own, three lines with a clear order
+   (what this is and when it refills; what's left; the meter). */
 .usage-glance.account-switcher__row {
   align-items: flex-start;
   height: auto;
-  padding-block: var(--spacing-xs);
+  padding: var(--spacing-sm) var(--spacing-md);
 }
 
 .usage-glance__body {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-3xs);
+  gap: var(--spacing-xs);
   min-width: 0;
   flex: 1;
   text-align: left;
+}
+
+.usage-glance__top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
+  min-width: 0;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-compact);
 }
 
 .usage-glance__headline {
   min-width: 0;
   overflow: hidden;
   color: var(--text-primary);
+  font-size: var(--font-size-body-md);
   font-weight: var(--font-weight-label);
   letter-spacing: var(--tracking-name);
+  line-height: var(--line-height-compact);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.usage-glance[data-tone='warning'] .usage-glance__headline {
+.usage-glance__label {
+  overflow: hidden;
+  color: var(--text-muted);
+  font-weight: var(--font-weight-body);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-glance__refill {
+  flex: none;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The pace marker on a meter segment. */
+.usage-stack__even {
+  position: absolute;
+  inset-block: 0;
+  left: var(--usage-stack-even);
+  width: var(--border-width-emphasis);
+  background: var(--text-secondary);
+  box-shadow: 0 0 0 var(--border-width-default) var(--surface-panel);
+  transform: translateX(-50%);
+}
+
+.usage-glance[data-needs-you] .usage-glance__headline {
   color: var(--accent-warning);
+}
+
+/* ------------------------------------------------------ the Tokens view */
+
+.usage-burn {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.usage-burn__row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: var(--spacing-2xs) var(--spacing-md);
+  font-size: var(--font-size-body-sm);
+}
+
+.usage-burn__name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  font-weight: var(--font-weight-label);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usage-burn__detail {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.usage-burn__bar {
+  position: relative;
+  grid-column: 1 / -1;
+  height: var(--spacing-2xs);
+  overflow: hidden;
+  background: var(--usage-stack-track);
+  border-radius: var(--radius-pill);
+}
+
+.usage-burn__bar::after {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--usage-burn-share);
+  background: var(--usage-stack-ink-quiet);
+  border-radius: inherit;
+  content: '';
+}
+
+/* One line under a meter: an account signed in twice, which draws no segment. */
+.usage-stack-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-body-sm);
 }
 
 .usage-glance__est,
@@ -485,25 +581,144 @@
   font-variant-numeric: tabular-nums;
 }
 
-.usage-key__bar {
-  position: relative;
-  height: var(--spacing-xs);
-  overflow: hidden;
-  background: var(--usage-stack-track);
+/* A limit as a card: its own sheet inside the key. */
+.usage-key__limit {
+  padding: var(--spacing-md);
+  background: var(--surface-recessed);
+  border-radius: var(--radius-control);
+}
+
+.usage-key__chip {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: var(--spacing-3xs);
+  padding: 0 var(--spacing-xs);
+  color: var(--text-secondary);
+  font-size: var(--font-size-caption);
+  font-variant-numeric: tabular-nums;
+  background: var(--surface-panel);
+  border: var(--border-width-default) solid var(--border-subtle);
   border-radius: var(--radius-pill);
 }
 
-.usage-key__fill {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: var(--usage-key-fill);
-  background: var(--usage-stack-ink);
-  border-radius: inherit;
+.usage-key__figure {
+  color: var(--text-primary);
+  font-size: var(--font-size-24);
+  font-weight: var(--font-weight-label);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--tracking-name);
+  line-height: var(--line-height-heading);
 }
 
-.usage-key__limit[data-tone='warning'] .usage-key__fill {
+.usage-key__figure-unit {
+  color: var(--text-muted);
+  font-size: var(--font-size-body-sm);
+  font-weight: var(--font-weight-body);
+  letter-spacing: normal;
+}
+
+.usage-key__limit[data-tone='warning'] .usage-key__figure {
+  color: var(--accent-warning);
+}
+
+.usage-key__limit[data-tone='limited'] .usage-key__figure {
+  color: var(--text-muted);
+}
+
+/* ------------------------------------------------- the pace-marked bar */
+
+.usage-pacebar {
+  position: relative;
+  display: block;
+  width: 100%;
+  height: var(--spacing-sm);
+  /* What is used: hatched, quiet. */
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--usage-stack-track) 0 var(--border-width-emphasis),
+    var(--surface-panel) var(--border-width-emphasis) var(--spacing-2xs)
+  );
+  border-radius: var(--radius-pill);
+  box-shadow: inset 0 0 0 var(--border-width-default) var(--border-subtle);
+}
+
+.usage-pacebar[data-size='small'] {
+  height: var(--spacing-xs);
+}
+
+/* What is left: solid ink. */
+.usage-pacebar__fill {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: var(--usage-pacebar-fill);
+  background: var(--usage-stack-ink);
+  border-radius: inherit;
+  transition: width var(--transition-arrive);
+}
+
+.usage-pacebar[data-tone='warning'] .usage-pacebar__fill {
   background: var(--accent-warning);
 }
+
+/* Where it would stand at an even pace: a tick across the bar. */
+.usage-pacebar__even {
+  position: absolute;
+  inset-block: calc(var(--spacing-3xs) * -1);
+  left: var(--usage-pacebar-even);
+  width: var(--border-width-emphasis);
+  background: var(--text-secondary);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 0 0 var(--border-width-default) var(--surface-panel);
+  transform: translateX(-50%);
+}
+
+/* ----------------------------------- the time left, with the estimate */
+
+.usage-key__timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+}
+
+.usage-key__timeline-track {
+  position: relative;
+  display: block;
+  height: var(--border-width-emphasis);
+  background: var(--border-subtle);
+  border-radius: var(--radius-pill);
+}
+
+.usage-key__timeline-mark {
+  position: absolute;
+  top: 50%;
+  left: var(--usage-key-runout);
+  width: var(--spacing-xs);
+  height: var(--spacing-xs);
+  background: var(--surface-panel);
+  border: var(--border-width-emphasis) dashed var(--text-secondary);
+  border-radius: var(--radius-pill);
+  transform: translate(-50%, -50%);
+}
+
+.usage-key__timeline-ends {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--spacing-xs);
+  color: var(--text-muted);
+  font-size: var(--font-size-caption);
+}
+
+.usage-key__paceword {
+  color: var(--text-secondary);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+}
+
+.usage-key__paceword[data-pace='ahead'] {
+  color: var(--text-primary);
+}
+
 
 .usage-key__limit[data-tone='limited'] .usage-key__limit-left {
   color: var(--text-muted);
