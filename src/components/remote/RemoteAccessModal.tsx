@@ -14,6 +14,7 @@
 
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import { ModalFrame } from '../primitives/ModalFrame';
+import { Button } from '../primitives/Button';
 import { Spinner } from '../primitives/Spinner';
 import { TextButton } from '../primitives/TextButton';
 import { useOpenModal } from '../../contexts/ModalContext';
@@ -177,45 +178,58 @@ function RemoteAccessPanel({
   const ctl: RemoteCtl | null = s ? { status: s, busy, act, now } : null;
   const complete = s ? isSetupComplete(s, choices) : false;
 
+  // One line on what this is, and how it differs from the phone app, in setup
+  // and live alike: the two are easy to mix up from the sidebar.
+  const intro = (
+    <p className="remote-intro" data-testid="remote-intro">
+      Let another AI assistant (Grok, ChatGPT, Claude, or any that takes custom connectors) drive
+      your agents on this Mac through a private link.{' '}
+      {inline ? (
+        'On your phone, the phone app above is simpler.'
+      ) : (
+        <TextButton
+          variant="strong"
+          onClick={() => {
+            onClose();
+            openModal('phone');
+          }}
+        >
+          On your phone, the phone app is simpler.
+        </TextButton>
+      )}
+    </p>
+  );
+
   return frame(
     <div className="settings-modal-body remote-access">
       {!ctl ? (
         <div className="remote-loading">
           {status.error ? (
-            <p className="remote-error">Couldn’t read remote access status.</p>
+            <>
+              <p className="remote-error">
+                Couldn’t read remote access status: {errMsg(status.error)}
+              </p>
+              <Button variant="secondary" onClick={() => void loadStatus()}>
+                Try again
+              </Button>
+            </>
           ) : (
             <Spinner />
           )}
         </div>
       ) : complete ? (
-        <RemoteLive
-          ctl={ctl}
-          projects={projects.data ?? []}
-          onProjectChange={onProjectChange}
-          activity={audit.data ?? []}
-        />
+        <>
+          {intro}
+          <RemoteLive
+            ctl={ctl}
+            projects={projects.data ?? []}
+            onProjectChange={onProjectChange}
+            activity={audit.data ?? []}
+          />
+        </>
       ) : (
         <>
-          <p className="remote-intro">
-            Drive your agents from another assistant — Grok, ChatGPT, Claude, or anything that
-            supports custom connectors (MCP, the standard way assistants add apps). It works on this
-            Mac — the same agents, the same conversations — so everything is waiting when you’re
-            back.
-            {!inline && (
-              <>
-                {' '}
-                <TextButton
-                  variant="strong"
-                  onClick={() => {
-                    onClose();
-                    openModal('phone');
-                  }}
-                >
-                  For your phone, use the phone app.
-                </TextButton>
-              </>
-            )}
-          </p>
+          {intro}
           <RemoteOnBar ctl={ctl} />
           <RemoteSetup
             ctl={ctl}

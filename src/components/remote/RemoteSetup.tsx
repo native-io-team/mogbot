@@ -50,7 +50,7 @@ export function RemoteSetup({ ctl, choices, setChoice, projects, onProjectChange
         : `${toFix} thing${toFix === 1 ? '' : 's'} to fix before you leave`,
     connect: status.tailscale.state === 'connected' ? status.tailscale.dnsName : 'Link is live',
     projects: `${status.projects.length} project${status.projects.length === 1 ? '' : 's'} shared`,
-    pushing: status.pushPin === 'notSet' ? 'Off — no pushing from your phone' : 'On, with your PIN',
+    pushing: status.pushPin === 'notSet' ? 'Off, your assistant can’t push' : 'On, with your PIN',
     assistant: 'Connected',
   };
 
@@ -100,8 +100,8 @@ export function RemoteSetup({ ctl, choices, setChoice, projects, onProjectChange
     pushing: (
       <>
         <p className="remote-note">
-          To push from your phone, set a PIN here. Your assistant never sees it: when you want to
-          push, it shows you what would go out and you type the PIN yourself. Five wrong tries lock
+          To let your assistant push, set a PIN here. It never sees the PIN: when you want to push,
+          it shows you what would go out and you type the PIN yourself. Five wrong tries lock
           pushing until you’re back.
         </p>
         <PinForm ctl={ctl} submitLabel="Allow pushing" onDone={() => setReopened(null)} />
@@ -113,7 +113,7 @@ export function RemoteSetup({ ctl, choices, setChoice, projects, onProjectChange
               setReopened(null);
             }}
           >
-            Skip — I’ll push from the computer
+            Skip, I’ll push from this Mac
           </Button>
         </div>
       </>

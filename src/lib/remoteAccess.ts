@@ -1,6 +1,7 @@
 /**
- * Remote access — control this app from any MCP-capable AI assistant on
- * your phone while your Mac keeps doing the work.
+ * Remote access — drive your agents from any MCP-capable AI assistant while
+ * this Mac keeps doing the work. (The phone app is the other way in; this is
+ * for an assistant you already use.)
  *
  * TypeScript mirror of `src-tauri/src/commands/remote_access.rs`, the invoke
  * wrappers, and the logic the modal and sidebar render: the "before you
@@ -269,6 +270,8 @@ export type ConnectionStep =
   | { kind: 'signInTailscale' }
   | { kind: 'tailscaleProblem'; detail: string }
   | { kind: 'off' }
+  /** On, but the app's server isn't running (it stopped, or never came back). */
+  | { kind: 'serverStopped' }
   | { kind: 'approveFunnel'; url: string }
   | { kind: 'funnelFailed'; detail: string }
   | { kind: 'starting' }
@@ -307,6 +310,9 @@ export function connectionStep(s: RemoteAccessStatus, now: number = 0): Connecti
       break;
   }
   if (!s.enabled) return { kind: 'off' };
+  // Without the server there is nothing for the link to reach, and waiting on
+  // Tailscale would wait forever. Turning it on again starts the server.
+  if (!s.serverRunning) return { kind: 'serverStopped' };
   if (s.linkMasked) {
     const r = s.reachability;
     if (r?.state === 'reachable') return { kind: 'ready', linkMasked: s.linkMasked };
@@ -340,7 +346,7 @@ export interface SetupChoices {
   understood: boolean;
   /** Pressed Continue after ticking projects. */
   projectsConfirmed: boolean;
-  /** Chose not to allow pushing from the phone. */
+  /** Chose not to allow pushing from the assistant. */
   pushingSkipped: boolean;
 }
 
@@ -354,7 +360,7 @@ const STEP_TITLES: Record<SetupStepId, string> = {
   stayOn: 'This Mac has to stay on',
   connect: 'Give this Mac a private link',
   projects: 'Choose what your assistant can reach',
-  pushing: 'Pushing from your phone',
+  pushing: 'Pushing from your assistant',
   assistant: 'Connect your AI assistant',
 };
 
@@ -410,10 +416,18 @@ export function isSetupComplete(s: RemoteAccessStatus, c: SetupChoices): boolean
 
 export type LiveState = 'live' | 'down' | 'off';
 
-/** "Live" only when the internet can actually reach it; anything less is "down". */
-export function liveState(s: RemoteAccessStatus): LiveState {
+/**
+ * "Live" only when the server runs, Tailscale confirms the link, and the
+ * internet can actually reach it; anything less is "down". A reachability
+ * reading without a link (or a server) is stale, never evidence.
+ */
+export function liveState(
+  s: Pick<RemoteAccessStatus, 'enabled' | 'serverRunning' | 'linkMasked' | 'reachability'>
+): LiveState {
   if (!s.enabled) return 'off';
-  return s.reachability?.state === 'reachable' ? 'live' : 'down';
+  const reachable =
+    s.serverRunning && s.linkMasked !== null && s.reachability?.state === 'reachable';
+  return reachable ? 'live' : 'down';
 }
 
 export function agoText(ms: number, now: number): string {
@@ -424,11 +438,35 @@ export function agoText(ms: number, now: number): string {
   return `${Math.floor(secs / 86_400)} d ago`;
 }
 
-/** "grok connected 3 min ago", or null when nothing has connected this run. */
+/**
+ * The assistant as people know it. `clientInfo.name` is whatever the client
+ * sent (`grok`, `claude-ai`, `openai-mcp`, `cursor-vscode`…); the ones we can
+ * recognise get their own name, anything else is shown as sent, with only its
+ * first letter raised so it can start a sentence.
+ */
+export function assistantName(client: string): string {
+  const c = client.trim();
+  const known: [RegExp, string][] = [
+    [/^grok/i, 'Grok'],
+    [/^claude/i, 'Claude'],
+    [/^(openai|chatgpt)/i, 'ChatGPT'],
+    [/^cursor/i, 'Cursor'],
+    [/^gemini/i, 'Gemini'],
+  ];
+  for (const [re, name] of known) if (re.test(c)) return name;
+  return c.charAt(0).toUpperCase() + c.slice(1);
+}
+
+/**
+ * "Grok, last heard from 3 min ago", or null when nothing has asked anything
+ * this run. The time is the last request, not the connection, so it says so.
+ */
 export function describeLastRequest(activity: RemoteActivity, now: number): string | null {
   if (activity.lastRequestMs === null) return null;
   const when = agoText(activity.lastRequestMs, now);
-  return activity.lastClient ? `${activity.lastClient} connected ${when}` : `Last used ${when}`;
+  return activity.lastClient
+    ? `${assistantName(activity.lastClient)}, last heard from ${when}`
+    : `Last heard from ${when}`;
 }
 
 /** A remote action as one readable line. */
@@ -437,7 +475,7 @@ export function describeAudit(entry: AuditEntry): string {
   const quote = entry.detail ? `: “${entry.detail}”` : '';
   switch (entry.tool) {
     case 'connected':
-      return `${entry.detail} connected`;
+      return `${assistantName(entry.detail || 'An assistant')} connected`;
     case 'message_agent':
     case 'send_to_agent': // the tool's name before message_agent; older log lines
       return `Sent a message${project}${quote}`;

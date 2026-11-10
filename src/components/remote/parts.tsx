@@ -185,7 +185,7 @@ export function ConnectionPanel({ ctl }: { ctl: RemoteCtl }) {
       return (
         <>
           <p className="remote-note">
-            Turning this on keeps the computer awake and gives it a link only you have.
+            Turning this on keeps this Mac awake and gives it a link only you have.
           </p>
           {offerLid && (
             <label className="remote-toggle">
@@ -208,6 +208,19 @@ export function ConnectionPanel({ ctl }: { ctl: RemoteCtl }) {
           <div className="remote-actions">
             <Button variant="primary" {...busyProps(busy, 'enable')} onClick={turnOn}>
               Turn on remote access
+            </Button>
+          </div>
+        </>
+      );
+    case 'serverStopped':
+      return (
+        <>
+          <p className="remote-note">
+            The server behind the link isn’t running. Starting it again brings the link back.
+          </p>
+          <div className="remote-actions">
+            <Button variant="primary" {...busyProps(busy, 'enable')} onClick={turnOn}>
+              Start it again
             </Button>
           </div>
         </>
@@ -512,7 +525,7 @@ export function PinForm({
           ? problem
           : mismatch
             ? 'The two PINs don’t match.'
-            : '6–12 digits. Not your phone or bank PIN — and never written in a chat until you want to push.'}
+            : '6–12 digits. Not your phone or bank PIN, and never written in a chat until you want to push.'}
       </p>
       <div className="remote-actions">
         <Button type="submit" variant="primary" {...busyProps(ctl.busy, 'pin')}>
