@@ -1083,6 +1083,28 @@ pub fn update<F: FnOnce(&mut Agent)>(id: &str, change: F) -> Result<Agent, Comma
     Ok(updated)
 }
 
+/// A best-effort write (the caller carries on whether it landed or not),
+/// with a trace when it didn't: `store::update(..).or_log("its unread
+/// count")`. The log names what the write was for and where it was made,
+/// never what it held; the error is the store's own (a path, "busy").
+pub trait OrLog<T> {
+    fn or_log(self, what: &str) -> Option<T>;
+}
+
+impl<T, E: std::fmt::Display> OrLog<T> for Result<T, E> {
+    #[track_caller]
+    fn or_log(self, what: &str) -> Option<T> {
+        match self {
+            Ok(v) => Some(v),
+            Err(e) => {
+                let at = std::panic::Location::caller();
+                tracing::warn!("[Agents] couldn't save {what} ({at}): {e}");
+                None
+            }
+        }
+    }
+}
+
 pub struct NewAgent {
     pub name: String,
     pub role: String,
@@ -1201,8 +1223,38 @@ pub fn normalize_model(model: &str) -> Result<Option<String>, CommandError> {
     Ok(Some(model.to_string()))
 }
 
+/// Add an agent. Its home and CLAUDE.md are made first, outside the
+/// registry lock (`store_lock`: folder I/O never runs under it): its id is
+/// new, so nothing reaches that folder until the registry names it. If the
+/// agent can't be added after all (a name taken meanwhile), the folder goes.
 pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
     let name = validate_name(&new.name)?;
+    let role = new.role.trim().to_string();
+    // Refused before any folder is made when it's already clear.
+    if list()?.iter().any(|a| a.name.eq_ignore_ascii_case(&name)) {
+        return Err(super::err_invalid(
+            "name",
+            format!("There's already an agent called {name}."),
+        ));
+    }
+    let id = new_id();
+    let home = agents_root()?.join(&id);
+    let made = ensure_private_dir(&home)
+        .map_err(|e| super::err_io(e.to_string()))
+        .and_then(|()| write_instructions_for(&home, &name, &role, &new.instructions))
+        .and_then(|()| register_new(id, name, new));
+    if made.is_err() {
+        if let Err(e) = crate::utils::remove_dir_all_robust(&home) {
+            tracing::warn!(
+                "[Agents] couldn't tidy away a new agent's folder that wasn't used: {e}"
+            );
+        }
+    }
+    made
+}
+
+/// [`create`]'s registry half, under the lock: nothing but the registry.
+fn register_new(id: String, name: String, new: NewAgent) -> Result<Agent, CommandError> {
     let _guard = lock::take()?;
     let mut registry = read_registry()?;
     if registry
@@ -1245,7 +1297,7 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         .unwrap_or(((index * 5 + 1) % SHAPE_COUNT as usize) as u8);
     let now = now_ms();
     let agent = Agent {
-        id: new_id(),
+        id,
         name,
         role: new.role.trim().to_string(),
         shape,
@@ -1286,9 +1338,6 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         secrets: Vec::new(),
         extra: Default::default(),
     };
-    let home = agents_root()?.join(&agent.id);
-    ensure_private_dir(&home).map_err(|e| super::err_io(e.to_string()))?;
-    write_instructions(&home, &agent, &new.instructions)?;
     registry.agents.push(agent);
     // Its icon and key, or a free key when its own is taken by now.
     super::keys::fill(&mut registry.agents);
@@ -1331,6 +1380,16 @@ pub fn write_instructions(
     agent: &Agent,
     instructions: &str,
 ) -> Result<(), CommandError> {
+    write_instructions_for(home, &agent.name, &agent.role, instructions)
+}
+
+/// [`write_instructions`] by the two things it says about the agent.
+fn write_instructions_for(
+    home: &Path,
+    name: &str,
+    role: &str,
+    instructions: &str,
+) -> Result<(), CommandError> {
     let path = home.join("CLAUDE.md");
     let existing = std::fs::read_to_string(&path).ok();
     let memory = existing
@@ -1345,10 +1404,10 @@ pub fn write_instructions(
         .as_deref()
         .and_then(super::arrival::section_text)
         .unwrap_or_default();
-    let role = if agent.role.is_empty() {
+    let role = if role.is_empty() {
         String::new()
     } else {
-        format!("{}\n\n", agent.role)
+        format!("{role}\n\n")
     };
     let body = instructions.trim();
     let instructions = if body.is_empty() {
@@ -1356,7 +1415,7 @@ pub fn write_instructions(
     } else {
         format!("## Instructions\n\n{body}\n\n")
     };
-    let content = format!("# {}\n\n{role}{arrival}{instructions}{memory}", agent.name);
+    let content = format!("# {name}\n\n{role}{arrival}{instructions}{memory}");
     note_claude_md_write(&path);
     write_atomic(&path, content.as_bytes())
 }
@@ -1511,7 +1570,55 @@ fn write_trash(items: &[Deleted]) -> Result<(), CommandError> {
 /// its home (memory, chat, timelines) are kept for [`restore`]. Its secrets,
 /// connections and copy stay where they are until it's purged. The Chief of
 /// Staff can't be deleted.
+///
+/// Its folder moves to the trash before the registry lock is taken, and
+/// back if the registry can't be changed after all (`store_lock`: folder
+/// I/O never runs under it). Nothing can restore it meanwhile: it isn't in
+/// the trash list until the lock is held.
 pub fn soft_delete(id: &str, by: Option<AgentRef>) -> Result<Agent, CommandError> {
+    validate_id(id)?;
+    // Refused before anything moves when it's already clear.
+    if get(id)?.is_main {
+        return Err(CommandError::expected(
+            "The Chief of Staff can't be deleted.",
+        ));
+    }
+    let root = agents_root()?;
+    let trash = root.join(TRASH_DIR);
+    std::fs::create_dir_all(&trash).map_err(|e| super::err_io(e.to_string()))?;
+    let home = root.join(id);
+    let kept = trash.join(id);
+    let moved = if home.exists() {
+        if kept.exists() {
+            if let Err(e) = crate::utils::remove_dir_all_robust(&kept) {
+                tracing::warn!(
+                    "[Agents] couldn't clear an old trash folder before deleting {id}: {e}"
+                );
+            }
+        }
+        std::fs::rename(&home, &kept).map_err(|e| super::err_io(e.to_string()))?;
+        true
+    } else {
+        false
+    };
+    let removed = soft_delete_entry(id, by);
+    if removed.is_err() && moved {
+        // Never lose it: the registry still names it, so its home goes back.
+        if let Err(e) = std::fs::rename(&kept, &home) {
+            tracing::error!(
+                "[Agents] deleting {id} failed and its folder couldn't be put back from the trash: {e}"
+            );
+        }
+    }
+    let removed = removed?;
+    if let Ok(log) = log_path(id) {
+        forget_pending(&log);
+    }
+    Ok(removed)
+}
+
+/// [`soft_delete`]'s list half, under the lock: the trash list, then the registry.
+fn soft_delete_entry(id: &str, by: Option<AgentRef>) -> Result<Agent, CommandError> {
     let _guard = lock::take()?;
     let mut registry = read_registry()?;
     let index = registry
@@ -1524,42 +1631,67 @@ pub fn soft_delete(id: &str, by: Option<AgentRef>) -> Result<Agent, CommandError
             "The Chief of Staff can't be deleted.",
         ));
     }
-    let root = agents_root()?;
-    let trash = root.join(TRASH_DIR);
-    std::fs::create_dir_all(&trash).map_err(|e| super::err_io(e.to_string()))?;
-    let home = root.join(id);
-    let kept = trash.join(id);
-    if kept.exists() {
-        let _ = crate::utils::remove_dir_all_robust(&kept);
-    }
-    if home.exists() {
-        std::fs::rename(&home, &kept).map_err(|e| super::err_io(e.to_string()))?;
-    }
     let removed = registry.agents.remove(index);
     let entry = serde_json::to_value(&removed).map_err(super::err_other)?;
-    let mut items = read_trash();
+    let before = read_trash();
+    let mut items = before.clone();
     items.retain(|d| d.id() != id);
     items.push(Deleted {
         agent: entry,
         deleted_at: now_ms(),
         deleted_by: by,
     });
-    if let Err(e) = write_trash(&items) {
-        // Never lose it: put the home back and leave the registry alone.
-        let _ = std::fs::rename(&kept, &home);
+    write_trash(&items)?;
+    if let Err(e) = write_registry(&registry) {
+        // Still on the team: it mustn't be in Recently deleted too.
+        if let Err(undo) = write_trash(&before) {
+            tracing::error!(
+                "[Agents] deleting {id} failed and Recently deleted couldn't be put back: {undo}"
+            );
+        }
         return Err(e);
-    }
-    write_registry(&registry)?;
-    if let Ok(log) = log_path(id) {
-        forget_pending(&log);
     }
     Ok(removed)
 }
 
 /// Bring a soft-deleted agent back as it was. Its name is kept unless another
 /// agent took it meanwhile, in which case " (restored)" is added.
+///
+/// Its folder comes back from the trash before the registry lock is taken,
+/// and goes back there if the registry can't be changed after all.
 pub fn restore(id: &str) -> Result<Agent, CommandError> {
     validate_id(id)?;
+    // Refused before anything moves when it's already clear.
+    if !read_trash().iter().any(|d| d.id() == id) {
+        return Err(CommandError::expected(
+            "That agent isn't in Recently deleted any more.",
+        ));
+    }
+    if list()?.iter().any(|a| a.id == id) {
+        return Err(CommandError::expected("That agent is already on the team."));
+    }
+    let root = agents_root()?;
+    let kept = root.join(TRASH_DIR).join(id);
+    let home = root.join(id);
+    let moved = if kept.exists() && !home.exists() {
+        std::fs::rename(&kept, &home).map_err(|e| super::err_io(e.to_string()))?;
+        true
+    } else {
+        false
+    };
+    let restored = restore_entry(id);
+    if restored.is_err() && moved {
+        if let Err(e) = std::fs::rename(&home, &kept) {
+            tracing::error!(
+                "[Agents] restoring {id} failed and its folder couldn't go back to the trash: {e}"
+            );
+        }
+    }
+    restored
+}
+
+/// [`restore`]'s list half, under the lock: the registry, then the trash list.
+fn restore_entry(id: &str) -> Result<Agent, CommandError> {
     let _guard = lock::take()?;
     let mut items = read_trash();
     let index = items
@@ -1579,19 +1711,17 @@ pub fn restore(id: &str) -> Result<Agent, CommandError> {
     {
         agent.name = format!("{} (restored)", agent.name);
     }
-    let root = agents_root()?;
-    let kept = root.join(TRASH_DIR).join(id);
-    let home = root.join(id);
-    if kept.exists() && !home.exists() {
-        std::fs::rename(&kept, &home).map_err(|e| super::err_io(e.to_string()))?;
-    }
     registry.agents.push(agent);
     // Its icon and key, or a free key when its own is taken by now.
     super::keys::fill(&mut registry.agents);
     let agent = registry.agents.last().cloned().expect("just pushed");
     write_registry(&registry)?;
     items.remove(index);
-    write_trash(&items)?;
+    if let Err(e) = write_trash(&items) {
+        // Back on the team; Recently deleted still lists it, and restoring
+        // it again says it's already here. Logged rather than undone.
+        tracing::warn!("[Agents] restored {id}, but Recently deleted couldn't be updated: {e}");
+    }
     Ok(agent)
 }
 
@@ -1608,11 +1738,29 @@ pub fn take_expired(now: i64) -> Vec<Agent> {
         };
         let items = read_trash();
         let cutoff = now - TRASH_DAYS * 24 * 60 * 60 * 1000;
+        // An entry for an agent that is on the team (a restore whose list
+        // update failed) is only dropped: purging it would forget a live
+        // agent's secrets and remove nothing of its own.
+        let on_team: Vec<String> = match read_registry() {
+            Ok(r) => r.agents.into_iter().map(|a| a.id).collect(),
+            Err(e) => {
+                tracing::warn!(
+                    "[Agents] trash sweep skipped: the agents list couldn't be read: {e}"
+                );
+                return Vec::new();
+            }
+        };
         let (old, keep): (Vec<_>, Vec<_>) = items.into_iter().partition(|d| d.deleted_at < cutoff);
-        if old.is_empty() || write_trash(&keep).is_err() {
+        if old.is_empty() {
             return Vec::new();
         }
-        old
+        if let Err(e) = write_trash(&keep) {
+            tracing::warn!("[Agents] trash sweep couldn't update Recently deleted: {e}");
+            return Vec::new();
+        }
+        old.into_iter()
+            .filter(|d| !on_team.iter().any(|id| id == d.id()))
+            .collect::<Vec<_>>()
     };
     // Out of the list, so no one restores them: their folders go unlocked.
     let root = agents_root().ok();
