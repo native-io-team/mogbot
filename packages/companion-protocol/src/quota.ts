@@ -9,8 +9,11 @@
 import { clockFormat, formatClock } from './clock';
 import type { AgentEngine, Quota, QuotaWindow, UsageTotals } from './model';
 
-/** The share of a window at which the line turns amber. */
-export const QUOTA_WARN_PERCENT = 90;
+/**
+ * The share of a window used at which its figure and bar take the warning
+ * role: 80%, the same on every usage surface, desk and phone.
+ */
+export const QUOTA_WARN_PERCENT = 80;
 
 const ENGINE_SHORT: Record<AgentEngine, string> = {
   claude: 'Claude',

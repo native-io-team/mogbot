@@ -33,8 +33,9 @@
   --agent-usage-ring-ink: var(--accent-warning);
 }
 
+/* Used up: the same warning role as from 80%, a full dial. */
 .agent-usage-ring__dial[data-tone='limited'] {
-  --agent-usage-ring-ink: var(--accent-error);
+  --agent-usage-ring-ink: var(--accent-warning);
 }
 
 /* No 5-hour reading: an outline, never a 0% that wasn't reported. */
@@ -157,7 +158,8 @@
   color: var(--text-primary);
 }
 
-/* Amber only when the user has something to do; out of usage refills by itself. */
-.agent-usage__headline[data-tone='warning'] {
+/* The warning role from 80% used, or when the user has something to do. */
+.agent-usage__headline[data-tone='warning'],
+.agent-usage__headline[data-tone='limited'] {
   color: var(--accent-warning);
 }

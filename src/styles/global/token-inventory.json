@@ -5211,7 +5211,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 264
+      "consumerCount": 263
     },
     {
       "name": "--surface-control",
@@ -5315,7 +5315,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 932
+      "consumerCount": 931
     },
     {
       "name": "--text-faint",
@@ -5411,7 +5411,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 59
+      "consumerCount": 58
     },
     {
       "name": "--border-control",
@@ -5435,7 +5435,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 352
+      "consumerCount": 350
     },
     {
       "name": "--border-width-emphasis",
@@ -5443,7 +5443,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 55
+      "consumerCount": 53
     },
     {
       "name": "--accent-selected",
@@ -5539,7 +5539,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 112
+      "consumerCount": 113
     },
     {
       "name": "--accent-error",
@@ -6187,7 +6187,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 293
+      "consumerCount": 292
     },
     {
       "name": "--spacing-xs",
@@ -6699,7 +6699,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 264
+      "consumerCount": 263
     },
     {
       "name": "--surface-control",
@@ -6811,7 +6811,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 932
+      "consumerCount": 931
     },
     {
       "name": "--text-faint",
@@ -6899,7 +6899,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 59
+      "consumerCount": 58
     },
     {
       "name": "--border-control",
@@ -6963,7 +6963,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 112
+      "consumerCount": 113
     },
     {
       "name": "--accent-error",

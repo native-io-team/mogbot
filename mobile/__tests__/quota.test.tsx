@@ -9,7 +9,8 @@ describe('usage before the wall, on the phone', () => {
     // The Mac's own serde output (companion/fixtures.rs), at a time before its resets.
     const lines = quotaLines(real.agentsQuota, 1_762_290_000_000);
     expect(lines.map((l) => [l.engine, l.tone])).toEqual([
-      ['claude', 'calm'],
+      // 85% used: the warning role from 80%, as every usage surface.
+      ['claude', 'warning'],
       ['codex', 'limited'],
     ]);
     expect(lines[0].text).toMatch(/^Claude usage 85% · refills /);

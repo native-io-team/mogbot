@@ -1,17 +1,20 @@
 /**
- * Usage, drawn. The total first: ONE ordinary bar filled to what is left
- * across every account (`TotalBar`), so two accounts at 50% read as one bar
- * half full. Then each account as one row (`AccountRow`) with its own bar,
- * % left, refill, who uses it and "Use for new work", opening its own page
+ * Usage, drawn, and said as what is USED everywhere: every figure "N% used",
+ * every bar filling with use (a full bar is out), the warning role from
+ * `HIGH_USED`, "Out until <refill>" at 100%. The total first: ONE ordinary
+ * bar filled to what is used across every account (`TotalBar`), so two
+ * accounts at 50% read as one bar half full. Then each account as one row
+ * (`AccountRow`) with its own bar, % used, refill, who uses it and "Use for
+ * new work", opening its own page
  * (`AccountDetail`): its limit cards against pace, who used it, where its
  * usage went, and what to do with it.
  *
  * Nothing read is an empty, dashed track, never room. A second sign-in of
  * an account already counted gets one line under the bar (`SameNotes`);
  * its row and page say so plainly, with "Sign in with a different account"
- * and "Remove". Status hues only when an
- * account is low; out of usage is neutral (it resets by itself). Never the
- * accent.
+ * and "Remove". A bar and its figure take the warning role from 80% used
+ * (used up too); the state pills stay neutral (it refills by itself).
+ * Never the accent.
  *
  * Every figure is the glance's (`companion-protocol/usageGlance`).
  *
@@ -41,7 +44,6 @@ import { StatusPill, type StatusTone } from '../primitives/StatusPill';
 import { Dropdown, DropdownDivider, DropdownItem } from '../primitives/Dropdown';
 import type { AgentEngine } from '../../lib/agents';
 import {
-  LOW_LEFT,
   OUT_OF_USAGE,
   REMOVE_ACCOUNT,
   SIGN_IN_DIFFERENT,
@@ -55,6 +57,7 @@ import {
   USE_THIS_ONE_NOW,
 } from '../../../packages/companion-protocol/src/cardWords';
 import {
+  usedTone,
   usersLine,
   type GlanceUsed,
 } from '../../../packages/companion-protocol/src/usageGlance';
@@ -70,8 +73,8 @@ export const ENGINE_ICON: Record<AgentEngine, typeof ClaudeIcon> = {
 /* ------------------------------------------------------------ the total */
 
 /**
- * The total as ONE ordinary bar, filled to what is left across every
- * account, as the figure beside it says it ("55% left" is a bar 55% full).
+ * The total as ONE ordinary bar, filled to what is used across every
+ * account, as the figure beside it says it ("45% used" is a bar 45% full).
  * Never a segment per account: two accounts at 50% each read as one bar
  * half full, not two quarter-bars (the owner's "two 25s"). The accounts,
  * each with its own bar, are the rows one level down. Nothing read: an
@@ -85,25 +88,24 @@ export function TotalBar({
   size?: 'small' | 'large';
 }) {
   if (total.segments.length === 0) return null;
-  const left = total.left;
+  const used = total.used;
   return (
     <span
       className="usage-total"
       data-size={size}
       data-tone={total.tone}
-      data-unread={left === null || undefined}
-      data-empty={left === 0 || undefined}
+      data-unread={used === null || undefined}
       role="meter"
-      aria-label={left === null ? 'Usage left: not read yet' : 'Usage left, across accounts'}
+      aria-label={used === null ? 'Usage used: not read yet' : 'Usage used, across accounts'}
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-valuenow={left ?? undefined}
-      aria-valuetext={left === null ? 'Not read yet' : `${left}% left`}
+      aria-valuenow={used ?? undefined}
+      aria-valuetext={used === null ? 'Not read yet' : `${used}% used`}
     >
-      {left !== null && (
+      {used !== null && (
         <span
           className="usage-total__fill"
-          style={{ '--usage-total-fill': `${left}%` } as CSSProperties}
+          style={{ '--usage-total-fill': `${used}%` } as CSSProperties}
         />
       )}
     </span>
@@ -160,12 +162,9 @@ export const PILL: Record<AccountKeyState, StatusTone> = {
   unread: 'idle',
 };
 
-/** What an account adds, in a row's words. */
+/** What an account adds, in a row's words: "62% used", "Not read yet" (`StackKey.figure`). */
 export function roomWords(k: StackKey): string {
-  if (k.state === 'same') return 'Adds no room';
-  if (k.state === 'off') return 'Not signed in';
-  if (k.share === null) return 'Not read yet';
-  return `${k.share}% left`;
+  return k.figure;
 }
 
 /* ------------------------------------------------------- an account row */
@@ -199,7 +198,8 @@ export function AccountRow({
         className="usage-row"
         data-state={k.state}
         data-tone={k.tone}
-        data-unread={k.share === null || undefined}
+        data-used-tone={usedTone(k.used)}
+        data-unread={k.used === null || undefined}
         data-account={k.id}
         aria-label={`${k.position}. ${k.name}, ${roomWords(k)}, ${k.stateLabel}${
           refill ? `, refills in ${refill}` : ''
@@ -217,10 +217,10 @@ export function AccountRow({
           {k.detail.length > 0 && <span className="usage-row__detail">{k.detail[0]}</span>}
         </span>
         <span className="usage-row__bar" aria-hidden>
-          {k.share !== null && (
+          {k.used !== null && (
             <span
               className="usage-row__fill"
-              style={{ '--usage-row-fill': `${k.share}%` } as CSSProperties}
+              style={{ '--usage-row-fill': `${k.used}%` } as CSSProperties}
             />
           )}
         </span>
@@ -281,15 +281,15 @@ export function AccountRow({
 /* ------------------------------------------------------ a limit's card */
 
 /**
- * A bar of what is left (solid) against what is used (hatched), with the
- * pace marker: where it would stand had it been spent evenly through the
- * window. Left of the marker is ahead of pace; right of it, room to spare.
+ * A bar that fills with use, with the pace marker: where it would stand had
+ * it been spent evenly through the window. A fill past the marker is ahead
+ * of pace; short of it, room to spare.
  */
 export function PaceBar({
   limit,
   size = 'large',
 }: {
-  limit: Pick<KeyLimit, 'label' | 'left' | 'evenLeft' | 'tone' | 'paceState'>;
+  limit: Pick<KeyLimit, 'label' | 'used' | 'evenUsed' | 'tone' | 'paceState'>;
   size?: 'small' | 'large';
 }) {
   return (
@@ -299,20 +299,20 @@ export function PaceBar({
       data-tone={limit.tone}
       data-pace={limit.paceState}
       role="meter"
-      aria-label={`${limit.label} limit left`}
+      aria-label={`${limit.label} limit used`}
       aria-valuemin={0}
       aria-valuemax={100}
-      aria-valuenow={limit.left}
+      aria-valuenow={limit.used}
     >
       <span
         className="usage-pacebar__fill"
-        style={{ '--usage-pacebar-fill': `${limit.left}%` } as CSSProperties}
+        style={{ '--usage-pacebar-fill': `${limit.used}%` } as CSSProperties}
       />
-      {limit.evenLeft !== undefined && (
+      {limit.evenUsed !== undefined && (
         <span
           className="usage-pacebar__even"
-          style={{ '--usage-pacebar-even': `${limit.evenLeft}%` } as CSSProperties}
-          title={`Even pace: ${limit.evenLeft}% left by now`}
+          style={{ '--usage-pacebar-even': `${limit.evenUsed}%` } as CSSProperties}
+          title={`Even pace: ${limit.evenUsed}% used by now`}
           aria-hidden
         />
       )}
@@ -338,7 +338,18 @@ export function LimitRow({ limit }: { limit: KeyLimit }) {
         )}
       </div>
       <span className="usage-key__figure">
-        {limit.left}%<span className="usage-key__figure-unit"> left</span>
+        {limit.used >= 100 ? (
+          <>
+            Out
+            <span className="usage-key__figure-unit">
+              {limit.resetsAt ? ` until ${limit.resetsAt}` : ' of usage'}
+            </span>
+          </>
+        ) : (
+          <>
+            {limit.used}%<span className="usage-key__figure-unit"> used</span>
+          </>
+        )}
       </span>
       <PaceBar limit={limit} />
       {limit.runOut && (
@@ -369,11 +380,13 @@ export function LimitRow({ limit }: { limit: KeyLimit }) {
           {limit.paceWord}
         </span>
       )}
-      {limit.resetsAt && <span className="usage-key__reset">Refills {limit.resetsAt}</span>}
+      {limit.resetsAt && limit.used < 100 && (
+        <span className="usage-key__reset">Refills {limit.resetsAt}</span>
+      )}
       {limit.pace && (
-        // An estimate: secondary ink, never amber; a small mark only when little is left.
+        // An estimate: secondary ink, never amber; a small mark only from HIGH_USED.
         <span className="usage-key__pace" title={limit.pace.basis}>
-          {limit.left <= LOW_LEFT && (
+          {limit.tone !== 'calm' && (
             <WarningIcon size={12} className="usage-key__pace-icon" aria-hidden />
           )}
           <span>

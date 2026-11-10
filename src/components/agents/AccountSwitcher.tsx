@@ -66,7 +66,7 @@ export function glanceStatus(glance: Pick<UsageGlance, 'tone' | 'row'>): FooterR
 /**
  * A working line's room as the same pill as everywhere else: out of usage is
  * neutral (it resets by itself), carrying on with the other engine is
- * running. A plain "62% left" stays text.
+ * running. A plain "38% used" stays text.
  */
 export function rowPill(line: WorkingLine): StatusTone | null {
   if (line.away) return 'running';

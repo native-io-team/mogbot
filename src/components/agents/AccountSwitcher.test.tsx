@@ -198,9 +198,9 @@ describe('Usage view', () => {
     render(<AgentsUsageView />);
 
     const hero = await screen.findByTestId('usage-hero');
-    await waitFor(() => expect(hero).toHaveTextContent('62% left'));
+    await waitFor(() => expect(hero).toHaveTextContent('38% used'));
     // One bar filled to the total; the accounts are the rows, not the bar.
-    expect(within(hero).getByRole('meter')).toHaveAttribute('aria-valuenow', '62');
+    expect(within(hero).getByRole('meter')).toHaveAttribute('aria-valuenow', '38');
     expect(within(hero).queryAllByRole('button')).toHaveLength(0);
     expect(hero).toHaveTextContent('1 account not read yet, not counted');
     await waitFor(() => expect(rows()[0]).toHaveTextContent('In use'));
@@ -246,7 +246,7 @@ describe('Usage view', () => {
     store.agents = [];
     mock([mac, work]);
     render(<AgentsUsageView />);
-    await waitFor(() => expect(rows()[0]).toHaveTextContent('62% left'));
+    await waitFor(() => expect(rows()[0]).toHaveTextContent('38% used'));
     fireEvent.click(rows()[0]);
     const page = await screen.findByRole('article');
     expect(page).toHaveTextContent('Max plan');
@@ -315,13 +315,13 @@ describe('Usage view', () => {
     store.agents = [];
     mock([mac, work]);
     const { unmount } = render(<AgentsUsageView />);
-    await waitFor(() => expect(rows()[0]).toHaveTextContent('62% left'));
+    await waitFor(() => expect(rows()[0]).toHaveTextContent('38% used'));
     const viewText = rows().map((k) => k.textContent);
     const heroText = screen.getByTestId('usage-hero').textContent;
     unmount();
 
     render(<AccountsPage />);
-    await waitFor(() => expect(rows()[0]).toHaveTextContent('62% left'));
+    await waitFor(() => expect(rows()[0]).toHaveTextContent('38% used'));
     expect(rows().map((k) => k.textContent)).toEqual(viewText);
     expect(screen.getByTestId('usage-hero').textContent).toEqual(heroText);
     // Always "left", never a bare used figure.
@@ -393,10 +393,10 @@ describe('the sidebar row pill', () => {
       ...over,
     }) as Parameters<typeof rowPill>[0];
   it('is the shared StatusPill tone: out of usage neutral, carrying on running', () => {
-    expect(rowPill(line({ tone: 'out', room: 'Out of usage until 3:20 PM' }))).toBe('out');
+    expect(rowPill(line({ tone: 'out', room: 'Out until 3:20 PM' }))).toBe('out');
     expect(rowPill(line({ tone: 'warning', away: true, room: 'on Codex' }))).toBe('running');
-    expect(rowPill(line({ tone: 'warning', room: '12% left' }))).toBeNull();
-    expect(rowPill(line({ room: '62% left' }))).toBeNull();
+    expect(rowPill(line({ tone: 'warning', room: '88% used' }))).toBeNull();
+    expect(rowPill(line({ room: '38% used' }))).toBeNull();
   });
 });
 

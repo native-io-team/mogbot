@@ -50,8 +50,13 @@ export interface PaceLine {
 export interface UsageMeter {
   key: string;
   label: string;
-  /** 0–100, floored: "90%" never shows on a window that hasn't reached it. */
+  /** 0–100 used, floored: "90%" never shows on a window that hasn't reached it. The bar fills to it. */
   percent: number;
+  /**
+   * A plan limit's figure, said as what is used: "38% used", at 100% "Out
+   * until 3:20 PM". Absent on the context meter, whose label says it.
+   */
+  figure?: string;
   /** "Resets at 3:20 PM", "319.9K of 1M tokens". */
   detail: string;
   tone: UsageTone;
@@ -71,9 +76,9 @@ export function tokensShort(n: number): string {
 
 /**
  * "32% full · 319.9K of 1M tokens"; null when the engine hasn't reported it.
- * "Full", never "used": it sits on the same sheet as the accounts' "% left",
- * and a conversation filling up is not usage running out (the desk's
- * context meter says "full" too, `formatContext`).
+ * "Full", never "used": a conversation filling up is not usage running
+ * out, so it isn't said in the limits' word (the desk's context meter says
+ * "full" too, `formatContext`).
  */
 export function contextMeter(context: ContextFill | undefined): UsageMeter | null {
   if (!context || !(context.window > 0) || context.used < 0) return null;
@@ -223,6 +228,12 @@ const meterOf = (
     key,
     label,
     percent,
+    figure:
+      percent >= 100
+        ? w.resetsAt
+          ? `Out until ${resetPhrase(w.resetsAt, now)}`
+          : 'Out of usage'
+        : `${percent}% used`,
     detail: `${resetsLine(w.resetsAt, now)}${aged(w, now)}`,
     tone: toneOf(percent, w.limited),
     ...(line ? { pace: line } : {}),
@@ -525,6 +536,7 @@ export function computeRows(
         key: m.key,
         label: m.label,
         percent: m.percent,
+        ...(m.figure ? { figure: m.figure } : {}),
         detail: m.detail,
         tone,
         ...(pace ? { pace } : {}),

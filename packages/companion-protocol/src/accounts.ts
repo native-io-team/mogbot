@@ -9,7 +9,7 @@ import type { UsageAccount } from './model';
 import { readDay, resetPhrase } from './quota';
 
 /**
- * - out now: "Out of usage until Sat 2:00 PM", or with no reported reset
+ * - out now: "Out until Sat 2:00 PM", or with no reported reset
  *   "Out of usage · refill time not reported";
  * - signed out: "Not signed in";
  * - otherwise "Signed in" (as its email when there is one), plus
@@ -19,7 +19,7 @@ export function accountState(a: UsageAccount, now = Date.now()): string {
   if (!a.signedIn) return 'Not signed in';
   if (a.out) {
     return a.limit?.resetsAt && a.limit.resetsAt > now
-      ? `Out of usage until ${resetPhrase(a.limit.resetsAt, now)}`
+      ? `Out until ${resetPhrase(a.limit.resetsAt, now)}`
       : 'Out of usage · refill time not reported';
   }
   const who = a.email ? `Signed in as ${a.email}` : 'Signed in';

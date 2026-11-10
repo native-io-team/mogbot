@@ -46,18 +46,18 @@ describe('AgentsQuota', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('a calm line below 90%, with which window and when in its tooltip', async () => {
-    serve([claude(85)]);
+  it('a calm line below 80%, with which window and when in its tooltip', async () => {
+    serve([claude(75)]);
     render(<AgentsQuota place="sidebar" />);
-    const line = await screen.findByText(/^Claude usage 85% · refills /);
+    const line = await screen.findByText(/^Claude usage 75% · refills /);
     expect(line).toHaveAttribute('data-tone', 'calm');
     expect(line.getAttribute('title')).toMatch(/As Claude Code reported it at .*weekly limit/);
   });
 
-  it('amber from 90%, and at the limit itself', async () => {
-    serve([claude(91)]);
+  it('amber from 80%, and at the limit itself', async () => {
+    serve([claude(81)]);
     const { unmount } = render(<AgentsQuota place="team" />);
-    expect(await screen.findByText(/^Claude usage 91%/)).toHaveAttribute('data-tone', 'warning');
+    expect(await screen.findByText(/^Claude usage 81%/)).toHaveAttribute('data-tone', 'warning');
     unmount();
     clearMocks();
     serve([claude(100, { limited: true })]);

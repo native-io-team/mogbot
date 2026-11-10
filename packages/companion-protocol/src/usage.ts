@@ -70,7 +70,7 @@ export function estimateLine(e: UsageEstimate | undefined, unit = 'turn'): strin
   return `About ${compact(e.tokens)} tokens a ${unit} · estimate from ${e.runs} past run${e.runs === 1 ? '' : 's'}`;
 }
 
-/** One window of an account, as reported: "5-hour 38% · resets 3:00 PM". */
+/** One window of an account, as reported: "5-hour 38% used · refills 3:00 PM". */
 export function windowLine(w: QuotaWindow, now = Date.now()): string {
   const name = windowName(w);
   const label = name.charAt(0).toUpperCase() + name.slice(1);
@@ -79,7 +79,7 @@ export function windowLine(w: QuotaWindow, now = Date.now()): string {
     ? 'used up'
     : w.usedPercent === undefined
       ? 'no figure'
-      : `${Math.max(0, Math.floor(w.usedPercent))}%`;
+      : `${Math.max(0, Math.floor(w.usedPercent))}% used`;
   const reset = w.resetsAt ? ` · refills ${resetDay(w.resetsAt, now)}` : '';
   const age =
     !full && now - w.observedAt > QUOTA_STALE_MS ? ` · read ${readDay(w.observedAt, now)}` : '';
@@ -97,7 +97,7 @@ export function accountUsage(
   if (a.out) {
     return {
       text: a.outUntil
-        ? `Out of usage until ${resetPhrase(a.outUntil, now)}`
+        ? `Out until ${resetPhrase(a.outUntil, now)}`
         : 'Out of usage · refill time not reported',
       tone: 'limited',
     };
@@ -147,7 +147,7 @@ const PLACE_NAMES = new Set(['this mac', 'signed in on this mac']);
 export const isPlaceName = (name: string) => PLACE_NAMES.has(name.trim().toLowerCase());
 
 export interface SpareLine {
-  /** "Claude 5-hour limit resets 3:00 PM · 62% left". */
+  /** "Claude 5-hour limit refills 3:00 PM · 62% unused": the leftover that goes at the refill. */
   text: string;
   /** Where it came from and what happens next. */
   detail: string;
@@ -155,7 +155,7 @@ export interface SpareLine {
 
 function spareText(s: SpareWindow, now: number): string {
   const left = Math.max(0, Math.floor(100 - s.usedPercent));
-  return `${ENGINE_SHORT[s.engine]} ${windowName(s)} limit refills ${resetDay(s.resetsAt, now)} · ${left}% left`;
+  return `${ENGINE_SHORT[s.engine]} ${windowName(s)} limit refills ${resetDay(s.resetsAt, now)} · ${left}% unused`;
 }
 
 /**

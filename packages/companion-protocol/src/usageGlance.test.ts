@@ -8,6 +8,8 @@ import {
   runsOnRows,
   totalWords,
   usageGlance,
+  usedFigure,
+  usedTone,
   usersLine,
   weightingOf,
   type UsageTotal,
@@ -153,9 +155,9 @@ describe('usageGlance', () => {
       }),
       { now: NOW }
     );
-    expect(g.headline).toMatch(/^Out of usage until /);
+    expect(g.headline).toMatch(/^Out until /);
     expect(g.tone).toBe('limited');
-    expect(g.keys[0].stateLabel).toMatch(/^Out of usage until /);
+    expect(g.keys[0].stateLabel).toMatch(/^Out until /);
     expect(g.low?.waitUntil).toMatch(/^Wait until /);
   });
 
@@ -386,7 +388,7 @@ describe('where did my usage go', () => {
       ],
       NOW
     );
-    expect(lines[0].title).toBe('Weekly 68% → 33% left');
+    expect(lines[0].title).toBe('Weekly 32% → 67% used');
     expect(lines[0].elsewhere).toMatch(/^Nothing these agents ran explains this/);
     expect(lines[1].runs).toEqual(['Riley: Morning brief · 3 messages · 1.2M tokens']);
     expect(lines[1].elsewhere).toBeNull();
@@ -406,7 +408,7 @@ describe('the row, in plain words', () => {
       inv([line('default', { windows: [week(43, 5 * 24 * H)] })]),
       { now: NOW }
     );
-    expect(g.row.figure).toBe('57% left this week');
+    expect(g.row.figure).toBe('43% used this week');
     expect(g.row.refill).toMatch(/^Refills /);
     expect(g.row.count).toBeNull();
     expect(g.row.needsYou).toBe(false);
@@ -599,7 +601,7 @@ describe('the total, across every account', () => {
       { now: NOW }
     );
     expect(g.total.left).toBe(72);
-    expect(g.total.figure).toBe('72% left');
+    expect(g.total.figure).toBe('28% used');
     expect(g.total.across).toBe('across 2 accounts');
     // The bar and the list below it share one order: the work order (round 4).
     expect(g.keys.map((k) => k.name)).toEqual(['sam@example.com', 'Work']);
@@ -609,7 +611,7 @@ describe('the total, across every account', () => {
     ]);
     // The next refill is the soonest of the weeks counted.
     expect(g.total.refill).toMatchObject({ in: '2d 0h', account: 'sam@example.com' });
-    expect(g.row.figure).toBe('72% left');
+    expect(g.row.figure).toBe('28% used');
     expect(g.row.count).toBe('2 accounts');
     expect(g.row.refill).toBe('Refills in 2d 0h');
   });
@@ -642,7 +644,7 @@ describe('the total, across every account', () => {
     expect(g.total.left).toBe(50);
     expect(g.total.segments.map((s) => s.name)).toEqual(['sam@example.com']);
     expect(g.total.across).toBe('this week');
-    expect(g.row.figure).toBe('50% left this week');
+    expect(g.row.figure).toBe('50% used this week');
     expect(g.row.count).toBeNull();
   });
 
@@ -700,7 +702,7 @@ describe('the total, across every account', () => {
     });
     expect(g.total.left).toBe(62);
     expect(g.total.across).toBe('for now');
-    expect(g.row.figure).toBe('62% left for now');
+    expect(g.row.figure).toBe('38% used for now');
   });
 
   it('lists who used an account as rows, most first, with each one’s share', () => {
@@ -738,9 +740,9 @@ describe('the one bar: a total across accounts, never a segment each', () => {
   it('two Max plans at 50% each are 50% in total, one bar half full', () => {
     const g = two(50, 50, ['max', 'max']);
     expect(g.total.left).toBe(50);
-    expect(g.total.figure).toBe('50% left');
+    expect(g.total.figure).toBe('50% used');
     expect(g.total.tone).toBe('calm');
-    expect(g.row.figure).toBe('50% left');
+    expect(g.row.figure).toBe('50% used');
     expect(g.row.count).toBe('2 accounts');
     expect(g.total.weighting).toBe('Both on Max, so each counts the same.');
   });
@@ -748,7 +750,7 @@ describe('the one bar: a total across accounts, never a segment each', () => {
   it('one at 0% and one at 100% are 50%', () => {
     const g = two(100, 0);
     expect(g.total.left).toBe(50);
-    expect(g.row.figure).toBe('50% left');
+    expect(g.row.figure).toBe('50% used');
   });
 
   it('leaves an unread account out of the total and says so, short', () => {
@@ -768,10 +770,10 @@ describe('the one bar: a total across accounts, never a segment each', () => {
     const g = two(20, 60, ['max', 'pro']);
     expect(g.total.left).toBe(60);
     expect(g.total.weighting).toBe(
-      'An average of each account’s % left. Plan sizes aren’t reported, so Max and Pro count the same here.'
+      'An average of each account’s % used. Plan sizes aren’t reported, so Max and Pro count the same here.'
     );
     expect(two(20, 60).total.weighting).toBe(
-      'An average of each account’s % left: plan sizes aren’t reported, so each counts the same.'
+      'An average of each account’s % used: plan sizes aren’t reported, so each counts the same.'
     );
     expect(weightingOf(['Max', 'Max', 'Max'])).toBe('All 3 on Max, so each counts the same.');
     expect(weightingOf(['Max'])).toBeNull();
@@ -848,7 +850,7 @@ describe('totalWords', () => {
     );
     const w = totalWords(g);
     expect(w.eyebrow).toBe('All accounts');
-    expect(w.figure).toBe('72% left');
+    expect(w.figure).toBe('28% used');
     expect(w.across).toBe('across 2 accounts');
     // The week the total counts, not the 5-hour limit an hour away.
     expect(w.refill).toMatch(/^Next refill in 2d 2h · sam@example\.com, /);
@@ -868,7 +870,8 @@ describe('totalWords', () => {
 describe('glanceUsed (the glance, said as what is used)', () => {
   const total = (left: number | null, extra: Partial<UsageTotal> = {}): UsageTotal => ({
     left,
-    figure: left === null ? 'Not read yet' : `${left}% left`,
+    used: left === null ? null : 100 - left,
+    figure: left === null ? 'Not read yet' : `${100 - left}% used`,
     across: left === null ? '' : 'this week',
     unread: null,
     notRead: null,
@@ -900,14 +903,15 @@ describe('glanceUsed (the glance, said as what is used)', () => {
     expect(glanceUsed({ total: total(20), tone: 'calm', row: row('x') }).tone).toBe('high');
   });
 
-  it('out everywhere is a full bar and the row’s own words', () => {
+  it('out everywhere is a full bar and the row’s own words, the refill said once', () => {
     const u = glanceUsed({
       total: total(0),
       tone: 'limited',
-      row: row('Out of usage', 'Refills Sat 10:00 AM'),
+      row: row('Out until Sat 10:00 AM', 'Refills Sat 10:00 AM'),
     });
     expect(u.used).toBe(100);
-    expect(u.line).toBe('Out of usage · refills Sat 10:00 AM');
+    expect(u.line).toBe('Out until Sat 10:00 AM');
+    expect(u.detail).toBe('Out until Sat 10:00 AM');
     expect(u.tone).toBe('out');
   });
 
@@ -922,5 +926,48 @@ describe('glanceUsed (the glance, said as what is used)', () => {
     expect(shortCountdown('6d 2h')).toBe('6d');
     expect(shortCountdown('4h 59m')).toBe('4h');
     expect(shortCountdown('12m')).toBe('12m');
+  });
+});
+
+describe('every usage surface says what is used', () => {
+  it('usedFigure: "N% used", and at 100% "Out until <refill>"', () => {
+    expect(usedFigure(38)).toBe('38% used');
+    expect(usedFigure(100, 'Sat 10:00 AM')).toBe('Out until Sat 10:00 AM');
+    expect(usedFigure(100)).toBe('Out of usage');
+  });
+
+  it('usedTone: the warning role from 80% used, limited at 100, quiet unread', () => {
+    expect(usedTone(null)).toBe('quiet');
+    expect(usedTone(79)).toBe('calm');
+    expect(usedTone(80)).toBe('warning');
+    expect(usedTone(100)).toBe('limited');
+  });
+
+  it('an account and its limits fill with use, the pace marker at the even pace used', () => {
+    const g = usageGlance([acct('default')], inv([line('default', { windows: [week(62)] })]), {
+      now: NOW,
+    });
+    const k = g.keys[0];
+    expect(k.used).toBe(62);
+    expect(k.figure).toBe('62% used');
+    const l = k.limits[0];
+    expect(l.used).toBe(62);
+    expect(l.figure).toBe('62% used');
+    expect(l.evenUsed).toBe(100 - (l.evenLeft as number));
+    expect(g.total.used).toBe(62);
+    expect(g.total.figure).toBe('62% used');
+  });
+
+  it('a limit used up says until when; 80% takes the warning role', () => {
+    const up = usageGlance([acct('default')], inv([line('default', { windows: [week(100)] })]), {
+      now: NOW,
+    });
+    expect(up.keys[0].limits[0].figure).toMatch(/^Out until /);
+    expect(up.keys[0].limits[0].tone).toBe('limited');
+    const high = usageGlance([acct('default')], inv([line('default', { windows: [week(80)] })]), {
+      now: NOW,
+    });
+    expect(high.keys[0].limits[0].tone).toBe('warning');
+    expect(high.total.tone).toBe('warning');
   });
 });

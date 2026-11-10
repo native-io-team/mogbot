@@ -1,12 +1,12 @@
 /**
- * Usage, from the agent chat's header: a small ring (what is left of the
+ * Usage, from the agent chat's header: a small ring (what is used of the
  * current 5-hour window, as the engine reported it) that opens a popover:
  * this agent's context (only when its engine reported it), then the whole
  * stack of accounts as the Usage view's hero says it (`totalWords`: the
- * total left and across what, the segmented bar, the next refill), and a way
+ * total used and across what, the one bar, the next refill), and a way
  * into the Usage view. One rendering of usage, so
  * the popover, the sidebar, Settings and the phone never disagree, and
- * every limit is said as what is left.
+ * every limit is said as what is used.
  *
  * Nothing is filled in: no reading, no section; no 5-hour reading, the
  * control is the word "Usage" rather than a ring that wasn't reported. With
@@ -39,10 +39,10 @@ interface AgentUsageRingProps {
 export function AgentUsageRing({ agent, open, onOpenChange }: AgentUsageRingProps) {
   const { quotas, now } = useQuotas();
   const ring = ringPercent(quotas, agent.engine, now);
-  // Said, and drawn, as what is left: the same as every other usage figure.
-  const left = ring ? 100 - ring.percent : null;
+  // Said, and drawn, as what is used: the same as every other usage figure.
+  const used = ring ? ring.percent : null;
   const label =
-    left !== null ? `Usage: ${left}% of the 5-hour limit left` : 'Usage: no 5-hour reading yet';
+    used !== null ? `Usage: ${used}% of the 5-hour limit used` : 'Usage: no 5-hour reading yet';
   const anything =
     ring !== null || contextMeter(agent.context) !== null || (quotas?.length ?? 0) > 0;
   if (!anything && !open) return null;
@@ -71,7 +71,7 @@ export function AgentUsageRing({ agent, open, onOpenChange }: AgentUsageRingProp
               <span
                 className="agent-usage-ring__dial"
                 data-tone={ring.tone}
-                style={{ '--agent-usage-ring-percent': left ?? 0 } as CSSProperties}
+                style={{ '--agent-usage-ring-percent': used ?? 0 } as CSSProperties}
                 aria-hidden
               />
             ) : (
@@ -106,7 +106,10 @@ function UsageBody({ agent, onClose }: { agent: Agent; onClose: () => void }) {
       {stacked && (
         <Section title={glance.keys.length === 1 ? 'Your account' : 'Your accounts'}>
           {/* The Usage view's hero, small: the same figure and the same refill. */}
-          <p className="agent-usage__headline" data-tone={glance.tone}>
+          <p
+            className="agent-usage__headline"
+            data-tone={glance.tone === 'calm' ? glance.total.tone : glance.tone}
+          >
             {words.figure}
             {words.across && <span className="agent-usage__muted"> {words.across}</span>}
           </p>
