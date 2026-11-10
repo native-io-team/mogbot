@@ -1654,8 +1654,18 @@ pub fn holder_of(path: &str) -> Option<(String, String, String)> {
 /// The workspace removed an agent's copy (confirmed by name): the agent no
 /// longer holds it. Its branch stays, as the workspace's remove promises.
 pub fn forget(agent_id: &str, path: &str) {
+    // Paths compared outside the registry lock (canonicalising reads the
+    // disk); the update drops only the copy that was compared.
+    let Some(held) = store::get(agent_id)
+        .ok()
+        .and_then(|a| a.copy)
+        .map(|c| c.path)
+        .filter(|held| same_path(held, path))
+    else {
+        return;
+    };
     let _ = store::update(agent_id, |a| {
-        if a.copy.as_ref().is_some_and(|c| same_path(&c.path, path)) {
+        if a.copy.as_ref().is_some_and(|c| c.path == held) {
             a.copy = None;
         }
     });
