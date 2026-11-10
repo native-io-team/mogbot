@@ -14,6 +14,8 @@
 
 import { useState, type CSSProperties } from 'react';
 import {
+  ArrowDownIcon,
+  ArrowUpIcon,
   ClaudeIcon,
   CodexIcon,
   EditIcon,
@@ -161,6 +163,12 @@ export interface KeyActions {
   onSignIn: () => void;
   onRename: (name: string) => Promise<boolean>;
   onRemove: () => void;
+  /**
+   * Move it one place up or down: the order without dragging (WCAG 2.5.7).
+   * Absent at that end of the list, or with one account.
+   */
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }
 
 /** One account as a key: its place, name, state, limits, who used it, and what to do. */
@@ -261,6 +269,16 @@ export function UsageKey({
           >
             Rename
           </DropdownItem>
+          {actions.onMoveUp && (
+            <DropdownItem icon={<ArrowUpIcon size={14} />} onSelect={actions.onMoveUp}>
+              Move up
+            </DropdownItem>
+          )}
+          {actions.onMoveDown && (
+            <DropdownItem icon={<ArrowDownIcon size={14} />} onSelect={actions.onMoveDown}>
+              Move down
+            </DropdownItem>
+          )}
           {k.signedIn && !k.thisMac && (
             <DropdownItem icon={<ResetIcon size={14} />} onSelect={actions.onSignIn}>
               Sign in again

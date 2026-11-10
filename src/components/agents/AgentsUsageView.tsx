@@ -372,6 +372,13 @@ export function UsagePanel({ inSettings = false }: { inSettings?: boolean }) {
   );
 }
 
+/** `ids` with the entries at `a` and `b` exchanged. */
+function swap(ids: readonly string[], a: number, b: number): string[] {
+  const next = [...ids];
+  [next[a], next[b]] = [next[b], next[a]];
+  return next;
+}
+
 function EngineStack({
   engine,
   several,
@@ -402,7 +409,7 @@ function EngineStack({
       </h3>
       <p className="usage-section__muted">
         {draggable
-          ? 'Turns start on the first with room and carry on down. Drag to change the order.'
+          ? 'Turns start on the first with room and carry on down. Drag to change the order, or use its menu.'
           : 'Turns run on this one.'}
       </p>
       <DragSortScope
@@ -432,6 +439,8 @@ function EngineStack({
                   onSignIn: () => onSignIn(k.id),
                   onRename: (name) => onRename(k.id, name),
                   onRemove: () => onRemove(k.id),
+                  onMoveUp: i > 0 ? () => onReorder(swap(ids, i, i - 1)) : undefined,
+                  onMoveDown: i < ids.length - 1 ? () => onReorder(swap(ids, i, i + 1)) : undefined,
                 }}
               />
             </DragSortItem>

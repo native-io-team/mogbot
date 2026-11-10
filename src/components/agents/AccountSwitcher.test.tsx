@@ -202,6 +202,28 @@ describe('Usage view', () => {
     await waitFor(() => expect(screen.getAllByRole('article')[0]).toHaveTextContent('Work'));
   });
 
+  it('moves an account up from its menu, without dragging', async () => {
+    store.engines = [claude];
+    store.agents = [];
+    const calls = mock([mac, work]);
+    render(<AgentsUsageView />);
+    await screen.findAllByRole('article');
+    // The first has nowhere to go up to.
+    fireEvent.click(screen.getByRole('button', { name: `More for ${mac.name}` }));
+    expect(await screen.findByText('Move down')).toBeInTheDocument();
+    expect(screen.queryByText('Move up')).toBeNull();
+    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'Escape' });
+
+    fireEvent.click(screen.getByRole('button', { name: 'More for Work' }));
+    await act(async () => {
+      fireEvent.click(await screen.findByText('Move up'));
+      await Promise.resolve();
+    });
+    const moves = calls.filter((c) => c.cmd === 'agents_account_reorder');
+    expect(moves).toHaveLength(1);
+    expect(moves[0].args).toMatchObject({ engine: 'claude', ids: ['a1', 'default'] });
+  });
+
   it('adds an account in one click, once, with a name not taken', async () => {
     store.engines = [claude];
     store.agents = [];
