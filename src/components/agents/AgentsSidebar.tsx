@@ -5,8 +5,9 @@
  * shared status dots — so it reads as the same sidebar, not a second app.
  *
  * There is one group, so there is no group header: the Projects | Agents
- * toggle above it says where you are. "New agent" closes the list, where
- * "Open project" closes the project list. The sidebar's top field searches
+ * toggle above it says where you are. "New agent" and "New room" are pinned
+ * under the list (`AgentsSidebarActions`), outside its scroller; the
+ * Routines page sits in the footer with Usage (`RoutinesRow`). The sidebar's top field searches
  * conversations here; while it has a query the results take the list's place.
  *
  * Right-click a row (or Shift+F10 on it) for Pin, Mark as unread, Mute notifications, Edit, Hide
@@ -48,6 +49,7 @@ import {
 } from './AgentGroupParts';
 import { sectionAgents, useAgentGroups, type AgentGroup } from '../../lib/agentGroups';
 import { Button } from '../primitives/Button';
+import { FooterRowIcon } from '../workspace/FooterRowIcon';
 import { IconButton } from '../primitives/IconButton';
 import { StatusPill } from '../primitives/StatusPill';
 import { AgentKey } from './AgentKey';
@@ -89,7 +91,6 @@ interface AgentsSidebarProps {
   showHidden: boolean;
   onToggleShowHidden: () => void;
   onSelect: (agentId: string) => void;
-  onNew: () => void;
   /** The top field's query; while there is one, its results replace the list. */
   query: string;
   searchRef: RefObject<HTMLInputElement | null>;
@@ -101,11 +102,6 @@ interface AgentsSidebarProps {
   /** Group conversations, each with its members as they are now. */
   rooms: { room: Room; members: Agent[] }[];
   roomActions: RoomActions;
-  onNewRoom: () => void;
-  /** Routines, every agent's in one list. */
-  onOpenRoutines?: () => void;
-  /** Routines is the view on screen. */
-  routinesOpen?: boolean;
 }
 
 function subtitle(agent: Agent): ReactNode {
@@ -274,7 +270,7 @@ export function InFlightBell({
   // it opens leads with its Needs you section (What's in flight is the rest).
   const label = count > 0 ? `Needs you · ${count}` : 'Needs you · nothing right now';
   return (
-    <span className="workspace-sidebar-inbox agents-inflight">
+    <span className="agents-inflight-anchor agents-inflight">
       <IconButton
         variant="ghost"
         tabIndex={0}
@@ -300,7 +296,6 @@ export function AgentsSidebar({
   showHidden,
   onToggleShowHidden,
   onSelect,
-  onNew,
   query,
   searchRef,
   onOpenHit,
@@ -309,9 +304,6 @@ export function AgentsSidebar({
   actions,
   rooms,
   roomActions,
-  onNewRoom,
-  onOpenRoutines,
-  routinesOpen,
 }: AgentsSidebarProps) {
   // Optional groups (by project, or your own), off by default.
   const grouping = useAgentGroups();
@@ -429,45 +421,81 @@ export function AgentsSidebar({
             </button>
           )}
           {showHidden && hidden.map(row)}
-          <div className="workspace-sidebar-active-actions">
-            <Button
-              variant="ghost"
-              width="fill"
-              className="workspace-sidebar-add-project agents-list__new"
-              onClick={onNew}
-              title={`New agent (${kbd('mod', 'N')})`}
-            >
-              <AddIcon size={16} />
-              <span>New agent</span>
-            </Button>
-            {onOpenRoutines && (
-              <Button
-                variant="ghost"
-                width="fill"
-                className={`workspace-sidebar-add-project agents-list__routines${routinesOpen ? ' is-active' : ''}`}
-                aria-current={routinesOpen ? 'page' : undefined}
-                onClick={onOpenRoutines}
-              >
-                <RoutineIcon size={16} />
-                <span>Routines</span>
-              </Button>
-            )}
-            {/* A room needs two agents to talk to. */}
-            {agents.length >= 2 && (
-              <Button
-                variant="ghost"
-                width="fill"
-                className="workspace-sidebar-add-project agents-list__new-room"
-                onClick={onNewRoom}
-              >
-                <CollaboratorsIcon size={16} />
-                <span>New room</span>
-              </Button>
-            )}
-          </div>
         </>
       )}
     </div>
+  );
+}
+
+/**
+ * The create actions, pinned under the list rather than at its end, so with
+ * ten agents or project groups they never scroll under the Usage footer
+ * (round 4, #10). Pages (Routines, Usage) live in the footer; actions here.
+ */
+export function AgentsSidebarActions({
+  agentCount,
+  onNew,
+  onNewRoom,
+}: {
+  agentCount: number;
+  onNew: () => void;
+  onNewRoom: () => void;
+}) {
+  return (
+    <div className="workspace-sidebar-active-actions agents-list__actions">
+      <Button
+        variant="ghost"
+        width="fill"
+        className="workspace-sidebar-add-project agents-list__new"
+        onClick={onNew}
+        title={`New agent (${kbd('mod', 'N')})`}
+      >
+        <AddIcon size={16} />
+        <span>New agent</span>
+      </Button>
+      {/* A room needs two agents to talk to. */}
+      {agentCount >= 2 && (
+        <Button
+          variant="ghost"
+          width="fill"
+          className="workspace-sidebar-add-project agents-list__new-room"
+          onClick={onNewRoom}
+        >
+          <CollaboratorsIcon size={16} />
+          <span>New room</span>
+        </Button>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Routines, every agent's in one list: a page, so it sits in the footer
+ * with Usage, in the footer rows' own shape, and wears the selected fill
+ * while it's open.
+ */
+export function RoutinesRow({
+  open,
+  collapsed,
+  onOpen,
+}: {
+  open: boolean;
+  collapsed: boolean;
+  onOpen: () => void;
+}) {
+  return (
+    <Button
+      variant="ghost"
+      width="fill"
+      className={`remote-indicator agents-list__routines${collapsed ? ' remote-indicator--compact' : ''}`}
+      aria-current={open ? 'page' : undefined}
+      aria-label="Routines"
+      title={collapsed ? 'Routines' : undefined}
+      onClick={onOpen}
+      leftIcon={<FooterRowIcon icon={<RoutineIcon size={14} />} status="off" />}
+    >
+      {!collapsed && <span className="remote-indicator__line">Routines</span>}
+    </Button>
   );
 }
 

@@ -1094,3 +1094,9 @@
   font-family: var(--font-ui);
   font-size: var(--font-size-body-md);
 }
+
+/* Nothing read yet (a first run): the row is the word alone, in the
+   sidebar footer's own ink, like Settings beside it. */
+.usage-glance[data-quiet] .usage-glance__label {
+  color: inherit;
+}

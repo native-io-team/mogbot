@@ -70,6 +70,17 @@ interface AgentComposerProps {
   /** `now`: interrupt the turn in progress rather than queue (⌘↵). */
   onSend: (now?: boolean) => void;
   onPickFiles: () => void;
+  /**
+   * A starter's brief typed in with its blank still empty ("… My topics: "):
+   * while the draft is exactly that, nothing sends (Send is off, Enter does
+   * nothing) and the hint says to finish it.
+   */
+  unfilled?: string | null;
+}
+
+/** True while the draft is the starter's brief with its blank still empty. */
+export function isUnfilled(draft: string, unfilled: string | null | undefined): boolean {
+  return Boolean(unfilled) && draft.trim() === (unfilled ?? '').trim();
 }
 
 /** "That looks like a key" over the composer, reading the draft itself. */
@@ -105,11 +116,14 @@ export const AgentComposer = memo(function AgentComposer({
   onStop,
   onSend,
   onPickFiles,
+  unfilled,
 }: AgentComposerProps) {
   const draft = useComposerDraft(agentId);
   const setDraft = useMemo(() => (text: string) => setComposerDraft(agentId, text), [agentId]);
   const dictating = dictation.phase !== 'idle';
-  const canSend = draft.trim().length > 0 || staged.length > 0 || quotes.length > 0;
+  const blank = isUnfilled(draft, unfilled);
+  const canSend =
+    !blank && (draft.trim().length > 0 || staged.length > 0 || quotes.length > 0);
 
   // In sidebar order as it is now: computed again as you type, so the picker
   // opening on "@" lists them the way the sidebar does at that moment.
@@ -189,7 +203,7 @@ export const AgentComposer = memo(function AgentComposer({
           if (mentionPicker.onKeyDown(e)) return;
           if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
             e.preventDefault();
-            onSend(e.metaKey);
+            if (!blank) onSend(e.metaKey);
           } else if (e.key === 'Escape' && onEscape?.()) {
             e.preventDefault();
           } else if (e.key === 'Escape' && working && !canSend) {
@@ -226,7 +240,11 @@ export const AgentComposer = memo(function AgentComposer({
           />
         )}
         {/* Its own row above the text, so a long hint never squeezes it. */}
-        {escArmed && working && !canSend && !dictating ? (
+        {blank && !dictating ? (
+          <span className="agent-composer__hint" role="status">
+            Fill in the end, then send
+          </span>
+        ) : escArmed && working && !canSend && !dictating ? (
           <span className="agent-composer__hint" data-armed role="status">
             Esc again to stop {agentName}
           </span>
@@ -252,7 +270,7 @@ export const AgentComposer = memo(function AgentComposer({
             aria-label={dictating ? 'Stop dictating' : 'Dictate'}
             title={dictating ? 'Stop dictating (Esc to discard)' : 'Dictate (⌘⇧D, or hold ⌥Space)'}
           />
-          {working && !canSend && !dictating ? (
+          {working && !canSend && !blank && !dictating ? (
             <IconButton
               tabIndex={0}
               variant="secondary"

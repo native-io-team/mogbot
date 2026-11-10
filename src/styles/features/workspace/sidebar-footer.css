@@ -108,7 +108,7 @@
 
 /* The bell (What's in flight, Agents mode) carries a count badge. The wrapper
    exists only to anchor the badge to the icon button. */
-.workspace-sidebar-inbox {
+.agents-inflight-anchor {
   position: relative;
   display: inline-flex;
 }

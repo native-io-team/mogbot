@@ -9,8 +9,10 @@
  *
  * Words and figures are the phone's too (`companion-protocol/usageGlance`
  * `row`): only what an engine reported; an account nobody has read is an
- * empty, dashed segment, never a full one. This row never asks for a
- * reading itself (`glance`); opening the view does.
+ * empty, dashed segment, never a full one. Before anything was read (a
+ * first run) the row is the word "Usage" alone: no "Not read yet", no empty
+ * bar, nothing that asks to be looked at before an agent has run. This row
+ * never asks for a reading itself (`glance`); opening the view does.
  *
  * ⌘K "Usage and accounts…", "Switch account…" and "Add an account…" open
  * the view (`requestSwitcher`), as does the chat header's account chip.
@@ -150,6 +152,8 @@ export function AccountSwitcher({
 
   if (!accounts || glance.keys.length === 0) return null;
   const { row: words } = glance;
+  // Signed in, nothing read yet, nothing to do: calm, the label alone.
+  const quiet = glance.unread && !words.needsYou;
   const label = `Usage: ${[words.figure, words.refill, words.count].filter(Boolean).join('. ')}`;
 
   const row = (
@@ -163,10 +167,16 @@ export function AccountSwitcher({
       aria-current={open ? 'page' : undefined}
       data-testid="account-switcher"
       data-needs-you={words.needsYou || undefined}
+      data-quiet={quiet || undefined}
       onClick={() => onOpen?.()}
       leftIcon={<FooterRowIcon icon={<ActivityIcon size={14} />} status={glanceStatus(glance)} />}
     >
-      {!collapsed && (
+      {!collapsed && quiet && (
+        <span className="usage-glance__body">
+          <span className="usage-glance__label">Usage</span>
+        </span>
+      )}
+      {!collapsed && !quiet && (
         <span className="usage-glance__body">
           <span className="usage-glance__label">Usage</span>
           <span className="usage-glance__headline">

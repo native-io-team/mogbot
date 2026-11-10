@@ -22,7 +22,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ComponentProps } from 'react';
 import { flushSync } from 'react-dom';
 import { HomeSidebar } from '../workspace/HomeSidebar';
-import { AgentsSidebar, InFlightBell } from './AgentsSidebar';
+import { AgentsSidebar, AgentsSidebarActions, InFlightBell, RoutinesRow } from './AgentsSidebar';
 import { AgentsSearchPopover, AgentsTopSearch } from './AgentsSearchBox';
 import { EngineSignInModal, type EngineSetup } from './EngineSignInModal';
 import { AgentChat } from './AgentChat';
@@ -985,8 +985,23 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                 onOpen={focusSearch}
               />
             }
+            listActions={
+              query.trim().length === 0 || popoverSearch ? (
+                <AgentsSidebarActions
+                  agentCount={listed.length}
+                  onNew={() => openNew()}
+                  onNewRoom={openNewRoom}
+                />
+              ) : undefined
+            }
             footerContent={
               <SidebarBoundary part="accounts" message="Accounts couldn’t be shown.">
+                {/* Pages together: Routines beside Usage, actions above the list's end. */}
+                <RoutinesRow
+                  open={routinesOpen}
+                  collapsed={sidebarProps.isSidebarHidden ?? false}
+                  onOpen={() => openRoutines()}
+                />
                 <AccountSwitcher
                   collapsed={sidebarProps.isSidebarHidden ?? false}
                   open={usageOpen}
@@ -1002,12 +1017,8 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                   showHidden={showHidden}
                   onToggleShowHidden={toggleShowHidden}
                   onSelect={setSelectedId}
-                  onNew={() => openNew()}
                   rooms={roomRows}
                   roomActions={roomActions}
-                  onNewRoom={openNewRoom}
-                  onOpenRoutines={() => openRoutines()}
-                  routinesOpen={routinesOpen}
                   actions={actions}
                   query={popoverSearch ? '' : query}
                   searchRef={searchRef}

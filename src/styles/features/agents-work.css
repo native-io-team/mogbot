@@ -174,7 +174,8 @@
   gap: var(--spacing-2xs);
   margin-top: var(--spacing-sm);
   margin-left: calc(var(--agents-work-icon) + var(--spacing-sm));
-  padding-top: var(--spacing-xs);
+  padding: var(--spacing-xs) 0 var(--spacing-xs);
+  /* The underline sits below the line box; the body clips at its edge. */
   border-top: var(--border-width-default) solid var(--border-subtle);
 }
 
