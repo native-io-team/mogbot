@@ -88,7 +88,9 @@ function ConversationsSheet() {
       ? 'Needs your OK'
       : c.id === working
         ? 'Working'
-        : formatAgo(c.lastActivityAt, now);
+        : c.lastActivityAt > 0
+          ? formatAgo(c.lastActivityAt, now)
+          : undefined;
 
   return (
     <SheetPage>
@@ -157,7 +159,7 @@ function ConversationsSheet() {
               variant="ghost"
               size="compact"
               disabled={!connected}
-              onPress={() => setRenaming(current.title)}
+              onPress={() => setRenaming(current.title ? conversationTitle(current) : '')}
             />
           ) : (
             <View style={styles.rename}>

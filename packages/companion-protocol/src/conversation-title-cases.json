@@ -1,0 +1,52 @@
+{
+  "_": "A conversation's automatic title from its first user message: the cases conversationAutoTitle (conversations.ts) and the Mac's auto_title (src-tauri/src/agents/conversation_title.rs) are both held to. Each title also tidies to itself.",
+  "cases": [
+    {
+      "text": "I Kind of like B with a hint of A. Let's go with that for the hero",
+      "title": "I kind of like B with a hint of A"
+    },
+    {
+      "text": "I Kind of like B with a hint of A. L…",
+      "title": "I kind of like B with a hint of A"
+    },
+    {
+      "text": "Can you draft the quarterly investor update for the board, with the numbers from March",
+      "title": "Draft the quarterly investor update"
+    },
+    {
+      "text": "Can you draft the quarterly investor update for the board,…",
+      "title": "Draft the quarterly investor update"
+    },
+    {
+      "text": "> quoted\nSort out the March invoices please",
+      "title": "Sort out the March invoices"
+    },
+    { "text": "Hey, can you fix the build? It's failing on CI.", "title": "Fix the build" },
+    {
+      "text": "Hi! Please plan the November launch email.",
+      "title": "Plan the November launch email"
+    },
+    { "text": "## **Plan** the `launch` email", "title": "Plan the launch email" },
+    {
+      "text": "- [Read the brief](https://example.com/brief) and summarise it",
+      "title": "Read the brief and summarise it"
+    },
+    {
+      "text": "\"Draft the job post\" for a designer, thanks!",
+      "title": "Draft the job post for a designer"
+    },
+    { "text": "FIX THE STAGING DEPLOY", "title": "Fix the staging deploy" },
+    { "text": "what’s on my calendar tomorrow?", "title": "What’s on my calendar tomorrow" },
+    {
+      "text": "```\nnpm ERR! missing script\n```\nwhy does this fail",
+      "title": "Why does this fail"
+    },
+    {
+      "text": "Ask Finance about the Northwind invoice",
+      "title": "Ask Finance about the Northwind invoice"
+    },
+    { "text": "  hello\n\nworld", "title": "Hello" },
+    { "text": "ok", "title": "Ok" },
+    { "text": "", "title": "" }
+  ]
+}
