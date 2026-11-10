@@ -2207,6 +2207,15 @@ pub fn in_routine(agent_id: &str) -> bool {
         .is_some_and(|r| r.running && !r.tickets.is_empty())
 }
 
+/// The name of the routine the agent's turn in progress runs, when it runs
+/// exactly one: a page it updates names it ("by Weekly report").
+pub fn routine_running(agent_id: &str) -> Option<String> {
+    if !in_routine(agent_id) {
+        return None;
+    }
+    super::runs::routine_named(agent_id, &turn_tickets(agent_id))
+}
+
 /// What a turn answering outside text is told about itself, so it doesn't
 /// report the browser it wasn't given as broken (`prompts::OUTSIDE_TURN`).
 pub fn outside_note(outside: bool) -> Option<&'static str> {

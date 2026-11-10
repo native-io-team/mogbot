@@ -70,6 +70,7 @@ const HISTORY = [
     note: 'Logged Tuesday’s card spend',
     changes: { added: ['heads-up'], changed: ['month', 'categories'], removed: [] },
     byRoutine: true,
+    routine: 'Log the day’s card spend',
   },
   {
     version: 3,
@@ -104,6 +105,7 @@ const page = (pinned: boolean) => ({
   note: 'Logged Tuesday’s card spend',
   changes: HISTORY[0].changes,
   byRoutine: true,
+  routine: HISTORY[0].routine,
   blocks: set([metrics(1150, 850), note, spending, bills(false)]),
   history: HISTORY,
 });
@@ -154,7 +156,7 @@ export const agentsPageScenarios: Scenario[] = [
     id: 'agents-page',
     title: 'Agents — a living page pinned above the conversation',
     looksRightWhen:
-      'Under the chat header, in the conversation’s column: a quiet bar with a down chevron and “November budget”, then “Updated 3 min ago · v4” muted on the right and a pin button. Under it the page: three metric tiles ($1,150 spent, $850 left, 20 days), an amber “Heads up” note about eating out, then one card holding “Where it went” (a table, dollar columns right-aligned) and “Bills this month” (a checklist, Rent ticked, notes under the others). A hairline separates the page from the chat, whose messages carry on below. Tokens only; readable in both themes.',
+      'Under the chat header, in the conversation’s column: a quiet bar with a down chevron and “November budget”, then “Updated 3 min ago · v4” muted on the right and a pin button. The whole band is a tint off the chat (darker in light, lighter in dark), so it reads as the page, not a reply. Under the bar: three flat metric tiles ($1,150 spent, $850 left, 20 days; a faint hairline, no lift), an amber “Heads up” note about eating out, then one card holding “Where it went” (a table, dollar columns right-aligned) and “Bills this month”, scrolling inside the band, which is no taller than 320px. A hairline separates the page from the chat, whose messages carry on below. Tokens only; readable in both themes.',
     requires: '.agent-page .agent-block-metrics',
     openSelector: AGENTS_TAB,
     steps: [open],
@@ -165,7 +167,7 @@ export const agentsPageScenarios: Scenario[] = [
     id: 'agents-page-history',
     title: 'Agents — a page’s versions: what changed, and when',
     looksRightWhen:
-      'Pressing “Updated 3 min ago · v4” opens a recessed list above the page, newest first: “v4 · 3 min ago · by a routine” over “Added Heads up · Changed month, Where it went — Logged Tuesday’s card spend” (v4 highlighted as the one shown), then v3 (Changed Bills this month — Electricity is due Friday), v2 (by a routine), and v1 “Made the page — Started the month”.',
+      'Pressing “Updated 3 min ago · v4” opens a popover under it (the page doesn’t move), newest first: “v4 · 3 min ago · by Log the day’s card spend” over “Added Heads up · Changed month, Where it went — Logged Tuesday’s card spend” (v4 highlighted as the one shown), then v3 (Changed Bills this month — Electricity is due Friday), v2 (by a routine: which one isn’t known), and v1 “Made the page — Started the month”.',
     requires: '.agent-page__history',
     openSelector: AGENTS_TAB,
     steps: [open, { click: '.agent-page__when' }],

@@ -51,7 +51,7 @@ describe('AgentSkills in the editor', () => {
     updateAgent.mockClear();
   });
 
-  it('shows the setting (Ask me by default) and what it knows how to do', async () => {
+  it('shows the setting (Ask me by default) and its skills', async () => {
     render(<AgentSkills agent={ledger} />);
     expect(await screen.findByText('Export invoices')).toBeTruthy();
     expect(screen.getByText('When asked for last month’s invoices')).toBeTruthy();
@@ -89,7 +89,7 @@ describe('AgentSkills in the editor', () => {
     });
   });
 
-  it('opened for it (⌘K "What … knows how to do"), it scrolls into view', () => {
+  it('opened for it (⌘K "<agent>’s skills"), it scrolls into view', () => {
     const scroll = vi.fn();
     const was = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView');
     Object.defineProperty(Element.prototype, 'scrollIntoView', {
@@ -112,7 +112,7 @@ describe('AgentSkills in the editor', () => {
     api.agentSkills.mockResolvedValue({ agentId: 'a1', setting: 'off', skills: [] });
     store.value = { agents: [{ ...ledger, learnSkills: 'off' }] };
     render(<AgentSkills agent={ledger} />);
-    expect(await screen.findByText('Ledger doesn’t save what it learns.')).toBeTruthy();
+    expect(await screen.findByText('Ledger doesn’t save new skills.')).toBeTruthy();
   });
 });
 
@@ -135,7 +135,7 @@ describe('the skill card', () => {
     approval,
   });
 
-  it('previews the skill and answers Not now / Save, Save neutral', () => {
+  it('previews the skill as an offer: quiet, Not now / Save, neither solid', () => {
     const onAnswer = vi.fn();
     const { container } = render(
       <ApprovalCard message={message(card)} agentName="Ledger" paused={false} onAnswer={onAnswer} />
@@ -144,9 +144,12 @@ describe('the skill card', () => {
     expect(screen.getByText(/1\. Open Reports/)).toBeTruthy();
     expect(screen.getByText('2 personal details or secrets removed.')).toBeTruthy();
     const save = screen.getByRole('button', { name: /^Save/ });
-    expect(save.className).toMatch(/button--strong/);
-    expect(save.className).not.toMatch(/button--primary/);
-    expect(screen.getByRole('button', { name: /^Not now/ })).toBeTruthy();
+    // Nothing waits on it: no solid answer, no A / D keys, drawn as an offer.
+    expect(save.className).toMatch(/button--secondary/);
+    expect(save.className).not.toMatch(/button--primary|button--strong/);
+    expect(screen.getByRole('button', { name: /^Not now/ }).className).toMatch(/button--ghost/);
+    expect(save.getAttribute('aria-keyshortcuts')).toBeNull();
+    expect(container.querySelector('.agent-approval[data-offer]')).toBeTruthy();
     // Nothing broader to say instead: no "More answers" menu.
     expect(container.querySelector('[aria-label="More answers"]')).toBeNull();
   });
@@ -160,6 +163,6 @@ describe('the skill card', () => {
         onAnswer={vi.fn()}
       />
     );
-    expect(screen.getByText('Saved · under What it knows how to do')).toBeTruthy();
+    expect(screen.getByText('Saved · under Skills')).toBeTruthy();
   });
 });

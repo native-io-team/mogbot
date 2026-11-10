@@ -232,7 +232,7 @@ export interface Agent {
   starters?: AgentStarter[];
   /** No OS notifications; unread and the Dock badge still count it. */
   muted: boolean;
-  /** "Save what it learns" (`agents/skills_learn.rs`); absent is `ask`. */
+  /** "Save new skills" (`agents/skills_learn.rs`); absent is `ask`. */
   learnSkills?: LearnSkills;
   /** Omitted by the backend when there are none. */
   checkIns?: CheckIn[];
@@ -1028,7 +1028,7 @@ export interface UpdateAgentInput {
   workDirectly?: boolean;
   /** "Runs on": one of its engine's accounts, or '' for any account. */
   account?: string;
-  /** "Save what it learns": Automatically, Ask me or Off. */
+  /** "Save new skills": Automatically, Ask me or Off. */
   learnSkills?: LearnSkills;
 }
 

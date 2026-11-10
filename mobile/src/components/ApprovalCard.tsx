@@ -21,6 +21,7 @@ import {
   SKILL_NOT_NOW,
   SKILL_SAVE,
   skillCardNote,
+  SKILL_OFFER_NOTE,
   stepInSource,
 } from '@shipstudio/companion-protocol';
 import { router } from 'expo-router';
@@ -379,7 +380,8 @@ export function ApprovalCard({
       )}
       <Button
         title={crossover ? CROSSOVER_WAIT : denyWord}
-        variant="outline"
+        // An offer's no is quiet: nothing waits on it.
+        variant={skill ? 'ghost' : 'outline'}
         busy={busy === 'deny'}
         disabled={off}
         focusable={armed}
@@ -427,7 +429,8 @@ export function ApprovalCard({
       {!stepIn && !crossover && (
         <Button
           title={allowWord}
-          variant={risky ? 'danger' : 'answer'}
+          // An offer's yes is a choice, not a release: outlined, not solid.
+          variant={risky && !skill ? 'danger' : skill ? 'outline' : 'answer'}
           busy={busy === 'allow'}
           disabled={off}
           focusable={armed}
@@ -442,6 +445,7 @@ export function ApprovalCard({
   return (
     <Card
       tone={risky ? 'warning' : undefined}
+      quiet={!!skill}
       icon={
         risky
           ? 'exclamationmark.triangle'
@@ -489,7 +493,7 @@ export function ApprovalCard({
             : gate
               ? 'It waits for you, and closes if the routine runs again first.'
               : skill
-                ? skillCardNote(skill) ?? undefined
+                ? [skillCardNote(skill), SKILL_OFFER_NOTE].filter(Boolean).join(' ')
                 : paused &&
                   !fit.pinned &&
                   !consent &&

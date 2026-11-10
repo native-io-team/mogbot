@@ -66,9 +66,8 @@ Small wins: duplicate an agent; reply to a single message.
   its thread, else a recap) ([agents.md](agents.md), "Rewind, fork and edit").
 - **Agents learn skills** — after a task the app saw take real effort, an
   agent can save how it did it (`save_skill`): per agent Automatically / Ask
-  me / Off, a Save / Not now card, scrubbed, listed as "What it knows how to
-  do" on desk and phone, carried in recipes ([agents.md](agents.md), "What it
-  knows how to do").
+  me / Off, a Save / Not now card, scrubbed, listed as "Skills" on desk and
+  phone, carried in recipes ([agents.md](agents.md), "Skills").
 - **"When an email or text arrives…"** — Mail and Messages on this Mac as free
   "When…" sources, read-only, needing Full Disk Access, each message passed in
   as outside text ([agents.md](agents.md), "When… routines").

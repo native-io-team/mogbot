@@ -1,8 +1,16 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useState, type ReactElement } from 'react';
-import { ComposerEditing, GoBackConfirm, GoBackMenu, foldRows } from './AgentGoBack';
-import { rewoundIds } from '../../../packages/companion-protocol/src/rewind';
+import {
+  ComposerEditing,
+  GoBackConfirm,
+  GoBackContextMenu,
+  GoBackMenu,
+  GoBackPicker,
+  foldRows,
+  openOneFold,
+} from './AgentGoBack';
+import { REWOUND_END, rewoundIds } from '../../../packages/companion-protocol/src/rewind';
 
 const idle = { agentName: 'Writer', working: false, driven: false };
 
@@ -24,6 +32,57 @@ describe('GoBackMenu', () => {
     expect(screen.getByRole('menuitem', { name: 'Rewind to here' })).toBeDisabled();
     expect(screen.getByRole('menuitem', { name: 'Fork from here' })).not.toBeDisabled();
     expect(screen.getByText('Writer is working. Wait for it to finish, or Stop it.')).toBeTruthy();
+  });
+});
+
+describe('GoBackContextMenu', () => {
+  it('opens on a right-click of your message with Copy, Remember, then the three ways back', () => {
+    const onPick = vi.fn();
+    render(
+      <GoBackContextMenu state={idle} text="Fix it" onPick={onPick} onRemember={() => {}}>
+        <div>Fix it</div>
+      </GoBackContextMenu>
+    );
+    fireEvent.contextMenu(screen.getByText('Fix it'));
+    const items = screen.getAllByRole('menuitem').map((i) => i.textContent?.trim());
+    expect(items).toEqual([
+      'Copy',
+      'Remember this',
+      'Edit and resend',
+      'Fork from here',
+      'Rewind to here',
+    ]);
+    fireEvent.click(screen.getByRole('menuitem', { name: /Fork from here/ }));
+    expect(onPick).toHaveBeenCalledWith('fork');
+  });
+});
+
+describe('GoBackPicker', () => {
+  it('lists your recent messages, each with Edit, Fork and Rewind', () => {
+    const onPick = vi.fn();
+    render(
+      <GoBackPicker
+        open
+        messages={[
+          { id: 'b', text: 'Keep three sections', ts: Date.now() },
+          { id: 'a', text: 'Plan the launch email', ts: Date.now() - 60_000 },
+        ]}
+        state={{ ...idle, working: true }}
+        onPick={onPick}
+        onClose={() => {}}
+      />
+    );
+    const rows = screen.getAllByRole('listitem').map((r) => r.textContent);
+    expect(rows[0]).toContain('“Keep three sections”');
+    expect(rows[1]).toContain('“Plan the launch email”');
+    // Working: going back in place waits, a fork never does.
+    expect(
+      screen.getByRole('button', { name: 'Rewind to here: “Plan the launch email”' })
+    ).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Fork from here: “Plan the launch email”' })
+    );
+    expect(onPick).toHaveBeenCalledWith('fork', 'a');
   });
 });
 
@@ -136,6 +195,17 @@ describe('foldRows', () => {
     fireEvent.click(toggle);
     expect(shown()).toEqual(['a', 'b', 'peer', 'note']);
     expect(toggle.getAttribute('aria-expanded')).toBe('true');
+    // Opened, the run is closed by its own line, right after its last row.
+    const end = screen.getByText(REWOUND_END);
+    expect(end.previousElementSibling?.textContent).toBe('peer');
+    fireEvent.click(toggle);
+    expect(screen.queryByText(REWOUND_END)).toBeNull();
+  });
+
+  it('keeps one fold open at a time, so the band between its lines is one run', () => {
+    expect([...openOneFold(new Set(), 'r1')]).toEqual(['r1']);
+    expect([...openOneFold(new Set(['r1']), 'r2')]).toEqual(['r2']);
+    expect([...openOneFold(new Set(['r2']), 'r2')]).toEqual([]);
   });
 
   it('leaves a chat with no rewinds exactly as it was', () => {

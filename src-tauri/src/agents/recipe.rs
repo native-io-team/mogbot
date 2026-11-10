@@ -78,7 +78,7 @@ pub struct Recipe {
     /// "often", "judgement", "go_hard" or "full_send": a suggestion.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub independence: Option<Level>,
-    /// What it knows how to do (`skills_learn`), scrubbed like the rest.
+    /// Skills (`skills_learn`), scrubbed like the rest.
     /// Absent when it has none, so a recipe without any reads as before.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub skills: Vec<RecipeSkill>,

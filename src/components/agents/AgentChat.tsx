@@ -89,6 +89,9 @@ import {
   GO_BACK_ORDER,
   GoBackConfirm,
   foldRows,
+  GO_BACK_PICK_MAX,
+  GoBackPicker,
+  openOneFold,
   type GoBackAction,
   type GoBackAsk,
 } from './AgentGoBack';
@@ -1027,24 +1030,52 @@ export const AgentChat = memo(function AgentChat({
   const rewinds = conversationList?.items.find((c) => c.id === viewing)?.rewinds;
   const rewound = useMemo(() => rewoundIds(rewinds), [rewinds]);
   const [openFolds, setOpenFolds] = useState<ReadonlySet<string>>(() => new Set());
-  const toggleFold = useCallback(
-    (id: string) =>
-      setOpenFolds((open) => {
-        const next = new Set(open);
-        if (!next.delete(id)) next.add(id);
-        return next;
-      }),
-    []
-  );
+  const toggleFold = useCallback((id: string) => setOpenFolds((open) => openOneFold(open, id)), []);
   // Lines still on their way have no place in the log to go back to yet.
   const localIds = useMemo(() => new Set(pending.map((p) => p.key)), [pending]);
-  const lastOwn = useMemo(() => {
-    for (let i = shown.length - 1; i >= 0; i--) {
+  // Your messages that can be gone back to, newest first: ⌘K's picker.
+  const ownRecent = useMemo(() => {
+    const out: AgentMessage[] = [];
+    for (let i = shown.length - 1; i >= 0 && out.length < GO_BACK_PICK_MAX; i--) {
       const m = shown[i];
-      if (m.kind === 'user' && !localIds.has(m.id) && !rewound.has(m.id)) return m;
+      if (m.kind === 'user' && !localIds.has(m.id) && !rewound.has(m.id)) out.push(m);
     }
-    return null;
+    return out;
   }, [shown, localIds, rewound]);
+  const lastOwn = ownRecent[0] ?? null;
+  const [picking, setPicking] = useState(false);
+  useEffect(() => setPicking(false), [viewing]);
+  const pickGoBack = (action: GoBackAction, id: string) => {
+    const m = ownRecent.find((x) => x.id === id);
+    setPicking(false);
+    if (m) onGoBack(action, m);
+  };
+  useCommands(
+    () =>
+      ownRecent.length > 0
+        ? [
+            {
+              id: 'agents.goBack.pick',
+              title: 'Go back to an earlier message…',
+              subtitle: `Edit, fork or rewind, in your chat with ${agent.name}`,
+              icon: GO_BACK_ICONS.rewind,
+              category: 'action' as const,
+              keywords: [
+                'rewind',
+                'fork',
+                'edit',
+                'resend',
+                'undo',
+                'branch',
+                'go back',
+                'earlier',
+              ],
+              run: () => setPicking(true),
+            },
+          ]
+        : [],
+    [ownRecent.length, agent.name]
+  );
   useCommands(
     () =>
       lastOwn
@@ -2261,6 +2292,13 @@ export const AgentChat = memo(function AgentChat({
                 </Button>
               )}
 
+              <GoBackPicker
+                open={picking}
+                messages={ownRecent}
+                state={goBack}
+                onPick={pickGoBack}
+                onClose={() => setPicking(false)}
+              />
               <GoBackConfirm
                 ask={goBackAsk}
                 agentName={agent.name}

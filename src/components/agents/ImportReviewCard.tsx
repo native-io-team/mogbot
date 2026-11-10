@@ -360,7 +360,7 @@ function ProposalRow({
             </ImportSection>
           )}
           {skills.length > 0 && (
-            <ImportSection title="What it knows how to do · saved as its skills">
+            <ImportSection title="Skills">
               <ul className="agents-import-agent__memory">
                 {skills.map((s) => (
                   <li key={s.slug}>

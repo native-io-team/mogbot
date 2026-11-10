@@ -906,7 +906,9 @@ conversation per agent and the chat is as it was.
   field. Going back in place waits while the agent works or you drive it; a
   fork never does, and opens the new conversation. What a rewind passed over
   folds into one "Rewound · N messages" row that opens in place
-  (`lib/goBack.ts`, `foldRewound`). On the web build, rows that rise in while
+  (`lib/goBack.ts`, `foldRewound`), drawn as past as on the desk: a rule
+  down the left from that row to "End of what was rewound", the lines muted
+  (`PAST` in `lib/theme.ts`). On the web build, rows that rise in while
   a rewind reshapes the list can overlap until the chat is drawn again;
   qa:web's `goback-rewound` reloads before its shot.
 

@@ -15,11 +15,23 @@ import {
   BranchIcon,
   ChevronRightIcon,
   CloseIcon,
+  CopyIcon,
   MoreHorizontalIcon,
   PencilIcon,
+  PinIcon,
   UndoIcon,
 } from '@/components/icons';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
+import { formatAgo } from '../../lib/formatAgo';
 import { Button } from '../primitives/Button';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '../primitives/ContextMenu';
 import { Dropdown, DropdownItem } from '../primitives/Dropdown';
 import { IconButton } from '../primitives/IconButton';
 import { MenuButton } from '../primitives/MenuButton';
@@ -35,6 +47,7 @@ import {
   goBackQuote,
   rewindConfirm,
   rewoundSummary,
+  REWOUND_END,
   type GoBackAction,
 } from '../../../packages/companion-protocol/src/rewind';
 
@@ -103,6 +116,127 @@ export function GoBackMenu({
     </Dropdown>
   );
 }
+
+/**
+ * The same three, on a right-click of one of your messages, with Copy (and
+ * Remember this) first since the menu stands in for the webview's own. The
+ * hover "…" is easy to miss; a right-click is where people look.
+ */
+export function GoBackContextMenu({
+  state,
+  text,
+  onPick,
+  onRemember,
+  children,
+}: {
+  state: GoBackState;
+  text: string;
+  onPick: (action: GoBackAction) => void;
+  onRemember?: () => void;
+  children: ReactElement;
+}) {
+  const { copy } = useCopyToClipboard();
+  const reason = goBackBlocked('rewind', state);
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuContent aria-label="Message actions" className="agent-go-back__context">
+        <ContextMenuItem onSelect={() => void copy(text)}>
+          <CopyIcon size={12} /> Copy
+        </ContextMenuItem>
+        {onRemember && (
+          <ContextMenuItem onSelect={onRemember}>
+            <PinIcon size={12} /> Remember this
+          </ContextMenuItem>
+        )}
+        <ContextMenuSeparator />
+        {ORDER.map((action) => (
+          <ContextMenuItem
+            key={action}
+            disabled={goBackBlocked(action, state) !== null}
+            onSelect={() => onPick(action)}
+          >
+            {GO_BACK_ICONS_SM[action]} {GO_BACK_LABELS[action]}
+          </ContextMenuItem>
+        ))}
+        {reason && <ContextMenuLabel className="agent-go-back__reason">{reason}</ContextMenuLabel>}
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+const GO_BACK_ICONS_SM: Record<GoBackAction, ReactNode> = {
+  edit: <PencilIcon size={12} />,
+  fork: <BranchIcon size={12} />,
+  rewind: <UndoIcon size={12} />,
+};
+
+/** How many of your messages ⌘K's "Go back to an earlier message…" offers. */
+export const GO_BACK_PICK_MAX = 12;
+
+/**
+ * ⌘K's "Go back to an earlier message…": your recent messages in this
+ * conversation, newest first, each with Edit and resend, Fork from here and
+ * Rewind to here. The per-message commands only reach your last message.
+ */
+export function GoBackPicker({
+  open,
+  messages,
+  state,
+  onPick,
+  onClose,
+}: {
+  open: boolean;
+  /** Your messages that can be gone back to, newest first. */
+  messages: readonly { id: string; text: string; ts: number }[];
+  state: GoBackState;
+  onPick: (action: GoBackAction, messageId: string) => void;
+  onClose: () => void;
+}) {
+  const reason = goBackBlocked('rewind', state);
+  return (
+    <ModalFrame
+      isOpen={open}
+      onClose={onClose}
+      title="Go back to an earlier message"
+      className="agent-go-back__picker"
+    >
+      <ol className="agent-go-back__picks" aria-label="Your messages">
+        {messages.map((m) => (
+          <li key={m.id} className="agent-go-back__pick">
+            <span className="agent-go-back__pick-text">
+              “{goBackQuote(m.text) || 'Your message'}”
+              <span className="agent-go-back__pick-when">{formatAgo(m.ts)}</span>
+            </span>
+            <span className="agent-go-back__pick-actions">
+              {ORDER.map((action) => (
+                <Button
+                  key={action}
+                  variant="ghost"
+                  size="compact"
+                  leftIcon={GO_BACK_ICONS_SM[action]}
+                  disabled={goBackBlocked(action, state) !== null}
+                  onClick={() => onPick(action, m.id)}
+                  aria-label={`${GO_BACK_LABELS[action]}: “${goBackQuote(m.text)}”`}
+                >
+                  {GO_BACK_SHORT[action]}
+                </Button>
+              ))}
+            </span>
+          </li>
+        ))}
+      </ol>
+      {reason && <p className="agent-go-back__picker-reason">{reason}</p>}
+    </ModalFrame>
+  );
+}
+
+/** A row's buttons, short: the row already says which message. */
+const GO_BACK_SHORT: Record<GoBackAction, string> = {
+  edit: 'Edit',
+  fork: 'Fork',
+  rewind: 'Rewind',
+};
 
 /** What a confirm is about: Fork or Rewind on one message. */
 export interface GoBackAsk {
@@ -197,6 +331,12 @@ export function ComposerEditing({ text, onCancel }: { text: string | null; onCan
  * opened. Row count and order are unchanged (the working line and the setup
  * card are placed by index), and an opened row is still a direct child of
  * the chat, so its own styles hold.
+ *
+ * Opened, the run reads as past: the summary line heads it, "End of what
+ * was rewound" closes it, and the rows between are muted behind a rule on
+ * the left. That is drawn by sibling selectors between the two lines
+ * (agents-chat.css), which is why only one run is open at a time
+ * (`openOneFold`).
  */
 export function foldRows<T>(
   rows: (ReactElement | null)[],
@@ -214,16 +354,13 @@ export function foldRows<T>(
     if (group.kind !== 'rewound') continue;
     const count = group.items.reduce((n, x) => n + Math.max(1, idsOf(x.item).length), 0);
     const isOpen = open.has(group.rewindId);
+    const last = group.items.length - 1;
     group.items.forEach(({ i }, at) => {
       const row = rows[i];
       const key = isValidElement(row) && row.key != null ? String(row.key) : `rewound-${i}`;
       const shown = isOpen ? row : null;
-      if (at > 0) {
-        out[i] = shown;
-        return;
-      }
-      out[i] = (
-        <Fragment key={key}>
+      const head =
+        at === 0 ? (
           <div
             className="agent-note agent-go-back__summary"
             data-rewound={group.rewindId}
@@ -232,16 +369,37 @@ export function foldRows<T>(
             <TextButton
               tabIndex={0}
               aria-expanded={isOpen}
-              leftIcon={<ChevronRightIcon size={12} className="agent-go-back__chevron" />}
+              leftIcon={<UndoIcon size={12} />}
+              rightIcon={<ChevronRightIcon size={12} className="agent-go-back__chevron" />}
               onClick={() => onToggle(group.rewindId)}
             >
               {rewoundSummary(count)}
             </TextButton>
           </div>
+        ) : null;
+      const tail =
+        isOpen && at === last ? (
+          <div className="agent-note agent-go-back__end" data-rewound-end={group.rewindId}>
+            {REWOUND_END}
+          </div>
+        ) : null;
+      if (!head && !tail) {
+        out[i] = shown;
+        return;
+      }
+      out[i] = (
+        <Fragment key={key}>
+          {head}
           {shown}
+          {tail}
         </Fragment>
       );
     });
   }
   return out;
+}
+
+/** Opening a fold closes any other (see `foldRows`); toggling it again closes it. */
+export function openOneFold(open: ReadonlySet<string>, id: string): ReadonlySet<string> {
+  return open.has(id) ? new Set() : new Set([id]);
 }

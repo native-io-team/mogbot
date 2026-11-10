@@ -47,7 +47,7 @@ import { ComposerAttachments, MessageAttachments } from './AgentAttachments';
 import { LocalLinks } from './AgentLocalLinks';
 import type { DraftAttachment } from './useComposerAttachments';
 import { MentionText } from './AgentMentions';
-import { GoBackMenu, type GoBackAction, type GoBackState } from './AgentGoBack';
+import { GoBackContextMenu, GoBackMenu, type GoBackAction, type GoBackState } from './AgentGoBack';
 import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
 import { LoginCard } from './AgentLoginCard';
@@ -59,6 +59,7 @@ import { AgentSettingsChange } from './AgentSettingsChange';
 import { AgentSkillCardBody } from './AgentSkills';
 import {
   SKILL_NOT_NOW,
+  SKILL_OFFER_NOTE,
   SKILL_SAVE,
   skillOutcome,
 } from '../../../packages/companion-protocol/src/skills';
@@ -373,6 +374,22 @@ export const UserBubble = memo(function UserBubble({
     />
   );
   const onKeyDown = useCopyOnKey(message.text);
+  const bubble = (
+    <div className="agent-bubble agent-bubble--user">
+      {message.revises && <RevisesBar revises={message.revises} />}
+      {splitQuotes(message.text).map((part, i) =>
+        part.kind === 'quote' ? (
+          <blockquote key={i} className="agent-bubble__quote">
+            {part.text}
+          </blockquote>
+        ) : (
+          <p key={i} className="agent-bubble__text">
+            <MentionText text={part.text} mentions={message.mentions} colorOf={colorOf} />
+          </p>
+        )
+      )}
+    </div>
+  );
   // Written in Slack, not here: "From Slack · #launch".
   const via = viaLabel(message.via);
   return (
@@ -401,20 +418,18 @@ export const UserBubble = memo(function UserBubble({
       {message.text && (
         <div className="agent-chat__line">
           {actions}
-          <div className="agent-bubble agent-bubble--user">
-            {message.revises && <RevisesBar revises={message.revises} />}
-            {splitQuotes(message.text).map((part, i) =>
-              part.kind === 'quote' ? (
-                <blockquote key={i} className="agent-bubble__quote">
-                  {part.text}
-                </blockquote>
-              ) : (
-                <p key={i} className="agent-bubble__text">
-                  <MentionText text={part.text} mentions={message.mentions} colorOf={colorOf} />
-                </p>
-              )
-            )}
-          </div>
+          {goBack && onGoBack && !failed && !sending ? (
+            <GoBackContextMenu
+              state={goBack}
+              text={message.text}
+              onPick={(action) => onGoBack(action, message)}
+              onRemember={onRemember && (() => onRemember(message))}
+            >
+              {bubble}
+            </GoBackContextMenu>
+          ) : (
+            bubble
+          )}
         </div>
       )}
       {via && <div className="agent-chat__queued">{via}</div>}
@@ -1252,7 +1267,8 @@ const ApprovalCardBody = memo(function ApprovalCard({
   };
   const long = compact && fields?.some(([, v]) => v.length > 120 || v.includes('\n'));
   // A and D while this card has focus, never anywhere else (`approvalKeys`).
-  const keys = pending && !noting && !compact;
+  // Not on a skill offer: nothing waits on it, so it doesn't claim the keys.
+  const keys = pending && !noting && !compact && !skill;
   const onCardKey = (event: KeyboardEvent<HTMLDivElement>) => {
     const which = approvalKey(event);
     if (!which || busy) return;
@@ -1276,6 +1292,8 @@ const ApprovalCardBody = memo(function ApprovalCard({
           status: approval.status,
           clamped: (long && !showAll) || undefined,
           risk: approval.risk,
+          // An offer, not a gate: drawn quieter (agents-skills.css).
+          offer: (pending && !!skill) || undefined,
         }}
         // The Mac marked Allow risky (Bold's floor): told apart by the icon as well as hue.
         tone={approval.risk === 'high' ? 'warning' : undefined}
@@ -1310,7 +1328,7 @@ const ApprovalCardBody = memo(function ApprovalCard({
           pending && gate
             ? 'It waits for you, and closes if the routine runs again first.'
             : pending && skill
-              ? 'Nothing waits on it. Saved, it’s listed under What it knows how to do.'
+              ? SKILL_OFFER_NOTE
               : pending && paused && !plainDeny && !approval.settings && !approval.slackReply
                 ? 'It paused here for you. Allow it and it picks up where it left off.'
                 : approval.status === 'expired'
@@ -1365,7 +1383,7 @@ const ApprovalCardBody = memo(function ApprovalCard({
               <Button
                 ref={denyRef}
                 tabIndex={0}
-                variant="secondary"
+                variant={skill ? 'ghost' : 'secondary'}
                 className="agent-approval__deny"
                 disabled={busy}
                 onClick={() => void answer(false)}
@@ -1385,7 +1403,8 @@ const ApprovalCardBody = memo(function ApprovalCard({
               {!nothingToAllow && (
                 <Button
                   tabIndex={0}
-                  variant="strong"
+                  // An offer's yes is a choice, not a release: outlined, not solid.
+                  variant={skill ? 'secondary' : 'strong'}
                   data-allow
                   disabled={busy}
                   {...keyProps}

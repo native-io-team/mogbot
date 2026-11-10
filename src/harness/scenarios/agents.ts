@@ -3852,6 +3852,34 @@ export const agentsScenarios: Scenario[] = [
     commands: GO_BACK,
   },
   {
+    id: 'agents-go-back-context',
+    title: 'Agents — Edit, Fork and Rewind on a right-click of your message',
+    looksRightWhen:
+      'A right-click on your message “Plan the November launch email…” opens the app’s context menu at the pointer: Copy, Remember this, a divider, then “Edit and resend” (pencil), “Fork from here” (branch), “Rewind to here” (undo arrow). Neutral, never accent; nothing disabled (Acme is idle).',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-go-back__context',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { rightClick: '.agent-chat__row--user .agent-bubble--user' },
+    ],
+    commands: GO_BACK,
+  },
+  {
+    id: 'agents-go-back-picker',
+    title: 'Agents — ⌘K “Go back to an earlier message…”',
+    looksRightWhen:
+      'A dialog “Go back to an earlier message”: your messages in this conversation that can be gone back to, newest first (“Keep three sections…” then “Plan the November launch email…”; the rewound one is not offered), each a quoted first line with how long ago, and on its right three quiet buttons, Edit, Fork and Rewind, with their glyphs. Nothing in accent; nothing disabled (Acme is idle).',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-go-back__picker',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { key: 'mod+k' },
+      { fill: '.command-palette-input', value: 'Go back to an earlier message' },
+      { click: '.command-palette [role="option"]', text: 'Go back to an earlier message' },
+    ],
+    commands: REWOUND,
+  },
+  {
     id: 'agents-go-back-confirm',
     title: 'Agents — Rewind to here?, the confirm',
     looksRightWhen:
@@ -3883,7 +3911,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-go-back-rewound',
     title: 'Agents — what a rewind passed over, folded',
     looksRightWhen:
-      'The launch email conversation: your ask and the three-section outline, then one quiet centred line with a chevron, “Rewound · 2 messages” (the two-sections ask and its reply are not shown), then the note “Went back to before …”, then your pricing-table ask and its reply. Nothing deleted, nothing in accent.',
+      'The launch email conversation: your ask and the three-section outline, then one quiet centred line, a rewind glyph, “Rewound · 2 messages” and a chevron (the two-sections ask and its reply are not shown), then the note “Went back to before …”, then your pricing-table ask and its reply. Nothing deleted, nothing in accent.',
     openSelector: AGENTS_TAB,
     requires: '.agent-go-back__summary',
     steps: [{ click: '[data-agent-id="acme"]' }],
@@ -3893,7 +3921,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-go-back-rewound-open',
     title: 'Agents — a rewound fold, opened',
     looksRightWhen:
-      'As the folded one, but the “Rewound · 2 messages” line’s chevron points down and under it are the two lines it held: “Make it two sections, drop the customer story.” and its reply, in place, before the “Went back to before …” note.',
+      'As the folded one, but opened it reads as past: one band with a grey rule down its left, from the “Rewound · 2 messages” line (now left-aligned, chevron down) to “End of what was rewound”. Between them the two lines it held, muted: “Make it two sections, drop the customer story.” and its reply. Then the “Went back to before …” note and the live conversation at full ink.',
     openSelector: AGENTS_TAB,
     requires: '.agent-go-back__summary[data-open]',
     steps: [{ click: '[data-agent-id="acme"]' }, { click: '.agent-go-back__summary button' }],

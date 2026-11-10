@@ -31,7 +31,13 @@ const line = (id: string): Item => ({
 const day = (key: string): Item => ({ kind: 'day', key, label: 'Today' });
 const rewind = (id: string, ids: string[]): Rewind => ({ id, at: ids[0], ts: 1, ids });
 const keys = (items: Item[]) =>
-  items.map((i) => (i.kind === 'rewound' ? `[${i.count}${i.open ? ' open' : ''}]` : i.key));
+  items.map((i) =>
+    i.kind === 'rewound'
+      ? `[${i.count}${i.open ? ' open' : ''}]`
+      : i.kind === 'rewound-end'
+        ? '[end]'
+        : `${i.key}${i.past ? ' past' : ''}`
+  );
 
 describe('the three ways back on a long-press', () => {
   const ids = (m: Pick<AgentMessage, 'kind' | 'text'>, goBack: boolean) =>
@@ -72,14 +78,15 @@ describe('the Rewound fold', () => {
     expect(keys(foldRewoundItems(items, [r], new Set()))).toEqual(['m6', '[3]', 'm2', 'm1']);
   });
 
-  it('opens in place: its lines shown, the row above them', () => {
+  it('opens in place as past: its lines muted between the row above and the end line below', () => {
     const r = rewind('r1', ['m3', 'm4', 'm5']);
     expect(keys(foldRewoundItems(items, [r], new Set(['r1'])))).toEqual([
       'm6',
-      'm5',
-      'd1',
-      'm4',
-      'm3',
+      '[end]',
+      'm5 past',
+      'd1 past',
+      'm4 past',
+      'm3 past',
       '[3 open]',
       'm2',
       'm1',

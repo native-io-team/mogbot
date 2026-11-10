@@ -2940,7 +2940,7 @@ pub fn on_its_own_team_fixture() -> Value {
     v
 }
 
-/// "What it knows how to do", as `agents_skills` serializes it.
+/// "Skills", as `agents_skills` serializes it.
 pub fn skills_fixture() -> Value {
     json!({
         "agentId": AGENT,

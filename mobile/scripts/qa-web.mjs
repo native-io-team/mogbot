@@ -1287,8 +1287,15 @@ const LIVE = [
     name: 'page-chat',
     route: '/chat/budget',
     ready: 'Budget',
+    act: async (page) => {
+      await page.clickWhere(
+        `() => document.querySelector('[data-testid="page-toggle"]')`,
+        'the page’s fold'
+      );
+      await sleep(400);
+    },
     check:
-      'Above the messages, a band: a down chevron and “November budget”, “Updated 3 min ago · v4” muted at the right and an unpin glyph; under it two metric tiles, an amber note about eating out, a table and a checklist, scrolling inside the band; a hairline, then the chat',
+      'Opened: above the messages, a band a step off the chat (darker in light, lighter in dark): a down chevron and “November budget”, “Updated 3 min ago · v4” muted at the right and an unpin glyph; under it two flat metric tiles (a faint hairline, no lift, unlike a reply’s), an amber note about eating out, a table and a checklist, scrolling inside the band (at most 320pt); a hairline, then the chat',
   },
   {
     name: 'page-history',
@@ -1302,20 +1309,14 @@ const LIVE = [
       await sleep(400);
     },
     check:
-      'The page’s versions, newest first: “v4 · 3 min ago · by a routine” over what changed and the agent’s note, then v3, v2 and “Made the page — Started the month”; v4 marked as the one shown',
+      'The page’s versions, newest first: “v4 · 3 min ago · by Log the day’s card spend” over what changed and the agent’s note, then v3, v2 and “Made the page — Started the month”; v4 marked as the one shown',
   },
   {
     name: 'page-folded',
     route: '/chat/budget',
     ready: 'Budget',
-    act: async (page) => {
-      await page.clickWhere(
-        `() => document.querySelector('[data-testid="page-toggle"]')`,
-        'the page’s fold'
-      );
-      await sleep(400);
-    },
-    check: 'The page folded to its one line (chevron pointing right); the chat takes the rest',
+    check:
+      'As a phone opens it: the page folded to its one line (chevron pointing right) on its tinted band; the chat takes the rest',
   },
   {
     name: 'chat-table',
@@ -1849,7 +1850,7 @@ const LIVE = [
       await sleep(1000);
     },
     check:
-      'The fold open: the row (chevron up) with the opening-hours lines under it (on the second theme, the first theme’s line too)',
+      'The fold open, read as past: the row (rewind glyph, chevron down) heads a band with a rule down its left, the opening-hours lines under it muted (on the second theme, the first theme’s line too), closed by “End of what was rewound”',
     after: async (page) => {
       await fetch(`${MOCK}/dev/unrewind`);
       await openSiteConversation('Rebuild the Acme site')(page);
@@ -1870,15 +1871,15 @@ const LIVE = [
     route: '/chat/fin',
     ready: 'Not now',
     check:
-      'Finance’s “Save “Reconcile Stripe payouts” as a skill?” card: a graduation-cap icon, when to use it, the numbered steps, a quiet “1 personal detail or secret removed.”, and Not now · Save (Save the neutral answer, no ⋯)',
+      'Finance’s “Save “Reconcile Stripe payouts” as a skill?” card: a graduation-cap icon, when to use it, the numbered steps, drawn as an offer (no raised sheet, a faint hairline, the title a step quieter), a quiet “1 personal detail or secret removed. Nothing waits on it. Saved, it’s listed under Skills.”, and Not now (plain) · Save (outlined, never solid), no ⋯',
   },
   {
     name: 'agent-sheet-skills',
     route: '/agent/fin',
     ready: 'Finance',
-    act: scrollToText('WHAT IT KNOWS HOW TO DO'),
+    act: scrollToText('SKILLS'),
     check:
-      'Finance’s sheet: “What it knows how to do” with “Save what it learns · Ask me” (a menu of Automatically, Ask me, Off), then “Export invoices from Xero” with when to use it, and a muted line saying anything that read outside content asks first',
+      'Finance’s sheet: “Skills” with “Save new skills · Ask me” (a menu of Automatically, Ask me, Off), then “Export invoices from Xero” with when to use it, and a muted line saying anything that read outside content asks first',
   },
   {
     name: 'agent-sheet-site',

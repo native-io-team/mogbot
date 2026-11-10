@@ -1,5 +1,5 @@
 /**
- * "Save what it learns" and "What it knows how to do", in the agent editor
+ * "Save new skills" and "Skills", in the agent editor
  * (`agents/skills_learn.rs`). The setting is three choices, saved at once
  * like the Admin switch; each skill can be edited (cleaned on the Mac as a
  * new one is) or removed, also at once.
@@ -101,7 +101,7 @@ export function AgentSkillCardBody({ card }: { card: SkillCard }) {
 
 /** The editor's section: the setting, then the skills. */
 export function AgentSkills({ agent, focus = false }: { agent: Agent; focus?: boolean }) {
-  // Opened for this section (⌘K "What … knows how to do"): it sits at the
+  // Opened for this section (⌘K "<agent>’s skills"): it sits at the
   // foot of the editor, so it's brought into view rather than left below.
   const root = useRef<HTMLDivElement>(null);
   useEffect(() => {

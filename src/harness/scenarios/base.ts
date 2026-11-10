@@ -307,7 +307,7 @@ export const baseCommands: CommandMap = {
   }),
   agents_policy_team: BALANCED_TEAM,
   agents_policy_set: null,
-  // Edit agent's "What it knows how to do" (`agents/skills_learn.rs`): Ask me, none yet.
+  // Edit agent's "Skills" (`agents/skills_learn.rs`): Ask me, none yet.
   agents_skills: (args: Record<string, unknown>) => ({
     agentId: typeof args.agentId === 'string' ? args.agentId : '',
     setting: 'ask',

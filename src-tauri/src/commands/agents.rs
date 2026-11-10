@@ -834,7 +834,7 @@ pub struct UpdateAgentInput {
     /// string for any account.
     #[serde(default)]
     pub account: Option<String>,
-    /// "Save what it learns": `auto`, `ask` or `off` (`agents::skills_learn`).
+    /// "Save new skills": `auto`, `ask` or `off` (`agents::skills_learn`).
     #[serde(default)]
     pub learn_skills: Option<agents::skills_learn::Learning>,
 }
@@ -2434,7 +2434,7 @@ pub async fn agents_recipe_save(
     blocking(move || agents::recipe::save(&agent_id, std::path::Path::new(&path), &shown)).await
 }
 
-/// "What it knows how to do": its "Save what it learns" setting and the
+/// "Skills": its "Save new skills" setting and the
 /// skills it saved (`agents::skills_learn`).
 #[tauri::command]
 #[tracing::instrument]

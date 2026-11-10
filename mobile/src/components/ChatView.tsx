@@ -16,6 +16,7 @@ import {
   newestResults,
   rewindConfirm,
   rewoundSummary,
+  REWOUND_END,
   foldResultReplies,
   showsStarters,
   type Agent,
@@ -112,6 +113,7 @@ import {
   space,
   type,
   PRESSED,
+  PAST,
 } from '../lib/theme';
 import {
   endOffset,
@@ -1052,6 +1054,8 @@ const ItemView = memo(function ItemView({
       <RoomFoldRow fold={item.fold} />
     ) : item.kind === 'rewound' ? (
       <RewoundRow item={item} onToggle={onToggleFold} />
+    ) : item.kind === 'rewound-end' ? (
+      <RewoundEnd />
     ) : item.kind === 'setup' ? (
       <TeamSetupCard chief={agent.name} onError={onError} />
     ) : (
@@ -1076,6 +1080,13 @@ const ItemView = memo(function ItemView({
       (item.message.kind === 'session' &&
         (item.message.session?.event === 'started' || item.message.session?.event === 'sent')));
   const tight = afterLine && isLineItem(item);
+  const inner = yours ? (
+    <SendRise rise={item.kind === 'pending'}>{body}</SendRise>
+  ) : arrived ? (
+    <Arrive>{body}</Arrive>
+  ) : (
+    body
+  );
   return (
     <View
       style={[
@@ -1083,16 +1094,16 @@ const ItemView = memo(function ItemView({
         grouped && styles.itemGrouped,
         attached && styles.itemAttached,
         tight && styles.itemAfterLine,
+        // An opened fold reads as past: one rule down the left, from the
+        // "Rewound" row to "End of what was rewound", its lines muted.
+        (item.past ||
+          item.kind === 'rewound-end' ||
+          (item.kind === 'rewound' && item.open)) &&
+          styles.past,
       ]}
     >
       {lit && <Glow />}
-      {yours ? (
-        <SendRise rise={item.kind === 'pending'}>{body}</SendRise>
-      ) : arrived ? (
-        <Arrive>{body}</Arrive>
-      ) : (
-        body
-      )}
+      {item.past ? <View style={styles.pastBody}>{inner}</View> : inner}
     </View>
   );
 }, sameRow);
@@ -1135,18 +1146,38 @@ function RewoundRow({
       accessibilityLabel={summary}
       accessibilityHint={item.open ? 'Folds them again' : 'Shows them'}
       onPress={() => onToggle(item.rewindId)}
-      style={({ pressed }) => [styles.rewound, pressed && styles.rewoundPressed]}
+      style={({ pressed }) => [
+        styles.rewound,
+        item.open && styles.rewoundOpen,
+        pressed && styles.rewoundPressed,
+      ]}
     >
       <Icon name="arrow.uturn.left" size={iconSize.inline} color={colors.textSecondary} />
       <T variant="caption" color={colors.textSecondary} maxFontSizeMultiplier={chromeScale}>
         {summary}
       </T>
       <Icon
-        name={item.open ? 'chevron.up' : 'chevron.down'}
+        name={item.open ? 'chevron.down' : 'chevron.right'}
         size={iconSize.inline}
         color={colors.textSecondary}
       />
     </Pressable>
+  );
+}
+
+/** Closes an opened fold, so where the past ends is said, not guessed. */
+function RewoundEnd() {
+  const colors = useColors();
+  const styles = useStyles();
+  return (
+    <T
+      variant="caption"
+      color={colors.textMuted}
+      maxFontSizeMultiplier={chromeScale}
+      style={styles.rewoundEnd}
+    >
+      {REWOUND_END}
+    </T>
   );
 }
 
@@ -1480,6 +1511,15 @@ const useStyles = makeStyles((colors) => ({
     borderRadius: radius.inner,
   },
   rewoundPressed: PRESSED,
+  // Opened, the row heads the band (the rule is its wrapper's): on the left.
+  rewoundOpen: { alignSelf: 'flex-start' },
+  rewoundEnd: { paddingVertical: space.xs },
+  past: {
+    paddingLeft: space.md,
+    borderLeftWidth: PAST.rule,
+    borderLeftColor: colors.borderDefault,
+  },
+  pastBody: { opacity: PAST.opacity },
   // Inverted, so paddingTop is the newest end: room for the fade above the
   // composer, and paddingBottom the oldest, under the header's fade.
   content: {

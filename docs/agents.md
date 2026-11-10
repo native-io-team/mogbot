@@ -574,8 +574,11 @@ all of them, so whatever it remembers in one it knows in the others.
 ### Rewind, fork and edit (`src-tauri/src/agents/rewind.rs`)
 
 Answers: **can I get out of a wrong turn without losing the work?** On any
-of the user's own messages (desk: the hover actions' … menu, and ⌘K for the
-last one; phone: long-press): **Edit and resend** puts it back in the
+of the user's own messages (desk: the hover actions' … menu, a right-click on
+the message (Copy and Remember this first, as it stands in for the webview's
+menu; `GoBackContextMenu`), ⌘K for the last one, and ⌘K "Go back to an
+earlier message…", a picker of the last 12 with the three actions on each
+(`GoBackPicker`); phone: long-press): **Edit and resend** puts it back in the
 composer under "Editing your message"; sending goes back to just before it,
 then sends the new words there. **Fork from here** makes a new conversation
 (titled "Fork of …", which the user is then in) whose history is everything
@@ -586,7 +589,9 @@ carries the same conversation on from just before it.
   kept in `conversations.json` (`Conversation::rewinds`: the message it went
   back before and the ids it folded); the chat shows those lines under one
   "Rewound · N messages" line that opens them (`foldRewound`, shared by desk
-  and phone), and a recap leaves them out (`runner::recap_log`). A fork lists
+  and phone). Opened, they read as past on both: one band with a rule down
+  its left from that line to "End of what was rewound", the lines muted (the
+  desk keeps one fold open at a time, `openOneFold`). A recap leaves them out (`runner::recap_log`). A fork lists
   the ids it was made with (`inherited`): `store::conversation_page` reads
   them from the one log like its own lines, so nothing is copied and a fork
   of a fork carries the whole history. Each ends on one quiet line saying
@@ -3604,7 +3609,7 @@ The backend decides, since it knows when a message is recorded and when a turn e
 - Clicking a notification focuses a window and emits `agents://open`; the app switches to Agents and opens that agent. Focusing a window clears the unread of the agent it shows.
 - Uses `tauri-plugin-notification` (2.8, click reporting on macOS). Not verified in a real build yet: the dev binary posts under another app's identity, so click-through should be checked in a signed build.
 
-## What it knows how to do (`src-tauri/src/agents/skills_learn.rs`)
+## Skills (`src-tauri/src/agents/skills_learn.rs`)
 
 After a hard task an agent can keep how it did it as a skill, so next time
 the same request is one sentence. The agent calls `save_skill { name, when,
@@ -3620,13 +3625,18 @@ the stream to report the `save_skill` call itself, which both engines do
 before making it, so every earlier step is counted. A wait that runs out
 judges on what was seen and logs it.
 
-**Per agent: Save what it learns — Automatically / Ask me / Off**
+**One vocabulary.** A skill is saved: the setting is "Save new skills", the
+list is "Skills", the card asks "Save “<name>” as a skill?", the line says
+"Saved a skill: <name>", and the answered card "Saved · under Skills".
+
+**Per agent: Save new skills — Automatically / Ask me / Off**
 (`Agent::learn_skills`, stored `auto` / `ask` / `off`, absent is `ask`).
-Automatically saves at once with the line "Learned a skill: <name>. Next time
+Automatically saves at once with the line "Saved a skill: <name>. Next time
 it follows these steps."; Ask me puts one card in the chat, "Save “<name>” as
 a skill?", showing when to use it and the steps exactly as they'd be saved,
-answered **Not now / Save** (Save neutral, nothing behind ⋯; nothing waits
-on it, it never expires); Off doesn't serve the tool. **A turn answering
+answered **Not now / Save** (nothing behind ⋯; nothing waits on it, it never
+expires, and it is drawn as an offer, not a gate: no raised surface, Not now
+plain and Save outlined, no A / D keys, desk and phone alike); Off doesn't serve the tool. **A turn answering
 outside text, or in a conversation that read outside content
 (`exposure::read_outside`), always gets the card, whatever the setting**,
 marked high risk (the warning icon; never answered in place on the phone's
@@ -3651,12 +3661,12 @@ no skills, no section, so the prompt budgets are unchanged). One set of
 files for every engine, so switching engines keeps them. A SKILL.md the
 user put there by hand is listed too.
 
-**Listed and changed.** Edit agent → "Save what it learns" (a segmented
-control, saved at once) and "What it knows how to do", each skill with Edit
+**Listed and changed.** Edit agent → "Save new skills" (a segmented
+control, saved at once) and "Skills", each skill with Edit
 (name, when, steps; cleaned again, a new name moves its folder) and Remove
 (`agents_skills`, `agents_skill_edit`, `agents_skill_remove`;
-`agents-skills-changed` refreshes the list). Phone: the agent sheet's "What
-it knows how to do" (`agents.skills`, a menu for the setting through
+`agents-skills-changed` refreshes the list). Phone: the agent sheet's
+"Skills" (`agents.skills`, a menu for the setting through
 `agents.update` `learnSkills`, each skill's steps with Edit on its own sheet,
 `agents.skillEdit`, and Remove, `agents.skillRemove`). From chat:
 `update_agent` `learn_skills` (Chief): Ask me and Off apply at once;
@@ -3666,7 +3676,7 @@ and is a card otherwise.
 **In recipes.** A recipe carries `skills: [{name, when, steps}]`, scrubbed
 like the rest and absent when there are none (version stays 1; older builds
 ignore it). On import each is cleaned again (`skills_learn::draft`), shown on
-the review card under "What it knows how to do" with its steps, and written
+the review card under "Skills" with its steps, and written
 into the new agent's home on Import ("It came with skills: …").
 
 **Residual.** The agent can still write a file into that folder with its
@@ -6389,7 +6399,7 @@ are `agents/settings_tools.rs`. Tests: `agents/settings_chat_tests.rs`,
 | Which account turns start on ("use my personal plan") | `use_account` (Chief): puts that signed-in account first in the order (`wallet::reorder`), failover unchanged | no when the user's own message asked; a card when another agent or a routine did; never for outside text |
 | Engine, model, effort, routines' model | `update_agent` (Chief) | no: what its turns run on, not what they may do; one "Now on Opus · High from its next message" line, as the editor leaves |
 | Mute an agent's notifications | `update_agent` `muted` (Chief) | no; unread and the badge still count it |
-| Save what it learns (skills) | `update_agent` `learn_skills` (Chief) | Ask me and Off no; Automatically no on the user's own message alone, a card otherwise |
+| Save new skills (skills) | `update_agent` `learn_skills` (Chief) | Ask me and Off no; Automatically no on the user's own message alone, a card otherwise |
 | Name, role, look; unbinding from a project | `update_agent` / `create_agent` (Chief) | no (a card in a turn answering outside text, as before) |
 | Binding an agent to a project (more reach), changing its instructions | `update_agent` `project` / `instructions` (Chief) | no on the user's own message alone; a card otherwise ("Works in: shippy", "New instructions: …", with Runs on on the same card when it changes too; `mcp::update_widens`) |
 | Admin switch | `propose_settings_change` `admin` (admins) | yes |
@@ -6887,7 +6897,10 @@ point-in-time messages and result cards.
 - **Every version kept.** A change is the next version, with what changed
   (`Changes`: blocks added, changed, removed, renamed), the agent's
   one-line `note`, and whether a routine's turn made it (`by_routine`, from
-  the run's ticket). An update that changes nothing makes no version. The
+  the run's ticket) and which (`routine`, its name, when the turn ran exactly
+  one routine: `runner::routine_running`). The history line reads "by Log the
+  day's card spend", or "by a routine" when it isn't known which
+  (`pageByLine`). An update that changes nothing makes no version. The
   last 30 versions are kept, oldest dropped first; the numbers keep counting.
 - **Beside the log, never in it.** `<home>/pages/<conversation>.json`, one
   file per conversation; `messages.jsonl` is untouched. The trace in the chat
@@ -6920,16 +6933,23 @@ point-in-time messages and result cards.
 - **Desk** (`components/agents/ConversationPage.tsx`, `lib/agentPage.ts`):
   under the chat header, in the conversation's column: a bar (fold, title,
   "Updated 3 min ago · v4", unpin) over the page's blocks, which scroll inside
-  a band so the chat keeps the window. Pressing the "Updated" line lists every
-  kept version, newest first, with what changed in words (`pageChangeLine`,
-  block titles where they have one) and the note; pressing one shows it as it
-  was, read-only, with "Back to v4". Folding is remembered per conversation on
-  this Mac. Unpinned, the header has a pin button to bring it back; ⌘K has
+  a band capped at the smaller of 40% of the window and 320px, so the chat
+  keeps the window. It is furniture, not a reply: the band is a tint off the
+  chat and its tiles lie flat (a hairline, no lift), so a metric on the page
+  never looks like one in a reply (`agents-page.css`). Pressing the "Updated"
+  line opens a popover listing every kept version, newest first, with what
+  changed in words (`pageChangeLine`, block titles where they have one) and
+  the note, so the page itself doesn't move; pressing one shows it as it was,
+  read-only, with "Back to v4". Folding is remembered per conversation on
+  this Mac; until the user picks, a window 820px tall or less starts it
+  folded (`SHORT_WINDOW`). Unpinned, the header has a pin button to bring it back; ⌘K has
   "Pin / Unpin this conversation's page".
 - **Phone** (`components/ConversationPage.tsx`, `lib/page.ts`): the same band
   above the messages, on a Mac that lists `agents.page`; read again when the
   conversation on screen changes and as the agent's turn moves on. Fold
-  (for as long as the app runs), versions, an older one, Unpin.
+  (for as long as the app runs), versions, an older one, Unpin. The same
+  tinted band and flat tiles (`FlatBlocks`), capped at 40% of the screen and
+  320pt; on a phone-height screen it starts folded to its bar until opened.
 - **Wire**: `agents.page` and `agents.pageVersion` (read-only, not audited)
   and `agents.pagePin` (audited "pinned/unpinned the page of …"); types and
   the pure rules (`readPage`, `pageUpdatedLine`, `pageChangeLine`) in

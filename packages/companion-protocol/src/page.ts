@@ -34,6 +34,8 @@ export interface PageVersion {
   changes: PageChanges;
   /** Made by a routine's run. */
   byRoutine?: boolean;
+  /** That routine's name, when the run was one routine's (`page::Update::routine`). */
+  routine?: string;
 }
 
 /** One line of the history: no blocks. */
@@ -44,6 +46,7 @@ export interface PageHistoryEntry {
   note?: string;
   changes: PageChanges;
   byRoutine?: boolean;
+  routine?: string;
 }
 
 /** `agents.page`: the page as it is (the current version's fields) and its history. */
@@ -53,6 +56,16 @@ export interface ConversationPage extends PageVersion {
   pinned: boolean;
   /** Every kept version, newest first, the current one included. */
   history: PageHistoryEntry[];
+}
+
+/**
+ * Who made a version, for its history line: "by Evening budget check" when
+ * a routine's run did and it is known which, "by a routine" when not, and
+ * nothing for a turn the user started.
+ */
+export function pageByLine(entry: Pick<PageHistoryEntry, 'byRoutine' | 'routine'>): string | null {
+  if (!entry.byRoutine) return null;
+  return entry.routine ? `by ${entry.routine}` : 'by a routine';
 }
 
 /** The page's blocks, if this build can draw any of them. */

@@ -123,7 +123,7 @@ pub struct Agent {
     /// No OS notifications for this agent. Unread and the Dock badge still count it.
     #[serde(default)]
     pub muted: bool,
-    /// "Save what it learns": Automatically / Ask me (the default) / Off
+    /// "Save new skills": Automatically / Ask me (the default) / Off
     /// (`agents/skills_learn.rs`). Absent in registries from before it.
     #[serde(
         default,

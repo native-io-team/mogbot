@@ -1,6 +1,6 @@
 /**
  * Skills an agent saved after a hard task (`agents/skills_learn.rs`): its
- * "Save what it learns" setting and "What it knows how to do". The words
+ * "Save new skills" setting and "Skills". The words
  * are shared with the phone (`companion-protocol/src/skills.ts`).
  *
  * @module lib/agentSkills
