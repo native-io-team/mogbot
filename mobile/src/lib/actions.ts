@@ -4,13 +4,25 @@
  * the screens; this only decides what's on offer for what's pressed.
  */
 
-import type { Agent, AgentMessage } from '@shipstudio/companion-protocol';
+import {
+  GO_BACK_LABELS,
+  type Agent,
+  type AgentMessage,
+  type GoBackAction,
+} from '@shipstudio/companion-protocol';
 import type { SymbolViewProps } from 'expo-symbols';
 
 type SFSymbol = Extract<SymbolViewProps['name'], string>;
 
 export type AgentAction = 'pin' | 'unpin' | 'markUnread' | 'mute' | 'unmute' | 'hide' | 'unhide';
-export type MessageAction = 'copy' | 'copyMarkdown' | 'listen' | 'quote' | 'select' | 'remember';
+export type MessageAction =
+  | 'copy'
+  | 'copyMarkdown'
+  | 'listen'
+  | 'quote'
+  | 'select'
+  | 'remember'
+  | GoBackAction;
 
 export interface Action<Id extends string> {
   id: Id;
@@ -87,7 +99,9 @@ export function messageActions(
   message: Pick<AgentMessage, 'kind' | 'text'>,
   remember = false,
   /** This build can read aloud (lib/readAloud.ts): an agent's reply gets Listen. */
-  listen = false
+  listen = false,
+  /** The Mac can go back (`agents.conversationRewind`): your messages get the three ways back. */
+  goBack = false
 ): Action<MessageAction>[] {
   if (!message.text.trim()) return [];
   if (message.kind !== 'agent' && message.kind !== 'user') return [];
@@ -103,6 +117,13 @@ export function messageActions(
     { id: 'select', title: 'Select Text', icon: 'selection.pin.in.out' }
   );
   if (remember) out.push({ id: 'remember', title: 'Remember This', icon: 'pin' });
+  if (goBack && message.kind === 'user') {
+    out.push(
+      { id: 'edit', title: GO_BACK_LABELS.edit, icon: 'pencil' },
+      { id: 'fork', title: GO_BACK_LABELS.fork, icon: 'arrow.triangle.branch' },
+      { id: 'rewind', title: GO_BACK_LABELS.rewind, icon: 'arrow.uturn.left' }
+    );
+  }
   return out;
 }
 

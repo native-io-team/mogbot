@@ -26,6 +26,7 @@ export const BAR_ORDER = [
   'import',
   'setup',
   'revising',
+  'editing',
   'engine',
 ] as const;
 export type BarId = (typeof BAR_ORDER)[number];

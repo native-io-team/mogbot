@@ -2383,6 +2383,33 @@ export function createMockServer(opts: MockOptions = {}) {
     convs.set(agentId, c);
     return c;
   }
+  /** A fork's history (`conversations::Conversation::inherited`): `agentId:conversation` → line ids. */
+  const inherited = new Map<string, Set<string>>();
+  const inConversation = (agentId: string, conversation: string, m: AgentMessage) =>
+    (m.conversation || 'first') === conversation ||
+    !!inherited.get(`${agentId}:${conversation}`)?.has(m.id);
+  /** What the chat shows of a conversation: its lines and history, without what a rewind folded. */
+  function visibleIn(agentId: string, conversation: string): AgentMessage[] {
+    const item = convsOf(agentId).items.find((i) => i.id === conversation);
+    const folded = new Set((item?.rewinds ?? []).flatMap((r) => r.ids));
+    return (messages.get(agentId) ?? []).filter(
+      (m) => inConversation(agentId, conversation, m) && !folded.has(m.id)
+    );
+  }
+  /** The user's message gone back to, or a refusal in the Mac's words. */
+  function goBackTo(agentId: string, conversation: string, messageId: string) {
+    const lines = visibleIn(agentId, conversation);
+    const at = lines.findIndex((m) => m.id === messageId);
+    if (at === -1)
+      return fail({ type: 'Other', message: 'That message isn’t in this conversation any more.' });
+    if (lines[at].kind !== 'user')
+      return fail({ type: 'Other', message: 'Only your own messages can be gone back to.' });
+    return { lines, at };
+  }
+  const quoted = (text: string) => {
+    const first = text.split('\n').find((l) => l.trim() && !l.startsWith('>')) ?? '';
+    return first.length > 40 ? `${first.slice(0, 40).trimEnd()}…` : first.trim();
+  };
   function convList(agentId: string): Conversations {
     const c = convsOf(agentId);
     const items = c.items
@@ -2426,6 +2453,77 @@ export function createMockServer(opts: MockOptions = {}) {
       if (p.conversationId === 'first') delete places[String(p.routineId)];
       else places[String(p.routineId)] = String(p.conversationId);
       routinePlaces.set(agentId, places);
+      return convList(agentId);
+    },
+    // `rewind::rewind`: the lines from the message on folded, never deleted; refused mid-turn.
+    'agents.conversationRewind': (p) => {
+      const agentId = String(p.agentId);
+      const conversation = String(p.conversationId);
+      const item = convsOf(agentId).items.find((i) => i.id === conversation);
+      if (!item) return fail({ type: 'Other', message: 'That conversation isn’t there any more.' });
+      const a = agent(agentId);
+      if (a && a.status.state !== 'idle')
+        return fail({
+          type: 'Other',
+          message: `${a.name} is working. Wait for it to finish, or Stop it, then go back.`,
+        });
+      const { lines, at } = goBackTo(agentId, conversation, String(p.messageId));
+      const ids = lines.slice(at).map((m) => m.id);
+      item.rewinds = [
+        ...(item.rewinds ?? []),
+        { id: `r-${randomUUID().slice(0, 6)}`, at: lines[at].id, ts: Date.now(), ids },
+      ];
+      const after = ids.length - 1;
+      putMessage({
+        id: `m_${randomUUID().slice(0, 8)}`,
+        agentId,
+        ts: Date.now(),
+        kind: 'note',
+        text: `Went back to before “${quoted(lines[at].text)}”. ${
+          after === 0
+            ? 'It is'
+            : after === 1
+              ? 'It and the message after it are'
+              : `It and the ${after} messages after it are`
+        } folded above, not deleted. Files it changed and anything it sent since aren’t undone.`,
+        conversation,
+      });
+      return convList(agentId);
+    },
+    // `rewind::fork`: a new conversation made from the lines before the message.
+    'agents.conversationFork': (p) => {
+      const agentId = String(p.agentId);
+      const from = String(p.conversationId);
+      const c = convsOf(agentId);
+      const source = c.items.find((i) => i.id === from);
+      if (!source)
+        return fail({ type: 'Other', message: 'That conversation isn’t there any more.' });
+      const { lines, at } = goBackTo(agentId, from, String(p.messageId));
+      const id = `c-${randomUUID().slice(0, 6)}`;
+      inherited.set(`${agentId}:${id}`, new Set(lines.slice(0, at).map((m) => m.id)));
+      const title = source.title || (from === 'first' ? '' : '');
+      c.items.push({
+        id,
+        title: title ? `Fork of ${title}` : '',
+        named: !!title,
+        createdAt: Date.now(),
+        lastActivityAt: Date.now(),
+        current: true,
+        loaded: false,
+        waiting: 0,
+        forkedFrom: { conversation: from, message: lines[at].id, title },
+      });
+      c.current = id;
+      putMessage({
+        id: `m_${randomUUID().slice(0, 8)}`,
+        agentId,
+        ts: Date.now(),
+        kind: 'note',
+        text: `Forked from ${title ? `“${title}”` : 'this conversation'} before “${quoted(
+          lines[at].text
+        )}”. That one is unchanged. Files it changed and anything it sent since aren’t undone.`,
+        conversation: id,
+      });
       return convList(agentId);
     },
     'agents.conversationRename': (p) => {
@@ -2508,7 +2606,7 @@ export function createMockServer(opts: MockOptions = {}) {
       const all = messages.get(String(p.agentId)) ?? [];
       // One conversation's lines when it's named, as the Mac reads them.
       const list = p.conversation
-        ? all.filter((m) => (m.conversation || 'first') === p.conversation)
+        ? all.filter((m) => inConversation(String(p.agentId), String(p.conversation), m))
         : all;
       const limit = Number(p.limit ?? 50);
       const end = p.before ? list.findIndex((m) => m.id === p.before) : list.length;

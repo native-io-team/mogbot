@@ -25,6 +25,11 @@ export interface ComposerDraft {
   files?: DraftFile[];
   /** "Ask for changes": the result this message will revise. */
   revising?: ResultRef;
+  /**
+   * Edit and resend: the message this one replaces. Sending goes back to just
+   * before it in its conversation (`sendEdited`), then sends.
+   */
+  editing?: { messageId: string; conversation: string };
 }
 
 export const EMPTY_DRAFT: ComposerDraft = { text: '', quotes: [], mentions: [], files: [] };
@@ -36,7 +41,7 @@ export const EMPTY_DRAFT: ComposerDraft = { text: '', quotes: [], mentions: [], 
 export const FILE_KEEP_MS = 55 * 60_000;
 
 const isEmpty = (d: ComposerDraft) =>
-  !d.text && !d.quotes.length && !d.mentions.length && !d.files?.length && !d.revising;
+  !d.text && !d.quotes.length && !d.mentions.length && !d.files?.length && !d.revising && !d.editing;
 
 /** Files that waited too long for the Mac to still have them. */
 export const expiredFiles = (d: ComposerDraft, now = Date.now()) =>
