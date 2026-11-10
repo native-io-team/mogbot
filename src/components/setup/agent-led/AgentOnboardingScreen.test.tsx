@@ -51,7 +51,7 @@ describe('AgentOnboardingScreen', () => {
     getOnboardingTestMode.mockReset().mockResolvedValue({ mock: false, forceOnboarding: false });
   });
 
-  it('walks Welcome, then the engine, then hands off to the Chief with nothing in between', async () => {
+  it('walks Welcome, the engine, then the two optional questions, then hands off to the Chief', async () => {
     getFullSetupStatus.mockResolvedValue(machine({ codex: 'ready', codex_auth: 'ready' }));
     const onComplete = vi.fn();
     render(<AgentOnboardingScreen onComplete={onComplete} />);
@@ -65,12 +65,17 @@ describe('AgentOnboardingScreen', () => {
     // Already set up here: "Done", and one button, focused.
     expect(await heading('Codex is connected')).toBeInTheDocument();
     expect(screen.getByRole('status')).toHaveTextContent('Done.');
-    await waitFor(() =>
-      expect(screen.getByRole('button', { name: 'Meet your Chief of Staff' })).toHaveFocus()
-    );
-    press('Meet your Chief of Staff');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Continue' })).toHaveFocus());
+    press('Continue');
+    await waitFor(() => expect(setDefaultAgentId).toHaveBeenCalledWith('codex'));
+
+    // The two optional parts, each one question with Not now.
+    expect(await heading('Bring your agents from another assistant?')).toBeInTheDocument();
+    expect(onComplete).not.toHaveBeenCalled();
+    press('Not now');
+    expect(await heading('Use your agents from your phone?')).toBeInTheDocument();
+    press('Not now');
     await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
-    expect(setDefaultAgentId).toHaveBeenCalledWith('codex');
     expect(JSON.parse(localStorage.getItem(FLOW_STORAGE_KEY) ?? '{}')).toMatchObject({
       finished: true,
     });
@@ -133,7 +138,7 @@ describe('AgentOnboardingScreen', () => {
       screen.getByText('Claude Code', { selector: '.agent-pick-card-name' }).closest('button')!
     );
     await waitFor(() => expect(setDefaultAgentId).toHaveBeenCalledWith('claude-code'));
-    await waitFor(() => expect(onComplete).toHaveBeenCalledTimes(1));
+    expect(await heading('Bring your agents from another assistant?')).toBeInTheDocument();
   });
 
   it('a failed status check offers a retry instead of guessing', async () => {

@@ -20,6 +20,7 @@ import {
   PHONE_OFFER_NOTE,
   reachedFirstResult,
 } from './ChiefPhoneOffer';
+import { phoneOfferNote } from '../../lib/phoneApp';
 
 const msg = (kind: AgentMessage['kind'], id: string): AgentMessage => ({
   id,
@@ -65,9 +66,11 @@ describe('reachedFirstResult', () => {
 });
 
 describe('ChiefPhoneOffer', () => {
-  it('doesn’t promise ten minutes while there is no App Store app', () => {
-    expect(PHONE_OFFER_NOTE).not.toMatch(/^.*About ten minutes\.$/);
-    expect(PHONE_OFFER_NOTE).toMatch(/no App Store app yet/);
+  it('says up front that it runs through Tailscale, on every route that offers it', () => {
+    for (const route of ['store', 'build'] as const) {
+      expect(phoneOfferNote(route)).toMatch(/Tailscale on both/);
+    }
+    if (PHONE_OFFER_NOTE) expect(PHONE_OFFER_NOTE).toMatch(/Tailscale/);
   });
 
   beforeEach(() => {
@@ -75,10 +78,10 @@ describe('ChiefPhoneOffer', () => {
     getPhoneStatus.mockReset().mockResolvedValue({ devices: [] });
   });
 
-  it('offers once with no phone paired; Set up my phone opens the Phone panel and stays answered', async () => {
+  it('offers once with no phone paired; Pair your phone opens the Phone panel and stays answered', async () => {
     const onSetUp = vi.fn();
     const { unmount } = render(<ChiefPhoneOffer onSetUp={onSetUp} />);
-    fireEvent.click(await screen.findByRole('button', { name: 'Set up my phone' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Pair your phone' }));
     expect(onSetUp).toHaveBeenCalledTimes(1);
     expect(screen.queryByTestId('chief-phone-offer')).not.toBeInTheDocument();
     unmount();

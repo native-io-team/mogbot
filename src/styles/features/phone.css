@@ -3,6 +3,9 @@
 /* A QR code is read most reliably dark-on-light, so its paper stays light in
    both themes. */
 :root {
+  --phone-flow-min-height: 440px;
+  --phone-flow-back-width: 72px;
+  --phone-flow-button-width: 220px;
   --phone-qr-paper: #ffffff;
   --phone-qr-ink: #0b0b0c;
 }
@@ -48,72 +51,85 @@
   margin-top: var(--spacing-sm);
 }
 
-/* First visit: get the app, Tailscale once, pair. Numbered by the list. */
-.phone-steps {
+/* The first phone (PhoneFlow inside the panel): one screen per step, Back
+   and a bar at the top, one question, one big button. */
+.phone-flow {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xl);
+  min-height: var(--phone-flow-min-height);
+}
+
+.phone-flow__top {
+  display: grid;
+  grid-template-columns: var(--phone-flow-back-width) 1fr var(--phone-flow-back-width);
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.phone-flow__back {
+  display: flex;
+}
+
+.phone-flow__bar {
+  height: var(--spacing-xs);
+  border-radius: var(--radius-pill);
+  background: var(--progress-track);
+  overflow: hidden;
+}
+
+.phone-flow__fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-pill);
+  background: var(--text-primary);
+  transition: width var(--motion-screen);
+}
+
+.phone-flow__body {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--spacing-md);
+  margin: auto 0;
+  animation: flow-arrive var(--motion-screen) both;
+}
+
+.phone-flow__title {
+  margin: 0;
+  font-size: var(--font-size-3xl);
+  font-weight: var(--font-weight-heading);
+  line-height: var(--line-height-compact);
+  color: var(--text-primary);
+  text-align: center;
+  text-wrap: balance;
+}
+
+.phone-flow__lede {
+  margin: 0;
+  font-size: var(--font-size-body-md);
+  line-height: var(--line-height-help);
+  color: var(--text-secondary);
+  text-align: center;
+  text-wrap: pretty;
+}
+
+.phone-flow__content {
   display: flex;
   flex-direction: column;
   gap: var(--spacing-md);
-  margin: var(--spacing-md) 0 0;
-  padding-left: var(--spacing-lg);
-  font-size: var(--font-size-body-md);
-  font-weight: var(--font-weight-heading);
-  color: var(--text-primary);
 }
 
-.phone-step {
+.phone-flow__actions {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
-  gap: var(--spacing-xs);
-}
-
-.phone-steps > .phone-step {
-  display: list-item;
-}
-
-.phone-steps > .phone-step > * + * {
-  margin-top: var(--spacing-xs);
-}
-
-.phone-step__title {
-  margin: 0;
-  font-size: var(--font-size-body-md);
-  font-weight: var(--font-weight-heading);
-  color: var(--text-primary);
-}
-
-.phone-step__done {
-  margin-right: var(--spacing-xs);
-  vertical-align: -1px;
-  color: var(--accent-success);
-}
-
-.phone-step__actions {
-  display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: var(--spacing-sm);
+  margin-top: var(--spacing-sm);
 }
 
-.phone-steps .text-button.button {
-  font-weight: var(--font-weight-body);
-}
-
-.phone-step__text {
-  margin: 0;
-  font-size: var(--font-size-body-md);
-  font-weight: var(--font-weight-body);
-  line-height: var(--line-height-help);
-  color: var(--text-secondary);
-}
-
-.phone-step__action {
-  margin-top: var(--spacing-xs);
-}
-
-/* The second step reads as next, not now. */
-.phone-step[data-later] .phone-step__title,
-.phone-step[data-later] .phone-step__text {
-  color: var(--text-muted);
+.phone-flow__actions > .button--size-large {
+  min-width: var(--phone-flow-button-width);
 }
 
 .phone-section {

@@ -173,6 +173,13 @@
   --transition-arrive: var(--duration-arrive) var(--ease-arrive);
   /* A key going down and coming back up. */
   --transition-press: var(--duration-press) var(--ease-press);
+  /* A step-by-step flow (onboarding, pairing): each screen arriving, the
+     bar filling, a Done tick landing, and the Paired moment's ring. */
+  --motion-screen: var(--duration-slow) var(--ease-arrive);
+  --motion-celebrate: var(--duration-loader-fast) var(--ease-arrive);
+  --motion-celebrate-ring: var(--duration-loader-isolated) var(--ease-arrive);
+  --motion-celebrate-delay: var(--duration-slow);
+  --motion-reduced: var(--duration-reduced);
 
   --shadow-button:
     0 var(--stroke-1) var(--space-02) var(--color-black-o75),

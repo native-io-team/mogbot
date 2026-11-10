@@ -5,14 +5,14 @@
  * onboarding) was ten minutes of Tailscale between someone and their first
  * result.
  *
- * Shown once per Mac's chat until it's answered: Set up my phone opens the
+ * Shown once per Mac's chat until it's answered: "Pair your phone" opens the
  * Phone panel (the same pairing the onboarding screens did), Not now puts it
  * away. Never while a phone is already paired, while the import question is
  * still open (one question at a time), or while a turn is running.
  *
  * The answer is kept in this window's storage: losing it costs one more
- * offer, never a wrong state, and "Get the phone app" at the sidebar's foot
- * and ⌘K "Pair a phone" are there either way.
+ * offer, never a wrong state, and "Pair your phone" at the sidebar's foot
+ * and in ⌘K are there either way.
  *
  * @module components/agents/ChiefPhoneOffer
  */
@@ -22,6 +22,7 @@ import { MobileIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { AgentCard } from './AgentCard';
 import { getPhoneStatus } from '../../lib/companion';
+import { PAIR_YOUR_PHONE } from '../../../packages/companion-protocol/src/pairWords';
 import type { AgentMessage } from '../../lib/agents';
 import { PHONE_APP_ROUTE, phoneOfferNote } from '../../lib/phoneApp';
 
@@ -32,7 +33,9 @@ export const PHONE_OFFER_KEY = 'shipstudio.chief.phoneOffer';
  * a minute from the App Store, or built on this Mac (Expo Go in minutes,
  * Xcode up to an hour). With neither, there is no card at all: it opened a
  * panel that said the app isn't available, a dead end as the first-hour
- * next step.
+ * next step. The one thing to know before starting is said too: the phone
+ * reaches this Mac only through Tailscale, on both. Said here, not as a
+ * surprise after a scan that never arrives.
  */
 export const PHONE_OFFER_NOTE = phoneOfferNote(PHONE_APP_ROUTE);
 
@@ -121,7 +124,7 @@ export function ChiefPhoneOffer({
             onClick={() => answer('setup')}
             data-phone-offer-setup
           >
-            Set up my phone
+            {PAIR_YOUR_PHONE}
           </Button>
         </>
       }

@@ -114,6 +114,9 @@ export const TAILNET_HTTPS_PORT = ${companion.tailnetPort};
 
 /** The app's source repository, or null when it has none to link to. */
 export const SOURCE_URL: string | null = ${JSON.stringify(brand.repository ?? null)};
+
+/** Where someone with only the phone gets the Mac app, or null when nowhere public. */
+export const MAC_DOWNLOAD_URL: string | null = ${JSON.stringify(brand.links?.macDownload ?? null)};
 `;
 if (write) writeFileSync(join(root, GEN_PATH), gen);
 else if (read(GEN_PATH) !== gen)

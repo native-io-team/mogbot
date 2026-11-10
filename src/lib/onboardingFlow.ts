@@ -3,18 +3,25 @@
  * button. "Do this. Done. Next."
  *
  * 1. Welcome — what this is, in a line.
- * 2. Engine — Claude Code or Codex, then each install / sign-in as its own
- *    screen, ticked by the app's own checks.
- * 3. The Chief of Staff's chat, on its greeting and starters.
+ * 2. Engine — Claude Code, Codex or OpenCode, then each install / sign-in
+ *    as its own screen, ticked by the app's own checks. Required.
+ * 3. Your agents — "Bring your agents from another assistant?" Yes walks
+ *    Remote Access a screen per step (Tailscale on this Mac, the private
+ *    link, connect the assistant), then starts the import, whose interview
+ *    carries on in the Chief's chat. Not now goes on.
+ * 4. Your phone — "Use your agents from your phone?" Yes walks it a screen
+ *    per step (the app, Tailscale on this Mac, Tailscale on the phone with
+ *    the same account, phone access, the code, Allow, Paired), in the same
+ *    words the phone uses (`companion-protocol/src/pairWords.ts`).
+ * 5. The Chief of Staff's chat, on its greeting and starters.
  *
- * That is all onboarding asks, because the engine is the only thing nothing
- * works without. Everything else waits for the moment it means something,
- * each skippable, in the app:
+ * Only the engine is required. Every screen of an optional part has "Skip
+ * for now", and a skipped part comes back later as one card:
  *
- * - Bringing agents from another assistant: one card under the Chief's
- *   greeting (`ImportChoiceCard`), answered once for the Mac.
- * - Your phone: a card in the Chief's chat once the first thing asked for
- *   has come back (`ChiefPhoneOffer`), and "Get the phone app" at the
+ * - Bringing agents: the card under the Chief's greeting
+ *   (`ImportChoiceCard`), while the Mac's answer is still undecided.
+ * - Your phone: the card in the Chief's chat once the first thing asked for
+ *   has come back (`ChiefPhoneOffer`), and "Pair your phone" at the
  *   sidebar's foot.
  * - Another account: on the usage-limit line the moment one runs out, and
  *   at the account row at the foot of Agents.
@@ -39,39 +46,104 @@ import { describeFailure, type InstallFailure } from './installProgress';
 
 // ============ Steps ============
 
-export const FLOW_STEPS = ['welcome', 'engine'] as const;
+/**
+ * Every screen, in order. Three parts, as the owner put it: this Mac and
+ * one engine (required); your agents from another assistant over Remote
+ * Access (optional); your phone (optional). Each optional part opens on one
+ * yes/no question, and every screen in it has "Skip for now", which goes on
+ * to the next part; skipped parts come back later as one card in the
+ * Chief's chat (`ImportChoiceCard`, `ChiefPhoneOffer`).
+ */
+export const FLOW_STEPS = [
+  'welcome',
+  'engine',
+  // Your agents, from another assistant (Remote Access, then the interview).
+  'agentsAsk',
+  'agentsTailscale',
+  'agentsLink',
+  'agentsConnect',
+  'agentsStart',
+  // Your phone.
+  'phoneAsk',
+  'phoneGetApp',
+  'phoneMacTailscale',
+  'phonePhoneTailscale',
+  'phoneAccess',
+  'phoneScan',
+  'phoneAllow',
+  'phonePaired',
+] as const;
 export type FlowStep = (typeof FLOW_STEPS)[number];
 
 /**
- * The parts the progress bar shows: the two screens, then where they lead.
- * The last is never a screen here; it is the Chief's chat, and the bar
- * shows it so the engine screens read as the last thing in the way.
+ * The parts the progress bar shows, then where they lead. The last is never
+ * a screen here; it is the Chief's chat, and the bar shows it so the last
+ * screen reads as the last thing in the way.
  */
-export const FLOW_SECTIONS = ['welcome', 'engine', 'chief'] as const;
+export const FLOW_SECTIONS = ['welcome', 'engine', 'agents', 'phone', 'chief'] as const;
 export type FlowSection = (typeof FLOW_SECTIONS)[number];
 
 export const SECTION_LABEL: Record<FlowSection, string> = {
   welcome: 'Welcome',
   engine: 'Your AI',
+  agents: 'Your agents',
+  phone: 'Your phone',
   chief: 'Your Chief of Staff',
 };
 
 export function sectionOf(step: FlowStep): FlowSection {
-  return step;
+  if (step === 'welcome' || step === 'engine') return step;
+  return step.startsWith('agents') ? 'agents' : 'phone';
 }
 
-/** "Step 2 of 3". */
-export function progressOf(step: FlowStep): { section: number; sections: number } {
-  return { section: FLOW_SECTIONS.indexOf(sectionOf(step)) + 1, sections: FLOW_SECTIONS.length };
+/** The screens of one part, in order. */
+export function stepsOf(section: FlowSection): FlowStep[] {
+  return FLOW_STEPS.filter((s) => sectionOf(s) === section);
 }
 
-/** The screen after this one; null after the engine, which is the Chief's chat. */
+/**
+ * "Step 2 of 5", and how far through its part this screen is (0 on a
+ * part's first screen, approaching 1 on its last), so the bar moves on
+ * every screen, not only between parts.
+ */
+export function progressOf(step: FlowStep): {
+  section: number;
+  sections: number;
+  within: number;
+} {
+  const part = stepsOf(sectionOf(step));
+  return {
+    section: FLOW_SECTIONS.indexOf(sectionOf(step)) + 1,
+    sections: FLOW_SECTIONS.length,
+    within: part.length > 1 ? part.indexOf(step) / part.length : 0,
+  };
+}
+
+/** The screen after this one; null after the last, which is the Chief's chat. */
 export function nextStep(step: FlowStep): FlowStep | null {
   return FLOW_STEPS[FLOW_STEPS.indexOf(step) + 1] ?? null;
 }
 
-/** Back: the screen before. */
+/**
+ * "Skip for now" and "Not now": past the rest of this part, to the next
+ * part's first screen; null at the end (the Chief's chat).
+ */
+export function skipPart(step: FlowStep): FlowStep | null {
+  const section = sectionOf(step);
+  return (
+    FLOW_STEPS.find((s, i) => i > FLOW_STEPS.indexOf(step) && sectionOf(s) !== section) ?? null
+  );
+}
+
+/**
+ * Back: the screen before. The phone's answer screens (Allow, Paired) go
+ * back to the code, and the first screen of an optional part goes back to
+ * the previous part's question rather than into its middle.
+ */
 export function prevStep(step: FlowStep): FlowStep | null {
+  if (step === 'phoneAllow' || step === 'phonePaired') return 'phoneScan';
+  if (step === 'phoneAsk') return 'agentsAsk';
+  if (step === 'agentsAsk') return 'engine';
   return FLOW_STEPS[FLOW_STEPS.indexOf(step) - 1] ?? null;
 }
 
@@ -148,6 +220,8 @@ export function isOnboardingInProgress(p: FlowProgress | null = readProgress()):
  */
 export function resumeStep(saved: FlowProgress | null): FlowStep {
   if (!saved || saved.finished) return 'welcome';
+  // A phone's request and its answer last minutes; a relaunch makes a new code.
+  if (saved.step === 'phoneAllow' || saved.step === 'phonePaired') return 'phoneScan';
   return saved.step;
 }
 

@@ -1,6 +1,6 @@
 /** The in-app QR scanner. A pairing link goes to the pairing screen, which asks before pairing. */
 
-import { linkProblem, parseLink, PHONE_SETTINGS } from '../lib/pairing';
+import { linkProblem, parseLink, WHERE_TO_PAIR } from '../lib/pairing';
 import { CameraView, useCameraPermissions } from 'expo-camera';
 import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
@@ -54,7 +54,8 @@ export default function Scan() {
             Scan the code on your Mac
           </T>
           <T color={colors.textSecondary}>
-            The camera is only used to read the pairing code. Nothing is recorded.
+            The camera is only used to read the code your Mac shows after you click {WHERE_TO_PAIR}.
+            Nothing is recorded.
           </T>
           {permission && !permission.canAskAgain ? (
             <Button
@@ -71,7 +72,7 @@ export default function Scan() {
         <View pointerEvents="none" style={styles.frameWrap}>
           <View style={styles.frame} />
           <T color={colors.onMedia} style={styles.caption}>
-            {wrong ?? `Point at the code in ${PHONE_SETTINGS} on your Mac`}
+            {wrong ?? `Point at the code your Mac shows after you click ${WHERE_TO_PAIR}`}
           </T>
         </View>
       )}

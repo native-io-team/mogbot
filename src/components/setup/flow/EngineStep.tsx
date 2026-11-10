@@ -171,7 +171,7 @@ export function EngineStep({
             disabled={finishing}
             data-flow-primary
           >
-            {finishing ? <Spinner size="sm" /> : 'Meet your Chief of Staff'}
+            {finishing ? <Spinner size="sm" /> : 'Continue'}
           </Button>
         }
         secondary={

@@ -38,6 +38,8 @@ export interface BrandLinks {
    */
   appStore: string | null;
   pushRelay: string | null;
+  /** Where the Mac app is downloaded from (the phone's pairing screen links it). */
+  macDownload: string | null;
 }
 
 export interface Brand {

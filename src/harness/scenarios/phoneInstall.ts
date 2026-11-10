@@ -12,7 +12,7 @@
 import type { Scenario, ScenarioStep } from '../types';
 import { BRAND } from '../../lib/brand';
 import { PHONE_PAIRING_LINK, PHONE_QR } from '../fixtures/phoneQr';
-import { phoneStatus } from './phone';
+import { PHONE_DEVICES, phoneStatus } from './phone';
 
 const DAY = 24 * 60 * 60 * 1000;
 const DNS = 'studio-mac.tail1234.ts.net';
@@ -239,8 +239,8 @@ export const phoneInstallScenarios: Scenario[] = [
   install(
     'phone-install-pairing',
     'Install — "Pair it now" goes straight to the pairing code',
-    'Back in the Phone panel (title "Phone") with the QR code on screen, and a "Built on this ' +
-      'Mac for Sam’s iPhone" row with when it stops working and Reinstall.',
+    'Back in the Phone panel (title "Phone") on the flow’s code screen: the bar at 5 of 7, ' +
+      '“On your phone, open Mogbot and tap Scan the code”, the QR alone and large.',
     {
       companion_status: phoneStatus({
         enabled: true,
@@ -262,7 +262,8 @@ export const phoneInstallScenarios: Scenario[] = [
     },
     {
       ...viaSettings(SET_UP, { click: '[data-install-pair]' }),
-      requires: '[data-testid="phone-pair-code"]',
+      // No phone paired yet: the flow's own code screen.
+      requires: '[data-testid="flow-qr"] canvas',
     }
   ),
   install(
@@ -369,6 +370,8 @@ export const phoneInstallScenarios: Scenario[] = [
         source: { ...source, present: true, installed: true },
       },
       companion_install_ios_app: NOT_INSTALLED,
+      // Paired before the build lapsed: the panel itself, not the first-phone flow.
+      companion_status: phoneStatus({ devices: [PHONE_DEVICES[0]] }),
       companion_install_build_log: FAILED_BUILD_LOG,
       ...fakePty(FAILED_BUILD_LOG, 65),
     },
@@ -393,7 +396,7 @@ export const phoneInstallScenarios: Scenario[] = [
     'Phone panel — a build from this Mac, with Reinstall',
     'Under the intro, a row "Built on this Mac for Sam’s iPhone", "Works until <date>. Plug ' +
       'it in to reinstall.", a quiet "Other phone" and a primary "Reinstall".',
-    {},
+    { companion_status: phoneStatus({ devices: [PHONE_DEVICES[0]] }) },
     {
       command: 'companion.devices',
       requires: '[data-testid="phone-install-entry"]',

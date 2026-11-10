@@ -12,6 +12,8 @@ import {
   type ParsedLink,
   type PairingLink,
   type Route,
+  PAIR_WHERE,
+  PAIR_YOUR_PHONE,
 } from '@shipstudio/companion-protocol';
 import { brand } from './brand';
 import { pairWith, PairError, type PairFailure, type PairStep } from './pairFlow';
@@ -25,12 +27,13 @@ import { Linking, Platform } from 'react-native';
 /** Where the desk keeps the phone (its Settings section, `lib/settingsPages.ts`). */
 export const PHONE_SETTINGS = 'Settings → Phone';
 /**
- * Where the desk shows a pairing code: the Phone panel's button. The panel is
- * the same whether it's opened from Settings or the phone line at the foot of
- * the sidebar ("Get the phone app"), and is titled "Phone" both ways.
+ * Where the desk shows a pairing code, in the desk's own words
+ * (`companion-protocol/src/pairWords.ts`): the sidebar row reads "Pair your
+ * phone" while no phone is paired, and opens straight on the code. With a
+ * phone paired before, the same row (now naming that phone) opens the panel,
+ * whose button is "Pair your phone" too.
  */
-export const WHERE_TO_PAIR =
-  'Phone (in Settings, or the phone line at the foot of the sidebar) → Show code';
+export const WHERE_TO_PAIR = `“${PAIR_YOUR_PHONE}” ${PAIR_WHERE}`;
 
 /** One paired Mac. Multiple Macs are P3. */
 export interface Credentials {
@@ -74,7 +77,8 @@ export function parseLink(text: string): PairingLink | null {
 /** What to say about text that isn't a link this app can pair from. */
 export function linkProblem(text: string): string {
   const read = readLink(text);
-  if (read.ok) return `That isn’t a pairing code. Make one on your Mac: ${WHERE_TO_PAIR}.`;
+  const notCode = `That isn’t a pairing code. On your Mac, click ${WHERE_TO_PAIR}, then scan the code it shows.`;
+  if (read.ok) return notCode;
   switch (read.problem) {
     case 'old_mac':
       return 'Update the app on your Mac to pair. This code comes from an older version that can’t prove it’s your Mac; once it’s updated, make a new code there.';
@@ -83,9 +87,9 @@ export function linkProblem(text: string): string {
       // shows its old name: updating it is the fix, not this phone.
       return 'Update the app on your Mac to pair. This code comes from an older copy, from before the app was renamed, so it shows the old name there too. Once it’s updated, make a new code there.';
     case 'other_app':
-      return `That code is for a different app’s phone app. Make one in ${brand.name} on your Mac: ${WHERE_TO_PAIR}.`;
+      return `That code is for a different app’s phone app. In ${brand.name} on your Mac, click ${WHERE_TO_PAIR}, then scan the code it shows.`;
     default:
-      return `That isn’t a pairing code. Make one on your Mac: ${WHERE_TO_PAIR}.`;
+      return notCode;
   }
 }
 
@@ -298,7 +302,7 @@ export function diagnose(
   });
 }
 
-const TAILSCALE_STORE =
+export const TAILSCALE_STORE =
   Platform.OS === 'android'
     ? 'https://play.google.com/store/apps/details?id=com.tailscale.ipn'
     : 'https://apps.apple.com/app/tailscale/id1470499037';
@@ -316,6 +320,9 @@ export async function tailscaleInstalled(): Promise<boolean | null> {
     return null;
   }
 }
+
+/** Where the Mac app is downloaded from (brand.json `links.macDownload`), or null. */
+export { MAC_DOWNLOAD_URL } from '@shipstudio/companion-protocol';
 
 /** The Tailscale app if it's installed, otherwise its store page. */
 export async function openTailscale() {

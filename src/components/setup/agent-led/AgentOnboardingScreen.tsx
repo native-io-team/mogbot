@@ -3,10 +3,11 @@
  * straight line of one-question screens (`lib/onboardingFlow`).
  *
  * Welcome → the engine (pick, then install and sign in, a screen each) →
- * the Chief's chat. That's all: the engine is the only thing nothing works
- * without. Bringing agents from another assistant, the phone, another
- * account and how independent agents are each wait for their moment in the
- * app, skippable (`lib/onboardingFlow` says where).
+ * "Bring your agents from another assistant?" (Remote Access a screen per
+ * step, then the import) → "Use your agents from your phone?" (a screen per
+ * step, ending on Paired) → the Chief's chat. Only the engine is required;
+ * each optional part has "Not now" and "Skip for now", and comes back later
+ * as one card in the Chief's chat.
  *
  * Only the engine is required. Everything a project needs is asked for
  * later, when work first becomes a project (`ProjectToolsModal`). The app
@@ -21,6 +22,9 @@ import { Spinner } from '../../primitives/Spinner';
 import { CheckLine } from '../flow/FlowParts';
 import { EngineStep } from '../flow/EngineStep';
 import { WelcomeStep } from '../flow/SimpleSteps';
+import { AgentsFlow, type AgentsStep } from '../flow/AgentsFlow';
+import { FlowShell } from '../flow/FlowParts';
+import { PhoneFlow, Primary, Skip, type PhoneFlowStep } from '../../phone/PhoneFlow';
 import type { AgentCardKey } from './AgentPickGrid';
 import {
   SetupItem,
@@ -33,6 +37,7 @@ import { isMockFailure } from '../../../lib/installProgress';
 import {
   nextStep,
   prevStep,
+  skipPart,
   readProgress,
   resumeStep,
   saveProgress,
@@ -132,7 +137,7 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
     await onComplete();
   }, [onComplete]);
 
-  /** The engine is installed and signed in: make it the default, then the Chief. */
+  /** The engine is installed and signed in: make it the default, then the optional parts. */
   const engineReady = useCallback(
     async (key: AgentCardKey) => {
       const agentId = agentIdForBinary(key);
@@ -143,9 +148,19 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
         entry_path: 'agent_led',
         $screen_name: 'Onboarding',
       });
-      await finish();
+      go('agentsAsk');
     },
-    [finish]
+    [go]
+  );
+
+  /** "Not now" / "Skip for now": the next part, or the Chief's chat after the last. */
+  const skip = useCallback(
+    (from: FlowStep) => {
+      const next = skipPart(from);
+      if (next) go(next);
+      else void finish();
+    },
+    [go, finish]
   );
 
   if (!step) {
@@ -157,9 +172,42 @@ export function AgentOnboardingScreen({ onComplete }: AgentOnboardingScreenProps
     );
   }
 
+  const back = () => go(prevStep(step));
   const screen =
     step === 'welcome' ? (
       <WelcomeStep onNext={() => go(nextStep(step))} />
+    ) : step.startsWith('agents') ? (
+      <AgentsFlow step={step as AgentsStep} go={go} onSkip={() => skip(step)} onBack={back} />
+    ) : step === 'phoneAsk' ? (
+      <FlowShell
+        step={step}
+        onBack={back}
+        title="Use your agents from your phone?"
+        lede="Chat, answer and approve from anywhere. Your phone talks only to this Mac, through Tailscale on both. About five minutes."
+        primary={<Primary onClick={() => go('phoneGetApp')}>Set up my phone</Primary>}
+        secondary={<Skip onSkip={() => skip(step)} label="Not now" />}
+      />
+    ) : step !== 'engine' ? (
+      <PhoneFlow
+        step={step as PhoneFlowStep}
+        go={go}
+        onSkip={() => void finish()}
+        onDone={() => void finish()}
+        doneLabel="Go to your Chief of Staff"
+        render={(s, view) => (
+          <FlowShell
+            step={s}
+            onBack={s === 'phonePaired' ? undefined : () => go(prevStep(s) ?? 'phoneAsk')}
+            mark={view.mark}
+            title={view.title}
+            lede={view.lede}
+            primary={view.primary}
+            secondary={view.secondary}
+          >
+            {view.children}
+          </FlowShell>
+        )}
+      />
     ) : (
       <EngineStep
         items={items}

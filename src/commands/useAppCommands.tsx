@@ -1,3 +1,4 @@
+import { PAIR_YOUR_PHONE } from '../../packages/companion-protocol/src/pairWords';
 import { useCallback, useEffect, useState, useSyncExternalStore } from 'react';
 import { projectShortcutOrder } from '../hooks/useProjectNumberShortcuts';
 import { useCommands } from './useCommands';
@@ -714,10 +715,20 @@ export function useAppCommands({
       },
       {
         id: 'companion.pair',
-        title: 'Pair a phone',
+        title: PAIR_YOUR_PHONE,
         icon: <MobileIcon size={14} />,
         category: 'settings',
-        keywords: ['phone', 'mobile', 'iphone', 'android', 'qr', 'companion', 'pair'],
+        keywords: [
+          'phone',
+          'mobile',
+          'iphone',
+          'android',
+          'qr',
+          'code',
+          'scan',
+          'companion',
+          'pair a phone',
+        ],
         run: () => {
           requestPairOnOpen();
           openModal('phone');
