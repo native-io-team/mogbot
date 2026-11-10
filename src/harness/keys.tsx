@@ -7,6 +7,7 @@
  *
  *   harness-keys.html?theme=light
  *   harness-keys.html?theme=dark&freeze=off   (watch the Needs-your-OK pulse)
+ *   harness-keys.html?only=squint             (the at-a-glance test alone)
  *
  * Served only by the harness's Vite server. The real component and the real
  * stylesheet; nothing here is a mock-up.
@@ -53,10 +54,10 @@ const BOARD: [string, string, string][] = [
 
 const DETAIL: Record<string, string> = {
   idle: 'at rest',
-  working: 'pressed',
-  live: 'legend lit',
+  working: 'pressed, lit, breathing',
+  live: 'lit, glow spills',
   needsOk: 'lit, pulsing, proud',
-  paused: 'cap off',
+  paused: 'drained, sunk',
   new: 'empty socket',
 };
 
@@ -68,9 +69,53 @@ const SIZES: [AgentKeySize, string][] = [
   ['xs', '16 · a line of text'],
 ];
 
+/**
+ * The squint test (docs/internal/agent-keys.md, "At a glance"): twelve agents
+ * in mixed states with no words, at every size. Blurred or at half size, you
+ * should still count working (pressed, softly lit), free (at rest, unlit) and
+ * needs your help (proud, bright, the loudest) at once; paused (grey, sunk)
+ * reads as none of them.
+ */
+const SQUINT: [string, string, (typeof KEY_STATES)[number]][] = [
+  ['blue', 'inbox', 'working'],
+  ['orange', 'code', 'idle'],
+  ['putty', 'search', 'needsOk'],
+  ['teal', 'clock', 'idle'],
+  ['graphite', 'pen', 'working'],
+  ['mustard', 'send', 'paused'],
+  ['pink', 'people', 'idle'],
+  ['sage', 'globe', 'working'],
+  ['blue', 'calendar', 'needsOk'],
+  ['orange', 'megaphone', 'idle'],
+  ['teal', 'money', 'working'],
+  ['graphite', 'shield', 'idle'],
+];
+const SQUINT_SIZES: AgentKeySize[] = ['xl', 'lg', 'md', 'sm'];
+
+function Squint() {
+  return (
+    <section data-section="squint" className="key-gallery__squint">
+      {SQUINT_SIZES.map((size) => (
+        <div key={size} className="key-gallery__row key-gallery__row--tight">
+          {SQUINT.map(([c, i, st], n) => (
+            <AgentKey key={n} name={i} colorway={c} icon={i} state={st} size={size} />
+          ))}
+        </div>
+      ))}
+    </section>
+  );
+}
+
 const inbox = { name: 'Inbox', colorway: 'blue', icon: 'inbox', boundKey: 'I' } as const;
 
 function Gallery() {
+  if (params.get('only') === 'squint') {
+    return (
+      <main className="key-gallery">
+        <Squint />
+      </main>
+    );
+  }
   return (
     <main className="key-gallery">
       <h1>Agent keys</h1>
@@ -90,6 +135,9 @@ function Gallery() {
           </div>
         ))}
       </div>
+
+      <h2>At a glance: working, free, needs you (squint test)</h2>
+      <Squint />
 
       <h2>30px (in a list)</h2>
       <div className="key-gallery__row" data-section="small">

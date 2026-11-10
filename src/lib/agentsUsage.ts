@@ -92,4 +92,27 @@ export {
   type StackEngine,
   type StackKey,
   type UsageGlance,
+  type GlanceRowWords,
+  type SignInChangedNotice,
 } from '../../packages/companion-protocol/src/usageGlance';
+export {
+  ADD_IT,
+  NOT_NOW,
+  REMOVE_ACCOUNT,
+  SIGN_IN_DIFFERENT,
+  TRY_AGAIN_DIFFERENT,
+  addedSameAccount,
+  browserSteps,
+  browserWarning,
+} from '../../packages/companion-protocol/src/sameAccount';
+
+/** "This Mac's Claude Code is now signed in as …" was answered: not said again. */
+export const markSignInChangeSeen = (key: string) =>
+  invoke<void>('agents_usage_sign_in_seen', { key });
+
+/**
+ * Right after an account is signed in: read it once and say whether it's an
+ * account already in the list (`sameAs`, that one's id).
+ */
+export const checkNewAccount = (engine: AgentEngine, id: string) =>
+  invoke<{ sameAs?: string }>('agents_usage_check_account', { engine, id });

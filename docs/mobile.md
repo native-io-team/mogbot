@@ -456,8 +456,7 @@ server), and every link must carry a fingerprint.
 
 ### Screens
 
-**Navigation:** native tabs for Needs you, Agents, Projects and Search (the
-app still opens on Agents); chat, the agent sheet, files, a session, a
+**Navigation:** native tabs for Catch up, Agents, Projects and Search; chat, the agent sheet, files, a session, a
 request, the diff and the photo viewer push over them. At
 700 pt and wider (iPad, landscape) the Agents list and a chat sit side by side.
 
@@ -470,30 +469,66 @@ request, the diff and the photo viewer push over them. At
   from the other tabs. Every other state keeps its mark. Swipe to mute, hide (with Undo) or pin; hold for the
   context menu. Quick actions on the icon: "Needs you" and "New message to
   Chief of Staff".
-- **Needs you** (`app/(tabs)/needs/index.tsx`, `lib/needsYou.ts`), the first
-  tab and the phone's one place for everything waiting on you, across every
-  agent; the tab carries the one count: its rows (`feedItems(...).length`),
-  so cards, not agents, and always the number the list shows. Home has no
-  bar for it: a waiting agent's row keeps only its own label, as the desk's
-  sidebar row does (docs/agents.md, "Needs you: one place per surface"). Each row is the agent, what it asks and when: approvals, plans,
-  "OK to go on?", keys, logins, a session's question, changes in a task copy
-  waiting on Keep or Discard, a turn only you can fix, setting up your team,
-  and an import only the Mac can review. What blocks an agent first, then the
-  rest; newest first within each. A short plain request the Mac marked
-  low-risk is answered on its row (Deny · Allow, the same 400 ms arming;
-  `answersInPlace`). Anything risky (`approval.risk: 'high'`, decided on the
-  Mac by `mcp::risk_of` from Bold's floor: deleting for good, money,
-  credentials, `sudo`, pushing, publishing, sending, system files; plans and
-  push cards too) wears the warning icon and has **Review**, and so does a
-  card the Mac didn't classify (an older Mac, a card from before) and one
-  that doesn't fit whole (`fitsWhole`: over 160 characters or 3 lines, a
-  plan over 3 steps). Review opens it in full, where a risky Allow is in the
-  danger style. The phone never works risk out from a command's words. The
-  rest open where they're answered. Answered cards leave by themselves, here or at the desk. The
-  chats the cards live in are loaded as the tab opens. **One at a time**
-  (with two or more) opens Catch up. A pushed "needs you" opens this tab.
+- **Catch up** (`app/(tabs)/catch-up/index.tsx`, `lib/needsYou.ts`,
+  `lib/catchUpTab.ts`), the first tab: the phone's inbox for its agents and
+  its one place for everything waiting on you, across every agent. The tab
+  carries the one count: its rows (`feedItems(...).length`), so cards, not
+  agents, and always the number the list shows. Home has no bar for it: a
+  waiting agent's row keeps only its own label, as the desk's sidebar row
+  does (docs/agents.md, "Needs you: one place per surface").
+  - **Header.** The large title, then "3 things need you" and "From 2
+    agents" (plus "as of …" offline). Nothing waiting: a calm check, "All
+    caught up", one line, and **Go to Agents**.
+  - **Grouped by agent.** One card per agent, in the order of its most
+    urgent row (what blocks an agent first, then the rest; newest first
+    within each; `groupByAgent`). Its head is the agent's key (lit while it
+    needs you, `agentKeyState`), its name and how many; tapping it opens the
+    chat. Each row is one line of what's asked, the agent's one line of why,
+    and when: approvals, plans, "OK to go on?", keys, logins, a session's
+    question, changes in a task copy, a turn only you can fix, setting up
+    your team, and an import only the Mac can review.
+  - **Answers on the row.** A short plain request the Mac marked low-risk
+    is answered there (Deny · Allow, compact and neutral, the same 400 ms
+    arming; `answersInPlace`), its whole text shown (the exact command in
+    mono when there's no plain line). Anything risky (`approval.risk:
+    'high'`, decided on the Mac by `mcp::risk_of` from Bold's floor:
+    deleting for good, money, credentials, `sudo`, pushing, publishing,
+    sending, system files; plans and push cards too) wears the warning icon
+    and has **Review**, and so does a card the Mac didn't classify (an older
+    Mac, a card from before) and one that doesn't fit whole (`fitsWhole`:
+    over 160 characters or 3 lines, a plan over 3 steps). Review opens it in
+    full, where a risky Allow is in the danger style. The phone never works
+    risk out from a command's words. A key, a login or a question has its one
+    action ("Enter key", "Sign in", "Answer") beside the words, opening it
+    where it's answered; changes in a copy have Discard (confirmed) · Keep
+    changes on the row (`useCopyParts`, compact).
+  - **Swipe** a row left for **Chat** (its chat at the card), also in the
+    VoiceOver actions rotor. Swiping never answers.
+  - **Answered rows leave** by themselves, here or at the desk, fading out
+    while the rest close up (still under Reduce Motion), and an agent's card
+    goes with its last row.
+  - **Since you last caught up.** Below, a quiet list of what happened that
+    didn't ask anything, from the agents' saved chats only
+    (`sinceItems`): results shared (the newest version of each), routines
+    that ran, turns that ended in an error, and "2 new messages" for an
+    agent with unread replies and nothing else listed. Up to 6, newest
+    first, each opening its chat at the message. "Since" is when you last
+    left the tab (`catch-up.json`, frozen for the visit so nothing vanishes
+    while you read); with none on record the section is "Recently" (the last
+    24 hours). The chats it needs (cards, copies, unread) are loaded as the
+    tab opens.
+  - **One at a time** (header, with two or more) goes through them full
+    screen (below). A pushed "needs you" opens this tab.
+  - **Where the app opens** (`lib/landing.ts`): at launch, Catch up when
+    anything waits (from the saved copy), else Agents; the Mac's first answer
+    within 4 s may put that right once, only if you haven't moved. Coming
+    back after 10 minutes or more away, from one of the tabs, it opens Catch
+    up when anything waits, and an emptied Catch up hands you to Agents.
+    Never from a chat, a request or a sheet, and a tapped notification or
+    quick action wins (it moves the app first; nothing here moves it
+    again).
 - **Request** (`app/request.tsx`, `/request?agent=&id=`): one card in full,
-  from a feed row, a tapped approval notification or Review on the Lock
+  from a Catch up row, a tapped approval notification or Review on the Lock
   Screen. Nothing capped (`ApprovalCard`'s `full`): a long command line by
   line, every step of a plan, an email's whole body, details open; the page
   scrolls and Deny · Allow stay pinned at the bottom. A key, a login or a
@@ -511,8 +546,8 @@ request, the diff and the photo viewer push over them. At
   ↻ reads it all again.
   No pace warning: the Mac serves no forecast of when a window runs out,
   and the phone doesn't guess one.
-- **Catch up** (`app/catch-up.tsx`, `lib/catchUp.ts`), from the Needs you
-  tab's **One at a time**: everything waiting, one card
+- **One at a time** (`app/one-at-a-time.tsx`, `lib/catchUp.ts`), from
+  Catch up's **One at a time**: everything waiting, one card
   at a time, full screen. Setting up your team first, then every request
   this phone can answer (oldest first), then each agent with something new
   to read or a turn that needs you. A card is the agent, what it said since
@@ -527,8 +562,8 @@ request, the diff and the photo viewer push over them. At
   light on Next. A card on screen counts as read (`setOpenChat`). Passed
   cards stay counted, cards ahead answered or read elsewhere drop out, new
   ones join the end; the card in front of you, answered on the desk or
-  expired, says so for a beat and moves on. Done: "All caught up" and Back
-  to agents. Chats the cards need are loaded once before it starts (up to
+  expired, says so for a beat and moves on. Done: "All caught up" and Done,
+  back to Catch up. Chats the cards need are loaded once before it starts (up to
   5 s; offline it uses what's cached), so the order doesn't shift.
 - **Chat.** An inverted list: newest on the composer, older pages loaded on
   scroll. Replies stream one display frame at a time (`lib/reveal.ts`) and the
@@ -696,12 +731,21 @@ or the Needs-you feed, 44 a list row, 112 the agent sheet); the sublegend
 The colourways and the socket's neutrals are named colours in theme.ts,
 which the theme test holds to `agent-keys.json`.
 
-States come from `agentKeyState` (lib/agents.ts, the desk's): Needs your
-OK while a card waits, Paused (a socket with its stem in its colour) while
-a usage limit stops it, Working (pressed) while a turn runs, Live (the
-legend lit) while you drive it at the desk. Only Needs your OK moves: a
-slow pulse of the lit legend, a Reanimated loop mounted on that key alone
-and still with Reduce Motion, in the background or off screen. An agent
+States come from `agentKeyState` (lib/agents.ts, the desk's) and look as
+on the desk and the site (`keyPose`, `keyPaint` in lib/agentKey.ts): Needs
+your OK, the loudest, sits proud with an amber-gold legend, an amber light in
+its face and an amber spill under it, pulsing; Working is pressed and
+warm-lit, its light breathing and spilling under it in its own colour; Live
+(you drive it at the desk) is lit and still; Paused (a usage limit) keeps its
+cap, drained of colour, faded and sunk; a new agent is an empty socket that
+fades in. A lit face deepens in its own hue (`KEY_LIT_MIX`). A row's key goes
+all the way down while your finger is on it (`pressed`). Only opacity loops
+(Reanimated, on the UI thread), only on a working key or one that needs your
+OK, and it holds still with Reduce Motion, in the background or off screen;
+the states still differ when nothing moves. The agent list has no "N working"
+line and no unread dot: the keys say who is working, free or waiting, and an
+unread row's line is in strong ink (its accessible name says "working",
+"unread"). An agent
 from an older Mac is drawn by `keyLookFor` (its colour's nearest
 colourway, an icon from its name and role).
 
@@ -731,7 +775,7 @@ conversations with one agent"), on a Mac that lists `agents.conversations`
 conversation per agent and the chat is as it was.
 
 - **Store.** `chats[agentId]` stays every line the agent has, whatever the
-  conversation: the Needs tab, the agent rows, Catch up and the request
+  conversation: the Catch up tab, the agent rows, One at a time and the request
   screens read its cards there. One conversation's chat is kept beside it
   under `conversationKey(agentId, id)` (`<agent>#conversation:<id>`), read a
   page at a time with `agents.messages`' `conversation`; every event lands in
@@ -825,7 +869,7 @@ The phone can start work as well as answer it. Each piece is gated by
 `welcome.methods`, so an older Mac shows less instead of failing.
 
 - **Import agents** (the ⋯ menu beside New agent on Agents, or the home's
-  one-time "Bring your agents from another assistant?" card while the Mac
+  one-time "Already have agents in another assistant?" card while the Mac
   says it's undecided and serves `agents.setImportChoice`;
   `app/import.tsx`, on a Mac that serves `agents.import.status`). Three
   steps, one screen at a time (`lib/importChoice.ts`, "Step n of 3"),
@@ -851,7 +895,7 @@ The phone can start work as well as answer it. Each piece is gated by
 - **New agent** (the pencil on Agents, or the empty list's button;
   `app/new-agent.tsx`). On a Mac listing `MAC_FEATURES.draft` it opens as
   the desk's dialog does, describe-first: "Describe the agent you want", one
-  big box and **Draft it** alone, with "Its name, briefing and routines, for
+  big box and **Draft it** alone, with "Its name, what it does and when it runs, for
   you to check before anything is made." under it, then the other ways in as
   quiet links in the desk's words: "Or fill it in yourself, start from
   <ready-made agents>, or ask your Chief of Staff." Fill it in yourself (or
@@ -1362,7 +1406,7 @@ ids, the agent's name and one line through `secrets::redact` and
   push reaches it, which is why `LIVE_WINDOW_MS` stays 0: a phone not in front
   gets both, and the awake one keeps the banner with words. Until the relay is
   deployed, a phone in the background or killed gets nothing until it opens;
-  then the badge and Needs you say what's waiting.
+  then the badge and Catch up say what's waiting.
 
 Settings says plainly what arrives when.
 
@@ -1395,7 +1439,7 @@ any card where something was redacted. Rules:
 - **One banner.** The card's notification replaces the relay's content-free
   "needs you" for the same agent (`dismissPushFor`, at once and after 4 s).
   A push itself has no buttons: it carries no words, so there's nothing to
-  agree to; tapping it opens Needs you, and a tapped approval opens the
+  agree to; tapping it opens Catch up, and a tapped approval opens the
   request in full.
 
 Verified in jest and on the web build only. On a device: whether iOS keeps

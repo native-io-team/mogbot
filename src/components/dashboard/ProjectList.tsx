@@ -725,10 +725,10 @@ export function ProjectList({
         {/* Delete Project Confirmation Modal */}
         {deleteConfirm && (
           <ProjectActionConfirmModal
-            title="Delete files from this computer?"
+            title="Delete files from this Mac?"
             body={
               <>
-                Permanently delete <strong>{deleteConfirm.name}</strong> from this computer?
+                Permanently delete <strong>{deleteConfirm.name}</strong> from this Mac?
               </>
             }
             hint="This removes the local project folder and its files. Use Remove from projects if you only want to hide it from the app."
@@ -750,7 +750,7 @@ export function ProjectList({
                 Remove <strong>{removeConfirm.name}</strong> from your projects?
               </>
             }
-            hint="Your project folder and files will stay on this computer. You can add it back later with Import project, Local folder."
+            hint="Your project folder and files will stay on this Mac. You can add it back later with Import project, Local folder."
             loading={removing}
             confirmLabel="Remove from projects"
             loadingLabel="Removing…"

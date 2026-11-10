@@ -1,5 +1,5 @@
 /**
- * "Bring your agents from another assistant?" — asked once, at the top of
+ * "Already have agents in another assistant?" — asked once, at the top of
  * the Chief's chat, for an install that never answered it (onboarding's last
  * step asks everyone new). Once it's answered (an import brought something
  * across, or "No thanks, start fresh"), import lives in the background: ⌘K,
@@ -20,6 +20,12 @@ import { useAgentsSelector, refreshAgents } from '../../lib/agentsStore';
 import { setImportChoice } from '../../lib/agents';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
+import {
+  IMPORT_CHOICE_BRING,
+  IMPORT_CHOICE_DECLINE,
+  IMPORT_CHOICE_NOTE,
+  IMPORT_CHOICE_TITLE,
+} from '../../../packages/companion-protocol/src/cardWords';
 
 export function ImportChoiceCard({ onImport }: { onImport: () => void }) {
   const choice = useAgentsSelector((s) => s.importChoice);
@@ -42,12 +48,12 @@ export function ImportChoiceCard({ onImport }: { onImport: () => void }) {
       className="agent-import-choice"
       data-testid="agent-import-choice"
       icon={<DownloadIcon size={14} />}
-      title="Bring your agents from another assistant?"
-      note="From Grok, ChatGPT, Claude or anything else that runs agents for you. Each comes with its instructions, routines and memory, and nothing is created until you say so."
+      title={IMPORT_CHOICE_TITLE}
+      note={IMPORT_CHOICE_NOTE}
       actions={
         <>
           <Button variant="secondary" size="compact" disabled={saving} onClick={decline}>
-            No thanks, start fresh
+            {IMPORT_CHOICE_DECLINE}
           </Button>
           <Button
             variant="strong"
@@ -56,7 +62,7 @@ export function ImportChoiceCard({ onImport }: { onImport: () => void }) {
             onClick={onImport}
             data-import-choice-bring
           >
-            Bring my agents
+            {IMPORT_CHOICE_BRING}
           </Button>
         </>
       }

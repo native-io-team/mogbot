@@ -610,6 +610,22 @@ pub fn is_handle(s: &str) -> bool {
             .all(|c| c.is_ascii_digit() || matches!(c, '+' | ' ' | '-' | '(' | ')' | '.'))
 }
 
+/// A phone number as people write it: "+1 (555) 123-4567" for a North
+/// American number. Anything else (another country's number, whose grouping
+/// varies, an email, a group's name) is shown as given, never regrouped by
+/// guess. Pure.
+pub fn display_handle(s: &str) -> String {
+    let t = s.trim();
+    let digits = |d: &str| !d.is_empty() && d.chars().all(|c| c.is_ascii_digit());
+    match t.strip_prefix("+1") {
+        Some(d) if d.len() == 10 && digits(d) => {
+            format!("+1 ({}) {}-{}", &d[..3], &d[3..6], &d[6..])
+        }
+        _ if t.len() == 10 && digits(t) => format!("({}) {}-{}", &t[..3], &t[3..6], &t[6..]),
+        _ => t.to_string(),
+    }
+}
+
 /// A note's body as Notes stores it: the title as its first line, then the
 /// text, escaped, one `<div>` per line. Pure.
 pub fn note_html(title: &str, body: &str) -> String {
@@ -740,7 +756,11 @@ where
                 .and_then(Value::as_str)
                 .or(a.get("chat").and_then(Value::as_str))
                 .unwrap_or("");
-            format!("send {} this message:\n\n“{}”", short(to, 60), st("text"))
+            format!(
+                "send {} this message:\n\n“{}”",
+                short(&display_handle(to), 60),
+                st("text")
+            )
         }
         _ => def.name.to_string(),
     }
@@ -1118,29 +1138,47 @@ fn error(message: impl Into<String>) -> Value {
     crate::agent_bridge::tool_error_result(&message.into())
 }
 
-/// The card's title and words for a [`Step::Grant`] or [`Step::Once`].
-/// Pure.
-pub fn card(step: Step, agent: &str, app: App, what: &str) -> (String, String) {
+/// A first-use card: its title, the words on it (what it wants, then one
+/// line saying what Allow gives), and the rest of how it works, which goes
+/// behind Details.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Card {
+    pub title: String,
+    pub summary: String,
+    pub more: String,
+}
+
+/// The card for a [`Step::Grant`] or [`Step::Once`]. Pure.
+pub fn card(step: Step, agent: &str, app: App, what: &str) -> Card {
     let title = app.title();
+    let after = "Take it back any time in What it can reach. macOS may ask you once too.";
     match step {
-        Step::Grant(Access::Read) => (
-            format!("Allow {agent} to read your {title}?"),
-            format!(
-                "It wants to {what}.\n\nAllow lets it read your {title} on this Mac from now on. Anything it would add, change or send asks you first. Take it back any time in What it can reach. macOS may ask you once too."
+        Step::Grant(Access::Read) => Card {
+            title: format!("Allow {agent} to read your {title}?"),
+            summary: format!(
+                "It wants to {what}.\n\nAllow lets {agent} read your {title} from now on."
             ),
-        ),
-        Step::Grant(Access::Full) => (
-            format!("Allow {agent} to use your {title}?"),
-            format!(
-                "It wants to {what}.\n\nAllow does this now, and lets it read your {title} on this Mac from now on. Anything else it adds, changes or sends follows how much you let it do on its own. Take it back any time in What it can reach. macOS may ask you once too."
+            more: format!("Anything it would add, change or send asks you first. {after}"),
+        },
+        Step::Grant(Access::Full) => {
+            let now = if app == App::Messages { "sends it" } else { "does it" };
+            Card {
+                title: format!("Allow {agent} to use your {title}?"),
+                summary: format!(
+                    "It wants to {what}.\n\nAllow {now} and lets {agent} read your {title} from now on."
+                ),
+                more: format!(
+                    "Anything else it adds, changes or sends follows how much you let it do on its own. {after}"
+                ),
+            }
+        }
+        _ => Card {
+            title: format!("Let {agent} use your {title}?"),
+            summary: format!("It wants to {what}."),
+            more: format!(
+                "It's answering text from outside this app, so it asks each time, and this doesn't give it your {title} for later."
             ),
-        ),
-        _ => (
-            format!("Let {agent} use your {title}?"),
-            format!(
-                "It wants to {what}.\n\nIt's answering text from outside this app, so it asks each time, and this doesn't give it your {title} for later."
-            ),
-        ),
+        },
     }
 }
 
@@ -1173,8 +1211,15 @@ pub async fn call(
             }
         }
         s @ (Step::Grant(_) | Step::Once) => {
-            let (title, summary) = card(s, &caller.name, mac, &describe(def, &op, &tz));
-            let detail = serde_json::to_string_pretty(args).unwrap_or_default();
+            let Card {
+                title,
+                summary,
+                more,
+            } = card(s, &caller.name, mac, &describe(def, &op, &tz));
+            let detail = format!(
+                "{more}\n\n{}",
+                serde_json::to_string_pretty(args).unwrap_or_default()
+            );
             let answer =
                 super::mcp::ask_user_with_summary(app, caller, title, summary, detail).await;
             if let Some(refused) = super::mcp::refused_reply(&answer, "use it") {

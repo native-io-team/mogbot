@@ -9,6 +9,7 @@
 
 import { useEffect, useRef, type CSSProperties, type ReactNode } from 'react';
 import { openUrl } from '@tauri-apps/plugin-opener';
+import { clockFormat } from '../../../../packages/companion-protocol/src/clock';
 import { Button } from '../../primitives/Button';
 import { Spinner } from '../../primitives/Spinner';
 import { ArrowLeftIcon, CheckIcon, ExternalLinkIcon, WarningIcon } from '@/components/icons';
@@ -143,11 +144,7 @@ interface CheckLineProps {
 }
 
 const timeOf = (ms: number) =>
-  new Date(ms).toLocaleTimeString(undefined, {
-    hour: 'numeric',
-    minute: '2-digit',
-    second: '2-digit',
-  });
+  clockFormat({ hour: 'numeric', minute: '2-digit', second: '2-digit' }).format(ms);
 
 /** "Done ✓", "Checking…", or "Not done yet" with the one fix and Check again. */
 export function CheckLine({ result, onCheckAgain, checking = false, checkedAt }: CheckLineProps) {

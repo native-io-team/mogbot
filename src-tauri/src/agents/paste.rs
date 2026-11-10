@@ -692,7 +692,10 @@ mod tests {
         assert!(p.agents[1].routines.is_empty());
 
         let shown = preview_routines(&p.agents[0].routines);
-        assert_eq!(shown[0].schedule.as_deref(), Some("every weekday at 09:00"));
+        assert_eq!(
+            shown[0].schedule.as_deref(),
+            Some("every weekday at 9:00 AM")
+        );
         assert!(shown[0].refused.is_none());
         assert!(shown[1].schedule.is_none());
         let why = shown[1].refused.as_deref().unwrap();

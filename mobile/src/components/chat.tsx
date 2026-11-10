@@ -7,6 +7,10 @@
  */
 
 import {
+  CONTINUE_TEXT,
+  failureFix,
+  failureFixAtMac,
+  failureFixLabel,
   revisingLabel,
   splitQuotes,
   viaLabel,
@@ -578,20 +582,36 @@ function FailureCard({
 }) {
   const colors = useColors();
   const router = useRouter();
-  const signedOut = message.failure?.kind === 'signed_out';
-  // Cut off part-way and not picked up by itself: Continue carries on in
-  // the same conversation (never the request again, which could redo it).
-  const interrupted = message.failure?.kind === 'interrupted';
+  // The one fix, by kind, in the desk's words (`failures.ts`).
+  const fix = failureFix(message.failure?.kind);
   const engine = engineName(agent);
+  const atMac = failureFixAtMac(fix, engine);
   const project = agent.project ? folderName(agent.project) : null;
-  // The Mac's words, when they say more than the title already does.
+  // What Retry sends again: the words before this line, when they were
+  // only words (files can't be sent again from here).
+  const source = useApp((s) => {
+    const lines = s.chats[agent.id]?.messages ?? [];
+    const at = lines.findIndex((m) => m.id === message.id);
+    for (let i = at - 1; i >= 0; i--) {
+      const m = lines[i];
+      if (m.kind !== 'user') continue;
+      return m.attachments?.length ? null : m.text.trim() || null;
+    }
+    return null;
+  });
+  // The Mac's words, when they say more than the title already does. A
+  // failure the title can only summarise ("<reason> · didn't finish") is
+  // headed by its state and said once, in full, under it: the reason and
+  // its fix ("… Retry once this Mac is back online."), never twice.
   const said = message.text.trim();
-  const more = !!said && !title.includes(said.replace(/[.:!?]+$/, ''));
+  const heading = fix === 'retry' && said ? 'Didn’t finish' : title;
+  const more = !!said && !heading.includes(said.replace(/[.:!?]+$/, ''));
+  const retry = fix === 'retry' && latest && source ? source : null;
   return (
     <Card
       icon="exclamationmark.circle"
       tone="error"
-      title={title}
+      title={heading}
       meta={formatClock(message.ts)}
       // The message doesn't record what it ran on, and the agent may have
       // switched engines since: only where, which doesn't change.
@@ -599,29 +619,34 @@ function FailureCard({
       note={
         !latest
           ? undefined
-          : signedOut
-            ? `Sign in to ${engine} on your Mac, then send it again.`
-            : interrupted
-              ? undefined
-              : 'Send a message to try again.'
+          : (atMac ?? (fix === 'continue' || retry ? undefined : 'Send a message to try again.'))
       }
       actions={
-        signedOut ? (
+        atMac ? (
           <Button
             title="Connection details"
             variant="outline"
             onPress={() => router.push('/connection')}
           />
-        ) : interrupted && latest ? (
+        ) : fix === 'continue' && latest ? (
+          // Cut off part-way: Continue carries on in the same conversation
+          // (never the request again, which could redo it).
           <Button
-            title="Continue"
+            title={failureFixLabel('continue', engine)}
             variant="outline"
-            onPress={() => void send(agent.id, 'Continue').catch(() => {})}
+            onPress={() => void send(agent.id, CONTINUE_TEXT).catch(() => {})}
+          />
+        ) : retry ? (
+          <Button
+            title={failureFixLabel('retry', engine)}
+            variant="outline"
+            onPress={() => void send(agent.id, retry).catch(() => {})}
+            testID="failure-retry"
           />
         ) : undefined
       }
     >
-      {!signedOut && more && (
+      {!atMac && more && (
         <T variant="small" color={colors.textSecondary} numberOfLines={6}>
           {said}
         </T>

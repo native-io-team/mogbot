@@ -111,7 +111,7 @@ export const agentsKeysScenarios: Scenario[] = [
     id: 'agents-keys-board',
     title: 'Agents — the team as a board of keys (What’s in flight)',
     looksRightWhen:
-      'What’s in flight opens on a warm plate of full-size keys, one per agent, its name and its state in words under it, then an empty socket “New agent · Add one”. Each key: a darker skirt, a lighter inset face, a hard depth shadow, one legend centred, its bound letter small at the bottom right, independence pips on the front edge. Acme Site and Research are pressed (Working); Lead Gen sits proud and lit (Needs your OK, its state in amber); Hiring is lit (Live: you’re driving it); Native App is a socket with a cross-shaped stem in its colour (Paused). No glows round any key, no badge dots. Readable in both themes; keys keep their colours.',
+      'What’s in flight opens on a warm plate of full-size keys, one per agent, its name in bold and a state line under it, then an empty socket “New agent · Empty socket”. Each key: a top-lit skirt, a lighter inset face, a hard depth shadow, one legend centred, its bound letter small at the bottom right clear of the corner, independence pips on the front edge. Acme Site and Research are pressed and lit warm with a soft spill in their colour (“Working on …”); Lead Gen sits proud with an amber legend and an amber spill (Needs your OK, the word in amber), the loudest key; Hiring is lit and still (“Live · You’re driving it”, Live in green); Native App is drained grey and sunk (Paused); idle keys are at rest and unlit, with their last line. Readable in both themes; keys keep their colours.',
     requires: '.agents-board .agent-key[data-state="needsOk"]',
     command: 'agents.team',
     viewport: { width: 1440, height: 1000 },
@@ -121,7 +121,7 @@ export const agentsKeysScenarios: Scenario[] = [
     id: 'agents-keys-sidebar',
     title: 'Agents — small keys in the sidebar, the Chief’s chat open',
     looksRightWhen:
-      'Twelve sidebar rows, each led by a 30px key in its colourway with one legend: a star for the Chief, money for Finance, people for Hiring, megaphone for Social Posts, shield for Security & DevOps, an inbox for Inbox. Working rows are pressed; Lead Gen’s key sits proud and lit; Native App shows an empty socket with its stem. Every key still reads as a key at this size. The chat header shows the Chief’s 44px key.',
+      'Twelve sidebar rows, each led by a 30px key in its colourway with one legend: a star for the Chief, money for Finance, people for Hiring, megaphone for Social Posts, shield for Security & DevOps, an inbox for Inbox. Working rows are pressed and warm-lit; Lead Gen’s key sits proud with an amber legend and spill (the loudest); Native App’s key is drained grey and sunk; Hiring’s row says “Live” in green. Every key still reads as a key at this size. The chat header shows the Chief’s 44px key.',
     openSelector: AGENTS_TAB,
     requires: '.agents-list__row .agent-key[data-icon="star"]',
     commands,

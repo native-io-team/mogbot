@@ -226,6 +226,27 @@ fn plain_detail(body: &[String]) -> String {
     }
 }
 
+/// The card's title: what it wants, in the app's words, where the session's
+/// question names it ("Do you want to make this edit to Hero.tsx?" is "Edit
+/// Hero.tsx?"); any other question as the session asked it.
+fn plain_question(question: &str) -> String {
+    let q = question.trim();
+    let lower = q.to_lowercase();
+    for (asked, verb) in [
+        ("do you want to make this edit to ", "Edit"),
+        ("do you want to create ", "Create"),
+    ] {
+        if let Some(rest) = lower.strip_prefix(asked) {
+            // The file as the session wrote it (its case), without the "?".
+            let file = q[q.len() - rest.len()..].trim_end_matches('?').trim();
+            if !file.is_empty() {
+                return format!("{verb} {file}?");
+            }
+        }
+    }
+    q.to_string()
+}
+
 pub fn kind_of(question: &str, options: &[PromptOption]) -> PromptKind {
     let lower = question.to_lowercase();
     if options
@@ -260,7 +281,10 @@ pub(crate) fn card(
             format!("Let Claude Code work in {name}?"),
             format!("Claude Code asks once per folder before it reads, edits and runs files in it. Allow, and {name} stays trusted, the way Claude Code records it when you accept its own dialog."),
         ),
-        _ => (decision.question.clone(), plain_detail(&decision.body)),
+        _ => (
+            plain_question(&decision.question),
+            plain_detail(&decision.body),
+        ),
     };
     // Its kind is read from the session's own words; the card shows ours.
     let options = options
@@ -1001,7 +1025,22 @@ mod tests {
             vec!["site".into()],
         );
         assert_eq!(card.detail, "Edit index.html");
+        // The title says what it wants, never the engine's raw question.
+        assert_eq!(card.title, "Edit index.html?");
+        assert_eq!(
+            plain_question("Do you want to create Notes.md?"),
+            "Create Notes.md?"
+        );
+        assert_eq!(
+            plain_question("Do you want to proceed?"),
+            "Do you want to proceed?"
+        );
         let prompt = card.prompt.unwrap();
+        // What the session asked is kept for answering it.
+        assert_eq!(
+            prompt.question,
+            "Do you want to make this edit to index.html?"
+        );
         assert_eq!(prompt.kind, PromptKind::Permission);
         let labels: Vec<_> = prompt.options.iter().map(|o| o.label.as_str()).collect();
         assert_eq!(

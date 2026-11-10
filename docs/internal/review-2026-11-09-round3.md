@@ -256,3 +256,24 @@ instead of polling frames.
 
 2, 3, 5 and 6 are cross-surface (desk, phone, Rust) and want one owner each. 4 and 11 belong with
 the keys designer. 7, 8, 9, 10, 12 and 13 are small and independent.
+
+## Follow-up pass (same day)
+
+| # | Change | Where |
+| --- | --- | --- |
+| 3 | Times of day follow this Mac's 12/24-hour setting at the source: `agents::clock` (CFDateFormatter, honours the 24-hour switch) behind `schedule::describe`, `format_time`, the brief and usage lines; the overview carries `hour24` and both clients format through `companion-protocol/clock.ts`. The grammar reads "9:00 AM" back (tested) | `clock.rs`, `schedule.rs`, `brief.rs`, `failure.rs`, `clock.ts` |
+| 4 | New agent is a dashed outline with a "+", never a socket; a paused socket's housing wears the agent's shade; the dark rim reads at 3:1 | `AgentKey.tsx` (desk, phone), `agent-key.css`, `theme.ts` |
+| 5 | One import is one Needs you row (newest stage per `talkId`), counted once | `mobile/src/lib/needsYou.ts` |
+| 6 | Phone: the header's conversations icon only while there's one conversation (the title row otherwise); the usage meter is the desk's static outline and pie. Desk: with several conversations the role leaves the header and the title gets the room | `ChatView.tsx`, `usage.tsx`, `AgentChat.tsx` |
+| 7 | No Projects badge; the Needs you badge is a neutral fill | `(tabs)/_layout.tsx`, `theme.ts` |
+| 8 | Mac apps card: the words, then one line; the rest behind Details. "+1 (555) 123-4567". What it can reach says how macOS asks once, under the list | `mac_apps.rs`, `logins.rs`, `AgentReach.tsx` |
+| 9 | TextButton underlined at rest (40%), full on hover and focus; Other ways has a chevron | `text-button.css`, `AgentLoginCard.tsx` |
+| 10 | No reading: the hero is the account's name and one quiet line | `usageGlance.ts` (`unread`), `AgentsUsageView.tsx` |
+| 11 | Picker: the small key becomes a close button while the picker shows the big one; UI face for the sublegend and shortcut field; Create is neutral | `AgentEditorModal.tsx`, `agents-look.css`, `agent-key.css` |
+| 12 | "This Mac" throughout the desk's copy | `src/` |
+| 13 | No "Idle" under resting keys on the board | `AgentsBoard.tsx` |
+| 14 | Session permission titles say what they want ("Edit Hero.tsx?"); phone conversations sheet neutral, no chevron on New conversation; phone section labels sentence case; Settings → Notifications in one word | `decisions.rs`, `conversations.tsx`, `ui.tsx`, `push.ts` |
+| + | Phone agent rows drop the role stub; a key given automatically never repeats another's colourway with the same icon | `AgentRow.tsx`, `keys.rs`, `store.rs`, `agentKeys.ts` |
+
+Still open: 2 (one `RecipeSections`), and from 14 the stacked bars in the Chief's chat. The 24-hour
+switch is read by the Mac only; the phone follows the Mac rather than its own setting.

@@ -569,8 +569,13 @@ pub struct AgentMessage {
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum NoteFix {
-    /// Settings → Agents → Your Chrome.
+    /// Settings → Agents → Your Chrome: set it up.
     UserChrome,
+    /// Settings → Agents → Your Chrome, when it's on but not connected:
+    /// the button says to check it, not to set it up again.
+    UserChromeCheck,
+    /// Settings → Agents → Disk space, with Free up space.
+    Disk,
 }
 
 /// `agents.json`. Read and written losslessly: an entry this build can't
@@ -651,6 +656,16 @@ pub fn tests_lock() -> std::sync::MutexGuard<'static, ()> {
 #[cfg(test)]
 pub fn set_root_for_tests(path: Option<PathBuf>) {
     *ROOT_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner()) = path;
+}
+
+/// A unit test without a scratch root reads the real app's folder; it
+/// must never write there. Always true outside tests.
+pub fn may_write_root() -> bool {
+    !cfg!(test)
+        || ROOT_OVERRIDE
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_some()
 }
 
 pub fn now_ms() -> i64 {
@@ -1161,8 +1176,24 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
     let index = registry.agents.len();
     // Its colour as before (one asked for, else spread across the palette,
     // which import previews predict), and its key's colourway the nearest.
-    let color = color_for(new.color.as_deref(), index);
-    let colorway = super::keys::colorway_for_color(&color);
+    let mut color = color_for(new.color.as_deref(), index);
+    let mut colorway = super::keys::colorway_for_color(&color);
+    // Its icon from its name and role, now, and (unless a colour was asked
+    // for) a colourway no one on the team wears with that icon, so two
+    // agents never get the same key.
+    let icon = super::keys::icon_for(&name, new.role.trim(), new.is_main);
+    if new.color.is_none() {
+        let worn: Vec<(&str, &str)> = registry
+            .agents
+            .iter()
+            .filter_map(|a| Some((a.colorway.as_deref()?, a.icon.as_deref()?)))
+            .collect();
+        let distinct = super::keys::distinct_colorway(&colorway, &icon, worn.iter().copied());
+        if distinct != colorway {
+            color = super::keys::legacy_color_for(&distinct);
+            colorway = distinct;
+        }
+    }
     let shape = new
         .shape
         .filter(|s| *s < SHAPE_COUNT)
@@ -1175,7 +1206,7 @@ pub fn create(new: NewAgent) -> Result<Agent, CommandError> {
         shape,
         color,
         colorway: Some(colorway),
-        icon: None,
+        icon: Some(icon),
         bound_key: None,
         is_main: new.is_main,
         // The one agent you're told to talk to stays put at the top; unpinnable.

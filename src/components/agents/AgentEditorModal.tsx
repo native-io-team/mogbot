@@ -14,7 +14,7 @@
  */
 
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
-import { ErrorIcon } from '@/components/icons';
+import { CloseIcon, ErrorIcon } from '@/components/icons';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Button } from '../primitives/Button';
 import { TextArea, TextField } from '../primitives/TextField';
@@ -571,15 +571,21 @@ export function AgentEditorModal({
         <button
           type="button"
           className="agent-editor__look-toggle"
-          aria-label="Change how it looks"
-          title="Change how it looks"
+          aria-label={showLook ? 'Done changing how it looks' : 'Change how it looks'}
+          title={showLook ? 'Done changing how it looks' : 'Change how it looks'}
           aria-expanded={showLook}
+          data-open={showLook || undefined}
           onClick={() => {
             setLookByHand(true);
             setShowLook((open) => !open);
           }}
         >
-          <AgentKey name={name} colorway={colorway} icon={icon} size="md" />
+          {/* Open, the picker's big key is the key: this one would be it twice, 40px apart. */}
+          {showLook ? (
+            <CloseIcon size={14} />
+          ) : (
+            <AgentKey name={name} colorway={colorway} icon={icon} size="md" />
+          )}
         </button>
         <TextField
           placeholder="Name"
@@ -799,8 +805,9 @@ export function AgentEditorModal({
         <Button variant="secondary" onClick={onClose}>
           Cancel
         </Button>
+        {/* Neutral: inside an agent's own dialog the accent is the colour being picked. */}
         {!describing && (
-          <Button variant="primary" type="submit" disabled={!canSave}>
+          <Button variant="strong" type="submit" disabled={!canSave}>
             {editing ? 'Save' : 'Create'}
           </Button>
         )}

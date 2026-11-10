@@ -1,5 +1,5 @@
 /**
- * Project tools: what a project needs on this computer, asked for the first
+ * Project tools: what a project needs on this Mac, asked for the first
  * time work becomes a project (see `lib/projectTools`).
  *
  * First a plain list of what's missing and one button. Then the user's own
@@ -115,7 +115,7 @@ export function ProjectToolsModal({ isOpen, onClose }: ProjectToolsModalProps) {
       <div className="settings-modal-body project-tools">
         {!status.data ? (
           <div className="project-tools__loading">
-            {status.error ? <p>Couldn’t check this computer. Close and try again.</p> : <Spinner />}
+            {status.error ? <p>Couldn’t check this Mac. Close and try again.</p> : <Spinner />}
           </div>
         ) : running && engine ? (
           <GuidedSetupPhase
@@ -129,7 +129,7 @@ export function ProjectToolsModal({ isOpen, onClose }: ProjectToolsModalProps) {
         ) : required.length > 0 ? (
           <>
             <p className="project-tools__lede">
-              Projects (a site, an app) are built on this computer. It needs these first:
+              Projects (a site, an app) are built on this Mac. It needs these first:
             </p>
             <ul className="project-tools__list">
               {required.map((item) => (
@@ -199,7 +199,7 @@ export function ProjectToolsModal({ isOpen, onClose }: ProjectToolsModalProps) {
 function EngineNote({ engineName }: { engineName: string | null }) {
   return engineName ? (
     <p className="project-tools__note">
-      {engineName} installs them in a terminal and explains each step. This computer checks each one
+      {engineName} installs them in a terminal and explains each step. This Mac checks each one
       itself, and you carry on when they’re all there.
     </p>
   ) : (

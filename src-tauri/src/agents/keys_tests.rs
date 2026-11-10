@@ -266,6 +266,46 @@ fn keys_round_trip_and_an_agent_without_them_reads_as_before() {
 }
 
 #[test]
+fn two_agents_never_get_the_same_key_unless_someone_chose_it() {
+    // Two blue agents whose roles both read as social posts: the second key
+    // filled in gets another colourway, so the two can be told apart.
+    let mut a = agent("m", "Studio", "blue");
+    a.role = "Social posts".into();
+    let mut b = agent("s", "Members", "blue");
+    b.role = "Social posts".into();
+    let mut team = vec![a, b];
+    keys::fill(&mut team);
+    let look = |x: &Agent| (x.colorway.clone().unwrap(), x.icon.clone().unwrap());
+    assert_eq!(team[0].icon.as_deref(), Some("megaphone"));
+    assert_eq!(team[0].icon, team[1].icon);
+    assert_eq!(team[0].colorway.as_deref(), Some("blue"));
+    assert_ne!(look(&team[0]), look(&team[1]));
+
+    // A key someone chose stays, even when it matches another.
+    let mut chosen = team[0].clone();
+    chosen.id = "c".into();
+    chosen.name = "Chosen".into();
+    chosen.bound_key = None;
+    team.push(chosen);
+    keys::fill(&mut team);
+    assert_eq!(look(&team[2]), look(&team[0]));
+
+    // Every colourway taken with that icon: the preferred one.
+    let all: Vec<(&str, &str)> = keys::colorways()
+        .into_iter()
+        .map(|c| (c, "megaphone"))
+        .collect();
+    assert_eq!(
+        keys::distinct_colorway("teal", "megaphone", all.iter().copied()),
+        "teal"
+    );
+    assert_eq!(
+        keys::distinct_colorway("teal", "inbox", all.iter().copied()),
+        "teal"
+    );
+}
+
+#[test]
 fn a_new_agent_gets_its_colours_nearest_colourway_its_icon_and_its_letter() {
     let _serial = store::tests_lock();
     let root = tempfile::tempdir().unwrap();

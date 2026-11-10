@@ -754,7 +754,7 @@ export function getTerminalCommands(): Record<string, TerminalCommand> {
             '  echo "To fix this, ask your system administrator to:"',
             '  echo "  1. Open System Settings → Users & Groups"',
             '  echo "  2. Click the ⓘ next to your account"',
-            '  echo "  3. Enable \\"Allow this user to administer this computer\\""',
+            '  echo "  3. Enable \\"Allow this user to administer this Mac\\""',
             '  echo ""',
             '  echo "Then restart the app and try again."',
             '  exit 1',

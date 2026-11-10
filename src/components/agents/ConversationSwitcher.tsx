@@ -100,7 +100,17 @@ export function ConversationSwitcher({
           setNow(Date.now());
           void refreshConversations(agent.id);
         }}
-        search={{ value: query, onChange: setQuery, placeholder: 'Find a conversation' }}
+        search={{
+          value: query,
+          onChange: setQuery,
+          placeholder: 'Find a conversation',
+          // Enter opens the first match, once there is a search to match.
+          onEnter: () => {
+            const first = query ? items[0] : undefined;
+            if (first) void openConversation(agent.id, first.id);
+            return Boolean(first);
+          },
+        }}
         trigger={(p) => (
           <MenuButton
             {...p}
@@ -132,13 +142,11 @@ export function ConversationSwitcher({
         </DropdownItem>
         <DropdownDivider />
         {items.length === 0 ? (
-          <p className="agent-model-menu__heading">
+          <p className="agent-model-menu__heading agent-conversations__note">
             {list ? 'No conversation matches.' : 'Reading conversations…'}
           </p>
         ) : (
-          <p className="agent-model-menu__heading">
-            Conversations · memory is shared by all of them
-          </p>
+          !query && <p className="agent-model-menu__heading agent-conversations__heading">Recent</p>
         )}
         {items.map((c) => (
           <DropdownItem
@@ -163,7 +171,11 @@ export function ConversationSwitcher({
             </span>
           </DropdownItem>
         ))}
-        {hidden && <p className="agent-model-menu__heading">Search to find older conversations.</p>}
+        {hidden && (
+          <p className="agent-model-menu__heading agent-conversations__note">
+            Search to find older conversations.
+          </p>
+        )}
         <DropdownDivider />
         <DropdownItem icon={<PencilIcon size={14} />} onSelect={() => setRename(true)}>
           <span className="agent-model-menu__label">Rename this conversation…</span>
@@ -185,7 +197,8 @@ export function ConversationSwitcher({
 function detailOf(c: ConversationView, now: number, workingIn: string | null): string {
   if (c.waiting > 0) return 'Needs your OK';
   if (c.id === workingIn) return 'Working';
-  return now ? formatAgo(c.lastActivityAt, now) : '';
+  // No time known (0) says nothing rather than "2966w ago".
+  return now && c.lastActivityAt > 0 ? formatAgo(c.lastActivityAt, now) : '';
 }
 
 function RenameConversation({
@@ -199,7 +212,8 @@ function RenameConversation({
   onClose: () => void;
   onError: (error: unknown) => void;
 }) {
-  const [value, setValue] = useState(conversation.title);
+  // What it is called on screen (an older automatic title tidied), not its raw words.
+  const [value, setValue] = useState(conversation.title ? conversationTitle(conversation) : '');
   const [saving, setSaving] = useState(false);
   const input = useRef<HTMLInputElement>(null);
   useEffect(() => input.current?.select(), []);

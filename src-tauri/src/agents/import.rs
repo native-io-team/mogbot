@@ -7,11 +7,9 @@
 //! agents. Re-importing is safe: an agent with the same name is updated, not
 //! duplicated, and the main agent is merged into the Chief of Staff.
 
-use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter};
-
-use super::{runner, schedule, store};
+use super::{schedule, store};
 use crate::errors::CommandError;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ImportedAgent {
@@ -311,17 +309,6 @@ pub fn import_with(
     Ok(summary)
 }
 
-pub fn import_and_notify(
-    app: &AppHandle,
-    agents: Vec<ImportedAgent>,
-    source: &str,
-) -> Result<ImportSummary, CommandError> {
-    let summary = import(agents, source)?;
-    let _ = app.emit(runner::EVENT_REGISTRY, ());
-    super::tray::mark_used(app);
-    Ok(summary)
-}
-
 /// The one message the user sends their other assistant to start an import:
 /// a conversation over the connector (`agents::connector`), which the other
 /// assistant drives because MCP only goes from it to us. Name-free: the
@@ -415,10 +402,10 @@ mod tests {
             .iter()
             .map(|r| (r.agent.as_str(), r.detail.as_str()))
             .collect();
-        assert_eq!(set[0], ("Finance", "every weekday at 09:00"));
+        assert_eq!(set[0], ("Finance", "every weekday at 9:00 AM"));
         assert_eq!(set[1], ("Finance", "every 2 hours"));
         assert!(set[2].1.starts_with("once, "), "{}", set[2].1);
-        assert_eq!(set[3], ("Chief of Staff", "every day at 07:30"));
+        assert_eq!(set[3], ("Chief of Staff", "every day at 7:30 AM"));
         assert_eq!(set.len(), 4);
 
         let refused: Vec<(&str, &str)> = summary
@@ -452,7 +439,7 @@ mod tests {
         assert_eq!(store::find("Finance").unwrap().unwrap().check_ins.len(), 3);
         assert_eq!(
             again.routines_set[0].detail,
-            "every weekday at 09:00 (already set)"
+            "every weekday at 9:00 AM (already set)"
         );
         assert_eq!(again.routines_refused.len(), 3);
 
@@ -552,8 +539,8 @@ mod tests {
             .map(|o| o.detail.as_str())
             .collect();
         assert!(
-            said.contains(&"every month on the last Friday at 16:00")
-                && said.contains(&"every 3 months on the 15th at 09:00 (Jan, Apr, Jul and Oct)"),
+            said.contains(&"every month on the last Friday at 4:00 PM")
+                && said.contains(&"every 3 months on the 15th at 9:00 AM (Jan, Apr, Jul and Oct)"),
             "{said:?}"
         );
         store::set_root_for_tests(None);

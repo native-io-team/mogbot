@@ -768,14 +768,45 @@ const scrollToIncludes = (text) => async (page) => {
 
 /** The states the other phases miss (`--probe`, dev/mock-probe.ts). */
 const PROBE = [
+  // docs/internal/failure-states.md: each failure with its one fix.
   {
-    name: 'probe-needs-you',
+    name: 'probe-failure-offline',
+    route: '/chat/offline',
+    ready: 'Stock Check',
+    check:
+      'The network went mid-turn: a red card headed “Didn’t finish”, the Mac’s sentence once under it (“Claude Code couldn’t reach Anthropic over the network. Retry once this Mac is back online.”), and Retry (sends “Check stock levels…” again); no raw error',
+  },
+  {
+    name: 'probe-failure-gone',
+    route: '/chat/gone',
+    ready: 'Invoicer',
+    check:
+      'Its engine is gone: “Claude Code isn’t installed”, the note “Install Claude Code on your Mac, then send it again.”, Connection details; no os error',
+  },
+  {
+    name: 'probe-failure-signed-out',
+    route: '/chat/signedout',
+    ready: 'Returns',
+    check:
+      'Signed out: “Claude Code is signed out”, the note “Sign in to Claude Code on your Mac, then send it again.”, Connection details',
+  },
+  {
+    name: 'probe-needs-you-failures',
     route: '/needs',
     ready: 'Needs you',
     act: () => sleep(1500),
+    pages: 3,
+    check:
+      'Each failure row says its state once as the title (“Didn’t finish”, “Not installed”, “Signed out”) and the reason under it, never “Didn’t finish” twice',
+  },
+  {
+    name: 'probe-catch-up',
+    route: '/catch-up',
+    ready: 'Catch up',
+    act: () => sleep(1500),
     pages: 2,
     check:
-      'Needs you: risky requests (Temp Helper’s delete, Deploys’ production deploy) wear the warning icon and say Review, never Allow on the row; only short low-risk ones are answered in place; the 19-line script says Review; step-in and crossover open',
+      'Catch up: risky requests (Temp Helper’s delete, Deploys’ production deploy) wear the warning icon and say Review, never Allow on the row; only short low-risk ones are answered in place; the 19-line script says Review; step-in and crossover open',
   },
   {
     name: 'probe-request-risky',
@@ -925,6 +956,18 @@ const PROBE_RESTARTED = [
     check:
       'After the Mac restarted mid-turn: no live line, the turn ends on “Interrupted: the app closed while this agent was working…” with Continue, never Retry',
   },
+  // Last: the desk removes this phone (in memory only; the next theme's Mac still knows it).
+  {
+    name: 'probe-revoked-connection',
+    route: '/connection',
+    ready: 'This phone',
+    act: async () => {
+      await fetch(`${MOCK}/dev/probe?do=revoke`);
+      await sleep(3000);
+    },
+    check:
+      'Removed on the desk: “Not paired any more”, the app’s sentence (“Your agents are still on … Pair again to see them here.”), never the Mac’s raw refusal; the one button is Pair again, no Open Tailscale',
+  },
 ];
 
 /** Connected, everything the mock seeds. */
@@ -934,7 +977,7 @@ const LIVE = [
     route: '/agents',
     ready: 'Chief of Staff',
     check:
-      'Chief and pinned, then by activity, what needs you first; no “N agents need your OK” bar (the Needs you tab counts it); each waiting row keeps only its own label. Above them, the usage glance as the desk sidebar says it',
+      'Chief and pinned, then by activity, what needs you first; no “N agents need your OK” bar (the Catch up tab counts it); each waiting row keeps only its own label. Above them, the usage glance as the desk sidebar says it',
   },
   {
     name: 'projects',
@@ -944,23 +987,24 @@ const LIVE = [
   },
   { name: 'search', route: '/search', check: 'Empty search' },
   {
-    name: 'needs-you',
-    route: '/needs',
-    ready: 'Needs you',
+    name: 'catch-up',
+    route: '/catch-up',
+    ready: 'Catch up',
     act: () => sleep(1500),
+    pages: 3,
     check:
-      'Needs you: every waiting card across agents, newest first; the tab badge is the number of rows; short low-risk ones Deny · Allow (neutral), risky or long ones Review, keys/logins their own action',
+      'Catch up: "N things need you", then one card per agent (its key, name, count), its rows one line of what is asked and one of why; the tab badge is the number of rows; short low-risk ones Deny · Allow (neutral, compact), risky or long ones Review, keys/logins their own action, copies Discard · Keep changes; then "Since you last caught up" from real records',
   },
   {
     name: 'catchup-first',
-    route: '/catch-up',
+    route: '/one-at-a-time',
     ready: 'Catch up',
     act: () => sleep(1200),
     check: 'Catch up: "1 of N", the bar, one card; Allow · Deny (neutral) over Chat · Next',
   },
   {
     name: 'catchup-approval',
-    route: '/catch-up',
+    route: '/one-at-a-time',
     ready: 'Catch up',
     act: async (page) => {
       await sleep(1000);
@@ -991,7 +1035,7 @@ const LIVE = [
   },
   {
     name: 'catchup-done',
-    route: '/catch-up',
+    route: '/one-at-a-time',
     ready: 'Catch up',
     act: async (page) => {
       await sleep(1000);
@@ -1002,7 +1046,7 @@ const LIVE = [
       }
       await sleep(600);
     },
-    check: 'All caught up: a calm check and Back to agents',
+    check: 'All caught up: a calm check and Done',
   },
   {
     name: 'chat-chief',

@@ -570,7 +570,7 @@ pub fn record(account: &Account, answer: Answer, of_engine: usize, now: i64) -> 
     );
     if let Answer::Read(reading) | Answer::ReadHeaders(reading) = answer {
         if let Some(at) = super::quota::limited_until(std::slice::from_ref(&reading), engine, now) {
-            wallet::reported_out(engine, &account.id, at, now);
+            wallet::reported_out_with_twins(engine, &account.id, at, now);
         }
         // The account's own reading, and a sample its pace learns from.
         usage_plan::archive(&account.id, &reading, now);
@@ -654,6 +654,32 @@ pub async fn check_all() -> bool {
     }
     RUNNING.store(false, Ordering::SeqCst);
     changed
+}
+
+/// Read one account now (it was just signed in): what its token answers
+/// for is then known, so a second sign-in of an account already here shows
+/// at once. True when what's shown changed.
+pub async fn check_one(engine: Engine, id: &str) -> bool {
+    let Some(binary) = super::engine::binary(engine).await else {
+        return false;
+    };
+    let candidates = wallet::candidates(engine).await;
+    let of_engine = candidates.len();
+    let Some(c) = candidates.into_iter().find(|c| c.account.id == id) else {
+        return false;
+    };
+    if !c.signed_in {
+        return false;
+    }
+    let now = super::store::now_ms();
+    let answer = match engine {
+        Engine::Claude => read_claude(&c.account, CLAUDE_USAGE_URL, now).await,
+        Engine::Codex => read_codex(&binary, &c.account, now).await,
+    };
+    let account = c.account;
+    tokio::task::spawn_blocking(move || record(&account, answer, of_engine, now))
+        .await
+        .unwrap_or(false)
 }
 
 async fn check_and_tell(app: &AppHandle) {

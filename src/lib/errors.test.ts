@@ -543,13 +543,13 @@ describe('humanizeGitError', () => {
       // the gh timeout mapping (issue #686)
       'GitHub took too long to respond. Check your internet connection and try again.',
       // gh_tls_error
-      "GitHub's secure connection couldn't be verified. This usually means a corporate proxy, VPN, or antivirus is inspecting HTTPS traffic on this computer (its certificate isn't trusted yet), or the system's certificate store is out of date. Install your proxy's certificate or update your system, then try again.",
+      "GitHub's secure connection couldn't be verified. This usually means a corporate proxy, VPN, or antivirus is inspecting HTTPS traffic on this Mac (its certificate isn't trusted yet), or the system's certificate store is out of date. Install your proxy's certificate or update your system, then try again.",
       // gh_server_error
       "GitHub's API is temporarily unavailable (a GitHub server error). Try again in a moment.",
       // gh_malformed_request_error
       "GitHub couldn't process the request (a temporary GitHub API error). Try again in a moment.",
       // gh_config_error
-      "The GitHub CLI (gh) can't read its own settings because of a file-permissions problem on this computer — this isn't a GitHub sign-in issue. Open a terminal and run `sudo chown -R $(whoami) ~/.config/gh`, then try again.",
+      "The GitHub CLI (gh) can't read its own settings because of a file-permissions problem on this Mac — this isn't a GitHub sign-in issue. Open a terminal and run `sudo chown -R $(whoami) ~/.config/gh`, then try again.",
       // gh_crash_error (both variants)
       'The GitHub CLI (gh) crashed unexpectedly. Try again — if it keeps happening, reinstalling the GitHub CLI may help.',
       "The GitHub CLI (gh) couldn't start because the system is low on memory. Close some other apps (on Windows, increasing the paging file size can also help) and try again.",
@@ -950,7 +950,7 @@ describe('isRecognizedGitFailure — backend wordings added in sweep 18', () => 
     ],
     [
       "#737 gh_shadowed_binary_error (PATH found something that isn't gh)",
-      'The program named `gh` on this computer isn\'t GitHub\'s CLI — something else (most often an unrelated global npm package called "gh") is being found first. Remove it (`npm uninstall -g gh`) or reinstall the GitHub CLI, then try again.',
+      'The program named `gh` on this Mac isn\'t GitHub\'s CLI — something else (most often an unrelated global npm package called "gh") is being found first. Remove it (`npm uninstall -g gh`) or reinstall the GitHub CLI, then try again.',
     ],
     [
       '#792 delete_branch (GitHub refuses to delete the default branch)',

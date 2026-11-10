@@ -37,6 +37,7 @@ import { AgentMark, AgentSwitcher } from './AgentSwitcher';
 import { useHeightReveal, useNewKeys } from './useAgentMotion';
 import {
   answerApproval,
+  CONTINUE_TEXT,
   promptAnswer,
   createCheckIn,
   failedTurn,
@@ -291,9 +292,10 @@ interface AgentsTeamViewProps {
   onOpenAgent: (agentId: string) => void;
   /** Open a chat at one of its lines. */
   onOpenMessage: (agentId: string, messageId: string, conversation?: string) => void;
-  /** The expired-login remedy on a failed turn. */
   /** Sign the agent's engine back in. */
   onSignIn: (engine: AgentEngine) => void;
+  /** Its engine isn't on this Mac: install it again. */
+  onInstallEngine?: (engine: AgentEngine) => void;
   /** Below the compact breakpoint there's no sidebar; the header switches agents. */
   compact?: { agents: Agent[]; onGoHome: () => void; onGoProjects: () => void };
   /** The board's empty socket: make a new agent. */
@@ -304,6 +306,7 @@ export function AgentsTeamView({
   onOpenAgent,
   onOpenMessage,
   onSignIn,
+  onInstallEngine,
   compact,
   onNewAgent,
 }: AgentsTeamViewProps) {
@@ -404,6 +407,16 @@ export function AgentsTeamView({
   };
 
   const retry = async (agent: Agent, failure: AgentMessage) => {
+    // Cut off part-way: Continue carries on in the same conversation, never
+    // the request again (that could do the work twice), as in the chat.
+    if (failure.failure?.kind === 'interrupted') {
+      try {
+        upsertMessage(await sendAgentMessage(agent.id, CONTINUE_TEXT, [], []));
+      } catch (error) {
+        toastError(error);
+      }
+      return;
+    }
     const chat = lines[agent.id] ?? [];
     const source = lastUserMessage(chat, chat.indexOf(failure));
     if (!source) return;
@@ -656,6 +669,9 @@ export function AgentsTeamView({
                             message={failure}
                             engine={agent.engine}
                             onSignIn={() => onSignIn(agent.engine)}
+                            onInstall={
+                              onInstallEngine ? () => onInstallEngine(agent.engine) : undefined
+                            }
                             onRetry={() => void retry(agent, failure)}
                             onRetryAt={(at) => void retryAt(agent, failure, at)}
                             retryScheduled={(agent.checkIns ?? []).some(

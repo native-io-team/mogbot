@@ -80,6 +80,7 @@ import {
   describeScope,
   ENGINE_LABEL,
   errorRemedy,
+  failureFixLabel,
   expiryLine,
   folderName,
   formatClock,
@@ -426,6 +427,8 @@ interface ErrorLineProps extends Arrival {
   /** A retry already waits for that reset (a check-in at that time). */
   retryScheduled?: boolean;
   onSignIn?: () => void;
+  /** Its engine isn't on this Mac: set it up again (Install …). */
+  onInstall?: () => void;
   /** What the agent runs on, which "Sign in to …" names. */
   engine?: AgentEngine;
   /** Whose home a timeline's screenshots live in; without it, no timeline. */
@@ -444,10 +447,13 @@ export const ErrorLine = memo(function ErrorLine({
   onRetryAt,
   retryScheduled,
   onSignIn,
+  onInstall,
   engine = 'claude',
   agent,
 }: ErrorLineProps) {
-  const signIn = errorRemedy(message) === 'sign-in' && onSignIn;
+  const remedy = errorRemedy(message);
+  const signIn = remedy === 'sign-in' && onSignIn;
+  const install = remedy === 'install' && onInstall;
   const resetsAt = message.failure?.kind === 'usage_limit' ? message.failure.resetsAt : undefined;
   // Offered only while the reset is still ahead (as of when the line was shown).
   const [shownAt] = useState(Date.now);
@@ -500,12 +506,12 @@ export const ErrorLine = memo(function ErrorLine({
                 {scheduling ? 'Scheduling…' : `Retry ${retryPhrase(retryAt)}`}
               </TextButton>
             ))}
-          {/* Retry at the reset is the recommended one; "Try anyway" stays
+          {/* Retry at the reset is the recommended one; "Try now" stays
               beside it, quiet, because the limit may already have lifted
               (another plan, extra usage). Once the reset has passed, Retry. */}
           {onRetry && (
             <TextButton tabIndex={0} variant={retryAt ? 'default' : 'strong'} onClick={onRetry}>
-              {retryAt ? 'Try anyway' : 'Retry'}
+              {retryAt ? 'Try now' : 'Retry'}
             </TextButton>
           )}
           {/* The moment another account is worth having, so onboarding
@@ -528,16 +534,28 @@ export const ErrorLine = memo(function ErrorLine({
             <ErrorIcon size={14} className="inline-error-icon" />
             <ErrorText message={message} />
           </div>
-          {(signIn || onRetry) && (
+          {(signIn || install || onRetry) && (
             <div className="agent-card__actions">
               {onRetry && (
-                <Button tabIndex={0} variant={signIn ? 'ghost' : 'secondary'} onClick={onRetry}>
-                  {message.failure?.kind === 'interrupted' ? 'Continue' : 'Retry'}
+                <Button
+                  tabIndex={0}
+                  variant={signIn || install ? 'ghost' : 'secondary'}
+                  onClick={onRetry}
+                >
+                  {failureFixLabel(
+                    message.failure?.kind === 'interrupted' ? 'continue' : 'retry',
+                    ENGINE_LABEL[engine]
+                  )}
                 </Button>
               )}
               {signIn && (
                 <Button tabIndex={0} variant="secondary" onClick={onSignIn}>
-                  Sign in to {ENGINE_LABEL[engine]}
+                  {failureFixLabel('sign-in', ENGINE_LABEL[engine])}
+                </Button>
+              )}
+              {install && (
+                <Button tabIndex={0} variant="secondary" onClick={onInstall} data-fix="install">
+                  {failureFixLabel('install', ENGINE_LABEL[engine])}
                 </Button>
               )}
             </div>

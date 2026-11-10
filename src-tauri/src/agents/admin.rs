@@ -1414,6 +1414,22 @@ fn bring_to_user(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value 
 /// Marked on routines an admin paused, so resume starts only those.
 const PAUSED_BY_ADMIN: &str = "pausedByAdmin";
 
+/// The routines an admin's pause (`on`) or resume switches: pause, every one
+/// running; resume, only those an admin paused. Pure.
+fn admin_switches(check_ins: &[super::schedule::CheckIn], on: bool) -> Vec<String> {
+    check_ins
+        .iter()
+        .filter(|c| {
+            if on {
+                !c.paused
+            } else {
+                c.paused && c.extra.contains_key(PAUSED_BY_ADMIN)
+            }
+        })
+        .map(|c| c.id.clone())
+        .collect()
+}
+
 fn pause(app: &AppHandle, caller: &store::Agent, args: &Value, on: bool) -> Value {
     let Some(name) = arg(args, "agent") else {
         return error("`agent` is required.");
@@ -1428,20 +1444,19 @@ fn pause(app: &AppHandle, caller: &store::Agent, args: &Value, on: bool) -> Valu
     if target.is_main {
         return error("The Chief of Staff can't be paused by another agent.");
     }
-    let mut changed = 0;
-    for c in &target.check_ins {
-        let mine = c.extra.contains_key(PAUSED_BY_ADMIN);
-        let switch = if on { !c.paused } else { c.paused && mine };
-        if !switch {
-            continue;
-        }
-        if super::schedule::set_paused(&target.id, &c.id, on).is_ok() {
-            changed += 1;
+    let mut switched = Vec::new();
+    for id in admin_switches(&target.check_ins, on) {
+        if super::schedule::set_paused(&target.id, &id, on).is_ok() {
+            switched.push(id);
         }
     }
+    let changed = switched.len();
     let _ = store::update(&target.id, |a| {
         for c in a.check_ins.iter_mut() {
-            if on && c.paused {
+            // Only the routines this pause switched off are the admin's to
+            // switch back on: never one the user paused, or one an import
+            // paused for the user's review.
+            if on && switched.contains(&c.id) {
                 c.extra.insert(PAUSED_BY_ADMIN.into(), Value::Bool(true));
             } else if !on {
                 c.extra.remove(PAUSED_BY_ADMIN);

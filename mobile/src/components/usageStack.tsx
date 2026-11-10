@@ -18,7 +18,13 @@
 
 import { useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
-import { LOW_LEFT, type StackKey, type UsageGlance } from '@shipstudio/companion-protocol';
+import {
+  ADD_ON_MAC,
+  LOW_LEFT,
+  SIGN_IN_DIFFERENT,
+  type StackKey,
+  type UsageGlance,
+} from '@shipstudio/companion-protocol';
 import { makeStyles, useColors } from '../lib/appearance';
 import { depthOf, iconSize, PRESSED, radius, space, type Palette } from '../lib/theme';
 import { Icon, StatusPill, T } from './ui';
@@ -39,18 +45,18 @@ const pillOf = (k: StackKey) =>
         ? 'waiting'
         : 'idle';
 
-/** The stack as one meter. */
+/** The stack as one meter: a segment per real account (a second sign-in of one draws none). */
 export function StackMeter({ glance, tall = false }: { glance: UsageGlance; tall?: boolean }) {
   const colors = useColors();
   const styles = useStyles();
-  const words = glance.keys
+  const words = glance.meterKeys
     .map((k) =>
       k.left === null ? `${k.name}: ${k.stateLabel.toLowerCase()}` : `${k.name}: ${k.left}% left`
     )
     .join('; ');
   return (
     <View style={styles.track} accessible accessibilityLabel={`Room left. ${words}`}>
-      {glance.keys.map((k) => (
+      {glance.meterKeys.map((k) => (
         <View
           key={k.key}
           style={[styles.seg, tall && styles.segTall, k.left === null && styles.segEmpty]}
@@ -68,48 +74,59 @@ export function StackMeter({ glance, tall = false }: { glance: UsageGlance; tall
 
 /** What a key has left, in the legend's words. */
 function roomWord(k: StackKey): string {
-  if (k.state === 'same') return 'Adds no room';
   if (k.left === null) return k.signedIn ? 'No reading' : 'Not signed in';
   return `${k.left}% left`;
 }
 
+/** Each account signed in twice, one line each, under the meter. */
+function SameNotes({ glance }: { glance: UsageGlance }) {
+  const colors = useColors();
+  return (
+    <>
+      {glance.sameNotes.map((n) => (
+        <T key={n} variant="caption" color={colors.textMuted}>
+          {n}
+        </T>
+      ))}
+    </>
+  );
+}
+
 /**
- * The Agents list's usage line, as the desk sidebar's row says it: the
- * headline, the stack as a thin meter, and the count with the soonest
- * reset. Opens Usage.
+ * The Agents list's usage line, as the desk sidebar's row says it, in
+ * words anyone reads: "Usage 57% left this week", the stack as a thin
+ * meter, and "Refills Sat 10:00 AM" (with "2 accounts" only when there
+ * are). Amber only when the user must act. Opens Usage.
  */
 export function GlanceRow({ glance, onPress }: { glance: UsageGlance; onPress: () => void }) {
   const colors = useColors();
   const styles = useStyles();
   if (glance.keys.length === 0) return null;
-  const label = [glance.headline, glance.estimate ? '(estimate)' : null, glance.summary]
-    .filter(Boolean)
-    .join('. ');
+  const { row } = glance;
+  const foot = [row.refill, row.count].filter(Boolean).join(' · ');
+  const label = `Usage: ${[row.figure, row.refill, row.count].filter(Boolean).join('. ')}`;
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={`Usage. ${label}`}
+      accessibilityLabel={label}
       accessibilityHint="Every account, its limits and where its usage went"
       onPress={onPress}
       style={({ pressed }) => [styles.row, pressed && PRESSED]}
     >
       <T
         variant="small"
-        color={glance.tone === 'calm' ? colors.textPrimary : colors.accentWarning}
+        color={row.needsYou ? colors.accentWarning : colors.textPrimary}
         numberOfLines={1}
       >
-        {glance.headline}
-        {glance.estimate ? (
-          <T variant="small" color={colors.textMuted}>
-            {' '}
-            · est.
-          </T>
-        ) : null}
+        <T variant="small" color={colors.textMuted}>
+          Usage{' '}
+        </T>
+        {row.figure}
       </T>
-      <StackMeter glance={glance} />
-      {!!glance.summary && (
+      {glance.meterKeys.length > 0 && <StackMeter glance={glance} />}
+      {!!foot && (
         <T variant="caption" color={colors.textMuted} numberOfLines={1}>
-          {glance.summary}
+          {foot}
         </T>
       )}
     </Pressable>
@@ -135,7 +152,7 @@ export function GlanceCard({ glance }: { glance: UsageGlance }) {
       {/* A legend, one account a line: the full width for its name, so an
           email reads whole rather than as "Signed in on t…". */}
       <View style={styles.legend}>
-        {glance.keys.map((k) => (
+        {glance.meterKeys.map((k) => (
           <View key={k.key} style={styles.legendRow}>
             <T variant="caption" color={colors.textMuted} style={styles.legendPlace}>
               {String(k.position)}
@@ -149,6 +166,17 @@ export function GlanceCard({ glance }: { glance: UsageGlance }) {
           </View>
         ))}
       </View>
+      <SameNotes glance={glance} />
+      {glance.signInChanged && (
+        <View style={styles.low}>
+          <T variant="small" color={colors.textPrimary}>
+            {glance.signInChanged.text}
+          </T>
+          <T variant="caption" color={colors.textMuted}>
+            {ADD_ON_MAC}
+          </T>
+        </View>
+      )}
       {glance.soonest && (
         <T variant="small" color={colors.textSecondary}>
           Next reset: {glance.soonest.account}’s {glance.soonest.label.toLowerCase()} limit,{' '}
@@ -218,10 +246,22 @@ export function KeyCard({ k }: { k: StackKey }) {
             <T variant="small" color={colors.textSecondary}>
               {l.label}
             </T>
-            <T variant="small" color={colors.textPrimary}>
-              {l.left}% left
-            </T>
+            {l.countdown && (
+              <T variant="caption" color={colors.textSecondary}>
+                ⟳ {l.countdown}
+              </T>
+            )}
           </View>
+          <T
+            variant="title"
+            color={l.tone === 'warning' ? colors.accentWarning : colors.textStrong}
+          >
+            {l.left}%
+            <T variant="small" color={colors.textMuted}>
+              {' '}
+              left
+            </T>
+          </T>
           <View style={styles.bar}>
             <View
               style={[
@@ -232,10 +272,28 @@ export function KeyCard({ k }: { k: StackKey }) {
                 },
               ]}
             />
+            {l.evenLeft !== undefined && (
+              // Where it would stand at an even pace through the window.
+              <View
+                style={[
+                  styles.even,
+                  {
+                    left: `${l.evenLeft}%`,
+                    // Light on the fill, dark on the empty track: seen either way.
+                    backgroundColor: l.evenLeft < l.left ? colors.surfaceApp : colors.textSecondary,
+                  },
+                ]}
+              />
+            )}
           </View>
+          {l.paceWord && (
+            <T variant="small" color={colors.textSecondary}>
+              {l.paceWord}
+            </T>
+          )}
           {l.resetsAt && (
             <T variant="caption" color={colors.textMuted}>
-              Resets {l.resetsIn} · {l.resetsAt}
+              Refills {l.resetsAt}
             </T>
           )}
           {l.pace && (
@@ -249,7 +307,7 @@ export function KeyCard({ k }: { k: StackKey }) {
                 />
               )}
               <T variant="caption" color={colors.textSecondary} style={styles.grow}>
-                {l.pace.text} · {l.pace.basis}
+                {l.runOut ? l.pace.basis : `${l.pace.text} · ${l.pace.basis}`}
               </T>
             </View>
           )}
@@ -258,7 +316,10 @@ export function KeyCard({ k }: { k: StackKey }) {
       {k.fix && (
         <View style={styles.low}>
           <T variant="small" color={colors.textPrimary}>
-            {k.fix.text} On your Mac: Agents → Usage.
+            {k.fix.text}{' '}
+            {k.fix.action === 'sign_in_other'
+              ? `${SIGN_IN_DIFFERENT}${k.thisMac ? '' : ', or remove it,'} on your Mac: Agents → Usage.`
+              : 'On your Mac: Agents → Usage.'}
           </T>
         </View>
       )}
@@ -366,6 +427,7 @@ const useStyles = makeStyles((colors) => ({
     backgroundColor: colors.surfaceControl,
     overflow: 'hidden',
   },
+  even: { position: 'absolute', top: 0, bottom: 0, width: space['3xs'] },
   low: {
     gap: space['2xs'],
     padding: space.md,

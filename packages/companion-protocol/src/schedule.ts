@@ -5,6 +5,7 @@
  * (which re-exports them) so both clients word a schedule the same way.
  */
 
+import { formatClock } from './clock';
 import type { CheckIn, CheckInRun, MonthDay, Repeat, Watch, WatchSource } from './model';
 
 /** What a scheduled run came to, in a few words. */
@@ -53,7 +54,8 @@ export function describeRunDetail(detail: string): string {
  * one per call, which over a few hundred rows was the costliest part of a
  * chat render.
  */
-const CLOCK = new Intl.DateTimeFormat(undefined, { hour: 'numeric', minute: '2-digit' });
+/** The user's clock (`clock.ts`): "9:00 AM" or "09:00", as the Mac says. */
+const CLOCK = { format: formatClock };
 const SHORT_DAY = new Intl.DateTimeFormat(undefined, {
   weekday: 'short',
   month: 'short',
@@ -61,7 +63,7 @@ const SHORT_DAY = new Intl.DateTimeFormat(undefined, {
 });
 
 const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-/** "9:00 AM" in the user's locale, the same way `formatWhen` writes times. */
+/** "9:00 AM" (or "09:00") as the user reads times, the same way `formatWhen` writes times. */
 const clockText = (hour: number, minute: number) =>
   CLOCK.format(new Date(2000, 0, 1, hour, minute));
 
@@ -506,7 +508,7 @@ export function describeWatchTitle(source: WatchSource): string {
   return `When ${describeWatchSource(source)}`;
 }
 
-/** Whether each check is a Claude Code call (a connector), not a free CLI call. */
+/** Whether each check is a model call (a connector), not a free CLI call. */
 export function watchUsesModel(source: WatchSource): boolean {
   return source.kind === 'linear_assigned' || source.kind === 'custom';
 }

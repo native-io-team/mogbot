@@ -41,7 +41,8 @@
 //!   last moved, a preview line, and which one the user is in (`current`).
 //!   Absent, the list is the first conversation alone, titled from the
 //!   first thing the user said in it. A title comes from the first message
-//!   of a conversation until the user renames it.
+//!   of a conversation until the user renames it: a short sentence-case
+//!   line, the ask without the pleasantries (`conversation_title`).
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -52,7 +53,8 @@ use crate::errors::CommandError;
 
 /// The first conversation's id: the chat every agent already had.
 pub const FIRST: &str = "first";
-/// Longest title, in characters (auto or typed).
+/// Longest title the user may type, in characters. Automatic ones are
+/// shorter (`conversation_title::AUTO_TITLE_CHARS`).
 pub const TITLE_CHARS: usize = 60;
 /// Most conversations kept per agent. Past it, creating one is refused
 /// with a line saying so; nothing is ever dropped to make room.
@@ -330,30 +332,9 @@ fn first_title(agent_id: &str) -> String {
         .unwrap_or_default()
 }
 
-/// A title from what the user said: its first line, without Markdown
-/// quoting, clipped at a word to [`TITLE_CHARS`].
+/// A title from what the user said (`conversation_title::auto_title`).
 pub fn title_from(text: &str) -> String {
-    // What they wrote, not what they quoted (`> …`), unless a quote is all there is.
-    let own = text
-        .lines()
-        .map(str::trim)
-        .find(|l| !l.is_empty() && !l.starts_with('>'));
-    let line = own.unwrap_or_else(|| {
-        text.lines()
-            .map(|l| l.trim_start_matches('>').trim())
-            .find(|l| !l.is_empty())
-            .unwrap_or("")
-    });
-    let line: String = line.split_whitespace().collect::<Vec<_>>().join(" ");
-    if line.chars().count() <= TITLE_CHARS {
-        return line;
-    }
-    let cut: String = line.chars().take(TITLE_CHARS - 1).collect();
-    let cut = match cut.rfind(' ') {
-        Some(at) if at > TITLE_CHARS / 2 => cut[..at].to_string(),
-        _ => cut,
-    };
-    format!("{}…", cut.trim_end())
+    super::conversation_title::auto_title(text)
 }
 
 fn current_of(list: &List) -> String {
@@ -385,7 +366,13 @@ fn view(agent: &Agent, list: &List, waiting: &HashMap<String, u32>) -> Conversat
         .iter()
         .map(|c| ConversationView {
             id: c.id.clone(),
-            title: c.title.clone(),
+            // An automatic title from an older build (the whole first line)
+            // is tidied on read; a name the user typed is theirs.
+            title: if c.named {
+                c.title.clone()
+            } else {
+                title_from(&c.title)
+            },
             named: c.named,
             created_at: c.created_at,
             last_activity_at: c.last_activity_at.max(c.created_at),

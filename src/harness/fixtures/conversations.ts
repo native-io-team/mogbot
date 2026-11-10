@@ -68,7 +68,8 @@ export function several(
         named: true,
         preview: 'Done. It runs every Monday at 9.',
       }),
-      item('c-hiring', 'Draft the job post for a designer', 6 * 24 * HOUR, {
+      // As a Mac on an older build sent it: the raw first line, tidied on show.
+      item('c-hiring', 'can you draft the job post for a designer, please', 6 * 24 * HOUR, {
         preview: 'Sent you a draft.',
       }),
     ],

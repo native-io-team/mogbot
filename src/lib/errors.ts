@@ -244,7 +244,7 @@ export function humanizeGitError(value: unknown, ctx: GitErrorContext = {}): str
     ((m.includes('failed to read configuration') || m.includes('failed to load config')) &&
       m.includes('permission denied'))
   ) {
-    return `The GitHub CLI (gh) can't read its own settings because of a file-permissions problem on this computer — this isn't a GitHub sign-in issue. Open a terminal and run \`sudo chown -R $(whoami) ~/.config/gh\`, then try again.`;
+    return `The GitHub CLI (gh) can't read its own settings because of a file-permissions problem on this Mac — this isn't a GitHub sign-in issue. Open a terminal and run \`sudo chown -R $(whoami) ~/.config/gh\`, then try again.`;
   }
 
   // GitHub wouldn't authenticate. GitHub's no-write-access rejection reads
@@ -275,7 +275,7 @@ export function humanizeGitError(value: unknown, ctx: GitErrorContext = {}): str
     // issue #687).
     m.includes("secure connection couldn't be verified")
   ) {
-    return `GitHub's secure connection couldn't be verified. This usually means a corporate proxy, VPN, or antivirus is inspecting HTTPS traffic on this computer, or the system's certificate store is out of date. Install your proxy's certificate or update your system, then try again.`;
+    return `GitHub's secure connection couldn't be verified. This usually means a corporate proxy, VPN, or antivirus is inspecting HTTPS traffic on this Mac, or the system's certificate store is out of date. Install your proxy's certificate or update your system, then try again.`;
   }
 
   // Couldn't reach GitHub at all. 'dial tcp'/'connectex' cover Go's dial
@@ -564,7 +564,7 @@ export function describeProcessError(
     return {
       expected: true,
       message:
-        "GitHub couldn't authenticate this computer over SSH, so the repository couldn't be reached. Either set up an SSH key for your GitHub account (github.com/settings/keys), or switch to HTTPS by running `gh config set git_protocol https` in a terminal, then try again.",
+        "GitHub couldn't authenticate this Mac over SSH, so the repository couldn't be reached. Either set up an SSH key for your GitHub account (github.com/settings/keys), or switch to HTTPS by running `gh config set git_protocol https` in a terminal, then try again.",
     };
   }
   // Git-over-HTTPS credential failure: no usable credential helper, so git
@@ -579,7 +579,7 @@ export function describeProcessError(
     return {
       expected: true,
       message:
-        "GitHub couldn't authenticate this computer over HTTPS — git needed to ask for a password, and there's no saved credential to use. Open a terminal and run `gh auth login`, then `gh auth setup-git`, and try again.",
+        "GitHub couldn't authenticate this Mac over HTTPS — git needed to ask for a password, and there's no saved credential to use. Open a terminal and run `gh auth login`, then `gh auth setup-git`, and try again.",
     };
   }
   // macOS's git shim refusing to run at all until the Xcode license is
@@ -718,7 +718,7 @@ export function describeProcessError(
   if (brokenToolInstall) {
     return {
       expected: true,
-      message: `The package manager at ${brokenToolInstall[1]} is broken — its own program files are missing, so it can't start. Reinstall Node.js (or that package manager) on this computer, then try again.`,
+      message: `The package manager at ${brokenToolInstall[1]} is broken — its own program files are missing, so it can't start. Reinstall Node.js (or that package manager) on this Mac, then try again.`,
     };
   }
   // pnpm 9 and earlier require a `packages:` field in any pnpm-workspace.yaml.
@@ -730,7 +730,7 @@ export function describeProcessError(
     return {
       expected: true,
       message:
-        "This project's `pnpm-workspace.yaml` carries settings but lists no packages, which needs pnpm 10 or newer — the pnpm on this computer is older. Update it (`corepack use pnpm@latest`, or `npm install -g pnpm@latest`), then retry the install.",
+        "This project's `pnpm-workspace.yaml` carries settings but lists no packages, which needs pnpm 10 or newer — the pnpm on this Mac is older. Update it (`corepack use pnpm@latest`, or `npm install -g pnpm@latest`), then retry the install.",
     };
   }
   // Corrupted pnpm store: the content-addressable cache has dangling links,
@@ -855,7 +855,7 @@ export function describeProcessError(
     const tool = missingTool[1];
     return {
       expected: true,
-      message: `This project needs \`${tool}\`, which isn't installed on this computer (or isn't on your PATH). Install ${tool} and try again — or, for package managers, delete its lockfile to fall back to npm.`,
+      message: `This project needs \`${tool}\`, which isn't installed on this Mac (or isn't on your PATH). Install ${tool} and try again — or, for package managers, delete its lockfile to fall back to npm.`,
     };
   }
   // Negative codes (spawn failure / killed by signal) must match too —

@@ -117,7 +117,7 @@ describe('WhenComposer', () => {
     fireEvent.click(radio('A Linear issue is assigned to you'));
     expect(
       screen.getByText(
-        /uses a little of Finance’s Claude usage and can only read that app, up to 24 a day/
+        /uses a little of Finance’s usage and can only read that app, up to 24 a day/
       )
     ).toBeInTheDocument();
     // A model check is at least 15 minutes apart, and starts at 30.

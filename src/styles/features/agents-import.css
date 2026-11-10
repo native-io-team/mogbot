@@ -670,7 +670,7 @@
 
 /* ------------------------------------------------------- import choice */
 
-/* "Bring your agents from another assistant?", once, at the top of the
+/* "Already have agents in another assistant?", once, at the top of the
    Chief's chat: a card like any other decision, with room under it. */
 .agent-import-choice {
   margin-bottom: var(--spacing-lg);

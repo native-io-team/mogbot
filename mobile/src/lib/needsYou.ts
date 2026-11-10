@@ -1,7 +1,8 @@
 /**
- * The "Needs you" feed: every card waiting on you, across every agent, in
- * one list. The phone's one place for it (its own tab, whose badge counts
- * these rows, so the number matches the list); a tapped alert leads here.
+ * What waits on you, for the Catch up tab: every card across every agent,
+ * in one list. The phone's one place for it (the tab's badge counts these
+ * rows, so the number matches the list; `lib/catchUpTab.ts` groups them by
+ * agent); a tapped alert leads here.
  * Agents' rows only label theirs (docs/agents.md, "Needs you: one place per
  * surface").
  *
@@ -15,6 +16,10 @@
  *   turn only you can fix, or a card its chat hasn't loaded yet).
  * - **mac**: a card only the Mac can answer (an import to review).
  * - **setup**: "Setting up your team" while it's open.
+ *
+ * One import is one row: its stages (consent, playback, review) are cards of
+ * one `connector.talkId`, and only the newest still waiting is listed and
+ * counted, as the desk shows one card that replaces the last.
  *
  * Order: what blocks an agent first, then the rest; newest first within
  * each, so what just arrived is on top. Answered cards leave by themselves:
@@ -76,9 +81,17 @@ export function feedItems(
   for (const agent of visible) {
     const messages = chats[agent.id]?.messages;
     let asks = 0;
+    // An import's newest waiting stage, per talk: the others aren't listed.
+    const newestStage = new Map<string, string>();
+    for (const m of messages ?? []) {
+      const talk = pendingCard(m)?.connector?.talkId;
+      if (talk) newestStage.set(talk, m.id);
+    }
     for (const m of messages ?? []) {
       const card = pendingCard(m);
       if (!card) continue;
+      const talk = card.connector?.talkId;
+      if (talk && newestStage.get(talk) !== m.id) continue;
       const here = answerableHere(card, reviewHere);
       items.push({
         key: `${here ? 'ask' : 'mac'}:${m.id}`,
@@ -168,7 +181,7 @@ export function fitsWhole(message: AgentMessage | undefined): boolean {
 export const highRisk = (a: Approval | undefined): boolean => a?.risk === 'high';
 
 /**
- * Whether a card may be answered without opening it: on its Needs you row,
+ * Whether a card may be answered without opening it: on its Catch up row,
  * or from a Lock Screen notification. Only what the Mac marked low-risk,
  * and only when the whole of it fits. A risky card, or one the Mac didn't
  * classify (an older Mac, a card from before it did), opens in full first.

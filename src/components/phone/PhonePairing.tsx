@@ -23,6 +23,7 @@ import {
 import { PhoneQr } from './PhoneQr';
 import { TailscaleStoreLinks } from './PhoneTailscale';
 import { BRAND } from '../../lib/brand';
+import { formatClock } from '../../../packages/companion-protocol/src/clock';
 
 interface OfferProps {
   busy: boolean;
@@ -109,8 +110,7 @@ interface ConfirmProps {
   onDecide: (allow: boolean, replace: string[]) => void;
 }
 
-const timeOf = (ms: number) =>
-  new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+const timeOf = (ms: number) => formatClock(ms);
 const dayOf = (ms: number) =>
   new Date(ms).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 

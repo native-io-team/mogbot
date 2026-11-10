@@ -107,45 +107,6 @@
   flex-direction: column;
 }
 
-/* The team line: "3 working" or "All quiet", at the head of the list. Quiet
-   by design (a caption, not a header); the dot is the running status hue and
-   only lights while someone is working. */
-.agents-list__team {
-  display: flex;
-  align-items: center;
-  gap: var(--spacing-tight);
-  height: var(--size-sidebar-section-row);
-  padding: var(--spacing-xs) var(--spacing-md) 0 var(--spacing-md);
-  box-sizing: content-box;
-  font-size: var(--font-size-body-sm);
-  font-weight: var(--font-weight-label);
-  letter-spacing: var(--tracking-name);
-  color: var(--text-muted);
-  border-bottom: var(--border-width-default) solid var(--border-subtle);
-}
-
-.agents-list__team-dot {
-  flex: 0 0 auto;
-  width: var(--size-sidebar-status-indicator);
-  height: var(--size-sidebar-status-indicator);
-  border-radius: var(--radius-pill);
-  background: var(--text-faint);
-}
-
-.agents-list__team[data-working] {
-  color: var(--text-secondary);
-}
-
-.agents-list__team[data-working] .agents-list__team-dot {
-  background: var(--status-running);
-  box-shadow: 0 0 0 var(--border-width-emphasis)
-    color-mix(in srgb, var(--status-running) 22%, transparent);
-}
-
-.workspace-sidebar.is-hidden .agents-list__team {
-  display: none;
-}
-
 /* The project row's band and hairline. The badge starts on the sidebar's
    outer gutter (--space-08), the column the mode toggle and the Search field
    above start on; there is no disclosure chevron to make room for. */
@@ -308,6 +269,14 @@
   color: var(--accent-warning);
 }
 
+/* Live (you're driving it): the word in green, as on the board. */
+.agents-list__state-word {
+  font-weight: var(--font-weight-label);
+}
+.agents-list__state-word[data-state='live'] {
+  color: var(--accent-success);
+}
+
 /* A state in a pill, then its words: one line, the words cut first. The pill
    sits in the line's own height (no vertical padding here), so a row that
    turns amber or red never grows. */
@@ -403,12 +372,20 @@
   pointer-events: none;
 }
 
-/* A row with a pill says its state there. The column at its right keeps one
-   meaning (unread); the state dot rides on the badge only on the collapsed
-   rail, where the pill isn't shown. */
-.workspace-sidebar:not(.is-hidden) .agents-list__rail-mark,
-.workspace-sidebar.is-hidden .agents-list__row-unread {
+/* The open list's right edge is clean: the key says working, free or needs
+   you, the pill says what's wrong, and unread is the row's ink. Only the
+   collapsed rail, with no words, keeps a state mark on the badge. */
+.workspace-sidebar:not(.is-hidden) .agents-list__status {
   display: none;
+}
+
+/* Unread: the name and its line in full-strength ink, the name heavier. */
+.agents-list__row[data-unread] .agents-list__name-text {
+  font-weight: var(--font-weight-heading);
+}
+.agents-list__row[data-unread] .agents-list__preview,
+.agents-list__row[data-unread] .agents-list__rest {
+  color: var(--text-primary);
 }
 
 .agents-list__rail-mark {

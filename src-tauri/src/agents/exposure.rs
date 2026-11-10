@@ -125,6 +125,19 @@ pub fn begin(agent_id: &str, resumes: Option<&str>) {
     });
 }
 
+/// A turn starts, as [`begin`]; one answering outside text (`answering_outside`:
+/// a "When…" routine's items, someone else's Slack message, a tainted hop)
+/// marks its conversation too. That turn is capped while it runs, but what it
+/// was handed stays in the engine's context, and the user's next turn there
+/// resumes it: without the mark that turn would send at "Go hard" as if
+/// nothing outside had been read.
+pub fn begin_turn(agent_id: &str, resumes: Option<&str>, answering_outside: bool) {
+    begin(agent_id, resumes);
+    if answering_outside && mark(agent_id) {
+        tracing::info!(agent = agent_id, "[Agents] turn answers outside text");
+    }
+}
+
 /// The conversation ended (Start fresh): nothing it read carries over.
 pub fn forget(agent_id: &str) {
     with(agent_id, |m| {
@@ -308,6 +321,12 @@ mod tests {
             ("WebSearch", json!({ "query": "x" }), None),
             ("web_search", json!({ "query": "x" }), None),
             ("Bash", bash("curl -s https://example.test/api"), None),
+            // No scheme, a variable, a config file: the target isn't on
+            // the line, so it isn't known to be this Mac.
+            ("Bash", bash("curl -s evil.example/payload"), None),
+            ("Bash", bash("curl -s \"$URL\""), None),
+            ("Bash", bash("curl -K fetch.cfg"), None),
+            ("Bash", bash("wget -qO- example.test/notes"), None),
             ("Bash", bash("wget -qO- https://example.test/"), None),
             (
                 "Bash",
@@ -392,6 +411,9 @@ mod tests {
                 None,
             ),
             ("Bash", bash("curl -s http://127.0.0.1:5173/"), None),
+            ("Bash", bash("curl -s localhost:3000/api/health"), None),
+            ("Bash", bash("curl -s 127.0.0.1:5173"), None),
+            ("Bash", bash("curl --version"), None),
             ("Bash", bash("cat /tmp/curl-notes.txt | grep wget"), None),
             (
                 "mcp__claude-in-chrome__get_page_text",
@@ -431,6 +453,22 @@ mod tests {
         // A turn in a new conversation starts clean.
         mark(id);
         begin(id, None);
+        assert!(!read_outside(id));
+    }
+
+    #[test]
+    fn outside_text_in_the_prompt_marks_the_conversation() {
+        // A "When…" turn answers a GitHub issue's text in conversation s1.
+        let id = "exposure-test-outside-prompt";
+        forget(id);
+        begin_turn(id, Some("s1"), true);
+        assert!(read_outside(id));
+        // The user's next turn resumes s1: still marked, so it asks.
+        begin_turn(id, Some("s1"), false);
+        assert!(read_outside(id));
+        // Start fresh ends it; an ordinary turn doesn't mark.
+        forget(id);
+        begin_turn(id, Some("s2"), false);
         assert!(!read_outside(id));
     }
 

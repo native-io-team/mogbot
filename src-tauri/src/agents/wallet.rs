@@ -754,6 +754,64 @@ pub fn reported_out(engine: Engine, id: &str, resets_at: i64, now: i64) {
     });
 }
 
+/// The other entries in `rows` (id, organization, plan) that are the same
+/// account as `id`: the second sign-ins of one account, by the same rule
+/// the Usage view counts them once with (`inventory::same_as`).
+pub fn twins_in(rows: &[(String, Option<String>, Option<String>)], id: &str) -> Vec<String> {
+    let input: Vec<_> = rows
+        .iter()
+        .map(|(id, org, plan)| (id.clone(), true, org.clone(), plan.clone()))
+        .collect();
+    let first = super::inventory::same_as(&input);
+    let root = |i: usize| first[i].unwrap_or(i);
+    let Some(me) = rows.iter().position(|(r, _, _)| r == id) else {
+        return Vec::new();
+    };
+    (0..rows.len())
+        .filter(|&j| j != me && root(j) == root(me))
+        .map(|j| rows[j].0.clone())
+        .collect()
+}
+
+/// `id`'s other sign-ins on this Mac, as recorded (`twins_in`).
+fn twins_of(engine: Engine, id: &str) -> Vec<String> {
+    let (archived, _) = super::usage_plan::readings();
+    let orgs = super::usage_plan::records().orgs;
+    let rows: Vec<_> = of(engine)
+        .into_iter()
+        .map(|a| {
+            let key = super::usage_plan::account_key(engine, &a.id);
+            let who = identity_of(&a);
+            let org = who.org.or_else(|| orgs.get(&key).cloned());
+            let plan = who
+                .plan
+                .or_else(|| archived.get(&key).and_then(|q| q.plan.clone()));
+            (a.id, org, plan)
+        })
+        .collect();
+    twins_in(&rows, id)
+}
+
+/// [`mark_out`], and every other sign-in of the same account with it: one
+/// account's limit is reached on all of them, so failover never spends a
+/// try (and a "Switched to …" line) on the same account under another name.
+pub fn mark_out_with_twins(engine: Engine, id: &str, resets_at: Option<i64>, now: i64) {
+    mark_out(engine, id, resets_at, now);
+    for twin in twins_of(engine, id) {
+        mark_out(engine, &twin, resets_at, now);
+    }
+}
+
+/// [`reported_out`], and every other sign-in of the same account with it.
+pub fn reported_out_with_twins(engine: Engine, id: &str, resets_at: i64, now: i64) {
+    reported_out(engine, id, resets_at, now);
+    if resets_at > now {
+        for twin in twins_of(engine, id) {
+            reported_out(engine, &twin, resets_at, now);
+        }
+    }
+}
+
 /// Before recording an engine's plan reading from `seat`: true when the
 /// reading known came from another account, which the caller then clears
 /// (a reading is one account's picture, never two mixed).
@@ -889,6 +947,10 @@ pub fn env_for(account: &Account) -> Vec<(String, String)> {
                     .into_owned(),
             )];
             if let Some(token) = accounts::claude_token_for(&account.id) {
+                // In the turn's environment, so an `env` or a script that
+                // echoes it would carry it into the chat, the timeline and
+                // the phone: redaction has to know it (`secrets::redact`).
+                super::secrets::remember_external(&token, "Claude account token");
                 env.push(("CLAUDE_CODE_OAUTH_TOKEN".to_string(), token));
             }
             env
@@ -1601,6 +1663,47 @@ mod tests {
             choose(&unknown, &[], now()),
             Choice::Run(unknown[0].account.clone())
         );
+    }
+
+    /// Persona review 2026-11-09 (the stacker's trap): the owner's "Personal
+    /// Account" was a second sign-in of This Mac's. When one is out, so is
+    /// the other: failover must not switch to it, say "Switched to
+    /// Personal", and be refused again.
+    #[test]
+    fn a_second_sign_in_of_an_account_is_out_with_it() {
+        let row = |id: &str, org: Option<&str>, plan: Option<&str>| {
+            (
+                id.to_string(),
+                org.map(str::to_string),
+                plan.map(str::to_string),
+            )
+        };
+        let rows = [
+            row("default", Some("claude-org:o1"), Some("Max")),
+            row("a1", Some("claude-org:o1"), None),
+            row("a2", Some("claude-org:o2"), None),
+            row("a3", Some("claude-org:o1"), None),
+        ];
+        assert_eq!(twins_in(&rows, "default"), vec!["a1", "a3"]);
+        assert_eq!(twins_in(&rows, "a1"), vec!["default", "a3"]);
+        assert!(twins_in(&rows, "a2").is_empty());
+        assert!(twins_in(&rows, "gone").is_empty());
+        // Seats of one Team organization are separate people's limits.
+        let team = [
+            row("default", Some("claude-org:t"), Some("Team")),
+            row("a1", Some("claude-org:t"), Some("Team")),
+        ];
+        assert!(twins_in(&team, "default").is_empty());
+        // Nothing recorded: never guessed.
+        let unknown = [row("default", None, None), row("a1", None, None)];
+        assert!(twins_in(&unknown, "default").is_empty());
+
+        // And with the twin marked too, failover has nowhere to go.
+        let list = [
+            cand("default", "This Mac", true, out_until(now() + H)),
+            cand("a1", "Personal", true, out_until(now() + H)),
+        ];
+        assert!(!can_switch(&list, &["default".to_string()], now()));
     }
 
     #[test]

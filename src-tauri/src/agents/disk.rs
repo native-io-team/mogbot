@@ -354,7 +354,7 @@ pub fn chief_line(c: Crossing, free: u64) -> String {
             gb(free)
         ),
         Crossing::Floor => format!(
-            "This Mac is nearly out of disk space: {} free. Agents now ask before installing packages or cloning. Settings → Agents shows the largest agent folders, with Free up space.",
+            "This Mac is nearly out of disk space: {} free. Agents now ask before installing packages or cloning. Settings → Agents shows the largest agent folders.",
             gb(free)
         ),
     }
@@ -378,10 +378,10 @@ fn check(app: &AppHandle) {
         return;
     };
     let line = chief_line(crossing, free);
-    let _ = super::runner::record(
-        app,
-        super::runner::new_message(&chief.id, store::MessageKind::Note, line.clone()),
-    );
+    let mut note = super::runner::new_message(&chief.id, store::MessageKind::Note, line.clone());
+    // Its fix as a button: Settings → Agents → Disk space.
+    note.fix = Some(store::NoteFix::Disk);
+    let _ = super::runner::record(app, note);
     if crossing == Crossing::Floor {
         super::notify::alert_user(app, &chief.id, &line);
     }

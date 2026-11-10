@@ -165,7 +165,7 @@ export function McpModal({
         // Missing CLI is a user-environment state, not a bug (issue #594).
         logger.warn('Failed to add MCP server: agent CLI not installed', { error: message });
         setAddError(
-          `${agentDisplayName} doesn't appear to be installed on this computer, so its MCP servers can't be managed. Install ${agentDisplayName} first, then try again.`
+          `${agentDisplayName} doesn't appear to be installed on this Mac, so its MCP servers can't be managed. Install ${agentDisplayName} first, then try again.`
         );
       } else if (isMcpInvalidInputError(err)) {
         // The backend's own input-shape validation (OpenCode config path) —

@@ -35,6 +35,65 @@ pub async fn agents_usage_overview(
     Ok(agents::inventory::read().await)
 }
 
+/// The user answered "This Mac's Claude Code is now signed in as …" ("Add
+/// it" or "Not now"): it isn't said again.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_usage_sign_in_seen(app: AppHandle, key: String) -> Result<(), CommandError> {
+    tokio::task::spawn_blocking(move || usage_plan::sign_in_told(&key))
+        .await
+        .map_err(agents::err_other)?;
+    changed(&app);
+    Ok(())
+}
+
+/// What a just-signed-in account turned out to be.
+#[derive(Debug, Clone, serde::Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct AccountCheck {
+    /// The id of an account earlier in the list that this one is the same
+    /// account as, by the engines' own records (`inventory::same_as`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub same_as: Option<String>,
+}
+
+/// The twin of `id` among an inventory's accounts, by its `same_as` name.
+pub fn twin_of(inv: &Inventory, engine: agents::engine::Engine, id: &str) -> AccountCheck {
+    let of = |a: &&agents::inventory::AccountLine| a.engine == engine;
+    let same_as = inv
+        .accounts
+        .iter()
+        .filter(of)
+        .find(|a| a.id == id)
+        .and_then(|line| line.same_as.as_ref())
+        .and_then(|name| {
+            inv.accounts
+                .iter()
+                .filter(of)
+                .find(|a| &a.name == name && a.id != id)
+                .map(|a| a.id.clone())
+        });
+    AccountCheck { same_as }
+}
+
+/// Right after an account is signed in: read it once, and say whether it's
+/// an account already in the list, so a duplicate is said at once rather
+/// than found later in Usage.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_usage_check_account(
+    app: AppHandle,
+    engine: String,
+    id: String,
+) -> Result<AccountCheck, CommandError> {
+    let engine = agents::engine::Engine::parse(&engine)?;
+    if agents::usage_read::check_one(engine, &id).await {
+        let _ = app.emit(runner::EVENT_QUOTA, ());
+    }
+    let inv = agents::inventory::read().await;
+    Ok(twin_of(&inv, engine, &id))
+}
+
 /// The user's own choice, in Settings: no card (the card is for an agent
 /// asking).
 #[tauri::command]

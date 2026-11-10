@@ -121,8 +121,9 @@ const OPS_CHAT = [
 
 const DISK_LINE = msg(
   'note',
-  'This Mac is nearly out of disk space: 3.2 GB free. Agents now ask before installing packages or cloning. Settings → Agents shows the largest agent folders, with Free up space.',
-  2
+  'This Mac is nearly out of disk space: 3.2 GB free. Agents now ask before installing packages or cloning. Settings → Agents shows the largest agent folders.',
+  2,
+  { fix: 'disk' }
 );
 
 /** `agents/chrome_health.rs`: Claude in Chrome answered no browser, Your Chrome isn't set up. */
@@ -296,10 +297,10 @@ export const agentsProbeScenarios: Scenario[] = [
     id: 'agents-probe-disk-line',
     title: 'Agents — the disk-low line in the Chief’s chat',
     looksRightWhen:
-      'The Chief’s chat ends on one quiet line, “This Mac is nearly out of disk space: 3.2 GB free…”, wrapping inside the column, not a card and not red.',
+      'The Chief’s chat ends on one quiet line, “This Mac is nearly out of disk space: 3.2 GB free…”, wrapping inside the column, not a card and not red, ending “· Free up space” as a link-style button that opens Settings → Agents at Disk space.',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="chief"]' }],
-    requires: '.agent-chat__header',
+    requires: '[data-fix="disk"]',
     commands: { agents_overview: overview([...TEAM, OPS]), agents_messages: linesChat },
   },
   {
@@ -420,7 +421,7 @@ export const agentsProbeScenarios: Scenario[] = [
         color: 'green',
         instructions: 'Remind the user to water the plants.',
         routines: [
-          { when: 'every day at 8am', note: 'Check the forecast', readsAs: 'every day at 08:00' },
+          { when: 'every day at 8am', note: 'Check the forecast', readsAs: 'every day at 8:00 AM' },
           {
             when: 'whenever it is dry',
             note: 'Remind me to water the plants',

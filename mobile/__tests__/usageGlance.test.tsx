@@ -91,7 +91,7 @@ const inventory = (lines: UsageAccountLine[], runOut = false): UsageInventory =>
 });
 
 const colorOf = (text: string | RegExp) =>
-  StyleSheet.flatten(screen.getByText(text).props.style)?.color as string | undefined;
+  (StyleSheet.flatten((screen.getByText(text).props as { style?: object }).style) as { color?: string } | undefined)?.color;
 
 describe('usage at a glance, on the phone', () => {
   it('the Agents list line answers as the desk sidebar does, and opens Usage', async () => {
@@ -100,12 +100,30 @@ describe('usage at a glance, on the phone', () => {
     });
     const onPress = jest.fn();
     await render(<GlanceRow glance={glance} onPress={onPress} />);
-    expect(screen.getByText('Plenty of room')).toBeTruthy();
-    expect(screen.getByText(/^2 accounts · resets /)).toBeTruthy();
-    // Never the old "Claude usage 41% · resets Thu".
-    expect(screen.queryByText(/usage \d+%/)).toBeNull();
-    fireEvent.press(screen.getByRole('button'));
+    // What's left and of what, then when it refills: words anyone reads.
+    expect(screen.getByText(/70% left this week/)).toBeTruthy();
+    expect(screen.getByText(/^Refills .* · 2 accounts$/)).toBeTruthy();
+    expect(screen.queryByText('Plenty of room')).toBeNull();
+    await fireEvent.press(screen.getByRole('button'));
     expect(onPress).toHaveBeenCalled();
+  });
+
+  it('an account signed in twice draws no segment and says so in one line', async () => {
+    const glance = usageGlance(
+      [mac, work],
+      inventory([line('default', 30), line('w', 30, { sameAs: 'This Mac' })]),
+      { now: NOW }
+    );
+    expect(glance.meterKeys).toHaveLength(1);
+    await render(<GlanceRow glance={glance} onPress={() => {}} />);
+    // One real account: no "1 account" beside a meter that shows two.
+    expect(screen.queryByText(/accounts?$/)).toBeNull();
+    await render(<GlanceCard glance={glance} />);
+    expect(
+      screen.getByText(
+        'Work is the same Claude account as Claude Code account — adds no extra room'
+      )
+    ).toBeTruthy();
   });
 
   it('names every account in full, never "This Mac", each with what it has left', async () => {
@@ -148,6 +166,7 @@ describe('usage at a glance, on the phone', () => {
       { now: NOW }
     );
     await render(<KeyCard k={paced.keys[0]} />);
-    expect(amber).not.toContain(colorOf(/^At this pace it runs out /));
+    expect(amber).not.toContain(colorOf(/^Ahead of pace — at this rate it runs out /));
+    expect(amber).not.toContain(colorOf(/^Estimate from /));
   });
 });

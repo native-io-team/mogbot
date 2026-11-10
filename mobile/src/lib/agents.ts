@@ -20,12 +20,18 @@ import {
   apiPrice,
   keyStateOf,
   needsYouCount,
-  resetPhrase,
   secretTitle,
   tokenCount,
   workingRowLine,
 } from '@shipstudio/companion-protocol';
-import { crossoverOutcome, previewText, stepInOutcome } from '@shipstudio/companion-protocol';
+import {
+  formatClock as clockOf,
+  crossoverOutcome,
+  failureLine as sharedFailureLine,
+  failurePill,
+  previewText,
+  stepInOutcome,
+} from '@shipstudio/companion-protocol';
 import { drivenLine } from './bars';
 import { diffLineKind } from './diff';
 import { ENGINE_DEFAULT } from './newAgentDefaults';
@@ -45,8 +51,6 @@ export const needsYou = (agent: Agent) =>
 /** Its last turn failed, and nothing has been said since. */
 export const failedTurn = (agent: Agent): Failure | null =>
   agent.failure && agent.status.state === 'idle' ? agent.failure : null;
-
-export const needsAttention = (agent: Agent) => needsYou(agent) || failedTurn(agent) !== null;
 
 /** Stopped by a usage limit: paused until it resets, not waiting on you. */
 export const usageLimited = (agent: Agent) =>
@@ -70,19 +74,11 @@ export function agentKeyState(
 }
 
 /**
- * A failed turn in a line. `engine`: what the agent runs on ("Codex"), so a
- * Codex agent is never said to be signed out of Claude Code.
+ * A failed turn in a line, as the desk says it (`failures.ts`): "Out of
+ * usage until 3:00 PM", "Codex is signed out", "<reason> · didn't finish".
  */
 export function failureLine(failure: Failure, preview: string | null, engine?: string): string {
-  if (failure.kind === 'usage_limit') {
-    return failure.resetsAt
-      ? `Out of usage until ${resetPhrase(failure.resetsAt)}`
-      : 'Out of usage';
-  }
-  if (failure.kind === 'signed_out') return `${engine ?? 'Its engine'} is signed out`;
-  if (failure.kind === 'interrupted') return 'Interrupted · Continue to pick it up';
-  const clause = (preview ?? '').split(/(?<=[.!?:])\s/)[0].replace(/[.:]$/, '');
-  return clause ? `Didn’t finish: ${clause}` : 'Didn’t finish';
+  return sharedFailureLine(failure, preview, engine ?? 'Its engine');
 }
 
 /**
@@ -103,21 +99,7 @@ export function rowPill(
   }
   const failure = state === 'failed' || state === 'limited' ? failedTurn(agent) : null;
   if (!failure) return null;
-  if (failure.kind === 'usage_limit') {
-    return {
-      tone: 'out',
-      label: 'Out of usage',
-      rest: failure.resetsAt ? `until ${resetPhrase(failure.resetsAt)}` : '',
-    };
-  }
-  if (failure.kind === 'signed_out') {
-    return { tone: 'failed', label: 'Signed out', rest: engineName(agent) };
-  }
-  if (failure.kind === 'interrupted') {
-    return { tone: 'failed', label: 'Interrupted', rest: 'Continue to pick it up' };
-  }
-  const clause = (previewText(agent.preview) ?? '').split(/(?<=[.!?:])\s/)[0].replace(/[.:]$/, '');
-  return { tone: 'failed', label: 'Didn’t finish', rest: clause };
+  return failurePill(failure, previewText(agent.preview), engineName(agent));
 }
 
 /**
@@ -330,9 +312,8 @@ export function usageLine(t: UsageTotals, onPlan = false): string {
     .join(' · ');
 }
 
-export function formatClock(ts: number): string {
-  return new Date(ts).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
-}
+/** "9:00 AM" / "09:00", as the Mac shows times (companion-protocol `clock`). */
+export const formatClock = (ts: number): string => clockOf(ts);
 
 /**
  * A project's task, named by what it was asked: the first line of its
@@ -660,6 +641,9 @@ export function askingLine(
   if (!diff && lines[0] && !json) return lines[0];
   const edit = /^do you want to make this edit to (.+?)\?*$/i.exec(approval.title.trim());
   if (edit) return `Wants to edit ${edit[1]}`;
+  // A newer Mac's title says it plainly ("Edit Hero.tsx?"): the row says who wants it.
+  const plain = /^(Edit|Create) (.+?)\?$/.exec(approval.title.trim());
+  if (plain) return `Wants to ${plain[1].toLowerCase()} ${plain[2]}`;
   return approval.title;
 }
 
@@ -669,7 +653,7 @@ type Chats = Record<string, { messages: AgentMessage[] } | undefined>;
  * "2 need you · 3 working", over the agents shown on Home. Needs-you is the
  * one number every surface shows (`needsYouCount`, companion-protocol's
  * attention.ts): the quick action, and the desk's sidebar, review bar and
- * Dock badge. The Needs you tab's badge counts its own rows instead
+ * Dock badge. The Catch up tab's badge counts its own rows instead
  * (`feedItems`), cards rather than agents, so it matches its list. It once counted only what
  * the saved chats showed answerable here, and said 14 beside Home's 13.
  */

@@ -37,7 +37,7 @@ fn a_draft_is_read_and_every_field_checked() {
     // The empty note is dropped; the unreadable time is kept, marked, never guessed.
     assert_eq!(d.routines.len(), 2);
     let brief = &d.routines[0];
-    assert_eq!(brief.reads_as.as_deref(), Some("every weekday at 08:00"));
+    assert_eq!(brief.reads_as.as_deref(), Some("every weekday at 8:00 AM"));
     assert!(brief.problem.is_none());
     assert_eq!(brief.then.len(), 1);
     assert!(brief.then[0].ask_first);

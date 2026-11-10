@@ -640,3 +640,31 @@ fn a_heredoc_body_is_data_and_a_script_lists_its_commands() {
         "Write notes.txt"
     );
 }
+
+#[test]
+fn an_admins_resume_wakes_only_what_an_admin_paused() {
+    let check = |id: &str, paused: bool, import: bool, by_admin: bool| {
+        let mut v = json!({ "id": id, "note": "x", "nextAt": 0, "createdAt": 0, "paused": paused });
+        if import {
+            v["pausedOnImport"] = json!(true);
+        }
+        if by_admin {
+            v[PAUSED_BY_ADMIN] = json!(true);
+        }
+        serde_json::from_value::<super::super::schedule::CheckIn>(v).unwrap()
+    };
+    let before = vec![
+        check("running", false, false, false),
+        check("user-paused", true, false, false),
+        check("import-paused", true, true, false),
+    ];
+    // Pause switches only the running one, so only it is the admin's.
+    assert_eq!(admin_switches(&before, true), vec!["running".to_string()]);
+    let after = vec![
+        check("running", true, false, true),
+        check("user-paused", true, false, false),
+        check("import-paused", true, true, false),
+    ];
+    // Resume never wakes an imported routine the user hasn't reviewed.
+    assert_eq!(admin_switches(&after, false), vec!["running".to_string()]);
+}

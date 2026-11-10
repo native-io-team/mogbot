@@ -286,19 +286,24 @@ pub fn clear_claude_token(account_id: &str) {
 /// rate limits, and server errors all return `false`, so a transient blip never
 /// blocks a real login (we'd rather store a token and let normal use surface a
 /// problem than reject a good login offline).
-fn claude_token_is_rejected(token: &str) -> bool {
+///
+/// Also answers the organization the token is for, when the answer named it
+/// (`anthropic-organization-id`, `usage_read::ORG_HEADER`), so a second
+/// sign-in of an account already here is known as one at once, not only at
+/// its first usage read.
+fn claude_token_check(token: &str) -> (bool, Option<String>) {
     let Ok(rt) = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
     else {
-        return false;
+        return (false, None);
     };
     rt.block_on(async {
         let Ok(client) = reqwest::Client::builder()
             .timeout(std::time::Duration::from_secs(10))
             .build()
         else {
-            return false;
+            return (false, None);
         };
         let body = serde_json::json!({
             "model": "claude-haiku-4-5-20251001",
@@ -315,8 +320,17 @@ fn claude_token_is_rejected(token: &str) -> bool {
             .send()
             .await
         {
-            Ok(resp) => resp.status() == reqwest::StatusCode::UNAUTHORIZED,
-            Err(_) => false,
+            Ok(resp) => {
+                let org = resp
+                    .headers()
+                    .get(crate::agents::usage_read::ORG_HEADER)
+                    .and_then(|v| v.to_str().ok())
+                    .map(str::trim)
+                    .filter(|v| !v.is_empty())
+                    .map(str::to_string);
+                (resp.status() == reqwest::StatusCode::UNAUTHORIZED, org)
+            }
+            Err(_) => (false, None),
         }
     })
 }
@@ -340,7 +354,7 @@ fn unix_now() -> u64 {
 /// inject; the terminal is then free to authenticate interactively.
 ///
 /// Tokens the API rejected at connect time are never persisted in the first
-/// place (see `claude_token_is_rejected` in `connect_claude_account`), so
+/// place (see `claude_token_check` in `connect_claude_account`), so
 /// "no token stored" is the stored rejection state and this helper only needs
 /// the expiry. No expiry recorded (older connect) → inject, mirroring
 /// `resolve_claude_identity`'s benefit-of-the-doubt for pre-expiry connects.
@@ -1461,7 +1475,8 @@ pub fn claude_connect_start(
                 // rejects is the exact trap that made a workspace read
                 // "connected" on the dashboard while every agent call returned
                 // 401 — so a rejected token is dropped, not saved.
-                if claude_token_is_rejected(&token) {
+                let (rejected, org) = claude_token_check(&token);
+                if rejected {
                     tracing::warn!(
                         account_id = %account_id,
                         "captured Claude token was rejected by the API (401); not storing"
@@ -1477,6 +1492,13 @@ pub fn claude_connect_start(
 
                 if let Err(e) = store_claude_token(&account_id, &token, email.as_deref()) {
                     tracing::warn!("failed to store captured Claude token: {e}");
+                } else if let Some(org) = org {
+                    // After `store_claude_token`, which forgets the old one.
+                    crate::agents::usage_plan::set_org(
+                        crate::agents::engine::Engine::Claude,
+                        &account_id,
+                        &org,
+                    );
                 }
                 let _ = app.emit(
                     "claude-connect-captured",

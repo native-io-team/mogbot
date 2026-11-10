@@ -543,6 +543,8 @@ export function createMockServer(opts: MockOptions = {}) {
       ? (JSON.parse(readFileSync(opts.devicesFile, 'utf8')) as [string, Entry][])
       : []
   );
+  /** `/dev/probe?do=revoke`: this phone removed on the desk, in memory only. */
+  let probeRevoked = false;
   const saveDevices = () => {
     if (!opts.devicesFile) return;
     // `--http` never made the certificate folder this lives in.
@@ -1124,7 +1126,7 @@ export function createMockServer(opts: MockOptions = {}) {
         text: '',
         approval: {
           requestId: 'req_prompt',
-          title: 'Do you want to make this edit to Hero.tsx?',
+          title: 'Edit Hero.tsx?',
           detail:
             '@@ -18,3 +18,3 @@\n-      <section className="pt-24 pb-20">\n+      <section className="hero">\n       <h1>Ship faster</h1>',
           status: 'pending',
@@ -2413,7 +2415,7 @@ export function createMockServer(opts: MockOptions = {}) {
         kind: 'user',
         text,
         clientId,
-        ...(typeof p.conversation === "string" ? { conversation: p.conversation } : {}),
+        ...(typeof p.conversation === 'string' ? { conversation: p.conversation } : {}),
         ...(staged.length
           ? { attachments: staged.map((b) => attach(agentId, id, b.name, b.mime, b.bytes)) }
           : {}),
@@ -3215,7 +3217,12 @@ export function createMockServer(opts: MockOptions = {}) {
     // As the router does: `on` and `at` (0 to 1439) required.
     'agents.setMorningBrief': (p) => {
       const at = p.at as unknown;
-      if (typeof p.on !== 'boolean' || !Number.isInteger(at) || (at as number) < 0 || (at as number) >= 1440) {
+      if (
+        typeof p.on !== 'boolean' ||
+        !Number.isInteger(at) ||
+        (at as number) < 0 ||
+        (at as number) >= 1440
+      ) {
         return fail({
           type: 'Protocol',
           code: 'bad_params',
@@ -3897,7 +3904,7 @@ export function createMockServer(opts: MockOptions = {}) {
         if (frame.t !== 'hello') return ws.close();
         const entry = [...devices.values()].find((d) => d.token === frame.token);
         if (!entry) return refuse('unauthorized', realRefusal('unauthorized'));
-        if (entry.revoked) return refuse('revoked', realRefusal('revoked'));
+        if (entry.revoked || probeRevoked) return refuse('revoked', realRefusal('revoked'));
         const n = { version: proven };
         conn = {
           ws,
@@ -4086,6 +4093,18 @@ export function createMockServer(opts: MockOptions = {}) {
           setStatus('stale', 'working', 'Deploying…');
         }
         res.end('answered on the desk');
+        return;
+      }
+      if (q.get('do') === 'revoke') {
+        // Removed on the desk (Settings → Phone → Remove): every phone is
+        // refused from now on. Kept in memory only, so the next mock (the
+        // next theme) still knows the pairing.
+        probeRevoked = true;
+        for (const c of conns) {
+          send(c, { t: 'refused', reason: 'revoked', message: realRefusal('revoked') });
+          c.ws.close();
+        }
+        res.end('revoked on the desk');
         return;
       }
       if (q.get('do') === 'delete') {
@@ -4622,7 +4641,7 @@ function seedMessages(a: Agent, now: number): AgentMessage[] {
             requestId: 'req_ops_push',
             title: 'Run a command',
             detail: 'git push origin release',
-        risk: 'high',
+            risk: 'high',
             summary: 'Push code to the project’s online copy — so tonight’s release can deploy',
             status: 'pending' as const,
             tool: 'Bash',

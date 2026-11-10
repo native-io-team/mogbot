@@ -368,6 +368,8 @@ interface AgentChatProps extends AgentActions {
   onSetUpEngine: () => void;
   /** The expired-login remedy on an error line. */
   onSignIn: () => void;
+  /** An error line's remedy when its engine isn't on this Mac: install it. */
+  onInstallEngine?: () => void;
   onImport: () => void;
   /** The Chief's phone offer, once the first result is in: open the Phone panel. */
   onSetUpPhone?: () => void;
@@ -426,6 +428,7 @@ export const AgentChat = memo(function AgentChat({
   onOpenAgent,
   onSetUpEngine,
   onSignIn,
+  onInstallEngine,
   onImport,
   onSetUpPhone,
   onEscape,
@@ -443,6 +446,9 @@ export const AgentChat = memo(function AgentChat({
   // under its own key. Unknown for a moment on first open, while the Mac
   // says which one the user was last in.
   const viewing = useAgentsSelector((s) => s.viewing[agent.id]);
+  const severalConversations = useAgentsSelector(
+    (s) => (s.conversations[agent.id]?.items.length ?? 0) > 1
+  );
   useEffect(() => {
     void ensureViewing(agent.id);
   }, [agent.id]);
@@ -1372,7 +1378,9 @@ export const AgentChat = memo(function AgentChat({
   // Identity only: who this is and what it's for. What it's doing is said
   // once in the sidebar row and once in the conversation (a bar, the working
   // line), never a third time up here.
-  const role = agent.role ? roleWithoutPath(agent.role) : '';
+  // With several conversations the title of the one on screen wins the room:
+  // the role is in the sidebar row already, and cut there it said nothing.
+  const role = agent.role && !severalConversations ? roleWithoutPath(agent.role) : '';
   const title = (
     <>
       <AgentKey
@@ -1515,6 +1523,7 @@ export const AgentChat = memo(function AgentChat({
                 agent={rowAgent}
                 engine={agent.engine}
                 onSignIn={onSignIn}
+                onInstall={onInstallEngine ?? onSetUpEngine}
                 onRetry={m.id === retryId ? retryLast : undefined}
                 onRetryAt={retryLater}
                 retryScheduled={Boolean(
@@ -1582,6 +1591,8 @@ export const AgentChat = memo(function AgentChat({
       rowsPaused,
       onAnswer,
       onSignIn,
+      onInstallEngine,
+      onSetUpEngine,
       retryId,
       retryLast,
       retryLater,

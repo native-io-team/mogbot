@@ -92,6 +92,16 @@ const REFUSED_LABEL: Record<RefusedReason, string> = {
 };
 
 /**
+ * The Mac let this phone go, or asks it to pair again: Pair again is the
+ * one fix (Tailscale wouldn't help). Not for an update, which pairing
+ * doesn't fix.
+ */
+export function needsPairing(link: AppState['link']): boolean {
+  if (link.kind !== 'refused') return false;
+  return link.reason !== 'update_app' && link.reason !== 'update_mac';
+}
+
+/**
  * What a screen with nothing to show says under the pill's words, by the
  * reason: "once it answers" only where it might (a refusal is final until
  * someone does something). `what` is what's missing ("Your agents").

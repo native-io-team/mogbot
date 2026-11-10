@@ -410,6 +410,37 @@ pub fn fresh_colorway<'a>(worn: impl IntoIterator<Item = &'a str>) -> String {
     best.0.to_string()
 }
 
+/// A colourway for a key with `icon` that no one on the team already wears
+/// with that icon: `preferred` when it's free, else the fewest-worn one that
+/// is, so two agents never look the same (two blue speakers). `preferred`
+/// when every colourway is taken with that icon.
+pub fn distinct_colorway<'a>(
+    preferred: &str,
+    icon: &str,
+    team: impl IntoIterator<Item = (&'a str, &'a str)> + Clone,
+) -> String {
+    let clash = |c: &str| team.clone().into_iter().any(|(w, i)| w == c && i == icon);
+    if !clash(preferred) {
+        return preferred.to_string();
+    }
+    let mut counts: Vec<(&str, usize)> = SPEC
+        .colorways
+        .iter()
+        .map(|c| (c.id.as_str(), 0))
+        .filter(|(id, _)| !clash(id))
+        .collect();
+    for (w, _) in team.clone() {
+        if let Some(entry) = counts.iter_mut().find(|(id, _)| *id == w) {
+            entry.1 += 1;
+        }
+    }
+    counts
+        .iter()
+        .min_by_key(|(_, n)| *n)
+        .map(|(id, _)| id.to_string())
+        .unwrap_or_else(|| preferred.to_string())
+}
+
 /// Gives every agent saved before keys a colourway (its colour's nearest),
 /// an icon (from its name and role) and a key (the first free letter of its
 /// name), the Chief first, then in team order; and keeps bound keys unique
@@ -417,15 +448,34 @@ pub fn fresh_colorway<'a>(worn: impl IntoIterator<Item = &'a str>) -> String {
 /// whether anything changed.
 pub fn fill(agents: &mut [Agent]) -> bool {
     let mut changed = false;
-    for a in agents.iter_mut() {
-        if !a.colorway.as_deref().is_some_and(is_colorway) {
-            a.colorway = Some(colorway_for_color(&a.color));
-            changed = true;
+    for i in 0..agents.len() {
+        let a = &agents[i];
+        let had_colorway = a.colorway.as_deref().is_some_and(is_colorway);
+        let had_icon = a.icon.as_deref().is_some_and(is_icon);
+        if had_colorway && had_icon {
+            continue;
         }
-        if !a.icon.as_deref().is_some_and(is_icon) {
-            a.icon = Some(icon_for(&a.name, &a.role, a.is_main));
-            changed = true;
-        }
+        let icon = if had_icon {
+            a.icon.clone().unwrap_or_default()
+        } else {
+            icon_for(&a.name, &a.role, a.is_main)
+        };
+        let colorway = if had_colorway {
+            a.colorway.clone().unwrap_or_default()
+        } else {
+            // Not one someone chose: one no one else wears with this icon.
+            let worn: Vec<(&str, &str)> = agents
+                .iter()
+                .enumerate()
+                .filter(|(j, _)| *j != i)
+                .filter_map(|(_, b)| Some((b.colorway.as_deref()?, b.icon.as_deref()?)))
+                .collect();
+            distinct_colorway(&colorway_for_color(&a.color), &icon, worn.iter().copied())
+        };
+        let a = &mut agents[i];
+        a.colorway = Some(colorway);
+        a.icon = Some(icon);
+        changed = true;
     }
     let mut order: Vec<usize> = (0..agents.len()).collect();
     order.sort_by_key(|i| !agents[*i].is_main);

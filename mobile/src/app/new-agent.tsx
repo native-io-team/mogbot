@@ -527,12 +527,12 @@ function DescribeFirst({
             busy={drafting}
             disabled={!ready}
             onPress={onDraft}
-            accessibilityHint={`${macName} drafts its name, briefing and routines for you to check`}
+            accessibilityHint={`${macName} drafts its name, what it does and when it runs, for you to check`}
           />
           <T variant="caption" color={colors.textMuted}>
             {drafting
-              ? 'Writing its name, briefing and routines. This takes a little while.'
-              : 'Its name, briefing and routines, for you to check before anything is made.'}
+              ? 'Writing its name, what it does and when it runs. This takes a little while.'
+              : 'Its name, what it does and when it runs, for you to check before anything is made.'}
           </T>
         </View>
         {error && (

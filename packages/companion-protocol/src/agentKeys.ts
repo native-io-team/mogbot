@@ -187,6 +187,24 @@ export function freshColorway(worn: Iterable<string>): string {
   return best;
 }
 
+/**
+ * A colourway for a key with `icon` that no one on the team wears with that
+ * icon (`keys::distinct_colorway`): `preferred` when it's free, else the
+ * fewest-worn free one; `preferred` when every colourway is taken.
+ */
+export function distinctColorway(
+  preferred: string,
+  icon: string,
+  team: readonly (readonly [colorway: string, icon: string])[]
+): string {
+  const clash = (c: string) => team.some(([w, i]) => w === c && i === icon);
+  if (!clash(preferred)) return preferred;
+  const free = COLORWAY_IDS.filter((id) => !clash(id));
+  if (free.length === 0) return preferred;
+  const worn = (id: string) => team.filter(([w]) => w === id).length;
+  return free.reduce((best, id) => (worn(id) < worn(best) ? id : best), free[0]);
+}
+
 /** What an agent is drawn as. */
 export interface AgentKeyLook {
   colorway: string;
@@ -249,12 +267,39 @@ export const KEY_GEOMETRY = {
   depth: 8,
   icon: 40,
   stroke: 2,
-  sublegend: { right: 8, bottom: 5, size: 12 },
-  pips: { bottom: 6, width: 9, height: 4, gap: 4 },
-  working: { down: 6, depth: 2, darken: 0.08 },
-  live: { darken: 0.2, darkenLight: 0.35, legend: '#FFF6DC' },
-  needsOk: { up: 5, depth: 13, pulseMs: 1600 },
+  /** The bound key, clear of the face's rounded corner: as far from the right as the bottom, optically. */
+  sublegend: { right: 9, bottom: 8, size: 11 },
+  pips: { bottom: 6, width: 8, height: 3.5, gap: 4 },
+  /** Pressed all the way: the depth left under it (the site's working key). */
+  working: { floor: 1.5, breatheMs: 2400 },
+  /** Lit (working, live): the legend's warm white. */
+  live: { legend: '#FFE9B4' },
+  /** The loudest state: proud, the legend amber-gold, pulsing; never below `pulseLow`. */
+  needsOk: { up: 5, depth: 13, pulseMs: 1600, pulseLow: 0.6, legend: '#FFC94A', deeper: 0.14 },
+  /** Paused: the cap drained of colour, faded, sunk halfway. */
+  paused: { saturate: 0.12, legendOpacity: 0.55 },
 } as const;
+
+/**
+ * How far a lit face deepens toward its own depth shade (the site's
+ * `--lit-mix`): more on a pale face so the lit legend reads.
+ */
+export const KEY_LIT_MIX: Readonly<Record<string, number>> = {
+  blue: 0.42,
+  orange: 0.3,
+  putty: 0.62,
+  teal: 0.48,
+  graphite: 0.3,
+  mustard: 0.48,
+  pink: 0.58,
+  sage: 0.48,
+  brick: 0.3,
+  plum: 0.3,
+  navy: 0.3,
+  forest: 0.3,
+  sky: 0.55,
+  lilac: 0.58,
+};
 
 /** At or below this size a key drops its sublegend and pips and thickens its legend. */
 export const KEY_SMALL_MAX = 36;

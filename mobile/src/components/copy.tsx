@@ -100,6 +100,8 @@ export interface CopyProps {
   warning?: string;
   /** What changed ("2 files · +3 −1"), said once, in the card's note. */
   stats?: ReactNode;
+  /** Keep / Discard as compact buttons (a Catch up row); full size on a card. */
+  size?: 'default' | 'compact';
   onError: (text: string) => void;
 }
 
@@ -127,7 +129,7 @@ export function useCopyParts(props: CopyProps | null): CopyParts | null {
   // Sized for the longer Keep label, so the pair never cuts it at a large text size.
   const share = useActionShare(['Discard', 'Keep there too']);
   if (!props || !served) return null;
-  const { agent, copy, leftOut, warning, stats, onError } = props;
+  const { agent, copy, leftOut, warning, stats, size, onError } = props;
   const working = agent.status.state !== 'idle';
   // Driven by hand on the Mac: the copy may be mid-edit in the terminal, and
   // the Mac refuses Keep and Discard until it's handed back.
@@ -237,18 +239,20 @@ export function useCopyParts(props: CopyProps | null): CopyParts | null {
         <Button
           title="Discard"
           variant="outline"
+          size={size}
           busy={busy === 'discard'}
           disabled={off}
           onPress={discard}
-          style={share}
+          style={size === 'compact' ? undefined : share}
         />
         <Button
           title={into ? 'Keep there too' : 'Keep changes'}
           variant="answer"
+          size={size}
           busy={busy === 'keep'}
           disabled={off}
           onPress={() => void keep(into)}
-          style={share}
+          style={size === 'compact' ? undefined : share}
         />
       </>
     ),

@@ -3032,14 +3032,7 @@ fn outside_simple(words: Vec<Word>, depth: u8) -> bool {
     };
     let args = &texts[1..];
     match name {
-        "curl" | "wget" => args.iter().any(|a| {
-            a.find("://").is_some_and(|i| {
-                let start = a[..i]
-                    .rfind(|c: char| !c.is_ascii_alphabetic())
-                    .map_or(0, |j| j + 1);
-                remote_url(&a[start..])
-            })
-        }),
+        "curl" | "wget" => curl_reads_outside(args),
         "git" => args.contains(&"clone") && args.iter().any(|a| remote_url(a) || a.contains('@')),
         "gh" => match args {
             ["issue", "view", ..] => true,
@@ -3073,6 +3066,42 @@ fn outside_simple(words: Vec<Word>, depth: u8) -> bool {
         "eval" => outside_line(&args.join(" "), depth + 1),
         _ => false,
     }
+}
+
+/// Whether a `curl` / `wget` with these arguments reads from off this Mac.
+/// A full address says where; without one (`curl evil.example/x`,
+/// `curl "$URL"`, `curl -K config`, `wget -i list`) the target can't be
+/// read off the line, so only one that names this Mac is local. Flags alone
+/// (`curl --version`) read nothing.
+fn curl_reads_outside(args: &[&str]) -> bool {
+    let full: Vec<&str> = args
+        .iter()
+        .filter_map(|a| {
+            a.find("://").map(|i| {
+                let start = a[..i]
+                    .rfind(|c: char| !c.is_ascii_alphabetic())
+                    .map_or(0, |j| j + 1);
+                &a[start..]
+            })
+        })
+        .collect();
+    if !full.is_empty() {
+        return full.iter().any(|u| remote_url(u));
+    }
+    if args.iter().all(|a| a.starts_with('-')) {
+        return false;
+    }
+    let host_of = |a: &str| -> String {
+        let h = a.split(['/', '?', '#']).next().unwrap_or("");
+        match h.rsplit_once(':') {
+            Some((host, port)) if port.chars().all(|c| c.is_ascii_digit()) => host.to_string(),
+            _ => h.to_string(),
+        }
+    };
+    !args.iter().any(|a| {
+        let h = host_of(a);
+        !h.is_empty() && local_host(&h)
+    })
 }
 
 /// Loop words, assignments and wrappers in front of the program.

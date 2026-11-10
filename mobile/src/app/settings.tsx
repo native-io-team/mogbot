@@ -240,7 +240,7 @@ export default function Settings() {
         }
       >
         <Row
-          label="Alerts"
+          label="On this phone"
           value={
             alerts === Notifications.PermissionStatus.GRANTED
               ? 'On'

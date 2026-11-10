@@ -705,6 +705,13 @@ pub async fn spend_now(app: &AppHandle) -> Result<String, crate::errors::Command
         .ok()
         .and_then(|all| all.into_iter().find(|a| a.is_main))
         .ok_or_else(|| super::err_invalid("chief", "There's no Chief of Staff to start it."))?;
+    let busy = super::runner::is_working(&chief.id) || super::runner::queued(&chief.id);
+    if usage_plan::already_starting(&spare, &usage_plan::nudged(), busy) {
+        return Ok(format!(
+            "{} is already starting your spare-capacity list for this limit.",
+            chief.name
+        ));
+    }
     // Recorded, so "Use it all" doesn't wake it a second time for this window.
     let _ = usage_plan::mark_nudged(usage_plan::spare_key(&spare));
     wake_for_spare(app, &inv, &chief, &spare, &waiting, true);
@@ -817,6 +824,7 @@ mod tests {
             }],
             routines: vec![],
             totals: crate::agents::compute::totals(&[], 0),
+            sign_in_changes: vec![],
             now: 0,
         }
     }

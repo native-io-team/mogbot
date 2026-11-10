@@ -1,6 +1,22 @@
 use super::*;
 use crate::agents::failure::Failure;
 
+/// docs/internal/failure-states.md: the pause is said once, with its fix.
+#[test]
+fn a_routine_that_paused_itself_says_so_once() {
+    let line = paused_words(
+        "Triage mentions",
+        "Paused after 3 runs in a row didn't finish: Claude Code is signed out.",
+    );
+    assert_eq!(
+        line,
+        "“Triage mentions” paused itself after 3 runs in a row didn't finish: Claude Code is signed out. Resume it from the schedule when it's fixed."
+    );
+    let line = paused_words("Inbox", "Paused after 5 checks in a row failed: boom");
+    assert!(line.contains("failed: boom. Resume"), "{line}");
+    assert_eq!(line.matches("aused").count(), 1, "{line}");
+}
+
 fn connection(
     service: &str,
     key: &str,
@@ -59,6 +75,71 @@ fn a_linear_routine_checks_through_our_own_linear_first() {
     assert!(why.contains("wasn't given it"), "{why}");
     let why = route_for("a1", &Source::LinearAssigned, &[], Some("{}"), None).unwrap_err();
     assert!(why.contains("isn't connected"), "{why}");
+}
+
+#[test]
+fn a_check_runs_on_the_agents_engine_when_it_can_seal_else_the_other() {
+    use Engine::{Claude, Codex};
+    let ours = Route::Ours {
+        server_key: "linear".into(),
+    };
+    let theirs = Route::ClaudeCode(watch_seal::Connector {
+        name: "linear".into(),
+        config: serde_json::json!({ "type": "http", "url": "https://mcp.linear.app/mcp" }),
+    });
+    let both = |_: Engine| Ready::Yes;
+    let only = |one: Engine| move |e: Engine| if e == one { Ready::Yes } else { Ready::No };
+    // The agent's own, when it's here.
+    assert_eq!(pick_engine(Codex, &ours, both), Ok(Codex));
+    assert_eq!(pick_engine(Claude, &ours, both), Ok(Claude));
+    // A Codex-only Mac: our own connection is checked on Codex.
+    assert_eq!(pick_engine(Claude, &ours, only(Codex)), Ok(Codex));
+    assert_eq!(pick_engine(Codex, &ours, only(Claude)), Ok(Claude));
+    // A server from Claude Code's own config: only Claude Code can seal it,
+    // whatever the agent runs on.
+    assert_eq!(pick_engine(Codex, &theirs, both), Ok(Claude));
+    let why = pick_engine(Codex, &theirs, only(Codex)).unwrap_err();
+    assert!(
+        why.contains("Connect it in Apps so Codex can check it"),
+        "{why}"
+    );
+    // A Codex too old for the seal is never used, and says so.
+    let old = |e: Engine| if e == Codex { Ready::TooOld } else { Ready::No };
+    let why = pick_engine(Codex, &ours, old).unwrap_err();
+    assert!(why.contains("Update Codex"), "{why}");
+    assert_eq!(
+        pick_engine(Codex, &ours, |e| if e == Codex {
+            Ready::TooOld
+        } else {
+            Ready::Yes
+        }),
+        Ok(Claude)
+    );
+    let why = pick_engine(Claude, &ours, |_| Ready::No).unwrap_err();
+    assert!(why.contains("neither is set up"), "{why}");
+}
+
+#[test]
+fn a_model_checks_outcome_names_the_engine_it_ran_on() {
+    let _serial = store::tests_lock();
+    let dir = tempfile::tempdir().unwrap();
+    store::set_root_for_tests(Some(dir.path().to_path_buf()));
+    let agent = new_agent();
+    let id = create_in(&agent.id, Source::LinearAssigned, 30, "Triage it", NOW)
+        .unwrap()
+        .check_in
+        .id;
+    let mut a = store::get(&agent.id).unwrap();
+    let found = Ok(Found {
+        engine: Some(Engine::Codex),
+        ..Found::window(vec![ev("a")])
+    });
+    let applied = apply_check(&mut a, &id, &found, None, NOW);
+    assert_eq!(applied.outcome.engine.as_deref(), Some("Codex"));
+    // A free check names none.
+    let applied = apply_check(&mut a, &id, &Ok(Found::default()), None, NOW + 30 * MIN);
+    assert_eq!(applied.outcome.engine, None);
+    store::set_root_for_tests(None);
 }
 
 #[test]
@@ -1041,7 +1122,7 @@ fn review_4_every_new_routine_leaves_a_chat_line() {
     c.watch.as_mut().unwrap().every_minutes = 30;
     assert_eq!(
         routine_line_text(&c),
-        "Set up a “When…” routine for when a new email from Dana: Triage it · checks every 30 min, each a short Claude Code call (at most 24 a day)"
+        "Set up a “When…” routine for when a new email from Dana: Triage it · checks every 30 min, each a short model call (at most 24 a day)"
     );
     let gh = watch_check_in(Source::GithubMentions);
     assert!(routine_line_text(&gh).ends_with("checks every 10 min, free"));

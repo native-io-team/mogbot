@@ -167,7 +167,7 @@
     {
       "path": "src/styles/components/text-button.css",
       "token": "--space-02",
-      "count": 2,
+      "count": 1,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
@@ -1381,6 +1381,12 @@
       "token": "--transition-slow",
       "count": 14,
       "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
+    },
+    {
+      "path": "src/styles/features/usage-view.css",
+      "token": "--font-size-24",
+      "count": 1,
+      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
       "path": "src/styles/features/visual-editor-classes.css",

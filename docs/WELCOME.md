@@ -32,38 +32,61 @@ and the occasional bug. In particular:
   needs re-installing (your agent can do it). Expo Go doesn't expire but needs
   a terminal open on the Mac.
 
-## Setting it up, in five steps
+## Setting it up
 
-Open this repo in **Claude Code** or **Codex** and say:
+**Never used Claude Code or Codex?** That's fine; you won't need to type
+any commands. Install the Claude desktop app from
+[claude.ai/download](https://claude.ai/download) and open its **Code** tab
+(or open the Codex app if you're on ChatGPT), sign in with the plan you
+already pay for, and paste this:
+
+> Download https://github.com/native-io-team/mogbot into a folder in my
+> home folder, then set it up on my Mac and phone. Follow docs/INSTALL.md.
+
+Already use one of them? Open this repo in it and say:
 
 > Set this up on my Mac and phone. Follow docs/INSTALL.md.
 
-Your agent builds the app ([INSTALL.md](INSTALL.md)) and stops whenever it
-needs you. Then the app itself takes over: one screen at a time, one big
-button each, and every check says **Done** or **Not done yet — here's what
-to do**. Quit part-way and it reopens where you stopped.
+Your agent builds the app ([INSTALL.md](INSTALL.md)), which takes 10 to 25
+minutes the first time, and stops whenever it needs you (your Mac
+password, a sign-in, a tap on your phone). When it asks you to approve a
+command, it's asking for permission to run it on your Mac: say yes to the
+setup steps it describes.
+
+Then the app itself takes over, in two short steps, one big button each.
+Every check says **Done** or **Not done yet — here's what to do**, and if
+you quit part-way it reopens where you stopped.
 
 1. **Welcome.** One line on what this is.
 2. **Your AI.** Pick **Claude Code** (Claude Pro or Max) or **Codex** (a paid
    ChatGPT plan); it installs, then you sign in in your browser. A screen
-   each.
-3. **How independent** your agents should be. Skip keeps the default.
-4. **Your phone** (optional, about ten minutes): Tailscale on this Mac,
-   Tailscale on your phone signed in to the **same account** (the screen
-   shows a code to scan for the App Store and ticks when it sees your
-   phone), the phone app, then scan the code and click Allow. The phone app
-   is Expo Go or built with Xcode for now; your setup agent installs it
-   (INSTALL.md, Step 13).
-5. **You're ready.** Bring your agents from Grok, ChatGPT or another
-   assistant (three short screens: Remote access on, the link in your
-   assistant, one message), or start fresh with your Chief of Staff.
+   each. "Claude Code" and "Codex" are just the names of the parts of Claude
+   and ChatGPT that can do work on a computer; you don't need to code.
+
+That's it: you land in a chat with your **Chief of Staff**. Tell it what's on
+your plate in plain words. Everything else is offered when it matters, and
+each can be skipped:
+
+- **Bring agents from another assistant** (Grok, ChatGPT…): one card under
+  the Chief's first message. No agents yet? Press **No thanks, start fresh**.
+- **Your phone**: offered once your first piece of work comes back, and any
+  time from **Get the phone app** at the bottom left. Ten minutes to an hour
+  (there's no App Store app yet):
+  Tailscale (a free app that lets your phone reach your Mac privately) on
+  both, signed in to the **same account**, the phone app, then scan a code.
+  The phone app is Expo Go or built with Xcode for now; your setup agent
+  installs it (INSTALL.md, Step 13).
+- **Another account**: offered the moment one runs out of usage.
+- **How much agents do on their own**: by default they do work on this Mac
+  and ask before anything leaves it (sending, spending, posting). Tell your
+  Chief "ask me less" or "ask me more", or see Settings → Independence.
 
 Optionally, later: let agents use your Chrome (the Claude in Chrome
 extension, same Claude account).
 
 Your team can be changed any time by asking the Chief: new agents, different
-instructions, routines, which engine one runs on. How independent your agents
-are is in Settings → Agents.
+instructions, routines (work that repeats on a schedule), which AI one runs
+on.
 
 ## Giving feedback
 

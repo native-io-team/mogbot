@@ -302,8 +302,12 @@ export interface ContextFill {
 }
 
 export interface Failure {
-  /** `interrupted`: cut off part-way and not picked up by itself; Continue carries on. */
-  kind: 'usage_limit' | 'signed_out' | 'interrupted' | 'other';
+  /**
+   * `interrupted`: cut off part-way and not picked up by itself; Continue
+   * carries on. `engine_missing`: its engine isn't on the Mac any more
+   * (older Macs never send it).
+   */
+  kind: 'usage_limit' | 'signed_out' | 'interrupted' | 'engine_missing' | 'other';
   resetsAt?: number;
 }
 
@@ -605,6 +609,8 @@ export interface AgentsOverview {
    * Mac from before it sends none, and then the phone never asks.
    */
   importChoice?: ImportChoice;
+  /** This Mac shows a 24-hour clock (`agents::clock`). Older Macs never send it. */
+  hour24?: boolean;
 }
 
 /** Mirrors `agents::import_choice::Choice`. */
@@ -971,6 +977,8 @@ export interface AgentReach {
     kept: string;
     needsSignIn: boolean;
     lastUsedAt?: number;
+    /** One of this Mac's own apps (macOS asks once; said under the list, not per row). */
+    macApp?: boolean;
   }[];
   /** Absent for an agent on Codex, which has no browser. */
   /**
@@ -1456,7 +1464,7 @@ export interface AgentMessage {
    * `user_chrome` is Settings → Agents → Your Chrome on the Mac. The phone
    * shows the note's text, which names where. Older Macs never send it.
    */
-  fix?: 'user_chrome';
+  fix?: 'user_chrome' | 'user_chrome_check' | 'disk';
   /**
    * Which of the agent's conversations it was said in (`conversationOf`).
    * Absent on lines from before there were several: the first one's.
@@ -2058,7 +2066,32 @@ export interface UsageInventory {
   routines: UsageRoutineLine[];
   /** Every account at once. Absent from Macs that predate it. */
   totals?: ComputeTotals;
+  /**
+   * This Mac's own sign-in became another account and the one it was isn't
+   * connected any more, until the user answers it. Absent when there is
+   * none, and from Macs that predate it.
+   */
+  signInChanges?: SignInChange[];
   now: number;
+}
+
+/** This Mac's own sign-in to an engine is now another account (`sameAccount.ts`). */
+export interface SignInChange {
+  engine: AgentEngine;
+  /** Answering it sends this back; it carries no account id. */
+  key: string;
+  /** When the new sign-in was first seen. */
+  at: number;
+  nowEmail?: string;
+  nowOrgName?: string;
+  /** Only when recorded while that account was the one signed in. */
+  beforeEmail?: string;
+  beforeOrgName?: string;
+  /** A weekly reset the previous account reported. */
+  beforeWeeklyReset?: number;
+  nowWeeklyReset?: number;
+  /** Nothing named the previous account: only its weekly reset, which moved. */
+  byReset: boolean;
 }
 
 export interface PasteImportAgent {
