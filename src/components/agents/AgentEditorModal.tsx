@@ -637,8 +637,8 @@ export function AgentEditorModal({
         />
       )}
       {editing ? (
-        <p className="agent-editor__hint">
-          What it remembers is kept separately, under Memory, and isn't changed here.
+        <p className="agent-editor__hint agent-editor__caption">
+          Its memory lives under Memory and isn&apos;t changed here.
         </p>
       ) : (
         onAskChief &&
