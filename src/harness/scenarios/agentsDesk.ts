@@ -136,7 +136,7 @@ export const agentsDeskScenarios: Scenario[] = [
     id: 'agents-desk-ran-on',
     title: 'Agents — which account and model ran a turn, and a step’s exact command',
     looksRightWhen:
-      'Acme Site’s chat. Beside the folded “Worked 6 min · 4 steps · edited 1 file” line, in quieter muted text: “Claude Code · sam@acme.com · claude-opus-4-6”. The line is open: four steps, each with a quiet disclosure under its label (“Show details” under the read and the edit, “Show exact command” under the two commands); under “Ran npm test” it is open, showing “npm test -- --watch=false” in a small recessed monospace box with Copy under it. At the end, a quiet “What it was told” link.',
+      'Acme Site’s chat. Beside the folded “Worked 6 min · 4 steps · edited 1 file” line, in quieter muted text: “Claude Code · sam@acme.com · Opus” (the model id only in its tooltip). The line is open: four steps, one line each, no link under any; each kept step ends in a small muted chevron after its words, and the step’s words open it. “Ran npm test” is open (its chevron turned down), showing “npm test -- --watch=false” in a small recessed monospace box with a Copy icon and word, not underlined. After the steps, a hairline at the steps’ text edge, then the footer in muted ink: “Edited pricing.css” and an underlined “What it was told”: neither reads as one more step.',
     requires: '.agent-work__exact-text',
     openSelector: AGENTS_TAB,
     steps: [
@@ -144,7 +144,7 @@ export const agentsDeskScenarios: Scenario[] = [
       openSteps,
       {
         click:
-          '[data-message-ids="desk-pricing"] .agent-work__step:nth-child(3) .agent-work__exact button',
+          '[data-message-ids="desk-pricing"] .agent-work__step:nth-child(3) .agent-work__exact-toggle',
       },
     ],
     commands: deskCommands,
@@ -153,7 +153,7 @@ export const agentsDeskScenarios: Scenario[] = [
     id: 'agents-desk-briefing',
     title: 'Agents — what a turn was told, read-only',
     looksRightWhen:
-      'A dialog titled “What it was told” with Copy all and a close button in its header. A muted line says when it was given, that the app wrote it on top of the agent’s own instructions, that it is read-only and secrets are blanked. Then folding sections: “Who it is” open with its text in a recessed box in the reading face, the body inset on the header’s edges; “How you talk”, “How much to do on your own”, “Secrets” (whose text shows [secret:STRIPE_KEY], never a value) and “Its instructions and memory” folded. Nothing is editable.',
+      'A dialog titled “What it was told” with Copy all and a close button in its header. A muted line says when it was given, that the app wrote it on top of the agent’s own instructions, that it is read-only and secrets are blanked. Then folding sections, each led by the app’s small chevron (never the browser’s black triangle), turned down when open: “Who it is” open with its text in a recessed box in the reading face, the body inset on the header’s edges; “How you talk”, “How much to do on your own”, “Secrets” (whose text shows [secret:STRIPE_KEY], never a value) and “Its instructions and memory” folded. Nothing is editable.',
     requires: '.agent-briefing__section',
     openSelector: AGENTS_TAB,
     steps: [openAcme, openSteps, { click: '.agent-work .text-button', text: 'What it was told' }],

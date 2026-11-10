@@ -976,13 +976,15 @@ steps has no line.
 
 For people who live in a terminal and want to see what ran:
 
-- **Ran on**: beside the folded line, "Claude Code · sam@acme.com ·
-  claude-opus-4-6". The engine and account are the ones the runner started
+- **Ran on**: beside the folded line, "Claude Code · sam@acme.com · Opus"
+  (the model in the Model menu's words, `modelWords`; the id as reported in
+  its tooltip). The engine and account are the ones the runner started
   the turn on (`work::on_ran_on`; the last try's, when a limit moved it).
   The model is only what the engine said: Claude Code's `system/init`
   event, Codex's `thread/start` result (`Step::Model`). Absent when it
   didn't say; nothing is inferred from the agent's settings.
-- **Show exact command**: under a step, the command line (or the tool and
+- **Exact command**: a kept step's own words open it (a chevron at their
+  trailing edge; no link per step), the command line (or the tool and
   its input) exactly as it ran. It is kept beside the timeline in
   `<home>/turn-detail/<message-id>.json`, never on the step (which carries
   only `hasExact`), so the status, the phone and notifications never see it.

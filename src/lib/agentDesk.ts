@@ -19,9 +19,26 @@ import {
   type TurnWork,
 } from './agents';
 
-/** "Claude Code · work@acme.com · claude-opus-4-6": only the parts the Mac recorded. */
-export function ranOnLine(work: Pick<TurnWork, 'engine' | 'account' | 'model'>): string | null {
-  const parts = [work.engine, work.account, work.model].filter(
+/**
+ * A model id as the engine reported it, in the Model menu's own words:
+ * "claude-opus-4-6" is "Opus" (the family the menu names beside Smartest).
+ * Anything else (Codex's models) is shown by its own name.
+ */
+export function modelWords(model: string): string {
+  const family = /(?:^|[-_.\s])(opus|sonnet|haiku)(?:$|[-_.\s\d])/i.exec(model)?.[1];
+  return family ? family[0].toUpperCase() + family.slice(1).toLowerCase() : model;
+}
+
+/**
+ * "Claude Code · work@acme.com · Opus": only the parts the Mac recorded, the
+ * model in plain words. `exact` keeps the model id as reported, for the tooltip.
+ */
+export function ranOnLine(
+  work: Pick<TurnWork, 'engine' | 'account' | 'model'>,
+  exact = false
+): string | null {
+  const model = work.model && !exact ? modelWords(work.model) : work.model;
+  const parts = [work.engine, work.account, model].filter(
     (p): p is string => typeof p === 'string' && p.trim().length > 0
   );
   return parts.length > 0 ? parts.join(' · ') : null;

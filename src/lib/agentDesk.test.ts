@@ -3,6 +3,7 @@ import {
   lastResultWords,
   nextRunWords,
   pausedLine,
+  modelWords,
   ranOnLine,
   resumedLine,
   routineCountLine,
@@ -31,6 +32,23 @@ describe('ranOnLine', () => {
     );
     expect(ranOnLine({ engine: 'Codex', model: '  ' })).toBe('Codex');
     expect(ranOnLine({})).toBeNull();
+  });
+
+  it('says the model in the Model menu’s words, the id only when asked for', () => {
+    const work = { engine: 'Claude Code', account: 'sam@acme.com', model: 'claude-opus-4-6' };
+    expect(ranOnLine(work)).toBe('Claude Code · sam@acme.com · Opus');
+    expect(ranOnLine(work, true)).toBe('Claude Code · sam@acme.com · claude-opus-4-6');
+  });
+});
+
+describe('modelWords', () => {
+  it('names Claude’s families and leaves other models as reported', () => {
+    expect(modelWords('claude-opus-4-6')).toBe('Opus');
+    expect(modelWords('claude-sonnet-4-5-20250929')).toBe('Sonnet');
+    expect(modelWords('claude-3-5-haiku-latest')).toBe('Haiku');
+    expect(modelWords('sonnet')).toBe('Sonnet');
+    expect(modelWords('gpt-5.5')).toBe('gpt-5.5');
+    expect(modelWords('magnum-opusx')).toBe('magnum-opusx');
   });
 });
 

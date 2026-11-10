@@ -1,11 +1,12 @@
 /**
  * Under the hood of a finished turn, desk only (`lib/agentDesk.ts`):
  *
- * - **Ran on.** "Claude Code · work@acme.com · claude-opus-4-6" beside the
- *   folded "What it did" line: the engine and account the Mac started the
- *   turn on, and the model only as the engine reported it.
- * - **Show exact command.** Under a step: the command line (or the tool and
- *   its input) exactly as it ran, redacted and scrubbed on the Mac, copyable.
+ * - **Ran on.** "Claude Code · work@acme.com · Opus" beside the folded
+ *   "What it did" line: the engine and account the Mac started the turn on,
+ *   and the model only as the engine reported it, in the Model menu's words
+ *   (the id itself in the tooltip).
+ * - **Exact command.** A step's own words open the command line (or the tool
+ *   and its input) exactly as it ran, redacted and scrubbed on the Mac, copyable.
  * - **What it was told.** The briefing the turn was given, section by
  *   section, read-only (`AgentBriefingModal`).
  *
@@ -16,7 +17,7 @@
  */
 
 import { useState } from 'react';
-import { CopyIcon } from '@/components/icons';
+import { ChevronRightIcon, CopyIcon } from '@/components/icons';
 import { TextButton } from '../primitives/TextButton';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Spinner } from '../primitives/Spinner';
@@ -31,7 +32,7 @@ export function RanOn({ work }: { work: TurnWork }) {
   const line = ranOnLine(work);
   if (!line) return null;
   return (
-    <span className="agent-work__ran-on" title={`Ran on ${line}`}>
+    <span className="agent-work__ran-on" title={`Ran on ${ranOnLine(work, true)}`}>
       {line}
     </span>
   );
@@ -56,12 +57,12 @@ function CopyText({ text, label }: { text: string; label: string }) {
 }
 
 /**
- * "Show exact command" under a step that ran one; any other step (a read, an
- * edit, a tool) kept the tool and its input, so it says "details", not
- * "command". Read once, when first opened.
+ * A step whose exact command (or, for a read, an edit, a tool: the tool and
+ * its input) was kept: the step's own words are the toggle, a chevron at
+ * their trailing edge, so the timeline carries no link per step. Read once,
+ * when first opened.
  */
-export function ExactCommand({ at, command = true }: { at: ExactRef; command?: boolean }) {
-  const what = command ? 'exact command' : 'details';
+export function useExact(at: ExactRef) {
   const [open, setOpen] = useState(false);
   const read = useAsyncState(() => getStepExact(at.agentId, at.messageId, at.index));
   const toggle = () => {
@@ -69,31 +70,63 @@ export function ExactCommand({ at, command = true }: { at: ExactRef; command?: b
     setOpen(next);
     if (next && read.data === null && !read.isLoading) void read.execute();
   };
+  return { open, toggle, read };
+}
+
+type Exact = ReturnType<typeof useExact>;
+
+/** The step's label as the toggle; a screen reader hears what it opens. */
+export function ExactToggle({
+  exact,
+  line,
+  command = true,
+}: {
+  exact: Exact;
+  line: string;
+  command?: boolean;
+}) {
+  const what = `${exact.open ? 'Hide' : 'Show'} ${command ? 'exact command' : 'details'}`;
+  return (
+    <TextButton
+      tabIndex={0}
+      className="agent-work__label agent-work__exact-toggle"
+      aria-expanded={exact.open}
+      data-open={exact.open || undefined}
+      title={`${line} · ${what}`}
+      rightIcon={<ChevronRightIcon size={12} />}
+      onClick={exact.toggle}
+    >
+      <span className="agent-work__exact-words">{line}</span>
+      <span className="sr-only">{`, ${what}`}</span>
+    </TextButton>
+  );
+}
+
+/** Under the step, once opened: the command (or the tool's input), copyable. */
+export function ExactBody({ exact }: { exact: Exact }) {
+  const { open, read } = exact;
+  if (!open) return null;
   return (
     <div className="agent-work__exact">
-      <TextButton tabIndex={0} aria-expanded={open} onClick={toggle}>
-        {open ? `Hide ${what}` : `Show ${what}`}
-      </TextButton>
-      {open &&
-        (read.isLoading ? (
-          <span className="agent-work__exact-note" role="status">
-            <Spinner size="sm" /> Reading…
-          </span>
-        ) : read.error ? (
-          <span className="agent-work__exact-note" role="alert">
-            Couldn’t read it.{' '}
-            <TextButton tabIndex={0} onClick={() => void read.execute()}>
-              Try again
-            </TextButton>
-          </span>
-        ) : read.data ? (
-          <>
-            <pre className="agent-work__exact-text">{read.data}</pre>
-            <CopyText text={read.data} label="Copy" />
-          </>
-        ) : (
-          <span className="agent-work__exact-note">It isn’t kept for this step any more.</span>
-        ))}
+      {read.isLoading ? (
+        <span className="agent-work__exact-note" role="status">
+          <Spinner size="sm" /> Reading…
+        </span>
+      ) : read.error ? (
+        <span className="agent-work__exact-note" role="alert">
+          Couldn’t read it.{' '}
+          <TextButton tabIndex={0} onClick={() => void read.execute()}>
+            Try again
+          </TextButton>
+        </span>
+      ) : read.data ? (
+        <>
+          <pre className="agent-work__exact-text">{read.data}</pre>
+          <CopyText text={read.data} label="Copy" />
+        </>
+      ) : (
+        <span className="agent-work__exact-note">It isn’t kept for this step any more.</span>
+      )}
     </div>
   );
 }
@@ -103,7 +136,7 @@ export function BriefingLink({ agentId, messageId }: { agentId: string; messageI
   const [open, setOpen] = useState(false);
   return (
     <>
-      <p className="agent-work__files">
+      <p className="agent-work__files agent-work__told">
         <TextButton tabIndex={0} onClick={() => setOpen(true)}>
           What it was told
         </TextButton>
@@ -195,13 +228,19 @@ export function AgentBriefingModal({
                 className="agent-briefing__section"
                 open={i === 0}
               >
-                <summary>{section.title}</summary>
+                <summary>
+                  <ChevronRightIcon size={12} />
+                  {section.title}
+                </summary>
                 <pre className="agent-briefing__text">{section.body}</pre>
               </details>
             ))}
             {briefing.instructions && (
               <details className="agent-briefing__section">
-                <summary>Its instructions and memory</summary>
+                <summary>
+                  <ChevronRightIcon size={12} />
+                  Its instructions and memory
+                </summary>
                 <pre className="agent-briefing__text">{briefing.instructions}</pre>
               </details>
             )}
