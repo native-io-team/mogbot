@@ -36,6 +36,7 @@ import {
   WarningIcon,
 } from '@/components/icons';
 import { Button } from '../primitives/Button';
+import { approvalKey } from './approvalKeys';
 import { Dropdown, DropdownItem } from '../primitives/Dropdown';
 import { IconButton } from '../primitives/IconButton';
 import { TextButton } from '../primitives/TextButton';
@@ -1067,6 +1068,15 @@ export const ApprovalCard = memo(function GuardedApprovalCard(props: ApprovalCar
   );
 });
 
+/** "A" / "D" inside an answer button, shown only while its card has focus. */
+function KeyHint({ letter }: { letter: string }) {
+  return (
+    <kbd className="agent-approval__key" aria-hidden>
+      {letter}
+    </kbd>
+  );
+}
+
 const ApprovalCardBody = memo(function ApprovalCard({
   message,
   agentName,
@@ -1099,7 +1109,7 @@ const ApprovalCardBody = memo(function ApprovalCard({
   // Answered while on screen, so the buttons resolve into the outcome;
   // a card that loads already answered just shows it.
   const [openedPending] = useState(approval?.status === 'pending');
-  const { guard, keyProps } = useCardGuard(approval?.status === 'pending');
+  const { armed, guard, keyProps } = useCardGuard(approval?.status === 'pending');
   if (!approval) return null;
   // Nobody answered: a quiet one-line receipt, not a card still asking.
   const expired = approval.status === 'expired' ? expiryLine(approval) : null;
@@ -1193,11 +1203,24 @@ const ApprovalCardBody = memo(function ApprovalCard({
     }
   };
   const long = compact && fields?.some(([, v]) => v.length > 120 || v.includes('\n'));
+  // A and D while this card has focus, never anywhere else (`approvalKeys`).
+  const keys = pending && !noting && !compact;
+  const onCardKey = (event: KeyboardEvent<HTMLDivElement>) => {
+    const which = approvalKey(event);
+    if (!which || busy) return;
+    if (which === 'allow' && (nothingToAllow || !armed)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    void answer(which === 'allow');
+  };
   return (
     <div
       className="agent-chat__row agent-chat__row--agent agent-chat__row--card"
       data-arrived={arrived || undefined}
       data-message-ids={message.id}
+      data-keys={keys || undefined}
+      tabIndex={keys ? -1 : undefined}
+      onKeyDown={keys ? onCardKey : undefined}
     >
       <AgentCard
         className="agent-approval"
@@ -1294,8 +1317,10 @@ const ApprovalCardBody = memo(function ApprovalCard({
                 className="agent-approval__deny"
                 disabled={busy}
                 onClick={() => void answer(false)}
+                aria-keyshortcuts={keys ? 'D' : undefined}
               >
                 {front ? 'Not now' : handoff ? 'Ignore' : gate ? GATE_DENY : 'Deny'}
+                {keys && <KeyHint letter="D" />}
               </Button>
               {!nothingToAllow && (
                 <Button
@@ -1305,8 +1330,10 @@ const ApprovalCardBody = memo(function ApprovalCard({
                   disabled={busy}
                   {...keyProps}
                   onClick={guard(() => void answer(true))}
+                  aria-keyshortcuts={keys ? 'A' : undefined}
                 >
                   {front ? 'Check again' : handoff ? 'Save to memory' : gate ? GATE_ALLOW : 'Allow'}
+                  {keys && <KeyHint letter="A" />}
                 </Button>
               )}
             </>
