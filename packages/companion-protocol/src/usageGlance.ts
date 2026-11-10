@@ -32,6 +32,7 @@ import type {
   UsageRun,
 } from './model';
 import { QUOTA_WARN_PERCENT, resetPhrase } from './quota';
+import { RUNS_ON_ANY, RUNS_ON_ANY_DETAIL, runsOnDetail } from './cardWords';
 import { planLabel } from './usage';
 import { roughWhen } from './usageSheet';
 import { accountLabel, switcherView, type SwitcherRow } from './accountSwitcher';
@@ -124,6 +125,8 @@ export interface StackKey {
   spent: string[];
   /** The same, one row each for a table: who used this account this week, most first. */
   agents: AgentSpend[];
+  /** The agents that ran on it this week, by name, most first, each once (a routine is its agent's). */
+  usedBy: string[];
   /**
    * What this account adds to the total: its weekly limit's left (else its
    * tighter limit's, when the engine reported no week), 0–100. Null with no
@@ -192,6 +195,12 @@ export interface TotalSegment {
  * at 100% and 44% read as "72% left", not as the one in use. Each account
  * counts equally (plans' sizes aren't reported, so none is guessed); a
  * second sign-in of an account and an account with no reading add nothing.
+ *
+ * Drawn as ONE ordinary bar filled to `left` (what's left, as the figure
+ * says it), never a segment per account: two accounts at 50% read as one
+ * bar half full, not as two quarter-bars. The accounts, each with its own
+ * bar, are one level down (the Usage view's rows). `segments` stays for
+ * words and tests; no glance draws it.
  */
 export interface UsageTotal {
   /** 0–100, the mean of each read account's share; null when none is read. */
@@ -202,6 +211,19 @@ export interface UsageTotal {
   across: string;
   /** "1 account not read yet, not counted": only when there is one. */
   unread: string | null;
+  /** The same, short, for the glance: "1 account not read". */
+  notRead: string | null;
+  /**
+   * How the total is weighted, said honestly, with two or more counted:
+   * plan sizes aren't reported, so it is the plain average of each
+   * account's % left ("Both on Max, so each counts the same.").
+   */
+  weighting: string | null;
+  /**
+   * The one bar's tone: `warning` at or under `LOW_LEFT`, `limited` at 0,
+   * `quiet` with nothing read. Never per account at this level.
+   */
+  tone: KeyTone;
   /** The accounts counted (read). */
   counted: number;
   /** The soonest refill of the limits counted. */
@@ -257,6 +279,8 @@ export interface GlanceRowWords {
   refill: string | null;
   /** "2 accounts": only with more than one real account. */
   count: string | null;
+  /** "1 account not read": accounts left out of the figure, beside it. */
+  notRead: string | null;
   /** The user has something to do (nearly out everywhere, nothing signed in). */
   needsYou: boolean;
 }
@@ -285,16 +309,19 @@ function rowWords(
       figure: keys.length === 0 ? 'No accounts yet' : 'Not signed in',
       refill: null,
       count,
+      notRead: null,
       needsYou: true,
     };
   }
-  if (read.length === 0) return { figure: 'Not read yet', refill: null, count, needsYou };
+  if (read.length === 0) {
+    return { figure: 'Not read yet', refill: null, count, notRead: null, needsYou };
+  }
   if (roomy.length === 0) {
     const at = back ? resetPhrase(back, now) : (soonest?.resetsAt ?? null);
     // Out everywhere only when every account was read: one out and three
     // never read is not "out of usage", it's that one account (round 4).
     const figure = read.length < counted.length ? outOf(read) : OUT_OF_USAGE;
-    return { figure, refill: at ? `Refills ${at}` : null, count, needsYou };
+    return { figure, refill: at ? `Refills ${at}` : null, count, notRead: null, needsYou };
   }
   // The total across every account, as the Usage view's hero says it, and
   // the accounts that figure is of: an account not read yet isn't in it, so
@@ -303,6 +330,7 @@ function rowWords(
     figure: total.counted > 1 ? total.figure : `${total.figure} ${total.across}`,
     refill: total.refill ? `Refills in ${total.refill.in}` : null,
     count: total.counted > 1 ? plural(total.counted, 'account') : null,
+    notRead: total.notRead,
     needsYou,
   };
 }
@@ -345,6 +373,79 @@ export function totalWords(
     refill,
     known,
   };
+}
+
+/** One agent and the account it runs on, for the Usage view's "Runs on" list. */
+export interface RunsOnRow {
+  agentId: string;
+  name: string;
+  engine: AgentEngine;
+  /** The account id it is set to, or '' for any account (the order). */
+  current: string;
+  /** "Any account", "Work". */
+  currentLabel: string;
+  /** "Any account" first, then each account of its engine, by the name its row shows. */
+  choices: { id: string; label: string; detail: string }[];
+}
+
+/**
+ * Each agent whose engine has two or more accounts, with the account it
+ * runs on: "Any account" (the order, carrying on when one runs out) or one
+ * only (`agents.update` with `account`). An agent set to an account that is
+ * gone reads as any account, as the Mac treats it.
+ */
+export function runsOnRows(
+  glance: Pick<UsageGlance, 'engines'>,
+  agents: readonly { id: string; name: string; engine: AgentEngine; account?: string }[]
+): RunsOnRow[] {
+  return agents.flatMap((a) => {
+    const keys = glance.engines.find((e) => e.engine === a.engine)?.keys ?? [];
+    const mine = keys.filter((k) => k.state !== 'same');
+    if (mine.length < 2) return [];
+    const choices = [
+      { id: '', label: RUNS_ON_ANY, detail: RUNS_ON_ANY_DETAIL },
+      ...mine.map((k) => ({
+        id: k.id,
+        label: k.name,
+        detail: runsOnDetail({ signedIn: k.signedIn, out: k.state === 'out' }),
+      })),
+    ];
+    const current = a.account && mine.some((k) => k.id === a.account) ? a.account : '';
+    return [
+      {
+        agentId: a.id,
+        name: a.name,
+        engine: a.engine,
+        current,
+        currentLabel: choices.find((c) => c.id === current)?.label ?? RUNS_ON_ANY,
+        choices,
+      },
+    ];
+  });
+}
+
+/**
+ * Who an account is for, under its row: who runs only on it, and who used
+ * it this week. Absent with neither.
+ */
+export function usersLine(k: Pick<StackKey, 'pinnedBy' | 'usedBy'>): string | null {
+  const pinned =
+    k.pinnedBy.length > 0
+      ? `Only ${list(k.pinnedBy)} ${k.pinnedBy.length === 1 ? 'runs' : 'run'} here`
+      : null;
+  const others = k.usedBy.filter((n) => !k.pinnedBy.includes(n));
+  const who =
+    others.length > 3
+      ? `${others.slice(0, 3).join(', ')} and ${others.length - 3} more`
+      : list(others);
+  const used = others.length > 0 ? `${pinned ? 'also used by' : 'Used by'} ${who} this week` : null;
+  return [pinned, used].filter(Boolean).join(' · ') || null;
+}
+
+function list(names: string[]): string {
+  return names.length <= 1
+    ? (names[0] ?? '')
+    : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;
 }
 
 export interface UsageGlance {
@@ -691,6 +792,7 @@ function keyOf(
       .slice(0, 5)
       .map((r) => `${r.name} · ${tokensShortly(r.tokens)} tokens · ${plural(r.turns, 'message')}`),
     agents: agentsOf(line),
+    usedBy: usedByOf(line),
     share: shareLimit ? shareLimit.left : left,
     shareOf: shareLimit ? (week ? 'week' : 'tight') : null,
     shareLimit,
@@ -722,6 +824,16 @@ function agentsOf(line: UsageAccountLine | undefined): AgentSpend[] {
     turnsText: plural(r.turns, 'message'),
     share: all > 0 ? Math.round((r.tokens / all) * 100) : 0,
   }));
+}
+
+/** Each agent that ran on an account this week, once, most tokens first. */
+function usedByOf(line: UsageAccountLine | undefined): string[] {
+  const by = new Map<string, { name: string; tokens: number }>();
+  for (const r of line?.spent ?? []) {
+    const was = by.get(r.agentId);
+    by.set(r.agentId, { name: r.name, tokens: (was?.tokens ?? 0) + r.tokens });
+  }
+  return [...by.values()].sort((a, b) => b.tokens - a.tokens).map((b) => b.name);
 }
 
 /** "Max", "Pro": a plan as one word, for "across 2 Max accounts". */
@@ -779,6 +891,9 @@ export function totalOf(
       ? `across ${read.length} ${words[0]} accounts`
       : `across ${plural(read.length, 'account')}`;
   }
+  const weighting = read.length > 1 ? weightingOf(read.map((k) => planWord(plans(k)))) : null;
+  const tone: KeyTone =
+    left === null ? 'quiet' : left <= 0 ? 'limited' : left <= LOW_LEFT ? 'warning' : 'calm';
   const soon = read
     .filter((k) => k.shareLimit?.resetsAt && k.shareLimit.countdown)
     .map((k) => ({ k, l: k.shareLimit as KeyLimit }))
@@ -791,12 +906,35 @@ export function totalOf(
       unread.length > 0 && read.length > 0
         ? `${plural(unread.length, 'account')} not read yet, not counted`
         : null,
+    notRead:
+      unread.length > 0 && read.length > 0 ? `${plural(unread.length, 'account')} not read` : null,
+    weighting,
+    tone,
     counted: read.length,
     refill: soon
       ? { in: soon.l.countdown as string, at: soon.l.resetsAt as string, account: soon.k.name }
       : null,
     segments,
   };
+}
+
+/**
+ * How the total weighs its accounts. The engines report each limit as a
+ * percentage and never a plan's size, so the total is the plain average of
+ * each account's % left; said so, and when the plans differ, that a bigger
+ * plan counts no more than a smaller one here.
+ */
+export function weightingOf(plans: (string | null)[]): string | null {
+  if (plans.length < 2) return null;
+  const all = plans.length === 2 ? 'Both' : `All ${plans.length}`;
+  const first = plans[0];
+  if (first && plans.every((p) => p === first))
+    return `${all} on ${first}, so each counts the same.`;
+  const named = [...new Set(plans.filter((p): p is string => !!p))];
+  if (named.length > 1) {
+    return `An average of each account’s % left. Plan sizes aren’t reported, so ${named.join(' and ')} count the same here.`;
+  }
+  return 'An average of each account’s % left: plan sizes aren’t reported, so each counts the same.';
 }
 
 /** A limit's reset, from its countdown's source: kept on the key as `resetsAtMs`. */

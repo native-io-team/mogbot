@@ -210,7 +210,7 @@ describe('Usage view', () => {
       )
     ).toBe(true);
 
-    // Into Work's page: its pins, "Use this one now", and back with Esc.
+    // Into Work's page: its pins, "Use for new work", and back with Esc.
     fireEvent.click(rows()[1]);
     const page = await screen.findByRole('article');
     expect(page).toHaveTextContent('me@work.example');
@@ -219,7 +219,7 @@ describe('Usage view', () => {
       screen.getByText('Usage', { selector: '.breadcrumb__link, .breadcrumb__link *' })
     ).toBeInTheDocument();
     await act(async () => {
-      fireEvent.click(within(page).getByRole('button', { name: 'Use this one now' }));
+      fireEvent.click(within(page).getByRole('button', { name: 'Use for new work' }));
       await Promise.resolve();
     });
     expect(calls.some((c) => c.cmd === 'agents_account_use')).toBe(true);
@@ -228,7 +228,7 @@ describe('Usage view', () => {
     await waitFor(() => expect(rows()[0]).toHaveTextContent('Work'));
   });
 
-  it('an account’s page has its limits against pace, and no "Use this one now" when in use', async () => {
+  it('an account’s page has its limits against pace, and no "Use for new work" when in use', async () => {
     store.engines = [claude];
     store.agents = [];
     mock([mac, work]);
@@ -239,7 +239,7 @@ describe('Usage view', () => {
     expect(page).toHaveTextContent('Max plan');
     expect(page).toHaveTextContent('5-hour');
     expect(page).toHaveTextContent('Under pace');
-    expect(within(page).queryByRole('button', { name: 'Use this one now' })).toBeNull();
+    expect(within(page).queryByRole('button', { name: 'Use for new work' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Back to Usage' }));
     await waitFor(() => expect(screen.queryByRole('article')).toBeNull());
   });
@@ -388,7 +388,8 @@ describe('the sidebar row pill', () => {
 });
 
 describe('glanceStatus (the usage row’s corner dot)', () => {
-  const row = (needsYou: boolean) => ({ figure: '', refill: null, count: null, needsYou }) as const;
+  const row = (needsYou: boolean) =>
+    ({ figure: '', refill: null, count: null, notRead: null, needsYou }) as const;
   it('shows no dot when all is well: a green one said nothing anyone could read', () => {
     expect(glanceStatus({ tone: 'calm', row: row(false) })).toBe('off');
   });
