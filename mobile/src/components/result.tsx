@@ -1,11 +1,13 @@
 /**
- * The result card (`share_result`), on the shared card as the desk draws it:
- * a document icon, the title with its version, what changed since the last
- * one, then the summary, what the agent didn't verify (up front, tinted,
- * only when it said), the before and after per page (a slider or side by
- * side, `compare`), its files and links, what it says it checked, and "Ask for changes". A project copy's card is the same
- * card with the copy's note and Discard / Keep changes in its answer row
- * (`copy`), never a second card inside it.
+ * The result card (`share_result`), in the desk's order on the shared card:
+ * an icon for what kind of thing was made, the title with its version, what
+ * changed since the last one (set off by a rule), the summary, then the work
+ * itself full width: the before and after per page (a slider or side by
+ * side, `compare`), its files, and its links as one hairline list (a kind
+ * tile, the name, the host). Then one Checks box: what it says it checked
+ * over what it didn't verify. "Ask for changes" closes the card. A project
+ * copy's card is the same card with the copy's note and Discard / Keep
+ * changes in its answer row (`copy`), never a second card inside it.
  *
  * Only the newest version of a result is drawn in full; an older one folds
  * to a line. Nothing here fills a list the agent didn't give.
@@ -20,11 +22,14 @@ import {
   testHeadline,
   testShots,
   itemName,
+  linkHost,
+  linkKind,
   listedItems,
   MAC_FEATURES,
   supersededLine,
   type Agent,
   type AgentMessage,
+  type LinkKind,
   type ResultCard,
   type ResultItem,
   type ResultRef,
@@ -36,13 +41,14 @@ import { openHere } from '../lib/logins';
 import { describeError, watchLive } from '../lib/session';
 import { haptic } from '../lib/haptics';
 import { makeStyles, useColors } from '../lib/appearance';
-import { iconSize, radius, space } from '../lib/theme';
+import { iconSize, keySize, radius, space, squircle } from '../lib/theme';
 import { useApp, useServed } from '../lib/store';
 import { Attachments } from './attachments';
 import { Compare } from './compare';
 import { useCopyParts, type CopyProps } from './copy';
 import { Card, Line, OFFLINE_NOTE, TextAction } from './surfaces';
 import { Icon, T } from './ui';
+import type { SFName } from '../lib/icons';
 
 /** The Mac takes `revises` on a send: only then is "Ask for changes" offered. */
 export const useCanRevise = () => useServed('agents.send', MAC_FEATURES.reviseResults);
@@ -143,16 +149,25 @@ export function TestPart({
 /** Only plain web links open; anything else is shown, not followed. */
 const safeLink = (url: string) => /^https?:\/\//i.test(url);
 
-function LinkRow({ item }: { item: Extract<ResultItem, { kind: 'link' }> }) {
+/** A host line under a title that is already that address says nothing new. */
+const repeatsHost = (host: string, name: string) => {
+  const bare = name.replace(/^www\./i, '').toLowerCase();
+  const h = host.toLowerCase();
+  return bare === h || bare.startsWith(`${h}/`);
+};
+
+const LINK_ICON: Record<LinkKind, SFName> = {
+  local: 'desktopcomputer',
+  repo: 'chevron.left.forwardslash.chevron.right',
+  doc: 'doc.text',
+  web: 'globe',
+};
+
+function LinkRow({ item, first }: { item: Extract<ResultItem, { kind: 'link' }>; first: boolean }) {
   const colors = useColors();
   const styles = useStyles();
   const name = itemName(item);
-  let host = item.url;
-  try {
-    host = new URL(item.url).host;
-  } catch {
-    // shown as written
-  }
+  const host = linkHost(item.url);
   const safe = safeLink(item.url);
   return (
     <Pressable
@@ -164,12 +179,18 @@ function LinkRow({ item }: { item: Extract<ResultItem, { kind: 'link' }> }) {
         haptic.light();
         void Linking.openURL(item.url);
       }}
-      style={({ pressed }) => [styles.link, pressed && { opacity: 0.6 }]}
+      style={({ pressed }) => [styles.link, !first && styles.divided, pressed && { opacity: 0.6 }]}
     >
-      <Icon name="globe" size={iconSize.body} color={colors.textMuted} />
+      <View style={styles.tile}>
+        <Icon
+          name={LINK_ICON[linkKind(item.url)]}
+          size={iconSize.inline}
+          color={colors.textSecondary}
+        />
+      </View>
       <View style={{ flex: 1, minWidth: 0 }}>
         <T numberOfLines={1}>{name}</T>
-        {host !== name && (
+        {!repeatsHost(host, name) && (
           <T variant="caption" color={colors.textMuted} numberOfLines={1}>
             {host}
           </T>
@@ -197,45 +218,66 @@ function Body({
   const links = items.filter((i): i is Extract<ResultItem, { kind: 'link' }> => i.kind === 'link');
   const notVerified = card.notVerified ?? [];
   const checked = card.checked ?? [];
+  const changes = card.version > 1 ? card.changes?.trim() : undefined;
   return (
     <>
+      {/* What changed since the version before: the agent's line, by a rule.
+          A test's own section says how it went, so it isn't repeated here. */}
+      {!!changes && !card.test && (
+        <View style={styles.changes} accessibilityLabel={changesLine(card) ?? undefined}>
+          <T variant="caption" color={colors.textMuted}>
+            {`Changes since v${card.version - 1}`}
+          </T>
+          <T variant="small" color={colors.textSecondary}>
+            {changes}
+          </T>
+        </View>
+      )}
       {!!card.summary && <T color={colors.textBody}>{card.summary}</T>}
-      {notVerified.length > 0 && (
-        <View
-          style={styles.unverified}
-          accessibilityLabel={`Not verified: ${notVerified.join('. ')}`}
-        >
-          <View style={styles.row}>
-            {/* What wasn't checked is normal and expected: a quiet question,
-                as on the desk, never the warning triangle (real danger only). */}
-            <Icon name="questionmark.circle" size={iconSize.inline} color={colors.textMuted} />
-            <T variant="small" style={styles.unverifiedTitle}>
-              Not verified
-            </T>
-          </View>
-          {notVerified.map((line, i) => (
-            <T key={`${i}:${line}`} variant="small" color={colors.textBody}>
-              • {line}
-            </T>
+      {pages.length > 0 && <Compare agentId={agentId} pages={pages} />}
+      {files.length > 0 && <Attachments agentId={agentId} attachments={files} onError={onError} />}
+      {links.length > 0 && (
+        <View style={styles.list}>
+          {links.map((l, i) => (
+            <LinkRow key={`${i}:${l.url}`} item={l} first={i === 0} />
           ))}
         </View>
       )}
-      {pages.length > 0 && <Compare agentId={agentId} pages={pages} />}
-      {files.length > 0 && <Attachments agentId={agentId} attachments={files} onError={onError} />}
-      {links.map((l, i) => (
-        <LinkRow key={`${i}:${l.url}`} item={l} />
-      ))}
-      {checked.length > 0 && (
-        <View style={{ gap: space['2xs'] }}>
-          {/* The agent's claims: attributed, with a neutral bullet, not a tick. */}
-          <T variant="caption" color={colors.textMuted}>
-            {CHECKED_HEADING}
-          </T>
-          {checked.map((line, i) => (
-            <T key={`${i}:${line}`} variant="small" color={colors.textSecondary}>
-              • {line}
-            </T>
-          ))}
+      {(checked.length > 0 || notVerified.length > 0) && (
+        <View style={styles.checks}>
+          {checked.length > 0 && (
+            <View style={styles.checkPart}>
+              {/* The agent's claims: attributed, with a neutral bullet, not a tick. */}
+              <T variant="caption" color={colors.textMuted}>
+                {CHECKED_HEADING}
+              </T>
+              {checked.map((line, i) => (
+                <T key={`${i}:${line}`} variant="small" color={colors.textSecondary}>
+                  • {line}
+                </T>
+              ))}
+            </View>
+          )}
+          {notVerified.length > 0 && (
+            <View
+              style={[styles.checkPart, checked.length > 0 && styles.divided]}
+              accessibilityLabel={`Not verified: ${notVerified.join('. ')}`}
+            >
+              <View style={styles.row}>
+                {/* What wasn't checked is normal and expected: a quiet question,
+                    as on the desk, never the warning triangle (real danger only). */}
+                <Icon name="questionmark.circle" size={iconSize.inline} color={colors.textMuted} />
+                <T variant="small" style={styles.unverifiedTitle}>
+                  Not verified
+                </T>
+              </View>
+              {notVerified.map((line, i) => (
+                <T key={`${i}:${line}`} variant="small" color={colors.textBody}>
+                  • {line}
+                </T>
+              ))}
+            </View>
+          )}
         </View>
       )}
     </>
@@ -319,8 +361,6 @@ export function ResultCardView({
           .filter(Boolean)
           .join(' · ') || undefined
       }
-      // A test's own section says how it went; the same words aren't repeated above it.
-      source={(card.test ? null : changesLine(card)) ?? undefined}
       // Offline the answers stay, disabled, with the one note every card uses
       // (a copy's own note already says it).
       note={parts?.note ?? (ask && !connected ? OFFLINE_NOTE : undefined)}
@@ -374,22 +414,46 @@ const useStyles = makeStyles((colors) => ({
   },
   textPair: { flexDirection: 'row', alignItems: 'center', gap: space.lg },
   strong: { fontWeight: '600' as const, color: colors.textPrimary },
-  unverified: {
-    gap: space.xs,
-    padding: space.md,
+  // One box for both lists, split by a hairline: the claims, then the caveats.
+  checks: {
     borderRadius: radius.inner,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderDefault,
+    overflow: 'hidden',
+  },
+  checkPart: { gap: space.xs, padding: space.md },
+  divided: {
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: colors.borderDefault,
   },
   unverifiedTitle: { fontWeight: '600' as const, color: colors.textSecondary },
+  changes: {
+    gap: space['2xs'],
+    paddingLeft: space.md,
+    borderLeftWidth: StyleSheet.hairlineWidth * 2,
+    borderLeftColor: colors.borderStrong,
+  },
+  // Links as one list, a hairline between rows, each a 44pt target or more.
+  list: {
+    borderRadius: radius.inner,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.borderDefault,
+    overflow: 'hidden',
+  },
   link: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: space.sm,
-    minHeight: 44,
+    gap: space.md,
+    minHeight: keySize.lg,
     paddingHorizontal: space.md,
-    borderRadius: radius.inner,
+    paddingVertical: space.sm,
+  },
+  tile: {
+    width: iconSize.hero,
+    height: iconSize.hero,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: squircle(iconSize.hero),
     backgroundColor: colors.surfaceControl,
-    overflow: 'hidden',
   },
 }));

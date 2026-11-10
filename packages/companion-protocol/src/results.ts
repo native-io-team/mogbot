@@ -317,3 +317,80 @@ export function consoleLine(report: TestReport): string | null {
   if (n === 0) return null;
   return n === 1 ? '1 console error' : `${n} console errors`;
 }
+
+/**
+ * Every version of each result in a conversation, oldest first, keyed by the
+ * result's id: what the card's version switcher (v1 · v2) offers. Only what
+ * the log holds; a version the log no longer has is simply absent.
+ */
+export function resultVersions(messages: readonly Carrier[]): Map<string, ResultCard[]> {
+  const out = new Map<string, ResultCard[]>();
+  for (const m of messages) {
+    const r = m.result;
+    if (!r) continue;
+    const list = out.get(r.id) ?? [];
+    // A version recorded twice is shown once: the later one wins.
+    const at = list.findIndex((c) => c.version === r.version);
+    if (at >= 0) list[at] = r;
+    else list.push(r);
+    out.set(r.id, list);
+  }
+  out.forEach((list) => list.sort((a, b) => a.version - b.version));
+  return out;
+}
+
+/**
+ * The state a result card's pill says, from what the card itself carries:
+ * shared partway through, an earlier version, or the finished work. Never
+ * "verified": that is the agent's to say, in its checks.
+ */
+export type ResultStatus = 'partway' | 'earlier' | 'finished';
+
+export function resultStatus(card: ResultCard, newest: boolean): ResultStatus {
+  if (!newest) return 'earlier';
+  return card.checkpoint ? 'partway' : 'finished';
+}
+
+export const RESULT_STATUS_LABEL: Record<ResultStatus, string> = {
+  partway: CHECKPOINT_LABEL,
+  earlier: 'Earlier version',
+  finished: 'Finished',
+};
+
+/**
+ * What kind of place a link goes, for its row's icon: a site running on this
+ * Mac, a repository, a document or sheet, or any other page. Read from the
+ * address alone, so it is only ever an icon, never words.
+ */
+export type LinkKind = 'local' | 'repo' | 'doc' | 'web';
+
+export function linkKind(url: string): LinkKind {
+  let host: string;
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch {
+    return 'web';
+  }
+  if (host === 'localhost' || host === '127.0.0.1' || host === '[::1]' || host.endsWith('.local'))
+    return 'local';
+  if (/(^|\.)(github\.com|gitlab\.com|bitbucket\.org)$/.test(host)) return 'repo';
+  if (/(^|\.)(docs\.google\.com|notion\.so|notion\.site|dropbox\.com|figma\.com)$/.test(host))
+    return 'doc';
+  return 'web';
+}
+
+/** A link's address as its row's second line: the host, without "www.". */
+export function linkHost(url: string): string {
+  try {
+    return new URL(url).host.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
+/** A picture this much taller than wide is a phone screen: it gets a device frame. */
+export const PORTRAIT_RATIO = 1.3;
+
+export function isPortrait(size: { width: number; height: number } | null | undefined): boolean {
+  return Boolean(size && size.width > 0 && size.height / size.width >= PORTRAIT_RATIO);
+}

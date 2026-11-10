@@ -132,7 +132,7 @@ describe('the compare on a result card', () => {
     expect(screen.getByText('Partway through')).toBeTruthy();
     fireEvent.click(screen.getByRole('button', { name: 'Test it' }));
     expect(screen.getByTestId('opened').textContent).toBe('v:-:t');
-    fireEvent.click(screen.getByRole('button', { name: 'Preview' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Open preview' }));
     expect(screen.getByTestId('opened').textContent).toBe('v:-:');
   });
 });

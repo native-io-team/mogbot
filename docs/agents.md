@@ -6315,10 +6315,24 @@ chat.
   Links are http/https with no sign-in details in them. `checked`
   and `not_verified` are the agent's own words; the app never fills either,
   and shows each only when given. On the desk the card reads work first:
-  summary, before/after, files and links, then one Checks row with "It says
-  it checked" and "Not verified" side by side (stacked when narrow), all at
-  the chat's reading size. A link's subtitle is left out when it only repeats
-  the title's host (`lib/resultItems.ts`).
+  a header (a tile for what kind of thing was made, the title, a status pill
+  read from the card alone — Finished, Partway through or Earlier version,
+  never "verified" — and a v1 · v2 switcher once the chat holds more than one
+  version, `resultVersions`), "Changes since v1" set off by a rule, the
+  summary, then the media: before/after on a recessed stage (side by side
+  with the captions as tags on the pictures, or a slider with a round grip),
+  a phone screen shown whole in a device frame when the picture is clearly
+  portrait (`isPortrait`, from the picture's own size once loaded), other
+  pictures as a small gallery, and a site's "Live preview" row (Test it,
+  Open preview). Then files and links as one hairline-divided list (a kind
+  tile, the name, type and size or the host, Open, and Copy link for a link;
+  the icon from `linkKind`, the address alone, never words), then one Checks
+  block with "It says it checked" and "Not verified" split by a hairline
+  (stacked under 520px of card, a container query, as with the preview pane
+  open). A link's subtitle is left out when it only repeats the title's host
+  (`lib/resultItems.ts`). A project copy's "Changes are ready" is the card's
+  footer, on the recessed fill to its edges, with the diff stat (+12 −3) by
+  the file count.
 - **Refused, never trimmed.** Title 120, summary 2,000, each line 300, 12
   lines per list, 12 items (files also ≤ 10, 25 MB each). Cutting a "not
   verified" list would hide exactly what matters, so too much is an error the
@@ -6341,8 +6355,11 @@ chat.
   the caller has no live turn (`broker::is_live`) the card is recorded into
   the chat at once and the agent is told it is there now
   (`results::recorded_reply`); a second call adds a second card.
-- **Ask for changes** opens the composer with a "Changes to <title> · v1"
-  chip; the send carries `revises` (the result id). `agents_send` pins the
+- **Ask for changes** opens a field in the card itself on the desk
+  (`ResultChatProvider`: Enter sends, Escape puts it away, Send is neutral);
+  a copy's Ask for changes opens the same field. Where the card can't send
+  (a room), it opens the composer with a "Changes to <title> · v1" chip.
+  Either way the send carries `revises` (the result id). `agents_send` pins the
   message to the result as the log has it (`revises: {id, version, title}`)
   and adds `results::revising_prompt` ahead of the text. The next
   `share_result` revises that result: explicitly (`revises`) or because the

@@ -23,6 +23,7 @@ import { asCommandError, formatCommandError } from '../../lib/errors';
 import { queueSubmitReview } from '../../lib/reviewHandoff';
 import { isFocusClick } from '../../lib/firstClick';
 import { useCopyCommands } from './useCopyCommands';
+import { useResultAsk } from './AgentResult';
 import {
   discardCopy,
   keepCopy,
@@ -94,6 +95,9 @@ export function CopyActions({
   onAskForChanges?: () => void;
 }) {
   const { showToast } = useOptionalToast();
+  // Inside a result card that can take the request itself: its own field.
+  const askInCard = useResultAsk();
+  const ask = onAskForChanges ? (askInCard ?? onAskForChanges) : undefined;
   const [busy, setBusy] = useState<'keep' | 'discard' | null>(null);
   const [confirming, setConfirming] = useState(false);
   const [answered, setConflict] = useState<string[] | null>(null);
@@ -355,8 +359,8 @@ export function CopyActions({
           Preview
         </TextButton>
       )}
-      {onAskForChanges && (
-        <TextButton tabIndex={0} onClick={onAskForChanges}>
+      {ask && (
+        <TextButton tabIndex={0} onClick={ask}>
           Ask for changes
         </TextButton>
       )}

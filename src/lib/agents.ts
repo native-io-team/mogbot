@@ -2724,6 +2724,8 @@ export type {
   ResultCard,
   ResultItem,
   ResultRef,
+  ResultStatus,
+  LinkKind,
   ShotRole,
 } from '../../packages/companion-protocol/src/results';
 export type { LocalLink } from '../../packages/companion-protocol/src/model';
@@ -2748,6 +2750,12 @@ export {
   foldResultReplies,
   revisingLabel,
   supersededLine,
+  resultVersions,
+  resultStatus,
+  RESULT_STATUS_LABEL,
+  linkKind,
+  linkHost,
+  isPortrait,
 } from '../../packages/companion-protocol/src/results';
 
 /** "9:24 AM": a message's time, on hover. */
