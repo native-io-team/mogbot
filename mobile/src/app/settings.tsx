@@ -51,7 +51,7 @@ const TEXT_SIZE_LABELS: Record<TextSize, string> = {
 };
 
 const USAGE_FOOTER =
-  'Change it on the Mac in Settings → Agents → Usage, or ask your Chief of Staff. Estimates come from your past runs.';
+  'Change it on the Mac in Settings → Accounts & usage, or ask your Chief of Staff. Estimates come from your past runs.';
 
 type UpdateState =
   | { kind: 'idle' }

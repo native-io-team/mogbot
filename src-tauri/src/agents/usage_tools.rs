@@ -514,7 +514,7 @@ async fn named_account(args: &Value) -> Result<super::wallet::Account, String> {
     let account = pick_account(&shown, named, engine)?;
     if !super::wallet::signed_in(&account).await {
         return Err(format!(
-            "“{}” isn't signed in on this Mac. Ask the user to sign it in under Settings → Agents → Usage; nothing changed.",
+            "“{}” isn't signed in on this Mac. Ask the user to sign it in under Settings → Accounts & usage; nothing changed.",
             account.name
         ));
     }

@@ -47,7 +47,7 @@ const ASK = {
   title: `Your Claude Code account is out until ${AT}. Carry on with Codex until then?`,
   detail: '',
   summary:
-    "Codex can't open Claude Code's conversation, so Finance starts there from your chat and its memory. When Claude Code has room again, Finance goes back to it and is told what happened meanwhile. Claude in Chrome stays with Claude Code; on Codex it uses your Chrome through the app's own extension. Always: whenever every Claude Code account is out. Change it in Settings → Agents → Usage.",
+    "Codex can't open Claude Code's conversation, so Finance starts there from your chat and its memory. When Claude Code has room again, Finance goes back to it and is told what happened meanwhile. Claude in Chrome stays with Claude Code; on Codex it uses your Chrome through the app's own extension. Always: whenever every Claude Code account is out. Change it in Settings → Accounts & usage.",
   status: 'pending',
   crossover: { from: 'claude', to: 'codex', until: BACK, resume: true },
 };

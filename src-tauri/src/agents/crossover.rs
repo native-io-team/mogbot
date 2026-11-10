@@ -427,7 +427,7 @@ pub fn card_detail(ask: &Ask, agent: &str, reach: Option<&str>) -> String {
         ));
     }
     out.push_str(&format!(
-        " Always: whenever every {from} account is out. Change it in Settings → Agents → Usage."
+        " Always: whenever every {from} account is out. Change it in Settings → Accounts & usage."
     ));
     out
 }
