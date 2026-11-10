@@ -564,6 +564,36 @@ pub(crate) async fn bounded<T>(
 where
     T: Send + 'static,
 {
+    bounded_in(&IN_FLIGHT, method, deadline, answer).await
+}
+
+/// How many phone requests may hold a blocking thread at once, across
+/// every socket, counting ones past their deadline that are still running.
+/// Past it a request is answered as busy at once: a paired device sending
+/// request after request that sticks (on a lock, a slow disk) would
+/// otherwise take every thread of the blocking pool the whole app shares,
+/// one per request, and keep them past its deadline.
+pub(crate) const MAX_IN_FLIGHT: usize = 48;
+
+static IN_FLIGHT: std::sync::LazyLock<Arc<tokio::sync::Semaphore>> =
+    std::sync::LazyLock::new(|| Arc::new(tokio::sync::Semaphore::new(MAX_IN_FLIGHT)));
+
+/// [`bounded`], against `slots`: a slot is held until the work itself ends.
+pub(crate) async fn bounded_in<T>(
+    slots: &Arc<tokio::sync::Semaphore>,
+    method: &str,
+    deadline: Duration,
+    answer: impl std::future::Future<Output = Result<T, WireError>> + Send + 'static,
+) -> Result<T, WireError>
+where
+    T: Send + 'static,
+{
+    let Ok(slot) = slots.clone().try_acquire_owned() else {
+        tracing::warn!("[Companion] {method} refused: {MAX_IN_FLIGHT} requests already running");
+        return Err(WireError::Command(crate::errors::CommandError::expected(
+            BUSY,
+        )));
+    };
     /// Sends "stop" when dropped while armed.
     struct Abort(Option<oneshot::Sender<()>>);
     impl Drop for Abort {
@@ -577,6 +607,8 @@ where
     let mut abort = Abort(Some(stop_tx));
     let handle = tokio::runtime::Handle::current();
     let work = tokio::task::spawn_blocking(move || {
+        // Given back when this thread is done, deadline or not.
+        let _slot = slot;
         handle.block_on(async move {
             tokio::pin!(answer);
             tokio::select! {

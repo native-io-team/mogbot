@@ -801,16 +801,103 @@ fn strings(v: &Value, key: &str, out: &mut Vec<String>) {
     }
 }
 
-/// Words that mean a secret: a form never asks for one.
+/// Text as a reader sees it: invisible characters (a zero-width space in
+/// "pass\u{200B}word") dropped, and the Cyrillic and Greek letters that look
+/// like Latin ones ("Pаssword" with a Cyrillic а) read as those, lowercased.
+fn as_read(s: &str) -> String {
+    s.chars()
+        .filter(|c| {
+            !matches!(c, '\u{00AD}' | '\u{180E}' | '\u{200B}'..='\u{200F}' | '\u{202A}'..='\u{202E}' | '\u{2060}'..='\u{2064}' | '\u{FEFF}')
+        })
+        .map(|c| match c {
+            'а' | 'А' | 'α' | 'Α' => 'a',
+            'в' | 'В' | 'β' | 'Β' => 'b',
+            'с' | 'С' | 'ϲ' => 'c',
+            'ԁ' => 'd',
+            'е' | 'Е' | 'ε' | 'Ε' => 'e',
+            'һ' | 'Н' | 'Η' => 'h',
+            'і' | 'І' | 'ι' | 'Ι' => 'i',
+            'ј' | 'Ј' => 'j',
+            'к' | 'К' | 'κ' | 'Κ' => 'k',
+            'м' | 'М' | 'Μ' => 'm',
+            'п' | 'ո' | 'Ν' => 'n',
+            'о' | 'О' | 'ο' | 'Ο' | 'σ' => 'o',
+            'р' | 'Р' | 'ρ' | 'Ρ' => 'p',
+            'ѕ' | 'Ѕ' => 's',
+            'т' | 'Т' | 'τ' | 'Τ' => 't',
+            'υ' | 'у' => 'u',
+            'ν' => 'v',
+            'х' | 'Х' | 'χ' | 'Χ' => 'x',
+            'У' | 'Υ' | 'γ' => 'y',
+            'Ζ' => 'z',
+            other => other,
+        })
+        .collect::<String>()
+        .to_lowercase()
+}
+
+/// A form whose title or button asks for a secret.
+const SECRET_FORM: &str = "this form asks for a secret (a password, a key, a token or a one-time code). Never in a form: an API key or token is request_secret (a masked card, into the Keychain); an account is request_login; a code for a site is the user's to type there (ask_user_to_step_in).";
+
+/// Secrets spelled as one run of letters, whatever sits between them
+/// ("p.a.s.s.w.o.r.d", "api_key", "one-time-code").
+const SECRET_RUNS: &[&str] = &[
+    "password",
+    "passcode",
+    "passphrase",
+    "apikey",
+    "privatekey",
+    "secretkey",
+    "seedphrase",
+    "recoveryphrase",
+    "cardnumber",
+    "securitycode",
+    "verificationcode",
+    "onetimecode",
+    "authcode",
+];
+
+/// Words that mean a secret: a form never asks for one. One-time codes
+/// count: a form asking for "the 6-digit code we texted you" is how a page
+/// an agent read would take over an account the user is signed in to.
 fn asks_for_secret(s: &str) -> bool {
-    let s = s.to_ascii_lowercase();
+    let s = as_read(s);
     let words: Vec<&str> = s
         .split(|c: char| !c.is_ascii_alphanumeric())
         .filter(|w| !w.is_empty())
         .collect();
     let has = |w: &str| words.contains(&w);
     let pair = |a: &str, b: &str| words.windows(2).any(|p| p[0] == a && p[1] == b);
-    has("password")
+    let run: String = words.concat();
+    let code_after = [
+        "verification",
+        "verify",
+        "login",
+        "sms",
+        "auth",
+        "authentication",
+        "authenticator",
+        "confirmation",
+        "backup",
+        "access",
+        "digit",
+        "time",
+        "sign",
+        "signin",
+        "mfa",
+        "2fa",
+        "otp",
+    ];
+    SECRET_RUNS.iter().any(|r| run.contains(r))
+        || code_after.iter().any(|a| pair(a, "code") || pair(a, "codes"))
+        // "the code we texted you", "the code we sent".
+        || (has("code") && ["texted", "sent", "emailed", "sms"].iter().any(|w| has(w)))
+        || has("passwd")
+        || has("pwd")
+        || has("credential")
+        || has("credentials")
+        || pair("security", "answer")
+        || has("password")
         || has("passcode")
         || has("passphrase")
         || has("secret")
@@ -959,7 +1046,13 @@ fn check(block: &mut Block) -> Result<(), String> {
                 too_long(&o.reply, 500, &format!("options[{i}].reply"))?;
             }
         }
-        Body::Form(f) => check_form(f)?,
+        Body::Form(f) => {
+            // A form titled "Verify it's you" asks for what its fields say.
+            if block.title.as_deref().is_some_and(asks_for_secret) || asks_for_secret(&f.submit) {
+                return Err(SECRET_FORM.into());
+            }
+            check_form(f)?
+        }
         Body::Links(l) => {
             list_size(&l.items, 1, 12, "`items`")?;
             for (i, it) in l.items.iter_mut().enumerate() {
@@ -1554,6 +1647,43 @@ pub fn asks(set: &BlockSet) -> bool {
             b.body,
             Body::Choices(_) | Body::Comparison(_) | Body::Form(_)
         )
+    })
+}
+
+/// Whether `text`, sent by the user, is a block's answer whose words they
+/// never saw: a choice whose `reply` isn't its label, or a comparison
+/// option whose `reply` isn't the "Let's go with <name>." Pick this stands
+/// for. `blocks` is the latest agent message's set, before the user's.
+///
+/// A tap sends the reply as the user's own message, so without this an
+/// agent steered by something it read could put "Not now" on a button that
+/// sends "Yes, approve it" and have it count as typed: answering an open
+/// card (`typed_answer`), a plan's yes (`plan_grant`), or a rule to
+/// remember (`remember`). Such an answer still goes to the agent; it just
+/// isn't the user's typed words (`commands::agents::send_in`).
+pub fn unseen_answer(blocks: &Value, text: &str) -> bool {
+    let Ok(set) = serde_json::from_value::<BlockSet>(blocks.clone()) else {
+        return false;
+    };
+    let same = |a: &str, b: &str| {
+        let norm = |s: &str| {
+            s.split_whitespace()
+                .collect::<Vec<_>>()
+                .join(" ")
+                .to_lowercase()
+        };
+        norm(a) == norm(b)
+    };
+    let text = text.trim();
+    set.items.iter().any(|b| match &b.body {
+        Body::Choices(c) => c
+            .options
+            .iter()
+            .any(|o| same(&o.reply, text) && !same(&o.reply, &o.label)),
+        Body::Comparison(c) => c.options.iter().any(|o| {
+            same(&o.reply, text) && !same(&o.reply, &format!("Let's go with {}.", o.name.trim()))
+        }),
+        _ => false,
     })
 }
 
