@@ -51,9 +51,11 @@ import { previewErrorScenarios } from './previewError';
 import { remoteScenarios } from './remote';
 import { teamScenarios } from './team';
 import { projectsAtWorkScenarios } from './projectsAtWork';
+import { connectiveScenarios } from './connective';
 
 export const scenarios: Scenario[] = [
   ...agentsScenarios,
+  ...connectiveScenarios,
   ...agentsKeysScenarios,
   ...agentsDesktopScenarios,
   ...agentsBriefScenarios,

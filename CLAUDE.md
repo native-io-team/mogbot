@@ -909,6 +909,8 @@ export function useBranchCommands({ currentBranch, switchBranch, hasConflicts }:
 5. **Destructive actions need confirmation** — route through the existing confirm-modal pattern. The palette is low-friction by design; guardrails belong on the handler side.
 6. **Deps array controls re-registration** — treat it exactly like `useEffect`'s. Missing a dep → stale closure. Too many deps → the bucket rebuilds constantly (no harm, but wasteful).
 
+**How it shows** (`components/CommandPalette/paletteLayout.ts`, tested): anything namespaced `agents.` or `rooms.` is grouped under Agents (`paletteGroup`), which leads on the desk; inside a project the project's actions lead. Nothing typed: up to four recently run commands lead as Recent. Typed: groups are ordered by their best match, so Enter runs the best match overall. A command marked `fallback: true` is offered only when nothing matches and is handed the query (`run(query)`): that is "Ask the Chief of Staff", which puts the text in the Chief's message box, never sends it.
+
 **Where to put it:**
 
 - For a feature with ≤ 3 commands → call `useCommands` at the bottom of the feature's hook (if it's `.tsx`) or a sibling `useXxxCommands.tsx`.

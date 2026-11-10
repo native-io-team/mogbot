@@ -11,6 +11,7 @@ import { listen } from '@tauri-apps/api/event';
 import {
   AgentsIcon,
   CollaboratorsIcon,
+  CommentIcon,
   DownloadIcon,
   FileTextIcon,
   GlobeIcon,
@@ -29,6 +30,7 @@ import { AGENT_EVENTS, OTHER_APP_NAME, otherAppExists, TEAM_ID } from '../lib/ag
 import { DESCRIBE_START, ROLE_TEMPLATES } from '../lib/agentTemplates';
 import { SHARE_RECIPE_EVENT } from '../lib/agentRecipe';
 import { openLogs } from '../lib/agentDesk';
+import { composerDraft, setComposerDraft } from '../lib/composerDraft';
 import { setGroupMode, startNamingGroup, useAgentGroups, type GroupMode } from '../lib/agentGroups';
 
 /** ⌘K switches for the agent list's optional groups. */
@@ -180,7 +182,9 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
   const { showToast } = useOptionalToast();
   // "Setting up your team", offered while there's one to finish (put away or not).
   const setup = useResumableTeamSetup();
-  const chiefId = agents.find((a) => a.isMain)?.id;
+  const chief = agents.find((a) => a.isMain);
+  const chiefId = chief?.id;
+  const chiefName = chief?.name;
   const groupMode = useAgentGroups().mode;
   // Whether the other app has agents on this Mac, asked once from its
   // registry alone (not the preview, which reads every agent's folder): it
@@ -222,6 +226,28 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
 
   useCommands(
     () => [
+      // ⌘K's way on from "nothing matches": what was typed, put in the
+      // Chief's message box (never sent), for it to work out.
+      ...(chiefId && chiefName
+        ? [
+            {
+              id: 'agents.askChief',
+              title: `Ask ${chiefName}`,
+              icon: <CommentIcon size={14} />,
+              category: 'action' as const,
+              fallback: true,
+              run: (query?: string) => {
+                const text = query?.trim();
+                if (text) {
+                  const before = composerDraft(chiefId).trimEnd();
+                  setComposerDraft(chiefId, before ? `${before}\n${text}` : text);
+                }
+                requestAgentsIntent({ kind: 'open', agentId: chiefId });
+                setView('agents');
+              },
+            },
+          ]
+        : []),
       {
         id: 'agents.open',
         title: 'Agents',
@@ -572,6 +598,6 @@ export function useAgentsNavCommands({ setView }: { setView: (view: AppView) => 
         },
       })),
     ],
-    [setView, agents, showToast, otherApp, setup, chiefId, groupMode]
+    [setView, agents, showToast, otherApp, setup, chiefId, chiefName, groupMode]
   );
 }

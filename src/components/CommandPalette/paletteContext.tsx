@@ -8,7 +8,7 @@ import {
   type ReactNode,
 } from 'react';
 import { useOpenModal } from '../../contexts/ModalContext';
-import type { CommandCategory } from '../../commands/types';
+import type { PaletteGroup } from '../../commands/types';
 
 /**
  * Which area of the app the palette should adapt to.
@@ -19,8 +19,8 @@ import type { CommandCategory } from '../../commands/types';
  */
 export type PaletteContextKind = 'home' | 'project' | 'other';
 
-/** Tab ids accepted by the palette (matches `PaletteTabId` inside the palette). */
-export type PaletteTabId = 'all' | CommandCategory;
+/** Tab ids accepted by the palette (its tabs are a subset of the groups). */
+export type PaletteTabId = 'all' | PaletteGroup;
 
 interface PaletteContextValue {
   kind: PaletteContextKind;
