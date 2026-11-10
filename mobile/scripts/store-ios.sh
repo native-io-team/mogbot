@@ -65,7 +65,8 @@ fi
 step "Checking the tools"
 command -v node >/dev/null || fail "Node isn't installed."
 command -v pod >/dev/null || fail "CocoaPods isn't installed."
-xcodebuild -version | head -1 || fail "Xcode isn't set up (xcode-select -p)."
+xcode="$(xcodebuild -version 2>/dev/null)" || fail "Xcode isn't set up (xcode-select -p)."
+echo "${xcode%%$'\n'*}"
 expected_id="$(node -p "require('$here/../brand.json').companion.bundleId")"
 echo "bundle id $expected_id, build $build_number, $([ "$sign" = 1 ] && echo "signed for team $team" || echo unsigned)"
 
@@ -80,7 +81,7 @@ step "Installing pods"
 cd "$here/ios"
 pod install
 
-workspace="$(ls -d "$here"/ios/*.xcworkspace | head -1)"
+workspace="$(ls -d "$here"/ios/*.xcworkspace | sed -n 1p)"
 scheme="$(basename "$workspace" .xcworkspace)"
 [ -d "$workspace" ] || fail "No workspace in mobile/ios."
 mkdir -p "$out"
@@ -99,7 +100,7 @@ else
     CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY="" DEVELOPMENT_TEAM="$team"
 fi
 
-app="$(ls -d "$archive"/Products/Applications/*.app | head -1)"
+app="$(ls -d "$archive"/Products/Applications/*.app | sed -n 1p)"
 [ -d "$app" ] || fail "The archive has no app."
 
 if [ "$sign" = 1 ]; then
@@ -110,12 +111,12 @@ if [ "$sign" = 1 ]; then
     fail "store/ExportOptions.plist must keep destination export."
   xcodebuild -exportArchive -archivePath "$archive" -exportOptionsPlist "$here/store/ExportOptions.plist" \
     -exportPath "$export_dir" -allowProvisioningUpdates ${auth[@]+"${auth[@]}"}
-  ipa="$(ls "$export_dir"/*.ipa | head -1)"
+  ipa="$(ls "$export_dir"/*.ipa | sed -n 1p)"
   [ -f "$ipa" ] || fail "No .ipa was exported."
   unpacked="$out/ipa"
   rm -rf "$unpacked" && mkdir -p "$unpacked"
   unzip -q "$ipa" -d "$unpacked"
-  app="$(ls -d "$unpacked"/Payload/*.app | head -1)"
+  app="$(ls -d "$unpacked"/Payload/*.app | sed -n 1p)"
 fi
 
 step "Checking the app"
@@ -142,7 +143,7 @@ if [ "$sign" = 1 ]; then
   [ "$aps" = production ] || fail "aps-environment is '$aps', not production."
   [ "$team_signed" = "$team" ] || fail "signed by team $team_signed, not $team."
 else
-  ent="$(ls "$here"/ios/"$scheme"/*.entitlements 2>/dev/null | head -1)"
+  ent="$(ls "$here"/ios/"$scheme"/*.entitlements 2>/dev/null | sed -n 1p)"
   aps="$([ -n "$ent" ] && plutil -extract aps-environment raw "$ent" 2>/dev/null || true)"
   echo "aps          $aps in the project's entitlements (an App Store export makes it production)"
   [ -n "$aps" ] || fail "no aps-environment in the store build's entitlements."

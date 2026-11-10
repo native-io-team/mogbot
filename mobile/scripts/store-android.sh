@@ -52,11 +52,11 @@ case "$build_number" in ''|*[!0-9]*|0) fail "--build-number must be a whole numb
 step "Checking the tools"
 command -v node >/dev/null || fail "Node isn't installed."
 if [ -z "${JAVA_HOME:-}" ] && [ -d "$HOME/.local/jdk" ]; then
-  JAVA_HOME="$(find "$HOME/.local/jdk" -maxdepth 3 -type d -name Home -path '*jdk-17*' | head -1)"
+  JAVA_HOME="$(find "$HOME/.local/jdk" -maxdepth 3 -type d -name Home -path '*jdk-17*' | sed -n 1p)"
 fi
 [ -n "${JAVA_HOME:-}" ] && export JAVA_HOME PATH="$JAVA_HOME/bin:$PATH"
 java -version >/dev/null 2>&1 || fail "No Java. Install JDK 17 (Temurin or Zulu) and set JAVA_HOME."
-java_major="$(java -version 2>&1 | sed -n 's/.*version "\([0-9]*\).*/\1/p' | head -1)"
+java_major="$(java -version 2>&1 | sed -n 's/.*version "\([0-9]*\).*/\1/p' | sed -n 1p)"
 [ "${java_major:-0}" -ge 17 ] || fail "JDK 17 or newer is needed (found $java_major)."
 export ANDROID_HOME="${ANDROID_HOME:-$HOME/Library/Android/sdk}"
 [ -d "$ANDROID_HOME" ] || fail "No Android SDK at $ANDROID_HOME. Install Android Studio or the command-line tools."
@@ -94,15 +94,15 @@ COMPANION_STORE_BUILD=1 COMPANION_BUILD_NUMBER="$build_number" \
 
 aab="$here/android/app/build/outputs/bundle/release/app-release.aab"
 manifest="$(find "$here/android/app/build/intermediates" -path '*release*' -name AndroidManifest.xml \
-  -path '*merged_manifest*' | head -1)"
+  -path '*merged_manifest*' | sed -n 1p)"
 [ -f "$aab" ] || fail "No bundle at $aab."
 [ -f "$manifest" ] || fail "No merged release manifest to check."
 
 step "Checking the bundle"
 expected_id="$(node -p "require('$here/../brand.json').companion.bundleId")"
-attr() { sed -n "s/.*android:$1=\"\([^\"]*\)\".*/\1/p" "$manifest" | head -1; }
-pkg="$(sed -n 's/.*package="\([^"]*\)".*/\1/p' "$manifest" | head -1)"
-[ -n "$pkg" ] || pkg="$(sed -n "s/.*applicationId '\([^']*\)'.*/\1/p" "$here/android/app/build.gradle" | head -1)"
+attr() { sed -n "s/.*android:$1=\"\([^\"]*\)\".*/\1/p" "$manifest" | sed -n 1p; }
+pkg="$(sed -n 's/.*package="\([^"]*\)".*/\1/p' "$manifest" | sed -n 1p)"
+[ -n "$pkg" ] || pkg="$(sed -n "s/.*applicationId '\([^']*\)'.*/\1/p" "$here/android/app/build.gradle" | sed -n 1p)"
 vcode="$(attr versionCode)"; vname="$(attr versionName)"; target="$(attr targetSdkVersion)"; min="$(attr minSdkVersion)"
 echo "package      $pkg"
 echo "version      $vname ($vcode)"
@@ -117,7 +117,7 @@ for p in $perms; do
   case " $allowed " in *" $p "*) ;; *) fail "unexpected permission $p (add it to ANDROID_PERMISSIONS on purpose, or block it)." ;; esac
 done
 if grep -q 'android:debuggable="true"' "$manifest"; then fail "the release manifest is debuggable."; fi
-cert="$(keytool -printcert -jarfile "$aab" 2>/dev/null | sed -n 's/^Owner: //p' | head -1)"
+cert="$(keytool -printcert -jarfile "$aab" 2>/dev/null | sed -n 's/^Owner: //p' | sed -n 1p)"
 echo "signed by    ${cert:-unsigned}"
 case "$cert" in *"Android Debug"*) echo "  (the debug key: fine to check, not to upload)";; esac
 
