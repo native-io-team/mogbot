@@ -135,12 +135,16 @@ function oneEdit(a: string, b: string): boolean {
 }
 
 /** How well one word matches an entry: 0 for not at all. */
-function wordScore(e: IconEntry, t: string): number {
+function wordScore(e: IconEntry, t: string, fuzzy = true): number {
   if (e.nameWords.includes(t)) return 100;
   if (t.length >= 2 && e.nameWords.some((w) => w.startsWith(t))) return 60;
   if (e.tagWords.includes(t)) return 50;
   if (t.length >= 3 && e.tagWords.some((w) => w.startsWith(t))) return 30;
-  if (t.length >= 4 && [...e.nameWords, ...e.tagWords].some((w) => w.length >= 4 && oneEdit(w, t)))
+  if (
+    fuzzy &&
+    t.length >= 4 &&
+    [...e.nameWords, ...e.tagWords].some((w) => w.length >= 4 && oneEdit(w, t))
+  )
     return 20;
   return 0;
 }
@@ -148,7 +152,7 @@ function wordScore(e: IconEntry, t: string): number {
 /** A typed word's score: itself, or (at seven tenths) the best of its synonyms. */
 function tokenScore(e: IconEntry, t: string): number {
   let best = wordScore(e, t) * 10;
-  for (const s of SYNONYMS[t] ?? []) best = Math.max(best, wordScore(e, s) * 7);
+  for (const s of SYNONYMS[t] ?? []) best = Math.max(best, wordScore(e, s, false) * 7);
   return best;
 }
 

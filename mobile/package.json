@@ -104,7 +104,7 @@
           "node_modules/(?!((jest-)?react-native|@react-native(-community)?|expo(nent)?|@expo(nent)?/.*|@expo-google-fonts/.*|react-navigation|@react-navigation/.*|marked|@noble/.*))"
         ],
         "moduleNameMapper": {
-          "^\\./agentKeyPackShards$": "<rootDir>/__tests__/agentKeyPackShards.stub.ts"
+          "^\\./agentKeyPackShards$": "<rootDir>/../packages/companion-protocol/src/agentKeyPackShards.require.ts"
         }
       },
       {
@@ -117,7 +117,7 @@
           "node_modules/(?!(@noble/.*))"
         ],
         "moduleNameMapper": {
-          "^\\./agentKeyPackShards$": "<rootDir>/__tests__/agentKeyPackShards.stub.ts"
+          "^\\./agentKeyPackShards$": "<rootDir>/../packages/companion-protocol/src/agentKeyPackShards.require.ts"
         }
       }
     ]
