@@ -54,6 +54,7 @@ import { previewErrorScenarios } from './previewError';
 import { remoteScenarios } from './remote';
 import { teamScenarios } from './team';
 import { projectsAtWorkScenarios } from './projectsAtWork';
+import { projectsDashboardScenarios } from './projectsDashboard';
 import { connectiveScenarios } from './connective';
 
 export const scenarios: Scenario[] = [
@@ -98,6 +99,7 @@ export const scenarios: Scenario[] = [
   ...agentsHeaderScenarios,
   ...agentsAccountsScenarios,
   ...appScenarios,
+  ...projectsDashboardScenarios,
   ...onboardingFlowScenarios,
   ...featureScenarios,
   ...hostingScenarios,

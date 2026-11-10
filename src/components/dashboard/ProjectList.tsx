@@ -75,6 +75,8 @@ import { ProjectSettingsModal } from '../workspace/ProjectSettingsModal';
 import { DashboardWorkspaceChip } from './DashboardWorkspaceChip';
 import { ProjectThumbnailInput } from './ProjectThumbnailInput';
 import type { ProjectViewMode } from './ProjectGridView';
+import { projectTeam } from './ProjectTeam';
+import { openAgentChat, useAgentsAtWork } from '../workspace/useProjectAgents';
 
 /** Basic project info for selection callback */
 interface Project {
@@ -100,10 +102,6 @@ interface ProjectListProps {
   onCreateProject: () => void;
   /** Callback to open the import project wizard */
   onImportProject?: () => void;
-  /** Whether GitHub is authenticated (import requires GitHub) */
-  isGitHubAuthenticated?: boolean;
-  /** Callback when user tries to import without GitHub auth */
-  onGitHubConnectForImport?: () => void;
   /** GitHub username for contribution calendar */
   githubUsername?: string | null;
   /** Whether the initial auth check has completed */
@@ -118,19 +116,20 @@ interface ProjectListProps {
   onTogglePin?: (projectPath: string, pinned: boolean) => void | Promise<void>;
   /** Open the workspace switcher (shown as a chip beside "All projects"). */
   onSwitchAccount?: () => void;
+  /** Switches to Agents: a project's team line opens that agent's chat. */
+  onGoAgents?: () => void;
 }
 
 export function ProjectList({
   onSelectProject,
   onCreateProject,
   onImportProject,
-  isGitHubAuthenticated = true,
-  onGitHubConnectForImport,
   onLoadingChange,
   cleanupStatus,
   pinnedSet,
   onTogglePin,
   onSwitchAccount,
+  onGoAgents,
 }: ProjectListProps) {
   /** Hidden <input type="file"> reused across cards. The current upload
    *  target lives in a ref (not state) so the change handler reads the
@@ -348,7 +347,10 @@ export function ProjectList({
       logger.error('Failed to toggle main branch warning', {
         error: formatCommandError(asCommandError(error)),
       });
-      alert('Failed to update main branch warning: ' + formatCommandError(asCommandError(error)));
+      showToast(
+        `Couldn't change the main branch warning: ${formatCommandError(asCommandError(error))}`,
+        'error'
+      );
     }
   };
 
@@ -384,7 +386,7 @@ export function ProjectList({
       logger.error('Failed to upload thumbnail', {
         error: formatCommandError(asCommandError(error)),
       });
-      alert('Failed to upload thumbnail: ' + formatCommandError(asCommandError(error)));
+      showToast(`Couldn't use that picture: ${formatCommandError(asCommandError(error))}`, 'error');
     }
   };
 
@@ -393,14 +395,17 @@ export function ProjectList({
       const result = await exportProjectAsTemplate(projectPath);
       if (result) {
         void trackEvent('project_exported_as_template', { $screen_name: 'Dashboard' });
-        alert(`Template exported to:\n${result}`);
+        showToast(`Saved the template to ${result}`, 'success');
       }
       // If result is null, user cancelled the dialog - no action needed
     } catch (error) {
       logger.error('Failed to export template', {
         error: formatCommandError(asCommandError(error)),
       });
-      alert('Failed to export template: ' + formatCommandError(asCommandError(error)));
+      showToast(
+        `Couldn't save the template: ${formatCommandError(asCommandError(error))}`,
+        'error'
+      );
     }
   };
 
@@ -427,7 +432,10 @@ export function ProjectList({
       logger.error('Failed to delete folder', {
         error: formatCommandError(asCommandError(error)),
       });
-      alert('Failed to delete folder: ' + formatCommandError(asCommandError(error)));
+      showToast(
+        `Couldn't delete the folder: ${formatCommandError(asCommandError(error))}`,
+        'error'
+      );
     } finally {
       setDeletingFolder(false);
     }
@@ -546,6 +554,17 @@ export function ProjectList({
     }
   }, [projectSettingsModal.isOpen]);
 
+  // Who works in each project: agents bound to it and any whose turn is in it.
+  const projectAgents = useAgentsAtWork(true);
+  const teamFor = useCallback(
+    (projectPath: string) => projectTeam(projectAgents, projectPath, Date.now()),
+    [projectAgents]
+  );
+  const handleOpenAgent = useMemo(
+    () => (onGoAgents ? (agentId: string) => openAgentChat(onGoAgents, agentId) : undefined),
+    [onGoAgents]
+  );
+
   const totalCount = currentFolderId
     ? filteredProjects.length
     : filteredFolders.length + filteredProjects.length;
@@ -582,8 +601,6 @@ export function ProjectList({
             onNewFolder={() => setShowNewFolderModal(true)}
             onCreateProject={onCreateProject}
             onImportProject={onImportProject}
-            isGitHubAuthenticated={isGitHubAuthenticated}
-            onGitHubConnectForImport={onGitHubConnectForImport}
             titleAccessory={
               !currentFolderId && hasMultipleWorkspaces && activeAccount && onSwitchAccount ? (
                 <DashboardWorkspaceChip account={activeAccount} onSwitch={onSwitchAccount} />
@@ -640,6 +657,8 @@ export function ProjectList({
                 pinnedSet={pinnedSet}
                 onTogglePin={onTogglePin}
                 onCreateProject={onCreateProject}
+                teamFor={teamFor}
+                onOpenAgent={handleOpenAgent}
               />
             </>
           )}

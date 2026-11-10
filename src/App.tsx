@@ -1119,6 +1119,7 @@ function AppContents({ initialProjectPath }: AppProps) {
     pinnedSet: pinnedProjects.pinnedSet,
     onTogglePin: (path: string, pinned: boolean) => void handleTogglePin(path, pinned),
     onSwitchAccount: openAccountSelect,
+    onGoAgents: modeNav.onGoAgents,
   };
 
   const workspaceViewProps = {

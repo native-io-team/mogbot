@@ -12,6 +12,7 @@ import { memo } from 'react';
 import { DashboardProject } from '../../lib/project';
 import { BranchIcon } from '@/components/icons';
 import { ProjectCardMenu } from './ProjectCardMenu';
+import { ProjectTeam, type ProjectTeamSummary } from './ProjectTeam';
 
 /** Props for the ProjectCard component */
 interface ProjectCardProps {
@@ -45,6 +46,10 @@ interface ProjectCardProps {
   isPinned?: boolean;
   /** Toggle pin state. Receives the desired new state. */
   onTogglePin?: (pinned: boolean) => void | Promise<void>;
+  /** The agents that work here (`projectTeam`); absent when none. */
+  team?: ProjectTeamSummary | null;
+  /** Opens an agent's chat from the team line. */
+  onOpenAgent?: (agentId: string) => void;
 }
 
 export const ProjectCard = memo(function ProjectCard({
@@ -63,6 +68,8 @@ export const ProjectCard = memo(function ProjectCard({
   onRemove,
   isPinned,
   onTogglePin,
+  team,
+  onOpenAgent,
 }: ProjectCardProps) {
   const hasChanges = project.uncommitted_count !== null && project.uncommitted_count > 0;
   const hasWorktrees = project.worktree_count != null && project.worktree_count > 0;
@@ -116,6 +123,7 @@ export const ProjectCard = memo(function ProjectCard({
               )}
               {hasChanges && (
                 <span className="project-card-changes">
+                  {project.git_branch && '· '}
                   {project.uncommitted_count}{' '}
                   {project.uncommitted_count === 1 ? 'change' : 'changes'}
                 </span>
@@ -128,6 +136,7 @@ export const ProjectCard = memo(function ProjectCard({
               )}
             </div>
           )}
+          {team && <ProjectTeam team={team} onOpenAgent={onOpenAgent} />}
         </div>
         <ProjectCardMenu
           onOpenSettings={onOpenSettings}

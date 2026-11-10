@@ -15,6 +15,7 @@ import { useProjectToolsChecking } from '../../lib/projectTools';
 import { PlusIcon } from '@/components/icons';
 import type { DashboardProject } from '../../lib/project';
 import type { FolderInfo } from '../../lib/folders';
+import type { ProjectTeamSummary } from './ProjectTeam';
 
 interface ProjectWithThumbnail extends DashboardProject {
   thumbnailData: string | null;
@@ -58,6 +59,10 @@ export interface ProjectGridViewProps {
   onTogglePin?: (projectPath: string, pinned: boolean) => void | Promise<void>;
   /** Start the create-project flow (drives the zero-projects empty-state CTA). */
   onCreateProject?: () => void;
+  /** The agents that work in a project (`projectTeam`), by its path. */
+  teamFor?: (projectPath: string) => ProjectTeamSummary | null;
+  /** Opens an agent's chat from a project's team line. */
+  onOpenAgent?: (agentId: string) => void;
 }
 
 /**
@@ -92,6 +97,8 @@ export function ProjectGridView({
   pinnedSet,
   onTogglePin,
   onCreateProject,
+  teamFor,
+  onOpenAgent,
 }: ProjectGridViewProps) {
   const checking = useProjectToolsChecking();
   if (totalCount === 0) {
@@ -166,6 +173,8 @@ export function ProjectGridView({
             onRemoveProject={onRemoveProject}
             pinnedSet={pinnedSet}
             onTogglePin={onTogglePin}
+            teamFor={teamFor}
+            onOpenAgent={onOpenAgent}
           />
         )}
       </div>
@@ -204,6 +213,8 @@ export function ProjectGridView({
           onRemove={() => onRemoveProject(project)}
           isPinned={pinnedSet?.has(project.path) ?? false}
           onTogglePin={onTogglePin ? (pinned) => onTogglePin(project.path, pinned) : undefined}
+          team={teamFor?.(project.path) ?? null}
+          onOpenAgent={onOpenAgent}
         />
       ))}
     </div>
