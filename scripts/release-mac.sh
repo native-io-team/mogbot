@@ -69,7 +69,7 @@ echo "    identity: $IDENTITY"
 echo "    target:   $TARGET_DIR"
 
 # ---------------------------------------------------------------- preflight
-security find-identity -v -p codesigning | grep -qF "\"$IDENTITY\"" \
+grep -qF "\"$IDENTITY\"" <<<"$(security find-identity -v -p codesigning)" \
   || die "identity not in the keychain: $IDENTITY (security find-identity -v -p codesigning)"
 ok "signing identity found"
 
@@ -101,7 +101,7 @@ fi
 if [ "$SKIP_BUILD" = 0 ]; then
   if [ "$UNIVERSAL" = 1 ]; then
     for t in aarch64-apple-darwin x86_64-apple-darwin; do
-      rustup target list --installed | grep -qx "$t" || die "missing Rust target $t (rustup target add $t)"
+      grep -qx "$t" <<<"$(rustup target list --installed)" || die "missing Rust target $t (rustup target add $t)"
     done
   fi
   say "Building (pnpm tauri build --bundles app --target $TRIPLE)"
@@ -137,8 +137,11 @@ ok "signed by the identity, hardened runtime, timestamped, entitlements present"
 # Every Mach-O inside the bundle must be signed by us too, or notarization fails.
 UNSIGNED=()
 while IFS= read -r -d '' f; do
-  if file -b "$f" | grep -q "Mach-O"; then
-    codesign -dvv "$f" 2>&1 | grep -qF "Authority=$IDENTITY" || UNSIGNED+=("$f")
+  # Captured, not piped into grep -q: with pipefail, grep -q closing the pipe
+  # early fails the pipeline and reads as "unsigned".
+  if [[ "$(file -b "$f")" == *Mach-O* ]]; then
+    info="$(codesign -dvv "$f" 2>&1 || true)"
+    [[ "$info" == *"Authority=$IDENTITY"* ]] || UNSIGNED+=("$f")
   fi
 done < <(find "$APP_PATH/Contents" -type f -print0)
 [ ${#UNSIGNED[@]} -eq 0 ] || die "binaries in the bundle not signed by the identity: ${UNSIGNED[*]}"
