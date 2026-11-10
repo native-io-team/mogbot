@@ -83,6 +83,16 @@ pub fn decide(url: &Url, dev_url: Option<&Url>, top_level_only: bool) -> NavDeci
     }
 }
 
+/// What the log says about a navigation: its scheme and host, never its
+/// path, query or fragment, where a signed link, an OAuth code or a `mailto:`
+/// address would sit.
+fn log_target(url: &Url) -> String {
+    match url.host_str() {
+        Some(host) => format!("{}://{host}", url.scheme()),
+        None => format!("{}:", url.scheme()),
+    }
+}
+
 pub fn init<R: Runtime>() -> TauriPlugin<R> {
     tauri::plugin::Builder::new("navigation-guard")
         .on_navigation(|webview, url| {
@@ -90,7 +100,10 @@ pub fn init<R: Runtime>() -> TauriPlugin<R> {
             match decide(url, dev_url.as_ref(), cfg!(windows)) {
                 NavDecision::Allow => true,
                 NavDecision::OpenExternally => {
-                    tracing::info!(url = %url, "Navigation sent to the system instead of the app");
+                    tracing::info!(
+                        to = %log_target(url),
+                        "Navigation sent to the system instead of the app"
+                    );
                     if let Err(error) = tauri_plugin_opener::open_url(url.as_str(), None::<&str>) {
                         tracing::warn!(%error, "Could not open a link externally");
                     }
@@ -115,6 +128,22 @@ mod tests {
 
     fn dev() -> Url {
         u("http://127.0.0.1:1420")
+    }
+
+    #[test]
+    fn the_log_names_only_scheme_and_host() {
+        assert_eq!(
+            log_target(&u("https://example.test/cb?code=fictional-oauth-code#t=1")),
+            "https://example.test"
+        );
+        assert_eq!(
+            log_target(&u("https://user:pw@example.test:8443/x?sig=abc")),
+            "https://example.test"
+        );
+        assert_eq!(
+            log_target(&u("mailto:someone@example.test?subject=x")),
+            "mailto:"
+        );
     }
 
     #[test]
