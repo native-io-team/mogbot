@@ -266,9 +266,16 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  /* On the selected surface muted is 3.6:1 and secondary 4.3:1. */
-  color: var(--text-primary);
-  font-size: var(--font-size-12);
+  /* Decorative (aria-hidden; the thumbnail is labelled "Open <name>"), so it
+     can sit back in muted instead of shouting the same words on every card. */
+  color: var(--text-muted);
+}
+
+.project-card-monogram {
+  font-size: var(--font-size-display);
+  font-weight: var(--font-weight-semibold);
+  line-height: 1;
+  letter-spacing: 0;
 }
 
 .project-card-info {

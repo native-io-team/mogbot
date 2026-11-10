@@ -52,6 +52,12 @@ interface ProjectCardProps {
   onOpenAgent?: (agentId: string) => void;
 }
 
+/** "acme-marketing" → "A": the first letter or digit of the name, else its first character. */
+export function monogram(name: string): string {
+  const letter = Array.from(name).find((c) => /[\p{L}\p{N}]/u.test(c));
+  return (letter ?? Array.from(name)[0] ?? '').toLocaleUpperCase();
+}
+
 export const ProjectCard = memo(function ProjectCard({
   project,
   thumbnailData,
@@ -95,8 +101,10 @@ export const ProjectCard = memo(function ProjectCard({
         {thumbnailData ? (
           <img src={thumbnailData} alt={project.name} />
         ) : (
-          <div className="project-card-placeholder">
-            <span>No preview</span>
+          // No picture taken or uploaded yet: the
+          // project's initial, quiet, rather than a wall of "No preview".
+          <div className="project-card-placeholder" aria-hidden>
+            <span className="project-card-monogram">{monogram(project.name)}</span>
           </div>
         )}
       </div>
