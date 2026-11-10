@@ -300,25 +300,47 @@ fn tabs_are_read_from_either_shape() {
     assert_eq!(landed_in("not json", None), None);
 }
 
+fn new_agent(name: &str) -> Agent {
+    store::create(store::NewAgent {
+        name: name.into(),
+        role: String::new(),
+        instructions: String::new(),
+        shape: None,
+        avatar: None,
+        color: None,
+        is_main: false,
+    })
+    .unwrap()
+}
+
 #[test]
 fn the_switch_starts_off_and_an_old_browser_choice_keeps_it_on() {
     with_root(|| {
-        assert!(!team_enabled());
-        let a = store::create(store::NewAgent {
-            name: "Social".into(),
-            role: String::new(),
-            instructions: String::new(),
-            shape: None,
-            avatar: None,
-            color: None,
-            is_main: false,
-        })
-        .unwrap();
-        // Chosen on a login card in an older build.
+        // Chosen on a login card in an older build, before the switch existed.
+        let a = new_agent("Social");
         give_site(&a.id, "x.com").unwrap();
         assert!(team_enabled());
         change(|s| s.enabled = false).unwrap();
         assert!(!team_enabled(), "a kept choice wins over the upgrade");
+    });
+    with_root(|| {
+        new_agent("Quiet");
+        assert!(!team_enabled());
+    });
+}
+
+#[test]
+fn the_agents_own_browser_never_switches_the_users_chrome_on() {
+    // Found by the fake-engine suite: `request_login` sends an agent to the
+    // agents' browser and gives it the site; the upgrade, worked out again
+    // on the next read, took that for an old "Use my browser" choice and
+    // switched Claude in Chrome on for the whole team.
+    with_root(|| {
+        let a = new_agent("Reader");
+        assert!(!team_enabled(), "a new team starts off");
+        give_site(&a.id, "linear.app").unwrap();
+        assert!(!team_enabled(), "still off: nothing was set up");
+        assert!(!for_turn(&store::get(&a.id).unwrap(), false));
     });
 }
 

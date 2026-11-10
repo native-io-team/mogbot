@@ -848,6 +848,16 @@ pub fn set_root_for_tests(path: Option<PathBuf>) {
     *ROOT_OVERRIDE.lock().unwrap_or_else(|e| e.into_inner()) = path;
 }
 
+/// A unit test without a scratch root reads the real app's folder; it
+/// must never write there. Always true outside tests.
+pub fn may_write_root() -> bool {
+    !cfg!(test)
+        || ROOT_OVERRIDE
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .is_some()
+}
+
 pub fn now_ms() -> i64 {
     chrono::Utc::now().timestamp_millis()
 }
