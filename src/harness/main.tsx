@@ -27,7 +27,12 @@ import { installFakeBackend, whenIpcQuiet } from './fakeBackend';
 import { findScenario, scenarios } from './scenarios';
 import type { ScenarioStep } from './types';
 import { unhandledCalls } from './unhandled';
-import { listCommands, runCommand, whenRegistryStable } from './commandBridge';
+import {
+  listCommands,
+  runCommand,
+  whenCommandRegistered,
+  whenRegistryStable,
+} from './commandBridge';
 import { HarnessOverlay } from './HarnessOverlay';
 import { initTheme } from '../lib/theme';
 import { holdCopiedFlag } from '../hooks/useCopyToClipboard';
@@ -298,6 +303,11 @@ async function settle(): Promise<void> {
     // Wait for every feature hook to have registered before looking the
     // command up, otherwise a slow bucket reads as a missing command.
     await whenRegistryStable();
+    // A project's commands register only once its workspace mounts, after
+    // the project has opened: under load that comes after the registry's
+    // first quiet spell, and a command that was simply late read as missing.
+    // Wait for it (bounded) before calling it absent.
+    await whenCommandRegistered(commandId);
     const ran = await runCommand(commandId).catch((e) => {
       console.error(`[harness] command ${commandId} threw:`, e);
       return true; // it exists; it failed. That is a finding, not a lookup miss.
