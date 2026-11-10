@@ -518,7 +518,7 @@ async fn skills(h: &H) -> Check {
     ensure(
         notes(&a.id)
             .iter()
-            .any(|n| n.starts_with("Learned a skill: Tally the receipts")),
+            .any(|n| *n == agents::skills_learn::saved_line("Tally the receipts", false)),
         format!("no saved line: {:?}", notes(&a.id)),
     )?;
 
