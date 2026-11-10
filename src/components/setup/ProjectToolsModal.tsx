@@ -37,7 +37,7 @@ import { getAgentById } from '../../lib/agent';
 
 /** Plain names for the list; the checklist keeps the tools' own names. */
 const PLAIN_NAMES: Record<string, string> = {
-  homebrew: 'A package manager, to install the rest',
+  homebrew: 'Homebrew, a free tool that installs the rest',
   node: 'Node.js, which most sites and apps run on',
   npm_fix: 'A permissions fix for Node.js',
   git: 'Git, which keeps every version of your work',

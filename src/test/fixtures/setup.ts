@@ -31,7 +31,7 @@ const CLAUDE_AUTH_READY = item('claude_auth', 'Claude Account', 'ready', {
 });
 const CODEX_READY = item('codex', 'Codex', 'ready', { version: '0.1.0' });
 const CODEX_AUTH_READY = item('codex_auth', 'Codex Account', 'ready', { username: 'codex-user' });
-const OPENCODE_READY = item('opencode', 'Opencode', 'ready', { version: '0.1.0' });
+const OPENCODE_READY = item('opencode', 'OpenCode', 'ready', { version: '0.1.0' });
 const VERCEL_READY = item('vercel', 'Vercel CLI', 'ready', { version: '33.0.0' });
 const VERCEL_AUTH_READY = item('vercel_auth', 'Vercel Account', 'ready', {
   username: 'vercel-user',
@@ -48,8 +48,8 @@ const CLAUDE_MISSING = item('claude', 'Claude Code', 'not_installed');
 const CLAUDE_AUTH_MISSING = item('claude_auth', 'Claude Account', 'not_authenticated');
 const CODEX_MISSING = item('codex', 'Codex', 'not_installed');
 const CODEX_AUTH_MISSING = item('codex_auth', 'Codex Account', 'not_authenticated');
-const OPENCODE_MISSING = item('opencode', 'Opencode', 'not_installed');
-const OPENCODE_AUTH_MISSING = item('opencode_auth', 'Opencode Account', 'not_authenticated');
+const OPENCODE_MISSING = item('opencode', 'OpenCode', 'not_installed');
+const OPENCODE_AUTH_MISSING = item('opencode_auth', 'OpenCode Account', 'not_authenticated');
 const VERCEL_MISSING = item('vercel', 'Vercel CLI', 'not_installed');
 const VERCEL_AUTH_MISSING = item('vercel_auth', 'Vercel Account', 'not_authenticated');
 

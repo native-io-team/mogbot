@@ -764,7 +764,7 @@ export const baseCommands: CommandMap = {
     },
     {
       id: 'opencode',
-      displayName: 'Opencode',
+      displayName: 'OpenCode',
       binaryName: 'opencode',
       installed: false,
       version: null,

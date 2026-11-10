@@ -142,7 +142,7 @@ export const FULL_INVENTORY = {
     },
   ],
   local: [
-    { name: 'Opencode', models: [] },
+    { name: 'OpenCode', models: [] },
     { name: 'Ollama', running: true, models: ['llama3.2:3b', 'qwen2.5-coder:7b'] },
   ],
   spare: [
