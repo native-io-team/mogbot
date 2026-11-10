@@ -85,6 +85,11 @@
   grid-column: 1 / 3;
   justify-self: start;
   gap: var(--spacing-md);
+  /* The title clips (its chips give way), and the key's depth and ambient
+     shadow hang below the cap: room above and below, given straight back,
+     so the key's foot isn't cut flat. */
+  padding-block: var(--spacing-xs);
+  margin-block: calc(var(--spacing-xs) * -1);
 }
 
 .agent-chat__header .agent-chat__title .agent-key {
