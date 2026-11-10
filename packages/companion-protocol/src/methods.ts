@@ -269,6 +269,16 @@ export interface Methods {
    * second and a half) for a newer one.
    */
   'agents.signinFrame': { params: { sessionId: string; after?: number }; result: SigninFrame };
+  /**
+   * Mac feature `stepIn.phone`: step into an agent's own tab for its
+   * step-in card (`agents/step_in.rs`). The tab is held so the agent can't
+   * use it, its window stays parked on the Mac, and this phone sees and
+   * drives it with `agents.signinFrame` / `agents.signinInput`.
+   * `agents.signinDone` is Hand back (`handed_back`); Stop, five idle
+   * minutes and Hand back at the Mac hand it back too. Refused while the
+   * user is in it at the Mac.
+   */
+  'agents.stepInBegin': { params: { agentId: string; requestId: string }; result: SigninBegun };
   /** A tap, typing, a key, a scroll, Back or Reload. Only from the phone that began it. */
   'agents.signinInput': { params: { sessionId: string; input: SigninInput }; result: null };
   /**

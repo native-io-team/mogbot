@@ -334,6 +334,7 @@ fn the_wire_shapes() {
         idle_seconds: 300,
         via: Via::AgentsBrowser,
         frame_gap_ms: 30,
+        step_in: false,
     };
     assert_eq!(serde_json::to_value(&b).unwrap()["via"], "agents_browser");
     assert_eq!(serde_json::to_value(Via::MacWindow).unwrap(), "mac_window");
@@ -481,4 +482,95 @@ fn the_desk_bar_only_keeps_claude_in_chrome_out_for_its_own_sessions() {
     let live = &src[src.find("pub fn live()").unwrap()..];
     let live = &live[..live.find('}').unwrap()];
     assert!(live.contains("Via::Chrome"), "{live}");
+}
+
+/* -------------------------------------------------------------- step in */
+
+#[test]
+fn a_step_in_says_so_on_the_wire_and_hands_back() {
+    let b = Begun {
+        session_id: "s".into(),
+        domain: "okta.com".into(),
+        title: "approve the Okta sign-in".into(),
+        idle_seconds: 300,
+        via: Via::AgentsBrowser,
+        frame_gap_ms: 30,
+        step_in: true,
+    };
+    assert_eq!(serde_json::to_value(&b).unwrap()["stepIn"], true);
+    let sign_in = Begun { step_in: false, ..b };
+    assert!(serde_json::to_value(&sign_in)
+        .unwrap()
+        .get("stepIn")
+        .is_none());
+    assert_eq!(
+        serde_json::to_value(Outcome::HandedBack).unwrap(),
+        json!("handed_back")
+    );
+    let op = Op::StepIn {
+        agent_id: "a".into(),
+        request_id: "r".into(),
+    };
+    assert_eq!(op.name(), "step_in");
+}
+
+/// The phone in an agent's own tab: the desk's sign-in bar stays away (the
+/// step-in card and bar say it instead, by the phone's name), and the
+/// session can be found by its card.
+#[test]
+fn a_step_in_session_is_named_on_its_card_not_on_the_sign_in_bar() {
+    use crate::agent_browser::service::{tests::fake_browser, Owner, Service};
+    let (b, _fake) = fake_browser();
+    let svc = Service::start(b, std::path::PathBuf::from("/tmp/none")).unwrap();
+    let agent = "agent-step-in-phone";
+    let tab = svc
+        .open(Owner::Agent(agent.into()), "https://acme.okta.com/")
+        .unwrap();
+    let win =
+        crate::agent_browser::signin::SigninWindow::borrow("req-step", agent, svc, tab).unwrap();
+    let mut shared = Shared::new(
+        Via::AgentsBrowser,
+        Driver::Agents(AgentsTab { win, geom: None }),
+    );
+    shared.step_in = true;
+    let open = Opening {
+        agent_id: agent.into(),
+        request_id: "req-step".into(),
+        ..opening("phone-step")
+    };
+    let (id, _) = with_table(|t| t.begin(open, shared, Instant::now(), 0))
+        .ok()
+        .unwrap();
+    assert!(banner().is_none());
+    assert_eq!(step_in_device("req-step").as_deref(), Some("Sam’s iPhone"));
+    assert_eq!(step_in_device("req-other"), None);
+    assert!(with_table(|t| t.take(&id)).is_some());
+    assert_eq!(step_in_device("req-step"), None);
+}
+
+/// Every way a phone's step-in ends hands the tab back, so the agent is
+/// always woken; Hand back at the desk ends the phone's session without a
+/// second hand-back; and there's no "another way in" for the agent's tab.
+#[test]
+fn every_end_of_a_phone_step_in_hands_back_once() {
+    let src = include_str!("phone_signin.rs");
+    let body = |name: &str| {
+        let s = &src[src.find(name).unwrap()..];
+        s[..s.find("\n}\n").unwrap()].to_string()
+    };
+    assert!(body("fn spawn_reaper")
+        .contains("finish_live(&app, l, \"timed out\", How::TimedOut)"));
+    assert!(body("pub async fn stop(").contains("finish_live("));
+    assert!(body("pub async fn stop_from_desk").contains("finish_live("));
+    let done = body("pub async fn done(");
+    assert!(
+        done.contains("step_in::hand_back(app, &a, &r, How::HandedBack)"),
+        "{done}"
+    );
+    let from_desk = body("pub async fn end_step_in");
+    assert!(!from_desk.contains("hand_back"), "{from_desk}");
+    assert!(body("pub async fn fallback(").contains("STEP_IN_NO_FALLBACK"));
+    let step_in = include_str!("step_in.rs");
+    let hand_back = &step_in[step_in.find("pub async fn hand_back").unwrap()..];
+    assert!(hand_back[..hand_back.find("\n}\n").unwrap()].contains("phone_signin::end_step_in"));
 }

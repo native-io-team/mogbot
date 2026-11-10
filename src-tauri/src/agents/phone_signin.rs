@@ -17,6 +17,13 @@
 //! **Done** checks the page here; signed in, the card answers itself and the
 //! agent carries on.
 //!
+//! **Step in** (`Op::StepIn`, `agents.stepInBegin`) uses the same screen for
+//! a step-in card (`agents::step_in`): instead of a sign-in window, the
+//! agent's own tab, held so none of its tools reach it, its window left
+//! parked. Done is Hand back; Stop, leaving the screen and five idle minutes
+//! hand back too, so the agent is always woken. Hand back at the desk ends
+//! the phone's session.
+//!
 //! The mechanism, and why: docs/agents.md, "Signing in on your Mac from the phone".
 //!
 //! What holds, tested in `phone_signin_tests.rs`:
@@ -47,6 +54,7 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter};
 
 use super::browser::ChromeMcp;
+use crate::agent_browser::step_in::How;
 use crate::errors::CommandError;
 
 /// No input from the phone for this long and the session ends.
@@ -549,6 +557,9 @@ pub struct Begun {
     pub via: Via,
     /// How long the phone waits between pictures.
     pub frame_gap_ms: u64,
+    /// The agent's own tab, for a step-in card: Done is Hand back.
+    #[serde(default, skip_serializing_if = "is_false")]
+    pub step_in: bool,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -617,6 +628,8 @@ pub enum Outcome {
     SignedOut,
     /// It couldn't be told: the phone offers "Hand it over anyway".
     Unknown,
+    /// A step-in: the tab went back to the agent, which was woken.
+    HandedBack,
 }
 
 /// The desk's bar.
@@ -640,6 +653,7 @@ impl Op {
             Op::Done { .. } => "done",
             Op::Stop { .. } => "stop",
             Op::Fallback { .. } => "fallback",
+            Op::StepIn { .. } => "step_in",
         }
     }
 }
@@ -676,6 +690,11 @@ pub enum Op {
     Fallback {
         session_id: String,
     },
+    /// Step into an agent's own tab for its step-in card.
+    StepIn {
+        agent_id: String,
+        request_id: String,
+    },
 }
 
 /* --------------------------------------------------------------- runtime */
@@ -705,6 +724,8 @@ pub enum Driver {
 #[derive(Clone)]
 pub struct Shared {
     via: Via,
+    /// The agent's own tab for a step-in card, not a sign-in.
+    step_in: bool,
     driver: Arc<tokio::sync::Mutex<Driver>>,
     /// The first picture reached the phone (logged once).
     shown: Arc<std::sync::atomic::AtomicBool>,
@@ -714,6 +735,7 @@ impl Shared {
     fn new(via: Via, d: Driver) -> Shared {
         Shared {
             via,
+            step_in: false,
             driver: Arc::new(tokio::sync::Mutex::new(d)),
             shown: Arc::new(std::sync::atomic::AtomicBool::new(false)),
         }
@@ -734,15 +756,25 @@ pub fn live() -> bool {
     with_table(|t| t.current().is_some_and(|l| l.extra.via == Via::Chrome))
 }
 
-/// What the desk's bar shows.
+/// What the desk's bar shows. A step-in isn't a sign-in: its own card and
+/// bar say the phone is in it (`step_in::apply`).
 pub fn banner() -> Option<Banner> {
     with_table(|t| {
-        t.current().map(|l| Banner {
+        t.current().filter(|l| !l.extra.step_in).map(|l| Banner {
             domain: l.scope.domain.clone(),
             device_name: l.device_name.clone(),
             started_at: l.started_ms,
             via: l.extra.via,
         })
+    })
+}
+
+/// The phone that's in step-in card `request_id`'s tab now, by name.
+pub fn step_in_device(request_id: &str) -> Option<String> {
+    with_table(|t| {
+        t.current()
+            .filter(|l| l.extra.step_in && l.request_id == request_id)
+            .map(|l| l.device_name.clone())
     })
 }
 
@@ -823,6 +855,9 @@ pub fn choose(
     }
 }
 
+/// A step-in is the agent's own tab: there's no plain window to move it to.
+pub const STEP_IN_NO_FALLBACK: &str =
+    "This is the agent's own tab, so there's no other way in from here. Step in on your Mac for this one.";
 pub const NO_AGENTS_BROWSER: &str = "The agents' browser isn't on on this Mac (Settings → Agents), or Google Chrome isn't installed there.";
 const NOT_FROM_HERE: &str = "This card isn't one you can sign in to from here.";
 /// The Mac's reasons when opening it failed or took too long.
@@ -916,7 +951,7 @@ pub async fn begin(
         }
     };
     if let Some(old) = replaced {
-        close(old.extra).await;
+        finish_live(app, old, "replaced", How::HandedBack).await;
     }
     audit(device_name, &scope.domain, "started", true);
     emit(app);
@@ -929,7 +964,135 @@ pub async fn begin(
         idle_seconds: IDLE.as_secs(),
         via,
         frame_gap_ms: frame_gap(via).as_millis() as u64,
+        step_in: false,
     })
+}
+
+/// Step into an agent's own tab for its step-in card: the tab is held
+/// (`step_in::begin_from_phone`), its window stays parked, and the phone
+/// sees and drives it as it would a sign-in, on the card's site and the
+/// sign-in providers only.
+pub async fn begin_step_in(
+    app: &AppHandle,
+    device_id: &str,
+    device_name: &str,
+    agent_id: &str,
+    request_id: &str,
+) -> Result<Begun, CommandError> {
+    if !crate::agent_browser::available() {
+        return Err(CommandError::expected(NO_AGENTS_BROWSER));
+    }
+    // Busy elsewhere: refused before the tab is touched.
+    if let Some(other) = with_table(|t| {
+        t.expire(Instant::now());
+        t.current()
+            .filter(|l| l.device_id != device_id)
+            .map(|_| Refusal::Busy)
+    }) {
+        return Err(refused(other));
+    }
+    let (a, r) = (agent_id.to_string(), request_id.to_string());
+    let mut job =
+        tokio::spawn(async move { super::step_in::begin_from_phone(&a, &r).await });
+    let (card, svc, tab) = match tokio::time::timeout(BEGIN_TIMEOUT, &mut job).await {
+        Ok(Ok(Ok(v))) => v,
+        Ok(Ok(Err(e))) => return Err(e),
+        Ok(Err(e)) => return Err(super::err_other(e)),
+        Err(_) => {
+            // A hold that lands after the phone was told is let go.
+            let (a, r) = (agent_id.to_string(), request_id.to_string());
+            tokio::spawn(async move {
+                if let Ok(Ok(_)) = job.await {
+                    super::step_in::abandon(&a, &r);
+                }
+            });
+            return Err(CommandError::expected(AGENTS_SLOW));
+        }
+    };
+    let scope = Scope::for_site(&card.site);
+    let (key, agent) = (request_id.to_string(), agent_id.to_string());
+    let win = tokio::task::spawn_blocking(move || {
+        crate::agent_browser::signin::SigninWindow::borrow(&key, &agent, svc, tab)
+    })
+    .await
+    .map_err(super::err_other)
+    .and_then(|r| r.map_err(CommandError::expected));
+    let win = match win {
+        Ok(w) => w,
+        Err(e) => {
+            super::step_in::abandon(agent_id, request_id);
+            audit(device_name, &scope.domain, "step in didn't start", false);
+            return Err(e);
+        }
+    };
+    let mut shared = Shared::new(
+        Via::AgentsBrowser,
+        Driver::Agents(AgentsTab { win, geom: None }),
+    );
+    shared.step_in = true;
+    let open = Opening {
+        device_id: device_id.to_string(),
+        device_name: device_name.to_string(),
+        agent_id: agent_id.to_string(),
+        request_id: request_id.to_string(),
+        scope: scope.clone(),
+    };
+    let begun = with_table(|t| t.begin(open, shared, Instant::now(), super::store::now_ms()));
+    let (id, replaced) = match begun {
+        Ok(v) => v,
+        Err((why, b)) => {
+            close(b).await;
+            super::step_in::abandon(agent_id, request_id);
+            return Err(refused(why));
+        }
+    };
+    if let Some(old) = replaced {
+        finish_live(app, old, "replaced", How::HandedBack).await;
+    }
+    audit(device_name, &scope.domain, "stepped in", true);
+    super::step_in::began(app, agent_id, request_id);
+    spawn_reaper(app.clone(), id.clone());
+    tracing::info!(domain = %scope.domain, "[Agents] phone step-in started");
+    Ok(Begun {
+        session_id: id,
+        domain: scope.domain,
+        title: card.reason,
+        idle_seconds: IDLE.as_secs(),
+        via: Via::AgentsBrowser,
+        frame_gap_ms: frame_gap(Via::AgentsBrowser).as_millis() as u64,
+        step_in: true,
+    })
+}
+
+/// A step-in's hand-back reached the desk first (Hand back there, the tab
+/// closed, the time ran out, Not now): the phone's session for it ends,
+/// without handing back again.
+pub async fn end_step_in(app: &AppHandle, request_id: &str) {
+    let live = with_table(|t| {
+        let id = t
+            .current()
+            .filter(|l| l.extra.step_in && l.request_id == request_id)
+            .map(|l| l.id.clone())?;
+        t.take(&id)
+    });
+    if let Some(l) = live {
+        end(app, l, "handed back on the Mac", true).await;
+    }
+}
+
+/// End a session that's over, and for a step-in hand the tab back too
+/// (`how`), so the agent is always woken.
+async fn finish_live(app: &AppHandle, live: Live<Shared>, outcome: &str, how: How) {
+    let step = live
+        .extra
+        .step_in
+        .then(|| (live.agent_id.clone(), live.request_id.clone()));
+    end(app, live, outcome, true).await;
+    if let Some((a, r)) = step {
+        if let Err(e) = super::step_in::hand_back(app, &a, &r, how).await {
+            tracing::info!(error = %e, "[Agents] phone step-in: hand back after it ended");
+        }
+    }
 }
 
 /// The phone's words when opening it took longer than [`BEGIN_TIMEOUT`].
@@ -1115,7 +1278,7 @@ fn spawn_reaper(app: AppHandle, id: String) {
                 _ => (true, None),
             });
             if let Some(l) = expired {
-                end(&app, l, "timed out", false).await;
+                finish_live(&app, l, "timed out", How::TimedOut).await;
                 return;
             }
             if gone {
@@ -1192,6 +1355,8 @@ async fn frame_of(
                     return Ok(Frame::empty(FrameState::Outside, host));
                 }
             }
+            // The agent's own tab has no other way in: shown as it is.
+            let refused = shot.refused.filter(|_| !shared.step_in);
             a.geom = Some(FrameGeom {
                 width: shot.width,
                 height: shot.height,
@@ -1199,7 +1364,7 @@ async fn frame_of(
             });
             use base64::Engine as _;
             Ok(Frame {
-                state: if shot.refused.is_some() {
+                state: if refused.is_some() {
                     FrameState::Blocked
                 } else {
                     FrameState::Live
@@ -1210,7 +1375,7 @@ async fn frame_of(
                 height: shot.height,
                 seq: Some(shot.seq),
                 secure: shot.secret,
-                blocked: shot.refused.map(|r| r.reason().to_string()),
+                blocked: refused.map(|r| r.reason().to_string()),
             })
         }
     }
@@ -1404,6 +1569,13 @@ pub async fn done(
     anyway: bool,
 ) -> Result<Outcome, CommandError> {
     let (shared, scope) = session(device_id, id)?;
+    if shared.step_in {
+        let live = with_table(|t| t.take(id)).ok_or_else(|| refused(Refusal::Gone))?;
+        let (a, r) = (live.agent_id.clone(), live.request_id.clone());
+        end(app, live, "handed back", true).await;
+        super::step_in::hand_back(app, &a, &r, How::HandedBack).await?;
+        return Ok(Outcome::HandedBack);
+    }
     let (agent_id, request_id, service) = with_table(|t| {
         t.current()
             .map(|l| (l.agent_id.clone(), l.request_id.clone()))
@@ -1495,6 +1667,9 @@ pub async fn done(
 /// plain answer that this one sign-in happens at the Mac.
 pub async fn fallback(app: &AppHandle, device_id: &str, id: &str) -> Result<Begun, CommandError> {
     let (shared, scope) = session(device_id, id)?;
+    if shared.step_in {
+        return Err(CommandError::expected(STEP_IN_NO_FALLBACK));
+    }
     let (title, started) = with_table(|t| {
         t.current().map(|l| {
             let title = super::logins::pending_login(&l.agent_id, &l.request_id)
@@ -1539,6 +1714,7 @@ pub async fn fallback(app: &AppHandle, device_id: &str, id: &str) -> Result<Begu
         idle_seconds: IDLE.as_secs(),
         via: Via::MacWindow,
         frame_gap_ms: frame_gap(Via::MacWindow).as_millis() as u64,
+        step_in: false,
     })
 }
 
@@ -1549,7 +1725,7 @@ pub async fn stop(app: &AppHandle, device_id: &str, id: &str) -> Result<(), Comm
         Ok::<_, Refusal>(t.take(id))
     });
     match live {
-        Ok(Some(l)) => end(app, l, "stopped on the phone", true).await,
+        Ok(Some(l)) => finish_live(app, l, "stopped on the phone", How::HandedBack).await,
         Ok(None) | Err(Refusal::Gone) | Err(Refusal::TimedOut) => {}
         Err(other) => return Err(refused(other)),
     }
@@ -1559,7 +1735,7 @@ pub async fn stop(app: &AppHandle, device_id: &str, id: &str) -> Result<(), Comm
 /// Stop from the desk's bar: whatever is live.
 pub async fn stop_from_desk(app: &AppHandle) {
     if let Some(l) = with_table(Table::take_any) {
-        end(app, l, "stopped on the Mac", true).await;
+        finish_live(app, l, "stopped on the Mac", How::HandedBack).await;
     }
 }
 
@@ -1616,6 +1792,10 @@ async fn run_op(
             Ok(Value::Null)
         }
         Op::Fallback { session_id } => v(fallback(app, device_id, &session_id).await),
+        Op::StepIn {
+            agent_id,
+            request_id,
+        } => v(begin_step_in(app, device_id, device_name, &agent_id, &request_id).await),
     }
 }
 

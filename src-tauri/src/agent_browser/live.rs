@@ -193,6 +193,10 @@ pub fn stop(agent: &str, cast: Screencast) {
 
 fn stop_session(svc: &Service, session_id: &str) {
     if let Some(tab) = svc.tab_by_session(session_id) {
+        // Someone stepped in from the phone: its pictures are theirs now.
+        if super::step_in::holds_target(&tab.target_id) {
+            return;
+        }
         svc.unwatch(&tab);
     }
 }
@@ -336,5 +340,27 @@ mod tests {
             .unwrap()
             .iter()
             .any(|c| c == "Page.stopScreencast"));
+    }
+
+    /// A lease that lapses while someone is in the tab from the phone
+    /// doesn't stop the screencast the phone is watching.
+    #[test]
+    fn a_lapsed_lease_leaves_a_held_tabs_pictures_alone() {
+        let (b, _fake) = fake_browser();
+        let svc = Service::start(b, PathBuf::from("/tmp/none")).unwrap();
+        let agent = "live_preview_held";
+        let tab = svc
+            .open(Owner::Agent(agent.into()), "https://example.com/")
+            .unwrap();
+        frame_on(&svc, agent, 0, THUMB).expect("a frame");
+        super::super::step_in::begin_for_phone_on(&svc, agent, "req_live", tab.id, &tab.url, 0)
+            .unwrap();
+        // Held: the chat gets no picture, and its lapsed lease stops nothing.
+        assert!(frame_on(&svc, agent, 0, THUMB).is_none());
+        stop_session(&svc, &tab.session_id);
+        assert!(svc.slot(&tab.session_id).is_some());
+        super::super::step_in::forget(agent);
+        stop_session(&svc, &tab.session_id);
+        assert!(svc.slot(&tab.session_id).is_none());
     }
 }

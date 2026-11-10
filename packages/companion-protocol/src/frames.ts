@@ -202,6 +202,11 @@ export const MAC_FEATURES = {
    */
   signinPhone: 'signin.phone',
   /**
+   * Stepping into an agent's own tab for its step-in card from the phone:
+   * `agents.stepInBegin`, then the `agents.signin*` frames and input.
+   */
+  stepInPhone: 'stepIn.phone',
+  /**
    * `agents.watchLive` takes `link`: Watch live on a dev server an agent's
    * reply linked to (`localLinks` on the message), not only on a card.
    */

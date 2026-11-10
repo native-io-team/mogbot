@@ -131,6 +131,23 @@ describe('Step in bar', () => {
     expect(calls('agents_step_in_hand_back')).toHaveLength(1);
   });
 
+  it('names the phone that stepped in, with Hand back and no Show window', async () => {
+    const live = { inSince: 1_000, until: 1_000 + 15 * 60_000 };
+    const fromPhone = card({}, live);
+    fromPhone.approval!.stepIn!.onPhone = 'Sam’s iPhone';
+    render(<StepInBar agent={agent} now={2_000} messages={[fromPhone]} />);
+    const bar = screen.getByTestId('agent-step-in-bar');
+    expect(bar).toHaveTextContent('Sam’s iPhone is in Research’s browser');
+    expect(screen.queryByRole('button', { name: 'Show window' })).toBeNull();
+    render(<StepInCard message={fromPhone} onAnswer={vi.fn()} />);
+    expect(screen.getByText(/Sam’s iPhone is in its browser now/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Show window' })).toBeNull();
+    await act(async () => {
+      fireEvent.click(screen.getAllByRole('button', { name: 'Hand back' })[1]);
+    });
+    expect(calls('agents_step_in_hand_back')).toHaveLength(1);
+  });
+
   it('finds the step-in under way, never an answered one', () => {
     const live = card({}, { inSince: 1, until: 2 });
     expect(activeStepIn([card(), live])?.requestId).toBe('req-1');
