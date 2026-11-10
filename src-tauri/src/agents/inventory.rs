@@ -632,12 +632,14 @@ pub async fn local_compute() -> Vec<LocalCompute> {
 
 /// The inventory now, from disk, the engines and this Mac.
 pub async fn read() -> Inventory {
-    let engines = super::engine::overview().await;
-    let mut candidates = Vec::new();
-    for engine in Engine::ALL {
-        candidates.extend(wallet::candidates(engine).await);
-    }
-    let local = local_compute().await;
+    // The engines, each engine's accounts and this Mac's other compute are
+    // asked about at once: each waits on CLIs or the Keychain, not on the others.
+    let (engines, accounts, local) = tokio::join!(
+        super::engine::overview(),
+        futures_util::future::join_all(Engine::ALL.map(wallet::candidates)),
+        local_compute()
+    );
+    let candidates: Vec<_> = accounts.into_iter().flatten().collect();
     let now = super::store::now_ms();
     tokio::task::spawn_blocking(move || {
         let (archived, samples) = usage_plan::readings();

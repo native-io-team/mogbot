@@ -101,18 +101,62 @@ fn emit_registry(app: &AppHandle) {
 #[tauri::command]
 #[tracing::instrument(skip(app))]
 pub async fn agents_overview(app: AppHandle) -> Result<AgentsOverview, CommandError> {
-    agents::ensure_main()?;
-    attachments::grant_asset_scope(&app);
-    let engines = engine::overview().await;
+    // The engines are asked about (their CLIs, their sign-ins) while the
+    // registry is read on a blocking thread: neither waits on the other.
+    // On a launch the engines' answer is the slow one, and the store work
+    // stays off the async workers every other command shares.
+    let store_app = app.clone();
+    let (engines, views) = tokio::join!(
+        engine::overview(),
+        blocking(move || {
+            agents::ensure_main()?;
+            attachments::grant_asset_scope(&store_app);
+            agent_views()
+        })
+    );
+    let mut agents = views?;
     let engine_ready = engines
         .iter()
         .any(|e| e.id == Engine::Claude && e.installed);
-    if let Err(e) = put_chief_on_a_ready_engine(&engines) {
-        tracing::warn!(error = %e, "couldn't move the Chief of Staff onto a ready engine");
+    let ready = engines.clone();
+    let (moved, rest) = blocking(move || {
+        let moved = match put_chief_on_a_ready_engine(&ready) {
+            Ok(moved) => moved,
+            Err(e) => {
+                tracing::warn!(error = %e, "couldn't move the Chief of Staff onto a ready engine");
+                false
+            }
+        };
+        let rest = (
+            agents::defaults::view_of(&agents::defaults::saved(), &ready),
+            agents::independence::level(),
+            agents::import_choice::choice(),
+            agents::clock::hour24(),
+        );
+        Ok((moved, rest))
+    })
+    .await?;
+    // The Chief just went onto another engine: the list says so.
+    if moved {
+        agents = blocking(agent_views).await?;
     }
+    let (defaults, independence, import_choice, hour24) = rest;
+    Ok(AgentsOverview {
+        agents,
+        engine_ready,
+        engines,
+        defaults,
+        independence,
+        import_choice,
+        hour24,
+    })
+}
+
+/// Every agent as the overview shows it.
+fn agent_views() -> Result<Vec<AgentView>, CommandError> {
     let policy = agents::policy::load();
     let counts = account_counts();
-    let agents = store::list()?
+    store::list()?
         .into_iter()
         .map(|agent| {
             Ok(AgentView {
@@ -125,39 +169,29 @@ pub async fn agents_overview(app: AppHandle) -> Result<AgentsOverview, CommandEr
                 agent,
             })
         })
-        .collect::<Result<_, CommandError>>()?;
-    let defaults = agents::defaults::view_of(&agents::defaults::saved(), &engines);
-    Ok(AgentsOverview {
-        agents,
-        engine_ready,
-        engines,
-        defaults,
-        independence: agents::independence::level(),
-        import_choice: agents::import_choice::choice(),
-        hour24: agents::clock::hour24(),
-    })
+        .collect()
 }
 
 /// A Chief of Staff that has never run, on an engine that isn't here, goes
 /// onto one that is: someone with only Codex would otherwise meet a Chief that
 /// can't answer. One that has run keeps its engine (and its conversation); its
 /// chat offers to set that engine up instead.
-fn put_chief_on_a_ready_engine(engines: &[engine::EngineInfo]) -> Result<(), CommandError> {
+fn put_chief_on_a_ready_engine(engines: &[engine::EngineInfo]) -> Result<bool, CommandError> {
     let Some(chief) = store::list()?.into_iter().find(|a| a.is_main) else {
-        return Ok(());
+        return Ok(false);
     };
     let has_run = chief.session_id.is_some() || chief.new_engine;
     let ready = |id: Engine| engines.iter().any(|e| e.id == id && e.ready());
     let target = engine::default_for(engines);
     if has_run || ready(chief.engine) || !ready(target) || target == chief.engine {
-        return Ok(());
+        return Ok(false);
     }
     store::update(&chief.id, |a| {
         a.switch_engine(target);
         // Nothing to carry over: it has never had a conversation.
         a.new_engine = false;
     })?;
-    Ok(())
+    Ok(true)
 }
 
 /// The agents that work in a project, read straight from the registry: no

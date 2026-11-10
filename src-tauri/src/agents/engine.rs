@@ -142,6 +142,10 @@ pub async fn signed_in_here(engine: Engine) -> bool {
     if super::codex::scripted() {
         return true;
     }
+    // One probe per engine at a time: an asker that arrives mid-probe (the
+    // Usage view's accounts beside the engines' overview) waits for its answer.
+    static PROBING: LazyLock<[tokio::sync::Mutex<()>; 2]> = LazyLock::new(Default::default);
+    let _probing = PROBING[engine as usize].lock().await;
     if let Some((yes, _, at)) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).get(&engine) {
         let keep = if *yes { 60 } else { 5 };
         if at.elapsed() < Duration::from_secs(keep) {
@@ -197,8 +201,22 @@ async fn asks(engine: Engine, binary: Option<&std::path::Path>) -> bool {
 }
 
 pub async fn overview() -> Vec<EngineInfo> {
+    // One look at a time: a second asker (the launch's early look, then the
+    // Agents view's; the view and the Usage view) waits for the first and
+    // answers from what it just cached, instead of starting every CLI again.
+    static ONE_AT_A_TIME: LazyLock<tokio::sync::Mutex<()>> = LazyLock::new(Default::default);
+    let _turn = ONE_AT_A_TIME.lock().await;
     let (claude, codex) = tokio::join!(info(Engine::Claude), info(Engine::Codex));
     vec![claude, codex]
+}
+
+/// Look at the engines once at launch, while the window loads: the Agents
+/// view's first overview then reads the binaries and sign-ins from cache
+/// rather than waiting on each CLI.
+pub fn look_early() {
+    tauri::async_runtime::spawn(async {
+        let _ = overview().await;
+    });
 }
 
 /// The engine a new agent goes on when nobody picked one: Claude Code when

@@ -302,6 +302,8 @@ pub fn run() {
             // Every account's limits, read without a turn: on open, then every 10 minutes.
             agents::usage_read::spawn(_app.handle().clone());
             agents::disk::spawn(_app.handle().clone());
+            // The engines' CLIs, asked now rather than when Agents first opens.
+            agents::engine::look_early();
 
             // Start the agent preview bridge (global loopback MCP server) at
             // launch so it's listening before any agent session spawns —
