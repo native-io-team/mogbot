@@ -532,7 +532,7 @@ export interface KeyColors {
 }
 
 /**
- * The eight colourways, value for value with the shared `agent-keys.json`
+ * The fourteen colourways, value for value with the shared `agent-keys.json`
  * (theme.node.test holds them equal). Keys keep their colours in both
  * appearances; only the socket and the shadow under them follow it.
  */
@@ -545,6 +545,12 @@ export const keyColorways: Record<string, KeyColors> = {
   mustard: { face: '#e8b93f', skirt: '#c99a26', depth: '#8e6b12', legend: '#2a1e05' },
   pink: { face: '#efa9a2', skirt: '#d48a83', depth: '#9c5c56', legend: '#2b0e0c' },
   sage: { face: '#a9ba78', skirt: '#8c9d5c', depth: '#5f6e38', legend: '#1a2108' },
+  brick: { face: '#b5452c', skirt: '#963722', depth: '#632314', legend: '#fff1e8' },
+  plum: { face: '#7a3e6e', skirt: '#62305a', depth: '#3f1c3a', legend: '#fbeaf5' },
+  navy: { face: '#27395e', skirt: '#1d2c4a', depth: '#0e172c', legend: '#eee7d8' },
+  forest: { face: '#2f6148', skirt: '#244d39', depth: '#123021', legend: '#eaf2e2' },
+  sky: { face: '#9dc8ea', skirt: '#7eabd0', depth: '#4c7ba3', legend: '#0e2538' },
+  lilac: { face: '#c3b4e2', skirt: '#a696c8', depth: '#6c5d95', legend: '#1f1734' },
 };
 
 /**
