@@ -174,7 +174,9 @@ these without updating that doc.
   into the Keychain through a masked card, never the chat ("Secrets"). "You can always do those" in chat becomes a rule only through `remember_permission` (`agents/remember.rs`): a live turn whose latest input the user typed in that chat, the scope of a card it showed, and never Bold's floor (`go_hard::floor`) ("Said in chat")
 - **"Bold" hardening.** No request goes through on its own with a secret in its address, query
   or headers (`agents/egress.rs`). After a turn reads outside content (web pages and search
-  results, issue/PR comments, mail and chat through connections, other sites in the browser),
+  results, issue/PR comments, a PR, issue, diff or run log not by the `gh` user, scripts that
+  fetch, Mail and Messages on this Mac, mail and chat through connections, other sites in the
+  browser; a denylist, so incomplete by design, docs/agents.md "Other programs that fetch"),
   network writes to another host and packages new to the project ask for the rest of that
   conversation, since what it read stays in the engine's context on the next turn
   (`agents/exposure.rs`, `agents/installs.rs`; a new package is remembered once allowed). Network
@@ -205,7 +207,7 @@ these without updating that doc.
   per-device and per-source limits bound what a stranger can cost
   ([docs/mobile.md](docs/mobile.md), "Pairing", "Auth, revocation and audit")
 - **Remote Access** is a separate server from the agent bridge (which is loopback only): masked
-  token copied from Rust, text only to agent tabs, push behind a PIN the assistant never sees,
+  token copied from Rust and kept in the Keychain, text only to agent tabs, push behind a PIN the assistant never sees,
   everything audited ([docs/remote-access.md](docs/remote-access.md), "Security")
 - **Hardening on foundation:** per-turn bridge secrets never on argv (`agents/reach.rs`), agent
   writes to `.git` / `.shipstudio` denied, consent before installing or running a project's own

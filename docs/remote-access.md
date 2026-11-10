@@ -100,6 +100,19 @@ link…** rotates it, the old link dies instantly, and setup starts over. If
 your phone is lost, removing the Mac in Tailscale's admin console cuts it off
 from any device. The config and audit files are written `0600`.
 
+**The token lives in the login Keychain** (`remote_access::token_store`, one
+generic-password item under the app's own `<slug>-remote-access-` prefix),
+not in `remote_access.json`, and is held in memory after the first read since
+every request checks it. An older settings file's copy is moved on first
+read: written to the Keychain, read back, and only when it reads back the
+same is the file rewritten without it. If the Keychain refuses (locked,
+denied), the file's copy keeps working and the move is tried again on the
+next read; a new link the Keychain refuses is kept in the file the same way,
+and a file token that differs from the Keychain's is the newer link and moves
+over it. "The Keychain didn't answer" is never taken for "no token", which
+would mint a new one and break the assistant's link. Unverified: the move on
+a real Keychain (the tests use an in-memory store).
+
 **Prompt injection.** This is the realistic attack. The assistant reads
 terminal output, which can contain text from strangers (web pages,
 dependencies, issues). Defences:
