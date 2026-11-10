@@ -2885,7 +2885,7 @@ const RETRY_NOTE_MAX = 560;
  */
 export function retryNote(text: string, files: string[] = []): string {
   const ask = text.trim();
-  const head = 'Claude Code’s usage limit has reset. Carry on with what I asked';
+  const head = 'Claude Code’s usage limit has refilled. Carry on with what I asked';
   // At most half the note: as many paths as fit, then how many more.
   let attached = '';
   for (let n = files.length; n > 0 && !attached; n--) {
@@ -2996,7 +2996,7 @@ export interface TeamSummary {
   working: Agent[];
   /** Cards to answer, or the failed turn's line (newest in its chat) to act on. */
   needsYou: { agent: Agent; approvals: AgentMessage[]; failure: AgentMessage | null }[];
-  /** Stopped by a usage limit, with the line that says when it resets. */
+  /** Stopped by a usage limit, with the line that says when it refills. */
   paused: { agent: Agent; failure: AgentMessage | null }[];
   scheduled: { agent: Agent; checkIn: CheckIn }[];
   replies: { agent: Agent; message: AgentMessage }[];

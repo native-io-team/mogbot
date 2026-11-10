@@ -43,7 +43,7 @@ pub const EVENT_CONVERSATIONS: &str = "agents://conversations";
 pub const EVENT_DRAFT: &str = "agents://draft";
 /// An engine reported how much of the plan is left (`super::quota`).
 pub const EVENT_QUOTA: &str = "agents://quota";
-/// The usage mode or the spare-capacity list changed (`agents::usage_plan`).
+/// The usage mode or the list of ideas for leftover usage changed (`agents::usage_plan`).
 pub const EVENT_USAGE_PLAN: &str = "agents://usage-plan";
 
 /// How often a growing draft is sent to the UI: smooth to the eye, and a
@@ -7018,7 +7018,7 @@ mod tests {
 
         assert!(agent_prompt.contains(&prompts::usage_section(mode, false)));
         assert!(agent_prompt.contains("## Usage limits"));
-        assert!(agent_prompt.contains("Use it all before reset"));
+        assert!(agent_prompt.contains("Use it all before the refill"));
         assert!(!agent_prompt.contains("set_usage_mode"));
         assert!(chief_prompt.contains("set_usage_mode"));
         assert_eq!(std::fs::read_to_string(&claude_md).unwrap(), before);

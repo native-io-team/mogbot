@@ -4825,17 +4825,22 @@ account named under its segment and opening it); a calm bar when every
 account is nearly out (add an account, carry on with the other engine when
 it has room, or "Wait until …"); "Accounts", one row each in the order work
 tries them (`AccountRow`: keycap, name, a small bar, what it adds, In use /
-Next / "Out of usage", refill countdown), with "Add an account" at the
-heading's right; "How agents use your limits" (the mode as a hugging
+Next / "Out of usage", refill countdown; a signed-out row has its own Sign in
+beside it, the same sign-in as its page), with "Add an account" at the
+heading's right. With one account the hero has no eyebrow and its bar no name or
+room under it: the row says those once; "How agents use your limits" (the mode as a hugging
 control and its one line, then, when a window on the account in use resets
-soon with at least 25% left, a nudge: "62% of Work's week resets in 9 h",
-the first waiting items of the spare-capacity list, and "Give agents
+soon with at least 25% left, a nudge: "62% of Work's week refills in 9 h",
+the first waiting items of the list of ideas for leftover usage, and "Give agents
 something to do", which wakes the Chief with that list now:
 `agents_spare_spend_now` → `usage_tools::spend_now`, the same prompt "Use it
 all" sends, changing no approval; a press while the Chief is still starting
 that window says so instead of queuing it twice,
-`usage_plan::already_starting`); then the crossover choice, the
-spare-capacity list and other compute. *An account's page*
+`usage_plan::already_starting`); then the crossover choice, "Ideas for
+leftover usage" (the spare-capacity list; one plain name in the UI) and other compute.
+The user's word for the moment a limit comes back is **refill**, everywhere
+(hero, chips, mode "Use it all before the refill", lines, the phone); "reset"
+stays only in code and in what agents are told. *An account's page*
 (`AccountDetail`; "Usage › Work" with a back arrow, Esc or ⌘[ to return;
 `requestUsageAccount` opens one from elsewhere, as the chat header's account
 chip does): its keycap, name, state pill, place in the order, plan and who,
@@ -5138,7 +5143,7 @@ the wallet's own loop (`run_on_engine`):
 - **The user's choice, per engine** (`crossover.json` beside the wallet;
   Settings → Agents → Usage, "When every Claude Code account is out"; the
   Chief's `set_engine_fallback`, behind a card): **Ask first** (default),
-  **Carry on with Codex**, or **Wait for the reset**. Ask first puts one card
+  **Carry on with Codex**, or **Wait for the refill**. Ask first puts one card
   in the agent's chat when a turn ends with every account out: "All your
   Claude Code accounts are out until 4:00 PM. Carry on with Codex until
   then?" — **Always** (Allow + always: sets Carry on), **Just this time**
@@ -5372,7 +5377,7 @@ or the Chief's `set_usage_mode`, which always asks on a card first):
   while every account its agent could run on is past 90% (`HOLD_PERCENT`) of
   a 5-hour or weekly limit waits for the first of them to reset, then runs
   once, late. Said once per hold: a line in the agent's chat and a run row
-  "Waiting for the reset" (`runs::Outcome::Held`, `usage_plan::first_hold`).
+  "Waiting for the refill" (`runs::Outcome::Held`, `usage_plan::first_hold`).
   Run now still runs; "When…" routines aren't held; an account with no
   reading is never held for.
 - **In any mode, an account out until a known reset is waited for, not
@@ -5399,7 +5404,7 @@ or the Chief's `set_usage_mode`, which always asks on a card first):
   routines (`Agent::routine_model`, the default), the agent's own (`same`),
   or one of its engine's. The turn finds it through its tickets
   (`runs::routine_model`), only when every routine in that turn agrees.
-- **Use it all before reset**: the user's standing OK to spend capacity that
+- **Use it all before the refill**: the user's standing OK to spend capacity that
   would otherwise expire. **Any account's** expiring room counts: the
   account turns run on next first; with none spare there, the soonest spare
   window on another account, and turns on that engine then start on it until
@@ -5413,8 +5418,8 @@ or the Chief's `set_usage_mode`, which always asks on a card first):
   `SPARE_MIN_PERCENT` (25) points unused (and the account's other 5-hour or
   weekly window has as much left and isn't used up: spending a 5-hour window
   spends the week too; only accounts signed in, not out and not a second
-  sign-in count), work waits on the spare-capacity
-  list, and the Chief is free, the check-in tick (at most every 3 minutes)
+  sign-in count), work waits on the ideas for
+  leftover usage, and the Chief is free, the check-in tick (at most every 3 minutes)
   wakes the Chief once per window instance (`usage_plan::should_nudge`,
   `nudged`), with a quiet Note in its chat. The Chief hands items to agents,
   marks them started (`finish_spare_work`), and may bring a routine forward
@@ -5422,7 +5427,7 @@ or the Chief's `set_usage_mode`, which always asks on a card first):
   changes no approval: anything that sends, spends, pushes or changes what
   others see still waits for the user's Allow.
 
-**The spare-capacity list**: users add in Settings; any agent adds with
+**The spare-capacity list** ("Ideas for leftover usage" in the UI): users add in Settings; any agent adds with
 `add_spare_work` ("sometime", "when there's spare capacity"). At most 50
 items of 600 characters. A turn answering outside text (a "When…" routine's
 items) can't add to it, take items off it or run a routine; and what such a
@@ -5606,8 +5611,13 @@ that says what happens ("Quitting the app stops them, and sleep pauses
 them.", or with Keep running on, "Closing the
 window keeps them going; quitting stops them, and sleep pauses them.") and one
 line suggesting an always-on Mac, such as a Mac mini or a cloud Mac, for
-round-the-clock agents; and as a "Keep this Mac awake" link at the end of the
-schedule popover's footnote. Elsewhere than macOS none of it shows.
+round-the-clock agents; and as a "Keep this Mac awake" link after the one
+sentence on where routines run (`ROUTINES_NEED_THE_MAC`, shared): the schedule
+popover's footnote, and under the Chief's starters once one that sets up a
+routine is picked (every idea but the one-off research and debate,
+`ideaRepeats`). The phone says the same sentence under its routine sheet's
+buttons and its Chief starters, without the link. Elsewhere than macOS the link
+doesn't show.
 
 ## Menu bar, quit guard and quick entry (`agents/tray.rs`, `agents/quick_entry.rs`)
 

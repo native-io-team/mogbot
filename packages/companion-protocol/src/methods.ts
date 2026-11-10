@@ -565,7 +565,7 @@ export interface Methods {
   /**
    * The capacity inventory: the usage mode, every account with what its
    * engine last reported, other compute, spare windows, estimates from past
-   * runs and the spare-capacity list (`agents::inventory`). Read-only on the
+   * runs and the list of ideas for leftover usage (`agents::inventory`). Read-only on the
    * phone. Newer Macs only.
    */
   'agents.usagePlan': { params: Record<string, never>; result: UsageInventory };
@@ -576,7 +576,7 @@ export interface Methods {
    */
   'agents.usage.setMode': { params: { mode: UsageMode }; result: UsageInventory };
   /**
-   * Something for the spare-capacity list, added by "you" (at most 600
+   * Something for the list of ideas for leftover usage, added by "you" (at most 600
    * characters), optionally for one agent. Answers the inventory. Audited.
    * Newer Macs only.
    */
@@ -585,7 +585,7 @@ export interface Methods {
     result: UsageInventory;
   };
   /**
-   * "Give agents something to do": the Chief starts the spare-capacity list
+   * "Give agents something to do": the Chief starts the list of ideas for leftover usage
    * on a limit near its reset with room left, on any account (the one turns
    * run on next first). Answers the line to show. Audited. Newer Macs only.
    */

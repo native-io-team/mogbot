@@ -92,7 +92,10 @@ export const KEY_STATE_LABEL: Record<KeyState, string> = {
  * state is news ("Finance, needs your OK"). Idle says nothing more; a key with
  * no agent yet is "New agent". Desk and phone both, so the two never disagree.
  */
-export function keyAccessibleName(name: string | null | undefined, state?: KeyState | null): string {
+export function keyAccessibleName(
+  name: string | null | undefined,
+  state?: KeyState | null
+): string {
   const who = name?.trim();
   if (!who) return KEY_STATE_LABEL.new;
   if (!state || state === 'idle') return who;

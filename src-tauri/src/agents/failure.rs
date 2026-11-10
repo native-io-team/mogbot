@@ -122,10 +122,10 @@ where
             ),
             (None, Some((words, zone))) => match zone {
                 Some(_) => format!(
-                    "{who} is out of usage. {who} says it resets {}.",
+                    "{who} is out of usage. {who} says it refills {}.",
                     original_case(detail, words)
                 ),
-                None => format!("{who} is out of usage. {who} says it resets at {words}."),
+                None => format!("{who} is out of usage. {who} says it refills at {words}."),
             },
             (None, None) => {
                 format!("{who} is out of usage. It resets on its own; try again later.")
@@ -816,7 +816,7 @@ mod tests {
         assert_eq!(failure.kind, FailureKind::UsageLimit);
         assert_eq!(failure.resets_at, None, "never invented");
         assert!(
-            text.contains("Claude Code says it resets 4:40pm (Asia/Dubai)."),
+            text.contains("Claude Code says it refills 4:40pm (Asia/Dubai)."),
             "{text}"
         );
     }

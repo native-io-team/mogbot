@@ -8,7 +8,7 @@
 //! work to lighter models or engines. `UseItAll` is the user's standing OK
 //! to spend what would otherwise expire: when a window is near its reset
 //! with capacity left, on the account turns would run on next, the Chief is
-//! woken with the spare-capacity list ([`should_nudge`]), once per window.
+//! woken with the list of ideas for leftover usage ([`should_nudge`]), once per window.
 //! It changes no approval: anything that sends, spends or changes what
 //! others see still waits for the user's Allow.
 //!
@@ -60,7 +60,7 @@ impl Mode {
             "use_it_all" | "use_it_all_before_reset" => Ok(Mode::UseItAll),
             _ => Err(super::err_invalid(
                 "mode",
-                "Pick normal, save (Save my limits) or use_it_all (Use it all before reset).",
+                "Pick normal, save (Save my limits) or use_it_all (Use it all before the refill).",
             )),
         }
     }
@@ -69,7 +69,7 @@ impl Mode {
         match self {
             Mode::Normal => "Normal",
             Mode::Save => "Save my limits",
-            Mode::UseItAll => "Use it all before reset",
+            Mode::UseItAll => "Use it all before the refill",
         }
     }
 }
@@ -505,7 +505,7 @@ pub fn add_item(
         if f.backlog.len() >= BACKLOG_MAX {
             return Err(super::err_invalid(
                 "text",
-                "The spare-capacity list is full (50). Finish or remove something first.",
+                "Your ideas for leftover usage are full (50). Finish or remove something first.",
             ));
         }
         let item = SpareItem {
@@ -526,7 +526,7 @@ pub fn add_item(
 pub fn settle_item(id: &str, done: bool, now: i64) -> Result<SpareItem, CommandError> {
     change_plan(|f| {
         let at = f.backlog.iter().position(|i| i.id == id).ok_or_else(|| {
-            super::err_invalid("id", "There's no spare-capacity item with that id.")
+            super::err_invalid("id", "There's no idea for leftover usage with that id.")
         })?;
         if done {
             return Ok(f.backlog.remove(at));

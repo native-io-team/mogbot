@@ -162,7 +162,7 @@ function limitOf(w: QuotaWindow | undefined, label: string, now: number): RoomLi
     key: label,
     label,
     left,
-    resets: w.resetsAt ? `resets ${resetPhrase(w.resetsAt, now)}` : undefined,
+    resets: w.resetsAt ? `refills ${resetPhrase(w.resetsAt, now)}` : undefined,
     tone: left <= 0 ? 'limited' : used >= QUOTA_WARN_PERCENT ? 'warning' : 'calm',
   };
 }
@@ -193,7 +193,7 @@ function stateOf(
       state:
         a.limit?.resetsAt && a.limit.resetsAt > now
           ? `Out of usage until ${resetPhrase(a.limit.resetsAt, now)}`
-          : 'Out of usage · reset time not reported',
+          : 'Out of usage · refill time not reported',
       tone: 'out',
     };
   }

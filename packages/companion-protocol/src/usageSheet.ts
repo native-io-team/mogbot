@@ -95,9 +95,9 @@ const isSession = (w: Pick<QuotaWindow, 'kind' | 'windowMinutes'>) =>
 
 /** "Resets at 3:20 PM" today, "Resets tomorrow 3:20 PM", "Resets Mon 4:00 PM". */
 export function resetsLine(at: number | undefined, now = Date.now()): string {
-  if (at === undefined) return 'Reset time not reported';
+  if (at === undefined) return 'Refill time not reported';
   const phrase = resetPhrase(at, now);
-  return /^\d/.test(phrase) ? `Resets at ${phrase}` : `Resets ${phrase}`;
+  return /^\d/.test(phrase) ? `Refills at ${phrase}` : `Refills ${phrase}`;
 }
 
 /** An old reading says how old: a figure stands until reset, but use elsewhere since isn't in it. */
@@ -193,7 +193,7 @@ export function paceLine(p: UsagePace | undefined, now = Date.now()): PaceLine |
   if (!p || p.estimate !== true) return null;
   if (!(p.reachesAt > now) || !(p.reachesAt < p.resetsAt)) return null;
   return {
-    text: `At this pace you’ll hit the limit ${roughWhen(p.reachesAt, now)}, before it resets ${retryPhrase(p.resetsAt, now)}`,
+    text: `At this pace you’ll hit the limit ${roughWhen(p.reachesAt, now)}, before it refills ${retryPhrase(p.resetsAt, now)}`,
     basis: basisOf(p),
   };
 }
@@ -402,7 +402,7 @@ export function usageSheet(
  *    when there is no room, when there is again.
  * 2. The Mac's estimate across accounts, when it sent one.
  * 3. Each account with a reading, as its own card: a row per limit (name,
- *    %, its bar, when it resets) and, under the bar it is about, that
+ *    %, its bar, when it refills) and, under the bar it is about, that
  *    limit's own pace estimate, said as one.
  * 4. Accounts with no bar to draw (out of usage, not signed in, not read),
  *    compact and quiet, each with its one line.
@@ -489,7 +489,7 @@ const accountName = (engine: AgentEngine, name: string) =>
 
 /**
  * A limit's pace, said under its own bar, so short: the bar already says
- * which limit and when it resets ("At this pace it runs out tomorrow night"
+ * which limit and when it refills ("At this pace it runs out tomorrow night"
  * · "Estimate from 6 readings over 2 hours"). Null when `paceLine` would be.
  */
 export function barPace(p: UsagePace | undefined, now = Date.now()): PaceLine | null {

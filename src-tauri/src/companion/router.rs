@@ -707,7 +707,7 @@ pub trait Backend: Send + Sync + 'static {
     /// `agents_set_usage_mode`: the user chose a usage mode (no card: their
     /// own choice, as in Settings). Answers the inventory.
     async fn usage_set_mode(&self, mode: &str) -> Result<Value, CommandError>;
-    /// `agents_spare_add`: something for the spare-capacity list, by "you".
+    /// `agents_spare_add`: something for the list of ideas for leftover usage, by "you".
     /// Answers the inventory.
     async fn spare_add(&self, text: &str, agent_id: Option<&str>) -> Result<Value, CommandError>;
     /// `agents_spare_spend_now`: "Give agents something to do". Answers `{ line }`.
@@ -1844,8 +1844,8 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             preview(field("id"))
         ),
         "agents.usage.setMode" => format!("usage mode: {}", preview(field("mode"))),
-        "agents.spare.add" => format!("spare-capacity list: add {}", preview(field("text"))),
-        "agents.spare.spendNow" => "spare-capacity list: start now".to_string(),
+        "agents.spare.add" => format!("ideas for leftover usage: add {}", preview(field("text"))),
+        "agents.spare.spendNow" => "ideas for leftover usage: start now".to_string(),
         "agents.accounts.reorder" => format!(
             "{} accounts in order: {}",
             preview(field("engine")),
@@ -2414,7 +2414,7 @@ async fn run(
             let mode = params.get("mode").and_then(Value::as_str).unwrap_or("");
             if !matches!(mode, "normal" | "save" | "use_it_all") {
                 return Err(bad_params(
-                    "The usage mode is normal, save (Save my limits) or use_it_all (Use it all before reset).",
+                    "The usage mode is normal, save (Save my limits) or use_it_all (Use it all before the refill).",
                 ));
             }
             Ok(b.usage_set_mode(mode).await?)
@@ -2432,7 +2432,7 @@ async fn run(
             if text.is_empty() || text.chars().count() > 600 || agent.is_some_and(|a| a.len() > 64)
             {
                 return Err(bad_params(
-                    "Adding to the spare-capacity list takes the text (at most 600 characters) and optionally an agentId.",
+                    "Adding to the list of ideas for leftover usage takes the text (at most 600 characters) and optionally an agentId.",
                 ));
             }
             Ok(b.spare_add(text, agent).await?)
@@ -4018,7 +4018,7 @@ mod tests {
     }
 
     /// Persona review 2026-11-09 (the Maximizer): the phone changes the
-    /// mode, adds to the spare-capacity list and starts it, audited.
+    /// mode, adds to the list of ideas for leftover usage and starts it, audited.
     #[tokio::test]
     async fn a_phone_changes_the_usage_mode_and_the_spare_list_audited() {
         use crate::companion::testkit::Stub;
@@ -4049,7 +4049,7 @@ mod tests {
         assert!(said["line"]
             .as_str()
             .unwrap()
-            .contains("spare-capacity list"));
+            .contains("ideas for leftover usage"));
         assert_eq!(
             *stub.usage_changes.lock().unwrap(),
             vec!["mode use_it_all", "add Tidy the docs for a1", "spend"]

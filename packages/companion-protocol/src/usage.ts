@@ -36,16 +36,16 @@ export const USAGE_MODES: readonly UsageMode[] = ['normal', 'save', 'use_it_all'
 export const USAGE_MODE_LABEL: Record<UsageMode, string> = {
   normal: 'Normal',
   save: 'Save my limits',
-  use_it_all: 'Use it all before reset',
+  use_it_all: 'Use it all before the refill',
 };
 
 /** One line each, what it changes. */
 export const USAGE_MODE_DETAIL: Record<UsageMode, string> = {
   normal:
     'Agents never slow down for limits. Before something big, they say what it will likely use.',
-  save: 'Routines wait while the account in use is nearly out, until its limit resets. Agents ask before heavy work and send light work to lighter models.',
+  save: 'Routines wait while the account in use is nearly out, until its limit refills. Agents ask before heavy work and send light work to lighter models.',
   use_it_all:
-    'Near a reset with capacity left, the Chief starts your spare-capacity list. Allow cards still apply.',
+    'Near a refill with usage left over, the Chief starts on your ideas for leftover usage. Allow cards still apply.',
 };
 
 const ENGINE_SHORT: Record<AgentEngine, string> = {
@@ -80,7 +80,7 @@ export function windowLine(w: QuotaWindow, now = Date.now()): string {
     : w.usedPercent === undefined
       ? 'no figure'
       : `${Math.max(0, Math.floor(w.usedPercent))}%`;
-  const reset = w.resetsAt ? ` · resets ${resetDay(w.resetsAt, now)}` : '';
+  const reset = w.resetsAt ? ` · refills ${resetDay(w.resetsAt, now)}` : '';
   const age =
     !full && now - w.observedAt > QUOTA_STALE_MS ? ` · read ${readDay(w.observedAt, now)}` : '';
   return `${label} ${used}${reset}${age}`;
@@ -98,7 +98,7 @@ export function accountUsage(
     return {
       text: a.outUntil
         ? `Out of usage until ${resetPhrase(a.outUntil, now)}`
-        : 'Out of usage · reset time not reported',
+        : 'Out of usage · refill time not reported',
       tone: 'limited',
     };
   }
@@ -152,7 +152,7 @@ export interface SpareLine {
 
 function spareText(s: SpareWindow, now: number): string {
   const left = Math.max(0, Math.floor(100 - s.usedPercent));
-  return `${ENGINE_SHORT[s.engine]} ${windowName(s)} limit resets ${resetDay(s.resetsAt, now)} · ${left}% left`;
+  return `${ENGINE_SHORT[s.engine]} ${windowName(s)} limit refills ${resetDay(s.resetsAt, now)} · ${left}% left`;
 }
 
 /**
@@ -175,10 +175,10 @@ export function spareLine(
   const next =
     inv.mode === 'use_it_all'
       ? waiting > 0
-        ? ` The Chief will use it on your spare-capacity list (${waiting} waiting).`
+        ? ` The Chief will use it on your ideas for leftover usage (${waiting} waiting).`
         : inv.backlog.length === 0
-          ? ' Your spare-capacity list is empty.'
-          : ' Nothing is waiting on your spare-capacity list.'
+          ? ' Your list of ideas for leftover usage is empty.'
+          : ' Nothing is waiting on your list of ideas for leftover usage.'
       : '';
   return { text: spareText(s, now), detail: `${reported}${next}` };
 }
@@ -216,7 +216,7 @@ export function usageRows(inv: UsageInventory | null | undefined, now = Date.now
   const waiting = inv.backlog.filter((i) => i.state === 'waiting').length;
   rows.push({
     key: 'backlog',
-    label: 'Spare-capacity list',
+    label: 'Ideas for leftover usage',
     value: inv.backlog.length === 0 ? 'Empty' : `${waiting} waiting`,
   });
   for (const l of inv.local) rows.push({ key: `local:${l.name}`, label: localLine(l) });

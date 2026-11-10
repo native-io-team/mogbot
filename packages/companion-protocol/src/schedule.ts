@@ -37,10 +37,10 @@ export function describeRun(run: CheckInRun, now = Date.now()): string {
     case 'declined':
       return run.step ? `Stopped after step ${run.step}` : 'Stopped';
     case 'held':
-      // A usage limit to reset first (the detail says which, and when).
+      // A usage limit to refill first (the detail says which, and when).
       return run.retryAt
-        ? `Waiting for the reset · runs ${formatWhen(run.retryAt, now).replace(/^(Today|Tomorrow)/, (w) => w.toLowerCase())}`
-        : 'Waiting for the reset';
+        ? `Waiting for the refill · runs ${formatWhen(run.retryAt, now).replace(/^(Today|Tomorrow)/, (w) => w.toLowerCase())}`
+        : 'Waiting for the refill';
     default:
       return 'Unknown';
   }

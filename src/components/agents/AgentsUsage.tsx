@@ -131,9 +131,10 @@ export function SpareList({
   };
   return (
     <div className="agents-usage__block">
-      <span className="agents-usage__heading">Spare-capacity list</span>
+      <span className="agents-usage__heading">Ideas for leftover usage</span>
       <span className="agents-usage__muted">
-        Work for when capacity would otherwise expire. Agents can add to it too.
+        Work for agents to do with usage that would go unused before it refills. Agents can add to
+        it too.
       </span>
       {inventory.backlog.length > 0 && (
         <ul className="agents-usage__list">
@@ -174,7 +175,7 @@ export function SpareList({
           value={text}
           maxLength={600}
           placeholder="Research I’d like done sometime…"
-          aria-label="Add to the spare-capacity list"
+          aria-label="Add to your ideas for leftover usage"
           onChange={(e) => setText(e.target.value)}
         />
         <Button type="submit" variant="secondary" disabled={busy || !text.trim()}>

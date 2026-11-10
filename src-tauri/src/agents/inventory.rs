@@ -866,7 +866,7 @@ where
     s.push_str(match inv.mode {
         Mode::Normal => " Don't slow down or skimp for limits; say what something big will likely use before starting it.\n",
         Mode::Save => " Ask before heavy work; send light work to lighter models or engines.\n",
-        Mode::UseItAll => " The user's standing OK to use capacity that would otherwise expire on work from the spare-capacity list.\n",
+        Mode::UseItAll => " The user's standing OK to use capacity that would otherwise expire on work from the list of ideas for leftover usage.\n",
     });
     total_text(&mut s, inv, tz);
     s.push_str("\nREADINGS (only what the engines reported):\n");
@@ -899,7 +899,7 @@ where
                     Some(at) => {
                         line.push_str(&format!(": out of usage until {}", when(tz, at, now)))
                     }
-                    None => line.push_str(": out of usage, reset time not reported"),
+                    None => line.push_str(": out of usage, refill time not reported"),
                 }
             }
             if a.windows.is_empty() {

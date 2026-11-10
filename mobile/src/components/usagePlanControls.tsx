@@ -1,5 +1,5 @@
 /**
- * The usage mode and the spare-capacity list, changed from the phone (persona
+ * The usage mode and the list of ideas for leftover usage, changed from the phone (persona
  * review 2026-11-09, the Maximizer): the mode as one segmented choice, "Add to
  * the spare list", and "Give agents something to do". Only on a Mac that
  * serves `agents.usage.setMode` / `agents.spare.*`; an older Mac's phone keeps
@@ -80,7 +80,7 @@ export function UsagePlanControls({
     void run('add', async () => {
       onChanged(await call('agents.spare.add', { text: t }));
       setText('');
-      setSaid('Added to the spare-capacity list.');
+      setSaid('Added to your ideas for leftover usage.');
     });
   };
 
@@ -102,21 +102,21 @@ export function UsagePlanControls({
         {USAGE_MODE_LABEL[inventory.mode]}: {USAGE_MODE_DETAIL[inventory.mode]}
       </T>
 
-      <SectionTitle title="Spare-capacity list" style={styles.gap} />
+      <SectionTitle title="Ideas for leftover usage" style={styles.gap} />
       <T variant="small" color={colors.textMuted}>
         {waiting === 0
-          ? 'Nothing waiting. Add work to do when a limit is about to reset with room left.'
-          : `${waiting} waiting for spare capacity.`}
+          ? 'Nothing waiting. Add work to do when a limit is about to refill with room left.'
+          : `${waiting} waiting for leftover usage.`}
       </T>
       <View style={styles.addRow}>
         <TextInput
           value={text}
           onChangeText={setText}
-          placeholder="Something to do with spare room"
+          placeholder="Something to do with leftover usage"
           placeholderTextColor={colors.textMuted}
           maxLength={600}
           style={styles.input}
-          accessibilityLabel="Add to the spare-capacity list"
+          accessibilityLabel="Add to your ideas for leftover usage"
           returnKeyType="done"
           onSubmitEditing={add}
         />

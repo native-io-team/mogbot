@@ -101,7 +101,7 @@ describe('which account is working', () => {
       ['5-hour', 62],
       ['Weekly', 88],
     ]);
-    expect(claude.rows[0].room[0].resets).toMatch(/^resets /);
+    expect(claude.rows[0].room[0].resets).toMatch(/^refills /);
     // No reading: no figure, never a full bar.
     expect(claude.rows[1].room).toEqual([]);
     expect(claude.rows[1].pinnedBy).toEqual(['Riley']);

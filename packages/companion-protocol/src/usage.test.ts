@@ -46,7 +46,7 @@ describe('the capacity inventory, in words', () => {
     expect(accountUsage(account(), NOW)).toEqual({ text: 'No reading yet', tone: 'calm' });
     expect(accountUsage(account({ signedIn: false }), NOW).text).toBe('Not signed in');
     expect(accountUsage(account({ out: true }), NOW).text).toBe(
-      'Out of usage · reset time not reported'
+      'Out of usage · refill time not reported'
     );
   });
 
@@ -58,14 +58,14 @@ describe('the capacity inventory, in words', () => {
       limited: false,
       observedAt: NOW - 60_000,
     };
-    expect(windowLine(fresh, NOW)).toMatch(/^5-hour 38% · resets /);
+    expect(windowLine(fresh, NOW)).toMatch(/^5-hour 38% · refills /);
     const old = {
       ...fresh,
       kind: 'seven_day',
       resetsAt: NOW + 3 * 24 * HOUR,
       observedAt: NOW - 30 * HOUR,
     };
-    expect(windowLine(old, NOW)).toMatch(/^Weekly 38% · resets \w+ · read yesterday$/);
+    expect(windowLine(old, NOW)).toMatch(/^Weekly 38% · refills \w+ · read yesterday$/);
     const warm = accountUsage(account({ windows: [{ ...fresh, usedPercent: 93 }] }), NOW);
     expect(warm.tone).toBe('warning');
   });
@@ -116,8 +116,8 @@ describe('the capacity inventory, in words', () => {
       }),
       NOW
     );
-    expect(line?.text).toMatch(/^Claude 5-hour limit resets .+ · 62% left$/);
-    expect(line?.detail).toContain('spare-capacity list (1 waiting)');
+    expect(line?.text).toMatch(/^Claude 5-hour limit refills .+ · 62% left$/);
+    expect(line?.detail).toContain('ideas for leftover usage (1 waiting)');
     // A reset that has passed is history.
     expect(
       spareLine(inventory({ spare: [{ ...spare, next: true, resetsAt: NOW - 1 }] }), NOW)
@@ -127,7 +127,7 @@ describe('the capacity inventory, in words', () => {
 
   it('reads what a Mac really serves for agents.usagePlan, as the phone rows', () => {
     const rows = usageRows(real.agentsUsagePlan, real.agentsUsagePlan.now);
-    expect(rows[0]).toMatchObject({ key: 'mode', label: 'Use it all before reset' });
+    expect(rows[0]).toMatchObject({ key: 'mode', label: 'Use it all before the refill' });
     expect(rows.map((r) => r.key)).toEqual([
       'mode',
       'spare',
