@@ -2197,6 +2197,16 @@ pub fn from_outside(agent_id: &str) -> bool {
         .is_some_and(|r| r.running && r.outside)
 }
 
+/// Whether the agent's turn in progress is a routine's run (it holds a
+/// scheduled run's ticket): a page it updates says "by a routine".
+pub fn in_routine(agent_id: &str) -> bool {
+    RUNTIMES
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .is_some_and(|r| r.running && !r.tickets.is_empty())
+}
+
 /// What a turn answering outside text is told about itself, so it doesn't
 /// report the browser it wasn't given as broken (`prompts::OUTSIDE_TURN`).
 pub fn outside_note(outside: bool) -> Option<&'static str> {
@@ -3351,7 +3361,18 @@ fn take_batch(agent_id: &str) -> Option<Batch> {
     let conversation = runtime.conversation.clone();
     // Disk low: every turn opens with it, wherever it answers (`disk`).
     let disk = super::disk::turn_note();
-    let prompt = format!("{nudge}{disk}{preamble}{prompt}");
+    // A conversation with a page: one line, so the turn keeps it current (`page`).
+    let page = if room.is_none() {
+        super::page::turn_note(
+            agent_id,
+            conversation
+                .as_deref()
+                .unwrap_or(super::conversations::FIRST),
+        )
+    } else {
+        String::new()
+    };
+    let prompt = format!("{nudge}{disk}{page}{preamble}{prompt}");
     Some(Batch {
         prompt,
         routine,

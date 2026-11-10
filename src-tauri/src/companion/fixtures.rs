@@ -1026,6 +1026,42 @@ async fn generate() -> String {
         .await,
     );
     out += &entry(
+        "agentsPage",
+        "Result<'agents.page'>",
+        call(
+            "agents.page",
+            json!({ "agentId": AGENT, "conversationId": "c2" }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsPageNone",
+        "Result<'agents.page'>",
+        call(
+            "agents.page",
+            json!({ "agentId": AGENT, "conversationId": "first" }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsPageVersion",
+        "Result<'agents.pageVersion'>",
+        call(
+            "agents.pageVersion",
+            json!({ "agentId": AGENT, "conversationId": "c2", "version": 1 }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsPagePin",
+        "Result<'agents.pagePin'>",
+        call(
+            "agents.pagePin",
+            json!({ "agentId": AGENT, "conversationId": "c2", "pinned": true }),
+        )
+        .await,
+    );
+    out += &entry(
         "agentsConversationRoutine",
         "Result<'agents.conversationRoutine'>",
         call(

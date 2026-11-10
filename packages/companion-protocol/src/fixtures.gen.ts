@@ -4709,6 +4709,265 @@ export const agentsConversationRename = {
     "ci_1": "c2"
   }
 } satisfies Result<'agents.conversationRename'>;
+export const agentsPage = {
+  "agentId": "a1",
+  "at": 1762290000000,
+  "blocks": {
+    "items": [
+      {
+        "id": "status",
+        "items": [
+          {
+            "label": "Days to launch",
+            "value": 12.0
+          },
+          {
+            "delta": -3.0,
+            "good": "down",
+            "label": "Open tasks",
+            "value": 5.0,
+            "vs": "vs Monday"
+          }
+        ],
+        "kind": "metrics",
+        "summary": "- Days to launch: 12\n- Open tasks: 5 (-3 vs Monday)"
+      },
+      {
+        "id": "tasks",
+        "items": [
+          {
+            "done": true,
+            "text": "Press kit"
+          },
+          {
+            "done": true,
+            "text": "Pricing page"
+          }
+        ],
+        "kind": "checklist",
+        "summary": "This week\n- [x] Press kit\n- [x] Pricing page",
+        "title": "This week"
+      },
+      {
+        "id": "links",
+        "items": [
+          {
+            "domain": "example.com",
+            "label": "Launch doc",
+            "url": "https://example.com/launch"
+          }
+        ],
+        "kind": "links",
+        "summary": "- Launch doc: https://example.com/launch"
+      }
+    ],
+    "v": 1
+  },
+  "byRoutine": true,
+  "changes": {
+    "added": [
+      "links"
+    ],
+    "changed": [
+      "tasks"
+    ],
+    "removed": []
+  },
+  "conversation": "c2",
+  "history": [
+    {
+      "at": 1762290000000,
+      "byRoutine": true,
+      "changes": {
+        "added": [
+          "links"
+        ],
+        "changed": [
+          "tasks"
+        ],
+        "removed": []
+      },
+      "note": "Pricing page is done",
+      "title": "Launch plan",
+      "version": 2
+    },
+    {
+      "at": 1762280000000,
+      "changes": {
+        "added": [
+          "status",
+          "tasks"
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "note": "Started the plan",
+      "title": "Launch plan",
+      "version": 1
+    }
+  ],
+  "note": "Pricing page is done",
+  "pinned": true,
+  "title": "Launch plan",
+  "version": 2
+} satisfies Result<'agents.page'>;
+export const agentsPageNone = null satisfies Result<'agents.page'>;
+export const agentsPageVersion = {
+  "at": 1762280000000,
+  "blocks": {
+    "items": [
+      {
+        "id": "status",
+        "items": [
+          {
+            "label": "Days to launch",
+            "value": 12.0
+          },
+          {
+            "delta": -3.0,
+            "good": "down",
+            "label": "Open tasks",
+            "value": 5.0,
+            "vs": "vs Monday"
+          }
+        ],
+        "kind": "metrics",
+        "summary": "- Days to launch: 12\n- Open tasks: 5 (-3 vs Monday)"
+      },
+      {
+        "id": "tasks",
+        "items": [
+          {
+            "done": true,
+            "text": "Press kit"
+          },
+          {
+            "done": false,
+            "note": "Waiting on copy",
+            "text": "Pricing page"
+          }
+        ],
+        "kind": "checklist",
+        "summary": "This week\n- [x] Press kit\n- [ ] Pricing page (Waiting on copy)",
+        "title": "This week"
+      }
+    ],
+    "v": 1
+  },
+  "changes": {
+    "added": [
+      "status",
+      "tasks"
+    ],
+    "changed": [],
+    "removed": []
+  },
+  "note": "Started the plan",
+  "title": "Launch plan",
+  "version": 1
+} satisfies Result<'agents.pageVersion'>;
+export const agentsPagePin = {
+  "agentId": "a1",
+  "at": 1762290000000,
+  "blocks": {
+    "items": [
+      {
+        "id": "status",
+        "items": [
+          {
+            "label": "Days to launch",
+            "value": 12.0
+          },
+          {
+            "delta": -3.0,
+            "good": "down",
+            "label": "Open tasks",
+            "value": 5.0,
+            "vs": "vs Monday"
+          }
+        ],
+        "kind": "metrics",
+        "summary": "- Days to launch: 12\n- Open tasks: 5 (-3 vs Monday)"
+      },
+      {
+        "id": "tasks",
+        "items": [
+          {
+            "done": true,
+            "text": "Press kit"
+          },
+          {
+            "done": true,
+            "text": "Pricing page"
+          }
+        ],
+        "kind": "checklist",
+        "summary": "This week\n- [x] Press kit\n- [x] Pricing page",
+        "title": "This week"
+      },
+      {
+        "id": "links",
+        "items": [
+          {
+            "domain": "example.com",
+            "label": "Launch doc",
+            "url": "https://example.com/launch"
+          }
+        ],
+        "kind": "links",
+        "summary": "- Launch doc: https://example.com/launch"
+      }
+    ],
+    "v": 1
+  },
+  "byRoutine": true,
+  "changes": {
+    "added": [
+      "links"
+    ],
+    "changed": [
+      "tasks"
+    ],
+    "removed": []
+  },
+  "conversation": "c2",
+  "history": [
+    {
+      "at": 1762290000000,
+      "byRoutine": true,
+      "changes": {
+        "added": [
+          "links"
+        ],
+        "changed": [
+          "tasks"
+        ],
+        "removed": []
+      },
+      "note": "Pricing page is done",
+      "title": "Launch plan",
+      "version": 2
+    },
+    {
+      "at": 1762280000000,
+      "changes": {
+        "added": [
+          "status",
+          "tasks"
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "note": "Started the plan",
+      "title": "Launch plan",
+      "version": 1
+    }
+  ],
+  "note": "Pricing page is done",
+  "pinned": true,
+  "title": "Launch plan",
+  "version": 2
+} satisfies Result<'agents.pagePin'>;
 export const agentsConversationRoutine = {
   "agentId": "a1",
   "current": "c2",
@@ -5134,6 +5393,9 @@ export const frames = [
       "agents.conversationSelect",
       "agents.conversationRename",
       "agents.conversationRoutine",
+      "agents.page",
+      "agents.pageVersion",
+      "agents.pagePin",
       "agents.create",
       "agents.draft",
       "agents.templates",

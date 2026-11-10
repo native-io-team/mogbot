@@ -327,6 +327,53 @@ impl Backend for DesktopBackend {
         )
     }
 
+    async fn page(
+        &self,
+        agent_id: &str,
+        conversation: Option<&str>,
+    ) -> Result<Value, CommandError> {
+        json(
+            crate::commands::agents_page::agents_page(
+                agent_id.to_string(),
+                conversation.map(str::to_string),
+            )
+            .await?,
+        )
+    }
+
+    async fn page_version(
+        &self,
+        agent_id: &str,
+        conversation: Option<&str>,
+        version: u32,
+    ) -> Result<Value, CommandError> {
+        json(
+            crate::commands::agents_page::agents_page_version(
+                agent_id.to_string(),
+                conversation.map(str::to_string),
+                version,
+            )
+            .await?,
+        )
+    }
+
+    async fn page_pin(
+        &self,
+        agent_id: &str,
+        conversation: Option<&str>,
+        pinned: bool,
+    ) -> Result<Value, CommandError> {
+        json(
+            crate::commands::agents_page::agents_page_pin(
+                self.app.clone(),
+                agent_id.to_string(),
+                conversation.map(str::to_string),
+                pinned,
+            )
+            .await?,
+        )
+    }
+
     async fn conversation_routine(
         &self,
         agent_id: &str,

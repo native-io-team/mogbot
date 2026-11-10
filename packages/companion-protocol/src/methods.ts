@@ -8,6 +8,7 @@
  */
 
 import type { Conversations } from './conversations';
+import type { ConversationPage, PageVersion } from './page';
 import type { Cursor } from './frames';
 import type { AgentPolicyView } from './policy';
 import type { OnItsOwn, OnItsOwnNarrow, OnItsOwnTeam } from './onItsOwn';
@@ -154,6 +155,25 @@ export interface Methods {
   'agents.conversationRoutine': {
     params: { agentId: string; routineId: string; conversationId: string };
     result: Conversations;
+  };
+  /**
+   * `agents_page`: a conversation's living page (`page.ts`) and its history,
+   * or null when it has none. No `conversationId`: the one the user is in.
+   * Newer Macs only: check `welcome.methods`.
+   */
+  'agents.page': {
+    params: { agentId: string; conversationId?: string };
+    result: ConversationPage | null;
+  };
+  /** `agents_page_version`: one kept version, for reading; null once it isn't kept. */
+  'agents.pageVersion': {
+    params: { agentId: string; conversationId?: string; version: number };
+    result: PageVersion | null;
+  };
+  /** `agents_page_pin`: pin the page above the chat, or unpin it; the page after. */
+  'agents.pagePin': {
+    params: { agentId: string; conversationId?: string; pinned: boolean };
+    result: ConversationPage | null;
   };
   /**
    * `agents_turn_work`: what the turn ending on `messageId` did, steps and
@@ -811,6 +831,8 @@ export const READ_ONLY_METHODS = [
   'agents.overview',
   'agents.messages',
   'agents.conversations',
+  'agents.page',
+  'agents.pageVersion',
   'agents.workSteps',
   'agents.instructions',
   'agents.memory',

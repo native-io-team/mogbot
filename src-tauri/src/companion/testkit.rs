@@ -594,6 +594,8 @@ pub struct Stub {
     pub conversations: Mutex<(Vec<(String, String)>, String)>,
     /// Routine id → the conversation it runs in, for routines not in the first.
     pub routine_places: Mutex<Vec<(String, String)>>,
+    /// The conversation "c2"'s page: whether it is pinned (it has two versions).
+    pub page_pinned: Mutex<bool>,
     /// What reached a session: `(session id, text or "key:<key>")`.
     pub typed: Mutex<Vec<(String, String)>>,
     /// Permission rules revoked, by id.
@@ -626,6 +628,50 @@ impl Stub {
     }
 
     /// The stub's conversations, as the desk's `agents_conversations` serializes them.
+    /// "c2"'s page, made by the real `page::apply`: a tracker at v2.
+    fn page_file(&self) -> crate::agents::page::PageFile {
+        use crate::agents::page;
+        let v1 = page::parse(&json!({
+            "title": "Launch plan",
+            "blocks": [
+                { "id": "status", "kind": "metrics", "items": [{ "label": "Days to launch", "value": 12 }, { "label": "Open tasks", "value": 5, "delta": -3, "good": "down", "vs": "vs Monday" }] },
+                { "id": "tasks", "kind": "checklist", "title": "This week", "items": [{ "text": "Press kit", "done": true }, { "text": "Pricing page", "done": false, "note": "Waiting on copy" }] }
+            ],
+            "note": "Started the plan"
+        }))
+        .unwrap();
+        let first = page::apply(None, "c2", &v1, 1_762_280_000_000, false)
+            .unwrap()
+            .unwrap();
+        let v2 = page::parse(&json!({
+            "blocks": [
+                { "id": "tasks", "kind": "checklist", "title": "This week", "items": [{ "text": "Press kit", "done": true }, { "text": "Pricing page", "done": true }] },
+                { "id": "links", "kind": "links", "items": [{ "url": "https://example.com/launch", "label": "Launch doc" }] }
+            ],
+            "note": "Pricing page is done"
+        }))
+        .unwrap();
+        let mut file = page::apply(Some(&first), "c2", &v2, 1_762_290_000_000, true)
+            .unwrap()
+            .unwrap();
+        file.pinned = *self.page_pinned.lock().unwrap();
+        file
+    }
+
+    fn page_for(
+        &self,
+        agent_id: &str,
+        conversation: Option<&str>,
+    ) -> Result<Option<crate::agents::page::PageFile>, CommandError> {
+        if agent_id != AGENT {
+            return Err(CommandError::expected("No such agent."));
+        }
+        let at = conversation
+            .map(str::to_string)
+            .unwrap_or_else(|| self.conversations.lock().unwrap().1.clone());
+        Ok((at == "c2").then(|| self.page_file()))
+    }
+
     fn conversation_list(&self) -> Value {
         use crate::agents::conversations::{ConversationView, Conversations};
         let (items, current) = self.conversations.lock().unwrap().clone();
@@ -703,6 +749,7 @@ impl Stub {
                 "c2".into(),
             )),
             routine_places: Mutex::new(vec![("ci_1".into(), "c2".into())]),
+            page_pinned: Mutex::new(true),
             typed: Mutex::new(Vec::new()),
             revoked: Mutex::new(Vec::new()),
             narrowed: Mutex::new(Vec::new()),
@@ -1222,6 +1269,46 @@ impl Backend for Stub {
             item.1 = title;
         }
         Ok(self.conversation_list())
+    }
+
+    async fn page(
+        &self,
+        agent_id: &str,
+        conversation: Option<&str>,
+    ) -> Result<Value, CommandError> {
+        let file = self.page_for(agent_id, conversation)?;
+        Ok(
+            serde_json::to_value(file.and_then(|f| crate::agents::page::view(agent_id, &f)))
+                .unwrap(),
+        )
+    }
+
+    async fn page_version(
+        &self,
+        agent_id: &str,
+        conversation: Option<&str>,
+        version: u32,
+    ) -> Result<Value, CommandError> {
+        let file = self.page_for(agent_id, conversation)?;
+        let found = file.and_then(|f| {
+            f.versions
+                .iter()
+                .find(|v| v.version == version)
+                .map(crate::agents::page::view_of)
+        });
+        Ok(serde_json::to_value(found).unwrap())
+    }
+
+    async fn page_pin(
+        &self,
+        agent_id: &str,
+        conversation: Option<&str>,
+        pinned: bool,
+    ) -> Result<Value, CommandError> {
+        if self.page_for(agent_id, conversation)?.is_some() {
+            *self.page_pinned.lock().unwrap() = pinned;
+        }
+        self.page(agent_id, conversation).await
     }
 
     async fn conversation_routine(

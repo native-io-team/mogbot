@@ -140,6 +140,7 @@ pub mod on_its_own;
 pub mod opencode;
 pub mod other_app;
 pub mod outward;
+pub mod page;
 pub mod paste;
 pub mod permissions;
 pub mod phone_signin;

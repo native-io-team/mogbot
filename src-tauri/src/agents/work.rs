@@ -886,6 +886,12 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
             "Showing it in the chat",
             "show it in the chat",
         ),
+        "page" => act(
+            StepKind::Message,
+            "Updated the page",
+            "Updating the page",
+            "update the page",
+        ),
         "share_result" => act(
             StepKind::Message,
             "Put together its result",

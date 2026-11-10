@@ -72,6 +72,9 @@ pub const METHODS: &[&str] = &[
     "agents.conversationSelect",
     "agents.conversationRename",
     "agents.conversationRoutine",
+    "agents.page",
+    "agents.pageVersion",
+    "agents.pagePin",
     "agents.create",
     "agents.draft",
     "agents.templates",
@@ -150,6 +153,8 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.overview",
     "agents.messages",
     "agents.conversations",
+    "agents.page",
+    "agents.pageVersion",
     "agents.workSteps",
     "agents.instructions",
     "agents.memory",
@@ -645,6 +650,24 @@ pub trait Backend: Send + Sync + 'static {
         agent_id: &str,
         routine_id: &str,
         id: &str,
+    ) -> Result<Value, CommandError>;
+    /// `agents_page`: the conversation's living page (`agents/page.rs`),
+    /// or null. `None` is the conversation the user is in.
+    async fn page(&self, agent_id: &str, conversation: Option<&str>)
+        -> Result<Value, CommandError>;
+    /// `agents_page_version`: one kept version, or null.
+    async fn page_version(
+        &self,
+        agent_id: &str,
+        conversation: Option<&str>,
+        version: u32,
+    ) -> Result<Value, CommandError>;
+    /// `agents_page_pin`: pinned above the chat, or not; the page after.
+    async fn page_pin(
+        &self,
+        agent_id: &str,
+        conversation: Option<&str>,
+        pinned: bool,
     ) -> Result<Value, CommandError>;
     async fn send(
         &self,
@@ -1200,6 +1223,33 @@ struct ConversationRenameParams {
     agent_id: String,
     conversation_id: String,
     title: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PageParams {
+    agent_id: String,
+    /// Absent: the conversation the user is in.
+    #[serde(default)]
+    conversation_id: Option<String>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PageVersionParams {
+    agent_id: String,
+    #[serde(default)]
+    conversation_id: Option<String>,
+    version: u32,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct PagePinParams {
+    agent_id: String,
+    #[serde(default)]
+    conversation_id: Option<String>,
+    pinned: bool,
 }
 
 #[derive(Deserialize)]
@@ -1848,6 +1898,17 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
         "agents.conversationRoutine" => {
             format!("move {} to {}", field("routineId"), field("conversationId"))
         }
+        "agents.pagePin" => {
+            let pinned = params.get("pinned").and_then(Value::as_bool) == Some(true);
+            format!(
+                "{} the page of {}",
+                if pinned { "pinned" } else { "unpinned" },
+                match field("conversationId") {
+                    "" => "the current conversation",
+                    c => c,
+                }
+            )
+        }
         "agents.setDefaults" => {
             let said: Vec<String> = [
                 ("engine", "engine"),
@@ -2269,6 +2330,24 @@ async fn run(
             }
             Ok(
                 b.conversation_rename(&p.agent_id, &p.conversation_id, p.title)
+                    .await?,
+            )
+        }
+        "agents.page" => {
+            let p: PageParams = parse(params)?;
+            Ok(b.page(&p.agent_id, p.conversation_id.as_deref()).await?)
+        }
+        "agents.pageVersion" => {
+            let p: PageVersionParams = parse(params)?;
+            Ok(
+                b.page_version(&p.agent_id, p.conversation_id.as_deref(), p.version)
+                    .await?,
+            )
+        }
+        "agents.pagePin" => {
+            let p: PagePinParams = parse(params)?;
+            Ok(
+                b.page_pin(&p.agent_id, p.conversation_id.as_deref(), p.pinned)
                     .await?,
             )
         }
