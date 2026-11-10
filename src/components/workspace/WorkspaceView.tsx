@@ -513,12 +513,6 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
   useWorkspacePanelCommands({
     isAgentPanelHidden,
     toggleAgentPanel,
-    agentPanelDocked,
-    toggleAgentPanelDocked,
-    elementTreeDocked,
-    toggleElementTreeDocked,
-    variablesPanelDocked,
-    toggleVariablesPanelDocked,
     isWebProject,
     variablesPanelOpen: variables.open,
     toggleVariablesPanel: variables.toggle,
