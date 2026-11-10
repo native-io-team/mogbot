@@ -100,7 +100,7 @@
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: var(--spacing-2xs);
+  gap: var(--spacing-xs);
 }
 
 .agent-composer__attach,

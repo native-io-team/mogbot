@@ -120,6 +120,14 @@
   gap: var(--spacing-2xs);
 }
 
+/* One height across the header's controls (Model and the conversation
+   switcher were compact: 20px targets beside 30px ones). Ghost buttons, so
+   only the hover fill grows. */
+.agent-chat__header :is(.agent-chat__actions, .agent-chat__title) .button--size-compact {
+  height: var(--control-height-standard);
+  min-height: var(--control-height-standard);
+}
+
 /* Collapsed, the padding clears the floating nav row; the actions still keep
    to the window's edge, as the title stays centred on the window. */
 .workspace-sidebar.is-hidden ~ .agents-main .agent-chat__actions {
@@ -299,7 +307,7 @@
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
   max-width: 480px;
   margin-top: var(--spacing-md);
 }

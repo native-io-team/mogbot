@@ -20,18 +20,22 @@
 
 /* ------------------------------------------------------- the sidebar row */
 
+/* Two lines and a meter in a 30px footer: each gets its own line height
+   and a 4px step, and the row a 6px inset, so the words never sit on the
+   meter (they did at a line height of 1 and 1px apart). */
 .usage-glance.account-switcher__row {
   align-items: flex-start;
   height: auto;
-  padding-block: var(--spacing-xs);
+  padding-block: var(--spacing-tight);
 }
 
 .usage-glance__body {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-3xs);
+  gap: var(--spacing-xs);
   min-width: 0;
   flex: 1;
+  line-height: var(--line-height-compact);
   text-align: left;
 }
 
@@ -649,13 +653,13 @@
 .usage-add {
   display: flex;
   flex-direction: column;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
 }
 
 .usage-add__buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: var(--spacing-xs);
+  gap: var(--spacing-sm);
 }
 
 @media (prefers-reduced-motion: reduce) {

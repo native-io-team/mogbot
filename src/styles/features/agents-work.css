@@ -222,21 +222,25 @@
 }
 
 /* The whole line opens the steps; it reads as text, never as a link, so it
-   carries no underline at rest (the finished "Worked …" line beside it has
-   none either). Hover and keyboard focus draw one, clear of the descenders,
-   with the words brightening, which is the affordance. */
+   carries no underline (an underline 2px under 11px words looked cramped,
+   and the words' own clip cut it in half). Hover and keyboard focus give it
+   a ghost button's fill, bled 4px round the words with a box-shadow so
+   nothing moves, and brighten the words: the affordance. */
 .text-button.button.agent-working__toggle {
   flex: 0 1 auto;
   justify-content: flex-start;
   min-width: 0;
   color: inherit;
   text-decoration-line: none;
+  border-radius: var(--radius-sm);
+  transition:
+    background var(--transition-interaction),
+    box-shadow var(--transition-interaction);
 }
 
-.text-button.button.agent-working__toggle:hover:not(:disabled),
-.text-button.button.agent-working__toggle:focus-visible {
-  text-decoration-line: underline;
-  text-decoration-color: color-mix(in srgb, currentColor 40%, transparent);
+.text-button.button.agent-working__toggle:is(:hover:not(:disabled), :focus-visible) {
+  background: var(--button-surface-hover);
+  box-shadow: 0 0 0 var(--spacing-xs) var(--button-surface-hover);
 }
 
 .agent-working__toggle:hover .agent-working__meta,
