@@ -266,6 +266,11 @@
   --shadow-card:
     inset 0 var(--stroke-1) 0 var(--color-white-o05), 0 0 0 var(--stroke-1) var(--color-black-o30),
     0 var(--space-08) var(--space-24) calc(var(--space-12) * -1) var(--color-black-o50);
+  /* How far `--shadow-card` reaches past the card, any side (here 8 + 24 -
+     12 = 20px down, rounded up). A box that clips its contents (overflow,
+     content-visibility, contain: paint) and holds a card pads by this and
+     gives it back as negative margin, so the shadow is drawn whole. */
+  --shadow-card-reach: var(--space-24);
 }
 
 /*
@@ -389,6 +394,8 @@
     0 0 0 var(--stroke-1) var(--color-black-o07),
     0 var(--space-24) var(--space-32) calc(var(--space-24) * -1) var(--color-black-o30),
     0 var(--space-06) var(--space-12) calc(var(--space-08) * -1) var(--color-black-o15);
+  /* 24 + 32 - 24 = 32px down. */
+  --shadow-card-reach: var(--space-32);
 
   --tint-subtle: rgba(0, 0, 0, 0.035);
   --tint-strong: rgba(0, 0, 0, 0.07);
