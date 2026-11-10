@@ -87,6 +87,13 @@ export interface Palette {
   accentFocus: string;
   /** The neutral accent: what an agent coloured "white" (and the Chief, by default) takes. */
   accentNeutral: string;
+  /**
+   * A count on a tab (Needs you): neutral like the desk's bell, never system
+   * red. iOS draws its badge text white whatever is asked, so the fill is a
+   * dark neutral in both themes, white on it at AA.
+   */
+  badgeFill: string;
+  badgeInk: string;
   /** A diff's added and removed lines: ink, and the band behind the line. */
   diffAdd: string;
   diffAddBg: string;
@@ -157,6 +164,8 @@ const dark: Palette = {
   accentErrorLight: '#ef4444', // --accent-error-light
   accentFocus: '#2792ff', // --accent-focus (blue-500)
   accentNeutral: '#ebe8e3', // --agents-tint-white, warmed as textBody
+  badgeFill: '#5b5850',
+  badgeInk: '#ffffff',
   diffAdd: '#35d35d',
   diffAddBg: 'rgba(53, 211, 93, 0.1)',
   diffDel: '#ef4444',
@@ -221,6 +230,8 @@ const light: Palette = {
   accentFocus: '#0b6bdc',
   // The neutral accent in light is ink: a white Chief on a white app would be invisible.
   accentNeutral: '#1c1c1c',
+  badgeFill: '#1c1c1c',
+  badgeInk: '#ffffff',
   diffAdd: '#11672f',
   diffAddBg: 'rgba(21, 128, 61, 0.1)',
   diffDel: '#b0221a',
@@ -571,6 +582,10 @@ export interface KeyNeutrals {
   housingShade: string;
   stem: string;
   stemDepth: string;
+  /** New agent: the dashed outline where a key will go, its wash and its plus. */
+  newRim: string;
+  newFill: string;
+  newPlus: string;
 }
 
 export const keyNeutrals: Record<'dark' | 'light', KeyNeutrals> = {
@@ -578,23 +593,30 @@ export const keyNeutrals: Record<'dark' | 'light', KeyNeutrals> = {
     ambient: '#000000',
     ambientOpacity: 0.45,
     socket: '#1d1c1a',
-    socketRim: 'rgba(255, 255, 255, 0.06)',
+    // At 3:1 on the plate, so a paused key never vanishes in dark.
+    socketRim: 'rgba(255, 255, 255, 0.32)',
     socketShade: 'rgba(0, 0, 0, 0.55)',
     housing: '#2a2926',
     housingShade: 'rgba(0, 0, 0, 0.5)',
     stem: '#5b5850',
     stemDepth: '#3a3833',
+    newRim: 'rgba(255, 255, 255, 0.42)',
+    newFill: 'rgba(255, 255, 255, 0.03)',
+    newPlus: '#d6d2ca',
   },
   light: {
     ambient: '#3c2c14',
     ambientOpacity: 0.3,
     socket: '#d9d1c0',
-    socketRim: 'rgba(70, 55, 30, 0.1)',
+    socketRim: 'rgba(70, 55, 30, 0.6)',
     socketShade: 'rgba(70, 55, 30, 0.3)',
     housing: '#cbc2af',
     housingShade: 'rgba(70, 55, 30, 0.28)',
     stem: '#b3aa96',
     stemDepth: '#9c937f',
+    newRim: 'rgba(70, 55, 30, 0.5)',
+    newFill: 'rgba(255, 255, 255, 0.35)',
+    newPlus: '#55524b',
   },
 };
 
