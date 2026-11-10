@@ -347,9 +347,9 @@
 
 .settings-toggle-track {
   display: block;
-  width: 36px;
-  height: 20px;
-  border-radius: 10px;
+  width: var(--switch-width);
+  height: var(--switch-height);
+  border-radius: var(--radius-pill);
   background: var(--switch-off-track);
   border: 1px solid var(--switch-off-track-border);
   position: relative;
@@ -365,21 +365,21 @@
 
 .settings-toggle-thumb {
   display: block;
-  width: 16px;
-  height: 16px;
+  width: var(--switch-knob);
+  height: var(--switch-knob);
   border-radius: var(--radius-full);
   background: var(--switch-off-knob);
   box-shadow: var(--switch-knob-shadow);
   position: absolute;
-  top: 1px;
-  left: 1px;
+  top: var(--switch-inset);
+  left: var(--switch-inset);
   transition:
     transform 0.2s,
     background 0.2s;
 }
 
 .settings-toggle.on .settings-toggle-thumb {
-  transform: translateX(16px);
+  transform: translateX(var(--switch-travel));
   background: var(--text-on-accent);
 }
 

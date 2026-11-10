@@ -3179,7 +3179,7 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "consumerCount": 1
+      "consumerCount": 2
     },
     {
       "name": "--switch-off-track-border",
@@ -3187,7 +3187,7 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "consumerCount": 1
+      "consumerCount": 2
     },
     {
       "name": "--switch-off-knob",
@@ -3195,7 +3195,7 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "consumerCount": 1
+      "consumerCount": 2
     },
     {
       "name": "--switch-knob-shadow",
@@ -3203,7 +3203,47 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "consumerCount": 1
+      "consumerCount": 2
+    },
+    {
+      "name": "--switch-width",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "global/component",
+      "status": "canonical",
+      "consumerCount": 2
+    },
+    {
+      "name": "--switch-height",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "global/component",
+      "status": "canonical",
+      "consumerCount": 2
+    },
+    {
+      "name": "--switch-knob",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "global/component",
+      "status": "canonical",
+      "consumerCount": 4
+    },
+    {
+      "name": "--switch-inset",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "global/component",
+      "status": "canonical",
+      "consumerCount": 4
+    },
+    {
+      "name": "--switch-travel",
+      "definitionFile": "src/styles/global/tokens-components.css",
+      "layer": "components",
+      "owner": "global/component",
+      "status": "canonical",
+      "consumerCount": 2
     },
     {
       "name": "--switch-off-track",
@@ -3211,7 +3251,7 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "consumerCount": 1
+      "consumerCount": 2
     },
     {
       "name": "--switch-off-track-border",
@@ -3219,7 +3259,7 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "consumerCount": 1
+      "consumerCount": 2
     },
     {
       "name": "--switch-off-knob",
@@ -3227,7 +3267,7 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "consumerCount": 1
+      "consumerCount": 2
     },
     {
       "name": "--switch-knob-shadow",
@@ -3235,7 +3275,7 @@
       "layer": "components",
       "owner": "global/component",
       "status": "canonical",
-      "consumerCount": 1
+      "consumerCount": 2
     },
     {
       "name": "--status-pill-running",
@@ -5179,7 +5219,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 310
+      "consumerCount": 309
     },
     {
       "name": "--surface-control-hover",
@@ -5267,7 +5307,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 587
+      "consumerCount": 586
     },
     {
       "name": "--text-muted",
@@ -5355,7 +5395,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 425
+      "consumerCount": 424
     },
     {
       "name": "--border-subtle",
@@ -5395,7 +5435,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 319
+      "consumerCount": 320
     },
     {
       "name": "--border-width-emphasis",
@@ -5459,7 +5499,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 96
+      "consumerCount": 95
     },
     {
       "name": "--text-success",
@@ -5467,7 +5507,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 1
+      "consumerCount": 2
     },
     {
       "name": "--text-warning",
@@ -5979,7 +6019,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 98
+      "consumerCount": 102
     },
     {
       "name": "--transition-interaction-slow",
@@ -6211,7 +6251,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 82
+      "consumerCount": 84
     },
     {
       "name": "--mask-opaque",
@@ -6619,7 +6659,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 310
+      "consumerCount": 309
     },
     {
       "name": "--surface-control-hover",
@@ -6707,7 +6747,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 587
+      "consumerCount": 586
     },
     {
       "name": "--text-quiet",
@@ -6795,7 +6835,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 425
+      "consumerCount": 424
     },
     {
       "name": "--border-subtle",
@@ -6835,7 +6875,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 96
+      "consumerCount": 95
     },
     {
       "name": "--text-success",
@@ -6843,7 +6883,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 1
+      "consumerCount": 2
     },
     {
       "name": "--text-warning",

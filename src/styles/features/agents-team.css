@@ -69,7 +69,8 @@
 }
 
 .agents-board__state[data-state='live'] .agents-board__word {
-  color: var(--accent-success);
+  /* The same role as the sidebar's "Live" (agents.css): text, not a fill. */
+  color: var(--text-success);
 }
 
 /* Needs your OK is the status pill, as everywhere else: one style. */
