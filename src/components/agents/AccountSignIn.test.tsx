@@ -29,15 +29,15 @@ afterEach(cleanup);
 describe('AccountSignIn', () => {
   it('says the browser decides which Claude account is added', () => {
     render(<AccountSignIn account={account('claude')} onDone={() => {}} />);
-    expect(screen.getByTestId('account-sign-in-browser-note').textContent).toMatch(
-      /whoever claude\.ai is signed in as.*sign out of claude\.ai.*private window/
+    expect(screen.getByTestId('account-signin-warning').textContent).toMatch(
+      /whoever is logged into claude\.ai.*sign out there first.*private window/
     );
   });
 
   it('says the same for a ChatGPT sign-in', () => {
     render(<AccountSignIn account={account('codex')} onDone={() => {}} />);
-    expect(screen.getByTestId('account-sign-in-browser-note').textContent).toMatch(
-      /whoever ChatGPT is signed in as/
+    expect(screen.getByTestId('account-signin-warning').textContent).toMatch(
+      /whoever is logged into chatgpt\.com/i
     );
   });
 });

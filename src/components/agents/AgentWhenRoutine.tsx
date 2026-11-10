@@ -7,7 +7,8 @@
  * source needs (a folder, or what to look out for), how often to check, and
  * what to do. Under it, what it costs, said before you add it: GitHub and
  * folders are checked for free; an app source (Linear, anything else) is a
- * short read-only Claude Code call per check, at least 15 minutes apart and
+ * short read-only model call per check (Claude Code, or Codex for an app
+ * connected under Apps), at least 15 minutes apart and
  * at most 24 a day, sealed to that one app (`watch_seal.rs`). It checks
  * through an app connected under Apps and given to this agent (ours,
  * preferred, reached through the relay), else one set up in Claude Code
@@ -63,13 +64,13 @@ const SOURCES: SourceChoice[] = [
   {
     kind: 'linear_assigned',
     label: 'A Linear issue is assigned to you',
-    how: 'Through your Linear app · uses a little of your Claude usage each check',
+    how: 'Through your Linear app · uses a little of your usage each check',
   },
   { kind: 'new_file', label: 'A new file appears in a folder', how: 'Free · reads the folder' },
   {
     kind: 'custom',
     label: 'Something else…',
-    how: 'You say what, in one app · uses a little of your Claude usage each check',
+    how: 'You say what, in one app · uses a little of your usage each check',
   },
 ];
 
@@ -81,7 +82,7 @@ function intervalsFor(kind: Kind): number[] {
 }
 
 export const DEFAULT_EVERY = 10;
-/** An app check's default: each one is a Claude Code call. */
+/** An app check's default: each one is a model call. */
 export const DEFAULT_MODEL_EVERY = 30;
 
 const isModelKind = (kind: Kind) => kind === 'linear_assigned' || kind === 'custom';
@@ -224,7 +225,7 @@ export function WhenComposer({ agent, editing, onDone, onCancel }: WhenComposerP
 
   const perDay = Math.min(Math.floor((24 * 60) / Math.max(every, 1)), DEFAULT_MAX_CHECKS_PER_DAY);
   const cost = watchUsesModel(source)
-    ? `Each check uses a little of ${agent.name}’s Claude usage and can only read that app, up to ${perDay} a day.`
+    ? `Each check uses a little of ${agent.name}’s usage and can only read that app, up to ${perDay} a day.`
     : 'Checks are free.';
 
   return (

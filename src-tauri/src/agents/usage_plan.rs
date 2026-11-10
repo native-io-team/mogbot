@@ -25,6 +25,7 @@ use std::sync::Mutex;
 use super::engine::Engine;
 use super::forecast::{self, Sample};
 use super::quota::{self, Quota, QuotaWindow};
+use super::sign_in_change::SignInRecord;
 use crate::errors::CommandError;
 
 const HOUR_MS: i64 = 60 * 60 * 1000;
@@ -144,6 +145,13 @@ struct ReadingsFile {
     /// is never said to be unexplained: nothing was being recorded.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     tracked_since: Option<i64>,
+    /// Each identity this Mac's own sign-in has had, by engine
+    /// (`sign_in_change`).
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    sign_ins: BTreeMap<String, Vec<SignInRecord>>,
+    /// Sign-in changes the user already answered (`SignInChange::key`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    sign_in_told: Vec<String>,
 }
 
 /// Turn records are kept this long: the week a weekly window covers, and a day.
@@ -724,6 +732,47 @@ pub fn set_check(engine: Engine, account: &str, check: Check) -> bool {
 pub fn checks() -> BTreeMap<String, Check> {
     let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
     read_json::<ReadingsFile>(readings_path()).checks
+}
+
+/// This Mac's own sign-in to `engine` is `identity` now (`sign_in_change::note`):
+/// its history after keeping that, and the changes the user already answered.
+pub fn note_sign_in(
+    engine: Engine,
+    identity: &super::identity::Identity,
+    weekly: Option<(i64, i64)>,
+    now: i64,
+) -> (Vec<SignInRecord>, Vec<String>) {
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut file: ReadingsFile = read_json(readings_path());
+    let history = file
+        .sign_ins
+        .entry(account_key(engine, super::wallet::THIS_MAC))
+        .or_default();
+    if super::sign_in_change::note(history, identity, weekly, now) {
+        let out = (history.clone(), file.sign_in_told.clone());
+        if let Err(e) = write_json(readings_path(), &file) {
+            tracing::warn!("[Agents] usage readings not saved: {e}");
+        }
+        return out;
+    }
+    (history.clone(), file.sign_in_told.clone())
+}
+
+/// The user answered a sign-in change ("Add it", "Not now"): it isn't said again.
+pub fn sign_in_told(key: &str) {
+    let key = key.trim();
+    if key.is_empty() || key.len() > 120 {
+        return;
+    }
+    change_readings(|f| {
+        if !f.sign_in_told.iter().any(|k| k == key) {
+            f.sign_in_told.push(key.to_string());
+            // Old answers fall away; a change is never older than the history kept.
+            if f.sign_in_told.len() > 32 {
+                f.sign_in_told.remove(0);
+            }
+        }
+    });
 }
 
 /// Every account's last reading and samples, as stored.

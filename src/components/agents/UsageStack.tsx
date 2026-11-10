@@ -3,9 +3,11 @@
  * segment, in the order turns try them, filled to what its tighter limit
  * has left), and each account as a key card in the Usage view.
  *
- * A segment with no reading is an empty, dashed slot; a second sign-in of
- * an account already in the stack is hatched and holds nothing, since it
- * adds no room. The account in use is drawn in full ink; the rest quieter.
+ * A segment with no reading is an empty, dashed slot. A second sign-in of
+ * an account already in the stack draws no segment (callers pass the
+ * glance's `meterKeys`) and gets one line under the meter (`SameNotes`);
+ * its key says so plainly, with "Sign in with a different account" and
+ * "Remove". The account in use is drawn in full ink; the rest quieter.
  * Status hues only when an account is low; out of usage is neutral (it
  * resets by itself).
  *
@@ -33,6 +35,8 @@ import { DragSortHandle } from '../primitives/DragSort';
 import type { AgentEngine } from '../../lib/agents';
 import {
   LOW_LEFT,
+  REMOVE_ACCOUNT,
+  SIGN_IN_DIFFERENT,
   type KeyLimit,
   type AccountKeyState,
   type StackKey,
@@ -57,11 +61,14 @@ export function StackMeter({
   keys,
   size = 'small',
   labelled = false,
+  paced = false,
 }: {
   keys: StackKey[];
   size?: 'small' | 'large';
   /** Name each segment under it (the Usage view's hero). */
   labelled?: boolean;
+  /** Mark where each segment would stand at an even pace through its window. */
+  paced?: boolean;
 }) {
   const words = keys.map(segmentWords).join('; ');
   return (
@@ -80,6 +87,13 @@ export function StackMeter({
               className="usage-stack__fill"
               style={{ '--usage-stack-fill': `${k.left ?? 0}%` } as CSSProperties}
             />
+            {paced && k.tight?.evenLeft !== undefined && (
+              <span
+                className="usage-stack__even"
+                style={{ '--usage-stack-even': `${k.tight.evenLeft}%` } as CSSProperties}
+                aria-hidden
+              />
+            )}
           </span>
         ))}
       </span>
@@ -90,7 +104,7 @@ export function StackMeter({
               <span className="usage-stack__label-name">{k.name}</span>
               <span className="usage-stack__label-room">
                 {k.state === 'same'
-                  ? 'Adds no room'
+                  ? 'Adds no extra room'
                   : k.state === 'off'
                     ? 'Not signed in'
                     : k.left === null
@@ -105,6 +119,20 @@ export function StackMeter({
   );
 }
 
+/** Under a meter: each account signed in twice, which draws no segment of its own. */
+export function SameNotes({ notes }: { notes: string[] }) {
+  if (notes.length === 0) return null;
+  return (
+    <>
+      {notes.map((n) => (
+        <p key={n} className="usage-stack-note" data-testid="usage-same-note">
+          {n}
+        </p>
+      ))}
+    </>
+  );
+}
+
 const PILL: Record<AccountKeyState, StatusTone> = {
   in_use: 'done',
   next: 'idle',
@@ -115,31 +143,96 @@ const PILL: Record<AccountKeyState, StatusTone> = {
   unread: 'idle',
 };
 
+/**
+ * A bar of what is left (solid) against what is used (hatched), with the
+ * pace marker: where it would stand had it been spent evenly through the
+ * window. Left of the marker is ahead of pace; right of it, room to spare.
+ */
+export function PaceBar({
+  limit,
+  size = 'large',
+}: {
+  limit: Pick<KeyLimit, 'label' | 'left' | 'evenLeft' | 'tone' | 'paceState'>;
+  size?: 'small' | 'large';
+}) {
+  return (
+    <span
+      className="usage-pacebar"
+      data-size={size}
+      data-tone={limit.tone}
+      data-pace={limit.paceState}
+      role="meter"
+      aria-label={`${limit.label} limit left`}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={limit.left}
+    >
+      <span
+        className="usage-pacebar__fill"
+        style={{ '--usage-pacebar-fill': `${limit.left}%` } as CSSProperties}
+      />
+      {limit.evenLeft !== undefined && (
+        <span
+          className="usage-pacebar__even"
+          style={{ '--usage-pacebar-even': `${limit.evenLeft}%` } as CSSProperties}
+          title={`Even pace: ${limit.evenLeft}% left by now`}
+          aria-hidden
+        />
+      )}
+    </span>
+  );
+}
+
+/**
+ * One limit as a card: its name and countdown chip, the big figure, the
+ * pace-marked bar, the time until it refills with the Mac's run-out
+ * estimate marked on it (labelled as one), and what that means in words.
+ */
 function LimitRow({ limit }: { limit: KeyLimit }) {
   return (
-    <div className="usage-key__limit" data-tone={limit.tone}>
+    <div className="usage-key__limit" data-tone={limit.tone} data-model={limit.model || undefined}>
       <div className="usage-key__limit-head">
         <span className="usage-key__limit-name">{limit.label}</span>
-        <span className="usage-key__limit-left">{limit.left}% left</span>
+        {limit.countdown && (
+          <span className="usage-key__chip" title={`Refills ${limit.resetsAt ?? ''}`}>
+            <ResetIcon size={11} aria-hidden />
+            {limit.countdown}
+          </span>
+        )}
       </div>
-      <span
-        className="usage-key__bar"
-        role="meter"
-        aria-label={`${limit.label} limit left`}
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={limit.left}
-      >
-        <span
-          className="usage-key__fill"
-          style={{ '--usage-key-fill': `${limit.left}%` } as CSSProperties}
-        />
+      <span className="usage-key__figure">
+        {limit.left}%<span className="usage-key__figure-unit"> left</span>
       </span>
-      {limit.resetsAt && (
-        <span className="usage-key__reset">
-          Resets {limit.resetsIn} · {limit.resetsAt}
+      <PaceBar limit={limit} />
+      {limit.runOut && (
+        <span
+          className="usage-key__timeline"
+          role="img"
+          aria-label={`${limit.runOut.text}, an estimate`}
+        >
+          <span className="usage-key__timeline-track">
+            <span
+              className="usage-key__timeline-mark"
+              style={
+                {
+                  '--usage-key-runout': `${Math.round(limit.runOut.along * 100)}%`,
+                } as CSSProperties
+              }
+            />
+          </span>
+          <span className="usage-key__timeline-ends" aria-hidden>
+            <span>Now</span>
+            <span>{limit.runOut.text} · estimate</span>
+            <span>Refills</span>
+          </span>
         </span>
       )}
+      {limit.paceWord && (
+        <span className="usage-key__paceword" data-pace={limit.paceState}>
+          {limit.paceWord}
+        </span>
+      )}
+      {limit.resetsAt && <span className="usage-key__reset">Refills {limit.resetsAt}</span>}
       {limit.pace && (
         // An estimate: secondary ink, never amber; a small mark only when little is left.
         <span className="usage-key__pace" title={limit.pace.basis}>
@@ -147,8 +240,8 @@ function LimitRow({ limit }: { limit: KeyLimit }) {
             <WarningIcon size={12} className="usage-key__pace-icon" aria-hidden />
           )}
           <span>
-            {limit.pace.text}
-            <span className="usage-key__basis"> · {limit.pace.basis}</span>
+            {!limit.runOut && <>{limit.pace.text} · </>}
+            <span className="usage-key__basis">{limit.pace.basis}</span>
           </span>
         </span>
       )}
@@ -335,10 +428,17 @@ export function UsageKey({
               Sign in
             </Button>
           )}
-          {k.fix?.action === 'sign_in_other' && !k.thisMac && (
-            <Button size="compact" variant="secondary" onClick={actions.onSignIn}>
-              Sign in with another account
-            </Button>
+          {k.fix?.action === 'sign_in_other' && (
+            <>
+              <Button size="compact" variant="secondary" onClick={actions.onSignIn}>
+                {SIGN_IN_DIFFERENT}
+              </Button>
+              {!k.thisMac && (
+                <Button size="compact" variant="ghost" onClick={() => setConfirming(true)}>
+                  {REMOVE_ACCOUNT}
+                </Button>
+              )}
+            </>
           )}
           <span className="usage-key__spacer" />
           {k.changes.length > 0 && (

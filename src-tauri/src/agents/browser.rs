@@ -76,15 +76,36 @@ fn path() -> Result<PathBuf, CommandError> {
 }
 
 pub fn load() -> Stored {
-    path()
-        .ok()
-        .and_then(|p| super::survive::read_kept(&p, "Your browser setting for agents"))
-        .unwrap_or_else(upgraded)
+    let Ok(p) = path() else {
+        return Stored::default();
+    };
+    let existed = p.exists();
+    if let Some(kept) = super::survive::read_kept(&p, "Your browser setting for agents") {
+        return kept;
+    }
+    // Decided once, and kept: the upgrade reads agents' sites, which the
+    // access chain now also gives for the agents' own browser
+    // (`access_chain`, `give_site`). Worked out afresh on every read, the
+    // first "use the agents' browser" on a new team switched Claude in
+    // Chrome on for every agent, with no setup and nothing verified (found
+    // by the fake-engine suite). A damaged file starts off, not upgraded.
+    let decided = if existed {
+        Stored::default()
+    } else {
+        upgraded()
+    };
+    if store::may_write_root() {
+        if let Err(e) = save(&decided) {
+            tracing::warn!("[Agents] Couldn't keep the browser setting: {e}");
+        }
+    }
+    decided
 }
 
 /// Before this switch existed every Claude Code agent had the browser, and
 /// a user who chose "Use my browser" on a login card meant it: that team
 /// starts switched on. Everyone else starts off, until they set it up.
+/// Read once, the first time the setting is (see [`load`]).
 fn upgraded() -> Stored {
     let chose = store::list()
         .unwrap_or_default()

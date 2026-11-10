@@ -132,7 +132,10 @@ describe('AccountSwitcher (the sidebar’s usage glance)', () => {
     render(<AccountSwitcher collapsed={false} onOpen={onOpen} />);
 
     const row = await screen.findByTestId('account-switcher');
-    await waitFor(() => expect(row).toHaveTextContent('Plenty of room'));
+    // What's left and of what, in plain words; then how many accounts.
+    await waitFor(() => expect(row).toHaveTextContent('62% left for now'));
+    expect(row).toHaveTextContent(/^Usage/);
+    expect(row).toHaveTextContent('Refills');
     expect(row).toHaveTextContent('2 accounts');
     // One segment per account: Work has no reading, so its slot is empty, never full.
     const meter = within(row).getByRole('img', { name: /Room left/ });
@@ -182,7 +185,9 @@ describe('Usage view', () => {
     const keys = await screen.findAllByRole('article');
     await waitFor(() => expect(keys[0]).toHaveTextContent('In use'));
     expect(keys[0]).toHaveTextContent('Max plan');
-    expect(keys[0]).toHaveTextContent('5-hour62% left');
+    expect(keys[0]).toHaveTextContent('5-hour');
+    expect(keys[0]).toHaveTextContent('62% left');
+    expect(keys[0]).toHaveTextContent('Under pace');
     expect(keys[1]).toHaveTextContent('Next');
     expect(keys[1]).toHaveTextContent('me@work.example');
     expect(keys[1]).toHaveTextContent('Riley runs only on this one');
@@ -311,13 +316,12 @@ describe('the sidebar row pill', () => {
 });
 
 describe('glanceStatus (the usage row’s corner dot)', () => {
-  const key = (left: number | null) => ({ left }) as never;
-  it('shows no dot before anything was read: a green one would claim the limits are fine', () => {
-    expect(glanceStatus({ tone: 'calm', keys: [key(null), key(null)] })).toBe('off');
+  const row = (needsYou: boolean) => ({ figure: '', refill: null, count: null, needsYou }) as const;
+  it('shows no dot when all is well: a green one said nothing anyone could read', () => {
+    expect(glanceStatus({ tone: 'calm', row: row(false) })).toBe('off');
   });
-  it('is green once a reading says there is room, amber and red as before', () => {
-    expect(glanceStatus({ tone: 'calm', keys: [key(null), key(60)] })).toBe('ok');
-    expect(glanceStatus({ tone: 'warning', keys: [key(null)] })).toBe('warn');
-    expect(glanceStatus({ tone: 'limited', keys: [key(0)] })).toBe('down');
+  it('shows one only when the user must act, or agents are out', () => {
+    expect(glanceStatus({ tone: 'warning', row: row(true) })).toBe('warn');
+    expect(glanceStatus({ tone: 'limited', row: row(false) })).toBe('down');
   });
 });

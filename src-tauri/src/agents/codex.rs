@@ -108,7 +108,7 @@ pub(super) fn toml<T: serde::Serialize + ?Sized>(value: &T) -> String {
 
 /// Extra `-c` overrides, one per line, in debug builds only: how the e2e
 /// suite points Codex at a scripted model when no account is signed in.
-fn extra_config() -> Vec<String> {
+pub(super) fn extra_config() -> Vec<String> {
     if !cfg!(debug_assertions) {
         return Vec::new();
     }
@@ -284,15 +284,22 @@ const PROFILES_SINCE: (u64, u64) = (0, 166);
 /// [`PROFILES_SINCE`] or later. Kept per binary until it changes (an
 /// update); a version that can't be read counts as no.
 pub async fn profiles_supported(binary: &Path) -> bool {
+    version_is_at_least(binary, PROFILES_SINCE).await
+}
+
+/// Whether this Codex's `--version` is `since` or later. The version is
+/// kept per binary until it changes (an update); one that can't be read
+/// counts as no.
+pub(super) async fn version_is_at_least(binary: &Path, since: (u64, u64)) -> bool {
     use std::collections::HashMap;
     use std::sync::{LazyLock, Mutex};
     use std::time::SystemTime;
-    type Seen = HashMap<PathBuf, (Option<SystemTime>, bool)>;
+    type Seen = HashMap<PathBuf, (Option<SystemTime>, String)>;
     static CACHE: LazyLock<Mutex<Seen>> = LazyLock::new(Default::default);
     let stamp = std::fs::metadata(binary).and_then(|m| m.modified()).ok();
-    if let Some((at, yes)) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).get(binary) {
+    if let Some((at, text)) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).get(binary) {
         if *at == stamp {
-            return *yes;
+            return version_at_least(text, since);
         }
     }
     let mut cmd = tokio::process::Command::new(binary);
@@ -302,11 +309,12 @@ pub async fn profiles_supported(binary: &Path) -> bool {
     else {
         return false;
     };
-    let yes = version_at_least(&String::from_utf8_lossy(&out.stdout), PROFILES_SINCE);
+    let text = String::from_utf8_lossy(&out.stdout).into_owned();
+    let yes = version_at_least(&text, since);
     CACHE
         .lock()
         .unwrap_or_else(|e| e.into_inner())
-        .insert(binary.to_path_buf(), (stamp, yes));
+        .insert(binary.to_path_buf(), (stamp, text));
     yes
 }
 
@@ -435,7 +443,7 @@ pub(super) fn result(item: &Value) -> Option<super::work::CallResult> {
     })
 }
 
-fn usage(value: &Value) -> Option<UsageTotals> {
+pub(super) fn usage(value: &Value) -> Option<UsageTotals> {
     let usage = value.get("usage")?.as_object()?;
     let n = |k: &str| usage.get(k).and_then(Value::as_u64).unwrap_or(0);
     // Codex's input count includes what was read from cache; ours doesn't.

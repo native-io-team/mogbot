@@ -508,7 +508,7 @@ export function describeWatchTitle(source: WatchSource): string {
   return `When ${describeWatchSource(source)}`;
 }
 
-/** Whether each check is a Claude Code call (a connector), not a free CLI call. */
+/** Whether each check is a model call (a connector), not a free CLI call. */
 export function watchUsesModel(source: WatchSource): boolean {
   return source.kind === 'linear_assigned' || source.kind === 'custom';
 }

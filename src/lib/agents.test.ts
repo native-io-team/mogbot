@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { agentInitials, distinctInitials } from './agentInitials';
 import {
+  describeWatchCheck,
   routineModelChoices,
   routineModelOf,
   promptAnswer,
@@ -1080,5 +1081,20 @@ describe('a turn cut off part-way', () => {
     const failed = { ...cut, failure: { kind: 'other' as const } };
     expect(continuesFrom([asked, failed])).toBe(false);
     expect(retrySourceFor([asked, failed])?.id).toBe('u');
+  });
+});
+
+describe('describeWatchCheck', () => {
+  it('names the engine a model check ran on, and nothing for a free one', () => {
+    expect(describeWatchCheck({ found: 0, baseline: false })).toBe('Nothing new.');
+    expect(describeWatchCheck({ found: 2, baseline: false, engine: 'Codex' })).toBe(
+      'Found 2 new; it’s on it. Checked on Codex.'
+    );
+    expect(describeWatchCheck({ found: 0, baseline: true, engine: 'Claude Code' })).toBe(
+      'Noted what’s there now; anything new from here starts work. Checked on Claude Code.'
+    );
+    expect(describeWatchCheck({ found: 0, baseline: false, error: 'Codex is old.' })).toBe(
+      'Check failed: Codex is old.'
+    );
   });
 });

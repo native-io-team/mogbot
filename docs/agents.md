@@ -4189,7 +4189,7 @@ every few minutes:
 | Someone mentions me on GitHub | `gh api notifications` (all, participating), reason `mention`/`team_mention`; one firing per new mention (thread id + latest comment, or `updated_at`) | free |
 | An issue or PR is assigned to me | `gh api search/issues -f q="assignee:@me is:open"`, 100 a page, up to 300 | free |
 | A new file appears in a folder | the folder's listing (not hidden, not `.crdownload`/`.part`/…, not modified in the last 5 s; symlinks skipped); folders of at most 2,000 entries | free |
-| A Linear issue is assigned to me | one sealed headless Claude Code call on Haiku through Linear: ours first (connected under Apps or on a login card, given to this agent, reached through the relay with a secret that opens only that connection, for reads only, never a card: `conn_relay::Via::Sealed`), else the Linear server set up in Claude Code | a model call |
+| A Linear issue is assigned to me | one sealed headless model call through Linear (Claude Code on Haiku, or Codex on a small model: see "Which engine runs a check" below): ours first (connected under Apps or on a login card, given to this agent, reached through the relay with a secret that opens only that connection, for reads only, never a card: `conn_relay::Via::Sealed`), else the Linear server set up in Claude Code | a model call |
 | Something else… (in the user's words, through one named app) | the same sealed call, through that app | a model call |
 
 **The rules.** The first check is a baseline (it notes what's there and
@@ -4274,6 +4274,77 @@ the flags was needed. **Not verified:** a real Linear or Gmail app,
 including whether an OAuth app's saved sign-in is found when its config is
 passed this way.
 
+**The relay's side of the seal** (`conn_relay`, `Via::Sealed`, any engine).
+A check's own secret opens one connection, and through it the check may only
+start a session, list tools and call them (`sealed_method_allowed`: no
+resources, prompts or answers to the app's own requests). Its tool list is
+read whole and passed on holding only the read tools, each marked
+`readOnlyHint: true` (`sealed_tool_list`; an unreadable list is an error,
+never the app's own list), and any call that isn't a read is refused
+(`sealed_refusal`). So neither engine is ever offered a write tool, and a
+write called anyway is refused here.
+
+**The sealed check on Codex** (`watch_seal_codex.rs`). For someone with
+Codex and no Claude Code. `codex exec --json --skip-git-repo-check
+--ephemeral --strict-config --ignore-user-config --ignore-rules --sandbox
+read-only`, `--disable` for `shell_tool`, `unified_exec`, `view_image`,
+`image_generation`, `multi_agent`, `apps`, `plugins`, `browser_use`,
+`browser_use_external`, `computer_use`, `in_app_browser`, `goals`, `hooks`,
+`memories`, `skill_search`, `skill_mcp_dependency_install`, `tool_suggest`,
+`sleep_tool` and `workspace_dependencies`, and `-c approval_policy="never"`,
+`web_search="disabled"`, `project_doc_max_bytes=0`,
+`skills.include_instructions=false`, `skills.bundled.enabled=false`,
+`model_reasoning_effort="low"`, `developer_instructions=<the same system
+prompt>` and one server: `mcp_servers.<key>={url=<the relay>,
+bearer_token_env_var=SHIPSTUDIO_AGENTS_CHECK_TOKEN, startup_timeout_sec=30,
+tool_timeout_sec=120}` (the secret in the environment, never argv). The
+model is the first one Codex's own list describes as fast, efficient or
+affordable (`small_model`), else Codex's default; the prompt and the JSON it
+must answer with are the Claude check's. It runs in the same empty folder,
+for at most 3 minutes, and only on Codex 0.166 or later (`SINCE`).
+Afterwards, any step in its answer that isn't a message, reasoning or a call
+to that one server fails the check and nothing it said is used
+(`parse_result`).
+
+Codex runs an MCP tool under `never` only when the server marks it
+read-only; everything else is refused before it reaches the server. That,
+with the relay's filtered list, is two walls where Claude Code has its
+`--allowedTools` and the relay. Only our own connections can be checked on
+Codex: a server from Codex's or Claude Code's own config would need that
+config, with any token or key in it, on Codex's command line
+(`--ignore-user-config` keeps the user's own config.toml servers out).
+
+Verified on Codex 0.166 (`codex-cli 0.166.0`) with the exact command line
+(`cargo test print_codex_check_args -- --ignored --nocapture`), a throwaway
+`CODEX_HOME`, a scripted Responses model and a stub HTTP server offering
+`list_items` (marked read-only) and `create_item` (marked destructive): the
+read tool ran, with the secret arriving as its bearer token; `create_item`
+failed with "MCP tool call requires approval, but approval policy is never"
+and never reached the stub; an unmarked read tool was refused the same way
+(which is why the relay marks reads); `exec_command` (with or without asking
+to escalate), `exec`, `web_search`, `view_image` and `spawn_agent` were
+"unsupported call"; `request_user_input` was unavailable; `apply_patch` was
+"rejected: writing is blocked by read-only sandbox"; `read_mcp_resource`
+went through to the stub (the relay now refuses it); a server in the
+`CODEX_HOME` config.toml, a folder AGENTS.md and the skill list didn't load;
+an unknown `--disable` feature or `-c` key stops Codex before it starts.
+What still loads is `$CODEX_HOME/AGENTS.md`, the user's own global
+instructions, which Codex has no switch for; it gives the check no tool.
+**Not verified:** a signed-in account's real model, a real app through the
+relay, and the small-model choice's actual price.
+
+**Which engine runs a check** (`watch::pick_engine`). The agent's own
+engine when it is ready and can seal the route, else the other: Claude Code
+seals either route; Codex only our own connections, and only when it is
+installed, signed in and 0.166 or later. Nothing ready says so in one line
+("This routine's check runs on Claude Code or Codex, and neither is set up
+on this Mac.", "Checks on Codex need Codex 0.166 or later. Update Codex.",
+or, for an app set up only in Claude Code on a Mac without it, "Connect it
+in Apps so Codex can check it."). Check now ends with the engine ("Nothing
+new. Checked on Codex."), as does a morning-brief check line ("(Google
+Calendar, on Codex)"); usage is counted as a check either way, in tokens
+on a ChatGPT plan.
+
 **Cost.** A model check is counted as a *check*, not a turn
 (`UsageTotals::checks`/`priced_checks`), in the agent's usage and the
 routine's own (`CheckIn::usage`, the one store runs use too), so the row
@@ -4332,9 +4403,10 @@ the desk banner and the phone notification say.
   room anywhere is.
 - **The user's own checks** (opt-in, at most 4): "events on my calendar
   today" through Google Calendar, say. Each runs exactly as a "When…"
-  routine's connector check does (`watch::check`, sealed by `watch_seal`:
-  no shell, files or web, only that connector's read tools, on the Chief's
-  grant). What comes back is outside text: titles only, escaped by
+  routine's connector check does (`watch::check`, sealed by `watch_seal` on
+  Claude Code or `watch_seal_codex` on Codex: no shell, files or web, only
+  that connector's read tools, on the Chief's grant), on the Chief's engine
+  when it can, and its line names a Codex run. What comes back is outside text: titles only, escaped by
   `brief::plain` so nothing in them can become a link (not even a bare
   address), a list or bold, and never given to a turn. A check that can't
   run says why in one line ("Gmail isn't connected. Connect it in Apps.").
@@ -4625,16 +4697,48 @@ read answered with (`usage_read::ORG_HEADER`, kept per account in
 `usage-readings.json` `orgs`, forgotten on a new sign-in); Codex's
 `chatgpt_account_id` and user. A later account with the same organization
 on a plan that isn't shared by seats (not Team, Enterprise, Business, Edu)
-is `sameAs` the first: it counts once in totals (`compute::totals`), its
-segment is hatched and holds nothing, and its key says "Same account as …"
-with the fix (sign in again with another account, signing out of claude.ai
-first, or remove it). When one sign-in of an account is marked out (a
-turn's limit, a `rejected` event, a used-up read), every other sign-in of it
-is too (`wallet::mark_out_with_twins`), so failover never switches to the
-same account under another name. The org is also kept from the one-token
-check at sign-in (`claude_token_check`), when its answer names one, and the
-add-account sign-in says that the browser decides who signs in. The header is in Claude Code's own code but was not
-yet observed on a setup token's answer here; without it nothing is marked.
+is `sameAs` the first: it counts once in totals (`compute::totals`), draws
+no segment of the meter (the glance's `meterKeys`; one line under the meter
+instead, `sameNotes`), and its key says plainly "Same Claude account as … —
+adds no extra room" with "Sign in with a different account" and "Remove"
+(words in `companion-protocol/sameAccount.ts`, shared with the phone). The
+header is in Claude Code's own code but was not yet observed on a setup
+token's answer here; without it nothing is marked. When one sign-in of an
+account is marked out, every other sign-in of it is too
+(`wallet::mark_out_with_twins`), so failover never switches to the same
+account under another name.
+
+Adding guards the trap: before the sign-in opens the browser, the dialog
+says the browser signs in as whoever is logged into claude.ai (or
+chatgpt.com) and to sign out or use a private window; the moment it returns,
+`agents_usage_check_account` reads that account once (`usage_read::check_one`)
+and, when it is one already here, the dialog says so at once with "Try again
+with a different account" or "Remove it".
+
+**This Mac's sign-in became another account** (`agents/sign_in_change.rs`).
+Signing Claude Code in on this Mac as someone else swaps the account behind
+This Mac silently: on the owner's Mac (2026-11-09) it went from an account
+resetting Mondays 4 PM to the one "Personal Account" already was (Saturdays
+10 AM), so both entries became one account and the other was no longer
+connected. Each inventory read keeps the identity of This Mac's sign-in per
+engine (`usage-readings.json` `signIns`: the organization, else the email,
+with first/last seen and a weekly reset observed while it was signed in; a
+reading older than the identity is never credited to it). When it changes
+and the previous account isn't connected (no other account has its identity,
+or its weekly reset when its identity is unknown), Usage says once: "This
+Mac's Claude Code is now signed in as X. Your previous account (Y, resets
+Mondays 4 PM) isn't connected anymore — add it to keep stacking", with "Add
+it" (the add flow) and "Not now" (`agents_usage_sign_in_seen`). Before any
+history existed, the one record that tells accounts apart is This Mac's own
+weekly-reset samples: a reset that moved to another time of the week and
+stayed there is said as exactly that, naming nobody (`byReset`).
+
+**The sidebar row** says, in words anyone reads, what the agents can still
+do and when it refills (`usageGlance` `row`): "Usage 57% left this week" (the
+tighter limit of the account in use), a meter with one segment per real
+account, "Refills Sat 10:00 AM", and "2 accounts" only when there are. Its
+corner dot shows only when the user must act or agents are out; the phone's
+Agents list says the same.
 
 **Where did my usage go** (`agents/usage_story.rs`). Each turn's tokens are
 recorded per account with its agent, and its routine when it ran one alone
@@ -6551,6 +6655,50 @@ low-disk note. The card wiring in `mcp::decide_inner` is covered by
 - `node scripts/harness-capture.mjs agents-first-win` / `agents-template-`: the starters and the gallery (`agents-ideas`, `agents-ideas-when`: team, brief and site typed; a document staged and New agent on Research, both from the gallery), first results (a team built, a document summarised), Inbox in the dialog with its connect line, and a Chief-made Inbox's first open.
 - `node scripts/harness-capture.mjs agents-result`: v1, asking, v2, not verified, a copy's card with before/after.
 - `pnpm vitest run src/lib/agents.test.ts`: chat grouping, dividers, ordering.
+- `scripts/agents-fake-e2e.sh [scenario…]` (free, offline, deterministic,
+  about two minutes, macOS, needs python3): whole agent turns against a **fake engine**.
+  `src-tauri/examples/agents_fake/main.rs` drives the real runner, store,
+  agent bridge, approval broker, wallet and MCP tools through the same
+  Tauri commands the UI calls, with `scripts/fake-engine/fake_claude.py`
+  first on PATH as `claude` (and, linked as `codex`, as Codex's `exec`
+  driver: `SHIPSTUDIO_AGENTS_CODEX_EXEC`). The fake speaks Claude Code's
+  stream-json as observed on 2.1.318 (init with its permission mode,
+  streamed text, tool_use / tool_result, `rate_limit_event`, `result` with
+  usage), calls the bridge's tools for real with the turn's bearer secret
+  from its `--mcp-config` file, asks through `--permission-prompt-tool`
+  before a Bash call, keeps transcripts where `--resume` looks (and fails
+  as Claude Code does when one is missing), and runs whatever script the
+  message carries: the last `#fake [...]` line of its prompt (say, slow
+  output, any bridge tool, Bash, Write, a rate-limit reading, the usage
+  limit unless an account's token is set, sleep, hang, crash, exit, an
+  error result, a mid-process `result`, raw lines; the list is in the
+  script's header). `FAKE_ENGINE_DEFAULT` scripts prompts with no marker
+  (a pick-up, a late Allow); `FAKE_ENGINE_LOG` gets every turn's prompt
+  and every bridge answer. Throwaway HOME, the Keychain in memory
+  (`keychain::use_memory_for_e2e`), no model, no account, no network.
+  Scenarios: a normal turn (the final reply as a bubble, the narration and
+  steps in "What it did", usage, the session resumed), approvals (Allow
+  runs, Deny doesn't, the step marked declined; Always allow; two agents'
+  cards at once), a plan grant (one card, the covered command's "Under your
+  OK" line), a login card (the agents' browser first, one card, asked once,
+  a decline wakes the agent), a result card and its v2 (Ask for changes),
+  tools the app refuses (an unknown agent, a file outside its folders),
+  delegation and the hop cap (a ping-pong stops at six), usage-limit
+  failover (the quiet "Switched to …" line; after acting, the same
+  conversation resumed on the other account; every account out, one line;
+  carrying on with Codex after the card), crashes, exits and error results
+  (each ends in a line, the partial kept, one pick-up then an error), a
+  `bypassPermissions` init stopped, Stop (mid-reply, on a hung engine, with
+  a card waiting), interrupt, queueing (batched; never across
+  conversations; while a card waits), several conversations (a session
+  each, swapped per turn, a crash picked up in its own), a lost transcript
+  put back, a `result` with the process left running, a second round after
+  a `result`, garbage lines, the approval wait running out, a 2 MB command
+  output, deleting an agent mid-turn, routines (one firing, one in steps
+  waiting on "OK to go on?", one failing into a retry), Codex `exec` turns,
+  and the morning brief composed from all of it. `AGENTS_FAKE_KEEP=1` keeps
+  the HOME. Not covered: Codex's app-server (the fake has none), the user's
+  Chrome, and anything a model decides.
 - `scripts/agents-e2e.sh [scenario…]` (opt-in, real turns, on Haiku): `src-tauri/examples/agents_e2e/main.rs` drives the real
   runner, store, bridge and MCP tools through the same Tauri commands the UI
   calls, on `claude --model haiku`, in a throwaway HOME (only the keychain is

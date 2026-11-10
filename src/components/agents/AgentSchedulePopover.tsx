@@ -104,6 +104,7 @@ import {
   type SchedulePreview,
   type UsageSummary,
   type WatchCheckOutcome,
+  describeWatchCheck,
 } from '../../lib/agents';
 import { KeepAwakeLink } from './AgentsStayOn';
 import { useQuotaLines } from './AgentsQuota';
@@ -747,7 +748,7 @@ function ScheduleRow({
   const { execute: checkNow, isLoading: checking } = useAsyncState(async () => {
     setChecked(null);
     try {
-      setChecked(describeCheck(await onCheckNow()));
+      setChecked(describeWatchCheck(await onCheckNow()));
     } catch (err) {
       setChecked(reasonOf(err));
     }
@@ -895,17 +896,6 @@ function ScheduleRow({
       {showRuns && <RunHistory runs={runs} />}
     </li>
   );
-}
-
-/** What Check now came to, in a line. */
-function describeCheck(o: WatchCheckOutcome): string {
-  if (o.paused) return o.paused;
-  if (o.error) return `Check failed: ${o.error}`;
-  if (o.baseline) return 'Noted what’s there now; anything new from here starts work.';
-  if (o.unconfirmed)
-    return 'Found nothing. The next check confirms that before anything starts work.';
-  if (o.found > 0) return `Found ${o.found} new; it’s on it.`;
-  return 'Nothing new.';
 }
 
 /** The last runs, newest first: when, and what came of it. */

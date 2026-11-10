@@ -1,15 +1,16 @@
 /**
  * Usage at a glance, always in sight: the row at the foot of the Agents
- * sidebar. One line that answers ("Plenty of room", "Runs out ~Thu, 2 days
- * before reset", "Out of usage until 3:20 PM"), the whole stack of accounts
- * as one segmented meter (each account a segment, filled to what its
- * tighter limit has left), and the count and soonest reset. It opens the
+ * sidebar, answering "how much can my agents still do, and when does it
+ * refill" in words anyone reads: "Usage 57% left this week", a meter with
+ * one segment per real account (a second sign-in of one never draws one),
+ * and "Refills Sat 10:00 AM", with "2 accounts" only when there are. A
+ * status dot only when the user must act, or agents are out. It opens the
  * Usage view (`AgentsUsageView`), where every account is a key in order.
  *
- * Words and figures are the phone's too (`companion-protocol/usageGlance`):
- * only what an engine reported; an account nobody has read is an empty,
- * dashed segment, never a full one. This row never asks for a reading
- * itself (`glance`); opening the view does.
+ * Words and figures are the phone's too (`companion-protocol/usageGlance`
+ * `row`): only what an engine reported; an account nobody has read is an
+ * empty, dashed segment, never a full one. This row never asks for a
+ * reading itself (`glance`); opening the view does.
  *
  * ⌘K "Usage and accounts…", "Switch account…" and "Add an account…" open
  * the view (`requestSwitcher`), as does the chat header's account chip.
@@ -18,7 +19,7 @@
  */
 
 import { useEffect, useMemo } from 'react';
-import { ClaudeIcon, CodexIcon } from '@/components/icons';
+import { ActivityIcon, ClaudeIcon, CodexIcon } from '@/components/icons';
 import { Button } from '../primitives/Button';
 import { Tooltip } from '../primitives/Tooltip';
 import { FooterRowIcon, type FooterRowStatus } from '../workspace/FooterRowIcon';
@@ -45,19 +46,14 @@ const ENGINE_ICON: Record<AgentEngine, typeof ClaudeIcon> = {
   codex: CodexIcon,
 };
 
-const STATUS: Record<UsageGlance['tone'], FooterRowStatus> = {
-  calm: 'ok',
-  warning: 'warn',
-  limited: 'down',
-};
-
 /**
- * The row's corner dot. Nothing read yet is no dot: a green one would say
- * "fine" about limits nobody has seen.
+ * The row's corner dot: only when the user has something to do (nearly out
+ * everywhere, nothing signed in) or agents can't run (out of usage). Fine
+ * is no dot: a green one said nothing anyone could read.
  */
-export function glanceStatus(glance: Pick<UsageGlance, 'tone' | 'keys'>): FooterRowStatus {
-  if (glance.tone === 'calm' && glance.keys.every((k) => k.left === null)) return 'off';
-  return STATUS[glance.tone];
+export function glanceStatus(glance: Pick<UsageGlance, 'tone' | 'row'>): FooterRowStatus {
+  if (glance.tone === 'limited') return 'down';
+  return glance.row.needsYou ? 'warn' : 'off';
 }
 
 /**
@@ -153,11 +149,8 @@ export function AccountSwitcher({
   );
 
   if (!accounts || glance.keys.length === 0) return null;
-  const first = glance.keys.find((k) => k.state === 'in_use') ?? glance.keys[0];
-  const Icon = ENGINE_ICON[first.engine];
-  const label = [glance.headline, glance.estimate ? '(estimate)' : null, glance.summary]
-    .filter(Boolean)
-    .join('. ');
+  const { row: words } = glance;
+  const label = `Usage: ${[words.figure, words.refill, words.count].filter(Boolean).join('. ')}`;
 
   const row = (
     <Button
@@ -166,26 +159,27 @@ export function AccountSwitcher({
       className={`remote-indicator account-switcher__row usage-glance${
         collapsed ? ' remote-indicator--compact' : ''
       }`}
-      aria-label={`Usage. ${label}`}
+      aria-label={`${label}. Show usage and accounts`}
       aria-current={open ? 'page' : undefined}
       data-testid="account-switcher"
-      data-tone={glance.tone}
+      data-needs-you={words.needsYou || undefined}
       onClick={() => onOpen?.()}
-      leftIcon={<FooterRowIcon icon={<Icon size={14} />} status={glanceStatus(glance)} />}
+      leftIcon={<FooterRowIcon icon={<ActivityIcon size={14} />} status={glanceStatus(glance)} />}
     >
       {!collapsed && (
         <span className="usage-glance__body">
-          <span className="usage-glance__headline">
-            {glance.headline}
-            {glance.estimate && <span className="usage-glance__est"> · est.</span>}
+          <span className="usage-glance__top">
+            <span className="usage-glance__label">Usage</span>
+            {words.count && <span className="usage-glance__refill">{words.count}</span>}
           </span>
-          <StackMeter keys={glance.keys} size="small" />
-          {glance.summary && <span className="usage-glance__summary">{glance.summary}</span>}
+          <span className="usage-glance__headline">{words.figure}</span>
+          {glance.meterKeys.length > 0 && <StackMeter keys={glance.meterKeys} size="small" paced />}
+          {words.refill && <span className="usage-glance__summary">{words.refill}</span>}
         </span>
       )}
     </Button>
   );
-  return collapsed ? <Tooltip content={label}>{row}</Tooltip> : row;
+  return <Tooltip content={collapsed ? label : 'Show usage and accounts'}>{row}</Tooltip>;
 }
 
 /**

@@ -29,6 +29,7 @@ use super::engine::{Engine, EngineInfo};
 use super::forecast::{self, PerRun, Unit, WindowShare};
 use super::identity::Identity;
 use super::quota::{Quota, QuotaWindow};
+use super::sign_in_change;
 use super::store::Agent;
 use super::usage_plan::{self, AccountReading, Mode, Spare, SpareItem};
 use super::usage_story;
@@ -156,6 +157,10 @@ pub struct Inventory {
     pub routines: Vec<RoutineLine>,
     /// Every account at once: what there is room on, by reading (`compute.rs`).
     pub totals: compute::Totals,
+    /// This Mac's own sign-in became another account and the one it was
+    /// isn't connected any more: said once (`sign_in_change`).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub sign_in_changes: Vec<sign_in_change::SignInChange>,
     pub now: i64,
 }
 
@@ -488,8 +493,64 @@ pub fn build(parts: Parts) -> Inventory {
         backlog: parts.backlog,
         agents,
         routines,
+        sign_in_changes: Vec::new(),
         now,
     }
+}
+
+/// The weekly window's reset in `line`'s reading, with when it was observed.
+fn weekly_of(line: &AccountLine) -> Option<(i64, i64)> {
+    line.windows
+        .iter()
+        .find(|w| compute::family(w) == Some(compute::Family::Weekly))
+        .and_then(|w| w.resets_at.map(|r| (r, w.observed_at)))
+}
+
+/// Keep who this Mac's own sign-in to each engine is now, and the change
+/// to tell the user about, if any (`sign_in_change`). Reads and writes the
+/// readings file.
+fn sign_in_changes(
+    inv: &Inventory,
+    identities: &std::collections::BTreeMap<String, Identity>,
+    orgs: &std::collections::BTreeMap<String, String>,
+    samples: &std::collections::BTreeMap<String, Vec<forecast::Sample>>,
+    now: i64,
+) -> Vec<sign_in_change::SignInChange> {
+    let mut out = Vec::new();
+    for engine in Engine::ALL {
+        let Some(mac) = inv
+            .accounts
+            .iter()
+            .find(|a| a.engine == engine && a.this_mac && a.signed_in)
+        else {
+            continue;
+        };
+        let key = usage_plan::account_key(engine, &mac.id);
+        let Some(identity) = identities.get(&key) else {
+            continue;
+        };
+        let (history, told) = usage_plan::note_sign_in(engine, identity, weekly_of(mac), now);
+        let connected: Vec<sign_in_change::Connected> = inv
+            .accounts
+            .iter()
+            .filter(|a| a.engine == engine && !a.this_mac && a.signed_in)
+            .map(|a| {
+                let k = usage_plan::account_key(engine, &a.id);
+                sign_in_change::Connected {
+                    who: identities
+                        .get(&k)
+                        .and_then(|i| i.org.clone())
+                        .or_else(|| orgs.get(&k).cloned()),
+                    weekly_reset: weekly_of(a).map(|(r, _)| r),
+                }
+            })
+            .collect();
+        let mine = samples.get(&key).map(Vec::as_slice).unwrap_or_default();
+        out.extend(sign_in_change::notice(
+            engine, &history, mine, &connected, &told,
+        ));
+    }
+    out
 }
 
 /* ---------------------------------------------------- other compute */
@@ -590,8 +651,11 @@ pub async fn read() -> Inventory {
                     wallet::identity_of(&c.account),
                 )
             })
-            .collect();
-        build(Parts {
+            .collect::<std::collections::BTreeMap<_, _>>();
+        let records = usage_plan::records();
+        let (kept_ids, kept_orgs, kept_samples) =
+            (identities.clone(), records.orgs.clone(), samples.clone());
+        let mut inv = build(Parts {
             mode: usage_plan::mode(),
             engines,
             candidates,
@@ -607,10 +671,12 @@ pub async fn read() -> Inventory {
             local,
             backlog: usage_plan::backlog(),
             identities,
-            records: usage_plan::records(),
+            records,
             today: super::usage::today(),
             now,
-        })
+        });
+        inv.sign_in_changes = sign_in_changes(&inv, &kept_ids, &kept_orgs, &kept_samples, now);
+        inv
     })
     .await
     .unwrap_or_else(|_| empty(now))
@@ -628,6 +694,7 @@ fn empty(now: i64) -> Inventory {
         agents: Vec::new(),
         routines: Vec::new(),
         totals: compute::totals(&[], now),
+        sign_in_changes: Vec::new(),
         now,
     }
 }
@@ -1205,6 +1272,38 @@ mod tests {
         assert_eq!(inv.accounts[1].same_as.as_deref(), Some("This Mac"));
         // Only This Mac counts toward what there is.
         assert_eq!(inv.totals.accounts, 1);
+    }
+
+    /// Right after "Add an account": the new sign-in's read named the
+    /// organization This Mac is already signed in to, so the add flow says
+    /// at once that it's the same account (by This Mac's id), rather than
+    /// keeping a duplicate quietly.
+    #[test]
+    fn a_just_added_account_that_is_already_here_is_said_at_once() {
+        use crate::commands::agents_usage::twin_of;
+        let mut p = parts();
+        p.identities
+            .insert("claude:default".into(), who("claude-org:o1", Some("Max")));
+        // Before its first read: nothing known, nothing said.
+        let before = build(parts());
+        assert_eq!(twin_of(&before, Engine::Claude, "w1").same_as, None);
+        p.records
+            .orgs
+            .insert("claude:w1".into(), "claude-org:o1".into());
+        let inv = build(p);
+        assert_eq!(
+            twin_of(&inv, Engine::Claude, "w1").same_as.as_deref(),
+            Some("default")
+        );
+        assert_eq!(twin_of(&inv, Engine::Claude, "default").same_as, None);
+        // Another account: nothing to say.
+        let mut q = parts();
+        q.identities
+            .insert("claude:default".into(), who("claude-org:o1", Some("Max")));
+        q.records
+            .orgs
+            .insert("claude:w1".into(), "claude-org:o2".into());
+        assert_eq!(twin_of(&build(q), Engine::Claude, "w1").same_as, None);
     }
 
     #[test]
