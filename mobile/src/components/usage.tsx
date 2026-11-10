@@ -8,18 +8,9 @@
  */
 
 import { Pressable, StyleSheet, View } from 'react-native';
-import Svg, { Circle, Path } from 'react-native-svg';
 import { makeStyles, useColors, useLargeText } from '../lib/appearance';
 import type { ComputeRow, ComputeView, UsageMeter, UsageTone } from '../lib/usageSheet';
-import {
-  depthOf,
-  iconSize,
-  meter as meterSize,
-  PRESSED,
-  radius,
-  space,
-  type Palette,
-} from '../lib/theme';
+import { depthOf, meter as meterSize, PRESSED, radius, space, type Palette } from '../lib/theme';
 import { T } from './ui';
 
 /** The warning role from 80% used and when used up (it refills by itself: never error red). */
@@ -27,35 +18,10 @@ const inkOf = (colors: Palette, tone: UsageTone, calm = colors.textSecondary) =>
   tone === 'limited' || tone === 'warning' ? colors.accentWarning : calm;
 
 /**
- * The meter's diameter and line: a header glyph, the size and weight of the
- * system's ⓘ beside it, so the three read as one set.
- */
-const RING = iconSize.bar;
-/** The outline's width (an SF Symbol's regular weight) and the gap to the pie. */
-const OUTLINE = 1.6;
-const GAP = space['2xs'];
-
-/**
- * A pie of `share` (0..1) from twelve o'clock, clockwise: a wedge, a full
- * disc, or nothing.
- */
-export function piePath(cx: number, cy: number, r: number, share: number): string | null {
-  const s = Math.max(0, Math.min(1, share));
-  if (s <= 0) return null;
-  if (s >= 1)
-    return `M ${cx - r} ${cy} A ${r} ${r} 0 1 1 ${cx + r} ${cy} A ${r} ${r} 0 1 1 ${cx - r} ${cy} Z`;
-  const a = 2 * Math.PI * s;
-  const f = (n: number) => Number(n.toFixed(3));
-  const x = f(cx + r * Math.sin(a));
-  const y = f(cy - r * Math.cos(a));
-  const large = s > 0.5 ? 1 : 0;
-  return `M ${cx} ${cy} L ${cx} ${cy - r} A ${r} ${r} 0 ${large} 1 ${x} ${y} Z`;
-}
-
-/**
- * The header's usage meter, as the desk draws it: a static outline with
- * what is used as a pie inside it. A thin arc read as a loading spinner; a
- * filled wedge in a whole circle reads as a gauge.
+ * The header's usage meter: what is used of the 5-hour window, said as a
+ * figure ("52%") in the header's tint. A pie in a circle read as the
+ * appearance toggle at half, and a thin arc as a spinner; a number reads as
+ * one thing only. Amber from 80% used, as every usage figure.
  */
 export function UsageRing({
   percent,
@@ -71,10 +37,7 @@ export function UsageRing({
 }) {
   const colors = useColors();
   const styles = useStyles();
-  // Filled to what is used, as every usage figure is said.
-  const shown = Math.max(0, Math.min(100, percent));
-  const c = RING / 2;
-  const pie = piePath(c, c, c - OUTLINE - GAP, shown / 100);
+  const shown = Math.round(Math.max(0, Math.min(100, percent)));
   return (
     <Pressable
       accessibilityRole="button"
@@ -84,17 +47,16 @@ export function UsageRing({
       onPress={onPress}
       style={({ pressed }) => [styles.ring, pressed && PRESSED]}
     >
-      <Svg width={RING} height={RING} viewBox={`0 0 ${RING} ${RING}`} testID="usage-meter">
-        <Circle
-          cx={c}
-          cy={c}
-          r={c - OUTLINE / 2}
-          stroke={tint ?? colors.textSecondary}
-          strokeWidth={OUTLINE}
-          fill="none"
-        />
-        {pie && <Path d={pie} fill={inkOf(colors, tone, tint)} />}
-      </Svg>
+      <T
+        variant="headline"
+        color={inkOf(colors, tone, tint)}
+        numberOfLines={1}
+        maxFontSizeMultiplier={1.2}
+        testID="usage-meter"
+        style={styles.ringFigure}
+      >
+        {`${shown}%`}
+      </T>
     </Pressable>
   );
 }
@@ -285,7 +247,9 @@ const useStyles = makeStyles((colors) => ({
   },
   quietRow: { gap: space['2xs'], paddingHorizontal: space.lg, paddingVertical: space.md },
   divided: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderDefault },
-  ring: { alignItems: 'center', justifyContent: 'center', padding: space['3xs'] },
+  ring: { alignItems: 'center', justifyContent: 'center', paddingHorizontal: space['2xs'] },
+  // Figures that don't jiggle as the reading moves.
+  ringFigure: { fontVariant: ['tabular-nums'] },
   // The one meter (theme `meter`, the desk's `--meter-*`), on its
   // see-through track, which shows on a dark group as on a light one.
   track: {

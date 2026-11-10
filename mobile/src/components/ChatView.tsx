@@ -718,7 +718,8 @@ export function ChatView({
     );
   }
 
-  const header = <Header agent={agent} />;
+  // Embedded (beside the list) the title takes the row's flex, not the bar's budget.
+  const header = <Header agent={agent} buttons={0} />;
   const openSheet = () => router.push({ pathname: '/agent/[id]', params: { id } });
   const openUsage = () => router.push({ pathname: '/usage', params: { id } });
   const openConversations = () => router.push({ pathname: '/conversations', params: { id } });
@@ -1268,10 +1269,20 @@ function Glow() {
  * how it sits (`agentKeyState`).
  */
 /**
- * What the header's buttons take: back on the left, the usage ring and ⓘ on
- * the right, and the bar's insets. The title stops short of them.
+ * What the header's controls take, measured on an iPhone 16 Pro (iOS 26):
+ * back and its gap on the left, each button of the right-hand glass group
+ * and the group's inset. The title stops short of them; a flat 200 let the
+ * group sit over the account ("On julian@native.agen…" under the glass).
  */
-const HEADER_RESERVED = 200;
+const HEADER_LEFT = 80;
+const HEADER_PER_BUTTON = 54;
+const HEADER_RIGHT_INSET = 24;
+export function headerTitleWidth(screen: number, buttons: number): number {
+  return Math.max(
+    96,
+    Math.min(260, screen - HEADER_LEFT - HEADER_RIGHT_INSET - buttons * HEADER_PER_BUTTON)
+  );
+}
 
 /**
  * The chat's header and its buttons, as the screen's options. Its own memoised
@@ -1297,12 +1308,13 @@ const ChatHeader = memo(function ChatHeader({
   const router = useRouter();
   const accent = useAccent();
   const id = agent.id;
-  const header = <Header agent={agent} />;
+  const ring = percent != null && tone != null;
+  const buttons = (ring ? 1 : 0) + (offered && !switchRow ? 1 : 0) + (TALK_OFFERED ? 1 : 0) + 1;
+  const header = <Header agent={agent} buttons={buttons} />;
   const openSheet = () => router.push({ pathname: '/agent/[id]', params: { id } });
   const openUsage = () => router.push({ pathname: '/usage', params: { id } });
   const openConversations = () => router.push({ pathname: '/conversations', params: { id } });
   const openTalk = () => router.push({ pathname: '/talk', params: { id } });
-  const ring = percent != null && tone != null;
   const conversationsButton = offered && !switchRow && (
     <IconButton name="bubble.left" label="Conversations" onPress={openConversations} />
   );
@@ -1388,14 +1400,14 @@ const ChatHeader = memo(function ChatHeader({
   );
 });
 
-function Header({ agent }: { agent: Agent }) {
+function Header({ agent, buttons }: { agent: Agent; buttons: number }) {
   const colors = useColors();
   const styles = useStyles();
   const { width, fontScale } = useWindowDimensions();
   const whole = headerSubtitleParts(agent);
   // A role cut to "Desig…" is dropped for the account alone, until the role,
   // the account or the room changes.
-  const fit = `${whole.role}|${whole.on}|${width}|${fontScale}|${type.caption}`;
+  const fit = `${whole.role}|${whole.on}|${width}|${buttons}|${fontScale}|${type.caption}`;
   const [cutAt, setCutAt] = useState<string | null>(null);
   const roleCut = cutAt === fit;
   const parts = roleCut
@@ -1405,7 +1417,7 @@ function Header({ agent }: { agent: Agent }) {
     ? headerSubtitle({ role: '', ranOn: agent.ranOn, engine: agent.engine })
     : headerSubtitle(agent);
   return (
-    <View style={[styles.header, { maxWidth: Math.min(260, width - HEADER_RESERVED) }]}>
+    <View style={[styles.header, { maxWidth: headerTitleWidth(width, buttons) }]}>
       <AgentKey
         id={agent.id}
         name={agent.name}
