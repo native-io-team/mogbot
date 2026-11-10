@@ -5451,7 +5451,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 40
+      "consumerCount": 41
     },
     {
       "name": "--accent-error-deep",
@@ -6795,7 +6795,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 40
+      "consumerCount": 41
     },
     {
       "name": "--accent-error-deep",
