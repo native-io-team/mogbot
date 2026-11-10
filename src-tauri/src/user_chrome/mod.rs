@@ -18,6 +18,10 @@
 //!   (`agent_browser::page`). What asks is `agents::browser_gate`, the same
 //!   rules as Claude in Chrome.
 //! - [`settings`]: Settings → Agents → "Your Chrome", **off** by default.
+//! - [`managed`]: whether Chrome's policy (this Mac's, or a work profile's)
+//!   keeps the extension out, and the personal profile to use instead.
+//! - Which way agents use, Your Chrome or Claude in Chrome, and why:
+//!   `agents::chrome_route` (Your Chrome whenever it's connected).
 //!
 //! Design, threat model and what's verified: docs/internal/own-browser-layer.md.
 
@@ -26,6 +30,7 @@ pub mod frame;
 pub mod host;
 pub mod install;
 pub mod link;
+pub mod managed;
 pub mod protocol;
 pub mod settings;
 pub mod tools;
@@ -146,7 +151,7 @@ fn prepare_install() -> std::io::Result<()> {
 /// and settings, and never for outside text.
 pub fn for_turn(agent: &crate::agents::store::Agent, outside: bool) -> bool {
     let enabled = settings::enabled();
-    let connected = enabled && !registry().conns().is_empty();
+    let connected = enabled && connected();
     connected
         && allowed(
             enabled,
@@ -155,6 +160,11 @@ pub fn for_turn(agent: &crate::agents::store::Agent, outside: bool) -> bool {
             agent,
             outside,
         )
+}
+
+/// A Chrome is connected to the app's link right now.
+pub fn connected() -> bool {
+    !registry().conns().is_empty()
 }
 
 /// [`for_turn`], pure. `policy_browser`: the agent's settings let it use
@@ -201,6 +211,12 @@ pub struct Status {
     pub browsers: Vec<Browser>,
     /// A connected extension is older than the one this app ships.
     pub update_needed: bool,
+    /// Chrome's policy and profiles: what keeps the extension out, and
+    /// which profile is personal.
+    pub management: managed::Management,
+    /// The way agents reach the user's Chrome right now, and why
+    /// (`agents::chrome_route::team`).
+    pub route: crate::agents::chrome_route::Now,
 }
 
 pub fn status() -> Status {
@@ -239,6 +255,8 @@ pub fn status() -> Status {
             .to_string(),
         browsers,
         update_needed,
+        management: managed::read(),
+        route: crate::agents::chrome_route::team(),
     }
 }
 

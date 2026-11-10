@@ -51,6 +51,7 @@ turn, Claude Code and Codex alike.
 | `install` | The host manifest (`<Chrome user data>/NativeMessagingHosts/<identifier>.chrome_link.json`), staging the extension into the app's data folder for Load unpacked, the External Extensions file once listed. |
 | `tools` | The `user_chrome` MCP server: the agents' browser's 13 tools with identical names and schemas (a test holds them equal), plus `hover`, `browsers`, `use_browser`. Per-agent tab ownership, refs, the gate, cards. |
 | `settings` | `user-chrome.json`, **off** by default. |
+| `managed` | Whether Chrome's policy (this Mac's, or a work profile's) keeps the extension out; the profiles, which are managed, and opening a personal one. |
 
 `agent_browser/page.rs` (new) is the page logic both browsers share:
 `PageCdp` has one required method, `cdp(method, params)`; navigate, settle,
@@ -123,6 +124,124 @@ and its prompt says to use `mcp__user_chrome__*` wherever it's told to use
 Claude in Chrome, so every existing prompt and access-chain step carries over.
 `browser::for_turn` is now "has the user's Chrome by any route";
 `claude_in_chrome_for_turn` is the old meaning.
+
+## Which way agents use, and why (`agents/chrome_route.rs`)
+
+Observed (the owner): "I keep having to log in and out with the Claude in
+Chrome extension once we switch accounts." Claude in Chrome reaches the
+browser as the claude.ai account its token belongs to, so a turn moved to
+another Claude account finds no browser until the extension is signed in to
+that account (`account_reach` works around it for added accounts by running
+the server as this Mac's sign-in, which still depends on the extension's own
+sign-in). Your Chrome belongs to no account and no engine. So one pure
+function, `chrome_route::decide`, picks per turn:
+
+1. **Your Chrome whenever it's connected**, on every engine and every
+   account. The turn gets `mcp__user_chrome__*`, runs `--no-chrome`, and on
+   Claude Code `mcp__claude-in-chrome` is added to `--disallowedTools` too.
+   Its prompt says never to send the user to sign in to or out of the Claude
+   extension.
+2. **Claude in Chrome only as the fallback**: Your Chrome off or not
+   connected, the team set Claude in Chrome up, Claude Code, and the last
+   `chrome_health` probe didn't find it down.
+3. **None**, with the reason (outside text, taken away from this agent, its
+   settings, Codex without Your Chrome, Claude in Chrome down, nothing set up).
+
+`connections::for_turn` takes the route from it, so the turn and the words
+can't disagree; a test holds `decide` equal to `user_chrome::allowed` and
+`browser::allowed` over all 256 combinations of its inputs. The same
+`browser_gate` decides every call on either path. Settings → Chrome shows
+"Agents use now" with the team's route and why (`chrome_route::team`), and
+each agent's "What it can reach" names its own ("Chrome, through Your
+Chrome", and why), Codex agents included once Your Chrome is on.
+
+## Work-managed Chrome profiles (`user_chrome/managed.rs`)
+
+Observed (the owner): his work Chrome profile is managed by Google Admin,
+which turned off Developer mode, so Load unpacked wasn't there and the
+extension couldn't be added. Chrome takes policy from two places, and the app
+reads both, writing nothing:
+
+| Where | What the app reads | What it can tell |
+|---|---|---|
+| This Mac (MDM): `/Library/Managed Preferences/com.google.Chrome.plist` and `/Library/Managed Preferences/<user>/…` | The plist through `plutil`; `managed::blocks` reads `ExtensionDeveloperModeSettings` (1), `DeveloperToolsAvailability` (2), `ExtensionInstallBlocklist`/`Allowlist`, `ExtensionSettings` (`installation_mode`), `ExtensionAllowedTypes`, `NativeMessagingUserLevelHosts` (false), `NativeMessagingBlocklist`/`Allowlist` | Exactly which of Developer mode, installing, or the native host is blocked, for every profile |
+| A profile (a Workspace account, policy set in Google Admin) | `Local State` → `profile.info_cache` (name, `hosted_domain`, `user_accepted_account_management`), `profile.last_used`, and whether `<profile>/Policy/User Policy` exists | That the profile is managed. Not which policies: that file is a signed protobuf the app doesn't parse |
+
+Settings → Chrome, while nothing is connected:
+
+- **This Mac's policy blocks it**: one line saying what's off in every
+  profile and to ask whoever manages the Mac; no profile buttons (a new
+  profile gets the same policy).
+- **The profile Chrome opened last is managed**: "This Chrome profile
+  ("Work", example.com) is managed by your work, so it can't add the app's
+  extension. Use a personal Chrome profile for your agents' browsing.", the
+  steps, and **Open "<personal profile>"** (one that isn't managed, if there
+  is one) and **Open a new Chrome profile** (`agents_user_chrome_open_profile`:
+  `open -na "Google Chrome" --args --profile-directory=Agents`; Chrome makes
+  the profile when the folder doesn't exist, and a managed "Agents" is never
+  reused). The host manifest is per user data folder, so it already serves
+  every profile; only Load unpacked is left to do there.
+- **Nothing detected**: a quiet "Developer mode greyed out in Chrome?" opens
+  the same advice, since a Workspace profile's policy can't be read and the
+  app can't see the switch itself.
+
+Checked on a scratch `--user-data-dir` (Chrome 156): `open -na "Google
+Chrome" --args --profile-directory=Agents` makes the `Agents` folder, and
+`Local State` then lists it in `profile.info_cache` (`name`, `user_name`,
+`gaia_id`, no `hosted_domain` while signed out) with `profile.last_used` set
+to it. Not checked: the keys on a real Workspace-managed profile
+(`hosted_domain`, `user_accepted_account_management`, `Policy/User Policy`
+are from Chromium's source, and the owner's profiles were never read).
+
+The "can't" in the profile sentence is inferred from management, not read
+from the policy: a managed profile whose admin left Developer mode on would
+still work. Profile folder names are checked (`managed::valid_dir`) before
+they reach `--profile-directory`, and a managed one is refused.
+
+## Ways to install it without the Web Store
+
+Checked against Chrome's documented behaviour; none of these was tried on a
+managed profile here.
+
+| Route | Needs | Works for the owner's work profile? |
+|---|---|---|
+| Load unpacked (now) | Developer mode on in that profile | No: policy turns Developer mode off. Yes in a personal profile |
+| `--load-extension` | Nothing, before Chrome 137 | No: branded Chrome 137+ ignores it |
+| Drag a `.crx` onto chrome://extensions | Developer mode; off-store `.crx` are disabled on macOS anyway | No |
+| `External Extensions/<id>.json` | A **Web Store** id (`external_update_url` to the store); macOS ignores a local `external_crx` | Only once listed, and only if policy allows installing it |
+| `ExtensionInstallForcelist` (policy) | An admin: Google Admin for the Workspace profile, or MDM for the Mac. Off-store (self-hosted `update_url`) only on managed machines | Yes, if his Workspace admin adds it. The host manifest still has to be at the user level (or `/Library/Google/Chrome/NativeMessagingHosts` with `NativeMessagingUserLevelHosts` off) |
+| Chrome Web Store | A listing (below) | Probably: a profile that blocks Developer mode can still allow store installs (if Claude in Chrome was added to it from the store, it does), unless policy blocks installs (`ExtensionInstallBlocklist` `*` without an allowlist entry) |
+| A separate browser (Chrome Beta/Canary/Chromium/Chrome for Testing) | Its own profile, signed in to the sites again | Other Chrome channels may share the managed policy (not checked); Chromium and Chrome for Testing read their own policy domain and accept `--load-extension`. Not built: it is a second browser to sign in to, which is what the agents' own browser already is |
+
+**Today's answer**: a personal Chrome profile (Settings → Chrome → Open a new
+Chrome profile), signed in there to the sites agents need.
+
+## Chrome Web Store: what listing it would take (owner's decision)
+
+Not done, and not to be done without the owner: publishing puts the app's
+name in a public store.
+
+- **Account**: a Chrome Web Store developer account ($5 once), ideally a
+  group publisher under the company, with 2-step verification; a verified
+  publisher domain is optional.
+- **Package**: `pnpm package:extension` (removes the dev `key`). The store
+  assigns a new id, which goes in `brand.json` → `chromeExtension.webStoreId`;
+  the host then allows both ids, and Settings offers "Add to Chrome…"
+  (External Extensions + the listing page).
+- **Listing**: `chrome-extension/store/listing.md` and `privacy.md` have the
+  text, single purpose, permission justifications and data-use answers. Still
+  missing: a 1280×800 screenshot, a 440×280 promo tile, a hosted privacy
+  policy URL (required because of `debugger` and page content).
+- **Visibility**: **Unlisted** is enough: installable by link, not searchable.
+  It goes through the same review as public. **Private** (only a Google
+  group or one Workspace domain) would limit it to his own domain's users.
+- **Review**: `debugger` and `nativeMessaging` get manual review; expect
+  days to a few weeks, and possibly questions about the single purpose. Each
+  update is reviewed again, so the extension's protocol must stay compatible
+  with older app builds for the review window.
+- **Then**: in his work profile, "Add to Chrome" from the listing (if Google
+  Admin allows store installs), or his admin force-installs it by id. Either
+  way, no Developer mode.
 
 ## Why not CDP on the user's Chrome
 

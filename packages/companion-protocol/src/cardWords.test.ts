@@ -49,7 +49,7 @@ describe('the words the desk and the phone share', () => {
   });
 
   it('accounts: one word for putting one first, and Runs on', () => {
-    expect(USE_THIS_ONE_NOW).toBe('Use this one now');
+    expect(USE_THIS_ONE_NOW).toBe('Use for new work');
     expect(RUNS_ON_ANY_DETAIL).toMatch(/carrying on with the next/);
     expect(runsOnDetail({ signedIn: false, out: false })).toBe('Not signed in');
     expect(runsOnDetail({ signedIn: true, out: true })).toMatch(/out of usage now$/);

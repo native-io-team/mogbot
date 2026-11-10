@@ -117,21 +117,21 @@
   align-items: center;
   justify-content: space-between;
   gap: var(--spacing-md);
-  padding: 12px 16px;
+  padding: var(--spacing-md) var(--spacing-lg);
   margin-bottom: var(--dashboard-section-gap);
   background: linear-gradient(
     135deg,
     var(--dash-slack-grad-start) 0%,
     var(--dash-slack-grad-end) 100%
   );
-  border: 1px solid rgba(var(--purple-deep-rgb), 0.2);
-  border-radius: var(--radius-card);
+  border: var(--border-width-default) solid rgba(var(--purple-deep-rgb), 0.2);
+  border-radius: var(--radius-lg);
 }
 
 .slack-cta-content {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: var(--spacing-md);
   flex: 1;
   min-width: 0;
 }
@@ -149,17 +149,17 @@
 
 .slack-cta-content strong {
   color: var(--text-primary);
-  font-weight: 600;
+  font-weight: var(--font-weight-heading);
 }
 
 .slack-cta-join {
-  padding: 4px 10px;
+  padding: var(--spacing-xs) var(--spacing-sm);
   background: rgba(var(--purple-deep-rgb), 0.2);
-  border: 1px solid rgba(var(--purple-deep-rgb), 0.3);
+  border: var(--border-width-default) solid rgba(var(--purple-deep-rgb), 0.3);
   border-radius: var(--radius-control);
   color: var(--slack-lavender);
   font-size: var(--font-size-body-md);
-  font-weight: 500;
+  font-weight: var(--font-weight-label);
   cursor: pointer;
   transition:
     background-color var(--transition),
@@ -249,7 +249,8 @@
 .dashboard-panel {
   padding: var(--spacing-lg);
   background: var(--surface-panel);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-card);
+  border: var(--border-width-default) solid var(--border-subtle);
+  /* The Agents board's plate radius: a section is a sheet, not a control. */
+  border-radius: var(--radius-lg);
   margin-bottom: var(--dashboard-section-gap);
 }

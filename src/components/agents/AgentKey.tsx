@@ -39,6 +39,8 @@ export type AgentKeySize = 'xl' | 'lg' | 'md' | 'sm' | 'xs';
 
 /** Sizes that show the sublegend and pips. */
 const BIG: ReadonlySet<AgentKeySize> = new Set(['xl']);
+/** The small drawing (a list key and under): agent-key.css's md, sm and xs. */
+const SMALL: ReadonlySet<AgentKeySize> = new Set(['md', 'sm', 'xs']);
 
 /**
  * Every agent's key and independence as one string, so a streaming reply
@@ -180,6 +182,9 @@ export function AgentKey({
                 {legend(drawing, 'high')}
               </>
             )}
+            {/* Needs your OK at list size: a dark keyline under the legend
+                that parts the amber from the face (agent-key.css). */}
+            {state === 'needsOk' && SMALL.has(size) && legend(drawing, 'keyline')}
             {legend(drawing)}
             {big && look.boundKey && <span className="agent-key__sub">{look.boundKey}</span>}
           </span>
@@ -196,13 +201,17 @@ export function AgentKey({
   );
 }
 
-/** The icon on the face; with `glow`, one of a working key's lit copies under it. */
-function legend(drawing: ReturnType<typeof legendDrawing>, glow?: 'low' | 'high') {
+/**
+ * The icon on the face; with `under`, a copy drawn under it: one of a working
+ * key's lit copies (`low`, `high`), or a small Needs-your-OK key's keyline.
+ */
+function legend(drawing: ReturnType<typeof legendDrawing>, under?: 'low' | 'high' | 'keyline') {
+  const extra = under === 'keyline' ? ' agent-key__keyline' : under ? ' agent-key__glow' : '';
   return (
     <svg
       data-dynamic-svg="agent-key"
-      className={glow ? 'agent-key__legend agent-key__glow' : 'agent-key__legend'}
-      data-glow={glow}
+      className={`agent-key__legend${extra}`}
+      data-glow={under === 'keyline' ? undefined : under}
       data-round={drawing?.round || undefined}
       data-fill={drawing?.fill || undefined}
       viewBox={`0 0 ${KEY_ICON_GRID} ${KEY_ICON_GRID}`}

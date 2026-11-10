@@ -1,17 +1,19 @@
 /* ============ Folder Card Styles ============ */
 
+/* One family with the project card beside it (project-grid.css): the same
+   surface, shadow and radius. */
 .folder-card {
   display: flex;
   flex-direction: column;
-  background: var(--surface-panel);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  transition: border-color var(--transition);
+  background: var(--project-card-surface);
+  border-radius: var(--project-card-radius);
+  box-shadow: var(--project-card-shadow);
+  transition: background-color var(--transition-interaction);
   min-width: 0;
 }
 
 .folder-card:hover {
-  border-color: var(--text-muted);
+  background: var(--project-card-surface-hover);
 }
 
 .folder-card-thumbnail {
@@ -20,8 +22,8 @@
   aspect-ratio: 16 / 8.85;
   padding: 0;
   border: none;
-  border-bottom: 1px solid var(--border-default);
-  border-radius: 11px 11px 0 0;
+  border-bottom: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--project-card-radius) var(--project-card-radius) 0 0;
   background: var(--surface-control);
   cursor: pointer;
   overflow: hidden;
@@ -38,12 +40,13 @@
   /* Thumbnails run flush to the card edge — the card's own 1px border is
      the only frame. Hairline dividers between quadrants come from the grid
      background showing through the gap (no second inset border). */
-  gap: 1px;
-  background: var(--border-default);
+  gap: var(--border-width-default);
+  background: var(--border-subtle);
 }
 
+/* An empty quadrant is the same warm plate as a project with no screenshot. */
 .folder-card-grid-item {
-  background: var(--surface-panel);
+  background: linear-gradient(var(--agent-key-plate-top), var(--agent-key-plate-bottom));
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -86,28 +89,30 @@
 .folder-card-open-label {
   color: var(--text-primary);
   font-size: var(--font-size-body-lg);
-  font-weight: 500;
+  font-weight: var(--font-weight-label);
 }
 
 .folder-card-info {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 12px 16px;
-  gap: 8px;
+  padding: var(--spacing-md);
+  gap: var(--spacing-sm);
   overflow: visible;
 }
 
 .folder-card-details {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-2xs);
   min-width: 0;
 }
 
+/* A name as on a project card and in the Agents list. */
 .folder-card-name {
-  font-weight: 600;
-  font-size: 15px;
+  font-weight: var(--font-weight-label);
+  font-size: var(--font-size-body-lg);
+  letter-spacing: var(--tracking-name);
   color: var(--text-primary);
   white-space: nowrap;
   overflow: hidden;
@@ -123,12 +128,12 @@
    in base.css); only the trigger button is styled here. */
 .folder-card-menu-btn {
   flex-shrink: 0;
-  padding: 4px 8px;
+  padding: var(--spacing-xs) var(--spacing-sm);
   background: transparent;
   border: none;
   color: var(--text-muted);
   font-size: var(--font-size-subhead);
-  letter-spacing: 1px;
+  letter-spacing: var(--tracking-control);
   cursor: pointer;
   border-radius: var(--radius-sm);
   transition:
@@ -147,17 +152,17 @@
 .folder-breadcrumb {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
   margin-bottom: var(--spacing-sm);
 }
 
 .folder-breadcrumb-back {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
+  gap: var(--spacing-tight);
+  padding: var(--spacing-tight) var(--spacing-md);
   background: var(--surface-panel);
-  border: 1px solid var(--border-default);
+  border: var(--border-width-default) solid var(--border-default);
   border-radius: var(--radius-control);
   color: var(--text-secondary);
   cursor: pointer;

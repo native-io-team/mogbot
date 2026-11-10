@@ -659,7 +659,8 @@ pub fn build(agent: &Agent, ask: &Ask) -> Result<LoginRequest, CommandError> {
         } else if no_connector.is_some() && !agents_browser {
             // Both ways it can't use in one sentence, then the one fix,
             // rather than "runs on Codex" said twice.
-            let via_claude_ai = known.is_some_and(|s| matches!(s.connector, Connector::ClaudeAi(_)));
+            let via_claude_ai =
+                known.is_some_and(|s| matches!(s.connector, Connector::ClaudeAi(_)));
             no_connector = Some(if via_claude_ai {
                 format!("{title} comes through claude.ai or your own Chrome, and both need Claude Code; {name} runs on Codex. To give it {title}, switch it to Claude Code under Model.")
             } else {
@@ -2651,6 +2652,10 @@ pub struct ReachBrowser {
     /// The Chrome profile and account each of its sites was found in.
     pub accounts: Vec<super::browser_profiles::ReachAccount>,
     pub helper_installed: bool,
+    /// The way its turns reach the user's Chrome now, and why
+    /// (`chrome_route`): Your Chrome whenever it's connected, Claude in
+    /// Chrome only as the fallback.
+    pub route: super::chrome_route::Now,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -2669,7 +2674,8 @@ pub struct ReachSecret {
 #[serde(rename_all = "camelCase")]
 pub struct Reach {
     pub connections: Vec<ReachConnection>,
-    /// `None` on Codex, which has no browser.
+    /// `None` on Codex unless Your Chrome is on (Codex has no Claude in
+    /// Chrome).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub browser: Option<ReachBrowser>,
     pub secrets: Vec<ReachSecret>,
@@ -2717,14 +2723,18 @@ pub fn reach(agent: &Agent) -> Reach {
                 last_used_at: c.last_used_at,
             })
             .collect(),
-        browser: (agent.engine == Engine::Claude).then(|| ReachBrowser {
-            on: !agent.reach.browser_off && super::browser::team_enabled(),
-            team_on: super::browser::team_enabled(),
-            own_off: agent.reach.browser_off,
-            sites: agent.reach.browser_sites.clone(),
-            accounts: super::browser_profiles::for_reach(agent),
-            helper_installed: browser_helper_installed(),
-        }),
+        browser: (agent.engine == Engine::Claude || crate::user_chrome::settings::enabled()).then(
+            || ReachBrowser {
+                on: !agent.reach.browser_off
+                    && (super::browser::team_enabled() || crate::user_chrome::settings::enabled()),
+                team_on: super::browser::team_enabled() || crate::user_chrome::settings::enabled(),
+                own_off: agent.reach.browser_off,
+                sites: agent.reach.browser_sites.clone(),
+                accounts: super::browser_profiles::for_reach(agent),
+                helper_installed: browser_helper_installed(),
+                route: super::chrome_route::for_turn(agent, false),
+            },
+        ),
         secrets: agent
             .secrets
             .iter()
@@ -2995,7 +3005,10 @@ mod tests {
             // One sentence for both ways it can't use, and the one fix.
             let told = none.no_connector.as_deref().unwrap();
             assert_eq!(told.matches("runs on Codex").count(), 1, "{told}");
-            assert!(told.contains("switch it to Claude Code under Model"), "{told}");
+            assert!(
+                told.contains("switch it to Claude Code under Model"),
+                "{told}"
+            );
             assert!(asked_reply(&none).contains("don't ask for a password"));
             let linear = build(&codex, &ask("linear", &[])).unwrap();
             assert_eq!(

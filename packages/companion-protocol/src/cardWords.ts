@@ -61,8 +61,14 @@ export const IMPORT_CHOICE_NOTE =
 export const IMPORT_CHOICE_DECLINE = 'No thanks, start fresh';
 export const IMPORT_CHOICE_BRING = 'Bring my agents';
 
-/** Puts an account first in its engine's order (desk popover, Settings, phone). */
-export const USE_THIS_ONE_NOW = 'Use this one now';
+/**
+ * Puts an account first in its engine's order, so new work starts on it
+ * (desk Usage rows and pages, Settings, phone). Said as what it does: the
+ * owner couldn't tell "Use this one now" from switching a running turn.
+ */
+export const USE_THIS_ONE_NOW = 'Use for new work';
+/** Beside the account new work starts on: the one "Use for new work" made first. */
+export const NEW_WORK_HERE = 'New work starts here';
 
 /** "Runs on": the default, the team's order. */
 export const RUNS_ON_ANY = 'Any account';

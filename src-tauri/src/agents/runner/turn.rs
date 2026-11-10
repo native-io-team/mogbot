@@ -774,6 +774,7 @@ pub(super) async fn run_turn(
     // Short lines written mid-turn go to the timeline (`narration`).
     let mut narration = super::narration::Narration::default();
     clear_blocks_asked(agent_id);
+    super::blocks::clear_shown(agent_id);
     // The `show` call itself has been read: only words after it can follow
     // the question (`blocks::is_call`).
     let mut show_read = false;
@@ -944,7 +945,13 @@ pub(super) async fn run_turn(
                                 continue;
                             }
                             // Asked with blocks: the question is the last word.
-                            if !text.is_empty() && !quiet && show_read && blocks_asked(agent_id) {
+                            // Shown without asking: a line only restating it.
+                            if !text.is_empty()
+                                && !quiet
+                                && show_read
+                                && (blocks_asked(agent_id)
+                                    || super::blocks::restates_shown(agent_id, &text))
+                            {
                                 said_anything = true;
                                 let fold = super::narration::Fate::Fold(super::narration::Held {
                                     draft_id,

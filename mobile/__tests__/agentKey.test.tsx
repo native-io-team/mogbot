@@ -10,9 +10,9 @@ import { KEY_GEOMETRY, KEY_STATES, type AgentsOverview } from '@shipstudio/compa
 import { render, screen } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 import { AgentKey } from '../src/components/AgentKey';
-import { keyGeometry, keyPaint, keyPose } from '../src/lib/agentKey';
+import { askKeyline, keyGeometry, keyPaint, keyPose } from '../src/lib/agentKey';
 import { setApp } from '../src/lib/store';
-import { keyColorways, keySize, luminance } from '../src/lib/theme';
+import { contrast, keyColorways, keyLit, keySize, luminance } from '../src/lib/theme';
 import { agent } from './helpers';
 
 const mockMoving = jest.fn((still: boolean) => !still);
@@ -201,6 +201,25 @@ describe('the key', () => {
     expect(screen.getByTestId('agent-key-legend-ask', hidden)).toBeTruthy();
     expect(style('agent-key-cap-needsOk').top).toBe(-5);
     expect(mockRepeat).toHaveBeenCalled();
+  });
+
+  it('keeps a small Needs-your-OK legend sharp: steady, on a dark keyline, the spill still pulsing', async () => {
+    await render(<AgentKey name="Finance" icon="money" state="needsOk" size={keySize.md} />);
+    // One pulse, the spill's; the legend holds still so it never fades on the face.
+    expect(screen.getAllByTestId('agent-key-pulse', hidden)).toHaveLength(1);
+    expect(screen.getByTestId('agent-key-legend-ask', hidden)).toBeTruthy();
+    const strokes = paths().map((p) => p.stroke?.payload);
+    expect(strokes).toContain(argb(askKeyline(keyColorways.blue)));
+    expect(strokes).toContain(argb(keyLit.ask));
+    // No amber glow ring on the icon.
+    expect(strokes).not.toContain(argb(keyLit.askGlow));
+  });
+
+  it('parts the amber legend from every colourway’s keyline at list size', () => {
+    for (const [id, paint] of Object.entries(keyColorways)) {
+      const ratio = contrast(keyLit.ask, askKeyline(paint));
+      expect({ id, ok: ratio >= 4.5 }).toEqual({ id, ok: true });
+    }
   });
 
   it('holds still with Reduce Motion (or off screen): lit and amber, no pulse running', async () => {

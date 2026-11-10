@@ -1721,6 +1721,162 @@ pub fn is_call(action: &super::work::Action) -> bool {
         .is_some_and(|e| e == name || e.starts_with(&format!("{name} ")))
 }
 
+/* ------------------------------------------------- words after a show */
+
+/// What each live turn has shown so far (every `show`'s `message_text`),
+/// by agent. Observed live (Claude Code, 2026-11-10): after a `show` that
+/// asks nothing (usage tiles), the model still wrote "That's everything
+/// there is to show for now." or "You've used 62% this week." under it, a
+/// second bubble saying nothing the blocks didn't. A prompt rule didn't stop
+/// it. The runner folds such a line into "What it did" ([`restates_shown`]),
+/// as it does any words after an asking `show`; a line with anything new
+/// stays in the chat.
+static SHOWN: std::sync::LazyLock<
+    std::sync::Mutex<std::collections::HashMap<String, String>>,
+> = std::sync::LazyLock::new(Default::default);
+
+/// A live turn of this agent put `text` (the intro and the blocks'
+/// summaries) in the chat.
+pub fn note_shown(agent_id: &str, text: &str) {
+    let mut shown = SHOWN.lock().unwrap_or_else(|e| e.into_inner());
+    let all = shown.entry(agent_id.to_string()).or_default();
+    all.push('\n');
+    all.push_str(text);
+}
+
+/// A turn starts: it has shown nothing yet.
+pub fn clear_shown(agent_id: &str) {
+    SHOWN
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .remove(agent_id);
+}
+
+/// Whether `reply` only restates or closes what this turn has shown. The
+/// runner asks only about words it read after the `show` call (`is_call`).
+pub fn restates_shown(agent_id: &str, reply: &str) -> bool {
+    SHOWN
+        .lock()
+        .unwrap_or_else(|e| e.into_inner())
+        .get(agent_id)
+        .is_some_and(|shown| restates(shown, reply))
+}
+
+/// Longer than this is never a filler line.
+const MAX_RESTATING: usize = 200;
+
+/// Words a closing line is made of, which say nothing on their own.
+const FILLER: &[&str] = &[
+    "a", "about", "above", "all", "also", "an", "and", "any", "anything", "are", "as", "at",
+    "be", "been", "below", "block", "blocks", "both", "breakdown", "but", "by", "can", "card",
+    "chart", "could", "cover", "covered", "covers", "current", "currently", "d", "data",
+    "deeper", "detail", "details", "did", "dig", "does", "done", "each", "else", "every",
+    "everything", "far", "for", "from", "full", "further", "get", "glad", "glance", "got", "had",
+    "has", "have", "help", "helpful", "helps", "here", "hope", "how", "i", "if", "in", "info",
+    "information", "into", "is", "it", "its", "just", "know", "laid", "latest", "lay", "let",
+    "like", "ll", "look", "m", "may", "me", "metric", "metrics", "might", "moment", "more",
+    "much", "my", "need", "nothing", "now", "number", "numbers", "of", "okay", "on", "one",
+    "ones", "only", "or", "our", "out", "over", "overview", "picture", "pulled", "put",
+    "question", "questions", "quick", "re", "right", "s", "see", "should", "show", "showing",
+    "shown", "shows", "so", "some", "stand", "stands", "stat", "stats", "sum", "summary", "sums",
+    "sure", "table", "that", "the", "their", "them", "then", "there", "these", "they", "thing",
+    "things", "this", "those", "tile", "tiles", "to", "together", "up", "us", "ve", "very",
+    "want", "was", "we", "were", "what", "where", "which", "will", "with", "would", "you",
+    "your",
+];
+
+/// A word without its common endings, so "resets" meets "reset".
+fn stem(w: &str) -> &str {
+    if w.len() > 5 && w.ends_with("ing") {
+        &w[..w.len() - 3]
+    } else if w.len() > 4 && w.ends_with("ed") {
+        &w[..w.len() - 2]
+    } else if w.len() > 3 && w.ends_with('s') && !w.ends_with("ss") {
+        &w[..w.len() - 1]
+    } else {
+        w
+    }
+}
+
+/// The numbers in `s`, as values: "1,284" is 1284, "$2.75" 2.75, and
+/// "12.5K" both 12500 and 12.5 (as [`number`] writes it, and as read).
+fn numbers_in(s: &str) -> Vec<f64> {
+    let chars: Vec<char> = s.chars().collect();
+    let mut out = Vec::new();
+    let mut i = 0;
+    while i < chars.len() {
+        if !chars[i].is_ascii_digit() {
+            i += 1;
+            continue;
+        }
+        let mut raw = String::new();
+        while i < chars.len()
+            && (chars[i].is_ascii_digit()
+                || (matches!(chars[i], ',' | '.')
+                    && chars.get(i + 1).is_some_and(|c| c.is_ascii_digit())))
+        {
+            if chars[i] != ',' {
+                raw.push(chars[i]);
+            }
+            i += 1;
+        }
+        let scale = match chars.get(i).map(|c| c.to_ascii_uppercase()) {
+            Some('K') => 1e3,
+            Some('M') => 1e6,
+            Some('B') => 1e9,
+            Some('T') => 1e12,
+            _ => 1.0,
+        };
+        // "12.5K", but not "3mo".
+        let unit = scale > 1.0 && !chars.get(i + 1).is_some_and(|c| c.is_alphanumeric());
+        if let Ok(v) = raw.parse::<f64>() {
+            out.push(v);
+            if unit {
+                out.push(v * scale);
+            }
+        }
+    }
+    out
+}
+
+/// The words of `s`, lowercased, leaving out numbers.
+fn words_in(s: &str) -> Vec<String> {
+    s.split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty() && !w.chars().any(|c| c.is_ascii_digit()))
+        .map(str::to_lowercase)
+        .collect()
+}
+
+/// Whether `reply` only restates or closes `shown`: short, asks nothing,
+/// links nothing, every number in it was shown, and every word that isn't a
+/// closing word was shown. Conservative: a line failing any of these stays
+/// in the chat.
+pub fn restates(shown: &str, reply: &str) -> bool {
+    let reply = reply.trim();
+    if reply.is_empty()
+        || reply.chars().count() > MAX_RESTATING
+        || reply.contains('?')
+        || reply.contains('`')
+        || reply.contains("://")
+        || reply.lines().filter(|l| !l.trim().is_empty()).count() > 2
+    {
+        return false;
+    }
+    let seen = numbers_in(shown);
+    let same = |a: f64, b: f64| (a - b).abs() <= 1e-9 * a.abs().max(1.0);
+    if !numbers_in(reply)
+        .iter()
+        .all(|n| seen.iter().any(|s| same(*n, *s)))
+    {
+        return false;
+    }
+    let known: std::collections::HashSet<String> =
+        words_in(shown).iter().map(|w| stem(w).to_string()).collect();
+    words_in(reply)
+        .iter()
+        .all(|w| FILLER.contains(&w.as_str()) || known.contains(stem(w)))
+}
+
 #[cfg(test)]
 #[path = "blocks_tests.rs"]
 mod tests;

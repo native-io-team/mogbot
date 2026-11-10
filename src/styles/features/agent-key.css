@@ -294,6 +294,9 @@
   --agent-key-rest-depth: calc(8 * var(--agent-key-u));
   --agent-key-icon: calc(40 * var(--agent-key-u));
   --agent-key-stroke: 2;
+  /* Needs your OK at list size: the dark keyline either side of the legend,
+     in grid units like the stroke (KEY_GEOMETRY.needsOk.smallKeyline). */
+  --agent-key-keyline: 1.4;
   --agent-key-ambient-y: calc(6 * var(--agent-key-u));
   --agent-key-ambient-blur: calc(13 * var(--agent-key-u));
   --agent-key-ambient-spread: calc(-3 * var(--agent-key-u));
@@ -618,6 +621,43 @@
 .agent-key:is(.agent-key--md, .agent-key--sm, .agent-key--xs)[data-state='needsOk'] {
   --agent-key-ty: calc(-2 * var(--agent-key-v));
   --agent-key-d: calc(var(--agent-key-rest-depth) + 2 * var(--agent-key-v));
+  /* The keyline's shade: its own depth taken halfway to black (the phone's
+     askKeyline, KEY_GEOMETRY.needsOk.smallKeylineShade). */
+  --agent-key-ask-keyline: color-mix(in srgb, var(--agent-key-depth), var(--agent-key-black) 50%);
+}
+
+/* At list size (30 and under) the wide glow that lights a big key's legend
+   fills the gaps inside the icon, so a banknote or a receipt blooms into a
+   blank lit tile, and on a pale face the amber barely parts from the cap.
+   There, the legend stays steady and sharp instead: no glow on the icon and
+   no amber wash in the face, and a dark keyline under it (a copy of the
+   legend drawn wider, `smallKeyline` grid units either side, so it scales
+   with the key) that parts amber from any face. What makes it the loudest
+   key on the list stays: proud, deepened, the amber spill pulsing round it. */
+.agent-key:is(.agent-key--md, .agent-key--sm, .agent-key--xs)[data-state='needsOk']
+  .agent-key__legend {
+  filter: none;
+  animation: none;
+}
+.agent-key:is(.agent-key--md, .agent-key--sm, .agent-key--xs)[data-state='needsOk']
+  .agent-key__face::after {
+  content: none;
+}
+.agent-key__keyline {
+  display: none;
+}
+.agent-key:is(.agent-key--md, .agent-key--sm, .agent-key--xs)[data-state='needsOk']
+  .agent-key__legend.agent-key__keyline {
+  display: block;
+  stroke: var(--agent-key-ask-keyline);
+  stroke-width: calc(var(--agent-key-stroke) + 2 * var(--agent-key-keyline));
+}
+.agent-key:is(.agent-key--md, .agent-key--sm, .agent-key--xs)[data-state='needsOk']
+  .agent-key__legend.agent-key__keyline[data-fill] {
+  fill: var(--agent-key-ask-keyline);
+  stroke: var(--agent-key-ask-keyline);
+  stroke-width: calc(2 * var(--agent-key-keyline));
+  stroke-linejoin: round;
 }
 
 /* Paused: the cap stays (you can see whose key it is), drained of colour

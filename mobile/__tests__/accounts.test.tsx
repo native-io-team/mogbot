@@ -119,7 +119,7 @@ describe('usage accounts, on the phone', () => {
     await render(<AccountsSections state={state([mac, work])} />);
     expect(screen.getByText('Claude Code out · on Codex')).toBeTruthy();
     expect(screen.getByLabelText('Use Work now')).toBeTruthy();
-    expect(screen.getByText('Use this one now')).toBeTruthy();
+    expect(screen.getByText('Use for new work')).toBeTruthy();
     setApp({ overview: null as never });
   });
 

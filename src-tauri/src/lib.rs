@@ -598,6 +598,7 @@ pub fn run() {
             commands::agents::agents_user_chrome_set_enabled,
             commands::agents::agents_user_chrome_show_extension,
             commands::agents::agents_user_chrome_open_extensions_page,
+            commands::agents::agents_user_chrome_open_profile,
             commands::agents::agents_user_chrome_add_from_store,
             commands::agents_desk::agents_step_exact,
             commands::agents_desk::agents_turn_briefing,

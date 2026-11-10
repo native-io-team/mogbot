@@ -155,7 +155,9 @@ export function AccountSwitcher({
   const { row: words } = glance;
   // Signed in, nothing read yet, nothing to do: calm, the label alone.
   const quiet = glance.unread && !words.needsYou;
-  const label = `Usage: ${[words.figure, words.refill, words.count].filter(Boolean).join('. ')}`;
+  const label = `Usage: ${[words.figure, words.count, words.notRead, words.refill]
+    .filter(Boolean)
+    .join('. ')}`;
 
   const row = (
     <Button
@@ -187,7 +189,11 @@ export function AccountSwitcher({
             )}
           </span>
           <TotalBar total={glance.total} size="small" />
-          {words.refill && <span className="usage-glance__summary">{words.refill}</span>}
+          {(words.refill || words.notRead) && (
+            <span className="usage-glance__summary">
+              {[words.refill, words.notRead].filter(Boolean).join(' · ')}
+            </span>
+          )}
         </span>
       )}
     </Button>

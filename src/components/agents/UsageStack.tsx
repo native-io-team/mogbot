@@ -1,15 +1,15 @@
 /**
- * Usage, drawn. The total first: one bar made of a segment per real
- * account, in the work order, each filled to what that account adds
- * (`TotalBar`), so 100% and 44% read at a glance as "most of my limit is
- * left"; each segment opens its account. Then each account as one row (`AccountRow`) that opens its own
- * page (`AccountDetail`): its limit cards against pace, who used it, where
- * its usage went, and what to do with it.
+ * Usage, drawn. The total first: ONE ordinary bar filled to what is left
+ * across every account (`TotalBar`), so two accounts at 50% read as one bar
+ * half full. Then each account as one row (`AccountRow`) with its own bar,
+ * % left, refill, who uses it and "Use for new work", opening its own page
+ * (`AccountDetail`): its limit cards against pace, who used it, where its
+ * usage went, and what to do with it.
  *
- * A segment with no reading is an empty, dashed slot, never room. A second
- * sign-in of an account already counted draws no segment and gets one line
- * under the bar (`SameNotes`); its row and page say so plainly, with "Sign
- * in with a different account" and "Remove". Status hues only when an
+ * Nothing read is an empty, dashed track, never room. A second sign-in of
+ * an account already counted gets one line under the bar (`SameNotes`);
+ * its row and page say so plainly, with "Sign in with a different account"
+ * and "Remove". Status hues only when an
  * account is low; out of usage is neutral (it resets by itself). Never the
  * accent.
  *
@@ -22,6 +22,7 @@ import { useState, type CSSProperties, type ReactNode, type Ref } from 'react';
 import {
   ArrowDownIcon,
   ArrowUpIcon,
+  CheckIcon,
   ChevronRightIcon,
   ClaudeIcon,
   CodexIcon,
@@ -49,7 +50,11 @@ import {
   type StackKey,
   type UsageTotal,
 } from '../../lib/agentsUsage';
-import { USE_THIS_ONE_NOW } from '../../../packages/companion-protocol/src/cardWords';
+import {
+  NEW_WORK_HERE,
+  USE_THIS_ONE_NOW,
+} from '../../../packages/companion-protocol/src/cardWords';
+import { usersLine } from '../../../packages/companion-protocol/src/usageGlance';
 import { pinnedLine } from '../../../packages/companion-protocol/src/accountSwitcher';
 import { AgentKey } from './AgentKey';
 
@@ -62,76 +67,42 @@ export const ENGINE_ICON: Record<AgentEngine, typeof ClaudeIcon> = {
 /* ------------------------------------------------------------ the total */
 
 /**
- * The total as one bar: a segment per account, in the work order, each filled
- * to what it adds. Large, each segment is a button that opens that account
- * (its name and room are the account rows under it, never said twice);
- * small (the sidebar row, the chat's popover), it is a picture.
+ * The total as ONE ordinary bar, filled to what is left across every
+ * account, as the figure beside it says it ("55% left" is a bar 55% full).
+ * Never a segment per account: two accounts at 50% each read as one bar
+ * half full, not two quarter-bars (the owner's "two 25s"). The accounts,
+ * each with its own bar, are the rows one level down. Nothing read: an
+ * empty dashed track, never a full one.
  */
 export function TotalBar({
   total,
   size = 'small',
-  onOpen,
 }: {
   total: UsageTotal;
   size?: 'small' | 'large';
-  /** Open an account's page (the large bar). */
-  onOpen?: (engine: AgentEngine, id: string) => void;
 }) {
   if (total.segments.length === 0) return null;
-  const words = total.segments.map((s) => s.words).join('; ');
-  if (!onOpen) {
-    return (
-      <span className="usage-total" data-size={size} role="img" aria-label={`Room left. ${words}`}>
-        <span className="usage-total__track">
-          {total.segments.map((s) => (
-            <Segment key={s.key} left={s.left} state={s.state} tone={s.tone} />
-          ))}
-        </span>
-      </span>
-    );
-  }
-  return (
-    <div className="usage-total" data-size={size} role="list" aria-label="Room left, by account">
-      {total.segments.map((s) => (
-        <div key={s.key} role="listitem" className="usage-total__item">
-          <button
-            type="button"
-            className="usage-total__part"
-            data-account={s.id}
-            aria-label={`${s.words}. Open ${s.name}`}
-            title={s.words}
-            onClick={() => onOpen(s.engine, s.id)}
-          >
-            <Segment left={s.left} state={s.state} tone={s.tone} />
-          </button>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function Segment({
-  left,
-  state,
-  tone,
-}: {
-  left: number | null;
-  state: AccountKeyState;
-  tone: StackKey['tone'];
-}) {
+  const left = total.left;
   return (
     <span
-      className="usage-total__seg"
-      data-state={state}
-      data-tone={tone}
+      className="usage-total"
+      data-size={size}
+      data-tone={total.tone}
       data-unread={left === null || undefined}
       data-empty={left === 0 || undefined}
-      aria-hidden
+      role="meter"
+      aria-label={left === null ? 'Usage left: not read yet' : 'Usage left, across accounts'}
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={left ?? undefined}
+      aria-valuetext={left === null ? 'Not read yet' : `${left}% left`}
     >
-      <span
-        className="usage-total__fill"
-        style={{ '--usage-total-fill': `${left ?? 0}%` } as CSSProperties}
-      />
+      {left !== null && (
+        <span
+          className="usage-total__fill"
+          style={{ '--usage-total-fill': `${left}%` } as CSSProperties}
+        />
+      )}
     </span>
   );
 }
@@ -175,16 +146,25 @@ export function AccountRow({
   k,
   onOpen,
   onSignIn,
+  onUse,
 }: {
   k: StackKey;
   onOpen: () => void;
   /** A signed-out account's one action, beside the row (never inside its button). */
   onSignIn?: () => void;
+  /**
+   * "Use for new work" (puts it first): given when its engine has another
+   * account to switch from. The one new work starts on says so instead.
+   */
+  onUse?: () => void;
 }) {
   const Icon = ENGINE_ICON[k.engine];
   const refill = k.refillLimit?.countdown;
+  const users = usersLine(k);
+  const current = k.state === 'in_use';
+  const foot = users || (onUse && (current || k.canUse));
   return (
-    <li className="usage-row__item">
+    <li className="usage-row__item" data-current={(onUse && current) || undefined}>
       <button
         type="button"
         className="usage-row"
@@ -243,6 +223,27 @@ export function AccountRow({
         >
           Sign in
         </Button>
+      )}
+      {foot && (
+        <div className="usage-row__foot">
+          <span className="usage-row__users">{users}</span>
+          {onUse && current && (
+            <span className="usage-row__current" data-testid="usage-new-work-here">
+              <CheckIcon size={12} aria-hidden />
+              {NEW_WORK_HERE}
+            </span>
+          )}
+          {onUse && !current && k.canUse && (
+            <Button
+              variant="secondary"
+              size="compact"
+              onClick={onUse}
+              aria-label={`${USE_THIS_ONE_NOW}: ${k.name}`}
+            >
+              {USE_THIS_ONE_NOW}
+            </Button>
+          )}
+        </div>
       )}
     </li>
   );

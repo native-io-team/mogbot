@@ -146,7 +146,7 @@ export const agentsAccountsScenarios: Scenario[] = [
     id: 'agents-account-row',
     title: 'Agents — which account is working, at the sidebar’s foot',
     looksRightWhen:
-      'At the foot of the Agents sidebar, above Phone and Settings: the Claude icon with a green dot, “Room to work”, the stack as three thin segments (sam@example.com 39% in ink, Work 78% quieter, Side project empty: out of usage) and, muted, “2 accounts · resets …”. It never shows “This Mac”. Nothing wraps; nothing accent-coloured.',
+      'At the foot of the Agents sidebar, above Phone and Settings: the Claude icon with a green dot, “Room to work”, the total as one thin bar (never a segment per account) and, muted, “2 accounts · resets …”. It never shows “This Mac”. Nothing wraps; nothing accent-coloured.',
     openSelector: AGENTS_TAB,
     requires: '[data-testid="account-switcher"]',
     clipSelector: '.workspace-sidebar-footer',
@@ -156,7 +156,7 @@ export const agentsAccountsScenarios: Scenario[] = [
     id: 'agents-account-switcher',
     title: 'Agents — Switch account… (opens Usage)',
     looksRightWhen:
-      'The Usage view, from ⌘K: the hero with the stack (sam@example.com in use, Work next, Side project out of usage), then each account as a key card in order with “Use this one now” on Work and none on the one out.',
+      'The Usage view, from ⌘K: the hero with the stack (sam@example.com in use, Work next, Side project out of usage), then each account as a key card in order with “Use for new work” on Work and none on the one out.',
     openSelector: AGENTS_TAB,
     command: 'agents.switchAccount',
     requires: '[data-testid="usage-hero"]',

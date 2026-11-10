@@ -80,6 +80,7 @@ pub mod browser_profiles;
 pub mod capabilities;
 pub mod capacity;
 pub mod chrome_health;
+pub mod chrome_route;
 pub mod claude;
 pub mod clock;
 pub mod codex;

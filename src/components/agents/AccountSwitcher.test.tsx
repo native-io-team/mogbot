@@ -145,11 +145,12 @@ describe('AccountSwitcher (the sidebar’s usage glance)', () => {
     expect(row).toHaveTextContent(/^Usage/);
     expect(row).toHaveTextContent('Refills');
     expect(row).not.toHaveTextContent('2 accounts');
-    // One segment per account: Work has no reading, so its slot is empty, never full.
-    const meter = within(row).getByRole('img', { name: /Room left/ });
-    expect(meter).toHaveAccessibleName(
-      /sam@example.com: 62% left, refills in .+; Work: shows after its first reply/
-    );
+    // Work has no reading: left out of the figure, and the row says so.
+    expect(row).toHaveTextContent('1 account not read');
+    // ONE bar of the total, never a segment per account.
+    const meter = within(row).getByRole('meter');
+    expect(meter).toHaveAttribute('aria-valuenow', '62');
+    expect(row.querySelectorAll('.usage-total__fill')).toHaveLength(1);
     // The row itself never asks for a reading: a glance.
     expect(
       calls.some(
@@ -196,11 +197,21 @@ describe('Usage view', () => {
 
     const hero = await screen.findByTestId('usage-hero');
     await waitFor(() => expect(hero).toHaveTextContent('62% left'));
-    // The bar: the account with a reading first, the unread one an empty slot.
-    const parts = within(hero).getAllByRole('button');
-    expect(parts[0]).toHaveAccessibleName(/^sam@example.com: 62% left/);
-    expect(parts[1]).toHaveAccessibleName(/^Work: shows after its first reply/);
+    // One bar filled to the total; the accounts are the rows, not the bar.
+    expect(within(hero).getByRole('meter')).toHaveAttribute('aria-valuenow', '62');
+    expect(within(hero).queryAllByRole('button')).toHaveLength(0);
+    expect(hero).toHaveTextContent('1 account not read yet, not counted');
     await waitFor(() => expect(rows()[0]).toHaveTextContent('In use'));
+    // The one new work starts on is unmistakable; the other offers the switch.
+    const items = document.querySelectorAll('.usage-row__item');
+    expect(items[0]).toHaveTextContent('New work starts here');
+    expect(
+      within(items[1] as HTMLElement).getByRole('button', { name: /^Use for new work/ })
+    ).toBeInTheDocument();
+    expect(items[1]).toHaveTextContent('Only Riley runs here');
+    // Runs on: Riley, on Work only, changed in place.
+    const runsOn = screen.getByRole('list', { name: 'Which account each agent runs on' });
+    expect(within(runsOn).getByRole('button', { name: 'Riley runs on: Work' })).toBeInTheDocument();
     expect(rows()[0]).toHaveTextContent('sam@example.com');
     expect(rows()[1]).toHaveTextContent('Next');
     // Someone is looking: a full read.
@@ -210,7 +221,7 @@ describe('Usage view', () => {
       )
     ).toBe(true);
 
-    // Into Work's page: its pins, "Use this one now", and back with Esc.
+    // Into Work's page: its pins, "Use for new work", and back with Esc.
     fireEvent.click(rows()[1]);
     const page = await screen.findByRole('article');
     expect(page).toHaveTextContent('me@work.example');
@@ -219,7 +230,7 @@ describe('Usage view', () => {
       screen.getByText('Usage', { selector: '.breadcrumb__link, .breadcrumb__link *' })
     ).toBeInTheDocument();
     await act(async () => {
-      fireEvent.click(within(page).getByRole('button', { name: 'Use this one now' }));
+      fireEvent.click(within(page).getByRole('button', { name: 'Use for new work' }));
       await Promise.resolve();
     });
     expect(calls.some((c) => c.cmd === 'agents_account_use')).toBe(true);
@@ -228,7 +239,7 @@ describe('Usage view', () => {
     await waitFor(() => expect(rows()[0]).toHaveTextContent('Work'));
   });
 
-  it('an account’s page has its limits against pace, and no "Use this one now" when in use', async () => {
+  it('an account’s page has its limits against pace, and no "Use for new work" when in use', async () => {
     store.engines = [claude];
     store.agents = [];
     mock([mac, work]);
@@ -239,7 +250,7 @@ describe('Usage view', () => {
     expect(page).toHaveTextContent('Max plan');
     expect(page).toHaveTextContent('5-hour');
     expect(page).toHaveTextContent('Under pace');
-    expect(within(page).queryByRole('button', { name: 'Use this one now' })).toBeNull();
+    expect(within(page).queryByRole('button', { name: 'Use for new work' })).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Back to Usage' }));
     await waitFor(() => expect(screen.queryByRole('article')).toBeNull());
   });
@@ -388,7 +399,8 @@ describe('the sidebar row pill', () => {
 });
 
 describe('glanceStatus (the usage row’s corner dot)', () => {
-  const row = (needsYou: boolean) => ({ figure: '', refill: null, count: null, needsYou }) as const;
+  const row = (needsYou: boolean) =>
+    ({ figure: '', refill: null, count: null, notRead: null, needsYou }) as const;
   it('shows no dot when all is well: a green one said nothing anyone could read', () => {
     expect(glanceStatus({ tone: 'calm', row: row(false) })).toBe('off');
   });

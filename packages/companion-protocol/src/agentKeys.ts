@@ -311,7 +311,22 @@ export const KEY_GEOMETRY = {
   /** Lit (working, live): the legend's warm white. */
   live: { legend: '#FFE9B4' },
   /** The loudest state: proud, the legend amber-gold, pulsing; never below `pulseLow`. */
-  needsOk: { up: 5, depth: 13, pulseMs: 1600, pulseLow: 0.6, legend: '#FFC94A', deeper: 0.14 },
+  needsOk: {
+    up: 5,
+    depth: 13,
+    pulseMs: 1600,
+    pulseLow: 0.6,
+    legend: '#FFC94A',
+    deeper: 0.14,
+    /**
+     * At list size (a small key) the wide glow would fill the icon's gaps, so
+     * the legend holds still with no glow, on a dark keyline `smallKeyline`
+     * grid units either side of its stroke, in its depth shade taken
+     * `smallKeylineShade` of the way to black: amber parts from any face.
+     */
+    smallKeyline: 1.4,
+    smallKeylineShade: 0.5,
+  },
   /** Paused: the cap drained of colour, faded, sunk halfway. */
   paused: { saturate: 0.12, legendOpacity: 0.55 },
 } as const;

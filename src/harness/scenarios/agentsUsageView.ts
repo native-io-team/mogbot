@@ -540,7 +540,7 @@ function trio(
       id: `usage-${id}-row`,
       title: `Usage — ${title} (the sidebar row)`,
       looksRightWhen:
-        'At the foot of the Agents sidebar: “Usage”, then the total (“72% left · 2 accounts”), the total bar (a segment per account, most room first) and “Refills in …”. Nothing accent-coloured; nothing wraps.',
+        'At the foot of the Agents sidebar: “Usage”, then the total (“72% left · 2 accounts”), ONE ordinary bar filled to that figure (never a segment per account) and “Refills in …” (with “· 1 account not read” when one is left out). Nothing accent-coloured; nothing wraps.',
       openSelector: AGENTS_TAB,
       requires: '[data-testid="account-switcher"]',
       clipSelector: '.workspace-sidebar-footer',
@@ -550,34 +550,34 @@ function trio(
 }
 
 const PAGE =
-  'The page header is the breadcrumb, “Usage › <name>” (Usage a quieter link back), with no second breadcrumb line under it. A sheet with a large keycap holding its place in the order, the name, a status pill and “Max plan · …” (the place not said again), with “Use this one now” (when it isn’t in use) and ⋯ at the right. Then “Limits” with Limits | Tokens at its right, the limit cards (5-hour, Weekly, per-model) with countdown chips, a big “% left”, the pace-marked bar and the pace sentence, then “Where it went” when there is something to say.';
+  'The page header is the breadcrumb, “Usage › <name>” (Usage a quieter link back), with no second breadcrumb line under it. A sheet with a large keycap holding its place in the order, the name, a status pill and “Max plan · …” (the place not said again), with “Use for new work” (when it isn’t in use) and ⋯ at the right. Then “Limits” with Limits | Tokens at its right, the limit cards (5-hour, Weekly, per-model) with countdown chips, a big “% left”, the pace-marked bar and the pace sentence, then “Where it went” when there is something to say.';
 
 export const agentsUsageViewScenarios: Scenario[] = [
   ...trio(
     'two',
     'two accounts, 100% and 44%',
-    'The hero leads with the total: “All accounts”, a large “72% left across 2 Max accounts”, “Next refill in 2d 4h · sam@example.com, …”. One bar of two segments, Work (full) on the left, sam@example.com (44%) on the right, each with its name, “% left” and a refill chip under it. Then “Accounts” with “Add …” at the right, two rows in order (1 sam@example.com In use, 2 Work), figures aligned. Then “How agents use your limits”, a hugging three-option control and its one line.',
+    'The hero leads with the total: “All accounts”, a large “72% left across 2 Max accounts”, “Next refill in 2d 4h · sam@example.com, …”. ONE ordinary bar, 72% filled, no segments, then “Both on Max, so each counts the same.” Then “Accounts” with “Add …” at the right, two rows in order (1 sam@example.com In use, 2 Work), figures aligned, each with its own small bar; under the first a ticked “New work starts here”, under Work a “Use for new work” button, each with who used it this week. Then “Runs on” with one row per agent and its account in a menu button. Then “How agents use your limits”, a hugging three-option control and its one line.',
     TWO,
     { account: 'default', looksRightWhen: PAGE }
   ),
   ...trio(
     'one',
     'one account',
-    'The hero: “Usage”, “53% left this week”, “Next refill in …”, one full-width segment. One row. No “All accounts”.',
+    'The hero: “Usage”, “53% left this week”, “Next refill in …”, one bar 53% filled. One row, with no “Use for new work” (nothing to switch to) and no Runs on section. No “All accounts”.',
     ONE,
     { account: 'default', looksRightWhen: PAGE }
   ),
   ...trio(
     'three',
     'three accounts',
-    'Three segments, most room first (Side project 95%, Work 78%, sam@example.com 39%); the total is their mean. Three rows in order 1, 2, 3: In use, Next, Ready.',
+    'One bar filled to the mean of the three (Side project 95%, Work 78%, sam@example.com 39%), with the line saying how it is averaged. Three rows in order 1, 2, 3: In use (“New work starts here”), Next and Ready (each “Use for new work”).',
     THREE,
     { account: 'a1work', looksRightWhen: PAGE }
   ),
   ...trio(
     'one-out',
     'one account out',
-    'sam@example.com sits last in the bar (empty, 0% left) and its row says “Out of usage until …” in a neutral pill; the total counts it as nothing left.',
+    'One bar of the total, counting the out account as nothing left; sam@example.com’s row says “Out of usage until …” in a neutral pill, with no “Use for new work”.',
     ONE_OUT,
     {
       account: 'default',
@@ -588,7 +588,7 @@ export const agentsUsageViewScenarios: Scenario[] = [
   ...trio(
     'near-empty',
     'every account nearly empty',
-    'A small total in amber slivers; under the hero one calm warning-washed bar: “Every account is nearly out of usage.” with “Add an account” and “Wait until …”.',
+    'A small total: one amber sliver of a bar; under the hero one calm warning-washed bar: “Every account is nearly out of usage.” with “Add an account” and “Wait until …”.',
     NEAR_EMPTY,
     null
   ),
@@ -602,7 +602,7 @@ export const agentsUsageViewScenarios: Scenario[] = [
   ...trio(
     'unknown',
     'no readings yet',
-    'The hero says “Your usage shows here after an agent’s first reply.” in secondary ink (no big figure). Every segment is an empty dashed slot, never full. Rows say “Not read yet”; the signed-out one only its “Not signed in” pill.',
+    'The hero says “Your usage shows here after an agent’s first reply.” in secondary ink (no big figure). The one bar is an empty dashed track, never full. Rows say “Not read yet”; the signed-out one only its “Not signed in” pill.',
     UNKNOWN,
     {
       account: 'a3new',
@@ -613,7 +613,7 @@ export const agentsUsageViewScenarios: Scenario[] = [
   ...trio(
     'same-account',
     'the same account signed in twice',
-    'The bar has ONE segment (the duplicate draws none), with one muted line under it: “Personal Account is the same Claude account as sam@example.com — adds no extra room”. The rows list both; Personal Account’s says “Adds no room” with a “Same account” pill and a dashed bar.',
+    'One bar of the total (the duplicate adds nothing), with one muted line under it: “Personal Account is the same Claude account as sam@example.com — adds no extra room”. The rows list both; Personal Account’s says “Adds no room” with a “Same account” pill and a dashed bar.',
     SAME,
     {
       account: 'a4dup',
@@ -624,15 +624,21 @@ export const agentsUsageViewScenarios: Scenario[] = [
   ...trio(
     'signin-changed',
     'this Mac’s sign-in became another account',
-    'First thing in the view, a calm bar about this Mac’s sign-in, with “Add it” and “Not now”. Below, the total of one segment and the duplicate line.',
+    'First thing in the view, a calm bar about this Mac’s sign-in, with “Add it” and “Not now”. Below, the total as one bar and the duplicate line.',
     SIGNIN_CHANGED,
     null
   ),
-  ...trio('pace', 'every limit, against pace', 'Two segments, Work (88%) first.', PACE, {
-    account: 'default',
-    looksRightWhen:
-      'sam@example.com’s page: 5-hour, Weekly and “Weekly · Opus” cards. The weekly one is ahead of pace: a now → refills line with a dashed marker “Runs out ~tomorrow · estimate” and “Ahead of pace — …”.',
-  }),
+  ...trio(
+    'pace',
+    'every limit, against pace',
+    'One bar of the total; Work (88%) first in the rows.',
+    PACE,
+    {
+      account: 'default',
+      looksRightWhen:
+        'sam@example.com’s page: 5-hour, Weekly and “Weekly · Opus” cards. The weekly one is ahead of pace: a now → refills line with a dashed marker “Runs out ~tomorrow · estimate” and “Ahead of pace — …”.',
+    }
+  ),
   {
     id: 'usage-tokens',
     title: 'Usage — who used an account this week (Tokens)',

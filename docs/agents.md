@@ -2551,8 +2551,14 @@ equivalent here: Codex agents never get the browser and ask instead.
 native host (the app's own binary) and the app's MV3 extension, and every
 turn, on any engine and any account, gets `mcp__user_chrome__*` with the
 agents' browser's tool names. The same gate decides it (below), outside text
-never gets it, and a turn that has it runs `--no-chrome`. Design, trust and
-what's verified: docs/internal/own-browser-layer.md.
+never gets it, and a turn that has it runs `--no-chrome`. **It wins whenever
+it's connected** (`agents/chrome_route.rs`): every engine, every account, so
+switching Claude accounts never needs the Claude extension signed in again;
+Claude in Chrome is only the fallback. Settings → Chrome says which way
+agents use now and why, and each agent's "What it can reach" says its own. A
+Chrome profile managed by work (Developer mode off) is detected and the page
+offers a personal profile instead (`user_chrome/managed.rs`). Design, trust,
+install routes and what's verified: docs/internal/own-browser-layer.md.
 
 **Set up once, checked by the app.** ⌘K "Let agents use your browser…", the
 setup checklist and "What it can reach" open one guided card: Claude Code
@@ -5017,10 +5023,13 @@ a place, not an account, so it is never shown as a name.
 **Usage at a glance, always in sight** (`AccountSwitcher`; words shared
 with the phone in `companion-protocol/src/usageGlance.ts`): the row at the
 sidebar's foot says the total across every account ("72% left · 2
-accounts"), draws the total bar (one segment per real account, most room
-first, each filled to what it adds; an account with no reading an empty
-dashed slot, never full) and the next refill ("Refills in 2d 4h"). It never
-asks for a reading itself (`agents_usage_overview` with `look: false`).
+accounts"), draws ONE ordinary bar filled to that figure (never a segment
+per account: the owner read two accounts at 50% drawn as two half-full
+segments as "two 25s"; nothing read, an empty dashed track) and the next
+refill ("Refills in 2d 4h · 1 account not read" when one is left out). It
+never asks for a reading itself (`agents_usage_overview` with `look: false`).
+The bar's fill and the headline say the same thing, everywhere: what is
+**left**.
 
 **The total** (`usageGlance` `total`, `totalOf`; the owner's words: "an
 account with 100% left and an account with 44% left … so you can see overall
@@ -5030,22 +5039,32 @@ counts equally: plans' sizes aren't reported, so none is weighted or
 guessed, and the words say "across 2 accounts" (or "across 2 Max accounts"
 when every one counted is on that plan). A second sign-in of an account
 already counted and an account with no reading add nothing ("1 account not
-read yet, not counted"); an account out of usage adds 0. The bar's
-segments run most room first, unread ones last; each says when it refills
-(an out account: when it is back). Desk and phone compute it in the same
-function.
+read yet, not counted"; short, "1 account not read", `total.notRead`); an
+account out of usage adds 0. Two at 50% are 50%; one at 0% and one at 100%
+are 50%. How it is weighted is said under the hero (`total.weighting`,
+`weightingOf`): "Both on Max, so each counts the same.", or, with plans that
+differ or aren't known, that it is a plain average because plan sizes
+aren't reported. The bar is amber only when the total is at or under 10%
+(`total.tone`). Desk and phone compute it in the same function.
 
 **The Usage view** (`AgentsUsageView`, `USAGE_ID`; opened by that row, ⌘K
 "Usage and accounts…", "Switch account…", "Add an account…"). Two levels.
 *The overview*: the total as a hero ("72% left across 2 Max accounts",
-"Next refill in 2d 4h · sam@example.com, Thu 3:15 AM", the bar, each
-segment opening its account; the rows below name them, so the bar doesn't); a calm bar when every
+"Next refill in 2d 4h · sam@example.com, Thu 3:15 AM", the one bar and how
+it is weighted; the rows below name the accounts, so the bar doesn't); a calm bar when every
 account is nearly out (add an account, carry on with the other engine when
 it has room, or "Wait until …"); "Accounts", one row each in the order work
 tries them (`AccountRow`: keycap, name, a small bar, what it adds, In use /
 Next / "Out of usage", refill countdown; a signed-out row has its own Sign in
-beside it, the same sign-in as its page), with "Add an account" at the
-heading's right. With one account the hero has no eyebrow. The hero's words
+beside it, the same sign-in as its page; under each, who uses it,
+`usersLine`: "Only Riley runs here · also used by Finance this week", and,
+with two or more accounts of its engine, a ticked **"New work starts here"**
+on the one in use and **"Use for new work"** on the others), with "Add an
+account" at the heading's right. Then **Runs on** (`runsOnRows`): each agent
+whose engine has two or more accounts, with the account it runs on in a menu
+(Any account, or one only; `agents_update` with `account`, the same choice
+as its Model menu), so moving work from one plan to another is on this
+page. With one account the hero has no eyebrow. The hero's words
 (`totalWords`) are the phone's hero's and the chat header popover's too, so
 those three never word the total or its refill differently; "How agents use your limits" (the mode as a hugging
 control and its one line, then, when a window on the account in use resets
@@ -5063,7 +5082,7 @@ stays only in code and in what agents are told. *An account's page*
 (`AccountDetail`; "Usage › Work" with a back arrow, Esc or ⌘[ to return;
 `requestUsageAccount` opens one from elsewhere, as the chat header's account
 chip does): its keycap, name, state pill, place in the order, plan and who,
-"Use this one now" and a menu (Rename, Move up / Move down, Sign in again,
+"Use for new work" and a menu (Rename, Move up / Move down, Sign in again,
 Remove); its notices (the one fix for a sign-in problem, "Same Claude
 account as …", this Mac's sign-in having changed); "Limits" with Limits |
 Tokens at its right: the limit cards (5-hour, weekly, per-model, each with
@@ -5148,7 +5167,7 @@ rise that began after this Mac started recording turns
 (`usage_plan::start_tracking`); an older rise is left out rather than
 called unexplained.
 
-**"Use this one now"** (`agents_account_use` → `wallet::use_first`; the
+**"Use for new work"** (`agents_account_use` → `wallet::use_first`; the
 phone's `agents.accounts.use`, audited) puts the account first in its
 engine's order: every turn that *starts* from then on tries it first; a
 turn already running finishes on the account it started on; it is refused
@@ -6901,6 +6920,18 @@ engine's own event: Claude Code's `tool_use`, Codex's `mcp_tool_call` /
 the engine makes it, maybe before the runner has read what the engine wrote
 just before, and that is the chat's. The `parity-*` scenarios hold it on
 every engine.
+
+A `show` that asks nothing (usage tiles) drew the same habit: a closing
+second bubble ("That's everything there is to show for now.") or one saying
+again what the tiles said, and a prompt rule didn't stop it. So a line read
+after any `show` that only restates or closes it also goes in "What it did"
+(`blocks::restates`, against every summary the turn has shown,
+`blocks::note_shown`). The test is conservative: at most 200 characters and
+two lines, no question, link or code, every number in it shown, and every
+word either shown or a closing word ("that's", "all", "here's", "now"…).
+"You've used 62% of your weekly limit; it resets Friday." under tiles saying
+so folds; "I'd switch the Researcher to your second account" stays. The
+`parity-*` scenarios hold both sides on every engine.
 
 Harness: `agents-blocks-*` (numbers, a chart's tooltip, a sorted table, more
 charts, deciding, a form left empty, progress, answered, outside text).

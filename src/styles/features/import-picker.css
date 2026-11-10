@@ -12,23 +12,24 @@
 .import-picker-options {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding: 20px 24px 24px;
+  gap: var(--spacing-sm);
+  padding: var(--spacing-xl);
+  padding-top: var(--spacing-lg);
 }
 
 .import-picker-card {
   display: flex;
   align-items: center;
-  gap: 16px;
-  padding: 16px;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg);
   background: var(--surface-panel);
-  border: 1px solid var(--border-default);
+  border: var(--border-width-default) solid var(--border-default);
   border-radius: var(--radius-lg);
   cursor: pointer;
   transition:
-    background-color 0.15s ease,
-    color 0.15s ease,
-    border-color 0.15s ease;
+    background-color var(--transition-interaction),
+    color var(--transition-interaction),
+    border-color var(--transition-interaction);
   text-align: left;
   width: 100%;
 }
@@ -42,9 +43,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
-  border-radius: 10px;
+  width: calc(var(--spacing-lg) * 3);
+  height: calc(var(--spacing-lg) * 3);
+  border-radius: var(--radius-card);
   background: var(--surface-control);
   color: var(--text-primary);
   flex-shrink: 0;
@@ -53,12 +54,13 @@
 .import-picker-text {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: var(--spacing-2xs);
 }
 
 .import-picker-title {
   font-size: var(--font-size-subhead);
-  font-weight: 600;
+  font-weight: var(--font-weight-heading);
+  letter-spacing: var(--tracking-name);
   color: var(--text-primary);
 }
 

@@ -7,9 +7,10 @@
  * @module components/agents/AgentsUserChromeSettings
  */
 
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { listen } from '@tauri-apps/api/event';
 import { Button } from '../primitives/Button';
+import { TextButton } from '../primitives/TextButton';
 import { Row, Toggle } from './AgentSettingsRows';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { useAsyncState } from '../../hooks/useAsyncState';
@@ -25,7 +26,11 @@ import {
   extensionLine,
   getUserChromeStatus,
   hostLine,
+  managedAdvice,
   openChromeExtensionsPage,
+  openChromeProfile,
+  PERSONAL_PROFILE_STEPS,
+  routeLine,
   setUserChromeEnabled,
   showUserChromeExtension,
   userChromeLine,
@@ -107,6 +112,17 @@ export function AgentsUserChromeSettings() {
     onError,
   });
 
+  // "Developer mode is greyed out": what the app can't see for itself.
+  const [reported, setReported] = useState(false);
+  const advice = status ? managedAdvice(status, reported) : null;
+  const openProfile = useCallback(
+    (dir?: string) => () =>
+      void openChromeProfile(dir).catch((e: unknown) =>
+        showToast(e instanceof Error ? e.message : String(e), 'error')
+      ),
+    [showToast]
+  );
+
   if (status && !status.supported) return null;
   return (
     <section ref={ref} className="settings-group" aria-labelledby="agents-settings-user-chrome">
@@ -121,6 +137,7 @@ export function AgentsUserChromeSettings() {
             onChange={(on) => run({ kind: 'switch', on })}
           />
         </Row>
+        {status?.route && <Row label="Agents use now" description={routeLine(status.route)} />}
         {status?.enabled && (
           <div className="settings-row-steps" data-testid="user-chrome-steps">
             {!status.chromeInstalled && (
@@ -130,6 +147,28 @@ export function AgentsUserChromeSettings() {
               />
             )}
             <Row label="Chrome can reach this app" description={hostLine(status.host)} />
+            {status.browsers.length === 0 && !status.webStoreUrl && advice && (
+              <Row
+                label="Chrome is managed by your work"
+                description={
+                  advice.everyProfile ? advice.line : `${advice.line} ${PERSONAL_PROFILE_STEPS}`
+                }
+                stacked={!advice.everyProfile}
+              >
+                {!advice.everyProfile && (
+                  <span className="settings-row-actions" data-testid="user-chrome-profiles">
+                    {advice.personal && (
+                      <Button variant="secondary" onClick={openProfile(advice.personal.dir)}>
+                        Open “{advice.personal.name}”
+                      </Button>
+                    )}
+                    <Button variant="secondary" onClick={openProfile()}>
+                      Open a new Chrome profile
+                    </Button>
+                  </span>
+                )}
+              </Row>
+            )}
             <Row
               label="Add the extension to Chrome"
               description={extensionLine(status)}
@@ -158,6 +197,13 @@ export function AgentsUserChromeSettings() {
                   </span>
                 ))}
             </Row>
+            {status.browsers.length === 0 && !status.webStoreUrl && !advice && (
+              <p className="settings-row-description">
+                <TextButton onClick={() => setReported(true)}>
+                  Developer mode greyed out in Chrome?
+                </TextButton>
+              </p>
+            )}
             {status.browsers.map((b, i) => (
               <Row
                 key={b.profileId}
