@@ -15,7 +15,7 @@ import {
   abortMerge,
   completeMerge,
 } from '../../lib/conflicts';
-import { WarningIcon, CopyIcon, ChevronIcon, InfoIcon } from '@/components/icons';
+import { WarningIcon, CopyIcon, ChevronIcon, GitMergeIcon } from '@/components/icons';
 import { trackEvent, trackError } from '../../lib/analytics';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { ModalFrame } from '../primitives/ModalFrame';
@@ -174,11 +174,11 @@ export function ConflictResolutionModal({
     try {
       await abortMerge(projectPath);
       void trackEvent('merge_aborted', { $screen_name: 'Conflict Resolution' });
-      onToast?.('Merge aborted', 'success');
+      onToast?.('Merge cancelled', 'success');
       onClose();
     } catch (e) {
       trackError('merge_abort', e, 'Conflict Resolution');
-      onToast?.(formatCommandError(asCommandError(e)) || 'Failed to abort merge', 'error');
+      onToast?.(formatCommandError(asCommandError(e)) || 'Couldn’t cancel the merge', 'error');
     } finally {
       setIsApplying(false);
     }
@@ -259,7 +259,7 @@ If a resolution is genuinely ambiguous, show me the options and ask before choos
       >
         <div className="conflict-loading">
           <Spinner size="lg" />
-          <p>Analyzing conflicts…</p>
+          <p>Reading the conflicts…</p>
         </div>
       </ModalFrame>
     );
@@ -294,7 +294,7 @@ If a resolution is genuinely ambiguous, show me the options and ask before choos
     currentFile && !currentConflict
       ? (currentFile.unsupportedReason ??
         (currentFile.isBinary
-          ? "This is a binary file. You'll need to resolve this conflict manually."
+          ? "This file isn't text, so it can't be merged line by line here. Keep one version in your editor, or hand the merge to your agent."
           : null))
       : null;
 
@@ -322,18 +322,16 @@ If a resolution is genuinely ambiguous, show me the options and ask before choos
           </div>
           <div className="conflict-binary">
             <p>{fileNotice}</p>
-            {onSendToAgent && (
-              <button className="conflict-send-btn" onClick={handleSendToAgent}>
-                Send to Agent
-              </button>
-            )}
-            <button
-              className="conflict-btn secondary"
-              onClick={() => void handleAbort()}
-              disabled={isApplying}
-            >
-              Abort Merge
-            </button>
+            <div className="conflict-binary-actions">
+              <Button variant="danger" onClick={() => void handleAbort()} disabled={isApplying}>
+                Cancel the merge
+              </Button>
+              {onSendToAgent && (
+                <Button variant="secondary" onClick={handleSendToAgent}>
+                  Send to agent
+                </Button>
+              )}
+            </div>
           </div>
         </>
       </ModalFrame>
@@ -350,6 +348,8 @@ If a resolution is genuinely ambiguous, show me the options and ask before choos
   // Check for deleted content
   const isCurrentDeleted = !currentConflict.currentContent.trim();
   const isIncomingDeleted = !currentConflict.incomingContent.trim();
+  const truncatedAny = currentTruncated.truncated > 0 || incomingTruncated.truncated > 0;
+  const hasMore = truncatedAny || !!currentConflict.contextBefore || !!currentConflict.contextAfter;
 
   return (
     <ModalFrame
@@ -364,7 +364,7 @@ If a resolution is genuinely ambiguous, show me the options and ask before choos
         {/* Header */}
         <div className="conflict-header">
           <div className="conflict-header-icon">
-            <WarningIcon size={20} />
+            <GitMergeIcon size={18} />
           </div>
           <div className="conflict-header-text">
             <h2>This file has conflicting changes</h2>
@@ -377,18 +377,17 @@ If a resolution is genuinely ambiguous, show me the options and ask before choos
           </div>
         </div>
 
-        {/* Explanation */}
-        <div className="conflict-explanation">
-          Someone else changed the same part of this file. Choose which version to keep.
-        </div>
+        <p className="conflict-explanation">
+          Both branches changed the same lines. Choose which version to keep.
+        </p>
 
         {/* Binary file handling */}
         {currentFile.isBinary ? (
           <div className="conflict-binary">
-            <p>This is a binary file. You'll need to resolve this conflict manually.</p>
-            <button className="conflict-btn secondary" onClick={() => void handleAbort()}>
-              Abort Merge
-            </button>
+            <p>
+              This file isn&apos;t text, so it can&apos;t be merged line by line here. Keep one
+              version in your editor, or hand the merge to your agent.
+            </p>
           </div>
         ) : (
           <>
@@ -397,7 +396,7 @@ If a resolution is genuinely ambiguous, show me the options and ask before choos
               {/* Current (Ours) panel */}
               <div className="conflict-panel">
                 <div className="conflict-panel-header yours">
-                  YOUR VERSION
+                  Yours
                   <span className="conflict-branch-name">{currentFile.oursBranch}</span>
                 </div>
                 <div className="conflict-panel-content">
@@ -408,7 +407,7 @@ If a resolution is genuinely ambiguous, show me the options and ask before choos
                       <pre>{currentTruncated.text}</pre>
                       {currentTruncated.truncated > 0 && (
                         <div className="conflict-truncated">
-                          ... and {currentTruncated.truncated} more lines
+                          …and {currentTruncated.truncated} more lines
                         </div>
                       )}
                     </>
@@ -419,7 +418,7 @@ If a resolution is genuinely ambiguous, show me the options and ask before choos
               {/* Incoming (Theirs) panel */}
               <div className="conflict-panel">
                 <div className="conflict-panel-header theirs">
-                  THEIR VERSION
+                  Theirs
                   <span className="conflict-branch-name">{currentFile.theirsBranch}</span>
                 </div>
                 <div className="conflict-panel-content">
@@ -430,7 +429,7 @@ If a resolution is genuinely ambiguous, show me the options and ask before choos
                       <pre>{incomingTruncated.text}</pre>
                       {incomingTruncated.truncated > 0 && (
                         <div className="conflict-truncated">
-                          ... and {incomingTruncated.truncated} more lines
+                          …and {incomingTruncated.truncated} more lines
                         </div>
                       )}
                     </>
@@ -446,86 +445,92 @@ If a resolution is genuinely ambiguous, show me the options and ask before choos
                 onClick={() => void handleResolve('current')}
                 disabled={isApplying}
               >
-                {isApplying ? 'Applying…' : 'Keep Yours'}
+                {isApplying ? 'Keeping…' : 'Keep yours'}
               </button>
               <button
                 className="conflict-btn theirs"
                 onClick={() => void handleResolve('incoming')}
                 disabled={isApplying}
               >
-                {isApplying ? 'Applying…' : 'Keep Theirs'}
+                {isApplying ? 'Keeping…' : 'Keep theirs'}
               </button>
             </div>
 
-            {/* Callout tip with Copy for Claude */}
+            {/* Need parts of both: the agent can combine them. One way there:
+                Send when there's a session to send to, else Copy. */}
             <div className="conflict-callout">
-              <span className="conflict-callout-icon">
-                <InfoIcon size={16} />
-              </span>
-              <span>
-                If this is a more complicated conflict and you need both changes, hand it to your
-                agent to merge them manually.
-              </span>
-              <button className="conflict-copy-btn" onClick={handleCopyForClaude}>
-                <CopyIcon size={12} />
-                Copy Prompt
-              </button>
-              {onSendToAgent && (
-                <button className="conflict-send-btn" onClick={handleSendToAgent}>
-                  Send to Agent
+              <span>Need parts of both? Your agent can combine them.</span>
+              {onSendToAgent ? (
+                <Button variant="secondary" size="compact" onClick={handleSendToAgent}>
+                  Send to agent
+                </Button>
+              ) : (
+                <Button
+                  variant="secondary"
+                  size="compact"
+                  leftIcon={<CopyIcon size={12} />}
+                  onClick={handleCopyForClaude}
+                >
+                  Copy a prompt
+                </Button>
+              )}
+            </div>
+
+            {hasMore && (
+              <div className="conflict-more-info">
+                <button
+                  type="button"
+                  className="conflict-more-toggle"
+                  aria-expanded={showMoreInfo}
+                  onClick={() => setShowMoreInfo(!showMoreInfo)}
+                >
+                  <span className={`conflict-toggle-chevron ${showMoreInfo ? 'expanded' : ''}`}>
+                    <ChevronIcon size={12} />
+                  </span>
+                  {truncatedAny
+                    ? 'The whole of both, and the lines around them'
+                    : 'The lines around them'}
                 </button>
-              )}
-            </div>
 
-            {/* More information section */}
-            <div className="conflict-more-info">
-              <button
-                className="conflict-more-toggle"
-                onClick={() => setShowMoreInfo(!showMoreInfo)}
-              >
-                <span className={`conflict-toggle-chevron ${showMoreInfo ? 'expanded' : ''}`}>
-                  <ChevronIcon size={12} />
-                </span>
-                More information
-              </button>
-
-              {showMoreInfo && (
-                <div className="conflict-more-content">
-                  {currentConflict.contextBefore && (
-                    <div className="conflict-context">
-                      <div className="conflict-context-label">Context before:</div>
-                      <pre>{currentConflict.contextBefore}</pre>
-                    </div>
-                  )}
-
-                  <div className="conflict-diff">
-                    <div className="conflict-diff-section">
-                      <div className="conflict-diff-label yours">Your version:</div>
-                      <pre>{currentConflict.currentContent || '(empty)'}</pre>
-                    </div>
-                    <div className="conflict-diff-section">
-                      <div className="conflict-diff-label theirs">Their version:</div>
-                      <pre>{currentConflict.incomingContent || '(empty)'}</pre>
-                    </div>
+                {showMoreInfo && (
+                  <div className="conflict-more-content">
+                    {currentConflict.contextBefore && (
+                      <div className="conflict-context">
+                        <div className="conflict-context-label">Before</div>
+                        <pre>{currentConflict.contextBefore}</pre>
+                      </div>
+                    )}
+                    {truncatedAny && (
+                      <div className="conflict-diff">
+                        <div className="conflict-diff-section">
+                          <div className="conflict-diff-label">Yours, in full</div>
+                          <pre>{currentConflict.currentContent || '(empty)'}</pre>
+                        </div>
+                        <div className="conflict-diff-section">
+                          <div className="conflict-diff-label">Theirs, in full</div>
+                          <pre>{currentConflict.incomingContent || '(empty)'}</pre>
+                        </div>
+                      </div>
+                    )}
+                    {currentConflict.contextAfter && (
+                      <div className="conflict-context">
+                        <div className="conflict-context-label">After</div>
+                        <pre>{currentConflict.contextAfter}</pre>
+                      </div>
+                    )}
                   </div>
-
-                  {currentConflict.contextAfter && (
-                    <div className="conflict-context">
-                      <div className="conflict-context-label">Context after:</div>
-                      <pre>{currentConflict.contextAfter}</pre>
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
+                )}
+              </div>
+            )}
           </>
         )}
 
         {/* Footer */}
         <div className="conflict-footer">
           <Button variant="danger" onClick={() => void handleAbort()} disabled={isApplying}>
-            Abort Merge
+            Cancel the merge
           </Button>
+          <span className="conflict-footer-note">Closing this cancels the merge too.</span>
         </div>
       </>
     </ModalFrame>
