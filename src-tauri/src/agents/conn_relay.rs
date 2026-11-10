@@ -23,6 +23,11 @@
 //! that opens only that one connection: its reads go through, anything
 //! else is refused, never put on a card, and the agent's conversation isn't
 //! marked as having read outside content (the wake turn is outside text).
+//! It may only start a session, list tools and call them
+//! ([`sealed_method_allowed`]), and the tool list it gets back holds only
+//! the reads, each marked read-only ([`sealed_tool_list`]): the engine never
+//! sees a write tool, and a Codex check, which runs only tools marked
+//! read-only, can call nothing else even if one slipped through.
 
 use std::time::Duration;
 
@@ -136,6 +141,69 @@ pub fn sealed_refusal(tool_name: &str) -> Option<String> {
     (!reads).then(|| format!("This check can only read: `{tool_name}` isn't a read."))
 }
 
+/// What a sealed check may ask the app: start a session, list the tools
+/// and call them (a call is held to [`sealed_refusal`]). Not resources,
+/// prompts, completions or answers to the app's own requests.
+pub fn sealed_method_allowed(method: Option<&str>) -> bool {
+    match method {
+        Some(m) => {
+            matches!(m, "initialize" | "ping" | "tools/list" | "tools/call")
+                || m.starts_with("notifications/")
+        }
+        None => false,
+    }
+}
+
+/// The largest tool list a sealed check reads whole to filter.
+const SEALED_LIST_MAX: usize = 4 * 1024 * 1024;
+
+/// A sealed check's `tools/list` answer, as JSON or as an event stream:
+/// only the tools [`sealed_refusal`] lets through, each marked
+/// `readOnlyHint: true` (we vouch by name, the same rule as the call).
+/// `None` when it can't be read: the check gets an error, never the list
+/// unfiltered.
+pub fn sealed_tool_list(body: &str) -> Option<String> {
+    fn filter(mut v: Value) -> Value {
+        if let Some(tools) = v.pointer_mut("/result/tools").and_then(Value::as_array_mut) {
+            tools.retain(|t| {
+                t.get("name")
+                    .and_then(Value::as_str)
+                    .is_some_and(|n| sealed_refusal(n).is_none())
+            });
+            for t in tools.iter_mut() {
+                if !t.get("annotations").is_some_and(Value::is_object) {
+                    t["annotations"] = json!({});
+                }
+                t["annotations"]["readOnlyHint"] = json!(true);
+                if let Some(a) = t["annotations"].as_object_mut() {
+                    a.remove("destructiveHint");
+                }
+            }
+        }
+        v
+    }
+    if let Ok(v) = serde_json::from_str::<Value>(body.trim()) {
+        return Some(filter(v).to_string());
+    }
+    // An event stream: each `data:` line is one message.
+    let mut out = String::with_capacity(body.len());
+    let mut any = false;
+    for line in body.split_inclusive('\n') {
+        let bare = line.trim_end_matches(['\r', '\n']);
+        match bare.strip_prefix("data:") {
+            Some(data) if !data.trim().is_empty() => {
+                let v = serde_json::from_str::<Value>(data.trim()).ok()?;
+                out.push_str("data: ");
+                out.push_str(&filter(v).to_string());
+                out.push_str(&line[bare.len()..]);
+                any = true;
+            }
+            _ => out.push_str(line),
+        }
+    }
+    any.then_some(out)
+}
+
 /// One request from `agent_id`'s turn (or its routine's sealed check) for
 /// its connection `key`.
 pub async fn relay(
@@ -176,6 +244,14 @@ pub async fn relay(
             }
         }
     };
+    let rpc_method = message
+        .as_ref()
+        .and_then(|m| m.get("method"))
+        .and_then(Value::as_str)
+        .map(str::to_string);
+    if via == Via::Sealed && message.is_some() && !sealed_method_allowed(rpc_method.as_deref()) {
+        return rpc_error(&id, "This check can only list and call read tools.");
+    }
     // The grant, enforced here for every engine.
     if let Some(m) = &message {
         if m.get("method").and_then(Value::as_str) == Some("tools/call") {
@@ -252,6 +328,26 @@ pub async fn relay(
             builder = builder.header(*name, v);
         }
     }
+    // A sealed check's tool list: read whole, and only the reads passed on.
+    if via == Via::Sealed && rpc_method.as_deref() == Some("tools/list") {
+        let fail = || rpc_error(&id, "Couldn't read the app's list of tools.");
+        if upstream
+            .content_length()
+            .is_some_and(|n| n as usize > SEALED_LIST_MAX)
+        {
+            return fail();
+        }
+        let Ok(bytes) = upstream.bytes().await else {
+            return fail();
+        };
+        if bytes.len() > SEALED_LIST_MAX {
+            return fail();
+        }
+        let Some(listed) = std::str::from_utf8(&bytes).ok().and_then(sealed_tool_list) else {
+            return fail();
+        };
+        return builder.body(full(listed)).unwrap_or_else(|_| fail());
+    }
     let (tx, rx) = tokio::sync::mpsc::channel(16);
     tokio::spawn(async move {
         while let Ok(Some(chunk)) = upstream.chunk().await {
@@ -291,5 +387,80 @@ mod tests {
         ] {
             assert!(sealed_refusal(write).is_some(), "{write}");
         }
+    }
+
+    #[test]
+    fn a_sealed_check_may_only_list_and_call_tools() {
+        for ok in [
+            "initialize",
+            "notifications/initialized",
+            "ping",
+            "tools/list",
+            "tools/call",
+        ] {
+            assert!(sealed_method_allowed(Some(ok)), "{ok}");
+        }
+        for no in [
+            "resources/read",
+            "resources/list",
+            "prompts/get",
+            "completion/complete",
+            "logging/setLevel",
+        ] {
+            assert!(!sealed_method_allowed(Some(no)), "{no}");
+        }
+        // An answer to the app's own request (an elicitation) has no method.
+        assert!(!sealed_method_allowed(None));
+    }
+
+    fn listed() -> Value {
+        json!({ "jsonrpc": "2.0", "id": 1, "result": { "tools": [
+            { "name": "list_issues", "inputSchema": {} },
+            { "name": "get_issue", "annotations": { "readOnlyHint": false, "destructiveHint": true, "title": "Get" } },
+            { "name": "create_issue", "annotations": { "readOnlyHint": true } },
+            { "name": "delete_issue" },
+        ] } })
+    }
+
+    fn names_and_hints(v: &Value) -> Vec<(String, Value)> {
+        v["result"]["tools"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|t| {
+                (
+                    t["name"].as_str().unwrap().to_string(),
+                    t["annotations"].clone(),
+                )
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_sealed_checks_tool_list_holds_only_reads_marked_read_only() {
+        let out = sealed_tool_list(&listed().to_string()).unwrap();
+        let v: Value = serde_json::from_str(&out).unwrap();
+        // A write is dropped even when the app calls it read-only.
+        assert_eq!(
+            names_and_hints(&v),
+            vec![
+                ("list_issues".to_string(), json!({ "readOnlyHint": true })),
+                (
+                    "get_issue".to_string(),
+                    json!({ "readOnlyHint": true, "title": "Get" })
+                ),
+            ]
+        );
+        // As an event stream too, line endings kept.
+        let sse = format!("event: message\r\ndata: {}\r\n\r\n", listed());
+        let out = sealed_tool_list(&sse).unwrap();
+        assert!(out.starts_with("event: message\r\ndata: {"));
+        assert!(out.ends_with("\r\n\r\n"));
+        let data = out.lines().find_map(|l| l.strip_prefix("data: ")).unwrap();
+        let v: Value = serde_json::from_str(data).unwrap();
+        assert_eq!(names_and_hints(&v).len(), 2);
+        // Unreadable: no list at all, never the app's own.
+        assert!(sealed_tool_list("data: {not json").is_none());
+        assert!(sealed_tool_list("garbage").is_none());
     }
 }
