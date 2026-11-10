@@ -142,6 +142,43 @@ export function chatItems(
       now
     )
   );
+  // A draft that became its message keeps its key, so the row never remounts.
+  const skip = draft && messages.some((m) => m.id === draft.id) ? draft.id : undefined;
+  return out.concat(skip ? messageItems(rows, skip, now) : keptItems(messages, rows, agent, now));
+}
+
+/**
+ * The messages' rows, kept while the messages, the copy and the day are the
+ * same: a reply streaming in (a draft every ~100 ms) or a status event
+ * rebuilt every row of the chat, worded each time line again, and handed
+ * the list all-new rows, so every row on screen drew again.
+ */
+const kept = new WeakMap<
+  AgentMessage[],
+  { copy: string | undefined; day: number; items: Item[] }
+>();
+
+function keptItems(
+  messages: AgentMessage[],
+  rows: (AgentMessage | RoomFold)[],
+  agent: Agent,
+  now: number
+): Item[] {
+  const copy = agent.copy?.id;
+  const day = dayStart(now);
+  const held = kept.get(messages);
+  if (held && held.copy === copy && held.day === day) return held.items;
+  const items = messageItems(rows, undefined, now);
+  kept.set(messages, { copy, day, items });
+  return items;
+}
+
+function messageItems(
+  rows: (AgentMessage | RoomFold)[],
+  skip: string | undefined,
+  now: number
+): Item[] {
+  const out: Item[] = [];
   for (let i = rows.length - 1; i >= 0; i--) {
     const row = rows[i];
     const before = rows[i - 1];
@@ -155,8 +192,7 @@ export function chatItems(
     const m = row;
     const prev = before && 'count' in before ? before.last : before;
     const label = timeLabel(m.ts, prev?.ts, now);
-    // A draft that became its message keeps its key, so the row never remounts.
-    if (!(draft && m.id === draft.id)) {
+    if (m.id !== skip) {
       const grouped = !label && !!prev && side(prev) === side(m) && m.ts - prev.ts <= RUN_MS;
       out.push({ kind: 'message', key: messageKey(m), message: m, grouped });
     }
