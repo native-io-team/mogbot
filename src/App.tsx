@@ -21,7 +21,7 @@
  * @module App
  */
 
-import { useState, useEffect, useRef, useMemo, useCallback, useSyncExternalStore } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { invoke } from '@tauri-apps/api/core';
 import { useTerminalManagement } from './hooks/useTerminalManagement';
 import { useIntegrationStatus } from './hooks/useIntegrationStatus';
@@ -59,7 +59,6 @@ import {
   useSetPaletteContext,
 } from './components/CommandPalette/paletteContext';
 import { useAppCommands } from './commands/useAppCommands';
-import { useWorkflowCommands } from './commands/useWorkflowCommands';
 import { useAppMode } from './hooks/useAppMode';
 import { useProjectNumberShortcuts } from './hooks/useProjectNumberShortcuts';
 import { PinnedProjectCommandHost } from './commands/usePinnedProjectCommands';
@@ -69,11 +68,6 @@ import { DevDesignSystemTools } from './components/design-system/DevDesignSystem
 import { logger } from './lib/logger';
 import { asCommandError, formatCommandError } from './lib/errors';
 import { trackEvent, trackPageview } from './lib/analytics';
-import {
-  getSnapshot as getWorkflowsSnapshot,
-  subscribe as subscribeWorkflows,
-  unreadCount,
-} from './lib/workflowsStore';
 import { useCompactWorkspaceToolbar } from './hooks/useCompactWorkspaceToolbar';
 import { useKeepDevServersRunning } from './hooks/useKeepDevServersRunning';
 import { useDevServerRetention } from './hooks/useDevServerRetention';
@@ -154,14 +148,7 @@ function AppContents({ initialProjectPath }: AppProps) {
         currentProjectName: currentProject?.name ?? null,
         currentProjectPath: currentProject?.path ?? null,
       });
-    } else if (
-      view === 'projects' ||
-      view === 'workflows' ||
-      view === 'inbox' ||
-      view === 'agents'
-    ) {
-      // Workflows and the Inbox are home-level screens; left in 'other' their
-      // ⌘K armed a palette that couldn't render (see CommandPaletteHost).
+    } else if (view === 'projects' || view === 'agents') {
       setPaletteContext({ kind: 'home', currentProjectName: null, currentProjectPath: null });
     } else {
       setPaletteContext({ kind: 'other', currentProjectName: null, currentProjectPath: null });
@@ -621,7 +608,6 @@ function AppContents({ initialProjectPath }: AppProps) {
     openProject: handleRailClick,
     cancelPendingOpen,
   });
-  useWorkflowCommands({ setView: modeNav.navigate, showToast });
   useOrphanedWorkspaceGuard(view, currentProject !== null, setView);
 
   // Close an active session from the sidebar (dashboard, collapsed rail, or
@@ -944,17 +930,10 @@ function AppContents({ initialProjectPath }: AppProps) {
     ]
   );
 
-  // Shared configuration for the home-level
-  // sidebar, used by the Projects, Workflows, and Inbox screens.
-  const workflowsSnapshot = useSyncExternalStore(subscribeWorkflows, getWorkflowsSnapshot);
-  const inboxUnread = unreadCount(workflowsSnapshot);
-
+  // Shared configuration for the home-level sidebar (Projects and Agents).
   const homeSidebarProps = useMemo(
     () => ({
       onGoHome: () => modeNav.navigate('projects'),
-      onGoWorkflows: () => modeNav.navigate('workflows'),
-      onGoInbox: () => modeNav.navigate('inbox'),
-      inboxUnreadCount: inboxUnread,
       onGoProjects: modeNav.onGoProjects,
       onGoAgents: modeNav.onGoAgents,
       onOpenProjectPicker: openProjectPicker,
@@ -976,7 +955,6 @@ function AppContents({ initialProjectPath }: AppProps) {
     }),
     [
       openAccountSelect,
-      inboxUnread,
       modeNav,
       openProjectPicker,
       isSidebarHidden,

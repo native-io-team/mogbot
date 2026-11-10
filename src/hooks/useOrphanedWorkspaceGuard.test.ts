@@ -25,7 +25,7 @@ describe('useOrphanedWorkspaceGuard', () => {
     expect(setView).not.toHaveBeenCalled();
   });
 
-  it.each<AppView>(['loading', 'projects', 'project-loading', 'workflows', 'inbox'])(
+  it.each<AppView>(['loading', 'projects', 'project-loading', 'agents'])(
     'ignores the %s view without a project',
     (view) => {
       const setView = vi.fn();

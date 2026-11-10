@@ -28,8 +28,8 @@ first real result", below); while the greeting is all there is, it and the
 starters sit in the middle of the page as an empty state (`data-greeting` on
 the message column), not at the foot of an empty screen.
 
-In Agents mode the sidebar's top row is the toggle (Home, Workflows and the
-Inbox belong to the Projects side). **What's in flight** — the one name for
+In Agents mode the sidebar's top row is the toggle (Home belongs to the
+Projects side). **What's in flight** — the one name for
 the cross-agent overview — is reached from a **"Needs you · N"** row at the
 top of the agent list, shown only while an agent waits on you (a request, or a
 turn that didn't finish; the same set ⌘J visits), and from ⌘K. A usage limit
@@ -1204,7 +1204,7 @@ dev-server owner.
   and pull request as changes. A turn answering outside text can't use the
   changing ones.
 - Not added: importing from GitHub, env vars, assets, snapshots/rewind,
-  workflows, the iOS simulator; agents reach most of those with their own
+  the iOS simulator; agents reach most of those with their own
   file and git tools.
 - Not verified: a real `preview_start` in the running app (window round trip,
   install, proxy, screenshot); the parts are unit-tested.
@@ -4179,7 +4179,7 @@ cut off by quitting is recorded as such at launch, and a routine's retry that
 came due while the app was closed is dropped, not run late. Run now is
 recorded too, but never retried or announced.
 
-A one-minute tick fires them, with the workflow scheduler's rules: nothing
+A one-minute tick fires them, with Ship Studio's old workflow-scheduler rules: nothing
 fires while the app is closed, at most one firing per tick, and a routine never
 catches up a backlog. A routine missed while closed runs once when the app
 reopens, marked late (never once per time it missed, and never skipped); if its
@@ -5417,13 +5417,12 @@ timers firing; in the background, only status loops (loaders, the key).
   in progress, routines and "When…" checks the user timed, Slack replies
   waiting to post, card expiry, and closing idle dev servers or browsers.
 - **One wake-up a minute.** The minute loops (check-ins, "When…" checks,
-  workflows, card expiry) sleep to the minute boundary (`power::sleep_aligned`)
+  card expiry) sleep to the minute boundary (`power::sleep_aligned`)
   so they wake together. The phone's projects watch has no timer while no
   phone is in the foreground.
 - **Desk, window hidden** (`data-app-hidden`): every CSS animation pauses,
   `usePolling` holds (catching up on its own cadence when seen; `whileHidden`
-  for the two polls with an effect outside the window), the workflows poll
-  skips. **In the background** (`data-app-background`, another app focused):
+  for the two polls with an effect outside the window). **In the background** (`data-app-background`, another app focused):
   the working line's shimmer and a key's Needs-your-OK pulse pause; status
   loops keep going. **Off-screen** (`lib/offscreen.ts`): the working loader
   holds still. Agent keys have no timers at all: a state is a data attribute,

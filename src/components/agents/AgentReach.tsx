@@ -19,7 +19,7 @@ import { Tooltip } from '../primitives/Tooltip';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { useOpenModal } from '../../contexts/ModalContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
-import { formatAgo } from '../../lib/workflows';
+import { formatAgo } from '../../lib/formatAgo';
 import {
   accessLabel,
   agentReach,

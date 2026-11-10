@@ -68,7 +68,7 @@ import { AgentsQuota } from './AgentsQuota';
 import { AgentsSpareNote } from './AgentsUsage';
 import { kbd } from '../../lib/shortcuts';
 import { cardsGroup, groupLine, newestCardAt } from '../../lib/agentRequests';
-import { formatAgo } from '../../lib/workflows';
+import { formatAgo } from '../../lib/formatAgo';
 import { previewText } from '../../../packages/companion-protocol/src/preview';
 import {
   progressLine,

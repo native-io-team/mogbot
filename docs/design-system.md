@@ -413,7 +413,7 @@ the browser's default white box — a real regression the pinned comment compose
 it moved out of the stylesheet scope that had been dressing its raw element.
 
 Several features still hand-roll a `<textarea>` predating this primitive (`EnvEditor`,
-`WorkflowEditorModal`, `NewTicketForm`, `EditPopover`). Migrating them is open work; new code uses
+`NewTicketForm`, `EditPopover`). Migrating them is open work; new code uses
 `TextArea`.
 
 ### ModalFrame — [ModalFrame.tsx](../src/components/primitives/ModalFrame.tsx)

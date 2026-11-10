@@ -43,7 +43,7 @@ export function postsElsewhere(action: string, appHref: string): boolean {
 
 export function installNavigationGuard(win: Window = window): () => void {
   const onClick = (event: MouseEvent) => {
-    // Components that route their own links (agent prose, Inbox) already
+    // Components that route their own links (agent prose) already
     // called preventDefault; so did the opener plugin for target=_blank.
     if (event.defaultPrevented) return;
     const anchor = event

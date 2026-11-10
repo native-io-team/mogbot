@@ -5,9 +5,7 @@ properties it carries, and the question the event answers.
 
 The pipeline: TypeScript [`src/lib/analytics.ts`](../src/lib/analytics.ts) →
 Tauri `track_event` IPC → Rust [`src-tauri/src/commands/analytics.rs`](../src-tauri/src/commands/analytics.rs)
-→ PostHog HTTP capture API. The API key never leaves the Rust backend. A
-handful of workflow events are sent straight from Rust via
-`track_backend_event`, because they happen with no window involved.
+→ PostHog HTTP capture API. The API key never leaves the Rust backend.
 
 ## The organizing principle
 
@@ -223,40 +221,6 @@ Branch names are never sent. Every event here is shape-only.
 | `skill_removed` | `plugin`, `scope` |
 | `mcp_server_added` / `mcp_server_removed` | `scope` |
 
-### Workflows & Inbox
-
-Shape only. No workflow name, no instruction text, no finding title, no project
-path — everything this feature touches is someone's private repository, and the
-questions worth asking ("does anyone arm a schedule?", "do runs fail?", "does a
-finding ever become work?") are all answerable without any of it.
-
-| Event | Fired when | Properties | Question it answers |
-|---|---|---|---|
-| `workflow_created` | A workflow file is saved from the editor (`source: 'form'`), or the backend first lists a file that appeared on disk without it (`source: 'file'` — in practice the bundled agent skill, though a pull or a hand-written file looks the same) | `source`, `trigger_kind`, `permission`, `agent`, `auto_run`, `severity_floor` | Which authoring path people use, and whether they schedule or only ever press Run |
-| `workflow_edited` | An existing workflow is saved from the editor | `trigger_kind`, `permission`, `agent`, `auto_run`, `severity_floor` | Do workflows get tuned after the first run? |
-| `workflow_deleted` | Deleted from the editor (`source: 'form'`, with `trigger_kind`, `auto_run`) or the file vanished from disk (`source: 'file'`, shape unknown) | `source`, … | Churn |
-| `workflow_toggled` | The auto-run switch in the list | `auto_run`, `trigger_kind` | The moment a workflow becomes unattended |
-| `workflow_run_started` | A run begins — **emitted from Rust** | `source` (`manual`/`schedule`/`event`), `trigger_kind`, `permission`, `agent`, `auto_run` | Paired with the finish: a start with no finish is a run the app was quit out of |
-| `workflow_run_finished` | Every run completes or fails — **emitted from Rust**, so scheduled and event-triggered runs count too | `source`, `trigger_kind`, `permission`, `agent`, `auto_run`, `status` (`ok`/`findings`/`failed`), `findings`, `duration_ms`, `duration_bucket` (`<30s` / `30s-2m` / `2m-10m` / `>10m`), `tokens` | Does the unattended half work, what does it cost, and how often does it fail? |
-| `workflow_finding_action` | Something happens to a finding in the Inbox | `action`, `severity`, `occurrences`; `fix` also carries `outcome` | Does the inbox turn into work, or into a graveyard? |
-
-`workflow_finding_action.action` is one of:
-
-- `open` — first read of an unread finding (arrow-keying back through
-  already-read items does not count again)
-- `fix` — "Fix in \<project\>". Fired **once the hand-off resolves**, not at the
-  click, so one event carries the `outcome`: `delivered` (a new agent tab
-  started with the prompt), `no_room` (the project is at its tab cap), or
-  `failed` (the project would not open, or no terminal was ready within a
-  minute)
-- `archive` / `restore` / `delete`
-
-The Rust-side events (`workflow_run_started`, `workflow_run_finished`, and the
-`source: 'file'` create/delete) go through `track_backend_event`, because a
-scheduled run fires with no window involved and a file written by an agent is
-only ever noticed by the backend's listing; routing them through the frontend
-would drop exactly the cases the feature exists for.
-
 ### Onboarding funnel
 
 | Event | Properties |
@@ -310,14 +274,11 @@ files GitHub issues (including from error toasts) is documented in
 4. **Feature adoption** — % of users with at least one of: `palette_command_run`,
    `inspect_panel_opened`, `visual_edit_started`, `logs_sent_to_agent`,
    `screenshot_captured`, `skill_installed`,
-   `mcp_server_added`, `workflow_created`, `asset_managed`.
-5. **Workflows** — `workflow_created` by `source`; `workflow_run_finished` by
-   `source` and `status`; `workflow_finding_action` `fix` by `outcome` vs
-   `archive`/`delete`.
-6. **Retention** — cohort by `first_app_version` (set_once), retained by
+   `mcp_server_added`, `asset_managed`.
+5. **Retention** — cohort by `first_app_version` (set_once), retained by
    `project_opened`.
-7. **Errors** — `error_occurred` grouped by `action`; `install_dependencies_failed`;
-   `preview_connect_stopped`; `workflow_run_finished` with `status: failed`.
+6. **Errors** — `error_occurred` grouped by `action`; `install_dependencies_failed`;
+   `preview_connect_stopped`.
    Watch for spikes across release boundaries (cohort by `latest_app_version`).
 
 ## Adding a new event

@@ -39,7 +39,7 @@ import { listen, UnlistenFn } from '@tauri-apps/api/event';
 import { trackError } from '../lib/analytics';
 import { buildMigrationPrompt, initMigration } from '../lib/migration';
 import { getDevServerPort } from '../lib/project';
-import { queueHandoff } from '../lib/workflowHandoff';
+import { queueHandoff } from '../lib/promptHandoff';
 import { friendlyProcessError } from '../lib/errors';
 import { getWindowLabel } from '../lib/window';
 import { checkNpmCachePermissions } from '../lib/setup';

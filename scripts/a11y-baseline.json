@@ -48,8 +48,6 @@
   "hosting-unavailable|light|color-contrast": 2,
   "hosting-unlinked|dark|color-contrast": 1,
   "hosting-unlinked|light|color-contrast": 2,
-  "inbox-populated|dark|color-contrast": 3,
-  "inbox-populated|light|color-contrast": 1,
   "layout-agent-elements-stacked|light|color-contrast": 2,
   "layout-agent-on-the-right|dark|color-contrast": 1,
   "layout-agent-on-the-right|light|color-contrast": 2,

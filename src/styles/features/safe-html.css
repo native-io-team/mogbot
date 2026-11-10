@@ -1,9 +1,8 @@
-/* Containers for HTML rendered from agent, workflow or outside text (see
+/* Containers for HTML rendered from agent or outside text (see
    src/lib/safeHtml.ts). The sanitizer already drops `style`, but these are the
    second wall: whatever renders inside is painted only inside its own box, so
    nothing a message contains can draw over an Allow / Deny card or the app. */
-.agent-markdown__prose,
-.inbox-detail-body {
+.agent-markdown__prose {
   contain: paint;
   overflow: hidden;
 }

@@ -11,7 +11,7 @@
 //!
 //! So this teaches the agent to write the records itself. It is the same
 //! artifact Ship Studio writes, in the same directory, read by the same fold —
-//! there is no API in front of it, exactly as with the workflows skill. An
+//! there is no API in front of it. An
 //! agent on a teammate's machine that has never opened Ship Studio still
 //! produces rows the rest of the team can read.
 //!

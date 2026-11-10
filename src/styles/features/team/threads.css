@@ -33,7 +33,7 @@
   height: auto;
 }
 
-/* Same two-pane geometry as .inbox-body — a list that drives a reader. */
+/* Two panes — a list that drives a reader. */
 .team-threads-body {
   display: grid;
   grid-template-columns: minmax(0, 320px) minmax(0, 1fr);

@@ -141,7 +141,7 @@ dependencies, issues). Defences:
 - **No flag injection.** An opening prompt that starts with `-` would have been
   parsed by the agent CLI as a flag (`--dangerously-skip-permissions`). It now
   gets a leading space, both in Rust and in `agentPromptArgs`. That fix also
-  closes the same hole in Inbox handoffs, which existed before this feature.
+  closes the same hole in queued-prompt handoffs (`lib/promptHandoff.ts`).
 - The agent's own permission system still applies on top of all this. Remote
   access types into the agent; it doesn't widen what the agent may do. If you
   started the agent with permission prompts skipped, a remote message gets that
@@ -236,7 +236,7 @@ Grok Bot ──HTTPS──▶ Tailscale ──▶ tailscaled Funnel (/<slug>, TL
   window (or main). `useRemoteAgentControl` spawns the tab's PTY in the
   background (`lib/backgroundSessions.ts`, with the same command builder as a
   mounted tab, `lib/agentSpawn.ts`) whose CLI *starts with* the prompt — the
-  Inbox's spawn-not-paste rule — and the project's tab list adopts it without
+  same spawn-not-paste rule as `hooks/usePromptHandoff` — and the project's tab list adopts it without
   the window changing. Rust reports success only once a new agent PTY
   actually exists.
 - **Tailscale.** Mounted at `/<slug>` (`brand::FUNNEL_MOUNT_PATH`; Ship Studio

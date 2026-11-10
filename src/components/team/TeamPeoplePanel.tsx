@@ -20,7 +20,7 @@ import { EmptyState } from '../primitives/EmptyState';
 import { TeamAvatar } from './TeamAvatar';
 import { TeamActorName } from './TeamActorName';
 import { TeamCoverageComplete, TeamGitHubOnlyBadge } from './TeamCoverageNote';
-import { formatAgo } from '../../lib/workflows';
+import { formatAgo } from '../../lib/formatAgo';
 import { actorKey, type TeamMember } from '../../lib/team';
 
 const ROLE_LABEL: Record<TeamMember['role'], string> = {

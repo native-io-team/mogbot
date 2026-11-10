@@ -52,8 +52,8 @@ export interface TerminalTab {
   /**
    * Opens the agent with this already asked, via its argv.
    *
-   * Set once, when the tab is created for a specific request — "Send to agent"
-   * from the Inbox. Cleared as soon as the agent spawns, so restarting the tab
+   * Set once, when the tab is created for a specific request — a queued prompt
+   * (lib/promptHandoff). Cleared as soon as the agent spawns, so restarting the tab
    * later does not silently ask the same thing a second time.
    */
   initialPrompt?: string;
@@ -279,8 +279,8 @@ export function useTerminalManagement(
       agentId?: string,
       options?: { initialPrompt?: string; projectPath?: string; sessionId?: string }
     ) => {
-      // A caller may target a project that is still becoming current — the
-      // Inbox opens a project and asks for a tab in the same breath.
+      // A caller may target a project that is still becoming current — a
+      // queued prompt opens a project and asks for a tab in the same breath.
       const path = options?.projectPath ?? currentPathRef.current;
       if (!path) return;
       const s = getOrCreate(path);

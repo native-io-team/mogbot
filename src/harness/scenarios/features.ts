@@ -40,50 +40,6 @@ const branch = (name: string, over: Record<string, unknown> = {}) => ({
   ...over,
 });
 
-const workflow = (slug: string, name: string, over: Record<string, unknown> = {}) => ({
-  id: `${WORKSPACE_PROJECT}::${slug}`,
-  slug,
-  name,
-  icon: null,
-  description: 'Checks the things that keep breaking.',
-  agentId: null,
-  projectPath: WORKSPACE_PROJECT,
-  projectName: 'acme-marketing',
-  trigger: { kind: 'manual' },
-  permission: 'read-only',
-  prompt: 'Review the diff and report anything that would break in production.',
-  severityFloor: 'info',
-  autoRun: false,
-  filePath: `${WORKSPACE_PROJECT}/.shipstudio/workflows/${slug}.md`,
-  updatedAt: Date.now() - HOUR,
-  nextRunAt: null,
-  isRunning: false,
-  runningSince: null,
-  runs: [],
-  ...over,
-});
-
-const finding = (id: string, severity: string, title: string, summary: string) => ({
-  id,
-  workflowId: `${WORKSPACE_PROJECT}::pre-release`,
-  workflowName: 'Pre-release check',
-  projectName: 'acme-marketing',
-  projectPath: WORKSPACE_PROJECT,
-  severity,
-  title,
-  summary,
-  bodyMd: `## ${title}\n\n${summary}\n\n\`\`\`ts\nconst x = 1;\n\`\`\`\n`,
-  createdAt: Date.now() - HOUR,
-  read: false,
-  archived: false,
-  fingerprint: id,
-  occurrences: 1,
-  firstSeenAt: Date.now() - HOUR,
-  locations: [{ path: 'src/app/page.tsx', line: 42 }],
-  suggestedPrompt: `Fix: ${title}`,
-  runId: 'run_1',
-});
-
 export const featureScenarios: Scenario[] = [
   {
     id: 'workspace',
@@ -323,75 +279,6 @@ export const featureScenarios: Scenario[] = [
             },
           ],
         },
-      ],
-    },
-  },
-  {
-    id: 'workflows-populated',
-    // Same as the Inbox above: the fixture existed, but nothing navigated to
-    // Workflows, so the capture showed the workspace instead of the list it
-    // describes. Requiring the running workflow's live region makes the
-    // "running is distinguishable from idle" claim something the run can
-    // actually fail on. Note it is NOT the row dot: a running workflow renders
-    // PixelLoaderRings instead, so `data-state="running"` on the dot is
-    // unreachable.
-    command: 'workflows.open',
-    requires: '[role="status"][aria-label$="is running"]',
-    title: 'Workflows — several configured',
-    looksRightWhen:
-      'Trigger descriptions are legible, and a running workflow is distinguishable from an idle one.',
-    project: WORKSPACE_PROJECT,
-    commands: {
-      ...workspaceCommands,
-      list_all_workflows: [
-        workflow('pre-release', 'Pre-release check'),
-        workflow('a11y', 'Accessibility sweep', {
-          trigger: { kind: 'daily', atHour: 9, atMinute: 0 },
-          autoRun: true,
-          nextRunAt: Date.now() + HOUR,
-        }),
-        workflow('deps', 'Dependency audit', {
-          isRunning: true,
-          runningSince: Date.now() - 30_000,
-        }),
-      ],
-    },
-  },
-  {
-    id: 'inbox-populated',
-    // The fixture was here but nothing opened the Inbox, so this photographed
-    // the workspace with an unread badge on the bell and nothing else — no
-    // severities, no unread row, no detail pane, none of what the caption
-    // below claims to check. `requires` names a severity chip so a scenario
-    // that stops reaching the Inbox fails the run instead of passing on the
-    // screen behind it.
-    command: 'inbox.open',
-    requires: '.inbox-item-severity[data-severity="critical"]',
-    title: 'Inbox — findings to triage',
-    looksRightWhen:
-      'Severities are distinguishable at a glance, unread stands out, and the detail pane renders markdown without breaking the layout.',
-    project: WORKSPACE_PROJECT,
-    commands: {
-      ...workspaceCommands,
-      list_inbox_items: [
-        finding(
-          'f1',
-          'critical',
-          'Preview URL is constructed, not observed',
-          'The card builds a URL from the project name, which 404s past 63 characters.'
-        ),
-        finding(
-          'f2',
-          'warning',
-          'Unbounded CLI call on the boot path',
-          'A network CLI call without a timeout can hang the window indefinitely.'
-        ),
-        finding(
-          'f3',
-          'info',
-          'Off-scale font size',
-          'A 15px literal should round to the nearest type-scale token.'
-        ),
       ],
     },
   },

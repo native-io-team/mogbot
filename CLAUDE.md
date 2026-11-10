@@ -54,7 +54,6 @@ Chief of Staff (see "Agents Flow", [docs/agents.md](docs/agents.md)):
 - **Git** - Branches, PRs with generated titles/descriptions, visual merge-conflict resolution, snapshots (rewind)
 - **Hosting Status** - Whether *the pushed commit* deployed on Vercel, Cloudflare Pages or Netlify, with the build error when it didn't (see "Hosting Flow")
 - **Site Migration** - Rebuild a live URL here, measured page by page against the original (see `docs/site-migration.md`)
-- **Workflows & Inbox** - Scheduled read-only agent runs that file findings (see `docs/workflows-inbox.md`)
 - **Assets, Skills & MCP, IDE integration** - As in Ship Studio (the plugin system was removed; a Ship Studio project's `.shipstudio/plugins/` folder is left on disk and ignored)
 
 **Across both:** the Cmd+K palette (every feature registers there), light and dark themes on desktop and phone, multi-window, and **Remote Access** — driving your agents from another MCP-capable assistant (Grok, Claude, ChatGPT…) over your own Tailscale Funnel (see "Remote Access Flow"). For the phone, the answer is the companion app; Remote Access answers a different question. Updates, telemetry, issue reporting and the template catalogue are off until `brand.json` names an endpoint for them.
@@ -116,15 +115,12 @@ Chief of Staff (see "Agents Flow", [docs/agents.md](docs/agents.md)):
 - **Shared state files** in `~/ShipStudio/.shipstudio/`, read and written by both apps:
   - `folders.json`, `external-projects.json`, `attached-libraries.json` — one dashboard
     organisation, whichever app you open
-  - `workflows-state.json` — run history, inbox, and the `last_run_at` both schedulers decide from.
-    Giving each app its own copy made every armed workflow run twice, and Mogbot's first launch
-    fire every daily workflow Ship Studio had already run. Mogbot additionally takes a per-slot
-    claim (`workflow-claims/`, atomic create, stale after 30 min) before a scheduled run; Ship
-    Studio doesn't, so a slot it is mid-way through can still be started here before it records
-    the run (`commands/workflows/slot_claim.rs`)
+  - Ship Studio's `workflows-state.json` and `workflow-claims/` sit beside them. This app no
+    longer has Workflows or the Inbox (agents' routines and "When…" routines do that job), so it
+    never reads, writes or deletes them, nor the `.shipstudio/workflows/*.md` files in projects;
+    Ship Studio keeps running them
   - **Read-modify-write risk:** each app serialises its own writes with an in-process lock only.
-    Two apps writing the same file at the same moment can drop one write (a folder move, a run's
-    findings). Writes are atomic renames, so the file is never corrupt, just occasionally stale.
+    Two apps writing the same file at the same moment can drop one write (a folder move). Writes are atomic renames, so the file is never corrupt, just occasionally stale.
     Don't add a new shared file without accepting that, or adding a cross-process lock
 - **Read-only from Ship Studio:** with no projects folder set here, the Default workspace starts
   at the folder Ship Studio's Default workspace uses (read from its `app_state.json`, never
@@ -199,7 +195,7 @@ these without updating that doc.
   write its own memory or change the team without a card ([docs/agents.md](docs/agents.md),
   "When… routines"; [docs/remote-access.md](docs/remote-access.md), "Importing agents as a
   conversation")
-- **The webview never loads untrusted content.** One strict sanitizer for agent and Inbox HTML,
+- **The webview never loads untrusted content.** One strict sanitizer for agent HTML,
   images shown as link chips, a navigation guard, preview text reaching an agent only through a
   confirmed chip, an open allowlist for agent files (see "What stands in for a CSP" below)
 - **The phone pairs to *your* Mac.** The Mac proves its pinned Ed25519 identity (Keychain) before
@@ -232,7 +228,6 @@ Command modules in `src-tauri/src/commands/`. Domains with submodules are direct
 - `ide/` - VS Code/Cursor launch, preview screenshots
 - `projects/` - Project CRUD: detection, metadata, dev-server config, pins, sessions, templates, UI state, window registry
 - `pty/` - Pseudo-terminal spawn/stream for the embedded agent terminals
-- `workflows/` - Workflows & Inbox: workflow markdown files, headless runs, filed findings, and the bundled agent skill (see `docs/workflows-inbox.md`)
 - `setup/` - First-run onboarding: install, auth, status checks, mock/force modes
 - `skills/` - Agent skill search and install
 
@@ -296,8 +291,6 @@ Single-file domains:
 - `code/` - Code mode: viewer, file tree, code tab, health panel
 - `hosting/` - The Push popover's Hosting section: the fixed-geometry row, the address rows, the connect and link-picker flows, and the Deployments panel
 - `extensions/` - Agent extensions: the Skills and MCP modals and their shared layout parts
-- `workflows/` - Workflows list, row, editor, template picker, run history
-- `inbox/` - Findings list and the report reader
 - `agents/` - Agents mode: the full-window chat (sidebar, conversation, approval cards, avatar, create/edit and import dialogs)
 - `migration/` - Site migration: the URL tab in New Project, the phase rail, the four-part status, the fidelity matrix and the comparison viewer
 - `remote/` - Remote access: the modal (five-step setup, then the live view) and the sidebar indicator
@@ -346,7 +339,8 @@ Key modules in `src/lib/` (not exhaustive — `ls src/lib` for the full list):
 - `previewCanvas.ts` - Breakpoint-canvas geometry and zoom maths (layout, fit scale, device heights, mount window, pointer anchoring) — see `docs/breakpoint-canvas.md`
 - `polling.ts` - Exponential backoff utilities for async operations
 - `project.ts` - Project metadata and file operations
-- `workflows.ts` / `workflowsStore.ts` / `workflowHandoff.ts` / `workflowTemplates.ts` - Workflows & Inbox: types mirroring the Rust shapes, the store over the Tauri commands, the queue that carries a finding's prompt into a workspace terminal, and the template library the new-workflow picker is built from
+- `promptHandoff.ts` (+ `hooks/usePromptHandoff.ts`) - The one-slot queue that carries a prompt (a site migration's brief) into a new agent tab once its project is open: spawn-with-prompt, never paste
+- `formatAgo.ts` - Relative times ("18m ago") for list rows and chat lines
 - `projectSessions.ts` / `sessionRegistry.ts` / `ptySession.ts` - Hot project sessions (backend authority + frontend mirror)
 - `setup.ts` - Setup wizard step definitions and integration status
 - `terminalLinks.ts` - Clickable URLs in terminals (web-links addon)
@@ -530,15 +524,15 @@ recorded in [docs/internal/hosting-provider-matrix.md](docs/internal/hosting-pro
 4. Backend gathers git context (diff, commits, branch name) and calls Claude CLI for the summary
 5. PR is created via `gh pr create`; git/GitHub failures surface through `humanizeGitError` (src/lib/errors.ts) with the branch names filled in
 
-### Workflows Flow
+### Workflows and the Inbox (removed)
 
-1. A workflow is a markdown file at `<project>/.shipstudio/workflows/<slug>.md` — frontmatter plus an instruction body. The form in `WorkflowEditorModal` and the user's own agent (via the bundled `<slug>-workflows` skill) write the *same* artifact; there is no API in front of it
-2. Running one shells out to the user's agent CLI headless in the project dir. Read-only is enforced by the CLI (`--permission-mode plan` / `--sandbox read-only`), not merely requested — never weaken this without changing the UI copy that claims it
-3. Findings come back as the last fenced ```json block in the reply, are deduped by fingerprint, and are filed to `~/ShipStudio/.shipstudio/workflows-state.json` — shared with Ship Studio (see "Brand and identity"), **never** into the project repo
-4. Scheduling is one tokio tick (`workflow_scheduler.rs`), at most one run per tick, never catching up on a backlog. Nothing fires while the app is closed and every UI string says so
-5. In the Inbox, "Fix in \<project\>" queues the suggested prompt (`lib/workflowHandoff.ts`), opens the workspace, and `useWorkflowHandoff` types it once a terminal exists
-
-Full design: [docs/workflows-inbox.md](docs/workflows-inbox.md).
+Ship Studio's Workflows (scheduled read-only agent runs from `.shipstudio/workflows/*.md`) and
+the Inbox they filed findings to are gone from this app: agents' routines and "When…" routines
+do that job, and their results arrive as chat lines and result cards. What stays on disk is
+never touched: the projects' workflow files and Ship Studio's `workflows-state.json` are Ship
+Studio's, which keeps running them. This app's own `<slug>-workflows` skill is removed on launch
+when it carries this app's version stamp (`RETIRED_SKILLS` in `commands/skills/bundled.rs`);
+Ship Studio's `shipstudio-workflows` is never touched.
 
 ### Site Migration Flow
 
@@ -965,7 +959,7 @@ The Content Security Policy in `src-tauri/tauri.conf.json` MUST be set to `null`
 
 **What stands in for a CSP.** With no CSP, nothing stops the webview loading a remote image or
 following a link, so untrusted text never gets the chance:
-- HTML from agents, outside assistants and workflows goes only through `sanitizeMessageHtml`
+- HTML from agents and outside assistants goes only through `sanitizeMessageHtml`
   (`src/lib/safeHtml.ts`): a prose-only tag allowlist, no `style`, no forms/media/svg/iframes, and
   every image rendered as an "Image from example.com" link chip, never loaded.
 - The preview iframe can only *ask* to send text to an agent; the user confirms it in an app chip

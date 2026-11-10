@@ -1,13 +1,12 @@
 /* Deployments panel — recent deployments with their build output.
  *
- * Deliberately the same shape as the workflow run-history dialog: a list you
- * pick from, the raw output beside it. Same job, same idiom. */
+ * A list you pick from, the raw output beside it. */
 
 .deployments-modal {
   width: min(880px, 94vw);
   /* Definite, not a max — `.modal-frame-content` is sized by its content, so
      a max-height leaves the panes' `flex: 1` dividing nothing and the dialog
-     collapses to a stub. Same reason `.run-history-modal` does this. */
+     collapses to a stub. */
   height: min(660px, 84vh);
   overflow: hidden;
 }

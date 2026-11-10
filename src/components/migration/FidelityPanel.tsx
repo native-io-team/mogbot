@@ -33,7 +33,7 @@ import {
   type FidelityRun,
   type MigrationStatus,
 } from '@/lib/migration';
-import { queueHandoff } from '@/lib/workflowHandoff';
+import { queueHandoff } from '@/lib/promptHandoff';
 import { getDevServerPort } from '@/lib/project';
 import { logger } from '@/lib/logger';
 import { useOptionalToast } from '../../contexts/ToastContext';

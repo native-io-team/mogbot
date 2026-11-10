@@ -134,7 +134,7 @@ const noop = () => {};
  * Below the compact breakpoint there is no sidebar, so the icon pair sits at
  * the top bar's leading edge instead, clear of the macOS traffic lights.
  * `floating` pins it to the window's top-left for screens with no bar of
- * their own (the dashboard, Workflows, the Inbox).
+ * their own (the dashboard).
  */
 export function CompactModeToggle({
   mode,

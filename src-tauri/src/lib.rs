@@ -39,7 +39,6 @@ pub mod types;
 pub mod user_chrome;
 pub mod utils;
 pub mod webview_scripts;
-pub mod workflow_scheduler;
 
 use tauri::Manager;
 
@@ -193,17 +192,11 @@ pub fn run() {
                     .plugin(tauri_plugin_updater::Builder::new().build())?;
             }
 
-            // Teach the user's own agent about workflows, and start the tick
-            // that fires the armed ones. The skill install is the discovery
-            // path for the whole feature (see commands::workflows::skill); it
-            // is idempotent and skips agents that aren't installed.
-            {
-                let handle = _app.handle().clone();
-                tauri::async_runtime::spawn(async move {
-                    commands::skills::install_bundled_skills();
-                    workflow_scheduler::spawn(handle);
-                });
-            }
+            // Install the bundled skills for the user's own agents. Idempotent,
+            // and skips agents that aren't installed.
+            tauri::async_runtime::spawn(async move {
+                commands::skills::install_bundled_skills();
+            });
 
             // Agents: notification clicks open the agent. A card still
             // "pending" from the last run has nobody waiting on it any more;
@@ -944,16 +937,6 @@ pub fn run() {
             commands::agents::agents_account_reorder,
             commands::agents::agents_account_use,
             commands::agents::agents_account_remove,
-            commands::workflows::list_all_workflows,
-            commands::workflows::save_workflow_file,
-            commands::workflows::delete_workflow_file,
-            commands::workflows::run_workflow,
-            commands::workflows::list_inbox_items,
-            commands::workflows::workflow_progress,
-            commands::workflows::set_inbox_item_read,
-            commands::workflows::set_inbox_item_archived,
-            commands::workflows::delete_inbox_item,
-            commands::workflows::mark_all_inbox_read,
             // Team (multiplayer). Read-only: git and gh are the database, and
             // nothing here writes to either.
             commands::team::get_team_snapshot,

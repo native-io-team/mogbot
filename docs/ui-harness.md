@@ -315,7 +315,7 @@ Fixture layering:
 | `base.ts` | A healthy, fully set-up machine; everything reachable from anywhere |
 | `workspace.ts` | What opening a project asks for |
 | `app.ts` | Dashboard and onboarding scenarios |
-| `features.ts` | Populated branches, PRs, conflicts, workflows, inbox |
+| `features.ts` | Populated branches, PRs, conflicts |
 | `hosting.ts` | The ten push-popover deployment states |
 | `hostingConnect.ts` | The connect flow: the token modal and the link picker |
 

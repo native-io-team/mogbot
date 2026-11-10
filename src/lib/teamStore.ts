@@ -1,7 +1,7 @@
 /**
  * Team — the frontend store.
  *
- * A `useSyncExternalStore` source shaped like `workflowsStore`, so the Team
+ * A `useSyncExternalStore` source, so the Team
  * surfaces read state the way every other screen does.
  *
  * State comes from `get_team_snapshot` (see `teamApi.ts`), which reads the
