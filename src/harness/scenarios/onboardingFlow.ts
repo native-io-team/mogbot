@@ -170,7 +170,7 @@ function installFailures(): Scenario[] {
     failing(
       'onboarding-signin-failed',
       '2b. Sign-in failed',
-      '"Sign in to Claude Code", "Not done yet." with what the sign-in said ("Login was cancelled in the browser."), the generic fix, "Show details" and "Try again".',
+      '"Sign in to Claude Code", "Not done yet. The sign-in page was closed before it finished.", the fix naming the Claude Pro or Max plan, "Show details" and "Try again".',
       CLAUDE_INSTALLED,
       'signin',
       claude

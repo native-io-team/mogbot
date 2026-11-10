@@ -56,6 +56,12 @@ export const plainName = (itemId: string) =>
 
 export const isAuthItem = (itemId: string) => itemId.endsWith('_auth');
 
+/** The plan each engine's sign-in wants, as the engine cards name it. */
+const PLANS: Record<string, string> = {
+  claude: 'Claude Pro or Max',
+  codex: 'ChatGPT Plus or Pro',
+};
+
 /**
  * Node.js installs through Homebrew in the background (`install_brew_packages`),
  * which shows nothing until it's done: one honest step, then the check.
@@ -222,6 +228,7 @@ export type InstallFailureKind =
   | 'license'
   | 'node'
   | 'signed_in'
+  | 'signin'
   | 'unverified'
   | 'unknown';
 
@@ -240,6 +247,19 @@ const PASSWORD_GAVE_UP = /incorrect password attempts/i;
 const XCODE_LICENSE = /not agreed to the xcode license/i;
 const DISK_FULL =
   /\bENOSPC\b|no space left on device|not enough (free )?(disk )?space|disk (is )?full/i;
+/**
+ * A sign-in the person didn't finish: the browser page closed, cancelled or
+ * timed out. `claude auth login` says "Login interrupted." straight after its
+ * open code prompt; Codex says "Login was not completed".
+ */
+const SIGN_IN_UNFINISHED =
+  /login (was )?(interrupted|cancell?ed|not completed|timed out)|access_denied|authori[sz]ation (was )?denied/i;
+/**
+ * Prompts a CLI leaves open with no line break while it waits. Whatever it
+ * prints next lands on the same line, so they are cut before the last line
+ * is shown as the cause ("Paste code here if prompted > Login interrupted.").
+ */
+const OPEN_PROMPTS = /Paste code here if prompted\s*>\s*/g;
 const NO_HOMEBREW = /homebrew is needed|brew: (command )?not found|failed to run brew/i;
 const BAD_PASSWORD = /sorry, try again|incorrect password attempts/i;
 const NO_PERMISSION =
@@ -262,7 +282,7 @@ export function describeFailure(
   output: string,
   opts: { exitedClean?: boolean } = {}
 ): InstallFailure {
-  const text = stripAnsi(output);
+  const text = stripAnsi(output).replace(OPEN_PROMPTS, '\n');
   const auth = isAuthItem(itemId);
   const name = plainName(itemId);
 
@@ -337,6 +357,15 @@ export function describeFailure(
     if (already) {
       return { kind: 'signed_in', line: alreadySignedInMessage(itemId, already.identity) };
     }
+  }
+  if (auth && SIGN_IN_UNFINISHED.test(text)) {
+    return {
+      kind: 'signin',
+      line: 'The sign-in page was closed before it finished.',
+      fix: PLANS[itemId.replace(/_auth$/, '')]
+        ? `Press Try again and finish signing in on the page that opens, with the account that has your ${PLANS[itemId.replace(/_auth$/, '')]} plan.`
+        : 'Press Try again and finish signing in on the page that opens.',
+    };
   }
   if (opts.exitedClean) {
     return {

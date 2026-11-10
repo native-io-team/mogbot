@@ -159,6 +159,25 @@ describe('describeFailure', () => {
     });
   });
 
+  it('a sign-in closed in the browser says so, never the CLI’s open prompt', () => {
+    const claude = describeFailure('claude_auth', played('claude_auth', 'signin'));
+    expect(claude.kind).toBe('signin');
+    expect(claude.line).toBe('The sign-in page was closed before it finished.');
+    expect(claude.line).not.toMatch(/Paste code/);
+    expect(claude.fix).toMatch(/Claude Pro or Max/);
+    const codex = describeFailure('codex_auth', played('codex_auth', 'signin'));
+    expect(codex.kind).toBe('signin');
+    expect(codex.fix).toMatch(/ChatGPT Plus or Pro/);
+  });
+
+  it('an unknown sign-in failure never shows the open code prompt', () => {
+    const f = describeFailure(
+      'claude_auth',
+      'Paste code here if prompted > OAuth error: bad state'
+    );
+    expect(f.line).toBe('OAuth error: bad state');
+  });
+
   it('a sign-in the CLI insists is done names who it is signed in as', () => {
     expect(describeFailure('claude_auth', 'Logged in as sam@example.com').kind).toBe('signed_in');
   });
