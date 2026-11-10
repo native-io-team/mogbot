@@ -68,7 +68,8 @@ export interface PanelMeta {
  * responsible for scrolling inside these limits.
  */
 export const PANEL_META: Record<PanelId, PanelMeta> = {
-  agent: { label: 'Agent', minWidth: 260, maxWidth: 900, defaultWidth: 420, minHeight: 180 },
+  // "Session": what the sidebar calls these. "Agent" is a teammate from Agents.
+  agent: { label: 'Session', minWidth: 260, maxWidth: 900, defaultWidth: 420, minHeight: 180 },
   navigator: {
     label: 'Elements',
     minWidth: 180,

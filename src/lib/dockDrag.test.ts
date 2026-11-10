@@ -211,7 +211,7 @@ describe('describeDrop', () => {
         },
         labelOf
       )
-    ).toBe('Above Agent · same column');
+    ).toBe('Above Session · same column');
     expect(
       describeDrop(
         {
@@ -227,6 +227,6 @@ describe('describeDrop', () => {
         },
         labelOf
       )
-    ).toBe('Below Agent · same column');
+    ).toBe('Below Session · same column');
   });
 });

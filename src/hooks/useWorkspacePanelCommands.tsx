@@ -32,10 +32,10 @@ export function useWorkspacePanelCommands({
     () => [
       {
         id: 'workspace.toggleAgentPanel',
-        title: isAgentPanelHidden ? 'Show Agent panel' : 'Hide Agent panel',
+        title: isAgentPanelHidden ? 'Show Session panel' : 'Hide Session panel',
         category: 'action',
         when: 'project',
-        keywords: ['terminal', 'pane', 'sidebar'],
+        keywords: ['agent', 'terminal', 'claude', 'codex', 'pane', 'sidebar'],
         run: toggleAgentPanel,
       },
       {
