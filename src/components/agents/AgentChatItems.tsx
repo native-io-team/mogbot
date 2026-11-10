@@ -1182,9 +1182,17 @@ const ApprovalCardBody = memo(function ApprovalCard({
     >
       <AgentCard
         className="agent-approval"
-        data={{ status: approval.status, clamped: (long && !showAll) || undefined }}
+        data={{
+          status: approval.status,
+          clamped: (long && !showAll) || undefined,
+          risk: approval.risk,
+        }}
+        // The Mac marked Allow risky (Bold's floor): told apart by the icon as well as hue.
+        tone={approval.risk === 'high' ? 'warning' : undefined}
         icon={
-          front ? (
+          approval.risk === 'high' ? (
+            <WarningIcon size={14} />
+          ) : front ? (
             <GlobeIcon size={14} />
           ) : handoff ? (
             <DownloadIcon size={14} />

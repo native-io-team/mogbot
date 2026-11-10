@@ -319,6 +319,8 @@ pub fn card_for(source: &str, before: Option<(&str, usize)>, parts: &[String]) -
         source: source.to_string(),
         parts: total,
     });
+    // Save to memory keeps text; nothing leaves this Mac.
+    approval.risk = Some(store::Risk::Low);
     approval
 }
 

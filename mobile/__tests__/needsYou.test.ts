@@ -6,7 +6,14 @@
 
 import type { Agent, AgentMessage, Approval } from '@shipstudio/companion-protocol';
 import { GATE_ALLOW, GATE_DENY } from '@shipstudio/companion-protocol';
-import { feedItems, fitsWhole, keepCard, rowAction } from '../src/lib/needsYou';
+import {
+  answersInPlace,
+  feedItems,
+  fitsWhole,
+  highRisk,
+  keepCard,
+  rowAction,
+} from '../src/lib/needsYou';
 import { agent, msg } from './helpers';
 
 const a = (id: string, over: Partial<Agent> = {}) =>
@@ -143,6 +150,30 @@ describe('answering a row', () => {
     const m = ask('a', 'x', 1);
     expect(row(m)).toEqual({ kind: 'answer', allow: 'Allow', deny: 'Deny' });
     expect(fitsWhole(m)).toBe(true);
+  });
+
+  it('answers in place only what the Mac marked low-risk', () => {
+    expect(answersInPlace(ask('a', 'x', 1, { risk: 'low' }))).toBe(true);
+    // Risky: deleting for good, pushing, money, credentials, sudo, sending.
+    const del = ask('d', 'x', 1, {
+      title: 'Delete files',
+      detail: 'rm -r ~/Exports/2024',
+      risk: 'high',
+    });
+    expect(fitsWhole(del)).toBe(true);
+    expect(answersInPlace(del)).toBe(false);
+    expect(highRisk(del.approval)).toBe(true);
+    // Unclassified (an older Mac, a card from before it did): opens in full, no danger mark.
+    const old = ask('o', 'x', 1);
+    expect(answersInPlace(old)).toBe(false);
+    expect(highRisk(old.approval)).toBe(false);
+    // Low but too long: still opens in full.
+    const long = ask('l', 'x', 1, {
+      risk: 'low',
+      detail: Array.from({ length: 12 }, (_, i) => `line ${i}`).join('\n'),
+    });
+    expect(answersInPlace(long)).toBe(false);
+    expect(answersInPlace(undefined)).toBe(false);
   });
 
   it('uses a card’s own words', () => {

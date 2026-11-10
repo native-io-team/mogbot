@@ -26,7 +26,14 @@ const card = (over: Partial<Approval> = {}, status: Approval['status'] = 'pendin
     agentId: 'site',
     kind: 'approval',
     text: '',
-    approval: { requestId: 'r1', title: 'Run a command', detail: 'pnpm build', status, ...over },
+    approval: {
+      requestId: 'r1',
+      title: 'Run a command',
+      detail: 'pnpm build',
+      status,
+      risk: 'low',
+      ...over,
+    },
   });
 
 const approvalAlert: Alert = {
@@ -87,6 +94,14 @@ describe('an approval', () => {
       (c) => (c[0] as { categoryIdentifier: string }).categoryIdentifier
     );
     expect(cats).toEqual([CATEGORY.review, CATEGORY.gate]);
+  });
+
+  it('a card the Mac marked risky is posted with Review only, never Allow', async () => {
+    const { deps, live } = setup();
+    live.heard(card({ title: 'Delete files', detail: 'rm -r ~/Exports/2024', risk: 'high' }));
+    await live.alert(approvalAlert);
+    const notice = deps.postNotice.mock.calls[0][0] as { categoryIdentifier: string };
+    expect(notice.categoryIdentifier).toBe(CATEGORY.review);
   });
 
   it('an answered card is never posted late', async () => {

@@ -4860,6 +4860,7 @@ export const frames = [
             "total": 2
           },
           "requestId": "q15",
+          "risk": "low",
           "status": "pending",
           "summary": "“Draft the weekly report from this week's notes” · step 1 of 2 is done. Next, step 2: Post it to #team on Slack",
           "title": "OK to go on?"

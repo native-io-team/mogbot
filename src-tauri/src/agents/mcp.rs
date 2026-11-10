@@ -2492,7 +2492,9 @@ pub(super) async fn ask_user(
 }
 
 /// `ask_user` for a card whose detail is raw (a push): it leads with `summary`
-/// and keeps the detail behind Details. Never tied to a tool call.
+/// and keeps the detail behind Details. Never tied to a tool call. Its
+/// callers act as the user off this Mac (publishing a branch, opening a pull
+/// request) or run a project's own scripts, so the card is `Risk::High`.
 pub(super) async fn ask_user_with_summary(
     app: &AppHandle,
     caller: &store::Agent,
@@ -2560,9 +2562,11 @@ async fn ask_inner(
     let mut card = runner::new_message(&caller.id, MessageKind::Approval, "");
     let mut approval = new_card(request_id.clone(), title, detail, call);
     // `new_card` gave a tool call its plain line; a caller's own wins.
-    if summary.is_some() {
+    let raw = summary.is_some();
+    if raw {
         approval.summary = summary;
     }
+    approval.risk = risk_of(caller, call, plan.is_some() || raw);
     approval.plan = plan;
     if call.is_some() {
         approval.from_outside =
@@ -2654,6 +2658,44 @@ pub(super) fn refused_reply(answer: &Answer, what: &str) -> Option<String> {
     }
 }
 
+/// How risky a card's Allow is (`Approval::risk`), from the same classifier
+/// the levels use: a tool call is `High` when it is on Bold's floor
+/// (`go_hard::floor`: deleting outside the work folders, pushing, publishing,
+/// deploys, sending, money, credentials, `sudo`, system files, any action in
+/// the user's browser), else `Low`. A plan (`ask_plan`: things done under the
+/// user's name) and a raw-detail card (`ask_user_with_summary`: a push, a
+/// pull request, a project's own scripts) are `High`. Anything else is left
+/// unclassified, which the phone opens in full rather than answer in place.
+pub(crate) fn risk_of(
+    caller: &store::Agent,
+    call: Option<(&str, &Value)>,
+    acts_as_user: bool,
+) -> Option<store::Risk> {
+    let ctx = call.and_then(|_| super::autoallow::Ctx::for_agent(caller));
+    risk_for(ctx.as_ref(), call, acts_as_user)
+}
+
+/// `risk_of` with the turn's context given. No context for a call (the
+/// agent's home can't be laid out) is `High`: unread is never low.
+pub(crate) fn risk_for(
+    ctx: Option<&super::autoallow::Ctx>,
+    call: Option<(&str, &Value)>,
+    acts_as_user: bool,
+) -> Option<store::Risk> {
+    if acts_as_user {
+        return Some(store::Risk::High);
+    }
+    let (tool, input) = call?;
+    let Some(ctx) = ctx else {
+        return Some(store::Risk::High);
+    };
+    Some(if super::go_hard::floor(tool, input, ctx) {
+        store::Risk::High
+    } else {
+        store::Risk::Low
+    })
+}
+
 /// The card for a request. Only a Claude Code tool call can be always
 /// allowed: Ship Studio's own confirmations (delete an agent) never offer it.
 pub(crate) fn new_card(
@@ -2691,6 +2733,7 @@ pub(crate) fn new_card(
         crossover: None,
         account_switch: None,
         slack_reply: None,
+        risk: None,
     }
 }
 
@@ -3952,6 +3995,83 @@ mod tests {
 
     fn no_browser(_: &str, _: &Value, _: bool) -> bool {
         false
+    }
+
+    #[test]
+    fn risk_is_high_for_the_floor_and_low_for_local_work() {
+        use store::Risk::{High, Low};
+        let home = "/Users/fictional";
+        let app = format!("{home}/Library/Application Support/FictionalApp");
+        let own = format!("{app}/agents/a1");
+        let ctx = super::super::autoallow::Ctx {
+            home: home.into(),
+            own_home: own.clone().into(),
+            cwd: format!("{home}/ShipStudio/site").into(),
+            scratch: vec![own.into(), format!("{home}/ShipStudio/site").into()],
+            app_data: vec![app.into()],
+            ..Default::default()
+        };
+        let risk = |tool: &str, input: Value| risk_for(Some(&ctx), Some((tool, &input)), false);
+        let bash = |c: &str| risk("Bash", json!({ "command": c }));
+        // Deleting for good outside the work folders, pushing, sudo, sending.
+        assert_eq!(bash("rm -r ~/Exports/2024"), Some(High));
+        assert_eq!(bash("git push --force origin main"), Some(High));
+        assert_eq!(bash("git push origin feature"), Some(High));
+        assert_eq!(bash("sudo pmset disablesleep 1"), Some(High));
+        assert_eq!(bash("npm publish"), Some(High));
+        assert_eq!(bash("vercel --prod"), Some(High));
+        // Credentials and system persistence.
+        assert_eq!(
+            risk("Write", json!({ "file_path": "~/.ssh/config" })),
+            Some(High)
+        );
+        assert_eq!(
+            risk("Write", json!({ "file_path": "~/.zshrc" })),
+            Some(High)
+        );
+        assert_eq!(
+            risk(
+                "Write",
+                json!({ "file_path": "~/Library/LaunchAgents/x.plist" })
+            ),
+            Some(High)
+        );
+        // Sending as the user, money, and the user's own browser.
+        assert_eq!(
+            risk("mcp__gmail__send_email", json!({ "to": "x" })),
+            Some(High)
+        );
+        assert_eq!(risk("mcp__stripe__create_payout", json!({})), Some(High));
+        assert_eq!(
+            risk(
+                "mcp__claude-in-chrome__computer",
+                json!({ "action": "left_click" })
+            ),
+            Some(High)
+        );
+        // A harmless edit, a test run, a read.
+        assert_eq!(
+            risk("Edit", json!({ "file_path": "src/index.ts" })),
+            Some(Low)
+        );
+        assert_eq!(bash("npm test"), Some(Low));
+        assert_eq!(bash("rm -r node_modules"), Some(Low));
+        // A plan or a push card acts as the user; no call and no word: unclassified.
+        assert_eq!(risk_for(Some(&ctx), None, true), Some(High));
+        assert_eq!(risk_for(None, None, false), None);
+        // A call with no context is never low.
+        let input = json!({ "command": "npm test" });
+        assert_eq!(risk_for(None, Some(("Bash", &input)), false), Some(High));
+    }
+
+    #[test]
+    fn risk_travels_to_the_phone_as_a_word() {
+        let mut card = new_card("r".into(), "t".into(), "d".into(), None);
+        assert!(serde_json::to_value(&card).unwrap().get("risk").is_none());
+        card.risk = Some(store::Risk::High);
+        assert_eq!(serde_json::to_value(&card).unwrap()["risk"], "high");
+        card.risk = Some(store::Risk::Low);
+        assert_eq!(serde_json::to_value(&card).unwrap()["risk"], "low");
     }
 
     #[test]

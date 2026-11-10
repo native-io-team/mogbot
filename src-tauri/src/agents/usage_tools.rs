@@ -518,6 +518,7 @@ pub fn switch_card(engine: Engine, id: &str, name: &str) -> store::Approval {
         id: id.to_string(),
         name: name.to_string(),
     });
+    card.risk = Some(store::Risk::Low);
     card
 }
 

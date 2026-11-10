@@ -27,6 +27,7 @@ import { askAction, askState, type CatchItem } from '../lib/catchUp';
 import { haptic } from '../lib/haptics';
 import { useInFlight } from '../lib/once';
 import { answerApproval, describeError, loadLatest, setOpenChat } from '../lib/session';
+import { highRisk } from '../lib/needsYou';
 import { useApp } from '../lib/store';
 import { avatarSize, iconSize, space } from '../lib/theme';
 
@@ -240,7 +241,8 @@ function Shown({
             />
             <Button
               title={action.allow}
-              variant="answer"
+              // Risky, as the Mac said it: Allow in the danger style.
+              variant={highRisk(approval) ? 'danger' : 'answer'}
               size="large"
               busy={busy === 'allow'}
               disabled={!!busy || !connected}

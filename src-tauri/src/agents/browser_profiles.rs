@@ -612,6 +612,8 @@ pub async fn bring_to_front(
         crossover: None,
         account_switch: None,
         slack_reply: None,
+        // Check again only looks again.
+        risk: Some(store::Risk::Low),
     });
     super::runner::record_own(app, card).map_err(|e| e.to_string())?;
     store::refresh_pending(&agent.id);

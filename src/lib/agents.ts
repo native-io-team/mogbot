@@ -608,6 +608,11 @@ export interface Approval {
   /** "Reply in Slack?": the exact words and where; Allow posts them as you (`lib/slack`). Nothing waits on it. */
   slackReply?: { channel: string; threadTs: string; place: string; text: string };
   /**
+   * How risky Allow is, decided on the Mac (`mcp::risk_of`, Bold's floor):
+   * `high` is shown with the warning icon. Absent: unclassified.
+   */
+  risk?: 'low' | 'high';
+  /**
    * "Bring your work Chrome window to the front so I can use it": answered
    * with Check again (allow) or Not now, never a login.
    */

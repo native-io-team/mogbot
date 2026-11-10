@@ -19,6 +19,26 @@ const approvalMessage: AgentMessage = {
 };
 
 describe('ApprovalCard', () => {
+  it('a request the Mac marked risky wears the warning icon; others don’t', () => {
+    const risky: AgentMessage = {
+      ...approvalMessage,
+      approval: { ...approvalMessage.approval!, detail: 'rm -r ~/Exports/2024', risk: 'high' },
+    };
+    const { container, unmount } = render(
+      <ApprovalCard message={risky} agentName="Acme" paused={false} onAnswer={vi.fn()} />
+    );
+    expect(container.querySelector('.agent-card__icon[data-tone="warning"]')).not.toBeNull();
+    unmount();
+    const low: AgentMessage = {
+      ...approvalMessage,
+      approval: { ...approvalMessage.approval!, risk: 'low' },
+    };
+    const again = render(
+      <ApprovalCard message={low} agentName="Acme" paused={false} onAnswer={vi.fn()} />
+    );
+    expect(again.container.querySelector('.agent-card__icon[data-tone="warning"]')).toBeNull();
+  });
+
   it('Deny is one click', async () => {
     const onAnswer = vi.fn().mockResolvedValue(undefined);
     render(

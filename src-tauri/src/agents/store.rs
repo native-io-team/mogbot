@@ -633,6 +633,23 @@ pub struct Approval {
     /// Older clients show a plain Allow / Deny over the same summary.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub slack_reply: Option<super::slack::ReplyCard>,
+    /// How risky Allow is, decided here from the classifiers the levels use
+    /// (`mcp::risk_of`: `go_hard::floor` for a tool call). Only `Low` may be
+    /// answered in place on the phone's list or from a Lock Screen
+    /// notification; `High` (deleting outside the work folders, pushing,
+    /// publishing, sending, money, credentials, `sudo`, system files) opens
+    /// in full and is marked as dangerous, and absent (unclassified, or a
+    /// card from before this was recorded) opens in full too.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub risk: Option<Risk>,
+}
+
+/// `Approval::risk`.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum Risk {
+    Low,
+    High,
 }
 
 /// Where a message came in from, when not this app (`AgentMessage::via`).
@@ -2827,6 +2844,7 @@ mod tests {
                         crossover: None,
                         account_switch: None,
                         slack_reply: None,
+                        risk: None,
                     });
                 }
                 append_message(&line).unwrap();
@@ -3042,6 +3060,7 @@ mod tests {
                     crossover: None,
                     account_switch: None,
                     slack_reply: None,
+                    risk: None,
                 }),
                 attachments: Vec::new(),
                 check_in: None,
@@ -3172,6 +3191,7 @@ mod tests {
                 crossover: None,
                 account_switch: None,
                 slack_reply: None,
+                risk: None,
             });
             append_message(&card).unwrap();
             let raw = std::fs::read(log_path(&a.id).unwrap()).unwrap();

@@ -710,6 +710,7 @@ mod tests {
             crossover: None,
             account_switch: None,
             slack_reply: None,
+            risk: None,
         });
         store::append_message(&card).unwrap();
         (request_id, request)

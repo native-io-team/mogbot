@@ -208,6 +208,7 @@ fn the_thread_reads_back_with_each_members_card_answers() {
             crossover: None,
             account_switch: None,
             slack_reply: None,
+            risk: None,
             summary: None,
         });
         // The member's own log has the card, the room a copy.

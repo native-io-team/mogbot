@@ -1,11 +1,12 @@
 /**
  * Needs you: every card waiting on you, across every agent, in one list
- * (`lib/needsYou.ts`). The phone's one place for it; Home's bar, a pushed
- * "needs you" and the tab's count all lead here.
+ * (`lib/needsYou.ts`). The phone's one place for it; a pushed "needs you"
+ * and the tab's count (these rows, counted) lead here.
  *
- * Each row is the agent, what it asks and when. A short plain request is
- * answered right on its row (Deny · Allow, inert for a beat as on every
- * card); anything longer opens in full first (Review), and a key, a login,
+ * Each row is the agent, what it asks and when. A short plain request the
+ * Mac marked low-risk is answered right on its row (Deny · Allow, inert for
+ * a beat as on every card); anything risky (marked with the danger icon),
+ * unclassified or longer opens in full first (Review), and a key, a login,
  * a question, changes to keep or a turn that didn't finish opens where it
  * is answered. Answered cards leave the list by themselves, here or at the
  * desk. "One at a time" goes through them full screen (Catch up).
@@ -26,8 +27,15 @@ import { AgentAccent } from '../../../lib/accent';
 import { askingLine, failedTurn, failureLine, engineName, formatAgo } from '../../../lib/agents';
 import { makeStyles, useColors } from '../../../lib/appearance';
 import { haptic } from '../../../lib/haptics';
+import { SETUP_TITLE } from '../../../lib/home';
 import { largeTitle } from '../../../lib/navigation';
-import { feedItems, fitsWhole, rowAction, type FeedItem } from '../../../lib/needsYou';
+import {
+  answersInPlace,
+  feedItems,
+  highRisk,
+  rowAction,
+  type FeedItem,
+} from '../../../lib/needsYou';
 import { useInFlight } from '../../../lib/once';
 import { useRefresh } from '../../../lib/refresh';
 import { answerApproval, canCall, describeError, loadLatest } from '../../../lib/session';
@@ -197,7 +205,7 @@ function rowWords(
       return ['Keep these changes?', c ? `${files} in ${c.project}` : files];
     }
     case 'setup':
-      return ['Finish setting up your team', setupLine ?? `In ${agent.name}’s chat`];
+      return [SETUP_TITLE, setupLine ?? `In ${agent.name}’s chat`];
     case 'stuck': {
       const failure = failedTurn(agent);
       return failure
@@ -220,8 +228,10 @@ function Row({ item, agent }: { item: FeedItem; agent: Agent }) {
   const setup = useApp((s) => s.teamSetup);
   const connected = useApp((s) => s.link.kind === 'connected');
   const action = rowAction(item, card);
-  // Answered on the row only when the whole of it is on the row.
-  const inline = item.kind === 'ask' && action.kind === 'answer' && fitsWhole(card);
+  // Answered on the row only when the Mac called it low-risk and the whole
+  // of it is on the row.
+  const inline = item.kind === 'ask' && action.kind === 'answer' && answersInPlace(card);
+  const risky = item.kind === 'ask' && highRisk(card?.approval);
   const armed = useArmed(inline, item.key);
   const once = useInFlight();
   const [busy, setBusy] = useState<null | 'allow' | 'deny'>(null);
@@ -269,7 +279,7 @@ function Row({ item, agent }: { item: FeedItem; agent: Agent }) {
         onPress={open}
         android_ripple={ripple}
         accessibilityRole="button"
-        accessibilityLabel={`${agent.name}. ${title}. ${line}`}
+        accessibilityLabel={`${agent.name}. ${risky ? 'Risky. ' : ''}${title}. ${line}`}
         accessibilityHint={item.kind === 'ask' ? 'Opens the whole request' : undefined}
         style={({ pressed }) => [styles.rowMain, pressed && PRESSED]}
       >
@@ -291,9 +301,20 @@ function Row({ item, agent }: { item: FeedItem; agent: Agent }) {
               </T>
             )}
           </View>
-          <T color={colors.textStrong} numberOfLines={2}>
-            {title}
-          </T>
+          <View style={styles.rowTitle}>
+            {risky && (
+              <View style={styles.danger} testID="needs-risky">
+                <Icon
+                  name="exclamationmark.triangle"
+                  size={iconSize.body}
+                  color={colors.accentWarning}
+                />
+              </View>
+            )}
+            <T color={colors.textStrong} numberOfLines={2} style={styles.grow}>
+              {title}
+            </T>
+          </View>
           {!!line && (
             <T variant="small" color={colors.textSecondary} numberOfLines={inline ? 4 : 2}>
               {line}
@@ -363,6 +384,8 @@ const useStyles = makeStyles((colors) => ({
   rowText: { flex: 1, gap: space['2xs'] },
   rowHead: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   grow: { flex: 1 },
+  rowTitle: { flexDirection: 'row', alignItems: 'flex-start', gap: space.xs },
+  danger: { paddingTop: space['2xs'] },
   answers: { flexDirection: 'row', gap: space.sm },
   answer: { flex: 1 },
   empty: { alignItems: 'center', gap: space.md, paddingTop: space['2xl'] * 2 },

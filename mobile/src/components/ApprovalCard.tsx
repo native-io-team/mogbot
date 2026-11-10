@@ -20,6 +20,7 @@ import {
   stepInSource,
 } from '@shipstudio/companion-protocol';
 import { STEP_IN_AT_MAC, STEP_IN_ON_YOUR_MAC } from '../lib/agents';
+import { highRisk } from '../lib/needsYou';
 import {
   Children,
   createContext,
@@ -288,6 +289,9 @@ export function ApprovalCard({
   const gate = approval.gate;
   // "Carry on with Codex until then?": Wait, Just this time, Always; nothing behind ⋯.
   const crossover = approval.crossover;
+  // The Mac marked Allow risky (deleting for good, pushing, sending, money,
+  // credentials…): the danger icon, and Allow in the danger style.
+  const risky = highRisk(approval);
   const [denyWord, allowWord] = approval.front
     ? ['Not now', 'Check again']
     : stepIn
@@ -387,7 +391,7 @@ export function ApprovalCard({
       {!stepIn && !crossover && (
         <Button
           title={allowWord}
-          variant="answer"
+          variant={risky ? 'danger' : 'answer'}
           busy={busy === 'allow'}
           disabled={off}
           focusable={armed}
@@ -401,18 +405,21 @@ export function ApprovalCard({
 
   return (
     <Card
+      tone={risky ? 'warning' : undefined}
       icon={
-        stepIn
-          ? 'globe'
-          : crossover
-            ? 'arrow.left.arrow.right'
-            : consent
-              ? 'square.and.arrow.down'
-              : approval.settings
-                ? 'slider.horizontal.3'
-                : gate
-                  ? 'arrow.trianglehead.2.clockwise'
-                  : 'checkmark.shield'
+        risky
+          ? 'exclamationmark.triangle'
+          : stepIn
+            ? 'globe'
+            : crossover
+              ? 'arrow.left.arrow.right'
+              : consent
+                ? 'square.and.arrow.down'
+                : approval.settings
+                  ? 'slider.horizontal.3'
+                  : gate
+                    ? 'arrow.trianglehead.2.clockwise'
+                    : 'checkmark.shield'
       }
       title={approval.title}
       // Whose and where, as its sibling import card says it.

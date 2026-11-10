@@ -201,6 +201,7 @@ export function addProbeAccount(
           requestId: 'req_stale',
           title: 'Run a command',
           detail: 'pnpm run deploy --prod',
+          risk: 'high',
           summary: 'Run the project’s “deploy” script — to ship the fix to production',
           status: 'pending',
           tool: 'Bash',
@@ -261,6 +262,7 @@ export function addProbeAccount(
           requestId: 'req_doomed',
           title: 'Delete files',
           detail: 'rm -r ~/Exports/2024',
+          risk: 'high',
           status: 'pending',
           tool: 'Bash',
         },
@@ -395,6 +397,7 @@ export function addProbeAccount(
           title: 'Reply in Slack?',
           summary: `In #launch, in the thread it was asked in. Goes out under your name, exactly:\n“${SLACK_REPLY}”`,
           detail: SLACK_REPLY,
+          risk: 'high',
           status: 'pending',
           slackReply: {
             channel: 'C0LAUNCH',

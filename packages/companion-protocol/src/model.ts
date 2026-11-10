@@ -729,6 +729,15 @@ export interface Approval {
    */
   slackReply?: { channel: string; threadTs: string; place: string; text: string };
   /**
+   * How risky Allow is, decided on the Mac from the classifiers the levels
+   * use (`mcp::risk_of`: Bold's floor for a tool call). Only `low` is
+   * answered in place (the Needs you list, a Lock Screen notification);
+   * `high` opens in full with the danger icon, and absent (unclassified, an
+   * older Mac, a card from before it was recorded) opens in full too. The
+   * phone never works risk out from a command's text.
+   */
+  risk?: 'low' | 'high';
+  /**
    * "Bring your work Chrome window to the front so I can use it": Allow means
    * Check again, Deny means Not now. Never a login.
    */

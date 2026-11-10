@@ -1,5 +1,5 @@
 /**
- * Catch up, from Home's "N agents need your OK" bar: everything waiting on
+ * Catch up, from Needs you's "One at a time": everything waiting on
  * you, one card at a time (lib/catchUp.ts). Each card is the agent, what it
  * said, and what it's asking; under the thumb, Allow · Deny for a request
  * (its own one action for a login, a key, a question), Chat to open it in
@@ -59,9 +59,10 @@ import {
 } from '../lib/catchUp';
 import { GalleryContext, chatGallery } from '../lib/gallery';
 import { haptic } from '../lib/haptics';
-import { barWords } from '../lib/home';
+import { SETUP_TITLE } from '../lib/home';
 import { useInFlight } from '../lib/once';
 import { answerApproval, canCall, describeError, loadLatest, setOpenChat } from '../lib/session';
+import { highRisk } from '../lib/needsYou';
 import { useApp } from '../lib/store';
 import { progress as setupProgress } from '../lib/teamSetup';
 import { avatarSize, iconSize, lineHeight, radius, READ_LINE, space, type } from '../lib/theme';
@@ -362,7 +363,7 @@ function Shown({
           )}
           {status && <Line text={status} />}
           {item.kind === 'setup' && (
-            <Card icon="list.bullet" title={barWords({ kind: 'setup' }, agent.name)[0]}>
+            <Card icon="list.bullet" title={SETUP_TITLE}>
               <T variant="small" color={colors.textSecondary}>
                 {`${setup ? `${setupProgress(setup)} · ` : ''}in ${agent.name}’s chat`}
               </T>
@@ -376,6 +377,8 @@ function Shown({
                 agent={agent}
                 onError={setError}
                 answers={false}
+                // A risky request is read in full before it's allowed.
+                full={highRisk(card.approval)}
               />
             ) : (
               <Card icon={askIcon(card.approval)} title={card.approval.title}>
@@ -431,7 +434,8 @@ function Shown({
             />
             <Button
               title={action.allow}
-              variant="answer"
+              // Risky, as the Mac said it: Allow in the danger style.
+              variant={highRisk(card?.approval) ? 'danger' : 'answer'}
               size="large"
               busy={busy === 'allow'}
               disabled={!!busy || !connected}
@@ -464,11 +468,7 @@ function Shown({
 
 /** The icon its own card in the chat wears (a login's is the lock, as a key's). */
 const askIcon = (a: Approval) =>
-  a.login || a.secret
-    ? 'lock.fill'
-    : a.connector
-        ? 'square.and.arrow.down'
-        : 'checkmark.shield';
+  a.login || a.secret ? 'lock.fill' : a.connector ? 'square.and.arrow.down' : 'checkmark.shield';
 
 function AllCaughtUp({ onBack }: { onBack: () => void }) {
   const styles = useStyles();

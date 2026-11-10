@@ -2,11 +2,14 @@
  * Answering from the Lock Screen: Allow / Deny on an approval's
  * notification, without opening the app.
  *
- * - **What gets buttons.** A card whose whole content fits in the
- *   notification (`fitsWhole`) and that has a plain pair of answers. Anything
- *   longer, and every key, login, session question, step-in or three-way
- *   card, gets **Review** instead, which opens it in full. Nobody allows what
- *   they couldn't read.
+ * - **What gets buttons.** A card the Mac marked low-risk whose whole
+ *   content fits in the notification (`answersInPlace`) and that has a plain
+ *   pair of answers. Anything risky (deleting for good, money, credentials,
+ *   pushing, publishing, sending: `approval.risk`, decided on the Mac) or
+ *   unclassified, anything longer, and every key, login, session question,
+ *   step-in or three-way card, gets **Review** instead, which opens it in
+ *   full. Nobody allows what they couldn't read, or something risky from a
+ *   Lock Screen.
  * - **Allow needs the phone unlocked.** Every card that reaches you is above
  *   your independence level (the rest were answered for you), so Allow is
  *   always `isAuthenticationRequired` on iOS; on Android, where an action
@@ -33,7 +36,7 @@ import { GATE_ALLOW, GATE_DENY } from '@shipstudio/companion-protocol';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 import { askingLine } from './agents';
-import { fitsWhole } from './needsYou';
+import { answersInPlace } from './needsYou';
 import type { Target } from './notify';
 
 /** Action ids, as the response hands them back. */
@@ -224,7 +227,7 @@ export function approvalNotice(
     };
   }
   const whole = redact(wholeText(a));
-  const actionable = !opensOnly(a) && fitsWhole(message) && !whole.masked;
+  const actionable = !opensOnly(a) && answersInPlace(message) && !whole.masked;
   if (actionable) {
     return {
       ...base,

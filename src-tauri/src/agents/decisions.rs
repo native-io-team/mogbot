@@ -307,6 +307,7 @@ pub(crate) fn card(
         crossover: None,
         account_switch: None,
         slack_reply: None,
+        risk: None,
     }
 }
 

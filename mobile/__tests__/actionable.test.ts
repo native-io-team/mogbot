@@ -26,7 +26,14 @@ const card = (over: Partial<Approval> = {}, status: Approval['status'] = 'pendin
     agentId: 'site',
     kind: 'approval',
     text: '',
-    approval: { requestId: 'r1', title: 'Run a command', detail: 'pnpm build', status, ...over },
+    approval: {
+      requestId: 'r1',
+      title: 'Run a command',
+      detail: 'pnpm build',
+      status,
+      risk: 'low',
+      ...over,
+    },
   });
 
 describe('categories', () => {
@@ -83,6 +90,39 @@ describe('approvalNotice', () => {
     );
     expect(approvalNotice(who, card({ handoff: {} as never }))?.categoryIdentifier).toBe(
       CATEGORY.handoff
+    );
+  });
+
+  // The Mac decides risk (`mcp::risk_of`, Bold's floor); the phone only reads it.
+  it.each([
+    ['deleting for good', 'Delete files', 'rm -r ~/Exports/2024'],
+    ['a force push', 'Run a command', 'git push --force origin main'],
+    ['a push', 'Publish acme-site', 'Push feature to origin'],
+    ['money', 'Create payout', 'Stripe payout $400'],
+    ['credentials', 'Edit ~/.ssh/config', 'Host *'],
+    ['sudo', 'Run a command', 'sudo pmset disablesleep 1'],
+    ['system persistence', 'Write a file', '~/Library/LaunchAgents/x.plist'],
+    ['sending as you', 'Reply in Slack?', 'On it, shipping today'],
+  ])('%s, marked risky on the Mac, never gets Allow on the Lock Screen', (_, title, detail) => {
+    const n = approvalNotice(who, card({ title, detail, risk: 'high' }));
+    expect(n?.categoryIdentifier).toBe(CATEGORY.review);
+  });
+
+  it('a card the Mac didn’t classify (an older Mac) only offers Review', () => {
+    expect(approvalNotice(who, card({ risk: undefined }))?.categoryIdentifier).toBe(
+      CATEGORY.review
+    );
+    // Not even a plain gate or handoff: Allow from a Lock Screen needs the Mac's word.
+    expect(
+      approvalNotice(who, card({ risk: undefined, gate: { routine: 'R' } as never }))
+        ?.categoryIdentifier
+    ).toBe(CATEGORY.review);
+  });
+
+  it('never reads risk from the words: a low card that says rm -r is the Mac’s call', () => {
+    // The phone doesn't second-guess: risk is the Mac's, worked out from the call itself.
+    expect(approvalNotice(who, card({ detail: 'rm -r node_modules' }))?.categoryIdentifier).toBe(
+      CATEGORY.answer
     );
   });
 

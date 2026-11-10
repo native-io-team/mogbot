@@ -985,6 +985,8 @@ pub fn reply_card(r: &ReplyCard) -> store::Approval {
         r.place
     ));
     card.slack_reply = Some(r.clone());
+    // Allow posts as the user.
+    card.risk = Some(store::Risk::High);
     card
 }
 

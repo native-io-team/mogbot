@@ -246,6 +246,8 @@ pub fn card(c: &CheckIn, done: usize, produced: &str, run_at: i64) -> Approval {
         next: next_text,
         run_at,
     });
+    // Go ahead runs the routine's next step, which asks for itself.
+    approval.risk = Some(store::Risk::Low);
     approval
 }
 

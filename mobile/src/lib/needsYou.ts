@@ -1,12 +1,15 @@
 /**
  * The "Needs you" feed: every card waiting on you, across every agent, in
- * one list. The phone's one place for it (its own tab, with the count);
- * Home's bar and a tapped alert lead here.
+ * one list. The phone's one place for it (its own tab, whose badge counts
+ * these rows, so the number matches the list); a tapped alert leads here.
+ * Agents' rows only label theirs (docs/agents.md, "Needs you: one place per
+ * surface").
  *
  * An item is one of:
  * - **ask**: a card still waiting that this phone can answer: an approval,
- *   a plan, "OK to go on?", a key, a login, a session's question. A plain
- *   one is answered on its row (Deny · Allow); the rest open.
+ *   a plan, "OK to go on?", a key, a login, a session's question. A short
+ *   plain one the Mac marked low-risk is answered on its row (Deny · Allow,
+ *   `answersInPlace`); the rest open in full first.
  * - **keep**: a task copy with changes, waiting on Keep or Discard.
  * - **stuck**: an agent that needs you with no card this phone has (a failed
  *   turn only you can fix, or a card its chat hasn't loaded yet).
@@ -21,7 +24,7 @@
  */
 
 import { agentNeedsYou, setupHold } from '@shipstudio/companion-protocol';
-import type { Agent, AgentMessage, TeamSetupView } from '@shipstudio/companion-protocol';
+import type { Agent, AgentMessage, Approval, TeamSetupView } from '@shipstudio/companion-protocol';
 import { answerableHere, failedTurn } from './agents';
 import { askAction, type AskAction } from './catchUp';
 import { shows } from './teamSetup';
@@ -154,4 +157,22 @@ export function fitsWhole(message: AgentMessage | undefined): boolean {
   }
   const text = (a.summary?.trim() || a.detail || '').trim();
   return text.length <= FITS_CHARS && text.split('\n').length <= FITS_LINES;
+}
+
+/**
+ * Allow is risky, as the Mac decided it (`approval.risk`, from Bold's floor:
+ * deleting for good, money, credentials, `sudo`, pushing, publishing,
+ * sending, system files). Shown with the danger icon, and its Allow in the
+ * danger style. Never worked out on the phone from a command's text.
+ */
+export const highRisk = (a: Approval | undefined): boolean => a?.risk === 'high';
+
+/**
+ * Whether a card may be answered without opening it: on its Needs you row,
+ * or from a Lock Screen notification. Only what the Mac marked low-risk,
+ * and only when the whole of it fits. A risky card, or one the Mac didn't
+ * classify (an older Mac, a card from before it did), opens in full first.
+ */
+export function answersInPlace(message: AgentMessage | undefined): boolean {
+  return message?.approval?.risk === 'low' && fitsWhole(message);
 }
