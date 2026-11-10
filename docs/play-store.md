@@ -161,12 +161,39 @@ Console has no permission declaration form to fill in.
 
 ## What was checked, and how
 
-See "Release build" below for the run. Not checked: a Play-signed install, a
-real Android phone, push through FCM, Play's pre-launch report.
+See "Release build" below for the run. The release APK of the same
+config ran on the API 35 emulator: the pairing screen, the demo, every
+agent's chat, the approval card, the result card and the table rendered
+(the screenshots above), with no crash in logcat. That run found and fixed
+one Android bug: the tab screens' transparent large-title bar (iOS's) let
+the first card draw under the title and the status bar, because Android
+has no adjusted insets; the bar is opaque there now (`HEADER_OVERLAYS`,
+`src/lib/navigation.ts`). Not checked: a Play-signed install, a real Android
+phone, the camera scan, dictation, notifications and their Allow / Deny
+actions, push through FCM, tablets, dark appearance, Play's pre-launch
+report.
 
 ### Release build
 
-<!-- filled in from the run: see the commit that adds it -->
+`scripts/store-android.sh --build-number 1` on this Mac (Temurin 17.0.21,
+the SDK above), 10 November 2026: **BUILD SUCCESSFUL** (bundleRelease, about
+6 minutes from a cold Gradle cache), all checks passed:
+
+- Package `io.native.mogbot.companion`, version `1.0.0` (1), min SDK 24,
+  target SDK 36, not debuggable, the namespace `io.native_.mogbot.companion`.
+- Permissions exactly as listed above (the first run failed the check on
+  the biometric, install-referrer and badge permissions, which is how they
+  were found and settled).
+- An 84 MB `.aab` with all four ABIs (Play delivers one per device, so a
+  phone downloads a fraction of that), signed with the **debug** key because
+  no upload key exists yet: not uploadable, as the script says.
+- The first ever Android build failed before this: AGP refuses
+  `io.native.mogbot.companion` as a namespace (`native` is a Java keyword),
+  so `withJavaSafeNamespace` was added. A self-build over adb
+  (`<id>.self`) had the same problem and gets the same fix.
+
+The bundle and `mobile/android` were deleted afterwards; the Gradle caches
+in `~/.gradle` were kept (shared, and they make the next build fast).
 
 ## Store listing (drafts, not published)
 
@@ -227,16 +254,31 @@ In [`play-store/`](play-store/):
 | --- | --- | --- |
 | App icon | 512 × 512 PNG, ≤ 1 MB, full square (Play rounds it) | `icon-512.png` (from `mobile/assets/icon.png`) |
 | Feature graphic | 1024 × 500 JPG or 24-bit PNG, no alpha | `feature-graphic.png`, drawn from `feature-graphic.html` (the app's dark surface, its icon, Geist) |
-| Phone screenshots | 2–8, PNG or JPG, 16:9 or 9:16, each side 320–3840 px and the long side ≤ 2× the short; **at least 4 at 1080 px or more** to be eligible for recommendations | `phone-*.png` if present (see below) |
+| Phone screenshots | 2–8, PNG or JPG, 16:9 or 9:16, each side 320–3840 px and the long side ≤ 2× the short; **at least 4 at 1080 px or more** to be eligible for recommendations | `phone-1-agents.jpg` … `phone-5-research.jpg`, 1080 × 1920 (below) |
 | 7" and 10" tablet screenshots | Optional (needed for tablet featuring), same rules, ≥ 1080 px | not made |
 
 To render the feature graphic again, Chrome headless at 1024 × 500 on the
 HTML (the fonts need `--allow-file-access-from-files`, or inline them).
 
-Phone screenshots must come from Android (the emulator or a phone), never
-the iPhone set or `qa:web` upscaled. With an APK of the store config
-installed on an emulator: `adb shell am start -d mogbot-companion://demo`,
-then `adb exec-out screencap -p > phone-1.png` per screen.
+The phone screenshots are from Android: a release APK of the store config
+(`./gradlew assembleRelease` after `store-android.sh --keep-native`) on the
+API 35 emulator (Google APIs, arm64, an AVD set to 1080 × 1920 at 420 dpi,
+since Play wants the long side at most twice the short and a Pixel's 2400
+isn't), light appearance, the system UI demo mode (9:41, full battery and
+Wi-Fi, no notification icons), opened with `adb shell am start -a
+android.intent.action.VIEW -d mogbot-companion://demo`, then
+`…://chat/chief`, `chat/inbox`, `chat/site`, `chat/research`, each taken
+with `adb exec-out screencap -p`:
+
+| File | Shows |
+| --- | --- |
+| `phone-1-agents.jpg` | The agents, one waiting on you, one working, under "This is the demo" |
+| `phone-2-chief.jpg` | The Chief's morning brief |
+| `phone-3-approval.jpg` | "Send an email as you": Deny / Allow |
+| `phone-4-result.jpg` | A result card: what it checked and what it didn't |
+| `phone-5-research.jpg` | A reply with a table |
+
+Like the iPhone set they show the demo's labels. No tablet set yet.
 
 ## Policy answers (App content)
 

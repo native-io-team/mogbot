@@ -124,6 +124,16 @@ archive -configuration Release` with signing off, on Xcode 27.2 / iOS SDK
 
 The archive and its 3 GB of build products were deleted after checking.
 
+Again on 10 November 2026 with `scripts/store-ios.sh --build-number 1`
+(unsigned, Xcode 27.2): **ARCHIVE SUCCEEDED**, 56 MB app; bundle id
+`io.native.mogbot.companion`, 1.0.0 (1), `NSHumanReadableCopyright` "© 2026
+Galluzzo Conseil Inc.", ATS arbitrary loads false, non-exempt encryption
+false, the privacy manifest present, no Face ID string, and `aps-environment`
+in the project's entitlements (development there; the App Store export makes
+it production). Archive and 3.2 GB of derived data deleted afterwards. Not
+run: `--sign` (no Xcode account or API key on this Mac, and it would reach
+Apple).
+
 ### Permissions (Info.plist)
 
 Every string is shown by iOS when the app first asks, and each one is used:

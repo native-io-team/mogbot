@@ -57,7 +57,7 @@ import { setApp, useApp } from '../../../lib/store';
 import { asOverview } from '../../../lib/wellFormed';
 import { useRefresh } from '../../../lib/refresh';
 import { RefreshStatus } from '../../../components/RefreshStatus';
-import { largeTitle } from '../../../lib/navigation';
+import { HEADER_OVERLAYS, largeTitle } from '../../../lib/navigation';
 import {
   keySize,
   chromeScale,
@@ -421,7 +421,7 @@ export default function Agents() {
           {/* Under the translucent bar (and iPad's tab bar in it): padded by the
               header's height, as the list is by its own inset (lib/navigation.ts). */}
           <View
-            style={[styles.splitChat, { paddingRight: insets.right, paddingTop: headerHeight }]}
+            style={[styles.splitChat, { paddingRight: insets.right, paddingTop: HEADER_OVERLAYS ? headerHeight : 0 }]}
           >
             {shown ? (
               <AgentAccent agentId={shown}>
