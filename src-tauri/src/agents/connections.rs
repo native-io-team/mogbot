@@ -698,23 +698,27 @@ pub struct TurnAccess {
 impl TurnAccess {
     /// Codex: one `-c` per server, authenticated by the turn's bridge secret
     /// (the same variable as our own server's).
+    ///
+    /// Each is pre-approved (`default_tools_approval_mode = "approve"`), as
+    /// our own server is: every one of them decides its own calls (the
+    /// relay's grant and card, `conn_relay`; the browsers' gate,
+    /// `browser_gate`), so Codex asking first would only ask twice. Without
+    /// it Codex wants an approval for any tool not marked read-only, which
+    /// `codex exec`'s "never" refuses outright (seen on 0.166: "MCP tool call
+    /// requires approval, but approval policy is never"), so the exec
+    /// fallback could use none of them. Each may also wait on a card before
+    /// it answers, so Codex's own per-call timeout (60s) is raised past the
+    /// card's, as Claude Code's `MCP_TOOL_TIMEOUT` is for every server.
     pub fn codex_config(&self) -> Vec<String> {
         self.servers
             .iter()
             .map(|s| {
-                // The agents' browser may wait on a card before it answers.
-                let wait = if s.key == crate::agent_browser::tools::SERVER_KEY
-                    || s.key == crate::user_chrome::tools::SERVER_KEY
-                {
-                    format!(",tool_timeout_sec={}", super::mcp::APPROVAL_WAIT_SECS + 60)
-                } else {
-                    String::new()
-                };
                 format!(
-                    "mcp_servers.{}={{url={},bearer_token_env_var={}{wait}}}",
+                    "mcp_servers.{}={{url={},bearer_token_env_var={},tool_timeout_sec={},default_tools_approval_mode=\"approve\"}}",
                     s.key,
                     toml(&s.url),
-                    toml(super::reach::TOKEN_ENV)
+                    toml(super::reach::TOKEN_ENV),
+                    super::mcp::APPROVAL_WAIT_SECS + 60,
                 )
             })
             .collect()
@@ -1408,16 +1412,21 @@ mod tests {
             assert!(!given.contains("lin_turn_token"), "{given}");
             assert!(!format!("{h:?}").contains("lin_turn_token"));
             assert!(given.contains("Bearer turn-secret"));
+            // Every server decides its own calls and may wait on a card:
+            // pre-approved in Codex (else `codex exec` refuses every call)
+            // and given as long as a card, as our own server is.
             let config = h.codex_config();
+            let wait = super::super::mcp::APPROVAL_WAIT_SECS + 60;
             assert_eq!(
                 config[0],
-                r#"mcp_servers.linear={url="http://127.0.0.1:4321/mcp/conn/linear",bearer_token_env_var="SHIPSTUDIO_AGENTS_BRIDGE_TOKEN"}"#
+                format!(
+                    r#"mcp_servers.linear={{url="http://127.0.0.1:4321/mcp/conn/linear",bearer_token_env_var="SHIPSTUDIO_AGENTS_BRIDGE_TOKEN",tool_timeout_sec={wait},default_tools_approval_mode="approve"}}"#
+                )
             );
             assert_eq!(
                 config[1],
                 format!(
-                    r#"mcp_servers.browser={{url="http://127.0.0.1:4321/mcp/browser",bearer_token_env_var="SHIPSTUDIO_AGENTS_BRIDGE_TOKEN",tool_timeout_sec={}}}"#,
-                    super::super::mcp::APPROVAL_WAIT_SECS + 60
+                    r#"mcp_servers.browser={{url="http://127.0.0.1:4321/mcp/browser",bearer_token_env_var="SHIPSTUDIO_AGENTS_BRIDGE_TOKEN",tool_timeout_sec={wait},default_tools_approval_mode="approve"}}"#
                 )
             );
             // The relay gets it, for a granted agent only.
