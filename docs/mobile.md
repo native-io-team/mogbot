@@ -696,12 +696,21 @@ or the Needs-you feed, 44 a list row, 112 the agent sheet); the sublegend
 The colourways and the socket's neutrals are named colours in theme.ts,
 which the theme test holds to `agent-keys.json`.
 
-States come from `agentKeyState` (lib/agents.ts, the desk's): Needs your
-OK while a card waits, Paused (a socket with its stem in its colour) while
-a usage limit stops it, Working (pressed) while a turn runs, Live (the
-legend lit) while you drive it at the desk. Only Needs your OK moves: a
-slow pulse of the lit legend, a Reanimated loop mounted on that key alone
-and still with Reduce Motion, in the background or off screen. An agent
+States come from `agentKeyState` (lib/agents.ts, the desk's) and look as
+on the desk and the site (`keyPose`, `keyPaint` in lib/agentKey.ts): Needs
+your OK, the loudest, sits proud with an amber-gold legend, an amber light in
+its face and an amber spill under it, pulsing; Working is pressed and
+warm-lit, its light breathing and spilling under it in its own colour; Live
+(you drive it at the desk) is lit and still; Paused (a usage limit) keeps its
+cap, drained of colour, faded and sunk; a new agent is an empty socket that
+fades in. A lit face deepens in its own hue (`KEY_LIT_MIX`). A row's key goes
+all the way down while your finger is on it (`pressed`). Only opacity loops
+(Reanimated, on the UI thread), only on a working key or one that needs your
+OK, and it holds still with Reduce Motion, in the background or off screen;
+the states still differ when nothing moves. The agent list has no "N working"
+line and no unread dot: the keys say who is working, free or waiting, and an
+unread row's line is in strong ink (its accessible name says "working",
+"unread"). An agent
 from an older Mac is drawn by `keyLookFor` (its colour's nearest
 colourway, an icon from its name and role).
 

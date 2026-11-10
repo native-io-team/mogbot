@@ -240,7 +240,7 @@ export function AgentKey({
                 <FaceGlow g={g} color={keyLit.breath} opacity={0.33} />
               </Breathing>
             )}
-            {state === 'needsOk' && <FaceGlow g={g} color={keyLit.askFace} opacity={0.38} />}
+            {state === 'needsOk' && <FaceGlow g={g} color={keyLit.askFace} opacity={0.24} />}
             {state === 'needsOk' ? <Breathing kind="pulse">{legend}</Breathing> : legend}
             {g.details && look.boundKey && (
               <Text
@@ -412,7 +412,7 @@ function Legend({
   const lit = light !== 'none';
   const glow = light === 'ask' ? keyLit.askGlow : keyLit.glow;
   // Two soft rings of glow under the stroke: wide and faint, then tight.
-  const wide = light === 'ask' ? 3.4 : 2.6;
+  const wide = light === 'ask' ? 2.8 : 2.4;
   return (
     <Svg
       width={g.icon}
@@ -427,8 +427,8 @@ function Legend({
       }
       style={[styles.legend, dim && { opacity: KEY_GEOMETRY.paused.legendOpacity }]}
     >
-      {lit && strokes(glow, g.stroke * wide, light === 'ask' ? 0.32 : 0.22)}
-      {lit && strokes(glow, g.stroke * 1.7, light === 'ask' ? 0.55 : 0.4)}
+      {lit && strokes(glow, g.stroke * wide, light === 'ask' ? 0.2 : 0.16)}
+      {lit && strokes(glow, g.stroke * 1.7, light === 'ask' ? 0.45 : 0.35)}
       {strokes(ink, g.stroke)}
     </Svg>
   );
