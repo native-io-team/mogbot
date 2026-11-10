@@ -123,6 +123,13 @@ pub struct Agent {
     /// No OS notifications for this agent. Unread and the Dock badge still count it.
     #[serde(default)]
     pub muted: bool,
+    /// "Save new skills": Automatically / Ask me (the default) / Off
+    /// (`agents/skills_learn.rs`). Absent in registries from before it.
+    #[serde(
+        default,
+        skip_serializing_if = "super::skills_learn::Learning::is_default"
+    )]
+    pub learn_skills: super::skills_learn::Learning,
     /// Check-ins and routines this agent is woken by (see `schedule`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub check_ins: Vec<super::schedule::CheckIn>,
@@ -441,6 +448,12 @@ pub struct Approval {
     /// Older clients show a plain Allow / Deny over the same summary.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub slack_reply: Option<super::slack::ReplyCard>,
+    /// "Save “Export invoices” as a skill?" (`save_skill`,
+    /// `agents/skills_learn.rs`): the skill exactly as it would be saved.
+    /// Nothing waits on it; Save (Allow) writes it, Not now (Deny) doesn't.
+    /// Older clients show a plain Allow / Deny over the same summary and detail.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub skill: Option<super::skills_learn::SkillCard>,
     /// How risky Allow is, decided here from the classifiers the levels use
     /// (`mcp::risk_of`: `go_hard::floor` for a tool call). Only `Low` may be
     /// answered in place on the phone's list or from a Lock Screen
@@ -1077,9 +1090,15 @@ pub fn update<F: FnOnce(&mut Agent)>(id: &str, change: F) -> Result<Agent, Comma
         .iter_mut()
         .find(|a| a.id == id)
         .ok_or_else(|| CommandError::expected("That agent no longer exists."))?;
+    let before = agent.clone();
     change(agent);
     let updated = agent.clone();
-    write_registry(&registry)?;
+    // A change that changed nothing (a When… check reserving a free source,
+    // a count already right) leaves the file alone: each write is the whole
+    // registry, twice (it and its backup).
+    if updated != before {
+        write_registry(&registry)?;
+    }
     Ok(updated)
 }
 
@@ -1322,6 +1341,7 @@ fn register_new(id: String, name: String, new: NewAgent) -> Result<Agent, Comman
         away: None,
         context: None,
         routine_model: None,
+        learn_skills: Default::default(),
         account: None,
         template: None,
         reach: Default::default(),
@@ -2411,7 +2431,9 @@ pub fn messages_page(
 }
 
 /// [`messages_page`] for one of the agent's conversations
-/// (`conversations::of`): only its lines, paged the same way.
+/// (`conversations::of`): only its lines, paged the same way. A fork's
+/// history (lines of the conversation it came from) comes before its own,
+/// by id; lines it rewound past are in it too (the chat folds them).
 pub fn conversation_page(
     agent_id: &str,
     conversation: &str,
@@ -2419,7 +2441,10 @@ pub fn conversation_page(
     before: Option<&str>,
     through: Option<(&str, usize)>,
 ) -> Result<Vec<AgentMessage>, CommandError> {
-    let keep = |m: &AgentMessage| super::conversations::of(m) == conversation;
+    // Read before the log's lock: the list's is never held across it.
+    let inherited = super::conversations::page_spec(agent_id, conversation).inherited;
+    let keep =
+        |m: &AgentMessage| super::conversations::of(m) == conversation || inherited.contains(&m.id);
     let lock = log_lock(agent_id);
     let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
     let path = log_path(agent_id)?;
@@ -2620,12 +2645,15 @@ fn resolve_approval_as(
     Ok(changed)
 }
 
+/// Cards that wait on the user. A "Save … as a skill?" card is an offer that
+/// says "Nothing waits on it", so it never makes an agent "Needs your OK",
+/// the Dock badge or the phone's Catch up count (`skills_learn`).
 fn count_pending(log: &[AgentMessage]) -> u32 {
     log.iter()
         .filter(|m| {
             m.approval
                 .as_ref()
-                .is_some_and(|a| a.status == ApprovalStatus::Pending)
+                .is_some_and(|a| a.status == ApprovalStatus::Pending && a.skill.is_none())
         })
         .count() as u32
 }
@@ -2773,6 +2801,35 @@ mod tests {
     }
 
     use super::*;
+
+    #[test]
+    fn a_skill_offer_never_counts_as_waiting_on_the_user() {
+        use crate::agents::skills_learn::{card, Skill, SkillCard};
+        let line = |approval: Approval| {
+            let mut m = crate::agents::runner::new_message("a1", MessageKind::Approval, "");
+            m.approval = Some(approval);
+            m
+        };
+        let skill = line(card(SkillCard {
+            skill: Skill {
+                slug: "export-invoices".into(),
+                name: "Export invoices".into(),
+                when: "When asked for invoices".into(),
+                steps: "1. Export them.".into(),
+            },
+            removed: 0,
+            outside: false,
+            replaces: false,
+        }));
+        let ask = line(crate::agents::mcp::new_card(
+            new_id(),
+            "Run a command".into(),
+            "rm -rf build".into(),
+            None,
+        ));
+        assert_eq!(count_pending(std::slice::from_ref(&skill)), 0);
+        assert_eq!(count_pending(&[skill, ask]), 1);
+    }
 
     #[test]
     fn routines_run_on_haiku_only_while_the_agent_is_on_the_default_model() {
@@ -2957,6 +3014,7 @@ mod tests {
                         step_in: None,
                         crossover: None,
                         account_switch: None,
+                        skill: None,
                         slack_reply: None,
                         risk: None,
                     });
@@ -3173,6 +3231,7 @@ mod tests {
                     step_in: None,
                     crossover: None,
                     account_switch: None,
+                    skill: None,
                     slack_reply: None,
                     risk: None,
                 }),
@@ -3308,6 +3367,7 @@ mod tests {
                 step_in: None,
                 crossover: None,
                 account_switch: None,
+                skill: None,
                 slack_reply: None,
                 risk: None,
             });

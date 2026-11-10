@@ -128,7 +128,7 @@ where
                 None => format!("{who} is out of usage. {who} says it refills at {words}."),
             },
             (None, None) => {
-                format!("{who} is out of usage. It resets on its own; try again later.")
+                format!("{who} is out of usage. It refills on its own; try again later.")
             }
         };
         return (
@@ -843,7 +843,7 @@ mod tests {
             NOW,
         );
         assert_eq!(failure.resets_at, None);
-        assert!(text.ends_with("It resets on its own; try again later."));
+        assert!(text.ends_with("It refills on its own; try again later."));
         // Nor does a bare number pass for a time.
         assert_eq!(
             describe(Engine::Claude, "usage limit · resets 5", &Utc, None, NOW)

@@ -364,9 +364,9 @@ export function WorkspaceHeader({
         className="workspace-panel-toggle"
         pressed={agentPanelVisible}
         onClick={onToggleAgentPanel}
-        title="Agent"
+        title="Session"
         leftIcon={<AgentsIcon size={16} />}
-        aria-label="Agent"
+        aria-label="Session"
         data-workspace-panel="agent"
       />
       <ToggleButton

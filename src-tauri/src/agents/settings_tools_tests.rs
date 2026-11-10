@@ -241,6 +241,60 @@ fn slow_on_battery_off_is_more_room() {
     assert!(!slow_widens(true, None));
 }
 
+/// Settings' switches from chat: read in a fixed order, named as Settings
+/// names them, and a card only for the ones that write outside this Mac
+/// turned on (reports, words in a shared repository).
+#[test]
+fn settings_switches_from_chat() {
+    let asked = switches_asked(&json!({
+        "analytics": false, "compact_toolbar": true, "theme": "dark", "terminal_gpu": "yes"
+    }));
+    assert_eq!(asked, vec![("compact_toolbar", true), ("analytics", false)]);
+    assert_eq!(switch_line("compact_toolbar", true), "Compact toolbar on");
+    assert_eq!(
+        switch_line("analytics", false),
+        "Usage analytics & error reports off"
+    );
+    assert!(!switches_widen(&asked));
+    assert!(switches_widen(&[("analytics", true)]));
+    assert!(switches_widen(&[("commit_message", true)]));
+    assert!(switches_widen(&[("credit_in_commits", true)]));
+    assert!(!switches_widen(&[("commit_message", false)]));
+    assert!(!switches_widen(&[
+        ("project_thumbnails", true),
+        ("menu_bar_icon", true)
+    ]));
+    // Every switch the schema offers is one the tool can set.
+    let schema = (find("change_app_setting").unwrap().schema)();
+    for (key, _, _) in SWITCHES {
+        assert!(
+            schema["properties"].get(*key).is_some(),
+            "{key} not in the schema"
+        );
+    }
+}
+
+/// The line for new agents' engine and model names the model, or says it's
+/// the engine's own.
+#[test]
+fn new_agents_line_names_the_model() {
+    let view = |model: Option<&str>| crate::agents::defaults::View {
+        engine: Some(Engine::Codex),
+        models: Default::default(),
+        starts_on: Engine::Codex,
+        model: model.map(str::to_string),
+        fallback: None,
+    };
+    assert_eq!(
+        new_agents_line(&view(Some("gpt-5.5"))),
+        "New agents start on Codex with gpt-5.5"
+    );
+    assert_eq!(
+        new_agents_line(&view(None)),
+        "New agents start on Codex with its default model"
+    );
+}
+
 /// The account card says what changes, in the user's names.
 #[test]
 fn the_account_card_says_what_changes() {

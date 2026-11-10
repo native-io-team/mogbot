@@ -1,0 +1,168 @@
+/**
+ * Skills an agent saved after a hard task, on the desk: the "Save what it
+ * learns" setting and its list in the editor, and the card in the chat
+ * (Not now / Save, the neutral answer). Fictional agents only.
+ */
+import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { act, fireEvent, render, screen } from '@testing-library/react';
+
+const api = vi.hoisted(() => ({
+  agentSkills: vi.fn(),
+  editAgentSkill: vi.fn(),
+  removeAgentSkill: vi.fn(),
+}));
+vi.mock('../../lib/agentSkills', async (orig) => ({
+  ...(await orig<typeof import('../../lib/agentSkills')>()),
+  ...api,
+}));
+const updateAgent = vi.hoisted(() => vi.fn(() => Promise.resolve({})));
+vi.mock('../../lib/agents', async (orig) => ({
+  ...(await orig<typeof import('../../lib/agents')>()),
+  updateAgent,
+}));
+vi.mock('@tauri-apps/api/event', () => ({ listen: () => Promise.resolve(() => undefined) }));
+const store = vi.hoisted(() => ({ value: {} as Record<string, unknown> }));
+vi.mock('../../lib/agentsStore', async (orig) => ({
+  ...(await orig<typeof import('../../lib/agentsStore')>()),
+  refreshAgents: () => Promise.resolve(),
+  useAgentsSelector: (select: (s: unknown) => unknown) => select(store.value),
+}));
+
+import { AgentSkills } from './AgentSkills';
+import { ApprovalCard } from './AgentChatItems';
+import type { Agent, AgentMessage, Approval } from '../../lib/agents';
+
+const ledger = { id: 'a1', name: 'Ledger', role: '', isMain: false } as Agent;
+const skill = {
+  slug: 'export-invoices',
+  name: 'Export invoices',
+  when: 'When asked for last month’s invoices',
+  steps: '1. Open Reports\n2. Export as CSV',
+};
+
+describe('AgentSkills in the editor', () => {
+  beforeEach(() => {
+    store.value = { agents: [ledger] };
+    api.agentSkills
+      .mockReset()
+      .mockResolvedValue({ agentId: 'a1', setting: 'ask', skills: [skill] });
+    api.removeAgentSkill.mockReset().mockResolvedValue(undefined);
+    api.editAgentSkill.mockReset().mockResolvedValue(skill);
+    updateAgent.mockClear();
+  });
+
+  it('shows the setting (Ask me by default) and its skills', async () => {
+    render(<AgentSkills agent={ledger} />);
+    expect(await screen.findByText('Export invoices')).toBeTruthy();
+    expect(screen.getByText('When asked for last month’s invoices')).toBeTruthy();
+    expect(screen.getByRole('button', { name: 'Ask me' }).getAttribute('aria-pressed')).toBe(
+      'true'
+    );
+    expect(screen.getByText(/Anything that read outside content asks first/)).toBeTruthy();
+  });
+
+  it('changes the setting at once', async () => {
+    render(<AgentSkills agent={ledger} />);
+    await screen.findByText('Export invoices');
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Automatically' }));
+    });
+    expect(updateAgent).toHaveBeenCalledWith('a1', { learnSkills: 'auto' });
+  });
+
+  it('removes and edits a skill', async () => {
+    render(<AgentSkills agent={ledger} />);
+    await screen.findByText('Export invoices');
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Remove' }));
+    });
+    expect(api.removeAgentSkill).toHaveBeenCalledWith('a1', 'export-invoices');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit' }));
+    fireEvent.change(screen.getByLabelText('Skill name'), { target: { value: 'Export bills' } });
+    act(() => {
+      fireEvent.click(screen.getByRole('button', { name: 'Save skill' }));
+    });
+    expect(api.editAgentSkill).toHaveBeenCalledWith('a1', 'export-invoices', {
+      name: 'Export bills',
+      when: skill.when,
+      steps: skill.steps,
+    });
+  });
+
+  it('opened for it (⌘K "<agent>’s skills"), it scrolls into view', () => {
+    const scroll = vi.fn();
+    const was = Object.getOwnPropertyDescriptor(Element.prototype, 'scrollIntoView');
+    Object.defineProperty(Element.prototype, 'scrollIntoView', {
+      configurable: true,
+      value: scroll,
+    });
+    try {
+      const { unmount } = render(<AgentSkills agent={ledger} />);
+      expect(scroll).not.toHaveBeenCalled();
+      unmount();
+      render(<AgentSkills agent={ledger} focus />);
+      expect(scroll).toHaveBeenCalledWith({ block: 'start' });
+    } finally {
+      if (was) Object.defineProperty(Element.prototype, 'scrollIntoView', was);
+      else delete (Element.prototype as { scrollIntoView?: unknown }).scrollIntoView;
+    }
+  });
+
+  it('says what happens when it has none', async () => {
+    api.agentSkills.mockResolvedValue({ agentId: 'a1', setting: 'off', skills: [] });
+    store.value = { agents: [{ ...ledger, learnSkills: 'off' }] };
+    render(<AgentSkills agent={ledger} />);
+    expect(await screen.findByText('Ledger doesn’t save new skills.')).toBeTruthy();
+  });
+});
+
+describe('the skill card', () => {
+  const card: Approval = {
+    requestId: 'r1',
+    title: 'Save “Export invoices” as a skill?',
+    detail: skill.steps,
+    summary: `When to use it: ${skill.when}`,
+    status: 'pending',
+    risk: 'low',
+    skill: { ...skill, removed: 2 },
+  };
+  const message = (approval: Approval): AgentMessage => ({
+    id: 'm1',
+    agentId: 'a1',
+    ts: Date.now(),
+    kind: 'approval',
+    text: '',
+    approval,
+  });
+
+  it('previews the skill as an offer: quiet, Not now / Save, neither solid', () => {
+    const onAnswer = vi.fn();
+    const { container } = render(
+      <ApprovalCard message={message(card)} agentName="Ledger" paused={false} onAnswer={onAnswer} />
+    );
+    expect(screen.getByText(skill.when)).toBeTruthy();
+    expect(screen.getByText(/1\. Open Reports/)).toBeTruthy();
+    expect(screen.getByText('2 personal details or secrets removed.')).toBeTruthy();
+    const save = screen.getByRole('button', { name: /^Save/ });
+    // Nothing waits on it: no solid answer, no A / D keys, drawn as an offer.
+    expect(save.className).toMatch(/button--secondary/);
+    expect(save.className).not.toMatch(/button--primary|button--strong/);
+    expect(screen.getByRole('button', { name: /^Not now/ }).className).toMatch(/button--ghost/);
+    expect(save.getAttribute('aria-keyshortcuts')).toBeNull();
+    expect(container.querySelector('.agent-approval[data-offer]')).toBeTruthy();
+    // Nothing broader to say instead: no "More answers" menu.
+    expect(container.querySelector('[aria-label="More answers"]')).toBeNull();
+  });
+
+  it('reads as a receipt once answered', () => {
+    render(
+      <ApprovalCard
+        message={message({ ...card, status: 'allowed' })}
+        agentName="Ledger"
+        paused={false}
+        onAnswer={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Saved · under Skills')).toBeTruthy();
+  });
+});

@@ -272,7 +272,7 @@ describe('topbar Focus projection', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Focus' }));
     await act(async () => Promise.resolve());
-    const divider = screen.getByRole('separator', { name: 'Resize Agent column' });
+    const divider = screen.getByRole('separator', { name: 'Resize Session column' });
     act(() => {
       fireEvent.pointerDown(divider, { pointerId: 1, clientX: 600 });
       fireEvent.pointerMove(divider, { pointerId: 1, clientX: 480 });
@@ -338,7 +338,7 @@ describe('topbar Focus projection', () => {
       expect(agentColumn).toHaveStyle({ order: '0', width: '600px' });
       expect(previewColumn).toHaveStyle({ order: '1' });
 
-      const divider = screen.getByRole('separator', { name: 'Resize Agent column' });
+      const divider = screen.getByRole('separator', { name: 'Resize Session column' });
       expect(divider).toHaveAttribute('aria-valuemin', '260');
       expect(divider).toHaveAttribute('aria-valuemax', '940');
       expect(divider).toHaveAttribute('aria-valuenow', '600');
@@ -353,7 +353,7 @@ describe('topbar Focus projection', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Focus' }));
     await act(async () => Promise.resolve());
 
-    const divider = screen.getByRole('separator', { name: 'Resize Agent column' });
+    const divider = screen.getByRole('separator', { name: 'Resize Session column' });
     expect(divider).toHaveAttribute('aria-valuemin', '260');
     expect(divider).toHaveAttribute('aria-valuemax', '1740');
     expect(divider).toHaveAttribute('aria-valuenow', '1000');
@@ -366,7 +366,7 @@ describe('topbar Focus projection', () => {
 
     fireEvent.click(screen.getByRole('tab', { name: 'Focus' }));
     await act(async () => Promise.resolve());
-    const divider = screen.getByRole('separator', { name: 'Resize Agent column' });
+    const divider = screen.getByRole('separator', { name: 'Resize Session column' });
     act(() => {
       fireEvent.pointerDown(divider, { pointerId: 1, clientX: 600 });
       fireEvent.pointerMove(divider, { pointerId: 1, clientX: 480 });
@@ -381,7 +381,7 @@ describe('topbar Focus projection', () => {
     await act(async () => Promise.resolve());
     fireEvent.click(screen.getByRole('tab', { name: 'Focus' }));
     await act(async () => Promise.resolve());
-    expect(screen.getByRole('separator', { name: 'Resize Agent column' })).toHaveAttribute(
+    expect(screen.getByRole('separator', { name: 'Resize Session column' })).toHaveAttribute(
       'aria-valuenow',
       '480'
     );
@@ -390,7 +390,7 @@ describe('topbar Focus projection', () => {
     renderFocusWorkspace('preview');
     fireEvent.click(screen.getByRole('tab', { name: 'Focus' }));
     await act(async () => Promise.resolve());
-    expect(screen.getByRole('separator', { name: 'Resize Agent column' })).toHaveAttribute(
+    expect(screen.getByRole('separator', { name: 'Resize Session column' })).toHaveAttribute(
       'aria-valuenow',
       '480'
     );
@@ -403,21 +403,21 @@ describe('topbar Focus projection', () => {
     const { rerender } = renderFocusWorkspace('preview');
     fireEvent.click(screen.getByRole('tab', { name: 'Focus' }));
     await act(async () => Promise.resolve());
-    expect(screen.getByRole('separator', { name: 'Resize Agent column' })).toHaveAttribute(
+    expect(screen.getByRole('separator', { name: 'Resize Session column' })).toHaveAttribute(
       'aria-valuenow',
       '480'
     );
 
     rerender(<FocusWorkspace initialTab="preview" projectPath={OTHER_PROJECT} />);
     await act(async () => Promise.resolve());
-    expect(screen.getByRole('separator', { name: 'Resize Agent column' })).toHaveAttribute(
+    expect(screen.getByRole('separator', { name: 'Resize Session column' })).toHaveAttribute(
       'aria-valuenow',
       '840'
     );
 
     rerender(<FocusWorkspace initialTab="preview" projectPath={PROJECT} />);
     await act(async () => Promise.resolve());
-    expect(screen.getByRole('separator', { name: 'Resize Agent column' })).toHaveAttribute(
+    expect(screen.getByRole('separator', { name: 'Resize Session column' })).toHaveAttribute(
       'aria-valuenow',
       '480'
     );
@@ -430,7 +430,7 @@ describe('topbar Focus projection', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Focus' }));
     await act(async () => Promise.resolve());
 
-    const divider = screen.getByRole('separator', { name: 'Resize Agent column' });
+    const divider = screen.getByRole('separator', { name: 'Resize Session column' });
     fireEvent.keyDown(divider, { key: 'ArrowLeft' });
     expect(divider).toHaveAttribute('aria-valuenow', '590');
     expect(readProjectFocusSplitRatio(PROJECT)).toBeCloseTo(590 / 1200);
@@ -460,7 +460,7 @@ describe('topbar Focus projection', () => {
       fireEvent.click(screen.getByRole('tab', { name: 'Focus' }));
       await act(async () => Promise.resolve());
 
-      const divider = screen.getByRole('separator', { name: 'Resize Agent column' });
+      const divider = screen.getByRole('separator', { name: 'Resize Session column' });
       expect(divider).toHaveAttribute('aria-valuemin', '260');
       expect(divider).toHaveAttribute('aria-valuemax', '940');
       expect(divider).toHaveAttribute('aria-valuenow', '600');
@@ -478,7 +478,7 @@ describe('topbar Focus projection', () => {
       await act(async () => Promise.resolve());
       fireEvent.click(screen.getByRole('tab', { name: 'Focus' }));
       await act(async () => Promise.resolve());
-      expect(screen.getByRole('separator', { name: 'Resize Agent column' })).toHaveAttribute(
+      expect(screen.getByRole('separator', { name: 'Resize Session column' })).toHaveAttribute(
         'aria-valuenow',
         '900'
       );
@@ -493,7 +493,7 @@ describe('topbar Focus projection', () => {
       renderFocusWorkspace('preview');
       fireEvent.click(screen.getByRole('tab', { name: 'Focus' }));
       await act(async () => Promise.resolve());
-      expect(screen.getByRole('separator', { name: 'Resize Agent column' })).toHaveAttribute(
+      expect(screen.getByRole('separator', { name: 'Resize Session column' })).toHaveAttribute(
         'aria-valuenow',
         '600'
       );

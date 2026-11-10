@@ -60,7 +60,7 @@ import {
 } from './components/CommandPalette/paletteContext';
 import { useAppCommands } from './commands/useAppCommands';
 import { useAppMode } from './hooks/useAppMode';
-import { useNativeMenu } from './hooks/useNativeMenu';
+import { NativeMenuHost } from './hooks/useNativeMenu';
 import { useMenuCommands } from './commands/useMenuCommands';
 import { useProjectNumberShortcuts } from './hooks/useProjectNumberShortcuts';
 import { PinnedProjectCommandHost } from './commands/usePinnedProjectCommands';
@@ -560,12 +560,6 @@ function AppContents({ initialProjectPath }: AppProps) {
     handleSelectProject,
     inAgents: view === 'agents',
   });
-  // The menu bar's view of this window, and the window's title.
-  useNativeMenu({
-    view,
-    currentProjectName: currentProject?.name ?? null,
-    pinnedPaths: confirmedPinnedPaths,
-  });
   useMenuCommands();
 
   const { activeAccount, accounts } = useActiveAccount(currentProject?.path ?? null);
@@ -985,7 +979,6 @@ function AppContents({ initialProjectPath }: AppProps) {
       getProjectDevServerSnapshot,
       serverLifecycleVersion,
       handleStopDevServer,
-      setView,
     ]
   );
 
@@ -1119,6 +1112,7 @@ function AppContents({ initialProjectPath }: AppProps) {
     pinnedSet: pinnedProjects.pinnedSet,
     onTogglePin: (path: string, pinned: boolean) => void handleTogglePin(path, pinned),
     onSwitchAccount: openAccountSelect,
+    onGoAgents: modeNav.onGoAgents,
   };
 
   const workspaceViewProps = {
@@ -1169,6 +1163,13 @@ function AppContents({ initialProjectPath }: AppProps) {
         pinnedPaths={confirmedPinnedPaths}
         currentProjectPath={currentProject?.path ?? null}
         onReorderProjects={handleReorderProjects}
+      />
+      {/* The menu bar's view of this window, and the window's title: its own
+          component, so the agents' order it follows never re-renders App. */}
+      <NativeMenuHost
+        view={view}
+        currentProjectName={currentProject?.name ?? null}
+        pinnedPaths={confirmedPinnedPaths}
       />
       <AppViewRouter
         view={view}

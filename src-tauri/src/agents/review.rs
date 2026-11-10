@@ -148,6 +148,11 @@ pub struct Proposal {
     /// what this build has (`recipe::apply_look` applies it).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub look: Option<ProposedLook>,
+    /// Skills it comes with (a recipe's), each cleaned like a saved one
+    /// (`skills_learn::draft`) and shown on the card before anything is
+    /// written; Import saves them into its home.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub skills: Vec<super::skills_learn::Skill>,
 }
 
 /// A key look and an independence a recipe suggests: only ids this build
@@ -636,6 +641,28 @@ pub fn proposal(key: String, args: &serde_json::Value, chief: &str) -> Result<Pr
         foreign_paths: Vec::new(),
         foreign_tools: Vec::new(),
         look: ProposedLook::from_args(args.get("look")),
+        skills: args
+            .get("skills")
+            .and_then(|v| v.as_array())
+            .into_iter()
+            .flatten()
+            .take(super::skills_learn::MAX_SKILLS)
+            .filter_map(|s| {
+                let f = |k: &str| s.get(k).and_then(|v| v.as_str()).unwrap_or("");
+                let when = if f("when").trim().is_empty() {
+                    f("name")
+                } else {
+                    f("when")
+                };
+                super::skills_learn::draft(
+                    &clean_line(f("name"), 80),
+                    when,
+                    &clean_text(f("steps"), 8_000),
+                )
+                .ok()
+                .map(|(skill, _)| skill)
+            })
+            .collect(),
     };
     if let Some(what) = secret_in(&p) {
         return Err(format!(
@@ -906,10 +933,31 @@ fn apply_one(
     import::add_routines(&agent, &routines, true, &mut summary);
     // A recipe's look and independence, on a new agent only: Replace keeps
     // the one here as the user set it up.
-    let look_lines = match (&p.look, replaced) {
+    let mut look_lines = match (&p.look, replaced) {
         (Some(look), false) => super::recipe::apply_look(&agent.id, look),
         _ => Vec::new(),
     };
+    // The skills the card showed, into its home (`skills_learn`).
+    if !p.skills.is_empty() {
+        let home = store::agent_home(&agent.id)?;
+        let saved: Vec<&str> = p
+            .skills
+            .iter()
+            .filter(|s| super::skills_learn::write(&home, s).is_ok())
+            .map(|s| s.name.as_str())
+            .collect();
+        if !saved.is_empty() {
+            look_lines.push(format!(
+                "It came with {}: {}.",
+                if saved.len() == 1 {
+                    "a skill"
+                } else {
+                    "skills"
+                },
+                saved.join(", ")
+            ));
+        }
+    }
     // Last, so it names what is now in its home.
     super::arrival::arrive(&agent.id, source)?;
     if let Some(app) = app {

@@ -32,7 +32,7 @@ interface HelpShortcut {
   keys: string[];
 }
 
-const DEFAULT_WORKSPACE_PANEL_LABELS = ['Agent', 'Elements', 'Variables', 'Assets'];
+const DEFAULT_WORKSPACE_PANEL_LABELS = ['Session', 'Elements', 'Variables', 'Assets'];
 
 function getWorkspacePanelLabels(): string[] {
   if (typeof document === 'undefined') return DEFAULT_WORKSPACE_PANEL_LABELS;
@@ -214,7 +214,7 @@ function getHelpShortcuts(): HelpShortcut[] {
       : []),
     {
       id: 'switch-terminal-tab',
-      label: 'Switch terminal/agent tab',
+      label: 'Switch session or terminal tab',
       description: 'Switch to terminal or agent tab 1–9 in the current project',
       keys: [isMac() ? kbd('ctrl', '1–9') : kbd('ctrl', 'alt', '1–9')],
     },

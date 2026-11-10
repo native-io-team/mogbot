@@ -75,6 +75,20 @@ import { ProjectSettingsModal } from '../workspace/ProjectSettingsModal';
 import { DashboardWorkspaceChip } from './DashboardWorkspaceChip';
 import { ProjectThumbnailInput } from './ProjectThumbnailInput';
 import type { ProjectViewMode } from './ProjectGridView';
+import { projectTeam } from './ProjectTeam';
+import { openAgentChat, useAgentsAtWork } from '../workspace/useProjectAgents';
+import { useAgentsSelector } from '../../lib/agentsStore';
+import { composerDraft, setComposerDraft } from '../../lib/composerDraft';
+import type { AgentsState } from '../../lib/agentsStore';
+
+/** The Chief's id and name, or null before the team is read. */
+const selectChief = (s: AgentsState) => {
+  const chief = s.agents.find((a) => a.isMain);
+  return chief ? `${chief.id}\t${chief.name}` : null;
+};
+
+/** What the empty dashboard's "Ask the Chief" puts in its message box (never sent). */
+const ASK_FOR_PROJECT = 'Make me a new site or app: ';
 
 /** Basic project info for selection callback */
 interface Project {
@@ -100,10 +114,6 @@ interface ProjectListProps {
   onCreateProject: () => void;
   /** Callback to open the import project wizard */
   onImportProject?: () => void;
-  /** Whether GitHub is authenticated (import requires GitHub) */
-  isGitHubAuthenticated?: boolean;
-  /** Callback when user tries to import without GitHub auth */
-  onGitHubConnectForImport?: () => void;
   /** GitHub username for contribution calendar */
   githubUsername?: string | null;
   /** Whether the initial auth check has completed */
@@ -118,19 +128,20 @@ interface ProjectListProps {
   onTogglePin?: (projectPath: string, pinned: boolean) => void | Promise<void>;
   /** Open the workspace switcher (shown as a chip beside "All projects"). */
   onSwitchAccount?: () => void;
+  /** Switches to Agents: a project's team line opens that agent's chat. */
+  onGoAgents?: () => void;
 }
 
 export function ProjectList({
   onSelectProject,
   onCreateProject,
   onImportProject,
-  isGitHubAuthenticated = true,
-  onGitHubConnectForImport,
   onLoadingChange,
   cleanupStatus,
   pinnedSet,
   onTogglePin,
   onSwitchAccount,
+  onGoAgents,
 }: ProjectListProps) {
   /** Hidden <input type="file"> reused across cards. The current upload
    *  target lives in a ref (not state) so the change handler reads the
@@ -348,7 +359,10 @@ export function ProjectList({
       logger.error('Failed to toggle main branch warning', {
         error: formatCommandError(asCommandError(error)),
       });
-      alert('Failed to update main branch warning: ' + formatCommandError(asCommandError(error)));
+      showToast(
+        `Couldn't change the main branch warning: ${formatCommandError(asCommandError(error))}`,
+        'error'
+      );
     }
   };
 
@@ -384,7 +398,7 @@ export function ProjectList({
       logger.error('Failed to upload thumbnail', {
         error: formatCommandError(asCommandError(error)),
       });
-      alert('Failed to upload thumbnail: ' + formatCommandError(asCommandError(error)));
+      showToast(`Couldn't use that picture: ${formatCommandError(asCommandError(error))}`, 'error');
     }
   };
 
@@ -393,14 +407,17 @@ export function ProjectList({
       const result = await exportProjectAsTemplate(projectPath);
       if (result) {
         void trackEvent('project_exported_as_template', { $screen_name: 'Dashboard' });
-        alert(`Template exported to:\n${result}`);
+        showToast(`Saved the template to ${result}`, 'success');
       }
       // If result is null, user cancelled the dialog - no action needed
     } catch (error) {
       logger.error('Failed to export template', {
         error: formatCommandError(asCommandError(error)),
       });
-      alert('Failed to export template: ' + formatCommandError(asCommandError(error)));
+      showToast(
+        `Couldn't save the template: ${formatCommandError(asCommandError(error))}`,
+        'error'
+      );
     }
   };
 
@@ -427,7 +444,10 @@ export function ProjectList({
       logger.error('Failed to delete folder', {
         error: formatCommandError(asCommandError(error)),
       });
-      alert('Failed to delete folder: ' + formatCommandError(asCommandError(error)));
+      showToast(
+        `Couldn't delete the folder: ${formatCommandError(asCommandError(error))}`,
+        'error'
+      );
     } finally {
       setDeletingFolder(false);
     }
@@ -546,6 +566,31 @@ export function ProjectList({
     }
   }, [projectSettingsModal.isOpen]);
 
+  // Who works in each project: agents bound to it and any whose turn is in it.
+  const projectAgents = useAgentsAtWork(true);
+  const teamFor = useCallback(
+    (projectPath: string) => projectTeam(projectAgents, projectPath, Date.now()),
+    [projectAgents]
+  );
+  const handleOpenAgent = useMemo(
+    () => (onGoAgents ? (agentId: string) => openAgentChat(onGoAgents, agentId) : undefined),
+    [onGoAgents]
+  );
+
+  const chiefKey = useAgentsSelector(selectChief);
+  const chief = useMemo(() => {
+    if (!chiefKey || !onGoAgents) return null;
+    const [id, name] = chiefKey.split('\t');
+    return {
+      name,
+      ask: () => {
+        // Start the sentence for them; anything they'd already typed stays.
+        if (!composerDraft(id).trim()) setComposerDraft(id, ASK_FOR_PROJECT);
+        openAgentChat(onGoAgents, id);
+      },
+    };
+  }, [chiefKey, onGoAgents]);
+
   const totalCount = currentFolderId
     ? filteredProjects.length
     : filteredFolders.length + filteredProjects.length;
@@ -582,8 +627,6 @@ export function ProjectList({
             onNewFolder={() => setShowNewFolderModal(true)}
             onCreateProject={onCreateProject}
             onImportProject={onImportProject}
-            isGitHubAuthenticated={isGitHubAuthenticated}
-            onGitHubConnectForImport={onGitHubConnectForImport}
             titleAccessory={
               !currentFolderId && hasMultipleWorkspaces && activeAccount && onSwitchAccount ? (
                 <DashboardWorkspaceChip account={activeAccount} onSwitch={onSwitchAccount} />
@@ -640,6 +683,9 @@ export function ProjectList({
                 pinnedSet={pinnedSet}
                 onTogglePin={onTogglePin}
                 onCreateProject={onCreateProject}
+                teamFor={teamFor}
+                onOpenAgent={handleOpenAgent}
+                chief={chief}
               />
             </>
           )}
@@ -750,11 +796,12 @@ export function ProjectList({
                 Remove <strong>{removeConfirm.name}</strong> from your projects?
               </>
             }
-            hint="Your project folder and files will stay on this Mac. You can add it back later with Import project, Local folder."
+            hint="Its folder and files stay on this Mac. To bring it back: Import, then Local folder."
             loading={removing}
             confirmLabel="Remove from projects"
             loadingLabel="Removing…"
-            confirmVariant="primary"
+            // An answer, not the recommended next step: neutral, as on every card.
+            confirmVariant="strong"
             onCancel={() => setRemoveConfirm(null)}
             onConfirm={() => void handleRemoveFromApp(removeConfirm)}
           />

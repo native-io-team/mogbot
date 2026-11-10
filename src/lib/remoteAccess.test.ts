@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   connectionStep,
   describeAudit,
+  assistantName,
   describeLastRequest,
   isReadyToLeave,
   isSetupComplete,
@@ -89,6 +90,9 @@ describe('connectionStep', () => {
       'signInTailscale'
     );
     expect(connectionStep(status({ enabled: false, linkMasked: null })).kind).toBe('off');
+    expect(connectionStep(status({ serverRunning: false, linkMasked: null })).kind).toBe(
+      'serverStopped'
+    );
   });
 
   it('shows the link only when the backend confirmed it', () => {
@@ -189,6 +193,12 @@ describe('liveState', () => {
     expect(liveState(status({ reachability: { state: 'noPublicDns' } }))).toBe('down');
     expect(liveState(status({ enabled: false }))).toBe('off');
   });
+
+  it('never trusts a reachability reading without a link or a server', () => {
+    // A stale "reachable" once the Funnel dropped read as Live.
+    expect(liveState(status({ linkMasked: null }))).toBe('down');
+    expect(liveState(status({ serverRunning: false }))).toBe('down');
+  });
 });
 
 describe('describeLastRequest', () => {
@@ -204,7 +214,13 @@ describe('describeLastRequest', () => {
         { lastRequestMs: now - 180_000, lastClient: 'grok', rejectedRequests: 0 },
         now
       )
-    ).toBe('grok connected 3 min ago');
+    ).toBe('Grok, last heard from 3 min ago');
+  });
+  it('names assistants as people know them, and anything else as sent', () => {
+    expect(assistantName('claude-ai')).toBe('Claude');
+    expect(assistantName('openai-mcp')).toBe('ChatGPT');
+    expect(assistantName('cursor-vscode')).toBe('Cursor');
+    expect(assistantName('my-bot')).toBe('My-bot');
   });
 });
 
@@ -222,7 +238,7 @@ describe('describeAudit', () => {
       'Pressed enter in site'
     );
     expect(describeAudit({ ...base, project: null, tool: 'connected', detail: 'grok' })).toBe(
-      'grok connected'
+      'Grok connected'
     );
   });
 });

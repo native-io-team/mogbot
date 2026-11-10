@@ -1,5 +1,6 @@
 /**
- * Settings → Accounts: each engine's accounts, in the order turns try them,
+ * Settings → Accounts, from a Mac that doesn't serve the Usage screen (a Mac
+ * that does shows Usage's card there instead, app/settings.tsx): each engine's accounts, in the order turns try them,
  * with which one is in use, its room, and who is set to run only on it.
  * "Use this one now" puts one first; the arrows move one earlier or later.
  * While every account of an engine is out and its agents carry on with the
@@ -19,13 +20,10 @@ import {
   awayStateOf,
   pinnedLine,
   USE_THIS_ONE_NOW,
-  type AgentEngine,
   type SwitcherEngine,
   type SwitcherRow,
 } from '@shipstudio/companion-protocol';
-import { usageGlance } from '@shipstudio/companion-protocol';
 import { View } from 'react-native';
-import { TotalCard } from './usageStack';
 import { makeStyles, useColors } from '../lib/appearance';
 import type { AccountsState } from '../lib/accounts';
 import { useApp } from '../lib/store';
@@ -54,30 +52,15 @@ export function shownEngines(view: SwitcherEngine[]): SwitcherEngine[] {
   return view.filter((e) => e.rows.length > 1 || e.rows.some((r) => r.signedIn));
 }
 
-export function AccountsSections({
-  state,
-  onOpenAccount,
-}: {
-  state: AccountsState;
-  /** Open one account's usage screen (a segment of the total). */
-  onOpenAccount?: (engine: AgentEngine, id: string) => void;
-}) {
+export function AccountsSections({ state }: { state: AccountsState }) {
   const colors = useColors();
   const styles = useStyles();
   const agents = useApp((s) => s.overview?.agents);
   const engines = shownEngines(state.view);
   if (!state.serves || engines.length === 0) return null;
   const several = engines.length > 1;
-  // The whole stack at a glance first, as the desk's sidebar says it.
-  const glance =
-    state.accounts && state.inventory ? usageGlance(state.accounts, state.inventory) : null;
   return (
     <>
-      {glance && glance.keys.length > 0 && (
-        <View style={styles.glance}>
-          <TotalCard glance={glance} onOpen={onOpenAccount} />
-        </View>
-      )}
       {engines.map((e, ei) => (
         <Section
           key={e.engine}
@@ -214,7 +197,6 @@ function AccountLine({
 }
 
 const useStyles = makeStyles(() => ({
-  glance: { marginBottom: space.lg },
   row: {
     flexDirection: 'row',
     alignItems: 'flex-start',

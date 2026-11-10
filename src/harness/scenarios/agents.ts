@@ -1514,6 +1514,116 @@ const CONVERSATIONS = {
     ],
   }),
   agents_conversation_rename: () => several('acme', now),
+  agents_conversation_rewind: () => several('acme', now),
+  agents_conversation_fork: () => several('acme', now),
+};
+
+/**
+ * Rewind, fork and edit (`agents/rewind.rs`): the launch email conversation
+ * after the user went back to before "Make it two sections", with what it
+ * passed over folded, the line saying so, and the conversation carrying on.
+ */
+const LAUNCH_SHORTER = msg('user', 'Make it two sections, drop the customer story.', 8, {
+  id: 'm-shorter',
+  agentId: 'acme',
+  conversation: 'c-launch',
+});
+const LAUNCH_SHORTER_REPLY = msg(
+  'agent',
+  'Two sections now: what’s new, then the ask. The customer story is gone.',
+  7,
+  { id: 'm-shorter-reply', agentId: 'acme', conversation: 'c-launch' }
+);
+const LAUNCH_REWOUND = [
+  ...LAUNCH_CHAT,
+  LAUNCH_SHORTER,
+  LAUNCH_SHORTER_REPLY,
+  msg(
+    'note',
+    'Went back to before “Make it two sections, drop the customer…”. It and the message after it are folded above, not deleted. Files it changed and anything it sent since aren’t undone.',
+    3,
+    { agentId: 'acme', conversation: 'c-launch' }
+  ),
+  msg('user', 'Keep three sections, but swap the customer story for a pricing table.', 2, {
+    agentId: 'acme',
+    conversation: 'c-launch',
+  }),
+  msg('agent', 'Done: what’s new, a pricing table with the three plans, then the ask.', 1, {
+    agentId: 'acme',
+    conversation: 'c-launch',
+  }),
+];
+const withLaunch = (
+  list: ReturnType<typeof several>,
+  over: Partial<ReturnType<typeof several>['items'][number]>
+) => ({
+  ...list,
+  items: list.items.map((c) => (c.id === 'c-launch' ? { ...c, ...over } : c)),
+});
+const GO_BACK = {
+  ...CONVERSATIONS,
+  agents_overview: acmeWith({ status: status('idle'), conversations: { loaded: 'c-launch' } }),
+};
+const REWOUND = {
+  ...GO_BACK,
+  agents_messages: (args: Record<string, unknown>) =>
+    args.agentId === 'acme' && args.conversation === 'c-launch'
+      ? LAUNCH_REWOUND
+      : CONVERSATIONS.agents_messages(args),
+  agents_conversations: (args: Record<string, unknown>) =>
+    args.agentId === 'acme'
+      ? withLaunch(several('acme', now), {
+          rewinds: [
+            {
+              id: 'r1',
+              at: 'm-shorter',
+              ts: now - 3 * MIN,
+              ids: ['m-shorter', 'm-shorter-reply'],
+            },
+          ],
+        })
+      : onlyFirst(args),
+};
+/** A fork of the launch email, made before "Make it two sections". */
+const FORK = {
+  ...GO_BACK,
+  agents_messages: (args: Record<string, unknown>) =>
+    args.agentId === 'acme' && args.conversation === 'c-fork'
+      ? [
+          ...LAUNCH_CHAT,
+          msg(
+            'note',
+            'Forked from “Plan the November launch email” before “Make it two sections, drop the customer…”. That one is unchanged. Files it changed and anything it sent since aren’t undone.',
+            1,
+            { agentId: 'acme', conversation: 'c-fork' }
+          ),
+        ]
+      : CONVERSATIONS.agents_messages(args),
+  agents_conversations: (args: Record<string, unknown>) => {
+    if (args.agentId !== 'acme') return onlyFirst(args);
+    const list = several('acme', now, 'c-fork');
+    return {
+      ...list,
+      items: [
+        {
+          id: 'c-fork',
+          title: 'Fork of Plan the November launch email',
+          named: true,
+          createdAt: now - MIN,
+          lastActivityAt: now - MIN,
+          current: true,
+          loaded: false,
+          waiting: 0,
+          forkedFrom: {
+            conversation: 'c-launch',
+            message: 'm-shorter',
+            title: 'Plan the November launch email',
+          },
+        },
+        ...list.items,
+      ],
+    };
+  },
 };
 
 /** The weekly metrics routine, set up in the first conversation. */
@@ -2569,7 +2679,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-when-routines',
     title: 'Agents — “When…” routines in the schedule popover',
     looksRightWhen:
-      'New routine on Lead Gen’s routines: the editor stands in for the list (a back arrow and “New routine” at the top), then “At a time / When…” with When… pressed and the composer: five plain sources (Linear among them, since Linear is set up in Claude Code itself, not only as a claude.ai connector), each with how it’s checked and its cost, under a “When this happens” label; Check every 5/10/30 min/every hour; a “What” field labelled like the time picker’s; the echo “When someone mentions you on GitHub — …” and the cost sentence; Cancel and a neutral Add (never Lead Gen’s teal). Readable in light and dark.',
+      'New routine on Lead Gen’s routines: the editor stands in for the list (a back arrow and “New routine” at the top), then “At a time / When…” with When… pressed and the composer: the everyday sources first (Mail, Messages, a folder, Something else… naming Gmail), then GitHub and Linear (Linear offered since Linear is set up in Claude Code itself, not only as a claude.ai connector), each with how it’s checked and its cost, under a “When this happens” label, GitHub mentions picked; Check every 5/10/30 min/every hour; a “What” field labelled like the time picker’s; the echo “When someone mentions you on GitHub — …” and the cost sentence; Cancel and a neutral Add (never Lead Gen’s teal). Readable in light and dark.',
     requires: '.agent-when__sources',
     openSelector: AGENTS_TAB,
     steps: [
@@ -2577,6 +2687,7 @@ export const agentsScenarios: Scenario[] = [
       { click: '.agent-chat__scheduled' },
       { click: '.agent-schedule__add button' },
       { click: '.agent-schedule__mode [aria-pressed="false"]' },
+      { click: '.agent-when__source:nth-child(5)' },
       {
         fill: '.agent-when input[aria-label="What to do when it happens"]',
         value: 'Triage it and tell me what’s urgent',
@@ -2589,6 +2700,8 @@ export const agentsScenarios: Scenario[] = [
       agents_usage: WHEN_USAGE,
       // The "At a time" composer previews its phrase before When… is pressed.
       agents_schedule_preview: schedulePreview,
+      // The composer opens on Mail, so it asks whether this Mac can read it.
+      agents_watch_mac_access: { mail: { state: 'ok' }, messages: { state: 'ok' } },
     },
   },
   {
@@ -2607,17 +2720,53 @@ export const agentsScenarios: Scenario[] = [
     },
   },
   {
+    id: 'agents-when-mail-access',
+    title: 'Agents — “When an email arrives” before Full Disk Access is on',
+    looksRightWhen:
+      'New routine on Lead Gen, When… pressed, “An email arrives in Mail” picked (“Free · reads Mail on this Mac”), with “From (optional)” filled with billing@northwind.com and the words field empty; under them the Mac’s own words, “Reading Mail needs Full Disk Access: System Settings → Privacy & Security → Full Disk Access, then turn on …”, with Open Full Disk Access then Check again under it; Check every 1/5/10/30 min; no echo and nothing repeated under the form; Add disabled.',
+    requires: '.agent-when__sources',
+    openSelector: AGENTS_TAB,
+    steps: [
+      { click: '[data-agent-id="leadgen"]' },
+      { click: '.agent-chat__scheduled' },
+      { click: '.agent-schedule__add button' },
+      { click: '.agent-schedule__mode [aria-pressed="false"]' },
+      { click: '.agent-when__source:nth-child(1)' },
+      { fill: '.agent-when input[aria-label="Only from"]', value: 'billing@northwind.com' },
+      {
+        fill: '.agent-when input[aria-label="What to do when it happens"]',
+        value: 'File the invoice and tell me the total',
+      },
+    ],
+    commands: {
+      agents_overview: overview(WHEN_TEAM),
+      agents_messages: messagesFor,
+      agents_apps_list: agentApps(CONNECTED_APPS),
+      agents_usage: WHEN_USAGE,
+      agents_schedule_preview: schedulePreview,
+      agents_watch_mac_access: {
+        mail: {
+          state: 'full_disk_access',
+          words:
+            'Reading Mail needs Full Disk Access: System Settings → Privacy & Security → Full Disk Access, then turn on Mogbot.',
+          settings: 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
+        },
+        messages: { state: 'ok' },
+      },
+    },
+  },
+  {
     id: 'agents-when-custom',
     title: 'Agents — adding a “When…” routine that checks through a connector',
     looksRightWhen:
-      'Linear is set up only as a claude.ai connector, so four sources are offered; “Something else…” is chosen, with “a new email from dana@acme.com” and what to do typed, and “Through” offers only the apps set up in Claude Code itself (figma, playwright; never “claude.ai …”), figma picked. The interval choices start at every 15 min with 30 pressed (a model check costs a call), and the line under says each check is a short read-only Claude Code call on Haiku, up to 24 a day, counted in Lead Gen’s usage, and that the first check only notes what’s already there. Add is enabled, with no Cancel (there is nothing to go back to).',
+      'Linear is set up only as a claude.ai connector, so six sources are offered (no Linear); “Something else…” is chosen, with “a new email from dana@acme.com” and what to do typed, and “Through” offers only the apps set up in Claude Code itself (figma, playwright; never “claude.ai …”), figma picked. The interval choices start at every 15 min with 30 pressed (a model check costs a call), and the line under says each check is a short read-only Claude Code call on Haiku, up to 24 a day, counted in Lead Gen’s usage, and that the first check only notes what’s already there. Add is enabled, with no Cancel (there is nothing to go back to).',
     requires: '.agent-when__sources',
     openSelector: AGENTS_TAB,
     steps: [
       { click: '[data-agent-id="leadgen"]' },
       { click: '.agent-chat__header [aria-label^="Schedule a routine"]' },
       { click: '.agent-schedule__mode [aria-pressed="false"]' },
-      { click: '.agent-when__source:last-child' },
+      { click: '.agent-when__source:nth-child(4)' },
       {
         fill: '.agent-when input[aria-label="What to look out for"]',
         value: 'a new email from dana@acme.com',
@@ -2640,6 +2789,8 @@ export const agentsScenarios: Scenario[] = [
         },
         ...CONNECTED_APPS.filter((a) => a.name !== 'linear'),
       ]),
+      // The composer opens on Mail, so it asks whether this Mac can read it.
+      agents_watch_mac_access: { mail: { state: 'ok' }, messages: { state: 'ok' } },
     },
   },
   {
@@ -3691,6 +3842,105 @@ export const agentsScenarios: Scenario[] = [
       { click: '[role="menuitem"]', text: 'Rename this conversation' },
     ],
     commands: CONVERSATIONS,
+  },
+  {
+    id: 'agents-go-back-menu',
+    title: 'Agents — Edit, Fork and Rewind on your own message',
+    looksRightWhen:
+      'Acme Site’s launch email conversation. Beside your message “Plan the November launch email…” its hover actions show (Copy, Remember, a … button, the time), and under the … a small menu: “Edit and resend” with a pencil, “Fork from here” with a branch, “Rewind to here” with an undo arrow. Neutral text, never accent; nothing disabled (Acme is idle).',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-go-back__menu',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-chat__row--user [aria-label="Go back to here"]' },
+    ],
+    commands: GO_BACK,
+  },
+  {
+    id: 'agents-go-back-context',
+    title: 'Agents — Edit, Fork and Rewind on a right-click of your message',
+    looksRightWhen:
+      'A right-click on your message “Plan the November launch email…” opens the app’s context menu at the pointer: Copy, Remember this, a divider, then “Edit and resend” (pencil), “Fork from here” (branch), “Rewind to here” (undo arrow). Neutral, never accent; nothing disabled (Acme is idle).',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-go-back__context',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { rightClick: '.agent-chat__row--user .agent-bubble--user' },
+    ],
+    commands: GO_BACK,
+  },
+  {
+    id: 'agents-go-back-picker',
+    title: 'Agents — ⌘K “Go back to an earlier message…”',
+    looksRightWhen:
+      'A dialog “Go back to an earlier message”: your messages in this conversation that can be gone back to, newest first (“Keep three sections…” then “Plan the November launch email…”; the rewound one is not offered), each a quoted first line with how long ago, and on its right three quiet buttons, Edit, Fork and Rewind, with their glyphs. Nothing in accent; nothing disabled (Acme is idle).',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-go-back__picker',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { key: 'mod+k' },
+      { fill: '.command-palette-input', value: 'Go back to an earlier message' },
+      { click: '.command-palette [role="option"]', text: 'Go back to an earlier message' },
+    ],
+    commands: REWOUND,
+  },
+  {
+    id: 'agents-go-back-confirm',
+    title: 'Agents — Rewind to here?, the confirm',
+    looksRightWhen:
+      'A small dialog “Rewind to here?”: “Acme Site carries on from just before “Plan the November launch email: who it…”. That message and what came after it stay in the chat, folded, not deleted. Files it changed and anything it sent since aren’t undone.” Then Cancel and a neutral “Rewind” (with an undo arrow) on the right; nothing in accent.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-go-back__confirm',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-chat__row--user [aria-label="Go back to here"]' },
+      { click: '[role="menuitem"]', text: 'Rewind to here' },
+    ],
+    commands: GO_BACK,
+  },
+  {
+    id: 'agents-go-back-editing',
+    title: 'Agents — editing a sent message before resending it',
+    looksRightWhen:
+      'The launch email conversation. Over the composer, a quiet bar with a pencil: “Editing your message. Sending goes back to just before it. “Plan the November launch email: who it…”” and an × to stop editing. The composer holds the message’s words, ready to change and send. The chat above is unchanged.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-go-back__editing',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { click: '.agent-chat__row--user [aria-label="Go back to here"]' },
+      { click: '[role="menuitem"]', text: 'Edit and resend' },
+    ],
+    commands: GO_BACK,
+  },
+  {
+    id: 'agents-go-back-rewound',
+    title: 'Agents — what a rewind passed over, folded',
+    looksRightWhen:
+      'The launch email conversation: your ask and the three-section outline, then one quiet centred line, a rewind glyph, “Rewound · 2 messages” and a chevron (the two-sections ask and its reply are not shown), then the note “Went back to before …”, then your pricing-table ask and its reply. Nothing deleted, nothing in accent.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-go-back__summary',
+    steps: [{ click: '[data-agent-id="acme"]' }],
+    commands: REWOUND,
+  },
+  {
+    id: 'agents-go-back-rewound-open',
+    title: 'Agents — a rewound fold, opened',
+    looksRightWhen:
+      'As the folded one, but opened it reads as past: one band with a grey rule down its left, from the “Rewound · 2 messages” line (now left-aligned, chevron down) to “End of what was rewound”. Between them the two lines it held, muted: “Make it two sections, drop the customer story.” and its reply. Then the “Went back to before …” note and the live conversation at full ink.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-go-back__summary[data-open]',
+    steps: [{ click: '[data-agent-id="acme"]' }, { click: '.agent-go-back__summary button' }],
+    commands: REWOUND,
+  },
+  {
+    id: 'agents-go-back-fork',
+    title: 'Agents — a fork of a conversation, opened',
+    looksRightWhen:
+      'Acme Site’s chat, the header’s conversation button reading “Fork of Plan the November launch email”. The chat holds the launch email’s history (your ask and the outline), then the quiet line “Forked from “Plan the November launch email” before …. That one is unchanged. Files it changed and anything it sent since aren’t undone.”',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-conversations__title',
+    steps: [{ click: '[data-agent-id="acme"]' }],
+    commands: FORK,
   },
   {
     id: 'agents-conversations-search-hit',

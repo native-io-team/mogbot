@@ -27,7 +27,18 @@ try {
   // Private mode or blocked site data. Nothing to clear, nothing to fix.
 }
 
-for (const [key, value] of Object.entries(scenario.storage ?? {})) {
+// ChiefPhoneOffer's PHONE_OFFER_KEY, written out: importing the component here
+// would load app modules (which read storage at module scope) before the wipe.
+const PHONE_OFFER_KEY = 'shipstudio.chief.phoneOffer';
+
+// The Chief's phone offer reads as answered unless the scenario is about it
+// (`phoneOffer: true`); a scenario's own `storage` still wins.
+const seeded: Record<string, string> = {
+  ...(scenario.phoneOffer ? {} : { [PHONE_OFFER_KEY]: 'later' }),
+  ...scenario.storage,
+};
+
+for (const [key, value] of Object.entries(seeded)) {
   try {
     localStorage.setItem(key, value);
   } catch {

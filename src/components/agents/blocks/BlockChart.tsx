@@ -14,6 +14,7 @@ import {
   chartHasData,
   chartLabel,
   chartModel,
+  chartSummary,
   formatValue,
   indexAt,
   legendEntries,
@@ -169,7 +170,7 @@ function Cartesian({
         height={height}
         viewBox={`0 0 ${width} ${height}`}
         role="img"
-        aria-label={chartLabel(block)}
+        aria-label={`${chartLabel(block)}. ${chartSummary(block)}`}
         tabIndex={spark ? undefined : 0}
         onPointerMove={spark ? undefined : move}
         onPointerLeave={() => setAt(null)}
@@ -371,7 +372,7 @@ function PieChart({ block, model }: { block: ChartBlock; model: PieModel }) {
         height={model.cy * 2}
         viewBox={`0 0 ${size} ${model.cy * 2}`}
         role="img"
-        aria-label={chartLabel(block)}
+        aria-label={`${chartLabel(block)}. ${chartSummary(block)}`}
         onPointerLeave={() => setAt(null)}
       >
         {model.slices.map((s) => (

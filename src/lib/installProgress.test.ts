@@ -35,7 +35,11 @@ describe('installSteps', () => {
 
   it('Node.js says it installs with Homebrew; a sign-in waits on the browser', () => {
     expect(installSteps('node')[0].label).toBe('Installing Node.js with Homebrew');
-    expect(installSteps('homebrew')[0].label).toBe('Downloading Homebrew');
+    expect(installSteps('homebrew').map((s) => s.label)).toEqual([
+      'Getting ready to install Homebrew',
+      'Downloading and installing Homebrew',
+      'Checking it works',
+    ]);
     expect(installSteps('claude_auth').map((s) => s.phase)).toEqual([
       'download',
       'browser',

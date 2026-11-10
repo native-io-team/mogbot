@@ -212,4 +212,12 @@ describe('a card', () => {
     });
     expect(askAction(ask('c', 'x', 0, { prompt: {} as never })).kind).toBe('open');
   });
+
+  it('answers a skill offer with its own words, never Allow / Deny', () => {
+    expect(askAction(ask('c', 'x', 0, { skill: {} as never }))).toEqual({
+      kind: 'answer',
+      allow: 'Save',
+      deny: 'Not now',
+    });
+  });
 });

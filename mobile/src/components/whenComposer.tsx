@@ -9,18 +9,26 @@
  * Differences, each because it's a phone: a folder is one of the Mac's own
  * (`agents.watch.options`: Downloads, Desktop, Documents, and folders other
  * routines already watch), never a typed path, which the Mac refuses too;
- * the apps a check can read through come from the Mac as well. Everything
+ * the apps a check can read through come from the Mac as well; an email or
+ * text routine's sender is typed (the Mac sends no contacts list), checked
+ * as the Mac checks it, and whether the Mac can read Mail or Messages is the
+ * Mac's own answer (`WatchOptions.mac`): its words name Full Disk Access,
+ * which only the Mac can switch on, and Check again asks it again. Everything
  * else, the 12-per-agent cap, the line in the chat and every rule of the
  * check, is the Mac's own (`agents/watch.rs`).
  */
 
 import {
   DEFAULT_WHEN_EVERY,
+  DEFAULT_WHEN_KIND,
   describeEvery,
   everyAfterPick,
   shortEvery,
+  whenAccess,
   whenApps,
   whenEcho,
+  whenFilterOf,
+  whenKindReadsMac,
   whenIntervalChoices,
   whenMissing,
   whenNoApps,
@@ -32,7 +40,7 @@ import {
   type WatchOptions,
   type WhenKind,
 } from '@shipstudio/companion-protocol';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { StyleSheet, TextInput, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { describeError, watch } from '../lib/session';
@@ -68,11 +76,12 @@ export function WhenComposer({
   const appearance = useAppearance();
   const accent = useAccent();
   const start = editing?.watch?.source;
-  const startKind: WhenKind = start && start.kind !== 'unknown' ? start.kind : 'github_mentions';
+  const startKind: WhenKind = start && start.kind !== 'unknown' ? start.kind : DEFAULT_WHEN_KIND;
   const [kind, setKind] = useState<WhenKind>(startKind);
   const [folder, setFolder] = useState(start?.kind === 'new_file' ? start.folder : '');
   const [check, setCheck] = useState(start?.kind === 'custom' ? start.check : '');
   const [app, setApp] = useState(start?.kind === 'custom' ? (start.app ?? '') : '');
+  const [filter, setFilter] = useState(() => whenFilterOf(start));
   const [every, setEvery] = useState(editing?.watch?.everyMinutes ?? DEFAULT_WHEN_EVERY);
   const [note, setNote] = useState(editing?.note ?? '');
   const [error, setError] = useState<string | null>(null);
@@ -80,24 +89,39 @@ export function WhenComposer({
   // What the Mac offers this agent: null while it's asked.
   const [options, setOptions] = useState<WatchOptions | null>(null);
 
+  const [asking, setAsking] = useState(false);
+
+  const ask = useCallback(
+    (live: () => boolean) =>
+      watch.options(agent.id).then(
+        (o) => live() && setOptions(o),
+        // Nothing offered: Linear and the apps stay out, and a folder can't be picked.
+        () => live() && setOptions({ connections: [], claudeApps: [], folders: [] })
+      ),
+    [agent.id]
+  );
   useEffect(() => {
     let live = true;
-    watch.options(agent.id).then(
-      (o) => live && setOptions(o),
-      // Nothing offered: Linear and the apps stay out, and a folder can't be picked.
-      () => live && setOptions({ connections: [], claudeApps: [], folders: [] })
-    );
+    void ask(() => live);
     return () => {
       live = false;
     };
-  }, [agent.id]);
+  }, [ask]);
+  // Check again: the Mac's answer once Full Disk Access is switched on there.
+  const askAgain = () => {
+    setAsking(true);
+    void ask(() => true).finally(() => setAsking(false));
+  };
 
   const found = whenApps(agent.id, options?.connections ?? [], options?.claudeApps ?? []);
   const choices = whenSourceChoices(found.linear || startKind === 'linear_assigned', 'your Mac');
   const intervals = whenIntervalChoices(kind, every);
-  const source = whenSourceOf(kind, folder.trim(), check.trim(), app);
-  const missing = whenMissing(kind, folder, check, app);
+  const source = whenSourceOf(kind, folder.trim(), check.trim(), app, filter);
+  const access = whenAccess(kind, options?.mac);
+  const fieldMissing = whenMissing(kind, folder, check, app, filter);
+  const missing = fieldMissing ?? access?.words ?? null;
   const folders = options?.folders ?? [];
+  const readsMac = whenKindReadsMac(kind);
 
   const pick = (next: WhenKind) => {
     setKind(next);
@@ -173,6 +197,56 @@ export function WhenComposer({
                   ? 'Folders your Mac offers. For another, set it up on your Mac.'
                   : 'Your Mac offered no folders. Set this one up on your Mac.'}
             </T>
+          </Animated.View>
+        )}
+
+        {readsMac && (
+          <Animated.View entering={FadeIn.duration(150)} style={styles.group}>
+            <TextInput
+              value={filter.from}
+              onChangeText={(t) => setFilter((f) => ({ ...f, from: t.replace(/\n/g, ' ') }))}
+              placeholder={
+                kind === 'new_mail'
+                  ? WHEN_WORDS.mailFromPlaceholder
+                  : WHEN_WORDS.textFromPlaceholder
+              }
+              placeholderTextColor={colors.textMuted}
+              style={styles.input}
+              selectionColor={accent.accent}
+              keyboardAppearance={appearance}
+              autoCapitalize="none"
+              autoCorrect={false}
+              maxLength={200}
+              accessibilityLabel="Only from"
+            />
+            {kind === 'new_mail' && (
+              <TextInput
+                value={filter.words}
+                onChangeText={(t) => setFilter((f) => ({ ...f, words: t.replace(/\n/g, ' ') }))}
+                placeholder={WHEN_WORDS.mailWordsPlaceholder}
+                placeholderTextColor={colors.textMuted}
+                style={styles.input}
+                selectionColor={accent.accent}
+                keyboardAppearance={appearance}
+                maxLength={200}
+                accessibilityLabel="Only with these words"
+              />
+            )}
+            {access ? (
+              // What the Mac needs, said beside Check again (as on the desk),
+              // not under the form.
+              <T variant="caption" color={colors.textSecondary}>
+                {access.words}
+              </T>
+            ) : null}
+            {access ? (
+              <Button
+                title={WHEN_WORDS.checkAgain}
+                variant="ghost"
+                busy={asking}
+                onPress={askAgain}
+              />
+            ) : null}
           </Animated.View>
         )}
 
@@ -270,7 +344,7 @@ export function WhenComposer({
           </T>
         ) : (
           <T variant="caption" color={colors.textSecondary}>
-            {missing ?? whenReadback(agent.name, source, every)}
+            {fieldMissing ?? (access ? '' : whenReadback(agent.name, source, every))}
           </T>
         )}
       </View>

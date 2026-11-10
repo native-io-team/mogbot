@@ -180,7 +180,9 @@ export const appScenarios: Scenario[] = [
     requires: '.empty-state-action',
     title: 'Dashboard — no projects yet',
     looksRightWhen:
-      'A deliberate empty state with a clear primary action, not a blank panel or a stuck spinner.',
+      'A deliberate empty state, not a blank panel or a stuck spinner. With a Chief, its one ' +
+      'action is "Ask <Chief>" (neutral: New project above is already the primary), which opens ' +
+      'its chat with "Make me a new site or app: " in the message box, never sent.',
     commands: {
       get_dashboard_projects: [],
       list_projects: [],

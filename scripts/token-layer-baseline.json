@@ -1133,13 +1133,13 @@
     {
       "path": "src/styles/features/project-grid.css",
       "token": "--font-size-12",
-      "count": 2,
+      "count": 1,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
       "path": "src/styles/features/project-grid.css",
       "token": "--font-weight-semibold",
-      "count": 1,
+      "count": 2,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {

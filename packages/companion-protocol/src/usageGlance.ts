@@ -206,7 +206,7 @@ export interface UsageTotal {
   counted: number;
   /** The soonest refill of the limits counted. */
   refill: { in: string; at: string; account: string } | null;
-  /** Most room first, left to right; accounts with no reading last. */
+  /** Every real account, in the work order (as the list under it); no reading is an empty slot. */
   segments: TotalSegment[];
 }
 
@@ -304,6 +304,46 @@ function rowWords(
     refill: total.refill ? `Refills in ${total.refill.in}` : null,
     count: total.counted > 1 ? plural(total.counted, 'account') : null,
     needsYou,
+  };
+}
+
+/**
+ * The total said once, for every place that leads with it (the Usage view's
+ * hero on the desk and the phone, the chat header's popover): the figure,
+ * what it is across, and the next refill with when. Out everywhere, or
+ * nothing read, the figure says that instead, never a number.
+ */
+export interface TotalWords {
+  /** "All accounts" over the figure, with more than one account in the bar. */
+  eyebrow: string | null;
+  /** "72% left", "Out of usage", "Your usage shows here after an agent’s first reply." */
+  figure: string;
+  /** "across 2 Max accounts", "this week": only beside a reading. */
+  across: string | null;
+  /** "Next refill in 2d 3h · Work, Thu 8:56 AM"; out everywhere, "Refills Sat 10:00 AM". */
+  refill: string | null;
+  /** A figure that is a reading (the big type is for readings only). */
+  known: boolean;
+}
+
+export function totalWords(
+  glance: Pick<UsageGlance, 'total' | 'tone' | 'unread' | 'headline' | 'row'>
+): TotalWords {
+  const { total } = glance;
+  const out = glance.tone === 'limited';
+  const known = total.left !== null && !out;
+  const figure = known ? total.figure : glance.unread ? glance.headline : glance.row.figure;
+  const refill = out
+    ? glance.row.refill
+    : total.refill
+      ? `Next refill in ${total.refill.in}${total.counted > 1 ? ` · ${total.refill.account}` : ''}, ${total.refill.at}`
+      : null;
+  return {
+    eyebrow: total.segments.length > 1 ? 'All accounts' : null,
+    figure,
+    across: known && total.across ? total.across : null,
+    refill,
+    known,
   };
 }
 

@@ -195,8 +195,11 @@
   display: flex;
   align-items: center;
   gap: 4px;
+  /* The branch is the line's subject: it keeps its name and the counts beside
+     it give way first (their shrink weight is far higher, and they ellipsise),
+     so a narrow card never reads "f…". */
   min-width: 0;
-  flex: 1;
+  flex: 0 1 auto;
 }
 
 .project-card-branch svg {
@@ -212,13 +215,19 @@
 
 .project-card-changes {
   color: var(--text-secondary); /* a count, not a call for you: amber means "needs you" only */
-  flex-shrink: 0;
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .project-card-worktrees {
   color: var(--text-muted);
-  flex-shrink: 0;
+  flex: 0 100 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -436,4 +445,47 @@
   .integration-bar {
     margin-top: 0;
   }
+}
+
+/* Who works in a project (ProjectTeam.tsx): agents' keys and one line, on the
+   card under its branch and in the list under its name. A text action: it
+   opens the first agent's chat, the card around it opens the project. */
+.project-card-team {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  max-width: 100%;
+  margin-top: var(--spacing-2xs);
+  color: var(--text-secondary);
+  font-size: var(--font-size-body-md);
+  text-align: left;
+}
+
+.project-card-team-keys {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.project-card-team-key + .project-card-team-key {
+  margin-left: calc(var(--spacing-xs) * -1);
+}
+
+.project-card-team-more {
+  margin-left: var(--spacing-2xs);
+  color: var(--text-muted);
+  font-size: var(--font-size-badge);
+  font-variant-numeric: tabular-nums;
+}
+
+.project-card-team-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.project-card-team--link:hover .project-card-team-text {
+  color: var(--text-primary);
 }

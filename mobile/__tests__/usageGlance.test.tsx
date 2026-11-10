@@ -111,9 +111,7 @@ describe('usage at a glance, on the phone', () => {
     // when it next refills, as a chip; the button says it in words.
     expect(screen.getByText(/60% left · 2 accounts/)).toBeTruthy();
     expect(screen.queryByText(/70% left/)).toBeNull();
-    expect(
-      screen.getByText(glance.total.refill!.in, { includeHiddenElements: true })
-    ).toBeTruthy();
+    expect(screen.getByText(glance.total.refill!.in, { includeHiddenElements: true })).toBeTruthy();
     expect(screen.getByRole('button').props.accessibilityLabel).toMatch(/Refills in /);
     expect(screen.queryByText('Plenty of room')).toBeNull();
     await fireEvent.press(screen.getByRole('button'));
@@ -138,26 +136,22 @@ describe('usage at a glance, on the phone', () => {
     ).toBeTruthy();
   });
 
-  it('leads with the total, roomiest account first, each named in full, never "This Mac"', async () => {
+  it('leads with the total, the bar in the work order, never "This Mac"; the rows name the accounts', async () => {
     const glance = usageGlance([mac, work], inventory([line('default', 30), line('w', 50)]), {
       now: NOW,
     });
-    const onOpen = jest.fn();
-    await render(<TotalCard glance={glance} onOpen={onOpen} />);
+    await render(<TotalCard glance={glance} />);
     // One headline, as the desk's hero: the figure, then of what.
     expect(screen.getByRole('header').props.children[0]).toBe('60% left');
     expect(screen.getByText('across 2 accounts')).toBeTruthy();
-    // Most room first: the account in use (70%) before Work (50%).
-    const names = screen.getAllByRole('button').map((b) => b.props.accessibilityLabel);
-    expect(names[0]).toMatch(/^Claude Code account: 70% left/);
-    expect(names[1]).toMatch(/^Work: 50% left/);
-    await fireEvent.press(screen.getAllByRole('button')[1]);
-    expect(onOpen).toHaveBeenCalledWith('claude', 'w');
+    // The bar says each account in the work order; the card doesn't list them
+    // again (the account rows under it do).
+    expect(screen.getByLabelText(/^Room left\. /).props.accessibilityLabel).toMatch(
+      /^Room left\. Claude Code account: 70% left.*; Work: 50% left/
+    );
+    expect(screen.queryAllByRole('button')).toHaveLength(0);
+    expect(screen.queryByText('70% left')).toBeNull();
     expect(screen.queryByText(/This Mac|Signed in on t/)).toBeNull();
-    expect(screen.getByText('Claude Code account')).toBeTruthy();
-    expect(screen.getByText('Work')).toBeTruthy();
-    expect(screen.getByText('70% left')).toBeTruthy();
-    expect(screen.getByText('50% left')).toBeTruthy();
   });
 
   it('an estimate is never amber: the run-out headline and a pace line are ink', async () => {

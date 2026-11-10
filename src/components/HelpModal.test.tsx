@@ -55,10 +55,10 @@ describe('HelpModal', () => {
     expect(screen.getByText('⌘W')).toHaveClass('workspace-sidebar-filter-shortcut');
     expect(screen.getByText('Switch workspace')).toBeVisible();
     expect(screen.getByText('⌥1–9')).toHaveClass('workspace-sidebar-filter-shortcut');
-    expect(screen.getByText('Toggle Agent panel')).toBeVisible();
+    expect(screen.getByText('Toggle Session panel')).toBeVisible();
     expect(screen.getByText('Switch workspace mode')).toBeVisible();
     expect(screen.getByText('⌘⌃1–3')).toHaveClass('workspace-sidebar-filter-shortcut');
-    expect(screen.getByText('Switch terminal/agent tab')).toBeVisible();
+    expect(screen.getByText('Switch session or terminal tab')).toBeVisible();
     expect(screen.getByText('⌃1–9')).toHaveClass('workspace-sidebar-filter-shortcut');
     expect(screen.getByText('Toggle Edit mode')).toBeVisible();
     expect(screen.getByText('⌘E')).toHaveClass('workspace-sidebar-filter-shortcut');

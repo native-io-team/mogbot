@@ -172,7 +172,7 @@ export function WorkspaceTerminalPane(props: WorkspaceTerminalPaneProps) {
       dock={dock}
       docked={agentPanelPinned || isPreviewHidden}
       visible={!isAgentPanelHidden}
-      ariaLabel="Agent panel"
+      ariaLabel="Session panel"
       positionKey="agentPanelFloatingPosition"
       sizeKey="agentPanelFloatingSize"
       floatingSize={AGENT_PANEL_FLOATING_SIZE}
@@ -186,7 +186,7 @@ export function WorkspaceTerminalPane(props: WorkspaceTerminalPaneProps) {
         <div className="workspace-terminal-view">
           <div className="terminal-agent-header panel-heading-pair" data-dockable-drag-handle>
             <span className="terminal-agent-header__identity">
-              <span className="panel-heading-pair-title workspace-panel-title">Agent</span>
+              <span className="panel-heading-pair-title workspace-panel-title">Session</span>
               <span className="panel-heading-pair-meta">{getActiveTabAgent().displayName}</span>
             </span>
             {!isPreviewHidden && (

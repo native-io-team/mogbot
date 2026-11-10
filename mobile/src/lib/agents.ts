@@ -21,6 +21,7 @@ import {
   keyStateOf,
   needsYouCount,
   secretTitle,
+  skillOutcome,
   tokenCount,
   workingRowLine,
 } from '@shipstudio/companion-protocol';
@@ -395,6 +396,17 @@ export const answerableHere = (approval: Pick<Approval, 'connector'>, reviewHere
 const pendingCard = (m: AgentMessage): Approval | null =>
   m.kind === 'approval' && m.approval?.status === 'pending' ? m.approval : null;
 
+/** Every card still waiting that the phone can answer, oldest first (ids). */
+export function pendingApprovalIds(messages: AgentMessage[] | undefined): string[] {
+  if (!messages) return [];
+  return messages
+    .filter((m) => {
+      const card = pendingCard(m);
+      return !!card && answerableHere(card);
+    })
+    .map((m) => m.id);
+}
+
 /**
  * An agent's approval still waiting that the phone can answer, as far as
  * this phone's copy of its chat shows. A review card isn't one.
@@ -712,6 +724,11 @@ export {
 export function cardOutcome(approval: Approval): string {
   // Nobody answered: what the desk's receipt says.
   if (approval.status === 'expired' && approval.expiry) return EXPIRY_OUTCOME[approval.expiry];
+  // "Save … as a skill?": Saved or Not now, as the desk says it.
+  if (approval.skill) {
+    const said = skillOutcome(approval.status);
+    if (said) return said;
+  }
   // "Needs you in its browser": the desk's words.
   if (approval.stepIn && (approval.status !== 'expired' || approval.setAside)) {
     return stepInOutcome(approval);

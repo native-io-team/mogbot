@@ -1,5 +1,7 @@
 /**
- * Settings → General: the Agents menu-bar icon and the quick-message shortcut.
+ * Settings → Agents → On this Mac: the Agents menu-bar icon and the
+ * quick-message shortcut. Both also change from chat (`change_app_setting`),
+ * and the rows read again when they do.
  *
  * The icon is on by default once Agents has been used (a message sent to any
  * agent, or agents imported) or while "Keep running when closed" is on, so
@@ -16,7 +18,7 @@
  * @module components/agents/AgentsDesktopSettings
  */
 
-import { useState, type KeyboardEvent } from 'react';
+import { useEffect, useState, type KeyboardEvent } from 'react';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import {
   acceleratorFromEvent,
@@ -25,6 +27,7 @@ import {
   type DesktopSettingsChange,
 } from '../../lib/agentsDesktop';
 import { asCommandError, formatCommandError } from '../../lib/errors';
+import { onAppSettingsChanged } from '../../lib/settingsFromChat';
 
 function Toggle({
   on,
@@ -54,6 +57,25 @@ export function AgentsDesktopSettings() {
   const settings = useAsyncState(getDesktopSettings, { immediate: true });
   const [recording, setRecording] = useState(false);
   const [problem, setProblem] = useState<string | null>(null);
+  const { execute: reread } = settings;
+  // The Chief turned the menu bar icon or quick message on or off from chat.
+  useEffect(() => {
+    let off: (() => void) | undefined;
+    let gone = false;
+    try {
+      onAppSettingsChanged((changed) => {
+        if ('menu_bar_icon' in changed || 'quick_message' in changed) void reread();
+      })
+        .then((u) => (gone ? u() : (off = u)))
+        .catch(() => {});
+    } catch {
+      /* no event bridge (tests, the harness) */
+    }
+    return () => {
+      gone = true;
+      off?.();
+    };
+  }, [reread]);
   const s = settings.data;
   if (!s?.supported) return null;
 

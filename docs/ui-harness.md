@@ -302,6 +302,12 @@ backend answer. An invented value is not. That is the line.
 
 Register it in `src/harness/scenarios/index.ts`.
 
+Every capture starts with the Chief's phone offer answered ("later"), since on
+a fresh install it shows under any Chief reply; a scenario about the offer sets
+`phoneOffer: true`. Copying always succeeds at once (the clipboard is stubbed:
+in a shared browser only the focused tab may write) and "Copied" holds for the
+capture instead of resetting after 2s.
+
 Fixture shapes must be copied from the `invoke<...>` type at the real call site,
 **including its snake_case/camelCase inconsistency** — the backend is not
 uniform about casing, and a fixture that tidies it up tests a response the app

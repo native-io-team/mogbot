@@ -327,6 +327,87 @@ impl Backend for DesktopBackend {
         )
     }
 
+    async fn page(
+        &self,
+        agent_id: &str,
+        conversation: Option<&str>,
+    ) -> Result<Value, CommandError> {
+        json(
+            crate::commands::agents_page::agents_page(
+                agent_id.to_string(),
+                conversation.map(str::to_string),
+            )
+            .await?,
+        )
+    }
+
+    async fn page_version(
+        &self,
+        agent_id: &str,
+        conversation: Option<&str>,
+        version: u32,
+    ) -> Result<Value, CommandError> {
+        json(
+            crate::commands::agents_page::agents_page_version(
+                agent_id.to_string(),
+                conversation.map(str::to_string),
+                version,
+            )
+            .await?,
+        )
+    }
+
+    async fn page_pin(
+        &self,
+        agent_id: &str,
+        conversation: Option<&str>,
+        pinned: bool,
+    ) -> Result<Value, CommandError> {
+        json(
+            crate::commands::agents_page::agents_page_pin(
+                self.app.clone(),
+                agent_id.to_string(),
+                conversation.map(str::to_string),
+                pinned,
+            )
+            .await?,
+        )
+    }
+
+    async fn conversation_rewind(
+        &self,
+        agent_id: &str,
+        id: &str,
+        message_id: &str,
+    ) -> Result<Value, CommandError> {
+        json(
+            cmd::agents_conversation_rewind(
+                self.app.clone(),
+                agent_id.to_string(),
+                id.to_string(),
+                message_id.to_string(),
+            )
+            .await?,
+        )
+    }
+
+    async fn conversation_fork(
+        &self,
+        agent_id: &str,
+        id: &str,
+        message_id: &str,
+    ) -> Result<Value, CommandError> {
+        json(
+            cmd::agents_conversation_fork(
+                self.app.clone(),
+                agent_id.to_string(),
+                id.to_string(),
+                message_id.to_string(),
+            )
+            .await?,
+        )
+    }
+
     async fn conversation_routine(
         &self,
         agent_id: &str,
@@ -551,6 +632,7 @@ impl Backend for DesktopBackend {
             project: None,
             work_directly: None,
             account: toggles.account,
+            learn_skills: toggles.learn_skills,
         };
         json(cmd::agents_update(self.app.clone(), agent_id.to_string(), input).await?)
     }
@@ -846,6 +928,32 @@ impl Backend for DesktopBackend {
 
     async fn policy(&self, agent_id: &str) -> Result<Value, CommandError> {
         json(cmd::agents_policy(agent_id.to_string()).await?)
+    }
+
+    async fn skills(&self, agent_id: &str) -> Result<Value, CommandError> {
+        json(cmd::agents_skills(agent_id.to_string()).await?)
+    }
+
+    async fn skill_edit(
+        &self,
+        agent_id: &str,
+        edit: super::router::SkillEdit,
+    ) -> Result<Value, CommandError> {
+        json(
+            cmd::agents_skill_edit(
+                self.app.clone(),
+                agent_id.to_string(),
+                edit.slug,
+                edit.name,
+                edit.when,
+                edit.steps,
+            )
+            .await?,
+        )
+    }
+
+    async fn skill_remove(&self, agent_id: &str, slug: &str) -> Result<(), CommandError> {
+        cmd::agents_skill_remove(self.app.clone(), agent_id.to_string(), slug.to_string()).await
     }
 
     async fn on_its_own(&self, agent_id: &str) -> Result<Value, CommandError> {

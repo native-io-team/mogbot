@@ -39,11 +39,11 @@ it('lists the open threads it was given', () => {
     />
   );
 
-  const threadList = within(screen.getByRole('listbox', { name: 'Comment threads' }));
-  const threadOptions = threadList.getAllByRole('option');
-  expect(threadOptions).toHaveLength(2);
-  expect(threadList.getByRole('option', { name: /Make this smaller/ })).toBeInTheDocument();
-  expect(threadList.getByRole('option', { name: /Wrong copy/ })).toBeInTheDocument();
+  const threadList = within(screen.getByRole('list', { name: 'Comment threads' }));
+  expect(threadList.getAllByRole('listitem')).toHaveLength(2);
+  // Each row opens through one button named by its pin, target and last words.
+  expect(threadList.getByRole('button', { name: /^#1 .*Make this smaller/ })).toBeInTheDocument();
+  expect(threadList.getByRole('button', { name: /Wrong copy/ })).toBeInTheDocument();
   expect(screen.queryByText('No open comments')).not.toBeInTheDocument();
 });
 

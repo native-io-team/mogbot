@@ -1,6 +1,6 @@
 /**
  * One account's usage, opened from a row or a segment of the total on the
- * Usage screen (or Settings → Accounts): "‹ Usage", its name as the title,
+ * Usage screen: "‹ Usage", its name as the title,
  * then the desk's account page (components/usageStack.tsx `KeyCard`): its
  * place and state with "Use this one now" and its place in the order, its
  * limits each against pace or who used it this week (Limits | Tokens), and
@@ -8,7 +8,7 @@
  * desk's account page says it).
  */
 
-import { usageGlance, type UsageInventory } from '@shipstudio/companion-protocol';
+import type { UsageInventory } from '@shipstudio/companion-protocol';
 import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
@@ -17,6 +17,8 @@ import { KeyCard, type KeyActions } from '../components/usageStack';
 import { Icon, SheetPage, T } from '../components/ui';
 import { idsOf, useAccounts } from '../lib/accounts';
 import { makeStyles, useColors } from '../lib/appearance';
+import { glanceFor } from '../lib/glance';
+import { useApp } from '../lib/store';
 import { call, canCall } from '../lib/session';
 import { iconSize, PRESSED, space } from '../lib/theme';
 import { usePolling } from '../lib/usePolling';
@@ -38,9 +40,11 @@ export default function UsageAccount() {
   usePolling(read, 60_000);
   const state = useAccounts({ room: false });
   const { accounts } = state;
+  const agents = useApp((s) => s.overview?.agents);
+  // The same glance as Usage and the Agents list: the same accounts, the same pins.
   const glance = useMemo(
-    () => (accounts && inventory ? usageGlance(accounts, inventory) : null),
-    [accounts, inventory]
+    () => (accounts && inventory ? glanceFor(accounts, inventory, agents) : null),
+    [accounts, inventory, agents]
   );
   const key = glance?.keys.find((k) => k.engine === engine && k.id === account) ?? null;
   // "May be the same account as …": the question about this one, said on its page too.

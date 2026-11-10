@@ -175,6 +175,14 @@ export async function refreshTeamSetup(): Promise<TeamSetupView | null> {
   }
 }
 
+/** The read the store starts with, while it's out. */
+let starting: Promise<unknown> | null = null;
+
+/** The store's opening read: a hook mounting while it's out doesn't ask again. */
+function readOnStart() {
+  starting ??= refreshTeamSetup().finally(() => (starting = null));
+}
+
 /** Registry and status changes (a login saved, an agent replying) move it on. */
 function soon() {
   if (timer) clearTimeout(timer);
@@ -190,7 +198,7 @@ function start() {
     listen(AGENT_EVENTS.registry, soon),
     listen(AGENT_EVENTS.status, soon),
   ];
-  void refreshTeamSetup();
+  readOnStart();
   stop = () => {
     for (const u of unlisteners) void u.then((f) => f()).catch(() => undefined);
     stop = null;
@@ -210,7 +218,7 @@ function subscribe(fn: () => void) {
 export function useTeamSetup(): TeamSetupView | null {
   const view = useSyncExternalStore(subscribe, () => current);
   useEffect(() => {
-    if (!loaded) void refreshTeamSetup();
+    if (!loaded) readOnStart();
   }, []);
   return view;
 }

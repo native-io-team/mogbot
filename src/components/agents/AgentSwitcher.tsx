@@ -67,7 +67,10 @@ export function AgentSwitcher({
           aria-label={label}
         >
           {title}
-          <ChevronIcon size={10} className={p['aria-expanded'] ? 'chevron-flipped' : undefined} />
+          <ChevronIcon
+            size={10}
+            className={`agent-chat__switcher-chevron${p['aria-expanded'] ? ' chevron-flipped' : ''}`}
+          />
         </MenuButton>
       )}
     >

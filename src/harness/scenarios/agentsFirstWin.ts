@@ -319,6 +319,7 @@ export const agentsFirstWinScenarios: Scenario[] = [
     looksRightWhen:
       'The site handed back on its result card, and under it one calm card: a phone icon, “Use your agents from your phone?”, one muted line (chat, answer and approve from anywhere; no App Store app yet, so ten minutes to an hour), then “Not now” and a neutral “Set up my phone”. The phone used to be four onboarding screens before any result; now it is offered once something came back.',
     command: 'agents.open',
+    phoneOffer: true,
     requires: '[data-testid="chief-phone-offer"]',
     commands: {
       agents_overview: { ...BASE_OVERVIEW, importChoice: 'declined' },

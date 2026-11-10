@@ -245,7 +245,7 @@ describe('HostingLinkPicker — failures', () => {
     expect(showToast).not.toHaveBeenCalled();
   });
 
-  it('reports a real failure and does not show an empty list in its place', async () => {
+  it('says a real failure in the dialog, with Try again, never an empty list', async () => {
     mockIPC((cmd) => {
       if (cmd === 'list_hosting_projects') throw new Error('Vercel is temporarily unavailable');
       return null;
@@ -254,12 +254,16 @@ describe('HostingLinkPicker — failures', () => {
 
     await pickProvider(/^vercel$/i);
 
-    await waitFor(() => expect(showToast).toHaveBeenCalled());
-    expect(showToast.mock.calls[0][1]).toBe('error');
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/couldn’t load your vercel projects/i);
+    expect(alert).toHaveTextContent(/temporarily unavailable/i);
+    // In the dialog, not a toast that is gone before it is read.
+    expect(showToast).not.toHaveBeenCalled();
     // An empty list here would read as "you have no projects", which is the
     // same lie as the empty state used to tell, arrived at from a failure.
     expect(document.body.textContent).not.toMatch(/nothing came back from/i);
-    expect(screen.getByRole('button', { name: /^cloudflare$/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /back/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /try again/i })).toBeInTheDocument();
   });
 
   it('never lets an abandoned provider’s response land behind the user', async () => {

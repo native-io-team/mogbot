@@ -208,6 +208,20 @@ export function InstallProgress({
         </div>
       )}
 
+      {prompt === 'key' && (
+        <div className="install-ask" data-install-ask="key">
+          <span className="install-ask__label">
+            Finish installing Apple’s Command Line Tools in the window that opened.
+          </span>
+          <p className="install-ask__hint">Then press Continue, and {name} carries on.</p>
+          <div className="install-ask__row">
+            <Button variant="strong" onClick={() => onAnswer('\r')}>
+              Continue
+            </Button>
+          </div>
+        </div>
+      )}
+
       {prompt === 'question' && (
         <div className="install-ask" data-install-ask="question">
           <span className="install-ask__label">It’s asking something.</span>

@@ -26,6 +26,7 @@ import { TextButton } from '../primitives/TextButton';
 import { TextArea } from '../primitives/TextField';
 import { ComposerAttachments, ComposerQuotes } from './AgentAttachments';
 import { ComposerRevising } from './AgentResult';
+import { ComposerEditing } from './AgentGoBack';
 import { AgentSecretHint } from './AgentSecretHint';
 import { useMentionPicker } from './AgentMentions';
 import type { DraftAttachment } from './useComposerAttachments';
@@ -60,6 +61,9 @@ interface AgentComposerProps {
   onRemoveQuote: (index: number) => void;
   revising: ResultRef | null;
   onClearRevising: () => void;
+  /** Editing a sent message (Edit and resend): its words as sent, or null. */
+  editing?: string | null;
+  onCancelEditing?: () => void;
   /** Mid-turn: what's sent waits for the next one. */
   busy: boolean;
   /** Working, not just holding a card open: Stop is offered. */
@@ -112,6 +116,8 @@ export const AgentComposer = memo(function AgentComposer({
   onRemoveQuote,
   revising,
   onClearRevising,
+  editing = null,
+  onCancelEditing,
   busy,
   working,
   onEscape,
@@ -176,7 +182,7 @@ export const AgentComposer = memo(function AgentComposer({
       className="agent-composer"
       data-dictation={dictation.phase}
       data-has-attachments={
-        staged.length > 0 || quotes.length > 0 || revising !== null || undefined
+        staged.length > 0 || quotes.length > 0 || revising !== null || editing !== null || undefined
       }
       onSubmit={(e) => {
         e.preventDefault();
@@ -184,6 +190,7 @@ export const AgentComposer = memo(function AgentComposer({
       }}
     >
       {mentionPicker.menu}
+      <ComposerEditing text={editing} onCancel={() => onCancelEditing?.()} />
       <ComposerRevising revising={revising} onRemove={onClearRevising} />
       <ComposerQuotes quotes={quotes} onRemove={onRemoveQuote} />
       <ComposerAttachments items={staged} onRemove={onRemoveStaged} />

@@ -8,8 +8,10 @@
  */
 
 import type { Conversations } from './conversations';
+import type { ConversationPage, PageVersion } from './page';
 import type { Cursor } from './frames';
 import type { AgentPolicyView } from './policy';
+import type { Skill, SkillsView } from './skills';
 import type { OnItsOwn, OnItsOwnNarrow, OnItsOwnTeam } from './onItsOwn';
 import type { QuietHours, QuietWindow } from './quiet';
 import type { MorningBrief } from './brief';
@@ -148,12 +150,50 @@ export interface Methods {
     result: Conversations;
   };
   /**
+   * "Rewind to here" (and Edit and resend, before its send): the conversation
+   * carries on from just before the user's message; what came after is
+   * folded (`ConversationView.rewinds`), never deleted. Refused while a turn
+   * runs. Newer Macs only: check `welcome.methods`.
+   */
+  'agents.conversationRewind': {
+    params: { agentId: string; conversationId: string; messageId: string };
+    result: Conversations;
+  };
+  /**
+   * "Fork from here": a new conversation (`current` in the result) whose
+   * history is everything before the user's message; the original stays.
+   * Newer Macs only: check `welcome.methods`.
+   */
+  'agents.conversationFork': {
+    params: { agentId: string; conversationId: string; messageId: string };
+    result: Conversations;
+  };
+  /**
    * Move a routine to another of the agent's conversations: it fires there
    * from its next run. Newer Macs only: check `welcome.methods`.
    */
   'agents.conversationRoutine': {
     params: { agentId: string; routineId: string; conversationId: string };
     result: Conversations;
+  };
+  /**
+   * `agents_page`: a conversation's living page (`page.ts`) and its history,
+   * or null when it has none. No `conversationId`: the one the user is in.
+   * Newer Macs only: check `welcome.methods`.
+   */
+  'agents.page': {
+    params: { agentId: string; conversationId?: string };
+    result: ConversationPage | null;
+  };
+  /** `agents_page_version`: one kept version, for reading; null once it isn't kept. */
+  'agents.pageVersion': {
+    params: { agentId: string; conversationId?: string; version: number };
+    result: PageVersion | null;
+  };
+  /** `agents_page_pin`: pin the page above the chat, or unpin it; the page after. */
+  'agents.pagePin': {
+    params: { agentId: string; conversationId?: string; pinned: boolean };
+    result: ConversationPage | null;
   };
   /**
    * `agents_turn_work`: what the turn ending on `messageId` did, steps and
@@ -351,6 +391,15 @@ export interface Methods {
   'agents.reach': { params: { agentId: string }; result: AgentReach };
   /** "What it can do" (`agents/policy.rs`): its settings in plain words. Read-only; changed in chat. */
   'agents.policy': { params: { agentId: string }; result: AgentPolicyView };
+  /** "Skills" (`agents/skills_learn.rs`): its setting and saved skills. */
+  'agents.skills': { params: { agentId: string }; result: SkillsView };
+  /** The user's edit of one skill, cleaned as a new one is; a new name moves it. */
+  'agents.skillEdit': {
+    params: { agentId: string; slug: string; name: string; when: string; steps: string };
+    result: Skill;
+  };
+  /** One skill removed from its home. */
+  'agents.skillRemove': { params: { agentId: string; slug: string }; result: null };
   /** "What can it do on its own?" (`agents/on_its_own.rs`): every standing rule, in plain words. */
   'agents.onItsOwn': { params: { agentId: string }; result: OnItsOwn };
   /** The same for the team: its level, rules every agent shares, each agent in a line. */
@@ -811,11 +860,14 @@ export const READ_ONLY_METHODS = [
   'agents.overview',
   'agents.messages',
   'agents.conversations',
+  'agents.page',
+  'agents.pageVersion',
   'agents.workSteps',
   'agents.instructions',
   'agents.memory',
   'agents.reach',
   'agents.policy',
+  'agents.skills',
   'agents.onItsOwn',
   'agents.onItsOwnTeam',
   'agents.loginsTeam',

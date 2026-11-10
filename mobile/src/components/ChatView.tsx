@@ -11,7 +11,12 @@
 import { headerSubtitle, headerSubtitleParts, roleCutPastReading } from '../lib/accountsView';
 import {
   FIRST_CONVERSATION,
+  forkConfirm,
+  goBackBlocked,
   newestResults,
+  rewindConfirm,
+  rewoundSummary,
+  REWOUND_END,
   foldResultReplies,
   showsStarters,
   type Agent,
@@ -60,7 +65,14 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { agentKeyState, askingLine, isQueued, needsYouHere, pendingApproval } from '../lib/agents';
+import {
+  agentKeyState,
+  askingLine,
+  isQueued,
+  needsYouHere,
+  pendingApproval,
+  pendingApprovalIds,
+} from '../lib/agents';
 import { messageActions, plainText, type MessageAction } from '../lib/actions';
 import { canReadAloud, readAloud, stopReading, useReading } from '../lib/readAloud';
 import { announce } from '../lib/a11y';
@@ -70,7 +82,10 @@ import { preview } from '../lib/files';
 import { haptic } from '../lib/haptics';
 import {
   canCall,
+  canGoBack,
   describeError,
+  forkConversation,
+  rewindConversation,
   ensureViewing,
   fetchPath,
   loadLatest,
@@ -83,7 +98,7 @@ import {
 import { useAccent } from '../lib/accent';
 import { chatKeyFor, conversationsOffered, jumpStep } from '../lib/conversations';
 import { ConversationSwitch } from './ConversationSwitch';
-import { useApp } from '../lib/store';
+import { getApp, useApp } from '../lib/store';
 import { SETUP_KEY, chatItems, isRowFor, sentAt, withSetupCard, type Item } from '../lib/timeline';
 import { setupAnchor, shows as showsSetup } from '../lib/teamSetup';
 import {
@@ -98,6 +113,7 @@ import {
   space,
   type,
   PRESSED,
+  PAST,
 } from '../lib/theme';
 import {
   endOffset,
@@ -109,6 +125,7 @@ import {
   pillFor,
   revealsCard,
   scrolled,
+  seeCards,
   toEnd,
   type Follow,
 } from '../lib/follow';
@@ -122,6 +139,8 @@ import { useArrivedKeys } from '../lib/arrivals';
 import { Composer } from './Composer';
 import { LinkProblem } from './ConnectionPill';
 import { Line } from './surfaces';
+import { ConversationPage } from './ConversationPage';
+import { pageOf } from '../lib/page';
 import { RoomFoldRow } from './RoomRow';
 import { TeamSetupCard } from './TeamSetupCard';
 import { PathContext } from './Markdown';
@@ -130,7 +149,8 @@ import { PaneContext, type Pane } from './ApprovalCard';
 import { UsageRing } from './usage';
 import { useQuotas } from '../lib/quota';
 import { ringPercent } from '../lib/usageSheet';
-import { showActions } from './menu';
+import { choose, showActions } from './menu';
+import { copyProject, foldRewoundItems } from '../lib/goBack';
 import { SelectSheet } from './SelectSheet';
 import { Starters } from './Starters';
 import { ChiefStarters, chiefGreetingOnly } from './ChiefStarters';
@@ -314,11 +334,27 @@ export function ChatView({
   // "Setting up your team" is a row like a message, where it was posted.
   const setup = useApp((s) => (agent?.isMain && showsSetup(s.teamSetup) ? s.teamSetup : null));
   const setupAt = useMemo(() => (setup ? setupAnchor(setup, messages) : null), [setup, messages]);
+  // What a rewind passed over: folded into one row each, opened on a tap.
+  const rewinds = useMemo(
+    () => conversations?.items.find((c) => c.id === viewing)?.rewinds,
+    [conversations, viewing]
+  );
+  const [openFolds, setOpenFolds] = useState<ReadonlySet<string>>(NO_KEYS);
+  const toggleFold = useCallback((rewindId: string) => {
+    haptic.select();
+    setOpenFolds((open) => {
+      const next = new Set(open);
+      if (next.has(rewindId)) next.delete(rewindId);
+      else next.add(rewindId);
+      return next;
+    });
+  }, []);
   const items = useMemo<Item[]>(() => {
     if (!agent) return [];
     const rows = chatItems(agent, messages, pending, draft);
-    return setup && chat?.loaded ? withSetupCard(rows, setupAt, !!chat.more) : rows;
-  }, [agent, messages, draft, pending, setup, setupAt, chat?.loaded, chat?.more]);
+    const withSetup = setup && chat?.loaded ? withSetupCard(rows, setupAt, !!chat.more) : rows;
+    return foldRewoundItems(withSetup, rewinds, openFolds);
+  }, [agent, messages, draft, pending, setup, setupAt, chat?.loaded, chat?.more, rewinds, openFolds]);
   // What came in while this chat was open rises in; the chat as it loads,
   // and older history fetched by scrolling back, hold still.
   const itemKeys = useMemo(() => items.map((i) => i.key), [items]);
@@ -400,6 +436,10 @@ export function ChatView({
   // A phone in landscape: the notch or the Dynamic Island is at a side.
   const side = embedded ? { left: 0, right: 0 } : { left: insets.left, right: insets.right };
   const newest = newestSignature(items[0]);
+  // The page is read again when the turn's state or its newest recorded line
+  // moves on: never per streamed word or working label, each of which would
+  // be a request to the Mac.
+  const pageTurn = `${agent?.status?.state ?? ''}:${messages[messages.length - 1]?.id ?? ''}`;
   // Read by the scroll handler, which outlives a render.
   const newestRef = useRef(newest);
   useLayoutEffect(() => {
@@ -465,13 +505,15 @@ export function ChatView({
   useLayoutEffect(() => {
     itemsRef.current = items;
   }, [items]);
-  const seenCard = useRef<string | null | undefined>(undefined);
+  const seenCards = useRef<ReadonlySet<string> | undefined>(undefined);
   const cardId = card?.id ?? null;
+  // Every card waiting, so one that was already there never counts as new.
+  const waitingKey = useMemo(() => pendingApprovalIds(messages).join(' '), [messages]);
   const loaded = !!chat?.loaded;
   useEffect(() => {
     if (!loaded) return;
-    const before = seenCard.current;
-    seenCard.current = cardId;
+    const before = seenCards.current;
+    seenCards.current = seeCards(before, waitingKey ? waitingKey.split(' ') : []);
     if (at || !revealsCard(before, cardId, distance.current)) return;
     const index = itemsRef.current.findIndex((i) => i.key === cardId);
     if (index < 0) return;
@@ -480,7 +522,7 @@ export function ChatView({
       80
     );
     return () => clearTimeout(timer);
-  }, [cardId, loaded, at]);
+  }, [cardId, loaded, at, waitingKey]);
 
   const targetIndex = target ? items.findIndex((i) => isRowFor(i, target)) : -1;
   useEffect(() => {
@@ -534,12 +576,69 @@ export function ChatView({
     (m: AgentMessage) => {
       haptic.select();
       const remember = canCall('agents.memoryChange') && canCall('agents.memorySuggest');
+      const here = viewing ?? FIRST_CONVERSATION;
+      const now = getApp().overview?.agents.find((a) => a.id === id);
+      const state = {
+        working: !!now && now.status.state !== 'idle',
+        driven: !!now?.takeover,
+        agentName: now?.name ?? 'It',
+      };
+      const project = now ? copyProject(now) : null;
+      // Going back in place waits for the turn in progress; a fork never does.
+      const blocked = (action: 'edit' | 'fork' | 'rewind') => {
+        const why = goBackBlocked(action, state);
+        if (why) showError(why);
+        return !!why;
+      };
       // The time it was sent lives here, not under every bubble.
       showActions(
         sentAt(m.ts),
-        messageActions(m, remember, canReadAloud()),
+        messageActions(m, remember, canReadAloud(), canGoBack() && m.kind === 'user'),
         (action: MessageAction) => {
           switch (action) {
+            case 'edit':
+              if (blocked('edit')) break;
+              setComposer(id, {
+                text: m.text,
+                editing: { messageId: m.id, conversation: here },
+              });
+              setFocusKey((k) => k + 1);
+              break;
+            case 'rewind': {
+              if (blocked('rewind')) break;
+              const c = rewindConfirm(state.agentName, m.text, project, pageOf(id, here)?.title);
+              choose(
+                c.title,
+                [
+                  {
+                    label: c.confirm,
+                    run: () =>
+                      rewindConversation(id, here, m.id).catch((e: unknown) =>
+                        showError(describeError(e))
+                      ),
+                  },
+                ],
+                c.body
+              );
+              break;
+            }
+            case 'fork': {
+              const c = forkConfirm(state.agentName, m.text, project);
+              choose(
+                c.title,
+                [
+                  {
+                    label: c.confirm,
+                    run: () =>
+                      forkConversation(id, here, m.id).catch((e: unknown) =>
+                        showError(describeError(e))
+                      ),
+                  },
+                ],
+                c.body
+              );
+              break;
+            }
             case 'copy':
               void Clipboard.setStringAsync(m.kind === 'agent' ? plainText(m.text) : m.text);
               haptic.success();
@@ -564,7 +663,7 @@ export function ChatView({
         }
       );
     },
-    [id, router, showError]
+    [id, router, showError, viewing]
   );
 
   // A reply read aloud stops when its chat closes.
@@ -657,6 +756,14 @@ export function ChatView({
           onPress={openConversations}
         />
       )}
+      {/* This conversation's living page, kept current by the agent (`agents/page.rs`). */}
+      <ConversationPage
+        agentId={agent.id}
+        conversation={offered ? (viewing ?? conversations?.current) : FIRST_CONVERSATION}
+        turn={pageTurn}
+        side={side}
+        onError={showError}
+      />
       <View style={{ flex: 1 }} onLayout={(e) => setRoomHeight(e.nativeEvent.layout.height)}>
         {pinQuestion && card?.approval && (
           <PinnedQuestion
@@ -701,6 +808,7 @@ export function ChatView({
                       latestFailure={latestFailure}
                       onError={showError}
                       onLongPress={onMessageAction}
+                      onToggleFold={toggleFold}
                       lit={!!target && isRowFor(item, target)}
                       arrived={arrived.has(item.key)}
                     />
@@ -918,6 +1026,7 @@ const ItemView = memo(function ItemView({
   latestFailure,
   onError,
   onLongPress,
+  onToggleFold,
   lit,
   afterLine,
   arrived,
@@ -943,6 +1052,10 @@ const ItemView = memo(function ItemView({
       <DraftRow id={item.key} text={item.text} />
     ) : item.kind === 'room' ? (
       <RoomFoldRow fold={item.fold} />
+    ) : item.kind === 'rewound' ? (
+      <RewoundRow item={item} onToggle={onToggleFold} />
+    ) : item.kind === 'rewound-end' ? (
+      <RewoundEnd />
     ) : item.kind === 'setup' ? (
       <TeamSetupCard chief={agent.name} onError={onError} />
     ) : (
@@ -967,6 +1080,13 @@ const ItemView = memo(function ItemView({
       (item.message.kind === 'session' &&
         (item.message.session?.event === 'started' || item.message.session?.event === 'sent')));
   const tight = afterLine && isLineItem(item);
+  const inner = yours ? (
+    <SendRise rise={item.kind === 'pending'}>{body}</SendRise>
+  ) : arrived ? (
+    <Arrive>{body}</Arrive>
+  ) : (
+    body
+  );
   return (
     <View
       style={[
@@ -974,16 +1094,16 @@ const ItemView = memo(function ItemView({
         grouped && styles.itemGrouped,
         attached && styles.itemAttached,
         tight && styles.itemAfterLine,
+        // An opened fold reads as past: one rule down the left, from the
+        // "Rewound" row to "End of what was rewound", its lines muted.
+        (item.past ||
+          item.kind === 'rewound-end' ||
+          (item.kind === 'rewound' && item.open)) &&
+          styles.past,
       ]}
     >
       {lit && <Glow />}
-      {yours ? (
-        <SendRise rise={item.kind === 'pending'}>{body}</SendRise>
-      ) : arrived ? (
-        <Arrive>{body}</Arrive>
-      ) : (
-        body
-      )}
+      {item.past ? <View style={styles.pastBody}>{inner}</View> : inner}
     </View>
   );
 }, sameRow);
@@ -999,7 +1119,66 @@ interface ItemProps {
   latestFailure?: string | null;
   onError: (t: string) => void;
   onLongPress: (m: AgentMessage) => void;
+  /** A "Rewound" row tapped: its lines shown or folded again. */
+  onToggleFold: (rewindId: string) => void;
   lit?: boolean;
+}
+
+/**
+ * What a rewind passed over, folded into one quiet Line: "Rewound · 4
+ * messages". A tap shows them in place (the row stays, above them) and
+ * folds them again.
+ */
+function RewoundRow({
+  item,
+  onToggle,
+}: {
+  item: Extract<Item, { kind: 'rewound' }>;
+  onToggle: (rewindId: string) => void;
+}) {
+  const colors = useColors();
+  const styles = useStyles();
+  const summary = rewoundSummary(item.count);
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityState={{ expanded: item.open }}
+      accessibilityLabel={summary}
+      accessibilityHint={item.open ? 'Folds them again' : 'Shows them'}
+      onPress={() => onToggle(item.rewindId)}
+      style={({ pressed }) => [
+        styles.rewound,
+        item.open && styles.rewoundOpen,
+        pressed && styles.rewoundPressed,
+      ]}
+    >
+      <Icon name="arrow.uturn.left" size={iconSize.inline} color={colors.textSecondary} />
+      <T variant="caption" color={colors.textSecondary} maxFontSizeMultiplier={chromeScale}>
+        {summary}
+      </T>
+      <Icon
+        name={item.open ? 'chevron.down' : 'chevron.right'}
+        size={iconSize.inline}
+        color={colors.textSecondary}
+      />
+    </Pressable>
+  );
+}
+
+/** Closes an opened fold, so where the past ends is said, not guessed. */
+function RewoundEnd() {
+  const colors = useColors();
+  const styles = useStyles();
+  return (
+    <T
+      variant="caption"
+      color={colors.textMuted}
+      maxFontSizeMultiplier={chromeScale}
+      style={styles.rewoundEnd}
+    >
+      {REWOUND_END}
+    </T>
+  );
 }
 
 /**
@@ -1171,7 +1350,6 @@ const ChatHeader = memo(function ChatHeader({
   );
 });
 
-
 function Header({ agent }: { agent: Agent }) {
   const colors = useColors();
   const styles = useStyles();
@@ -1323,6 +1501,25 @@ const fadeStyles = StyleSheet.create({
 
 const useStyles = makeStyles((colors) => ({
   center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  rewound: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'center',
+    gap: space.xs,
+    paddingVertical: space.xs,
+    paddingHorizontal: space.sm,
+    borderRadius: radius.inner,
+  },
+  rewoundPressed: PRESSED,
+  // Opened, the row heads the band (the rule is its wrapper's): on the left.
+  rewoundOpen: { alignSelf: 'flex-start' },
+  rewoundEnd: { paddingVertical: space.xs },
+  past: {
+    paddingLeft: space.md,
+    borderLeftWidth: PAST.rule,
+    borderLeftColor: colors.borderDefault,
+  },
+  pastBody: { opacity: PAST.opacity },
   // Inverted, so paddingTop is the newest end: room for the fade above the
   // composer, and paddingBottom the oldest, under the header's fade.
   content: {

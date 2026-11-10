@@ -200,7 +200,7 @@ describe('WorkspaceHeader title bar', () => {
       container.querySelector('.workspace-titlebar .source-control-actions')
     ).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Elements' })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Agent' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Session' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Variables' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Assets' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Branches' })).toBeInTheDocument();
@@ -286,7 +286,7 @@ describe('WorkspaceHeader title bar', () => {
     render(<TitlebarHarness props={props} />);
 
     const tools = document.querySelector('.workspace-titlebar-tools');
-    const agent = screen.getByRole('button', { name: 'Agent' });
+    const agent = screen.getByRole('button', { name: 'Session' });
     const variables = screen.getByRole('button', { name: 'Variables' });
     const assets = screen.getByRole('button', { name: 'Assets' });
     const buttons = Array.from(tools!.querySelectorAll<HTMLElement>('button'));

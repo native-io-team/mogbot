@@ -717,6 +717,11 @@ async fn generate() -> String {
         call("agents.policy", json!({ "agentId": AGENT })).await,
     );
     out += &entry(
+        "agentsSkills",
+        "Result<'agents.skills'>",
+        call("agents.skills", json!({ "agentId": AGENT })).await,
+    );
+    out += &entry(
         "agentsOnItsOwn",
         "Result<'agents.onItsOwn'>",
         call("agents.onItsOwn", json!({ "agentId": AGENT })).await,
@@ -1022,6 +1027,60 @@ async fn generate() -> String {
         call(
             "agents.conversationRename",
             json!({ "agentId": AGENT, "conversationId": "c2", "title": "Launch plan" }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsPage",
+        "Result<'agents.page'>",
+        call(
+            "agents.page",
+            json!({ "agentId": AGENT, "conversationId": "c2" }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsConversationRewind",
+        "Result<'agents.conversationRewind'>",
+        call(
+            "agents.conversationRewind",
+            json!({ "agentId": AGENT, "conversationId": "first", "messageId": "m-2" }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsPageNone",
+        "Result<'agents.page'>",
+        call(
+            "agents.page",
+            json!({ "agentId": AGENT, "conversationId": "first" }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsPageVersion",
+        "Result<'agents.pageVersion'>",
+        call(
+            "agents.pageVersion",
+            json!({ "agentId": AGENT, "conversationId": "c2", "version": 1 }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsPagePin",
+        "Result<'agents.pagePin'>",
+        call(
+            "agents.pagePin",
+            json!({ "agentId": AGENT, "conversationId": "c2", "pinned": true }),
+        )
+        .await,
+    );
+    out += &entry(
+        "agentsConversationFork",
+        "Result<'agents.conversationFork'>",
+        call(
+            "agents.conversationFork",
+            json!({ "agentId": AGENT, "conversationId": "first", "messageId": "m-2" }),
         )
         .await,
     );

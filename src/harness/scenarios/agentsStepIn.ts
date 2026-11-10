@@ -96,7 +96,7 @@ export const agentsStepInScenarios: Scenario[] = [
     id: 'agents-step-in-active',
     title: 'Agents — you’re in an agent’s browser',
     looksRightWhen:
-      'Above the composer, one bar with a globe: “You’re in Finance’s browser” and, muted, “login.microsoftonline.com · hands back by itself in 11 min”, with Show window and Hand back. The card above says “You’re in its browser now. Hand back when you’re done.” with Show window and Hand back, no Step in.',
+      'Above the composer, one bar with a globe: “You’re in Finance’s browser” and, muted, “login.microsoftonline.com · hands back by itself in 11 min”, with Show window and Hand back. The card above only says “You’re in its browser now. Hand back from the bar below when you’re done.”: no buttons (the bar has them), no Step in.',
     openSelector: AGENTS_TAB,
     requires: '[data-testid="agent-step-in-bar"]',
     steps: [{ click: '[data-agent-id="finance"]' }],

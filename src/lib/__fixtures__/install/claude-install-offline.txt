@@ -1,0 +1,4 @@
+%% Claude Code with no network: the outer `curl -fSL` can't fetch install.sh,
+%% so bash gets an empty script and the pipe's exit is curl's.
+Downloading the Claude Code installer…
+curl: (6) Could not resolve host: claude.ai

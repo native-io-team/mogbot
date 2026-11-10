@@ -335,7 +335,7 @@ describe('vertical resizing', () => {
       ])
     );
     await act(async () => Promise.resolve());
-    const handle = screen.getByRole('separator', { name: 'Resize Agent and Elements panels' });
+    const handle = screen.getByRole('separator', { name: 'Resize Session and Elements panels' });
     act(() => {
       handle.dispatchEvent(
         new PointerEvent('pointerdown', { bubbles: true, pointerId: 2, clientY: 450 })
@@ -473,7 +473,7 @@ describe('focus and body portals', () => {
     );
     await act(async () => Promise.resolve());
     expect(screen.getByTestId('preview').parentElement).not.toHaveAttribute('hidden');
-    expect(screen.getByRole('separator', { name: 'Resize Agent column' })).toBeInTheDocument();
+    expect(screen.getByRole('separator', { name: 'Resize Session column' })).toBeInTheDocument();
     expect(document.querySelectorAll('[data-rail-panel]')).toHaveLength(1);
     const saved = readProjectLayout(PROJECT);
     dragHeader('agent', { x: 150, y: 700 });

@@ -270,6 +270,14 @@ pub struct Action {
     /// the engine sent it. Raw here; [`detail::exact`] redacts and scrubs it
     /// before it is kept, and only the desk's "Show exact command" reads it.
     pub exact: Option<String>,
+    /// The tool's bare name as the engine reported it (`save_skill`, `Bash`),
+    /// so a tool can tell the engine has reported its own call ([`caught_up`]).
+    pub tool: String,
+}
+
+/// A tool's bare name: `mcp__app__save_skill` is `save_skill`.
+fn bare_tool(name: &str) -> &str {
+    name.rsplit("__").next().unwrap_or(name)
 }
 
 /// What became of a call, as the engine reported it.
@@ -421,6 +429,7 @@ const HIDDEN: [&str; 12] = [
 pub fn describe_tool(name: &str, input: Option<&Value>) -> Option<Action> {
     let mut action = describe_call(name, input)?;
     action.exact = detail::exact_of(name, input);
+    action.tool = bare_tool(name).to_string();
     Some(action)
 }
 
@@ -629,6 +638,7 @@ fn act(
         slow: None,
         command: None,
         exact: None,
+        tool: String::new(),
     }
 }
 
@@ -885,6 +895,12 @@ fn ours_tool(tool: &str, field: &dyn Fn(&str) -> Option<String>) -> Option<Actio
             "Showed it in the chat",
             "Showing it in the chat",
             "show it in the chat",
+        ),
+        "page" => act(
+            StepKind::Message,
+            "Updated the page",
+            "Updating the page",
+            "update the page",
         ),
         "share_result" => act(
             StepKind::Message,
@@ -1666,6 +1682,10 @@ struct Live {
     exacts: HashMap<u32, String>,
     /// The briefing this turn was given (`super::briefing`), by its key.
     briefing: Option<String>,
+    /// Calls the engine reported, by bare tool name ([`caught_up`]).
+    reported: HashMap<String, u32>,
+    /// Calls that reached the app's own tools, by name ([`caught_up`]).
+    arrived: HashMap<String, u32>,
 }
 
 /// The settings tools whose call may end as a card the user hasn't answered
@@ -1747,6 +1767,13 @@ impl Live {
         let label = clean(&action.label);
         let doing = clean(&action.doing);
         let exact = action.exact.as_deref().and_then(detail::exact);
+        let fresh = action
+            .id
+            .as_ref()
+            .is_none_or(|id| !self.calls.contains_key(id));
+        if fresh && !action.tool.is_empty() {
+            *self.reported.entry(action.tool.clone()).or_default() += 1;
+        }
         let Some(id) = action.id else {
             // Nothing can come back for a call without an id, so its edits
             // are never counted: only an observed success is.
@@ -2036,6 +2063,52 @@ pub fn on_action(agent_id: &str, action: Action, now: i64) -> String {
     let doing = clean(&action.doing);
     with_live(agent_id, |live| live.action(action, now));
     doing
+}
+
+/// How long a tool of ours waits for the engine's own report of its call.
+pub const CATCH_UP_MS: u64 = 3_000;
+
+/// A call of ours (`tool`, bare name) arrived over the bridge: wait until the
+/// engine's stream has reported that call too, which it does before making
+/// it (Claude Code's `tool_use`, Codex's `item/started`). The stream is
+/// ordered, so every step the engine took before the call is then in the
+/// timeline. The bridge and the stream reader are separate tasks, so the
+/// call can win the race; bounded by `wait_ms`. `false` when the engine
+/// never said (no live turn, or the wait ran out): judge on what was seen.
+pub async fn caught_up(agent_id: &str, tool: &str, wait_ms: u64) -> bool {
+    let Some(nth) = with_live(agent_id, |live| {
+        let n = live.arrived.entry(tool.to_string()).or_default();
+        *n += 1;
+        *n
+    }) else {
+        return false;
+    };
+    let deadline = std::time::Instant::now() + std::time::Duration::from_millis(wait_ms);
+    loop {
+        let seen = with_live(agent_id, |live| {
+            live.reported.get(tool).copied().unwrap_or(0)
+        });
+        match seen {
+            None => return false,
+            Some(seen) if seen >= nth => return true,
+            _ => {}
+        }
+        if std::time::Instant::now() >= deadline {
+            tracing::warn!(
+                "[Agents] the engine hadn't reported its {tool} call after {wait_ms}ms; judging on what was seen"
+            );
+            return false;
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(20)).await;
+    }
+}
+
+/// Calls of `tool` (bare name) the engine has reported this turn.
+pub fn reported(agent_id: &str, tool: &str) -> u32 {
+    with_live(agent_id, |live| {
+        live.reported.get(tool).copied().unwrap_or(0)
+    })
+    .unwrap_or(0)
 }
 
 /// A step the app took for the turn itself ("Started a copy of acme-site").

@@ -360,7 +360,12 @@ async function capture({
   sameColumn,
   viewport,
 }) {
-  const { page, targetId } = await newPage(url, viewport);
+  // `HARNESS_FORCE_WIDTH` re-captures every scenario at that width (a narrow
+  // pass), keeping a scenario's own height, so a fixed 1280 doesn't win.
+  const forced = process.env.HARNESS_FORCE_WIDTH
+    ? { ...(viewport ?? VIEWPORT), width: Number(process.env.HARNESS_FORCE_WIDTH) }
+    : viewport;
+  const { page, targetId } = await newPage(url, forced);
   try {
     const ready = await waitFor(page, 'window.__harnessReady', 25_000, `${file} to settle`)
       .then(() => true)

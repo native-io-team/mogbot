@@ -207,6 +207,40 @@ pub struct Conversation {
     pub last_activity_at: i64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub preview: Option<String>,
+    /// Where the user went back to (`rewind`): what came after each point,
+    /// folded in the chat, never deleted. Oldest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub rewinds: Vec<Rewind>,
+    /// A fork (`rewind::fork`): the conversation it came from and the
+    /// message it was forked before.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub forked_from: Option<ForkedFrom>,
+    /// A fork's history: the ids of the lines it was made with, from the
+    /// conversation it came from, shown before its own. Never copied.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub inherited: Vec<String>,
+}
+
+/// "Rewind to here" (or Edit and resend): the conversation carries on from
+/// just before `at`; `ids` are the lines from `at` on, folded under
+/// "Rewound", in the log as they were.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct Rewind {
+    pub id: String,
+    /// The user's message it went back to before.
+    pub at: String,
+    pub ts: i64,
+    pub ids: Vec<String>,
+}
+
+/// Where a fork came from.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ForkedFrom {
+    pub conversation: String,
+    /// The user's message it was forked before.
+    pub message: String,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -259,6 +293,22 @@ pub struct ConversationView {
     /// How full it is, as its engine last said.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context: Option<super::context::ContextFill>,
+    /// Where the user went back to: the lines each fold, oldest first.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub rewinds: Vec<Rewind>,
+    /// A fork: where it came from, and that one's title.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub forked_from: Option<ForkedFromView>,
+}
+
+/// A fork's origin as the chat names it.
+#[derive(Debug, Clone, Serialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
+pub struct ForkedFromView {
+    pub conversation: String,
+    pub message: String,
+    /// Empty when that one is gone.
+    pub title: String,
 }
 
 /// Everything the list commands answer with.
@@ -310,6 +360,9 @@ fn read(agent: &Agent) -> Result<List, CommandError> {
                 created_at: agent.created_at,
                 last_activity_at: agent.last_activity_at,
                 preview: agent.preview.clone(),
+                rewinds: Vec::new(),
+                forked_from: None,
+                inherited: Vec::new(),
             },
         );
     }
@@ -390,6 +443,23 @@ fn view(agent: &Agent, list: &List, waiting: &HashMap<String, u32>) -> Conversat
                     .find(|p| p.id == c.id)
                     .and_then(|p| p.context.clone())
             },
+            rewinds: c.rewinds.clone(),
+            forked_from: c.forked_from.as_ref().map(|f| ForkedFromView {
+                conversation: f.conversation.clone(),
+                message: f.message.clone(),
+                title: list
+                    .items
+                    .iter()
+                    .find(|i| i.id == f.conversation)
+                    .map(|i| {
+                        if i.named {
+                            i.title.clone()
+                        } else {
+                            title_from(&i.title)
+                        }
+                    })
+                    .unwrap_or_default(),
+            }),
         })
         .collect();
     items.sort_by(|a, b| {
@@ -468,6 +538,9 @@ pub fn create(agent_id: &str) -> Result<Conversations, CommandError> {
                 created_at: now,
                 last_activity_at: now,
                 preview: None,
+                rewinds: Vec::new(),
+                forked_from: None,
+                inherited: Vec::new(),
             });
             list.current = Some(id);
             write(agent_id, &list)?;
@@ -630,6 +703,156 @@ pub fn routine_in(agent_id: &str, routine_id: &str) -> String {
             l.items.iter().any(|i| i.id == c).then_some(c)
         })
         .unwrap_or_else(|| FIRST.to_string())
+}
+
+/* ------------------------------------------- rewinds and forks (`rewind`) */
+
+/// What a conversation's chat is made of beyond its own lines: a fork's
+/// history (ids from the conversation it came from) and what was rewound.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct PageSpec {
+    /// Lines from elsewhere in the log shown before its own (a fork's).
+    pub inherited: std::collections::HashSet<String>,
+    /// Lines folded under "Rewound": in the chat, not in what the agent
+    /// is handed again (a recap).
+    pub rewound: std::collections::HashSet<String>,
+}
+
+/// [`PageSpec`] for one conversation. Read under the list's lock alone,
+/// before a log's is taken.
+pub fn page_spec(agent_id: &str, conversation: &str) -> PageSpec {
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(item) = read_raw(agent_id)
+        .ok()
+        .flatten()
+        .and_then(|l| l.items.into_iter().find(|c| c.id == conversation))
+    else {
+        return PageSpec::default();
+    };
+    PageSpec {
+        inherited: item.inherited.into_iter().collect(),
+        rewound: item.rewinds.into_iter().flat_map(|r| r.ids).collect(),
+    }
+}
+
+/// The conversation's title as the switcher shows it (empty before its
+/// first message).
+pub fn title_of(agent_id: &str, id: &str) -> String {
+    list(agent_id)
+        .ok()
+        .and_then(|l| l.items.into_iter().find(|c| c.id == id))
+        .map(|c| c.title)
+        .unwrap_or_default()
+}
+
+/// The conversation's engine session goes: its next turn starts one of its
+/// own (from a branch point, `rewind`). Loaded or parked alike; the
+/// transcript stays on disk.
+pub fn forget_session(agent: &mut Agent, id: &str) {
+    if loaded(agent) == id {
+        agent.session_id = None;
+        agent.new_engine = false;
+        agent.context = None;
+        if let Some(away) = agent.away.as_mut() {
+            away.session_id = None;
+        }
+    } else {
+        agent.conversations.parked.retain(|p| p.id != id);
+    }
+}
+
+/// Fold `ids` (from `at` on) in conversation `id`. Returns the rewind's id.
+pub fn add_rewind(
+    agent_id: &str,
+    id: &str,
+    at: &str,
+    ids: Vec<String>,
+) -> Result<String, CommandError> {
+    let agent = store::get(agent_id)?;
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut list = read(&agent)?;
+    let Some(item) = list.items.iter_mut().find(|c| c.id == id) else {
+        return Err(CommandError::expected(
+            "That conversation isn't there any more.",
+        ));
+    };
+    let rewind = Rewind {
+        id: format!("r{}", store::new_id()),
+        at: at.to_string(),
+        ts: store::now_ms(),
+        ids,
+    };
+    let rid = rewind.id.clone();
+    item.rewinds.push(rewind);
+    item.last_activity_at = item.last_activity_at.max(store::now_ms());
+    write(agent_id, &list)?;
+    Ok(rid)
+}
+
+/// A new conversation made from `from`'s lines before `message`
+/// (`inherited`), which the user is now in. Its title is the one it came
+/// from, as a fork of it, until they rename it.
+pub fn add_fork(
+    agent_id: &str,
+    from: &str,
+    message: &str,
+    inherited: Vec<String>,
+) -> Result<String, CommandError> {
+    let agent = store::get(agent_id)?;
+    let _guard = LOCK.lock().unwrap_or_else(|e| e.into_inner());
+    let mut list = read(&agent)?;
+    if list.items.len() >= MAX_CONVERSATIONS {
+        return Err(CommandError::expected(format!(
+            "{} already has {MAX_CONVERSATIONS} conversations. Carry on in one of them.",
+            agent.name
+        )));
+    }
+    let Some(source) = list.items.iter().find(|c| c.id == from) else {
+        return Err(CommandError::expected(
+            "That conversation isn't there any more.",
+        ));
+    };
+    let shown = if source.named {
+        source.title.clone()
+    } else {
+        title_from(&source.title)
+    };
+    let title = fork_title(&shown);
+    let now = store::now_ms();
+    let id = format!("c{}", store::new_id());
+    list.items.push(Conversation {
+        id: id.clone(),
+        named: !title.is_empty(),
+        title,
+        created_at: now,
+        last_activity_at: now,
+        preview: source.preview.clone(),
+        rewinds: Vec::new(),
+        forked_from: Some(ForkedFrom {
+            conversation: from.to_string(),
+            message: message.to_string(),
+        }),
+        inherited,
+    });
+    list.current = Some(id.clone());
+    write(agent_id, &list)?;
+    Ok(id)
+}
+
+/// "Fork of <title>", within [`TITLE_CHARS`]; empty for an untitled one.
+pub fn fork_title(title: &str) -> String {
+    if title.trim().is_empty() {
+        return String::new();
+    }
+    let prefix = "Fork of ";
+    let room = TITLE_CHARS - prefix.chars().count();
+    let mut t: String = title.chars().take(room).collect();
+    if title.chars().count() > room {
+        t = t.trim_end().to_string();
+        t.pop();
+        t.push('…');
+    }
+    format!("{prefix}{t}")
 }
 
 /* ---------------------------------------------- answers to where they were asked */

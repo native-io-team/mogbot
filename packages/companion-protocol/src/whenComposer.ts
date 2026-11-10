@@ -7,6 +7,9 @@
  * GitHub and folders are checked for free; an app source (Linear, anything
  * else) is a short read-only model call per check, at least 15 minutes
  * apart and at most 24 a day, sealed to that one app (`watch_seal.rs`).
+ * Mail and Messages are read on the Mac itself, free and with no account
+ * (`watch_mac.rs`), once Full Disk Access is on: the composers say so in
+ * the Mac's own words (`whenAccess`) until it is.
  */
 
 import type { WatchSource } from './model';
@@ -31,6 +34,12 @@ export const WHEN_WORDS = {
   checkPlaceholder: 'What to look for, e.g. a new email from dana@acme.com',
   whatPlaceholder: 'Triage it and tell me if it’s urgent',
   firstCheck: 'The first check only notes what’s already there, so nothing old starts work.',
+  mailFromPlaceholder: 'From (optional), e.g. billing@northwind.com',
+  mailWordsPlaceholder: 'With these words (optional), e.g. invoice',
+  textFromPlaceholder: 'From (optional), e.g. +1 555 123 4567',
+  openSettings: 'Open Full Disk Access',
+  checkAgain: 'Check again',
+  checking: 'Checking your Mac can read it…',
 } as const;
 
 export interface WhenSourceChoice {
@@ -45,7 +54,22 @@ export interface WhenSourceChoice {
  * the desk, "your Mac" on the phone.
  */
 export function whenSources(mac: 'this Mac' | 'your Mac' = 'this Mac'): WhenSourceChoice[] {
+  // Everyday things first (mail, texts, a folder, anything else), then the
+  // ones for people who work on GitHub or Linear.
   return [
+    { kind: 'new_mail', label: 'An email arrives in Mail', how: `Free · reads Mail on ${mac}` },
+    {
+      kind: 'new_text',
+      label: 'A text arrives in Messages',
+      how: `Free · reads Messages on ${mac}`,
+    },
+    { kind: 'new_file', label: 'A new file appears in a folder', how: 'Free · reads the folder' },
+    {
+      kind: 'custom',
+      label: 'Something else…',
+      // Gmail on the web isn't Mail on this Mac: this is where it goes.
+      how: 'You say what, in one app like Gmail · uses a little of your usage each check',
+    },
     {
       kind: 'github_mentions',
       // "you", as the routine reads back once added ("When someone mentions you…").
@@ -62,18 +86,15 @@ export function whenSources(mac: 'this Mac' | 'your Mac' = 'this Mac'): WhenSour
       label: 'A Linear issue is assigned to you',
       how: 'Through your Linear app · uses a little of your usage each check',
     },
-    { kind: 'new_file', label: 'A new file appears in a folder', how: 'Free · reads the folder' },
-    {
-      kind: 'custom',
-      label: 'Something else…',
-      how: 'You say what, in one app · uses a little of your usage each check',
-    },
   ];
 }
 
+/** What a new "When…" routine starts on: the first source offered. */
+export const DEFAULT_WHEN_KIND: WhenKind = 'new_mail';
+
 /** How often each kind of source can be checked: a folder is free, a model check isn't. */
 export function whenIntervals(kind: WhenKind): number[] {
-  if (kind === 'new_file') return [1, 5, 10, 30];
+  if (kind === 'new_file' || kind === 'new_mail' || kind === 'new_text') return [1, 5, 10, 30];
   if (kind === 'github_mentions' || kind === 'github_assigned') return [5, 10, 30, 60];
   return [15, 30, 60, 240];
 }
@@ -106,23 +127,62 @@ export function shortEvery(minutes: number): string {
   return minutes === 60 ? '1 hour' : `${minutes / 60} hours`;
 }
 
+/** An email or text routine's narrowing: who it's from, and (mail) what it says. */
+export interface WhenFilter {
+  from: string;
+  words: string;
+}
+export const NO_FILTER: WhenFilter = { from: '', words: '' };
+
+/** One line, trimmed, as the Mac keeps it. */
+const oneLine = (s: string) => s.trim().replace(/\s+/g, ' ');
+
+/** The filter a saved source carries, to start the composer from. */
+export function whenFilterOf(source: WatchSource | undefined): WhenFilter {
+  if (source?.kind === 'new_mail') return { from: source.from ?? '', words: source.words ?? '' };
+  if (source?.kind === 'new_text') return { from: source.from ?? '', words: '' };
+  return NO_FILTER;
+}
+
 /** The source the composer would save. */
 export function whenSourceOf(
   kind: WhenKind,
   folder: string,
   check: string,
-  app: string
+  app: string,
+  filter: WhenFilter = NO_FILTER
 ): WatchSource {
   if (kind === 'new_file') return { kind, folder };
   if (kind === 'custom') return { kind, check, app };
+  const from = oneLine(filter.from);
+  const words = oneLine(filter.words);
+  if (kind === 'new_mail') return { kind, ...(from ? { from } : {}), ...(words ? { words } : {}) };
+  if (kind === 'new_text') return { kind, ...(from ? { from } : {}) };
   return { kind };
 }
 
+/** A phone number or email, as Messages knows people by; mirrors `mac_apps::is_handle`. */
+export function isHandle(s: string): boolean {
+  const t = s.trim();
+  const at = t.indexOf('@');
+  if (at >= 0) return at > 0 && t.slice(at + 1).includes('.') && !/\s/.test(t);
+  const digits = (t.match(/[0-9]/g) ?? []).length;
+  return digits >= 5 && /^[0-9+\s\-().]+$/.test(t);
+}
+
 /** What the composer still needs before it can add, in its words; `null` when nothing. */
-export function whenMissing(kind: WhenKind, folder: string, check: string, app: string) {
+export function whenMissing(
+  kind: WhenKind,
+  folder: string,
+  check: string,
+  app: string,
+  filter: WhenFilter = NO_FILTER
+) {
   if (kind === 'new_file' && !folder.trim()) return 'Which folder?';
   if (kind === 'custom' && !check.trim()) return 'What should it look out for?';
   if (kind === 'custom' && !app) return 'Which app should it check?';
+  if (kind === 'new_text' && filter.from.trim() && !isHandle(filter.from))
+    return 'Give their phone number or email, as Messages shows it, or leave it empty for anyone.';
   return null;
 }
 
@@ -147,9 +207,11 @@ export function whenChecksPerDay(every: number): number {
 
 /** What each check costs, said before it's added. */
 export function whenCost(agentName: string, source: WatchSource, every: number): string {
-  return source.kind === 'linear_assigned' || source.kind === 'custom'
-    ? `Each check uses a little of ${agentName}’s usage and can only read that app, up to ${whenChecksPerDay(every)} a day.`
-    : 'Checks are free.';
+  if (source.kind === 'linear_assigned' || source.kind === 'custom')
+    return `Each check uses a little of ${agentName}’s usage and can only read that app, up to ${whenChecksPerDay(every)} a day.`;
+  if (source.kind === 'new_mail' || source.kind === 'new_text')
+    return `Checks are free. What a message says is only information to ${agentName}, and it asks you before replying.`;
+  return 'Checks are free.';
 }
 
 /** The line under the echo: what it costs, and that the first check fires nothing. */
@@ -288,4 +350,40 @@ export interface WatchOptions {
   connections: WhenConnection[];
   claudeApps: WhenClaudeApp[];
   folders: WhenFolder[];
+  /** Whether Mail and Messages can be read; absent from older Macs. */
+  mac?: MacAccess;
+}
+
+/* ------------------------------------------------- Mail and Messages */
+
+/** Mirrors `watch_mac::AccessState`. */
+export type MacAccessState = 'ok' | 'full_disk_access' | 'not_set_up' | 'unsupported';
+
+/** Whether one of the Mac's apps can be read; mirrors `watch_mac::Access`. */
+export interface MacAppAccess {
+  state: MacAccessState;
+  /** What's wrong and what to do, in the Mac's words; absent when it's fine. */
+  words?: string;
+  /** The System Settings pane that fixes it (a desk can open it). */
+  settings?: string;
+}
+
+/** Mirrors `watch_mac::MacAccess` (`agents_watch_mac_access`, `WatchOptions.mac`). */
+export interface MacAccess {
+  mail: MacAppAccess;
+  messages: MacAppAccess;
+}
+
+/** Whether `kind` reads one of the Mac's own apps. */
+export const whenKindReadsMac = (kind: WhenKind) => kind === 'new_mail' || kind === 'new_text';
+
+/**
+ * What stands between `kind` and its first check on this Mac: the app's
+ * access when it isn't on, else `null`. Unknown (not asked yet, or an older
+ * Mac) is `null` too: the routine's own check says so if it can't read.
+ */
+export function whenAccess(kind: WhenKind, mac: MacAccess | null | undefined): MacAppAccess | null {
+  if (!mac || !whenKindReadsMac(kind)) return null;
+  const a = kind === 'new_mail' ? mac.mail : mac.messages;
+  return a.state === 'ok' ? null : a;
 }

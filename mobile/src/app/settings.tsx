@@ -5,7 +5,9 @@ import { useRouter } from 'expo-router';
 import * as Updates from 'expo-updates';
 import { useCallback, useEffect, useState } from 'react';
 import { Alert, AppState, Linking, ScrollView, StyleSheet, Switch, View } from 'react-native';
-import { Icon, Row, Section, T, tap } from '../components/ui';
+import { Icon, Row, Section, SectionTitle, T, tap } from '../components/ui';
+import { GlanceRow } from '../components/usageStack';
+import { useGlance } from '../lib/glance';
 import { NewAgentDefaults } from '../components/NewAgentDefaults';
 import { IndependenceSetting } from '../components/IndependenceSetting';
 import { MorningBriefSetting } from '../components/MorningBriefSetting';
@@ -143,6 +145,12 @@ export default function Settings() {
 
   const accounts = useAccounts();
   const usage = useUsageRows();
+  // A Mac that serves the whole Usage screen: Settings is one way into it,
+  // the same card as the Agents list's, never a second account list in older
+  // words (the desk's Settings → Accounts & usage is its Usage view too).
+  const glance = useGlance();
+  const servesUsage = useApp((s) => canCall('agents.usagePlan', s.welcome));
+  const usageCard = servesUsage && glance !== null && glance.keys.length > 0;
   const { version, build } = appInfo();
   const updateLabel =
     update.kind === 'checking'
@@ -181,26 +189,30 @@ export default function Settings() {
         </Section>
       )}
 
-      <AccountsSections
-        state={accounts}
-        onOpenAccount={(engine, account) =>
-          router.push({ pathname: '/usage-account', params: { engine, account } })
-        }
-      />
+      {usageCard ? (
+        <View style={styles.usage}>
+          <SectionTitle title="Accounts & usage" />
+          <GlanceRow glance={glance} onPress={() => router.push('/usage')} />
+        </View>
+      ) : (
+        <>
+          <AccountsSections state={accounts} />
 
-      {usage.length > 0 && (
-        <Section title="Usage" footer={USAGE_FOOTER}>
-          {usage.map((row, i) => (
-            <Row
-              key={row.key}
-              label={row.label}
-              value={row.value}
-              detail={row.detail}
-              warning={row.warning}
-              last={i === usage.length - 1}
-            />
-          ))}
-        </Section>
+          {usage.length > 0 && (
+            <Section title="Usage" footer={USAGE_FOOTER}>
+              {usage.map((row, i) => (
+                <Row
+                  key={row.key}
+                  label={row.label}
+                  value={row.value}
+                  detail={row.detail}
+                  warning={row.warning}
+                  last={i === usage.length - 1}
+                />
+              ))}
+            </Section>
+          )}
+        </>
       )}
 
       <IndependenceSetting />
@@ -433,6 +445,7 @@ export default function Settings() {
 
 const styles = StyleSheet.create({
   page: { padding: space.lg },
+  usage: { marginBottom: space.xl },
   check: { width: 16 },
   sizeTrail: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   error: { marginHorizontal: space.lg, marginTop: -space.md, marginBottom: space.lg },

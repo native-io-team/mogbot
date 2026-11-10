@@ -243,6 +243,16 @@ export const baseCommands: CommandMap = {
         ],
       },
     ],
+    // What a fresh install's overview carries (`agents::defaults::view_of`):
+    // nothing chosen, so new agents start on the ready engine at its default.
+    // Without it Settings → Agents drew no "What agents run on" section, and
+    // ⌘K "What new agents run on…" landed on the top of the page.
+    defaults: {
+      engine: null,
+      models: { claude: null, codex: null, opencode: null },
+      startsOn: 'claude',
+      model: null,
+    },
   },
   // A new Chief opens on its stored greeting (`agents::ensure_main`).
   agents_messages: (args: Record<string, unknown>) =>
@@ -251,6 +261,8 @@ export const baseCommands: CommandMap = {
   // Every agent has its one conversation until it's given another.
   agents_conversations: onlyFirst,
   agents_conversation_select: onlyFirst,
+  // No conversation has a living page until an agent pins one (`agents/page.rs`).
+  agents_page: null,
   // The palette sweep now starts in Agents, where ⌘K → Apps opens this.
   agents_apps_list: { connected: [] },
   agents_app_connections: { apps: [], connections: [], flows: [] },
@@ -295,6 +307,19 @@ export const baseCommands: CommandMap = {
   }),
   agents_policy_team: BALANCED_TEAM,
   agents_policy_set: null,
+  // Edit agent's "Skills" (`agents/skills_learn.rs`): Ask me, none yet.
+  agents_skills: (args: Record<string, unknown>) => ({
+    agentId: typeof args.agentId === 'string' ? args.agentId : '',
+    setting: 'ask',
+    skills: [],
+  }),
+  agents_skill_edit: (args: Record<string, unknown>) => ({
+    slug: args.slug,
+    name: args.name,
+    when: args.when,
+    steps: args.steps,
+  }),
+  agents_skill_remove: null,
   // "What can it do on its own?" (`agents/on_its_own.rs`). Narrowing answers
   // the same view without the item it took away.
   agents_on_its_own: onItsOwnFor,

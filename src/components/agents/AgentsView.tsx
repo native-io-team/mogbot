@@ -98,6 +98,7 @@ import {
   CollaboratorsIcon,
   CommentIcon,
   EditFieldIcon,
+  GraduationCapIcon,
   EditIcon,
   EyeIcon,
   EyeOffIcon,
@@ -196,10 +197,10 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     open: boolean;
     agent: Agent | null;
     tab?: EditorTab;
+    /** Scrolled to one section on opening (⌘K "<agent>’s skills"). */
+    focus?: 'skills' | 'reach';
     /** Creating: the ready-made agent it opens on. */
     template?: string;
-    /** Opens scrolled to "What it can reach" (a connected login card's link). */
-    reach?: boolean;
   }>({
     open: false,
     agent: null,
@@ -333,7 +334,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
   const openReach = useCallback(
     (agentId: string) => {
       const agent = agents.find((a) => a.id === agentId);
-      if (agent) setEditor({ open: true, agent, reach: true });
+      if (agent) setEditor({ open: true, agent, focus: 'reach' });
     },
     [agents]
   );
@@ -764,6 +765,23 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
               run: () => setEditor({ open: true, agent: selected, tab: 'memory' }),
             },
             {
+              // At the foot of a long editor: found by name here, as on the phone's agent sheet.
+              id: 'agents.skills',
+              title: `${selected.name}’s skills…`,
+              icon: <GraduationCapIcon size={14} />,
+              category: 'action' as const,
+              keywords: [
+                'agents',
+                'skills',
+                'learned',
+                'save new skills',
+                'what it knows how to do',
+                'how to',
+                'steps',
+              ],
+              run: () => setEditor({ open: true, agent: selected, focus: 'skills' }),
+            },
+            {
               id: 'agents.reach',
               title: `What ${selected.name} can reach…`,
               icon: <LockedIcon size={14} />,
@@ -779,7 +797,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                 'apps',
                 'browser',
               ],
-              run: () => setEditor({ open: true, agent: selected, reach: true }),
+              run: () => setEditor({ open: true, agent: selected, focus: 'reach' }),
             },
           ]
         : []),
@@ -1222,14 +1240,14 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
         <AgentEditorModal
           key={
             editor.open
-              ? `${editor.agent?.id ?? 'new'}-${editor.tab ?? ''}-${editor.template ?? ''}`
+              ? `${editor.agent?.id ?? 'new'}-${editor.tab ?? ''}-${editor.focus ?? ''}-${editor.template ?? ''}`
               : 'closed'
           }
           isOpen={editor.open}
           agent={editor.agent}
           initialTab={editor.tab}
+          initialFocus={editor.focus}
           initialTemplate={editor.template}
-          focusReach={editor.reach}
           takenColors={agents.map((a) => a.color)}
           onClose={() => setEditor({ open: false, agent: null })}
           onSaved={(id) => {

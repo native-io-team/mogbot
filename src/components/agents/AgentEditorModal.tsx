@@ -73,6 +73,7 @@ import { getAgentsSnapshot, useAgentsSelector } from '../../lib/agentsStore';
 import { useAsyncState } from '../../hooks/useAsyncState';
 import { AccentScope } from '../../contexts/AccentScopeContext';
 import { AdminSwitch } from './AgentAdmin';
+import { AgentSkills } from './AgentSkills';
 import {
   findTemplate,
   needsLine,
@@ -214,6 +215,8 @@ interface AgentEditorModalProps {
   onOpenApps?: () => void;
   /** Editing: open on its memory rather than its settings. */
   initialTab?: EditorTab;
+  /** Editing: bring this section into view on opening ("Skills", "What it can reach"). */
+  initialFocus?: 'skills' | 'reach';
   /** Install or sign in to an engine that isn't ready, over the editor. */
   onSetUpEngine?: (engine: AgentEngine, step: 'install' | 'sign-in') => void;
   /** Creating: close and draft the request in the Chief of Staff's chat instead. */
@@ -222,8 +225,6 @@ interface AgentEditorModalProps {
   onAskInChat?: (text: string) => void;
   /** Creating: open on this ready-made agent (an id from `ROLE_TEMPLATES`). */
   initialTemplate?: string | null;
-  /** Editing: open scrolled to "What it can reach". */
-  focusReach?: boolean;
 }
 
 export type EditorTab = 'agent' | 'memory';
@@ -242,11 +243,11 @@ export function AgentEditorModal({
   takenColors,
   onOpenApps,
   initialTab = 'agent',
+  initialFocus,
   onSetUpEngine,
   onAskChief,
   onAskInChat,
   initialTemplate,
-  focusReach,
 }: AgentEditorModalProps) {
   const editing = Boolean(agent);
   const [tab, setTab] = useState<EditorTab>(initialTab);
@@ -752,7 +753,8 @@ export function AgentEditorModal({
           <AdminSwitch agent={agent} />
           <Permissions agent={agent} />
           <AgentPolicy agent={agent} onAskInChat={onAskInChat} />
-          <AgentReach agent={agent} onOpenApps={onOpenApps} focus={focusReach} />
+          <AgentReach agent={agent} onOpenApps={onOpenApps} focus={initialFocus === 'reach'} />
+          <AgentSkills agent={agent} focus={initialFocus === 'skills'} />
         </div>
       )}
       {/* With one engine there's no "Runs on": what protects it, and the way to add another, live down here. */}

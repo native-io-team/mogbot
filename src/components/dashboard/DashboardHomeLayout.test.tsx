@@ -41,8 +41,6 @@ function renderSearchAndSort(overrides: Partial<React.ComponentProps<typeof Sear
     onNewFolder: vi.fn(),
     onCreateProject: vi.fn(),
     onImportProject: vi.fn(),
-    isGitHubAuthenticated: true,
-    onGitHubConnectForImport: vi.fn(),
     ...overrides,
   };
 
@@ -79,19 +77,13 @@ describe('dashboard home layout pieces', () => {
     expect(props.onNewFolder).toHaveBeenCalledOnce();
   });
 
-  it('routes unauthenticated import to GitHub connect', () => {
+  it('opens the import choices whatever GitHub says: a local folder needs no sign-in', () => {
     const onImportProject = vi.fn();
-    const onGitHubConnectForImport = vi.fn();
-    renderSearchAndSort({
-      onImportProject,
-      onGitHubConnectForImport,
-      isGitHubAuthenticated: false,
-    });
+    renderSearchAndSort({ onImportProject });
 
     fireEvent.click(screen.getByRole('button', { name: 'Import' }));
 
-    expect(onImportProject).not.toHaveBeenCalled();
-    expect(onGitHubConnectForImport).toHaveBeenCalledOnce();
+    expect(onImportProject).toHaveBeenCalledOnce();
   });
 
   it('uses the shared tabs primitive for the project view switcher', () => {

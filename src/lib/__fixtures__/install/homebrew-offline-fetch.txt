@@ -1,0 +1,8 @@
+%% Homebrew losing the network during its git fetch: install.sh's retry() warns
+%% between tries, then aborts "Failed 5 times doing: …git fetch…".
+Downloading the Homebrew installer…
+\e[1;34m==>\e[1;39m Downloading and installing Homebrew...\e[0m
+fatal: unable to access 'https://github.com/Homebrew/brew/': The requested URL returned error: 502
+\e[1;31mWarning\e[0m: Trying again in 2 seconds: /usr/bin/git fetch --quiet --progress --force origin
+fatal: unable to access 'https://github.com/Homebrew/brew/': The requested URL returned error: 502
+Failed 5 times doing: /usr/bin/git fetch --quiet --progress --force origin

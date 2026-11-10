@@ -117,11 +117,11 @@ fn a_hold_is_said_once_in_plain_words() {
     );
     assert_eq!(
         line,
-        "Holding “Check the inbox…” until 10:00 AM, when Personal’s 5-hour limit resets: it has 7% left, and Save my limits keeps routines for after the reset. Run now still runs it."
+        "Holding “Check the inbox…” until 10:00 AM, when Personal’s 5-hour limit refills: it has 7% left, and Save my limits keeps routines for after the refill. Run now still runs it."
     );
     assert_eq!(
         held_detail(&near, &Utc, now()),
-        "Waiting for the 5-hour limit to reset at 10:00 AM: 7% left, Save my limits."
+        "Waiting for the 5-hour limit to refill at 10:00 AM: 7% left, Save my limits."
     );
     let out = Hold {
         until: now() + 26 * H,
@@ -205,7 +205,7 @@ fn the_warning_says_what_is_left_when_it_resets_and_what_save_does() {
     };
     assert_eq!(
         warn_text(Engine::Claude, "Personal", &near, Mode::Normal, &Utc, now()),
-        "Claude Code “Personal” has 8% of its 5-hour limit left; it resets at 10:00 AM. Switch to Save my limits in Usage to hold routines until then."
+        "Claude Code “Personal” has 8% of its 5-hour limit left; it refills at 10:00 AM. Switch to Save my limits in Usage to hold routines until then."
     );
     assert!(
         warn_text(Engine::Claude, "Personal", &near, Mode::Save, &Utc, now())
@@ -221,5 +221,5 @@ fn the_warning_says_what_is_left_when_it_resets_and_what_save_does() {
         },
     };
     let said = warn_text(Engine::Codex, "Work", &pace, Mode::Normal, &Utc, now());
-    assert!(said.starts_with("At the recent pace, Codex “Work” runs out of its weekly limit tomorrow around 10:00 AM, before it resets Sat at 10:00 AM (an estimate from 6 readings)."), "{said}");
+    assert!(said.starts_with("At the recent pace, Codex “Work” runs out of its weekly limit tomorrow around 10:00 AM, before it refills Sat at 10:00 AM (an estimate from 6 readings)."), "{said}");
 }

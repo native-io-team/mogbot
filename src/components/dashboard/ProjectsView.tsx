@@ -50,6 +50,8 @@ interface ProjectsViewProps {
   onTogglePin?: (projectPath: string, pinned: boolean) => void;
   /** Open the workspace switcher (chip beside "All projects"). */
   onSwitchAccount?: () => void;
+  /** Switches to Agents (a project's team line opens that agent's chat). */
+  onGoAgents?: () => void;
 }
 
 export const ProjectsView = memo(function ProjectsView({
@@ -76,6 +78,7 @@ export const ProjectsView = memo(function ProjectsView({
   pinnedSet,
   onTogglePin,
   onSwitchAccount,
+  onGoAgents,
 }: ProjectsViewProps) {
   return (
     <>
@@ -85,8 +88,6 @@ export const ProjectsView = memo(function ProjectsView({
             onSelectProject={(project) => void onSelectProject(project)}
             onCreateProject={onCreateProject}
             onImportProject={onImportProject}
-            isGitHubAuthenticated={isGitHubAuthenticated}
-            onGitHubConnectForImport={() => void onGitHubConnect()}
             githubUsername={githubUsername}
             isAuthCheckDone={isAuthCheckDone}
             onLoadingChange={onLoadingChange}
@@ -94,6 +95,7 @@ export const ProjectsView = memo(function ProjectsView({
             pinnedSet={pinnedSet}
             onTogglePin={onTogglePin}
             onSwitchAccount={onSwitchAccount}
+            onGoAgents={onGoAgents}
           />
         </div>
         {showCreateModal && (
@@ -105,7 +107,16 @@ export const ProjectsView = memo(function ProjectsView({
         )}
         {importView === 'picker' && (
           <ImportTypePicker
-            onSelectGitHub={() => setImportView('github')}
+            githubConnected={isGitHubAuthenticated}
+            onSelectGitHub={() => {
+              // Cloning needs GitHub: without a sign-in, this choice signs in first.
+              if (isGitHubAuthenticated) {
+                setImportView('github');
+              } else {
+                setImportView('none');
+                onGitHubConnect();
+              }
+            }}
             onSelectLocalFolder={() => void onImportLocalFolder()}
             onClose={() => setImportView('none')}
           />

@@ -63,11 +63,22 @@ describe('the phone’s “When…” composer', () => {
     expect(screen.getAllByText('Free · checked from your Mac')).toHaveLength(2);
     expect(screen.getByText('A Linear issue is assigned to you')).toBeTruthy();
     expect(screen.getByText('CHECK EVERY')).toBeTruthy();
+    // Everyday sources first, as on the desk; GitHub further down.
+    const labels = screen
+      .getAllByText(/^(An email arrives|A text arrives|Someone mentions you)/)
+      .map((n) => n.props.children);
+    expect(labels).toEqual([
+      'An email arrives in Mail',
+      'A text arrives in Messages',
+      'Someone mentions you on GitHub',
+    ]);
+    await fireEvent.press(screen.getByText('Someone mentions you on GitHub'));
     expect(screen.getByText(/^Checks are free\. The first check only notes/)).toBeTruthy();
   });
 
   it('echoes the routine and adds it with the source, interval and note', async () => {
     const onDone = await mount();
+    await fireEvent.press(screen.getByText('Someone mentions you on GitHub'));
     await fireEvent.changeText(
       screen.getByPlaceholderText('Triage it and tell me if it’s urgent'),
       'Triage it'
@@ -132,6 +143,64 @@ describe('the phone’s “When…” composer', () => {
       { kind: 'github_assigned' },
       60,
       'Triage it'
+    );
+  });
+
+  it('reads Mail on your Mac, narrowed by sender and words', async () => {
+    await mount();
+    await fireEvent.press(screen.getByText('An email arrives in Mail'));
+    expect(screen.getByText('Free · reads Mail on your Mac')).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Only from'), 'billing@northwind.com');
+    await fireEvent.changeText(screen.getByLabelText('Only with these words'), 'invoice');
+    await fireEvent.changeText(
+      screen.getByPlaceholderText('Triage it and tell me if it’s urgent'),
+      'File it'
+    );
+    expect(
+      screen.getByText(
+        'When an email arrives in Mail from billing@northwind.com mentioning “invoice” — File it'
+      )
+    ).toBeTruthy();
+    await fireEvent.press(screen.getByText('Add'));
+    expect(mockCreate).toHaveBeenCalledWith(
+      'a1',
+      { kind: 'new_mail', from: 'billing@northwind.com', words: 'invoice' },
+      10,
+      'File it'
+    );
+  });
+
+  it('says the Mac needs Full Disk Access for Messages, and asks again', async () => {
+    const words =
+      'Reading Messages needs Full Disk Access: System Settings → Privacy & Security → Full Disk Access, then turn on Mogbot.';
+    mockOptions.mockImplementationOnce(() =>
+      Promise.resolve({
+        ...options,
+        mac: { mail: { state: 'ok' }, messages: { state: 'full_disk_access', words } },
+      })
+    );
+    await mount();
+    await fireEvent.press(screen.getByText('A text arrives in Messages'));
+    await fireEvent.changeText(
+      screen.getByPlaceholderText('Triage it and tell me if it’s urgent'),
+      'Tell me'
+    );
+    expect(screen.getAllByText(words)).toHaveLength(1);
+    await fireEvent.press(screen.getByText('Add'));
+    expect(mockCreate).not.toHaveBeenCalled();
+    // Switched on at the Mac: Check again hears so, and it can be added.
+    await fireEvent.press(screen.getByText('Check again'));
+    await act(async () => {});
+    expect(screen.queryByText(words)).toBeNull();
+    await fireEvent.changeText(screen.getByLabelText('Only from'), 'my landlord');
+    expect(screen.getByText(/^Give their phone number or email/)).toBeTruthy();
+    await fireEvent.changeText(screen.getByLabelText('Only from'), '+1 555 123 4567');
+    await fireEvent.press(screen.getByText('Add'));
+    expect(mockCreate).toHaveBeenCalledWith(
+      'a1',
+      { kind: 'new_text', from: '+1 555 123 4567' },
+      10,
+      'Tell me'
     );
   });
 });

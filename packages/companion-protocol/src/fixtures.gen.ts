@@ -3438,6 +3438,18 @@ export const agentsPolicy = {
   ],
   "sameAsTeam": false
 } satisfies Result<'agents.policy'>;
+export const agentsSkills = {
+  "agentId": "a1",
+  "setting": "ask",
+  "skills": [
+    {
+      "name": "Export invoices from Xero",
+      "slug": "export-invoices-from-xero",
+      "steps": "1. Open Reports → Invoices.\n2. Filter to last month.\n3. Export as CSV and share it.",
+      "when": "When the user asks for last month's invoices"
+    }
+  ]
+} satisfies Result<'agents.skills'>;
 export const agentsOnItsOwn = {
   "agentId": "a1",
   "agentName": "Finance",
@@ -4245,7 +4257,17 @@ export const watchOptions = {
       "label": "~/Desktop",
       "path": "/Users/sam/Desktop"
     }
-  ]
+  ],
+  "mac": {
+    "mail": {
+      "state": "ok"
+    },
+    "messages": {
+      "settings": "x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles",
+      "state": "full_disk_access",
+      "words": "Reading Messages needs Full Disk Access: System Settings → Privacy & Security → Full Disk Access, then turn on Mogbot."
+    }
+  }
 } satisfies Result<'agents.watch.options'>;
 export const watchCreate = {
   "createdAt": 1762290000000,
@@ -4709,7 +4731,109 @@ export const agentsConversationRename = {
     "ci_1": "c2"
   }
 } satisfies Result<'agents.conversationRename'>;
-export const agentsConversationRoutine = {
+export const agentsPage = {
+  "agentId": "a1",
+  "at": 1762290000000,
+  "blocks": {
+    "items": [
+      {
+        "id": "status",
+        "items": [
+          {
+            "label": "Days to launch",
+            "value": 12.0
+          },
+          {
+            "delta": -3.0,
+            "good": "down",
+            "label": "Open tasks",
+            "value": 5.0,
+            "vs": "vs Monday"
+          }
+        ],
+        "kind": "metrics",
+        "summary": "- Days to launch: 12\n- Open tasks: 5 (-3 vs Monday)"
+      },
+      {
+        "id": "tasks",
+        "items": [
+          {
+            "done": true,
+            "text": "Press kit"
+          },
+          {
+            "done": true,
+            "text": "Pricing page"
+          }
+        ],
+        "kind": "checklist",
+        "summary": "This week\n- [x] Press kit\n- [x] Pricing page",
+        "title": "This week"
+      },
+      {
+        "id": "links",
+        "items": [
+          {
+            "domain": "example.com",
+            "label": "Launch doc",
+            "url": "https://example.com/launch"
+          }
+        ],
+        "kind": "links",
+        "summary": "- Launch doc: https://example.com/launch"
+      }
+    ],
+    "v": 1
+  },
+  "byRoutine": true,
+  "changes": {
+    "added": [
+      "links"
+    ],
+    "changed": [
+      "tasks"
+    ],
+    "removed": []
+  },
+  "conversation": "c2",
+  "history": [
+    {
+      "at": 1762290000000,
+      "byRoutine": true,
+      "changes": {
+        "added": [
+          "links"
+        ],
+        "changed": [
+          "tasks"
+        ],
+        "removed": []
+      },
+      "note": "Pricing page is done",
+      "title": "Launch plan",
+      "version": 2
+    },
+    {
+      "at": 1762280000000,
+      "changes": {
+        "added": [
+          "status",
+          "tasks"
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "note": "Started the plan",
+      "title": "Launch plan",
+      "version": 1
+    }
+  ],
+  "note": "Pricing page is done",
+  "pinned": true,
+  "title": "Launch plan",
+  "version": 2
+} satisfies Result<'agents.page'>;
+export const agentsConversationRewind = {
   "agentId": "a1",
   "current": "c2",
   "items": [
@@ -4737,6 +4861,300 @@ export const agentsConversationRoutine = {
       "lastActivityAt": 1762290000000,
       "loaded": false,
       "named": false,
+      "rewinds": [
+        {
+          "at": "m-2",
+          "id": "r0",
+          "ids": [
+            "m-2",
+            "m-2-reply"
+          ],
+          "ts": 1762290100000
+        }
+      ],
+      "title": "Fix the login page",
+      "waiting": 1
+    }
+  ],
+  "routines": {
+    "ci_1": "c2"
+  }
+} satisfies Result<'agents.conversationRewind'>;
+export const agentsPageNone = null satisfies Result<'agents.page'>;
+export const agentsPageVersion = {
+  "at": 1762280000000,
+  "blocks": {
+    "items": [
+      {
+        "id": "status",
+        "items": [
+          {
+            "label": "Days to launch",
+            "value": 12.0
+          },
+          {
+            "delta": -3.0,
+            "good": "down",
+            "label": "Open tasks",
+            "value": 5.0,
+            "vs": "vs Monday"
+          }
+        ],
+        "kind": "metrics",
+        "summary": "- Days to launch: 12\n- Open tasks: 5 (-3 vs Monday)"
+      },
+      {
+        "id": "tasks",
+        "items": [
+          {
+            "done": true,
+            "text": "Press kit"
+          },
+          {
+            "done": false,
+            "note": "Waiting on copy",
+            "text": "Pricing page"
+          }
+        ],
+        "kind": "checklist",
+        "summary": "This week\n- [x] Press kit\n- [ ] Pricing page (Waiting on copy)",
+        "title": "This week"
+      }
+    ],
+    "v": 1
+  },
+  "changes": {
+    "added": [
+      "status",
+      "tasks"
+    ],
+    "changed": [],
+    "removed": []
+  },
+  "note": "Started the plan",
+  "title": "Launch plan",
+  "version": 1
+} satisfies Result<'agents.pageVersion'>;
+export const agentsPagePin = {
+  "agentId": "a1",
+  "at": 1762290000000,
+  "blocks": {
+    "items": [
+      {
+        "id": "status",
+        "items": [
+          {
+            "label": "Days to launch",
+            "value": 12.0
+          },
+          {
+            "delta": -3.0,
+            "good": "down",
+            "label": "Open tasks",
+            "value": 5.0,
+            "vs": "vs Monday"
+          }
+        ],
+        "kind": "metrics",
+        "summary": "- Days to launch: 12\n- Open tasks: 5 (-3 vs Monday)"
+      },
+      {
+        "id": "tasks",
+        "items": [
+          {
+            "done": true,
+            "text": "Press kit"
+          },
+          {
+            "done": true,
+            "text": "Pricing page"
+          }
+        ],
+        "kind": "checklist",
+        "summary": "This week\n- [x] Press kit\n- [x] Pricing page",
+        "title": "This week"
+      },
+      {
+        "id": "links",
+        "items": [
+          {
+            "domain": "example.com",
+            "label": "Launch doc",
+            "url": "https://example.com/launch"
+          }
+        ],
+        "kind": "links",
+        "summary": "- Launch doc: https://example.com/launch"
+      }
+    ],
+    "v": 1
+  },
+  "byRoutine": true,
+  "changes": {
+    "added": [
+      "links"
+    ],
+    "changed": [
+      "tasks"
+    ],
+    "removed": []
+  },
+  "conversation": "c2",
+  "history": [
+    {
+      "at": 1762290000000,
+      "byRoutine": true,
+      "changes": {
+        "added": [
+          "links"
+        ],
+        "changed": [
+          "tasks"
+        ],
+        "removed": []
+      },
+      "note": "Pricing page is done",
+      "title": "Launch plan",
+      "version": 2
+    },
+    {
+      "at": 1762280000000,
+      "changes": {
+        "added": [
+          "status",
+          "tasks"
+        ],
+        "changed": [],
+        "removed": []
+      },
+      "note": "Started the plan",
+      "title": "Launch plan",
+      "version": 1
+    }
+  ],
+  "note": "Pricing page is done",
+  "pinned": true,
+  "title": "Launch plan",
+  "version": 2
+} satisfies Result<'agents.pagePin'>;
+export const agentsConversationFork = {
+  "agentId": "a1",
+  "current": "c3",
+  "items": [
+    {
+      "createdAt": 1762200002000,
+      "current": true,
+      "forkedFrom": {
+        "conversation": "first",
+        "message": "m-2",
+        "title": "Fix the login page"
+      },
+      "id": "c3",
+      "lastActivityAt": 1762290002000,
+      "loaded": true,
+      "named": false,
+      "preview": "On it",
+      "title": "Fork of Fix the login page",
+      "waiting": 0
+    },
+    {
+      "createdAt": 1762200001000,
+      "current": false,
+      "id": "c2",
+      "lastActivityAt": 1762290001000,
+      "loaded": false,
+      "named": true,
+      "preview": "On it",
+      "title": "Launch plan",
+      "waiting": 0
+    },
+    {
+      "context": {
+        "at": 1762290000000,
+        "model": "claude-opus-5-5",
+        "used": 64000,
+        "window": 200000
+      },
+      "createdAt": 1762200000000,
+      "current": false,
+      "id": "first",
+      "lastActivityAt": 1762290000000,
+      "loaded": false,
+      "named": false,
+      "rewinds": [
+        {
+          "at": "m-2",
+          "id": "r0",
+          "ids": [
+            "m-2",
+            "m-2-reply"
+          ],
+          "ts": 1762290100000
+        }
+      ],
+      "title": "Fix the login page",
+      "waiting": 1
+    }
+  ],
+  "routines": {
+    "ci_1": "c2"
+  }
+} satisfies Result<'agents.conversationFork'>;
+export const agentsConversationRoutine = {
+  "agentId": "a1",
+  "current": "c3",
+  "items": [
+    {
+      "createdAt": 1762200002000,
+      "current": true,
+      "forkedFrom": {
+        "conversation": "first",
+        "message": "m-2",
+        "title": "Fix the login page"
+      },
+      "id": "c3",
+      "lastActivityAt": 1762290002000,
+      "loaded": true,
+      "named": false,
+      "preview": "On it",
+      "title": "Fork of Fix the login page",
+      "waiting": 0
+    },
+    {
+      "createdAt": 1762200001000,
+      "current": false,
+      "id": "c2",
+      "lastActivityAt": 1762290001000,
+      "loaded": false,
+      "named": true,
+      "preview": "On it",
+      "title": "Launch plan",
+      "waiting": 0
+    },
+    {
+      "context": {
+        "at": 1762290000000,
+        "model": "claude-opus-5-5",
+        "used": 64000,
+        "window": 200000
+      },
+      "createdAt": 1762200000000,
+      "current": false,
+      "id": "first",
+      "lastActivityAt": 1762290000000,
+      "loaded": false,
+      "named": false,
+      "rewinds": [
+        {
+          "at": "m-2",
+          "id": "r0",
+          "ids": [
+            "m-2",
+            "m-2-reply"
+          ],
+          "ts": 1762290100000
+        }
+      ],
       "title": "Fix the login page",
       "waiting": 1
     }
@@ -5101,6 +5519,9 @@ export const frames = [
       "agents.loginSaveKey",
       "agents.reach",
       "agents.policy",
+      "agents.skills",
+      "agents.skillEdit",
+      "agents.skillRemove",
       "agents.onItsOwn",
       "agents.onItsOwnTeam",
       "agents.onItsOwnNarrow",
@@ -5133,7 +5554,12 @@ export const frames = [
       "agents.conversationNew",
       "agents.conversationSelect",
       "agents.conversationRename",
+      "agents.conversationRewind",
+      "agents.conversationFork",
       "agents.conversationRoutine",
+      "agents.page",
+      "agents.pageVersion",
+      "agents.pagePin",
       "agents.create",
       "agents.draft",
       "agents.templates",

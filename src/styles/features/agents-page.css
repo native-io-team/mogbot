@@ -1,0 +1,141 @@
+/* A conversation's living page (components/agents/ConversationPage.tsx):
+ * a band under the chat header, in the conversation's column. The bar is
+ * one quiet line (fold, title, when it changed, unpin); the body is the
+ * page's blocks, drawn as any `show`, and scrolls on its own so the chat
+ * keeps most of the window.
+ *
+ * It is furniture, not a reply: the band is a tint off the chat and its tiles are
+ * flat, outlined rather than raised, so a metric on the page and a metric
+ * in a reply never look alike. */
+
+.agent-page {
+  /* The blocks' tiles read these (agents-blocks.css): flat on the page. */
+  --agents-card-surface: var(--surface-app);
+  --agents-card-shadow: inset 0 0 0 var(--border-width-default) var(--border-subtle);
+
+  flex: 0 0 auto;
+  padding: var(--spacing-xs) var(--agents-column-inset) 0;
+  /* A step toward the ink from the chat behind it, in either theme (the
+     recessed role is the app colour itself in both). */
+  background: color-mix(in srgb, var(--text-primary) 4%, var(--surface-app));
+  border-bottom: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-page__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  min-height: var(--spacing-2xl);
+  padding-bottom: var(--spacing-xs);
+}
+
+.agent-page__toggle {
+  display: inline-flex;
+  flex: 1 1 auto;
+  align-items: center;
+  gap: var(--spacing-xs);
+  min-width: 0;
+  padding: var(--spacing-2xs) 0;
+  border: 0;
+  background: none;
+  color: var(--text-primary);
+  font: inherit;
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
+  text-align: start;
+  cursor: pointer;
+}
+
+.agent-page__toggle:focus-visible {
+  outline: var(--border-width-default) solid var(--focus-ring);
+  border-radius: var(--radius-sm);
+}
+
+.agent-page__chevron {
+  flex: none;
+  color: var(--text-muted);
+  transition: transform var(--transition-interaction-fast);
+}
+
+.agent-page[data-folded] .agent-page__chevron {
+  transform: rotate(-90deg);
+}
+
+.agent-page__title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.agent-page__when {
+  flex: none;
+  color: var(--text-muted);
+  font-size: var(--font-size-body-sm);
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-page__body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  /* The page scrolls inside; the chat keeps the rest of the window, tall or short. */
+  max-height: min(40vh, 320px); /* css-ok: a cap in window height and in pixels */
+  overflow-y: auto;
+  padding-bottom: var(--spacing-md);
+}
+
+/* The versions: a popover off "Updated … · v4", so the page doesn't move. */
+.agent-page__history-menu {
+  width: min(380px, calc(100vw - var(--spacing-2xl))); /* css-ok: a popover's width */
+}
+
+.agent-page__history {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+  max-height: min(60vh, 420px); /* css-ok: a long history scrolls inside the popover */
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.agent-page__version {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-3xs);
+  width: 100%;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: var(--font-size-body-sm);
+  text-align: start;
+  cursor: pointer;
+}
+
+.agent-page__version:hover {
+  background: var(--surface-control-hover);
+}
+
+.agent-page__version[aria-current] {
+  background: var(--surface-selected);
+  color: var(--text-primary);
+}
+
+.agent-page__version:focus-visible {
+  outline: var(--border-width-default) solid var(--focus-ring);
+}
+
+.agent-page__version-head {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.agent-page__older {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-body-sm);
+}

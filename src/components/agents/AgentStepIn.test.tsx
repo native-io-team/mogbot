@@ -104,6 +104,19 @@ describe('Step in card', () => {
     expect(calls('agents_step_in_show')).toHaveLength(1);
   });
 
+  it('in its own chat, leaves Show window and Hand back to the bar', () => {
+    render(
+      <StepInCard
+        message={card({}, { inSince: 1_000, until: 1_000 + 15 * 60_000 })}
+        onAnswer={vi.fn()}
+        barShown
+      />
+    );
+    expect(screen.getByText(/Hand back from the bar below/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Hand back' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Show window' })).toBeNull();
+  });
+
   it('closes to one line', () => {
     render(<StepInCard message={card({ status: 'allowed' })} onAnswer={vi.fn()} />);
     expect(screen.getByText('Handed back')).toBeInTheDocument();

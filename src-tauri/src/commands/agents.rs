@@ -834,6 +834,9 @@ pub struct UpdateAgentInput {
     /// string for any account.
     #[serde(default)]
     pub account: Option<String>,
+    /// "Save new skills": `auto`, `ask` or `off` (`agents::skills_learn`).
+    #[serde(default)]
+    pub learn_skills: Option<agents::skills_learn::Learning>,
 }
 
 #[tauri::command]
@@ -959,6 +962,9 @@ pub async fn agents_update(
         }
         if let Some(m) = input.muted {
             a.muted = m;
+        }
+        if let Some(l) = input.learn_skills {
+            a.learn_skills = l;
         }
         if let Some(engine) = engine {
             a.switch_engine(engine);
@@ -1360,6 +1366,41 @@ pub async fn agents_conversation_rename(
     let list = blocking(move || conversations::rename(&id, &conversation_id, &title)).await?;
     let _ = app.emit(runner::EVENT_CONVERSATIONS, &agent_id);
     Ok(list)
+}
+
+/// "Rewind to here" (and Edit and resend, before its send): the
+/// conversation carries on from just before the user's message; what came
+/// after is folded, not deleted. Refused while a turn runs.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_conversation_rewind(
+    app: AppHandle,
+    agent_id: String,
+    conversation_id: String,
+    message_id: String,
+) -> Result<conversations::Conversations, CommandError> {
+    let id = agent_id.clone();
+    let done = blocking(move || agents::rewind::rewind(&id, &conversation_id, &message_id)).await?;
+    let _ = runner::record(&app, done.line);
+    let _ = app.emit(runner::EVENT_CONVERSATIONS, &agent_id);
+    Ok(done.conversations)
+}
+
+/// "Fork from here": a new conversation with everything before the user's
+/// message, which the user is now in; the original stays as it is.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_conversation_fork(
+    app: AppHandle,
+    agent_id: String,
+    conversation_id: String,
+    message_id: String,
+) -> Result<conversations::Conversations, CommandError> {
+    let id = agent_id.clone();
+    let done = blocking(move || agents::rewind::fork(&id, &conversation_id, &message_id)).await?;
+    let _ = runner::record(&app, done.line);
+    let _ = app.emit(runner::EVENT_CONVERSATIONS, &agent_id);
+    Ok(done.conversations)
 }
 
 /// Move a routine to another of the agent's conversations: it fires there
@@ -1920,6 +1961,10 @@ pub(crate) fn answer_card(
     if approval.slack_reply.is_some() {
         return agents::slack::answer_card(app, agent_id, &approval, allow);
     }
+    // "Save “…” as a skill?": Save writes it, Not now saves nothing.
+    if approval.skill.is_some() {
+        return agents::skills_learn::answer_card(app, agent_id, &approval, allow);
+    }
     if let Some(request) = &approval.secret {
         if allow {
             return Err(CommandError::expected(
@@ -2389,6 +2434,39 @@ pub async fn agents_recipe_save(
     blocking(move || agents::recipe::save(&agent_id, std::path::Path::new(&path), &shown)).await
 }
 
+/// "Skills": its "Save new skills" setting and the
+/// skills it saved (`agents::skills_learn`).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_skills(agent_id: String) -> Result<agents::skills_learn::View, CommandError> {
+    blocking(move || agents::skills_learn::view(&agent_id)).await
+}
+
+/// The user's edit of one skill, cleaned as a new one is.
+#[tauri::command]
+#[tracing::instrument(skip(app, name, when, steps))]
+pub async fn agents_skill_edit(
+    app: AppHandle,
+    agent_id: String,
+    slug: String,
+    name: String,
+    when: String,
+    steps: String,
+) -> Result<agents::skills_learn::Skill, CommandError> {
+    blocking(move || agents::skills_learn::edit(&app, &agent_id, &slug, &name, &when, &steps)).await
+}
+
+/// Remove one of its skills.
+#[tauri::command]
+#[tracing::instrument(skip(app))]
+pub async fn agents_skill_remove(
+    app: AppHandle,
+    agent_id: String,
+    slug: String,
+) -> Result<(), CommandError> {
+    blocking(move || agents::skills_learn::remove_one(&app, &agent_id, &slug)).await
+}
+
 /// The other app's agents on this Mac, and what importing them would do;
 /// `None` when it isn't here or has none. Reads only.
 #[tauri::command]
@@ -2601,6 +2679,14 @@ pub async fn agents_watch_update(
         blocking(move || agents::watch::edit(&agent_id, &id, source, every_minutes, &note)).await?;
     emit_registry(&app);
     Ok(edited)
+}
+
+/// Whether this Mac's Mail and Messages can be read for an email or text
+/// routine, naming the permission when not (`watch_mac`).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_watch_mac_access() -> Result<agents::watch_mac::MacAccess, CommandError> {
+    blocking(|| Ok(agents::watch_mac::mac_access())).await
 }
 
 /// Check a "When…" routine now; the agent is woken only if something's new.
