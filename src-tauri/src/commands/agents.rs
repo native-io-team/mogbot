@@ -2603,6 +2603,14 @@ pub async fn agents_watch_update(
     Ok(edited)
 }
 
+/// Whether this Mac's Mail and Messages can be read for an email or text
+/// routine, naming the permission when not (`watch_mac`).
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_watch_mac_access() -> Result<agents::watch_mac::MacAccess, CommandError> {
+    blocking(|| Ok(agents::watch_mac::mac_access())).await
+}
+
 /// Check a "When…" routine now; the agent is woken only if something's new.
 #[tauri::command]
 #[tracing::instrument(skip(app))]

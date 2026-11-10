@@ -732,6 +732,7 @@ pub fn run() {
             commands::agents::agents_watch_create,
             commands::agents::agents_watch_update,
             commands::agents::agents_watch_check_now,
+            commands::agents::agents_watch_mac_access,
             commands::agents::agents_apps_list,
             commands::agents::agents_app_connections,
             commands::agents::agents_app_connect,

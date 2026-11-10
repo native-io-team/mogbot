@@ -2389,6 +2389,14 @@ impl Backend for Stub {
                     { "path": "/Users/sam/Downloads", "label": "~/Downloads" },
                     { "path": "/Users/sam/Desktop", "label": "~/Desktop" },
                 ],
+                "mac": {
+                    "mail": { "state": "ok" },
+                    "messages": {
+                        "state": "full_disk_access",
+                        "words": crate::agents::watch_mac::full_disk_access_words(crate::agents::watch_mac::MacApp::Messages),
+                        "settings": crate::agents::watch_mac::FULL_DISK_ACCESS_PANE,
+                    },
+                },
             }),
             ScheduleOp::WatchCreate {
                 source,

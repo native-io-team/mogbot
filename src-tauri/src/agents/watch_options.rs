@@ -3,7 +3,9 @@
 //! which apps a check could read through (our own connections given to this
 //! agent, then Claude Code's own servers; `whenApps` in
 //! packages/companion-protocol reads them, on desk and phone alike), and the
-//! folders on this Mac a phone may pick for a "new file" routine.
+//! folders on this Mac a phone may pick for a "new file" routine, and
+//! whether this Mac's Mail and Messages can be read for an email or text
+//! routine (`watch_mac::mac_access`: Full Disk Access, named).
 //!
 //! A phone can't browse or type a path on the Mac: it picks from
 //! [`folders`], and a folder off that list is refused
@@ -38,6 +40,8 @@ pub struct Options {
     /// Claude Code couldn't list them.
     pub claude_apps: Vec<Value>,
     pub folders: Vec<Folder>,
+    /// Whether Mail and Messages can be read now, for "When an email / a text arrives".
+    pub mac: super::watch_mac::MacAccess,
 }
 
 /// "~/Downloads" for a path under `home`.
@@ -142,7 +146,7 @@ fn connection_for(c: &super::connections::Connection, agent_id: &str) -> Value {
 /// leaves its apps out, as on the desk.
 pub async fn options(agent_id: &str) -> Result<Options, CommandError> {
     let agent_id = agent_id.to_string();
-    let (connections, folders) = tokio::task::spawn_blocking({
+    let (connections, folders, mac) = tokio::task::spawn_blocking({
         let agent_id = agent_id.clone();
         move || {
             super::store::get(&agent_id)?;
@@ -151,7 +155,7 @@ pub async fn options(agent_id: &str) -> Result<Options, CommandError> {
                 .iter()
                 .map(|c| connection_for(c, &agent_id))
                 .collect();
-            Ok::<_, CommandError>((connections, folders()))
+            Ok::<_, CommandError>((connections, folders(), super::watch_mac::mac_access()))
         }
     })
     .await
@@ -169,6 +173,7 @@ pub async fn options(agent_id: &str) -> Result<Options, CommandError> {
         connections,
         claude_apps,
         folders,
+        mac,
     })
 }
 
