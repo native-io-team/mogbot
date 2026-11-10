@@ -379,6 +379,12 @@ pub const MAC_FEATURE_AGENT_KEYS: &str = "agents.keys";
 /// phone, the tab shown live there (`agents.signin*`; `agents/phone_signin.rs`).
 pub const MAC_FEATURE_SIGNIN_PHONE: &str = "signin.phone";
 
+/// `welcome.features`: `agents.signinBegin` takes `connect` (a login card's
+/// OAuth option): an app that won't take the phone's sign-in sheet signs in
+/// through this Mac's own sign-in, in the window the phone sees
+/// (`phone_signin::begin_connect`).
+pub const MAC_FEATURE_SIGNIN_CONNECT: &str = "signin.connect";
+
 /// `welcome.features`: stepping into an agent's own tab for its step-in
 /// card from the phone (`agents.stepInBegin`, then the `agents.signin*`
 /// frames and input; `agents/phone_signin.rs`, `agents/step_in.rs`).
@@ -418,6 +424,7 @@ pub const MAC_FEATURES: &[&str] = &[
     MAC_FEATURE_KEYCAPS,
     MAC_FEATURE_AGENT_KEYS,
     MAC_FEATURE_SIGNIN_PHONE,
+    MAC_FEATURE_SIGNIN_CONNECT,
     MAC_FEATURE_STEP_IN_PHONE,
     MAC_FEATURE_WATCH_LINKS,
     MAC_FEATURE_ENGINE,

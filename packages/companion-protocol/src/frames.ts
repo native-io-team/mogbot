@@ -207,6 +207,7 @@ export const MAC_FEATURES = {
    * `agents.signin*` methods, one tab shown live here and driven from here.
    */
   signinPhone: 'signin.phone',
+  signinConnect: 'signin.connect',
   /**
    * Stepping into an agent's own tab for its step-in card from the phone:
    * `agents.stepInBegin`, then the `agents.signin*` frames and input.

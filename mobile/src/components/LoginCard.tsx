@@ -46,6 +46,7 @@ import {
   phoneLine,
   phoneWay,
   signInWithSheet,
+  SHEET_REFUSED,
   loginCancel,
   loginDecline,
   loginNotNeeded,
@@ -112,11 +113,18 @@ export function LoginCard({
   const way = (o: LoginOption) => phoneWay(o, phoneSignIn, hasSignInSheet(), signinServed);
   const label = (o: LoginOption) => (way(o) === 'here' ? 'Sign in from here' : o.label);
   const router = useRouter();
-  const signinHere = () =>
+  const signinHere = (connect?: string) =>
     router.push({
       pathname: '/signin',
-      params: { agentId: message.agentId, requestId: approval.requestId },
+      params: {
+        agentId: message.agentId,
+        requestId: approval.requestId,
+        ...(connect ? { connect } : {}),
+      },
     });
+  // An app that won't take this phone's sign-in sheet signs in through the
+  // Mac's own sign-in instead, shown live here (Vercel: `begin_connect`).
+  const connectServed = useServed('agents.signinBegin', MAC_FEATURES.signinConnect);
 
   const wipe = () => {
     value.current = '';
@@ -155,7 +163,18 @@ export function LoginCard({
         haptic.select();
         return signinHere();
       case 'sheet':
-        return run(o.id, () => signInWithSheet(ids, o.id), haptic.select);
+        return run(
+          o.id,
+          async () => {
+            try {
+              await signInWithSheet(ids, o.id);
+            } catch (e) {
+              if (!(connectServed && (e as Error)?.name === SHEET_REFUSED)) throw e;
+              signinHere(o.id);
+            }
+          },
+          haptic.select
+        );
       case 'web':
         return run(
           o.id,
@@ -530,7 +549,7 @@ export function LoginCard({
                 title="Sign in from here"
                 variant="outline"
                 disabled={off}
-                onPress={signinHere}
+                onPress={() => signinHere()}
                 testID="login-signin-here"
               />
               <T variant="caption" color={colors.textMuted}>

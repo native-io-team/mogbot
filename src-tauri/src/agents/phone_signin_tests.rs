@@ -434,6 +434,7 @@ fn a_step_is_logged_by_name_never_by_contents() {
         agent_id: "a".into(),
         request_id: "q".into(),
         way: Some(Via::AgentsBrowser),
+        connect: None,
     };
     assert_eq!(begin.name(), "begin");
     // The way the phone names parses from its wire words.
@@ -575,4 +576,19 @@ fn every_end_of_a_phone_step_in_hands_back_once() {
     let step_in = include_str!("step_in.rs");
     let hand_back = &step_in[step_in.find("pub async fn hand_back").unwrap()..];
     assert!(hand_back[..hand_back.find("\n}\n").unwrap()].contains("phone_signin::end_step_in"));
+}
+
+#[test]
+fn connect_scope_takes_the_apps_sign_in_server() {
+    // Vercel's MCP signs in on vercel.com; an app whose sign-in server is
+    // elsewhere gets that domain too, and nothing else.
+    let s = Scope::for_site("vercel.com").with_host_of("https://auth.example-app.io/authorize?x=1");
+    assert!(s.allows("https://vercel.com/login"));
+    assert!(s.allows("https://auth.example-app.io/authorize"));
+    assert!(s.allows("https://login.example-app.io/"));
+    assert!(!s.allows("https://example-app.io.evil.test/"));
+    assert!(!s.allows("http://auth.example-app.io/"));
+    // An http address adds nothing.
+    let t = Scope::for_site("vercel.com").with_host_of("http://127.0.0.1:5555/callback");
+    assert!(!t.allows("https://127.0.0.1/"));
 }

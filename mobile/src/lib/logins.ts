@@ -11,13 +11,13 @@
  * The pure parts are in `loginState.ts`, re-exported here.
  */
 
-import type { AgentSecret, TeamLogins, TeamNeed } from '@shipstudio/companion-protocol';
+import type { AgentSecret, Result, TeamLogins, TeamNeed } from '@shipstudio/companion-protocol';
 import { CLAUDE_AI_CONNECTORS_URL } from '@shipstudio/companion-protocol';
 import { requireOptionalNativeModule } from 'expo';
 import * as Linking from 'expo-linking';
 import { Platform } from 'react-native';
 import { secretRouteProblem } from './secrets';
-import { call, currentTransport } from './session';
+import { call, currentTransport, describeError } from './session';
 
 export * from './loginState';
 
@@ -122,6 +122,9 @@ export type SheetTarget = { agentId: string; requestId: string } | { key: string
  * paired, identity-verified connection (as a secret would) and isn't kept
  * here. Returns whether it reached the Mac; a closed sheet cancels on the Mac.
  */
+/** `Error.name` when the Mac refused to get the sign-in sheet ready. */
+export const SHEET_REFUSED = 'SheetRefused';
+
 export async function signInWithSheet(
   target: SheetTarget,
   optionId: string
@@ -135,7 +138,15 @@ export async function signInWithSheet(
     t.identityVerified
   );
   if (problem) throw new Error(problem);
-  const begun = await t.request('agents.loginPhoneBegin', { ...target, optionId });
+  let begun: Result<'agents.loginPhoneBegin'>;
+  try {
+    begun = await t.request('agents.loginPhoneBegin', { ...target, optionId });
+  } catch (e) {
+    // The Mac couldn't get the sheet ready (an app that registers only a
+    // redirect back to the Mac, as Vercel does): the card can still sign in
+    // through the Mac's own sign-in, shown here (`SHEET_REFUSED`).
+    throw Object.assign(new Error(describeError(e)), { name: SHEET_REFUSED });
+  }
   let result: Awaited<ReturnType<WebBrowserModule['openAuthSessionAsync']>>;
   try {
     result = await wb.openAuthSessionAsync(begun.url, begun.redirectUri, {

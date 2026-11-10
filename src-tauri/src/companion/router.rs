@@ -1455,6 +1455,10 @@ struct SigninBeginParams {
     /// "agents_browser" / "chrome": the phone asked for that way.
     #[serde(default)]
     way: Option<crate::agents::phone_signin::Via>,
+    /// A login card's OAuth option the app wouldn't hand to the phone's
+    /// sheet: sign in through this Mac's own sign-in, in the window shown.
+    #[serde(default)]
+    connect: Option<String>,
 }
 
 #[derive(Deserialize)]
@@ -2075,6 +2079,7 @@ fn signin_op(method: &str, params: Value) -> Result<crate::agents::phone_signin:
                 agent_id: p.agent_id,
                 request_id: p.request_id,
                 way: p.way,
+                connect: p.connect,
             }
         }
         "agents.stepInBegin" => {

@@ -144,6 +144,18 @@ impl Scope {
         }
     }
 
+    /// Also show and drive pages under `url`'s domain (an app's own sign-in
+    /// server, `begin_connect`).
+    pub fn with_host_of(mut self, url: &str) -> Scope {
+        if let Some(h) = https_host(url) {
+            let root = root_of(&h);
+            if !self.roots.contains(&root) {
+                self.roots.push(root);
+            }
+        }
+        self
+    }
+
     /// The tab may show and be driven on `url`: `https` only, on the site's
     /// domain or a sign-in provider. Not a lookalike (`figma.com.evil.test`),
     /// not a userinfo trick (`https://figma.com@evil.test`), not `http`.
@@ -667,6 +679,10 @@ pub enum Op {
         /// The phone asked for this way ("Try the agents' browser"); none:
         /// the Mac picks ([`choose`]).
         way: Option<Via>,
+        /// A login card's OAuth way in (its option id) that the app won't
+        /// hand to the phone's sign-in sheet: this Mac runs its own sign-in
+        /// (redirect on loopback) in the window the phone sees ([`begin_connect`]).
+        connect: Option<String>,
     },
     Frame {
         session_id: String,
@@ -903,6 +919,36 @@ pub async fn begin(
         "[Agents] phone sign-in: way chosen"
     );
     let scope = Scope::for_site(site);
+    let url = start_url(&r.service, site);
+    begin_at(
+        app,
+        device_id,
+        device_name,
+        agent_id,
+        request_id,
+        via,
+        r.title,
+        site,
+        scope,
+        url,
+    )
+    .await
+}
+
+/// Open `url` for the phone in `via`'s window, on `scope`, and start its session.
+#[allow(clippy::too_many_arguments)]
+async fn begin_at(
+    app: &AppHandle,
+    device_id: &str,
+    device_name: &str,
+    agent_id: &str,
+    request_id: &str,
+    via: Via,
+    title: String,
+    site: &str,
+    scope: Scope,
+    url: String,
+) -> Result<Begun, CommandError> {
     // Busy elsewhere: refused before any browser is touched.
     if let Some(other) = with_table(|t| {
         t.expire(Instant::now());
@@ -912,7 +958,6 @@ pub async fn begin(
     }) {
         return Err(refused(other));
     }
-    let url = start_url(&r.service, site);
     let shared = match tokio::time::timeout(
         BEGIN_TIMEOUT,
         open_way(via, device_name, agent_id, request_id, site, &scope, &url),
@@ -960,12 +1005,133 @@ pub async fn begin(
     Ok(Begun {
         session_id: id,
         domain: scope.domain,
-        title: r.title,
+        title,
         idle_seconds: IDLE.as_secs(),
         via,
         frame_gap_ms: frame_gap(via).as_millis() as u64,
         step_in: false,
     })
+}
+
+/// Connect from the phone when the app won't take the phone's sign-in sheet
+/// (Vercel registers only a redirect back to the computer it runs on): this
+/// Mac starts its own sign-in, its redirect on a loopback listener here, and
+/// opens it in a window of the agents' browser the phone sees and drives, as
+/// "Sign in from here" does. The code comes back to this Mac, which holds the
+/// verifier; the token goes into its Keychain; the card answers itself and
+/// the phone's session ends signed in. Never the user's own Chrome: a page
+/// the phone drives there would need Claude in Chrome's per-site Allow at the
+/// Mac.
+pub async fn begin_connect(
+    app: &AppHandle,
+    device_id: &str,
+    device_name: &str,
+    agent_id: &str,
+    request_id: &str,
+    option_id: &str,
+) -> Result<Begun, CommandError> {
+    use super::logins::{self, Connector, Method};
+    let r = logins::pending_login(agent_id, request_id)?;
+    let option = r
+        .option(option_id)
+        .cloned()
+        .ok_or_else(|| CommandError::expected("That isn't one of this card's choices."))?;
+    if option.method != Method::Oauth {
+        return Err(CommandError::expected(
+            "That way in doesn't sign in on a page.",
+        ));
+    }
+    let Some(Connector::Oauth(server_url)) = logins::service(&r.service).map(|s| s.connector)
+    else {
+        return Err(CommandError::expected("That app has no connector."));
+    };
+    if !crate::agent_browser::available() {
+        return Err(CommandError::expected(NO_AGENTS_BROWSER));
+    }
+    let site = logins::service(&r.service)
+        .and_then(|s| s.site)
+        .unwrap_or_default();
+    let pending = super::oauth::begin(server_url).await?;
+    let url = pending.url.clone();
+    let scope = if site.is_empty() {
+        Scope::for_site(&https_host(&url).unwrap_or_default())
+    } else {
+        Scope::for_site(site)
+    }
+    .with_host_of(&url);
+    let site = if site.is_empty() {
+        scope.site.clone()
+    } else {
+        site.to_string()
+    };
+    let begun = begin_at(
+        app,
+        device_id,
+        device_name,
+        agent_id,
+        request_id,
+        Via::AgentsBrowser,
+        r.title.clone(),
+        &site,
+        scope,
+        url.clone(),
+    )
+    .await?;
+    let run = logins::Run {
+        app: app.clone(),
+        agent_id: agent_id.to_string(),
+        request_id: request_id.to_string(),
+        option: option.id.clone(),
+        origin: logins::Origin::phone(false),
+    };
+    run.opened(
+        &url,
+        format!(
+            "{}'s sign-in is open on your phone, in a window on this Mac.",
+            r.title
+        ),
+    );
+    let (app2, session, run2) = (app.clone(), begun.session_id.clone(), run.clone());
+    let task = tokio::spawn(async move {
+        let outcome = pending
+            .finish()
+            .await
+            .and_then(|done| logins::connect_oauth(&run2, &r, server_url, done));
+        match outcome {
+            Ok(_) => {
+                // Signed in: the card answered itself; the phone's window closes.
+                let live = with_table(|t| {
+                    let ours = t.current().is_some_and(|l| l.id == session);
+                    if ours {
+                        t.take(&session)
+                    } else {
+                        None
+                    }
+                });
+                if let Some(live) = live {
+                    end(&app2, live, "signed in", true).await;
+                }
+            }
+            Err(e) => run2.fail(e.to_string()),
+        }
+    });
+    // Cancel on the card (or the phone's Stop) stops the wait too.
+    if let Some(flow) = logins::flow_of(request_id) {
+        run.set_flow(flow, Some(task.abort_handle()));
+    }
+    Ok(begun)
+}
+
+/// A card's OAuth Connect is waiting on this Mac's own sign-in.
+fn connect_waiting(agent_id: &str, request_id: &str) -> bool {
+    let Some(flow) = super::logins::flow_of(request_id) else {
+        return false;
+    };
+    flow.state == super::logins::FlowState::Waiting
+        && super::logins::pending_login(agent_id, request_id)
+            .ok()
+            .and_then(|r| r.option(&flow.option).map(|o| o.method))
+            == Some(super::logins::Method::Oauth)
 }
 
 /// Step into an agent's own tab for its step-in card: the tab is held
@@ -1586,6 +1752,12 @@ pub async fn done(
         (a, r, service)
     })
     .ok_or_else(|| refused(Refusal::Gone))?;
+    // A Connect through this Mac's own sign-in (`begin_connect`) is done
+    // when the app hands the token back, never on a look at the page: until
+    // then the session goes on, and "anyway" can't stand in for a token.
+    if connect_waiting(&agent_id, &request_id) {
+        return Ok(Outcome::SignedOut);
+    }
     let outcome = if anyway {
         Outcome::SignedIn
     } else {
@@ -1773,7 +1945,16 @@ async fn run_op(
             agent_id,
             request_id,
             way,
-        } => v(begin(app, device_id, device_name, &agent_id, &request_id, way).await),
+            connect,
+        } => match connect {
+            Some(option) => {
+                v(
+                    begin_connect(app, device_id, device_name, &agent_id, &request_id, &option)
+                        .await,
+                )
+            }
+            None => v(begin(app, device_id, device_name, &agent_id, &request_id, way).await),
+        },
         Op::Frame { session_id, after } => v(frame(device_id, &session_id, after).await),
         Op::Input {
             session_id,

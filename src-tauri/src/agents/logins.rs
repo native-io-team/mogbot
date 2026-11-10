@@ -812,7 +812,7 @@ struct Live {
 
 static FLOWS: LazyLock<Mutex<HashMap<String, Live>>> = LazyLock::new(Default::default);
 
-fn flow_of(request_id: &str) -> Option<Flow> {
+pub(crate) fn flow_of(request_id: &str) -> Option<Flow> {
     FLOWS
         .lock()
         .unwrap_or_else(|e| e.into_inner())

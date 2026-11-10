@@ -7,8 +7,9 @@ import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import SignInFromPhone from '../src/app/signin';
 
 const calls: { method: string; params: unknown }[] = [];
+const searchParams: Record<string, string> = { agentId: 'qa', requestId: 'req_1' };
 jest.mock('expo-router', () => ({
-  useLocalSearchParams: () => ({ agentId: 'qa', requestId: 'req_1' }),
+  useLocalSearchParams: () => searchParams,
   useRouter: () => ({ back: jest.fn(), push: jest.fn() }),
 }));
 jest.mock('../src/components/agent', () => ({ Spinner: () => null }));
@@ -43,6 +44,18 @@ jest.mock('../src/lib/phoneSignin', () => ({
 }));
 
 describe('the sign-in screen', () => {
+  it('asks the Mac for its own sign-in when the card sent a Connect here', async () => {
+    const ps = jest.requireMock('../src/lib/phoneSignin');
+    searchParams.connect = 'oauth';
+    try {
+      const view = await render(<SignInFromPhone />);
+      expect(ps.signinBegin).toHaveBeenLastCalledWith('qa', 'req_1', undefined, 'oauth');
+      view.unmount();
+    } finally {
+      delete searchParams.connect;
+    }
+  });
+
   it('never hangs on opening: it times out, and Try the agents’ browser asks for it', async () => {
     const ps = jest.requireMock('../src/lib/phoneSignin');
     jest.useFakeTimers();
@@ -55,7 +68,7 @@ describe('the sign-in screen', () => {
       });
       expect(screen.getByText(/didn’t open the sign-in in time/)).toBeTruthy();
       await fireEvent.press(screen.getByTestId('signin-retry-agents'));
-      expect(ps.signinBegin).toHaveBeenLastCalledWith('qa', 'req_1', 'agents_browser');
+      expect(ps.signinBegin).toHaveBeenLastCalledWith('qa', 'req_1', 'agents_browser', undefined);
     } finally {
       jest.useRealTimers();
     }

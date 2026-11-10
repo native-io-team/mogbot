@@ -74,8 +74,14 @@ export default function SignInFromPhone() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const { width } = useWindowDimensions();
-  const params = useLocalSearchParams<{ agentId: string; requestId: string; stepIn?: string }>();
-  const { agentId, requestId } = params;
+  const params = useLocalSearchParams<{
+    agentId: string;
+    requestId: string;
+    stepIn?: string;
+    /** A login card's OAuth option: the Mac's own sign-in, shown here. */
+    connect?: string;
+  }>();
+  const { agentId, requestId, connect } = params;
   // A step-in card's tab, not a sign-in: Done is Hand back.
   const stepIn = params.stepIn === '1';
   const [view, dispatch] = useReducer(reduce, initialView);
@@ -105,7 +111,7 @@ export default function SignInFromPhone() {
     let gone = false;
     const begin = stepIn
       ? stepInBegin(agentId, requestId)
-      : signinBegin(agentId, requestId, attempt.way);
+      : signinBegin(agentId, requestId, attempt.way, connect);
     begin.then(
       (begun) => {
         if (gone) void signinStop(begun.sessionId).catch(() => {});
@@ -124,7 +130,7 @@ export default function SignInFromPhone() {
     return () => {
       gone = true;
     };
-  }, [agentId, requestId, attempt, stepIn]);
+  }, [agentId, requestId, attempt, stepIn, connect]);
   const retry = (way?: SigninVia) => {
     haptic.select();
     dispatch({ t: 'retry' });
@@ -274,9 +280,7 @@ export default function SignInFromPhone() {
             title={view.phase === 'ended' || stepIn ? 'Close' : 'Stop'}
             variant="outline"
             size="compact"
-            onPress={() =>
-              view.phase === 'ended' || stepIn ? router.back() : void stop()
-            }
+            onPress={() => (view.phase === 'ended' || stepIn ? router.back() : void stop())}
           />
         )}
         <View style={styles.titleWrap}>

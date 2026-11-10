@@ -5641,6 +5641,7 @@ export const frames = [
       "agents.keycaps",
       "agents.keys",
       "signin.phone",
+      "signin.connect",
       "stepIn.phone",
       "watch.links",
       "agents.engine",

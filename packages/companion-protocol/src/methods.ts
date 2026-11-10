@@ -300,7 +300,17 @@ export interface Methods {
      * `way`: the phone asked for one ("Try the agents' browser"); none, the
      * Mac picks at this moment (the agents' browser when it's on there).
      */
-    params: { agentId: string; requestId: string; way?: SigninVia };
+    params: {
+      agentId: string;
+      requestId: string;
+      way?: SigninVia;
+      /**
+       * A login card's OAuth option the app won't hand to the phone's sign-in
+       * sheet (Mac feature `signin.connect`): the Mac runs its own sign-in in
+       * the window shown, and the card answers itself once it's done.
+       */
+      connect?: string;
+    };
     result: SigninBegun;
   };
   /**

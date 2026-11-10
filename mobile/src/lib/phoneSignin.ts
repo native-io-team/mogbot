@@ -28,11 +28,18 @@ function guarded() {
 }
 
 // Async throughout, so a refusal arrives as a rejected promise, never a throw.
-export const signinBegin = async (agentId: string, requestId: string, way?: SigninVia) =>
-  guarded().request(
-    'agents.signinBegin',
-    way ? { agentId, requestId, way } : { agentId, requestId }
-  );
+export const signinBegin = async (
+  agentId: string,
+  requestId: string,
+  way?: SigninVia,
+  connect?: string
+) =>
+  guarded().request('agents.signinBegin', {
+    agentId,
+    requestId,
+    ...(way ? { way } : {}),
+    ...(connect ? { connect } : {}),
+  });
 /** Step into an agent's own tab for its step-in card: the same screen, Done is Hand back. */
 export const stepInBegin = async (agentId: string, requestId: string) =>
   guarded().request('agents.stepInBegin', { agentId, requestId });
