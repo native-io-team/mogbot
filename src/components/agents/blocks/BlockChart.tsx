@@ -164,6 +164,7 @@ function Cartesian({
   return (
     <div className="agent-block-chart__canvas">
       <svg
+        data-dynamic-svg="agent-block-chart"
         width={width}
         height={height}
         viewBox={`0 0 ${width} ${height}`}
@@ -365,6 +366,7 @@ function PieChart({ block, model }: { block: ChartBlock; model: PieModel }) {
   return (
     <div className="agent-block-chart__canvas" data-pie>
       <svg
+        data-dynamic-svg="agent-block-chart"
         width={size}
         height={model.cy * 2}
         viewBox={`0 0 ${size} ${model.cy * 2}`}

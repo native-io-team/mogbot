@@ -62,6 +62,7 @@ describe('Step in card', () => {
     await arm();
     await act(async () => {
       fireEvent.click(step, { detail: 1 });
+      await Promise.resolve();
     });
     expect(calls('agents_step_in')).toEqual([
       ['agents_step_in', { agentId: 'res', requestId: 'req-1' }],
@@ -75,6 +76,7 @@ describe('Step in card', () => {
     render(<StepInCard message={card()} onAnswer={onAnswer} />);
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
+      await Promise.resolve();
     });
     expect(onAnswer).toHaveBeenCalledWith('req-1', false);
   });
@@ -90,12 +92,14 @@ describe('Step in card', () => {
     expect(screen.getByText(/You’re in its browser now/)).toBeInTheDocument();
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Hand back' }));
+      await Promise.resolve();
     });
     expect(calls('agents_step_in_hand_back')).toEqual([
       ['agents_step_in_hand_back', { agentId: 'res', requestId: 'req-1' }],
     ]);
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Show window' }));
+      await Promise.resolve();
     });
     expect(calls('agents_step_in_show')).toHaveLength(1);
   });
@@ -127,6 +131,7 @@ describe('Step in bar', () => {
     expect(bar).toHaveTextContent('idp.example · hands back by itself in 11 min');
     await act(async () => {
       fireEvent.click(screen.getByRole('button', { name: 'Hand back' }));
+      await Promise.resolve();
     });
     expect(calls('agents_step_in_hand_back')).toHaveLength(1);
   });
@@ -144,6 +149,7 @@ describe('Step in bar', () => {
     expect(screen.queryByRole('button', { name: 'Show window' })).toBeNull();
     await act(async () => {
       fireEvent.click(screen.getAllByRole('button', { name: 'Hand back' })[1]);
+      await Promise.resolve();
     });
     expect(calls('agents_step_in_hand_back')).toHaveLength(1);
   });

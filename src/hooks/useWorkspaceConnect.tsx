@@ -51,7 +51,7 @@ const NATIVE_LOGIN: Record<ConnectServiceId, { command: string; args: string[] }
 const SERVICE_LABEL: Record<ConnectServiceId, string> = {
   github: 'GitHub',
   codex: 'Codex',
-  opencode: 'Opencode',
+  opencode: 'OpenCode',
   vercel: 'Vercel',
 };
 

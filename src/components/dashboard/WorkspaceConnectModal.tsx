@@ -28,7 +28,7 @@ const SERVICE_META: Record<WorkspaceConnectService, { label: string; instruction
       'A browser window will open — sign in to Codex, then return here. This finishes on its own when you’re signed in.',
   },
   opencode: {
-    label: 'Opencode',
+    label: 'OpenCode',
     instructions:
       'Follow the prompts in the terminal to choose a provider and sign in. This finishes on its own when you’re done.',
   },

@@ -1651,7 +1651,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "consumerCount": 11
+      "consumerCount": 12
     },
     {
       "name": "--button-font-size",
@@ -5227,7 +5227,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 607
+      "consumerCount": 608
     },
     {
       "name": "--text-secondary",
@@ -6635,7 +6635,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 607
+      "consumerCount": 608
     },
     {
       "name": "--text-secondary",

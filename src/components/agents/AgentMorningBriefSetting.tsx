@@ -1,5 +1,5 @@
 /**
- * Settings → Agents → Notifications, "Morning brief" (`agents::brief`): on
+ * Settings → Notifications, "Morning brief" (`agents::brief`): on
  * or off and its time, whether it posts on quiet days, and the user's own
  * read-only checks (added from chat with the Chief's `set_morning_brief`,
  * removed here). The same settings the phone and the chat change; read

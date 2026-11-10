@@ -82,8 +82,7 @@ impl ApiError {
     pub fn words(&self) -> String {
         match self {
             ApiError::SignIn(_) => {
-                "Slack refused the sign-in. Connect Slack again in Settings → Agents → Slack."
-                    .into()
+                "Slack refused the sign-in. Connect Slack again in Settings → Apps → Slack.".into()
             }
             ApiError::RateLimited(s) => format!("Slack asked to wait {s} s before checking again."),
             ApiError::Scope(s) => format!(

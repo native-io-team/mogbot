@@ -3327,7 +3327,10 @@ export const agentsScenarios: Scenario[] = [
         ...overview([TEAM[0], TEAM.find((a) => a.id === 'finance') ?? TEAM[1]]),
         importChoice: 'undecided',
       },
-      agents_messages: messagesFor,
+      // A short chat, as on an install that never decided: with the team's
+      // long one the chat opens at its newest line and scrolls the card away.
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? LONG_USER_CHAT.slice(0, 2) : messagesFor(args),
     },
   },
   {
@@ -3886,10 +3889,10 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-secrets-editor',
     title: 'Agents — keys under “What it can reach” in Edit agent',
     looksRightWhen:
-      'Editing Finance, below Permissions: a “What it can reach” group with “Keys in your Keychain” listing each key by what it’s for (no $VARIABLES or stored names on the row; those are in the row’s hover title), then “Used <when>” (or “Not used yet”), hairline-separated, each with a quiet Remove on the right.',
+      'Editing Finance, continuing “What it can reach” (no second heading of its own): “Keys in your Keychain” listing each key by what it’s for (no $VARIABLES or stored names on the row; those are in the row’s hover title), then “Used <when>” (or “Not used yet”), hairline-separated, each with a quiet Remove on the right.',
     openSelector: AGENTS_TAB,
     requires: '.agent-secrets__row',
-    clipSelector: '.agent-editor [role="group"][aria-label="What it can reach"]',
+    clipSelector: '.agent-editor .agent-reach',
     steps: [
       { click: '[data-agent-id="finance"]' },
       { click: '.agent-chat__menu [aria-label^="Actions for"]' },

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type RefObject } from 'react';
 import { keepReadTo, readTo, type ReadTo } from '../../lib/chatRestore';
 
 /** Chats whose place was put back this launch: once each, then they behave as before. */
@@ -66,10 +66,10 @@ export function useChatReadTo({
 }: Options): { onScrolled: () => void } {
   // Until the place is put back, nothing is noted: landing on the newest
   // line first would forget it.
-  const pending = useRef<ReadTo | null | undefined>(undefined);
-  if (pending.current === undefined && !restored.has(chatKey)) {
-    pending.current = readTo(chatKey);
-  }
+  // Read once, on the first render (a lazy state initialiser, so render never
+  // touches a ref).
+  const [first] = useState(() => (restored.has(chatKey) ? undefined : readTo(chatKey)));
+  const pending = useRef<ReadTo | null | undefined>(first);
   const settled = useRef(restored.has(chatKey));
 
   useLayoutEffect(() => {
@@ -117,7 +117,9 @@ export function useChatReadTo({
   // Leaving the chat (another agent, a project) notes where it was: before
   // its lines leave the page, so in a layout effect's cleanup.
   const noteRef = useRef(note);
-  noteRef.current = note;
+  useLayoutEffect(() => {
+    noteRef.current = note;
+  }, [note]);
   useLayoutEffect(
     () => () => {
       if (timer.current) clearTimeout(timer.current);

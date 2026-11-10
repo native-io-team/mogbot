@@ -129,7 +129,7 @@ const DISK_LINE = msg(
 /** `agents/chrome_health.rs`: Claude in Chrome answered no browser, Your Chrome isn't set up. */
 const CHROME_DOWN_LINE = msg(
   'note',
-  'Chrome isn’t reachable through Claude’s extension. Set up Your Chrome once (Settings → Agents → Your Chrome) so this can’t happen again. Until then, agents use their own browser for sites signed in there.',
+  'Chrome isn’t reachable through Claude’s extension. Set up Your Chrome once (Settings → Chrome) so this can’t happen again. Until then, agents use their own browser for sites signed in there.',
   1,
   { fix: 'user_chrome' }
 );
@@ -307,7 +307,7 @@ export const agentsProbeScenarios: Scenario[] = [
     id: 'agents-probe-chrome-down-line',
     title: 'Agents — Chrome isn’t reachable through Claude’s extension',
     looksRightWhen:
-      'The Chief’s chat ends on one quiet line, “Chrome isn’t reachable through Claude’s extension. Set up Your Chrome once (Settings → Agents → Your Chrome) so this can’t happen again. Until then, agents use their own browser…”, then “· Set up Your Chrome” as a link-style button; wrapping inside the column, not a card, not red, nothing about signing in to the Claude extension.',
+      'The Chief’s chat ends on one quiet line, “Chrome isn’t reachable through Claude’s extension. Set up Your Chrome once (Settings → Chrome) so this can’t happen again. Until then, agents use their own browser…”, then “· Set up Your Chrome” as a link-style button; wrapping inside the column, not a card, not red, nothing about signing in to the Claude extension.',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="chief"]' }],
     requires: '[data-fix="user_chrome"]',

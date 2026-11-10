@@ -10,5 +10,13 @@ export const ToggleButton = forwardRef<HTMLButtonElement, ToggleButtonProps>(fun
   { pressed, ...props },
   ref
 ) {
-  return <Button ref={ref} aria-pressed={pressed} {...props} />;
+  // As a radio (a choice in a radiogroup) its state is aria-checked, which
+  // the caller sets; aria-pressed isn't allowed on that role, so the chosen
+  // look comes from data-selected instead.
+  const asRadio = props.role === 'radio' || props.role === 'menuitemradio';
+  return asRadio ? (
+    <Button ref={ref} data-selected={pressed || undefined} {...props} />
+  ) : (
+    <Button ref={ref} aria-pressed={pressed} {...props} />
+  );
 });

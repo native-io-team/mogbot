@@ -1486,7 +1486,7 @@ export interface AgentMessage {
   via?: MessageVia;
   /**
    * On a note: the one fix it names (`agents/chrome_health.rs`):
-   * `user_chrome` is Settings → Agents → Your Chrome on the Mac. The phone
+   * `user_chrome` is Settings → Chrome on the Mac. The phone
    * shows the note's text, which names where. Older Macs never send it.
    */
   fix?: 'user_chrome' | 'user_chrome_check' | 'disk';

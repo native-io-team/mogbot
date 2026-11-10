@@ -128,7 +128,7 @@ const CODEX_READY = agent({
 });
 const OPENCODE_NOT_INSTALLED = agent({
   id: 'opencode',
-  displayName: 'Opencode',
+  displayName: 'OpenCode',
   binaryName: 'opencode',
   installed: false,
   version: null,
@@ -160,16 +160,16 @@ describe('AgentsPanel', () => {
       expect(screen.getByText('Claude Code')).toBeInTheDocument();
     });
     expect(screen.getByText('Codex')).toBeInTheDocument();
-    expect(screen.getByText('Opencode')).toBeInTheDocument();
+    expect(screen.getByText('OpenCode')).toBeInTheDocument();
   });
 
   it('shows "Install" button for a not-installed agent', async () => {
     mockInvoke('get_agents_status', [OPENCODE_NOT_INSTALLED]);
     render(<AgentsPanel />);
 
-    await waitFor(() => expect(screen.getByText('Opencode')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('OpenCode')).toBeInTheDocument());
     expect(screen.getByRole('button', { name: 'Install' })).toBeInTheDocument();
-    expect(screen.getByText('Projects only · Not installed')).toBeInTheDocument();
+    expect(screen.getByText('Not installed')).toBeInTheDocument();
     expect(screen.queryByText('Installed')).not.toBeInTheDocument();
   });
 

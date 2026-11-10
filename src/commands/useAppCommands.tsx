@@ -610,7 +610,7 @@ export function useAppCommands({
           'where did my usage go',
           'stacking',
         ],
-        // The Usage view when Agents shows it; else Settings → Agents → Usage.
+        // The Usage view when Agents shows it; else Settings → Accounts & usage.
         run: () => {
           if (requestSwitcher('open')) return;
           requestSettingsTabOnOpen('agents');

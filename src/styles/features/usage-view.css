@@ -19,7 +19,7 @@
   --usage-cap-size-large: var(--spacing-2xl);
   --usage-row-bar-width: 6em;
   --usage-row-left-width: 7.5em;
-  --usage-row-state-width: 8.5em;
+  --usage-row-state-width: 9.5em;
   --usage-row-refill-width: 5.5em;
   --usage-hero-headline: var(--font-size-display);
 }

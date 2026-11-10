@@ -427,7 +427,7 @@ pub fn card_detail(ask: &Ask, agent: &str, reach: Option<&str>) -> String {
         ));
     }
     out.push_str(&format!(
-        " Always: whenever every {from} account is out. Change it in Settings → Agents → Usage."
+        " Always: whenever every {from} account is out. Change it in Settings → Accounts & usage."
     ));
     out
 }
@@ -820,7 +820,7 @@ pub fn new_lines(ours: &str, theirs: &str) -> Vec<String> {
 
 /* ------------------------------------------------------------ the views */
 
-/// Settings → Agents → Usage, and the Chief's `usage_overview`.
+/// Settings → Accounts & usage, and the Chief's `usage_overview`.
 #[derive(Debug, Clone, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct View {

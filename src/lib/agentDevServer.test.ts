@@ -5,18 +5,19 @@ function owner(over: Partial<DevServerOwner> = {}) {
   const state = { status: 'not-running' as const, address: null as string | null };
   const o: DevServerOwner = {
     status: vi.fn(() => ({ ...state })),
-    start: vi.fn(async (_p: string, _n: string, port: number) => {
+    start: vi.fn((_p: string, _n: string, port: number) => {
       Object.assign(state, { status: 'ready', address: `localhost:${port}` });
-      return 'nextjs' as const;
+      return Promise.resolve('nextjs' as const);
     }),
-    stop: vi.fn(async () => {
+    stop: vi.fn(() => {
       Object.assign(state, { status: 'not-running', address: null });
+      return Promise.resolve();
     }),
     needsInstall: vi.fn(() => null),
     projectType: vi.fn(() => 'nextjs' as const),
     output: vi.fn(() => 'ready on 3100'),
-    reservePort: vi.fn(async (_p: string, preferred: number) => preferred + 1),
-    startProxy: vi.fn(async () => 51000),
+    reservePort: vi.fn((_p: string, preferred: number) => Promise.resolve(preferred + 1)),
+    startProxy: vi.fn(() => Promise.resolve(51000)),
     ...over,
   };
   return o;
@@ -47,7 +48,7 @@ describe('handleDevServerRequest', () => {
 
   it('says when nothing started, without a proxy', async () => {
     const o = owner({
-      start: vi.fn(async () => 'reactnative' as const),
+      start: vi.fn(() => Promise.resolve('reactnative' as const)),
       needsInstall: vi.fn(() => ({ packageManager: 'pnpm' })),
     });
     const r = await handleDevServerRequest(o, { ...req, action: 'start' });

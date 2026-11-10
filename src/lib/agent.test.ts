@@ -42,7 +42,7 @@ describe('getAgentById', () => {
   it('returns OPENCODE for "opencode"', () => {
     const agent = getAgentById('opencode');
     expect(agent.id).toBe('opencode');
-    expect(agent.displayName).toBe('Opencode');
+    expect(agent.displayName).toBe('OpenCode');
   });
 
   it('returns TERMINAL for "terminal"', () => {

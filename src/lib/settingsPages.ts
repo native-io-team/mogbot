@@ -37,7 +37,7 @@ export const SETTINGS_PAGES: readonly SettingsPageInfo[] = [
   {
     id: 'agents',
     title: 'Agents',
-    lead: 'This Mac, what new agents run on (Claude Code or Codex) and their model, and disk space.',
+    lead: 'This Mac, what new agents run on and their model, and disk space.',
     keywords: ['engine', 'model', 'keep awake', 'login', 'disk', 'menu bar', 'import'],
   },
   {

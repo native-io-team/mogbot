@@ -23,12 +23,8 @@ const message = (approval: Approval): AgentMessage => ({
 
 describe('an expired card', () => {
   it('says why in one line', () => {
-    expect(expiryLine({ ...base, expiry: 'moved_on' })).toBe(
-      'Expired · Run a command'
-    );
-    expect(expiryLine({ ...base, expiry: 'no_answer' })).toBe(
-      'No answer · Run a command'
-    );
+    expect(expiryLine({ ...base, expiry: 'moved_on' })).toBe('Expired · Run a command');
+    expect(expiryLine({ ...base, expiry: 'no_answer' })).toBe('No answer · Run a command');
     expect(expiryLine({ ...base, expiry: 'maybe_later' })).toBe('Maybe later · Run a command');
     expect(expiryLine(base)).toBeNull();
   });

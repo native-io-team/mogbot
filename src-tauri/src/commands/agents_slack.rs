@@ -1,4 +1,4 @@
-//! Settings → Agents → Slack: connect with the user's own Slack app's token,
+//! Settings → Apps → Slack: connect with the user's own Slack app's token,
 //! choose who answers, where it listens and the trigger word
 //! (`agents::slack`). The token goes from the masked field straight to the
 //! Keychain; nothing here ever returns it.
