@@ -3693,7 +3693,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-queued',
     title: 'Agents — a message queued while the agent works',
     looksRightWhen:
-      'Acme Site is Working. Earlier: a reply cut off with “Stopped”, a quiet centred “Interrupted to read your new message”, then the message that interrupted it and the reply. Then the working dots with “Editing PricingTable.tsx”, and only under them your newest message, slightly dimmed, with “Queued, sends when Acme Site finishes · Interrupt and send now” under it. The composer holds a second message, and beside the mic a faint “↵ queues · ⌘↵ interrupts and sends now”.',
+      'Acme Site is Working. Earlier: a reply cut off with “Stopped”, a quiet centred “Interrupted to read your new message”, then the message that interrupted it and the reply. Then the working dots with “Editing PricingTable.tsx”, and only under them your newest message, slightly dimmed, with “Queued, sends when Acme Site finishes · Interrupt and send now” under it. The composer holds a second message on its one row, and just under the box, starting where its text starts, a faint “↵ queue · ⌘↵ send now”; nothing above the text inside the box.',
     openSelector: AGENTS_TAB,
     requires: '.agent-chat__queued',
     steps: [
@@ -3705,6 +3705,22 @@ export const agentsScenarios: Scenario[] = [
       agents_messages: (args: Record<string, unknown>) =>
         args.agentId === 'acme' ? QUEUED_CHAT : messagesFor(args),
       agents_interrupt: true,
+    },
+  },
+  {
+    id: 'agents-composer-idle-typed',
+    title: 'Agents — typing while the agent is idle',
+    looksRightWhen:
+      'Acme Site is idle. The composer holds “And the 404 page.” on its one row with the send arrow lit; no caption under or above the box, since ↵ simply sends.',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-composer__input',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { fill: '.agent-composer__input', value: 'And the 404 page.' },
+    ],
+    commands: {
+      agents_overview: acmeWith({ status: status('idle') }),
+      agents_messages: messagesFor,
     },
   },
   {

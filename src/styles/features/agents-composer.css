@@ -127,6 +127,61 @@
   border-radius: 2px; /* css-ok: stop glyph's corner, square not dot */
 }
 
+/* ------------------------------------------------- queue / send now */
+
+/* "↵ queue · ⌘↵ send now": only while it works and you've typed. Outside
+   the box, so the field keeps its one quiet row, and absolutely placed, so
+   appearing never moves the composer or the chat. */
+.agent-composer__queue-hint {
+  position: absolute;
+  left: 0;
+  right: 0;
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs);
+  margin: 0;
+  /* Starts where the text does: the box's padding, the paperclip, the
+     field's own padding. */
+  padding: 0 calc(var(--spacing-tight) + var(--button-height) + var(--spacing-xs));
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-compact);
+  color: var(--text-muted);
+  white-space: nowrap;
+  top: calc(100% + var(--spacing-2xs));
+  pointer-events: none;
+  animation: agent-composer-hint-in var(--transition-interaction) both;
+}
+
+.agent-composer__queue-hint[data-learned] {
+  animation: none;
+}
+
+.agent-composer__queue-hint > span:not(.sr-only) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.agent-composer__queue-dot {
+  margin: 0 var(--spacing-xs);
+}
+
+.agent-composer__key {
+  font-family: inherit;
+  color: var(--text-secondary);
+}
+
+@keyframes agent-composer-hint-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .agent-composer__queue-hint {
+    animation: none;
+  }
+}
+
 /* No engine: the composer's slot says why, and offers the fix. */
 .agent-composer--blocked {
   display: flex;
