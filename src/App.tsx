@@ -985,7 +985,6 @@ function AppContents({ initialProjectPath }: AppProps) {
       getProjectDevServerSnapshot,
       serverLifecycleVersion,
       handleStopDevServer,
-      setView,
     ]
   );
 

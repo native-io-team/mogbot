@@ -479,7 +479,7 @@ fn main() {
         "  other agent opened: {}",
         text(&o).lines().next().unwrap_or("")
     );
-    let (r, _) = timed("get_text", json!({}));
+    let _ = timed("get_text", json!({}));
     let before = list_top();
     let (r, _) = timed("read_page", json!({}));
     let list = ref_in(&text(&r), "\"Result 5\"");

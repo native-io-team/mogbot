@@ -7439,9 +7439,15 @@ low-disk note. The card wiring in `mcp::decide_inner` is covered by
   `src-tauri/examples/agents_fake/main.rs` drives the real runner, store,
   agent bridge, approval broker, wallet and MCP tools through the same
   Tauri commands the UI calls, with `scripts/fake-engine/fake_claude.py`
-  first on PATH as `claude` (and, linked as `codex`, as Codex's `exec`
-  driver: `SHIPSTUDIO_AGENTS_CODEX_EXEC`; linked as `opencode`, as
-  `opencode acp`). The `opencode` scenario runs an OpenCode agent through
+  first on PATH as `claude` (and, linked as `codex`, as Codex's
+  app-server, or its `exec` driver under `SHIPSTUDIO_AGENTS_CODEX_EXEC`,
+  which every scenario but `codex-app` sets; linked as `opencode`, as
+  `opencode acp`). The `codex-app` scenario runs a Codex agent on the
+  app-server: the schema check passing, a command that asks and runs on
+  Allow, a bridge tool, the reply streamed, the thread resumed, a declined
+  command that never runs with the steer telling the agent why, Stop on a
+  hung turn, a failed turn and a crash each ending in a line, and a lost
+  thread replaced. The `opencode` scenario runs an OpenCode agent through
   it: a command that asks and runs on Allow, a bridge tool, the reply
   streamed, the session resumed, a denied command that never runs and the
   note after it, a crash and an error each ending in a line, a lost session
@@ -7486,8 +7492,10 @@ low-disk note. The card wiring in `mcp::decide_inner` is covered by
   output, deleting an agent mid-turn, routines (one firing, one in steps
   waiting on "OK to go on?", one failing into a retry), Codex `exec` turns,
   and the morning brief composed from all of it. `AGENTS_FAKE_KEEP=1` keeps
-  the HOME. Not covered: Codex's app-server (the fake has none), the user's
-  Chrome, and anything a model decides.
+  the HOME. A run ends with a summary by engine (claude, codex app-server,
+  codex exec, opencode) and the opt-in scenarios it skipped, also appended
+  as a Markdown table to `$GITHUB_STEP_SUMMARY` or `$AGENTS_FAKE_SUMMARY`
+  when set. Not covered: the user's Chrome, and anything a model decides.
 - `scripts/agents-e2e.sh [scenario…]` (opt-in, real turns, on Haiku): `src-tauri/examples/agents_e2e/main.rs` drives the real
   runner, store, bridge and MCP tools through the same Tauri commands the UI
   calls, on `claude --model haiku`, in a throwaway HOME (only the keychain is

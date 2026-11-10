@@ -13,6 +13,8 @@
 
 import {
   ADD_ACCOUNT_WHY,
+  awayLine,
+  awayStateOf,
   type AccountBlock,
   type UsageInventory,
 } from '@shipstudio/companion-protocol';
@@ -27,7 +29,7 @@ import { AccountRows as StackRows, TotalCard } from '../components/usageStack';
 import { servesUsageChanges, UsagePlanControls } from '../components/usagePlanControls';
 import { useAccounts } from '../lib/accounts';
 import { glanceFor } from '../lib/glance';
-import { IconButton, Section, SectionTitle, SheetPage, T } from '../components/ui';
+import { IconButton, Section, SectionTitle, SheetPage, StatusPill, T } from '../components/ui';
 import { engineName } from '../lib/agents';
 import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
@@ -159,16 +161,31 @@ export default function Usage() {
               </T>
             </View>
             {/* One list per engine, in the order turns try them, as the desk groups them. */}
-            {glance.engines.map((e) => (
-              <View key={e.engine} style={styles.engine}>
-                {glance.engines.length > 1 && (
-                  <T variant="small" color={colors.textSecondary} accessibilityRole="header">
-                    {e.label}
-                  </T>
-                )}
-                <StackRows keys={e.keys} all={e.keys} onOpen={(k) => openAccount(k.engine, k.id)} />
-              </View>
-            ))}
+            {glance.engines.map((e) => {
+              // Every account of this engine out and its agents carrying on
+              // with the other: one pill under its heading, as the desk's
+              // Usage view says it ("Codex out · on Claude Code until …").
+              const away = awayStateOf(e.engine, agents ?? [], now);
+              return (
+                <View key={e.engine} style={styles.engine}>
+                  {glance.engines.length > 1 && (
+                    <T variant="small" color={colors.textSecondary} accessibilityRole="header">
+                      {e.label}
+                    </T>
+                  )}
+                  {away && (
+                    <View style={styles.away}>
+                      <StatusPill tone="out" label={awayLine(away, now)} />
+                    </View>
+                  )}
+                  <StackRows
+                    keys={e.keys}
+                    all={e.keys}
+                    onOpen={(k) => openAccount(k.engine, k.id)}
+                  />
+                </View>
+              );
+            })}
           </View>
         )}
 
@@ -272,6 +289,7 @@ const useStyles = makeStyles((colors) => ({
   accounts: { gap: space.lg, marginBottom: space.xl },
   rowsHead: { gap: space.xs, marginTop: space.sm },
   engine: { gap: space.sm },
+  away: { flexDirection: 'row' },
   spin: { padding: space.sm },
 }));
 
