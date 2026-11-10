@@ -9,6 +9,10 @@ import type { PinnedProjectRow } from '../../hooks/usePinnedProjects';
 import { mockInvokeResponse } from '../../test/setup';
 import { WorkspaceSidebar } from './WorkspaceSidebar';
 
+/** A sidebar row's own action: the button stretched under its controls. */
+const rowAction = (row: Element | null | undefined) =>
+  row?.querySelector<HTMLElement>(':scope > .sidebar-row-hit') ?? null;
+
 // Features brand.json can switch off are tested switched on.
 vi.mock('../../lib/brand', async (importOriginal) => {
   const { withAllLinks } = await import('../../test/brandFixture');
@@ -397,7 +401,7 @@ describe('WorkspaceSidebar project activity indicator', () => {
     expect(status?.querySelectorAll('.sidebar-row-dot')).toHaveLength(1);
     expect(status?.querySelector('.dot-server-ready')).toBeInTheDocument();
     expect(status?.querySelector('.dot-idle')).not.toBeInTheDocument();
-    expect(container.querySelector('.sidebar-project-row')).toHaveAttribute(
+    expect(container.querySelector('.sidebar-project-row > .sidebar-row-hit')).toHaveAttribute(
       'aria-label',
       expect.stringContaining('dev server running; localhost:3000')
     );
@@ -519,7 +523,7 @@ describe('WorkspaceSidebar project activity indicator', () => {
 
       const projectRow = (name: string) =>
         [...container.querySelectorAll<HTMLElement>('.sidebar-project-row')].find((candidate) =>
-          candidate.getAttribute('aria-label')?.startsWith(`${name};`)
+          rowAction(candidate)?.getAttribute('aria-label')?.startsWith(`${name};`)
         );
       const expectedIndicator = (isCurrent: boolean, isExpanded: boolean) => {
         if (activity.name === 'error') return 'dot-error';
@@ -542,7 +546,7 @@ describe('WorkspaceSidebar project activity indicator', () => {
         ]
           .filter(Boolean)
           .join('; ');
-        expect(row).toHaveAttribute('aria-label', expectedLabel);
+        expect(rowAction(row)).toHaveAttribute('aria-label', expectedLabel);
 
         const status = row?.querySelector('.sidebar-project-status');
         const indicators = status?.querySelectorAll('.sidebar-row-dot, .ss-pixel-loader');
@@ -630,7 +634,7 @@ describe('WorkspaceSidebar project activity indicator', () => {
         expect(titleStatus.children).toHaveLength(1);
         expect(titleStatus.querySelectorAll('.sidebar-row-dot, .ss-pixel-loader')).toHaveLength(1);
         expect(titleStatus.querySelector('.sidebar-row-dot')).toHaveClass(`dot-${dot}`);
-        expect(projectRow).toHaveAttribute(
+        expect(rowAction(projectRow)).toHaveAttribute(
           'aria-label',
           `${projectName}; ${activity}; dev server running; localhost:3000; current project`
         );
@@ -781,7 +785,7 @@ describe('WorkspaceSidebar project activity indicator', () => {
     );
 
     const projectRow = container.querySelector<HTMLElement>('.sidebar-project-row');
-    expect(projectRow).toHaveAttribute(
+    expect(rowAction(projectRow)).toHaveAttribute(
       'aria-label',
       expect.stringContaining('dev server running; localhost:4321')
     );
@@ -994,10 +998,14 @@ describe('WorkspaceSidebar project activity indicator', () => {
       expect(items).toHaveLength(3);
       const firstRow = items[0]?.querySelector<HTMLElement>('.sidebar-project-row');
       const handle = within(firstRow!).getByRole('button', { name: 'Move alpha project' });
-      expect(firstRow?.firstElementChild).toBe(handle);
+      // First of what is drawn: the row's own action sits under it, out of flow.
+      expect(firstRow?.querySelector(':scope > :not(.sidebar-row-hit)')).toBe(handle);
       expect(handle).toHaveClass('drag-sort__handle', 'sidebar-project-drag-handle');
       expect(handle).toHaveAttribute('data-drag-sort-handle-visibility', 'hover');
-      expect(firstRow).toHaveAttribute('aria-label', expect.stringContaining('alpha; closed'));
+      expect(rowAction(firstRow)).toHaveAttribute(
+        'aria-label',
+        expect.stringContaining('alpha; closed')
+      );
       expect(firstRow).not.toHaveAttribute('title');
       expect(handle).not.toHaveAttribute('title');
       expect(firstRow?.querySelectorAll('[title]')).toHaveLength(0);
