@@ -134,6 +134,10 @@ export const agentsKeysScenarios: Scenario[] = [
     requires: '.agent-look__preview .agent-key--xl',
     steps: [
       { click: '.agents-list__new' },
+      // New agent opens describe-first; the form (and its key) is hidden by
+      // the stylesheet until "fill it in yourself", so a step into it would
+      // still "find" its control.
+      { click: '.agent-editor__fill-in' },
       { fill: '.agent-editor__identity input', value: 'Bookings' },
     ],
     commands,
@@ -146,6 +150,7 @@ export const agentsKeysScenarios: Scenario[] = [
     requires: '.agent-look__bind-field',
     steps: [
       { click: '.agents-list__new' },
+      { click: '.agent-editor__fill-in' },
       { focus: '.agent-look__bind-field' },
       { key: 'Enter' },
       { key: 'f' },

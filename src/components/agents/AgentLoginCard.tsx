@@ -36,7 +36,7 @@ import {
   type LoginOption,
 } from '../../lib/agentLogins';
 import type { AgentMessage } from '../../lib/agents';
-import { secretTitle } from '../../lib/agentSecrets';
+import { askedForLine } from '../../lib/agentSecrets';
 
 interface LoginCardProps {
   message: AgentMessage;
@@ -143,6 +143,7 @@ export const LoginCard = memo(function LoginCard({ message, agentName, arrived }
       )}
     </>
   );
+  const title = approval.title || `${agentName} needs your ${login.title}`;
 
   return (
     <div
@@ -159,10 +160,10 @@ export const LoginCard = memo(function LoginCard({ message, agentName, arrived }
           if (keyOpen) void saveKey();
         }}
         icon={<LockedIcon size={14} />}
-        title={approval.title || `${agentName} needs your ${login.title}`}
+        title={title}
         source={
           [
-            login.askedAs ? `Asked for “${secretTitle(login.askedAs)}”` : null,
+            askedForLine(login.askedAs, title),
             pending && login.alsoFor?.length ? `Also for ${login.alsoFor.join(', ')}` : null,
           ]
             .filter(Boolean)

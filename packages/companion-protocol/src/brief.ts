@@ -28,16 +28,23 @@ export const BRIEF_TITLE = 'Morning brief';
 
 /** The row's one line. */
 export const BRIEF_DETAIL =
-  'Your Chief of Staff posts what needs you, what runs today and what didn’t work. Nothing on a quiet day.';
+  'Your Chief of Staff posts what needs you, what runs today and what didn’t work.';
 
-/** The setting for posting even on a quiet day. */
-export const BRIEF_ALWAYS = 'Post on quiet days too';
+/** The setting for posting even when nothing needs you ("quiet" is Quiet hours' word, beside it). */
+export const BRIEF_ALWAYS = 'Post even when there’s nothing new';
 
 /** Every brief's first words: how a chat knows one (`agents::brief::HEAD`). */
 export const BRIEF_HEAD = 'Morning brief, ';
 
 /** The phone's picks. */
-export const BRIEF_TIMES: number[] = [6 * 60 + 30, 7 * 60, 7 * 60 + 30, 8 * 60, 8 * 60 + 30, 9 * 60];
+export const BRIEF_TIMES: number[] = [
+  6 * 60 + 30,
+  7 * 60,
+  7 * 60 + 30,
+  8 * 60,
+  8 * 60 + 30,
+  9 * 60,
+];
 
 const pad = (n: number) => String(n).padStart(2, '0');
 

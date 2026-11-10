@@ -118,11 +118,11 @@ function ConversationsSheet() {
         <TextInput
           value={query}
           onChangeText={setQuery}
-          placeholder="Search conversations"
+          placeholder="Find a conversation"
           placeholderTextColor={colors.textMuted}
           keyboardAppearance={appearance}
           selectionColor={accent.accent}
-          accessibilityLabel="Search conversations"
+          accessibilityLabel="Find a conversation"
           autoCorrect={false}
           style={styles.input}
         />

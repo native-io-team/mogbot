@@ -419,7 +419,11 @@ async function capture({
     // whatever else was rendered, under this scenario's name.
     const missingRequired = requires
       ? !(await page
-          .eval(`!!document.querySelector(${JSON.stringify(requires)})`)
+          // Drawn, not merely in the DOM: a surface hidden by a stylesheet
+          // (New agent's form while it describes) is not on screen.
+          .eval(
+            `(() => { const drawn = (e) => e.getClientRects().length > 0 || (getComputedStyle(e).display === 'contents' && [...e.children].some(drawn)); return [...document.querySelectorAll(${JSON.stringify(requires)})].some(drawn); })()`
+          )
           .catch(() => false))
       : false;
 

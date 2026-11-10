@@ -1,5 +1,5 @@
 /**
- * "<Agent> is waiting on you": the bar a chat shows while its agent's turn
+ * "<Agent> needs your OK" (the words the sidebar pill and the requests bar use): the bar a chat shows while its agent's turn
  * is held on a card the user's level doesn't answer, so a blocked agent
  * never looks like a busy one. It says the state and nothing more: the card
  * already asks its question, and a bar never repeats it (docs/agents.md,
@@ -70,7 +70,7 @@ export function WaitingForYouBar({
       state="waiting"
       role="alert"
       data-testid="agent-waiting-bar"
-      title={`${agent.name} is waiting on you`}
+      title={`${agent.name} needs your OK`}
       actions={
         <Button variant="secondary" size="compact" onClick={show}>
           Review

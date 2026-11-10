@@ -44,7 +44,7 @@ describe('WaitingForYouBar', () => {
       <WaitingForYouBar agent={waiting as never} messages={[msg({ title: 'Push to GitHub' })]} />
     );
     const bar = screen.getByTestId('agent-waiting-bar');
-    expect(bar.textContent).toBe('Researcher is waiting on youReview');
+    expect(bar.textContent).toBe('Researcher needs your OKReview');
     expect(bar.textContent).not.toMatch(/stopped|until you answer/i);
   });
 

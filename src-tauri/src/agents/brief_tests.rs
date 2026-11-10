@@ -362,9 +362,9 @@ fn it_reads_as_one_short_message_led_by_what_needs_you() {
         "Morning brief, Monday 9 November: 1 card waits for you, 1 thing didn’t work, 1 routine today, 1 agent worked."
     );
     for want in [
-        "**Waiting on you**\n- Finance: Send an email",
+        "**Needs you**\n- Finance: Send an email",
         "**Didn’t work**\n- Finance’s routine “Sweep the invoices inbox” failed at 3:00 AM: Gmail needs signing in again.",
-        "**Today**\n- 09:00 Finance: Sweep the invoices inbox",
+        "**Today**\n- 9:00 AM Finance: Sweep the invoices inbox",
         "**Since yesterday**\n- Research: shared “Papers digest”, ran 1 routine, 2 replies",
         "- Room on 1 of 3 accounts (1 not reported), by their own readings.",
         "- Soonest reset: Work (Claude Code), 5-hour limit, at 11:20 AM.",

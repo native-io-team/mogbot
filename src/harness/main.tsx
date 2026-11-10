@@ -116,6 +116,15 @@ ReactDOM.createRoot(document.getElementById('root') as HTMLElement).render(
  * as a fast one instead of a half-painted one.
  */
 /** Wait for a selector to exist, or give up after `timeoutMs`. */
+/**
+ * Drawn somewhere on the page: a layout box of its own, or (for a
+ * `display: contents` wrapper, which has none) a drawn child.
+ */
+function isDrawn(el: Element): boolean {
+  if (el.getClientRects().length > 0) return true;
+  return getComputedStyle(el).display === 'contents' && [...el.children].some(isDrawn);
+}
+
 async function waitFor(
   selector: string,
   timeoutMs = 8000,
@@ -123,13 +132,14 @@ async function waitFor(
 ): Promise<HTMLElement | null> {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
-    const el = text
-      ? ([...document.querySelectorAll<HTMLElement>(selector)].find((e) =>
-          (e.textContent ?? '').includes(text)
-        ) ?? null)
-      : document.querySelector<HTMLElement>(selector);
-    if (el) return el;
-    if (Date.now() > deadline) return null;
+    const all = [...document.querySelectorAll<HTMLElement>(selector)].filter(
+      (e) => !text || (e.textContent ?? '').includes(text)
+    );
+    // A drawn match first; a hidden one only once the wait is over, so the
+    // step can say it was hidden rather than that it never appeared.
+    const drawn = all.find(isDrawn);
+    if (drawn) return drawn;
+    if (Date.now() > deadline) return all[0] ?? null;
     await new Promise((r) => setTimeout(r, 100));
   }
 }
@@ -210,6 +220,14 @@ async function runSteps(list?: ScenarioStep[]): Promise<void> {
     if (!el) {
       stepLog.push(`never appeared: ${named}`);
       console.error(`[harness] step never appeared: ${named}`);
+      return;
+    }
+    // In the page but drawn nowhere (display: none, or inside something that
+    // is): a step into it "works" while the screen shows something else, as
+    // New agent's form did once it opened describe-first.
+    if (!isDrawn(el)) {
+      stepLog.push(`never appeared: ${named} (in the page, but hidden)`);
+      console.error(`[harness] step target is hidden: ${named}`);
       return;
     }
     if (step.click) {

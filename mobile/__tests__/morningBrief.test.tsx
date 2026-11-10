@@ -34,7 +34,15 @@ jest.mock('../src/components/ui', () => {
   const { Text, Pressable, View } = jest.requireActual('react-native');
   return {
     tap: jest.fn(),
-    Section: ({ title, footer, children }: { title: string; footer?: string; children: unknown }) => (
+    Section: ({
+      title,
+      footer,
+      children,
+    }: {
+      title: string;
+      footer?: string;
+      children: unknown;
+    }) => (
       <View>
         <Text>{title}</Text>
         {children as never}
@@ -61,7 +69,7 @@ import { Markdown } from '../src/components/Markdown';
 const BRIEF = [
   'Morning brief, Monday 9 November: 1 card waits for you, 2 routines today.',
   '',
-  '**Waiting on you**',
+  '**Needs you**',
   '- Browser Helper: Enter the code the portal sent',
   '',
   '**Your checks**',
@@ -80,7 +88,7 @@ describe('the morning brief on the phone', () => {
   it('reads as headed lists, a check’s words plain', async () => {
     expect(isBriefText(BRIEF)).toBe(true);
     await render(<Markdown text={BRIEF} />);
-    expect(screen.getByText('Waiting on you')).toBeTruthy();
+    expect(screen.getByText('Needs you')).toBeTruthy();
     expect(screen.getByText('Your checks')).toBeTruthy();
     expect(screen.getByText('Standup 9:30', { exact: false })).toBeTruthy();
     expect(screen.getByText('[Click me](https://evil.example)', { exact: false })).toBeTruthy();

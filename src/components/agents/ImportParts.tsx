@@ -127,6 +127,7 @@ export function ImportAgentRow({
   name,
   avatarName,
   color,
+  look,
   chip,
   role,
   counts,
@@ -139,6 +140,8 @@ export function ImportAgentRow({
   /** Whose badge it wears (the main one wears the Chief's). */
   avatarName?: string;
   color: string;
+  /** A recipe's own key (colourway and legend): the key it arrives with. */
+  look?: { colorway?: string; icon?: string };
   chip?: { kind: ImportChipKind; label: string };
   role?: string;
   counts?: ReactNode;
@@ -175,7 +178,13 @@ export function ImportAgentRow({
           aria-expanded={open}
           onClick={() => setOpen((o) => !o)}
         >
-          <AgentKey name={avatarName ?? name} color={color} size="md" />
+          <AgentKey
+            name={avatarName ?? name}
+            color={color}
+            colorway={look?.colorway}
+            icon={look?.icon}
+            size="md"
+          />
           <span className="agents-import-agent__text">
             <span className="agents-import-agent__name">
               <span className="agents-import-agent__name-text">{name}</span>

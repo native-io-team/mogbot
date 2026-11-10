@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { findSecret, secretTitle, secretVars } from './agentSecrets';
+import { askedForLine, findSecret, secretTitle, secretVars } from './agentSecrets';
 
 describe('findSecret', () => {
   it('spots common key shapes and names them', () => {
@@ -61,5 +61,19 @@ describe('secretVars', () => {
         ],
       })
     ).toBe('$BANK_USERNAME, $BANK_PASSWORD');
+  });
+});
+
+describe('askedForLine', () => {
+  it('stays quiet when the title already says what the agent called it', () => {
+    expect(askedForLine('gmail_work', 'Recruiter needs your Gmail (work)')).toBeNull();
+  });
+  it('says it when the title names something else', () => {
+    expect(askedForLine('payroll_mail', 'Recruiter needs your Gmail')).toBe(
+      'Asked for “Payroll mail”'
+    );
+  });
+  it('says nothing without a name', () => {
+    expect(askedForLine(undefined, 'Recruiter needs your Gmail')).toBeNull();
   });
 });

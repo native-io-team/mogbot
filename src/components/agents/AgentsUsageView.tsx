@@ -403,7 +403,7 @@ function EngineStack({
       <p className="usage-section__muted">
         {draggable
           ? 'Turns start on the first with room and carry on down. Drag to change the order.'
-          : 'Turns run on this one. Add another and agents carry on with it when this one runs out.'}
+          : 'Turns run on this one.'}
       </p>
       <DragSortScope
         label={`${engine.label} account order`}

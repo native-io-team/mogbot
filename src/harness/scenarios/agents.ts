@@ -1429,7 +1429,14 @@ const LAUNCH_CHAT = [
 
 /** One agent, several conversations: each chat its own, the invoices one waiting on you. */
 const CONVERSATIONS = {
-  agents_overview: acmeWith({ status: status('idle'), conversations: { loaded: 'c-launch' } }),
+  // The invoices conversation holds a card, so the agent waits on you as a
+  // whole (the sidebar, the bell and its key say so), whichever is on screen.
+  agents_overview: acmeWith({
+    status: status('waiting', 'Waiting for your OK'),
+    pendingApprovals: 1,
+    preview: 'Needs your OK: Send email to billing@acme.co',
+    conversations: { loaded: 'c-launch' },
+  }),
   agents_messages: (args: Record<string, unknown>) => {
     if (args.agentId !== 'acme') return messagesFor(args);
     if (args.conversation === 'c-launch') return LAUNCH_CHAT;
@@ -2487,8 +2494,8 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-schedule-empty',
     title: 'Agents — scheduling for an agent with nothing scheduled',
     looksRightWhen:
-      'The header shows a quiet clock button, not a chip. Open, it says nothing is scheduled yet and the picker is already open (Weekdays, At 09:00) with What focused and empty, the echo ending in “…” and “now say what Lead Gen should do” under it; Schedule is disabled and there is no Cancel.',
-    requires: '.agent-schedule__empty',
+      'The header’s Routines button, with words. Open, with nothing scheduled it goes straight to “New routine” (no list, no back arrow): At a time picked, Weekdays, At 09:00, What focused and empty, the echo ending in “…” and “now say what Lead Gen should do” under it; Schedule is disabled and there is no Cancel.',
+    requires: '.agent-schedule__body[data-view="editor"]',
     openSelector: AGENTS_TAB,
     steps: [
       { click: '[data-agent-id="leadgen"]' },
@@ -2696,7 +2703,7 @@ export const agentsScenarios: Scenario[] = [
     openSelector: AGENTS_TAB,
     requires: '.agent-editor [data-testid="agent-engine-protections"]',
     clipSelector: '.agent-editor',
-    steps: [{ click: '.workspace-sidebar-add-project' }],
+    steps: [{ click: '.workspace-sidebar-add-project' }, { click: '.agent-editor__fill-in' }],
     commands: {
       agents_overview: {
         ...overview(),

@@ -41,3 +41,16 @@ export function secretTitle(name: string): string {
   said[0] = said[0].charAt(0).toUpperCase() + said[0].slice(1);
   return said.join(' ');
 }
+
+/**
+ * The card's "Asked for “Gmail work”" line: what the agent called a login,
+ * only when the card's title doesn't already say it ("needs your Gmail
+ * (work)"). Said twice, the second reads as a different thing.
+ */
+export function askedForLine(askedAs: string | undefined, title: string): string | null {
+  if (!askedAs) return null;
+  const said = secretTitle(askedAs);
+  const squash = (s: string) => s.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, '');
+  if (squash(title).includes(squash(said))) return null;
+  return `Asked for “${said}”`;
+}

@@ -22,8 +22,8 @@
  */
 
 import {
+  askedForLine,
   MAC_FEATURES,
-  secretTitle,
   type Agent,
   type AgentMessage,
   type Approval,
@@ -242,7 +242,7 @@ export function LoginCard({
     );
   }
 
-  const source = login.askedAs ? `Asked for “${secretTitle(login.askedAs)}”` : undefined;
+  const source = askedForLine(login.askedAs, title) ?? undefined;
   const why = (
     <T variant="small" color={colors.textBody} maxFontSizeMultiplier={2}>
       {login.why}

@@ -577,7 +577,7 @@ where
 {
     tz.timestamp_millis_opt(ms)
         .single()
-        .map(|t| t.format("%H:%M").to_string())
+        .map(|t| t.format("%-I:%M %p").to_string())
         .unwrap_or_default()
 }
 
@@ -652,7 +652,7 @@ where
         .iter()
         .map(|w| format!("- {}: {}", w.agent, w.title))
         .collect();
-    section(&mut out, "Waiting on you", waiting);
+    section(&mut out, "Needs you", waiting);
 
     let failed = facts
         .failed

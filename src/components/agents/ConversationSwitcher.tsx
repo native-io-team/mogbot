@@ -100,7 +100,7 @@ export function ConversationSwitcher({
           setNow(Date.now());
           void refreshConversations(agent.id);
         }}
-        search={{ value: query, onChange: setQuery, placeholder: 'Search conversations' }}
+        search={{ value: query, onChange: setQuery, placeholder: 'Find a conversation' }}
         trigger={(p) => (
           <MenuButton
             {...p}

@@ -101,7 +101,8 @@ export function AgentMorningBriefSetting() {
           <Row
             key={`${c.app}:${c.what}`}
             label={`Check: ${c.what}`}
-            description={`Read only, in ${c.app}, shortly before the brief. Add more by asking your Chief of Staff.`}
+            // How to add one is said once, under the last.
+            description={`Read only, in ${c.app}, shortly before the brief.${i === checks.length - 1 ? ' Add more by asking your Chief of Staff.' : ''}`}
           >
             <TextButton
               onClick={() =>

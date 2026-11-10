@@ -254,6 +254,7 @@ function ProposalRow({
       name={arrivesAs}
       avatarName={p.name}
       color="gray"
+      look={p.look}
       chip={
         p.clash
           ? choice === 'replace'

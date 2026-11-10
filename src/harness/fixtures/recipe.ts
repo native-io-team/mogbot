@@ -20,7 +20,7 @@ const FINANCE_RECIPE = {
   ],
   watches: [{ when: 'a new file appears in [removed: a file path]', what: 'File the receipt' }],
   apps: ['Gmail', 'Google Sheets', 'Linear'],
-  look: { colorway: 'teal', icon: 'inbox', key: 'F' },
+  look: { colorway: 'orange', icon: 'money', key: 'F' },
   independence: 'often' as const,
 };
 
@@ -88,7 +88,7 @@ export const RECIPE_REVIEW = {
       apps: FINANCE_RECIPE.apps.map((name) => ({ name, purpose: '' })),
       preferences: '',
       context: '',
-      look: { colorway: 'teal', icon: 'inbox', key: 'F', independence: 'often' },
+      look: { colorway: 'orange', icon: 'money', key: 'F', independence: 'often' },
     },
   ],
 };

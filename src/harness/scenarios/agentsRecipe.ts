@@ -6,7 +6,7 @@
  */
 
 import type { Scenario } from '../types';
-import { AGENTS_TAB, REVIEW_CHAT, TEAM, gateWith, messagesFor, msg, overview } from './agents';
+import { AGENTS_TAB, TEAM, gateWith, messagesFor, msg, overview } from './agents';
 import { RECIPE_REVIEW, recipePreviewFor } from '../fixtures/recipe';
 
 const RECIPE_CARD = () =>
@@ -31,7 +31,7 @@ export const agentsRecipeScenarios: Scenario[] = [
     id: 'agents-recipe-share',
     title: 'Agents — Share Finance as a recipe',
     looksRightWhen:
-      'A dialog titled “Share Finance as a recipe”: a muted lede (anyone can make their own Finance; it holds what Finance is, never what it knows about you). Finance’s teal key with its name and role. A quiet recessed line: “4 personal details removed (1 email address, 1 phone number, 2 file paths). 1 password or key removed”. Instructions in a recessed box, with “[removed: …]” where each one was. “Routines · arrive paused” with two; “What it watches for”; “Apps it needs · by name, never your sign-in”: Gmail, Google Sheets, Linear; “Independence”: Suggests Careful. “Not in it” in muted text: memory, conversations, logins, the project, 1 one-time reminder. Footer: Copy as text (outline), Save file… (neutral solid, never the accent).',
+      'A dialog titled “Share Finance as a recipe”: a muted lede (anyone can make their own Finance; it holds what Finance is, never what it knows about you). Finance’s own key (orange, the money legend, as in the sidebar) with its name and role. A quiet recessed line: “4 personal details removed (1 email address, 1 phone number, 2 file paths). 1 password or key removed”. Instructions in a recessed box, with “[removed: …]” where each one was. “Routines · arrive paused” with two; “What it watches for”; “Apps it needs · by name, never your sign-in”: Gmail, Google Sheets, Linear; “Independence”: Suggests Careful. “Not in it” in muted text: memory, conversations, logins, the project, 1 one-time reminder. Footer: Copy as text (outline), Save file… (neutral solid, never the accent).',
     openSelector: AGENTS_TAB,
     requires: '[data-testid="agent-recipe"] .agent-recipe__removed',
     clipSelector: '.agent-recipe-modal',
@@ -64,7 +64,7 @@ export const agentsRecipeScenarios: Scenario[] = [
     id: 'agents-recipe-review',
     title: 'Agents — a recipe dropped on the window: the review card in the Chief’s chat',
     looksRightWhen:
-      'In the Chief’s chat, the usual review card “Bring in 1 agent from a recipe” with one row, Finance, a neutral “Name taken here” or “New” chip and its instructions. Opened, it lists Routines · arrive paused, What it watches for, Apps it used, and “Independence: Suggests Careful. Used only if that’s stricter than your team’s.” No memory section.',
+      'In the Chief’s chat, the usual review card “Bring in 1 agent from a recipe” with one row, Finance wearing the recipe’s key (orange, the money legend, the same key the share sheet showed), a neutral “Name taken here” or “New” chip and its instructions. Opened, it lists Routines · arrive paused, What it watches for, Apps it used, and “Independence: Suggests Careful. Used only if that’s stricter than your team’s.” No memory section.',
     command: 'agents.open',
     requires: '[data-testid="agent-import-review"]',
     steps: [
@@ -76,7 +76,7 @@ export const agentsRecipeScenarios: Scenario[] = [
     commands: {
       agents_overview: overview([{ ...TEAM[0], pendingApprovals: 1 }]),
       agents_messages: (args: Record<string, unknown>) =>
-        args.agentId === 'chief' ? [...REVIEW_CHAT, RECIPE_CARD()] : messagesFor(args),
+        args.agentId === 'chief' ? [...messagesFor(args), RECIPE_CARD()] : messagesFor(args),
       agents_import_talk: gateWith(null),
       agents_import_review_current: RECIPE_REVIEW,
     },

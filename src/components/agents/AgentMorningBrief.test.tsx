@@ -35,7 +35,7 @@ describe('the brief in the chat', () => {
     expect(first?.textContent).toMatch(/^Morning brief, Monday 9 November: 1 card waits for you/);
     const headings = [...container.querySelectorAll('strong')].map((s) => s.textContent);
     expect(headings).toEqual([
-      'Waiting on you',
+      'Needs you',
       'Didn’t work',
       'Today',
       'Since yesterday',
@@ -97,7 +97,7 @@ describe('the brief in Settings', () => {
       always: false,
       checks: null,
     });
-    fireEvent.click(screen.getByRole('switch', { name: 'Post on quiet days too' }));
+    fireEvent.click(screen.getByRole('switch', { name: 'Post even when there’s nothing new' }));
     await flush();
     expect(saved.always).toBe(true);
     expect(screen.getByText('Check: events on my calendar today')).toBeTruthy();

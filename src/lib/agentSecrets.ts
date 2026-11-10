@@ -42,7 +42,7 @@ export const addSecret = (agentId: string, name: string, kind: SecretKind, value
   invoke<AgentSecret>('agents_add_secret', { agentId, name, kind, value });
 
 /** A secret's name as a person says it ("CRM API key"): one rule, shared with the phone. */
-export { secretTitle } from '../../packages/companion-protocol/src/secretName';
+export { askedForLine, secretTitle } from '../../packages/companion-protocol/src/secretName';
 
 /** `$STRIPE_KEY`, or `$BANK_USERNAME, $BANK_PASSWORD`. */
 export const secretVars = (s: { fields: SecretField[] }) =>

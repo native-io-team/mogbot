@@ -171,6 +171,23 @@ describe('ImportReviewCard', () => {
     expect(shown.textContent).toContain('Rule 20.');
   });
 
+  it('a recipe’s agent wears the key it will arrive with', () => {
+    const card: ConnectorCard = {
+      ...CARD,
+      review: {
+        proposals: [
+          { ...CARD.review!.proposals[1], look: { colorway: 'orange', icon: 'money', key: 'F' } },
+        ],
+      },
+    };
+    const { container } = render(
+      <ImportReviewCard message={message()} card={card} chiefName="Ada" onAnswer={vi.fn()} />
+    );
+    const key = container.querySelector('.agents-import-agent [data-colorway]');
+    expect(key?.getAttribute('data-colorway')).toBe('orange');
+    expect(key?.getAttribute('data-icon')).toBe('money');
+  });
+
   it('lists the sandbox paths it marked and the tools it translated', () => {
     const card: ConnectorCard = {
       ...CARD,
