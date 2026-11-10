@@ -48,11 +48,7 @@ describe('routines in steps', () => {
     expect(
       stepsLine({
         note: 'a',
-        then: [
-          { text: 'b', askFirst: true },
-          { text: 'c' },
-          { text: 'd', askFirst: true },
-        ],
+        then: [{ text: 'b', askFirst: true }, { text: 'c' }, { text: 'd', askFirst: true }],
       })
     ).toBe('4 steps · your OK before steps 2 and 4');
   });

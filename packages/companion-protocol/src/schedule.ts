@@ -8,6 +8,14 @@
 import { formatClock } from './clock';
 import type { CheckIn, CheckInRun, MonthDay, Repeat, Watch, WatchSource } from './model';
 
+/**
+ * The one honest limit of a routine, said where one is set up (the routine
+ * picker, desk and phone, and under the Chief's starters once one that
+ * repeats is picked): the same sentence everywhere.
+ */
+export const ROUTINES_NEED_THE_MAC =
+  'Routines run only while the app is open and this Mac is awake. One that was missed runs once when it’s back.';
+
 /** What a scheduled run came to, in a few words. */
 export function describeRun(run: CheckInRun, now = Date.now()): string {
   switch (run.outcome) {
@@ -29,10 +37,10 @@ export function describeRun(run: CheckInRun, now = Date.now()): string {
     case 'declined':
       return run.step ? `Stopped after step ${run.step}` : 'Stopped';
     case 'held':
-      // A usage limit to reset first (the detail says which, and when).
+      // A usage limit to refill first (the detail says which, and when).
       return run.retryAt
-        ? `Waiting for the reset · runs ${formatWhen(run.retryAt, now).replace(/^(Today|Tomorrow)/, (w) => w.toLowerCase())}`
-        : 'Waiting for the reset';
+        ? `Waiting for the refill · runs ${formatWhen(run.retryAt, now).replace(/^(Today|Tomorrow)/, (w) => w.toLowerCase())}`
+        : 'Waiting for the refill';
     default:
       return 'Unknown';
   }

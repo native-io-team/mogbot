@@ -105,7 +105,7 @@ and didn't see it.
 **Fixed.** The header says "Routines", or "3 routines". The popover's verb button and the chat
 line are left (a verb and a past event read fine).
 
-### 6. My daily summary only runs while the app is open, and nobody told me
+### 6. My daily summary only runs while the app is open, and nobody told me (fixed)
 
 **Where.** `agents-first-win-morning-brief`, `agents-scheduled`, `agents-team-setup-routines`.
 `packages/companion-protocol/src/chiefIdeas.ts:50` (the brief),
@@ -120,7 +120,7 @@ routine for me. I'd close the laptop at night and wonder why nothing came.
 and the "Keep this Mac awake" link the picker has (one shared string). Not done here: it belongs
 in the routine-created line in Rust and the result card, not in a starter.
 
-### 7. Two words for the same moment: "refill" and "reset"
+### 7. Two words for the same moment: "refill" and "reset" (fixed)
 
 **Where.** `usage-one`, `usage-sheet` (phone), `settings-agents-usage`.
 `packages/companion-protocol/src/usage.ts:39` ("Use it all before reset"),
@@ -138,7 +138,7 @@ remaining strings in the shared module (`usage.ts`, `usageGlance.ts`, `crossover
 is done here; the rest is a copy pass across the shared package, too wide for tonight next to the
 other agents on the phone screens.
 
-### 8. "New room" appears with no explanation
+### 8. "New room" appears with no explanation (fixed)
 
 **Where.** `agents-new-agent-first-open` onwards. `src/components/agents/AgentsSidebar.tsx:465`.
 
@@ -148,7 +148,7 @@ Bot has no rooms; nothing says what one is.
 **Fix.** A tooltip and a one-line lead in the room editor: "Talk to several agents at once." Or
 hold the entry until the Chief suggests a room.
 
-### 9. The Usage page speaks in its own jargon and repeats itself
+### 9. The Usage page speaks in its own jargon and repeats itself (fixed)
 
 **Where.** `usage-one`, `usage-unknown`. `src/components/agents/AgentsUsageView.tsx:620-621`,
 `src/components/agents/AgentsUsage.tsx:134`, `src/components/agents/UsageStack.tsx:179`.
@@ -162,7 +162,7 @@ whether to do something.
 Rename the list "Ideas for leftover usage". Give a "Not signed in" row a "Sign in" button that
 starts the same flow as "Add a Claude Code account".
 
-### 10. The phone says "Settings → Phone → Show code"; the desk calls it "Your phone"
+### 10. The phone says "Settings → Phone → Show code"; the desk calls it "Your phone" (fixed)
 
 **Where.** qa:web `pair-scan`; desk `phone-ready`. `mobile/src/lib/pairing.ts:25`,
 `src/components/phone/PhoneModal.tsx:250`, `src/components/agents/AgentsSidebar.tsx` ("Get the

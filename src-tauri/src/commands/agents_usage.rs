@@ -1,6 +1,6 @@
 //! Settings → Accounts & usage, What's in flight's spare-capacity line and the
 //! phone's read-only view: the capacity inventory (`agents::inventory`), the
-//! usage mode and the spare-capacity list (`agents::usage_plan`).
+//! usage mode and the list of ideas for leftover usage (`agents::usage_plan`).
 
 use tauri::{AppHandle, Emitter};
 
@@ -163,7 +163,7 @@ pub async fn agents_crossover() -> Result<agents::crossover::View, CommandError>
     .map_err(agents::err_other)
 }
 
-/// Ask first, carry on with the other engine, or wait for the reset, when
+/// Ask first, carry on with the other engine, or wait for the refill, when
 /// every account of `engine` is out.
 #[tauri::command]
 #[tracing::instrument(skip(app))]

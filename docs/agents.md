@@ -4512,8 +4512,25 @@ check went, its week's cost, Check now (`agents_watch_check_now`), Edit,
 Pause and Cancel. ⌘K: "Start work for <agent> when something happens…".
 Agents set them with the `watch_for` tool. The phone gets them apart from
 timed routines as `agent.watches` (without `seen`/`pending`) and shows them
-read-only when `welcome.features` has `routines.when`; the Mac refuses any
-schedule operation the phone sends for one (`refuse_watch_from_phone`).
+when `welcome.features` has `routines.when`.
+
+**From the phone.** On a Mac that lists `agents.watch.options|create|update|checkNow`
+the phone sets them up and changes them too: its routine sheet has the same
+"At a time / When…" switch and the desk's composer, in the same words, all
+from `packages/companion-protocol/src/whenComposer.ts` (the desk reads them
+there too): When this happens over the sources ("checked from your Mac"),
+Through, Check every, What, the echo and what each check costs. A "When…" row
+on the agent sheet offers Check now, Pause, Edit and Cancel; on an older Mac
+it stays read-only ("Set up and changed on your Mac."). A phone can't type a
+path: `agents.watch.options` (`agents/watch_options.rs`) offers Downloads,
+Desktop and Documents when they exist plus folders a routine already watches,
+and a folder off that list is refused. The apps a check could read through
+come from the Mac as raw lists (our connections, with only this agent's
+grant, and Claude Code's servers) and are read by the shared `whenApps`. The
+user adds them, so no card, as on the desk; the 12-per-agent cap, the line in
+the chat and every rule of the check are the Mac's own. A time routine's Edit
+and Run now are refused for a "When…" one, and Check now for a timed one
+(`refuse_wrong_kind_from_phone`); Pause and Cancel are shared.
 
 Not verified against live accounts: a model check through a real connector,
 and the GitHub search source (pagination included). The notifications
@@ -4801,7 +4818,7 @@ with the phone in `companion-protocol/src/usageGlance.ts`): the row at the
 sidebar's foot says the total across every account ("72% left · 2
 accounts"), draws the total bar (one segment per real account, most room
 first, each filled to what it adds; an account with no reading an empty
-dashed slot, never full) and the next reset ("Resets in 2d 4h"). It never
+dashed slot, never full) and the next refill ("Refills in 2d 4h"). It never
 asks for a reading itself (`agents_usage_overview` with `look: false`).
 
 **The total** (`usageGlance` `total`, `totalOf`; the owner's words: "an
@@ -4813,29 +4830,34 @@ guessed, and the words say "across 2 accounts" (or "across 2 Max accounts"
 when every one counted is on that plan). A second sign-in of an account
 already counted and an account with no reading add nothing ("1 account not
 read yet, not counted"); an account out of usage adds 0. The bar's
-segments run most room first, unread ones last; each says when it resets
+segments run most room first, unread ones last; each says when it refills
 (an out account: when it is back). Desk and phone compute it in the same
 function.
 
 **The Usage view** (`AgentsUsageView`, `USAGE_ID`; opened by that row, ⌘K
 "Usage and accounts…", "Switch account…", "Add an account…"). Two levels.
 *The overview*: the total as a hero ("72% left across 2 Max accounts",
-"Next reset in 2d 4h · sam@example.com, Thu 3:15 AM", the bar with each
+"Next refill in 2d 4h · sam@example.com, Thu 3:15 AM", the bar with each
 account named under its segment and opening it); a calm bar when every
 account is nearly out (add an account, carry on with the other engine when
 it has room, or "Wait until …"); "Accounts", one row each in the order work
 tries them (`AccountRow`: keycap, name, a small bar, what it adds, In use /
-Next / "Out of usage", refill countdown), with "Add an account" at the
-heading's right; "How agents use your limits" (the mode as a hugging
+Next / "Out of usage", refill countdown; a signed-out row has its own Sign in
+beside it, the same sign-in as its page), with "Add an account" at the
+heading's right. With one account the hero has no eyebrow and its bar no name or
+room under it: the row says those once; "How agents use your limits" (the mode as a hugging
 control and its one line, then, when a window on the account in use resets
-soon with at least 25% left, a nudge: "62% of Work's week resets in 9 h",
-the first waiting items of the spare-capacity list, and "Give agents
+soon with at least 25% left, a nudge: "62% of Work's week refills in 9 h",
+the first waiting items of the list of ideas for leftover usage, and "Give agents
 something to do", which wakes the Chief with that list now:
 `agents_spare_spend_now` → `usage_tools::spend_now`, the same prompt "Use it
 all" sends, changing no approval; a press while the Chief is still starting
 that window says so instead of queuing it twice,
-`usage_plan::already_starting`); then the crossover choice, the
-spare-capacity list and other compute. *An account's page*
+`usage_plan::already_starting`); then the crossover choice, "Ideas for
+leftover usage" (the spare-capacity list; one plain name in the UI) and other compute.
+The user's word for the moment a limit comes back is **refill**, everywhere
+(hero, chips, mode "Use it all before the refill", lines, the phone); "reset"
+stays only in code and in what agents are told. *An account's page*
 (`AccountDetail`; "Usage › Work" with a back arrow, Esc or ⌘[ to return;
 `requestUsageAccount` opens one from elsewhere, as the chat header's account
 chip does): its keycap, name, state pill, place in the order, plan and who,
@@ -4904,9 +4926,9 @@ weekly-reset samples: a reset that moved to another time of the week and
 stayed there is said as exactly that, naming nobody (`byReset`).
 
 **The sidebar row** says, in words anyone reads, what the agents can still
-do and when it resets (`usageGlance` `row`): the total ("72% left", or
+do and when it refills (`usageGlance` `row`): the total ("72% left", or
 "57% left this week" with one account), "2 accounts" only when there are,
-the total bar and "Resets in 2d 4h". Its corner dot shows only when the
+the total bar and "Refills in 2d 4h". Its corner dot shows only when the
 user must act or agents are out; the phone's Agents list says the same.
 
 **Where it went** (`agents/usage_story.rs`). Each turn's tokens are
@@ -5138,7 +5160,7 @@ the wallet's own loop (`run_on_engine`):
 - **The user's choice, per engine** (`crossover.json` beside the wallet;
   Settings → Accounts & usage, "When every Claude Code account is out"; the
   Chief's `set_engine_fallback`, behind a card): **Ask first** (default),
-  **Carry on with Codex**, or **Wait for the reset**. Ask first puts one card
+  **Carry on with Codex**, or **Wait for the refill**. Ask first puts one card
   in the agent's chat when a turn ends with every account out: "All your
   Claude Code accounts are out until 4:00 PM. Carry on with Codex until
   then?" — **Always** (Allow + always: sets Carry on), **Just this time**
@@ -5284,7 +5306,7 @@ never slow down for limits unless the user chose that.
   gone. The chat header's ring fills to what is left of the 5-hour window and
   its popover shows the same stack (`usageGlance`); the phone's Agents list
   shows the desk sidebar's glance (`GlanceRow`) as one compact card (the
-  total and how many accounts it is of, a reset chip, the total bar fullest
+  total and how many accounts it is of, a refill chip, the total bar fullest
   first), and its Settings the glance card above the accounts. The count
   beside the total is the accounts read (`total.counted`): one not read yet
   isn't in the figure, so it isn't counted beside it. The rules everywhere:
@@ -5372,7 +5394,7 @@ or the Chief's `set_usage_mode`, which always asks on a card first):
   while every account its agent could run on is past 90% (`HOLD_PERCENT`) of
   a 5-hour or weekly limit waits for the first of them to reset, then runs
   once, late. Said once per hold: a line in the agent's chat and a run row
-  "Waiting for the reset" (`runs::Outcome::Held`, `usage_plan::first_hold`).
+  "Waiting for the refill" (`runs::Outcome::Held`, `usage_plan::first_hold`).
   Run now still runs; "When…" routines aren't held; an account with no
   reading is never held for.
 - **In any mode, an account out until a known reset is waited for, not
@@ -5399,7 +5421,7 @@ or the Chief's `set_usage_mode`, which always asks on a card first):
   routines (`Agent::routine_model`, the default), the agent's own (`same`),
   or one of its engine's. The turn finds it through its tickets
   (`runs::routine_model`), only when every routine in that turn agrees.
-- **Use it all before reset**: the user's standing OK to spend capacity that
+- **Use it all before the refill**: the user's standing OK to spend capacity that
   would otherwise expire. **Any account's** expiring room counts: the
   account turns run on next first; with none spare there, the soonest spare
   window on another account, and turns on that engine then start on it until
@@ -5413,8 +5435,8 @@ or the Chief's `set_usage_mode`, which always asks on a card first):
   `SPARE_MIN_PERCENT` (25) points unused (and the account's other 5-hour or
   weekly window has as much left and isn't used up: spending a 5-hour window
   spends the week too; only accounts signed in, not out and not a second
-  sign-in count), work waits on the spare-capacity
-  list, and the Chief is free, the check-in tick (at most every 3 minutes)
+  sign-in count), work waits on the ideas for
+  leftover usage, and the Chief is free, the check-in tick (at most every 3 minutes)
   wakes the Chief once per window instance (`usage_plan::should_nudge`,
   `nudged`), with a quiet Note in its chat. The Chief hands items to agents,
   marks them started (`finish_spare_work`), and may bring a routine forward
@@ -5422,7 +5444,7 @@ or the Chief's `set_usage_mode`, which always asks on a card first):
   changes no approval: anything that sends, spends, pushes or changes what
   others see still waits for the user's Allow.
 
-**The spare-capacity list**: users add in Settings; any agent adds with
+**The spare-capacity list** ("Ideas for leftover usage" in the UI): users add in Settings; any agent adds with
 `add_spare_work` ("sometime", "when there's spare capacity"). At most 50
 items of 600 characters. A turn answering outside text (a "When…" routine's
 items) can't add to it, take items off it or run a routine; and what such a
@@ -5606,8 +5628,13 @@ that says what happens ("Quitting the app stops them, and sleep pauses
 them.", or with Keep running on, "Closing the
 window keeps them going; quitting stops them, and sleep pauses them.") and one
 line suggesting an always-on Mac, such as a Mac mini or a cloud Mac, for
-round-the-clock agents; and as a "Keep this Mac awake" link at the end of the
-schedule popover's footnote. Elsewhere than macOS none of it shows.
+round-the-clock agents; and as a "Keep this Mac awake" link after the one
+sentence on where routines run (`ROUTINES_NEED_THE_MAC`, shared): the schedule
+popover's footnote, and under the Chief's starters once one that sets up a
+routine is picked (every idea but the one-off research and debate,
+`ideaRepeats`). The phone says the same sentence under its routine sheet's
+buttons and its Chief starters, without the link. Elsewhere than macOS the link
+doesn't show.
 
 ## Menu bar, quit guard and quick entry (`agents/tray.rs`, `agents/quick_entry.rs`)
 
@@ -5626,6 +5653,7 @@ and `agents://registry`:
 - Overflow is counted (`2 more`), not listed. Hidden agents aren't listed; idle ones aren't either.
 - Then Open <name>, New message to Chief… (quick entry), Keep this Mac awake / Keep running when closed (checkmarks, the same `set_stay_on`), Quit <name> (`brand::NAME`).
 - Clicking an agent opens its chat (`notify::open_agent`, the notification click's path), showing a window that a close hid.
+- The Dock icon's menu shows the same "Needs you" rows, then New Agent…, Open *the Chief* and Quick Message… (`dock_menu.rs`; the menu bar and every key: docs/keyboard-shortcuts.md).
 
 Shown by default **once the user has actually used Agents, or while Keep
 running when closed is on** (`AppState.menu_bar_icon`, `None` = that rule).
@@ -5915,9 +5943,22 @@ opencode acp
   session of its own), `question` and `doom_loop` `deny`. The app's own
   server and the turn's given servers (its granted apps through the relay,
   the browsers) are `<name>_*: allow`, as for the other engines, since each
-  decides its own calls. The same rules go on the `build` agent and it is
-  made the default, so the user's own agent files can't loosen them either.
-  The inline config outranks the user's global `opencode.json`.
+  decides its own calls. The same rules go on the `build` agent and on
+  `mode.build` (OpenCode folds a user's `mode.build` into the agent after
+  every config file, the inline one included: checked, it turned `bash:
+  ask` into `allow`), and `build` is made the default, so the user's own
+  agent files can't loosen them either. The inline config outranks the
+  user's global `opencode.json`; `OPENCODE_PERMISSION`, which OpenCode
+  merges over everything, is taken out of the turn's environment.
+- **No language servers or formatters** (`lsp: false`, `formatter:
+  false`), whatever the user's config turns on: both run the project's own
+  code (an ESLint config, a Prettier plugin) on a read or an approved edit,
+  with no card for running it. Claude Code and Codex run neither.
+- **Edits are judged by where they land.** An edit's path is checked as
+  written and with every symlink followed; both must be in the turn's
+  folders to go through without a card, so a repo's `notes.md -> ~/.zshrc`
+  or `hooks -> .git/hooks` asks (or is refused), and a dangling link, which a
+  write would create at its target, always asks.
 - **Every ask is ours.** `session/request_permission` is answered `once` or
   `reject`, never `always`. Classified from what it carries
   (`Conversation::classify`): a command → `Bash {command}`; an edit inside
@@ -6433,7 +6474,8 @@ of their own is open.
   section (`prompts::CHIEF`, built every turn), so Chiefs made by older
   builds have it without touching their CLAUDE.md.
 - **Managing.** "New room" at the foot of the agent list (once there are two
-  agents), ⌘K → New room…, Open <room>, <room>: members and name…,
+  agents; its tooltip and the editor's lead start with what a room is, "Talk
+  to several agents at once, in one conversation.", `ROOM_WHAT`), ⌘K → New room…, Open <room>, <room>: members and name…,
   Mute/Unmute, Delete…. Rooms sit in a "Rooms" section right after the
   agents (above Hidden, as on the phone), under a folding header with their
   count, like a group's. A room's badge is its own: its
@@ -6566,8 +6608,11 @@ blocks and 96 KB a message, 8 series, 120 points or 40 bars, 200 rows × 8
 columns, 4 images), finite numbers, labels that line up with values, http(s)
 links with no credentials, and **no HTML anywhere** (a block's strings are
 drawn as text; `code` is shown verbatim). A form that asks for a password, key,
-token, card number or the like is refused with "use request_secret": secrets
-keep their masked card. An image is only a file in the agent's own folder,
+token, card number, a one-time or verification code, or the like (in a
+field, its title or its button; read through zero-width characters and
+Cyrillic or Greek lookalikes, `as_read`) is refused with "use
+request_secret": secrets keep their masked card, and a code for a site is
+the user's to type there. An image is only a file in the agent's own folder,
 copied in and checked to be an image, as `share_file` does.
 
 **Fallback.** Every block has a plain-text `summary` (the agent's, or made
@@ -6580,7 +6625,13 @@ know the version or a kind draws the text instead (`readBlocks`).
 **Answers are the user's words.** A choice, Pick this or a form sends the
 user's own message through the ordinary send (`formReply` is one "Label:
 value" line each), so independence, approvals and plan grants are exactly as
-for anything typed. Once the user has said anything after the blocks
+for anything typed. One exception: a button whose `reply` isn't what it
+shows (a choice labelled "Not now" that sends "Yes, approve it"; a Pick
+this whose reply isn't "Let's go with <name>.") still sends those words,
+but they don't count as typed (`blocks::unseen_answer`,
+`commands::agents::unseen_block_answer`): they answer no open card
+(`typed_answer`), grant no plan and make no rule (`remember_permission`).
+Once the user has said anything after the blocks
 (`answerAfter`), they show the answer and send nothing again. Blocks posted in
 a turn answering outside text carry `fromOutside`: a tap only puts the words
 in the composer, with a line saying why, and nothing sends until the user

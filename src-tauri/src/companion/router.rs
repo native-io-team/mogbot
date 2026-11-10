@@ -112,6 +112,10 @@ pub const METHODS: &[&str] = &[
     "agents.schedule.pause",
     "agents.schedule.cancel",
     "agents.schedule.runNow",
+    "agents.watch.options",
+    "agents.watch.create",
+    "agents.watch.update",
+    "agents.watch.checkNow",
     "rooms.list",
     "rooms.messages",
     "rooms.send",
@@ -170,6 +174,7 @@ pub const READ_ONLY_METHODS: &[&str] = &[
     "agents.files",
     "agents.search",
     "agents.schedule.preview",
+    "agents.watch.options",
     "rooms.list",
     "rooms.messages",
     "projects.list",
@@ -261,6 +266,30 @@ pub enum ScheduleOp {
         agent_id: String,
         id: String,
     },
+    /// What the "When…" composer may offer for this agent (`watch_options`).
+    WatchOptions {
+        agent_id: String,
+    },
+    /// Add a "When…" routine (`agents_watch_create`).
+    WatchCreate {
+        agent_id: String,
+        source: crate::agents::watch::Source,
+        every_minutes: u32,
+        note: String,
+    },
+    /// Change one (`agents_watch_update`).
+    WatchUpdate {
+        agent_id: String,
+        id: String,
+        source: crate::agents::watch::Source,
+        every_minutes: u32,
+        note: String,
+    },
+    /// Check one now (`agents_watch_check_now`).
+    WatchCheckNow {
+        agent_id: String,
+        id: String,
+    },
 }
 
 impl ScheduleOp {
@@ -270,8 +299,13 @@ impl ScheduleOp {
             ScheduleOp::Update { agent_id, id, .. }
             | ScheduleOp::Pause { agent_id, id, .. }
             | ScheduleOp::Cancel { agent_id, id }
-            | ScheduleOp::RunNow { agent_id, id } => Some((agent_id, id)),
-            ScheduleOp::Preview { .. } | ScheduleOp::Create { .. } => None,
+            | ScheduleOp::RunNow { agent_id, id }
+            | ScheduleOp::WatchUpdate { agent_id, id, .. }
+            | ScheduleOp::WatchCheckNow { agent_id, id } => Some((agent_id, id)),
+            ScheduleOp::Preview { .. }
+            | ScheduleOp::Create { .. }
+            | ScheduleOp::WatchOptions { .. }
+            | ScheduleOp::WatchCreate { .. } => None,
         }
     }
 }
@@ -707,7 +741,7 @@ pub trait Backend: Send + Sync + 'static {
     /// `agents_set_usage_mode`: the user chose a usage mode (no card: their
     /// own choice, as in Settings). Answers the inventory.
     async fn usage_set_mode(&self, mode: &str) -> Result<Value, CommandError>;
-    /// `agents_spare_add`: something for the spare-capacity list, by "you".
+    /// `agents_spare_add`: something for the list of ideas for leftover usage, by "you".
     /// Answers the inventory.
     async fn spare_add(&self, text: &str, agent_id: Option<&str>) -> Result<Value, CommandError>;
     /// `agents_spare_spend_now`: "Give agents something to do". Answers `{ line }`.
@@ -1226,6 +1260,18 @@ struct ScheduleParams {
     paused: bool,
     #[serde(default)]
     then: Option<Vec<crate::agents::routine_steps::Step>>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct WatchRoutineParams {
+    agent_id: String,
+    #[serde(default)]
+    id: String,
+    source: crate::agents::watch::Source,
+    every_minutes: u32,
+    #[serde(default)]
+    note: String,
 }
 
 #[derive(Deserialize)]
@@ -1790,6 +1836,15 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             )
         }
         "agents.schedule.cancel" | "agents.schedule.runNow" => field("id").to_string(),
+        "agents.watch.create" | "agents.watch.update" => {
+            let kind = params
+                .get("source")
+                .and_then(|s| s.get("kind"))
+                .and_then(Value::as_str)
+                .unwrap_or("?");
+            preview(&format!("when {kind} — {}", field("note")))
+        }
+        "agents.watch.checkNow" => format!("check now {}", field("id")),
         "agents.conversationRoutine" => {
             format!("move {} to {}", field("routineId"), field("conversationId"))
         }
@@ -1844,8 +1899,8 @@ pub fn audit_detail(method: &str, params: &Value) -> String {
             preview(field("id"))
         ),
         "agents.usage.setMode" => format!("usage mode: {}", preview(field("mode"))),
-        "agents.spare.add" => format!("spare-capacity list: add {}", preview(field("text"))),
-        "agents.spare.spendNow" => "spare-capacity list: start now".to_string(),
+        "agents.spare.add" => format!("ideas for leftover usage: add {}", preview(field("text"))),
+        "agents.spare.spendNow" => "ideas for leftover usage: start now".to_string(),
         "agents.accounts.reorder" => format!(
             "{} accounts in order: {}",
             preview(field("engine")),
@@ -2414,7 +2469,7 @@ async fn run(
             let mode = params.get("mode").and_then(Value::as_str).unwrap_or("");
             if !matches!(mode, "normal" | "save" | "use_it_all") {
                 return Err(bad_params(
-                    "The usage mode is normal, save (Save my limits) or use_it_all (Use it all before reset).",
+                    "The usage mode is normal, save (Save my limits) or use_it_all (Use it all before the refill).",
                 ));
             }
             Ok(b.usage_set_mode(mode).await?)
@@ -2432,7 +2487,7 @@ async fn run(
             if text.is_empty() || text.chars().count() > 600 || agent.is_some_and(|a| a.len() > 64)
             {
                 return Err(bad_params(
-                    "Adding to the spare-capacity list takes the text (at most 600 characters) and optionally an agentId.",
+                    "Adding to the list of ideas for leftover usage takes the text (at most 600 characters) and optionally an agentId.",
                 ));
             }
             Ok(b.spare_add(text, agent).await?)
@@ -2842,6 +2897,55 @@ async fn run(
                 },
             };
             Ok(b.schedule(op).await?)
+        }
+        "agents.watch.options" => {
+            let p: ScheduleParams = parse(params)?;
+            Ok(b.schedule(ScheduleOp::WatchOptions {
+                agent_id: p.agent_id,
+            })
+            .await?)
+        }
+        "agents.watch.create" | "agents.watch.update" => {
+            let p: WatchRoutineParams = parse(params)?;
+            let update = method == "agents.watch.update";
+            if update && p.id.trim().is_empty() {
+                return Err(bad_params("id is required."));
+            }
+            // What to do, and a check in the user's own words, are prompts
+            // the routine sends later with nobody watching: the same rules as
+            // a message typed now.
+            refuse_unsafe_text(&p.note, "A routine's note")?;
+            if let crate::agents::watch::Source::Custom { check, .. } = &p.source {
+                refuse_unsafe_text(check.as_str(), "What a routine looks out for")?;
+            }
+            let op = if update {
+                ScheduleOp::WatchUpdate {
+                    agent_id: p.agent_id,
+                    id: p.id,
+                    source: p.source,
+                    every_minutes: p.every_minutes,
+                    note: p.note,
+                }
+            } else {
+                ScheduleOp::WatchCreate {
+                    agent_id: p.agent_id,
+                    source: p.source,
+                    every_minutes: p.every_minutes,
+                    note: p.note,
+                }
+            };
+            Ok(b.schedule(op).await?)
+        }
+        "agents.watch.checkNow" => {
+            let p: ScheduleParams = parse(params)?;
+            if p.id.trim().is_empty() {
+                return Err(bad_params("id is required."));
+            }
+            Ok(b.schedule(ScheduleOp::WatchCheckNow {
+                agent_id: p.agent_id,
+                id: p.id,
+            })
+            .await?)
         }
         "projects.list" => Ok(b.projects().await?),
         "sessions.read" => {
@@ -4018,7 +4122,7 @@ mod tests {
     }
 
     /// Persona review 2026-11-09 (the Maximizer): the phone changes the
-    /// mode, adds to the spare-capacity list and starts it, audited.
+    /// mode, adds to the list of ideas for leftover usage and starts it, audited.
     #[tokio::test]
     async fn a_phone_changes_the_usage_mode_and_the_spare_list_audited() {
         use crate::companion::testkit::Stub;
@@ -4049,7 +4153,7 @@ mod tests {
         assert!(said["line"]
             .as_str()
             .unwrap()
-            .contains("spare-capacity list"));
+            .contains("ideas for leftover usage"));
         assert_eq!(
             *stub.usage_changes.lock().unwrap(),
             vec!["mode use_it_all", "add Tidy the docs for a1", "spend"]

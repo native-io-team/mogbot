@@ -1,7 +1,7 @@
 /**
  * The Mac's capacity inventory (`agents.usagePlan`), read while Settings is
  * in front: the usage mode, a reset near with capacity left, estimates from
- * past runs and the spare-capacity list. Read-only here: the mode and the
+ * past runs and the list of ideas for leftover usage. Read-only here: the mode and the
  * list are changed on the Mac, or by asking the Chief of Staff. Worded by
  * @shipstudio/companion-protocol's usage.ts, exactly as the desk words it.
  *

@@ -2102,6 +2102,7 @@ export {
   routineInPast,
   routineWhenOf,
   routineWhenPhrase,
+  ROUTINES_NEED_THE_MAC,
   scheduleWhenPhrase,
   sortCheckIns,
   splitScheduleInput,
@@ -2129,29 +2130,12 @@ export {
   type PickerState,
 } from '../../packages/companion-protocol/src/routinePicker';
 
-/** What Check now came to; mirrors `watch::CheckOutcome`. */
-export interface WatchCheckOutcome {
-  found: number;
-  baseline: boolean;
-  /** A model check found nothing before its baseline; the next check confirms it. */
-  unconfirmed?: boolean;
-  error?: string;
-  paused?: string;
-  /** A model check: what it ran on ("Claude Code", "Codex"). */
-  engine?: string;
-}
-
-/** What Check now came to, in a line; a model check says what it ran on. */
-export function describeWatchCheck(o: WatchCheckOutcome): string {
-  if (o.paused) return o.paused;
-  if (o.error) return `Check failed: ${o.error}`;
-  const on = o.engine ? ` Checked on ${o.engine}.` : '';
-  if (o.baseline) return `Noted what’s there now; anything new from here starts work.${on}`;
-  if (o.unconfirmed)
-    return `Found nothing. The next check confirms that before anything starts work.${on}`;
-  if (o.found > 0) return `Found ${o.found} new; it’s on it.${on}`;
-  return `Nothing new.${on}`;
-}
+// What Check now came to, in the phone's words too.
+import type { WatchCheckOutcome } from '../../packages/companion-protocol/src/whenComposer';
+export {
+  describeWatchCheck,
+  type WatchCheckOutcome,
+} from '../../packages/companion-protocol/src/whenComposer';
 
 export const createWatch = (
   agentId: string,
@@ -2884,7 +2868,7 @@ const RETRY_NOTE_MAX = 560;
  */
 export function retryNote(text: string, files: string[] = []): string {
   const ask = text.trim();
-  const head = 'Claude Code’s usage limit has reset. Carry on with what I asked';
+  const head = 'Claude Code’s usage limit has refilled. Carry on with what I asked';
   // At most half the note: as many paths as fit, then how many more.
   let attached = '';
   for (let n = files.length; n > 0 && !attached; n--) {
@@ -2995,7 +2979,7 @@ export interface TeamSummary {
   working: Agent[];
   /** Cards to answer, or the failed turn's line (newest in its chat) to act on. */
   needsYou: { agent: Agent; approvals: AgentMessage[]; failure: AgentMessage | null }[];
-  /** Stopped by a usage limit, with the line that says when it resets. */
+  /** Stopped by a usage limit, with the line that says when it refills. */
   paused: { agent: Agent; failure: AgentMessage | null }[];
   scheduled: { agent: Agent; checkIn: CheckIn }[];
   replies: { agent: Agent; message: AgentMessage }[];

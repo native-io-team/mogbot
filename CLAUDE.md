@@ -57,7 +57,7 @@ Chief of Staff (see "Agents Flow", [docs/agents.md](docs/agents.md)):
 - **Site Migration** - Rebuild a live URL here, measured page by page against the original (see `docs/site-migration.md`)
 - **Assets, Skills & MCP, IDE integration** - As in Ship Studio (the plugin system was removed; a Ship Studio project's `.shipstudio/plugins/` folder is left on disk and ignored)
 
-**Across both:** the Cmd+K palette (every feature registers there), light and dark themes on desktop and phone, multi-window, and **Remote Access** — driving your agents from another MCP-capable assistant (Grok, Claude, ChatGPT…) over your own Tailscale Funnel (see "Remote Access Flow"). For the phone, the answer is the companion app; Remote Access answers a different question. Updates, telemetry, issue reporting and the template catalogue are off until `brand.json` names an endpoint for them.
+**Across both:** the Cmd+K palette (every feature registers there), the macOS menu bar and Dock menu (every item works where you are or is greyed out, every key is also in ⌘K; [docs/keyboard-shortcuts.md](docs/keyboard-shortcuts.md)), light and dark themes on desktop and phone, multi-window, and **Remote Access** — driving your agents from another MCP-capable assistant (Grok, Claude, ChatGPT…) over your own Tailscale Funnel (see "Remote Access Flow"). For the phone, the answer is the companion app; Remote Access answers a different question. Updates, telemetry, issue reporting and the template catalogue are off until `brand.json` names an endpoint for them.
 
 **Compatible with Ship Studio, both directions:** the `~/ShipStudio` projects folder and the in-project `.shipstudio/` format are shared, so either app opens the other's projects; app state is this app's own, so both run side by side.
 

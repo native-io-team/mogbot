@@ -26,11 +26,12 @@ const ENGINE_FULL: Record<AgentEngine, string> = {
 const CLOCK = { format: formatClock };
 const WEEKDAY = new Intl.DateTimeFormat(undefined, { weekday: 'short' });
 const WEEKDAY_CLOCK = {
-  format: (at: number | Date) => clockFormat({
-  weekday: 'short',
-  hour: 'numeric',
-  minute: '2-digit',
-}).format(at),
+  format: (at: number | Date) =>
+    clockFormat({
+      weekday: 'short',
+      hour: 'numeric',
+      minute: '2-digit',
+    }).format(at),
 };
 const DATE = new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' });
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -157,7 +158,7 @@ export function quotaLines(quotas: Quota[], now = Date.now()): QuotaLine[] {
     if (!fullest || fullest.usedPercent === undefined) continue;
     // Floored: "90%" never shows on a window that hasn't reached it.
     const shown = Math.max(0, Math.floor(fullest.usedPercent));
-    const reset = fullest.resetsAt ? ` · resets ${resetDay(fullest.resetsAt, now)}` : '';
+    const reset = fullest.resetsAt ? ` · refills ${resetDay(fullest.resetsAt, now)}` : '';
     // An old figure says so on the line, not only in the tooltip (which the
     // phone doesn't have). A used-up window needs no age: it stays used up
     // until its reset, which the line names.

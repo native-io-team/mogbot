@@ -7,7 +7,7 @@
 //! in and has room:
 //!
 //! - **The user's choice, per engine** ([`Mode`], `crossover.json` beside the
-//!   wallet): Ask first (the default), Carry on, or Wait for the reset. Ask
+//!   wallet): Ask first (the default), Carry on, or Wait for the refill. Ask
 //!   first puts one card in the agent's chat the first time it would happen
 //!   ("All your Claude Code accounts are out until 4:00 PM. Carry on with
 //!   Codex until then?"): **Always** sets Carry on, **Just this time** covers
@@ -46,7 +46,7 @@ pub enum Mode {
     Ask,
     /// Carry on with the other engine until this one has room again.
     Carry,
-    /// Wait for the reset.
+    /// Wait for the refill.
     Wait,
 }
 
@@ -872,7 +872,7 @@ pub fn overview_line(v: &View) -> Option<String> {
     let said = |m: Mode, home: Engine| match m {
         Mode::Ask => format!("ask first before carrying on with {}", other(home).label()),
         Mode::Carry => format!("carry on with {}", other(home).label()),
-        Mode::Wait => "wait for the reset".to_string(),
+        Mode::Wait => "wait for the refill".to_string(),
     };
     let mut out = format!(
         "When every Claude Code account is out: {}. When every Codex account is out: {}.",

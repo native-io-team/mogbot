@@ -53,17 +53,14 @@ words" gives the words a 280px `flex-basis`; in a stacked (column) row that basi
 Chrome's "Add the extension" step had its three buttons at the bottom of a tall empty card. The rule
 skips stacked rows.
 
-## 5. "Refills" beside "reset" on the same page (fixed)
+## 5. "Refills" beside "reset" on the same page (resolved on foundation, toward "refill")
 
-`settings-agents-page`, `usage-*`, `agents-chat-usage`. The total-first Usage view said "Next refill
-in 2d 23h" and "Refills" chips on the page whose mode is "Use it all before reset", whose nudge says
-"…5-hour limit resets in 40 min", and whose crossover says "Wait for the reset"; chat lines and the
-Mac's own failure lines say resets. One word now, "resets", on desk and phone
-(`usageGlance.ts`, `UsageStack.tsx`, `AgentsUsageView.tsx`, `AgentUsageRing.tsx`,
-`mobile/src/components/usageStack.tsx`, docs). Identifiers (`refill`, `RefillChip`) unchanged.
-*A decision as much as a fix:* the Usage branch chose "refill" as the plainer word; "reset" won
-because the mode, the spec in CLAUDE.md and every other surface already use it. Flipping the other
-way is the same handful of strings plus the Rust lines.
+`settings-agents-page`, `usage-*`, `agents-chat-usage`. The total-first Usage view said "Next refill"
+and "Refills" on a page whose mode said "before reset" and whose nudge said "…limit resets in 40
+min". This branch first unified on "resets"; foundation then made "refill" the one word
+(new-user review, item 7: shared package, desk, phone, Rust user lines, the mode "Use it all
+before the refill"). The merge takes foundation's words; this branch's "resets" strings were
+dropped. "reset" stays only in identifiers and agent-facing data lines.
 
 ## 6. Settings paths in copy pointed at pages that no longer exist (fixed)
 
@@ -124,7 +121,8 @@ pixels short for the amber pill. 9.5em.
 
 - Every toast was a keyboard-unreachable scroll region (`toast-success`, `toast-error-repeated`):
   `.toast-message` inherited line-height 1, so descenders spilled 2px past its `overflow-y: auto`
-  box. It has its own line height (`--line-height-compact`) now.
+  box. Foundation fixed the same thing in parallel (padding in, margin out, size unchanged); the
+  merge keeps its fix and drops this branch's line-height.
 - The blocks' form choices (`agents-blocks-decide`, `-form-invalid`) are `ToggleButton`s with
   `role="radio"`, which still carried `aria-pressed`. `ToggleButton` drops it for radios and shows
   the chosen one through `data-selected`.

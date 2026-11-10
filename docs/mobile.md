@@ -136,7 +136,13 @@ a new one arrives with 48 open, the oldest stranger is closed to make room,
 and a socket that authenticated (or a pair request holding a live code) is
 never evicted, so a flood can't keep a paired phone out. Each source may
 have at most 4 sockets before their hello (`MAX_PREHELLO_PER_SOURCE`) and
-32 requests in flight (an open socket counts as one); 10 s for headers,
+32 requests in flight (an open socket counts as one). A paired socket's
+requests each run on the blocking pool with a 20 s deadline
+(`server::bounded`, `REQUEST_DEADLINE`), answered "Your Mac is busy" past
+it; at most 48 hold a thread at once across every socket, counting ones
+still running past their deadline (`MAX_IN_FLIGHT`), and the rest are
+answered busy at once, so no device can take the pool the whole app
+shares; 10 s for headers,
 10 s for the whole pair body, and no 30 s gap in an upload. Uploads go straight to disk with a running cap,
 never whole into memory. Thumbnails are refused (422) for images over
 40 MP by their own header, before decoding; two decode at a time, and the
@@ -305,7 +311,10 @@ CA and no trust-on-first-use.
 
 ## Pairing
 
-1. **Mac:** Phone panel → **Pair a phone** (or Cmd+K). A one-time code
+1. **Mac:** Phone panel (titled "Phone" whether opened from Settings or the
+   sidebar's phone line, so the phone's "Phone (in Settings, or the phone line
+   at the foot of the sidebar) → Show code", `WHERE_TO_PAIR`, names what's on
+   screen) → **Show code** (or Cmd+K). A one-time code
    (128-bit, 5 minutes, single use) is shown as a QR code of
    `<companion.scheme>://pair?d=…` (`mogbot-companion` today) carrying the code, server id, Mac name,
    **exactly one route** and the **fingerprint of the Mac's identity key**,
@@ -571,10 +580,10 @@ request, the diff and the photo viewer push over them. At
 - **Usage** (`app/usage.tsx`, `app/usage-account.tsx`,
   `components/usageStack.tsx`), as the desk's Usage view says it
   (`usageGlance`, the same words and figures): the Agents list's glance (one
-  compact card: the total and how many accounts it is of, a reset chip, the
+  compact card: the total and how many accounts it is of, a refill chip, the
   total bar fullest first) and the ring left of ⓘ in a chat's header open it.
   Under a putty gauge key: this agent's context when its engine reported it,
-  then the total first ("72% left across 2 Max accounts", "Next reset in …",
+  then the total first ("72% left across 2 Max accounts", "Next refill in …",
   the bar with each account named under it), then **Accounts**, one list per
   engine in the order turns try them (keycap, name, plan, room, pill, refill
   chip). An account opens its own screen, the desk's account page: its place
@@ -1000,6 +1009,17 @@ The phone can start work as well as answer it. Each piece is gated by
   lists every kind of phrase the picker writes; the mobile tests check the
   picker writes them and a Rust test (`agents::schedule`) checks the Mac's
   grammar reads each back as the same schedule.
+  **"When…" routines.** On a Mac that lists `agents.watch.create`, a new
+  routine opens with "At a time / When…" (`ROUTINE_MODES`), and When… is the
+  desk's composer (`components/whenComposer.tsx`, words and rules from
+  `whenComposer.ts` in companion-protocol): When this happens over the
+  sources, a folder chosen from the Mac's own list (`agents.watch.options`;
+  never a typed path, which the Mac refuses), Through, Check every, What, the
+  echo and what each check costs. A "When…" row on the agent sheet offers
+  Check now, Pause, Edit and Cancel; on an older Mac it stays read-only.
+  docs/agents.md, "“When…” routines", has the rules. Captured as
+  `schedule-when`, `schedule-when-folder`, `schedule-when-custom` and
+  `agent-sheet-when`.
   **Times are the Mac's.** The Mac reads the words on its own clock
   (`chrono::Local`), so the picker works in `welcome.timeZone`: "Today", the
   date chips, the past check and a one-off's Edit are the Mac's, and when

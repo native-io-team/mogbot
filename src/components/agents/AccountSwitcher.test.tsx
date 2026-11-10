@@ -143,12 +143,12 @@ describe('AccountSwitcher (the sidebar’s usage glance)', () => {
     // account read, so no "2 accounts" beside it: Work isn't in it.
     await waitFor(() => expect(row).toHaveTextContent('62% left for now'));
     expect(row).toHaveTextContent(/^Usage/);
-    expect(row).toHaveTextContent('Resets');
+    expect(row).toHaveTextContent('Refills');
     expect(row).not.toHaveTextContent('2 accounts');
     // One segment per account: Work has no reading, so its slot is empty, never full.
     const meter = within(row).getByRole('img', { name: /Room left/ });
     expect(meter).toHaveAccessibleName(
-      /sam@example.com: 62% left, resets in .+; Work: shows after its first reply/
+      /sam@example.com: 62% left, refills in .+; Work: shows after its first reply/
     );
     // The row itself never asks for a reading: a glance.
     expect(

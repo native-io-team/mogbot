@@ -53,9 +53,9 @@ describe('AgentRoutineModel', () => {
 
   it('a held run says it is waiting for the reset, not that it failed', () => {
     const at = Date.now();
-    expect(describeRun({ at, outcome: 'held', attempt: 1 })).toBe('Waiting for the reset');
+    expect(describeRun({ at, outcome: 'held', attempt: 1 })).toBe('Waiting for the refill');
     expect(
       describeRun({ at, outcome: 'held', attempt: 1, retryAt: at + 2 * 3_600_000 }, at)
-    ).toMatch(/^Waiting for the reset · runs /);
+    ).toMatch(/^Waiting for the refill · runs /);
   });
 });

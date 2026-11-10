@@ -128,6 +128,8 @@ export const baseCommands: CommandMap = {
   get_shipstudio_dir: HARNESS_ROOT,
   get_log_path: '/Users/harness/Library/Logs/ShipStudio',
   log_frontend_event: null,
+  // Each view names its window (hooks/useNativeMenu).
+  set_window_title: null,
 
   // ---- dashboard --------------------------------------------------------
   get_dashboard_projects: projects,

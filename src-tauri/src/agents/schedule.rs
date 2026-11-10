@@ -1135,7 +1135,7 @@ pub fn plan<Tz: TimeZone>(tz: &Tz, agents: &[store::Agent], now: i64) -> Plan {
 }
 
 /// [`plan`], leaving out the due check-ins `waits` holds back (inside quiet
-/// hours, `quiet::fires_anyway` says which don't; a usage limit to reset
+/// hours, `quiet::fires_anyway` says which don't; a usage limit to refill
 /// first, `saver`): they stay due, and fire once when it lets them. Asked
 /// only of check-ins that are due.
 pub fn plan_with<Tz: TimeZone>(
@@ -1887,7 +1887,7 @@ fn tick(app: &AppHandle) -> Result<(), CommandError> {
     // set its time inside them (`quiet`). What they held is released here.
     let quiet = super::quiet::get();
     let holding = super::quiet::holding_now();
-    // A usage limit to reset first (`saver`): every account the agent runs
+    // A usage limit to refill first (`saver`): every account the agent runs
     // on is out until a known reset, or nearly out in "Save my limits".
     // Held routines stay due, said once each, and fire when it lifts. Run
     // now isn't planned here, so it still runs.
@@ -1938,7 +1938,7 @@ fn tick(app: &AppHandle) -> Result<(), CommandError> {
     if changed {
         let _ = tauri::Emitter::emit(app, runner::EVENT_REGISTRY, ());
     }
-    // "Use it all before reset": capacity about to expire wakes the Chief.
+    // "Use it all before the refill": capacity about to expire wakes the Chief.
     super::usage_tools::maybe_nudge(app);
     // Sign-ins looked at again, and one warning per window when nearly out.
     super::saver::tick(app);

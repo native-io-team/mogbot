@@ -371,6 +371,15 @@
   margin-top: var(--spacing-sm);
 }
 
+/* Under the chips once one that sets up a routine is picked: where routines run. */
+.agent-chat__starters-note {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+  color: var(--text-muted);
+}
+
 /* A ready-made agent's own starters, under its centred "Created by" line or
    its empty state: centred with them, not hung off a bubble. */
 .agent-chat__messages > .agent-chat__starters--centred {

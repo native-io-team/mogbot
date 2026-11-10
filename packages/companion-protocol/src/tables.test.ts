@@ -3,7 +3,18 @@ import { columnAlign, isFigure, numericColumns } from './tables';
 
 describe('figures in table cells', () => {
   it('reads amounts, counts, percentages and multiples as figures', () => {
-    for (const t of ['42', '$5,350', '-12%', '+3.5', '1.2k', '€1 200', '(40)', '3×', '0.75', '−8 pp']) {
+    for (const t of [
+      '42',
+      '$5,350',
+      '-12%',
+      '+3.5',
+      '1.2k',
+      '€1 200',
+      '(40)',
+      '3×',
+      '0.75',
+      '−8 pp',
+    ]) {
       expect(isFigure(t), t).toBe(true);
     }
   });

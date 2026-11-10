@@ -212,7 +212,7 @@ export function TotalCard({
   const refill = out
     ? glance.row.refill
     : total.refill
-      ? `Next reset in ${total.refill.in}${total.counted > 1 ? ` · ${total.refill.account}` : ''}, ${total.refill.at}`
+      ? `Next refill in ${total.refill.in}${total.counted > 1 ? ` · ${total.refill.account}` : ''}, ${total.refill.at}`
       : null;
   return (
     <View style={[styles.card, styles.hero]}>
@@ -350,7 +350,7 @@ export function AccountRows({
             key={k.key}
             accessibilityRole="button"
             accessibilityLabel={`${placeLabel(k, all)}. ${k.name}, ${room ? `${room}, ` : ''}${k.stateLabel}${
-              refill ? `, resets in ${refill}` : ''
+              refill ? `, refills in ${refill}` : ''
             }`}
             onPress={() => onOpen(k)}
             style={({ pressed }) => [
@@ -654,7 +654,7 @@ function LimitCard({ limit: l }: { limit: KeyLimit }) {
         {l.countdown && (
           <RefillChip
             text={l.countdown}
-            label={l.resetsAt ? `Resets ${l.resetsAt}` : `Resets in ${l.countdown}`}
+            label={l.resetsAt ? `Refills ${l.resetsAt}` : `Refills in ${l.countdown}`}
           />
         )}
       </View>
@@ -684,7 +684,7 @@ function LimitCard({ limit: l }: { limit: KeyLimit }) {
               {l.runOut.text} · estimate
             </T>
             <T variant="caption" color={colors.textMuted}>
-              Resets
+              Refills
             </T>
           </View>
         </View>
@@ -696,7 +696,7 @@ function LimitCard({ limit: l }: { limit: KeyLimit }) {
       )}
       {l.resetsAt && (
         <T variant="caption" color={colors.textMuted}>
-          Resets {l.resetsAt}
+          Refills {l.resetsAt}
         </T>
       )}
       {l.pace && (

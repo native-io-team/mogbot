@@ -49,7 +49,7 @@ describe('AgentsQuota', () => {
   it('a calm line below 90%, with which window and when in its tooltip', async () => {
     serve([claude(85)]);
     render(<AgentsQuota place="sidebar" />);
-    const line = await screen.findByText(/^Claude usage 85% · resets /);
+    const line = await screen.findByText(/^Claude usage 85% · refills /);
     expect(line).toHaveAttribute('data-tone', 'calm');
     expect(line.getAttribute('title')).toMatch(/As Claude Code reported it at .*weekly limit/);
   });

@@ -30,9 +30,7 @@ export const stepInOnPhone = (device: string) =>
 
 /** "You're in Research's browser", or from which phone. */
 export function stepInBarTitle(agentName: string, onPhone?: string): string {
-  return onPhone
-    ? `${onPhone} is in ${agentName}’s browser`
-    : `You’re in ${agentName}’s browser`;
+  return onPhone ? `${onPhone} is in ${agentName}’s browser` : `You’re in ${agentName}’s browser`;
 }
 
 /** Under the title, muted: "login.microsoftonline.com · Verify your identity". */

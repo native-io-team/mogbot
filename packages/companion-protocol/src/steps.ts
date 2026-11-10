@@ -71,9 +71,7 @@ export function keptRoutines(draft: AgentDraft, kept: boolean[]): NewRoutine[] {
 export function draftAppsLine(apps: string[]): string | null {
   if (apps.length === 0) return null;
   const names =
-    apps.length === 1
-      ? apps[0]
-      : `${apps.slice(0, -1).join(', ')} and ${apps[apps.length - 1]}`;
+    apps.length === 1 ? apps[0] : `${apps.slice(0, -1).join(', ')} and ${apps[apps.length - 1]}`;
   return `Uses ${names}. It asks you to connect ${apps.length === 1 ? 'it' : 'them'} the first time it needs ${apps.length === 1 ? 'it' : 'them'}.`;
 }
 
@@ -83,7 +81,8 @@ export function draftAppsLine(apps: string[]): string | null {
  */
 export const DESCRIBE_PLACEHOLDER = 'For example: “Brief me on my inbox every weekday at 8.”';
 
-const DAY_WORDS = /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december)\b/g;
+const DAY_WORDS =
+  /\b(monday|tuesday|wednesday|thursday|friday|saturday|sunday|january|february|march|april|may|june|july|august|september|october|november|december)\b/g;
 
 /**
  * A drafted routine's time as the Mac's grammar read it ("every friday at

@@ -66,9 +66,9 @@ describe('the plan', () => {
   it('splits the session from the weekly limits, All models first', () => {
     const plan = planUsage([claude], 'claude', NOW)!;
     expect(plan.session).toMatchObject({ label: '5-hour limit', percent: 38 });
-    expect(plan.session!.detail).toMatch(/^Resets at /);
+    expect(plan.session!.detail).toMatch(/^Refills at /);
     expect(plan.weekly.map((m) => m.label)).toEqual(['All models', 'Opus']);
-    expect(plan.weekly[0].detail).toMatch(/^Resets /);
+    expect(plan.weekly[0].detail).toMatch(/^Refills /);
   });
 
   it('draws the ring from the 5-hour window, and nothing without one', () => {

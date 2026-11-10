@@ -246,8 +246,10 @@ function PhonePanel({
     !readInstallRecord() &&
     !haveApp;
 
+  // "Phone", the Settings section's name, wherever it opens: the phone app
+  // sends people to Settings → Phone, so the sidebar's window says the same.
   return frame(
-    'Your phone',
+    'Phone',
     'phone-modal',
     <div className="settings-modal-body phone-access">
       {!s ? (

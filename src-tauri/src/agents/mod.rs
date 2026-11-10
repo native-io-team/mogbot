@@ -197,6 +197,7 @@ pub mod usage_story;
 pub mod usage_tools;
 pub mod wallet;
 pub mod watch;
+pub mod watch_options;
 pub mod watch_seal;
 pub mod watch_seal_codex;
 pub mod work;

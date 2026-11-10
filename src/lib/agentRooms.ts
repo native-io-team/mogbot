@@ -18,6 +18,9 @@ import { mentionedAgents } from './agents';
 export const MIN_ROOM_MEMBERS = 2;
 export const MAX_ROOM_MEMBERS = 6;
 
+/** What a room is, in one line: the sidebar's tooltip and the start of the editor's lead. */
+export const ROOM_WHAT = 'Talk to several agents at once, in one conversation.';
+
 /** Mirrors `rooms::RoomView`. */
 export interface Room {
   id: string;

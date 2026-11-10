@@ -576,7 +576,7 @@ export const agentsUsageScenarios: Scenario[] = [
     id: 'agents-chat-usage',
     title: 'Agents — the chat header’s usage ring and its popover',
     looksRightWhen:
-      'Finance’s chat. In the header, left of the clock, a small ring about two-thirds filled (62% of the 5-hour window left), in the muted ink, not the accent. Its popover: “Usage”; Context — “Finance’s conversation” 64% full with a bar and “128.4K of 200K tokens”; Your accounts — the stack’s one line in ink, the segmented meter with each account named under its segment and what it has left (“62% left”, “No reading”, never a used figure, never “This Mac” as a name), “Next reset: …”, and a full-width “Usage and accounts” button. Readable in both themes.',
+      'Finance’s chat. In the header, left of the clock, a small ring about two-thirds filled (62% of the 5-hour window left), in the muted ink, not the accent. Its popover: “Usage”; Context — “Finance’s conversation” 64% full with a bar and “128.4K of 200K tokens”; Your accounts — the stack’s one line in ink, the segmented meter with each account named under its segment and what it has left (“62% left”, “No reading”, never a used figure, never “This Mac” as a name), “Next refill: …”, and a full-width “Usage and accounts” button. Readable in both themes.',
     openSelector: AGENTS_TAB,
     requires: '.agent-usage .usage-total',
     clipSelector: '.agent-usage',
@@ -608,7 +608,7 @@ export const agentsUsageScenarios: Scenario[] = [
     id: 'settings-agents-usage',
     title: 'Settings — Agents → Usage: modes, what you have, spare capacity',
     looksRightWhen:
-      'Settings → Accounts & usage is the Usage view’s own panel, not a second sheet: the hero (“Your accounts, together”, the stack’s line, a segmented meter with each account named and “N% left” under it, the next reset), “Get the most from your limits” with the three-way mode control, then each engine’s accounts as key cards with grips (drag, or the grip with the keyboard; no ↑/↓ buttons), every limit said as “N% left”, pace lines in secondary ink (never amber). This Mac’s own sign-in is named by its email, plan or engine, never “This Mac”. Then adding an account, the crossover choice, the spare-capacity list with its two items, the engines’ average-turn estimates and other compute. Nothing accent-coloured.',
+      'Settings → Accounts & usage is the Usage view’s own panel, not a second sheet: the hero (“Your accounts, together”, the stack’s line, a segmented meter with each account named and “N% left” under it, the next reset), “Get the most from your limits” with the three-way mode control, then each engine’s accounts as key cards with grips (drag, or the grip with the keyboard; no ↑/↓ buttons), every limit said as “N% left”, pace lines in secondary ink (never amber). This Mac’s own sign-in is named by its email, plan or engine, never “This Mac”. Then adding an account, the crossover choice, the list of ideas for leftover usage with its two items, the engines’ average-turn estimates and other compute. Nothing accent-coloured.',
     // Settings → Accounts & usage: the Usage view's panel, mounted in Settings.
     command: 'settings.page.accounts',
     requires: '.usage-panel .usage-row',
@@ -688,7 +688,7 @@ export const agentsUsageScenarios: Scenario[] = [
     id: 'agents-team-spare-capacity',
     title: 'What’s in flight — a reset near with capacity left',
     looksRightWhen:
-      'At the foot of What’s in flight, under any plan-usage line, one quiet muted line: “Claude 5-hour limit resets <time> · 62% left”. Hovering says when it was reported (never “On This Mac”), and that the Chief will use it on the spare-capacity list (1 waiting). Muted, never amber or accent.',
+      'At the foot of What’s in flight, under any plan-usage line, one quiet muted line: “Claude 5-hour limit resets <time> · 62% left”. Hovering says when it was reported (never “On This Mac”), and that the Chief will use it on the list of ideas for leftover usage (1 waiting). Muted, never amber or accent.',
     command: 'agents.team',
     requires: '.agents-team__column > .agents-usage-spare',
     commands: {

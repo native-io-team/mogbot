@@ -13,7 +13,7 @@
  *    name, a small bar, what it adds, In use / Next, refill), opening its page.
  * 4. **How agents use your limits**: Normal / Save my limits / Use it all
  *    before reset, its one line, and the spare-capacity nudge.
- * 5. Add an account, the crossover choice, the spare-capacity list and other
+ * 5. Add an account, the crossover choice, the list of ideas for leftover usage and other
  *    compute on this Mac.
  *
  * **An account's page** (`AccountDetail`, "Usage › Work", Esc or the back
@@ -449,6 +449,7 @@ export function UsagePanel({
                         key={k.key}
                         k={k}
                         onOpen={() => show({ engine: k.engine, id: k.id })}
+                        onSignIn={() => signIn(k.engine, k.id)}
                       />
                     ))}
                   </ul>
@@ -605,7 +606,7 @@ function TotalHero({
   const refill = out
     ? glance.row.refill
     : total.refill
-      ? `Next reset in ${total.refill.in}${
+      ? `Next refill in ${total.refill.in}${
           total.counted > 1 ? ` · ${total.refill.account}` : ''
         }, ${total.refill.at}`
       : null;
@@ -617,9 +618,8 @@ function TotalHero({
       data-testid="usage-hero"
     >
       <div className="usage-hero__answer">
-        <p className="usage-hero__eyebrow">
-          {total.segments.length > 1 ? 'All accounts' : 'Usage'}
-        </p>
+        {/* With one account the page's title already says Usage. */}
+        {total.segments.length > 1 && <p className="usage-hero__eyebrow">All accounts</p>}
         <h2 className="usage-hero__headline">
           {figure}
           {!out && total.left !== null && total.across && (
@@ -628,7 +628,8 @@ function TotalHero({
         </h2>
         {refill && <p className="usage-hero__refill">{refill}</p>}
       </div>
-      <TotalBar total={total} size="large" onOpen={onOpen} />
+      {/* One account: the bar alone; its name and room are the row below. */}
+      <TotalBar total={total} size="large" onOpen={onOpen} labelled={total.segments.length > 1} />
       {(glance.estimate || total.unread || glance.sameNotes.length > 0) && (
         <div className="usage-hero__notes">
           {glance.estimate && (

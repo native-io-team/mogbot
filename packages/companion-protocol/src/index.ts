@@ -48,3 +48,4 @@ export * from './sameAccount';
 export * from './brief';
 export * from './conversations';
 export * from './failures';
+export * from './whenComposer';

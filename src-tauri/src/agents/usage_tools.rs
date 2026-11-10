@@ -1,7 +1,7 @@
 //! The agent tools for usage: `usage_overview` and `forecast_usage` (read
-//! only, every agent), the spare-capacity list (`add_spare_work`,
+//! only, every agent), the list of ideas for leftover usage (`add_spare_work`,
 //! `finish_spare_work`), and the Chief's `set_usage_mode` (an Allow card
-//! first) and `run_routine_now` (only in "Use it all before reset").
+//! first) and `run_routine_now` (only in "Use it all before the refill").
 
 use serde_json::{json, Value};
 use tauri::AppHandle;
@@ -21,7 +21,7 @@ pub struct Def {
 pub const TOOLS: &[Def] = &[
     Def {
         name: "usage_overview",
-        description: "What the user has to run agents on and what is left of it (their total compute): a TOTAL line across every account (how many have room now, per 5-hour and weekly limit, the soonest reset, and, as an ESTIMATE, when an engine runs out on every account at the recent pace), the usage mode they chose, every engine and account (Claude Code, Codex) with each account's last REPORTED limit windows and reset times (each account is read every 10 minutes without a turn where it can be) (only what the engines said, with when; \"No reading\" when there's none), which account the next turn runs on, other compute installed on this Mac (Opencode, Ollama, LM Studio), windows near a reset with capacity left, ESTIMATES of what a turn or routine uses from this user's past runs, and the spare-capacity list. Read-only. Use it before planning anything big, and whenever the user asks about usage or limits. Answering them, `show` the numbers rather than listing them: each account's used share of its limits as metrics (suffix \"%\", good \"down\", reset time in `vs`), a bar chart to compare accounts, an estimate labelled as one.",
+        description: "What the user has to run agents on and what is left of it (their total compute): a TOTAL line across every account (how many have room now, per 5-hour and weekly limit, the soonest reset, and, as an ESTIMATE, when an engine runs out on every account at the recent pace), the usage mode they chose, every engine and account (Claude Code, Codex) with each account's last REPORTED limit windows and reset times (each account is read every 10 minutes without a turn where it can be) (only what the engines said, with when; \"No reading\" when there's none), which account the next turn runs on, other compute installed on this Mac (Opencode, Ollama, LM Studio), windows near a reset with capacity left, ESTIMATES of what a turn or routine uses from this user's past runs, and the list of ideas for leftover usage. Read-only. Use it before planning anything big, and whenever the user asks about usage or limits. Answering them, `show` the numbers rather than listing them: each account's used share of its limits as metrics (suffix \"%\", good \"down\", reset time in `vs`), a bar chart to compare accounts, an estimate labelled as one.",
         main_only: false,
         schema: || json!({ "type": "object", "properties": {} }),
     },
@@ -41,7 +41,7 @@ pub const TOOLS: &[Def] = &[
     },
     Def {
         name: "add_spare_work",
-        description: "Add something to the spare-capacity list: work the user wants done \"sometime\", when there's capacity that would otherwise expire (research to do one day, a TODO, a cleanup). In \"Use it all before reset\" mode the Chief of Staff starts these when a limit is near its reset with capacity left. Only add what the user asked for, or a follow-up of work they asked for. Never anything that sends, spends, pushes or changes what other people see.",
+        description: "Add something to the list of ideas for leftover usage: work the user wants done \"sometime\", when there's capacity that would otherwise expire (research to do one day, a TODO, a cleanup). In \"Use it all before the refill\" mode the Chief of Staff starts these when a limit is near its reset with capacity left. Only add what the user asked for, or a follow-up of work they asked for. Never anything that sends, spends, pushes or changes what other people see.",
         main_only: false,
         schema: || json!({
             "type": "object",
@@ -54,7 +54,7 @@ pub const TOOLS: &[Def] = &[
     },
     Def {
         name: "finish_spare_work",
-        description: "Mark an item of the spare-capacity list started (`done: false`, when you hand it to an agent or begin it) or take it off the list (`done: true`, when it's finished or no longer wanted).",
+        description: "Mark an item of the list of ideas for leftover usage started (`done: false`, when you hand it to an agent or begin it) or take it off the list (`done: true`, when it's finished or no longer wanted).",
         main_only: false,
         schema: || json!({
             "type": "object",
@@ -67,7 +67,7 @@ pub const TOOLS: &[Def] = &[
     },
     Def {
         name: "set_usage_mode",
-        description: "Change how the user's usage limits are used, when they ask: `normal` (never slow down for limits), `save` (Save my limits: ask before heavy work, send light work to lighter models or engines) or `use_it_all` (Use it all before reset: their standing OK to spend capacity that would otherwise expire on the spare-capacity list). Spending more is a card first; save, or normal from use_it_all, applies at once with a line.",
+        description: "Change how the user's usage limits are used, when they ask: `normal` (never slow down for limits), `save` (Save my limits: ask before heavy work, send light work to lighter models or engines) or `use_it_all` (Use it all before the refill: their standing OK to spend capacity that would otherwise expire on the list of ideas for leftover usage). Spending more is a card first; save, or normal from use_it_all, applies at once with a line.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -90,7 +90,7 @@ pub const TOOLS: &[Def] = &[
     },
     Def {
         name: "set_engine_fallback",
-        description: "Change what happens when every account of an engine is out of usage, when the user asks (\"carry on with Codex when Claude runs out\", \"just wait for the reset\"): `carry` moves agents' turns to the other engine until it has room again (never for an agent set to one account), `wait` waits for the reset, `ask` asks the user first with a card. `engine` is the one that runs out. `carry` is a card first; wait and ask apply at once with a line.",
+        description: "Change what happens when every account of an engine is out of usage, when the user asks (\"carry on with Codex when Claude runs out\", \"just wait for the refill\"): `carry` moves agents' turns to the other engine until it has room again (never for an agent set to one account), `wait` waits for the reset, `ask` asks the user first with a card. `engine` is the one that runs out. `carry` is a card first; wait and ask apply at once with a line.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -103,7 +103,7 @@ pub const TOOLS: &[Def] = &[
     },
     Def {
         name: "run_routine_now",
-        description: "Run one of the user's routines now, without moving its next time: only in \"Use it all before reset\" mode, to use capacity that would otherwise expire. Its usual approvals still apply.",
+        description: "Run one of the user's routines now, without moving its next time: only in \"Use it all before the refill\" mode, to use capacity that would otherwise expire. Its usual approvals still apply.",
         main_only: true,
         schema: || json!({
             "type": "object",
@@ -214,12 +214,12 @@ pub fn fallback_card(engine: Engine, mode: super::crossover::Mode) -> (String, S
     let (from, to) = (engine.label(), other(engine).label());
     let title = match mode {
         M::Carry => format!("Carry on with {to} whenever every {from} account is out?"),
-        M::Wait => format!("Wait for the reset whenever every {from} account is out?"),
+        M::Wait => format!("Wait for the refill whenever every {from} account is out?"),
         M::Ask => format!("Ask you first whenever every {from} account is out?"),
     };
     let detail = match mode {
         M::Carry => format!("Agents' turns move to {to} until {from} has room again, then go back, with one line in the chat each way. Never for an agent set to one account."),
-        M::Wait => format!("Agents stop on the usage-limit line until a {from} account resets."),
+        M::Wait => format!("Agents stop on the usage-limit line until a {from} account refills."),
         M::Ask => format!("The first time it happens, one card asks whether to carry on with {to}."),
     };
     (title, detail)
@@ -346,7 +346,7 @@ pub fn add(caller: &store::Agent, args: &Value) -> Value {
     };
     match usage_plan::add_item(task, agent_id, &caller.name, store::now_ms()) {
         Ok(item) => text(format!(
-            "Added to the spare-capacity list (id {}). It runs when a limit is near its reset with capacity left, if the user has chosen “Use it all before reset”; otherwise it waits.",
+            "Added to the list of ideas for leftover usage (id {}). It runs when a limit is near its refill with usage left over, if the user has chosen “Use it all before the refill”; otherwise it waits.",
             item.id
         )),
         Err(e) => error(e.to_string()),
@@ -370,7 +370,7 @@ pub fn mode_card(mode: Mode) -> (String, String) {
     let detail = match mode {
         Mode::Normal => "Agents never slow down or hold back because of your limits. Before something big they say what it will likely use, then carry on.",
         Mode::Save => "Agents ask you before heavy work and send light work to lighter models or engines.",
-        Mode::UseItAll => "Your standing OK: when a limit is near its reset with capacity left, the Chief of Staff starts work from your spare-capacity list, or brings a routine forward, to use what would otherwise expire. Anything that sends, spends or changes what others see still waits for your Allow.",
+        Mode::UseItAll => "Your standing OK: when a limit is near its refill with usage left over, the Chief of Staff starts work from your ideas for leftover usage, or brings a routine forward, to use what would otherwise expire. Anything that sends, spends or changes what others see still waits for your Allow.",
     };
     (
         format!("Set usage to “{}”?", mode.label()),
@@ -645,7 +645,7 @@ pub fn answer_switch(
 
 pub fn run_routine(app: &AppHandle, args: &Value) -> Value {
     if usage_plan::mode().0 != Mode::UseItAll {
-        return error("Only in “Use it all before reset”. Otherwise ask the user to press Run now on the routine.");
+        return error("Only in “Use it all before the refill”. Otherwise ask the user to press Run now on the routine.");
     }
     let (Some(who), Some(id)) = (arg(args, "agent"), arg(args, "id")) else {
         return error("`agent` and `id` are required.");
@@ -686,7 +686,7 @@ pub fn maybe_nudge(app: &AppHandle) {
     tauri::async_runtime::spawn(async move { nudge(&app).await });
 }
 
-/// Wake the Chief to use a spare window, in "Use it all before reset"
+/// Wake the Chief to use a spare window, in "Use it all before the refill"
 /// (`usage_plan::should_nudge`). Run from the check-in tick.
 pub async fn nudge(app: &AppHandle) {
     let inv = inventory::read().await;
@@ -731,7 +731,7 @@ fn spend_there(spare: &usage_plan::Spare) -> bool {
 /// The user pressed "Give agents something to do" by a window near its
 /// reset with room left (the Usage view): the Chief starts the
 /// spare-capacity list on it now, whatever the mode. Their press is the OK
-/// for this window, as "Use it all before reset" is a standing one; it
+/// for this window, as "Use it all before the refill" is a standing one; it
 /// changes no approval. Answers the line to show.
 pub async fn spend_now(app: &AppHandle) -> Result<String, crate::errors::CommandError> {
     let inv = inventory::read().await;
@@ -743,7 +743,7 @@ pub async fn spend_now(app: &AppHandle) -> Result<String, crate::errors::Command
     if waiting.is_empty() {
         return Err(super::err_invalid(
             "backlog",
-            "Your spare-capacity list is empty. Add something to it first.",
+            "You have no ideas for leftover usage yet. Add something to it first.",
         ));
     }
     let now = inv.now;
@@ -757,7 +757,7 @@ pub async fn spend_now(app: &AppHandle) -> Result<String, crate::errors::Command
     let Some(spare) = usage_plan::pick_spare(&live, &[]).cloned() else {
         return Err(super::err_invalid(
             "spare",
-            "No limit is about to reset with room left on any account.",
+            "No limit is about to refill with room left on any account.",
         ));
     };
     let chief = store::list()
@@ -767,7 +767,7 @@ pub async fn spend_now(app: &AppHandle) -> Result<String, crate::errors::Command
     let busy = super::runner::is_working(&chief.id) || super::runner::queued(&chief.id);
     if usage_plan::already_starting(&spare, &usage_plan::nudged(), busy) {
         return Ok(format!(
-            "{} is already starting your spare-capacity list for this limit.",
+            "{} is already starting your ideas for leftover usage for this limit.",
             chief.name
         ));
     }
@@ -781,7 +781,7 @@ pub async fn spend_now(app: &AppHandle) -> Result<String, crate::errors::Command
     let _ = usage_plan::mark_nudged(usage_plan::spare_key(&spare));
     wake_for_spare(app, &inv, &chief, &spare, &waiting, true);
     Ok(format!(
-        "{} is starting your spare-capacity list ({} waiting).",
+        "{} is starting your ideas for leftover usage ({} waiting).",
         chief.name,
         waiting.len()
     ))
@@ -806,7 +806,7 @@ fn wake_for_spare(
         format!(" {} turns start on it until then.", spare.engine.label())
     };
     let note = format!(
-        "{} “{}”: the {window} limit resets {reset} and was {}% used when last reported. Using it on your spare-capacity list ({} waiting).{first}",
+        "{} “{}”: the {window} limit refills {reset} and was {}% used when last reported. Using it on your ideas for leftover usage ({} waiting).{first}",
         spare.engine.label(),
         spare.account_name,
         spare.used_percent.floor(),
@@ -827,10 +827,10 @@ fn wake_for_spare(
     let why = if pressed {
         "The user pressed “Give agents something to do” for this window in Usage: their OK to use capacity that would otherwise expire, for this window."
     } else {
-        "The user chose “Use it all before reset”: their standing OK to use capacity that would otherwise expire."
+        "The user chose “Use it all before the refill”: their standing OK to use capacity that would otherwise expire."
     };
     let prompt = format!(
-        "[Spare capacity — from the app, not the user]\n\n{why} {} account “{}”: the {window} limit resets {reset} and was {}% used when reported {read}.\n\nWaiting on the spare-capacity list:\n{}\n\nStart what fits before the reset: hand each item to the agent it names, or whose role fits, with message_agent (on {} if there's a choice), or do it yourself, and mark each started with finish_spare_work. You may also bring a routine forward with run_routine_now. Nothing that sends, spends, pushes or changes what other people see without the user's usual Allow. Then tell the user in one line what you started and which account it runs on.{}",
+        "[Spare capacity — from the app, not the user]\n\n{why} {} account “{}”: the {window} limit resets {reset} and was {}% used when reported {read}.\n\nWaiting on the list of ideas for leftover usage:\n{}\n\nStart what fits before the reset: hand each item to the agent it names, or whose role fits, with message_agent (on {} if there's a choice), or do it yourself, and mark each started with finish_spare_work. You may also bring a routine forward with run_routine_now. Nothing that sends, spends, pushes or changes what other people see without the user's usual Allow. Then tell the user in one line what you started and which account it runs on.{}",
         spare.engine.label(),
         spare.account_name,
         spare.used_percent.floor(),
@@ -1038,7 +1038,7 @@ mod tests {
             );
         }
         let (title, detail) = mode_card(Mode::UseItAll);
-        assert!(title.contains("Use it all before reset"));
+        assert!(title.contains("Use it all before the refill"));
         assert!(detail.contains("still waits for your Allow"));
     }
 }

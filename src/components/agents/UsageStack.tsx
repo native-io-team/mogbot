@@ -70,9 +70,12 @@ export function TotalBar({
   total,
   size = 'small',
   onOpen,
+  labelled = true,
 }: {
   total: UsageTotal;
   size?: 'small' | 'large';
+  /** Each segment's name and room under it (the large bar); off when a row below says it. */
+  labelled?: boolean;
   /** Open an account's page (the large bar). */
   onOpen?: (engine: AgentEngine, id: string) => void;
 }) {
@@ -101,21 +104,23 @@ export function TotalBar({
             onClick={() => onOpen(s.engine, s.id)}
           >
             <Segment left={s.left} state={s.state} tone={s.tone} />
-            <span className="usage-total__name">{s.name}</span>
-            <span className="usage-total__room">
-              <span className="usage-total__left">
-                {s.left === null ? 'Not read yet' : `${s.left}% left`}
-              </span>
-              {s.refill && (
-                <span
-                  className="usage-chip"
-                  title={s.refillAt ? `Resets ${s.refillAt}` : undefined}
-                >
-                  <ResetIcon size={11} aria-hidden />
-                  {s.refill}
+            {labelled && <span className="usage-total__name">{s.name}</span>}
+            {labelled && (
+              <span className="usage-total__room">
+                <span className="usage-total__left">
+                  {s.left === null ? 'Not read yet' : `${s.left}% left`}
                 </span>
-              )}
-            </span>
+                {s.refill && (
+                  <span
+                    className="usage-chip"
+                    title={s.refillAt ? `Refills ${s.refillAt}` : undefined}
+                  >
+                    <ResetIcon size={11} aria-hidden />
+                    {s.refill}
+                  </span>
+                )}
+              </span>
+            )}
           </button>
         </div>
       ))}
@@ -184,7 +189,16 @@ export function roomWords(k: StackKey): string {
 /* ------------------------------------------------------- an account row */
 
 /** One account in the overview's list: its place, name, room, state and refill; opens its page. */
-export function AccountRow({ k, onOpen }: { k: StackKey; onOpen: () => void }) {
+export function AccountRow({
+  k,
+  onOpen,
+  onSignIn,
+}: {
+  k: StackKey;
+  onOpen: () => void;
+  /** A signed-out account's one action, beside the row (never inside its button). */
+  onSignIn?: () => void;
+}) {
   const Icon = ENGINE_ICON[k.engine];
   const refill = k.refillLimit?.countdown;
   return (
@@ -197,7 +211,7 @@ export function AccountRow({ k, onOpen }: { k: StackKey; onOpen: () => void }) {
         data-unread={k.share === null || undefined}
         data-account={k.id}
         aria-label={`${k.position}. ${k.name}, ${roomWords(k)}, ${k.stateLabel}${
-          refill ? `, resets in ${refill}` : ''
+          refill ? `, refills in ${refill}` : ''
         }. Open`}
         onClick={onOpen}
       >
@@ -229,7 +243,7 @@ export function AccountRow({ k, onOpen }: { k: StackKey; onOpen: () => void }) {
         </span>
         <span className="usage-row__refill">
           {refill && (
-            <span className="usage-chip" title={`Resets ${k.refillLimit?.resetsAt ?? ''}`}>
+            <span className="usage-chip" title={`Refills ${k.refillLimit?.resetsAt ?? ''}`}>
               <ResetIcon size={11} aria-hidden />
               {refill}
             </span>
@@ -237,6 +251,17 @@ export function AccountRow({ k, onOpen }: { k: StackKey; onOpen: () => void }) {
         </span>
         <ChevronRightIcon size={14} className="usage-row__chevron" aria-hidden />
       </button>
+      {k.state === 'off' && onSignIn && (
+        <Button
+          variant="secondary"
+          size="compact"
+          className="usage-row__sign-in"
+          onClick={onSignIn}
+          aria-label={`Sign in to ${k.name}`}
+        >
+          Sign in
+        </Button>
+      )}
     </li>
   );
 }
@@ -285,7 +310,7 @@ export function PaceBar({
 
 /**
  * One limit as a card: its name and countdown chip, the big figure, the
- * pace-marked bar, the time until it resets with the Mac's run-out
+ * pace-marked bar, the time until it refills with the Mac's run-out
  * estimate marked on it (labelled as one), and what that means in words.
  */
 export function LimitRow({ limit }: { limit: KeyLimit }) {
@@ -294,7 +319,7 @@ export function LimitRow({ limit }: { limit: KeyLimit }) {
       <div className="usage-key__limit-head">
         <span className="usage-key__limit-name">{limit.label}</span>
         {limit.countdown && (
-          <span className="usage-chip" title={`Resets ${limit.resetsAt ?? ''}`}>
+          <span className="usage-chip" title={`Refills ${limit.resetsAt ?? ''}`}>
             <ResetIcon size={11} aria-hidden />
             {limit.countdown}
           </span>
@@ -323,7 +348,7 @@ export function LimitRow({ limit }: { limit: KeyLimit }) {
           <span className="usage-key__timeline-ends" aria-hidden>
             <span>Now</span>
             <span>{limit.runOut.text} · estimate</span>
-            <span>Resets</span>
+            <span>Refills</span>
           </span>
         </span>
       )}
@@ -332,7 +357,7 @@ export function LimitRow({ limit }: { limit: KeyLimit }) {
           {limit.paceWord}
         </span>
       )}
-      {limit.resetsAt && <span className="usage-key__reset">Resets {limit.resetsAt}</span>}
+      {limit.resetsAt && <span className="usage-key__reset">Refills {limit.resetsAt}</span>}
       {limit.pace && (
         // An estimate: secondary ink, never amber; a small mark only when little is left.
         <span className="usage-key__pace" title={limit.pace.basis}>

@@ -3,7 +3,7 @@
  * sidebar, answering "how much can my agents still do, and when does it
  * refill" in words anyone reads: the total across every account ("72% left
  * · 2 accounts"), the total bar (a segment per real account, in the work
- * order; a second sign-in of one never draws one), and "Resets in 2d 4h". A
+ * order; a second sign-in of one never draws one), and "Refills in 2d 4h". A
  * status dot only when the user must act, or agents are out. It opens the
  * Usage view (`AgentsUsageView`), where every account is a key in order.
  *

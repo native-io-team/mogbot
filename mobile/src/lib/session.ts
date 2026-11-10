@@ -18,6 +18,7 @@ import type {
   AgentEffort,
   AgentEngine,
   RoutineStep,
+  WatchSource,
 } from '@shipstudio/companion-protocol';
 import { MAC_FEATURES, legacyColorFor, setClockHour24 } from '@shipstudio/companion-protocol';
 import NetInfo from '@react-native-community/netinfo';
@@ -1046,6 +1047,19 @@ export const schedule = {
     call('agents.schedule.pause', { agentId, id, paused }),
   cancel: (agentId: string, id: string) => call('agents.schedule.cancel', { agentId, id }),
   runNow: (agentId: string, id: string) => call('agents.schedule.runNow', { agentId, id }),
+};
+
+/**
+ * "When…" routines, on a Mac that lists these methods (`canCall`). Pause and
+ * Cancel are `schedule.pause|cancel`, shared with timed routines.
+ */
+export const watch = {
+  options: (agentId: string) => call('agents.watch.options', { agentId }),
+  create: (agentId: string, source: WatchSource, everyMinutes: number, note: string) =>
+    call('agents.watch.create', { agentId, source, everyMinutes, note }),
+  update: (agentId: string, id: string, source: WatchSource, everyMinutes: number, note: string) =>
+    call('agents.watch.update', { agentId, id, source, everyMinutes, note }),
+  checkNow: (agentId: string, id: string) => call('agents.watch.checkNow', { agentId, id }),
 };
 
 // ---- Projects and sessions -----------------------------------------------------------

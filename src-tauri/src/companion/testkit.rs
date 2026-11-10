@@ -1954,7 +1954,9 @@ impl Backend for Stub {
 
     async fn spare_spend_now(&self) -> Result<Value, CommandError> {
         self.usage_changes.lock().unwrap().push("spend".into());
-        Ok(json!({ "line": "Chief of Staff is starting your spare-capacity list (2 waiting)." }))
+        Ok(
+            json!({ "line": "Chief of Staff is starting your ideas for leftover usage (2 waiting)." }),
+        )
     }
 
     async fn usage_plan(&self) -> Result<Value, CommandError> {
@@ -2367,6 +2369,55 @@ impl Backend for Stub {
             ScheduleOp::Pause { .. } | ScheduleOp::Cancel { .. } | ScheduleOp::RunNow { .. } => {
                 Value::Null
             }
+            ScheduleOp::WatchOptions { agent_id } => json!({
+                "connections": [{
+                    "service": "gmail",
+                    "title": "Gmail",
+                    "account": "sam@example.com",
+                    "kind": { "type": "oauth" },
+                    "serverKey": "gmail",
+                    "needsSignIn": false,
+                    "grants": [{ "agentId": agent_id }],
+                }],
+                "claudeApps": [{
+                    "name": "linear",
+                    "target": "https://mcp.linear.app/mcp",
+                    "status": "connected",
+                    "source": "user",
+                }],
+                "folders": [
+                    { "path": "/Users/sam/Downloads", "label": "~/Downloads" },
+                    { "path": "/Users/sam/Desktop", "label": "~/Desktop" },
+                ],
+            }),
+            ScheduleOp::WatchCreate {
+                source,
+                every_minutes,
+                note,
+                ..
+            } => serde_json::to_value(schedule::CheckIn {
+                id: "w9".into(),
+                note,
+                repeat: None,
+                next_at: now,
+                created_at: now,
+                paused: false,
+                paused_on_import: false,
+                runs: Vec::new(),
+                retry: None,
+                watch: Some(crate::agents::watch::Watch::new(source, every_minutes)),
+                usage: Default::default(),
+                follow_up: false,
+                then: Vec::new(),
+                waiting: None,
+                model: None,
+                extra: Default::default(),
+            })
+            .unwrap(),
+            ScheduleOp::WatchUpdate { .. } => {
+                return Err(CommandError::expected("That routine no longer exists."))
+            }
+            ScheduleOp::WatchCheckNow { .. } => json!({ "found": 0, "baseline": true }),
         })
     }
 
