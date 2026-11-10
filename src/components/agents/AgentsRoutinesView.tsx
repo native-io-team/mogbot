@@ -18,21 +18,22 @@ import { Button } from '../primitives/Button';
 import { TextButton } from '../primitives/TextButton';
 import { Spinner } from '../primitives/Spinner';
 import { AgentKey } from './AgentKey';
+import { AgentsPageHeader, type AgentsPageCompact } from './AgentsPageHeader';
 import { Toggle } from './AgentSettingsRows';
 import { useOptionalToast } from '../../contexts/ToastContext';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useAgentsSelector } from '../../lib/agentsStore';
 import { pauseCheckIn, type Agent } from '../../lib/agents';
 import {
-  lastResultWords,
-  nextRunWords,
   pauseAllRoutines,
+  ROUTINES_ID,
   pausedLine,
   resumeAllRoutines,
   resumedLine,
   routineCounts,
+  routineCountLine,
+  routineLine,
   routineRows,
-  routineWhenWords,
 } from '../../lib/agentDesk';
 
 export type BulkAsk = 'pause' | 'resume';
@@ -43,8 +44,10 @@ export function AgentsRoutinesView({
   onOpenAgent,
   ask,
   onAsked,
+  compact,
 }: {
   onOpenAgent: (agentId: string) => void;
+  compact?: AgentsPageCompact;
   /** ⌘K "Pause all routines…" / "Resume all routines…": open on that question. */
   ask?: BulkAsk | null;
   onAsked?: () => void;
@@ -88,25 +91,24 @@ export function AgentsRoutinesView({
 
   return (
     <section className="agent-chat agents-team agents-routines" aria-label="Routines">
-      <header className="agent-chat__header">
-        <div className="agent-chat__title">
-          <AgentKey name="Routines" colorway="putty" icon="lucide:calendar-clock" size="md" />
-          <h2 className="agent-chat__name">Routines</h2>
-        </div>
-      </header>
+      <AgentsPageHeader
+        name="Routines"
+        icon="lucide:calendar-clock"
+        pageId={ROUTINES_ID}
+        compact={compact}
+        onOpenAgent={onOpenAgent}
+      />
       <div className="agent-chat__scroll" tabIndex={0} role="region" aria-label="Every routine">
         <div className="agents-team__column">
           <div className="agents-routines__bar">
-            <p className="agents-routines__count">
-              {rows.length === 0
-                ? 'No routines yet.'
-                : `${counts.on} on · ${counts.paused} paused, across ${
-                    new Set(rows.map((r) => r.agent.id)).size
-                  } agents`}
-            </p>
+            <p className="agents-routines__count">{routineCountLine(rows)}</p>
             {rows.length > 0 && !confirming && (
               <span className="agents-routines__bulk">
-                <Button variant="secondary" onClick={() => setConfirming('resume')}>
+                <Button
+                  variant="secondary"
+                  onClick={() => setConfirming('resume')}
+                  disabled={counts.paused === 0}
+                >
                   Resume all…
                 </Button>
                 <Button
@@ -150,8 +152,6 @@ export function AgentsRoutinesView({
           ) : (
             <ul className="agents-routines__list">
               {rows.map(({ agent, routine }) => {
-                const next = nextRunWords(routine);
-                const last = lastResultWords(routine);
                 const on = !routine.paused;
                 return (
                   <li
@@ -173,11 +173,7 @@ export function AgentsRoutinesView({
                           {routine.note}
                         </span>
                       </span>
-                      <span className="agents-routines__when">
-                        {routineWhenWords(routine)}
-                        {next ? ` · next ${next}` : ' · paused'}
-                        {last ? ` · last: ${last}` : ''}
-                      </span>
+                      <span className="agents-routines__when">{routineLine(routine)}</span>
                     </span>
                     <Toggle
                       on={on}

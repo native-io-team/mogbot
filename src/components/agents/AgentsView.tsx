@@ -959,6 +959,11 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
     () => (isCompact ? { onGoHome, onGoProjects } : undefined),
     [isCompact, onGoHome, onGoProjects]
   );
+  // Pages that aren't a chat stand in for the sidebar the same way.
+  const pageCompact = useMemo(
+    () => (isCompact ? { agents, onGoHome, onGoProjects } : undefined),
+    [isCompact, agents, onGoHome, onGoProjects]
+  );
 
   return (
     <div className="app workspace workspace-home agents-mode">
@@ -967,8 +972,8 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
           <HomeSidebar
             {...sidebarProps}
             activeNav="agents"
-            // Home, Workflows and the Inbox belong to the Projects side; here
-            // the one control is What's in flight, with how many need you.
+            // Home belongs to the Projects side; here the one control is
+            // What's in flight, with how many need you.
             navContent={
               <InFlightBell count={needsYouCount} current={teamOpen} onOpen={openInFlight} />
             }
@@ -1051,21 +1056,14 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                 room={room}
                 agentsById={agentsById}
                 onOpenAgent={openAgent}
-                compact={
-                  isCompact
-                    ? {
-                        agents,
-                        onGoHome: sidebarProps.onGoHome,
-                        onGoProjects: sidebarProps.onGoProjects,
-                      }
-                    : undefined
-                }
+                compact={pageCompact}
                 {...roomActions}
               />
             ) : usageOpen ? (
-              <AgentsUsageView />
+              <AgentsUsageView compact={pageCompact} onOpenAgent={openAgent} />
             ) : routinesOpen ? (
               <AgentsRoutinesView
+                compact={pageCompact}
                 onOpenAgent={openAgent}
                 ask={routinesAsk}
                 onAsked={clearRoutinesAsk}
@@ -1077,15 +1075,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                 onOpenMessage={openMessage}
                 onSignIn={signIn}
                 onInstallEngine={installEngine}
-                compact={
-                  isCompact
-                    ? {
-                        agents,
-                        onGoHome: sidebarProps.onGoHome,
-                        onGoProjects: sidebarProps.onGoProjects,
-                      }
-                    : undefined
-                }
+                compact={pageCompact}
               />
             ) : !shown ? (
               <div className="agents-main__state">

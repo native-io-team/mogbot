@@ -130,6 +130,21 @@ describe('usageGlance', () => {
     expect(g.low?.waitUntil).toMatch(/^Wait until /);
   });
 
+  it('one account out and the rest never read is that account, not "out of usage"', () => {
+    const g = usageGlance(
+      [acct('default'), acct('work', { name: 'Work', out: true }), acct('p', { name: 'Personal' })],
+      inv([
+        line('default'),
+        line('work', { name: 'Work', out: true, windows: [week(100)] }),
+        line('p', { name: 'Personal' }),
+      ]),
+      { now: NOW }
+    );
+    expect(g.headline).toBe('Work is out');
+    expect(g.row.figure).toBe('Work is out');
+    expect(g.low).toBeNull();
+  });
+
   it('nearly empty everywhere offers the options', () => {
     const g = usageGlance(
       [acct('default'), acct('w')],

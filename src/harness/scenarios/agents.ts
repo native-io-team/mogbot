@@ -1902,7 +1902,14 @@ const crowdedHeader = (id: string, width?: number): Scenario => ({
   ...(width ? { viewport: { width, height: 800 } } : {}),
   openSelector: AGENTS_TAB,
   requires: '.agent-conversations__title',
-  steps: [{ click: '[data-agent-id="acme"]' }],
+  // Below 750px there's no sidebar: Acme is picked from the header's switcher.
+  steps:
+    width && width < 750
+      ? [
+          { click: '.agent-chat__switcher .agent-chat__title' },
+          { click: '[role="menuitem"]', text: 'Acme Site' },
+        ]
+      : [{ click: '[data-agent-id="acme"]' }],
   clipSelector: '.agent-chat__header',
   commands: CROWDED_HEADER,
 });
