@@ -117,7 +117,7 @@ function Screens() {
               />
               {/* Every sheet and grouped screen: panel behind, groups on surfaceGroup. */}
               <Stack.Screen name="connection" options={sheet(colors, [0.75, 1])} />
-              <Stack.Screen name="catch-up" options={{ headerShown: false }} />
+              <Stack.Screen name="one-at-a-time" options={{ headerShown: false }} />
               <Stack.Screen name="request" options={{ headerShown: false }} />
               <Stack.Screen name="usage" options={sheet(colors, [0.75, 1])} />
               <Stack.Screen name="controls" options={sheet(colors, [0.75, 1])} />
@@ -230,14 +230,14 @@ export default function RootLayout() {
       if (!paired) return;
       if (tapped === 'home') return router.navigate('/agents');
       // A card: open it in full, its answers under the thumb. A push names
-      // only the agent, so it opens everything that needs you.
+      // only the agent, so it opens Catch up, where everything waiting is.
       if (tapped.kind === 'approval' && tapped.messageId) {
         return router.navigate({
           pathname: '/request',
           params: { agent: tapped.agentId, id: tapped.messageId },
         });
       }
-      if (tapped.kind === 'needs_you' && !tapped.messageId) return router.navigate('/needs');
+      if (tapped.kind === 'needs_you' && !tapped.messageId) return router.navigate('/catch-up');
       const href = {
         pathname: '/chat/[id]' as const,
         params: {

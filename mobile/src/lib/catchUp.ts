@@ -1,6 +1,6 @@
 /**
  * Catch up: everything waiting on you, one card at a time, the way Slack's
- * catch-up goes through channels. From Needs you's "One at a time".
+ * catch-up goes through channels. From the Catch up tab's "One at a time".
  *
  * An item is one of:
  * - **ask**: a request still waiting that this phone can answer (an

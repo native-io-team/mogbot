@@ -1,7 +1,8 @@
 /**
- * The "Needs you" feed: every card waiting on you, across every agent, in
- * one list. The phone's one place for it (its own tab, whose badge counts
- * these rows, so the number matches the list); a tapped alert leads here.
+ * What waits on you, for the Catch up tab: every card across every agent,
+ * in one list. The phone's one place for it (the tab's badge counts these
+ * rows, so the number matches the list; `lib/catchUpTab.ts` groups them by
+ * agent); a tapped alert leads here.
  * Agents' rows only label theirs (docs/agents.md, "Needs you: one place per
  * surface").
  *
@@ -168,7 +169,7 @@ export function fitsWhole(message: AgentMessage | undefined): boolean {
 export const highRisk = (a: Approval | undefined): boolean => a?.risk === 'high';
 
 /**
- * Whether a card may be answered without opening it: on its Needs you row,
+ * Whether a card may be answered without opening it: on its Catch up row,
  * or from a Lock Screen notification. Only what the Mac marked low-risk,
  * and only when the whole of it fits. A risky card, or one the Mac didn't
  * classify (an older Mac, a card from before it did), opens in full first.

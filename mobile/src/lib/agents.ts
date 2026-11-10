@@ -669,7 +669,7 @@ type Chats = Record<string, { messages: AgentMessage[] } | undefined>;
  * "2 need you · 3 working", over the agents shown on Home. Needs-you is the
  * one number every surface shows (`needsYouCount`, companion-protocol's
  * attention.ts): the quick action, and the desk's sidebar, review bar and
- * Dock badge. The Needs you tab's badge counts its own rows instead
+ * Dock badge. The Catch up tab's badge counts its own rows instead
  * (`feedItems`), cards rather than agents, so it matches its list. It once counted only what
  * the saved chats showed answerable here, and said 14 beside Home's 13.
  */

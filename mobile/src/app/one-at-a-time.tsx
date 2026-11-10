@@ -1,5 +1,5 @@
 /**
- * Catch up, from Needs you's "One at a time": everything waiting on
+ * Catch up, one at a time (Catch up's "One at a time"): everything waiting on
  * you, one card at a time (lib/catchUp.ts). Each card is the agent, what it
  * said, and what it's asking; under the thumb, Allow · Deny for a request
  * (its own one action for a login, a key, a question), Chat to open it in
@@ -490,7 +490,7 @@ function AllCaughtUp({ onBack }: { onBack: () => void }) {
         <T color={colors.textSecondary} style={styles.doneText}>
           Nothing else is waiting on you.
         </T>
-        <Button title="Back to agents" variant="secondary" size="large" onPress={onBack} />
+        <Button title="Done" variant="secondary" size="large" onPress={onBack} />
       </Animated.View>
     </View>
   );
