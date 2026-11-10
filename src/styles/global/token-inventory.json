@@ -5259,7 +5259,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 610
+      "consumerCount": 611
     },
     {
       "name": "--text-secondary",
@@ -6699,7 +6699,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 610
+      "consumerCount": 611
     },
     {
       "name": "--text-secondary",

@@ -18,9 +18,11 @@ pub(super) async fn real_chief(h: &H) -> Check {
     // Until the turn ends, or it stops on a card nobody here will answer.
     let waiting = |id: &str| log(id).iter().any(|m| m.approval.is_some());
     let _ = h
-        .until("the turn to end or a card", Duration::from_secs(300), || {
-            !runner::in_turn(&chief.id) || waiting(&chief.id)
-        })
+        .until(
+            "the turn to end or a card",
+            Duration::from_secs(300),
+            || !runner::in_turn(&chief.id) || waiting(&chief.id),
+        )
         .await;
     tokio::time::sleep(Duration::from_secs(2)).await;
     let stopped_on_card = runner::in_turn(&chief.id);
@@ -30,7 +32,10 @@ pub(super) async fn real_chief(h: &H) -> Check {
             println!("    card: {}", serde_json::to_string(a).unwrap_or_default());
         }
         if let Some(b) = &m.blocks {
-            println!("    blocks: {}", serde_json::to_string(b).unwrap_or_default());
+            println!(
+                "    blocks: {}",
+                serde_json::to_string(b).unwrap_or_default()
+            );
         }
     }
     for a in store::list().unwrap_or_default() {
