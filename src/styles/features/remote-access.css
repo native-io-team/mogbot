@@ -23,8 +23,11 @@
 
 .remote-loading {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--spacing-md);
   padding: var(--spacing-xl) 0;
+  text-align: center;
 }
 
 .remote-note,

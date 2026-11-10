@@ -1,7 +1,7 @@
 //! # Remote access
 //!
 //! Lets a chat assistant on the user's phone (Grok Bot first; anything that
-//! speaks MCP) drive the Ship Studio running on their own Mac: read what an
+//! speaks MCP) drive the app running on their own Mac: read what an
 //! agent tab is showing, answer it, start a new agent, look at the preview,
 //! and — with a confirmation step — push.
 //!
@@ -405,7 +405,7 @@ pub struct AuditEntry {
     pub project: Option<String>,
     pub detail: String,
     pub ok: bool,
-    /// Who acted, when it wasn't the remote assistant: one of Ship Studio's
+    /// Who acted, when it wasn't the remote assistant: one of this app's
     /// own agents, by name (`agents/sessions.rs`). Absent for remote access.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub actor: Option<String>,
@@ -951,7 +951,7 @@ const PUBLISH_CHECK_EVERY: std::time::Duration = std::time::Duration::from_secs(
 pub struct PublishProgress {
     /// When the Funnel was (last) turned on and we started waiting, Unix ms.
     pub since_ms: Option<u64>,
-    /// Ship Studio already asked Tailscale again by itself.
+    /// The app already asked Tailscale again by itself.
     pub auto_retried: bool,
     /// The watchdog gave up waiting; it's over to the user.
     pub gave_up: bool,

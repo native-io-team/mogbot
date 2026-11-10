@@ -30,7 +30,7 @@ const MAX_BODY_BYTES: usize = 1024 * 1024;
 /// bounds what a misbehaving one can make us do.
 const MAX_CONNECTIONS: usize = 64;
 
-/// Marks Ship Studio's own reachability probe. The value is random per run,
+/// Marks the app's own reachability probe. The value is random per run,
 /// so nothing outside this process can use it to hide from the audit log.
 pub(crate) const PROBE_HEADER: &str = "x-app-probe";
 pub(crate) static PROBE_ID: LazyLock<String> = LazyLock::new(super::new_token);
