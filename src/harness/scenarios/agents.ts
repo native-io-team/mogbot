@@ -3852,6 +3852,34 @@ export const agentsScenarios: Scenario[] = [
     commands: GO_BACK,
   },
   {
+    id: 'agents-go-back-context',
+    title: 'Agents — Edit, Fork and Rewind on a right-click of your message',
+    looksRightWhen:
+      'A right-click on your message “Plan the November launch email…” opens the app’s context menu at the pointer: Copy, Remember this, a divider, then “Edit and resend” (pencil), “Fork from here” (branch), “Rewind to here” (undo arrow). Neutral, never accent; nothing disabled (Acme is idle).',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-go-back__context',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { rightClick: '.agent-chat__row--user .agent-bubble--user' },
+    ],
+    commands: GO_BACK,
+  },
+  {
+    id: 'agents-go-back-picker',
+    title: 'Agents — ⌘K “Go back to an earlier message…”',
+    looksRightWhen:
+      'A dialog “Go back to an earlier message”: your messages in this conversation that can be gone back to, newest first (“Keep three sections…” then “Plan the November launch email…”; the rewound one is not offered), each a quoted first line with how long ago, and on its right three quiet buttons, Edit, Fork and Rewind, with their glyphs. Nothing in accent; nothing disabled (Acme is idle).',
+    openSelector: AGENTS_TAB,
+    requires: '.agent-go-back__picker',
+    steps: [
+      { click: '[data-agent-id="acme"]' },
+      { key: 'mod+k' },
+      { fill: '.command-palette-input', value: 'Go back to an earlier message' },
+      { click: '.command-palette [role="option"]', text: 'Go back to an earlier message' },
+    ],
+    commands: REWOUND,
+  },
+  {
     id: 'agents-go-back-confirm',
     title: 'Agents — Rewind to here?, the confirm',
     looksRightWhen:

@@ -573,8 +573,11 @@ all of them, so whatever it remembers in one it knows in the others.
 ### Rewind, fork and edit (`src-tauri/src/agents/rewind.rs`)
 
 Answers: **can I get out of a wrong turn without losing the work?** On any
-of the user's own messages (desk: the hover actions' … menu, and ⌘K for the
-last one; phone: long-press): **Edit and resend** puts it back in the
+of the user's own messages (desk: the hover actions' … menu, a right-click on
+the message (Copy and Remember this first, as it stands in for the webview's
+menu; `GoBackContextMenu`), ⌘K for the last one, and ⌘K "Go back to an
+earlier message…", a picker of the last 12 with the three actions on each
+(`GoBackPicker`); phone: long-press): **Edit and resend** puts it back in the
 composer under "Editing your message"; sending goes back to just before it,
 then sends the new words there. **Fork from here** makes a new conversation
 (titled "Fork of …", which the user is then in) whose history is everything

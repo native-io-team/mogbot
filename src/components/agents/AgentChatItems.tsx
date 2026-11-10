@@ -47,7 +47,7 @@ import { ComposerAttachments, MessageAttachments } from './AgentAttachments';
 import { LocalLinks } from './AgentLocalLinks';
 import type { DraftAttachment } from './useComposerAttachments';
 import { MentionText } from './AgentMentions';
-import { GoBackMenu, type GoBackAction, type GoBackState } from './AgentGoBack';
+import { GoBackContextMenu, GoBackMenu, type GoBackAction, type GoBackState } from './AgentGoBack';
 import { AgentPeerStatus } from './AgentPeerStatus';
 import { SecretCard } from './AgentSecretCard';
 import { LoginCard } from './AgentLoginCard';
@@ -373,6 +373,22 @@ export const UserBubble = memo(function UserBubble({
     />
   );
   const onKeyDown = useCopyOnKey(message.text);
+  const bubble = (
+    <div className="agent-bubble agent-bubble--user">
+      {message.revises && <RevisesBar revises={message.revises} />}
+      {splitQuotes(message.text).map((part, i) =>
+        part.kind === 'quote' ? (
+          <blockquote key={i} className="agent-bubble__quote">
+            {part.text}
+          </blockquote>
+        ) : (
+          <p key={i} className="agent-bubble__text">
+            <MentionText text={part.text} mentions={message.mentions} colorOf={colorOf} />
+          </p>
+        )
+      )}
+    </div>
+  );
   // Written in Slack, not here: "From Slack · #launch".
   const via = viaLabel(message.via);
   return (
@@ -401,20 +417,18 @@ export const UserBubble = memo(function UserBubble({
       {message.text && (
         <div className="agent-chat__line">
           {actions}
-          <div className="agent-bubble agent-bubble--user">
-            {message.revises && <RevisesBar revises={message.revises} />}
-            {splitQuotes(message.text).map((part, i) =>
-              part.kind === 'quote' ? (
-                <blockquote key={i} className="agent-bubble__quote">
-                  {part.text}
-                </blockquote>
-              ) : (
-                <p key={i} className="agent-bubble__text">
-                  <MentionText text={part.text} mentions={message.mentions} colorOf={colorOf} />
-                </p>
-              )
-            )}
-          </div>
+          {goBack && onGoBack && !failed && !sending ? (
+            <GoBackContextMenu
+              state={goBack}
+              text={message.text}
+              onPick={(action) => onGoBack(action, message)}
+              onRemember={onRemember && (() => onRemember(message))}
+            >
+              {bubble}
+            </GoBackContextMenu>
+          ) : (
+            bubble
+          )}
         </div>
       )}
       {via && <div className="agent-chat__queued">{via}</div>}

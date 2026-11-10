@@ -15,11 +15,23 @@ import {
   BranchIcon,
   ChevronRightIcon,
   CloseIcon,
+  CopyIcon,
   MoreHorizontalIcon,
   PencilIcon,
+  PinIcon,
   UndoIcon,
 } from '@/components/icons';
+import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
+import { formatAgo } from '../../lib/formatAgo';
 import { Button } from '../primitives/Button';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuLabel,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '../primitives/ContextMenu';
 import { Dropdown, DropdownItem } from '../primitives/Dropdown';
 import { IconButton } from '../primitives/IconButton';
 import { MenuButton } from '../primitives/MenuButton';
@@ -104,6 +116,127 @@ export function GoBackMenu({
     </Dropdown>
   );
 }
+
+/**
+ * The same three, on a right-click of one of your messages, with Copy (and
+ * Remember this) first since the menu stands in for the webview's own. The
+ * hover "…" is easy to miss; a right-click is where people look.
+ */
+export function GoBackContextMenu({
+  state,
+  text,
+  onPick,
+  onRemember,
+  children,
+}: {
+  state: GoBackState;
+  text: string;
+  onPick: (action: GoBackAction) => void;
+  onRemember?: () => void;
+  children: ReactElement;
+}) {
+  const { copy } = useCopyToClipboard();
+  const reason = goBackBlocked('rewind', state);
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
+      <ContextMenuContent aria-label="Message actions" className="agent-go-back__context">
+        <ContextMenuItem onSelect={() => void copy(text)}>
+          <CopyIcon size={12} /> Copy
+        </ContextMenuItem>
+        {onRemember && (
+          <ContextMenuItem onSelect={onRemember}>
+            <PinIcon size={12} /> Remember this
+          </ContextMenuItem>
+        )}
+        <ContextMenuSeparator />
+        {ORDER.map((action) => (
+          <ContextMenuItem
+            key={action}
+            disabled={goBackBlocked(action, state) !== null}
+            onSelect={() => onPick(action)}
+          >
+            {GO_BACK_ICONS_SM[action]} {GO_BACK_LABELS[action]}
+          </ContextMenuItem>
+        ))}
+        {reason && <ContextMenuLabel className="agent-go-back__reason">{reason}</ContextMenuLabel>}
+      </ContextMenuContent>
+    </ContextMenu>
+  );
+}
+
+const GO_BACK_ICONS_SM: Record<GoBackAction, ReactNode> = {
+  edit: <PencilIcon size={12} />,
+  fork: <BranchIcon size={12} />,
+  rewind: <UndoIcon size={12} />,
+};
+
+/** How many of your messages ⌘K's "Go back to an earlier message…" offers. */
+export const GO_BACK_PICK_MAX = 12;
+
+/**
+ * ⌘K's "Go back to an earlier message…": your recent messages in this
+ * conversation, newest first, each with Edit and resend, Fork from here and
+ * Rewind to here. The per-message commands only reach your last message.
+ */
+export function GoBackPicker({
+  open,
+  messages,
+  state,
+  onPick,
+  onClose,
+}: {
+  open: boolean;
+  /** Your messages that can be gone back to, newest first. */
+  messages: readonly { id: string; text: string; ts: number }[];
+  state: GoBackState;
+  onPick: (action: GoBackAction, messageId: string) => void;
+  onClose: () => void;
+}) {
+  const reason = goBackBlocked('rewind', state);
+  return (
+    <ModalFrame
+      isOpen={open}
+      onClose={onClose}
+      title="Go back to an earlier message"
+      className="agent-go-back__picker"
+    >
+      <ol className="agent-go-back__picks" aria-label="Your messages">
+        {messages.map((m) => (
+          <li key={m.id} className="agent-go-back__pick">
+            <span className="agent-go-back__pick-text">
+              “{goBackQuote(m.text) || 'Your message'}”
+              <span className="agent-go-back__pick-when">{formatAgo(m.ts)}</span>
+            </span>
+            <span className="agent-go-back__pick-actions">
+              {ORDER.map((action) => (
+                <Button
+                  key={action}
+                  variant="ghost"
+                  size="compact"
+                  leftIcon={GO_BACK_ICONS_SM[action]}
+                  disabled={goBackBlocked(action, state) !== null}
+                  onClick={() => onPick(action, m.id)}
+                  aria-label={`${GO_BACK_LABELS[action]}: “${goBackQuote(m.text)}”`}
+                >
+                  {GO_BACK_SHORT[action]}
+                </Button>
+              ))}
+            </span>
+          </li>
+        ))}
+      </ol>
+      {reason && <p className="agent-go-back__picker-reason">{reason}</p>}
+    </ModalFrame>
+  );
+}
+
+/** A row's buttons, short: the row already says which message. */
+const GO_BACK_SHORT: Record<GoBackAction, string> = {
+  edit: 'Edit',
+  fork: 'Fork',
+  rewind: 'Rewind',
+};
 
 /** What a confirm is about: Fork or Rewind on one message. */
 export interface GoBackAsk {

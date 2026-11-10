@@ -1,7 +1,15 @@
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, render, screen } from '@testing-library/react';
 import { useState, type ReactElement } from 'react';
-import { ComposerEditing, GoBackConfirm, GoBackMenu, foldRows, openOneFold } from './AgentGoBack';
+import {
+  ComposerEditing,
+  GoBackConfirm,
+  GoBackContextMenu,
+  GoBackMenu,
+  GoBackPicker,
+  foldRows,
+  openOneFold,
+} from './AgentGoBack';
 import { REWOUND_END, rewoundIds } from '../../../packages/companion-protocol/src/rewind';
 
 const idle = { agentName: 'Writer', working: false, driven: false };
@@ -24,6 +32,57 @@ describe('GoBackMenu', () => {
     expect(screen.getByRole('menuitem', { name: 'Rewind to here' })).toBeDisabled();
     expect(screen.getByRole('menuitem', { name: 'Fork from here' })).not.toBeDisabled();
     expect(screen.getByText('Writer is working. Wait for it to finish, or Stop it.')).toBeTruthy();
+  });
+});
+
+describe('GoBackContextMenu', () => {
+  it('opens on a right-click of your message with Copy, Remember, then the three ways back', () => {
+    const onPick = vi.fn();
+    render(
+      <GoBackContextMenu state={idle} text="Fix it" onPick={onPick} onRemember={() => {}}>
+        <div>Fix it</div>
+      </GoBackContextMenu>
+    );
+    fireEvent.contextMenu(screen.getByText('Fix it'));
+    const items = screen.getAllByRole('menuitem').map((i) => i.textContent?.trim());
+    expect(items).toEqual([
+      'Copy',
+      'Remember this',
+      'Edit and resend',
+      'Fork from here',
+      'Rewind to here',
+    ]);
+    fireEvent.click(screen.getByRole('menuitem', { name: /Fork from here/ }));
+    expect(onPick).toHaveBeenCalledWith('fork');
+  });
+});
+
+describe('GoBackPicker', () => {
+  it('lists your recent messages, each with Edit, Fork and Rewind', () => {
+    const onPick = vi.fn();
+    render(
+      <GoBackPicker
+        open
+        messages={[
+          { id: 'b', text: 'Keep three sections', ts: Date.now() },
+          { id: 'a', text: 'Plan the launch email', ts: Date.now() - 60_000 },
+        ]}
+        state={{ ...idle, working: true }}
+        onPick={onPick}
+        onClose={() => {}}
+      />
+    );
+    const rows = screen.getAllByRole('listitem').map((r) => r.textContent);
+    expect(rows[0]).toContain('“Keep three sections”');
+    expect(rows[1]).toContain('“Plan the launch email”');
+    // Working: going back in place waits, a fork never does.
+    expect(
+      screen.getByRole('button', { name: 'Rewind to here: “Plan the launch email”' })
+    ).toBeDisabled();
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Fork from here: “Plan the launch email”' })
+    );
+    expect(onPick).toHaveBeenCalledWith('fork', 'a');
   });
 });
 
