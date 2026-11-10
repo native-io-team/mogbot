@@ -1683,7 +1683,7 @@
       "layer": "components",
       "owner": "Button",
       "status": "canonical",
-      "consumerCount": 18
+      "consumerCount": 19
     },
     {
       "name": "--button-padding",
@@ -6155,7 +6155,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 771
+      "consumerCount": 773
     },
     {
       "name": "--spacing-sm",
@@ -6171,7 +6171,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 599
+      "consumerCount": 598
     },
     {
       "name": "--spacing-lg",
@@ -6187,7 +6187,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 164
+      "consumerCount": 163
     },
     {
       "name": "--spacing-2xl",
@@ -6195,7 +6195,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 72
+      "consumerCount": 74
     },
     {
       "name": "--spacing-tight",
@@ -6564,6 +6564,14 @@
       "owner": "global/semantic",
       "status": "canonical",
       "consumerCount": 10
+    },
+    {
+      "name": "--shadow-card-reach",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "consumerCount": 2
     },
     {
       "name": "--focus-ring-strength",
@@ -7156,6 +7164,14 @@
       "owner": "global/semantic",
       "status": "canonical",
       "consumerCount": 10
+    },
+    {
+      "name": "--shadow-card-reach",
+      "definitionFile": "src/styles/global/tokens-semantic.css",
+      "layer": "semantic",
+      "owner": "global/semantic",
+      "status": "canonical",
+      "consumerCount": 2
     },
     {
       "name": "--tint-subtle",
