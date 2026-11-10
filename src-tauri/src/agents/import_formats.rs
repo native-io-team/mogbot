@@ -1177,7 +1177,7 @@ fn openclaw(files: &Files, out: &mut Export) {
         }
     } else {
         out.skipped.push(
-            "OpenClaw's scheduled jobs: it keeps them in a database since 2026.6.1. Ask OpenClaw to list them, then add them here".into(),
+            "OpenClaw’s scheduled jobs. Newer versions keep them in a database this can’t read: ask OpenClaw to list them, then ask each agent here to set up its own.".into(),
         );
     }
 }

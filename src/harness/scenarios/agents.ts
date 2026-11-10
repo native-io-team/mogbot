@@ -127,7 +127,7 @@ const EXPORT_PREVIEW_OPENCLAW = {
   about: [['Personal facts', 1]] as [string, number][],
   read: ['openclaw.json (agent names only)', 'workspace/AGENTS.md', 'workspace/SOUL.md'],
   skipped: [
-    'OpenClaw’s scheduled jobs: it keeps them in a database since 2026.6.1. Ask OpenClaw to list them, then add them here',
+    'OpenClaw’s scheduled jobs. Newer versions keep them in a database this can’t read: ask OpenClaw to list them, then ask each agent here to set up its own.',
   ],
 };
 
@@ -3039,7 +3039,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-import-file',
     title: 'Agents — import, an OpenClaw folder picked',
     looksRightWhen:
-      'The drop area shows the folder’s name (.openclaw) with its path under it and “Use something else”; the message and paste steps are gone. “2 agents from OpenClaw”, rows for Molty and Desk with counts, and a neutral note: 1 fact about you offered as notes for Chief of Staff, and “Not read: OpenClaw’s scheduled jobs: it keeps them in a database…”. Review in Chief of Staff’s chat is enabled.',
+      'The drop area shows the folder’s name (.openclaw) with its path under it and “Use something else”; the message and paste steps are gone. “2 agents from OpenClaw”, rows for Molty and Desk with counts, and a neutral note: 1 fact about you offered as notes for Chief of Staff, and “Not read: OpenClaw’s scheduled jobs. Newer versions keep them in a database…”. Review in Chief of Staff’s chat is enabled.',
     requires: '.agents-import-drop[data-file]',
     clipSelector: '.agents-import',
     openSelector: AGENTS_TAB,

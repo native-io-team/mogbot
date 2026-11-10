@@ -338,6 +338,20 @@ export const PASTE_FORMAT_PROBLEM =
   'That reply isn’t in the format we asked for — copy the message again and ask your assistant to reply with just the code block.';
 
 /**
+ * The problem itself, when it is one already said in plain words with its own
+ * fix (a reply cut off: send that part again; no JSON: paste the whole reply;
+ * too long: paste it in parts). "Copy the message again" would be the wrong
+ * fix for those. A parser's line (a line number, a field name) is not.
+ */
+export function pasteProblemInWords(problems: string[]): string | null {
+  if (problems.length !== 1) return null;
+  const [p] = problems;
+  const parserLine = /\bline \d|valid JSON|should be|"[a-z_]+"/.test(p);
+  const saysTheFix = /\b(Ask|Paste|Send)\b/.test(p);
+  return !parserLine && saysTheFix ? p : null;
+}
+
+/**
  * A pasted reply that can't come across as it is. One plain sentence with
  * the way out; the line-by-line reasons (a trailing comma at line 14, a
  * field that should be true or false) are for whoever wants them, behind
@@ -345,20 +359,23 @@ export const PASTE_FORMAT_PROBLEM =
  */
 export function PasteProblems({ problems }: { problems: string[] }) {
   const [open, setOpen] = useState(false);
+  const own = pasteProblemInWords(problems);
   return (
     <div className="agents-import-problems" role="alert">
       <WarningIcon size={14} className="agents-import-problems__icon" />
       <div>
-        <p className="agents-import-problems__title">{PASTE_FORMAT_PROBLEM}</p>
-        <TextButton
-          tabIndex={0}
-          className="agents-import-problems__toggle"
-          aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-        >
-          {open ? 'Hide details' : 'Show details'}
-        </TextButton>
-        {open && (
+        <p className="agents-import-problems__title">{own ?? PASTE_FORMAT_PROBLEM}</p>
+        {own === null && (
+          <TextButton
+            tabIndex={0}
+            className="agents-import-problems__toggle"
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+          >
+            {open ? 'Hide details' : 'Show details'}
+          </TextButton>
+        )}
+        {own === null && open && (
           <ul className="agents-import-problems__details">
             {problems.map((item, i) => (
               <li key={i}>{item}</li>
