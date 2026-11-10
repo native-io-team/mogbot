@@ -4667,32 +4667,31 @@ never slow down for limits unless the user chose that.
   **Run-out across accounts** (`RunOut`, an estimate) only for an engine
   with 2+ signed-in accounts, every one read, each either out (back at a
   known time) or running out before its reset by its own pace, and none
-  back before the last runs out; else nothing. Said on the desk (the usage
-  popover's "All accounts", Settings → Usage's "What you have") and the
-  phone's Usage sheet by `computeView` in `usageSheet.ts`, read top-down
-  in one glance. First one short headline, from read accounts only:
-  "Room now on Claude · This Mac" (one account with room), "Room now on
-  both accounts" / "all 3 accounts", "Room now on 2 of 3 accounts", or "No
-  room right now" with, under it, who has room again first ("Claude ·
-  Work has room again at 3:20 PM"). It never counts or lists the accounts
-  again: the cards below say which and when. Then, in the warning ink, the
-  Mac's estimate across accounts when it sent one ("At this pace you'll
-  run out of Claude on every account by Mon afternoon; Codex has room"),
-  over its basis. Then each account with a reading as its own card, most
-  room first: its name, "Max plan" and a muted "Used next" (only beside
-  another read account of its engine), and a row per limit: name left,
-  % right, the bar, "Resets …" under it, and that limit's own pace
-  estimate right under its bar, short ("At this pace it runs out tomorrow
-  night") over a muted basis ("Estimate from 200 readings over 10 hours");
-  that bar is tinted with the warning role so the two agree (as is any
-  limit at 90% or more, and the error role at its limit). Accounts with
-  nothing to draw follow compact and muted, one line each: not read (why,
-  in the Mac's words), out ("Out of usage until …"), "Not signed in". Each
-  reading
-  shows once: the popover no longer draws the next account's meters above
-  the list. `usage_overview` heads its answer with the same TOTAL COMPUTE
-  lines, and the run-out under ESTIMATES. A Mac that serves no totals gets
-  the old per-engine lists.
+  back before the last runs out; else nothing. Usage has **one rendering**
+  (round 2 review #1, #2, #6, #10): the Usage view's panel (`AgentsUsageView`
+  `UsagePanel`), which Settings → Accounts & usage mounts as is, so the two
+  can't disagree; the old "What you have" sheet and the ↑/↓ account list are
+  gone. The chat header's ring fills to what is left of the 5-hour window and
+  its popover shows the same stack (`usageGlance`); the phone's Agents list
+  shows the desk sidebar's glance (`GlanceRow`), and its Settings the glance
+  card above the accounts. The rules everywhere:
+  - **Every limit is said as what is left** ("62% left", "Weekly 68% → 53%
+    left"), never a bare used figure; only a conversation's context says
+    "used".
+  - **One name per account** (`accountLabel`, protocol): what the user named
+    it, else its email, else its organization, else its plan ("Claude Max"),
+    else "Claude Code account". Never "This Mac": where it is signed in is a
+    detail ("this Mac's own sign-in"). A second sign-in names the first by
+    its key; the chat chip and Runs on use the same name. On the phone the
+    glance names each account on its own line, never cut to a stub.
+  - **Amber means "needs you"**: a pace line or run-out estimate is
+    secondary ink, labelled an estimate, with a small warning mark only under
+    10% left; amber for a limit nearly or wholly out, and the headline only
+    when there is a choice to make (nearly out everywhere, nothing signed in).
+  - **One reorder**: drag on the desk (the grip also moves with the
+    keyboard); the phone keeps its ↑/↓, on the same order (`agents.accounts`).
+  An older Mac with no accounts list gets `computeView` (`usageSheet.ts`) on
+  the phone, worded by the same rules.
 - **Plan names only when reported**: Codex's snapshot carries `planType`
   (`Quota::plan`); Claude Code's stream reports none, but its credentials'
   `subscriptionType` does, so a Claude account read without a turn shows

@@ -8,7 +8,7 @@
 
 import type { Scenario } from '../types';
 import { AGENTS_TAB, TEAM, messagesFor, msg, now, overview } from './agents';
-import { FULL_INVENTORY } from './agentsUsage';
+import { FULL_INVENTORY, usageCommands } from './agentsUsage';
 
 const H = 3_600_000;
 const BACK = now + 3 * H;
@@ -136,7 +136,7 @@ export const agentsCrossoverScenarios: Scenario[] = [
     looksRightWhen:
       'Under “How agents use your limits”, two more blocks: “When every Claude Code account is out” with a three-way control (Ask first | Carry on with Codex | Wait for the reset), Carry on pressed, neutral not accent, a muted line that turns move to Codex until Claude Code has room and never for an agent set to one account, then one amber status line “Claude Code out · on Codex until <time>”. Then “When every Codex account is out” with Ask first pressed and its muted line. Readable in both themes.',
     command: 'settings.page.accounts',
-    requires: '.agents-usage [data-crossover="claude"] .agents-usage__state',
+    requires: '.usage-panel [data-crossover="claude"] .agents-usage__state',
     clipSelector: '[data-crossover="claude"]',
     commands: {
       agents_overview: overview(AWAY_TEAM),
@@ -147,7 +147,7 @@ export const agentsCrossoverScenarios: Scenario[] = [
         shortcut: 'Alt+Space',
         shortcutLabel: '⌥Space',
       },
-      agents_usage_overview: FULL_INVENTORY,
+      ...usageCommands(FULL_INVENTORY),
       agents_crossover: {
         claude: 'carry',
         codex: 'ask',

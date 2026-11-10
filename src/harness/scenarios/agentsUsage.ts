@@ -547,21 +547,45 @@ const DISK_FLOOR = {
   ],
 };
 
+/**
+ * The accounts list (`agents_accounts`) an inventory implies: Settings →
+ * Accounts & usage is the Usage view's panel, which reads both.
+ */
+function accountsOf(inv: { accounts: Record<string, unknown>[] }) {
+  return inv.accounts.map((a) => ({
+    id: a.id,
+    engine: a.engine,
+    name: a.name,
+    named: a.name !== 'This Mac',
+    thisMac: a.thisMac,
+    signedIn: a.signedIn,
+    out: a.out,
+    ...(a.plan ? { plan: a.plan } : {}),
+  }));
+}
+
+/** What the Usage panel reads, for an inventory. */
+export const usageCommands = (inv: { accounts: Record<string, unknown>[] }) => ({
+  agents_usage_overview: inv,
+  agents_accounts: accountsOf(inv),
+  agents_crossover: { claude: 'ask', codex: 'ask', away: [] },
+});
+
 export const agentsUsageScenarios: Scenario[] = [
   {
     id: 'agents-chat-usage',
     title: 'Agents — the chat header’s usage ring and its popover',
     looksRightWhen:
-      'Finance’s chat. In the header, left of the clock, a small ring about a third filled (38% of the 5-hour window), in the muted ink, not the accent. Its popover: “Usage”; Context — “Finance’s conversation” 64% used with a bar and “128.4K of 200K tokens”; All accounts — one short headline “Room now on 2 of 3 accounts”, no counts or per-limit summary lines. Then a card per account with a reading, spaced apart: Claude · This Mac with a muted “Used next”, a 5-hour row (38%, bar, “Resets at <time>”) and a Weekly row (61% and its bar in amber, “Resets <day> <time>”, then the amber “At this pace it runs out <day> <part of day>” over a muted “Estimate from 14 readings over 23 hours”); Codex · ChatGPT Plus (Plus plan) with its 5-hour row at 92% in amber. Then two compact muted lines: Claude · Personal saying why it can’t be read between turns, and Claude · Work “Out of usage until …”. A muted footnote that use elsewhere counts too. Readable in both themes.',
+      'Finance’s chat. In the header, left of the clock, a small ring about two-thirds filled (62% of the 5-hour window left), in the muted ink, not the accent. Its popover: “Usage”; Context — “Finance’s conversation” 64% used with a bar and “128.4K of 200K tokens”; Your accounts — the stack’s one line in ink, the segmented meter with each account named under its segment and what it has left (“62% left”, “No reading”, never a used figure, never “This Mac” as a name), the next reset, and a full-width “Usage and accounts” button. Readable in both themes.',
     openSelector: AGENTS_TAB,
-    requires: '.agent-usage .agents-compute__pace',
+    requires: '.agent-usage .usage-stack__labels',
     clipSelector: '.agent-usage',
     steps: [{ click: '[data-agent-id="finance"]' }, { click: '.agent-usage-ring' }],
     commands: {
       agents_overview: overview(TEAM_WITH_CONTEXT),
       agents_messages: messagesFor,
       agents_quota: CHAT_QUOTA,
-      agents_usage_overview: FULL_INVENTORY,
+      ...usageCommands(FULL_INVENTORY),
     },
   },
   {
@@ -584,82 +608,87 @@ export const agentsUsageScenarios: Scenario[] = [
     id: 'settings-agents-usage',
     title: 'Settings — Agents → Usage: modes, what you have, spare capacity',
     looksRightWhen:
-      'A “Usage” group. “How agents use your limits” with a three-way control (Normal | Save my limits | Use it all before reset), the last pressed, neutral not accent, and one muted line under it saying Allow cards still apply. “What you have”: Claude Code’s list — This Mac “5-hour 38% · resets <time> · Weekly 61% · resets <weekday>”, an amber “Weekly: At this pace you’ll hit the limit <weekday> <part of day>, before it resets … · Estimate from 14 readings over 23 hours”, and “Next turns run here”; Work in amber “Out of usage until …”; Personal “No reading yet”; then a muted “About 48k tokens a turn · estimate from 212 past runs”. Codex’s list: ChatGPT Plus “Primary 92% …” in amber, tagged “Plus plan · Next turns run here”, and no estimate line. A muted line “Claude 5-hour limit resets <time> · 62% unused”. “Other compute on this Mac”: Opencode installed; Ollama running with two models. “Spare-capacity list”: two lines (one “Added by you · for Research”, one “Added by Finance · Started”), each with a remove ×, and a field with a secondary Add. Readable in both themes; nothing is accent-coloured.',
-    // ⌘K "Usage and accounts…" opens Agents' Usage view now; Settings has its own page.
+      'Settings → Accounts & usage is the Usage view’s own panel, not a second sheet: the hero (“Your accounts, together”, the stack’s line, a segmented meter with each account named and “N% left” under it, the next reset), “Get the most from your limits” with the three-way mode control, then each engine’s accounts as key cards with grips (drag, or the grip with the keyboard; no ↑/↓ buttons), every limit said as “N% left”, pace lines in secondary ink (never amber). This Mac’s own sign-in is named by its email, plan or engine, never “This Mac”. Then adding an account, the crossover choice, the spare-capacity list with its two items, the engines’ average-turn estimates and other compute. Nothing accent-coloured.',
+    // Settings → Accounts & usage: the Usage view's panel, mounted in Settings.
     command: 'settings.page.accounts',
-    requires: '.agents-usage .agents-compute__row',
-    clipSelector: '.agents-usage',
+    requires: '.usage-panel .usage-key',
+    clipSelector: '.settings-window',
+    viewport: { width: 1280, height: 2800 },
     commands: {
       agents_overview: overview(),
       agents_desktop_settings: DESKTOP_SETTINGS,
-      agents_usage_overview: FULL_INVENTORY,
+      ...usageCommands(FULL_INVENTORY),
     },
   },
   {
     id: 'settings-agents-usage-runout',
     title: 'Settings — Agents → Usage: Claude runs out on every account at this pace',
     looksRightWhen:
-      '“What you have”: the headline “Room now on all 3 accounts”, then in amber “At this pace you’ll run out of Claude on every account in about 3 hours; Codex has room.” over a muted “Estimate from 13 readings across 2 accounts”. No counts or per-limit summary lines. Cards: Codex · ChatGPT Plus first (most room), then Claude · This Mac (Max plan · Used next) and Claude · Work, each with a 5-hour row and a Weekly row; each Claude 5-hour bar amber with its own short amber pace line and basis right under it. Nothing accent-coloured.',
-    // ⌘K "Usage and accounts…" opens Agents' Usage view now; Settings has its own page.
+      'The same panel with a run-out estimate: the hero headline “Runs out …” in ink, not amber, with “Estimate from 13 readings across 2 accounts. An estimate, not a reading.” under it; each Claude key’s 5-hour bar amber only where it is nearly out, its pace line secondary ink with what it rests on.',
+    // Settings → Accounts & usage: the Usage view's panel, mounted in Settings.
     command: 'settings.page.accounts',
-    requires: '.agents-usage .agents-compute__pace',
-    clipSelector: '.agents-usage',
+    requires: '.usage-panel .usage-key',
+    clipSelector: '.settings-window',
+    viewport: { width: 1280, height: 2800 },
     commands: {
       agents_overview: overview(),
       agents_desktop_settings: DESKTOP_SETTINGS,
-      agents_usage_overview: RUNOUT_INVENTORY,
+      ...usageCommands(RUNOUT_INVENTORY),
     },
   },
   {
     id: 'settings-agents-usage-two-claude',
     title: 'Settings — Agents → Usage: two Claude accounts read, Codex not signed in',
     looksRightWhen:
-      '“What you have”: one short headline “Room now on Claude · This Mac” (no “has room again”, no counts, no Weekly summary line). Then one card: Claude · This Mac (“Max plan · Used next”, muted, no pill), a 5-hour row at 7% in the muted ink, and a Weekly row at 71% in amber with “At this pace it runs out tomorrow night” right under its reset line, over its muted estimate basis. Then two compact muted lines: Claude · Personal “Out of usage until …” and Codex · This Mac “Not signed in”. Nothing accent-coloured.',
-    // ⌘K "Usage and accounts…" opens Agents' Usage view now; Settings has its own page.
+      'The same panel: Claude keys in order, the out one with a neutral “Out of usage until …” pill, Codex’s unsigned sign-in with “Not signed in” and its fix line. No account is named “This Mac”.',
+    // Settings → Accounts & usage: the Usage view's panel, mounted in Settings.
     command: 'settings.page.accounts',
-    requires: '.agents-usage .agents-compute__row',
-    clipSelector: '.agents-usage',
+    requires: '.usage-panel .usage-key',
+    clipSelector: '.settings-window',
+    viewport: { width: 1280, height: 2800 },
     commands: {
       agents_overview: overview(),
       agents_desktop_settings: DESKTOP_SETTINGS,
-      agents_usage_overview: TWO_CLAUDE_INVENTORY,
+      ...usageCommands(TWO_CLAUDE_INVENTORY),
     },
   },
   {
     id: 'settings-agents-usage-one-read',
     title: 'Settings — Agents → Usage: one account read, one that can’t be',
     looksRightWhen:
-      '“What you have”: “Room now on Claude · This Mac” on one line, nothing under it. One card: Claude · This Mac (“Max plan”, no “Used next”) with a 5-hour row at 7% muted and a Weekly row at 71% in amber, the amber “At this pace it runs out <when>” and a muted “Estimate from 200 readings over 10 hours” under that bar, said once. Then two compact muted lines: Claude · Personal saying why it can’t be read between turns and that its limits show after a turn runs on it; Codex · This Mac “Not signed in”.',
-    // ⌘K "Usage and accounts…" opens Agents' Usage view now; Settings has its own page.
+      'The same panel: one key read with its 5-hour and Weekly “N% left” bars and one pace line in secondary ink under the Weekly bar; Personal says it has no reading yet; never a made-up figure.',
+    // Settings → Accounts & usage: the Usage view's panel, mounted in Settings.
     command: 'settings.page.accounts',
-    requires: '.agents-usage .agents-compute__row',
-    clipSelector: '.agents-usage',
+    requires: '.usage-panel .usage-key',
+    clipSelector: '.settings-window',
+    viewport: { width: 1280, height: 2800 },
     commands: {
       agents_overview: overview(),
       agents_desktop_settings: DESKTOP_SETTINGS,
-      agents_usage_overview: ONE_READ_INVENTORY,
+      ...usageCommands(ONE_READ_INVENTORY),
     },
   },
   {
     id: 'settings-agents-usage-empty',
     title: 'Settings — Agents → Usage with no reading and no history',
     looksRightWhen:
-      'The Usage group with Normal pressed and its line (“Agents never slow down for limits…”). “What you have”: “No limits read yet”, no cards, and one compact muted line: Claude · This Mac “Not checked yet” — no bars, no estimate line at all, never a made-up figure. No “Other compute” group. The spare-capacity list shows only its sentence and the field.',
-    // ⌘K "Usage and accounts…" opens Agents' Usage view now; Settings has its own page.
+      'The same panel with nothing read: “No usage reading yet”, an empty dashed segment, a key saying it has no reading yet; no bars, no estimate lines, never a made-up figure. The spare-capacity list shows only its sentence and the field.',
+    // Settings → Accounts & usage: the Usage view's panel, mounted in Settings.
     command: 'settings.page.accounts',
-    requires: '.agents-usage .agents-compute__quiet-row',
-    clipSelector: '.agents-usage',
+    requires: '.usage-panel [data-testid="usage-hero"]',
+    clipSelector: '.settings-window',
+    viewport: { width: 1280, height: 2800 },
     commands: {
       agents_overview: overview(),
       agents_desktop_settings: DESKTOP_SETTINGS,
-      agents_usage_overview: EMPTY_INVENTORY,
+      ...usageCommands(EMPTY_INVENTORY),
     },
   },
   {
     id: 'agents-team-spare-capacity',
     title: 'What’s in flight — a reset near with capacity left',
     looksRightWhen:
-      'At the foot of What’s in flight, under any plan-usage line, one quiet muted line: “Claude 5-hour limit resets <time> · 62% unused”. Hovering says it’s on This Mac as reported at a time, and that the Chief will use it on the spare-capacity list (1 waiting). Muted, never amber or accent.',
+      'At the foot of What’s in flight, under any plan-usage line, one quiet muted line: “Claude 5-hour limit resets <time> · 62% left”. Hovering says when it was reported (never “On This Mac”), and that the Chief will use it on the spare-capacity list (1 waiting). Muted, never amber or accent.',
     command: 'agents.team',
     requires: '.agents-team__column > .agents-usage-spare',
     commands: {

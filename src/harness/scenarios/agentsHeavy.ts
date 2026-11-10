@@ -12,7 +12,7 @@
 
 import type { Scenario } from '../types';
 import { AGENTS_TAB, MIN, TEAM, agent, msg, now, overview, status } from './agents';
-import { FULL_INVENTORY } from './agentsUsage';
+import { FULL_INVENTORY, usageCommands } from './agentsUsage';
 
 const H = 60 * MIN;
 const DAY = 24 * H;
@@ -573,11 +573,12 @@ export const agentsHeavyScenarios: Scenario[] = [
     id: 'agents-heavy-settings',
     title: 'Settings → Agents with 22 agents',
     looksRightWhen:
-      'Settings on its Agents tab with the heavy roster behind it: nothing in Settings lists every agent, so 22 agents change nothing here; the Usage group reads as in settings-agents-usage.',
+      'Settings on its Agents tab with the heavy roster behind it: nothing in Settings lists every agent, so 22 agents change nothing here; the Accounts & usage page is the Usage view’s panel, as in settings-agents-usage.',
     command: 'settings.page.accounts',
-    requires: '.agents-usage .agents-usage__line',
+    requires: '.usage-panel .usage-key',
     commands: {
       ...commands,
+      ...usageCommands(FULL_INVENTORY),
       agents_desktop_settings: {
         supported: true,
         menuBarIcon: false,

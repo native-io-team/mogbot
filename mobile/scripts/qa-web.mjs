@@ -917,7 +917,8 @@ const LIVE = [
     name: 'agents',
     route: '/agents',
     ready: 'Chief of Staff',
-    check: 'Needs you, then Chief and pinned, then by activity; each row says what needs the OK',
+    check:
+      'Needs you, then Chief and pinned, then by activity; each row says what needs the OK. Above them, the usage glance as the desk sidebar says it: one line ("Plenty of room"), the stack as a thin segmented meter, and "N accounts · resets …"; never the old "Claude usage 41%" line',
   },
   {
     name: 'projects',
@@ -1800,7 +1801,7 @@ const LIVE = [
     ready: 'Use it all before reset',
     act: scrollToText('Spare-capacity list'),
     check:
-      'Usage: "Use it all before reset" with its line; "Claude 5-hour limit resets … · 62% unused"; "Claude Code: average turn" says it is an estimate; the list "0 waiting" (its one item started); Ollama running with its model, Opencode installed. Read-only.',
+      'Usage: "Use it all before reset" with its line; "Claude 5-hour limit resets … · 62% left"; "Claude Code: average turn" says it is an estimate; the list "0 waiting" (its one item started); Ollama running with its model, Opencode installed. Read-only.',
   },
   {
     name: 'connection',
@@ -2892,7 +2893,7 @@ async function main() {
           ready: 'Usage',
           act: scrollToText('YOUR ACCOUNTS'),
           check:
-            'Your accounts: a sheet with one headline, the stack as a segmented meter (one segment per account in order; an unread one an empty outlined slot, never full) with each account named and its room under it, and the next reset; then each account as a card: a numbered keycap (the one in use filled), its name, plan and who, a state pill ("In use", "Out of usage until …", "Not signed in"), its 5-hour and Weekly bars with "Resets in …", and an amber pace line when the Mac sent one',
+            'Your accounts: a sheet with one headline, the stack as a segmented meter (one segment per account in order; an unread one an empty outlined slot, never full) with each account named and its room under it, and the next reset; then each account as a card: a numbered keycap (the one in use filled), its name, plan and who, a state pill ("In use", "Out of usage until …", "Not signed in"), its 5-hour and Weekly bars with "Resets in …", and a pace line in secondary ink (never amber) when the Mac sent one; no account named "This Mac"',
         },
       ]);
     }

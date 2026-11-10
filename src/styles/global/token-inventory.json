@@ -5003,7 +5003,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 318
+      "consumerCount": 317
     },
     {
       "name": "--surface-control-hover",
@@ -5083,7 +5083,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 588
+      "consumerCount": 583
     },
     {
       "name": "--text-secondary",
@@ -5091,7 +5091,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 556
+      "consumerCount": 554
     },
     {
       "name": "--text-muted",
@@ -5099,7 +5099,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 890
+      "consumerCount": 884
     },
     {
       "name": "--text-faint",
@@ -5187,7 +5187,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 188
+      "consumerCount": 184
     },
     {
       "name": "--border-strong",
@@ -5219,7 +5219,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 297
+      "consumerCount": 293
     },
     {
       "name": "--border-width-emphasis",
@@ -5291,7 +5291,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 127
+      "consumerCount": 123
     },
     {
       "name": "--accent-error",
@@ -5491,7 +5491,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 78
+      "consumerCount": 77
     },
     {
       "name": "--font-size-body-lg",
@@ -5499,7 +5499,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 169
+      "consumerCount": 167
     },
     {
       "name": "--font-size-body-md",
@@ -5507,7 +5507,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 346
+      "consumerCount": 342
     },
     {
       "name": "--font-size-body-sm",
@@ -5515,7 +5515,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 511
+      "consumerCount": 502
     },
     {
       "name": "--font-size-control",
@@ -5627,7 +5627,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 136
+      "consumerCount": 134
     },
     {
       "name": "--font-weight-heading",
@@ -5659,7 +5659,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 10
+      "consumerCount": 9
     },
     {
       "name": "--line-height-control",
@@ -5683,7 +5683,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 131
+      "consumerCount": 125
     },
     {
       "name": "--line-height-reading",
@@ -5827,7 +5827,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 96
+      "consumerCount": 94
     },
     {
       "name": "--spacing-2xs",
@@ -5835,7 +5835,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 301
+      "consumerCount": 300
     },
     {
       "name": "--spacing-xs",
@@ -5843,7 +5843,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 713
+      "consumerCount": 704
     },
     {
       "name": "--spacing-sm",
@@ -5851,7 +5851,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 874
+      "consumerCount": 866
     },
     {
       "name": "--spacing-md",
@@ -5859,7 +5859,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 586
+      "consumerCount": 579
     },
     {
       "name": "--spacing-lg",
@@ -5867,7 +5867,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 236
+      "consumerCount": 235
     },
     {
       "name": "--spacing-xl",
@@ -5907,7 +5907,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 209
+      "consumerCount": 207
     },
     {
       "name": "--radius-sm",
@@ -5931,7 +5931,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 75
+      "consumerCount": 73
     },
     {
       "name": "--mask-opaque",
@@ -6275,7 +6275,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 318
+      "consumerCount": 317
     },
     {
       "name": "--surface-control-hover",
@@ -6355,7 +6355,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 588
+      "consumerCount": 583
     },
     {
       "name": "--text-secondary",
@@ -6363,7 +6363,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 556
+      "consumerCount": 554
     },
     {
       "name": "--text-quiet",
@@ -6379,7 +6379,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 890
+      "consumerCount": 884
     },
     {
       "name": "--text-faint",
@@ -6459,7 +6459,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 188
+      "consumerCount": 184
     },
     {
       "name": "--border-strong",
@@ -6499,7 +6499,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 127
+      "consumerCount": 123
     },
     {
       "name": "--accent-error",

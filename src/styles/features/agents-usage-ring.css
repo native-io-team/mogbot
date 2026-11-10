@@ -159,3 +159,10 @@
 .agent-usage__headline:is([data-tone='warning'], [data-tone='limited']) {
   color: var(--accent-warning);
 }
+
+/* A narrow popover: an account's name wraps rather than cut to a stub. */
+.agent-usage .usage-stack__label-name {
+  overflow: visible;
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
