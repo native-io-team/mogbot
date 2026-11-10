@@ -1000,6 +1000,17 @@ The phone can start work as well as answer it. Each piece is gated by
   lists every kind of phrase the picker writes; the mobile tests check the
   picker writes them and a Rust test (`agents::schedule`) checks the Mac's
   grammar reads each back as the same schedule.
+  **"When…" routines.** On a Mac that lists `agents.watch.create`, a new
+  routine opens with "At a time / When…" (`ROUTINE_MODES`), and When… is the
+  desk's composer (`components/whenComposer.tsx`, words and rules from
+  `whenComposer.ts` in companion-protocol): When this happens over the
+  sources, a folder chosen from the Mac's own list (`agents.watch.options`;
+  never a typed path, which the Mac refuses), Through, Check every, What, the
+  echo and what each check costs. A "When…" row on the agent sheet offers
+  Check now, Pause, Edit and Cancel; on an older Mac it stays read-only.
+  docs/agents.md, "“When…” routines", has the rules. Captured as
+  `schedule-when`, `schedule-when-folder`, `schedule-when-custom` and
+  `agent-sheet-when`.
   **Times are the Mac's.** The Mac reads the words on its own clock
   (`chrono::Local`), so the picker works in `welcome.timeZone`: "Today", the
   date chips, the past check and a one-off's Edit are the Mac's, and when

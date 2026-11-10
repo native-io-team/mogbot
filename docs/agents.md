@@ -4512,8 +4512,25 @@ check went, its week's cost, Check now (`agents_watch_check_now`), Edit,
 Pause and Cancel. ⌘K: "Start work for <agent> when something happens…".
 Agents set them with the `watch_for` tool. The phone gets them apart from
 timed routines as `agent.watches` (without `seen`/`pending`) and shows them
-read-only when `welcome.features` has `routines.when`; the Mac refuses any
-schedule operation the phone sends for one (`refuse_watch_from_phone`).
+when `welcome.features` has `routines.when`.
+
+**From the phone.** On a Mac that lists `agents.watch.options|create|update|checkNow`
+the phone sets them up and changes them too: its routine sheet has the same
+"At a time / When…" switch and the desk's composer, in the same words, all
+from `packages/companion-protocol/src/whenComposer.ts` (the desk reads them
+there too): When this happens over the sources ("checked from your Mac"),
+Through, Check every, What, the echo and what each check costs. A "When…" row
+on the agent sheet offers Check now, Pause, Edit and Cancel; on an older Mac
+it stays read-only ("Set up and changed on your Mac."). A phone can't type a
+path: `agents.watch.options` (`agents/watch_options.rs`) offers Downloads,
+Desktop and Documents when they exist plus folders a routine already watches,
+and a folder off that list is refused. The apps a check could read through
+come from the Mac as raw lists (our connections, with only this agent's
+grant, and Claude Code's servers) and are read by the shared `whenApps`. The
+user adds them, so no card, as on the desk; the 12-per-agent cap, the line in
+the chat and every rule of the check are the Mac's own. A time routine's Edit
+and Run now are refused for a "When…" one, and Check now for a timed one
+(`refuse_wrong_kind_from_phone`); Pause and Cancel are shared.
 
 Not verified against live accounts: a model check through a real connector,
 and the GitHub search source (pagination included). The notifications

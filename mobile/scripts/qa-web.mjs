@@ -1956,6 +1956,51 @@ const LIVE = [
       'Monthly picked: one more chip in How often, then Every month / Every 3 months and one “On the [1st] [day]” row like the time row; the echo says “Every month on the 1st at 9:00 AM”, and the Mac confirms the first run',
   },
   {
+    name: 'schedule-when',
+    route: '/schedule?agentId=site&mode=when',
+    ready: 'WHEN THIS HAPPENS',
+    check:
+      'New routine, “At a time / When…” with When… on, then the desk’s “When…” composer: WHEN THIS HAPPENS over five sources (Linear among them, the Mac has a Linear app), each with how it’s checked (“Free · checked from your Mac”), the first ticked; CHECK EVERY 5/10/30 min/1 hour with 10 min on; WHAT; the echo box says “Which…”-free words: “When someone mentions you on GitHub” and “Checks are free. The first check only notes what’s already there…”; Cancel and a neutral Add (not the agent’s colour), off until What is filled',
+  },
+  {
+    name: 'schedule-when-folder',
+    route: '/schedule?agentId=site&mode=when',
+    ready: 'WHEN THIS HAPPENS',
+    act: async (page) => {
+      await page.clickText('A new file appears in a folder');
+      await sleep(400);
+      await page.clickText('~/Downloads');
+      await sleep(300);
+      await page.type('File the invoice and tell me the total');
+      await sleep(400);
+    },
+    check:
+      'A new file appears in a folder ticked: chips of the Mac’s folders (~/Downloads on, ~/Desktop, ~/Documents) and “Folders your Mac offers. For another, set it up on your Mac.”; no path field; CHECK EVERY 1/5/10/30 min; the echo “When a new file appears in /Users/sam/Downloads — File the invoice and tell me the total” and “Checks are free…”; Add enabled',
+  },
+  {
+    name: 'schedule-when-custom',
+    route: '/schedule?agentId=site&mode=when',
+    ready: 'WHEN THIS HAPPENS',
+    act: async (page) => {
+      await page.clickText('Something else…');
+      await sleep(400);
+      await page.type('a new email from Dana about the launch');
+      await sleep(300);
+      await page.clickText('Gmail');
+      await sleep(400);
+    },
+    check:
+      'Something else… ticked: the “What to look for” field filled, THROUGH with Gmail and Linear chips (Gmail on), CHECK EVERY 15/30 min/1 hour/4 hours with 30 min on; the echo “When Acme Site finds “a new email from Dana about the launch”” and “Each check uses a little of Acme Site’s usage and can only read that app, up to 24 a day. The first check…”',
+  },
+  {
+    name: 'agent-sheet-when',
+    route: '/agent/site',
+    ready: 'Acme Site',
+    act: scrollToText('When something happens'),
+    check:
+      'WHEN SOMETHING HAPPENS: one row with a bolt, “When someone mentions you on GitHub”, “Triage it and tell me if it’s urgent”, “Checks every 10 min · checked 4 min ago · last found 2 …” and an ellipsis (it can be acted on); no “Set up and changed on your Mac.” line',
+  },
+  {
     name: 'new-agent',
     route: '/new-agent',
     ready: 'Draft it',
