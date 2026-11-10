@@ -738,6 +738,11 @@ export function ChatView({
           </Pressable>
           {usageRing}
           {conversationsButton}
+          <IconButton
+            name="waveform"
+            label={`Talk to ${agent.name}`}
+            onPress={() => router.push({ pathname: '/talk', params: { id } })}
+          />
           <IconButton name="info.circle" label={`About ${agent.name}`} onPress={openSheet} />
         </View>
       ) : (
@@ -1284,6 +1289,7 @@ const ChatHeader = memo(function ChatHeader({
   const openSheet = () => router.push({ pathname: '/agent/[id]', params: { id } });
   const openUsage = () => router.push({ pathname: '/usage', params: { id } });
   const openConversations = () => router.push({ pathname: '/conversations', params: { id } });
+  const openTalk = () => router.push({ pathname: '/talk', params: { id } });
   const ring = percent != null && tone != null;
   const conversationsButton = offered && !switchRow && (
     <IconButton name="bubble.left" label="Conversations" onPress={openConversations} />
@@ -1315,6 +1321,11 @@ const ChatHeader = memo(function ChatHeader({
                     {usageRing}
                     {conversationsButton}
                     <IconButton
+                      name="waveform"
+                      label={`Talk to ${agent.name}`}
+                      onPress={openTalk}
+                    />
+                    <IconButton
                       name="info.circle"
                       label={`About ${agent.name}`}
                       fallback="ⓘ"
@@ -1337,6 +1348,12 @@ const ChatHeader = memo(function ChatHeader({
             accessibilityLabel="Conversations"
             tintColor={accent.accent}
             onPress={openConversations}
+          />
+          <Stack.Toolbar.Button
+            icon="waveform"
+            accessibilityLabel={`Talk to ${agent.name}`}
+            tintColor={accent.accent}
+            onPress={openTalk}
           />
           <Stack.Toolbar.Button
             icon="info.circle"

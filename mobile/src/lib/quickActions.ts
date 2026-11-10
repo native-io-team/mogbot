@@ -1,8 +1,8 @@
 /**
  * Home Screen quick actions (long-press the app icon): message the Chief
- * of Staff, and open the next thing that needs you. Kept in step with the
- * Mac's agents; none while unpaired. A no-op where the native module isn't
- * built in (Expo Go).
+ * of Staff, talk to it (Talk, app/talk.tsx), and open the next thing that
+ * needs you. Kept in step with the Mac's agents; none while unpaired. A
+ * no-op where the native module isn't built in (Expo Go).
  */
 
 import * as QuickActions from 'expo-quick-actions';
@@ -12,7 +12,7 @@ import { quietAgentIds } from './home';
 import type { Target } from './notify';
 import { getApp, useApp } from './store';
 
-export type QuickTarget = (Target & { compose?: boolean }) | 'home';
+export type QuickTarget = (Target & { compose?: boolean; talk?: boolean }) | 'home';
 
 let signature = '';
 
@@ -34,7 +34,14 @@ function items(): QuickActions.Action[] {
         ]
       : []),
     ...(chief
-      ? [{ id: 'compose', title: `New message to ${chief.name}`, icon: 'symbol:square.and.pencil' }]
+      ? [
+          {
+            id: 'compose',
+            title: `New message to ${chief.name}`,
+            icon: 'symbol:square.and.pencil',
+          },
+          { id: 'talk', title: `Talk to ${chief.name}`, icon: 'symbol:waveform' },
+        ]
       : []),
   ];
 }
@@ -61,6 +68,10 @@ export function quickTarget(action: QuickActions.Action): QuickTarget | null {
   if (action.id === 'compose') {
     const chief = agents.find((a) => a.isMain);
     return chief ? { agentId: chief.id, compose: true } : 'home';
+  }
+  if (action.id === 'talk') {
+    const chief = agents.find((a) => a.isMain);
+    return chief ? { agentId: chief.id, talk: true } : 'home';
   }
   if (action.id === 'next')
     return nextNeedsYou(agents, s.chats, quietAgentIds(s.teamSetup)) ?? 'home';
