@@ -326,6 +326,12 @@ const TOOLS: &[Tool] = &[
         schema: super::quiet::schema,
     },
     Tool {
+        name: super::brief::TOOL,
+        description: super::brief::DESCRIPTION,
+        main_only: true,
+        schema: super::brief::schema,
+    },
+    Tool {
         name: super::team_reach::TOOL,
         description: super::team_reach::DESCRIPTION,
         main_only: false,
@@ -554,6 +560,8 @@ fn tools_list(caller: &store::Agent) -> Value {
     tools.extend(super::project_tools::definitions());
     // "Test it": only while the user's run is open (`preview_test`).
     tools.extend(super::preview_test::definitions(&caller.id));
+    // This Mac's own apps: every agent, one Allow per app on first use.
+    tools.extend(super::mac_apps::definitions());
     json!({ "tools": tools })
 }
 
@@ -600,6 +608,11 @@ pub async fn handle_rpc(
             if let Some(tool) = super::preview_test::find(name) {
                 return ok(super::preview_test::call(app, &caller, turn, tool, &args).await);
             }
+            // This Mac's apps: its grant, a card, macOS's own permission
+            // (`mac_apps::call`).
+            if let Some(tool) = super::mac_apps::find(name) {
+                return ok(super::mac_apps::call(app, &caller, turn, tool, &args).await);
+            }
             if let Some(tool) = super::usage_tools::find(name) {
                 return ok(usage_tool(app, &caller, turn, tool, &args).await);
             }
@@ -642,19 +655,27 @@ pub async fn handle_rpc(
             // needs the user's OK to change the team or set up a routine.
             // `delete_agent` asks anyway; `watch_for` asks in `check_ins`,
             // with what the routine costs on the same card.
-            if needs_card_in_routine_turn(name)
-                && name != "delete_agent"
-                && name != "watch_for"
-                && runner::from_outside(&caller.id)
-                && super::broker::is_live(&caller.id, turn)
-            {
+            // A turn that read one of this Mac's apps (`mac_apps`) asks the
+            // same way: what it read could hold someone else's words.
+            let outside_now =
+                runner::from_outside(&caller.id) && super::broker::is_live(&caller.id, turn);
+            let why = if outside_now {
+                (name != "watch_for").then_some(OUTSIDE_WHY)
+            } else {
+                super::mac_apps::read_in_turn(&caller.id, turn).then_some(super::mac_apps::READ_WHY)
+            };
+            if let (true, false, Some(why)) = (
+                needs_card_in_routine_turn(name),
+                name == "delete_agent",
+                why,
+            ) {
                 // A call that would fail anyway fails before asking.
                 if name == "create_agent" {
                     if let Err(e) = create_args(&args) {
                         return ok(error(e));
                     }
                 }
-                let (title, detail) = outside_card(name, &args);
+                let (title, detail) = outside_card(name, &args, why);
                 let answer = ask_user(app, &caller, title, detail, None).await;
                 if let Some(refused) = refused_reply(&answer, "do it") {
                     return ok(error(refused));
@@ -810,6 +831,7 @@ async fn call(
                 Err(e) => error(e),
             }
         }
+        super::brief::TOOL => morning_brief(app, caller, args).await,
         super::team_reach::TOOL => match super::team_reach::call(caller, args) {
             Ok(t) => text(t),
             Err(e) => error(e),
@@ -863,8 +885,7 @@ pub fn needs_card_in_routine_turn(tool: &str) -> bool {
 pub(super) const OUTSIDE_WHY: &str = "It’s working on something a “When…” routine found, which came from outside this app, so it asks you first.";
 
 /// The card for one of those, in a turn answering outside text.
-fn outside_card(tool: &str, args: &Value) -> (String, String) {
-    let why = OUTSIDE_WHY;
+fn outside_card(tool: &str, args: &Value, why: &str) -> (String, String) {
     let who = arg(args, "agent")
         .or(arg(args, "name"))
         .unwrap_or("an agent");
@@ -2647,6 +2668,68 @@ pub(super) fn read_wait(
 
 /// The tool's reply when a confirmation didn't come back as Allow: the
 /// user's No, or (never dressed up as a No) a card that expired unanswered.
+/// `set_morning_brief` (`agents/brief.rs`). The user's setting: never in a
+/// turn answering outside text. Adding a check (a daily read of their apps)
+/// wants their own message, else a card; anything else applies at once with
+/// a line.
+async fn morning_brief(app: &AppHandle, caller: &store::Agent, args: &Value) -> Value {
+    if runner::from_outside(&caller.id) {
+        return error("Not while answering what came from outside this app: the morning brief is the user's to set. Tell the user instead.");
+    }
+    let now = super::brief::get();
+    let next = match super::brief::wanted(args, &now) {
+        Ok(next) => next,
+        Err(e) => return error(e),
+    };
+    if super::brief::adds_checks(&now, &next) && !runner::users_own_ask(&caller.id) {
+        let answer = ask_user(
+            app,
+            caller,
+            "Add checks to your morning brief?".to_string(),
+            super::brief::checks_line(&next),
+            None,
+        )
+        .await;
+        if let Some(refused) = refused_reply(&answer, "add them") {
+            return error(refused);
+        }
+    }
+    let saved = if next != now {
+        match super::brief::set(next) {
+            Ok(saved) => {
+                let _ = tauri::Emitter::emit(app, super::brief::EVENT, ());
+                let line = runner::new_message(
+                    &caller.id,
+                    store::MessageKind::Note,
+                    super::brief::describe(&saved),
+                );
+                let _ = runner::record(app, line);
+                saved
+            }
+            Err(e) => return error(e.to_string()),
+        }
+    } else {
+        now
+    };
+    let mut told = format!(
+        "{} Tell the user in one line.",
+        super::brief::describe(&saved)
+    );
+    if args.get("now").and_then(Value::as_bool) == Some(true) {
+        match super::brief::post_now(app).await {
+            Ok(true) => {
+                told = format!(
+                    "{} Today's brief is posted in your chat; don't repeat it.",
+                    super::brief::describe(&saved)
+                )
+            }
+            Ok(false) => told = "There was nothing for a brief.".to_string(),
+            Err(e) => return error(format!("Couldn't post the brief: {e}")),
+        }
+    }
+    text(told)
+}
+
 pub(super) fn refused_reply(answer: &Answer, what: &str) -> Option<String> {
     match answer {
         Answer::Allowed => None,
@@ -4235,6 +4318,7 @@ mod tests {
         let (title, detail) = outside_card(
             "create_agent",
             &json!({ "name": "Research", "template": "research", "instructions": "Works in climate policy." }),
+            OUTSIDE_WHY,
         );
         assert_eq!(title, "Create Research");
         assert!(
@@ -4248,12 +4332,14 @@ mod tests {
         let (_, detail) = outside_card(
             "create_agent",
             &json!({ "name": "R", "template": "research", "role": "Climate papers" }),
+            OUTSIDE_WHY,
         );
         assert!(detail.contains("\nClimate papers\n") && !detail.contains(&research.role));
         // Without a template, the briefing is what's shown.
         let (_, detail) = outside_card(
             "create_agent",
             &json!({ "name": "F", "role": "Invoices", "instructions": "Pay on time." }),
+            OUTSIDE_WHY,
         );
         assert!(
             detail.starts_with("Invoices\nInstructions: Pay on time.\n\n"),

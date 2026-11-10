@@ -9,7 +9,7 @@
  * web page or message can open one.
  */
 
-import { CHIEF_LOOK, type PairingLink } from '@shipstudio/companion-protocol';
+import { CHIEF_ICON, COLORWAYS, type PairingLink } from '@shipstudio/companion-protocol';
 import * as Clipboard from 'expo-clipboard';
 import * as Notifications from 'expo-notifications';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -17,7 +17,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, FadeInDown, FadeOut, ZoomIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AgentAvatar, Spinner } from '../components/agent';
+import { Spinner } from '../components/agent';
+import { AgentKey } from '../components/AgentKey';
 import { Button, Icon, T } from '../components/ui';
 import { ALERTS_WHILE_OPEN } from '../lib/push';
 import {
@@ -39,7 +40,7 @@ import { PAIRING_LOST } from '../lib/identity';
 import { useApp } from '../lib/store';
 import { PAIRING_SCHEME } from '@shipstudio/companion-protocol';
 import { haptic } from '../lib/haptics';
-import { agentColorKeys, avatarSize, iconSize, radius, space } from '../lib/theme';
+import { iconSize, keySize, radius, space } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 // The placeholder tile (unbranded) until real branding lands.
 
@@ -156,13 +157,14 @@ export default function Pair() {
       bounces={false}
     >
       <View style={styles.hero}>
-        {/* The site's mark: a neutral key with a face, as the Chief wears. */}
+        {/* The site's mark: the Chief's key, as the desk's onboarding shows it. */}
         <View style={styles.logo}>
-          <AgentAvatar
-            name=""
-            color={agentColorKeys.all[0]}
-            look={CHIEF_LOOK}
-            size={avatarSize.sheet}
+          <AgentKey
+            name="Chief of Staff"
+            colorway={COLORWAYS[0].id}
+            icon={CHIEF_ICON}
+            boundKey="C"
+            size={keySize.xl}
           />
         </View>
         <T variant="display" color={colors.textStrong}>
@@ -201,8 +203,8 @@ export default function Pair() {
                 Scan the code on your Mac
               </T>
               <T color={colors.textSecondary}>
-                It’s on the Mac’s last setup screen for your phone, or in Settings → Agents → Phone →
-                Pair a phone. Then click Allow on the Mac.
+                It’s on the Mac’s last setup screen for your phone, or in Settings → Agents → Phone
+                → Pair a phone. Then click Allow on the Mac.
               </T>
               <Button
                 title="Scan the code"

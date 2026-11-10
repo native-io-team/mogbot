@@ -17,14 +17,21 @@ import { Stack, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, View } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
-import { AgentAvatar } from '../../../components/agent';
+import { AgentKey } from '../../../components/AgentKey';
 import { useArmed } from '../../../components/ApprovalCard';
 import { ConnectionNotice, useNow } from '../../../components/ConnectionPill';
 import { DemoCard } from '../../../components/DemoCard';
 import { RefreshStatus } from '../../../components/RefreshStatus';
 import { Button, Icon, T, useRipple } from '../../../components/ui';
 import { AgentAccent } from '../../../lib/accent';
-import { askingLine, failedTurn, failureLine, engineName, formatAgo } from '../../../lib/agents';
+import {
+  agentKeyState,
+  askingLine,
+  failedTurn,
+  failureLine,
+  engineName,
+  formatAgo,
+} from '../../../lib/agents';
 import { makeStyles, useColors } from '../../../lib/appearance';
 import { haptic } from '../../../lib/haptics';
 import { SETUP_TITLE } from '../../../lib/home';
@@ -41,7 +48,7 @@ import { useRefresh } from '../../../lib/refresh';
 import { answerApproval, canCall, describeError, loadLatest } from '../../../lib/session';
 import { useApp } from '../../../lib/store';
 import { progress as setupProgress } from '../../../lib/teamSetup';
-import { avatarSize, iconSize, PRESSED, radius, space } from '../../../lib/theme';
+import { heroMark, keySize, iconSize, PRESSED, radius, space } from '../../../lib/theme';
 import { previewText } from '@shipstudio/companion-protocol';
 
 /** Agents whose chat the feed needs and this phone hasn't loaded. */
@@ -283,12 +290,12 @@ function Row({ item, agent }: { item: FeedItem; agent: Agent }) {
         accessibilityHint={item.kind === 'ask' ? 'Opens the whole request' : undefined}
         style={({ pressed }) => [styles.rowMain, pressed && PRESSED]}
       >
-        <AgentAvatar
+        <AgentKey
           id={agent.id}
           name={agent.name}
           color={agent.color}
-          look={agent.avatar}
-          size={avatarSize.group}
+          state={agentKeyState(agent)}
+          size={keySize.md}
         />
         <View style={styles.rowText}>
           <View style={styles.rowHead}>
@@ -391,9 +398,9 @@ const useStyles = makeStyles((colors) => ({
   empty: { alignItems: 'center', gap: space.md, paddingTop: space['2xl'] * 2 },
   emptyText: { textAlign: 'center', paddingHorizontal: space.xl },
   check: {
-    width: avatarSize.sheet,
-    height: avatarSize.sheet,
-    borderRadius: avatarSize.sheet / 2,
+    width: heroMark,
+    height: heroMark,
+    borderRadius: heroMark / 2,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceControl,

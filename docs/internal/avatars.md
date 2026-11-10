@@ -1,8 +1,9 @@
 # Agent avatars
 
-> **Superseded on the desk by agent keys** ([agent-keys.md](agent-keys.md)): `AgentKey.tsx`,
-> `agent-key.css`, the shared `agentKeys.ts`. The desk files named below are gone. The phone still
-> draws these avatars from `packages/companion-protocol/src/avatar.ts` until it moves to keys.
+> **Superseded by agent keys** ([agent-keys.md](agent-keys.md)) on the desk and the phone:
+> `AgentKey.tsx` on both, the shared `agentKeys.ts`. The files named below, the shared
+> `avatar.ts` included, are gone. The Mac still keeps an agent's look (`agents::store::AgentLook`)
+> for older clients and the Chief's `update_agent`; nothing draws it. Kept as history.
 
 Each agent is a key cap in its own colour: one of four even shapes, raised like a key on a
 keyboard, with a small face on its top. When it moves, it says what the agent is doing. The

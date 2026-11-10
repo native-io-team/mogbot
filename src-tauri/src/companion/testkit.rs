@@ -1743,6 +1743,21 @@ impl Backend for Stub {
         Ok(json!({ "window": window }))
     }
 
+    async fn morning_brief(&self) -> Result<Value, CommandError> {
+        Ok(
+            json!({ "on": true, "at": 8 * 60, "always": false, "lastPostedAt": 1_762_675_200_000_i64 }),
+        )
+    }
+
+    async fn set_morning_brief(
+        &self,
+        on: bool,
+        at: u32,
+        always: bool,
+    ) -> Result<Value, CommandError> {
+        Ok(json!({ "on": on, "at": at, "always": always }))
+    }
+
     async fn usage_plan(&self) -> Result<Value, CommandError> {
         use crate::agents::engine::Engine;
         use crate::agents::forecast::PerRun;

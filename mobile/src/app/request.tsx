@@ -16,12 +16,13 @@ import { useCallback, useEffect, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AgentAvatar, Spinner } from '../components/agent';
+import { Spinner } from '../components/agent';
+import { AgentKey } from '../components/AgentKey';
 import { ApprovalCard, useArmed } from '../components/ApprovalCard';
 import { Card, Line } from '../components/surfaces';
 import { Button, IconButton, T } from '../components/ui';
 import { AgentAccent } from '../lib/accent';
-import { askingLine, formatAgo } from '../lib/agents';
+import { agentKeyState, askingLine, formatAgo } from '../lib/agents';
 import { makeStyles, useColors } from '../lib/appearance';
 import { askAction, askState, type CatchItem } from '../lib/catchUp';
 import { haptic } from '../lib/haptics';
@@ -29,7 +30,7 @@ import { useInFlight } from '../lib/once';
 import { answerApproval, describeError, loadLatest, setOpenChat } from '../lib/session';
 import { highRisk } from '../lib/needsYou';
 import { useApp } from '../lib/store';
-import { avatarSize, iconSize, space } from '../lib/theme';
+import { keySize, iconSize, space } from '../lib/theme';
 
 /** The big answer buttons: taller than a large button, for the thumb. */
 const BIG = space['2xl'] + space.xl;
@@ -172,12 +173,12 @@ function Shown({
       <ScrollView contentContainerStyle={styles.scroll}>
         {agent && (
           <View style={styles.who}>
-            <AgentAvatar
+            <AgentKey
               id={agent.id}
               name={agent.name}
               color={agent.color}
-              look={agent.avatar}
-              size={avatarSize.header}
+              state={agentKeyState(agent)}
+              size={keySize.md}
             />
             <T variant="headline" color={colors.textStrong} numberOfLines={1} style={styles.name}>
               {agent.name}
@@ -298,7 +299,7 @@ const useStyles = makeStyles((colors) => ({
     paddingHorizontal: space.sm,
     paddingVertical: space.xs,
   },
-  headerEnd: { width: avatarSize.list },
+  headerEnd: { width: keySize.lg },
   scroll: { padding: space.lg, gap: space.lg },
   who: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   name: { flex: 1 },

@@ -52,8 +52,8 @@ jest.mock('../src/components/ConnectionPill', () => ({
   useLinkState: () => null,
   useNow: () => Date.now(),
 }));
+jest.mock('../src/components/AgentKey', () => ({ AgentKey: () => null }));
 jest.mock('../src/components/agent', () => ({
-  AgentAvatar: () => null,
   Spinner: () => null,
   StatusMark: () => null,
 }));

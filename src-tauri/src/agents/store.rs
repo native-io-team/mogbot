@@ -36,19 +36,18 @@ pub const COLORS: &[&str] = &[
 /// face. Still written, so an older build reads the registry; nothing draws it.
 pub const SHAPE_COUNT: u8 = 14;
 
-/// The avatar's shapes, faces and finishes, as keys: the drawings live in the
-/// shared spec (`packages/companion-protocol/src/avatar.ts`, checked against
-/// these in a test). A key cap: four even shapes, a face on its top.
+/// The avatar's shapes, faces and finishes, as keys. Kept beside each agent's
+/// key (`keys`) for older clients and the Chief's `update_agent`; the clients
+/// draw keys now (docs/internal/agent-keys.md), so nothing draws these.
 pub const AVATAR_SHAPES: &[&str] = &["circle", "squircle", "diamond", "hexagon"];
 pub const AVATAR_FACES: &[&str] = &["dots", "smile", "debossed", "monogram"];
 pub const AVATAR_FINISHES: &[&str] = &["keycap", "embossed"];
-/// The face every default wears (`DEFAULT_FACE` in avatar.ts).
+/// The face every default wears.
 pub const DEFAULT_FACE: &str = "dots";
 
-/// The previous system's keys, each to its nearest now (`LEGACY_SHAPES` /
-/// `LEGACY_FACES` in avatar.ts; a test parses those and compares). A look
-/// saved under it reads as its nearest, the same on every client; nothing is
-/// rewritten on disk, so an older build still reads what it wrote.
+/// The previous system's keys, each to its nearest now. A look saved under
+/// it reads as its nearest; nothing is rewritten on disk, so an older build
+/// still reads what it wrote.
 pub const LEGACY_SHAPES: &[(&str, &str)] = &[
     ("rounded", "squircle"),
     ("pill", "circle"),
@@ -159,13 +158,12 @@ impl AgentLook {
         self.clone().normalized().is_some()
     }
 
-    /// The Chief's default (`CHIEF_LOOK` in avatar.ts).
+    /// The Chief's default.
     pub const CHIEF_SHAPE: &'static str = "squircle";
     pub const CHIEF_FACE: &'static str = DEFAULT_FACE;
 
-    /// What the clients derive for an agent with no choice saved
-    /// (`defaultLook` in avatar.ts: FNV-1a of the id picks a shape, never
-    /// the Chief's; every default has dot eyes).
+    /// What older clients derived for an agent with no choice saved (FNV-1a
+    /// of the id picks a shape, never the Chief's; every default has dot eyes).
     pub fn default_for(id: &str, is_main: bool) -> AgentLook {
         if is_main {
             return AgentLook {
@@ -211,8 +209,7 @@ impl AgentLook {
         }
     }
 
-    /// "a hexagon with dot eyes", "an embossed circle", as `describeLook` in
-    /// avatar.ts says it.
+    /// "a hexagon with dot eyes", "an embossed circle", as older clients said it.
     pub fn describe(shape: Option<&str>, face: Option<&str>, finish: Option<&str>) -> String {
         let embossed = finish == Some("embossed");
         let face = face.map(|f| match f {

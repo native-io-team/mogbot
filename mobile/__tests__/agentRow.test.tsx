@@ -98,14 +98,16 @@ jest.mock('../src/components/ConnectionPill', () => ({
   useLinkState: () => null,
   useNow: () => Date.now(),
 }));
-// The avatar counts how often the row under it mockMounts.
-jest.mock('../src/components/agent', () => ({
-  AgentAvatar: function Avatar() {
+// The key counts how often the row under it mounts.
+jest.mock('../src/components/AgentKey', () => ({
+  AgentKey: function Key() {
     jest.requireActual<typeof import('react')>('react').useEffect(() => {
       mockMounts += 1;
     }, []);
     return null;
   },
+}));
+jest.mock('../src/components/agent', () => ({
   Spinner: () => null,
   StatusMark: () => null,
 }));

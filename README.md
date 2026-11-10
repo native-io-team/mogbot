@@ -1,160 +1,197 @@
 # Mogbot
 
-> Working name. It lives in one file, [`brand.json`](brand.json); the app itself
-> avoids saying it.
+**Your own team of AI agents, on your Mac, on the Claude or ChatGPT plan you
+already pay for.**
 
-Your own team of AI agents, on your own computer, on the accounts you already
-pay for.
+<p align="center">
+  <img src="docs/images/readme/agent-keys-board.webp" alt="What's in flight: every agent as a key on a board, with its state under it (Working, Needs your OK, Live, Paused), and Lead Gen's email waiting on Deny or Allow" width="900">
+</p>
 
-**The goal: extremely complex tasks, made extremely easy.** You say what you
-want; your agents do whatever it takes. They find access wherever it exists (a
-connected app or Claude connector, the tools and files on your Mac, a built-in
-browser, your own Chrome) and only ask you when there's truly no other way —
-or before spending money, sending as you, publishing, or deleting your things.
-See [docs/MISSION.md](docs/MISSION.md#north-star-extremely-complex-tasks-made-extremely-easy).
+You talk to a **Chief of Staff**. It creates named agents for the work you hand
+it, briefs them, delegates, and comes back with results. Each agent remembers
+you, keeps its own instructions and routines, and runs on **Claude Code or
+Codex** (your pick, per agent) on your own machine. Anything that spends money,
+sends something as you, or changes what other people see waits for your
+**Allow**. Follow along and answer from your phone.
 
-## Try it
+Open source (MIT). Mogbot is a working name; it lives in one file,
+[`brand.json`](brand.json).
 
-**Invited to test it? Start with [docs/WELCOME.md](docs/WELCOME.md).**
+## What it does
 
-There's no download yet: you build it on your Mac. Easiest: open this folder in
-Claude Code or Codex and say *"Set this up on my Mac and phone. Follow
-docs/INSTALL.md."* It installs the tools, builds the app, and tells you the few
-things only you can do (sign in, install Tailscale on your phone, scan a code).
+### A team you can see
 
-You need a Mac with 15 GB free (about 25 GB to build the phone app with Xcode),
-a paid Claude (Pro/Max) or ChatGPT plan, and for the phone a free Tailscale
-account, on the Mac **and** the phone, same account, before you scan the
-pairing code. Step by step, with checks and troubleshooting:
-**[docs/INSTALL.md](docs/INSTALL.md)**.
+Every agent is a key: its own colour, an icon, and a letter on your keyboard
+that jumps straight to it. A key is pressed while the agent works, sits proud
+and lit when it needs your OK, and comes out of its socket when it's paused.
+The Chief makes new ones from one sentence; you review them once, then they
+exist. Agents can work together in rooms, and you can step into any agent's
+own session in a terminal and hand it back.
 
-**The phone app, two ways** (until it's on the App Store). Pick whichever is
-easiest for you:
+### Work comes back checked
 
-| | Expo Go | Built with Xcode |
-|---|---|---|
-| Best for | Trying it fast, development | The real experience |
-| You install | Expo Go from the App Store | Full Xcode on the Mac; phone plugged in once |
-| Setup time | Minutes | 30–60 min the first time |
-| Dictation, "Send to agent" share sheet, Home Screen actions | No (the keyboard's mic still works) | Yes |
-| Works when the Mac's dev server is off | No | Yes |
-| Push notifications | No | Not yet (needs a paid Apple Developer account and TestFlight) |
-| Catch | — | With a free Apple ID it must be re-installed every 7 days |
+<p align="center">
+  <img src="docs/images/readme/result-card.webp" alt="A result card in Finance's chat: October invoice summary, a PDF, a CSV and the source sheet, what it says it checked, what it didn't verify, and Ask for changes" width="900">
+</p>
 
-Either way the phone talks only to your Mac, over your own Tailscale.
+Finished work is one card: the files and links, what the agent **says** it
+checked, and what it **didn't** verify. Ask for changes and you get a new
+version. Under every reply, a folded "what it did" timeline shows the steps it
+actually took. An agent working on a project gets its own copy (a git
+worktree on its own branch), so you choose Keep changes, Review, Preview or
+Discard.
 
-You open the app and you're talking to your **Chief of Staff**. It sets up
-named agents for the work you hand it, briefs them, delegates, and comes back
-with results. Each agent remembers you, keeps its own instructions and
-routines, and runs on **Claude Code or Codex** on your machine. Anything that
-spends money, sends something, or changes what other people see waits for your
-Allow. You can follow along and answer from your phone.
+### Usage you can trust
 
-Why it exists, and what it is not: [docs/MISSION.md](docs/MISSION.md).
+<p align="center">
+  <img src="docs/images/readme/usage-view.webp" alt="The Usage view: Plenty of room, the 5-hour and weekly limits with when they reset, what each agent used this week, and Where did my usage go" width="900">
+</p>
 
-## What it does today
+The app shows your plan's limits only as Claude Code or Codex report them, and
+what each agent and routine used this week. Nothing is guessed; an estimate is
+labelled as one. Add more than one account and agents carry on with the next
+when one runs out. Pick Normal, Save my limits, or Use it all before reset.
 
-- **A team, not a chatbot.** A Chief of Staff plus the agents it (or you)
-  creates, each with a colour, memory you can read and edit, routines, apps
-  it may use, and a choice of engine per agent.
-- **Approvals as a tap.** Allow / Deny cards in the chat. Secrets go into a
-  masked card and the macOS Keychain, never into the conversation.
-- **Results you can review.** Finished work comes back as one card: the
-  files and links, what the agent says it checked and what it didn't
-  verify. Ask for changes and you get a new version.
-- **A copy of the project per task.** An agent working on a project works
-  in its own copy, so it never tramples you or another agent. Keep changes,
-  Review changes, Preview or Discard.
-- **Take over.** Step into an agent's own session in a terminal, drive it by
-  hand, then hand it back.
-- **Shows its work.** Under each reply, a folded "what it did" timeline of
-  the steps the agent actually took and how they turned out, with
-  screenshots, live while it works.
-- **Routines that start themselves.** On a schedule, or "When…" something
-  happens: a GitHub mention or assignment, a new file in a folder, or a
-  check through one of your apps. Checks run sealed and read-only, from
-  your Mac; there are no webhooks.
-- **Usage before the wall.** What each agent and routine used this week, and
-  your plan's usage when Claude Code or Codex reports it. Nothing estimated.
-- **Start fresh, keep memory.** A clean conversation whenever you want one,
-  and a context meter that only shows what the engine reported.
-- **Nothing goes silent.** A turn that fails, is stopped or is cut off says
-  so in the chat.
-- **Your phone.** A companion app (`mobile/`), paired by QR code, that talks to
-  your own Mac over your own Tailscale: chat, approve, review results, start
-  new agents and routines, dictate, share things to an agent. The phone only
-  talks to a Mac that has proved it's yours. Nothing passes through our
-  servers.
-- **Projects underneath.** When work becomes a site or an app, it lives in a
-  full workspace: agent terminals, live preview, visual editing, branches,
-  PRs, hosting status, snapshots. Agents create and work in projects too.
-- **Bring your agents.** From Ship Studio on this Mac, or from Grok Bot or any
-  other assistant through a short conversation that ends on a card where you
-  pick what to import.
+### You decide how much they do alone
+
+One slider per team or per agent: **Careful, Steady, Bold, Unleashed**. Each
+step lets agents do more without asking. Even at Unleashed they stop for
+money, logins, deleting for good and going live. Approvals arrive as an Allow /
+Deny card. Secrets go into a masked card and the macOS Keychain, never the
+chat. Logins use the provider's own sign-in; agents never ask for a password.
+
+### Your phone, talking only to your Mac
+
+<p align="center">
+  <img src="docs/images/readme/phone-needs-you.webp" alt="The phone app's Needs you list: a delete waiting on Deny or Allow, an import to review, an account switch to answer and a file edit to answer" width="360">
+</p>
+
+The companion app pairs by QR code and reaches your Mac over your own
+Tailscale. Chat, answer cards, review results, start agents and routines,
+dictate. The phone won't send a secret until the Mac proves it's yours.
+Nothing passes through our servers.
+
+### And
+
+- **Routines** on a schedule, in steps with your OK in the middle, or
+  "When…" something happens (a GitHub mention, a new file in a folder, a check
+  through one of your apps). Checks run sealed and read-only, from your Mac.
+- **Agents find their own way in:** a connected app, the tools and files on
+  your Mac, their own browser, or your signed-in Chrome when you allow it.
+- **Slack:** start an agent from a Slack message and get the answer in the
+  thread; every reply waits for your OK unless you've said otherwise.
+- **Bring your agents** from Grok Bot or any assistant that speaks MCP, through
+  a short interview that ends on one card where you pick what to import.
+- **Projects underneath:** when work becomes a site or an app, it lives in a
+  full workspace with agent terminals, live preview, visual editing, git and
+  hosting status.
 - Light and dark, on desktop and phone.
 
-Your Mac does the work, so it has to be on for agents to keep going. Being
-honest about that is a feature: the app tells you what will and won't keep
-running.
+## Quick start
 
-## Works with Ship Studio
+There's no download yet: you build it on your Mac. The full runbook, with a
+check for every step, is **[docs/INSTALL.md](docs/INSTALL.md)**.
 
-This is the evolution of [Ship Studio](https://github.com/ship-studio/ship-studio)
-and stays compatible with it in both directions: the projects folder
-(`~/ShipStudio`) and the in-project `.shipstudio/` format are shared, so either
-app opens projects made by the other. Settings, agents, pairing, logs and
-Keychain entries are this app's own, so the two run side by side.
+**You need**
 
-## Run it (development)
+- A Mac on a recent macOS (14 or later expected; tested on 26), Apple Silicon
+  or Intel, with **15 GB free** (about 25 GB to build the phone app with Xcode)
+- A paid **Claude plan (Pro or Max)** for Claude Code, or a paid **ChatGPT
+  plan** for Codex, or both
+- For the phone: an iPhone (or Android phone) and a free **Tailscale** account,
+  signed in on the Mac **and** the phone with the same account before you scan
+  the pairing code
 
-Requirements: macOS, Node 22 (`.nvmrc`), pnpm, Rust (`rust-toolchain.toml`),
-Xcode command line tools. For the phone build, full Xcode.
+**Easiest:** open this folder in Claude Code or Codex and say:
+
+> Set this up on my Mac and phone. Follow docs/INSTALL.md.
+
+It installs the tools, builds the app (10 to 25 minutes the first time), and
+stops for the few things only you can do: your Mac password, signing in,
+installing apps on your phone, scanning a code.
+
+**By hand** (Xcode Command Line Tools, Node 22+, pnpm 9 and Rust first; see
+steps 2 to 5 of [INSTALL.md](docs/INSTALL.md)):
 
 ```bash
+git clone https://github.com/native-io-team/mogbot.git && cd mogbot
 pnpm install
-pnpm tauri dev          # the desktop app
-pnpm harness            # the real UI against fixtures, in a browser (127.0.0.1:1425)
-pnpm test:run           # frontend tests
-pnpm rust:test          # backend tests
-pnpm check:all          # every CI gate
+CI=true pnpm tauri build --bundles app
+osascript -e 'quit app "Mogbot"' 2>/dev/null; rm -rf /Applications/Mogbot.app && cp -R src-tauri/target/release/bundle/macos/Mogbot.app /Applications/ && codesign --force --deep --sign - /Applications/Mogbot.app && codesign --verify --deep --strict /Applications/Mogbot.app && echo SIGNATURE_OK && open /Applications/Mogbot.app
 ```
 
-The phone app is its own pnpm project:
+The app then walks you through it one screen at a time: pick Claude Code or
+Codex, install and sign in, choose how independent agents are, optionally set
+up your phone, and you land in a conversation with your Chief of Staff.
 
-```bash
-cd mobile && pnpm install
-pnpm mock               # a scripted Mac, so you don't need the desktop running
-pnpm ios                # build the dev client and open the simulator
-```
+**The phone app** comes two ways until it's on the App Store: **Expo Go**
+(minutes; a terminal on the Mac stays open; no dictation or share sheet) or
+**built with Xcode** (the real app; 30 to 60 minutes the first time; with a
+free Apple ID, re-install every 7 days). Neither gets push notifications yet.
+See [INSTALL.md, step 13](docs/INSTALL.md#step-13-choose-how-to-get-the-phone-app).
 
-To pair with the real desktop app, turn Tailscale on (Mac and phone) and use
-the Phone row at the foot of the sidebar. Details, including building onto a
-real iPhone: [mobile/README.md](mobile/README.md).
+Your Mac does the work, so agents stop when it sleeps or the app is closed.
+The app tells you what will and won't keep running.
+
+## How it compares
+
+- **The experience is modelled on Grok Bot:** named agents you just talk to,
+  approvals as a tap, a chat that feels like a team. The difference is what's
+  underneath: Claude Code and Codex, on your machine and your own accounts,
+  with no usage ceiling of ours on top.
+- **Next to Claude Code or Codex in a terminal:** the same engines, plus a
+  team with memory, approval cards, result cards, routines, usage across
+  accounts and a phone app. You can still drop into any agent's terminal
+  session.
+- **Next to cloud agent services:** nothing runs on our servers, and nothing
+  is stored there. The trade-off is that your Mac has to be on.
+
+## Security
+
+Agents run with edits allowed and everything else routed through an approval
+broker: what they may do on their own is set by the independence level, and a
+short floor (money, credentials, deleting for good, pushing to production)
+always asks. Tokens and secrets live only in the macOS Keychain, never in the
+chat, argv or logs. Text from outside (web pages, mail, other people's
+messages) can't raise what an agent may do: imports and "When…" checks run
+sealed, read-only calls, and a turn answering outside text asks for more. The phone pairs only to a Mac that proves its
+pinned identity, and every pairing is confirmed on the desk. Details:
+[docs/agents.md](docs/agents.md#approvals), [docs/mobile.md](docs/mobile.md),
+[docs/remote-access.md](docs/remote-access.md). To report a vulnerability, see
+[SECURITY.md](SECURITY.md).
 
 ## Status
 
-Early, and moving fast. It will be open source (MIT); the git history is Ship
-Studio's, so upstream fixes can still be merged. There is no App Store or
-TestFlight build yet, no update feed, and no telemetry: those stay off until
-`brand.json` names an endpoint for them. What's next: [docs/ROADMAP.md](docs/ROADMAP.md).
+Early, and moving fast. macOS only for now. There is no signed download, no
+App Store or TestFlight build, no push notifications, no update feed and no
+telemetry: those stay off until `brand.json` names an endpoint for them, and
+it names none. What's next: [docs/ROADMAP.md](docs/ROADMAP.md).
 
-Before the repo goes public, review its history (it carries Ship Studio's)
-and make sure no credentials ever landed in it.
+**Works with Ship Studio.** This is the evolution of
+[Ship Studio](https://github.com/ship-studio/ship-studio) and opens its
+projects (`~/ShipStudio`, the in-project `.shipstudio/` folder) and vice versa.
+Settings, agents, pairing and Keychain entries are this app's own, so the two
+run side by side. You can copy Ship Studio's agents in from Agents → Import.
 
 ## Docs
 
-- [docs/WELCOME.md](docs/WELCOME.md): for invited testers, what to expect and how to set it up
+- [docs/WELCOME.md](docs/WELCOME.md): for invited testers, what to expect
 - [docs/INSTALL.md](docs/INSTALL.md): the setup runbook your agent follows
-- [docs/MISSION.md](docs/MISSION.md): why, for whom, and the rules that follow
-- [docs/ROADMAP.md](docs/ROADMAP.md): what's done and what's next, ranked
-- [docs/agents.md](docs/agents.md): agents, approvals, routines, memory and engines
-- [docs/mobile.md](docs/mobile.md): the phone companion and pairing
+- [docs/MISSION.md](docs/MISSION.md): why it exists and the rules that follow
+- [docs/ROADMAP.md](docs/ROADMAP.md): what's done and what's next
+- [docs/agents.md](docs/agents.md): agents, approvals, routines, memory, engines
+- [docs/mobile.md](docs/mobile.md): the phone app and pairing
 - [docs/remote-access.md](docs/remote-access.md): driving your agents from another assistant
 - [docs/design-system.md](docs/design-system.md): tokens, accent, themes, primitives
-- [CLAUDE.md](CLAUDE.md) / [AGENTS.md](AGENTS.md): architecture and conventions for contributors and agents
-- [CONTRIBUTING.md](CONTRIBUTING.md): setup, CI gates, debugging
-- [docs/ship-studio-readme.md](docs/ship-studio-readme.md): the original Ship Studio README
+
+## Contributing
+
+Contributions are welcome. Start with
+[CONTRIBUTING.md](CONTRIBUTING.md): setup, the UI harness, tests, the CI gates
+and the patterns the codebase expects. [CLAUDE.md](CLAUDE.md) and
+[AGENTS.md](AGENTS.md) are the architecture reference for people and coding
+agents alike. Please read the [Code of Conduct](CODE_OF_CONDUCT.md).
 
 ## License
 
-MIT. See [LICENSE](LICENSE).
+[MIT](LICENSE).

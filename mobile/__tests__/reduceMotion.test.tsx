@@ -1,6 +1,6 @@
 /**
- * Reduce Motion turned on while the app is open: the avatar's working
- * motion and blink (`useMoving`) stop at once, not at the next launch
+ * Reduce Motion turned on while the app is open: a key's pulse and the
+ * loops (`useMoving`) stop at once, not at the next launch
  * (Reanimated's own hook reads the setting only once).
  */
 

@@ -27,7 +27,8 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { AgentAvatar, Spinner } from '../components/agent';
+import { Spinner } from '../components/agent';
+import { AgentKey } from '../components/AgentKey';
 import { ApprovalCard, useArmed } from '../components/ApprovalCard';
 import { MessageRow } from '../components/chat';
 import { RowBoundary } from '../components/RowBoundary';
@@ -65,7 +66,16 @@ import { answerApproval, canCall, describeError, loadLatest, setOpenChat } from 
 import { highRisk } from '../lib/needsYou';
 import { useApp } from '../lib/store';
 import { progress as setupProgress } from '../lib/teamSetup';
-import { avatarSize, iconSize, lineHeight, radius, READ_LINE, space, type } from '../lib/theme';
+import {
+  heroMark,
+  keySize,
+  iconSize,
+  lineHeight,
+  radius,
+  READ_LINE,
+  space,
+  type,
+} from '../lib/theme';
 
 /** How long a card's chats get to load before the queue starts without them. */
 const LOAD_WAIT_MS = 5000;
@@ -335,13 +345,7 @@ function Shown({
       >
         <ScrollView contentContainerStyle={styles.scroll}>
           <View style={styles.who}>
-            <AgentAvatar
-              id={agent.id}
-              name={agent.name}
-              color={agent.color}
-              look={agent.avatar}
-              size={avatarSize.header}
-            />
+            <AgentKey id={agent.id} name={agent.name} color={agent.color} size={keySize.md} />
             <T variant="headline" color={colors.textStrong} numberOfLines={1} style={styles.name}>
               {agent.name}
             </T>
@@ -502,7 +506,7 @@ const useStyles = makeStyles((colors) => ({
     paddingHorizontal: space.sm,
     paddingVertical: space.xs,
   },
-  count: { minWidth: avatarSize.list, textAlign: 'right', paddingRight: space.sm },
+  count: { minWidth: keySize.lg, textAlign: 'right', paddingRight: space.sm },
   track: {
     height: space.xs,
     marginHorizontal: space.lg,
@@ -532,9 +536,9 @@ const useStyles = makeStyles((colors) => ({
   grow: { flex: 1 },
   done: { alignItems: 'center', gap: space.md, paddingHorizontal: space.xl },
   check: {
-    width: avatarSize.sheet,
-    height: avatarSize.sheet,
-    borderRadius: avatarSize.sheet / 2,
+    width: heroMark,
+    height: heroMark,
+    borderRadius: heroMark / 2,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.surfaceControl,

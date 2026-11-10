@@ -1,6 +1,6 @@
 # Contributing
 
-Thanks for your interest in contributing. This app (working name Mogbot, set in `brand.json`) is the evolution of Ship Studio; read [docs/MISSION.md](docs/MISSION.md) first, then [docs/ROADMAP.md](docs/ROADMAP.md). This guide will help you get started.
+Thanks for your interest in contributing. Mogbot (a working name, set only in `brand.json`) is the evolution of Ship Studio; read [docs/MISSION.md](docs/MISSION.md) first, then [docs/ROADMAP.md](docs/ROADMAP.md). This guide gets you from a clone to a passing PR.
 
 > **Before you start**
 >
@@ -16,9 +16,10 @@ Thanks for your interest in contributing. This app (working name Mogbot, set in 
 ### Prerequisites
 
 - **Node.js** — version pinned in [`.nvmrc`](.nvmrc) (currently 22). With `nvm`: `nvm use`.
-- **pnpm** — `npm install -g pnpm` (or use [Corepack](https://nodejs.org/api/corepack.html)).
-- **Rust** (latest stable) — install via [rustup.rs](https://rustup.rs/).
-- **Xcode Command Line Tools** (macOS only): `xcode-select --install`.
+- **pnpm 9** — `npm install -g pnpm@9.15.9` (or `corepack enable pnpm`). A newer global pnpm switches itself to the version in `packageManager` inside this repo.
+- **Rust** (stable, per [`rust-toolchain.toml`](rust-toolchain.toml)) — install via [rustup.rs](https://rustup.rs/).
+- **Xcode Command Line Tools**: `xcode-select --install`. Full Xcode only if you build the phone app onto a device.
+- **macOS.** The app and its install guide target the Mac; [docs/INSTALL.md](docs/INSTALL.md) is the step-by-step setup with a check for every step.
 
 ### Getting Started
 
@@ -34,9 +35,46 @@ pnpm install
 pnpm tauri dev
 ```
 
-This starts both the Vite dev server (frontend) and Tauri app (backend). The phone app is a separate pnpm project in `mobile/` — see [mobile/README.md](mobile/README.md).
+This starts both the Vite dev server (frontend, port 1420) and the Tauri app (backend). If 1420 is taken: `SHIPSTUDIO_DEV_PORT=1445 pnpm tauri dev --config '{"build":{"devUrl":"http://127.0.0.1:1445"}}'`. A dev build and an installed `.app` share the same app data (agents, pairing), so don't run both at once.
 
-**Working in a git worktree?** Set `CARGO_TARGET_DIR` to the main checkout's `.claude/cargo-shared` (absolute path) so worktrees share one Rust build instead of compiling from scratch each. Running several UI harnesses at once? Give each its own `SHIPSTUDIO_HARNESS_PORT` and `TMPDIR` (see [docs/ui-harness.md](docs/ui-harness.md)).
+The phone app is a separate pnpm project in `mobile/` — see [mobile/README.md](mobile/README.md):
+
+```bash
+cd mobile && pnpm install
+pnpm mock     # a scripted Mac, so you don't need the desktop running
+pnpm ios      # build the dev client and open the simulator
+```
+
+### Working in worktrees
+
+Several worktrees (or several coding agents) at once is normal here. Three things keep them out of each other's way:
+
+- **One Rust build.** Set `CARGO_TARGET_DIR` to the main checkout's `.claude/cargo-shared` (an absolute path) for every `cargo` and `pnpm tauri` command, so each worktree doesn't compile the crate from scratch.
+- **One harness port each.** Give every UI harness its own `SHIPSTUDIO_HARNESS_PORT` and `TMPDIR` (the capture script's Chrome profile lives there), the same in both shells. The capture script refuses to screenshot a harness served from another checkout.
+- **One phone QA port set each.** `pnpm qa:web --web-port <n> --mock-port <n> --cdp-port <n>`.
+
+## Looking at the UI
+
+You can see the app without building it. `pnpm harness` boots the **real** frontend in a browser against a fixture backend, and the capture script screenshots any state:
+
+```bash
+pnpm harness &                                   # http://127.0.0.1:1425
+pnpm harness:capture                             # every scenario + every Cmd+K command, into harness/shots/
+node scripts/harness-capture.mjs agents-         # only scenarios whose id starts with agents-
+node scripts/harness-capture.mjs --all --theme light
+```
+
+In another worktree, or beside another agent:
+
+```bash
+export SHIPSTUDIO_HARNESS_PORT=1437 TMPDIR=$(mktemp -d)
+pnpm harness &
+node scripts/harness-capture.mjs <scenario-id>
+```
+
+Open `http://127.0.0.1:1425/harness.html?scenario=<id>` to browse by hand. Scenarios live in `src/harness/scenarios/`; each says what the screen should look like. A Tauri command with no fixture is never given a plausible default: it fails the run, and that screenshot isn't evidence. Add the fixture first. Full guide: [docs/ui-harness.md](docs/ui-harness.md).
+
+**Phone screens without a simulator:** `cd mobile && pnpm qa:web` renders the companion app with react-native-web against the mock Mac and captures a fixed list of screens, light and dark, into `mobile/qa-shots/` with a `report.md`. Narrow it with `--only <prefix>`, `--phases <list>` and `--themes light`. What's a web artifact (tab-bar position, safe areas, icons) is listed in [docs/mobile.md](docs/mobile.md), "Phone screens without a simulator".
 
 ## Before You Push — the CI Gates
 
@@ -44,9 +82,10 @@ Every PR runs these checks in CI. Run them locally first and your PR will
 pass on the first try:
 
 ```bash
-pnpm check:all     # brand + typecheck + lint + prettier + rustfmt + clippy + docs + pattern & LOC checks
+pnpm check:all     # brand + typecheck + lint + prettier + rustfmt + clippy + script/extension tests + docs + pattern, LOC and UI-baseline checks
 pnpm test:run      # frontend tests (Vitest)
 pnpm rust:test     # backend tests (cargo test)
+cd mobile && pnpm typecheck && pnpm test   # the phone app, if you touched mobile/ or packages/
 ```
 
 Notes:
@@ -72,7 +111,8 @@ Notes:
 ```
 src/                        # React frontend (TypeScript)
 ├── components/             # UI components
-│   ├── setup/              # Onboarding wizard
+│   ├── agents/             # Agents: chat, cards, keys, sidebar, What's in flight
+│   ├── setup/              # Onboarding
 │   ├── edit/               # Visual editor panels
 │   └── primitives/         # Shared ModalFrame, Button, …
 ├── lib/                    # Tauri command wrappers & utilities (~60 modules)
@@ -80,6 +120,7 @@ src/                        # React frontend (TypeScript)
 ├── commands/               # Cmd+K palette registry
 ├── contexts/               # Modal, toast, and other app contexts
 ├── styles/                 # CSS (global tokens, features, modes, components)
+├── harness/                # UI harness: fixture backend + scenarios
 └── App.tsx                 # Main app component & state
 
 src-tauri/                  # Rust backend
@@ -89,17 +130,19 @@ src-tauri/                  # Rust backend
 │   ├── types.rs            # Type definitions
 │   ├── utils.rs            # Path validation, helpers
 │   ├── cache.rs            # TTL-based git caching
+│   ├── agents/             # The agents engine: turns, approvals, routines, usage, results
+│   ├── companion/          # The phone app's server (pairing, auth, sync)
+│   ├── remote_access/      # MCP server for driving agents from another assistant
 │   └── commands/           # Modular command handlers
 │       ├── git/            # Git operations (branches, status, stash, sync)
 │       ├── projects/       # Project CRUD (detection, metadata, sessions, templates)
 │       ├── setup/          # Onboarding (auth, install, status checks)
-│       ├── plugins/        # Plugin lifecycle & storage
 │       ├── ide/            # IDE launch & screenshot capture
 │       ├── pty/            # Pseudo-terminal spawn/stream
 │       ├── skills/         # Agent skill search & install
 │       ├── health/         # Project health checks
 │       ├── github.rs       # GitHub CLI integration
-│       ├── publishing.rs   # Vercel deployment workflow
+│       ├── publishing.rs   # Push the current branch to origin
 │       ├── mobile.rs       # Mobile app preview (Expo/RN/Flutter)
 │       ├── edit.rs         # Visual editor backend
 │       ├── conflicts.rs    # Merge conflict resolution
@@ -107,6 +150,12 @@ src-tauri/                  # Rust backend
 │       └── ...             # ~30 modules total — see CLAUDE.md for the full list
 ├── Cargo.toml              # Rust dependencies
 └── tauri.conf.json         # Tauri configuration
+
+mobile/                     # The phone app (Expo / React Native), its own pnpm project
+packages/companion-protocol # Types and shared data both apps and the Mac agree on
+chrome-extension/           # The extension behind "Use my Chrome" (off by default)
+docs/                       # MISSION, ROADMAP, INSTALL, agents, mobile, design system, ...
+brand.json                  # The app's name, ids and every external link
 ```
 
 ### Key Technologies
@@ -116,7 +165,8 @@ src-tauri/                  # Rust backend
 | Frontend | React 19, TypeScript, Vite |
 | Backend | Rust, Tauri 2 |
 | Terminal | xterm.js + tauri-pty |
-| Styling | CSS Variables (dark theme) |
+| Styling | CSS variables (design tokens), light and dark |
+| Phone | Expo / React Native |
 
 ## Code Style
 
@@ -197,8 +247,9 @@ Add screenshot capture for project thumbnails
 1. Create a feature branch from `main`
 2. Make your changes with clear commits
 3. Run the CI gates locally: `pnpm check:all && pnpm test:run && pnpm rust:test`
-4. Test the affected flows by hand with `pnpm tauri dev`
-5. Submit PR with description of changes — the PR template walks you through the patterns checklist
+4. Look at what you changed: a harness scenario for a UI change (add one if the state is new), and `pnpm tauri dev` for anything that touches Rust or a real engine
+5. Say what you verified and how, and what you didn't; read [docs/verifying-your-own-work.md](docs/verifying-your-own-work.md) first
+6. Submit the PR — the template walks you through the patterns checklist
 
 ## Common Development Tasks
 
@@ -248,6 +299,8 @@ pnpm test:run         # Run all tests once
 pnpm test             # Watch mode
 pnpm test:ui          # Run with interactive UI
 pnpm test:coverage    # Run with coverage report
+pnpm test:scripts     # Node tests for scripts/ (harness, brand checks, ...)
+pnpm test:extension   # Chrome extension tests
 ```
 
 Tests are in `src/**/*.test.{ts,tsx}`. We use the official `@tauri-apps/api/mocks` module for mocking Tauri IPC calls.
@@ -257,7 +310,13 @@ Tests are in `src/**/*.test.{ts,tsx}`. We use the official `@tauri-apps/api/mock
 pnpm rust:test        # or: cd src-tauri && cargo test
 ```
 
-Unit tests are colocated in source files using `#[cfg(test)]` modules.
+Unit tests are colocated in source files, or in `*_tests.rs` files beside them, using `#[cfg(test)]` modules.
+
+**Phone app (Jest):**
+```bash
+cd mobile && pnpm test        # unit and node tests
+cd mobile && pnpm typecheck
+```
 
 ### Manual Testing Checklist
 
@@ -306,7 +365,7 @@ The built app will be in `src-tauri/target/release/bundle/`.
 
 ### Frontend: Structured Logger
 
-Use the structured logger (`src/lib/logger.ts`) instead of `console.error`. Logs are flushed to the Rust backend and persisted to disk at `~/Library/Logs/ShipStudio/`.
+Use the structured logger (`src/lib/logger.ts`) instead of `console.error`. Logs are flushed to the Rust backend and persisted to disk at `~/Library/Logs/Mogbot/` (the folder is `appDirName` in `brand.json`).
 
 ```typescript
 import { logger } from '../lib/logger';
@@ -369,18 +428,13 @@ For anything that affects user-visible state or data integrity, propagate the er
 The app writes structured logs (via the `tracing` crate) to a folder named by `appDirName` in `brand.json` (`Mogbot` today):
 
 ```
-macOS:    ~/Library/Logs/Mogbot/
-Windows:  %LOCALAPPDATA%\Mogbot\logs\
+~/Library/Logs/Mogbot/
 ```
 
 Rotated daily. Tail the latest with:
 
 ```bash
-# macOS / Linux
 tail -f ~/Library/Logs/Mogbot/mogbot.log.*
-
-# Windows (PowerShell)
-Get-Content -Wait (Get-ChildItem $env:LOCALAPPDATA\Mogbot\logs\mogbot.log.* | Select -Last 1)
 ```
 
 ### Rust backtraces

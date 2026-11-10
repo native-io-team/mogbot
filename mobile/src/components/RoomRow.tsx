@@ -12,9 +12,11 @@ import { Pressable, View } from 'react-native';
 import { formatAgo } from '../lib/agents';
 import { foldLine, membersOf, roomKey, roomLine, workingHere, type RoomFold } from '../lib/rooms';
 import { useApp } from '../lib/store';
-import { avatarSize, chromeScale, iconSize, radius, space } from '../lib/theme';
+import { keySize, chromeScale, iconSize, radius, space } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
-import { AgentAvatar, Spinner } from './agent';
+import { Spinner } from './agent';
+import { AgentKey } from './AgentKey';
+import { keyGeometry } from '../lib/agentKey';
 import { Dot, Icon, StatusPill, T, useRipple } from './ui';
 
 const NONE: never[] = [];
@@ -22,13 +24,13 @@ const NONE: never[] = [];
 const RING = 2;
 
 /**
- * Two members' badges and "+N" for the rest, the newest speaker never
- * singled out: a room is nobody's in particular. Whole badges only: two
- * tiles share the list's avatar square corner to corner (rings touching,
- * faces apart), and the header sets them side by side, so no initials are
- * ever cut. The ring is drawn in the surface it sits on (`on`).
+ * Two members' keys and "+N" for the rest, the newest speaker never
+ * singled out: a room is nobody's in particular. Whole keys only: two
+ * small keys share the list's key square corner to corner (rings touching),
+ * and the header sets them side by side. The ring is drawn in the surface
+ * it sits on (`on`).
  */
-export function StackedAvatars({
+export function StackedKeys({
   members,
   size = 'list',
 }: {
@@ -37,8 +39,10 @@ export function StackedAvatars({
 }) {
   const colors = useColors();
   const styles = useStyles();
-  const tile = avatarSize.group;
+  const tile = keySize.sm;
   const ringed = tile + RING * 2;
+  // A key stands on its depth: its box is that much taller than wide.
+  const ringedTall = ringed + keyGeometry(tile).rest;
   const shown = members.slice(0, 2);
   const more = members.length - shown.length;
   const ring = { borderColor: size === 'header' ? colors.surfacePanel : colors.surfaceApp };
@@ -57,21 +61,21 @@ export function StackedAvatars({
       <View style={styles.pairRow} accessible={false}>
         {shown.map((m) => (
           <View key={m.id} style={[styles.ring, ring, { borderRadius: radius.inner }]}>
-            <AgentAvatar id={m.id} name={m.name} color={m.color} size={tile} />
+            <AgentKey id={m.id} name={m.name} color={m.color} size={tile} />
           </View>
         ))}
         {plus}
       </View>
     );
   }
-  const box = avatarSize.list;
+  const box = keySize.lg;
   // One badge sits centred; two share the square corner to corner.
   const spots =
     shown.length === 1
-      ? [[(box - ringed) / 2, (box - ringed) / 2]]
+      ? [[(box - ringed) / 2, (box - ringedTall) / 2]]
       : [
           [0, 0],
-          [box - ringed, box - ringed],
+          [box - ringed, box - ringedTall],
         ];
   return (
     <View style={{ width: box, height: box }} accessible={false}>
@@ -85,7 +89,7 @@ export function StackedAvatars({
             { left: spots[i][0], top: spots[i][1], borderRadius: radius.inner },
           ]}
         >
-          <AgentAvatar id={m.id} name={m.name} color={m.color} size={tile} />
+          <AgentKey id={m.id} name={m.name} color={m.color} size={tile} />
         </View>
       ))}
       {plus}
@@ -130,7 +134,7 @@ export const RoomRow = memo(function RoomRow({
         pressed && { backgroundColor: colors.surfaceControl },
       ]}
     >
-      <StackedAvatars members={members} />
+      <StackedKeys members={members} />
       <View style={styles.text}>
         <View style={styles.line}>
           <T

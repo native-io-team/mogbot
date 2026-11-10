@@ -9,13 +9,14 @@ import { Stack, useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { Pressable, SectionList, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
-import { AgentAvatar, Spinner } from '../../../components/agent';
+import { Spinner } from '../../../components/agent';
+import { AgentKey } from '../../../components/AgentKey';
 import { Icon, T } from '../../../components/ui';
 import { formatAgo, plainSnippet } from '../../../lib/agents';
 import { roomsOffered } from '../../../lib/rooms';
 import { canCall, describeError, search } from '../../../lib/session';
 import { useApp } from '../../../lib/store';
-import { avatarSize, fonts, iconSize, space } from '../../../lib/theme';
+import { keySize, fonts, iconSize, space } from '../../../lib/theme';
 import { useColors } from '../../../lib/appearance';
 
 interface Group {
@@ -128,7 +129,12 @@ export default function Search() {
             {section.room ? (
               <Icon name="person.2" size={iconSize.inline} color={colors.textSecondary} />
             ) : (
-              <AgentAvatar id={section.key} name={section.name} color={section.color} size={avatarSize.group} />
+              <AgentKey
+                id={section.key}
+                name={section.name}
+                color={section.color}
+                size={keySize.sm}
+              />
             )}
             <T
               variant="small"

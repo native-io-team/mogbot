@@ -27,22 +27,25 @@
 import * as Crypto from 'expo-crypto';
 import { useRouter } from 'expo-router';
 import {
+  boundKeyFor,
+  colorwayForColor,
   DESCRIBE_PLACEHOLDER,
-  freeLook,
+  freshColorway,
+  iconFor,
   keptRoutines,
+  keyLookFor,
+  legacyColorFor,
   openingOf,
-  lookFor,
   MAC_FEATURES,
   type AgentDraft,
-  type AgentLook,
   type NewAgentDefaults,
   type RoleTemplateSummary,
 } from '@shipstudio/companion-protocol';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
-import { AgentAvatar } from '../components/agent';
+import { AgentKey } from '../components/AgentKey';
 import { DraftReview } from '../components/draftReview';
-import { Chip, ChipRow, ColorSwatches, LookChoices } from '../components/pickers';
+import { Chip, ChipRow, ColorSwatches, KeyChoices } from '../components/pickers';
 import { Button, SheetPage, T } from '../components/ui';
 import { SheetTitle } from '../components/SheetTitle';
 import { AccentProvider, useAccent } from '../lib/accent';
@@ -61,7 +64,7 @@ import {
 } from '../lib/newAgent';
 import { call, canCall, createAgent, describeError } from '../lib/session';
 import { useApp, useServed } from '../lib/store';
-import { avatarSize, fonts, lineHeight, radius, space, type } from '../lib/theme';
+import { keySize, fonts, lineHeight, radius, space, type } from '../lib/theme';
 
 export default function NewAgent() {
   const colors = useColors();
@@ -94,15 +97,25 @@ export default function NewAgent() {
   const [role, setRole] = useState('');
   const [name, setName] = useState('');
   const takenColors = useMemo(() => (agents ?? []).map((a) => a.color), [agents]);
-  const [color, setColor] = useState(() => freeColor(takenColors));
-  // A Mac that keeps looks: a shape nobody wears yet, shown as it'll be.
-  const looks = useApp((s) => !!s.welcome?.features?.includes(MAC_FEATURES.keycaps));
-  const [look, setLook] = useState<AgentLook>(() =>
-    freeLook(
-      (agents ?? []).map((a) => lookFor(a)),
-      String(Date.now())
-    )
+  const [plainColor, setPlainColor] = useState(() => freeColor(takenColors));
+  // A Mac that keeps keys: a colourway nobody wears yet, a legend read from
+  // what it's for and the first free letter of its name, until you pick.
+  const keys = useApp((s) => !!s.welcome?.features?.includes(MAC_FEATURES.agentKeys));
+  const [colorway, setColorway] = useState(() =>
+    freshColorway((agents ?? []).map((a) => keyLookFor(a).colorway))
   );
+  const [pickedIcon, setIcon] = useState<string | null>(null);
+  const [pickedKey, setBoundKey] = useState<string | null>(null);
+  const takenKeys = useMemo(
+    () => (agents ?? []).map((a) => keyLookFor(a).boundKey).filter((k): k is string => !!k),
+    [agents]
+  );
+  // The colour old clients and the chat's accent read: the colourway's nearest, on a Mac that keeps keys.
+  const color = keys ? legacyColorFor(colorway) : plainColor;
+  const setColor = (c: string) => {
+    setPlainColor(c);
+    setColorway(colorwayForColor(c));
+  };
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const clientId = useRef(Crypto.randomUUID());
@@ -169,6 +182,8 @@ export default function NewAgent() {
 
   const suggested = suggestAgentName(role, taken);
   const finalName = name.trim() || suggested || '';
+  const icon = pickedIcon ?? iconFor(finalName, role);
+  const boundKey = pickedKey ?? boundKeyFor(finalName, takenKeys);
   const engine = defaultEngineLabel(engines, defaults);
   // On a fallback, why it isn't the engine chosen in Settings.
   const why = defaults && notChosenBecause(defaults);
@@ -185,7 +200,7 @@ export default function NewAgent() {
         role: role.trim(),
         color,
         ...(template ? { template: template.id } : {}),
-        ...(looks ? { avatar: look } : {}),
+        ...(keys ? { colorway, icon, ...(boundKey ? { boundKey } : {}) } : {}),
         ...(draft
           ? {
               instructions: instructions.trim(),
@@ -328,11 +343,12 @@ export default function NewAgent() {
           <>
             <View style={styles.identity}>
               <AccentProvider color={color}>
-                <AgentAvatar
-                  name={finalName || '?'}
+                <AgentKey
+                  name={finalName}
+                  role={role}
                   color={color}
-                  look={looks ? look : undefined}
-                  size={avatarSize.list}
+                  {...(keys ? { colorway, icon } : {})}
+                  size={keySize.lg}
                 />
               </AccentProvider>
               <TextInput
@@ -351,9 +367,19 @@ export default function NewAgent() {
                 accessibilityHint={suggested ? `Leave empty to call it ${suggested}` : undefined}
               />
             </View>
-            <ColorSwatches value={color} onChange={setColor} />
-            {looks && (
-              <LookChoices name={finalName || '?'} color={color} look={look} onChange={setLook} />
+            {keys ? (
+              <KeyChoices
+                name={finalName}
+                colorway={colorway}
+                icon={icon}
+                boundKey={boundKey}
+                taken={takenKeys}
+                onColorway={setColorway}
+                onIcon={setIcon}
+                onBoundKey={setBoundKey}
+              />
+            ) : (
+              <ColorSwatches value={color} onChange={setColor} />
             )}
             {draft && (
               <DraftReview

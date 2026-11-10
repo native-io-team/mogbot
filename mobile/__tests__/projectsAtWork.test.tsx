@@ -44,7 +44,8 @@ jest.mock('../src/components/ConnectionPill', () => ({
   LinkProblem: () => null,
   useNow: () => 0,
 }));
-jest.mock('../src/components/agent', () => ({ AgentAvatar: () => null, Spinner: () => null }));
+jest.mock('../src/components/agent', () => ({ Spinner: () => null }));
+jest.mock('../src/components/AgentKey', () => ({ AgentKey: () => null }));
 jest.mock('../src/components/session', () => ({
   SessionState: () => null,
   useTaskName: () => 'Claude Code 1',

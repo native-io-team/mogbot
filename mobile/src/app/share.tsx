@@ -14,7 +14,7 @@ import { MAX_ATTACHMENTS, type Agent } from '@shipstudio/companion-protocol';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { FlatList, Pressable, StyleSheet, View } from 'react-native';
-import { AgentAvatar } from '../components/agent';
+import { AgentKey } from '../components/AgentKey';
 import { Button, SheetPage, T, useRipple } from '../components/ui';
 import { SheetTitle } from '../components/SheetTitle';
 import { makeStyles, useColors } from '../lib/appearance';
@@ -32,7 +32,7 @@ import {
   type SharedPayload,
 } from '../lib/share';
 import { getApp, useApp } from '../lib/store';
-import { avatarSize, radius, space } from '../lib/theme';
+import { keySize, radius, space } from '../lib/theme';
 
 export default function Share() {
   const colors = useColors();
@@ -236,7 +236,7 @@ function AgentChoice({
         pressed && { backgroundColor: colors.surfaceGroupPressed },
       ]}
     >
-      <AgentAvatar id={agent.id} name={agent.name} color={agent.color} size={avatarSize.header} />
+      <AgentKey id={agent.id} name={agent.name} color={agent.color} size={keySize.md} />
       <View style={styles.rowText}>
         <T variant="headline" color={colors.textStrong} numberOfLines={1}>
           {agent.name}
@@ -280,7 +280,7 @@ const useStyles = makeStyles((colors) => ({
   rowText: { flex: 1, gap: space['2xs'] },
   divider: {
     position: 'absolute',
-    left: space.lg + avatarSize.header + space.md,
+    left: space.lg + keySize.md + space.md,
     right: 0,
     bottom: 0,
     height: StyleSheet.hairlineWidth,

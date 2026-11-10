@@ -1,4 +1,4 @@
-/** The paired Mac, alerts (with the honest limit), quiet hours, haptics, updates, and about. */
+/** The paired Mac, alerts (with the honest limit), quiet hours, the morning brief, haptics, updates, and about. */
 
 import * as Notifications from 'expo-notifications';
 import { useRouter } from 'expo-router';
@@ -8,6 +8,7 @@ import { Alert, AppState, Linking, ScrollView, StyleSheet, Switch, View } from '
 import { Icon, Row, Section, T, tap } from '../components/ui';
 import { NewAgentDefaults } from '../components/NewAgentDefaults';
 import { IndependenceSetting } from '../components/IndependenceSetting';
+import { MorningBriefSetting } from '../components/MorningBriefSetting';
 import { QuietHoursSetting } from '../components/QuietHoursSetting';
 import { formatDate } from '../lib/agents';
 import { useQuotaLines } from '../lib/quota';
@@ -275,6 +276,8 @@ export default function Settings() {
       </Section>
 
       <QuietHoursSetting />
+
+      <MorningBriefSetting />
 
       <Section title="Appearance">
         {APPEARANCE.map((o, i) => {

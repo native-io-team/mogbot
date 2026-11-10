@@ -58,6 +58,21 @@ fn git_status_failure_message(
     )
 }
 
+/// Whether the project is inside a git working tree, read from the disk (a
+/// `.git` in it or a folder above it), so asking runs no git. The workspace
+/// asks this before polling git status: a folder that isn't a repository
+/// spent three failing git processes on every 10-second tick.
+#[tauri::command]
+#[tracing::instrument(fields(project = %project_path))]
+pub async fn git_is_repository(project_path: String) -> Result<bool, CommandError> {
+    let project = validate_project_path(&project_path)?;
+    Ok(is_inside_repository(&project))
+}
+
+fn is_inside_repository(path: &std::path::Path) -> bool {
+    path.ancestors().any(|dir| dir.join(".git").exists())
+}
+
 #[tauri::command]
 #[tracing::instrument(fields(project = %project_path))]
 pub async fn check_git_has_changes(project_path: String) -> Result<bool, CommandError> {
@@ -271,7 +286,25 @@ pub async fn get_file_diff(
 
 #[cfg(test)]
 mod tests {
-    use super::{git_status_failure_message, truncate_stderr};
+    use super::{git_status_failure_message, is_inside_repository, truncate_stderr};
+
+    #[test]
+    fn repository_is_read_from_the_folder_or_above() {
+        let plain = tempfile::tempdir().unwrap();
+        assert!(!is_inside_repository(plain.path()));
+
+        let repo = tempfile::tempdir().unwrap();
+        std::fs::create_dir(repo.path().join(".git")).unwrap();
+        let nested = repo.path().join("apps/web");
+        std::fs::create_dir_all(&nested).unwrap();
+        assert!(is_inside_repository(repo.path()));
+        assert!(is_inside_repository(&nested));
+
+        // A worktree's `.git` is a file.
+        let worktree = tempfile::tempdir().unwrap();
+        std::fs::write(worktree.path().join(".git"), "gitdir: /elsewhere\n").unwrap();
+        assert!(is_inside_repository(worktree.path()));
+    }
 
     #[test]
     fn truncate_stderr_passes_short_text_through() {

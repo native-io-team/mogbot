@@ -474,6 +474,7 @@ pub fn phone_connection(c: &Connection) -> PhoneConnection {
             Kind::Oauth { .. } => "oauth",
             Kind::Gh => "gh",
             Kind::ClaudeAi { .. } => "claude_ai",
+            Kind::MacApp => "mac_app",
         },
         grants: c
             .grants

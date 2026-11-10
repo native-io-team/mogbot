@@ -48,16 +48,17 @@ import {
 } from '../lib/rooms';
 import { describeError, loadLatest, loadOlder, sendToRoom, setOpenChat } from '../lib/session';
 import { getApp, useApp } from '../lib/store';
-import { avatarSize, chromeScale, fonts, iconSize, radius, space, speakerInk } from '../lib/theme';
+import { keySize, chromeScale, fonts, iconSize, radius, space, speakerInk } from '../lib/theme';
 import { makeStyles, useAppearance, useColors } from '../lib/appearance';
-import { AgentAvatar, Spinner } from './agent';
+import { Spinner } from './agent';
+import { AgentKey } from './AgentKey';
 import { DaySeparator, DraftRow, MessageRow, PendingRow, SendRise, WorkingRow } from './chat';
 import { RowBoundary, rowResetKey } from './RowBoundary';
 import { MentionContext } from './Markdown';
 import { ComposerField, RoundButton } from './Composer';
 import { RoomBars } from './ConversationBars';
 import { Icon, T, useRipple } from './ui';
-import { StackedAvatars } from './RoomRow';
+import { StackedKeys } from './RoomRow';
 import { GalleryContext, chatGallery } from '../lib/gallery';
 
 const NONE: never[] = [];
@@ -75,7 +76,7 @@ function Speaker({ agent }: { agent: Agent }) {
   const color = useNameColor(agent.color);
   return (
     <View style={styles.speaker}>
-      <AgentAvatar id={agent.id} name={agent.name} color={agent.color} size={avatarSize.group} />
+      <AgentKey id={agent.id} name={agent.name} color={agent.color} size={keySize.sm} />
       <T variant="small" color={color} style={{ fontFamily: fonts.semibold }} numberOfLines={1}>
         {agent.name}
       </T>
@@ -275,7 +276,7 @@ function RoomChat({ id }: { id: string }) {
             ListFooterComponent={
               chat?.loaded && !chat.more ? (
                 <View style={styles.start}>
-                  <StackedAvatars members={members} />
+                  <StackedKeys members={members} />
                   <T variant="caption" color={colors.textSecondary} style={{ textAlign: 'center' }}>
                     {room.name} · {ROOM_INTRO}
                   </T>
@@ -341,7 +342,7 @@ function RoomHeader({
       : memberNames(members);
   return (
     <View style={styles.header}>
-      <StackedAvatars members={members} size="header" />
+      <StackedKeys members={members} size="header" />
       <View style={{ flexShrink: 1 }}>
         <T
           variant="headline"
@@ -642,7 +643,7 @@ function Chip({ agent, label, onPress }: { agent?: Agent; label?: string; onPres
       style={({ pressed }) => [styles.chip, pressed && styles.pressed]}
     >
       {agent ? (
-        <AgentAvatar id={agent.id} name={agent.name} color={agent.color} size={avatarSize.group} />
+        <AgentKey id={agent.id} name={agent.name} color={agent.color} size={keySize.sm} />
       ) : (
         <Icon name="person.2" size={iconSize.inline} color={colors.textSecondary} />
       )}

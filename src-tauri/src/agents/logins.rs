@@ -1016,6 +1016,14 @@ fn complete_held(
 fn tools_line(c: &connections::Connection, access: Access) -> String {
     match c.kind {
         Kind::Gh => format!("use the `gh` command ({})", access.label().to_lowercase()),
+        Kind::MacApp => match super::mac_apps::App::from_service(&c.service) {
+            Some(app) => format!(
+                "use the `{}_*` tools ({})",
+                app.prefix(),
+                access.label().to_lowercase()
+            ),
+            None => access.label().to_lowercase(),
+        },
         _ => format!(
             "its tools are named `mcp__{}__*` ({})",
             c.server_key,

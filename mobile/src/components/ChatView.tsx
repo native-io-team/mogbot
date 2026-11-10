@@ -58,7 +58,7 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { agentMood, askingLine, isQueued, needsYouHere, pendingApproval } from '../lib/agents';
+import { agentKeyState, askingLine, isQueued, needsYouHere, pendingApproval } from '../lib/agents';
 import { messageActions, plainText, type MessageAction } from '../lib/actions';
 import { announce } from '../lib/a11y';
 import { addQuote } from '../lib/drafts';
@@ -80,7 +80,7 @@ import { SETUP_KEY, chatItems, isRowFor, sentAt, withSetupCard, type Item } from
 import { setupAnchor, shows as showsSetup } from '../lib/teamSetup';
 import {
   alpha,
-  avatarSize,
+  keySize,
   chatFade,
   chromeScale,
   composer,
@@ -105,7 +105,8 @@ import {
   type Follow,
 } from '../lib/follow';
 import { makeStyles, useColors } from '../lib/appearance';
-import { AgentAvatar, Spinner } from './agent';
+import { Spinner } from './agent';
+import { AgentKey } from './AgentKey';
 import { DaySeparator, DraftRow, MessageRow, PendingRow, SendRise, WorkingRow } from './chat';
 import { RowBoundary, rowResetKey } from './RowBoundary';
 import { Arrive } from './Arrive';
@@ -976,8 +977,8 @@ function Glow() {
 /**
  * Identity only: who this is (name and role). What it's doing is said once in
  * its row on the list and once in the conversation (a bar, the working line,
- * a card), never a third time up here in words; the avatar only shows it, by
- * how it looks around (`agentMood`).
+ * a card), never a third time up here in words; the key only shows it, by
+ * how it sits (`agentKeyState`).
  */
 /**
  * What the header's buttons take: back on the left, the usage ring and ⓘ on
@@ -996,15 +997,17 @@ function Header({ agent }: { agent: Agent }) {
   const [cutAt, setCutAt] = useState<string | null>(null);
   const roleCut = cutAt === fit;
   const parts = roleCut ? headerSubtitleParts({ role: '', ranOn: agent.ranOn }) : whole;
-  const subtitle = roleCut ? headerSubtitle({ role: '', ranOn: agent.ranOn }) : headerSubtitle(agent);
+  const subtitle = roleCut
+    ? headerSubtitle({ role: '', ranOn: agent.ranOn })
+    : headerSubtitle(agent);
   return (
     <View style={[styles.header, { maxWidth: Math.min(260, width - HEADER_RESERVED) }]}>
-      <AgentAvatar
+      <AgentKey
         id={agent.id}
         name={agent.name}
         color={agent.color}
-        size={avatarSize.header}
-        mood={agentMood(agent)}
+        state={agentKeyState(agent)}
+        size={keySize.md}
       />
       <View style={{ flexShrink: 1 }}>
         <T

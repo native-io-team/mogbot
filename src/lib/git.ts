@@ -50,6 +50,11 @@ export async function getChangedFiles(projectPath: string): Promise<ChangedFile[
   return invoke<ChangedFile[]>('get_changed_files', { projectPath });
 }
 
+/** Whether the project is in a git repository, read from the disk (no git runs). */
+export async function isGitRepository(projectPath: string): Promise<boolean> {
+  return invoke<boolean>('git_is_repository', { projectPath });
+}
+
 /**
  * Gets the diff for a single uncommitted file.
  *
