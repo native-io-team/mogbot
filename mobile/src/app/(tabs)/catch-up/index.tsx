@@ -225,52 +225,52 @@ export default function CatchUp() {
         <DemoCard style={styles.top} />
         <ConnectionBar style={styles.top} />
         <View style={[styles.body, items.length === 0 && !happened.length && styles.grow]}>
-        {items.length === 0 ? (
-          <AllClear loading={missing.length > 0} compact={happened.length > 0} />
-        ) : (
-          <View style={styles.summary} accessibilityRole="header">
-            <T variant="title" color={colors.textStrong}>
-              {headline(items.length)}
-            </T>
-            {/* Offline, the connection bar above says when it last heard: not again here. */}
-            {!!sub && (
-              <T variant="small" color={colors.textSecondary}>
-                {sub}
+          {items.length === 0 ? (
+            <AllClear loading={missing.length > 0} compact={happened.length > 0} />
+          ) : (
+            <View style={styles.summary} accessibilityRole="header">
+              <T variant="title" color={colors.textStrong}>
+                {headline(items.length)}
               </T>
-            )}
-          </View>
-        )}
-        {groups.map((g) => {
-          const agent = overview?.agents.find((a) => a.id === g.agentId);
-          if (!agent) return null;
-          return (
-            <Animated.View key={g.agentId} entering={ENTER} exiting={LEAVE} layout={MOVE}>
-              <AgentAccent agentId={agent.id}>
-                <Group agent={agent} items={g.items} />
-              </AgentAccent>
-            </Animated.View>
-          );
-        })}
-        {happened.length > 0 && (
-          <Animated.View entering={ENTER} layout={MOVE} style={styles.since}>
-            <T
-              variant="caption"
-              color={colors.textMuted}
-              style={styles.sinceTitle}
-              accessibilityRole="header"
-            >
-              {sinceTitle(recent ? null : lastVisit).toUpperCase()}
-            </T>
-            <View style={styles.sinceList}>
-              {happened.map((h, i) => {
-                const agent = overview?.agents.find((a) => a.id === h.agentId);
-                return agent ? (
-                  <SinceRow key={h.key} item={h} agent={agent} first={i === 0} />
-                ) : null;
-              })}
+              {/* Offline, the connection bar above says when it last heard: not again here. */}
+              {!!sub && (
+                <T variant="small" color={colors.textSecondary}>
+                  {sub}
+                </T>
+              )}
             </View>
-          </Animated.View>
-        )}
+          )}
+          {groups.map((g) => {
+            const agent = overview?.agents.find((a) => a.id === g.agentId);
+            if (!agent) return null;
+            return (
+              <Animated.View key={g.agentId} entering={ENTER} exiting={LEAVE} layout={MOVE}>
+                <AgentAccent agentId={agent.id}>
+                  <Group agent={agent} items={g.items} />
+                </AgentAccent>
+              </Animated.View>
+            );
+          })}
+          {happened.length > 0 && (
+            <Animated.View entering={ENTER} layout={MOVE} style={styles.since}>
+              <T
+                variant="caption"
+                color={colors.textMuted}
+                style={styles.sinceTitle}
+                accessibilityRole="header"
+              >
+                {sinceTitle(recent ? null : lastVisit).toUpperCase()}
+              </T>
+              <View style={styles.sinceList}>
+                {happened.map((h, i) => {
+                  const agent = overview?.agents.find((a) => a.id === h.agentId);
+                  return agent ? (
+                    <SinceRow key={h.key} item={h} agent={agent} first={i === 0} />
+                  ) : null;
+                })}
+              </View>
+            </Animated.View>
+          )}
         </View>
       </ScrollView>
     </>

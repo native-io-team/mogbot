@@ -54,7 +54,7 @@ export function pushLine(
     case 'off':
       return {
         value: 'Off on your Mac',
-        footer: 'Turn on phone notifications on your Mac, in Settings → Agents → Phone.',
+        footer: 'Turn on phone notifications on your Mac, in Settings → Phone.',
       };
     case 'unavailable':
       return {

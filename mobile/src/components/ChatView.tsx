@@ -132,6 +132,7 @@ import { ringPercent } from '../lib/usageSheet';
 import { showActions } from './menu';
 import { SelectSheet } from './SelectSheet';
 import { Starters } from './Starters';
+import { ChiefStarters, chiefGreetingOnly } from './ChiefStarters';
 import { Button, Dot, Icon, IconButton, useRipple, T } from './ui';
 
 const NONE: never[] = [];
@@ -333,6 +334,9 @@ export function ChatView({
     agent.status.state === 'idle' &&
     pending.length === 0 &&
     showsStarters(agent, messages);
+  // The Chief's stored greeting is all there is: the desk's three ideas under it.
+  const chiefFirst = !!agent && pending.length === 0 && chiefGreetingOnly(agent, messages);
+  const [focusKey, setFocusKey] = useState(0);
   // The header must agree with the card: an approval in the chat is "needs you",
   // even in the beat before the status event says so.
   const asking = !!card;
@@ -810,6 +814,15 @@ export function ChatView({
                           send(agent.id, text).catch((e: unknown) => showError(describeError(e)));
                         }}
                       />
+                    ) : chiefFirst ? (
+                      <ChiefStarters
+                        onPick={(idea) => {
+                          haptic.select();
+                          // Typed in for you to finish: nothing goes until you press Send.
+                          setComposer(agent.id, { text: idea.text });
+                          setFocusKey((k) => k + 1);
+                        }}
+                      />
                     ) : undefined
                   }
                   ListFooterComponent={
@@ -925,6 +938,7 @@ export function ChatView({
           side={side}
           onSent={() => toNewest()}
           onOpenSetup={() => setFindSetup(true)}
+          focusKey={focusKey}
         />
       </KeyboardStickyView>
       <SelectSheet

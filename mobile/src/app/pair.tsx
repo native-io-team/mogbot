@@ -19,7 +19,7 @@ import Animated, { FadeIn, FadeInDown, FadeOut, ZoomIn } from 'react-native-rean
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Spinner } from '../components/agent';
 import { AgentKey } from '../components/AgentKey';
-import { Button, Icon, T } from '../components/ui';
+import { Button, Dot, Icon, T } from '../components/ui';
 import { ALERTS_WHILE_OPEN } from '../lib/push';
 import {
   cleanName,
@@ -31,6 +31,8 @@ import {
   pairPlan,
   parseLink,
   tailscaleInstalled,
+  PHONE_SETTINGS,
+  WHERE_TO_PAIR,
   type PairFailure,
   type PairPlan,
 } from '../lib/pairing';
@@ -159,22 +161,29 @@ export default function Pair() {
       bounces={false}
     >
       <View style={styles.hero}>
-        {/* The app's mark: the Chief's key, as the desk's onboarding shows it. */}
+        {/* The app's mark: the Chief's key, as the desk's onboarding shows it. In
+            full on the first screen; past it, the key alone, so a failure's
+            checklist and its buttons stay on screen. */}
         <View style={styles.logo}>
           <AgentKey
             name="Chief of Staff"
             colorway={CHIEF_COLORWAY}
             icon={CHIEF_ICON}
             boundKey="C"
-            size={keySize.xl}
+            size={phase.kind === 'start' ? keySize.xl : keySize.lg}
           />
         </View>
-        <T variant="display" color={colors.textStrong}>
-          Your agents, on your phone
-        </T>
-        <T color={colors.textSecondary}>
-          They keep working on your Mac. This phone talks to it directly, over your own Tailscale.
-        </T>
+        {phase.kind === 'start' && (
+          <>
+            <T variant="display" color={colors.textStrong}>
+              Your agents, on your phone
+            </T>
+            <T color={colors.textSecondary}>
+              They keep working on your Mac. This phone talks to it directly, over your own
+              Tailscale.
+            </T>
+          </>
+        )}
       </View>
 
       {phase.kind === 'start' && (
@@ -205,8 +214,8 @@ export default function Pair() {
                 Scan the code on your Mac
               </T>
               <T color={colors.textSecondary}>
-                It’s on the Mac’s last setup screen for your phone, or in Settings → Agents → Phone
-                → Pair a phone. Then click Allow on the Mac.
+                On your Mac, open {WHERE_TO_PAIR}. When this phone has scanned it, click Allow
+                there.
               </T>
               <Button
                 title="Scan the code"
@@ -467,7 +476,9 @@ function BeforeYouScan({ onNext }: { onNext: () => void }) {
           'The switch is on in the Tailscale app',
         ].map((line) => (
           <View key={line} style={styles.checkLine}>
-            <Icon name="checkmark" size={iconSize.inline} color={colors.textMuted} />
+            <View style={styles.point}>
+              <Dot color={colors.textMuted} size={space.tight} />
+            </View>
             <T color={colors.textPrimary} style={{ flex: 1 }}>
               {line}
             </T>
@@ -545,7 +556,7 @@ function FailureCopy({ failure, mac }: { failure: PairFailure; mac: string }) {
       case 'no_answer':
         return [
           `No answer from ${mac}`,
-          'The Mac had the request, but nothing came back within two minutes. If you clicked Allow, check Settings → Agents → Phone on the Mac; otherwise make a new code there and scan it.',
+          `The Mac had the request, but nothing came back within two minutes. If you clicked Allow, check ${PHONE_SETTINGS} on the Mac; otherwise make a new code there and scan it.`,
         ];
       case 'not_your_mac':
         return [
@@ -555,12 +566,12 @@ function FailureCopy({ failure, mac }: { failure: PairFailure; mac: string }) {
       case 'lan_only':
         return [
           'This code only offers your local network',
-          'This version of the app connects over Tailscale. Turn on Tailscale on your Mac, then make a new code in Settings → Agents → Phone.',
+          `This version of the app connects over Tailscale. Turn on Tailscale on your Mac, then make a new code in ${PHONE_SETTINGS}.`,
         ];
       case 'expired':
         return [
           'This code has expired',
-          'A code works once and for five minutes. Make a new one on your Mac: Settings → Agents → Phone → Pair a phone.',
+          `A code works once and for five minutes. Make a new one on your Mac: ${WHERE_TO_PAIR}.`,
         ];
       case 'refused':
         return [
@@ -606,7 +617,9 @@ const useStyles = makeStyles((colors) => ({
   },
   waitingTitle: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   checks: { gap: space.sm },
-  checkLine: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
+  checkLine: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
+  // Centred on the first line of body text.
+  point: { paddingTop: space.sm + space['2xs'] },
   mono: { fontVariant: ['tabular-nums'], letterSpacing: 1 },
   check: {
     width: 44,

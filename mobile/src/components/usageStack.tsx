@@ -588,8 +588,8 @@ export function KeyCard({
             ))}
           </View>
           <T variant="caption" color={colors.textMuted}>
-            Each task shows the tokens its engine reported; a rise isn’t divided between tasks. Use
-            of the same plan outside these agents counts too.
+            Each task shows the tokens Claude Code or Codex reported; a rise isn’t divided between
+            tasks. Use of the same plan outside these agents counts too.
           </T>
         </View>
       )}

@@ -51,8 +51,10 @@ work that keeps going without them. So the Chief's greeting starts on
 pipelines, not one-offs: something starts it (a time, a file, an email, a
 GitHub issue), agents hand the work between them, and it ends on a card the
 user answers, on the desk or the phone. Three starters and **More ideas…**,
-from one catalogue (`lib/chiefIdeas.ts`). Each types a whole, specific brief
-with one blank at its end; none sends by itself.
+from one catalogue (`packages/companion-protocol/src/chiefIdeas.ts`, re-exported
+by `lib/chiefIdeas.ts`), so the phone's chips (`ChiefStarters`) type the same
+words. Each types a whole, specific brief with one blank at its end; none sends
+by itself.
 
 The chips are **Brief me every morning…**, **Sort my inbox, draft replies…** and
 **Research it and write it up…**: one per group, everyday jobs someone who

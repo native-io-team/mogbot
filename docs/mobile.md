@@ -584,7 +584,12 @@ request, the diff and the photo viewer push over them. At
   back to Catch up. Chats the cards need are loaded once before it starts (up to
   5 s; offline it uses what's cached), so the order doesn't shift.
 - **Chat.** An inverted list: newest on the composer, older pages loaded on
-  scroll. Replies stream one display frame at a time (`lib/reveal.ts`) and the
+  scroll. While the Chief's stored greeting is all there is, the desk's three
+  ideas sit under it (`components/ChiefStarters.tsx`, the shared
+  `CHIEF_CHIPS`): a tap types the idea's whole brief into the composer and puts
+  the cursor there; nothing goes until Send, and they stay until you've said
+  something (docs/agents.md, "A first real result").
+  Replies stream one display frame at a time (`lib/reveal.ts`) and the
   finished message carries on from where its draft got to. **Following**
   (`lib/follow.ts`): at the newest line the chat is pinned, so your message
   glides in on the composer and a reply grows up from it, its newest words
