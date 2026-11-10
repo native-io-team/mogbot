@@ -1578,7 +1578,8 @@ TestFlight builds expire at 90.
 
 **Get the phone app** (sidebar, Phone panel or Cmd+K) is the route today, and follows
 the agent-led onboarding pattern: **the agent drives, the app verifies.** It
-spawns the user's agent beside a checklist with a prescriptive prompt
+spawns the user's agent (their engine: Codex when that's the default agent,
+else Claude Code, `installAgent`) beside a checklist with a prescriptive prompt
 (`buildIosInstallPrompt` / `buildAndroidInstallPrompt`); every check is a
 read-only command in `commands/companion_install.rs`, and nothing runs until
 the user clicks Start (or Reinstall). The source is a sparse checkout of
@@ -1592,8 +1593,8 @@ uses its own checkout, and `SHIPSTUDIO_COMPANION_SOURCE` overrides both.
 | License, after every install or update (git and builds fail until then) | Agent (`sudo xcodebuild -license accept`) | `xcodebuild -license check` |
 | First-launch components | Agent (`sudo xcodebuild -runFirstLaunch`) | `xcodebuild -checkFirstLaunchStatus` |
 | CocoaPods, Node | Agent | `pod --version`, the node check |
-| Phone plugged in and trusted, Developer Mode | User | `xcrun devicectl list devices` (physical only; Xcode 27 lists simulators there too, as `simulated`) |
-| Signing | User, guided | An "Apple Development" identity; the team id comes from it |
+| Phone plugged in and trusted, Developer Mode | User (waits while there's no Xcode: devicectl comes with it) | `xcrun devicectl list devices` (physical only; Xcode 27 lists simulators there too, as `simulated`) |
+| Signing | User, guided (Xcode → Settings → Accounts) | An "Apple Development" identity's team; else a team of an Apple ID signed in to Xcode (`IDEProvisioningTeamByIdentifier` in Xcode's preferences, the free personal team first), which ticks before any certificate exists because the first build's `-allowProvisioningUpdates` makes it. Xcode's `isFreeProvisioningTeam` says whether builds last 7 days or a year |
 | Build and install (Release, so no Metro) | Agent: `expo prebuild`, then `xcodebuild … -destination id=<hardware UDID> -allowProvisioningUpdates DEVELOPMENT_TEAM=<team> CODE_SIGN_STYLE=Automatic build`, then `devicectl device install app` (`iosBuildSteps`) | `devicectl device info apps` lists the bundle id |
 | Trust the developer, pair | User (Settings → General → VPN & Device Management) | The device appears in the registry |
 
@@ -1633,6 +1634,21 @@ outbox are on disk, so a restart loses nothing. `app.config.ts` reads
 `COMPANION_BUNDLE_ID`, `EAS_PROJECT_ID`, `UPDATES_URL` and `APPLE_TEAM_ID`;
 with no `EAS_PROJECT_ID` updates are off, so an official update can never land
 on a fork's binary. For self-builders, Reinstall is the update.
+
+**When a Reinstall fails.** Reinstall runs the build with no agent, so it also
+`tee`s it (with `pipefail`) into `companion-build/last-build.log` in the app's
+own folder. On a non-zero exit the panel reads the log's end back
+(`companion_install_build_log`, a fixed path, read-only; the terminal's own
+tail stands in if it can't) and `diagnoseBuildLog` (`src/lib/companionBuildLog.ts`)
+names the one fix for what a self-build actually meets: Xcode's sign-in
+lapsed ("No Account for Team"), a free Apple ID's 3-apps-on-a-phone and
+10-app-ids-a-week limits, Developer Mode off, a locked or unreachable phone,
+the license after an Xcode update, an Xcode too old for the SDK, a full disk,
+no profile. A fix that's the user's offers Reinstall again; every failure
+offers **Hand it to** the agent, whose prompt then starts from that log. No
+match is never guessed at: it goes to the agent. A phone that won't answer
+`devicectl device info apps` with Developer Mode on is a locked phone, and the
+build row says to unlock it rather than waiting silently.
 
 ## Testing
 

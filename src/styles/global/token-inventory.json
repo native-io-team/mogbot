@@ -6123,7 +6123,7 @@
       "layer": "semantic",
       "owner": "global/semantic",
       "status": "canonical",
-      "consumerCount": 913
+      "consumerCount": 914
     },
     {
       "name": "--spacing-md",
