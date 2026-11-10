@@ -2187,8 +2187,10 @@ async fn run(
         }
         "agents.conversationRoutine" => {
             let p: ConversationRoutineParams = parse(params)?;
-            Ok(b.conversation_routine(&p.agent_id, &p.routine_id, &p.conversation_id)
-                .await?)
+            Ok(
+                b.conversation_routine(&p.agent_id, &p.routine_id, &p.conversation_id)
+                    .await?,
+            )
         }
         "agents.startFresh" => {
             let p: AgentParam = parse(params)?;

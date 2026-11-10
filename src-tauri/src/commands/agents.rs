@@ -1283,8 +1283,8 @@ pub async fn agents_conversation_routine(
     conversation_id: String,
 ) -> Result<conversations::Conversations, CommandError> {
     let id = agent_id.clone();
-    let list = blocking(move || conversations::move_routine(&id, &routine_id, &conversation_id))
-        .await?;
+    let list =
+        blocking(move || conversations::move_routine(&id, &routine_id, &conversation_id)).await?;
     let _ = app.emit(runner::EVENT_CONVERSATIONS, &agent_id);
     Ok(list)
 }

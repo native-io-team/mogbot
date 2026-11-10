@@ -1209,7 +1209,14 @@ impl Backend for Stub {
         id: &str,
     ) -> Result<Value, CommandError> {
         self.conversations(agent_id).await?;
-        if !self.conversations.lock().unwrap().0.iter().any(|(c, _)| c == id) {
+        if !self
+            .conversations
+            .lock()
+            .unwrap()
+            .0
+            .iter()
+            .any(|(c, _)| c == id)
+        {
             return Err(CommandError::expected(
                 "That conversation isn't there any more.",
             ));
