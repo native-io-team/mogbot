@@ -5712,19 +5712,19 @@ async fn run_turn(
         None
     } else {
         let conversation = super::conversations::loaded(&agent).to_string();
-        super::rewind::pending(agent_id, &conversation, agent.session_id.is_some()).map(|p| {
-            match p.branch {
+        super::rewind::pending(agent_id, &conversation, agent.session_id.is_some()).map(|p| match p
+            .branch
+        {
+            super::rewind::Branch::Fork { session, at }
+                if engine == Engine::Claude
+                    && super::wallet::valid_session(&session)
+                    && super::wallet::valid_session(&at)
+                    && super::transcript::resumable(agent_id, engine, &session) =>
+            {
                 super::rewind::Branch::Fork { session, at }
-                    if engine == Engine::Claude
-                        && super::wallet::valid_session(&session)
-                        && super::wallet::valid_session(&at)
-                        && super::transcript::resumable(agent_id, engine, &session) =>
-                {
-                    super::rewind::Branch::Fork { session, at }
-                }
-                super::rewind::Branch::Fork { .. } => super::rewind::Branch::Recap,
-                b => b,
             }
+            super::rewind::Branch::Fork { .. } => super::rewind::Branch::Recap,
+            b => b,
         })
     };
     let recapped = !resuming

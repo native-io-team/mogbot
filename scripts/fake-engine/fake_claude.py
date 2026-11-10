@@ -19,6 +19,9 @@ observed on Claude Code 2.1.318 (`src-tauri/src/agents/testdata/`):
 - Sessions: `--session-id` starts a transcript under
   `$CLAUDE_CONFIG_DIR` (or `~/.claude`)`/projects/<cwd folder>/<id>.jsonl`,
   `--resume` needs one there ("No conversation found with session ID").
+  Every entry has a `uuid`; `--resume <s> --resume-session-at <uuid>
+  --fork-session [--session-id <new>]` starts <new> as <s> up to and
+  including that entry, <s> untouched (as Claude Code 2.1.322 does).
 - Sealed calls (`--output-format text|json`) get a short canned answer.
 
 What a turn does is the script in its prompt: the LAST `#fake ` in it
@@ -425,12 +428,29 @@ def stream_turn(args):
         sys.stderr.write("Error: Session ID %s is already in use.\n" % new)
         sys.exit(1)
     turn = Turn(args, prompt)
+    if resume and "--fork-session" in args:
+        turn.session = new or str(uuid.uuid4())
+        at = flag(args, "--resume-session-at")
+        kept, found = [], at is None
+        with open(find_transcript(resume)) as f:
+            for line in f:
+                kept.append(line)
+                if at is not None and json.loads(line).get("uuid") == at:
+                    found = True
+                    break
+        if not found:
+            sys.stderr.write("No message found with message.uuid of: %s\n" % at)
+            sys.exit(1)
+        os.makedirs(os.path.dirname(transcript_path(turn.session)), exist_ok=True)
+        with open(transcript_path(turn.session), "w") as f:
+            f.writelines(kept)
     path = transcript_path(turn.session)
     os.makedirs(os.path.dirname(path), exist_ok=True)
     with open(path, "a") as f:
-        f.write(json.dumps({"type": "user", "sessionId": turn.session,
+        f.write(json.dumps({"type": "user", "sessionId": turn.session, "uuid": str(uuid.uuid4()),
                             "message": {"role": "user", "content": prompt}}) + "\n")
-    log({"turn": turn.session, "resume": bool(resume), "cwd": os.getcwd(),
+    log({"turn": turn.session, "resume": bool(resume), "fork": "--fork-session" in args,
+         "cwd": os.getcwd(),
          "account": os.environ.get("CLAUDE_CONFIG_DIR", "this-mac"), "prompt": prompt})
     tools = ["Bash", "Edit", "Read", "Write"] + ["mcp__app__" + t for t in turn.bridge.tools() if t]
     status = "connected" if turn.bridge.url else "failed"
@@ -443,6 +463,7 @@ def stream_turn(args):
     with open(path, "a") as f:
         for reply in turn.replies:
             f.write(json.dumps({"type": "assistant", "sessionId": turn.session,
+                                "uuid": str(uuid.uuid4()),
                                 "message": {"role": "assistant", "content": reply}}) + "\n")
     turn.result()
 

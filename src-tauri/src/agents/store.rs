@@ -2423,9 +2423,8 @@ pub fn conversation_page(
 ) -> Result<Vec<AgentMessage>, CommandError> {
     // Read before the log's lock: the list's is never held across it.
     let inherited = super::conversations::page_spec(agent_id, conversation).inherited;
-    let keep = |m: &AgentMessage| {
-        super::conversations::of(m) == conversation || inherited.contains(&m.id)
-    };
+    let keep =
+        |m: &AgentMessage| super::conversations::of(m) == conversation || inherited.contains(&m.id);
     let lock = log_lock(agent_id);
     let _guard = lock.lock().unwrap_or_else(|e| e.into_inner());
     let path = log_path(agent_id)?;
