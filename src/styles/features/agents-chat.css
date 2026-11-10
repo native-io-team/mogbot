@@ -320,9 +320,11 @@
   text-align: center;
 }
 
+/* The one heading on an empty page: a step over the 15px a message is, or
+   the agent's name read as one more line of the hint under it. */
 .agent-chat__empty-name {
   margin: var(--spacing-xs) 0 0;
-  font-size: var(--font-size-h4);
+  font-size: var(--font-size-h3);
   font-weight: var(--font-weight-heading);
   line-height: var(--line-height-compact);
   color: var(--text-primary);
