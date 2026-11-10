@@ -47,8 +47,12 @@ describe('HelpModal', () => {
     expect(screen.getByText('⌘K')).toHaveClass('workspace-sidebar-filter-shortcut');
     expect(screen.getByText('F1')).toHaveClass('workspace-sidebar-filter-shortcut');
     expect(screen.queryByText('Switch terminal tab')).not.toBeInTheDocument();
-    expect(screen.getByText('Switch project')).toBeVisible();
+    expect(screen.getByText('Go to 1–9')).toBeVisible();
     expect(screen.getByText('⌘1–9')).toHaveClass('workspace-sidebar-filter-shortcut');
+    expect(screen.getByText('Settings')).toBeVisible();
+    expect(screen.getByText('⌘,')).toHaveClass('workspace-sidebar-filter-shortcut');
+    expect(screen.getByText('⌘T')).toHaveClass('workspace-sidebar-filter-shortcut');
+    expect(screen.getByText('⌘W')).toHaveClass('workspace-sidebar-filter-shortcut');
     expect(screen.getByText('Switch workspace')).toBeVisible();
     expect(screen.getByText('⌥1–9')).toHaveClass('workspace-sidebar-filter-shortcut');
     expect(screen.getByText('Toggle Agent panel')).toBeVisible();
@@ -80,7 +84,12 @@ describe('HelpModal', () => {
     render(<HelpModal />);
     await screen.findByText('Quick message');
     const titles = [...document.querySelectorAll('.help-section-title')].map((t) => t.textContent);
-    expect(titles[0]).toBe('Agents');
+    expect(titles.slice(0, 3)).toEqual(['Agents', 'Anywhere', 'Projects & workspace']);
+    expect(screen.getByText('New agent')).toBeVisible();
+    expect(screen.getByText('⌘N')).toHaveClass('workspace-sidebar-filter-shortcut');
+    expect(screen.getByText('⌘⇧N')).toHaveClass('workspace-sidebar-filter-shortcut');
+    expect(screen.getByText('⌘[')).toHaveClass('workspace-sidebar-filter-shortcut');
+    expect(screen.getByText('⌘]')).toHaveClass('workspace-sidebar-filter-shortcut');
     expect(screen.getByText('Next agent that needs your OK')).toBeVisible();
     expect(screen.getByText('⌘J')).toHaveClass('workspace-sidebar-filter-shortcut');
     expect(screen.getByText('⌘F')).toHaveClass('workspace-sidebar-filter-shortcut');

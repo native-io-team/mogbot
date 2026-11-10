@@ -5636,6 +5636,7 @@ and `agents://registry`:
 - Overflow is counted (`2 more`), not listed. Hidden agents aren't listed; idle ones aren't either.
 - Then Open <name>, New message to Chief… (quick entry), Keep this Mac awake / Keep running when closed (checkmarks, the same `set_stay_on`), Quit <name> (`brand::NAME`).
 - Clicking an agent opens its chat (`notify::open_agent`, the notification click's path), showing a window that a close hid.
+- The Dock icon's menu shows the same "Needs you" rows, then New Agent…, Open *the Chief* and Quick Message… (`dock_menu.rs`; the menu bar and every key: docs/keyboard-shortcuts.md).
 
 Shown by default **once the user has actually used Agents, or while Keep
 running when closed is on** (`AppState.menu_bar_icon`, `None` = that rule).
