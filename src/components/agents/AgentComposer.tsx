@@ -194,6 +194,7 @@ export const AgentComposer = memo(function AgentComposer({
   return (
     <form
       className="agent-composer"
+      data-queueing={(queueing && !learned) || undefined}
       data-dictation={dictation.phase}
       data-has-attachments={
         staged.length > 0 || quotes.length > 0 || revising !== null || editing !== null || undefined

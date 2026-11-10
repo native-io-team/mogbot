@@ -3569,6 +3569,24 @@ export const agentsScenarios: Scenario[] = [
     },
   },
   {
+    id: 'agents-queue-hint',
+    title: 'Agents — typing while it works: the queue hint',
+    looksRightWhen:
+      'The Chief is working and a message is typed. Under the composer, on a row of its own with clear space above and below, the hint reads “↵ queue · ⌘↵ send now” at a readable size, each key a small bordered cap. Nothing under the composer touches it.',
+    command: 'agents.open',
+    requires: '.agent-composer__queue-hint',
+    mockEvents: true,
+    steps: [{ fill: '.agent-composer__input', value: 'Also check the footer links' }],
+    clipSelector: '.agent-chat__footer',
+    commands: {
+      agents_overview: overview(
+        TEAM.map((a) => (a.id === 'chief' ? { ...a, status: status('working') } : a))
+      ),
+      agents_messages: (args: Record<string, unknown>) =>
+        args.agentId === 'chief' ? streamMessages() : messagesFor(args),
+    },
+  },
+  {
     id: 'agents-team-overview',
     title: 'Agents — What’s in flight (⌘K)',
     looksRightWhen:

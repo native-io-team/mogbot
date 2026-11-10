@@ -143,11 +143,11 @@
   /* Starts where the text does: the box's padding, the paperclip, the
      field's own padding. */
   padding: 0 calc(var(--spacing-tight) + var(--button-height) + var(--spacing-xs));
-  font-size: var(--font-size-caption);
+  font-size: var(--font-size-body-sm);
   line-height: var(--line-height-compact);
   color: var(--text-muted);
   white-space: nowrap;
-  top: calc(100% + var(--spacing-2xs));
+  top: calc(100% + var(--spacing-sm));
   pointer-events: none;
   animation: agent-composer-hint-in var(--transition-interaction) both;
 }
@@ -165,9 +165,22 @@
   margin: 0 var(--spacing-xs);
 }
 
+/* A key reads as a key: a small cap with room either side of its word. */
 .agent-composer__key {
+  margin-right: var(--spacing-xs);
+  padding: 0 var(--spacing-xs);
   font-family: inherit;
   color: var(--text-secondary);
+  background: var(--surface-control);
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-sm);
+}
+
+/* While the hint shows, the composer makes room under it for the hint's own
+   row, so it never sits on the box's edge or whatever is below. */
+.agent-composer[data-queueing] {
+  margin-bottom: calc(var(--spacing-lg) + var(--spacing-xl));
+  transition: margin-bottom var(--transition-interaction);
 }
 
 @keyframes agent-composer-hint-in {
