@@ -17,7 +17,7 @@ import { createPortal } from 'react-dom';
 import { useClickOutside } from '../../hooks/useClickOutside';
 import { usePortalAccentScope } from '../../contexts/AccentScopeContext';
 import { PORTAL_ANCHOR_ATTR, PORTAL_OWNER_ATTR } from './ModalFrame';
-import { fitMenu, MENU_GAP } from '../../lib/menuFit';
+import { fitMenu, fitMenuX, MENU_GAP } from '../../lib/menuFit';
 
 const MENU_ITEM_SELECTOR = '[role="menuitem"]';
 const TYPEAHEAD_TIMEOUT_MS = 500;
@@ -76,6 +76,11 @@ interface DropdownBaseProps {
     value: string;
     onChange: (value: string) => void;
     placeholder?: string;
+    /**
+     * Enter in the field: the caller picks what it means (the first match,
+     * usually). Return true to close the menu, as choosing an item does.
+     */
+    onEnter?: () => boolean;
   };
   /** Open on pointer hover while retaining click and keyboard access. */
   openOnHover?: boolean;
@@ -417,15 +422,18 @@ export function Dropdown({
         opens === 'top'
           ? { top: 'auto', bottom: window.innerHeight - rect.top + MENU_GAP }
           : { top: rect.bottom + MENU_GAP, bottom: 'auto' };
+      // Never past the window's side edges either: against the trigger's
+      // other edge when the side asked for has no room, else held inside.
+      const across = fitMenuX(rect, window.innerWidth, menuRef.current?.offsetWidth ?? 0, align);
       setPortalPos({
         position: 'fixed',
         ...vertical,
         // A cap the menu's own CSS takes as well as its own (dropdown.css):
         // an inline max-height would lift a menu's shorter cap.
         ['--ss-dropdown-room' as string]: `${maxHeight}px`,
-        ...(align === 'right'
-          ? { right: window.innerWidth - rect.right, left: 'auto' }
-          : { left: rect.left, right: 'auto' }),
+        ...('left' in across
+          ? { left: across.left, right: 'auto' }
+          : { right: across.right, left: 'auto' }),
         marginTop: 0,
       });
     };
@@ -478,6 +486,9 @@ export function Dropdown({
               if (event.key === 'ArrowDown') {
                 event.preventDefault();
                 focusEnabledMenuItemAt(0);
+              } else if (event.key === 'Enter' && search.onEnter) {
+                event.preventDefault();
+                if (search.onEnter()) close();
               }
             }}
           />

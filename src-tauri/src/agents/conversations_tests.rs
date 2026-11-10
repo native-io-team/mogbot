@@ -71,7 +71,7 @@ fn the_existing_chat_is_the_first_conversation_and_nothing_moves() {
         assert_eq!(list.current, FIRST);
         assert_eq!(list.items.len(), 1);
         assert_eq!(list.items[0].id, FIRST);
-        assert_eq!(list.items[0].title, "Sort out the March invoices please");
+        assert_eq!(list.items[0].title, "Sort out the March invoices");
         assert!(list.items[0].loaded && list.items[0].current);
         // Reading the list writes nothing; the log is untouched.
         assert!(!home.join("conversations.json").exists());
@@ -271,10 +271,7 @@ fn the_first_message_names_it_until_the_user_does() {
         assert!(touch(&ask, None));
         let list = super::list(&a.id).unwrap();
         let item = list.items.iter().find(|i| i.id == c).unwrap();
-        assert_eq!(
-            item.title,
-            "Can you draft the quarterly investor update for the board,…"
-        );
+        assert_eq!(item.title, "Draft the quarterly investor update");
         assert!(item.title.chars().count() <= TITLE_CHARS);
         assert!(!touch(
             &line(&a.id, MessageKind::User, "and more", Some(&c)),
@@ -441,12 +438,44 @@ fn a_routine_can_be_moved_to_another_conversation() {
 
 #[test]
 fn titles_are_one_clean_line() {
-    assert_eq!(title_from("  hello\n\nworld"), "hello");
-    assert_eq!(title_from("> a quote\n> more"), "a quote");
-    assert_eq!(title_from("> a quote\nmy words"), "my words");
-    assert_eq!(title_from("tabs\tand   spaces"), "tabs and spaces");
+    assert_eq!(title_from("  hello\n\nworld"), "Hello");
+    assert_eq!(title_from("> a quote\n> more"), "A quote");
+    assert_eq!(title_from("> a quote\nmy words"), "My words");
+    assert_eq!(title_from("tabs\tand   spaces"), "Tabs and spaces");
     assert_eq!(title_from(""), "");
-    let long = "word ".repeat(30);
-    let t = title_from(&long);
-    assert!(t.ends_with('…') && t.chars().count() <= TITLE_CHARS);
+    let t = title_from(&"word ".repeat(30));
+    assert!(t.chars().count() <= TITLE_CHARS && !t.ends_with('…'));
+}
+
+#[test]
+fn an_older_builds_automatic_title_is_tidied_on_read_and_a_typed_one_kept() {
+    scratch(|| {
+        let a = agent("Tidy");
+        let c = create(&a.id).unwrap().current;
+        // As an older build wrote them: the raw first line, clipped with "…".
+        let path = store::agent_home(&a.id).unwrap().join("conversations.json");
+        let mut raw: serde_json::Value =
+            serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+        for item in raw["items"].as_array_mut().unwrap() {
+            if item["id"] == c.as_str() {
+                item["title"] = "I Kind of like B with a hint of A. L…".into();
+            } else {
+                item["title"] = "can you keep MY name.".into();
+                item["named"] = true.into();
+            }
+        }
+        std::fs::write(&path, serde_json::to_vec(&raw).unwrap()).unwrap();
+
+        let list = super::list(&a.id).unwrap();
+        let title = |id: &str| {
+            list.items
+                .iter()
+                .find(|i| i.id == id)
+                .unwrap()
+                .title
+                .clone()
+        };
+        assert_eq!(title(&c), "I kind of like B with a hint of A");
+        assert_eq!(title(FIRST), "can you keep MY name.");
+    });
 }

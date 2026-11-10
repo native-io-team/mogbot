@@ -3438,11 +3438,46 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-conversations',
     title: 'Agents — several conversations with one agent, the switcher open',
     looksRightWhen:
-      'Acme Site’s chat. Beside its name in the header, a quiet button with a speech-bubble icon, “Plan the November launch email” (cut with … if it must) and an amber dot. Open under it, a menu: a search field, “New conversation” with a plus, a divider, the small heading “Conversations · memory is shared by all of them”, then four rows newest first: the launch email (a check, “4m ago”), “Chase the two overdue invoices” (“Needs your OK” and an amber dot), “Set up the weekly metrics report” (“3d ago”), “Draft the job post for a designer” (“6d ago”); then a divider and “Rename this conversation…” with a pencil. The chat shows only the launch conversation’s lines.',
+      'Acme Site’s chat. Beside its name in the header, a quiet button with a speech-bubble icon, “Plan the November launch email” (cut with … if it must) and an amber dot. Open under it, a menu: a search field, “New conversation” with a plus, a divider, the small heading “Recent”, then four rows newest first: the launch email on the selected fill in ordinary text colour (never accent), a check, “4m ago”, “Chase the two overdue invoices” (“Needs your OK” and an amber dot), “Set up the weekly metrics report” (“3d ago”), “Draft the job post for a designer” (“6d ago”); then a divider and “Rename this conversation…” with a pencil. The chat shows only the launch conversation’s lines.',
     openSelector: AGENTS_TAB,
     requires: '.agent-conversations__menu',
     steps: [{ click: '[data-agent-id="acme"]' }, { click: '.agent-conversations__trigger' }],
     commands: CONVERSATIONS,
+  },
+  {
+    id: 'agents-conversations-narrow',
+    title: 'Agents — the conversation switcher open in a narrow window',
+    looksRightWhen:
+      'A 900px window. The conversation menu is open under its button and wholly inside the window: about 320px wide, its right edge in line with the button’s (or held 8px in from the window’s edge), the search field and every row whole, nothing clipped at the right.',
+    viewport: { width: 900, height: 800 },
+    openSelector: AGENTS_TAB,
+    requires: '.agent-conversations__menu',
+    steps: [{ click: '[data-agent-id="acme"]' }, { click: '.agent-conversations__trigger' }],
+    commands: CONVERSATIONS,
+  },
+  {
+    id: 'agents-conversations-one-open',
+    title: 'Agents — one conversation, its menu open near the window’s right edge',
+    looksRightWhen:
+      'A 900px window. The header’s button is only the speech-bubble icon and chevron, beside Usage. Its menu is open and wholly inside the window, its right edge in line with the button’s: the search field, New conversation, “Recent”, then one row “I kind of like B with a hint of A” (sentence case, not the raw first message) on the selected fill in ordinary text colour with a check, then Rename this conversation….',
+    viewport: { width: 900, height: 800 },
+    openSelector: AGENTS_TAB,
+    requires: '.agent-conversations__menu',
+    steps: [{ click: '[data-agent-id="acme"]' }, { click: '.agent-conversations__trigger' }],
+    commands: {
+      agents_overview: acmeWith(ACME_FULL),
+      agents_messages: messagesFor,
+      // As a Mac on an older build named it: the raw first line, clipped.
+      agents_conversations: (args: Record<string, unknown>) => {
+        const list = onlyFirst(args);
+        list.items[0] = {
+          ...list.items[0],
+          title: 'I Kind of like B with a hint of A. L…',
+          lastActivityAt: now - 4 * 60_000,
+        };
+        return list;
+      },
+    },
   },
   {
     id: 'agents-conversations-header',
@@ -3472,7 +3507,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-conversations-rename',
     title: 'Agents — renaming a conversation',
     looksRightWhen:
-      'A small dialog “Rename conversation”: a text field holding “Plan the November launch email” (selected), under it “Leave it empty to name it by its first message again.”, then Cancel and Rename on the right.',
+      'A small dialog “Rename conversation”: clear space under its header rule, then a text field holding “Plan the November launch email” (selected), under it “Leave it empty to name it by its first message again.”, then Cancel and Rename on the right.',
     openSelector: AGENTS_TAB,
     requires: '.agent-conversations__rename-form',
     steps: [

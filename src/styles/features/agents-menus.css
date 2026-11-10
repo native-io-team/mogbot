@@ -317,8 +317,25 @@
   text-overflow: ellipsis;
 }
 
+/* A fixed width, so titles line up and the menu doesn't jump as a search
+   narrows it; never wider than the window (Dropdown keeps it inside). */
 .ss-dropdown__menu.agent-conversations__menu {
   width: 320px;
+  max-width: calc(100vw - var(--spacing-lg));
+}
+
+/* The one on screen: the selected fill and a check, its words in the
+   ordinary text colour. Accent-coloured words read as a link or a warning. */
+.agent-conversations__menu .ss-dropdown__item--active {
+  color: var(--text-primary);
+}
+
+.agent-conversations__menu .agent-conversations__heading {
+  padding-top: var(--spacing-sm);
+}
+
+.agent-conversations__menu .agent-conversations__note {
+  padding: var(--spacing-sm);
 }
 
 .agent-conversations__item {
@@ -346,11 +363,12 @@
   display: flex;
   flex-direction: column;
   gap: var(--spacing-sm);
-  padding: var(--spacing-xs) var(--spacing-xl) var(--spacing-xl);
+  /* Clear of the header's rule: the field sat right against it. */
+  padding: var(--spacing-xl);
 }
 
 .agent-conversations__rename-hint {
-  margin: 0;
+  margin: 0 0 var(--spacing-md);
   font-size: var(--font-size-body-sm);
   color: var(--text-muted);
 }

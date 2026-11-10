@@ -460,8 +460,14 @@ all of them, so whatever it remembers in one it knows in the others.
   on, and where a message sent without naming one goes). Absent, the list is
   the first conversation alone, titled from the first thing the user said in
   it. A conversation is named by the first message the user sends in it
-  (`title_from`: first line, quotes stripped, 60 characters at a word) until
-  they rename it; renaming to nothing gives it back to its first message. At
+  (`conversation_title::auto_title`, no model call: the first sentence of its
+  first own line, without Markdown, quotes or openers like "can you" and
+  "please", sentence case, at most 40 characters cut at a word, no trailing
+  punctuation) until they rename it; renaming to nothing gives it back to its
+  first message. An automatic title an older build stored is tidied the same
+  way on read, and the desk and phone tidy one from an older Mac
+  (`conversationAutoTitle`; both held to `conversation-title-cases.json`). A
+  typed name is shown as typed (up to 60 characters). At
   most 200 per agent (refused past that; nothing is ever dropped).
 - **Sessions.** The agent's own session fields (`session_id`, `new_engine`,
   `context`, its session on the other engine while `away`) belong to the
