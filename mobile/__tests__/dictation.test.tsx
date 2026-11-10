@@ -13,6 +13,7 @@ import {
   DICTATION_IDLE,
   HOLD_CANCEL_DISTANCE,
   NOTHING_HEARD_MS,
+  RECORDING,
   dictationDisplay,
   dictationHint,
   dictationReducer,
@@ -598,5 +599,29 @@ describe('holding the mic (a voice message)', () => {
     await act(() => r.fire('end'));
     expect(draft()).toBe('call mum back');
     expect(sendsOnRelease(hook.result.current.state)).toBe(true);
+  });
+
+  it('keeps the audio only when asked, small enough to send, and hands it over once', async () => {
+    const r = fakeRecognizer();
+    const { hook } = await setup(r, '');
+    // A tap, or a hold without "Attach the recording": nothing written to a file.
+    await act(async () => {
+      await hook.result.current.start({ held: true });
+    });
+    expect(r.started[0].recordingOptions).toBeUndefined();
+    await act(() => r.fire('audioend', { uri: 'file:///not-asked.wav', timestamp: 1 }));
+    await act(() => hook.result.current.cancel());
+    expect(hook.result.current.takeRecording()).toBeNull();
+
+    await act(async () => {
+      await hook.result.current.start({ held: true, record: true });
+    });
+    expect(r.started[1].recordingOptions).toEqual(RECORDING);
+    await act(() => r.fire('result', { isFinal: true, results: [{ transcript: 'hello' }] }));
+    await act(() => r.fire('audioend', { uri: 'file:///voice.wav', timestamp: 2 }));
+    await act(() => hook.result.current.release());
+    expect(sendsOnRelease(hook.result.current.state)).toBe(true);
+    expect(hook.result.current.takeRecording()).toBe('file:///voice.wav');
+    expect(hook.result.current.takeRecording()).toBeNull();
   });
 });

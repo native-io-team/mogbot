@@ -21,7 +21,10 @@
  * hold; let go and what it heard is sent, as if you'd pressed Send once it
  * finished; slide away before letting go and nothing is sent (`held`,
  * `release`, `sendsOnRelease`, `holdEnds`). Silence never stops a hold that
- * has heard you: you decide when it ends.
+ * has heard you: you decide when it ends. Only when Settings → Voice →
+ * "Attach the recording" is on is the audio kept (`record`): a 16 kHz WAV in
+ * the phone's cache, uploaded with the message to your own Mac and then
+ * deleted here (`takeRecording`). Otherwise nothing is recorded to a file.
  *
  * The phases are a pure reducer (`dictationReducer`) so a test can walk
  * every path: idle → starting → listening → stopping → idle, with the way it
@@ -446,6 +449,15 @@ export function silenceStops({
 
 // ---- Holding the mic -------------------------------------------------------------
 
+/** How a kept voice message is written: small enough to send (`MAX_ATTACHMENT_BYTES`). */
+export const RECORDING = {
+  persist: true,
+  outputSampleRate: 16_000,
+  outputEncoding: 'pcmFormatInt16',
+} as const;
+/** The name a voice message's audio has on the Mac. */
+export const RECORDING_NAME = 'Voice message.wav';
+
 /** Hold the mic this long and it's a voice message rather than a tap. */
 export const HOLD_DELAY_MS = 300;
 /** Let go this far from where the hold began and nothing is sent. */
@@ -508,6 +520,10 @@ export function useDictation({
   const stateRef = useRef(state);
   /** Sessions started on the recognizer whose `end` hasn't come: an old one's events are ignored. */
   const inFlight = useRef(0);
+  /** This session keeps its audio (a held mic with "Attach the recording" on). */
+  const recordRef = useRef(false);
+  /** The kept audio's file, once the recognizer has finished writing it. */
+  const recording = useRef<string | null>(null);
   const lastVoiceAt = useRef(0);
   const startedRef = useRef(0);
   const latest = useRef({ setDraft, onLevel, now });
@@ -551,6 +567,8 @@ export function useDictation({
           contextualStrings: vocabulary.slice(0, 100),
           iosTaskHint: 'dictation',
           volumeChangeEventOptions: { enabled: true, intervalMillis: LEVEL_INTERVAL_MS },
+          // Only when asked for: 16 kHz, 16-bit, about 2 MB a minute, under the Mac's 25 MB a file.
+          ...(recordRef.current ? { recordingOptions: RECORDING } : {}),
         });
       } catch {
         inFlight.current = Math.max(0, inFlight.current - 1);
@@ -583,6 +601,10 @@ export function useDictation({
         if (!current()) return;
         lastVoiceAt.current = latest.current.now();
         apply({ type: 'result', transcript: e.results[0]?.transcript ?? '', isFinal: e.isFinal });
+      }),
+      r.addListener('audioend', (e) => {
+        if (!current() || !recordRef.current || !e?.uri) return;
+        recording.current = e.uri;
       }),
       r.addListener('volumechange', (e) => {
         if (!current() || !active(stateRef.current)) return;
@@ -647,12 +669,17 @@ export function useDictation({
     return () => clearTimeout(timer);
   }, [phase, r, apply]);
 
-  /** Listen; `held` for a voice message, which `release` sends. */
+  /**
+   * Listen; `held` for a voice message, which `release` sends, and `record`
+   * to keep its audio for `takeRecording`.
+   */
   const start = useCallback(
-    async ({ held = false }: { held?: boolean } = {}) => {
+    async ({ held = false, record = false }: { held?: boolean; record?: boolean } = {}) => {
       if (!r || active(stateRef.current)) return false;
       const can = dictationSupport(r);
       if (can === 'no-module' || can === 'unavailable') return false;
+      recordRef.current = held && record;
+      recording.current = null;
       apply({ type: 'request', draft: getDraft(), held });
       setStartedAt(0); // the clock reads 0:00 until the recognizer is listening
       const permission = await r.requestPermissionsAsync().catch(() => null);
@@ -672,6 +699,13 @@ export function useDictation({
     },
     [r, getDraft, apply]
   );
+
+  /** The voice message's audio file, once (and only if it was kept): the caller owns it now. */
+  const takeRecording = useCallback(() => {
+    const uri = recording.current;
+    recording.current = null;
+    return uri;
+  }, []);
 
   /** Stop: keep what it heard; the last words are still on their way, then it ends. */
   const stop = useCallback(() => {
@@ -740,6 +774,7 @@ export function useDictation({
     start,
     stop,
     release,
+    takeRecording,
     send,
     cancel,
     drop,

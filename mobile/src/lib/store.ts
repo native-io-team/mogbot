@@ -68,9 +68,16 @@ export interface Prefs {
   appearance: AppearancePref;
   /** Settings → Text size, on top of Dynamic Type (`TEXT_SIZES` in theme.ts). */
   textSize: TextSize;
+  /** Settings → Voice: a voice message (the held mic) sends its audio to the Mac too. Off: words only. */
+  voiceRecording: boolean;
 }
 
-export const defaultPrefs: Prefs = { haptics: true, appearance: 'system', textSize: 'default' };
+export const defaultPrefs: Prefs = {
+  haptics: true,
+  appearance: 'system',
+  textSize: 'default',
+  voiceRecording: false,
+};
 
 export const useApp = create<AppState>(() => ({
   ...emptySync(),

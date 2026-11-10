@@ -78,6 +78,7 @@ import {
 import {
   HOLD_CANCEL_DISTANCE,
   HOLD_DELAY_MS,
+  RECORDING_NAME,
   dictationHint,
   holdEnds,
   listeningNote,
@@ -125,7 +126,14 @@ import {
   setComposer,
   useComposerDraft,
 } from '../lib/drafts';
-import { admit, pickDocuments, pickPhotos, takePhoto, type PickedFile } from '../lib/files';
+import {
+  admit,
+  discardFile,
+  pickDocuments,
+  pickPhotos,
+  takePhoto,
+  type PickedFile,
+} from '../lib/files';
 import { haptic } from '../lib/haptics';
 import { useRouter } from 'expo-router';
 import { chipLabel } from '../lib/agentControls';
@@ -193,6 +201,8 @@ export function Composer({
   const canAttach = useServed('agents.files');
   const team = useApp((s) => s.overview?.agents ?? NONE);
   const engines = useApp((s) => s.overview?.engines);
+  // Settings → Voice: a voice message takes its audio along too.
+  const keepRecording = useApp((s) => s.prefs.voiceRecording);
   // Only from a Mac that lists its engines: never a name guessed here.
   const chip = useMemo(() => (engines ? chipLabel(agent, engines) : null), [agent, engines]);
   // The chip opens Agent controls on a Mac with something there to change:
@@ -272,7 +282,7 @@ export function Composer({
     setDictated(true);
     refocus.current = input.current?.isFocused() ?? false;
     Keyboard.dismiss();
-    void dictation.start({ held: hold });
+    void dictation.start({ held: hold, record: hold && keepRecording });
     return true;
   };
   /** Where a hold on the mic began, while it's held. */
@@ -454,7 +464,29 @@ export function Composer({
   useEffect(() => {
     if (!sendsOnRelease(dictation.state) || sentHold.current === dictation.state) return;
     sentHold.current = dictation.state;
-    submit(false);
+    const recording = dictation.takeRecording();
+    if (!recording) {
+      submit(false);
+      return;
+    }
+    // The audio goes with the words, to the Mac only, and is deleted here after.
+    upload({ uri: recording, name: RECORDING_NAME, mime: 'audio/wav' }, () => {})
+      .then(
+        (ref) =>
+          addFile(agent.id, {
+            blobId: ref.blobId,
+            uri: recording,
+            name: ref.name,
+            mime: ref.mime,
+            size: ref.size,
+            stagedAt: Date.now(),
+          }),
+        () => onError(`The recording didn't reach ${macName}, so only the words went.`)
+      )
+      .finally(() => {
+        submit(false);
+        void discardFile(recording);
+      });
     // `submit` reads the draft from the store; only the session's end matters here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [dictation.state]);
