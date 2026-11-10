@@ -445,36 +445,48 @@
 }
 
 .agent-schedule__history {
-  display: flex;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
   flex-basis: 100%;
-  flex-direction: column;
-  gap: var(--spacing-2xs);
+  gap: var(--spacing-2xs) var(--spacing-sm);
   min-width: 0;
   margin: 0;
   padding: var(--spacing-2xs) 0 var(--spacing-xs);
   list-style: none;
 }
 
+/* Two columns that line up run to run: when, then what came of it, with
+   why underneath in full (it wraps; the reason is the useful half). */
 .agent-schedule__run {
-  display: flex;
+  display: grid;
+  grid-template-columns: max-content minmax(0, 1fr);
+  column-gap: var(--spacing-sm);
   align-items: baseline;
-  gap: var(--spacing-sm);
   min-width: 0;
   font-size: var(--font-size-body-sm);
   color: var(--text-muted);
 }
 
+.agent-schedule__history > .agent-schedule__run {
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
+}
+
 .agent-schedule__run-time {
-  flex: 0 0 auto;
+  grid-column: 1;
   font-variant-numeric: tabular-nums;
 }
 
 .agent-schedule__run-outcome {
-  flex: 1;
+  grid-column: 2;
   min-width: 0;
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
+}
+
+.agent-schedule__run-why {
+  grid-column: 2;
+  min-width: 0;
+  color: var(--text-muted);
+  overflow-wrap: anywhere;
 }
 
 .agent-schedule__run[data-outcome='ran'] .agent-schedule__run-outcome {

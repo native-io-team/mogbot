@@ -92,7 +92,7 @@ describe('the Routines overview', () => {
       runs: [{ at: 1, outcome: 'failed', attempt: 2 }],
     });
     expect(routineLine(daily, now)).toMatch(
-      /^Every weekday at .+ · next today at .+ · last: didn’t run after 2 tries$/
+      /^Every weekday at .+ · next today at .+ · last run: didn’t run after 2 tries$/
     );
     expect(routineLine(routine('p', { paused: true }), now)).toBe('Once · paused');
   });

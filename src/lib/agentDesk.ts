@@ -147,7 +147,8 @@ export function routineLine(routine: CheckIn, now = Date.now()): string {
   return [
     routineWhenWords(routine),
     next ? `next ${next}` : 'paused',
-    last && `last: ${lowerFirst(last)}`,
+    // "last: ran" read as a typo; the last run, said as a run.
+    last && `last run: ${lowerFirst(last)}`,
   ]
     .filter(Boolean)
     .join(' · ');
