@@ -172,7 +172,7 @@ pub async fn signed_in_here(engine: Engine) -> bool {
     }
     // One probe per engine at a time: an asker that arrives mid-probe (the
     // Usage view's accounts beside the engines' overview) waits for its answer.
-    static PROBING: LazyLock<[tokio::sync::Mutex<()>; 2]> = LazyLock::new(Default::default);
+    static PROBING: LazyLock<[tokio::sync::Mutex<()>; Engine::ALL.len()]> = LazyLock::new(Default::default);
     let _probing = PROBING[engine as usize].lock().await;
     if let Some((yes, _, at)) = CACHE.lock().unwrap_or_else(|e| e.into_inner()).get(&engine) {
         let keep = if *yes { 60 } else { 5 };
