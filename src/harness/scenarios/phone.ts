@@ -106,8 +106,9 @@ export const phoneScenarios: Scenario[] = [
   phone(
     'phone-install-tailscale',
     'Phone — on, but Tailscale isn’t installed',
-    'A quiet panel titled "Install Tailscale" with Turn off on the right, one paragraph on why, ' +
-      'and "Get Tailscale" plus "Try again". "Paired phones" below says none are paired yet.',
+    'A quiet panel titled "Install Tailscale" with "Turn off phone access" on the right, one ' +
+      'paragraph on why, and "Get Tailscale" plus "Check again" (nothing has failed yet). ' +
+      '"Paired phones" below says none are paired yet.',
     { enabled: true, running: true, tailscale: { state: 'notInstalled' } }
   ),
   phone(

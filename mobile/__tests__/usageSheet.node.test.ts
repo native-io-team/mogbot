@@ -46,7 +46,7 @@ const claude: Quota = {
 describe('context', () => {
   it('says the share and the tokens, as the engine reported them', () => {
     expect(contextMeter({ used: 319_900, window: 1_000_000, at: NOW })).toMatchObject({
-      label: '31% used',
+      label: '31% full',
       detail: '319.9K of 1M tokens',
       percent: 31,
     });

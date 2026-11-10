@@ -46,7 +46,7 @@ export interface PaceLine {
   basis: string;
 }
 
-/** One figure with its bar: "32% used", and the line under it. */
+/** One figure with its bar: "32% full", and the line under it. */
 export interface UsageMeter {
   key: string;
   label: string;
@@ -69,13 +69,18 @@ export function tokensShort(n: number): string {
   return `${(n / 1_000_000).toFixed(1).replace(/\.0$/, '')}M`;
 }
 
-/** "32% used · 319.9K of 1M tokens"; null when the engine hasn't reported it. */
+/**
+ * "32% full · 319.9K of 1M tokens"; null when the engine hasn't reported it.
+ * "Full", never "used": it sits on the same sheet as the accounts' "% left",
+ * and a conversation filling up is not usage running out (the desk's
+ * context meter says "full" too, `formatContext`).
+ */
 export function contextMeter(context: ContextFill | undefined): UsageMeter | null {
   if (!context || !(context.window > 0) || context.used < 0) return null;
   const percent = Math.min(100, Math.floor((context.used / context.window) * 100));
   return {
     key: 'context',
-    label: `${percent}% used`,
+    label: `${percent}% full`,
     percent,
     detail: `${tokensShort(context.used)} of ${tokensShort(context.window)} tokens`,
     tone: toneOf(percent),

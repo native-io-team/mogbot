@@ -105,8 +105,8 @@ export const CHIEF_IDEAS: readonly ChiefIdea[] = [
   {
     id: 'research',
     label: 'Research it and write it up',
-    what: 'A researcher gathers sources and a writer turns them into a clear draft with every source linked. Each week it looks for anything new and tells you what changed.',
-    text: 'Have a researcher dig into this and collect good sources, and a writer turn them into a clear draft with every source linked. Then every week, look for new sources, update the draft and tell me what changed. The topic: ',
+    what: 'A researcher gathers sources and a writer turns them into a clear draft with every source linked. Then your Chief asks whether you want it kept up to date each week.',
+    text: 'Have a researcher dig into this and collect good sources, and a writer turn them into a clear draft with every source linked. When it’s done, ask me whether I want it kept up to date each week. The topic: ',
     group: 'together',
   },
   {

@@ -110,7 +110,7 @@ export function UsageBar({ percent, tone }: { percent: number; tone: UsageTone }
 /**
  * A limit: "5-hour limit  62% left", its bar filled to what is left, and
  * "Resets at 3:20 PM". With `title`, the conversation's context, said as
- * its own label ("32% used": a conversation fills, a limit runs down).
+ * its own label ("32% full": a conversation fills, a limit runs down).
  */
 export function MeterRow({ meter, title }: { meter: UsageMeter; title?: string }) {
   const colors = useColors();

@@ -158,14 +158,13 @@ export const phoneInstallScenarios: Scenario[] = [
   install(
     'phone-install-choose',
     'Get the phone app — choose a route',
-    '"Phone" back link on the left, iPhone | Android on the right. A dashed, quieter TestFlight ' +
-      'card saying what it is, with a grey "Not available yet" pill instead of a button. Below, ' +
-      'a quiet "Install it yourself (advanced)" disclosure, open because there is no official ' +
-      'build yet, over "Build it on this Mac" in a solid card: one line on what happens, one on ' +
-      'what it needs (Xcode and an Apple ID; a free ID’s build stops after 7 days), and a ' +
-      'primary "Set up". Between them, a solid card “And Tailscale on the iPhone”: install it and ' +
-      'sign in with the same account as this Mac, why pairing waits for it, and a “Get Tailscale ' +
-      'on the App Store ↗” link.',
+    '"Phone" back link on the left, iPhone | Android on the right. With no official build ' +
+      'yet, "Build it on this Mac" leads in a solid card, not folded and not called advanced: ' +
+      'one line on what happens, one on what it needs (Xcode and an Apple ID; a free ID’s build ' +
+      'stops after 7 days), and a primary "Set up". Then a solid card “And Tailscale on the ' +
+      'iPhone”: install it and sign in with the same account as this Mac, why pairing waits for ' +
+      'it, and a “Get Tailscale on the App Store ↗” link. Last, a dashed, quieter TestFlight card ' +
+      'with a grey "Not available yet" pill instead of a button.',
     {}
   ),
   install(
