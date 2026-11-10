@@ -133,9 +133,17 @@ Declared (`ANDROID_PERMISSIONS` in `app.config.ts`), each used:
 | `POST_NOTIFICATIONS` | Alerts (Android 13+) | When alerts are turned on |
 | `VIBRATE` | Haptics | No |
 
-Also merged from libraries, no prompt: `ACCESS_WIFI_STATE` (NetInfo), and
-`WAKE_LOCK` / `c2dm.RECEIVE` only if Firebase messaging is compiled in. The
-build script allows exactly these.
+Also merged from libraries, none asked for at run time (all normal or
+vendor permissions): `ACCESS_WIFI_STATE` (NetInfo); `WAKE_LOCK` and
+`com.google.android.c2dm.permission.RECEIVE` (Firebase messaging, which
+expo-notifications always links, used only for push); the app's own
+`…DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`; and the vendor launchers' badge
+permissions (`com.sec.android.provider.badge…`, `com.huawei.android.launcher…`,
+`com.htc.launcher…`, `com.sonyericsson.home…`, `me.everything.badger…`,
+`android.permission.READ_APP_BADGE` and the like: ShortcutBadger, so the
+icon badge works on Samsung, Huawei, Sony and other launchers). The build
+script allows exactly these and fails on anything new. Play lists them on
+the listing's "About this app → App permissions"; none needs a declaration.
 
 Blocked (`ANDROID_BLOCKED_PERMISSIONS`, `tools:node="remove"`):
 `READ/WRITE_EXTERNAL_STORAGE`, `READ_MEDIA_IMAGES/VIDEO/AUDIO`,
@@ -144,7 +152,10 @@ and files from the document picker, which need none; Play's photo and video
 permissions policy refuses media access for occasional picking),
 `SYSTEM_ALERT_WINDOW` (the development menu's), `RECEIVE_BOOT_COMPLETED`
 (re-arms scheduled notifications; the app schedules none),
-`ACCESS_FINE/COARSE_LOCATION`. No foreground service, exact alarm, all-files,
+`ACCESS_FINE/COARSE_LOCATION`, `USE_BIOMETRIC` / `USE_FINGERPRINT`
+(expo-secure-store's, for keys behind biometrics, which the app's aren't) and
+the Play install referrer (`BIND_GET_INSTALL_REFERRER_SERVICE`,
+expo-application's; never read). No foreground service, exact alarm, all-files,
 SMS, call log, contacts, location or accessibility permission, so Play
 Console has no permission declaration form to fill in.
 

@@ -113,7 +113,10 @@ echo "SDK          min $min, target $target"
 perms="$(grep -o 'uses-permission[^>]*android:name="[^"]*"' "$manifest" | sed 's/.*name="//;s/"//' | sort -u)"
 echo "permissions:"; printf '  %s\n' $perms
 allowed="android.permission.INTERNET android.permission.ACCESS_NETWORK_STATE android.permission.ACCESS_WIFI_STATE android.permission.CAMERA android.permission.RECORD_AUDIO android.permission.POST_NOTIFICATIONS android.permission.VIBRATE android.permission.WAKE_LOCK com.google.android.c2dm.permission.RECEIVE $pkg.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+# The icon badge on vendor launchers (ShortcutBadger, in expo-notifications).
+badge='^(com\.[a-z]+(\.android)?\.launcher\.permission\.[A-Z_]+|com\.sec\.android\.provider\.badge\.permission\.(READ|WRITE)|com\.sonyericsson\.home\.permission\.BROADCAST_BADGE|com\.sonymobile\.home\.permission\.PROVIDER_INSERT_BADGE|me\.everything\.badger\.permission\.BADGE_COUNT_(READ|WRITE)|android\.permission\.READ_APP_BADGE)$'
 for p in $perms; do
+  if printf '%s' "$p" | grep -Eq "$badge"; then continue; fi
   case " $allowed " in *" $p "*) ;; *) fail "unexpected permission $p (add it to ANDROID_PERMISSIONS on purpose, or block it)." ;; esac
 done
 if grep -q 'android:debuggable="true"' "$manifest"; then fail "the release manifest is debuggable."; fi

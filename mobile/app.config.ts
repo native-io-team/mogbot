@@ -83,7 +83,11 @@ export const ANDROID_PERMISSIONS = [
  * of which needs storage or media access, which Google Play's photo and video
  * policy refuses for an app that only picks now and then. The overlay is the
  * development menu's; boot-completed only re-arms scheduled notifications,
- * and the app schedules none.
+ * and the app schedules none. Kept from libraries, none asked for at run
+ * time: ACCESS_WIFI_STATE (NetInfo), WAKE_LOCK and c2dm RECEIVE (Firebase
+ * messaging, in expo-notifications), and the launchers' badge permissions
+ * (ShortcutBadger, for the icon badge on Samsung, Huawei, Sony… launchers).
+ * scripts/store-android.sh fails on anything else.
  */
 export const ANDROID_BLOCKED_PERMISSIONS = [
   'android.permission.READ_EXTERNAL_STORAGE',
@@ -96,6 +100,11 @@ export const ANDROID_BLOCKED_PERMISSIONS = [
   'android.permission.RECEIVE_BOOT_COMPLETED',
   'android.permission.ACCESS_FINE_LOCATION',
   'android.permission.ACCESS_COARSE_LOCATION',
+  // expo-secure-store's, for keys behind biometrics; the app's keys aren't.
+  'android.permission.USE_BIOMETRIC',
+  'android.permission.USE_FINGERPRINT',
+  // expo-application's install referrer, which the app never reads.
+  'com.google.android.finsky.permission.BIND_GET_INSTALL_REFERRER_SERVICE',
 ];
 /**
  * The Play upload key, read at build time from Gradle properties
