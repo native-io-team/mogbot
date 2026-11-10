@@ -71,9 +71,11 @@ export type EphemeralEvent =
   | {
       type: 'sync.snapshot';
       cursor: Cursor;
-      overview: AgentsOverview;
+      /** `null` when the Mac couldn't read it in time: keep what you have. */
+      overview: AgentsOverview | null;
       status: MacStatus;
-      projects: ProjectSummary[];
+      /** `null` when the Mac couldn't read it in time: keep what you have. */
+      projects: ProjectSummary[] | null;
     }
   /** Replay or snapshot is done; what follows is live. */
   | { type: 'sync.caughtUp'; cursor: Cursor };

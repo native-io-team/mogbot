@@ -653,7 +653,9 @@ pub enum Event {
         cursor: Cursor,
         overview: Value,
         status: MacStatus,
-        projects: Vec<Value>,
+        /// The project list, or `null` when it couldn't be read in time
+        /// (the phone keeps the list it has).
+        projects: Value,
     },
     #[serde(rename = "sync.caughtUp")]
     CaughtUp { cursor: Cursor },

@@ -1921,3 +1921,63 @@ async fn a_stuck_request_is_answered_as_busy_and_never_starves_the_rest() {
     assert_eq!(wire["type"], "Other");
     assert_eq!(wire["message"], super::BUSY);
 }
+
+/// A connect-time snapshot whose parts hang (the agents list busy, a probe
+/// stuck) used to hold the socket silent after its welcome. It's sent within
+/// its deadline now, degraded: no overview or projects (the phone keeps what
+/// it has) and the last status known; the late status is published when it
+/// arrives.
+#[tokio::test(flavor = "multi_thread", worker_threads = 1)]
+async fn a_stuck_snapshot_is_sent_partial_within_its_deadline() {
+    let (c, stub) = Stub::companion();
+    let mut known = crate::companion::testkit::mac_status();
+    known.name = "Last known".into();
+    c.remember_status(&known);
+    stub.stall_ms
+        .store(1500, std::sync::atomic::Ordering::SeqCst);
+    let cursor = crate::companion::wire::Cursor {
+        epoch: "e".into(),
+        seq: 0,
+    };
+    let started = std::time::Instant::now();
+    let event = tokio::time::timeout(
+        Duration::from_secs(1),
+        super::snapshot(&c, cursor, Duration::from_millis(200)),
+    )
+    .await
+    .expect("the snapshot waited on its stuck parts");
+    assert!(started.elapsed() < Duration::from_secs(1));
+    let v = serde_json::to_value(&event).unwrap();
+    assert_eq!(v["type"], "sync.snapshot");
+    assert_eq!(v["overview"], Value::Null);
+    assert_eq!(v["projects"], Value::Null);
+    assert_eq!(v["status"]["name"], "Last known");
+    // The real status follows once it's worked out, journaled for phones.
+    let before = c.hub.cursor().seq;
+    tokio::time::timeout(Duration::from_secs(3), async {
+        while c.hub.cursor().seq == before {
+            tokio::time::sleep(Duration::from_millis(20)).await;
+        }
+    })
+    .await
+    .expect("the late status was never published");
+    assert_eq!(
+        c.last_status().unwrap(),
+        crate::companion::testkit::mac_status()
+    );
+}
+
+/// With nothing slow the snapshot is whole, as before.
+#[tokio::test]
+async fn a_quick_snapshot_is_whole() {
+    let (c, _) = Stub::companion();
+    let cursor = crate::companion::wire::Cursor {
+        epoch: "e".into(),
+        seq: 0,
+    };
+    let v =
+        serde_json::to_value(super::snapshot(&c, cursor, Duration::from_secs(5)).await).unwrap();
+    assert!(v["overview"].is_object(), "{v}");
+    assert!(v["projects"].is_array(), "{v}");
+    assert_eq!(c.last_status().unwrap().name, v["status"]["name"]);
+}
