@@ -598,7 +598,7 @@ request, the diff and the photo viewer push over them. At
   the bar; `totalWords`, as the desk's hero), then **Accounts**, one list per
   engine in the order turns try them (keycap numbered within its engine, the
   heading names it; name, plan, room, pill, refill chip). An account opens its own screen, the desk's account page: its place
-  and state, **Use this one now** and the ↑/↓ for its place (where the Mac
+  and state, **Use for new work** and the ↑/↓ for its place (where the Mac
   takes `agents.accounts.use|reorder`), then **Limits | Tokens**: each limit a
   card (countdown chip, big "% left", the pace-marked bar, the Mac's run-out
   estimate between now and the refill, said as one, the pace sentence), or
