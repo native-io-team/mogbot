@@ -4,6 +4,7 @@
  * Pure.
  */
 
+import { clockAt } from './clock';
 import type { AgentDraft, CheckIn, NewRoutine, RoutineStep } from './model';
 
 /** The answers on an "OK to go on?" card. Neutral, never the accent. */
@@ -86,13 +87,22 @@ const DAY_WORDS =
 
 /**
  * A drafted routine's time as the Mac's grammar read it ("every friday at
- * 16:00"), as a label: "Every Friday at 16:00". The case changes, and a
+ * 16:00"), as a label: "Every Friday at 4:00 PM" (in the Mac's 12- or
+ * 24-hour clock, `clock.ts`). The case and the time's form change, and a
  * one-time run's UTC offset ("once, Thu 5 Nov 2026, 9:00 AM (UTC-05:00)",
  * exact for an agent) is dropped: it is the Mac's own zone, which every
  * other time on this screen is in too.
  */
 export function whenLabel(readsAs: string): string {
   const plain = readsAs.replace(/\s*\(UTC[+-]\d{2}:\d{2}\)$/, '');
-  const named = plain.replace(DAY_WORDS, (w) => w[0].toUpperCase() + w.slice(1));
+  const named = plain
+    .replace(DAY_WORDS, (w) => w[0].toUpperCase() + w.slice(1))
+    // The grammar's 24-hour "at 08:00", told as every other time is ("at 8:00 AM",
+    // or "at 08:00" on a Mac set to 24-hour): the picker's own words for the same routine.
+    .replace(/\bat (\d{1,2}):(\d{2})\b(?!\s*[AaPp]\.?[Mm])/g, (m, h: string, min: string) => {
+      const hour = Number(h);
+      const minute = Number(min);
+      return hour < 24 && minute < 60 ? `at ${clockAt(hour, minute)}` : m;
+    });
   return named.charAt(0).toUpperCase() + named.slice(1);
 }

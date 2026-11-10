@@ -7,13 +7,27 @@ import {
   stepsLine,
   whenLabel,
 } from './steps';
+import { setClockHour24 } from './clock';
 
 describe('whenLabel', () => {
-  it('capitalises the sentence and the day and month names, nothing else', () => {
+  it('capitalises the sentence and the day and month names', () => {
+    setClockHour24(true);
     expect(whenLabel('every friday at 16:00')).toBe('Every Friday at 16:00');
     expect(whenLabel('every 3 months on the 15th at 09:00 (Jan, Apr, Jul and Oct)')).toBe(
       'Every 3 months on the 15th at 09:00 (Jan, Apr, Jul and Oct)'
     );
+    setClockHour24(null);
+  });
+
+  it('tells the time as the routine picker does, on the Mac’s clock', () => {
+    setClockHour24(false);
+    expect(whenLabel('every weekday at 08:00')).toBe('Every weekday at 8:00 AM');
+    expect(whenLabel('every friday at 16:30')).toBe('Every Friday at 4:30 PM');
+    // Already said with AM/PM: left as it is.
+    expect(whenLabel('once, Thu 5 Nov 2026, 9:00 AM')).toBe('Once, Thu 5 Nov 2026, 9:00 AM');
+    setClockHour24(true);
+    expect(whenLabel('every weekday at 8:00')).toBe('Every weekday at 08:00');
+    setClockHour24(null);
   });
 
   it('drops a one-time run’s UTC offset, keeping the months in brackets', () => {
