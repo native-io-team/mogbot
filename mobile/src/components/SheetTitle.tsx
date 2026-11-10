@@ -21,11 +21,14 @@ const SHEET_TITLE_SCALE = 1.6;
 export function SheetTitle({
   children,
   close = true,
+  leading,
   trailing,
   numberOfLines,
 }: {
   children: ReactNode;
   close?: boolean;
+  /** Before the title: a page's key, as the desk's page headers set one. */
+  leading?: ReactNode;
   trailing?: ReactNode;
   numberOfLines?: number;
 }) {
@@ -38,6 +41,7 @@ export function SheetTitle({
   const size = type.heading;
   return (
     <View style={styles.row}>
+      {leading}
       <T
         variant="title"
         color={colors.textStrong}

@@ -12,6 +12,7 @@
  */
 
 import {
+  ADD_ACCOUNT_WHY,
   usageGlance,
   type AccountBlock,
   type UsageInventory,
@@ -20,6 +21,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, View } from 'react-native';
 import { Spinner } from '../components/agent';
+import { AgentKey } from '../components/AgentKey';
 import { SheetTitle } from '../components/SheetTitle';
 import { ComputeAccount, ComputeQuiet, ComputeSummary, MeterRow } from '../components/usage';
 import { AccountRows as StackRows, TotalCard } from '../components/usageStack';
@@ -32,7 +34,7 @@ import { useQuotas } from '../lib/quota';
 import { call, canCall } from '../lib/session';
 import { asOverview } from '../lib/wellFormed';
 import { setApp, useApp } from '../lib/store';
-import { iconSize, space } from '../lib/theme';
+import { iconSize, keySize, space } from '../lib/theme';
 import { usePolling } from '../lib/usePolling';
 import { accountBlocks, computeView, contextMeter, usageSheet } from '../lib/usageSheet';
 
@@ -105,6 +107,8 @@ export default function Usage() {
     <SheetPage>
       <ScrollView contentContainerStyle={styles.page}>
         <SheetTitle
+          // The desk's Usage page header: a putty key with a gauge, then the name.
+          leading={<AgentKey name="Usage" colorway="putty" icon="lucide:gauge" size={keySize.md} />}
           trailing={
             refreshing ? (
               <View style={styles.spin}>
@@ -138,8 +142,27 @@ export default function Usage() {
           // The total first; each account a row that opens its own screen.
           <View style={styles.accounts}>
             <TotalCard glance={glance} onOpen={openAccount} />
-            <SectionTitle title="Accounts" />
-            <StackRows keys={glance.keys} onOpen={(k) => openAccount(k.engine, k.id)} />
+            <View style={styles.rowsHead}>
+              <T variant="headline" color={colors.textStrong} accessibilityRole="header">
+                Accounts
+              </T>
+              <T variant="small" color={colors.textMuted}>
+                {glance.keys.length > 1
+                  ? 'Work starts on the first account with room and carries on down. Open one to change its place.'
+                  : `Your agents use this one. ${ADD_ACCOUNT_WHY}`}
+              </T>
+            </View>
+            {/* One list per engine, in the order turns try them, as the desk groups them. */}
+            {glance.engines.map((e) => (
+              <View key={e.engine} style={styles.engine}>
+                {glance.engines.length > 1 && (
+                  <T variant="small" color={colors.textSecondary} accessibilityRole="header">
+                    {e.label}
+                  </T>
+                )}
+                <StackRows keys={e.keys} onOpen={(k) => openAccount(k.engine, k.id)} />
+              </View>
+            ))}
           </View>
         )}
 
@@ -236,7 +259,9 @@ const useStyles = makeStyles((colors) => ({
   block: { gap: space.md, padding: space.lg },
   divided: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderDefault },
   accountHead: { gap: space['2xs'] },
-  accounts: { gap: space.md, marginBottom: space.xl },
+  accounts: { gap: space.lg, marginBottom: space.xl },
+  rowsHead: { gap: space.xs, marginTop: space.sm },
+  engine: { gap: space.sm },
   spin: { padding: space.sm },
 }));
 

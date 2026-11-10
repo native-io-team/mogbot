@@ -16,6 +16,9 @@ import {
 import { AccountRows, GlanceRow, KeyCard, TotalCard } from '../src/components/usageStack';
 import { palettes } from '../src/lib/theme';
 
+// An agent's key is drawn with Reanimated; here only the words matter.
+jest.mock('../src/components/AgentKey', () => ({ AgentKey: () => null }));
+
 const NOW = new Date(2026, 10, 9, 12, 0).getTime();
 const H = 3_600_000;
 
@@ -141,7 +144,8 @@ describe('usage at a glance, on the phone', () => {
     });
     const onOpen = jest.fn();
     await render(<TotalCard glance={glance} onOpen={onOpen} />);
-    expect(screen.getByText('60% left')).toBeTruthy();
+    // One headline, as the desk's hero: the figure, then of what.
+    expect(screen.getByRole('header').props.children[0]).toBe('60% left');
     expect(screen.getByText('across 2 accounts')).toBeTruthy();
     // Most room first: the account in use (70%) before Work (50%).
     const names = screen.getAllByRole('button').map((b) => b.props.accessibilityLabel);
@@ -202,7 +206,13 @@ describe('usage at a glance, on the phone', () => {
     await fireEvent.press(rows[1]);
     expect(onOpen.mock.calls[0][0].id).toBe('w');
     await render(<KeyCard k={glance.keys[0]} />);
+    // Limits first, as the desk's page; Tokens shows who used it.
+    expect(screen.getByRole('header', { name: 'Limits' })).toBeTruthy();
+    expect(screen.queryByText('Messages')).toBeNull();
+    await fireEvent.press(screen.getByRole('tab', { name: 'Tokens' }));
+    expect(screen.getByText('Used by these agents this week')).toBeTruthy();
     expect(screen.getByText('Messages')).toBeTruthy();
     expect(screen.getByText('750k')).toBeTruthy();
+    expect(screen.getByText(/^Tokens as Claude Code or Codex reported them/)).toBeTruthy();
   });
 });
