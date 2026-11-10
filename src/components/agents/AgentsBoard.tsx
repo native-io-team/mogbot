@@ -1,8 +1,9 @@
 /**
  * The team as a board of keys (docs/internal/agent-keys.md): every agent you
  * have, at full size on a plate, in the state it's in, with its name and a
- * line under it: the state's word in its colour (Live green, Needs your OK
- * amber, Working in ink, as on the site), then what it's on. Pressing one
+ * line under it: the state's word in its colour (Live green, Working in
+ * ink, as on the site; Needs your OK in the status pill the sidebar, the In
+ * flight rows and the waiting bar use), then what it's on. Pressing one
  * opens its chat, as its bound key does from anywhere; the empty socket at
  * the end makes a new agent. An agent that joins while the board is up drops
  * into its socket (`seat`).
@@ -11,6 +12,7 @@
  */
 
 import { useState } from 'react';
+import { StatusPill } from '../primitives/StatusPill';
 import {
   KEY_STATE_LABEL,
   keyAccessibleName,
@@ -103,8 +105,16 @@ export function AgentsBoard({ agents, onOpenAgent, onNewAgent }: AgentsBoardProp
               />
               <span className="agents-board__name">{agent.name}</span>
               <span className="agents-board__state" data-state={state}>
-                {word && <b className="agents-board__word">{word}</b>}
-                {word && detail && !runOn && <span className="agents-board__sep"> · </span>}
+                {word && state === 'needsOk' ? (
+                  <StatusPill tone="waiting" className="agents-board__pill">
+                    {word}
+                  </StatusPill>
+                ) : (
+                  word && <b className="agents-board__word">{word}</b>
+                )}
+                {word && detail && !runOn && state !== 'needsOk' && (
+                  <span className="agents-board__sep"> · </span>
+                )}
                 {detail && <span className="agents-board__detail">{detail}</span>}
               </span>
             </button>

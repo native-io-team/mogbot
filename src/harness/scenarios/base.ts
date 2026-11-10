@@ -329,6 +329,8 @@ export const baseCommands: CommandMap = {
   },
   // No engine has reported its plan: no usage line anywhere (agents::quota).
   agents_quota: [],
+  // ⌘K "Open logs": Finder opens the folder; the app says so in a toast.
+  agents_open_logs: '/Users/sam/Library/Logs/Mogbot',
   // Usage wallets (agents::wallet::AccountView): only this Mac's own sign-ins,
   // unnamed, so each is shown as who it is signed in as (or as this Mac's
   // own when its engine doesn't record who).
