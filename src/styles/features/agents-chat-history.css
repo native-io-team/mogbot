@@ -97,3 +97,24 @@
   ) {
   margin-bottom: calc((var(--button-height-compact) + var(--agents-chat-card-room-top)) * -1);
 }
+
+/* The working line follows a reply closely, with no gap of its own, so a
+   reply's Copy, pin and time (hung in the room below it) sat on top of the
+   working line's key and words. Before the working line the reply keeps that
+   room instead of giving it back. */
+.agent-chat__messages
+  > .agent-chat__row--agent:not(.agent-chat__row--card):has(> .agent-message__actions):has(
+    + .agent-chat__row--working
+  ),
+.agent-chat__messages
+  > :is(
+    .agent-chat__row--card,
+    .agent-chat__row--agent:has(
+      .agent-card,
+      .agent-block-metric,
+      .agent-block-compare__option,
+      .agent-block-link
+    )
+  ):has(+ .agent-chat__row--working) {
+  margin-bottom: 0;
+}
