@@ -1283,8 +1283,8 @@ pub async fn agents_conversation_routine(
     conversation_id: String,
 ) -> Result<conversations::Conversations, CommandError> {
     let id = agent_id.clone();
-    let list = blocking(move || conversations::move_routine(&id, &routine_id, &conversation_id))
-        .await?;
+    let list =
+        blocking(move || conversations::move_routine(&id, &routine_id, &conversation_id)).await?;
     let _ = app.emit(runner::EVENT_CONVERSATIONS, &agent_id);
     Ok(list)
 }
@@ -2200,22 +2200,6 @@ pub async fn agents_import_paste_preview(text: String) -> Result<paste::Preview,
     tokio::task::spawn_blocking(move || paste::preview(&text))
         .await
         .map_err(agents::err_other)?
-}
-
-/// Import a pasted reply through the same merge as the `import_agents` tool.
-/// Any problem in the paste refuses the whole import (a Validation error).
-#[tauri::command]
-#[tracing::instrument(skip(app, text))]
-pub async fn agents_import_paste(
-    app: AppHandle,
-    text: String,
-) -> Result<import::ImportSummary, CommandError> {
-    tokio::task::spawn_blocking(move || {
-        let (agents, source) = paste::for_import(&text)?;
-        import::import_and_notify(&app, agents, &source)
-    })
-    .await
-    .map_err(agents::err_other)?
 }
 
 /// What the user sends their old assistant for a reply that covers

@@ -597,13 +597,6 @@ export const baseCommands: CommandMap = {
     rulesLeft: [],
     filesSkipped: [],
   },
-  agents_import_paste: {
-    created: [],
-    updated: [],
-    skipped: [],
-    routinesSet: [],
-    routinesRefused: [],
-  },
 
   // ---- surfaces reachable from anywhere -----------------------------------
   // These live in the base layer, not the workspace layer: Help, Skills, MCP

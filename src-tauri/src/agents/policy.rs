@@ -171,6 +171,46 @@ impl Overrides {
     pub fn is_empty(&self) -> bool {
         *self == Overrides::default()
     }
+
+    /// These settings with every grant wider than the team's taken back:
+    /// a level above `team_level`, the browser switched on, exact-text off.
+    /// Stricter choices stay. What Replace keeps when new instructions
+    /// arrive from outside (`review::replace_in_place`): they were given to
+    /// the old instructions, and a newly imported agent starts at the
+    /// team's. Pure.
+    pub fn without_widening(&self, team_level: Level) -> Overrides {
+        let mut o = self.clone();
+        if o.independence.is_some_and(|l| l.rank() > team_level.rank()) {
+            o.independence = None;
+        }
+        if o.browser == Some(true) {
+            o.browser = None;
+        }
+        if o.outward_text_needs_ok == Some(false) {
+            o.outward_text_needs_ok = None;
+        }
+        o.admin = None;
+        o
+    }
+}
+
+/// New instructions from outside replaced this agent's (`review`): take
+/// back its own grants wider than the team's ([`Overrides::without_widening`])
+/// and its admin role.
+pub fn narrow_for_replace(agent_id: &str) -> Result<(), CommandError> {
+    let team_level = super::independence::level();
+    modify(|saved| {
+        if let Some(o) = saved.agents.get_mut(agent_id) {
+            *o = o.without_widening(team_level);
+        }
+        Ok(())
+    })?;
+    // The Chief isn't replaced (an import's main agent merges into it), but
+    // never strip its role here if it ever is.
+    if store::get(agent_id).is_ok_and(|a| !a.is_main) {
+        super::admin::set_admin(agent_id, false)?;
+    }
+    Ok(())
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]

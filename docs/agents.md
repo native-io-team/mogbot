@@ -3727,8 +3727,9 @@ counts and what blocked it, in the app's words; it is refused in a turn
 answering outside text and needs the user's own message.
 
 **Replaced:** the old Paste path, which imported straight away and updated
-an agent of the same name, is gone from the UI (`agents_import_paste*` stay
-for older clients).
+an agent of the same name, is gone. Its command went too: it overwrote an
+agent's instructions in place with routines running and its trust intact,
+with no review card. Only the preview and prompt commands remain.
 
 **Not built:** a file on the phone (paste only there); OpenBot's
 `openbot.db`; OpenClaw's SQLite jobs; skills' files (names and descriptions

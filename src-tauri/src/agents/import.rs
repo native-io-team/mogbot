@@ -7,11 +7,9 @@
 //! agents. Re-importing is safe: an agent with the same name is updated, not
 //! duplicated, and the main agent is merged into the Chief of Staff.
 
-use serde::{Deserialize, Serialize};
-use tauri::{AppHandle, Emitter};
-
-use super::{runner, schedule, store};
+use super::{schedule, store};
 use crate::errors::CommandError;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ImportedAgent {
@@ -308,17 +306,6 @@ pub fn import_with(
     if !summary.created.is_empty() || !summary.updated.is_empty() {
         super::import_choice::record_import(store::now_ms());
     }
-    Ok(summary)
-}
-
-pub fn import_and_notify(
-    app: &AppHandle,
-    agents: Vec<ImportedAgent>,
-    source: &str,
-) -> Result<ImportSummary, CommandError> {
-    let summary = import(agents, source)?;
-    let _ = app.emit(runner::EVENT_REGISTRY, ());
-    super::tray::mark_used(app);
     Ok(summary)
 }
 
