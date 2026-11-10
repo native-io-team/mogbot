@@ -14,9 +14,10 @@ import { makeStyles, useColors } from '../lib/appearance';
 import { loginsUndecline, readReach } from '../lib/logins';
 import { describeError } from '../lib/session';
 import { useApp, useServed } from '../lib/store';
-import { iconSize, radius, space } from '../lib/theme';
+import { useRemembered } from '../lib/remembered';
+import { iconSize, space } from '../lib/theme';
 import { TextAction } from './surfaces';
-import { Icon, Row, SectionTitle, T } from './ui';
+import { Icon, Row, SectionTitle, T, groupSurface, pageRhythm } from './ui';
 
 export function WhatItCanReach({ agentId }: { agentId: string }) {
   const colors = useColors();
@@ -25,7 +26,7 @@ export function WhatItCanReach({ agentId }: { agentId: string }) {
   const live = useApp((s) => s.link.kind === 'connected');
   // The registry changes when a card is answered: read it again then.
   const stamp = useApp((s) => s.overview?.agents.find((a) => a.id === agentId)?.pendingApprovals);
-  const [reach, setReach] = useState<AgentReach | null>(null);
+  const [reach, setReach] = useRemembered<AgentReach>(`reach:${agentId}`);
   const [turnedOn, setTurnedOn] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const canUndecline = useServed('agents.loginsUndecline');
@@ -39,7 +40,7 @@ export function WhatItCanReach({ agentId }: { agentId: string }) {
     return () => {
       on = false;
     };
-  }, [agentId, served, live, stamp]);
+  }, [agentId, served, live, stamp, setReach]);
   if (!served || !reach) return null;
   const rows = reachRows(reach);
   const declined = (reach.declined ?? []).filter((d) => !turnedOn.includes(d.key));
@@ -60,7 +61,13 @@ export function WhatItCanReach({ agentId }: { agentId: string }) {
               warning={r.warning}
               leading={
                 <Icon
-                  name={r.key === 'browser' ? 'globe' : r.key.startsWith('s:') ? 'lock.fill' : 'puzzlepiece'}
+                  name={
+                    r.key === 'browser'
+                      ? 'globe'
+                      : r.key.startsWith('s:')
+                        ? 'lock.fill'
+                        : 'puzzlepiece'
+                  }
                   size={iconSize.body}
                   color={colors.textSecondary}
                 />
@@ -96,19 +103,23 @@ export function WhatItCanReach({ agentId }: { agentId: string }) {
         </View>
       )}
       {!!error && (
-        <T variant="small" color={colors.accentErrorLight} style={styles.none}>
+        <T variant="small" color={colors.accentErrorLight} style={styles.note}>
           {error}
         </T>
       )}
-      <T variant="caption" color={colors.textMuted} style={styles.none}>
+      <T variant="caption" color={colors.textMuted} style={styles.note}>
         Change this on your Mac.
       </T>
     </>
   );
 }
 
+/** It sits in the agent sheet's column. */
+const RHYTHM = pageRhythm(space.md);
+
 const useStyles = makeStyles((colors) => ({
-  title: { marginBottom: 0 },
-  list: { backgroundColor: colors.surfaceGroup, borderRadius: radius.card, overflow: 'hidden' },
+  title: RHYTHM.title,
+  note: { paddingHorizontal: space.lg, ...RHYTHM.note },
+  list: groupSurface(colors),
   none: { padding: space.lg },
 }));

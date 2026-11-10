@@ -34,9 +34,10 @@ import { makeStyles, useColors } from '../lib/appearance';
 import { haptic } from '../lib/haptics';
 import { call, describeError } from '../lib/session';
 import { useApp, useServed } from '../lib/store';
-import { radius, space } from '../lib/theme';
+import { useRemembered } from '../lib/remembered';
+import { space } from '../lib/theme';
 import { TextAction } from './surfaces';
-import { Row, SectionTitle, T } from './ui';
+import { Row, SectionTitle, T, groupSurface, pageRhythm } from './ui';
 
 export const readOnItsOwn = (agentId: string) => call('agents.onItsOwn', { agentId });
 export const readOnItsOwnTeam = () => call('agents.onItsOwnTeam', {});
@@ -103,7 +104,7 @@ export function OnItsOwnList({ agentId }: { agentId: string }) {
   const live = useApp((s) => s.link.kind === 'connected');
   // The registry changes when a rule, admin or browser does: read it again then.
   const stamp = useApp((s) => s.overview?.agents.find((a) => a.id === agentId));
-  const [view, setView] = useState<OnItsOwn | null>(null);
+  const [view, setView] = useRemembered<OnItsOwn>(`onItsOwn:${agentId}`);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [now, setNow] = useState(() => Date.now());
@@ -121,7 +122,7 @@ export function OnItsOwnList({ agentId }: { agentId: string }) {
     return () => {
       on = false;
     };
-  }, [agentId, served, live, stamp]);
+  }, [agentId, served, live, stamp, setView]);
 
   const narrow = useCallback(
     async (n: OnItsOwnNarrow) => {
@@ -171,8 +172,10 @@ export function OnItsOwnList({ agentId }: { agentId: string }) {
           {ON_ITS_OWN_NONE}
         </T>
       )}
-      {onItsOwnSections(view.items).map((s) => (
-        <View key={s.title} style={styles.section}>
+      {onItsOwnSections(view.items).map((s, i) => (
+        // Each after the first a step further from the group above than from
+        // its own, so "Plans you OK'd" reads as Plans' title, not Rules' foot.
+        <View key={s.title} style={[styles.section, i > 0 && styles.later]}>
           <T variant="caption" color={colors.textMuted} style={styles.sub}>
             {s.title}
           </T>
@@ -190,7 +193,7 @@ export function OnItsOwnList({ agentId }: { agentId: string }) {
           {error}
         </T>
       )}
-      <T variant="caption" color={colors.textMuted} style={styles.note}>
+      <T variant="caption" color={colors.textMuted} style={styles.foot}>
         {ON_ITS_OWN_FOOT}
       </T>
     </View>
@@ -206,7 +209,7 @@ export function OnItsOwnTeamList() {
   const live = useApp((s) => s.link.kind === 'connected');
   const chief = useApp((s) => s.overview?.agents.find((a) => a.isMain)?.id);
   const agents = useApp((s) => s.overview?.agents);
-  const [team, setTeam] = useState<OnItsOwnTeam | null>(null);
+  const [team, setTeam] = useRemembered<OnItsOwnTeam>('onItsOwn:team');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   useEffect(() => {
@@ -219,7 +222,7 @@ export function OnItsOwnTeamList() {
     return () => {
       on = false;
     };
-  }, [served, live, agents]);
+  }, [served, live, agents, setTeam]);
 
   // A team rule is taken back through the Chief: the line lands in its chat.
   const narrowTeam = async (n: OnItsOwnNarrow) => {
@@ -288,26 +291,25 @@ export function OnItsOwnTeamList() {
           {error}
         </T>
       )}
-      <T variant="caption" color={colors.textMuted} style={styles.note}>
+      <T variant="caption" color={colors.textMuted} style={styles.foot}>
         {ON_ITS_OWN_FOOT}
       </T>
     </View>
   );
 }
 
+const RHYTHM = pageRhythm(space.sm);
+
 const useStyles = makeStyles((colors) => ({
   root: { gap: space.sm },
-  title: { marginBottom: 0 },
+  title: RHYTHM.title,
   section: { gap: space.xs },
+  later: { marginTop: space.xs },
   sub: { paddingHorizontal: space.lg },
-  list: { backgroundColor: colors.surfaceGroup, borderRadius: radius.card, overflow: 'hidden' },
-  level: {
-    gap: space['2xs'],
-    padding: space.lg,
-    backgroundColor: colors.surfaceGroup,
-    borderRadius: radius.card,
-  },
+  list: groupSurface(colors),
+  level: { ...groupSurface(colors), gap: space['2xs'], padding: space.lg },
   actions: { flexDirection: 'row', gap: space.md },
   note: { paddingHorizontal: space.lg },
+  foot: { paddingHorizontal: space.lg, ...RHYTHM.note },
   pad: { padding: space.lg },
 }));

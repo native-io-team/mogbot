@@ -13,15 +13,16 @@ import {
   type PolicyLine,
 } from '@shipstudio/companion-protocol';
 import { router } from 'expo-router';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 import { View } from 'react-native';
 import { makeStyles, useColors } from '../lib/appearance';
 import { setComposer } from '../lib/drafts';
 import { call } from '../lib/session';
 import { useApp, useServed } from '../lib/store';
-import { radius, space } from '../lib/theme';
+import { useRemembered } from '../lib/remembered';
+import { space } from '../lib/theme';
 import { TextAction } from './surfaces';
-import { Row, SectionTitle, T } from './ui';
+import { Row, SectionTitle, T, groupSurface, pageRhythm } from './ui';
 
 export const readPolicy = (agentId: string) => call('agents.policy', { agentId });
 
@@ -40,7 +41,8 @@ export function WhatItCanDo({ agentId, name }: { agentId: string; name: string }
   const chief = useApp((s) => s.overview?.agents.find((a) => a.isMain)?.id);
   // A settings card answered changes it: read it again then.
   const stamp = useApp((s) => s.overview?.agents.find((a) => a.id === agentId)?.pendingApprovals);
-  const [view, setView] = useState<AgentPolicyView | null>(null);
+  // Drawn at once from the last read, so it doesn't arrive late and push Routines down.
+  const [view, setView] = useRemembered<AgentPolicyView>(`policy:${agentId}`);
   useEffect(() => {
     if (!served || !live) return;
     let on = true;
@@ -51,14 +53,19 @@ export function WhatItCanDo({ agentId, name }: { agentId: string; name: string }
     return () => {
       on = false;
     };
-  }, [agentId, served, live, stamp]);
+  }, [agentId, served, live, stamp, setView]);
   if (!served || !view) return null;
   return (
     <>
       <SectionTitle title="What it can do" style={styles.title} />
       <View style={styles.list} testID="policy">
         {view.lines.map((l, i) => (
-          <Row key={l.key} label={l.label} detail={policyDetail(l)} last={i === view.lines.length - 1} />
+          <Row
+            key={l.key}
+            label={l.label}
+            detail={policyDetail(l)}
+            last={i === view.lines.length - 1}
+          />
         ))}
       </View>
       <T variant="caption" color={colors.textMuted} style={styles.note}>
@@ -78,8 +85,11 @@ export function WhatItCanDo({ agentId, name }: { agentId: string; name: string }
   );
 }
 
+/** It sits in the agent sheet's column. */
+const RHYTHM = pageRhythm(space.md);
+
 const useStyles = makeStyles((colors) => ({
-  title: { marginBottom: 0 },
-  list: { backgroundColor: colors.surfaceGroup, borderRadius: radius.card, overflow: 'hidden' },
-  note: { paddingHorizontal: space.lg },
+  title: RHYTHM.title,
+  list: groupSurface(colors),
+  note: { paddingHorizontal: space.lg, ...RHYTHM.note },
 }));

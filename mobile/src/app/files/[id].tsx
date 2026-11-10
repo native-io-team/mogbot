@@ -20,6 +20,7 @@ import { attachmentSource, describeError, download, listFiles } from '../../lib/
 import { useRefresh } from '../../lib/refresh';
 import { RefreshStatus } from '../../components/RefreshStatus';
 import { useApp } from '../../lib/store';
+import { useRemembered } from '../../lib/remembered';
 import { withAgentAccent } from '../../lib/accentScreen';
 import { iconSize, radius, space, type } from '../../lib/theme';
 import { makeStyles, useColors } from '../../lib/appearance';
@@ -34,7 +35,7 @@ function Files() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const agentName = useApp((s) => s.overview?.agents.find((a) => a.id === id)?.name ?? 'Agent');
-  const [files, setFiles] = useState<SharedFile[] | null>(null);
+  const [files, setFiles] = useRemembered<SharedFile[]>(`files:${id}`);
   const [filter, setFilter] = useState<Filter>('all');
   const [error, setError] = useState<string | null>(null);
   const [opening, setOpening] = useState<string | null>(null);
@@ -53,7 +54,7 @@ function Files() {
         (e: unknown) => setError(describeError(e))
       )
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, setFiles]);
   const { refreshing, onRefresh, outcome, dismiss } = useRefresh(() => {
     setLoading(true);
     return listFiles(id)

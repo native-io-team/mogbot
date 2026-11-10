@@ -19,11 +19,12 @@ import { KeyboardAwareScrollView } from 'react-native-keyboard-controller';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { Spinner } from '../components/agent';
 import { choose } from '../components/menu';
-import { Button, Icon, T, SheetPage } from '../components/ui';
+import { Button, Icon, T, SheetPage, groupSurface } from '../components/ui';
 import { SheetTitle } from '../components/SheetTitle';
 import { haptic } from '../lib/haptics';
 import { changeMemory, describeError, readMemory } from '../lib/session';
 import { useApp } from '../lib/store';
+import { useRemembered } from '../lib/remembered';
 import { useAccent } from '../lib/accent';
 import { withAgentAccent } from '../lib/accentScreen';
 import { fonts, iconSize, radius, space, type } from '../lib/theme';
@@ -42,7 +43,8 @@ function Memory() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const name = useApp((s) => s.overview?.agents.find((a) => a.id === id)?.name ?? 'This agent');
   const connected = useApp((s) => s.link.kind === 'connected');
-  const [entries, setEntries] = useState<MemoryEntry[] | null>(null);
+  const [entries, setEntries] = useRemembered<MemoryEntry[]>(`memory:${id}`);
+  const [fresh, setFresh] = useState(false);
   const [editing, setEditing] = useState<number | null>(null);
   const [draft, setDraft] = useState('');
   const [adding, setAdding] = useState('');
@@ -53,14 +55,17 @@ function Memory() {
   const reload = useCallback(
     () =>
       readMemory(id).then(
-        (v) => setEntries(v.entries),
+        (v) => {
+          setEntries(v.entries);
+          setFresh(true);
+        },
         (e: unknown) => setError(describeError(e))
       ),
-    [id]
+    [id, setEntries]
   );
   useEffect(() => {
-    if (connected && entries === null) void reload();
-  }, [connected, entries, reload]);
+    if (connected && !fresh) void reload();
+  }, [connected, fresh, reload]);
 
   /** Apply a change; on a refusal, say why and show the memory as it is now. */
   const apply = async (change: MemoryChange) => {
@@ -163,6 +168,11 @@ function Memory() {
               }}
             />
           </Animated.View>
+        )}
+        {entries !== null && !connected && (
+          <T variant="small" color={colors.textMuted}>
+            As it was last read. Changing it needs your Mac.
+          </T>
         )}
         {entries === null
           ? !error && (
@@ -284,7 +294,7 @@ const useStyles = makeStyles((colors) => ({
   content: { padding: space.lg, paddingTop: space.xl, gap: space.md, paddingBottom: space['2xl'] },
   center: { paddingVertical: space.xl, alignItems: 'center' },
   heading: { marginLeft: space.lg },
-  list: { backgroundColor: colors.surfaceGroup, borderRadius: radius.card, overflow: 'hidden' },
+  list: groupSurface(colors),
   row: { paddingHorizontal: space.lg, paddingVertical: space.md },
   entry: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   editing: { gap: space.sm },

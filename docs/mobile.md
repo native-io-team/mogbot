@@ -1309,6 +1309,14 @@ after that it is **Not sent · Send · Discard** and never sent on its own,
 because a message landing hours later with no one watching is worse than one
 that waits. A refusal is final. Forgetting a Mac wipes its files.
 
+Sheets that read on opening (the agent sheet's What it can do and What it
+can reach, Memory, Instructions, Files, Without asking) keep their last
+answer in memory for the app's run (`lib/remembered.ts`, per paired Mac,
+bounded, never on disk, cleared by Forget this Mac). Opening one again draws
+that at once and the read refreshes it, so nothing arrives a beat late and
+pushes what's under it down; Memory and Instructions opened offline say
+they are as last read.
+
 ### The demo
 
 **Try the demo** on the welcome screen (or `<scheme>://demo`) opens sample

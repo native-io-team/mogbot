@@ -55,6 +55,7 @@ import {
   type SavedPairing,
 } from './pairing';
 import { flushCache, forgetCache, saveOutbox, loadCache, watchCache } from './cache';
+import { forgetRemembered } from './remembered';
 import { flushDrafts, forgetDrafts, loadDrafts, refusedToDraft, setComposer } from './drafts';
 import { outboxPlan, sendInOrder, unreached } from './outbox';
 import { loadPrefs } from './prefs';
@@ -1052,6 +1053,7 @@ export async function unpair(): Promise<'removed' | 'queued'> {
   await forgetCredentials();
   await clearCache().catch(() => {});
   liveAlerts.forget();
+  forgetRemembered();
   await clearAll();
   if (serverId) {
     await forgetCache(serverId).catch(() => {});
