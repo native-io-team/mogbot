@@ -37,8 +37,8 @@
   align-items: center;
   justify-content: center;
   box-sizing: border-box;
-  width: var(--size-sidebar-project-shortcut);
-  height: var(--size-sidebar-project-shortcut);
+  width: var(--agent-key-size-md);
+  height: var(--agent-key-size-md);
   font-size: var(--font-size-body-sm);
   font-weight: var(--font-weight-heading);
   line-height: 1;
@@ -55,25 +55,7 @@
 
 /* ------------------------------------------------------------ sidebar */
 
-.agents-list__section {
-  display: flex;
-  flex-direction: column;
-}
-
-.agents-list__section-title {
-  display: flex;
-  align-items: center;
-  height: var(--control-height-standard);
-  padding: var(--spacing-sm) var(--spacing-md) 0 var(--spacing-sm);
-  font-size: var(--font-size-caption);
-  font-weight: var(--font-weight-label);
-  color: var(--text-muted);
-  border-bottom: var(--border-width-default) solid var(--border-subtle);
-}
-
-.workspace-sidebar.is-hidden .agents-list__section-title {
-  display: none;
-}
+/* The Rooms section uses the groups' header (agents.css, .agents-list__group). */
 
 /* ------------------------------------------------------------ the room */
 
@@ -345,6 +327,16 @@
 
 .agent-room-editor__member:hover {
   background: var(--tint-subtle);
+}
+
+/* The room is full: the others stay listed, quieter, and can't be picked. */
+.agent-room-editor__member[data-closed] {
+  cursor: default;
+  opacity: var(--text-field-disabled-opacity);
+}
+
+.agent-room-editor__member[data-closed]:hover {
+  background: none;
 }
 
 .agent-room-editor__member-name {
