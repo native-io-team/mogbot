@@ -323,7 +323,8 @@ export const agentsOverview = {
     "model": "opus",
     "models": {
       "claude": "opus",
-      "codex": "gpt-5-codex"
+      "codex": "gpt-5-codex",
+      "opencode": null
     },
     "startsOn": "claude"
   },
@@ -438,7 +439,8 @@ export const agentsSetDefaults = {
   "model": "opus",
   "models": {
     "claude": "opus",
-    "codex": "gpt-5-codex"
+    "codex": "gpt-5-codex",
+    "opencode": null
   },
   "startsOn": "claude"
 } satisfies Result<'agents.setDefaults'>;
@@ -5355,7 +5357,8 @@ export const frames = [
           "model": "opus",
           "models": {
             "claude": "opus",
-            "codex": "gpt-5-codex"
+            "codex": "gpt-5-codex",
+            "opencode": null
           },
           "startsOn": "claude"
         },
@@ -5802,7 +5805,8 @@ export const frames = [
           "model": "opus",
           "models": {
             "claude": "opus",
-            "codex": "gpt-5-codex"
+            "codex": "gpt-5-codex",
+            "opencode": null
           },
           "startsOn": "claude"
         },

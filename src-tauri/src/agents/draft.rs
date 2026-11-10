@@ -357,6 +357,12 @@ pub async fn draft(description: &str) -> Result<Draft, CommandError> {
     let answer = match engine {
         Engine::Claude => run_claude(&binary, &text, defaults.model_for(engine)).await?,
         Engine::Codex => run_codex(&binary, &text, defaults.model_for(engine)).await?,
+        // Not built for OpenCode: said plainly rather than run unsealed.
+        Engine::OpenCode => {
+            return Err(CommandError::expected(
+                "Describing an agent needs Claude Code or Codex. Set one up, or create the agent yourself.",
+            ))
+        }
     };
     parse(&chrono::Local, &answer, &taken, store::now_ms()).map_err(CommandError::expected)
 }

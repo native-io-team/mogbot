@@ -26,6 +26,8 @@ pub struct Saved {
     pub claude_model: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub codex_model: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub opencode_model: Option<String>,
 }
 
 /// Anything that doesn't parse as `T` is `None`: one bad value in the app's
@@ -45,6 +47,7 @@ impl Saved {
         match engine {
             Engine::Claude => self.claude_model.as_deref(),
             Engine::Codex => self.codex_model.as_deref(),
+            Engine::OpenCode => self.opencode_model.as_deref(),
         }
     }
 
@@ -52,6 +55,7 @@ impl Saved {
         match engine {
             Engine::Claude => self.claude_model = model,
             Engine::Codex => self.codex_model = model,
+            Engine::OpenCode => self.opencode_model = model,
         }
     }
 }
@@ -62,6 +66,7 @@ impl Saved {
 pub struct Models {
     pub claude: Option<String>,
     pub codex: Option<String>,
+    pub opencode: Option<String>,
 }
 
 /// The setting as Settings and the phone show it.
@@ -107,6 +112,7 @@ pub fn view_of(saved: &Saved, engines: &[EngineInfo]) -> View {
         models: Models {
             claude: offered(saved, find(Engine::Claude), Engine::Claude),
             codex: offered(saved, find(Engine::Codex), Engine::Codex),
+            opencode: offered(saved, find(Engine::OpenCode), Engine::OpenCode),
         },
         starts_on,
         model: offered(saved, find(starts_on), starts_on),
@@ -129,6 +135,7 @@ impl View {
         match engine {
             Engine::Claude => self.models.claude.clone(),
             Engine::Codex => self.models.codex.clone(),
+            Engine::OpenCode => self.models.opencode.clone(),
         }
     }
 
@@ -168,11 +175,16 @@ pub struct Change {
     pub claude_model: Option<String>,
     #[serde(default)]
     pub codex_model: Option<String>,
+    #[serde(default)]
+    pub opencode_model: Option<String>,
 }
 
 impl Change {
     pub fn is_empty(&self) -> bool {
-        self.engine.is_none() && self.claude_model.is_none() && self.codex_model.is_none()
+        self.engine.is_none()
+            && self.claude_model.is_none()
+            && self.codex_model.is_none()
+            && self.opencode_model.is_none()
     }
 }
 
@@ -195,6 +207,7 @@ pub async fn check(change: &Change) -> Result<Saved, CommandError> {
     for (engine, model) in [
         (Engine::Claude, &change.claude_model),
         (Engine::Codex, &change.codex_model),
+        (Engine::OpenCode, &change.opencode_model),
     ] {
         if let Some(model) = model {
             next.set_model(engine, engine::normalize_model(engine, model)?);
@@ -217,6 +230,9 @@ pub async fn set(change: Change) -> Result<View, CommandError> {
         }
         if change.codex_model.is_some() {
             saved.codex_model = checked.codex_model.clone();
+        }
+        if change.opencode_model.is_some() {
+            saved.opencode_model = checked.opencode_model.clone();
         }
         s.agent_defaults = (saved != Saved::default()).then_some(saved);
     })?;
@@ -267,6 +283,7 @@ mod tests {
             engine: Some(Engine::Codex),
             claude_model: Some("haiku".into()),
             codex_model: Some("gpt-b".into()),
+            ..Saved::default()
         };
         let view = view_of(&saved, &both(true));
         assert_eq!(view.starts_on, Engine::Codex);
@@ -280,6 +297,7 @@ mod tests {
             engine: Some(Engine::Codex),
             claude_model: Some("sonnet".into()),
             codex_model: Some("gpt-a".into()),
+            ..Saved::default()
         };
         let view = view_of(&saved, &both(false));
         // Still what the user chose, but a new agent goes where it can run.
@@ -294,6 +312,7 @@ mod tests {
             engine: Some(Engine::Codex),
             claude_model: None,
             codex_model: Some("gpt-gone".into()),
+            ..Saved::default()
         };
         let view = view_of(&saved, &both(true));
         assert_eq!(view.model, None);
@@ -308,6 +327,7 @@ mod tests {
             engine: Some(Engine::Codex),
             claude_model: Some("opus".into()),
             codex_model: None,
+            ..Saved::default()
         };
         let json = serde_json::to_value(&saved).unwrap();
         assert_eq!(

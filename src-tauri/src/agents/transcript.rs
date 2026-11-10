@@ -130,6 +130,8 @@ pub fn ensure_in(
     }
     let own = home.join(DIR);
     match engine {
+        // Its sessions are in its own database, which the app doesn't copy.
+        Engine::OpenCode => Ok(false),
         Engine::Claude => {
             let Some(folder) = claude_folder(cwd) else {
                 // A folder name not known: the account carry still applies.
@@ -203,6 +205,8 @@ pub fn back_up_in(
     }
     let own = home.join(DIR);
     match engine {
+        // Its sessions are in its own database, which the app doesn't copy.
+        Engine::OpenCode => Ok(false),
         Engine::Claude => {
             let found = claude_copies(roots, session);
             let Some(source) = best(&found) else {
@@ -268,6 +272,7 @@ pub fn kept_in(engine: Engine, home: &Path, session: &str) -> bool {
     match engine {
         Engine::Claude => own.join(format!("{session}.jsonl")).is_file(),
         Engine::Codex => !codex_copies(&[own.join("codex")], session).is_empty(),
+        Engine::OpenCode => false,
     }
 }
 

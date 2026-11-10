@@ -79,11 +79,13 @@ pub enum Way {
     Fresh,
 }
 
-/// What this driver can do: `codex exec` has no way to compact a thread.
+/// What this driver can do: `codex exec` has no way to compact a thread,
+/// and ACP none to ask OpenCode for it (its own compaction stays on, by its
+/// own settings).
 pub fn way(driver: Driver) -> Way {
     match driver {
         Driver::ClaudePrint | Driver::CodexApp => Way::Compact,
-        Driver::CodexExec => Way::Fresh,
+        Driver::CodexExec | Driver::OpenCodeAcp => Way::Fresh,
     }
 }
 

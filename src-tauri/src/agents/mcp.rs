@@ -196,7 +196,7 @@ const TOOLS: &[Tool] = &[
                 "icon": { "type": "string", "description": format!("Optional: the legend on its key. Left out, one read from its name and role. {}", super::keys::icon_hint()) },
                 "key": { "type": "string", "description": "Optional: the keyboard key (one letter or digit) that jumps to it. Left out, the first free letter of its name." },
                 "project": { "type": "string", "description": "Optional: bind it to one of the user's projects (name or path from project_list), so its own turns run inside that project. Usually unnecessary: any agent can work on any project through sessions." },
-                "engine": { "type": "string", "enum": ["claude", "codex"], "description": "Optional: what it runs on. `claude` (Claude Code) or `codex` (Codex, on the user's ChatGPT plan). Left out, it goes on the user's default engine and model for new agents (Settings → Agents), or on whichever engine is set up when that one isn't. Only when the user asks for it; it must be installed and signed in." },
+                "engine": { "type": "string", "enum": ["claude", "codex", "opencode"], "description": "Optional: what it runs on. `claude` (Claude Code), `codex` (Codex, on the user's ChatGPT plan) or `opencode` (OpenCode, on the providers the user set up in it, local models included). Left out, it goes on the user's default engine and model for new agents (Settings → Agents), or on whichever engine is set up when that one isn't. Only when the user asks for it; it must be installed and signed in." },
                 "first_task": { "type": "string", "description": "Optional message to start it on right away." },
                 "welcome": { "type": "string", "description": "Optional: what it says first in its chat, one or two short sentences in its own voice (\"I'm Inbox. I go through your mail and tell you what needs you.\"). No model turn runs for it." },
                 "starters": {
@@ -234,7 +234,7 @@ const TOOLS: &[Tool] = &[
                 "role": { "type": "string" },
                 "instructions": { "type": "string" },
                 "project": { "type": "string" },
-                "engine": { "type": "string", "enum": ["claude", "codex"] },
+                "engine": { "type": "string", "enum": ["claude", "codex", "opencode"] },
                 "model": { "type": "string" },
                 "effort": { "type": "string", "enum": ["low", "medium", "high", "default"] },
                 "routine_model": { "type": "string" },

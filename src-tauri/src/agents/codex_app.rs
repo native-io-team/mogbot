@@ -168,6 +168,8 @@ pub enum Out {
     DraftDelta(String),
     /// Codex wants the user's OK: answered off the read loop ([`answer`]).
     Ask(Box<Ask>),
+    /// OpenCode wants the user's OK (`opencode::answer`).
+    AskOpenCode(Box<super::opencode::Ask>),
     /// The turn is over: close stdin, and the app-server exits.
     Close,
 }

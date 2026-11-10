@@ -56,7 +56,7 @@ pub(crate) fn ran_on(agent: &store::Agent, counts: &[(Engine, usize)]) -> Option
 /// How many accounts each engine has.
 pub(crate) fn account_counts() -> Vec<(Engine, usize)> {
     let all = agents::wallet::list();
-    Engine::ALL
+    Engine::PLANS
         .iter()
         .map(|e| (*e, all.iter().filter(|a| a.engine == *e).count()))
         .collect()
@@ -1033,7 +1033,7 @@ fn model_label(engine: Engine, model: &str) -> String {
                 .map(|f| f.to_uppercase().chain(c).collect())
                 .unwrap_or_default()
         }
-        Engine::Codex => agents::codex::models()
+        Engine::Codex | Engine::OpenCode => agents::engine::models(engine)
             .into_iter()
             .find(|m| m.value == model)
             .map(|m| m.label)

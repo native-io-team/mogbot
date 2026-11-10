@@ -1108,6 +1108,156 @@ async fn codex(h: &H) -> Check {
     )
 }
 
+/// The same on OpenCode (`opencode acp`, the fake as `opencode`): a command
+/// that asks and runs on Allow, a tool of the bridge, the reply streamed,
+/// the session resumed; a denied command never runs, its step is declined
+/// and the agent is told why in the round after; a crash and an error each
+/// end in a line; a lost session is replaced; the bridge secret never on its
+/// command line, in its config or its environment.
+async fn opencode(h: &H) -> Check {
+    let a = h.agent("Opener");
+    store::update(&a.id, |a| a.engine = Engine::OpenCode).unwrap();
+    let home = store::agent_home(&a.id).unwrap();
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"bash": "python3 -c 'print(6*7)' > oc.txt"},
+            {"tool": "list_agents"},
+            {"slow": "opencode {session} {turn}", "every": 0.05}
+        ])),
+    )
+    .await?;
+    let c = card(h, &a.id, 0).await?;
+    ensure(
+        c.tool.as_deref() == Some("Bash"),
+        format!("card for {:?}", c.tool),
+    )?;
+    answer(h, &a.id, &c, true).await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        std::fs::read_to_string(home.join("oc.txt"))
+            .unwrap_or_default()
+            .trim()
+            == "42",
+        "the allowed command didn't run",
+    )?;
+    let session = store::get(&a.id)
+        .unwrap()
+        .session_id
+        .ok_or("no session kept")?;
+    ensure(
+        last_reply(&a.id) == format!("opencode {session} 1"),
+        format!("{:?}", last_reply(&a.id)),
+    )?;
+    ensure(h.drafting(&a.id, 5), "the reply never streamed as a draft")?;
+    ensure(
+        timeline(&a.id).len() >= 2,
+        format!("timeline {:?}", timeline(&a.id)),
+    )?;
+    // The secret went over stdin only.
+    let opened: Vec<Value> = h
+        .fake_log()
+        .into_iter()
+        .filter(|e| e["engine"] == "opencode" && e.get("method").is_some())
+        .collect();
+    ensure(!opened.is_empty(), "the fake never opened a session")?;
+    for e in &opened {
+        ensure(
+            e["header"] == true,
+            "no Authorization header in session/new",
+        )?;
+        ensure(
+            e["env_has_bearer"] == false,
+            "the secret is in its environment",
+        )?;
+        ensure(
+            !e["argv"].to_string().contains("Bearer")
+                && !e["config"].to_string().contains("Bearer"),
+            "the secret is on its command line or in its config",
+        )?;
+        ensure(
+            e["config"]["permission"]["bash"] == "ask",
+            format!("bash isn't asked: {}", e["config"]["permission"]),
+        )?;
+    }
+
+    // Resumed: the same session, the second turn in it.
+    h.send(&a.id, &fake(json!([{"say": "again {session} {turn}"}])))
+        .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(
+        last_reply(&a.id) == format!("again {session} 2"),
+        format!("not resumed: {:?}", last_reply(&a.id)),
+    )?;
+
+    // Denied: nothing runs, and the agent hears why in the next round.
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"bash": "python3 -c 'print(6*9)' > denied.txt"},
+            {"say": "never said"}
+        ])),
+    )
+    .await?;
+    let c = card(h, &a.id, 1).await?;
+    answer(h, &a.id, &c, false).await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    ensure(!home.join("denied.txt").exists(), "a denied command ran")?;
+    ensure(
+        last_reply(&a.id).starts_with("Noted:") && last_reply(&a.id).contains("said no"),
+        format!("the agent wasn't told: {:?}", last_reply(&a.id)),
+    )?;
+    ensure(
+        !replies(&a.id).iter().any(|r| r == "never said"),
+        "the round carried on past a reject",
+    )?;
+
+    // A crash and an error each end in a line.
+    for (name, script) in [
+        ("crash", json!([{"crash": true}])),
+        ("error", json!([{"error": "Provider returned 500"}])),
+    ] {
+        let before = log(&a.id).len();
+        h.send(&a.id, &fake(script)).await?;
+        h.turn(&a.id).await.map_err(|e| format!("{name}: {e}"))?;
+        let new: Vec<AgentMessage> = log(&a.id).into_iter().skip(before).collect();
+        ensure(
+            new.iter().any(|m| {
+                matches!(m.kind, MessageKind::Error | MessageKind::Note)
+                    && !m.text.trim().is_empty()
+            }),
+            format!(
+                "{name}: the turn ended without a line: {:?}",
+                new.iter()
+                    .map(|m| (m.kind, m.text.clone()))
+                    .collect::<Vec<_>>()
+            ),
+        )?;
+    }
+
+    // A session OpenCode can't load is replaced, once, with the recap.
+    store::update(&a.id, |a| {
+        a.session_id = Some("ses_gone0000000000000000".into())
+    })
+    .unwrap();
+    h.send(&a.id, &fake(json!([{"say": "fresh {session}"}])))
+        .await?;
+    h.turn(&a.id).await?;
+    let now = store::get(&a.id).unwrap().session_id.unwrap_or_default();
+    ensure(
+        now != "ses_gone0000000000000000" && last_reply(&a.id) == format!("fresh {now}"),
+        format!(
+            "lost session not replaced: {:?} / {:?} / errors {:?}",
+            now,
+            last_reply(&a.id),
+            errors(&a.id)
+        ),
+    )
+}
+
 /// Claude Code's `result` is in but the process stays alive (a background
 /// task it started): the turn is over, and the agent is idle soon after.
 async fn lingering(h: &H) -> Check {
@@ -1873,6 +2023,7 @@ const ALL: &[&str] = &[
     "queue-card",
     "interrupt",
     "codex",
+    "opencode",
     "lingering",
     "rounds",
     "garbage",
@@ -1909,6 +2060,10 @@ fn install_fake(home: &Path) {
     let codex = bin.join("codex");
     let _ = std::fs::remove_file(&codex);
     std::os::unix::fs::symlink(&script, &codex).unwrap();
+    // OpenCode over `opencode acp`, the fake speaking ACP.
+    let opencode = bin.join("opencode");
+    let _ = std::fs::remove_file(&opencode);
+    std::os::unix::fs::symlink(&script, &opencode).unwrap();
     // Codex on `exec`, the driver the fake speaks (debug builds read this).
     std::env::set_var("SHIPSTUDIO_AGENTS_CODEX_EXEC", "1");
     std::env::set_var("CODEX_HOME", home.join(".codex"));
@@ -1977,6 +2132,7 @@ fn main() {
                 "queue-card" => queue_on_card(&h).await,
                 "interrupt" => interrupt(&h).await,
                 "codex" => codex(&h).await,
+                "opencode" => opencode(&h).await,
                 "lingering" => lingering(&h).await,
                 "rounds" => rounds(&h).await,
                 "garbage" => garbage(&h).await,

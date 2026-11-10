@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""A scripted stand-in for `claude` (and `codex`), for whole agent turns with no model.
+"""A scripted stand-in for `claude` (and `codex`, `opencode`), for whole agent turns with no model.
 
 The fake-engine suite (`src-tauri/examples/agents_fake/`) puts this first on
 PATH as `claude`. It speaks what the app reads from the real CLI, as
@@ -56,6 +56,19 @@ Run as `codex` (a link named so), it is Codex's `exec` driver instead
 the same steps, except that commands never ask (exec can't) and
 `usage_limit` applies to Codex only with `"codex": true`. The app runs it on `exec` when
 `SHIPSTUDIO_AGENTS_CODEX_EXEC` is set (debug builds).
+
+Run as `opencode`, it is OpenCode's `opencode acp` (the Agent Client
+Protocol on stdin/stdout, as observed on OpenCode 1.18.29,
+`testdata/opencode-acp.jsonl`): `initialize`, `session/new` / `session/load`
+(which replays the conversation first; an unknown one fails as OpenCode's
+does), `session/prompt` running the same steps, `session/cancel`. A `bash`
+step asks with `session/request_permission` unless the inline config
+(`OPENCODE_CONFIG_CONTENT`) says `allow`; a `write` step always asks; a
+reject ends the round with nothing said, as OpenCode does, and a prompt
+starting "[Note from the app" is answered "Noted: …". Tool steps call the
+app's server with the header `session/new` gave it. Sessions are files
+under `$XDG_DATA_HOME/opencode/fake-sessions`. `models --verbose` lists
+`opencode/fake` and `local/fake` (served from 127.0.0.1).
 
 `FAKE_ENGINE_PERMISSION_MODE` changes the permission mode its init
 reports (the app stops a `bypassPermissions` turn).
@@ -591,10 +604,299 @@ def codex_main(args):
         print("fake codex: nothing to do for %s" % " ".join(args), file=sys.stderr)
 
 
+# --------------------------------------------------------------- OpenCode
+
+def opencode_sessions():
+    base = os.environ.get("XDG_DATA_HOME") or os.path.join(
+        os.path.expanduser("~"), ".local", "share")
+    return os.path.join(base, "opencode", "fake-sessions")
+
+
+class Acp:
+    """`opencode acp`: JSON-RPC both ways, read by a thread into a queue so
+    a step can wait on the app's answer to a permission ask."""
+
+    def __init__(self):
+        import queue
+        import threading
+        self.inbox = queue.Queue()
+        self.next_id = 0
+        self.session = None
+        self.bridge = Bridge(None)
+        self.cancelled = False
+        self.replies = []
+        self.msg = 0
+        self.tool_n = 0
+        try:
+            self.config = json.loads(os.environ.get("OPENCODE_CONFIG_CONTENT") or "{}")
+        except Exception:
+            self.config = {}
+
+        def reader():
+            for line in sys.stdin:
+                line = line.strip()
+                if line:
+                    try:
+                        self.inbox.put(json.loads(line))
+                    except Exception:
+                        pass
+            self.inbox.put(None)
+
+        threading.Thread(target=reader, daemon=True).start()
+
+    def update(self, update):
+        out({"jsonrpc": "2.0", "method": "session/update",
+             "params": {"sessionId": self.session, "update": update}})
+
+    def path(self):
+        return os.path.join(opencode_sessions(), self.session + ".jsonl")
+
+    def record(self, entry):
+        with open(self.path(), "a") as f:
+            f.write(json.dumps(entry) + "\n")
+
+    def permission(self, name):
+        rules = self.config.get("permission") or {}
+        rule = rules.get(name, rules.get("*", "ask"))
+        if isinstance(rule, dict):
+            rule = rule.get("*", "ask")
+        return rule
+
+    def take(self, block=True):
+        """The next message from the app; a cancel is noted on the way."""
+        import queue
+        try:
+            msg = self.inbox.get(timeout=None if block else 0.2)
+        except queue.Empty:
+            return "empty"
+        if msg is None:
+            sys.exit(0)
+        if msg.get("method") == "session/cancel":
+            self.cancelled = True
+        return msg
+
+    def ask(self, call_id, kind, title, raw):
+        """`once` or not: the app's answer to `session/request_permission`."""
+        rid = self.next_id
+        self.next_id += 1
+        out({"jsonrpc": "2.0", "id": rid, "method": "session/request_permission", "params": {
+            "sessionId": self.session,
+            "toolCall": {"toolCallId": call_id, "title": title, "kind": kind,
+                         "status": "pending", "locations": [], "rawInput": raw},
+            "options": [{"optionId": "once", "kind": "allow_once", "name": "Allow once"},
+                        {"optionId": "always", "kind": "allow_always", "name": "Always allow"},
+                        {"optionId": "reject", "kind": "reject_once", "name": "Reject"}]}})
+        while True:
+            msg = self.take()
+            if msg.get("id") == rid and "method" not in msg:
+                break
+        option = ((msg.get("result") or {}).get("outcome") or {}).get("optionId")
+        log({"engine": "opencode", "asked": raw, "answer": option})
+        return option == "once"
+
+    def tool_call(self, name, kind, raw):
+        self.tool_n += 1
+        cid = "call_fake_%d_%d" % (os.getpid(), self.tool_n)
+        self.update({"sessionUpdate": "tool_call", "toolCallId": cid, "title": name,
+                     "kind": kind, "status": "pending", "locations": [], "rawInput": {}})
+        self.update({"sessionUpdate": "tool_call_update", "toolCallId": cid,
+                     "status": "in_progress", "kind": kind, "title": name, "rawInput": raw})
+        return cid
+
+    def done(self, cid, text, failed=False, exit_code=None):
+        update = {"sessionUpdate": "tool_call_update", "toolCallId": cid,
+                  "status": "failed" if failed else "completed",
+                  "content": [{"type": "content", "content": {"type": "text", "text": text}}],
+                  "rawOutput": {"output": text}}
+        if exit_code is not None:
+            update["rawOutput"]["metadata"] = {"exit": exit_code}
+        self.update(update)
+
+    def say(self, text, every=0.0):
+        self.msg += 1
+        mid = "msg_fake_%d_%d" % (os.getpid(), self.msg)
+        turns = 0
+        if os.path.isfile(self.path()):
+            with open(self.path()) as f:
+                turns = sum(1 for line in f if '"user"' in line)
+        text = (text.replace("{session}", self.session).replace("{turn}", str(turns))
+                .replace("{account}", "this-mac"))
+        for piece in re.findall(r"\S+\s*", text) or [text]:
+            self.update({"sessionUpdate": "agent_message_chunk", "messageId": mid,
+                         "content": {"type": "text", "text": piece}})
+            if every:
+                time.sleep(every)
+        self.replies.append(text)
+        self.record({"role": "assistant", "text": text})
+
+    def run(self, steps):
+        """The prompt's steps. A reject ends the round, as OpenCode's does."""
+        for step in steps:
+            if self.cancelled:
+                return
+            if "say" in step:
+                self.say(step["say"])
+            elif "slow" in step:
+                self.say(step["slow"], every=float(step.get("every", 0.2)))
+            elif "tool" in step or "volley" in step:
+                if "volley" in step:
+                    v = step["volley"]
+                    back = [{"volley": {"to": v["back"], "back": v["to"]}}]
+                    tool, args = "message_agent", {"agent": v["to"],
+                                                   "message": "volley #fake " + json.dumps(back)}
+                else:
+                    tool, args = step["tool"], step.get("args") or {}
+                cid = self.tool_call("app_" + tool, "other", args)
+                text, is_error = self.bridge.call(tool, args)
+                self.done(cid, text, failed=is_error)
+            elif "bash" in step:
+                command = step["bash"]
+                cid = self.tool_call("bash", "execute", {"command": command})
+                if self.permission("bash") != "allow":
+                    if not self.ask(cid, "execute", command, {"command": command}):
+                        self.done(cid, "The user rejected permission to use this specific "
+                                       "tool call.", failed=True)
+                        return
+                run = subprocess.run(["/bin/sh", "-c", command], capture_output=True, text=True)
+                self.done(cid, run.stdout + run.stderr, exit_code=run.returncode)
+            elif "write" in step:
+                full = os.path.join(os.getcwd(), step["write"])
+                cid = self.tool_call("write", "edit", {"filePath": full,
+                                                       "content": step.get("text", "")})
+                if not self.ask(cid, "edit", full, {"filepath": full, "diff": "+"}):
+                    self.done(cid, "The user rejected permission to use this specific "
+                                   "tool call.", failed=True)
+                    return
+                with open(full, "w") as f:
+                    f.write(step.get("text", ""))
+                self.done(cid, "Wrote file successfully.")
+            elif "sleep" in step:
+                time.sleep(float(step["sleep"]))
+            elif "hang" in step:
+                while not self.cancelled:
+                    self.take(block=False)
+            elif "crash" in step:
+                self.update({"sessionUpdate": "agent_message_chunk", "messageId": "crash",
+                             "content": {"type": "text",
+                                         "text": "Here is the first half of my answer"}})
+                os.kill(os.getpid(), signal.SIGSEGV)
+            elif "stderr" in step:
+                sys.stderr.write(step["stderr"] + "\n")
+                sys.stderr.flush()
+            elif "exit" in step:
+                sys.exit(int(step["exit"]))
+            elif "error" in step:
+                raise RuntimeError(step["error"])
+
+    def open_session(self, method, rid, params):
+        for server in params.get("mcpServers") or []:
+            if server.get("name") == "app":
+                self.bridge.url = server.get("url")
+                self.bridge.headers = {h["name"]: h["value"] for h in server.get("headers") or []}
+        log({"engine": "opencode", "argv": sys.argv[1:], "config": self.config,
+             "cwd": os.getcwd(), "method": method,
+             "env_has_bearer": any("Bearer" in v for v in os.environ.values()),
+             "header": bool(self.bridge.headers)})
+        if method == "session/load":
+            self.session = params.get("sessionId")
+            if not os.path.isfile(self.path()):
+                out({"jsonrpc": "2.0", "id": rid, "error": {
+                    "code": -32603, "message": "Internal error: OpenCode service failure",
+                    "data": {"service": "session"}}})
+                return
+            # Loading replays the whole conversation before answering.
+            with open(self.path()) as f:
+                for line in f:
+                    entry = json.loads(line)
+                    kind = "user_message_chunk" if entry["role"] == "user" else "agent_message_chunk"
+                    self.update({"sessionUpdate": kind, "messageId": "old",
+                                 "content": {"type": "text", "text": entry["text"]}})
+        else:
+            self.session = "ses_fake%s" % uuid.uuid4().hex[:20]
+            open(self.path(), "a").close()
+            # Where the app looks for a session (OpenCode's database).
+            with open(os.path.join(os.path.dirname(opencode_sessions()), "opencode.db"), "a") as f:
+                f.write(self.session + "\n")
+        result = {"configOptions": [{"id": "model",
+                                     "currentValue": self.config.get("model") or "opencode/fake"}]}
+        if method == "session/new":
+            result["sessionId"] = self.session
+        out({"jsonrpc": "2.0", "id": rid, "result": result})
+
+    def prompt(self, rid, params):
+        text = "".join(p.get("text", "") for p in params.get("prompt") or [])
+        self.record({"role": "user", "text": text})
+        log({"turn": self.session, "engine": "opencode", "prompt": text, "cwd": os.getcwd()})
+        self.cancelled = False
+        # The app's note after a reject is answered in words.
+        steps = ([{"say": "Noted: " + text[:300]}] if text.startswith("[Note from the app")
+                 else script_of(text))
+        try:
+            self.run(steps)
+        except RuntimeError as e:
+            out({"jsonrpc": "2.0", "id": rid, "error": {"code": -32603, "message": str(e)}})
+            return
+        self.update({"sessionUpdate": "usage_update", "used": 1500, "size": 200000,
+                     "cost": {"amount": 0.01, "currency": "USD"}})
+        out({"jsonrpc": "2.0", "id": rid, "result": {
+            "stopReason": "cancelled" if self.cancelled else "end_turn",
+            "usage": {"inputTokens": 100, "outputTokens": 20, "totalTokens": 170,
+                      "cachedReadTokens": 50}}})
+
+    def serve(self):
+        os.makedirs(opencode_sessions(), exist_ok=True)
+        while True:
+            msg = self.take()
+            method, rid, params = msg.get("method"), msg.get("id"), msg.get("params") or {}
+            if method == "initialize":
+                out({"jsonrpc": "2.0", "id": rid, "result": {
+                    "protocolVersion": 1, "agentInfo": {"name": "OpenCode", "version": "1.18.29"},
+                    "agentCapabilities": {"loadSession": True}}})
+            elif method in ("session/new", "session/load"):
+                self.open_session(method, rid, params)
+            elif method == "session/prompt":
+                self.prompt(rid, params)
+            elif method is not None and rid is not None:
+                out({"jsonrpc": "2.0", "id": rid, "error": {"code": -32601,
+                                                             "message": "no " + method}})
+
+
+OPENCODE_MODELS = """opencode/fake
+{
+  "id": "fake",
+  "providerID": "opencode",
+  "name": "Fake",
+  "api": { "id": "fake", "url": "https://opencode.ai/zen/v1" }
+}
+local/fake
+{
+  "id": "fake",
+  "providerID": "local",
+  "name": "Local Fake",
+  "api": { "id": "fake", "url": "http://127.0.0.1:11434/v1" }
+}"""
+
+
+def opencode_main(args):
+    if args[:1] in (["--version"], ["-v"]):
+        print("1.18.29")
+    elif args[:1] == ["models"]:
+        print(OPENCODE_MODELS if "--verbose" in args else "opencode/fake\nlocal/fake")
+    elif args[:2] == ["debug", "config"]:
+        print("{}")
+    elif args[:1] == ["acp"]:
+        Acp().serve()
+    else:
+        print("fake opencode: nothing to do for %s" % " ".join(args), file=sys.stderr)
+
+
 def main():
     args = sys.argv[1:]
     if os.path.basename(sys.argv[0]).startswith("codex"):
         codex_main(args)
+        return
+    if os.path.basename(sys.argv[0]).startswith("opencode"):
+        opencode_main(args)
         return
     if args[:1] in (["--version"], ["-v"]):
         print(VERSION)

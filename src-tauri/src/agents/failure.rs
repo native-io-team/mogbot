@@ -190,6 +190,8 @@ fn provider(engine: Engine) -> &'static str {
     match engine {
         Engine::Claude => "Anthropic",
         Engine::Codex => "OpenAI",
+        // Whichever provider it is set up with.
+        Engine::OpenCode => "its model provider",
     }
 }
 

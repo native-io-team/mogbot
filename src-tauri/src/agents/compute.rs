@@ -270,7 +270,7 @@ pub fn totals(all: &[AccountLine], now: i64) -> Totals {
         .filter(|a| is_read(a) && !has_room(a))
         .filter_map(|a| back_at(a).filter(|&t| t > now).map(|t| at(a, t)))
         .min_by_key(|x| x.at);
-    let run_out = Engine::ALL
+    let run_out = Engine::PLANS
         .iter()
         .filter_map(|&e| {
             let mine: Vec<&AccountLine> = accounts.iter().filter(|a| a.engine == e).collect();

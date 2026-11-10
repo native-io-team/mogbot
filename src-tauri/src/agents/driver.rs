@@ -31,6 +31,10 @@ pub enum Driver {
     /// need: JSONL out, the prompt on stdin, and nothing can ask (exec forces
     /// approvals to "never"; the prompt says so).
     CodexExec,
+    /// `opencode acp`: the Agent Client Protocol both ways for the whole
+    /// turn, so replies stream, every permission it asks for is a card, and
+    /// Stop cancels (`opencode`).
+    OpenCodeAcp,
 }
 
 /// What every driver needs to build a turn's command line.
@@ -69,6 +73,7 @@ impl Driver {
             Engine::Claude => Driver::ClaudePrint,
             Engine::Codex if super::codex_app::available(binary).await => Driver::CodexApp,
             Engine::Codex => Driver::CodexExec,
+            Engine::OpenCode => Driver::OpenCodeAcp,
         }
     }
 
@@ -76,6 +81,7 @@ impl Driver {
         match self {
             Driver::ClaudePrint => Engine::Claude,
             Driver::CodexApp | Driver::CodexExec => Engine::Codex,
+            Driver::OpenCodeAcp => Engine::OpenCode,
         }
     }
 
@@ -99,7 +105,9 @@ impl Driver {
         F: std::future::Future<Output = bool>,
     {
         match self.engine() {
-            Engine::Claude => Ok(()),
+            // Claude Code says so in its turn; OpenCode counts once it lists
+            // a model, and a provider it can't reach fails its own turn.
+            Engine::Claude | Engine::OpenCode => Ok(()),
             Engine::Codex if codex_signed_in().await => Ok(()),
             Engine::Codex => Err(CommandError::expected("Codex says: Not logged in.")),
         }
@@ -110,7 +118,7 @@ impl Driver {
     pub fn new_session(self) -> String {
         match self {
             Driver::ClaudePrint => uuid::Uuid::new_v4().to_string(),
-            Driver::CodexApp | Driver::CodexExec => String::new(),
+            Driver::CodexApp | Driver::CodexExec | Driver::OpenCodeAcp => String::new(),
         }
     }
 
@@ -146,13 +154,16 @@ impl Driver {
                 spec.writable,
                 spec.protected,
             ),
+            // Model, instructions and permissions go in its inline config;
+            // the session and the servers in `session/new` (`opencode`).
+            Driver::OpenCodeAcp => super::opencode::args(),
         }
     }
 
     /// Whether stdin stays open for the turn (a conversation), rather than
     /// carrying the prompt and closing.
     pub fn converses(self) -> bool {
-        self == Driver::CodexApp
+        matches!(self, Driver::CodexApp | Driver::OpenCodeAcp)
     }
 
     /// What identifies this turn's process on its command line, for the next
@@ -161,7 +172,9 @@ impl Driver {
     pub fn process_mark(self, session: &str, home: &Path) -> String {
         match self.engine() {
             Engine::Claude => session.to_string(),
-            Engine::Codex => home.to_string_lossy().into_owned(),
+            // `opencode acp` names nothing on its command line either: the
+            // home is in its environment's working folder or an added one.
+            Engine::Codex | Engine::OpenCode => home.to_string_lossy().into_owned(),
         }
     }
 
@@ -191,6 +204,60 @@ impl Driver {
                     .await,
                 )
             }
+            Driver::OpenCodeAcp => {
+                let given: Vec<String> = access.servers.iter().map(|s| s.key.clone()).collect();
+                Some(super::opencode::capabilities(agent, now, &given))
+            }
+        }
+    }
+}
+
+/// A turn that converses ([`Driver::converses`]): Codex's app-server or
+/// OpenCode's ACP, each read into the same [`Out`]s.
+///
+/// [`Out`]: super::codex_app::Out
+pub enum Conversation {
+    Codex(super::codex_app::Conversation),
+    OpenCode(super::opencode::Conversation),
+}
+
+impl Conversation {
+    pub fn on_message(&mut self, msg: &serde_json::Value) -> Vec<super::codex_app::Out> {
+        match self {
+            Conversation::Codex(c) => c.on_message(msg),
+            Conversation::OpenCode(c) => c.on_message(msg),
+        }
+    }
+
+    /// The message that stops the turn in progress, if one is.
+    pub fn interrupt(&mut self) -> Option<serde_json::Value> {
+        match self {
+            Conversation::Codex(c) => c.interrupt(),
+            Conversation::OpenCode(c) => c.interrupt(),
+        }
+    }
+
+    pub fn over(&self) -> bool {
+        match self {
+            Conversation::Codex(c) => c.over(),
+            Conversation::OpenCode(c) => c.over(),
+        }
+    }
+
+    /// OpenCode's tool calls announced since last asked, as Claude Code's,
+    /// for `exposure` (Codex's are read off its messages instead).
+    pub fn take_calls(&mut self) -> Vec<(String, serde_json::Value)> {
+        match self {
+            Conversation::Codex(_) => Vec::new(),
+            Conversation::OpenCode(c) => c.take_calls(),
+        }
+    }
+
+    /// OpenCode's asks' shared state and round, for `opencode::answer`.
+    pub fn opencode_gate(&self) -> Option<(std::sync::Arc<super::opencode::Gate>, u64)> {
+        match self {
+            Conversation::Codex(_) => None,
+            Conversation::OpenCode(c) => Some((c.gate(), c.round())),
         }
     }
 }
@@ -237,7 +304,7 @@ fn with_effort(driver: Driver, mut args: Vec<String>, effort: Option<&str>) -> V
             args.splice(at..at, ["-c".to_string(), value]);
             args
         }
-        Driver::CodexApp => args,
+        Driver::CodexApp | Driver::OpenCodeAcp => args,
     }
 }
 
@@ -281,6 +348,8 @@ fn with_access(
             args.splice(at..at, extra);
             args
         }
+        // Its servers go in `session/new`, with the secret, over stdin.
+        Driver::OpenCodeAcp => args,
     }
 }
 

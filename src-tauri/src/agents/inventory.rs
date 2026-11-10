@@ -517,7 +517,7 @@ fn sign_in_changes(
     now: i64,
 ) -> Vec<sign_in_change::SignInChange> {
     let mut out = Vec::new();
-    for engine in Engine::ALL {
+    for engine in Engine::PLANS {
         let Some(mac) = inv
             .accounts
             .iter()
@@ -602,7 +602,7 @@ pub async fn local_compute() -> Vec<LocalCompute> {
     let mut found = Vec::new();
     if find("opencode").await {
         found.push(LocalCompute {
-            name: "Opencode",
+            name: "OpenCode",
             running: None,
             models: Vec::new(),
         });
@@ -632,9 +632,15 @@ pub async fn local_compute() -> Vec<LocalCompute> {
 
 /// The inventory now, from disk, the engines and this Mac.
 pub async fn read() -> Inventory {
-    let engines = super::engine::overview().await;
+    // Accounts and limits are the plan engines' (OpenCode reports none; it
+    // is listed with the other compute on this Mac).
+    let engines: Vec<_> = super::engine::overview()
+        .await
+        .into_iter()
+        .filter(|e| e.id.has_plan())
+        .collect();
     let mut candidates = Vec::new();
-    for engine in Engine::ALL {
+    for engine in Engine::PLANS {
         candidates.extend(wallet::candidates(engine).await);
     }
     let local = local_compute().await;
@@ -660,7 +666,7 @@ pub async fn read() -> Inventory {
             engines,
             candidates,
             engine_readings: super::quota::shown(&super::quota::load(), now),
-            reading_from: Engine::ALL
+            reading_from: Engine::PLANS
                 .iter()
                 .map(|e| (*e, wallet::reading_from(*e)))
                 .collect(),

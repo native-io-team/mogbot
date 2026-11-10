@@ -255,10 +255,7 @@ fn key(engine: Engine, id: &str) -> String {
 }
 
 fn engine_word(engine: Engine) -> &'static str {
-    match engine {
-        Engine::Claude => "claude",
-        Engine::Codex => "codex",
-    }
+    engine.word()
 }
 
 /* --------------------------------------------------------------- disk */
@@ -317,6 +314,14 @@ fn clean_name(name: &str) -> Result<String, CommandError> {
 /// Add an account for an engine, last in its order. It isn't signed in yet:
 /// the caller runs the sign-in into its folder next.
 pub fn add(engine: Engine, name: &str) -> Result<Account, CommandError> {
+    // OpenCode's providers are set up in OpenCode itself: no accounts to add.
+    if !engine.has_plan() {
+        return Err(CommandError::expected(format!(
+            "{} has no accounts to add here: set up its providers in {} itself.",
+            engine.label(),
+            engine.label()
+        )));
+    }
     let name = clean_name(name)?;
     change(|file| {
         if file.of(engine).any(|a| a.name.eq_ignore_ascii_case(&name)) {
@@ -558,7 +563,7 @@ pub fn finish_pending_removals() {
 /// `engine:id` back into its parts.
 fn split_key(k: &str) -> Option<(Engine, &str)> {
     let (word, id) = k.split_once(':')?;
-    [Engine::Claude, Engine::Codex]
+    Engine::ALL
         .into_iter()
         .find(|e| engine_word(*e) == word)
         .map(|e| (e, id))
@@ -654,6 +659,8 @@ pub fn keep_sessions(engine: Engine, from: &Path, into: &Path) -> usize {
     let roots = [from.to_path_buf(), into.to_path_buf()];
     let mut ids: Vec<String> = Vec::new();
     match engine {
+        // One store, in OpenCode's own database: nothing to carry.
+        Engine::OpenCode => return 0,
         Engine::Claude => {
             for dir in std::fs::read_dir(from.join("projects"))
                 .into_iter()
@@ -697,6 +704,7 @@ pub fn keep_sessions(engine: Engine, from: &Path, into: &Path) -> usize {
             match engine {
                 Engine::Claude => carry_claude(&roots, into, id),
                 Engine::Codex => carry_codex(&roots, into, id),
+                Engine::OpenCode => Ok(false),
             }
             .unwrap_or(false)
         })
@@ -916,6 +924,8 @@ pub async fn signed_in(account: &Account) -> bool {
         Engine::Codex => accounts::codex_home_dir(&account.id)
             .join("auth.json")
             .is_file(),
+        // Only this Mac's own OpenCode exists (see [`add`]).
+        Engine::OpenCode => false,
     }
 }
 
@@ -961,6 +971,7 @@ pub fn env_for(account: &Account) -> Vec<(String, String)> {
                 .to_string_lossy()
                 .into_owned(),
         )],
+        Engine::OpenCode => Vec::new(),
     }
 }
 
@@ -969,6 +980,8 @@ pub fn folder(account: &Account) -> PathBuf {
     match account.engine {
         Engine::Claude => accounts::claude_config_dir(&account.id),
         Engine::Codex => accounts::codex_home_dir(&account.id),
+        // Where OpenCode keeps its data (its sessions' database).
+        Engine::OpenCode => accounts::opencode_data_home_dir(&account.id).join("opencode"),
     }
 }
 
@@ -1072,6 +1085,7 @@ pub fn carry_session(account: &Account, session: &str) -> bool {
     match account.engine {
         Engine::Claude => carry_claude(&roots, &target, session),
         Engine::Codex => carry_codex(&roots, &target, session),
+        Engine::OpenCode => Ok(false),
     }
     .unwrap_or_else(|e| {
         tracing::warn!("[Agents] couldn't carry a session to another account: {e}");
@@ -1093,6 +1107,17 @@ pub fn session_in(roots: &[PathBuf], engine: Engine, session: &str) -> bool {
         return false;
     }
     match engine {
+        // Its sessions live in its database (`opencode.db` and its
+        // write-ahead log): there when the database names the id.
+        Engine::OpenCode => roots.iter().any(|root| {
+            ["opencode.db", "opencode.db-wal"].iter().any(|f| {
+                std::fs::read(root.join(f)).is_ok_and(|bytes| {
+                    bytes
+                        .windows(session.len())
+                        .any(|w| w == session.as_bytes())
+                })
+            })
+        }),
         Engine::Claude => {
             let name = format!("{session}.jsonl");
             roots.iter().any(|root| {
@@ -1462,13 +1487,16 @@ pub fn identity_of(account: &Account) -> super::identity::Identity {
             Some(&accounts::codex_home_dir(&account.id).join("auth.json")),
             identity::codex,
         ),
+        // No one account: it runs on the providers set up in it.
+        Engine::OpenCode => identity::Identity::default(),
     }
 }
 
 pub async fn views() -> Vec<AccountView> {
     let now = super::store::now_ms();
     let mut out = Vec::new();
-    for account in list() {
+    // Accounts are shown for the plan engines; OpenCode's one is internal.
+    for account in list().into_iter().filter(|a| a.engine.has_plan()) {
         let signed_in = signed_in(&account).await;
         // Only for a sign-in that is there: a file can outlive a sign-out.
         let who = if signed_in {
