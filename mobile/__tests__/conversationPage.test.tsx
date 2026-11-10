@@ -1,7 +1,7 @@
 /**
  * The living page above the messages (`components/ConversationPage`): read
  * from the Mac only where it serves `agents.page`, drawn with the blocks,
- * versions on a tap, an older one opened, folding, unpinning.
+ * versions on a tap, an older one opened, folding, unpinning and pinning back.
  */
 import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { pageMock } from '../dev/mock-page';
@@ -112,6 +112,16 @@ describe('ConversationPage (phone)', () => {
       pinned: false,
     });
     expect(screen.queryByTestId('conversation-page')).toBeNull();
+    // Unpinned, one line brings it back: the phone's header has no Pin page.
+    await act(async () => {
+      await fireEvent.press(screen.getByLabelText('Pin the page “November budget”'));
+    });
+    expect(mockCall).toHaveBeenCalledWith('agents.pagePin', {
+      agentId: 'budget',
+      conversationId: 'first',
+      pinned: true,
+    });
+    expect(await screen.findByTestId('conversation-page')).toBeTruthy();
   });
 
   it('shows nothing where there is no page, or the Mac keeps none', async () => {

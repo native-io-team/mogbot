@@ -3,8 +3,9 @@
  * (fold, title, "Updated 3 min ago · v4", Unpin) and the page's blocks under
  * it, drawn by `Blocks` as any `show`. Tapping the "Updated" line lists the
  * kept versions with what changed; tapping one shows it as it was. The page
- * scrolls inside a band so the chat keeps most of the screen. Nothing when
- * the conversation has no page, the user unpinned it, or the Mac keeps none.
+ * scrolls inside a band so the chat keeps most of the screen. Unpinned, one
+ * quiet line with Pin brings it back. Nothing when the conversation has no
+ * page or the Mac keeps none.
  */
 
 import { useEffect, useMemo, useState } from 'react';
@@ -43,7 +44,8 @@ export function ConversationPage({
   onError: (message: string) => void;
 }) {
   const { page, folded } = useConversationPage(agentId, conversation, turn);
-  if (!page || !page.pinned || !conversation) return null;
+  if (!page || !conversation) return null;
+  if (!page.pinned) return <PinBack page={page} side={side} onError={onError} />;
   return (
     <PageBand
       key={`${agentId}#${conversation}`}
@@ -52,6 +54,51 @@ export function ConversationPage({
       side={side}
       onError={onError}
     />
+  );
+}
+
+/**
+ * An unpinned page, as one quiet line with Pin: the desk has it among the
+ * chat header's actions, which the phone's header has no room for. Without
+ * it, a page unpinned here could only come back from the desk.
+ */
+function PinBack({
+  page,
+  side,
+  onError,
+}: {
+  page: Page;
+  side: { left: number; right: number };
+  onError: (message: string) => void;
+}) {
+  const styles = useStyles();
+  const colors = useColors();
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={`Pin the page “${page.title}”`}
+      onPress={() => {
+        haptic.light();
+        pinPage(page.agentId, page.conversation, true).catch((e: unknown) =>
+          onError(String(e instanceof Error ? e.message : e))
+        );
+      }}
+      style={({ pressed }) => [
+        styles.band,
+        styles.bar,
+        { paddingLeft: space.lg + side.left, paddingRight: space.lg + side.right },
+        pressed && PRESSED,
+      ]}
+      testID="page-pin-back"
+    >
+      <Icon name="pin" size={iconSize.inline} color={colors.textMuted} />
+      <T variant="caption" color={colors.textMuted} numberOfLines={1} style={styles.pinTitle}>
+        {`Page: ${page.title}`}
+      </T>
+      <T variant="caption" color={colors.textSecondary}>
+        Pin
+      </T>
+    </Pressable>
   );
 }
 
@@ -235,6 +282,7 @@ const useStyles = makeStyles((colors) => ({
     minWidth: 0,
   },
   title: { flexShrink: 1 },
+  pinTitle: { flex: 1, minWidth: 0 },
   history: {
     gap: space['2xs'],
     marginBottom: space.sm,
