@@ -30,6 +30,7 @@ import {
   type Agent,
   type Quota,
   type UsageAccount,
+  type UsageInventory,
   type AgentMessage,
   type AgentSecret,
   type AgentReach,
@@ -2121,6 +2122,9 @@ export function createMockServer(opts: MockOptions = {}) {
     armed: importArmed,
     talk: importTalk,
   });
+  // The phone's own changes to the usage mode and the spare-capacity list.
+  let usageMode: UsageInventory['mode'] | null = null;
+  const spareAdded: UsageInventory['backlog'] = [];
   let walletAccounts: UsageAccount[] = opts.probe
     ? probeAccounts()
     : [
@@ -3132,12 +3136,43 @@ export function createMockServer(opts: MockOptions = {}) {
       walletAccounts = walletAccounts.map((a) => (a.engine === engine ? sorted[k++] : a));
       return structuredClone(walletAccounts);
     },
+    // As `agents_set_usage_mode` and `agents_spare_add` do; each answers the inventory.
+    'agents.usage.setMode': (p, c) => {
+      if (p.mode !== 'normal' && p.mode !== 'save' && p.mode !== 'use_it_all') {
+        return fail({
+          type: 'Protocol',
+          code: 'bad_params',
+          message: 'The usage mode is normal, save or use_it_all.',
+        });
+      }
+      usageMode = p.mode;
+      return methods['agents.usagePlan']!({}, c);
+    },
+    'agents.spare.add': (p, c) => {
+      const text = String(p.text ?? '').trim();
+      if (!text) return fail({ type: 'Validation', field: 'text', reason: 'Say what to do.' });
+      spareAdded.push({
+        id: `spare-${spareAdded.length + 1}`,
+        text,
+        addedBy: 'you',
+        addedAt: Date.now(),
+        state: 'waiting',
+      });
+      return methods['agents.usagePlan']!({}, c);
+    },
+    'agents.spare.spendNow': () => ({
+      line: 'Chief of Staff is starting your spare-capacity list (3 waiting).',
+    }),
     // Its spare window placed 40 minutes before a reset from now, so the line shows.
     // This Mac's five-hour window matches `agents.quota`'s (resets in 2 hours),
     // and its pace estimate lands 80 minutes from now, before that reset.
     'agents.usagePlan': () => {
       const now = Date.now();
       const plan = structuredClone(real.agentsUsagePlan);
+      // The fixture's literal types are narrower than the protocol's.
+      const own = plan as unknown as UsageInventory;
+      if (usageMode) own.mode = usageMode;
+      own.backlog.push(...structuredClone(spareAdded));
       if (opts.usage) return twoClaudeUsage(plan, opts.usage, now);
       for (const s of plan.spare)
         Object.assign(s, { resetsAt: now + 40 * 60_000, observedAt: now - 10 * 60_000 });

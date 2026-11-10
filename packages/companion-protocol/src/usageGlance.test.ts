@@ -104,6 +104,24 @@ describe('usageGlance', () => {
     expect(g.summary).toMatch(/^1 account · /);
   });
 
+  it('two meters moving together are a question, never counted as one', () => {
+    const g = usageGlance(
+      [acct('default', { name: 'sam@example.com' }), acct('w', { name: 'Work' })],
+      inv([
+        line('default', { windows: [week(42)] }),
+        line('w', { windows: [week(42)], maybeSameAs: 'default' }),
+      ]),
+      { now: NOW }
+    );
+    expect(g.sameNotes).toEqual([
+      'Work and sam@example.com may be the same Claude account: their weekly limits have moved together and reset at the same moment. If they are, sign one in with a different account.',
+    ]);
+    // Still two accounts on the meter and in the totals.
+    expect(g.meterKeys.map((k) => k.id)).toEqual(['default', 'w']);
+    expect(g.keys[1].state).not.toBe('same');
+    expect(g.summary).toMatch(/^2 accounts · /);
+  });
+
   it('out everywhere says until when, in the one phrase', () => {
     const g = usageGlance(
       [acct('default', { out: true, limit: { at: NOW - H, resetsAt: NOW + 3 * H } })],

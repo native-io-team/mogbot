@@ -30,6 +30,23 @@ export const ACCOUNT_ENGINE_LABEL: Record<AgentEngine, string> = {
   codex: 'Codex',
 };
 
+/** The short engine name a place is numbered by: "Claude 2", "Codex 1". */
+const PLACE_ENGINE: Record<AgentEngine, string> = { claude: 'Claude', codex: 'Codex' };
+
+/**
+ * An account's place in its engine's order, as a label. Places restart per
+ * engine, so with accounts of both engines in one list the engine is named
+ * ("Claude 1", "Codex 1"); otherwise the number alone (persona review
+ * 2026-11-09: Codex's "1" under three Claude accounts read as a second first).
+ */
+export function placeLabel(
+  k: { engine: AgentEngine; position: number },
+  all: readonly { engine: AgentEngine }[]
+): string {
+  const mixed = all.some((o) => o.engine !== k.engine);
+  return mixed ? `${PLACE_ENGINE[k.engine]} ${k.position}` : String(k.position);
+}
+
 /** Why more than one account: said once, wherever one is added. */
 export const ADD_ACCOUNT_WHY =
   'When one account runs out of usage, agents carry on with the next, so nothing stops.';

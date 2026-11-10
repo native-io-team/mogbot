@@ -43,7 +43,7 @@ export const USAGE_MODE_LABEL: Record<UsageMode, string> = {
 export const USAGE_MODE_DETAIL: Record<UsageMode, string> = {
   normal:
     'Agents never slow down for limits. Before something big, they say what it will likely use.',
-  save: 'Agents ask before heavy work and send light work to lighter models or engines.',
+  save: 'Routines wait while the account in use is nearly out, until its limit resets. Agents ask before heavy work and send light work to lighter models.',
   use_it_all:
     'Near a reset with capacity left, the Chief starts your spare-capacity list. Allow cards still apply.',
 };

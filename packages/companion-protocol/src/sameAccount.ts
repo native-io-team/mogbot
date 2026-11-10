@@ -45,6 +45,15 @@ export function sameAccountNote(engine: AgentEngine, name: string, other: string
   return `${name} is the same ${ACCOUNT_KIND[engine]} account as ${other} — adds no extra room`;
 }
 
+/**
+ * Their weekly meters moved together with the same reset while only one ran
+ * turns (`UsageAccountLine.maybeSameAs`): asked, never counted. Totals and
+ * failover still treat them as two until the engine's own records say so.
+ */
+export function maybeSameAccountNote(engine: AgentEngine, name: string, other: string): string {
+  return `${name} and ${other} may be the same ${ACCOUNT_KIND[engine]} account: their weekly limits have moved together and reset at the same moment. If they are, sign one in with a different account.`;
+}
+
 /** Before the sign-in opens the browser. */
 export function browserWarning(engine: AgentEngine): string {
   return `Your browser will sign in as whoever is logged into ${SITE[engine]} — sign out there first, or use a private window or another browser profile, to add a different account.`;

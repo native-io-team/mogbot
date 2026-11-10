@@ -21,6 +21,7 @@ import { Pressable, StyleSheet, View } from 'react-native';
 import {
   ADD_ON_MAC,
   LOW_LEFT,
+  placeLabel,
   SIGN_IN_DIFFERENT,
   type StackKey,
   type UsageGlance,
@@ -155,7 +156,7 @@ export function GlanceCard({ glance }: { glance: UsageGlance }) {
         {glance.meterKeys.map((k) => (
           <View key={k.key} style={styles.legendRow}>
             <T variant="caption" color={colors.textMuted} style={styles.legendPlace}>
-              {String(k.position)}
+              {placeLabel(k, glance.meterKeys)}
             </T>
             <T variant="small" color={colors.textPrimary} style={styles.grow} numberOfLines={1}>
               {k.name}
@@ -213,7 +214,7 @@ export function GlanceCard({ glance }: { glance: UsageGlance }) {
 }
 
 /** One account: its place, name, state, limits, who used it, and where its usage went. */
-export function KeyCard({ k }: { k: StackKey }) {
+export function KeyCard({ k, all = [] }: { k: StackKey; all?: readonly StackKey[] }) {
   const colors = useColors();
   const styles = useStyles();
   const [story, setStory] = useState(false);
@@ -225,7 +226,7 @@ export function KeyCard({ k }: { k: StackKey }) {
             variant="caption"
             color={k.state === 'in_use' ? colors.surfaceApp : colors.textPrimary}
           >
-            {String(k.position)}
+            {placeLabel(k, all)}
           </T>
         </View>
         <View style={styles.title}>
@@ -407,7 +408,8 @@ const useStyles = makeStyles((colors) => ({
   cardQuiet: { backgroundColor: colors.surfaceApp, boxShadow: 'none', borderStyle: 'dashed' },
   head: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
   cap: {
-    width: space.xl,
+    minWidth: space.xl,
+    paddingHorizontal: space['2xs'],
     height: space.xl,
     alignItems: 'center',
     justifyContent: 'center',

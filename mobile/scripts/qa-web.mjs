@@ -1034,6 +1034,17 @@ const LIVE = [
       'Usage: context 90%, 5-hour with its pace line ("At this pace you’ll hit the limit in about an hour, before it resets at …" + "Estimate from 6 readings…"), weekly (All models, Opus), every account',
   },
   {
+    name: 'usage-plan-controls',
+    route: '/usage?id=site',
+    ready: 'Usage',
+    act: async (page) => {
+      await sleep(1500);
+      await scrollToText('Spare-capacity list')(page);
+    },
+    check:
+      'Usage, under the accounts: "How agents use your limits" as a segmented Normal / Save / Use it all (the mode in force raised, neutral), its full name and one line under it; then "Spare-capacity list" with how many wait, a field with Add, and "Give agents something to do"',
+  },
+  {
     name: 'catchup-done',
     route: '/one-at-a-time',
     ready: 'Catch up',
