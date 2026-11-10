@@ -1954,7 +1954,9 @@ impl Backend for Stub {
 
     async fn spare_spend_now(&self) -> Result<Value, CommandError> {
         self.usage_changes.lock().unwrap().push("spend".into());
-        Ok(json!({ "line": "Chief of Staff is starting your ideas for leftover usage (2 waiting)." }))
+        Ok(
+            json!({ "line": "Chief of Staff is starting your ideas for leftover usage (2 waiting)." }),
+        )
     }
 
     async fn usage_plan(&self) -> Result<Value, CommandError> {
