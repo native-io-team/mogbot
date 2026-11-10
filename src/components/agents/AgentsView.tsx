@@ -1212,6 +1212,7 @@ function AgentsModeView({ isCompact, sidebarProps, previewServer }: AgentsViewPr
                   onSignIn={signIn}
                   onInstallEngine={installEngine}
                   compact={pageCompact}
+                  onStop={setStopping}
                 />
               ) : !shown ? (
                 <div className="agents-main__state">

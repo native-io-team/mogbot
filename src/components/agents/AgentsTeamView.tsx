@@ -22,7 +22,7 @@
  * @module components/agents/AgentsTeamView
  */
 
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
 import { ChevronRightIcon } from '@/components/icons';
 import { TextButton } from '../primitives/TextButton';
 import { StatusPill } from '../primitives/StatusPill';
@@ -46,6 +46,7 @@ import {
   formatWhen,
   getAgentMessages,
   lastUserMessage,
+  needsAttention,
   needsYou,
   replyPreview,
   resendable,
@@ -176,22 +177,43 @@ function useRoomCards(agents: Agent[], rooms: Room[], loaded: Record<string, Age
 
 function Section({
   title,
+  count,
   hint,
   empty,
+  quiet,
+  lead,
   children,
 }: {
   title: string;
+  /** Needs you: the page's first and loudest heading. */
+  lead?: boolean;
+  /** How many are in it, said beside the heading (never for a section that lists a sample). */
+  count?: number;
   /** A key that gets you there faster: on hover, not on the page (it read as a dev keymap). */
   hint?: string;
   empty: string;
-  children: ReactNode[];
+  /** The rest of the team: a quieter heading. */
+  quiet?: boolean;
+  children: ReactNode;
 }) {
+  const filled = Array.isArray(children) ? children.length > 0 : Boolean(children);
   return (
-    <section className="agents-team__section" aria-label={title}>
+    <section
+      className={`agents-team__section${quiet ? ' agents-team__section--quiet' : ''}${
+        lead ? ' agents-team__section--first' : ''
+      }`}
+      aria-label={count !== undefined ? `${title}, ${count}` : title}
+      data-filled={filled || undefined}
+    >
       <h3 className="agents-team__heading" title={hint}>
         {title}
+        {count !== undefined && count > 0 && (
+          <span className="agents-team__count" aria-hidden="true">
+            · {count}
+          </span>
+        )}
       </h3>
-      {children.length > 0 ? children : <p className="agents-team__empty">{empty}</p>}
+      {filled ? children : <p className="agents-team__empty">{empty}</p>}
     </section>
   );
 }
@@ -212,18 +234,37 @@ interface RowProps {
   pill?: { tone: StatusTone; label: string };
   /** Joined its section while the view was open: it rises in once. */
   arrived?: boolean;
+  /** Its key's size: Needs you's rows carry the larger one. */
+  keySize?: 'lg' | 'md';
+  /** Not read yet: the row's ink, as in the sidebar (and said to a screen reader). */
+  unread?: boolean;
 }
 
 /**
  * One line per agent: "Hiring · Send an email · 2m ago". The name, then what
  * it's about (it gives way first), then the time or a mark at the right.
  */
-function Row({ agent, place, line, meta, state, working, onOpen, fold, pill, arrived }: RowProps) {
+function Row({
+  agent,
+  place,
+  line,
+  meta,
+  state,
+  working,
+  onOpen,
+  fold,
+  pill,
+  arrived,
+  keySize = 'md',
+  unread,
+}: RowProps) {
   return (
     <button
       type="button"
       tabIndex={0}
       data-arrived={arrived || undefined}
+      data-board-nav=""
+      data-unread={unread || undefined}
       className="agents-team__row"
       onClick={onOpen}
       aria-expanded={fold?.expanded}
@@ -234,7 +275,7 @@ function Row({ agent, place, line, meta, state, working, onOpen, fold, pill, arr
         name={agent.name}
         color={agent.color}
         state={agentKeyState(agent, Boolean(working))}
-        size="md"
+        size={keySize}
       />
       <span className="agents-team__text">
         <span className="agents-team__name">
@@ -256,14 +297,34 @@ function Row({ agent, place, line, meta, state, working, onOpen, fold, pill, arr
           </span>
         )}
       </span>
+      {unread && <span className="sr-only">Unread.</span>}
       {meta && <span className="agents-team__meta">{meta}</span>}
       {fold && <ChevronRightIcon size={12} className="agents-team__chevron" />}
     </button>
   );
 }
 
-/** With this many agents needing you or fewer, each opens with its cards in view (as the review panel). */
-const OPEN_ALL_UP_TO = 2;
+/**
+ * The first agents needing you open with their cards in view, so the answer
+ * is right there; the rest wait as one line each, in the order they asked,
+ * and the next opens as one is answered. Five open cards were a screen and a
+ * half: Working and Finished fell below the fold, and so did the queue.
+ */
+const OPEN_FIRST = 2;
+/** Cards shown under an open row before "Show N more": the first is what it's waiting on. */
+const CARDS_SHOWN = 2;
+/** Routines listed under Coming up; the rest are in Routines. */
+const COMING_UP_MAX = 3;
+
+/**
+ * A line without its agent's name at the front: under that agent's own row,
+ * "Finance needs you in its browser: …" reads "Needs you in its browser: …".
+ */
+export function withoutName(line: string, name: string): string {
+  if (!name || !line.startsWith(`${name} `)) return line;
+  const rest = line.slice(name.length + 1);
+  return rest.charAt(0).toUpperCase() + rest.slice(1);
+}
 
 /** Opens and closes its height with the chat's motion (see useHeightReveal). */
 function Fold({ open, children }: { open: boolean; children: ReactNode }) {
@@ -300,6 +361,8 @@ interface AgentsTeamViewProps {
   compact?: AgentsPageCompact;
   /** The board's empty socket: make a new agent. */
   onNewAgent?: () => void;
+  /** Stop a working agent's turn (the view's owner confirms first). */
+  onStop?: (agent: Agent) => void;
 }
 
 export function AgentsTeamView({
@@ -309,6 +372,7 @@ export function AgentsTeamView({
   onInstallEngine,
   compact,
   onNewAgent,
+  onStop,
 }: AgentsTeamViewProps) {
   const agents = useAgentsSelector((s) => s.agents);
   const rooms = useAgentsSelector((s) => s.rooms);
@@ -332,8 +396,10 @@ export function AgentsTeamView({
   const team = useMemo(() => summarizeTeam(agents, lines), [agents, lines]);
   const columnRef = useRef<HTMLDivElement>(null);
   const [held, setHeld] = useState<Record<string, Held>>({});
-  // Rows you opened or closed; the rest follow the count (see OPEN_ALL_UP_TO).
+  // Rows you opened or closed; the rest follow the count (see OPEN_FIRST).
   const [opened, setOpened] = useState<Record<string, boolean>>({});
+  // Agents whose every card is shown, past the first CARDS_SHOWN.
+  const [showAll, setShowAll] = useState<Record<string, boolean>>({});
   const timers = useRef<number[]>([]);
   useEffect(() => () => timers.current.forEach((t) => window.clearTimeout(t)), []);
 
@@ -488,7 +554,6 @@ export function AgentsTeamView({
     useMemo(
       () => [
         ...groups.map((g) => `needs:${g.agent.id}`),
-        ...team.paused.map((p) => `paused:${p.agent.id}`),
         ...team.working.map((a) => `working:${a.id}`),
       ],
       [groups, team]
@@ -498,6 +563,73 @@ export function AgentsTeamView({
     useMemo(() => team.replies.map((r) => r.message.id), [team]),
     team.replies.length > 0
   );
+
+  // Finished and not read yet: each agent's newest reply, by its result
+  // card's title when it shared one. An agent still needing you or working
+  // is said in its own section, never twice.
+  const finished = useMemo(() => {
+    const inNeeds = new Set(groups.map((g) => g.agent.id));
+    return agents
+      .filter(
+        (a) =>
+          !a.hidden &&
+          a.unread > 0 &&
+          !inNeeds.has(a.id) &&
+          !needsAttention(a) &&
+          a.status.state !== 'working'
+      )
+      .map((agent) => {
+        const chat = lines[agent.id] ?? [];
+        let reply: AgentMessage | undefined;
+        for (let i = chat.length - 1; i >= 0; i--) {
+          const m = chat[i];
+          if (m.kind === 'agent' && (m.text.trim() || m.result)) {
+            reply = m;
+            break;
+          }
+        }
+        return { agent, reply };
+      })
+      .sort(
+        (a, b) =>
+          (b.reply?.ts ?? b.agent.lastActivityAt ?? 0) -
+          (a.reply?.ts ?? a.agent.lastActivityAt ?? 0)
+      );
+  }, [agents, groups, lines]);
+
+  // Everyone the sections above don't name: the quiet grid.
+  const rest = useMemo(() => {
+    const named = new Set([
+      ...groups.map((g) => g.agent.id),
+      ...team.working.map((a) => a.id),
+      ...finished.map((f) => f.agent.id),
+      ...team.paused.map((p) => p.agent.id),
+    ]);
+    return agents.filter((a) => !a.hidden && !named.has(a.id));
+  }, [agents, groups, team.working, team.paused, finished]);
+
+  /**
+   * Arrows move between the board's rows and keys (Tab still reaches every
+   * button on a card). Never j/k: a letter is an agent's own key.
+   */
+  const onNavKey = (e: KeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowDown', 'ArrowUp', 'ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) return;
+    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+    const from = e.target as HTMLElement;
+    if (
+      from.closest(
+        'input, textarea, select, [contenteditable="true"], [role="menu"], [role="listbox"]'
+      )
+    )
+      return;
+    const column = columnRef.current;
+    if (!column) return;
+    const next = boardNavTarget(column, from, e.key);
+    if (!next) return;
+    e.preventDefault();
+    next.focus();
+    next.scrollIntoView?.({ block: 'nearest' });
+  };
 
   return (
     <section className="agent-chat agents-team" aria-label="What’s in flight">
@@ -515,12 +647,22 @@ export function AgentsTeamView({
         role="region"
         aria-label="Everything in flight, by agent"
       >
-        <div className="agents-team__column" ref={columnRef}>
-          <AgentsBoard agents={agents} onOpenAgent={onOpenAgent} onNewAgent={onNewAgent} />
+        {/* Arrows between the buttons inside; each is its own control. */}
+        <div
+          className="agents-team__column"
+          ref={columnRef}
+          onKeyDown={onNavKey}
+          role="none"
+          aria-describedby="agents-team-keys"
+        >
+          <p id="agents-team-keys" className="sr-only">
+            Arrow keys move between agents; Tab reaches each card’s answers.
+          </p>
           {setup && chief && (
             <button
               type="button"
               tabIndex={0}
+              data-board-nav=""
               className="agents-team__row agents-team__setup"
               data-testid="agents-team-setup"
               onClick={() => {
@@ -542,14 +684,16 @@ export function AgentsTeamView({
           )}
           <Section
             title="Needs you"
+            count={groups.filter((g) => needsAttention(g.agent)).length}
             hint={
               groups.length > 0
                 ? `${kbd('mod', 'J')} opens the next agent that needs your OK`
                 : undefined
             }
-            empty="Nothing is waiting on you."
+            empty="Nothing needs you"
+            lead
           >
-            {groups.map(({ agent, approvals, failure }) => {
+            {groups.map(({ agent, approvals, failure }, place) => {
               const kind = failedTurn(agent);
               const pending = approvals.some((m) => m.approval?.status === 'pending');
               // The room the card waits in: the card's own tag, else where the turn is.
@@ -571,28 +715,33 @@ export function AgentsTeamView({
                   ? failurePill(kind, previewText(agent.preview), agent.engine)
                   : null;
               const waiting = pending || needsYou(agent);
-              const line = failed
+              // Something to open under the row: its cards, or the failure's next step.
+              const foldable = approvals.length > 0 || Boolean(failure && kind && !pending);
+              const expanded = foldable && (opened[agent.id] ?? place < OPEN_FIRST);
+              const said = failed
                 ? failed.rest
                 : open > 0
                   ? groupLine(asked)
                   : waiting
-                    ? ''
+                    ? (previewText(agent.preview)?.replace(/^Needs your OK:\s*/, '') ?? '')
                     : 'Answered';
-              const pill = failed
-                ? { tone: failed.tone, label: failed.label }
-                : waiting
-                  ? { tone: 'waiting' as const, label: 'Needs your OK' }
-                  : undefined;
+              // Its own failure's card says the sentence in full: the row needn't too.
+              const line = withoutName(failed && expanded && failure ? '' : said, agent.name);
+              // Under Needs you the heading already says it: a pill only for
+              // what isn't a request (a turn that didn't finish).
+              const pill = failed ? { tone: failed.tone, label: failed.label } : undefined;
               const at = newestCardAt(approvals) ?? (kind ? failure?.ts : undefined);
-              // Something to open under the row: its cards, or the failure's next step.
-              const foldable = approvals.length > 0 || Boolean(failure && kind && !pending);
-              const expanded = foldable && (opened[agent.id] ?? groups.length <= OPEN_ALL_UP_TO);
               const cardsId = `agents-team-cards-${agent.id}`;
+              const shownCards = showAll[agent.id]
+                ? approvals
+                : approvals.filter((m, i) => i < CARDS_SHOWN || held[m.id]);
+              const more = approvals.length - shownCards.length;
               return (
                 <Fold key={agent.id} open={stays}>
                   <div
-                    className="agents-team__group"
+                    className="agents-team__group agents-team__ask"
                     data-arrived={isNewRow(`needs:${agent.id}`) || undefined}
+                    data-expanded={expanded || undefined}
                   >
                     <div className="agents-team__head">
                       <Row
@@ -602,7 +751,7 @@ export function AgentsTeamView({
                         pill={pill}
                         state={
                           pending || needsYou(agent)
-                            ? undefined
+                            ? 'waiting'
                             : kind
                               ? kind.kind === 'usage_limit'
                                 ? 'limited'
@@ -617,19 +766,18 @@ export function AgentsTeamView({
                             : openWhere(agent, room)
                         }
                       />
-                      {foldable && (
-                        <TextButton
-                          tabIndex={0}
-                          className="agents-team__open"
-                          onClick={() => openWhere(agent, room)}
-                        >
-                          Open chat
-                        </TextButton>
-                      )}
+                      <TextButton
+                        tabIndex={0}
+                        className="agents-team__open"
+                        onClick={() => openWhere(agent, room)}
+                        aria-label={`Open ${agent.name}’s chat`}
+                      >
+                        Open chat
+                      </TextButton>
                     </div>
                     {expanded && (
-                      <div id={cardsId}>
-                        {approvals.map((m) => (
+                      <div id={cardsId} className="agents-team__cards">
+                        {shownCards.map((m) => (
                           <Fold key={m.id} open={!held[m.id]?.folding}>
                             <ApprovalCard
                               message={m}
@@ -643,6 +791,14 @@ export function AgentsTeamView({
                             />
                           </Fold>
                         ))}
+                        {more > 0 && (
+                          <TextButton
+                            className="agents-team__more"
+                            onClick={() => setShowAll((o) => ({ ...o, [agent.id]: true }))}
+                          >
+                            {`Show ${more} more`}
+                          </TextButton>
+                        )}
                         {failure && kind && !pending && (
                           <ErrorLine
                             message={failure}
@@ -669,20 +825,77 @@ export function AgentsTeamView({
             })}
           </Section>
 
-          {/* A usage limit resets by itself: listed here, quietly, not under Needs you. */}
+          <Section
+            title="Working now"
+            count={team.working.length}
+            empty="No one is working right now"
+          >
+            {team.working.map((agent) => (
+              <div
+                key={agent.id}
+                className="agents-team__head"
+                data-arrived={isNewRow(`working:${agent.id}`) || undefined}
+              >
+                <Row
+                  agent={agent}
+                  place={roomName(agent.status.room)}
+                  line={<AgentWorkingLine agent={agent} />}
+                  state="working"
+                  working
+                  meta={<PixelLoaderRings size="sm" label={`${agent.name} is working`} />}
+                  onOpen={() => openWhere(agent, agent.status.room)}
+                />
+                {onStop && (
+                  <TextButton
+                    tabIndex={0}
+                    className="agents-team__open"
+                    onClick={() => onStop(agent)}
+                    aria-label={`Stop ${agent.name}`}
+                  >
+                    Stop
+                  </TextButton>
+                )}
+              </div>
+            ))}
+          </Section>
+
+          <Section
+            title="Finished recently"
+            count={finished.length}
+            empty="Nothing new since you last looked"
+          >
+            {finished.map(({ agent, reply }) => (
+              <Row
+                key={agent.id}
+                agent={agent}
+                place={roomName(reply?.room)}
+                line={
+                  reply?.result?.title ??
+                  (reply ? replyPreview(reply.text) : (previewText(agent.preview) ?? ''))
+                }
+                unread
+                meta={reply ? formatAgo(reply.ts) : undefined}
+                arrived={reply ? isNewReply(reply.id) : false}
+                onOpen={() =>
+                  reply
+                    ? openWhere(agent, reply.room, reply.id, reply.conversation)
+                    : onOpenAgent(agent.id)
+                }
+              />
+            ))}
+          </Section>
+
+          {/* A usage limit resets by itself: listed quietly, never under Needs you,
+              with Retry at the reset right there. Only while someone is. */}
           {team.paused.length > 0 && (
-            <Section title="Paused" empty="">
+            <Section title="Paused" count={team.paused.length} empty="" quiet>
               {team.paused.map(({ agent, failure }) => {
                 const kind = failedTurn(agent);
                 const paused = kind
                   ? failurePill(kind, previewText(agent.preview), agent.engine)
                   : null;
                 return (
-                  <div
-                    key={agent.id}
-                    className="agents-team__group"
-                    data-arrived={isNewRow(`paused:${agent.id}`) || undefined}
-                  >
+                  <div key={agent.id} className="agents-team__group">
                     <Row
                       agent={agent}
                       line={paused ? paused.rest : 'Paused'}
@@ -711,47 +924,31 @@ export function AgentsTeamView({
             </Section>
           )}
 
-          <Section title="Working" empty="No one is working right now.">
-            {team.working.map((agent) => (
-              <Row
-                key={agent.id}
-                agent={agent}
-                place={roomName(agent.status.room)}
-                line={<AgentWorkingLine agent={agent} />}
-                state="working"
-                working
-                arrived={isNewRow(`working:${agent.id}`)}
-                meta={<PixelLoaderRings size="sm" label={`${agent.name} is working`} />}
-                onOpen={() => openWhere(agent, agent.status.room)}
+          <Section title="Everyone else" count={rest.length} empty="" quiet>
+            {(rest.length > 0 || onNewAgent) && (
+              <AgentsBoard
+                agents={rest}
+                onOpenAgent={onOpenAgent}
+                onNewAgent={onNewAgent}
+                variant="quiet"
+                label="Everyone else"
               />
-            ))}
+            )}
           </Section>
 
-          <Section title="Scheduled next" empty="Nothing is scheduled.">
-            {team.scheduled.map(({ agent, checkIn }) => (
-              <Row
-                key={`${agent.id}-${checkIn.id}`}
-                agent={agent}
-                line={checkIn.note}
-                meta={formatWhen(checkIn.nextAt)}
-                onOpen={() => onOpenAgent(agent.id)}
-              />
-            ))}
-          </Section>
-
-          <Section title="Done recently" empty="Nothing finished yet.">
-            {team.replies.map(({ agent, message }) => (
-              <Row
-                key={message.id}
-                agent={agent}
-                place={roomName(message.room)}
-                line={replyPreview(message.text)}
-                meta={formatAgo(message.ts)}
-                arrived={isNewReply(message.id)}
-                onOpen={() => openWhere(agent, message.room, message.id, message.conversation)}
-              />
-            ))}
-          </Section>
+          {team.scheduled.length > 0 && (
+            <Section title="Coming up" empty="" quiet>
+              {team.scheduled.slice(0, COMING_UP_MAX).map(({ agent, checkIn }) => (
+                <Row
+                  key={`${agent.id}-${checkIn.id}`}
+                  agent={agent}
+                  line={checkIn.note}
+                  meta={formatWhen(checkIn.nextAt)}
+                  onOpen={() => onOpenAgent(agent.id)}
+                />
+              ))}
+            </Section>
+          )}
 
           {/* What keeps them going, said once there is something to keep going. */}
           {(team.working.length > 0 || team.scheduled.length > 0) && <AgentsStayOnNote />}
@@ -764,4 +961,61 @@ export function AgentsTeamView({
       </div>
     </section>
   );
+}
+
+/**
+ * Where an arrow key goes from `from` on the board: Up/Down between rows,
+ * and in the grid of keys Left/Right along a row and Up/Down to the key
+ * nearest across in the row above or below; Home/End the first and last.
+ * From a card's button, Up/Down go to the row before or after it.
+ */
+export function boardNavTarget(
+  column: HTMLElement,
+  from: HTMLElement,
+  key: string
+): HTMLElement | undefined {
+  const items = Array.from(column.querySelectorAll<HTMLElement>('[data-board-nav]'));
+  if (items.length === 0) return undefined;
+  const current = from.closest<HTMLElement>('[data-board-nav]');
+  const index = current ? items.indexOf(current) : -1;
+  const inGrid = Boolean(current?.hasAttribute('data-grid'));
+  if (key === 'Home') return items[0];
+  if (key === 'End') return items[items.length - 1];
+  if (key === 'ArrowLeft' || key === 'ArrowRight') {
+    if (!inGrid) return undefined;
+    const candidate = items[index + (key === 'ArrowRight' ? 1 : -1)];
+    return candidate?.hasAttribute('data-grid') ? candidate : undefined;
+  }
+  const down = key === 'ArrowDown';
+  if (!current) {
+    return down
+      ? items.find((i) => from.compareDocumentPosition(i) & Node.DOCUMENT_POSITION_FOLLOWING)
+      : [...items]
+          .reverse()
+          .find((i) => from.compareDocumentPosition(i) & Node.DOCUMENT_POSITION_PRECEDING);
+  }
+  if (!inGrid) return items[index + (down ? 1 : -1)];
+  // The key in the row above or below, nearest across.
+  const box = current.getBoundingClientRect();
+  const rows = items.filter((i) => {
+    if (!i.hasAttribute('data-grid')) return false;
+    const top = i.getBoundingClientRect().top;
+    return down ? top > box.top + 2 : top < box.top - 2;
+  });
+  if (rows.length === 0) {
+    // Off the grid's edge: the row before it, or what comes after.
+    return down
+      ? items.slice(index + 1).find((i) => !i.hasAttribute('data-grid'))
+      : [...items.slice(0, index)].reverse().find((i) => !i.hasAttribute('data-grid'));
+  }
+  const tops = rows.map((i) => i.getBoundingClientRect().top);
+  const edge = down ? Math.min(...tops) : Math.max(...tops);
+  const centre = box.left + box.width / 2;
+  const across = (i: HTMLElement) => {
+    const r = i.getBoundingClientRect();
+    return Math.abs(r.left + r.width / 2 - centre);
+  };
+  return rows
+    .filter((i) => Math.abs(i.getBoundingClientRect().top - edge) < 2)
+    .sort((a, b) => across(a) - across(b))[0];
 }

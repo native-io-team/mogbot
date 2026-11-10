@@ -41,6 +41,7 @@ import { agentsHeaderScenarios } from './agentsHeader';
 import { agentsAccountsScenarios } from './agentsAccounts';
 import { agentsSidebarFootScenarios } from './agentsSidebarFoot';
 import { agentsKeysScenarios } from './agentsKeys';
+import { agentsInFlightScenarios } from './agentsInFlight';
 import { appScenarios } from './app';
 import { onboardingFlowScenarios } from './onboardingFlow';
 import { featureScenarios } from './features';
@@ -62,6 +63,7 @@ export const scenarios: Scenario[] = [
   ...agentsScenarios,
   ...connectiveScenarios,
   ...agentsKeysScenarios,
+  ...agentsInFlightScenarios,
   ...agentsDesktopScenarios,
   ...agentsBriefScenarios,
   ...agentsProjectScenarios,

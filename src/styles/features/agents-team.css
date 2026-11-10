@@ -284,3 +284,141 @@
 .agent-editor__can-do {
   font-variant-numeric: normal;
 }
+
+/* ------------------------------------------- the board, by attention */
+
+/* What's in flight is ordered by attention (in-flight-board-2026-11-10.md):
+   Needs you, Working now, Finished recently, then everyone else as a quiet
+   grid. Each heading carries its count, as the bell says it ("Needs you · 5"). */
+.agents-team__heading {
+  display: flex;
+  align-items: baseline;
+  gap: var(--spacing-2xs);
+}
+
+.agents-team__count {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Needs you is the page's first thing: its heading in full ink. */
+.agents-team__section--first .agents-team__heading {
+  color: var(--text-primary);
+}
+
+/* One agent asking: its row, then the card that answers it under the name.
+   No panel around it (a card in a panel was boxes in boxes); the space
+   between asks is what groups them. */
+.agents-team__ask {
+  margin-bottom: var(--spacing-xs);
+}
+
+/* What it wants, in plain words: the line any reader is here for. */
+.agents-team__ask .agents-team__line {
+  color: var(--text-primary);
+}
+
+.agents-team__ask .agents-team__line[data-state='failed'] {
+  color: var(--text-secondary);
+}
+
+.agents-team__cards {
+  display: flex;
+  flex-direction: column;
+}
+
+/* "Show 2 more", under the cards, on the name's edge as they are. */
+.text-button.button.agents-team__more {
+  align-self: flex-start;
+  margin: 0 0 var(--spacing-sm) calc(var(--size-sidebar-project-shortcut) + var(--spacing-sm));
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+/* Unread: the name and its line in full-strength ink, as in the sidebar. */
+.agents-team__row[data-unread] .agents-team__name {
+  font-weight: var(--font-weight-heading);
+}
+
+.agents-team__row[data-unread] .agents-team__line {
+  color: var(--text-primary);
+}
+
+/* Everyone else: quieter, below the line of things happening. */
+.agents-team__section--quiet .agents-team__heading {
+  color: var(--text-faint);
+}
+
+.agents-board--quiet .agents-board__plate {
+  grid-template-columns: repeat(auto-fill, minmax(calc(var(--agent-key-size-lg) * 2.4), 1fr));
+  gap: var(--spacing-md) var(--spacing-2xs);
+  padding: var(--spacing-lg) var(--spacing-sm);
+  /* The quietest section shouldn't carry the page's heaviest fill: the warm
+     plate (in light, a beige slab) read louder than Needs you. A recessed
+     well keeps the keys seated without shouting. */
+  background: var(--surface-recessed);
+  box-shadow: none;
+}
+
+.agents-board--quiet .agents-board__key {
+  position: relative;
+  padding: var(--spacing-xs) var(--spacing-2xs);
+}
+
+.agents-board--quiet .agents-board__key .agent-key {
+  margin-bottom: calc(var(--spacing-sm) + var(--agent-key-rest-depth));
+}
+
+.agents-board--quiet .agents-board__name {
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
+}
+
+.agents-board--quiet .agents-board__key:hover .agents-board__name,
+.agents-board--quiet .agents-board__key:focus-visible .agents-board__name {
+  color: var(--text-primary);
+}
+
+/* A state that is news (Paused until 5:02 PM, Live): one quiet line. */
+.agents-board__news {
+  max-width: 100%;
+  margin-top: var(--spacing-3xs);
+  overflow: hidden;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-compact);
+  color: var(--text-muted);
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+
+/* Its bound key, the sublegend the small key's face has no room for. */
+.agents-board__cap {
+  position: relative;
+  display: inline-flex;
+}
+
+/* Just off the cap's top-right corner, as a keyboard prints a second legend. */
+.agents-board__bound {
+  position: absolute;
+  top: 0;
+  left: calc(100% + var(--spacing-2xs));
+  font-family: inherit;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-compact);
+  color: var(--text-faint);
+}
+
+/* The column is the board's container, so narrow follows the pane, not the window. */
+.agents-team__column {
+  container: agents-board / inline-size;
+}
+
+/* Narrow: the cards span the column under the row; nothing clips. */
+@container agents-board (max-width: 560px) {
+  .agents-team__group .agent-chat__row {
+    padding-left: 0;
+  }
+
+  .text-button.button.agents-team__more {
+    margin-left: 0;
+  }
+}

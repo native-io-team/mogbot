@@ -48,7 +48,7 @@ const GH = {
     'Uses the GitHub CLI’s sign-in on this Mac. It works through `gh` commands; anything that changes GitHub asks you first.',
 };
 
-const GMAIL_LOGIN = {
+export const GMAIL_LOGIN = {
   service: 'gmail',
   title: 'Gmail',
   askedAs: 'gmail work',

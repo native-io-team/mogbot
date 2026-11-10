@@ -57,7 +57,7 @@ describe('a paused key', () => {
     expect(line).not.toContain('·');
   });
 
-  it('says only the word when the reset is not known', () => {
+  it('says only the word when the reset is not known (full board)', () => {
     render(
       <AgentsBoard
         agents={[agent('n', 'Native App', { failure: { kind: 'usage_limit' } } as Partial<Agent>)]}
@@ -65,5 +65,49 @@ describe('a paused key', () => {
       />
     );
     expect(document.querySelector('.agents-board__state')?.textContent).toBe('Paused');
+  });
+});
+
+describe('the quiet board (everyone else in What’s in flight)', () => {
+  it('names each key with what it last said, since the line is not on the page', () => {
+    const open = vi.fn();
+    render(
+      <AgentsBoard
+        variant="quiet"
+        label="Everyone else"
+        agents={[
+          agent('r', 'Research', { preview: 'Two competitors changed pricing.' } as Partial<Agent>),
+          agent('x', 'Quiet'),
+        ]}
+        onOpenAgent={open}
+      />
+    );
+    fireEvent.click(
+      screen.getByRole('button', { name: 'Research. Two competitors changed pricing.' })
+    );
+    expect(open).toHaveBeenCalledWith('r');
+    expect(screen.getByRole('button', { name: 'Quiet' })).toBeInTheDocument();
+    // No wall of cut-short previews: only the names are on the page.
+    expect(document.querySelector('.agents-board__state')).toBeNull();
+    expect(screen.queryByText('Two competitors changed pricing.')).toBeNull();
+  });
+
+  it('says a paused key’s return under its name, and its bound letter', () => {
+    render(
+      <AgentsBoard
+        variant="quiet"
+        agents={[
+          agent('n', 'Native App', {
+            failure: { kind: 'usage_limit' },
+            boundKey: 'N',
+          } as Partial<Agent>),
+        ]}
+        onOpenAgent={() => {}}
+      />
+    );
+    expect(document.querySelector('.agents-board__news')?.textContent).toBe('Paused');
+    const key = screen.getByRole('button', { name: 'Native App. Paused' });
+    expect(key).toHaveAttribute('aria-keyshortcuts', 'N');
+    expect(key.querySelector('.agents-board__bound')?.textContent).toBe('N');
   });
 });
