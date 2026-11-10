@@ -35,7 +35,7 @@ pub struct RemoteAccessStatus {
     /// server. `None` until the Funnel is on. Only `reachable` is "live".
     pub reachability: Option<tailscale::Reachability>,
     /// How long we've been waiting for the address to go public, and whether
-    /// Ship Studio already asked Tailscale again.
+    /// the app already asked Tailscale again.
     pub publish: remote_access::PublishProgress,
     pub power: power::PowerStatus,
     pub keep_awake: bool,
@@ -279,7 +279,7 @@ pub async fn set_remote_access_enabled(
     Ok(build_status().await)
 }
 
-/// Share or unshare one project. The path must be a real project Ship Studio
+/// Share or unshare one project. The path must be a real project the app
 /// manages — the same check every other project command makes.
 #[tauri::command]
 #[tracing::instrument]
