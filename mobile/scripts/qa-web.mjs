@@ -459,6 +459,18 @@ const FIND_SCROLLER = `(() => {
 const shots = [];
 const wanted = (name) => !ONLY || ONLY.split(',').some((o) => name.startsWith(o));
 
+/** The pairing screen's first question: a step saved by an earlier visit is walked back from. */
+async function toFirstPairScreen(page) {
+  await page.goto(`${WEB}/pair`);
+  await page.waitFor(`!!document.querySelector('[data-testid="step-progress"]')`, 180_000, 'the welcome');
+  for (let i = 0; i < 6; i++) {
+    const back = await page.eval(`!!document.querySelector('[aria-label="Back"]')`);
+    if (!back) break;
+    await page.clickLabel('Back');
+    await sleep(400);
+  }
+}
+
 /**
  * The pairing screens before anything is paired, in each theme: the welcome
  * (Tailscale on, then scan: a screen each), "Reaching <Mac>…" against a server that never
@@ -476,31 +488,28 @@ async function prePairShots(page, d) {
   try {
     for (const theme of THEMES) {
       await setTheme(page, theme);
-      if (wanted(`pair-start-${theme}`) || wanted(`pair-scan-${theme}`)) {
-        await page.goto(`${WEB}/pair`);
-        await page.waitFor(
-          `document.body.innerText.includes('Pair with your Mac')`,
-          180_000,
-          'the welcome'
-        );
-        await sleep(800);
-        await capture(page, `pair-start-${theme}`, {
-          route: '/pair',
-          check:
-            '“Pair with your Mac”, then one card of four numbered steps: open the app on your Mac (with “Get … for Mac”), Tailscale on this phone and your Mac (Get/Open Tailscale), click “Pair your phone” at the bottom of the sidebar, tap Scan the code; one big “Scan the code” below',
-          theme,
-        });
-        // The bottom of the same screen: the buttons under the steps.
-        await page.eval(
-          `[...document.querySelectorAll('div')].filter((e) => e.scrollHeight > e.clientHeight + 4).forEach((e) => (e.scrollTop = e.scrollHeight))`
-        );
-        await sleep(500);
-        await capture(page, `pair-scan-${theme}`, {
-          route: '/pair (scrolled)',
-          check:
-            'One big “Scan the code”, then “Paste a pairing link instead” and “Try the demo” with its one line; nothing cut off',
-          theme,
-        });
+      // One screen per step, walked by tapping each screen's own button, as
+      // a person would. The first visit of the run starts on the first
+      // question (nothing saved); each later one is reset to it.
+      const steps = [
+        ['pair-start', null, 'Do you have', '“Do you have Mogbot on your Mac?” under the Chief’s key, the bar at 1 of 7 with no Back; big Yes, an outline Not yet, then a quiet “Try the demo” with its one line'],
+        ['pair-getmac', 'Not yet', 'first', '“Get Mogbot on your Mac first”, its one line, the download address in a panel; big “Send the link to my Mac”, quiet “I have it now”; Back, the bar still 1 of 7'],
+        ['pair-tailscale', 'I have it now', 'Turn on Tailscale on this phone', '“Turn on Tailscale on this phone”, one line; a Done tick only if the phone saw it installed; one big button (Get/Open Tailscale, or It’s on) and one quiet one; bar 2 of 7'],
+        ['pair-account', '__next', 'Same Tailscale account', '“Same Tailscale account on both”, one line; big Same account, quiet Open Tailscale; bar 3 of 7'],
+        ['pair-code', 'Same account', 'Pair your phone', '“On your Mac, click “Pair your phone” at the bottom of the sidebar”, “A code appears on your Mac.”; big I see the code, quiet Paste a pairing link instead; bar 4 of 7'],
+      ];
+      if (steps.some(([n]) => wanted(`${n}-${theme}`))) {
+        await toFirstPairScreen(page);
+        for (const [name, tap, waitText, check] of steps) {
+          if (tap === '__next')
+            await page.clickText(
+              (await page.eval(`document.body.innerText.includes('It’s on')`)) ? 'It’s on' : 'I did it'
+            );
+          else if (tap) await page.clickText(tap);
+          await page.waitFor(`document.body.innerText.includes(${JSON.stringify(waitText)})`, 20_000, name);
+          await sleep(600);
+          if (wanted(`${name}-${theme}`)) await capture(page, `${name}-${theme}`, { route: '/pair', check, theme });
+        }
       }
       if (!wanted(`pair-reaching-${theme}`) && !wanted(`pair-unreachable-${theme}`)) continue;
       await page.goto(`${WEB}/pair?d=${unreachable}`);
@@ -552,13 +561,13 @@ async function demoShots(page) {
   const has = (text) => `document.body.innerText.includes(${JSON.stringify(text)})`;
   for (const theme of THEMES) {
     await setTheme(page, theme);
-    await page.goto(`${WEB}/pair`);
+    await toFirstPairScreen(page);
     await page.waitFor(has('Try the demo'), 180_000, 'the welcome');
     await sleep(500);
     if (wanted(`demo-welcome-${theme}`))
       await capture(page, `demo-welcome-${theme}`, {
         route: '/pair',
-        check: '“Try the demo” under the Tailscale step, with “No Mac nearby?…” under it',
+        check: '“Try the demo” quiet under Yes / Not yet on the first question, with “No Mac nearby?…” under it',
         theme,
       });
     await page.clickText('Try the demo');
@@ -3966,6 +3975,32 @@ async function main() {
       theme: THEMES[0],
     });
   await page.clickText('Pair');
+  // The mock allows after 1.5 s: the phone's half of the wait, then the moment.
+  await setTheme(page, THEMES[0]);
+  await page
+    .waitFor(`document.body.innerText.includes('Click Allow on your Mac')`, 10_000, 'the wait')
+    .then(async () => {
+      await sleep(400);
+      if (wanted(`pair-waiting-${THEMES[0]}`))
+        await capture(page, `pair-waiting-${THEMES[0]}`, {
+          route: '/pair?d=… (waiting for the desk)',
+          check: '“Click Allow on your Mac” with a spinner, the code’s last four, Cancel; bar at 7 of 7',
+          theme: THEMES[0],
+        });
+    })
+    .catch(() => {});
+  await page
+    .waitFor(`document.body.innerText.includes('Paired with')`, 15_000, 'the paired moment')
+    .then(async () => {
+      await sleep(700);
+      if (wanted(`pair-paired-${THEMES[0]}`))
+        await capture(page, `pair-paired-${THEMES[0]}`, {
+          route: '/pair?d=… (allowed)',
+          check: 'A tick, “Paired with <Mac>”, the bar full; alerts asked once or “Opening your agents…”',
+          theme: THEMES[0],
+        });
+    })
+    .catch(() => {});
   await page.waitFor(
     `location.pathname.startsWith('/agents') || document.body.innerText.includes('Chief of Staff')`,
     30_000,

@@ -80,6 +80,7 @@ export const MATERIAL: Partial<Record<SFName, string>> = {
   network: 'lan',
   'square.and.pencil': 'edit_square',
   'square.and.arrow.down': 'download',
+  'square.and.arrow.up': 'ios_share',
   iphone: 'smartphone',
   desktopcomputer: 'computer',
   'square.split.2x1': 'splitscreen_left',
