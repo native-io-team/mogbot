@@ -55,41 +55,44 @@ from one catalogue (`lib/chiefIdeas.ts`). Each types a whole, specific brief
 with one blank at its end; none sends by itself.
 
 The chips are **Brief me every morning…**, **Sort my inbox, draft replies…** and
-**Run my launch as a team…**: one per group, recognisable to someone who
-isn't a developer, and two of them need nothing set up, so the first result
-can land in the first minutes (the morning brief asks for its first one
-now). Ship fixes and client briefs were chips until a first-ten-minutes
-walk-through found them making the first screen read as a coding tool that
-asks for GitHub before showing anything; they are in the gallery.
+**Research it and write it up…**: one per group, everyday jobs someone who
+isn't a developer recognises, and two of them need nothing set up, so the
+first result can land in the first minutes (the morning brief asks for its
+first one now). Ship fixes and client briefs were chips until a
+first-ten-minutes walk-through found them making the first screen read as a
+coding tool that asks for GitHub before showing anything; "Run my launch as
+a team" went for the same reason ("I'm not launching anything").
 
 - **Brief me every morning…**: a researcher reads what's new on the topics
   the user names and a writer boils it down to one short brief, every
   weekday at 8am, the first one right away. Needs nothing set up.
-- **Ship fixes while I sleep…** (gallery): every night a fixer bound to the repo's
-  project takes the top open GitHub issue and fixes it in its own copy, a
-  reviewer checks it (`message_agent`), and the morning brings one change
-  card with Keep / Review / Discard. Pushing waits for the user.
-- **Run my launch as a team…**: a strategist, a writer and a builder, the
-  Chief keeping the plan in a file, and a 9am weekday standup it collects
-  and summarises. The Chief puts the three and itself in a room
+- **Research it and write it up…**: a researcher collects sources and a
+  writer turns them into a draft with every source linked, then a weekly
+  look for anything new. Needs nothing set up.
+- **Run a big project as a team…** (gallery): a planner, a writer and a
+  doer, the Chief keeping the plan in a file, and a 9am weekday check-in it
+  collects and summarises. The Chief puts the three and itself in a room
   (`create_room`, see "Rooms"), so the user talks to the whole team at once.
-- **Turn client briefs into sites…** (gallery): `watch_for` `new_file` on a folder;
-  each brief becomes a project (`blank` needs nothing installed) whose
-  session drafts the site, handed back with `share_result` naming the
-  project.
 - **More ideas…** opens the gallery (`ChiefIdeasModal`, also ⌘K → "Ideas for
   your team…"), grouped On a schedule / When something happens / Agents
-  together: watch competitors weekly (researcher + analyst, one brief), babysit
-  errors hourly (reproduce, fix in a copy, a card to keep; one line when
-  nothing broke, since a routine always leaves its line), chase unpaid
-  invoices every Monday (finder + reminder drafter, one card, nothing sent
-  without Allow), sort the inbox and draft replies (sorter + drafter through
-  the user's email app; sending is always an Allow card), research it and
-  write it up (researcher + writer, every source linked, a weekly update),
-  and two agents arguing it out. Invoices and research were added after a
-  beginner walk-through (docs/internal/persona-beginners-2026-11-09.md):
-  a small-business owner and a student found nothing that was theirs. Its foot links Ready-made
-  agents and the Phone panel.
+  together / For builders, everyday jobs first: chase unpaid invoices, draft
+  the week's social posts, apply for jobs (a scout and a cover-letter
+  writer), find a place to live, watch competitors, sort the inbox and draft
+  replies, tidy up meeting notes when they land in a folder (`new_file`),
+  research, plan a trip (prices checked again every few days), a big project
+  as a team, and two agents arguing it out. Anything that reaches other
+  people (sending, posting, submitting, booking, contacting) waits on an
+  Allow card. **For builders**, last, holds the ideas that need a code
+  project: ship fixes while I sleep (a fixer bound to the repo's project
+  takes the top open GitHub issue in its own copy, a reviewer checks it with
+  `message_agent`, one Keep / Review / Discard card; pushing waits for the
+  user), babysit errors hourly (reproduce, fix in a copy; one line when
+  nothing broke, since a routine always leaves its line) and turn client
+  briefs into sites (`watch_for` `new_file`, each brief a project handed back
+  with `share_result` and Preview). The everyday set came from a beginner
+  walk-through (docs/internal/persona-beginners-2026-11-09.md): a
+  small-business owner and a student found nothing that was theirs. Its foot
+  links Ready-made agents and the Phone panel.
 
 **Setup is step one, never a dead end.** An idea may need what this Mac
 doesn't have (GitHub signed in, the repo as a project, an email app, a
@@ -5533,7 +5536,7 @@ from its next message"), and the next turn gets the recent conversation
 
 ### Defaults for new agents (`agents/defaults.rs`)
 
-Settings → Agents → Engines and models (`AgentDefaultsSettings.tsx`) sets what
+Settings → Agents → What agents run on (`AgentDefaultsSettings.tsx`) sets what
 a new agent starts on when nobody picked, saved in the app's settings
 (`AppState::agent_defaults`: `engine`, `claudeModel`, `codexModel`):
 
@@ -5543,7 +5546,7 @@ a new agent starts on when nobody picked, saved in the app's settings
   Claude Code when ready, else the first engine that is
   (`engine::default_for`).
 - **Model on Claude Code / Model on Codex** — one row per installed engine:
-  "Engine's default" (no `--model`) and only the models that engine itself
+  "Default" (no `--model`) and only the models that engine itself
   reports or accepts: Claude Code's aliases (said by what they're for, the
   alias beside it), Codex's `models_cache.json`. An engine that lists none
   has no menu, just "Codex hasn't listed its models, so new agents use its
@@ -5561,7 +5564,7 @@ model, and switching engine there takes the other engine's default model;
 model is a choice, the engine's own); the Chief's `create_agent` (which takes
 no model) and the phone's `agents.create` use both. **Existing agents never
 change** with it, and an existing agent moved to another engine goes to that
-engine's own default, as before. ⌘K "Engine and model for new agents…" opens
+engine's own default, as before. ⌘K "What new agents run on, and their model…" opens
 Settings on it. The phone reads it from the overview and sets it with
 `agents.setDefaults` (docs/mobile.md, "Settings").
 
@@ -5732,7 +5735,7 @@ time. The e2e Codex scenarios run on the account when one is signed in.
   to another engine resets the setting along with its model.
   One-time check-ins, including "Retry at", run on the agent's own model
   (`store::Agent::routine_model`).
-- **Model.** Said by what it's for — Default / Most capable / Balanced /
+- **Model.** Said by what it's for — Default / Smartest / Balanced /
   Fastest — with Claude Code's own name (Opus / Sonnet / Haiku) in small
   text beside it; passed as `--model` from the next turn. Set it when creating
   the agent (it starts on the default for its engine, Settings → Agents),
@@ -5741,7 +5744,7 @@ time. The e2e Codex scenarios run on the account when one is signed in.
   what it's doing or the engine. Only Claude Code's own aliases are accepted, and the backend
   enforces that too. Default means no `--model`, so whatever Claude Code
   defaults to.
-- **Effort.** How hard its conversation turns think: Engine's default, Low,
+- **Effort.** How hard its conversation turns think: Default, Low,
   Medium or High (`store::EFFORTS`, the three both engines take), in the
   same … menu and on the phone's Agent controls. Claude Code gets
   `--effort <level>` (2.1.319 also takes `xhigh` and `max`); `codex exec`

@@ -119,6 +119,6 @@ export const effortRows = (): { value: AgentEffort | ''; label: string; detail?:
  */
 export function controlsLocked(agent: Pick<Agent, 'status' | 'takeover'>): string | null {
   if (agent.takeover) return 'You’re driving it on the Mac. Change these after you hand it back.';
-  if (agent.status.state !== 'idle') return 'Change the model and effort when this turn ends.';
+  if (agent.status.state !== 'idle') return 'Change the model and effort once it’s done with this.';
   return null;
 }

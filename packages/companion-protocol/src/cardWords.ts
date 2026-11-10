@@ -61,7 +61,30 @@ export function runsOnDetail(a: Pick<UsageAccount, 'signedIn' | 'out'>): string 
   return a.out ? 'Only this one, never another · out of usage now' : 'Only this one, never another';
 }
 
+// --- Models -----------------------------------------------------------------
+
+/**
+ * A model said by what it's for, desk and phone alike, with the model's own
+ * name small beside it ("Smartest · Opus"). Claude Code's aliases always
+ * mean the current model of that family, so these stay true as they move.
+ * Codex's models have no such families and are shown by their own names.
+ */
+export const MODEL_PURPOSE: Readonly<Record<string, string>> = {
+  opus: 'Smartest',
+  sonnet: 'Balanced',
+  haiku: 'Fastest',
+};
+
+/** No model chosen: whatever Claude Code or Codex picks by itself. */
+export const MODEL_DEFAULT = 'Default';
+
+/** "Model", in plain words, where the choice is made. */
+export const MODEL_MEANS = 'the AI it thinks with';
+
 // --- Routine lines ----------------------------------------------------------
+
+/** "Routine", said once where someone first meets one (a drafted agent's review). */
+export const ROUTINES_MEANS = 'What it does on its own, on a schedule or when something happens.';
 
 /**
  * The head of a routine's line in the chat: "Routine" (repeating) or

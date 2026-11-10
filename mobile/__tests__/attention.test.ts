@@ -281,7 +281,7 @@ describe('engines, slots and decision cards', () => {
       'Codex · GPT-5 Codex'
     );
     expect(engineLine(agent({ engine: 'codex', model: null }), engines)).toBe(
-      'Codex · Engine’s default'
+      'Codex · Default'
     );
     // A model the Mac doesn't list is shown as its id, not guessed.
     expect(engineLine(agent({ engine: 'claude', model: 'claude-x' }), engines)).toBe(

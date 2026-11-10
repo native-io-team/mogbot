@@ -3546,7 +3546,7 @@ export function createMockServer(opts: MockOptions = {}) {
         return fail({
           type: 'Validation',
           field: 'effort',
-          reason: 'Pick Low, Medium, High or Engine’s default (no effort).',
+          reason: 'Pick Low, Medium, High or Default.',
         });
       }
       const before = { engine: a.engine, model: a.model, effort: a.effort };

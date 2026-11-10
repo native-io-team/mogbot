@@ -2341,7 +2341,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-model-menu',
     title: 'Agents — model menu, with what routines run on',
     looksRightWhen:
-      'Finance’s header has a quiet “Model ⌄” button left of the … menu. Open, it starts with a quiet “Model · runs on Claude Code” line, then Default (checked), Most capable (Opus), Balanced (Sonnet), Fastest (Haiku) with the engine’s names small; Finance has a routine, so a divider, “Routines · the model they wake on”, then Automatic (checked) with “Fastest” small beside it, Same as its chats with what its chats run on, and the three models. The menu never runs past the window: it stops above the bottom edge and scrolls inside.',
+      'Finance’s header has a quiet “Model ⌄” button left of the … menu. Open, it starts with a quiet “Model · the AI it thinks with, on Claude Code” line, then Default (checked), Smartest (Opus), Balanced (Sonnet), Fastest (Haiku) with the engine’s names small; Finance has a routine, so a divider, “Routines · the model for its scheduled work”, then Automatic (checked) with “Fastest” small beside it, Same as its chats with what its chats run on, and the three models. The menu never runs past the window: it stops above the bottom edge and scrolls inside.',
     requires: '.agent-model-menu__heading',
     openSelector: AGENTS_TAB,
     steps: [{ click: '[data-agent-id="finance"]' }, { click: '.agent-chat__model button' }],
@@ -2743,7 +2743,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-model-menu',
     title: 'Agents — the model menu in the chat header',
     looksRightWhen:
-      'The header has a quiet “Model ⌄” button left of the … menu, which holds actions only. Open, the menu starts with “Model · runs on Claude Code” and Default (checked), Most capable, Balanced, Fastest, each with the engine’s own name small beside it; no item ringed or highlighted.',
+      'The header has a quiet “Model ⌄” button left of the … menu, which holds actions only. Open, the menu starts with “Model · the AI it thinks with, on Claude Code” and Default (checked), Smartest, Balanced, Fastest, each with the engine’s own name small beside it; no item ringed or highlighted.',
     openSelector: AGENTS_TAB,
     requires: '.agent-model-menu__heading',
     steps: [{ click: '.agent-chat__model button' }],
@@ -2842,7 +2842,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-first-run',
     title: 'Agents — first open: the Chief of Staff says hello',
     looksRightWhen:
-      'The Chief’s chat opens on its greeting, laid out as the Chief’s first message like any other (left-aligned, where the conversation starts, under its timestamp). Under it, at the same left edge, three starters with no trailing “…” (Brief me every morning, Sort my inbox, draft replies, Run my launch as a team), all neutral outline buttons, then a quieter borderless More ideas…. No power-management note and no import pitch in the sidebar yet. The composer is ready.',
+      'The Chief’s chat opens on its greeting, laid out as the Chief’s first message like any other (left-aligned, where the conversation starts, under its timestamp). Under it, at the same left edge, three starters with no trailing “…” (Brief me every morning, Sort my inbox, draft replies, Research it and write it up), all neutral outline buttons, then a quieter borderless More ideas…. No power-management note and no import pitch in the sidebar yet. The composer is ready.',
     command: 'agents.open',
     requires: '.agent-chat__messages > .agent-chat__starters',
     commands: {},

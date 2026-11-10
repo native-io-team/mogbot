@@ -15,7 +15,7 @@ const VIEWPORT = { width: 1280, height: 860 };
 
 const WHAT_EACH_SHOWS: Record<SettingsPage, string> = {
   agents:
-    'On this Mac (menu bar, quick message, keep awake, keep running when closed, open at login, stopped previews, battery), Engines and models, Disk space when it shows, and Bring agents in with Import….',
+    'On this Mac (menu bar, quick message, keep awake, keep running when closed, open at login, stopped previews, battery), What agents run on, Disk space when it shows, and Bring agents in with Import….',
   independence:
     'Your team: one line, then the four-stop slider (no title of its own, the page says Independence) on Steady with a neutral thumb, its line and the always-asks line. Then What agents can reach: the lead, the team’s lines with no Independence line, the enforced note, and no presets anywhere. Then Each agent’s independence with no level box (the slider above is it), then Admins.',
   accounts:

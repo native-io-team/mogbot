@@ -113,7 +113,7 @@ export function AgentsPage({ onImport }: { onImport: () => void }) {
       {engines.length > 0 && hasDefaults && (
         <section className="settings-group" aria-labelledby="agents-settings-engines">
           <h3 className="settings-group__title" id="agents-settings-engines">
-            Engines and models
+            What agents run on
           </h3>
           <SectionBoundary name="defaults">
             <AgentDefaultsSettings />
@@ -232,7 +232,7 @@ export function NotificationsPage() {
         <div className="settings-section">
           <Row
             label="Replies and requests"
-            description="A reply notifies once per turn; a request for your OK comes with a sound."
+            description="Each reply notifies once; a request for your OK comes with a sound."
           />
           <SectionBoundary name="quiet-hours">
             <AgentQuietHoursSetting />

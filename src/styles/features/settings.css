@@ -424,7 +424,7 @@
   font-size: var(--font-size-body-sm);
 }
 
-/* Settings → Agents → Engines and models: what new agents start on. The
+/* Settings → Agents → What agents run on: what new agents start on. The
    model menus show what each choice is for, the engine's own name small
    beside it, as Edit agent does. */
 .agent-defaults-trigger {

@@ -359,7 +359,7 @@ export function clearSettingsTabOnOpen() {
 
 /**
  * A part of a Settings tab a command asked to show, scrolled into view once
- * it renders (⌘K → "Engine and model for new agents…" lands below the fold).
+ * it renders (⌘K → "What new agents run on, and their model…" lands below the fold).
  * Taken once by the section itself.
  */
 export type SettingsSectionRequest =

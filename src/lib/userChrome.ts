@@ -58,12 +58,12 @@ export const USER_CHROME_TITLE = 'Your Chrome';
 
 /** Said once when the extension connects while its settings are open. */
 export const USER_CHROME_CONNECTED =
-  'Your Chrome is connected. Agents use it from their next turn.';
+  'Your Chrome is connected. Agents use it from their next message.';
 
 /** The line under the switch. */
 export function userChromeLine(s: UserChromeStatus | null): string {
   if (!s?.enabled) {
-    return 'Let agents on any engine use the sites you’re signed in to in Chrome, through this app’s own extension. Anything that sends, posts, pays or deletes still asks you first.';
+    return 'Let agents, on Claude Code or Codex, use the sites you’re signed in to in Chrome, through this app’s own extension. Anything that sends, posts, pays or deletes still asks you first.';
   }
   if (s.error) return `On, but it couldn’t start: ${s.error.trim().replace(/[.!]+$/, '')}.`;
   if (s.browsers.length === 1) {

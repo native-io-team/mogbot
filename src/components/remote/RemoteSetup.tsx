@@ -124,9 +124,9 @@ export function RemoteSetup({ ctl, choices, setChoice, projects, onProjectChange
         <ol className="remote-steps-mini">
           <li>Copy the link.</li>
           <li>
-            In your AI assistant, add a custom MCP connector, name it <strong>{BRAND.name}</strong>,
-            and paste the link. Grok, Claude, ChatGPT and Cursor all have one — anything that speaks
-            MCP works.
+            In your AI assistant, add a custom connector (it may say MCP), name it{' '}
+            <strong>{BRAND.name}</strong>, and paste the link. Grok, Claude, ChatGPT and Cursor all
+            have one — any assistant that takes custom connectors works.
           </li>
           <li>
             Ask it: <em>“What are my agents doing?”</em>

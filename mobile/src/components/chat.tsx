@@ -195,7 +195,7 @@ export const MessageRow = memo(function MessageRow({
             <T variant="caption" color={colors.textSecondary} style={styles.meta}>
               {agent.takeover
                 ? `Queued · ${drivenWait(agent.name)}`
-                : `Queued · ${agent.name} reads it when this turn ends`}
+                : `Queued · ${agent.name} reads it when it’s done with this one`}
             </T>
           )}
         </View>

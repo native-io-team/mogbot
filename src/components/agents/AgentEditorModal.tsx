@@ -101,7 +101,7 @@ function UsageLines({ usage, agent }: { usage: UsageSummary | null; agent: Agent
       {allTime && (
         <>
           <dt>This week</dt>
-          <dd title={priced(usage?.week)}>{week ?? 'No turns'}</dd>
+          <dd title={priced(usage?.week)}>{week ?? 'Nothing run yet'}</dd>
           {routines && (
             <>
               <dt>Its routines</dt>
@@ -133,7 +133,7 @@ function CanDo({ agent }: { agent: Agent }) {
       What {agent.name} can do
       {lines.length === 0 ? (
         <p className="agent-editor__hint">
-          Shown after its first turn, from what {ENGINE_LABEL[agent.engine]} says it can use.
+          Shown after its first reply, from what {ENGINE_LABEL[agent.engine]} says it can use.
         </p>
       ) : (
         <dl className="agent-editor__usage agent-editor__can-do">

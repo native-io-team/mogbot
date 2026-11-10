@@ -312,10 +312,19 @@ CA and no trust-on-first-use.
    connection if that ran out (a first request over a DERP relay, or a
    phone whose Tailscale is waking on demand, can be slow but working; a
    fast failure isn't retried), and is then diagnosed
-   (`diagnose`: a `*.ts.net` name that doesn't resolve is "this phone isn't
-   on your Mac's tailnet", anything else "can't reach *Mac*"), each naming
-   the host and the checks: Tailscale connected here, signed in to the same
-   account as the Mac. The pairing request keeps the desk's 120 s plus 15
+   (`diagnose`: a `*.ts.net` name that doesn't resolve means Tailscale is
+   off here, anything else that nothing answered). Either way the screen is
+   "Can't reach *Mac*" and a three-line checklist (`lib/reachChecklist.ts`,
+   `components/ReachChecklist.tsx`): the Mac awake with the app open (always
+   "can't tell": asleep and closed look the same), Tailscale on with the same
+   account on both (wrong when the name didn't resolve, the phone is offline
+   or Tailscale isn't installed, asked again whenever the app comes back to
+   the front; Open or Get Tailscale), and this phone paired (not yet). Each
+   row says what the phone sees and its one fix; the host is folded under
+   Details, never the first line, because a beginner read "Nothing answered
+   at localhost:50898" as the problem. The Connection sheet leads with the
+   same checklist while a paired phone's Mac is quiet, the layers folded
+   under it. The pairing request keeps the desk's 120 s plus 15
    (`PAIR_TIMEOUT_MS`), then says "No answer from *Mac*" rather than
    waiting forever.
 
@@ -683,7 +692,7 @@ request, the diff and the photo viewer push over them. At
 - **Settings.** The paired Mac, plan usage, what new agents start on, alerts
   (with their limits), haptics, updates, about. **New agents start on** lists
   the Mac's engines (one not installed or signed in is dimmed, saying which),
-  and a **Model on …** section per installed engine offers "Engine's default"
+  and a **Model on …** section per installed engine offers "Default"
   and only the models that engine listed (`lib/newAgentDefaults.ts`). Read
   from the overview's `defaults`; a tap sends `agents.setDefaults`, which the
   Mac checks as the desk does (a ready engine, a model it lists), audits
@@ -1072,7 +1081,7 @@ The phone can start work as well as answer it. Each piece is gated by
   (the engine's models by name, what each is for under it, "Engine's
   default" saying which model that is now; then "Switch to …" for each other
   ready engine, which keeps the conversation), on a Mac listing
-  `agents.engine`; **Effort** (Engine's default, Low, Medium, High) on one
+  `agents.engine`; **Effort** (Default, Low, Medium, High) on one
   listing `agents.effort`; **How much it does on its own** ("Same as team"
   and the four levels, `agents.setAgentIndependence`; going past the team's
   level asks first, with what it then does and what still asks); **Usage**,

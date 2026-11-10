@@ -198,8 +198,9 @@ function RemoteAccessPanel({
         <>
           <p className="remote-intro">
             Drive your agents from another assistant — Grok, ChatGPT, Claude, or anything that
-            supports MCP connectors. It works on this Mac — the same agents, the same conversations
-            — so everything is waiting when you’re back.
+            supports custom connectors (MCP, the standard way assistants add apps). It works on this
+            Mac — the same agents, the same conversations — so everything is waiting when you’re
+            back.
             {!inline && (
               <>
                 {' '}

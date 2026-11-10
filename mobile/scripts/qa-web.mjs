@@ -524,7 +524,7 @@ async function prePairShots(page, d) {
       await capture(page, `pair-unreachable-${theme}`, {
         route: '/pair?d=… (Mac never answers)',
         check:
-          '“Can’t reach <Mac>”, the host, what to check (Tailscale on, same account), Open Tailscale and Try again',
+          '“Can’t reach <Mac>”, “Check these, then try again.”, then three rows with a dot each: the Mac awake with the app open (can’t tell), Tailscale on with the same account (Open Tailscale), this phone paired (not yet); no host or port anywhere until Details is opened; Try again and Back',
         theme,
       });
     }
@@ -1524,7 +1524,7 @@ const LIVE = [
       await sleep(500);
     },
     check:
-      'Working, with words: “Ops reads it when this turn ends” full width over the field from its left edge, Send now at its right; in the field the mic, Stop and Send',
+      'Working, with words: “Ops reads it when it’s done with this one” full width over the field from its left edge, Send now at its right; in the field the mic, Stop and Send',
     after: clearField,
   },
   {
@@ -2162,7 +2162,7 @@ const OFFLINE_CACHED = [
     name: 'offline-connection',
     route: '/connection',
     settle: 3000,
-    check: 'What is wrong, layer by layer',
+    check: 'Check these first: three rows (Mac awake and app open, Tailscale on, paired: Yes), each with its fix; Details folded; no host in the first lines',
   },
 ];
 
@@ -2600,7 +2600,7 @@ const ENGINE = [
     ready: 'Designer',
     act: openControls,
     check:
-      'Agent controls: “Designer · Opus 5.5 · High”, then Model (Engine’s default ticked, saying it is Opus 5.5 now; “Switch to Codex…” under it), Effort (High ticked), how much it does on its own, Usage, More about Designer',
+      'Agent controls: “Designer · Opus 5.5 · High”, then Model (Default ticked, saying it is Opus 5.5 now; “Switch to Codex…” under it), Effort (High ticked), how much it does on its own, Usage, More about Designer',
     pages: 3,
     after: closeAndClear,
   },
@@ -2625,7 +2625,7 @@ const ENGINE = [
     ready: 'Ops',
     act: openControls,
     check:
-      'Ops is mid-turn: the sheet says to change the model and effort when this turn ends, their rows dimmed; the level stays open',
+      'Ops is working: the sheet says to change the model and effort once it’s done with this, their rows dimmed; the level stays open',
     pages: 2,
     after: closeAndClear,
   },

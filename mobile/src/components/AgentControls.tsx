@@ -169,7 +169,7 @@ export function AgentControls({ agentId }: { agentId: string }) {
       {efforts && (
         <Section
           title="Effort"
-          footer="How hard it thinks before it answers. Its routines keep the engine’s default."
+          footer="How hard it thinks before it answers. Its routines always use Default."
         >
           {effortRows().map((e, i, all) => (
             <Choice
@@ -367,7 +367,7 @@ function LevelChoices({
   // The one control for independence, as everywhere: the slider, and
   // whether it follows the team.
   return (
-    <Section title={AGENT_INDEPENDENCE_TITLE} footer="From its next step, even mid-turn.">
+    <Section title={AGENT_INDEPENDENCE_TITLE} footer="How much it does without asking you first. Changes from its next step, even mid-task.">
       <Choice
         label={sameAsTeamLabel(team)}
         on={!own}

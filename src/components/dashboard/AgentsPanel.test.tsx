@@ -438,7 +438,7 @@ describe('AgentsPanel', () => {
     mockInvoke('list_accounts', [account]);
   }
 
-  it('names the active workspace and groups rows under Engines / Services', async () => {
+  it('names the active workspace and groups rows under AI apps / Services', async () => {
     mockInvoke('get_agents_status', [CLAUDE_DEFAULT]);
     mockWorkspace(CIRCA);
     mockInvoke('get_account_credential_status', NOT_CONNECTED);
@@ -448,7 +448,7 @@ describe('AgentsPanel', () => {
     // Workspace badge names the active workspace.
     await waitFor(() => expect(screen.getAllByText(/Circa/).length).toBeGreaterThan(0));
     // The two section subheaders are present.
-    expect(screen.getByText('Engines')).toBeInTheDocument();
+    expect(screen.getByText('AI apps')).toBeInTheDocument();
     expect(screen.getByText('Services')).toBeInTheDocument();
     // The Services rows render for GitHub + Vercel once their status is known.
     expect(await screen.findByText('GitHub')).toBeInTheDocument();

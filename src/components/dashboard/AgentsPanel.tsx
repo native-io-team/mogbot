@@ -535,7 +535,7 @@ export function AgentsPanel() {
         )}
         {!loading && agents.length === 0 && (
           <div className="agents-panel-loading text-style-control" role="alert">
-            Couldn&rsquo;t check which engines are installed.
+            Couldn&rsquo;t check which AI apps are installed.
             <Button
               variant="secondary"
               size="compact"
@@ -548,7 +548,7 @@ export function AgentsPanel() {
             </Button>
           </div>
         )}
-        {agents.length > 0 && <p className="agents-section-title text-style-label">Engines</p>}
+        {agents.length > 0 && <p className="agents-section-title text-style-label">AI apps</p>}
         <div className="agents-panel-list">
           {agents.map((agent) => {
             // "Ready" (eligible to be the default agent) means connected AND valid.
