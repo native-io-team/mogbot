@@ -3714,6 +3714,44 @@ pub async fn agents_user_chrome_open_extensions_page() -> Result<(), CommandErro
         .map(|_| ())
 }
 
+/// Open Chrome in a personal profile for agents' browsing, where the app's
+/// extension can be added when the usual profile is managed by work:
+/// `dir` names an existing profile that isn't managed (from the status's
+/// list, checked again here), or `None` makes a new one ("Agents", which
+/// Chrome creates on first open). Nothing is installed: the user loads the
+/// extension there themselves.
+#[tauri::command]
+#[tracing::instrument]
+pub async fn agents_user_chrome_open_profile(dir: Option<String>) -> Result<String, CommandError> {
+    use crate::user_chrome::managed;
+    let profiles = tokio::task::spawn_blocking(|| {
+        crate::user_chrome::install::chrome_user_data_dir()
+            .map(|udd| managed::profiles(&udd))
+            .unwrap_or_default()
+    })
+    .await
+    .map_err(agents::err_other)?;
+    let dir = match dir {
+        Some(d) => {
+            let known = profiles.iter().find(|p| p.dir == d);
+            match known {
+                Some(p) if p.managed => {
+                    return Err(CommandError::expected(
+                        "That Chrome profile is managed by your work. Choose a personal one, or open a new profile.",
+                    ))
+                }
+                Some(_) if managed::valid_dir(&d) => d,
+                _ => return Err(CommandError::expected("That Chrome profile isn't on this Mac.")),
+            }
+        }
+        None => managed::new_profile_dir(&profiles),
+    };
+    let mut cmd = tokio::process::Command::new("open");
+    cmd.args(managed::open_profile_args(&dir));
+    crate::external_command::run_with_timeout(cmd, "open a Chrome profile", 15).await?;
+    Ok(dir)
+}
+
 /// Once the Web Store listing exists: ask Chrome to offer it (External
 /// Extensions, "Enable" on Chrome's next start) and open its page.
 #[tauri::command]
