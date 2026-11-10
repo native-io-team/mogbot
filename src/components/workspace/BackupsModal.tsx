@@ -180,7 +180,7 @@ export function BackupsModal({ projectPath, onRestore, onCreatePR }: BackupsModa
                 onClick={handleCreatePR}
                 leftIcon={<PullRequestIcon size={14} />}
               >
-                Create Pull Request
+                Create pull request
               </Button>
             )}
             <Button variant="secondary" onClick={handleCloseSuccess}>

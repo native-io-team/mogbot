@@ -112,7 +112,7 @@ export function SubmitReviewModal({
   }, [projectPath, baseBranches.join(',')]);
   const [isSubmitting, setIsSubmitting] = useState(false);
   // Progress label shown on the submit button as it works through its steps.
-  const [progressLabel, setProgressLabel] = useState('Create Pull Request');
+  const [progressLabel, setProgressLabel] = useState('Create pull request');
   const [error, setError] = useState<string | null>(null);
   const [phase, setPhase] = useState<Phase>('edit');
   const [createdPr, setCreatedPr] = useState<{ url: string; number: number } | null>(null);
@@ -213,7 +213,7 @@ export function SubmitReviewModal({
       }
     } finally {
       setIsSubmitting(false);
-      setProgressLabel('Create Pull Request');
+      setProgressLabel('Create pull request');
     }
   };
 
@@ -419,7 +419,7 @@ export function SubmitReviewModal({
       onClose={onClose}
       dismissable={!isBusy}
       className="submit-review-content"
-      title="Submit for Review"
+      title="Submit for review"
     >
       <>
         <div className="submit-review-body">
@@ -467,7 +467,7 @@ export function SubmitReviewModal({
                 {progressLabel}
               </>
             ) : (
-              'Create Pull Request'
+              'Create pull request'
             )}
           </Button>
         </div>

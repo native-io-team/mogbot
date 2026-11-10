@@ -10,12 +10,10 @@
 }
 
 .branches-tab-section-header {
-  font-size: var(--font-size-body-sm);
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 12px;
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-md);
 }
 
 /* New Branch Form */
@@ -314,12 +312,10 @@
 }
 
 .prs-tab-section-header {
-  font-size: var(--font-size-body-sm);
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  margin-bottom: 12px;
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
+  margin-bottom: var(--spacing-md);
 }
 
 .prs-tab-empty-state {

@@ -401,7 +401,7 @@
     {
       "path": "src/styles/features/branches/main.css",
       "token": "--font-weight-semibold",
-      "count": 2,
+      "count": 1,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
@@ -456,12 +456,6 @@
       "path": "src/styles/features/branches/main.css",
       "token": "--stroke-1",
       "count": 5,
-      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
-    },
-    {
-      "path": "src/styles/features/branches/main.css",
-      "token": "--tracking-code",
-      "count": 1,
       "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
@@ -526,21 +520,15 @@
     },
     {
       "path": "src/styles/features/conflicts.css",
-      "token": "--info",
+      "token": "--font-weight-regular",
       "count": 1,
-      "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
+      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
       "path": "src/styles/features/conflicts.css",
-      "token": "--info-rgb",
-      "count": 2,
-      "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
-    },
-    {
-      "path": "src/styles/features/conflicts.css",
-      "token": "--transition",
-      "count": 10,
-      "reason": "Transitional migration-alias consumer; replace with the canonical semantic role."
+      "token": "--line-height-relaxed",
+      "count": 1,
+      "reason": "Transitional primitive consumer; replace with an owner-appropriate semantic or component role."
     },
     {
       "path": "src/styles/features/create-project.css",

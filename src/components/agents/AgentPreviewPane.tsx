@@ -319,6 +319,11 @@ export function AgentPreviewPane({
     </Button>
   );
 
+  // With no site to show, the pane's body says why and offers the way on
+  // (Open in workspace, Ask to fix): the header doesn't repeat it, and a
+  // test that can't run isn't offered as a greyed-out button.
+  const down = DOWN_STATES.has(state.kind);
+  const bodyOpens = down && state.kind !== 'failed';
   return (
     <aside className="agent-preview" aria-label="Preview" data-state={state.kind}>
       <header className="agent-preview__header">
@@ -328,8 +333,8 @@ export function AgentPreviewPane({
           {where && <span className="agent-preview__where">{where}</span>}
         </div>
         <div className="agent-preview__header-actions">
-          {testButton}
-          {openInWorkspace && (
+          {(!down || testing) && testButton}
+          {openInWorkspace && !bodyOpens && (
             <Button variant="ghost" size="compact" onClick={openInWorkspace}>
               Open in workspace
             </Button>
@@ -364,6 +369,9 @@ export function AgentPreviewPane({
     </aside>
   );
 }
+
+/** States whose body explains there's no site, and offers what to do. */
+const DOWN_STATES: ReadonlySet<string> = new Set(['stopped', 'install', 'no-preview', 'failed']);
 
 /** The run for this agent, kept live from the backend's events. */
 function useAgentRun(agentId: string, target: PreviewTarget | null): PreviewRun | null {

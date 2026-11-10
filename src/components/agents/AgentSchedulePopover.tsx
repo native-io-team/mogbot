@@ -972,7 +972,8 @@ function RunHistory({ runs }: { runs: CheckInRun[] }) {
             ? `${run.signIn.join(', ')} ${run.signIn.length > 1 ? 'need' : 'needs'} signing in again`
             : null,
         ].filter(Boolean);
-        const outcome = [describeRun(run), ...extra].join(' · ');
+        // The outcome in its colour, then why in full underneath: the reason
+        // is the part worth reading, so it wraps instead of being cut.
         return (
           <li
             key={`${run.at}-${run.attempt}`}
@@ -982,9 +983,10 @@ function RunHistory({ runs }: { runs: CheckInRun[] }) {
             <time className="agent-schedule__run-time" dateTime={new Date(run.at).toISOString()}>
               {formatWhen(run.at)}
             </time>
-            <span className="agent-schedule__run-outcome" title={outcome}>
-              {outcome}
-            </span>
+            <span className="agent-schedule__run-outcome">{describeRun(run)}</span>
+            {extra.length > 0 && (
+              <span className="agent-schedule__run-why">{extra.join(' · ')}</span>
+            )}
           </li>
         );
       })}

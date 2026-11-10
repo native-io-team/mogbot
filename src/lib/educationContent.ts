@@ -234,7 +234,7 @@ export const educationContent: Record<string, EducationItem> = {
       'Manage Model Context Protocol servers that connect your agent to external tools and data sources. MCP servers let your agent interact with databases, APIs, and other services.',
   },
   'help-commands': {
-    title: 'Help & Commands',
+    title: 'Help and commands',
     description:
       'See keyboard shortcuts and all the commands available in the terminal. Find quick ways to navigate and control the app.',
   },

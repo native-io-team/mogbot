@@ -1405,10 +1405,12 @@ function NoEngine({
   return (
     <div className="agents-main__state">
       <div className="agents-no-engine">
-        <h2 className="agents-no-engine__title">Agents run on Claude Code, Codex or OpenCode</h2>
+        {/* The title says what's missing; the body what it takes. The three
+            names were said twice, above three buttons that say them again. */}
+        <h2 className="agents-no-engine__title">Agents need Claude Code, Codex or OpenCode</h2>
         <p className="agents-no-engine__body">
-          Each agent runs on Claude Code, Codex or OpenCode on this Mac, with your own account or
-          models. Set one up and your Chief of Staff is ready to talk.
+          One of them, on this Mac with your own account. Set it up and your Chief of Staff is ready
+          to talk. Your projects work without it.
         </p>
         <div className="agents-no-engine__actions">
           <Button variant="primary" onClick={() => onSetUp('claude')}>

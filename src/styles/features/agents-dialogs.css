@@ -7,6 +7,13 @@
   width: min(440px, 90vw);
 }
 
+/* An existing agent's dialog holds its whole briefing (usage, what it can
+   reach, its rules and skills): tables of two and three columns that wrapped
+   every value onto three lines at 440. New agent stays narrow and calm. */
+.modal-frame-content.agent-editor--existing {
+  width: min(580px, 92vw);
+}
+
 .agent-editor__body {
   display: flex;
   flex-direction: column;
@@ -100,6 +107,14 @@
   gap: var(--spacing-lg);
   padding-top: var(--spacing-lg);
   border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.agent-editor__instant {
+  margin: 0;
+  padding-top: var(--spacing-md);
+  border-top: var(--border-width-default) solid var(--border-subtle);
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
 }
 
 .agent-editor__briefing:empty {

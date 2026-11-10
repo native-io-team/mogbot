@@ -508,7 +508,7 @@ export function BranchesTab({
       {/* Current Branch */}
       {currentBranchInfo && (
         <div className="branches-tab-section">
-          <div className="branches-tab-section-header">Current Branch</div>
+          <div className="branches-tab-section-header">Current branch</div>
           <div className="branch-card current">
             <div className="branch-card-info">
               <div className="branch-card-name">
@@ -559,7 +559,7 @@ export function BranchesTab({
                       size="compact"
                       onClick={() => onSubmitForReview(currentBranchInfo.name)}
                     >
-                      Submit for Review
+                      Submit for review
                     </Button>
                   );
                 })()}
@@ -694,7 +694,7 @@ export function BranchesTab({
       {/* User's Branches */}
       {userBranches.length > 0 && (
         <div className="branches-tab-section">
-          <div className="branches-tab-section-header">Your Branches</div>
+          <div className="branches-tab-section-header">Your branches</div>
           {userBranches.map((branch) => (
             <BranchCard
               remoteName={remoteName}
@@ -718,7 +718,7 @@ export function BranchesTab({
       {/* Team Branches */}
       {teamBranches.length > 0 && (
         <div className="branches-tab-section">
-          <div className="branches-tab-section-header">Team Branches</div>
+          <div className="branches-tab-section-header">Team branches</div>
           {teamBranches.map((branch) => (
             <BranchCard
               remoteName={remoteName}
@@ -742,7 +742,7 @@ export function BranchesTab({
       {/* Main Branches */}
       {mainBranches.length > 0 && (
         <div className="branches-tab-section">
-          <div className="branches-tab-section-header">Main Branches</div>
+          <div className="branches-tab-section-header">Main branches</div>
           {mainBranches.map((branch) => (
             <BranchCard
               remoteName={remoteName}
@@ -1019,7 +1019,7 @@ export function BranchesTab({
             <p>
               It <strong>won't</strong> open a pull request or merge anything. It just uploads the
               branch. When you're ready for someone to review and merge it, use{' '}
-              <strong>Submit for Review</strong>.
+              <strong>Submit for review</strong>.
             </p>
           </div>
           <div className="post-merge-footer">
@@ -1198,7 +1198,7 @@ function BranchCard({
         {isSwitching && <Spinner size="sm" />}
         {isCurrent && showSubmitForReview && (
           <Button variant="primary" size="compact" onClick={onSubmitForReview}>
-            Submit for Review
+            Submit for review
           </Button>
         )}
         {!branch.pushed && !branch.isDefault && (

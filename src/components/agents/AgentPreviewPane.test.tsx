@@ -196,8 +196,10 @@ describe('opening the preview', () => {
       />
     );
     expect(await screen.findByText(/needs its dependencies installed first/)).toBeTruthy();
-    fireEvent.click(screen.getAllByRole('button', { name: 'Open in workspace' })[1]);
+    // Said once, in the body: the header doesn't repeat it, nor offer a test that can't run.
+    fireEvent.click(screen.getByRole('button', { name: 'Open in workspace' }));
     expect(open).toHaveBeenCalledWith(TARGET.path);
+    expect(screen.queryByRole('button', { name: 'Test it' })).toBeNull();
   });
 
   it('a folder whose start ran and left nothing running has no preview here', async () => {

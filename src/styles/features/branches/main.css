@@ -413,11 +413,11 @@
 }
 
 .branches-menu-section-title {
-  color: var(--text-muted);
-  font-size: var(--font-size-body-sm);
-  font-weight: var(--font-weight-semibold);
-  letter-spacing: var(--tracking-code);
-  text-transform: uppercase;
+  /* Sentence case, like every other heading in the app (it was shouted
+     in capitals, as Ship Studio drew it). */
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
 }
 
 .branches-menu-section > .branches-menu-section-title,
@@ -729,12 +729,10 @@
 }
 
 .branch-dropdown-header {
-  padding: 12px 14px 8px;
-  font-size: var(--font-size-body-sm);
-  font-weight: 600;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  padding: var(--spacing-md) var(--spacing-md) var(--spacing-sm);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  color: var(--text-secondary);
 }
 
 .branch-dropdown-section {

@@ -751,6 +751,9 @@ export function AgentEditorModal({
         <div className="agent-editor__briefing">
           <UsageLines usage={usage} agent={agent} />
           <CanDo agent={agent} />
+          {/* Everything from here on is saved the moment it changes, unlike
+              the draft above it: said once, where the two meet. */}
+          <p className="agent-editor__instant">These apply as you change them, without Save.</p>
           <AgentLevelPicker agent={agent} />
           <AdminSwitch agent={agent} />
           <Permissions agent={agent} />
@@ -834,7 +837,7 @@ export function AgentEditorModal({
         isOpen={isOpen}
         onClose={onClose}
         title={editing ? `Edit ${agent?.name}` : 'New agent'}
-        className="agent-editor"
+        className={agent ? 'agent-editor agent-editor--existing' : 'agent-editor'}
       >
         {agent ? (
           <Tabs value={tab} onValueChange={(v) => setTab(v as EditorTab)}>

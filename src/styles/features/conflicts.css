@@ -1,19 +1,21 @@
-/* Merge Conflict Resolution Modal */
+/* Merge conflict resolution modal (`branches/ConflictResolutionModal.tsx`).
+   On the app's tokens, both themes: no raw spacing, no white-on-hover (which
+   in the light theme turned the Keep buttons' words white on a light grey). */
 
 .conflict-content {
-  width: 480px;
-  max-height: 85vh;
-  background: var(--surface-panel);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
   display: flex;
   flex-direction: column;
+  width: min(480px, 92vw);
+  max-height: 85vh;
   overflow-y: auto;
+  background: var(--surface-panel);
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
 }
 
 .conflict-content-wide {
-  width: 720px;
+  width: min(720px, 92vw);
 }
 
 /* Loading and error states */
@@ -23,13 +25,17 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 16px;
-  padding: 48px 24px;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-2xl) var(--spacing-xl);
   color: var(--text-muted);
   text-align: center;
 }
 
 .conflict-error {
+  color: var(--text-secondary);
+}
+
+.conflict-error > svg {
   color: var(--accent-warning);
 }
 
@@ -37,15 +43,14 @@
 .conflict-header {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 20px 24px 12px;
-  border-bottom: 1px solid var(--border-default);
+  gap: var(--spacing-md);
+  padding: var(--spacing-xl) var(--spacing-xl) var(--spacing-sm);
 }
 
 .conflict-header-icon {
-  color: var(--accent-warning);
   flex-shrink: 0;
-  margin-top: 2px;
+  margin-top: var(--spacing-3xs);
+  color: var(--text-secondary);
 }
 
 .conflict-header-text {
@@ -54,291 +59,232 @@
 }
 
 .conflict-header h2 {
-  margin: 0 0 4px 0;
+  margin: 0 0 var(--spacing-xs);
   font-size: var(--font-size-h4);
-  font-weight: 600;
+  font-weight: var(--font-weight-heading);
   color: var(--text-primary);
 }
 
 .conflict-file-info {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
-  font-size: var(--font-size-body-lg);
-}
-
-.conflict-file-name {
-  color: var(--text-secondary);
-  font-family: var(--font-code);
-  background: var(--surface-control);
-  padding: 2px 6px;
-  border-radius: var(--radius-sm);
-}
-
-.conflict-progress {
-  color: var(--text-muted);
+  gap: var(--spacing-sm) var(--spacing-md);
+  margin: 0;
   font-size: var(--font-size-body-md);
 }
 
-/* Explanation */
-.conflict-explanation {
-  padding: 12px 24px;
-  font-size: var(--font-size-body-lg);
+.conflict-file-name {
+  padding: var(--spacing-3xs) var(--spacing-tight);
+  font-family: var(--font-code);
   color: var(--text-secondary);
   background: var(--surface-control);
-  border-bottom: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  overflow-wrap: anywhere;
 }
 
-/* Binary file warning */
+.conflict-progress {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
+.conflict-explanation {
+  margin: 0;
+  padding: 0 var(--spacing-xl) var(--spacing-lg);
+  font-size: var(--font-size-body-md);
+  color: var(--text-secondary);
+}
+
+/* A file that can't be merged line by line here */
 .conflict-binary {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 16px;
-  padding: 32px 24px;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-xl);
   text-align: center;
   color: var(--text-secondary);
 }
 
-/* Side-by-side panels */
+.conflict-binary p {
+  margin: 0;
+  max-width: 44ch;
+}
+
+.conflict-binary-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--spacing-sm);
+}
+
+/* Side by side */
 .conflict-panels {
   display: flex;
-  gap: 1px;
-  background: var(--border-default);
+  gap: var(--border-width-default);
   max-height: 300px;
+  margin: 0 var(--spacing-xl);
   overflow: hidden;
+  background: var(--border-default);
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-card);
 }
 
 .conflict-panel {
-  flex: 1;
   display: flex;
+  flex: 1;
   flex-direction: column;
-  background: var(--surface-app);
   min-width: 0;
+  background: var(--surface-app);
 }
 
+/* Yours and theirs are equals, so neither gets a hue: the branch name beside
+   each heading carries the identity. */
 .conflict-panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  font-size: var(--font-size-body-sm);
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  border-bottom: 2px solid;
-}
-
-/* Yours and theirs are equals, so neither gets a hue: green here would say
-   "go", blue would say "info", and both collide with the accent. The branch
-   names beside each heading carry the identity. */
-.conflict-panel-header.yours,
-.conflict-panel-header.theirs {
+  gap: var(--spacing-sm);
+  padding: var(--spacing-sm) var(--spacing-md);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
   color: var(--text-primary);
-  border-color: var(--border-strong);
   background: var(--surface-control);
+  border-bottom: var(--border-width-default) solid var(--border-default);
 }
 
 .conflict-branch-name {
-  font-weight: 400;
-  font-size: var(--font-size-badge);
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--text-muted);
-  max-width: 120px;
+  max-width: 160px;
   overflow: hidden;
-  text-overflow: ellipsis;
+  font-family: var(--font-code);
+  font-size: var(--font-size-badge);
+  font-weight: var(--font-weight-regular);
+  color: var(--text-muted);
   white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .conflict-panel-content {
   flex: 1;
-  padding: 12px;
+  padding: var(--spacing-md);
   overflow: auto;
-  font-size: var(--font-size-body-md);
-  line-height: 1.5;
 }
 
 .conflict-panel-content pre {
   margin: 0;
   font-family: var(--font-code);
-  font-size: var(--font-size-body-md);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-relaxed);
+  color: var(--text-primary);
   white-space: pre-wrap;
   word-break: break-word;
-  color: var(--text-primary);
 }
 
 .conflict-deleted {
-  color: var(--text-muted);
   font-style: italic;
+  color: var(--text-muted);
 }
 
 .conflict-truncated {
-  margin-top: 8px;
-  padding-top: 8px;
-  border-top: 1px dashed var(--border-default);
-  color: var(--text-muted);
+  margin-top: var(--spacing-sm);
+  padding-top: var(--spacing-sm);
   font-size: var(--font-size-body-sm);
-  font-style: italic;
+  color: var(--text-muted);
+  border-top: var(--border-width-default) dashed var(--border-default);
 }
 
-/* Action buttons */
+/* Keep yours / Keep theirs: an equal pair, deliberately not the Button
+   family (CLAUDE.md, "When a raw <button> is fine"). */
 .conflict-actions {
   display: flex;
-  gap: 0;
-  padding: 16px 24px;
-}
-
-.conflict-actions .conflict-btn {
-  flex: 1;
-  justify-content: center;
-  border-radius: 0;
-}
-
-.conflict-actions .conflict-btn:first-child {
-  border-radius: 6px 0 0 6px;
-}
-
-.conflict-actions .conflict-btn:last-child {
-  border-radius: 0 6px 6px 0;
+  padding: var(--spacing-lg) var(--spacing-xl);
 }
 
 .conflict-btn {
-  padding: 10px 20px;
-  border-radius: var(--radius-control);
-  font-size: var(--font-size-body-lg);
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    background-color var(--transition),
-    color var(--transition),
-    border-color var(--transition);
   display: flex;
+  flex: 1;
   align-items: center;
-  gap: 6px;
-}
-
-.conflict-btn.primary {
-  background: var(--accent-active);
-  border: 1px solid var(--accent-active);
-  color: var(--text-on-accent);
-}
-
-.conflict-btn.primary:hover:not(:disabled) {
-  background: var(--accent-active-hover);
-}
-
-.conflict-btn.yours,
-.conflict-btn.theirs {
-  background: var(--surface-control);
-  border: 1px solid var(--border-strong);
+  justify-content: center;
+  gap: var(--spacing-tight);
+  padding: var(--spacing-sm) var(--spacing-lg);
+  font-size: var(--font-size-body-md);
+  font-weight: var(--font-weight-label);
   color: var(--text-primary);
+  cursor: pointer;
+  background: var(--surface-control);
+  border: var(--border-width-default) solid var(--border-strong);
+  transition:
+    background-color var(--transition-interaction),
+    border-color var(--transition-interaction);
 }
 
-.conflict-btn.yours:hover:not(:disabled),
-.conflict-btn.theirs:hover:not(:disabled) {
+.conflict-actions .conflict-btn:first-child {
+  border-radius: var(--radius-control) 0 0 var(--radius-control);
+}
+
+.conflict-actions .conflict-btn:last-child {
+  border-left: none;
+  border-radius: 0 var(--radius-control) var(--radius-control) 0;
+}
+
+.conflict-btn:hover:not(:disabled) {
   background: var(--surface-control-hover);
-  color: var(--text-white);
 }
 
-.conflict-btn.secondary {
-  background: var(--surface-control);
-  border: 1px solid var(--border-default);
-  color: var(--text-secondary);
-}
-
-.conflict-btn.secondary:hover:not(:disabled) {
-  background: var(--border-default);
-  color: var(--text-primary);
+.conflict-btn:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .conflict-btn:disabled {
-  opacity: 0.5;
   cursor: not-allowed;
+  opacity: 0.5;
 }
 
-/* Callout tip */
+/* Need parts of both: one plain line and one way on. */
 .conflict-callout {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
-  gap: 10px;
-  margin: 0 24px 16px;
-  padding: 12px 14px;
-  background: rgba(var(--info-rgb), 0.08);
-  border: 1px solid rgba(var(--info-rgb), 0.2);
-  border-radius: var(--radius-card);
+  justify-content: space-between;
+  gap: var(--spacing-sm) var(--spacing-md);
+  margin: 0 var(--spacing-xl) var(--spacing-lg);
   font-size: var(--font-size-body-md);
   color: var(--text-secondary);
-  line-height: 1.5;
 }
 
-.conflict-callout-icon {
-  flex-shrink: 0;
-  color: var(--info);
-}
-
-.conflict-callout > span:nth-child(2) {
-  flex: 1;
-}
-
-.conflict-callout .conflict-copy-btn,
-.conflict-callout .conflict-send-btn {
-  margin: 0;
-  flex-shrink: 0;
-}
-
-/* Same chrome as the copy button. Secondary weight: the accent is kept for the
-   one commit action, so this modal doesn't offer two primaries. */
-.conflict-send-btn {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  background: var(--surface-control);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--radius-control);
-  color: var(--text-primary);
-  font-size: var(--font-size-body-md);
-  font-weight: 500;
-  cursor: pointer;
-  transition:
-    opacity var(--transition),
-    background-color var(--transition);
-}
-
-.conflict-send-btn:hover {
-  background: var(--surface-control-hover);
-  color: var(--text-white);
-}
-
-/* More information section */
+/* The lines around it */
 .conflict-more-info {
-  border-top: 1px solid var(--border-default);
-  background: var(--surface-control);
+  border-top: var(--border-width-default) solid var(--border-subtle);
 }
 
 .conflict-more-toggle {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: var(--spacing-sm);
   width: 100%;
-  padding: 12px 24px;
+  padding: var(--spacing-md) var(--spacing-xl);
+  font-size: var(--font-size-body-md);
+  color: var(--text-secondary);
+  text-align: left;
+  cursor: pointer;
   background: none;
   border: none;
-  color: var(--text-secondary);
-  font-size: var(--font-size-body-lg);
-  cursor: pointer;
-  transition: color var(--transition);
-  text-align: left;
+  transition: color var(--transition-interaction);
 }
 
 .conflict-more-toggle:hover {
   color: var(--text-primary);
 }
 
+.conflict-more-toggle:focus-visible {
+  outline: var(--focus-ring-width) solid var(--focus-ring);
+  outline-offset: calc(-1 * var(--focus-ring-width));
+}
+
 .conflict-toggle-chevron {
   display: inline-flex;
-  transition: transform var(--transition);
+  transition: transform var(--transition-interaction);
 }
 
 .conflict-toggle-chevron.expanded {
@@ -346,106 +292,56 @@
 }
 
 .conflict-more-content {
-  padding: 0 24px 16px;
-}
-
-.conflict-copy-btn {
   display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 14px;
-  margin-bottom: 16px;
-  background: var(--surface-panel);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-control);
-  color: var(--text-secondary);
-  font-size: var(--font-size-body-md);
-  cursor: pointer;
-  transition:
-    background-color var(--transition),
-    color var(--transition),
-    border-color var(--transition);
-}
-
-.conflict-copy-btn:hover {
-  background: var(--border-default);
-  color: var(--text-primary);
-}
-
-.conflict-context {
-  margin-bottom: 12px;
-}
-
-.conflict-context-label {
-  font-size: var(--font-size-body-sm);
-  font-weight: 500;
-  color: var(--text-muted);
-  margin-bottom: 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.conflict-context pre {
-  margin: 0;
-  padding: 10px 12px;
-  background: var(--surface-panel);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-control);
-  font-family: var(--font-code);
-  font-size: var(--font-size-body-sm);
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-  color: var(--text-secondary);
-  max-height: 120px;
-  overflow: auto;
+  flex-direction: column;
+  gap: var(--spacing-md);
+  padding: 0 var(--spacing-xl) var(--spacing-lg);
 }
 
 .conflict-diff {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  margin-bottom: 12px;
+  gap: var(--spacing-md);
 }
 
-.conflict-diff-section {
-  flex: 1;
-}
-
+.conflict-context-label,
 .conflict-diff-label {
-  font-size: var(--font-size-body-sm);
-  font-weight: 500;
-  margin-bottom: 6px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
+  margin-bottom: var(--spacing-tight);
+  font-size: var(--font-size-label);
+  font-weight: var(--font-weight-label);
+  color: var(--text-muted);
 }
 
-.conflict-diff-label.yours,
-.conflict-diff-label.theirs {
+.conflict-context pre,
+.conflict-diff-section pre {
+  max-height: 150px;
+  margin: 0;
+  padding: var(--spacing-sm) var(--spacing-md);
+  overflow: auto;
+  font-family: var(--font-code);
+  font-size: var(--font-size-body-sm);
   color: var(--text-secondary);
+  white-space: pre-wrap;
+  word-break: break-word;
+  background: var(--surface-app);
+  border: var(--border-width-default) solid var(--border-default);
+  border-radius: var(--radius-control);
 }
 
 .conflict-diff-section pre {
-  margin: 0;
-  padding: 10px 12px;
-  background: var(--surface-panel);
-  border: 1px solid var(--border-default);
-  border-radius: var(--radius-control);
-  font-family: var(--font-code);
-  font-size: var(--font-size-body-sm);
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
   color: var(--text-primary);
-  max-height: 150px;
-  overflow: auto;
 }
 
-/* Footer */
+/* Footer: the way out, and what closing does. */
 .conflict-footer {
   display: flex;
-  justify-content: flex-start;
-  padding: 16px 24px;
-  border-top: 1px solid var(--border-default);
-  background: var(--surface-panel);
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-md) var(--spacing-xl);
+  border-top: var(--border-width-default) solid var(--border-subtle);
+}
+
+.conflict-footer-note {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
 }

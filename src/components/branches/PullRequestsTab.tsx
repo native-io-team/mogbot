@@ -325,7 +325,7 @@ export function PullRequestsTab({
       {/* Recently Merged */}
       {mergedPrs.length > 0 && (
         <div className="prs-tab-section">
-          <div className="prs-tab-section-header">Recently Merged</div>
+          <div className="prs-tab-section-header">Recently merged</div>
           {mergedPrs.map((pr) => (
             <PrCard
               key={pr.number}
@@ -620,8 +620,10 @@ function PrCard({
               </Button>
             )
           )}
+          {/* Quiet on the row: closing a PR loses nothing and asks first, so a
+              red button on every row only shouted. The confirm stays danger. */}
           {onClose && (
-            <Button variant="danger" size="compact" onClick={onClose} disabled={isClosing}>
+            <Button variant="ghost" size="compact" onClick={onClose} disabled={isClosing}>
               {isClosing ? 'Closing…' : 'Close'}
             </Button>
           )}
