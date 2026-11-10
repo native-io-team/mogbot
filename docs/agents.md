@@ -3643,6 +3643,78 @@ the card with why, and is never guessed at.
 What doesn't come across: the other platform's own connectors (its Gmail,
 Calendar…). Here, agents use what this Mac and Claude Code are connected to.
 
+### Share an agent as a recipe (`src-tauri/src/agents/recipe.rs`)
+
+A recipe is an agent's shareable definition: what it is, never what it
+knows. **Share as a recipe…** in an agent's … menu (not the Chief's), ⌘K
+"Share <agent> as a recipe", or asking the Chief ("share Finance as a
+recipe": its `share_recipe` tool only opens the sheet on the Mac; the Chief
+never sees or sends the recipe) opens a sheet (`AgentRecipeModal`) showing
+exactly what the file holds, a line counting what was removed ("4 personal
+details removed (1 email address, 1 phone number, 2 file paths)"), and what
+is never in one. **Save file…** writes `<Name>.<slug>-recipe.json` where the
+user picks, only if it is still byte for byte what the sheet showed
+(`agents_recipe_save` re-reads it and refuses a change); **Copy as text**
+copies a line saying what it is plus the recipe in a ```json block.
+
+**Format, version 1** (`format` is `"agent-recipe"`, not the app's name, so
+a fork's recipes read the same):
+
+```json
+{
+  "format": "agent-recipe",
+  "version": 1,
+  "name": "Finance",
+  "role": "Keeps the books",
+  "instructions": "The ## Instructions section of its CLAUDE.md, scrubbed",
+  "routines": [{ "when": "every weekday at 09:00", "what": "Check for new invoices" }],
+  "watches": [{ "when": "a new file appears in [removed: a file path]", "what": "File it" }],
+  "apps": ["Gmail", "Linear"],
+  "look": { "colorway": "teal", "icon": "inbox", "key": "F" },
+  "independence": "often"
+}
+```
+
+`routines` are its repeating time routines in the schedule's own words;
+`watches` its "When…" routines; `apps` the titles of connections granted to
+it; `independence` the level it runs at (`often`, `judgement`, `go_hard`,
+`full_send`). A newer `version` is refused ("made by a newer version").
+
+**Never in it:** memory, conversations, logins, keys, connection tokens and
+which accounts it uses, its project, one-time reminders, the app's own
+follow-ups, later steps of a stepped routine (a step's "your OK first" can't
+survive as text). In every text that is in it, `recipe::scrub` replaces
+anything shaped like a credential (`harvest::mask_secrets`), file paths under
+a home folder (`/Users/…`, `/home/…`, `~/…`, `C:\Users\…`, at the start of a
+path, never inside a web address), email addresses and phone numbers (with a
+`+`, or 3-3-4 digits; dates and times aren't) with "[removed: …]", each
+counted.
+
+**Importing** is the export path above: `import_formats` recognises a recipe
+by its `format` (a file, a folder holding one, or a pasted reply), plain code
+copies only the recipe's own fields into one agent (a recipe carrying
+`memory`, `is_main`, `logins`, `agents` or a secret has them ignored:
+`a_hostile_recipe_stays_data`), and the same review card goes up in the
+Chief's chat, source "a recipe". Routines arrive paused; a taken name comes
+in as "<Name> (from a recipe)". On Import, a new agent takes the recipe's
+colourway and icon when this build draws them, and its key unless another
+agent has it, in which case it keeps the free key it was given (a line says
+so). The suggested independence is shown on the card and applied **only when
+it is stricter than the team's** (`recipe::level_to_apply`); a looser one is
+a line saying it stays at the team's level. Replace keeps the existing
+agent's look and level.
+
+Three ways in, all sealed: drop a recipe file (`*-recipe.json`) anywhere on
+the Agents window (`useRecipeDrop`; a chat's own drop skips recipe files, and
+Import's drop area reads them itself), paste one into the Chief's chat (the
+composer sends recipe text to `agents_import_text_review` instead of a turn,
+so no model reads it), or Import agents → drop, choose or paste. The Chief's
+`bring_agents_over` with a recipe's path works too.
+
+**Not built:** sharing from the phone, a link (recipes are files or text),
+and the phone's chat routing a pasted recipe to import (it is sent as a
+message there).
+
 ### Setting up your team (`src-tauri/src/agents/team_setup.rs`)
 
 What happens after Import, so a dozen new agents feel handled rather than
