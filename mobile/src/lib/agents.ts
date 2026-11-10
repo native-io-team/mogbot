@@ -644,7 +644,8 @@ export function capFields(
 export function skillSummary(approval: Pick<Approval, 'skill' | 'summary'>): string | null {
   const skill = approval.skill;
   if (!skill) return null;
-  const when = skill.when.trim();
+  // From the wire: an older or odd card may carry no words for when.
+  const when = (typeof skill.when === 'string' ? skill.when : '').trim();
   const summary = approval.summary?.trim() ?? '';
   const prefix = `When to use it: ${when}`;
   const rest = summary.startsWith(prefix) ? summary.slice(prefix.length).trim() : '';

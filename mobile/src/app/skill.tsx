@@ -121,7 +121,7 @@ function SkillPage() {
           <T color={colors.textSecondary}>
             {connected
               ? `Couldn’t read it: ${reading.reason}`
-              : 'Reading it needs your Mac. It reads again once it’s back.'}
+              : 'Reading it needs your Mac.'}
           </T>
         ) : reading.kind === 'gone' ? (
           <T color={colors.textSecondary}>That skill isn’t there any more.</T>
