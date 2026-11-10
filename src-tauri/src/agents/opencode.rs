@@ -223,13 +223,6 @@ fn label(m: &Model) -> String {
     }
 }
 
-/// Whether `model` (`provider/model`) is served from this Mac. Unknown, or
-/// no model chosen (OpenCode's own default), is not.
-pub fn is_local(model: Option<&str>) -> bool {
-    let Some(model) = model else { return false };
-    listed().iter().any(|m| m.id == model && m.local)
-}
-
 /// Ask the installed OpenCode for its models, at most once a minute: `opencode
 /// models --verbose` (what it can run, with each one's address) and `opencode
 /// debug config` (the user's providers, whose own `baseURL` says where a

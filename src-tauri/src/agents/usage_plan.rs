@@ -697,14 +697,6 @@ pub fn set_org(engine: Engine, account: &str, org: &str) {
     }
 }
 
-/// Forget what an account's token answered for (it was signed in again, or removed).
-pub fn forget_org(engine: Engine, account: &str) {
-    let key = account_key(engine, account);
-    change_readings(|f| {
-        f.orgs.remove(&key);
-    });
-}
-
 /// An account was signed in again: what its old token said about it
 /// (which organization, its last check) no longer holds, so it is read
 /// afresh.

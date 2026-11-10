@@ -2191,13 +2191,6 @@ export interface ImportRoutineOutcome {
   detail: string;
 }
 
-export interface PasteImportPreview {
-  source: string;
-  blocks: number;
-  agents: PasteImportAgent[];
-  problems: string[];
-}
-
 /** One agent an export or pasted reply holds (`agents/import_export.rs`). Identical to src/lib/agents.ts. */
 export interface ExportImportAgent {
   name: string;

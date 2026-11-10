@@ -1,7 +1,7 @@
 /**
  * The pieces both import paths are built from: the numbered steps (the same
  * rail as Remote access setup), the message to send with its Copy button, the
- * preview of what a pasted reply brings, and the moment it's done.
+ * preview of what an export or a pasted reply brings, and the moment it's done.
  *
  * @module components/agents/ImportParts
  */
@@ -13,12 +13,7 @@ import { Checkbox } from '../primitives/Checkbox';
 import { TextButton } from '../primitives/TextButton';
 import { useCopyToClipboard } from '../../hooks/useCopyToClipboard';
 import { useAgentsList } from '../../lib/agentsStore';
-import type {
-  ExportImportPreview,
-  ImportSummary,
-  PasteImportAgent,
-  PasteImportPreview,
-} from '../../lib/agents';
+import type { ExportImportPreview, ImportSummary, PasteImportAgent } from '../../lib/agents';
 import { AgentKey } from './AgentKey';
 
 export const plural = (n: number, word: string) =>
@@ -218,104 +213,6 @@ export function ImportSection({ title, children }: { title: string; children: Re
   );
 }
 
-function counts(agent: PasteImportAgent) {
-  return [
-    // Whether it brings instructions is the point; how many characters isn't.
-    agent.instructionsChars ? 'Instructions' : 'No instructions',
-    agent.memoryLines
-      ? `${agent.memoryLines.toLocaleString()} ${agent.memoryLines === 1 ? 'memory' : 'memories'}`
-      : 'no memory',
-    agent.routines.length ? plural(agent.routines.length, 'routine') : '',
-  ]
-    .filter(Boolean)
-    .join(' · ');
-}
-
-function chipFor(
-  agent: PasteImportAgent,
-  mainName: string
-): { kind: ImportChipKind; label: string } {
-  return agent.isMain
-    ? { kind: 'main', label: `Merges into ${mainName}` }
-    : agent.existing
-      ? { kind: 'update', label: 'Updates' }
-      : { kind: 'new', label: 'New' };
-}
-
-function AgentDetail({ agent }: { agent: PasteImportAgent }) {
-  return (
-    <>
-      <ImportSection title="Instructions">
-        {agent.instructions ? (
-          <p className="agents-import-agent__instructions">{agent.instructions}</p>
-        ) : (
-          <p className="agents-import-agent__none">None came across.</p>
-        )}
-      </ImportSection>
-      <ImportSection title="Memory">
-        {agent.memory.length ? (
-          <ul className="agents-import-agent__memory">
-            {agent.memory.map((m, i) => (
-              <li key={i}>{m}</li>
-            ))}
-          </ul>
-        ) : (
-          <p className="agents-import-agent__none">Nothing remembered yet.</p>
-        )}
-      </ImportSection>
-      {agent.routines.length > 0 && (
-        <section>
-          <h4>Routines</h4>
-          <ul className="agents-import-agent__routines">
-            {agent.routines.map((r, i) => (
-              <li key={i} data-refused={r.refused ? '' : undefined}>
-                {r.refused ? <WarningIcon size={12} /> : <CheckIcon size={12} />}
-                <span>
-                  {r.refused ? (
-                    <>
-                      Won’t be set: &ldquo;{r.when}&rdquo;. {r.refused}
-                    </>
-                  ) : (
-                    <>
-                      <strong>{r.schedule}</strong> {r.what}
-                    </>
-                  )}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
-    </>
-  );
-}
-
-function AgentRow({ agent, mainName }: { agent: PasteImportAgent; mainName: string }) {
-  const refused = agent.routines.filter((r) => r.refused).length;
-  return (
-    <ImportAgentRow
-      name={agent.name}
-      // The main one becomes the Chief of Staff, so it wears that badge.
-      avatarName={agent.isMain ? mainName : agent.name}
-      color={agent.color ?? 'gray'}
-      chip={chipFor(agent, mainName)}
-      role={agent.role || undefined}
-      counts={
-        <>
-          {counts(agent)}
-          {refused > 0 && (
-            <span className="agents-import-agent__warn">
-              {' · '}
-              {refused === 1 ? '1 won’t be set' : `${refused} won’t be set`}
-            </span>
-          )}
-        </>
-      }
-      detail={() => <AgentDetail agent={agent} />}
-    />
-  );
-}
-
 /** Calm and specific: what's wrong, where, and the easiest way out. */
 export function ImportProblems({ title, items }: { title: string; items: ReactNode[] }) {
   return (
@@ -405,37 +302,6 @@ export function ImportNotes({ title, items }: { title?: string; items: ReactNode
           ))}
         </ul>
       </div>
-    </div>
-  );
-}
-
-export function ImportPreview({ preview }: { preview: PasteImportPreview }) {
-  const { agents, problems, source, blocks } = preview;
-  const mainName = useAgentsList().find((a) => a.isMain)?.name ?? 'Chief of Staff';
-  const refused = agents.reduce((n, a) => n + a.routines.filter((r) => r.refused).length, 0);
-  return (
-    <div className="agents-import-preview" aria-live="polite">
-      {problems.length > 0 && <PasteProblems problems={problems} />}
-      {agents.length > 0 && (
-        <>
-          <p className="agents-import-preview__found">
-            <strong>{plural(agents.length, 'agent')}</strong>
-            {source ? ` from ${source}` : ''}
-            {blocks > 1 ? `, in ${blocks} parts` : ''}
-            {refused > 0 && (
-              <span className="agents-import-agent__warn">
-                {' · '}
-                {plural(refused, 'routine')} can’t be set as written
-              </span>
-            )}
-          </p>
-          <ul className="agents-import-preview__list">
-            {agents.map((a) => (
-              <AgentRow key={`${a.isMain}-${a.name}`} agent={a} mainName={mainName} />
-            ))}
-          </ul>
-        </>
-      )}
     </div>
   );
 }

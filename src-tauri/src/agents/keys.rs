@@ -397,24 +397,6 @@ pub fn bound_key_for(name: &str, taken: &HashSet<String>) -> Option<String> {
         .find(|c| !taken.contains(c))
 }
 
-/// The colourway fewest on the team wear, in palette order.
-pub fn fresh_colorway<'a>(worn: impl IntoIterator<Item = &'a str>) -> String {
-    let mut counts: Vec<(&str, usize)> =
-        SPEC.colorways.iter().map(|c| (c.id.as_str(), 0)).collect();
-    for w in worn {
-        if let Some(entry) = counts.iter_mut().find(|(id, _)| *id == w) {
-            entry.1 += 1;
-        }
-    }
-    let mut best = counts[0];
-    for c in &counts {
-        if c.1 < best.1 {
-            best = *c;
-        }
-    }
-    best.0.to_string()
-}
-
 /// A colourway for a key with `icon` that no one on the team already wears
 /// with that icon: `preferred` when it's free, else the fewest-worn one that
 /// is, so two agents never look the same (two blue speakers). `preferred`
