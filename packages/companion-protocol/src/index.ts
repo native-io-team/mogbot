@@ -18,6 +18,7 @@ export * from './memory';
 export * from './quotes';
 export * from './quota';
 export * from './results';
+export * from './blocks';
 export * from './accounts';
 export * from './usage';
 export * from './usageSheet';
