@@ -87,7 +87,15 @@ describe('usageGlance', () => {
     );
     const p = g.keys[1];
     expect(p.state).toBe('same');
-    expect(p.stateLabel).toBe('Same account as sam@example.com');
+    expect(p.stateLabel).toBe('Same account');
+    expect(p.fix?.text).toBe('Same Claude account as sam@example.com — adds no extra room.');
+    // Not a segment of the meter: one line under it instead.
+    expect(g.meterKeys.map((k) => k.id)).toEqual(['default']);
+    expect(g.sameNotes).toEqual([
+      'Personal Account is the same Claude account as sam@example.com — adds no extra room',
+    ]);
+    // The row never says "accounts" for one real account.
+    expect(g.row.count).toBeNull();
     expect(p.left).toBeNull();
     expect(p.limits).toEqual([]);
     expect(p.canUse).toBe(false);
@@ -218,7 +226,7 @@ describe('usageGlance', () => {
       ]),
       { now: NOW }
     );
-    expect(g.keys[1].stateLabel).toBe('Same account as sam@example.com');
+    expect(g.keys[1].sameAs).toBe('sam@example.com');
   });
 
   it('a run-out within the hour says "in about" once, never "~in about"', () => {
@@ -344,5 +352,183 @@ describe('where did my usage go', () => {
     expect(relativeIn(NOW + 40 * 60_000, NOW)).toBe('in 40 min');
     expect(relativeIn(NOW + 9 * H, NOW)).toBe('in 9 h');
     expect(relativeIn(NOW + 5 * 24 * H, NOW)).toBe('in 5 days');
+  });
+});
+
+describe('the row, in plain words', () => {
+  it('says what is left of the tighter limit, and when it refills', () => {
+    const g = usageGlance(
+      [acct('default', { name: 'sam@example.com' })],
+      inv([line('default', { windows: [week(43, 5 * 24 * H)] })]),
+      { now: NOW }
+    );
+    expect(g.row.figure).toBe('57% left this week');
+    expect(g.row.refill).toMatch(/^Refills /);
+    expect(g.row.count).toBeNull();
+    expect(g.row.needsYou).toBe(false);
+  });
+
+  it('counts accounts only when there is more than one real one', () => {
+    const g = usageGlance(
+      [acct('default'), acct('work', { name: 'Work' })],
+      inv([line('default', { windows: [week(22)] }), line('work', { windows: [week(70)] })]),
+      { now: NOW }
+    );
+    expect(g.row.count).toBe('2 accounts');
+  });
+
+  it('says plainly when nothing has been read, and never a figure', () => {
+    const g = usageGlance([acct('default')], inv([line('default')]), { now: NOW });
+    expect(g.row).toEqual({
+      figure: 'Not checked yet',
+      refill: null,
+      count: null,
+      needsYou: false,
+    });
+  });
+});
+
+describe('every limit, against pace', () => {
+  // A week with 3.5 days to go: half the time is left.
+  const half = 3.5 * 24 * H;
+
+  it('marks where an even pace would stand, and says whether it is ahead', () => {
+    const under = usageGlance(
+      [acct('default')],
+      inv([line('default', { windows: [week(20, half)] })]),
+      {
+        now: NOW,
+      }
+    ).keys[0].limits[0];
+    expect(under.evenLeft).toBe(50);
+    expect(under.paceState).toBe('under');
+    expect(under.paceWord).toBe('Under pace — room to spare before it refills');
+    expect(under.countdown).toBe('3d 12h');
+
+    const on = usageGlance(
+      [acct('default')],
+      inv([line('default', { windows: [week(52, half)] })]),
+      {
+        now: NOW,
+      }
+    ).keys[0].limits[0];
+    expect(on.paceWord).toBe('On pace — lasts until it refills');
+  });
+
+  it('a run-out is the Mac’s estimate, placed along the time left and said in words', () => {
+    const g = usageGlance(
+      [acct('default')],
+      inv([
+        line('default', {
+          windows: [week(80, half)],
+          pace: [
+            {
+              estimate: true,
+              kind: 'seven_day',
+              resetsAt: NOW + half,
+              reachesAt: NOW + 1.5 * 24 * H,
+              readings: 9,
+              spanMinutes: 3000,
+            },
+          ],
+        }),
+      ]),
+      { now: NOW }
+    );
+    const l = g.keys[0].limits[0];
+    expect(l.paceState).toBe('ahead');
+    expect(l.runOut?.along).toBeCloseTo(1.5 / 3.5);
+    expect(l.paceWord).toMatch(
+      /^Ahead of pace — at this rate it runs out .+, 2 days before it refills$/
+    );
+  });
+
+  it('a per-model limit is its own card and never the account’s room', () => {
+    const g = usageGlance(
+      [acct('default')],
+      inv([
+        line('default', {
+          windows: [week(20), { ...week(95), kind: 'seven_day_opus' }],
+        }),
+      ]),
+      { now: NOW }
+    );
+    expect(g.keys[0].limits.map((l) => l.label)).toEqual(['Weekly', 'Weekly · Opus']);
+    expect(g.keys[0].left).toBe(80);
+  });
+
+  it('adds up who used the real accounts this week, never a duplicate’s', () => {
+    const runs = [{ agentId: 'c', name: 'Chief', turns: 3, tokens: 3000 }];
+    const g = usageGlance(
+      [acct('default'), acct('p', { name: 'P' })],
+      inv([
+        line('default', { windows: [week(20)], spent: runs }),
+        line('p', { windows: [week(20)], sameAs: 'default', spent: runs }),
+      ]),
+      { now: NOW }
+    );
+    expect(g.burning).toEqual([
+      { key: 'c', name: 'Chief', tokens: 3000, detail: '3k tokens · 3 turns', share: 100 },
+    ]);
+  });
+});
+
+describe('this Mac signed in as another account', () => {
+  const MON_4PM = new Date(2026, 10, 2, 16, 0).getTime();
+  const SAT_10AM = new Date(2026, 10, 7, 10, 0).getTime();
+  const accounts = [acct('default', { name: 'me@example.com' })];
+
+  it('names the previous account and its reset, from what was recorded', () => {
+    const g = usageGlance(
+      accounts,
+      inv([line('default', { windows: [week(20)] })], {
+        signInChanges: [
+          {
+            engine: 'claude',
+            key: 'claude:1',
+            at: NOW - H,
+            nowEmail: 'me@example.com',
+            beforeEmail: 'work@example.com',
+            beforeWeeklyReset: MON_4PM,
+            byReset: false,
+          },
+        ],
+      }),
+      { now: NOW }
+    );
+    expect(g.signInChanged?.key).toBe('claude:1');
+    expect(g.signInChanged?.text).toBe(
+      'This Mac’s Claude Code is now signed in as me@example.com. Your previous account (work@example.com, resets Mondays 4 PM) isn’t connected anymore — add it to keep stacking.'
+    );
+  });
+
+  it('when only the reset moved, says that, and names nobody', () => {
+    const g = usageGlance(
+      accounts,
+      inv([line('default', { windows: [week(20)] })], {
+        signInChanges: [
+          {
+            engine: 'claude',
+            key: 'claude:moved:1',
+            at: NOW - H,
+            nowEmail: 'me@example.com',
+            beforeWeeklyReset: MON_4PM,
+            nowWeeklyReset: SAT_10AM,
+            byReset: true,
+          },
+        ],
+      }),
+      { now: NOW }
+    );
+    expect(g.signInChanged?.text).toBe(
+      'This Mac’s Claude Code is now signed in as me@example.com, whose week resets Saturdays 10 AM. It used to reset Mondays 4 PM, so that was another Claude account, and it isn’t connected anymore — add it to keep stacking.'
+    );
+  });
+
+  it('says nothing when the Mac said nothing', () => {
+    const g = usageGlance(accounts, inv([line('default', { windows: [week(20)] })]), {
+      now: NOW,
+    });
+    expect(g.signInChanged).toBeNull();
   });
 });

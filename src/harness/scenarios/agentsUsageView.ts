@@ -141,6 +141,8 @@ function commands(
     agents_spare_remove: null,
     agents_crossover: crossover,
     agents_set_crossover: crossover,
+    agents_usage_sign_in_seen: null,
+    agents_usage_check_account: {},
   };
 }
 
@@ -367,6 +369,94 @@ const SAME = {
   ]),
 };
 
+/**
+ * The owner's real setup: This Mac's Claude Code used to be one account
+ * (its week reset Mondays 4 PM) and is now signed in as the personal one,
+ * which "Personal Account" already was (Saturdays 10 AM). The Mac recorded
+ * no name for the old one, only that its weekly reset moved.
+ */
+const MON_4PM = (() => {
+  const d = new Date(now);
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7) - 7);
+  d.setHours(16, 0, 0, 0);
+  return d.getTime();
+})();
+const SAT_10AM = (() => {
+  const d = new Date(now);
+  d.setDate(d.getDate() + ((6 - d.getDay() + 7) % 7 || 7));
+  d.setHours(10, 0, 0, 0);
+  return d.getTime();
+})();
+const SIGNIN_CHANGED = {
+  accounts: [
+    account('default', 'me@example.com', { email: 'me@example.com', plan: 'Max' }),
+    account('a4dup', 'Personal Account', { email: 'me@example.com' }),
+    codexMac,
+  ],
+  inv: inventory(
+    [
+      line('default', 'me@example.com', [win('seven_day', 43, SAT_10AM - now)], {
+        plan: 'max',
+        spent,
+      }),
+      line('a4dup', 'Personal Account', [win('seven_day', 43, SAT_10AM - now)], {
+        sameAs: 'me@example.com',
+      }),
+    ],
+    {
+      signInChanges: [
+        {
+          engine: 'claude',
+          key: 'claude:moved:1',
+          at: now - 2 * 24 * H,
+          nowEmail: 'me@example.com',
+          beforeWeeklyReset: MON_4PM,
+          nowWeeklyReset: SAT_10AM,
+          byReset: true,
+        },
+      ],
+    }
+  ),
+};
+
+/** Every limit an engine reports, ahead of pace with a run-out estimate, and two accounts' tokens. */
+const PACE = {
+  accounts: [
+    account('default', 'sam@example.com', { email: 'sam@example.com', plan: 'Max' }),
+    account('a1work', 'Work', { email: 'sam@northwind.example', plan: 'Max' }),
+    codexMac,
+  ],
+  inv: inventory([
+    line(
+      'default',
+      'sam@example.com',
+      [
+        win('five_hour', 38, 2 * H + 20 * M),
+        win('seven_day', 64, 3 * 24 * H + 12 * H),
+        win('seven_day_opus', 30, 3 * 24 * H + 12 * H),
+      ],
+      {
+        plan: 'max',
+        spent,
+        pace: [
+          {
+            estimate: true,
+            kind: 'seven_day',
+            resetsAt: now + 3 * 24 * H + 12 * H,
+            reachesAt: now + 30 * H,
+            readings: 14,
+            spanMinutes: 3 * 24 * 60,
+          },
+        ],
+      }
+    ),
+    line('a1work', 'Work', [win('five_hour', 5, 4 * H), win('seven_day', 12, 6 * 24 * H)], {
+      next: false,
+      spent: [{ agentId: 'leadgen', name: 'Lead Gen', turns: 12, tokens: 2_100_000 }],
+    }),
+  ]),
+};
+
 const OPEN = [{ click: '[data-testid="account-switcher"]' }];
 
 function pair(
@@ -442,9 +532,51 @@ export const agentsUsageViewScenarios: Scenario[] = [
   ...pair(
     'same-account',
     'the same account signed in twice',
-    'Two keys, but the stack counts one: the second segment is hatched and empty, labelled “Adds no room”. “Personal Account” sits on a dashed sheet with an amber-washed fix line naming why (the same Claude Code account as sam@example.com) and “Sign in with another account”; no “Use this one now”. Summary “1 account · resets …”.',
+    'The meter has ONE segment (the duplicate draws none), with one muted line under it: “Personal Account is the same Claude account as sam@example.com — adds no extra room”. “Personal Account” sits on a dashed sheet with a “Same account” pill, the plain line “Same Claude account as sam@example.com — adds no extra room.”, and two buttons: “Sign in with a different account” and “Remove”; no “Use this one now”. The sidebar row says “Usage 78% left this week” and “Refills …”, with no account count.',
     SAME
   ),
+  ...pair(
+    'signin-changed',
+    'this Mac’s sign-in became another account',
+    'First thing in the view, a calm bar: “This Mac’s Claude Code is now signed in as me@example.com, whose week resets Saturdays 10 AM. It used to reset Mondays 4 PM, so that was another Claude account, and it isn’t connected anymore — add it to keep stacking.” with “Add it” and “Not now”. Below, one segment and the duplicate line for “Personal Account”.',
+    SIGNIN_CHANGED
+  ),
+  ...pair(
+    'pace',
+    'every limit, against pace',
+    'Each limit is its own small card: name and a countdown chip (“⟳ 3d 12h”), a big “36% left”, a bar with what is left solid and what is used hatched, and a thin pace tick where it would stand at an even pace. The weekly card of sam@example.com is ahead of pace: a now → refills line with a dashed marker “Runs out ~tomorrow · estimate” and the words “Ahead of pace — runs out ~…, 2 days early”. “Weekly · Opus” is its own card. Work’s cards say “Under pace — room to spare before it refills”. The sidebar row has a pace tick on each segment.',
+    PACE
+  ),
+  {
+    id: 'usage-tokens',
+    title: 'Usage — who used it this week (Tokens)',
+    looksRightWhen:
+      'After “Tokens” in the Limits / Tokens switch: “Who used it this week”, a line saying these are tokens the engines reported and not a cost, and one row per agent, most first (Chief of Staff 4.8M, Lead Gen 2.5M …) with a thin share bar each.',
+    openSelector: AGENTS_TAB,
+    steps: [...OPEN, { click: '[data-testid="usage-view-switch"] button:last-child' }],
+    requires: '[data-testid="usage-tokens"]',
+    viewport: { width: 1280, height: 1000 },
+    commands: commands(PACE.accounts, PACE.inv),
+  },
+  {
+    id: 'usage-add-account-warning',
+    title: 'Usage — adding an account warns about the browser first',
+    looksRightWhen:
+      'The sign-in dialog opens on a plain warning before any terminal: “Your browser will sign in as whoever is logged into claude.ai — sign out there first, or use a private window or another browser profile, to add a different account.” Then the email field, Later and Continue.',
+    openSelector: AGENTS_TAB,
+    steps: [...OPEN, { click: '[data-add-account="claude"]' }],
+    requires: '[data-testid="account-signin-warning"]',
+    viewport: { width: 1280, height: 900 },
+    commands: {
+      ...commands(SIGNIN_CHANGED.accounts, SIGNIN_CHANGED.inv),
+      agents_account_add: {
+        id: 'a5new',
+        engine: 'claude',
+        name: 'Account 3',
+        named: true,
+      },
+    },
+  },
   {
     id: 'usage-where-did-it-go',
     title: 'Usage — where did my usage go',

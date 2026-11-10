@@ -422,6 +422,25 @@ button.dashboard-card-row {
   padding: var(--spacing-lg) var(--spacing-xl) var(--spacing-xl);
 }
 
+/* The steps before a sign-in opens: the same breathing room as the terminal phase. */
+.connect-modal-email-phase {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-lg);
+  padding: var(--spacing-lg) var(--spacing-xl) var(--spacing-xl);
+}
+
+.connect-modal-steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  margin: 0;
+  padding-left: var(--spacing-xl);
+  color: var(--text-secondary);
+  font-size: var(--font-size-body-sm);
+  line-height: var(--line-height-help);
+}
+
 .connect-modal-instructions {
   margin: 0;
   color: var(--text-secondary);

@@ -656,6 +656,32 @@ pub async fn check_all() -> bool {
     changed
 }
 
+/// Read one account now (it was just signed in): what its token answers
+/// for is then known, so a second sign-in of an account already here shows
+/// at once. True when what's shown changed.
+pub async fn check_one(engine: Engine, id: &str) -> bool {
+    let Some(binary) = super::engine::binary(engine).await else {
+        return false;
+    };
+    let candidates = wallet::candidates(engine).await;
+    let of_engine = candidates.len();
+    let Some(c) = candidates.into_iter().find(|c| c.account.id == id) else {
+        return false;
+    };
+    if !c.signed_in {
+        return false;
+    }
+    let now = super::store::now_ms();
+    let answer = match engine {
+        Engine::Claude => read_claude(&c.account, CLAUDE_USAGE_URL, now).await,
+        Engine::Codex => read_codex(&binary, &c.account, now).await,
+    };
+    let account = c.account;
+    tokio::task::spawn_blocking(move || record(&account, answer, of_engine, now))
+        .await
+        .unwrap_or(false)
+}
+
 async fn check_and_tell(app: &AppHandle) {
     if check_all().await {
         let _ = app.emit(super::runner::EVENT_QUOTA, ());

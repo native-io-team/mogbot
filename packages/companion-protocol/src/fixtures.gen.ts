@@ -1039,6 +1039,19 @@ export const agentsUsagePlan = {
       "when": false
     }
   ],
+  "signInChanges": [
+    {
+      "at": 1762290000000,
+      "beforeEmail": "work@example.com",
+      "beforeOrgName": "Northwind",
+      "beforeWeeklyReset": 1762185600000,
+      "byReset": false,
+      "engine": "claude",
+      "key": "claude:1762290000000",
+      "nowEmail": "me@example.com",
+      "nowWeeklyReset": 1762596000000
+    }
+  ],
   "spare": [
     {
       "accountId": "default",

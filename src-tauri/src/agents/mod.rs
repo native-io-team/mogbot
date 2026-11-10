@@ -166,6 +166,7 @@ pub mod secrets;
 pub mod sessions;
 pub mod settings_tools;
 pub mod share_text;
+pub mod sign_in_change;
 pub mod slack;
 pub mod slack_api;
 pub mod starters;

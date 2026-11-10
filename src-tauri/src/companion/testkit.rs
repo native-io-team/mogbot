@@ -2104,6 +2104,18 @@ impl Backend for Stub {
                 per_run: Some(per),
             }],
             totals,
+            sign_in_changes: vec![crate::agents::sign_in_change::SignInChange {
+                engine: Engine::Claude,
+                key: "claude:1762290000000".into(),
+                at: 1_762_290_000_000,
+                now_email: Some("me@example.com".into()),
+                now_org_name: None,
+                before_email: Some("work@example.com".into()),
+                before_org_name: Some("Northwind".into()),
+                before_weekly_reset: Some(1_762_185_600_000),
+                now_weekly_reset: Some(1_762_596_000_000),
+                by_reset: false,
+            }],
             now: 1_762_295_000_000,
         };
         serde_json::to_value(inv).map_err(|e| CommandError::expected(e.to_string()))
