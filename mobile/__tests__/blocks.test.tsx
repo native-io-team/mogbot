@@ -4,6 +4,8 @@
  * and an answered block holds still.
  */
 import type { AgentMessage, Block, BlockSet } from '@shipstudio/companion-protocol';
+import { readBlocks } from '@shipstudio/companion-protocol';
+import turn from '../../packages/companion-protocol/src/blocks-turn.json';
 import { fireEvent, render, screen } from '@testing-library/react-native';
 import type { ReactNode } from 'react';
 import { Blocks, STAGED_NOTE } from '../src/components/blocks/Blocks';
@@ -382,5 +384,56 @@ describe('the chat’s answers', () => {
   it('keeps blocks on a message from the Mac, and drops a set of the wrong shape', async () => {
     expect(asMessage({ id: 'x', blocks: { v: 1, items: [] } })?.blocks).toBeTruthy();
     expect(asMessage({ id: 'x', blocks: 'nope' })?.blocks).toBeUndefined();
+  });
+});
+
+/*
+ * A real turn's blocks: `blocks-turn.json` is what the fake-engine suite's
+ * `blocks` scenario kept after an agent's `show` and the user's answer, as
+ * the companion's `messages` sends them. That scenario fails if the Mac
+ * stops producing exactly this.
+ */
+describe('a turn’s blocks, as the Mac sent them', () => {
+  const list = turn.messages.map((m) => asMessage(m)!);
+  const shown = list[0]!;
+  const answer = list[1]!;
+
+  it('draws every block', async () => {
+    expect(readBlocks(shown)!.items.map((b) => b.kind)).toEqual([
+      'metrics',
+      'chart',
+      'table',
+      'choices',
+    ]);
+    await draw(shown, replies().value);
+    for (const words of [
+      '412',
+      'Sold per day',
+      'Apples',
+      'Mangoes',
+      '$2.75',
+      'Which one do you want?',
+    ]) {
+      expect(screen.getAllByText(words, { exact: false }).length).toBeGreaterThan(0);
+    }
+    expect(screen.getAllByTestId('metric-tile')).toHaveLength(2);
+  });
+
+  it('a tap sends exactly the words the Mac then kept as the answer', async () => {
+    const r = replies();
+    await draw(shown, r.value);
+    await fireEvent.press(screen.getAllByTestId('block-choice')[1]!);
+    expect(r.reply).toHaveBeenCalledWith(shown.agentId, answer.text, false);
+  });
+
+  it('once answered, marks the pick and sends nothing', async () => {
+    const answers = blockAnswers(list);
+    expect(answers.get(shown.id)).toBe(answer.text);
+    const r = { reply: jest.fn(), answerOf: (id: string) => answers.get(id) ?? null };
+    await draw(shown, r);
+    const buttons = screen.getAllByTestId('block-choice');
+    expect(buttons[1]!.props.accessibilityState).toMatchObject({ selected: true });
+    await fireEvent.press(buttons[0]!);
+    expect(r.reply).not.toHaveBeenCalled();
   });
 });

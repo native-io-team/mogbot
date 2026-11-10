@@ -1,0 +1,96 @@
+{
+  "messages": [
+    {
+      "agentId": "grocer",
+      "blocks": {
+        "intro": "Here's the fruit stand this week.",
+        "items": [
+          {
+            "items": [
+              {
+                "delta": 9.0,
+                "good": "up",
+                "label": "Sold",
+                "value": 412.0,
+                "vs": "vs last week"
+              },
+              {
+                "delta": "+0.5%",
+                "good": "down",
+                "label": "Waste",
+                "suffix": "%",
+                "value": 3.5
+              }
+            ],
+            "kind": "metrics",
+            "summary": "- Sold: 412 (+9 vs last week)\n- Waste: 3.5% (+0.5%)"
+          },
+          {
+            "chart": "bar",
+            "kind": "chart",
+            "labels": ["Mon", "Tue", "Wed"],
+            "series": [
+              {
+                "name": "Apples",
+                "values": [40.0, 52.0, 61.0]
+              },
+              {
+                "name": "Mangoes",
+                "values": [22.0, 30.0, null]
+              }
+            ],
+            "summary": "Sold per day (bar chart, Mon to Wed)\n- Apples: 40 → 61 (low 40, high 61)\n- Mangoes: 22 → 30 (low 22, high 30)",
+            "title": "Sold per day"
+          },
+          {
+            "columns": [
+              {
+                "label": "Fruit"
+              },
+              {
+                "label": "Price",
+                "numeric": true,
+                "prefix": "$"
+              }
+            ],
+            "kind": "table",
+            "rows": [
+              ["Apple", 1.2],
+              ["Banana", 0.5],
+              ["Mango", 2.75]
+            ],
+            "summary": "Prices (3 rows)\nFruit | Price\nApple | $1.2\nBanana | $0.5\nMango | $2.75",
+            "title": "Prices"
+          },
+          {
+            "kind": "choices",
+            "options": [
+              {
+                "label": "Apple",
+                "reply": "Apple"
+              },
+              {
+                "label": "Mango",
+                "reply": "Mangoes, please."
+              }
+            ],
+            "question": "Which one do you want?",
+            "summary": "Which one do you want?\n“Apple” / “Mango”"
+          }
+        ],
+        "v": 1
+      },
+      "id": "m-blocks",
+      "kind": "agent",
+      "text": "Here's the fruit stand this week.\n\n- Sold: 412 (+9 vs last week)\n- Waste: 3.5% (+0.5%)\n\nSold per day (bar chart, Mon to Wed)\n- Apples: 40 → 61 (low 40, high 61)\n- Mangoes: 22 → 30 (low 22, high 30)\n\nPrices (3 rows)\nFruit | Price\nApple | $1.2\nBanana | $0.5\nMango | $2.75\n\nWhich one do you want?\n“Apple” / “Mango”",
+      "ts": 1
+    },
+    {
+      "agentId": "grocer",
+      "id": "m-answer",
+      "kind": "user",
+      "text": "Mangoes, please.",
+      "ts": 2
+    }
+  ]
+}

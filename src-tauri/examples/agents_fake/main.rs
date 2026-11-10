@@ -1855,6 +1855,254 @@ async fn untrusted_init(h: &H) -> Check {
     )
 }
 
+/// The fixture both clients draw: this scenario's two messages, as the desk
+/// (`agents_messages`) and the phone (the companion's `messages`) receive
+/// them, made stable. `AGENTS_FAKE_WRITE_FIXTURES=1` rewrites it from a run.
+fn blocks_fixture_path() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../packages/companion-protocol/src/blocks-turn.json")
+}
+
+/// What the fake's turn calls: a `show` with metrics, a chart, a table and
+/// a choice, then nothing more (the receipt says stop and wait).
+fn blocks_show() -> Value {
+    json!({
+        "text": "Here's the fruit stand this week.",
+        "blocks": [
+            {"kind": "metrics", "items": [
+                {"label": "Sold", "value": 412, "delta": 9, "vs": "vs last week", "good": "up"},
+                {"label": "Waste", "value": 3.5, "suffix": "%", "delta": "+0.5%", "good": "down"}
+            ]},
+            {"kind": "chart", "chart": "bar", "title": "Sold per day",
+             "labels": ["Mon", "Tue", "Wed"],
+             "series": [{"name": "Apples", "values": [40, 52, 61]},
+                        {"name": "Mangoes", "values": [22, 30, null]}]},
+            {"kind": "table", "title": "Prices",
+             "columns": ["Fruit", {"label": "Price", "prefix": "$"}],
+             "rows": [["Apple", 1.2], ["Banana", 0.5], ["Mango", 2.75]]},
+            {"kind": "choices", "question": "Which one do you want?",
+             "options": ["Apple", {"label": "Mango", "reply": "Mangoes, please."}]}
+        ]
+    })
+}
+
+/// Blocks end to end: the agent's `show` is checked and kept as one message
+/// (its blocks, and a text fallback of the intro plus a summary each), the
+/// agent is told to stop and wait, and answering the choice is the user's
+/// own words through the ordinary send, reaching the next turn. The kept
+/// messages must equal `blocks-turn.json`, which the desk's
+/// (`AgentBlocks.test.tsx`) and the phone's (`blocks.test.tsx`) tests draw
+/// and answer.
+async fn blocks(h: &H) -> Check {
+    let a = h.agent("Grocer");
+    // Then a line repeating the question, as the real model wrote (twice)
+    // even when told to stop: it goes in "What it did", not the chat.
+    h.send(
+        &a.id,
+        &fake(json!([
+            {"tool": "show", "args": blocks_show()},
+            {"say": "I put up a table of prices. Which one do you want? Tap a fruit above."}
+        ])),
+    )
+    .await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    let said = replies(&a.id);
+    ensure(
+        !said.iter().any(|r| r.contains("Tap a fruit above")),
+        format!("the repeat reached the chat: {said:?}"),
+    )?;
+    let in_timeline = log(&a.id).iter().any(|m| {
+        let work = m.work.clone().or_else(|| agents::work::load(&a.id, &m.id));
+        format!("{work:?}").contains("Tap a fruit above")
+    });
+    ensure(in_timeline, "the repeat isn't in \"What it did\"")?;
+    let shown: Vec<AgentMessage> = log(&a.id)
+        .into_iter()
+        .filter(|m| m.blocks.is_some())
+        .collect();
+    ensure(
+        shown.len() == 1,
+        format!("{} messages with blocks", shown.len()),
+    )?;
+    let m = &shown[0];
+    let set = m.blocks.clone().unwrap();
+    ensure(set["v"] == 1, format!("version: {}", set["v"]))?;
+    let items = set["items"].as_array().cloned().unwrap_or_default();
+    let kinds: Vec<&str> = items.iter().filter_map(|b| b["kind"].as_str()).collect();
+    ensure(
+        kinds == ["metrics", "chart", "table", "choices"],
+        format!("kinds: {kinds:?}"),
+    )?;
+    ensure(
+        items
+            .iter()
+            .all(|b| !b["summary"].as_str().unwrap_or("").is_empty()),
+        format!("a block without a summary: {set}"),
+    )?;
+    ensure(
+        m.text.starts_with("Here's the fruit stand this week.") && m.text.contains("Mango"),
+        format!("text fallback: {:?}", m.text),
+    )?;
+    // The agent was told it's shown, and to wait for the answer.
+    let told = h
+        .fake_log()
+        .iter()
+        .any(|e| e.to_string().contains("stop here and wait for it"));
+    ensure(told, "the show receipt never reached the engine")?;
+
+    // Tapping "Mango" is the user's message, sent as anything typed is.
+    h.send(&a.id, "Mangoes, please.").await?;
+    h.turn(&a.id).await?;
+    no_errors(&a.id)?;
+    // (The first turn's prompt holds the words too, inside its script.)
+    let turns: Vec<Value> = h
+        .turns_with("Mangoes, please.")
+        .into_iter()
+        .filter(|t| !t["prompt"].as_str().unwrap_or("").contains("#fake"))
+        .collect();
+    ensure(
+        turns.len() == 1,
+        format!("{} turns got the answer", turns.len()),
+    )?;
+    let after: Vec<AgentMessage> = log(&a.id)
+        .into_iter()
+        .skip_while(|x| x.id != m.id)
+        .collect();
+    let user = after
+        .iter()
+        .find(|x| x.kind == MessageKind::User)
+        .ok_or("no user message after the blocks")?;
+    ensure(
+        user.text == "Mangoes, please.",
+        format!("answer: {:?}", user.text),
+    )?;
+
+    // What the clients receive, made stable, against the shared fixture.
+    let wire = |x: &AgentMessage, id: &str, ts: i64| -> Value {
+        let mut v = serde_json::to_value(x).unwrap();
+        let o = v.as_object_mut().unwrap();
+        o.retain(|k, _| ["kind", "text", "blocks"].contains(&k.as_str()));
+        o.insert("id".into(), json!(id));
+        o.insert("agentId".into(), json!("grocer"));
+        o.insert("ts".into(), json!(ts));
+        v
+    };
+    let got = json!({ "messages": [wire(m, "m-blocks", 1), wire(user, "m-answer", 2)] });
+    let path = blocks_fixture_path();
+    if std::env::var("AGENTS_FAKE_WRITE_FIXTURES").is_ok() {
+        std::fs::write(&path, serde_json::to_string_pretty(&got).unwrap() + "\n").unwrap();
+    }
+    let want: Value = serde_json::from_str(
+        &std::fs::read_to_string(&path).map_err(|e| format!("{}: {e}", path.display()))?,
+    )
+    .map_err(|e| e.to_string())?;
+    ensure(
+        got == want,
+        format!(
+            "the kept messages differ from blocks-turn.json (AGENTS_FAKE_WRITE_FIXTURES=1 rewrites it):\n{}",
+            serde_json::to_string_pretty(&got).unwrap()
+        ),
+    )
+}
+
+/// One real Claude Code turn (`AGENTS_REAL_CLAUDE`, never in `ALL`): asked
+/// for a table and a question, does the model call `show` with valid blocks
+/// first try? Prints every `show` call and what the app answered.
+async fn real_blocks(h: &H) -> Check {
+    ensure(
+        std::env::var("AGENTS_REAL_CLAUDE").is_ok(),
+        "set AGENTS_REAL_CLAUDE to the claude binary",
+    )?;
+    let a = h.agent("Grocer");
+    let ask = std::env::var("AGENTS_REAL_PROMPT").unwrap_or_else(|_| {
+        "show me a small table of 3 fruits and their prices and ask me which one I want".into()
+    });
+    h.send(&a.id, &ask).await?;
+    h.idle(
+        &[&a.id],
+        Duration::from_millis(800),
+        Duration::from_secs(240),
+    )
+    .await?;
+    for m in log(&a.id) {
+        println!(
+            "--- {:?}: {}\n{}",
+            m.kind,
+            m.text,
+            m.blocks
+                .as_ref()
+                .map(|b| serde_json::to_string_pretty(b).unwrap())
+                .unwrap_or_default()
+        );
+    }
+    // Every `show` call and its answer, from the engine's own transcript.
+    // Under the real HOME, in the folders named after this run's (temp) agent
+    // homes; removed once read, so nothing of the run stays behind.
+    let mut calls = 0;
+    let mut failed = 0;
+    let projects = PathBuf::from(std::env::var("AGENTS_FAKE_REAL_HOME").unwrap_or_default())
+        .join(".claude/projects");
+    let tag = format!("agents-fake-{}", std::process::id());
+    let ours: Vec<PathBuf> = std::fs::read_dir(&projects)
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            p.file_name()
+                .is_some_and(|n| n.to_string_lossy().contains(&tag))
+        })
+        .collect();
+    let files: Vec<PathBuf> = ours.iter().flat_map(|d| walk(d)).collect();
+    for entry in files {
+        let text = std::fs::read_to_string(&entry).unwrap_or_default();
+        for line in text.lines() {
+            let Ok(v) = serde_json::from_str::<Value>(line) else {
+                continue;
+            };
+            for part in v["message"]["content"].as_array().into_iter().flatten() {
+                if part["type"] == "tool_use"
+                    && part["name"].as_str().unwrap_or("").ends_with("__show")
+                {
+                    calls += 1;
+                    println!("show call: {}", part["input"]);
+                }
+                if (part["type"] == "tool_result" && line.contains("Shown in the chat"))
+                    || part["is_error"] == true
+                {
+                    if part["is_error"] == true {
+                        failed += 1;
+                    }
+                    println!("tool result: {}", part["content"]);
+                }
+            }
+        }
+    }
+    for d in &ours {
+        let _ = std::fs::remove_dir_all(d);
+    }
+    ensure(calls > 0, "the model never called show")?;
+    ensure(failed == 0, format!("{failed} tool calls failed"))?;
+    ensure(
+        log(&a.id).iter().any(|m| m.blocks.is_some()),
+        "no message with blocks",
+    )
+}
+
+fn walk(dir: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    for e in std::fs::read_dir(dir).into_iter().flatten().flatten() {
+        let p = e.path();
+        if p.is_dir() {
+            out.extend(walk(&p));
+        } else if p.extension().is_some_and(|x| x == "jsonl") {
+            out.push(p);
+        }
+    }
+    out
+}
+
 const ALL: &[&str] = &[
     "normal",
     "approvals",
@@ -1891,6 +2139,7 @@ const ALL: &[&str] = &[
     "login",
     "untrusted-init",
     "brief",
+    "blocks",
 ];
 
 /* --------------------------------------------------------------------- main */
@@ -1925,6 +2174,10 @@ fn main() {
     let home = std::env::temp_dir().join(format!("agents-fake-{}", std::process::id()));
     std::fs::create_dir_all(&home).unwrap();
     let home = home.canonicalize().unwrap();
+    let real_home = std::env::var_os("HOME").map(PathBuf::from);
+    if let Some(r) = &real_home {
+        std::env::set_var("AGENTS_FAKE_REAL_HOME", r);
+    }
     std::env::set_var("HOME", &home);
     std::env::set_var("SHIPSTUDIO_AGENTS_SILENT", "1");
     for (key, _) in std::env::vars_os() {
@@ -1936,6 +2189,25 @@ fn main() {
     std::fs::create_dir_all(home.join("ShipStudio")).unwrap();
     app_lib::keychain::use_memory_for_e2e();
     install_fake(&home);
+    // `AGENTS_REAL_CLAUDE=<path to claude>`: the real engine instead of the
+    // fake, for the `real-*` scenarios only (a real model, real usage).
+    // It runs with the real HOME (Claude Code's sign-in is found from it);
+    // the app's own state, agents and Keychain stay in the throwaway one.
+    if let Ok(real) = std::env::var("AGENTS_REAL_CLAUDE") {
+        use std::os::unix::fs::PermissionsExt;
+        let claude = home.join("fakebin/claude");
+        let _ = std::fs::remove_file(&claude);
+        let real_home = real_home.clone().expect("HOME");
+        std::fs::write(
+            &claude,
+            format!(
+                "#!/bin/sh\nHOME='{}' exec '{real}' \"$@\"\n",
+                real_home.display()
+            ),
+        )
+        .unwrap();
+        std::fs::set_permissions(&claude, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
 
     #[allow(unused_mut)]
     let mut app = tauri::Builder::default()
@@ -1994,6 +2266,8 @@ fn main() {
                 "two-cards" => two_cards(&h).await,
                 "login" => login(&h).await,
                 "untrusted-init" => untrusted_init(&h).await,
+                "blocks" => blocks(&h).await,
+                "real-blocks" => real_blocks(&h).await,
                 other => Err(format!("unknown scenario {other}")),
             };
             let took = t.elapsed().as_secs_f32();

@@ -46,7 +46,7 @@ const MAX_URL: usize = 2_000;
 /// The whole set, as stored.
 const MAX_BYTES: usize = 96_000;
 
-pub const DESCRIPTION: &str = "Answer with UI, not just prose: post a message with blocks (charts, tables, metric tiles, facts, a checklist, steps, a comparison, quick replies, a short form, links, a callout, code, an image of yours). Use it when a block says it better than sentences: numbers over time → chart (line/area; bar for categories; pie/donut only for parts of one whole, ≤ 6 slices; sparkline inside a sentence-sized trend); a few headline numbers → metrics; rows of records → table; label/value details → facts; progress → checklist or steps; 2-3 options to weigh → comparison (each gets \"Pick this\"); a quick decision → choices; several details you need from the user → form; sources → links; a caution or an all-clear → callout. Finished deliverables still end on share_result. Data only: plain text, numbers and http(s) links; never HTML, never markdown inside blocks (only `text`, above them, is markdown). Don't repeat in prose what a block shows. A choice, Pick this or a form sends the user's answer as their next message, so ask one of them per call, then stop and wait. Never ask for a password, key or token in a form: use request_secret or request_login. Every block may have `title` and `summary` (one plain-text line for apps that can't draw it; made for you if left out). Kinds and their fields:\n\
+pub const DESCRIPTION: &str = "Answer with UI, not just prose: post a message with blocks (charts, tables, metric tiles, facts, a checklist, steps, a comparison, quick replies, a short form, links, a callout, code, an image of yours). Use it when a block says it better than sentences: numbers over time → chart (line/area; bar for categories; pie/donut only for parts of one whole, ≤ 6 slices; sparkline inside a sentence-sized trend); a few headline numbers → metrics; rows of records → table; label/value details → facts; progress → checklist or steps; 2-3 options to weigh → comparison (each gets \"Pick this\"); a quick decision → choices; several details you need from the user → form; sources → links; a caution or an all-clear → callout. Finished deliverables still end on share_result. Data only: plain text, numbers and http(s) links; never HTML, never markdown inside blocks (only `text`, above them, is markdown). Don't repeat in prose what a block shows. A choice, Pick this or a form sends the user's answer as their next message, so ask one of them per call, then end your turn with no more text (no \"tap one above\", no repeat of the question). Never ask for a password, key or token in a form: use request_secret or request_login. Every block may have `title` and `summary` (one plain-text line for apps that can't draw it; made for you if left out). Kinds and their fields:\n\
 - chart: `chart` line|bar|area|pie|donut|sparkline; `labels` (x categories, or slice names); `series` [{name, values}] (values line up with labels; null for a gap; pie/donut/sparkline take one series); `stacked` (bar/area); `prefix` (\"$\") / `suffix` (\"%\", \" ms\"); `axis` (what the values measure). Up to 8 series, 120 points (40 bars).\n\
 - table: `columns` (labels, or {label, prefix, suffix}); `rows` (arrays of strings/numbers/null, one per column). Up to 8 columns, 200 rows; numbers stay numbers so they sort and align.\n\
 - metrics: `items` [{label, value, prefix, suffix, delta (number, or words like \"+12%\"), vs (\"vs last week\"), good (\"up\" or \"down\": which way is good), trend (a few numbers for a sparkline)}], up to 6.\n\
@@ -1322,7 +1322,12 @@ pub fn summary_of(block: &Block) -> String {
                     .join(" | "),
             );
             for row in t.rows.iter().take(8) {
-                lines.push(row.iter().map(cell_text).collect::<Vec<_>>().join(" | "));
+                // A number in its column's units ("$2.75"), as the table draws it.
+                let cells = row.iter().zip(&t.columns).map(|(cell, col)| match cell {
+                    Some(Cell::Num(v)) => with_units(*v, &col.prefix, &col.suffix),
+                    other => cell_text(other),
+                });
+                lines.push(cells.collect::<Vec<_>>().join(" | "));
             }
             if t.rows.len() > 8 {
                 lines.push(format!("… {} more", t.rows.len() - 8));
@@ -1542,22 +1547,27 @@ pub fn message_text(set: &BlockSet) -> String {
     parts.join("\n\n")
 }
 
-/// What the agent is told once the blocks are in the chat.
-pub fn receipt(set: &BlockSet) -> String {
-    let kinds: Vec<&str> = set.items.iter().map(|b| b.body.kind()).collect();
-    let asks = set.items.iter().any(|b| {
+/// The set asks the user something (a choice, a comparison or a form).
+pub fn asks(set: &BlockSet) -> bool {
+    set.items.iter().any(|b| {
         matches!(
             b.body,
             Body::Choices(_) | Body::Comparison(_) | Body::Form(_)
         )
-    });
+    })
+}
+
+/// What the agent is told once the blocks are in the chat.
+pub fn receipt(set: &BlockSet) -> String {
+    let kinds: Vec<&str> = set.items.iter().map(|b| b.body.kind()).collect();
+    let asks = asks(set);
     let mut s = format!(
         "Shown in the chat: {}. Don't repeat in prose what they show.",
         kinds.join(", ")
     );
     if asks {
         s.push_str(
-            " The user's answer comes back as their next message: stop here and wait for it.",
+            " The user's answer comes back as their next message: stop here and wait for it. End your turn now with no more text: the question is already in the chat, and any words after it are a second bubble repeating it.",
         );
     }
     if set.from_outside {

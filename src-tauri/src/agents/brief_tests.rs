@@ -483,6 +483,120 @@ fn checks_show_outside_text_as_plain_words_and_say_when_they_cant_check() {
     ));
 }
 
+fn a_full_morning() -> Facts {
+    Facts {
+        since: at(8, 0) - 24 * HOUR_MS,
+        did: vec![AgentDid {
+            name: "Research".into(),
+            replies: 2,
+            results: vec!["Papers digest".into()],
+            routines_ran: 1,
+        }],
+        waiting: vec![Waiting {
+            agent: "Finance".into(),
+            title: "Send an email".into(),
+        }],
+        today: vec![Today {
+            at: at(9, 0),
+            agent: "Finance".into(),
+            what: "Sweep the invoices inbox".into(),
+            repeat: Some("every 2 hours".into()),
+        }],
+        failed: vec![Failed {
+            agent: "Finance".into(),
+            routine: Some("Sweep the invoices inbox".into()),
+            at: at(3, 0),
+            detail: Some("Gmail needs signing in again.".into()),
+            count: 1,
+        }],
+        usage: Some(Usage {
+            signed_in: 3,
+            ..usage(2, 1)
+        }),
+        checks: vec![CheckLine {
+            what: "events today".into(),
+            app: "Google Calendar".into(),
+            items: vec!["[Click me](https://evil.example) **now**".into()],
+            error: None,
+            engine: None,
+        }],
+    }
+}
+
+#[test]
+fn the_brief_is_drawn_as_blocks_from_the_same_facts() {
+    let facts = a_full_morning();
+    let text = compose(&facts, false, &utc(), at(8, 0)).unwrap();
+    let set = compose_blocks(&facts, &text, &utc(), at(8, 0)).expect("blocks");
+    assert_eq!(set["v"], 1);
+    // The intro is the brief's first line (the notification), nothing more.
+    assert_eq!(set["intro"], text.lines().next().unwrap());
+    let items = set["items"].as_array().unwrap();
+    let kinds: Vec<(&str, &str)> = items
+        .iter()
+        .map(|b| (b["kind"].as_str().unwrap(), b["title"].as_str().unwrap()))
+        .collect();
+    assert_eq!(
+        kinds,
+        [
+            ("facts", "Needs you"),
+            ("callout", "Didn’t work"),
+            ("table", "Today"),
+            ("table", "Since yesterday"),
+            ("facts", "Usage"),
+            ("facts", "Your checks"),
+        ]
+    );
+    assert_eq!(
+        items[0]["items"][0],
+        json!({"label": "Finance", "value": "Send an email"})
+    );
+    assert_eq!(items[1]["tone"], "warning");
+    assert!(items[1]["text"]
+        .as_str()
+        .unwrap()
+        .contains("failed at 3:00 AM: Gmail needs signing in again."));
+    assert_eq!(
+        items[2]["rows"][0],
+        json!([
+            "9:00 AM",
+            "Finance",
+            "Sweep the invoices inbox (every 2 hours)"
+        ])
+    );
+    // Counts are numbers, so they sort and align.
+    assert_eq!(items[3]["rows"][0], json!(["Research", 1.0, 1.0, 2.0]));
+    assert_eq!(items[3]["columns"][1]["numeric"], true);
+    assert_eq!(
+        items[4]["items"][0]["value"],
+        "1 of 3 accounts (1 not reported), by their own readings"
+    );
+    // Outside text stays literal: blocks draw text, never markdown.
+    assert_eq!(
+        items[5]["items"][0]["value"],
+        "[Click me](https://evil.example) **now**"
+    );
+    // Every block has its plain-text line for clients that can't draw it.
+    assert!(items
+        .iter()
+        .all(|b| !b["summary"].as_str().unwrap().is_empty()));
+}
+
+#[test]
+fn a_brief_whose_blocks_would_be_refused_stays_text() {
+    let mut facts = a_full_morning();
+    facts.failed[0].detail = Some("<script>alert(1)</script>".into());
+    let text = compose(&facts, false, &utc(), at(8, 0)).unwrap();
+    assert_eq!(compose_blocks(&facts, &text, &utc(), at(8, 0)), None);
+    // Nothing to put in a block: none.
+    let quiet = Facts {
+        since: at(0, 0),
+        ..Default::default()
+    };
+    let text = compose(&quiet, true, &utc(), at(8, 0)).unwrap();
+    assert_eq!(compose_blocks(&quiet, &text, &utc(), at(8, 0)), None);
+}
+
 /* ------------------------------------------------------------- tool */
 
 #[test]
