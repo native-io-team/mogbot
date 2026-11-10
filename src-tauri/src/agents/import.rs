@@ -266,7 +266,6 @@ pub fn import_with(
                         role: incoming.role.clone(),
                         instructions: incoming.instructions.clone(),
                         shape: None,
-                        avatar: None,
                         color: incoming.color.clone(),
                         is_main: false,
                     })?;

@@ -495,7 +495,6 @@ fn the_tool_says_the_first_run_and_the_months() {
         role: String::new(),
         instructions: String::new(),
         shape: None,
-        avatar: None,
         color: None,
         is_main: false,
     })

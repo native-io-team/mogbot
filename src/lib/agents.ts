@@ -27,7 +27,6 @@ import type {
   RoutineStep,
   RoutineWaiting,
 } from '../../packages/companion-protocol/src/model';
-import type { AgentLook } from '../../packages/companion-protocol/src/model';
 import { keyStateOf, type KeyState } from '../../packages/companion-protocol/src/agentKeys';
 
 export type { Watch, WatchEvent, WatchSource } from '../../packages/companion-protocol/src/model';
@@ -177,8 +176,6 @@ export interface Agent {
   name: string;
   role: string;
   shape: number;
-  /** Its look from before keys, as the Mac keeps it. Nothing draws it. */
-  avatar?: AgentLook;
   /**
    * Its key (docs/internal/agent-keys.md): a colourway, a legend and the
    * keyboard key it's bound to. Older Macs omit them: `keyLookFor` draws
@@ -941,7 +938,6 @@ export const attachmentUrl = (home: string, attachment: Attachment) =>
 export interface NewAgentInput {
   name: string;
   shape?: number;
-  avatar?: AgentLook;
   color?: string;
   /** Its key's colourway, legend and bound key (agentKeys.ts); older Macs ignore them. */
   colorway?: string;
@@ -966,7 +962,6 @@ export interface NewAgentInput {
 export interface UpdateAgentInput {
   name?: string;
   shape?: number;
-  avatar?: AgentLook;
   color?: string;
   /** Its key's colourway, legend and bound key (agentKeys.ts); older Macs ignore them. */
   colorway?: string;

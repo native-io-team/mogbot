@@ -1838,7 +1838,6 @@ async fn create_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
         role,
         instructions,
         shape: None,
-        avatar: None,
         color,
         is_main: false,
     });
@@ -2049,9 +2048,6 @@ async fn update_agent(app: &AppHandle, caller: &store::Agent, args: &Value) -> V
             a.account = acc;
         }
         run.apply(a);
-        if let Some(avatar) = look.avatar.clone() {
-            a.avatar = Some(avatar);
-        }
         look.key.apply(a);
         if let Some(c) = look.color.clone() {
             a.color = c;
@@ -2286,60 +2282,33 @@ impl RunSettings {
     }
 }
 
-/// What `update_agent`'s `shape` / `face` / `finish` / `color` change for
-/// this agent: only what differs from what it wears now; the rest of its
-/// look stays. Looks aren't settings, so this applies without a card.
+/// What `update_agent`'s `color`, `colorway`, `icon` and `key` change for
+/// this agent: only what differs from what it wears now. Looks aren't
+/// settings, so this applies without a card. (A shape, face or finish from
+/// before keys is no longer a look: nothing draws one.)
 #[derive(Debug, Default, PartialEq)]
 pub(super) struct LookUpdate {
-    /// Its whole new look, when the shape, face or finish changes.
-    pub avatar: Option<store::AgentLook>,
     pub color: Option<String>,
     /// Its key's colourway, legend and bound key (`keys`).
     pub key: super::keys::KeyChange,
-    shape_changed: bool,
-    face_changed: bool,
-    finish_changed: bool,
 }
 
 impl LookUpdate {
-    /// "now a hexagon with dot eyes, in blue" and "now Teal, on key Q", for the tool's reply.
+    /// "now Teal, on key Q" (or "now blue" for a colour), for the tool's reply.
     pub fn line(&self) -> Option<String> {
         // A colour asked for moves the colourway too: said once, as the colour.
         let mut key = self.key.clone();
         if self.color.is_some() {
             key.colorway = None;
         }
-        let parts: Vec<String> = self.avatar_line().into_iter().chain(key.line()).collect();
+        let parts: Vec<String> = self
+            .color
+            .as_ref()
+            .map(|c| format!("now {c}"))
+            .into_iter()
+            .chain(key.line())
+            .collect();
         (!parts.is_empty()).then(|| parts.join(", "))
-    }
-
-    fn avatar_line(&self) -> Option<String> {
-        let a = self.avatar.as_ref();
-        // Back to a key cap: said in words, since a key cap is otherwise unsaid.
-        let to_keycap = self.finish_changed && a.is_some_and(|l| l.finish.is_none());
-        let desc = if to_keycap && !self.shape_changed && !self.face_changed {
-            "a key cap".to_string()
-        } else {
-            store::AgentLook::describe(
-                a.filter(|_| self.shape_changed || self.finish_changed)
-                    .map(|l| l.shape.as_str()),
-                a.filter(|_| self.face_changed).map(|l| l.face.as_str()),
-                a.filter(|_| self.finish_changed)
-                    .and_then(|l| l.finish.as_deref()),
-            )
-        };
-        let whole = self.shape_changed || self.finish_changed;
-        let what = match (whole, desc.is_empty()) {
-            (_, true) => String::new(),
-            (false, false) => format!("now has {desc}"),
-            (true, false) => format!("now {desc}"),
-        };
-        match (what.is_empty(), &self.color) {
-            (false, Some(c)) => Some(format!("{what}, in {c}")),
-            (false, None) => Some(what),
-            (true, Some(c)) => Some(format!("now {c}")),
-            (true, None) => None,
-        }
     }
 }
 
@@ -2354,22 +2323,8 @@ pub(super) fn look_args(
             .map(|s| s.trim().to_ascii_lowercase())
             .filter(|s| !s.is_empty())
     };
-    let (shape, face, finish, color) = (key("shape"), key("face"), key("finish"), key("color"));
-    let now = store::AgentLook::of(agent);
+    let color = key("color");
     let mut out = LookUpdate::default();
-    if shape.is_some() || face.is_some() || finish.is_some() {
-        let next = store::AgentLook::checked_with(
-            shape.as_deref().unwrap_or(&now.shape),
-            face.as_deref().unwrap_or(&now.face),
-            finish.as_deref().or(now.finish.as_deref()),
-        )?;
-        out.shape_changed = next.shape != now.shape;
-        out.face_changed = next.face != now.face;
-        out.finish_changed = next.finish != now.finish;
-        if out.shape_changed || out.face_changed || out.finish_changed {
-            out.avatar = Some(next);
-        }
-    }
     if let Some(c) = color {
         if !store::COLORS.contains(&c.as_str()) {
             return Err(format!(
@@ -3899,7 +3854,6 @@ mod tests {
                 role: String::new(),
                 instructions: instructions.into(),
                 shape: None,
-                avatar: None,
                 color: None,
                 is_main,
             })
@@ -4235,7 +4189,6 @@ mod tests {
             name: "Finance".into(),
             role: String::new(),
             shape: 0,
-            avatar: None,
             color: "red".into(),
             colorway: None,
             icon: None,

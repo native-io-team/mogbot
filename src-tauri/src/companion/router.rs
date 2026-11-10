@@ -273,9 +273,9 @@ impl ScheduleOp {
 
 /// What the phone may change about an agent: the row's own toggles, its
 /// instructions (the agent sheet shows them, so it can correct them), and
-/// how it looks (`avatar` and `color`, from a Mac that lists
-/// [`MAC_FEATURE_LOOKS`](super::wire::MAC_FEATURE_LOOKS)). Its name, role,
-/// model and project stay the desk's.
+/// how it looks (`color`, from a Mac that lists
+/// [`MAC_FEATURE_LOOKS`](super::wire::MAC_FEATURE_LOOKS), and its key). Its
+/// name, role, model and project stay the desk's.
 #[derive(Debug, Clone, Default, PartialEq, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct AgentToggles {
@@ -283,8 +283,10 @@ pub struct AgentToggles {
     pub hidden: Option<bool>,
     pub muted: Option<bool>,
     pub instructions: Option<String>,
-    #[serde(default)]
-    pub avatar: Option<crate::agents::store::AgentLook>,
+    /// A look from before keys (a shape and a face), as an older phone
+    /// sends it: accepted and ignored, since nothing draws it now.
+    #[serde(default, rename = "avatar")]
+    pub old_look: Option<serde::de::IgnoredAny>,
     #[serde(default)]
     pub color: Option<String>,
     /// Its key, from a phone that saw
@@ -331,9 +333,10 @@ pub struct PhoneNewAgent {
     pub role: String,
     #[serde(default)]
     pub color: Option<String>,
-    /// Its shape and face, as the phone's preview showed them.
-    #[serde(default)]
-    pub avatar: Option<crate::agents::store::AgentLook>,
+    /// A look from before keys, as an older phone sends it: accepted and
+    /// ignored, since nothing draws it now.
+    #[serde(default, rename = "avatar")]
+    pub old_look: Option<serde::de::IgnoredAny>,
     /// Its key, as the phone's preview showed it (`MAC_FEATURE_AGENT_KEYS`).
     #[serde(default)]
     pub colorway: Option<String>,
@@ -487,7 +490,7 @@ fn check_new_agent(input: PhoneNewAgent) -> Result<PhoneNewAgent, WireError> {
         name,
         role,
         color,
-        avatar: check_look(input.avatar)?,
+        old_look: None,
         colorway: input.colorway,
         icon: input.icon,
         bound_key: input.bound_key,
@@ -501,16 +504,6 @@ fn check_new_agent(input: PhoneNewAgent) -> Result<PhoneNewAgent, WireError> {
 }
 
 /// A look the phone sent: keys this Mac draws, or a refusal naming them.
-fn check_look(
-    look: Option<crate::agents::store::AgentLook>,
-) -> Result<Option<crate::agents::store::AgentLook>, WireError> {
-    look.map(|l| {
-        crate::agents::store::AgentLook::checked_with(&l.shape, &l.face, l.finish.as_deref())
-    })
-    .transpose()
-    .map_err(bad_params)
-}
-
 /// Import without Remote access from the phone (`agents::import_export`):
 /// the message to send, what a pasted reply holds, and the review card.
 #[derive(Debug, Clone, PartialEq)]
@@ -2271,8 +2264,6 @@ async fn run(
             if let Some(i) = &p.input.instructions {
                 refuse_unsafe_text(i, "Instructions")?;
             }
-            let mut p = p;
-            p.input.avatar = check_look(p.input.avatar.take())?;
             if let Some(c) = p.input.color.as_deref().map(str::trim) {
                 if !crate::agents::store::COLORS.contains(&c) {
                     return Err(bad_params(format!("{c} isn't one of the agent colours.")));
@@ -4592,6 +4583,48 @@ mod tests {
             audit.last().unwrap().2,
             format!("edit instructions (18 chars) {AGENT}")
         );
+    }
+
+    #[tokio::test]
+    async fn an_older_phone_sending_a_look_is_accepted_and_the_look_ignored() {
+        use crate::companion::testkit::{Stub, AGENT};
+        let (c, stub) = Stub::companion();
+        let me = caller("dev_a");
+        let look = json!({ "shape": "hexagon", "face": "smile", "finish": "embossed" });
+        // Its look sheet: a colour and the shape it previewed.
+        let done = dispatch(
+            &c,
+            &me,
+            "agents.update",
+            json!({ "agentId": AGENT, "input": { "avatar": look, "color": "teal" } }),
+        )
+        .await
+        .unwrap();
+        assert!(done.get("avatar").is_none(), "agents carry no look");
+        let sent = stub.toggles.lock().unwrap().last().cloned().unwrap();
+        assert_eq!(sent.1.color.as_deref(), Some("teal"));
+        // A look alone, even one with keys no build ever drew: no error, nothing to it.
+        dispatch(
+            &c,
+            &me,
+            "agents.update",
+            json!({ "agentId": AGENT, "input": { "avatar": { "shape": "blob", "face": "?" } } }),
+        )
+        .await
+        .unwrap();
+        // Creating with one: made as asked, the look dropped.
+        let made = dispatch(
+            &c,
+            &me,
+            "agents.create",
+            json!({ "input": { "name": "Inbox", "color": "teal", "avatar": look }, "clientId": "old-1" }),
+        )
+        .await
+        .unwrap();
+        assert_eq!(made["name"], "Inbox");
+        assert!(made.get("avatar").is_none());
+        let created = stub.created.lock().unwrap().last().cloned().unwrap();
+        assert!(created.old_look.is_none(), "never passed on");
     }
 
     #[tokio::test]

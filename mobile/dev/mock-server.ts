@@ -1290,6 +1290,17 @@ export function createMockServer(opts: MockOptions = {}) {
         paused: false,
       },
     ];
+    // Set up in its opening-hours conversation, and runs there (`routinePlaces`).
+    agent('site')!.checkIns = [
+      {
+        id: 'ci_hours',
+        note: 'Check the opening hours are right before the weekend',
+        repeat: { kind: 'days', days: [5], hour: 10, minute: 0 },
+        nextAt: nextDaily([5], 10, 0, at),
+        createdAt: at - 26 * 3_600_000,
+        paused: false,
+      },
+    ];
     agent('qa')!.checkIns = [
       {
         id: 'ci_smoke',
@@ -1764,6 +1775,8 @@ export function createMockServer(opts: MockOptions = {}) {
           kind: m.kind,
           ...(m.peer ? { peerName: m.peer.name } : {}),
           snippet,
+          // The conversation it was said in, as the Mac sends it (none for a room's line).
+          ...(m.room ? {} : { conversation: m.conversation || 'first' }),
         });
       }
     }
@@ -2153,6 +2166,10 @@ export function createMockServer(opts: MockOptions = {}) {
   // Conversations (`agents/conversations.rs`): every agent has its first;
   // Acme Site also has a second, about the opening hours, its own lines in it.
   const convs = new Map<string, { current: string; items: ConversationView[] }>();
+  /** Routine id → the conversation it runs in, per agent, for those not in the first. */
+  const routinePlaces = new Map<string, Record<string, string>>([
+    ['site', { ci_hours: 'c-hours' }],
+  ]);
   function convsOf(agentId: string) {
     let c = convs.get(agentId);
     if (c) return c;
@@ -2211,7 +2228,7 @@ export function createMockServer(opts: MockOptions = {}) {
     const items = c.items
       .map((i) => ({ ...i, current: i.id === c.current }))
       .sort((a, b) => b.lastActivityAt - a.lastActivityAt);
-    return { agentId, current: c.current, items, routines: {} };
+    return { agentId, current: c.current, items, routines: { ...routinePlaces.get(agentId) } };
   }
   const methods: Partial<Record<MethodName, Handler>> = {
     'agents.conversations': (p) => convList(String(p.agentId)),
@@ -2237,6 +2254,19 @@ export function createMockServer(opts: MockOptions = {}) {
       });
       c.current = id;
       return convList(String(p.agentId));
+    },
+    'agents.conversationRoutine': (p) => {
+      const agentId = String(p.agentId);
+      const c = convsOf(agentId);
+      if (!c.items.some((i) => i.id === p.conversationId))
+        return fail({ type: 'Other', message: 'That conversation isn’t there any more.' });
+      if (!agent(agentId)?.checkIns?.some((r) => r.id === p.routineId))
+        return fail({ type: 'Other', message: 'That routine isn’t there any more.' });
+      const places = { ...routinePlaces.get(agentId) };
+      if (p.conversationId === 'first') delete places[String(p.routineId)];
+      else places[String(p.routineId)] = String(p.conversationId);
+      routinePlaces.set(agentId, places);
+      return convList(agentId);
     },
     'agents.conversationRename': (p) => {
       const c = convsOf(String(p.agentId));
@@ -3391,6 +3421,7 @@ export function createMockServer(opts: MockOptions = {}) {
               'role',
               'color',
               'template',
+              // An older phone's look from before keys: accepted and ignored.
               'avatar',
               'instructions',
               'routines',
@@ -3443,7 +3474,6 @@ export function createMockServer(opts: MockOptions = {}) {
         role,
         shape: agents.length % 14,
         color: typeof input.color === 'string' && input.color ? input.color : 'orange',
-        ...(input.avatar ? { avatar: input.avatar as Agent['avatar'] } : {}),
         ...(isColorway(input.colorway)
           ? { colorway: input.colorway, color: legacyColorFor(input.colorway) }
           : {}),
@@ -3517,7 +3547,7 @@ export function createMockServer(opts: MockOptions = {}) {
       if (typeof input.pinned === 'boolean') a.pinned = input.pinned;
       if (typeof input.muted === 'boolean') a.muted = input.muted;
       if (typeof input.hidden === 'boolean') a.hidden = input.hidden;
-      if (input.avatar) a.avatar = input.avatar as Agent['avatar'];
+      // An older phone's `avatar` (a look from before keys): accepted, ignored, as the Mac does.
       if (typeof input.color === 'string') a.color = input.color;
       if (input.colorway !== undefined) {
         if (!isColorway(input.colorway))

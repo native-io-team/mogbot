@@ -269,11 +269,13 @@ describe('files, search, schedules and projects against the mock Mac', () => {
     await expect(
       t.request('agents.update', { agentId: 'qa', input: { name: 'Renamed' } })
     ).rejects.toThrow(/pin, mute, hide, the instructions, how it looks, and its engine, model and effort/);
+    // An older phone's look sheet also sends a shape and a face: accepted, ignored.
     await t.request('agents.update', {
       agentId: 'qa',
-      input: { avatar: { shape: 'hexagon', face: 'smile' }, color: 'teal' },
+      input: { avatar: { shape: 'hexagon', face: 'smile' }, color: 'teal' } as never,
     });
-    await until(() => qa()?.avatar?.shape === 'hexagon' && qa()?.color === 'teal');
+    await until(() => qa()?.color === 'teal');
+    expect(qa()).not.toHaveProperty('avatar');
     await t.request('agents.update', { agentId: 'qa', input: { muted: false } });
     await until(() => qa()?.muted === false);
   });

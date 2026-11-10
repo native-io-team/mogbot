@@ -420,7 +420,6 @@ export interface Methods {
         | 'role'
         | 'color'
         | 'template'
-        | 'avatar'
         | 'instructions'
         | 'routines'
         | 'colorway'
@@ -442,7 +441,8 @@ export interface Methods {
   /**
    * From the phone, only the row's toggles (`pinned`, `muted`, `hidden`)
    * and `instructions` (at most 20,000 characters), and from a Mac listing
-   * `MAC_FEATURES.looks`, `avatar` and `color`, and from one listing
+   * `MAC_FEATURES.looks`, `color` (an older phone's `avatar`, a look from
+   * before keys, is accepted and ignored), and from one listing
    * `MAC_FEATURES.agentKeys`, `colorway`, `icon` and `boundKey` (a key
    * someone else has is refused, naming whose); any other field is refused
    * with `bad_params`. The name, role, model and project stay the desk's.

@@ -429,7 +429,6 @@ mod tests {
             role: String::new(),
             instructions: String::new(),
             shape: None,
-            avatar: None,
             color: None,
             is_main: false,
         })

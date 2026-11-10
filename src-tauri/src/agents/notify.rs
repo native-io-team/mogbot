@@ -477,7 +477,6 @@ mod tests {
             name: "Finance".into(),
             role: String::new(),
             shape: 0,
-            avatar: None,
             color: "red".into(),
             colorway: None,
             icon: None,

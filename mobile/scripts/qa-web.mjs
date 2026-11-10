@@ -1442,6 +1442,61 @@ const LIVE = [
     check: 'Allowed without asking: Revoke aligned with the other row values',
   },
   {
+    name: 'agent-sheet-routine-conversation',
+    route: '/agent/site',
+    ready: 'Check the opening hours',
+    pages: 4,
+    act: async (page) => {
+      await page.waitFor(
+        `document.body.innerText.includes('In “Update the winter opening hours”')`,
+        20_000,
+        'the routine’s conversation'
+      );
+    },
+    check:
+      'Routines: “Check the opening hours are right before the weekend”, “Every Friday at 10:00 AM”, then a quieter one-line “In “Update the winter opening hours”” (the conversation it runs in)',
+  },
+  {
+    name: 'search-hit-other-conversation',
+    route: '/search',
+    ready: 'Search',
+    act: async (page) => {
+      // On the first conversation, a hit from the opening-hours one.
+      await page.goto(`${WEB}/conversations?id=site`);
+      await page.waitFor(
+        `document.body.innerText.includes('Rebuild the Acme site')`,
+        20_000,
+        'the list'
+      );
+      await page.clickText('Rebuild the Acme site');
+      await sleep(800);
+      // No native search bar on the web: `?q=` starts with the query.
+      await page.goto(`${WEB}/search?q=Mondays`);
+      await page.waitFor(
+        `document.body.innerText.includes('Visit page')`,
+        20_000,
+        'the opening-hours hit'
+      );
+      await page.clickWhere(
+        `() => [...document.querySelectorAll('[role="button"]')].find((e) => e.innerText?.includes('Visit page'))`,
+        'the opening-hours hit'
+      );
+      await sleep(2000);
+    },
+    check:
+      'Acme Site’s chat, switched to its opening-hours conversation: the slim bar under the header says “Update the winter opening hours”, and “Done on the Visit page and the footer…” is lit up; nothing from the rebuild conversation',
+    after: async (page) => {
+      await page.goto(`${WEB}/conversations?id=site`);
+      await page.waitFor(
+        `document.body.innerText.includes('Rebuild the Acme site')`,
+        20_000,
+        'the list'
+      );
+      await page.clickText('Rebuild the Acme site');
+      await sleep(800);
+    },
+  },
+  {
     name: 'agent-sheet-look',
     route: '/agent/site',
     ready: 'Acme Site',

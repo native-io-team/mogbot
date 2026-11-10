@@ -488,7 +488,6 @@ impl Backend for DesktopBackend {
         let input = cmd::CreateAgentInput {
             name: input.name,
             shape: None,
-            avatar: input.avatar,
             color: Some(color),
             colorway: input.colorway,
             icon: input.icon,
@@ -536,7 +535,6 @@ impl Backend for DesktopBackend {
         let input = cmd::UpdateAgentInput {
             name: None,
             shape: None,
-            avatar: toggles.avatar,
             color: toggles.color.map(|c| c.trim().to_string()),
             colorway: toggles.colorway,
             icon: toggles.icon,

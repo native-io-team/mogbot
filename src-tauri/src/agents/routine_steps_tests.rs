@@ -218,7 +218,6 @@ fn go_ahead_and_the_next_run_never_both_take_the_waiting_run() {
             role: String::new(),
             instructions: String::new(),
             shape: None,
-            avatar: None,
             color: None,
             is_main: false,
         })

@@ -935,7 +935,6 @@ fn create(name: &str, p: &Proposal) -> Result<store::Agent, CommandError> {
         role: p.role.clone(),
         instructions: p.instructions.clone(),
         shape: None,
-        avatar: None,
         color: None,
         is_main: false,
     })
@@ -1150,7 +1149,6 @@ mod tests {
             role: "Mine".into(),
             instructions: "My own rules.".into(),
             shape: None,
-            avatar: None,
             color: None,
             is_main: false,
         })
