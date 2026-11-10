@@ -1404,7 +1404,21 @@ export const WorkspaceSidebar = memo(function WorkspaceSidebar({
                   total={projectAgents.length}
                   collapsed={collapsed.team}
                   onToggle={() => toggleSection('team')}
-                  items={projectAgents.filter((i) => matchesFilter(i.label))}
+                  items={projectAgents
+                    .filter((i) => matchesFilter(i.label))
+                    .map((i) => ({
+                      ...i,
+                      // The agent's own key, as at work and everywhere in Agents; never a grey dot.
+                      leading: (
+                        <AgentKey
+                          id={i.agentId}
+                          name={i.label}
+                          color={i.color}
+                          state={i.working && i.dotState !== 'waiting' ? 'working' : 'idle'}
+                          size="xs"
+                        />
+                      ),
+                    }))}
                   emptyHint="No matches"
                 />
               )}
