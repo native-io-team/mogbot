@@ -2134,7 +2134,7 @@ async fn routines(h: &H) -> Check {
         "the routine isn't scheduled again",
     )?;
     ensure(
-        of_kind(&a.id, MessageKind::CheckIn).len() >= 1,
+        !of_kind(&a.id, MessageKind::CheckIn).is_empty(),
         "no line saying the routine fired",
     )
 }
