@@ -16,6 +16,7 @@ export const MATERIAL: Partial<Record<SFName, string>> = {
   'checkmark.shield': 'verified_user',
   'slider.horizontal.3': 'tune',
   globe: 'public',
+  graduationcap: 'school',
   'chevron.left.forwardslash.chevron.right': 'code',
   'list.bullet': 'list',
   pencil: 'edit',

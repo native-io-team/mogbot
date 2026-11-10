@@ -20,7 +20,7 @@ import type {
   RoutineStep,
   WatchSource,
 } from '@shipstudio/companion-protocol';
-import { MAC_FEATURES, legacyColorFor, setClockHour24 } from '@shipstudio/companion-protocol';
+import { MAC_FEATURES, legacyColorFor, setClockHour24, type LearnSkills } from '@shipstudio/companion-protocol';
 import NetInfo from '@react-native-community/netinfo';
 import { AccessibilityInfo, AppState, Platform } from 'react-native';
 import * as Crypto from 'expo-crypto';
@@ -763,6 +763,8 @@ export async function setAgentToggles(
     colorway?: string;
     icon?: string;
     boundKey?: string;
+    /** "Save what it learns", from a Mac that serves `agents.skills`. */
+    learnSkills?: LearnSkills;
   }
 ) {
   const before = getApp().overview;
@@ -793,6 +795,7 @@ export async function setAgentToggles(
                       colorway: was.colorway,
                       icon: was.icon,
                       boundKey: was.boundKey,
+                      learnSkills: was.learnSkills,
                     }
                   : a;
               }),

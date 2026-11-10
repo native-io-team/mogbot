@@ -102,6 +102,21 @@ import { STEP_IN_ON_YOUR_MAC, addProbeAccount, probeAccounts } from './mock-prob
 // the mock answers with these shapes so it can't drift from the desktop.
 import * as real from '../../packages/companion-protocol/src/fixtures.gen';
 
+/** A skill an agent saved (`agents/skills_learn.rs`), for the chat's card and its sheet. */
+const SKILL_STEPS =
+  '1. Export last month’s payouts from Stripe (Balance → Payouts → Export, CSV).\n2. Paste them into the ledger’s “Payouts” tab.\n3. Match each to its bank line by amount and date (±2 days).\n4. Share anything unmatched as a table.';
+const skillsByAgent: Record<string, { slug: string; name: string; when: string; steps: string }[]> = {
+  fin: [
+    {
+      slug: 'export-invoices',
+      name: 'Export invoices from Xero',
+      when: 'When the user asks for last month’s invoices',
+      steps: '1. Open Reports → Invoices.\n2. Filter to last month.\n3. Export as CSV and share it.',
+    },
+  ],
+};
+const skillsOf = (agentId: string) => (skillsByAgent[agentId] ??= []);
+
 const realWelcome = real.frames.find((f) => f.t === 'welcome')!;
 const realRefusal = (reason: string) =>
   real.frames.find((f) => f.t === 'refused' && f.reason === reason)?.message ?? reason;
@@ -3120,6 +3135,26 @@ export function createMockServer(opts: MockOptions = {}) {
       return null;
     },
     'agents.policy': (p) => ({ ...structuredClone(real.agentsPolicy), agentId: String(p.agentId) }),
+    // "What it knows how to do": the Mac's real view; Finance keeps its skills here.
+    'agents.skills': (p) => ({
+      agentId: String(p.agentId),
+      setting: agent(String(p.agentId))?.learnSkills ?? 'ask',
+      skills: structuredClone(skillsOf(String(p.agentId))),
+    }),
+    'agents.skillEdit': (p) => {
+      const list = skillsOf(String(p.agentId));
+      const s = list.find((x) => x.slug === p.slug);
+      if (!s) return fail({ type: 'Other', message: 'That skill isn’t there any more.' });
+      Object.assign(s, { name: String(p.name), when: String(p.when), steps: String(p.steps) });
+      return structuredClone(s);
+    },
+    'agents.skillRemove': (p) => {
+      const list = skillsOf(String(p.agentId));
+      const i = list.findIndex((x) => x.slug === p.slug);
+      if (i < 0) return fail({ type: 'Other', message: 'That skill isn’t there any more.' });
+      list.splice(i, 1);
+      return null;
+    },
     // "What can it do on its own?": the Mac's real view, narrowed as the phone takes things away.
     'agents.onItsOwn': (p) => onItsOwnOf(String(p.agentId), agent(String(p.agentId))?.name),
     'agents.onItsOwnTeam': () => {
@@ -3795,6 +3830,7 @@ export function createMockServer(opts: MockOptions = {}) {
         'model',
         'effort',
         'account',
+        'learnSkills',
       ];
       if (!Object.keys(input).length || Object.keys(input).some((k) => !allowed.includes(k))) {
         return fail({
@@ -5157,6 +5193,27 @@ function seedMessages(a: Agent, now: number): AgentMessage[] {
       },
     });
   } else if (a.id === 'fin') {
+    add({ ts: now - 4 * 3_600_000, kind: 'user', text: 'Reconcile October’s payouts against the ledger.' });
+    add({
+      ts: now - 4 * 3_600_000 + 60_000,
+      kind: 'approval',
+      text: '',
+      approval: {
+        requestId: 'req_skill',
+        title: 'Save “Reconcile Stripe payouts” as a skill?',
+        detail: SKILL_STEPS,
+        summary: 'When to use it: When the user asks to reconcile last month’s payouts against the ledger',
+        status: 'pending',
+        risk: 'low',
+        skill: {
+          slug: 'reconcile-stripe-payouts',
+          name: 'Reconcile Stripe payouts',
+          when: 'When the user asks to reconcile last month’s payouts against the ledger',
+          steps: SKILL_STEPS,
+          removed: 1,
+        },
+      },
+    });
     add({ ts: now - 3 * 3_600_000, kind: 'user', text: 'Summarise October spend.' });
     add({
       ts: now - 3 * 3_600_000 + 5000,

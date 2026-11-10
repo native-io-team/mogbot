@@ -21,6 +21,7 @@ import {
   keyStateOf,
   needsYouCount,
   secretTitle,
+  skillOutcome,
   tokenCount,
   workingRowLine,
 } from '@shipstudio/companion-protocol';
@@ -712,6 +713,11 @@ export {
 export function cardOutcome(approval: Approval): string {
   // Nobody answered: what the desk's receipt says.
   if (approval.status === 'expired' && approval.expiry) return EXPIRY_OUTCOME[approval.expiry];
+  // "Save … as a skill?": Saved or Not now, as the desk says it.
+  if (approval.skill) {
+    const said = skillOutcome(approval.status);
+    if (said) return said;
+  }
   // "Needs you in its browser": the desk's words.
   if (approval.stepIn && (approval.status !== 'expired' || approval.setAside)) {
     return stepInOutcome(approval);

@@ -42,6 +42,7 @@ import { choose } from '../../components/menu';
 import { TextAction } from '../../components/surfaces';
 import { WhatItCanReach } from '../../components/reach';
 import { WhatItCanDo } from '../../components/policy';
+import { WhatItKnows } from '../../components/skills';
 import { AgentLevelRow } from '../../components/IndependenceSetting';
 import { ColorSwatches, KeyChoices } from '../../components/pickers';
 import { Button, Icon, InsetDivider, Row, SectionTitle, SheetPage, T } from '../../components/ui';
@@ -353,6 +354,8 @@ function AgentSheet() {
         <WhatItCanDo agentId={agent.id} name={agent.name} />
 
         <WhatItCanReach agentId={agent.id} />
+
+        <WhatItKnows agent={agent} enabled={live} onError={setError} />
 
         <View style={styles.sectionHead}>
           <SectionTitle title="Routines" style={styles.sectionTitle} />
