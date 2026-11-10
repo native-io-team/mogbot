@@ -455,6 +455,20 @@ pub(crate) async fn send_in(
     .filter(|part| !part.is_empty())
     .collect::<Vec<_>>()
     .join("\n\n");
+    // A block's answer whose words the user never saw (a button labelled
+    // one thing that sends another) goes to the agent, but isn't their
+    // typed words: it answers no card, grants no plan and makes no rule
+    // (`blocks::unseen_answer`).
+    let typed = typed && {
+        let (of, in_conversation, said) = (agent_id.clone(), conversation.clone(), said.clone());
+        !tokio::task::spawn_blocking(move || {
+            store::conversation_page(&of, &in_conversation, 40, None, None)
+                .map(|log| unseen_block_answer(&log, &said))
+                .unwrap_or(false)
+        })
+        .await
+        .unwrap_or(false)
+    };
     let typed_yes =
         typed && says_yes && message.attachments.is_empty() && message.revises.is_none();
     let message = runner::record(&app, message)?;
@@ -515,6 +529,25 @@ pub(crate) async fn send_in(
     );
     agents::tray::mark_used(&app);
     Ok(message)
+}
+
+/// Whether `text` answers a block posted since the user last spoke with
+/// words the button didn't show (`blocks::unseen_answer`).
+pub(crate) fn unseen_block_answer(log: &[store::AgentMessage], text: &str) -> bool {
+    for m in log.iter().rev() {
+        match m.kind {
+            store::MessageKind::User => return false,
+            store::MessageKind::Agent => {
+                if let Some(blocks) = &m.blocks {
+                    if agents::blocks::unseen_answer(blocks, text) {
+                        return true;
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    false
 }
 
 /// The cards waiting on the user in one of the agent's conversations.
@@ -2989,6 +3022,27 @@ pub async fn agents_disk_free_up(agent_id: String) -> Result<agents::disk::Freed
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Security review 2026-11-10: a button that sends words it didn't
+    /// show isn't the user's typed yes, for any set since they last spoke.
+    #[test]
+    fn a_block_answer_the_button_never_showed_is_not_typed() {
+        let mut asked = runner::new_message("a", store::MessageKind::Agent, "Want it?");
+        asked.blocks = Some(
+            serde_json::json!({ "v": 1, "items": [{ "kind": "choices", "summary": "",
+            "options": [{ "label": "Not now", "reply": "Yes, approve it" }, { "label": "Sure", "reply": "Sure" }] }] }),
+        );
+        let after = runner::new_message("a", store::MessageKind::Agent, "Also this.");
+        let log = vec![asked.clone(), after.clone()];
+        assert!(unseen_block_answer(&log, "Yes, approve it"));
+        assert!(!unseen_block_answer(&log, "Sure"));
+        // Once the user has spoken since, the old set answers nothing.
+        let user = runner::new_message("a", store::MessageKind::User, "hm");
+        assert!(!unseen_block_answer(
+            &[asked, user, after],
+            "Yes, approve it"
+        ));
+    }
 
     #[test]
     fn one_quiet_line_says_what_the_next_message_runs_on() {

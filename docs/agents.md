@@ -5942,9 +5942,22 @@ opencode acp
   session of its own), `question` and `doom_loop` `deny`. The app's own
   server and the turn's given servers (its granted apps through the relay,
   the browsers) are `<name>_*: allow`, as for the other engines, since each
-  decides its own calls. The same rules go on the `build` agent and it is
-  made the default, so the user's own agent files can't loosen them either.
-  The inline config outranks the user's global `opencode.json`.
+  decides its own calls. The same rules go on the `build` agent and on
+  `mode.build` (OpenCode folds a user's `mode.build` into the agent after
+  every config file, the inline one included: checked, it turned `bash:
+  ask` into `allow`), and `build` is made the default, so the user's own
+  agent files can't loosen them either. The inline config outranks the
+  user's global `opencode.json`; `OPENCODE_PERMISSION`, which OpenCode
+  merges over everything, is taken out of the turn's environment.
+- **No language servers or formatters** (`lsp: false`, `formatter:
+  false`), whatever the user's config turns on: both run the project's own
+  code (an ESLint config, a Prettier plugin) on a read or an approved edit,
+  with no card for running it. Claude Code and Codex run neither.
+- **Edits are judged by where they land.** An edit's path is checked as
+  written and with every symlink followed; both must be in the turn's
+  folders to go through without a card, so a repo's `notes.md -> ~/.zshrc`
+  or `hooks -> .git/hooks` asks (or is refused), and a dangling link, which a
+  write would create at its target, always asks.
 - **Every ask is ours.** `session/request_permission` is answered `once` or
   `reject`, never `always`. Classified from what it carries
   (`Conversation::classify`): a command → `Bash {command}`; an edit inside
@@ -6594,8 +6607,11 @@ blocks and 96 KB a message, 8 series, 120 points or 40 bars, 200 rows × 8
 columns, 4 images), finite numbers, labels that line up with values, http(s)
 links with no credentials, and **no HTML anywhere** (a block's strings are
 drawn as text; `code` is shown verbatim). A form that asks for a password, key,
-token, card number or the like is refused with "use request_secret": secrets
-keep their masked card. An image is only a file in the agent's own folder,
+token, card number, a one-time or verification code, or the like (in a
+field, its title or its button; read through zero-width characters and
+Cyrillic or Greek lookalikes, `as_read`) is refused with "use
+request_secret": secrets keep their masked card, and a code for a site is
+the user's to type there. An image is only a file in the agent's own folder,
 copied in and checked to be an image, as `share_file` does.
 
 **Fallback.** Every block has a plain-text `summary` (the agent's, or made
@@ -6608,7 +6624,13 @@ know the version or a kind draws the text instead (`readBlocks`).
 **Answers are the user's words.** A choice, Pick this or a form sends the
 user's own message through the ordinary send (`formReply` is one "Label:
 value" line each), so independence, approvals and plan grants are exactly as
-for anything typed. Once the user has said anything after the blocks
+for anything typed. One exception: a button whose `reply` isn't what it
+shows (a choice labelled "Not now" that sends "Yes, approve it"; a Pick
+this whose reply isn't "Let's go with <name>.") still sends those words,
+but they don't count as typed (`blocks::unseen_answer`,
+`commands::agents::unseen_block_answer`): they answer no open card
+(`typed_answer`), grant no plan and make no rule (`remember_permission`).
+Once the user has said anything after the blocks
 (`answerAfter`), they show the answer and send nothing again. Blocks posted in
 a turn answering outside text carry `fromOutside`: a tap only puts the words
 in the composer, with a line saying why, and nothing sends until the user
