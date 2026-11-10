@@ -548,55 +548,74 @@ export const keyColorways: Record<string, KeyColors> = {
 };
 
 /**
- * The lit legend (Live, Needs your OK): a backlit shine-through cap, the
- * icon warm white with a tight glow round the icon only; and the black wash
- * that darkens a pressed or lit face.
+ * A key's light (the site's keys; the desk's agent-key.css): the warm white
+ * of a lit legend (working, live) and its glow; the amber-gold of Needs your
+ * OK, the loudest state, and its spill; the light breathing in a working
+ * face; the washes that light a cap from above and shade its foot.
  */
 export const keyLit = {
-  legend: '#fff6dc',
-  glow: '#ffe2a0',
-  shade: '#000000',
+  legend: '#ffe9b4',
+  glow: '#ffd47a',
+  ask: '#ffc94a',
+  askGlow: '#ffaa28',
+  askSpill: '#ffb02e',
+  askFace: '#ffc450',
+  breath: '#ffe3a0',
+  spillWarm: '#ffe9b0',
+  white: '#ffffff',
+  black: '#000000',
   /** The hairline of light along a face's top edge. */
   shine: 'rgba(255, 255, 255, 0.22)',
 } as const;
 
-/** What follows the theme under a key: its soft ambient shadow, and the socket a removed cap leaves. */
+/** What follows the theme under a key: its soft ambient shadow, the empty socket and its stem, the spill's strength, a paused cap's fade. */
 export interface KeyNeutrals {
   ambient: string;
   ambientOpacity: number;
-  socket: string;
-  socketRim: string;
+  socketTop: string;
+  socketBottom: string;
   socketShade: string;
-  housing: string;
-  housingShade: string;
+  socketRim: string;
   stem: string;
   stemDepth: string;
+  spill: number;
+  pausedOpacity: number;
 }
 
 export const keyNeutrals: Record<'dark' | 'light', KeyNeutrals> = {
   dark: {
     ambient: '#000000',
     ambientOpacity: 0.45,
-    socket: '#1d1c1a',
-    socketRim: 'rgba(255, 255, 255, 0.06)',
+    socketTop: '#191816',
+    socketBottom: '#2a2824',
     socketShade: 'rgba(0, 0, 0, 0.55)',
-    housing: '#2a2926',
-    housingShade: 'rgba(0, 0, 0, 0.5)',
-    stem: '#5b5850',
-    stemDepth: '#3a3833',
+    socketRim: 'rgba(255, 255, 255, 0.1)',
+    stem: '#6e6a61',
+    stemDepth: '#45423c',
+    spill: 0.42,
+    pausedOpacity: 0.5,
   },
   light: {
-    ambient: '#3c2c14',
-    ambientOpacity: 0.3,
-    socket: '#d9d1c0',
-    socketRim: 'rgba(70, 55, 30, 0.1)',
-    socketShade: 'rgba(70, 55, 30, 0.3)',
-    housing: '#cbc2af',
-    housingShade: 'rgba(70, 55, 30, 0.28)',
-    stem: '#b3aa96',
-    stemDepth: '#9c937f',
+    ambient: '#2a2014',
+    ambientOpacity: 0.22,
+    socketTop: '#cdc4b2',
+    socketBottom: '#d8d0bf',
+    socketShade: 'rgba(0, 0, 0, 0.2)',
+    socketRim: 'rgba(255, 255, 255, 0.63)',
+    stem: '#bdb4a2',
+    stemDepth: '#968c78',
+    spill: 0.5,
+    pausedOpacity: 0.55,
   },
 };
+
+/** A colour with its saturation cut to `keep` (0 grey, 1 itself), as CSS `saturate()` does. */
+export function saturate(hex: string, keep: number): string {
+  const [r, g, b] = parseHex(hex);
+  const l = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  const c = [r, g, b].map((v) => Math.max(0, Math.min(255, Math.round(l + (v - l) * keep))));
+  return `#${c.map((v) => v.toString(16).padStart(2, '0')).join('')}`;
+}
 
 /**
  * The desktop's type scale (`--font-size-*`), one step up where the desk

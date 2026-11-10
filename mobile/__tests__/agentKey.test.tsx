@@ -2,17 +2,17 @@
  * An agent's key on the phone (components/AgentKey.tsx; the spec is
  * docs/internal/agent-keys.md): the desk's geometry, its colourway and
  * legend from the registry, the six physical states, the sublegend and pips
- * on big keys only, and the one animation, the Needs-your-OK pulse, running
- * only on that state and only while things may move.
+ * on big keys only, and the two loops (a working key's breath, the
+ * Needs-your-OK pulse), each only on its state and only while things may move.
  */
 
 import { KEY_GEOMETRY, KEY_STATES, type AgentsOverview } from '@shipstudio/companion-protocol';
 import { render, screen } from '@testing-library/react-native';
 import { StyleSheet } from 'react-native';
 import { AgentKey } from '../src/components/AgentKey';
-import { keyGeometry, keyPose } from '../src/lib/agentKey';
+import { keyGeometry, keyPaint, keyPose } from '../src/lib/agentKey';
 import { setApp } from '../src/lib/store';
-import { keyColorways, keySize } from '../src/lib/theme';
+import { keyColorways, keySize, luminance } from '../src/lib/theme';
 import { agent } from './helpers';
 
 const mockMoving = jest.fn((still: boolean) => !still);
@@ -62,18 +62,37 @@ describe('the geometry', () => {
     for (const size of Object.values(keySize)) {
       const g = keyGeometry(size);
       for (const state of KEY_STATES) {
-        const p = keyPose(g, state, false);
+        const p = keyPose(g, state);
         expect(p.down + p.depth).toBeCloseTo(g.rest, 9);
       }
     }
   });
 
-  it('presses while it works, sits proud while it needs your OK, darker lit on a pale face', () => {
+  it('presses and lights while it works, sits proud and amber while it needs your OK', () => {
     const g = keyGeometry(keySize.xl);
-    expect(keyPose(g, 'working', false)).toMatchObject({ down: 6, depth: 2, shade: 0.08 });
-    expect(keyPose(g, 'needsOk', false)).toMatchObject({ down: -5, depth: 13, lit: true });
-    expect(keyPose(g, 'live', false).shade).toBe(KEY_GEOMETRY.live.darken);
-    expect(keyPose(g, 'live', true).shade).toBe(KEY_GEOMETRY.live.darkenLight);
+    expect(keyPose(g, 'working')).toMatchObject({ down: 6.5, depth: 1.5, light: 'warm' });
+    expect(keyPose(g, 'needsOk')).toMatchObject({ down: -5, depth: 13, light: 'ask' });
+    expect(keyPose(g, 'live')).toMatchObject({ down: 0, light: 'warm' });
+    expect(keyPose(g, 'paused')).toMatchObject({ down: 4, depth: 4, light: 'none' });
+    expect(keyPose(g, 'idle', true)).toMatchObject({ down: 6.5, depth: 1.5 });
+  });
+
+  it('deepens a lit face in its own hue, more on a pale one, and drains a paused one', () => {
+    const blue = keyPaint('blue', keyColorways.blue, 'working');
+    expect(blue.face).not.toBe(keyColorways.blue.face);
+    expect(blue.legend.toLowerCase()).toBe(KEY_GEOMETRY.live.legend.toLowerCase());
+    const ask = keyPaint('blue', keyColorways.blue, 'needsOk');
+    expect(ask.legend.toLowerCase()).toBe(KEY_GEOMETRY.needsOk.legend.toLowerCase());
+    expect(luminance(ask.face)).toBeLessThan(luminance(blue.face));
+    const paused = keyPaint('orange', keyColorways.orange, 'paused');
+    const [r, g, b] = [1, 3, 5].map((i) => parseInt(paused.face.slice(i, i + 2), 16));
+    expect(Math.max(r, g, b) - Math.min(r, g, b)).toBeLessThan(40);
+  });
+
+  it('puts the sublegend clear of the face’s corner, as far from the right as the bottom', () => {
+    const g = keyGeometry(keySize.xl);
+    expect(g.sub.right).toBeGreaterThan(g.faceCorner * 0.75);
+    expect(Math.abs(g.sub.right - g.sub.bottom)).toBeLessThanOrEqual(1);
   });
 });
 
@@ -103,6 +122,11 @@ describe('the key', () => {
     expect(style('agent-key-cap-idle').backgroundColor).toBe(keyColorways.mustard.skirt);
   });
 
+  it('goes all the way down while a finger is on it', async () => {
+    await render(<AgentKey name="Ops" pressed size={keySize.xl} />);
+    expect(style('agent-key-cap-idle').top).toBe(6.5);
+  });
+
   it('shows the sublegend and the pips on a big key only', async () => {
     await render(<AgentKey name="Ops" boundKey="O" level="go_hard" size={keySize.xl} />);
     expect(screen.getAllByTestId('agent-key-pip-on', hidden)).toHaveLength(3);
@@ -116,34 +140,39 @@ describe('the key', () => {
     expect(screen.queryAllByTestId('agent-key-pip-on', hidden)).toHaveLength(0);
   });
 
-  it('is pressed while it works, its face washed darker', async () => {
+  it('is pressed, lit and breathing while it works, its light spilling under it', async () => {
     await render(<AgentKey name="Ops" state="working" size={keySize.xl} />);
-    expect(style('agent-key-cap-working').top).toBe(6);
-    expect(style('agent-key-shade').opacity).toBe(0.08);
-    expect(screen.getByTestId('agent-key-legend', hidden)).toBeTruthy();
+    expect(style('agent-key-cap-working').top).toBe(6.5);
+    expect(screen.getByTestId('agent-key-legend-lit', hidden)).toBeTruthy();
+    expect(screen.getByTestId('agent-key-spill', hidden)).toBeTruthy();
+    expect(screen.getAllByTestId('agent-key-breath', hidden).length).toBeGreaterThan(0);
+    expect(screen.queryByTestId('agent-key-pulse', hidden)).toBeNull();
   });
 
-  it('is lit while it’s live, and does not pulse', async () => {
+  it('is lit while it’s live, and holds still', async () => {
     await render(<AgentKey name="Ops" state="live" size={keySize.xl} />);
     expect(screen.getByTestId('agent-key-legend-lit', hidden)).toBeTruthy();
+    expect(screen.getByTestId('agent-key-spill', hidden)).toBeTruthy();
     expect(screen.queryByTestId('agent-key-pulse', hidden)).toBeNull();
     expect(mockRepeat).not.toHaveBeenCalled();
   });
 
-  it('pulses only while it needs your OK', async () => {
+  it('pulses amber, proud, only while it needs your OK', async () => {
     await render(<AgentKey name="Ops" state="needsOk" size={keySize.xl} />);
-    expect(screen.getByTestId('agent-key-pulse', hidden)).toBeTruthy();
-    expect(screen.getByTestId('agent-key-legend-lit', hidden)).toBeTruthy();
+    expect(screen.getAllByTestId('agent-key-pulse', hidden).length).toBeGreaterThan(0);
+    expect(screen.getByTestId('agent-key-legend-ask', hidden)).toBeTruthy();
     expect(style('agent-key-cap-needsOk').top).toBe(-5);
-    expect(mockRepeat).toHaveBeenCalledTimes(1);
+    expect(mockRepeat).toHaveBeenCalled();
   });
 
-  it('holds still with Reduce Motion (or off screen): lit, no pulse running', async () => {
+  it('holds still with Reduce Motion (or off screen): lit and amber, no pulse running', async () => {
     mockMoving.mockImplementation(() => false);
     await render(<AgentKey name="Ops" state="needsOk" size={keySize.xl} />);
-    expect(screen.getByTestId('agent-key-legend-lit', hidden)).toBeTruthy();
+    expect(screen.getByTestId('agent-key-legend-ask', hidden)).toBeTruthy();
     expect(mockRepeat).not.toHaveBeenCalled();
-    expect(style('agent-key-pulse').opacity).toBe(1);
+    for (const p of screen.getAllByTestId('agent-key-pulse', hidden)) {
+      expect(StyleSheet.flatten(p.props.style).opacity).toBe(1);
+    }
   });
 
   it('runs nothing at rest: no pulse, no clock', async () => {
@@ -152,10 +181,11 @@ describe('the key', () => {
     expect(mockRepeat).not.toHaveBeenCalled();
   });
 
-  it('is a socket with its stem in its colour when paused', async () => {
+  it('keeps its cap when paused, drained of colour and sunk halfway', async () => {
     await render(<AgentKey name="Ops" colorway="orange" state="paused" size={keySize.xl} />);
-    expect(screen.getByTestId('agent-key-socket-paused', hidden)).toBeTruthy();
-    expect(screen.queryByTestId('agent-key-depth', hidden)).toBeNull();
+    expect(style('agent-key-cap-paused').top).toBe(4);
+    expect(style('agent-key-cap-paused').backgroundColor).not.toBe(keyColorways.orange.skirt);
+    expect(screen.queryByTestId('agent-key-socket-new', hidden)).toBeNull();
   });
 
   it('is an empty socket for a new agent', async () => {

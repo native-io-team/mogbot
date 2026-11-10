@@ -360,91 +360,103 @@ function RowBody({
         if (id) onAction(id);
       }}
     >
-      {/* The key says what it's doing by how it sits (pressed, lit, proud, a
+      {({ pressed }) => (
+        <>
+          {/* The key says what it's doing by how it sits (pressed, lit, proud, a
           socket); the line says what. Last known: it rests. */}
-      <View style={styles.key}>
-        <AgentKey
-          id={agent.id}
-          name={agent.name}
-          color={agent.color}
-          state={keyState}
-          size={keySize.lg}
-        />
-      </View>
-      <View style={styles.text}>
-        <View style={styles.nameLine}>
-          <T
-            variant="headline"
-            color={colors.textStrong}
-            numberOfLines={1}
-            // Names stop growing at twice the size, under Home's large title.
-            maxFontSizeMultiplier={NAME_SCALE}
-            style={styles.name}
-          >
-            {agent.name}
-          </T>
-          {/* Its role, muted, one line: it gives way before the name does. */}
-          {roleShown ? (
-            <T
-              variant="caption"
-              color={colors.textMuted}
-              numberOfLines={1}
-              maxFontSizeMultiplier={NAME_SCALE}
-              style={styles.role}
-              onLayout={(e: LayoutChangeEvent) => {
-                const size = type.caption * Math.min(fontScale, NAME_SCALE);
-                if (roleCutPastReading(e.nativeEvent.layout.width, roleShown, size)) setCutAt(fit);
-              }}
-            >
-              {roleShown}
-            </T>
-          ) : (
-            <View style={styles.role} />
-          )}
-          {agent.pinned && <Icon name="pin.fill" size={iconSize.inline} color={colors.textMuted} />}
-          {agent.muted && (
-            <Icon name="bell.slash.fill" size={iconSize.inline} color={colors.textMuted} />
-          )}
-          {!!level && (
-            <T
-              variant="caption"
-              color={colors.textMuted}
-              numberOfLines={1}
-              maxFontSizeMultiplier={NAME_SCALE}
-              style={styles.level}
-            >
-              {/* Beside the time it reads as one quiet line: "Careful · 3 h ago". */}
-              {stacked ? level : `${level} ·`}
-            </T>
-          )}
-          {!stacked && time}
-        </View>
-        <View style={styles.nameLine}>
-          {pill && <StatusPill tone={pill.tone} label={pill.label} />}
-          <T
-            variant="small"
-            numberOfLines={stacked ? 3 : 1}
-            maxFontSizeMultiplier={NAME_SCALE}
-            color={unread ? colors.textStrong : colors.textSecondary}
-            style={{ flex: 1 }}
-          >
-            {driving && <T color={colors.accentSuccess}>Live · </T>}
-            {/* Working: the steadied step, so step → "Thinking" → step doesn't flicker. */}
-            {pill ? pill.rest : `${head}${tail}`}
-          </T>
-          {/*
+          <View style={styles.key}>
+            <AgentKey
+              id={agent.id}
+              name={agent.name}
+              color={agent.color}
+              state={keyState}
+              size={keySize.lg}
+              pressed={pressed}
+            />
+          </View>
+          <View style={styles.text}>
+            <View style={styles.nameLine}>
+              <T
+                variant="headline"
+                color={colors.textStrong}
+                numberOfLines={1}
+                // Names stop growing at twice the size, under Home's large title.
+                maxFontSizeMultiplier={NAME_SCALE}
+                style={styles.name}
+              >
+                {agent.name}
+              </T>
+              {/* Its role, muted, one line: it gives way before the name does. */}
+              {roleShown ? (
+                <T
+                  variant="caption"
+                  color={colors.textMuted}
+                  numberOfLines={1}
+                  maxFontSizeMultiplier={NAME_SCALE}
+                  style={styles.role}
+                  onLayout={(e: LayoutChangeEvent) => {
+                    const size = type.caption * Math.min(fontScale, NAME_SCALE);
+                    if (roleCutPastReading(e.nativeEvent.layout.width, roleShown, size))
+                      setCutAt(fit);
+                  }}
+                >
+                  {roleShown}
+                </T>
+              ) : (
+                <View style={styles.role} />
+              )}
+              {agent.pinned && (
+                <Icon name="pin.fill" size={iconSize.inline} color={colors.textMuted} />
+              )}
+              {agent.muted && (
+                <Icon name="bell.slash.fill" size={iconSize.inline} color={colors.textMuted} />
+              )}
+              {!!level && (
+                <T
+                  variant="caption"
+                  color={colors.textMuted}
+                  numberOfLines={1}
+                  maxFontSizeMultiplier={NAME_SCALE}
+                  style={styles.level}
+                >
+                  {/* Beside the time it reads as one quiet line: "Careful · 3 h ago". */}
+                  {stacked ? level : `${level} ·`}
+                </T>
+              )}
+              {!stacked && time}
+            </View>
+            <View style={styles.nameLine}>
+              {pill && <StatusPill tone={pill.tone} label={pill.label} />}
+              <T
+                variant="small"
+                numberOfLines={stacked ? 3 : 1}
+                maxFontSizeMultiplier={NAME_SCALE}
+                color={unread ? colors.textStrong : colors.textSecondary}
+                style={{ flex: 1 }}
+              >
+                {driving && <T color={colors.accentSuccess}>Live · </T>}
+                {/* Working: the steadied step, so step → "Thinking" → step doesn't flicker. */}
+                {pill ? pill.rest : `${head}${tail}`}
+              </T>
+              {/*
             Waiting on you is said once, in the row's words ("Needs your OK",
             or that it waits on your Mac) under the Needs you header: no dot
             beside them as well. Every other state keeps its mark.
           */}
-          <View style={styles.mark}>
-            {!needsYou(agent) && !running && (
-              <StatusMark agent={live ? { ...agent, unread: 0 } : agent} live={live} onMac={onMac} />
-            )}
+              <View style={styles.mark}>
+                {!needsYou(agent) && !running && (
+                  <StatusMark
+                    agent={live ? { ...agent, unread: 0 } : agent}
+                    live={live}
+                    onMac={onMac}
+                  />
+                )}
+              </View>
+            </View>
+            {stacked && time}
           </View>
-        </View>
-        {stacked && time}
-      </View>
+        </>
+      )}
     </Pressable>
   );
 }
