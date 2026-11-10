@@ -175,6 +175,11 @@ export interface MockOptions {
   /** Answer CORS preflights and tag every response, for the web build (dev only). */
   cors?: boolean;
   /**
+   * The app on the Mac is stuck: sockets are taken but nothing is said on
+   * them. What a phone sees while the real app hangs.
+   */
+  hung?: boolean;
+  /**
    * A Mac just set up: only the Chief of Staff, no rooms. What a phone sees
    * minutes after pairing, and the shortest list Home can have.
    */
@@ -1414,7 +1419,29 @@ export function createMockServer(opts: MockOptions = {}) {
   seedShared(now);
   // A Mac just set up has only the Chief: the others are seeded (their
   // fixtures refer to each other) and then left out of what the phone sees.
-  if (opts.solo) agents.splice(0, agents.length, ...agents.filter((a) => a.id === 'chief'));
+  if (opts.solo) {
+    agents.splice(0, agents.length, ...agents.filter((a) => a.id === 'chief'));
+    // The Chief as onboarding leaves it: its stored greeting and nothing else
+    // (`agents::ensure_main`, CHIEF_GREETING in src-tauri/src/agents/prompts.rs).
+    const chief = agent('chief');
+    if (chief) {
+      const greeting =
+        'Hi, I’m your Chief of Staff. Tell me what’s on your plate this week and I’ll put a team of agents on it. They keep working on a schedule or when something happens, and bring the results back to you. Anything that sends, spends or changes what others see waits for your OK.';
+      const ts = now - 3 * 60_000;
+      Object.assign(chief, {
+        status: { state: 'idle', activity: null, since: null },
+        pendingApprovals: 0,
+        unread: 0,
+        preview: greeting,
+        lastActivityAt: ts,
+        copy: undefined,
+        takeover: undefined,
+      });
+      messages.set('chief', [{ id: 'chief_greeting', agentId: 'chief', ts, kind: 'agent', text: greeting }]);
+    }
+    projects.splice(0, projects.length);
+    memories.delete('chief');
+  }
 
   // ---- Frames ----------------------------------------------------------------------
 
@@ -3889,6 +3916,8 @@ export function createMockServer(opts: MockOptions = {}) {
   // ---- The socket ------------------------------------------------------------------------
 
   function onConnection(ws: WebSocket) {
+    // Stuck: the connection is taken, and then nothing.
+    if (opts.hung) return;
     let conn: Conn | null = null;
     /** The protocol version, once this socket's challenge was answered. */
     let proven = 0;

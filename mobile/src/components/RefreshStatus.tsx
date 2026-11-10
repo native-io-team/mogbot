@@ -13,12 +13,13 @@ import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, View } from 'react-native';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
 import { haptic } from '../lib/haptics';
+import { useApp } from '../lib/store';
 import type { RefreshOutcome } from '../lib/refresh';
 import { duration } from '../lib/theme';
 import { Line } from './surfaces';
 
 export function RefreshStatus({
-  outcome,
+  outcome: given,
   onRetry,
   onDismiss,
 }: {
@@ -26,6 +27,10 @@ export function RefreshStatus({
   onRetry: () => void;
   onDismiss: () => void;
 }) {
+  // With the link down (or the Mac's app not answering) the connection bar
+  // already says it, with its own Try again: a failed pull adds nothing.
+  const linkDown = useApp((s) => s.link.kind !== 'connected' || s.link.stuck != null);
+  const outcome = given === 'failed' && linkDown ? 'idle' : given;
   // What to show while folding away: the last thing it said, not nothing.
   const [said, setSaid] = useState<Exclude<RefreshOutcome, 'idle'>>('done');
   const open = useSharedValue(0);

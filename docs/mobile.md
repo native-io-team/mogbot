@@ -115,7 +115,10 @@ cellular, a VPN like Tailscale coming up) or Try again tries at once; on a
 socket that looks open they send a ping that must be answered within 4 s. As
 its app exits (a quit or an update's restart) the Mac closes every socket
 with 1001 "going away" (`CLOSE_MAC_CLOSING`, `HubItem::AppClosing`), and the
-phone says "Waiting for the app on your Mac" for up to 2 minutes.
+phone says "Waiting for the app on your Mac" for up to 2 minutes. A socket
+that opens and then says nothing, or a request that times out while the
+heartbeat still comes, marks the app as stuck rather than the Mac as away
+(see "The connection bar").
 
 **Limits:** 600 requests a minute per device, socket and HTTP together,
 of which at most 10 may create an agent (`MAX_AGENTS_CREATED_PER_MINUTE`;
@@ -486,7 +489,7 @@ request, the diff and the photo viewer push over them. At
   waiting agent's row keeps only its own label, as the desk's sidebar row
   does (docs/agents.md, "Needs you: one place per surface").
   - **Header.** The large title, then "3 things need you" and "From 2
-    agents" (plus "as of …" offline). Nothing waiting: a calm check, "All
+    agents" (offline, the connection bar above says when it last heard). Nothing waiting: a calm check, "All
     caught up", one line, and **Go to Agents**.
   - **Grouped by agent.** One card per agent, in the order of its most
     urgent row (what blocks an agent first, then the rest; newest first
@@ -1237,11 +1240,35 @@ latency, last seen, likely causes from the last status); Mac awake
 (keep-awake, lid mode, battery); the app running (only ever yes when the
 server answered, since silence looks the same either way); Claude Code
 installed and signed in (a `signed_out` turn makes it a problem whatever the
-check says); each agent's capabilities; this device. Screens say nothing
-while all is well and show the pill when something isn't; in a chat it is the
-first bar above the composer ("Saved messages shown"), after a 2 s grace.
-The first 15 s of trying (counted again from when the app comes forward) read
-"Reconnecting…" or "Connecting…", never "Can’t reach Mac" (`CALM_MS`).
+check says); each agent's capabilities; this device.
+
+**The connection bar** (`ConnectionBar` in `components/ConnectionPill.tsx`,
+worded by `linkBar` in `lib/connection.ts`). Screens say nothing while all is
+well. When something isn't, every tab (Catch up, Agents, Projects) shows one
+bar at its top, on the content margin, in the chat bars' surface: what's
+wrong, when the phone last heard from the Mac ("Last heard from it 2 min ago
+· showing what was saved"), one **Try again**, and **What to check** folded
+under it, ending in Connection details. In a chat the same words are the
+first bar above the composer. It's the only place the link is said: no "as
+of" on Catch up's header, the Agents list or Projects (only a refusal, which
+has its own card, keeps "as of" there), no toast for a refresh that failed
+because of it, and a pull's "Couldn't reach your Mac" line stays folded while
+the bar shows. What's listed under it stays readable.
+
+What it says, in order: this phone offline; the Mac's app said it was closing
+("Waiting for the app on your Mac", up to 2 minutes); the first 15 s of
+trying (counted again from when the app comes forward), and a reconnect
+under 2 minutes old, read "Reconnecting to your Mac…" (`CALM_MS`), held back
+for the first 2 s; past that, **"The app on your Mac isn't responding"** when
+the phone saw something at the Mac's address take the connection but the
+app not answer (a request that timed out while the Mac's heartbeat still
+came, `connected.stuck`; or a socket that opened and stayed silent,
+`appStuck` on the trying states: restart the app), else **"Can't reach your
+Mac"** (nothing answered: asleep or shut, Tailscale off or another account,
+or the app stuck). Every cause is a "may"; none is the user's fault. When a
+bar that was shown clears, "Back in touch with your Mac" shows for 2.5 s,
+then nothing. `pnpm qa:web --phases link-down` captures each of these
+(`--hung` makes the mock take sockets and say nothing).
 
 ### Offline cache and outbox
 
@@ -1269,8 +1296,8 @@ is not yet verified.
 The copy (`lib/cache.ts`) holds the overview, Mac status, projects, the last
 400 messages of each opened chat and the cursor, written together so replay
 after a restart starts exactly where the copy ends. Downloads are cached by blob id or agent + path.
-While disconnected, status marks go grey, headers say "as of …" and actions
-are disabled. A message sent offline waits ("Waiting for …") and goes by
+While disconnected, status marks go grey, the connection bar says when the
+phone last heard from the Mac, and actions are disabled. A message sent offline waits ("Waiting for …") and goes by
 itself, idempotent by `clientId`, for **10 minutes** (`OUTBOX_WAIT_MS`);
 after that it is **Not sent · Send · Discard** and never sent on its own,
 because a message landing hours later with no one watching is worse than one

@@ -35,7 +35,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { AgentKey } from '../../../components/AgentKey';
 import { useArmed } from '../../../components/ApprovalCard';
-import { ConnectionNotice, useNow } from '../../../components/ConnectionPill';
+import { ConnectionBar } from '../../../components/ConnectionPill';
 import { useCopyParts } from '../../../components/copy';
 import { DemoCard } from '../../../components/DemoCard';
 import { RefreshStatus } from '../../../components/RefreshStatus';
@@ -215,9 +215,11 @@ export default function CatchUp() {
           />
         }
       >
+        {/* Above the rhythm below: each adds its own space only when it shows. */}
         <RefreshStatus outcome={outcome} onRetry={() => void onRefresh()} onDismiss={dismiss} />
-        <DemoCard />
-        <ConnectionNotice />
+        <DemoCard style={styles.top} />
+        <ConnectionBar style={styles.top} />
+        <View style={[styles.body, items.length === 0 && !happened.length && styles.grow]}>
         {items.length === 0 ? (
           <AllClear loading={missing.length > 0} compact={happened.length > 0} />
         ) : (
@@ -225,11 +227,10 @@ export default function CatchUp() {
             <T variant="title" color={colors.textStrong}>
               {headline(items.length)}
             </T>
-            {(!!sub || !live) && (
+            {/* Offline, the connection bar above says when it last heard: not again here. */}
+            {!!sub && (
               <T variant="small" color={colors.textSecondary}>
                 {sub}
-                {!!sub && !live ? ' · ' : ''}
-                {!live && <AsOf />}
               </T>
             )}
           </View>
@@ -265,16 +266,10 @@ export default function CatchUp() {
             </View>
           </Animated.View>
         )}
+        </View>
       </ScrollView>
     </>
   );
-}
-
-/** "as of 4 min ago": what's listed is the saved copy, not live news. */
-function AsOf() {
-  useNow(30_000);
-  const asOf = useApp((s) => (s.link.kind === 'reconnecting' ? s.link.lastSeenAt : s.syncedAt));
-  return asOf ? <>{`as of ${formatAgo(asOf)}`}</> : null;
 }
 
 /** Nothing waiting: said once, calmly, with the way to your agents. */
@@ -672,7 +667,11 @@ function SinceRow({ item, agent, first }: { item: SinceItem; agent: Agent; first
 }
 
 const useStyles = makeStyles((colors) => ({
-  content: { padding: space.lg, gap: space.lg, paddingBottom: space['2xl'] },
+  content: { padding: space.lg, paddingBottom: space['2xl'] },
+  // The one rhythm: 16 between the header, each agent's card and Since.
+  body: { gap: space.lg },
+  // A notice above it keeps the same 16 to what follows.
+  top: { marginBottom: space.lg },
   summary: { gap: space['2xs'], paddingHorizontal: space.xs },
   grow: { flex: 1 },
   group: {

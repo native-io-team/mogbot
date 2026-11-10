@@ -83,6 +83,7 @@ function selfSigned(dir: string) {
     importing: args.includes('--importing'),
     teamSetup: args.includes('--team-setup'),
     cors: args.includes('--cors'),
+    hung: args.includes('--hung'),
     solo: args.includes('--solo'),
     heavy: args.includes('--heavy'),
     torture: args.includes('--torture'),

@@ -1,23 +1,27 @@
 /**
- * The connection's voice on the screens: nothing while all is well, a pill
- * or a slim banner when something isn't, and always a tap away from the full
- * picture on the Connection screen.
+ * The connection's voice on the screens: nothing while all is well, one bar
+ * when something isn't (`ConnectionBar`, worded by `lib/connection`'s
+ * `linkBar`), and always a tap away from the full picture on the Connection
+ * screen.
  */
 
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useShallow } from 'zustand/react/shallow';
 import type { LinkState } from '@shipstudio/companion-protocol';
-import { CALM_MS, pill, problemBody } from '../lib/connection';
+import { announce } from '../lib/a11y';
+import { CALM_MS, linkBar, pill, problemBody, type LinkBar } from '../lib/connection';
+import { haptic } from '../lib/haptics';
 import { retryNow } from '../lib/session';
 import { useApp } from '../lib/store';
 import { useShowing } from '../lib/moving';
-import { chromeScale, radius, space, PRESSED } from '../lib/theme';
+import { depthOf, fonts, iconSize, radius, space } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 import { Spinner } from './agent';
-import { Button, Dot, T, useToneColor } from './ui';
+import { TextAction } from './surfaces';
+import { Button, Dot, Icon, T } from './ui';
 
 /**
  * Re-render every `ms` for "last seen 2 min ago", while anyone can see it:
@@ -72,55 +76,158 @@ export function useLinkState() {
   );
 }
 
-function ConnectionPill() {
-  const colors = useColors();
-  const styles = useStyles();
-  const toneColor = useToneColor();
-  const router = useRouter();
+/**
+ * What `ConnectionBar` shows: the link's bar (`linkBar`), held back for the
+ * first moments of a calm reconnect (coming back to the app reconnects in
+ * about a second), and, once a bar that was shown clears, "Back in touch"
+ * for a moment before it goes. Shared with the chat's bar, so a tab and a
+ * chat never say it differently.
+ */
+export function useLinkBar(): { bar: LinkBar | null; back: boolean } {
   const state = useLinkState();
-  const p = pill(state, useLinkNow(state.link));
-  return (
-    <Pressable
-      accessibilityRole="button"
-      accessibilityLabel={`${p.label}. Connection details`}
-      hitSlop={8}
-      onPress={() => router.push('/connection')}
-      style={({ pressed }) => pressed && PRESSED}
-    >
-      <Animated.View layout={LinearTransition.duration(200)} style={styles.pill}>
-        <Dot color={toneColor[p.tone]} glow={p.tone === 'ok'} />
-        <Animated.View
-          key={p.label}
-          entering={FadeIn.duration(180)}
-          exiting={FadeOut.duration(120)}
-        >
-          <T
-            variant="small"
-            color={colors.textPrimary}
-            numberOfLines={1}
-            maxFontSizeMultiplier={chromeScale}
-          >
-            {p.label}
-          </T>
-        </Animated.View>
-      </Animated.View>
-    </Pressable>
-  );
+  const now = useLinkNow(state.link, 10_000);
+  const bar = linkBar(state, now);
+  const down = !!bar;
+  const [late, setLate] = useState(false);
+  useEffect(() => {
+    if (!down) return;
+    const timer = setTimeout(() => setLate(true), BANNER_GRACE_MS);
+    return () => {
+      clearTimeout(timer);
+      setLate(false);
+    };
+  }, [down]);
+  const shown = bar && (late || bar.tone === 'problem') ? bar : null;
+  // "Back in touch": only after a bar was actually on screen, and only on a real return.
+  const wasShown = useRef(false);
+  const [back, setBack] = useState(false);
+  const connected = state.link.kind === 'connected' && !bar;
+  useEffect(() => {
+    if (shown) {
+      wasShown.current = true;
+      return;
+    }
+    if (!connected || !wasShown.current) return;
+    wasShown.current = false;
+    const on = setTimeout(() => {
+      setBack(true);
+      // Every tab has a bar: said once, not once per tab.
+      if (Date.now() - lastBackSaid > BACK_MS) {
+        lastBackSaid = Date.now();
+        announce('Back in touch with your Mac');
+      }
+    }, 0);
+    const off = setTimeout(() => setBack(false), BACK_MS);
+    return () => {
+      clearTimeout(on);
+      clearTimeout(off);
+      setBack(false);
+    };
+  }, [shown, connected]);
+  return { bar: shown, back: back && !shown };
 }
 
-/** Only when something is wrong: the state, and a tap to the reasons. */
-export function ConnectionNotice() {
+/** How long "Back in touch" stays. */
+const BACK_MS = 2500;
+let lastBackSaid = 0;
+
+/**
+ * The one connection bar at the top of every tab, on the content margin:
+ * what's wrong, when the phone last heard from the Mac, one Try again, and
+ * "What to check" folded under it. What's listed below it stays readable:
+ * it's the saved copy, and the bar says so once (no "as of" elsewhere).
+ * Coming back, one quiet "Back in touch", then nothing.
+ */
+export function ConnectionBar({ style }: { style?: StyleProp<ViewStyle> }) {
+  const colors = useColors();
   const styles = useStyles();
-  const state = useLinkState();
-  const p = pill(state, useLinkNow(state.link));
-  if (p.tone === 'ok' || state.link.kind === 'refused') return null;
+  const router = useRouter();
+  const { bar, back } = useLinkBar();
+  // "What to check" stays open for the state it was opened on; a new state starts folded.
+  const [openFor, setOpenFor] = useState<string | null>(null);
+  const open = !!bar && openFor === bar.kind;
+  const setOpen = (fn: (o: boolean) => boolean) => setOpenFor(fn(open) && bar ? bar.kind : null);
+  if (back) {
+    return (
+      <Animated.View
+        entering={FadeIn.duration(200)}
+        exiting={FadeOut.duration(300)}
+        style={[styles.bar, style]}
+        testID="connection-back"
+      >
+        <View style={styles.head}>
+          <View style={styles.mark}>
+            <Icon name="checkmark" size={iconSize.inline} color={colors.accentSuccess} />
+          </View>
+          <T variant="small" color={colors.textPrimary} style={styles.grow}>
+            Back in touch with your Mac
+          </T>
+        </View>
+      </Animated.View>
+    );
+  }
+  if (!bar) return null;
+  const tint = bar.tone === 'problem' ? colors.accentErrorLight : colors.accentWarning;
   return (
     <Animated.View
       entering={FadeIn.duration(200)}
       exiting={FadeOut.duration(150)}
-      style={styles.notice}
+      layout={LinearTransition.duration(200)}
+      style={[styles.bar, style]}
+      testID={`connection-bar-${bar.kind}`}
     >
-      <ConnectionPill />
+      <View style={[styles.head, styles.top]}>
+        <View style={[styles.mark, styles.markTop]}>
+          <Dot color={tint} />
+        </View>
+        <View
+          style={styles.words}
+          accessible
+          accessibilityLabel={`${bar.title}. ${bar.detail}`}
+          accessibilityLiveRegion="polite"
+        >
+          <T variant="small" color={colors.textStrong} style={styles.title}>
+            {bar.title}
+          </T>
+          <T variant="caption" color={colors.textSecondary}>
+            {bar.detail}
+          </T>
+        </View>
+        <Button
+          title="Try again"
+          variant="outline"
+          size="compact"
+          onPress={() => {
+            haptic.select();
+            retryNow();
+          }}
+        />
+      </View>
+      <View style={styles.foot}>
+        <TextAction
+          label="What to check"
+          muted
+          expanded={open}
+          onPress={() => setOpen((o) => !o)}
+        />
+      </View>
+      {open && (
+        <Animated.View entering={FadeIn.duration(180)} style={styles.checks}>
+          {bar.checks.map((line) => (
+            <View key={line} style={styles.check}>
+              <View style={styles.bullet}>
+                <Dot color={colors.textMuted} size={space.xs} />
+              </View>
+              <T variant="small" color={colors.textSecondary} style={styles.grow}>
+                {line}
+              </T>
+            </View>
+          ))}
+          <View style={styles.more}>
+            <TextAction label="Connection details" onPress={() => router.push('/connection')} />
+          </View>
+        </Animated.View>
+      )}
     </Animated.View>
   );
 }
@@ -136,8 +243,11 @@ export function LinkProblem({ what, macName }: { what: string; macName: string }
   const styles = useStyles();
   const router = useRouter();
   const state = useLinkState();
-  const p = pill(state, useLinkNow(state.link));
-  if (p.tone !== 'problem') {
+  const now = useLinkNow(state.link);
+  const p = pill(state, now);
+  const bar = linkBar(state, now);
+  // The bar may know more than the pill (the app on the Mac seen stuck): same verdict here.
+  if (p.tone !== 'problem' && bar?.tone !== 'problem') {
     return (
       <View style={styles.connecting}>
         <Spinner />
@@ -149,7 +259,7 @@ export function LinkProblem({ what, macName }: { what: string; macName: string }
   return (
     <View style={styles.problem}>
       <T variant="title" color={colors.textStrong} style={styles.center}>
-        {p.label}
+        {bar?.title ?? p.label}
       </T>
       <T color={colors.textSecondary} style={styles.center}>
         {problemBody(state.link, macName, what)}
@@ -184,18 +294,31 @@ const useStyles = makeStyles((colors) => ({
     gap: space.sm,
   },
   center: { textAlign: 'center' },
-  notice: { paddingHorizontal: space.lg, paddingBottom: space.sm, alignItems: 'flex-start' },
-  pill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: space.tight,
+  // The chat's bars' surface (surfaces.tsx), on the screen's content margin.
+  bar: {
+    gap: space.xs,
     paddingHorizontal: space.md,
-    paddingVertical: space.tight,
-    minHeight: 32,
-    borderRadius: radius.pill,
+    paddingVertical: space.sm,
+    borderRadius: radius.card,
     backgroundColor: colors.surfacePanel,
     borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.borderDefault,
-    maxWidth: 320,
+    borderColor: colors.cardBorder,
+    boxShadow: depthOf(colors).card,
+    overflow: 'hidden',
   },
+  head: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 32 },
+  // The dot sits on the title's line, however many lines the detail takes.
+  top: { alignItems: 'flex-start' },
+  mark: { width: iconSize.inline, alignItems: 'center' },
+  markTop: { paddingTop: space.tight },
+  words: { flex: 1, gap: space['2xs'] },
+  title: { fontFamily: fonts.medium },
+  grow: { flex: 1 },
+  // Under the words, lined up with them.
+  foot: { flexDirection: 'row', paddingLeft: iconSize.inline + space.sm },
+  checks: { gap: space.sm, paddingLeft: iconSize.inline + space.sm, paddingBottom: space.xs },
+  check: { flexDirection: 'row', alignItems: 'flex-start', gap: space.sm },
+  // Centred on the first line of small text.
+  bullet: { paddingTop: space.sm },
+  more: { flexDirection: 'row' },
 }));

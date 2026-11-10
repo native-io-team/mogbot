@@ -128,6 +128,7 @@ export function pill(s: Inputs, now = Date.now()): Pill {
   const { link } = s;
   if (link.kind === 'refused') return { tone: 'problem', label: REFUSED_LABEL[link.reason] };
   if (link.kind === 'connected') {
+    if (link.stuck) return { tone: 'problem', label: 'Mac not responding' };
     const out = engineHealth(s).find(signedOut);
     return out
       ? { tone: 'problem', label: `${out.label} signed out` }
@@ -159,6 +160,116 @@ export function pill(s: Inputs, now = Date.now()): Pill {
 export const CALM_MS = 15_000;
 /** How long the Mac's app may take to come back after saying it was closing. */
 export const MAC_CLOSING_WAIT_MS = 2 * 60_000;
+
+/**
+ * The one connection bar at the top of every tab (`ConnectionBar`) and over a
+ * chat's composer: what's wrong in plain words, when this phone last heard
+ * from the Mac, and what to check. Where the phone can tell, "the app on the
+ * Mac isn't responding" (something there took the connection, or the
+ * heartbeat came with no answers) is told apart from "can't reach the Mac"
+ * (nothing answered: asleep, shut, or Tailscale off). Never the user's fault:
+ * every cause is a "may".
+ *
+ * Null while there's nothing to say: connected and answering, or a refusal
+ * (that has its own card, with its one fix).
+ */
+export interface LinkBar {
+  tone: 'busy' | 'problem';
+  /** What's wrong, in plain words. */
+  title: string;
+  /** When it last heard from the Mac, and that what shows is the saved copy. */
+  detail: string;
+  /** "What to check": the likely causes, most likely first, each with its fix. */
+  checks: string[];
+  kind: 'offline' | 'connecting' | 'closing' | 'stuck' | 'unreachable';
+}
+
+/** "Last heard from it 2 min ago", or that nothing has been heard yet. */
+function heard(at: number, now: number): string {
+  return at ? `Last heard from it ${formatAgo(at, now)}` : 'Not heard from it yet';
+}
+
+const SAVED = ' · showing what was saved';
+
+export const STUCK_CHECKS = [
+  'The app on your Mac may be stuck. Quit it and open it again: your agents and chats are kept.',
+  'If it’s in the middle of something big, it may catch up by itself in a minute.',
+];
+
+export function linkBar(s: Inputs, now = Date.now()): LinkBar | null {
+  const { link } = s;
+  if (link.kind === 'refused') return null;
+  if (link.kind === 'connected') {
+    if (!link.stuck) return null;
+    return {
+      kind: 'stuck',
+      tone: 'problem',
+      title: 'The app on your Mac isn’t responding',
+      detail: `Your Mac is connected, but nothing has come back since ${formatAgo(link.stuck, now)}`,
+      checks: STUCK_CHECKS,
+    };
+  }
+  const lastSeen = link.kind === 'reconnecting' ? link.lastSeenAt : s.syncedAt || 0;
+  const since = `${heard(lastSeen, now)}${lastSeen ? SAVED : ''}`;
+  if (s.phoneOnline === false) {
+    return {
+      kind: 'offline',
+      tone: 'problem',
+      title: 'This phone is offline',
+      detail: since,
+      checks: ['Turn on Wi-Fi or mobile data on this phone. It reconnects by itself.'],
+    };
+  }
+  const unreachable = [
+    'Your Mac may be asleep or shut. Wake it, with the app open on it.',
+    'Tailscale may be off on this phone or on your Mac. Open Tailscale and check it’s on, with the same account on both.',
+    'If the app on your Mac is stuck, quit it and open it again.',
+  ];
+  const mac = s.mac;
+  if (mac && !mac.power.keepAwake && mac.power.onBattery === 'yes') {
+    const pct = mac.power.batteryPercent != null ? ` at ${mac.power.batteryPercent}%` : '';
+    unreachable[0] = `Your Mac was on battery${pct} with keep-awake off, so it may be asleep. Wake it, with the app open on it.`;
+  }
+  const stuck = !!link.appStuck;
+  const p = pill(s, now);
+  if (link.kind === 'reconnecting' && link.macClosing && p.tone === 'busy') {
+    return {
+      kind: 'closing',
+      tone: 'busy',
+      title: 'Waiting for the app on your Mac',
+      detail: `It said it was closing, for an update or a restart · ${heard(lastSeen, now).toLowerCase()}`,
+      checks: ['If it isn’t back in a minute or two, open the app on your Mac.'],
+    };
+  }
+  // Known stuck: said once the calm first seconds are over, not after the
+  // two minutes a silent Mac gets before "can't reach" (the phone knows more).
+  const calm = link.since != null && now - link.since < CALM_MS;
+  if (p.tone !== 'problem' && !(stuck && !calm)) {
+    return {
+      kind: 'connecting',
+      tone: 'busy',
+      title: lastSeen ? 'Reconnecting to your Mac…' : 'Connecting to your Mac…',
+      detail: since,
+      checks: stuck ? STUCK_CHECKS : unreachable,
+    };
+  }
+  if (stuck) {
+    return {
+      kind: 'stuck',
+      tone: 'problem',
+      title: 'The app on your Mac isn’t responding',
+      detail: `Your Mac is reachable · ${heard(lastSeen, now).toLowerCase()}${lastSeen ? SAVED : ''}`,
+      checks: STUCK_CHECKS,
+    };
+  }
+  return {
+    kind: 'unreachable',
+    tone: 'problem',
+    title: 'Can’t reach your Mac',
+    detail: since,
+    checks: unreachable,
+  };
+}
 
 export interface Layer {
   title: string;

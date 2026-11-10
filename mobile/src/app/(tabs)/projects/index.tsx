@@ -27,7 +27,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeIn, LinearTransition } from 'react-native-reanimated';
 import { Spinner } from '../../../components/agent';
-import { ConnectionNotice, LinkProblem, useNow } from '../../../components/ConnectionPill';
+import { ConnectionBar, LinkProblem, useNow } from '../../../components/ConnectionPill';
 import { DemoCard } from '../../../components/DemoCard';
 import { SessionState, useTaskName } from '../../../components/session';
 import { choose } from '../../../components/menu';
@@ -96,7 +96,7 @@ export default function Projects() {
       >
         <RefreshStatus outcome={outcome} onRetry={onRefresh} onDismiss={dismiss} />
         <DemoCard />
-        <ConnectionNotice />
+        <ConnectionBar style={styles.bar} />
         {/* The link first: a Mac that's away isn't one that needs updating. */}
         {!live ? (
           projects == null ? (
@@ -105,7 +105,7 @@ export default function Projects() {
             </View>
           ) : (
             <>
-              <AsOf />
+              {/* When it last heard is the connection bar's to say, once. */}
               {sorted.length === 0 ? (
                 <T color={colors.textSecondary} style={styles.note}>
                   No projects on {macName} when it was last seen.
@@ -137,20 +137,6 @@ export default function Projects() {
         )}
       </ScrollView>
     </>
-  );
-}
-
-/** "PROJECTS · AS OF 4 MIN AGO": the saved copy, said the way the agents list says it. */
-function AsOf() {
-  const colors = useColors();
-  const styles = useStyles();
-  useNow(30_000);
-  const asOf = useApp((s) => (s.link.kind === 'reconnecting' ? s.link.lastSeenAt : s.syncedAt));
-  if (!asOf) return null;
-  return (
-    <T variant="caption" color={colors.textMuted} style={styles.asOf} accessibilityRole="header">
-      {`Projects · as of ${formatAgo(asOf)}`}
-    </T>
   );
 }
 
@@ -360,7 +346,7 @@ const useStyles = makeStyles((colors) => ({
   content: { paddingBottom: space['2xl'], gap: space.md },
   note: { paddingHorizontal: space.lg, paddingVertical: space.md },
   problem: { alignItems: 'center', paddingHorizontal: space.lg, paddingVertical: space.xl },
-  asOf: { paddingHorizontal: space.lg, paddingTop: space.sm },
+  bar: { marginHorizontal: space.lg },
   card: {
     marginHorizontal: space.lg,
     borderRadius: radius.card,

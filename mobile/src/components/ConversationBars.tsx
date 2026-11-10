@@ -6,12 +6,10 @@
 
 import type { Agent, ResultRef } from '@shipstudio/companion-protocol';
 import { useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
 import { engineCantAskBar } from '../lib/agents';
 import { drivenBar, importBar, revisingBar } from '../lib/bars';
 import { setupBar } from '../lib/teamSetup';
 import { DEMO_BAR, isDemo } from '../lib/demo';
-import { pill } from '../lib/connection';
 import {
   canPause,
   pauseReading,
@@ -21,36 +19,22 @@ import {
   useReading,
 } from '../lib/readAloud';
 import { useApp } from '../lib/store';
-import { BANNER_GRACE_MS, useLinkNow, useLinkState } from './ConnectionPill';
+import { useLinkBar } from './ConnectionPill';
 import { BarStack, type BarSpec } from './surfaces';
 
 /**
- * The link, only once it's plainly down: coming back to the app reconnects in
- * about a second, and a bar flashing on every return would say something was
- * wrong when it wasn't.
+ * The link, in the same words as the tabs' bar (`useLinkBar`), held back for
+ * a calm reconnect; the bar opens the Connection screen.
  */
 function useConnectionBar(): BarSpec | null {
   const router = useRouter();
-  const state = useLinkState();
-  const now = useLinkNow(state.link, 10_000);
-  const down = state.link.kind !== 'connected';
-  const [late, setLate] = useState(false);
-  useEffect(() => {
-    if (!down) return;
-    const timer = setTimeout(() => setLate(true), BANNER_GRACE_MS);
-    return () => {
-      clearTimeout(timer);
-      setLate(false);
-    };
-  }, [down]);
-  if (!down) return null;
-  const p = pill(state, now);
-  if (!late && p.tone !== 'problem') return null;
+  const { bar } = useLinkBar();
+  if (!bar) return null;
   return {
     id: 'connection',
-    tone: p.tone === 'problem' ? 'problem' : 'waiting',
-    title: p.label,
-    detail: 'Saved messages shown',
+    tone: bar.tone === 'problem' ? 'problem' : 'waiting',
+    title: bar.title,
+    detail: bar.detail,
     onPress: () => router.push('/connection'),
     pressHint: 'Connection details',
   };

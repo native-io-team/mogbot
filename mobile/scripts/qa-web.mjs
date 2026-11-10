@@ -15,11 +15,12 @@
  *
  *   pnpm qa:web                          # everything, into qa-shots/
  *   pnpm qa:web --only chat-,composer-   # shots whose name starts with chat- or composer-
- *   pnpm qa:web --phases heavy           # only these phases (demo,fresh,live,cached,impostor,bars,usage-accounts,heavy,importing,team-setup,live-work,engine,probe,torture)
+ *   pnpm qa:web --phases heavy           # only these phases (demo,fresh,first-run,live,cached,impostor,bars,usage-accounts,heavy,importing,team-setup,live-work,engine,probe,torture)
  *   pnpm qa:web --themes dark            # one theme
  *   pnpm qa:web --phases send            # a send, frame by frame (not in the default run)
  *   pnpm qa:web --phases perf            # a 5,000-line chat: first render and scroll jank (not in the default run)
  *   pnpm qa:web --phases reconnecting    # the Mac going away under an open app (not in the default run)
+ *   pnpm qa:web --phases link-down       # the connection bar: away, back, the Mac's app stuck or closing (not in the default run)
  *   pnpm qa:web --out /tmp/shots
  *   pnpm qa:web --web-port 8098 --mock-port 47498 --cdp-port 9681
  *   QA_WEB_PORT=… QA_MOCK_PORT=… QA_CDP_PORT=… pnpm qa:web
@@ -55,7 +56,7 @@ const MAX_MS = Number(opt('--max-ms', 'QA_MAX_MS', 75 * 60 * 1000));
 const PHASES = opt(
   '--phases',
   'QA_PHASES',
-  'demo,fresh,live,cached,impostor,bars,usage-accounts,heavy,importing,team-setup,live-work,engine,probe,torture'
+  'demo,fresh,first-run,live,cached,impostor,bars,usage-accounts,heavy,importing,team-setup,live-work,engine,probe,torture'
 ).split(',');
 const phase = (name) => PHASES.includes(name);
 // Ports other tools in this repo own: the desktop app, its harness, the phone's Metro.
@@ -2213,6 +2214,126 @@ async function reconnectingShots(page) {
 }
 
 /**
+ * The Mac going away under an open tab, in order, as the connection bar says
+ * it: reconnecting (calm), can't reach it (past 15 s), "What to check" open,
+ * back (one quiet line), then nothing. Then the app on the Mac stuck (the
+ * socket taken, nothing said: `--hung`), and the app saying goodbye as it
+ * closes. Not in the default run.
+ */
+async function linkDownShots(page) {
+  const has = (testId) => `!!document.querySelector('[data-testid="${testId}"]')`;
+  // In-app navigation keeps the transport (a reload would start it over).
+  const open = (route) =>
+    page.eval(
+      `history.pushState(null, '', ${JSON.stringify(route)}); dispatchEvent(new PopStateEvent('popstate'))`
+    );
+  // The web build's tab bar is a pill over the top of the screen, right where
+  // the connection bar sits: hidden for these shots so the bar can be read.
+  const hideTabs = () =>
+    page.eval(`(() => {
+      for (const e of document.querySelectorAll('body *')) {
+        const r = e.getBoundingClientRect();
+        const t = e.innerText || '';
+        if (r.top < 120 && r.height > 30 && r.height < 90 && t.includes('Catch up') && t.includes('Projects'))
+          e.style.visibility = 'hidden';
+      }
+    })()`);
+  const shot = async (name, theme, route, check) => {
+    if (!wanted(`${name}-${theme}`)) return;
+    await hideTabs();
+    await capture(page, `${name}-${theme}`, { route, check, theme });
+  };
+  for (const theme of THEMES) {
+    await setTheme(page, theme);
+    for (const [tab, route] of [
+      ['agents', '/agents'],
+      ['catch-up', '/catch-up'],
+    ]) {
+      await startMock();
+      await page.goto(WEB + route);
+      await sleep(5000);
+      await killMock();
+      await sleep(3500);
+      await shot(
+        `link-reconnecting-${tab}`,
+        theme,
+        `${route} (Mac gone 3 s)`,
+        'One bar on the content margin: “Reconnecting to your Mac…”, “Last heard from it just now · showing what was saved”, Try again, What to check; the list readable under it; no toast, no “as of” anywhere else'
+      );
+      // Opened again with the Mac still away (a cold start): past the calm 15 s
+      // it says plainly that it can't reach it.
+      await page.goto(WEB + route);
+      await sleep(17000);
+      await shot(
+        `link-down-${tab}`,
+        theme,
+        `${route} (opened with the Mac away, 17 s)`,
+        'The same bar, now “Can’t reach your Mac” with its red dot and when it last heard; nothing else says it'
+      );
+      if (tab === 'agents') {
+        await page.clickText('What to check').catch((e) => page.errors.push(e.message));
+        await sleep(600);
+        await shot(
+          `link-down-checks-${tab}`,
+          theme,
+          `${route} (What to check)`,
+          'Three causes, each with its fix (asleep or shut; Tailscale off or another account; the app stuck), then Connection details'
+        );
+      }
+      await startMock();
+      await page
+        .waitFor(has('connection-back'), 20_000, 'back in touch')
+        .catch((e) => page.errors.push(e.message));
+      await sleep(300);
+      await shot(
+        `link-back-${tab}`,
+        theme,
+        `${route} (Mac back)`,
+        'One quiet line, “Back in touch with your Mac”, where the bar was'
+      );
+      await sleep(3500);
+      await shot(`link-back-gone-${tab}`, theme, `${route} (a moment later)`, 'Nothing: the list as usual');
+    }
+
+    // The app on the Mac stuck: the socket is taken and nothing is said.
+    await startMock();
+    await page.goto(`${WEB}/agents`);
+    await sleep(5000);
+    await killMock();
+    await startMock('--hung');
+    await sleep(30000);
+    await shot(
+      'link-stuck-agents',
+      theme,
+      '/agents (the Mac’s app hung)',
+      '“The app on your Mac isn’t responding”, “Your Mac is reachable · last heard…”; What to check says to quit and reopen it, never blames the user'
+    );
+    await open('/catch-up');
+    await sleep(1500);
+    await shot('link-stuck-catch-up', theme, '/catch-up (the Mac’s app hung)', 'The same bar, same words, on Catch up');
+    await page.clickText('What to check').catch((e) => page.errors.push(e.message));
+    await sleep(600);
+    await shot('link-stuck-checks-catch-up', theme, '/catch-up (What to check)', 'Quit it and open it again; it may catch up by itself');
+    await open('/chat/chief');
+    await sleep(2000);
+    await shot('link-stuck-chat', theme, '/chat/chief (the Mac’s app hung)', 'The chat’s bar over the composer says the same words');
+
+    // The app said goodbye as it closed (a quit, an update's restart).
+    await startMock();
+    await page.goto(`${WEB}/agents`);
+    await sleep(5000);
+    await stopMock();
+    await sleep(3500);
+    await shot(
+      'link-closing-agents',
+      theme,
+      '/agents (the Mac’s app closing)',
+      '“Waiting for the app on your Mac”: it said it was closing, for an update or a restart'
+    );
+  }
+}
+
+/**
  * Straight after pairing, before any chat was opened: nothing saved for it.
  * Settled past the first 15 s, which read as "Connecting…" (`CALM_MS`).
  */
@@ -2720,6 +2841,59 @@ const TORTURE = [
     route: '/chat/quiet',
     ready: 'Quiet',
     check: 'An agent with no lines: its empty state, the composer usable, no stray divider or time',
+  },
+];
+
+/**
+ * A Mac just set up (`--solo`): only the Chief, its stored greeting and
+ * nothing else. What a new phone lands on, and its first chat.
+ */
+const FIRST_RUN = [
+  {
+    name: 'firstrun-agents',
+    route: '/agents',
+    ready: 'Chief of Staff',
+    settle: 2500,
+    check: 'Only the Chief, its greeting as the preview; nothing that looks broken or empty',
+  },
+  {
+    name: 'firstrun-catch-up',
+    route: '/catch-up',
+    settle: 2500,
+    check:
+      'Nothing waiting on a first day: the calm check, “All caught up” said once, why it is empty and the way to the Chief; spacing even top to bottom',
+  },
+  {
+    name: 'firstrun-chat-chief',
+    route: '/chat/chief',
+    ready: 'Tell me what’s on your plate',
+    settle: 2500,
+    check:
+      'The Chief’s greeting, then the desk’s three ideas as chips under it (Brief me every morning · Sort my inbox, draft replies · Research it and write it up), and the composer empty',
+  },
+  {
+    name: 'firstrun-chat-chief-idea',
+    route: '/chat/chief',
+    ready: 'Brief me every morning',
+    settle: 2000,
+    act: async (page) => {
+      await page.clickText('Brief me every morning');
+      await sleep(800);
+    },
+    after: async (page) => {
+      await page.eval(
+        `(() => { const t = document.querySelector('textarea'); if (!t) return; const set = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value').set; set.call(t, ''); t.dispatchEvent(new Event('input', { bubbles: true })); })()`
+      );
+      await sleep(400);
+    },
+    check:
+      'A chip typed its whole brief into the composer (ending “My topics: ”) and nothing was sent; the chips stay until you send',
+  },
+  {
+    name: 'firstrun-projects',
+    route: '/projects',
+    settle: 2500,
+    check: 'No projects yet, said in one line',
   },
 ];
 
@@ -3260,6 +3434,13 @@ async function main() {
     await each(IMPORTING);
   }
 
+  if (phase('first-run')) {
+    await startMock('--solo');
+    await page.goto(`${WEB}/agents`);
+    await sleep(4000);
+    await each(FIRST_RUN);
+  }
+
   if (phase('team-setup')) {
     await startMock('--team-setup');
     await page.goto(`${WEB}/agents`);
@@ -3304,6 +3485,7 @@ async function main() {
   }
 
   if (phase('reconnecting')) await reconnectingShots(page);
+  if (phase('link-down')) await linkDownShots(page);
 
   if (phase('perf')) {
     await startMock('--torture');

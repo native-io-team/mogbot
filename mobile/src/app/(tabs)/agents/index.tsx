@@ -36,7 +36,7 @@ import { ChatView } from '../../../components/ChatView';
 import { GlanceRow } from '../../../components/usageStack';
 import { useGlance } from '../../../lib/glance';
 import { AgentAccent } from '../../../lib/accent';
-import { ConnectionNotice, LinkProblem, useNow } from '../../../components/ConnectionPill';
+import { ConnectionBar, LinkProblem, useNow } from '../../../components/ConnectionPill';
 import { DemoCard } from '../../../components/DemoCard';
 import { Button, Icon, IconButton, useRipple, T, tap } from '../../../components/ui';
 import { toggleFor, type AgentAction } from '../../../lib/actions';
@@ -199,9 +199,10 @@ export default function Agents() {
     const out: Row[] = [];
     const add = (a: Agent) =>
       out.push({ kind: 'agent', key: a.id, agent: a, quiet: home.quiet.has(a.id) });
-    // Offline (to say "as of"), or with Rooms below: the agents get their own label.
-    // No "3 working" line: each key says whether its agent works, is free or needs you.
-    if (!live || rooms?.length) out.push({ kind: 'header', key: 'h-rest', title: 'Agents' });
+    // With Rooms below, the agents get their own label. Offline, when it last heard
+    // is the connection bar's to say, once. No "3 working" line: each key says
+    // whether its agent works, is free or needs you.
+    if (rooms?.length) out.push({ kind: 'header', key: 'h-rest', title: 'Agents' });
     if (home.chief) add(home.chief);
     home.pinned.forEach(add);
     home.rest.forEach(add);
@@ -255,14 +256,11 @@ export default function Agents() {
   // unmounting one mid-refresh leaves the list held down (lib/refresh).
   const { refreshing, onRefresh, outcome, dismiss } = useRefresh(async () => {
     if (useApp.getState().link.kind !== 'connected') throw new Error('offline');
-    try {
-      const fresh = asOverview(await call('agents.overview', {}));
-      if (fresh) setApp((s) => ({ overview: shareStructure(s.overview, fresh) }));
-      if (roomsOffered(useApp.getState().welcome)) await refreshRooms();
-    } catch (e) {
-      setError(describeError(e));
-      throw e;
-    }
+    // A failure is said once, under the spinner or by the connection bar: never
+    // also as a toast over the rows.
+    const fresh = asOverview(await call('agents.overview', {}));
+    if (fresh) setApp((s) => ({ overview: shareStructure(s.overview, fresh) }));
+    if (roomsOffered(useApp.getState().welcome)) await refreshRooms();
   });
 
   // In the split, something is always open: what needs you, else the top agent.
@@ -333,7 +331,7 @@ export default function Agents() {
         <>
           <RefreshStatus outcome={outcome} onRetry={onRefresh} onDismiss={dismiss} />
           <DemoCard />
-          <ConnectionNotice />
+          <ConnectionBar style={styles.connection} />
           <Refused />
           <ImportChoiceCard />
           {!removed && glance && (
@@ -473,8 +471,9 @@ function SectionHeader({
 }) {
   const colors = useColors();
   const styles = useStyles();
-  useNow(30_000); // re-render to keep "as of" current
-  const asOf = useApp((s) => (s.link.kind === 'reconnecting' ? s.link.lastSeenAt : s.syncedAt));
+  // Offline, the connection bar says when it last heard; only a refusal (no bar) says it here.
+  useNow(30_000);
+  const asOf = useApp((s) => (s.link.kind === 'refused' ? s.syncedAt : null));
   const label = live || !asOf ? title : `${title} · as of ${formatAgo(asOf)}`;
   return (
     // A label belongs to the rows under it: close below, a clear gap above.
@@ -600,6 +599,7 @@ const useStyles = makeStyles((colors) => ({
   sectionLabel: { flex: 1 },
   sectionNext: { paddingTop: space.xl },
   quota: { paddingHorizontal: space.lg, paddingTop: space.sm, paddingBottom: space.xs },
+  connection: { marginHorizontal: space.lg, marginTop: space.xs, marginBottom: space.sm },
   headerButtons: { flexDirection: 'row', alignItems: 'center' },
   hiddenToggle: {
     flexDirection: 'row',
