@@ -226,7 +226,8 @@ export function engineItemCopy(
   }
   return {
     title: `Get your Mac ready for ${engine.name}`,
-    lede: `${engine.name} needs a couple of things first. It takes a few minutes, and may ask for your Mac password.`,
+    // Named, because a password box for a tool nobody mentioned is the scary moment.
+    lede: `${engine.name} runs on two free tools, Homebrew and Node.js. The app installs them for you in a few minutes, and may ask for your Mac password.`,
     action: 'Get it ready',
   };
 }
