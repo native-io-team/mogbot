@@ -98,6 +98,11 @@ export interface WorkStep {
   summary?: string;
   /** The last lines a long or failed command printed (finished timelines only). */
   output?: string[];
+  /**
+   * Its exact command or tool input is kept on this Mac, for the desk's
+   * "Show exact command" (`agents_step_exact`). The text never rides here.
+   */
+  hasExact?: boolean;
 }
 
 /** A tool known to take a while (`agents::describe::Slow`); a newer Mac may send another. */
@@ -170,6 +175,12 @@ export interface TurnWork {
    * from a Mac that never leaves them out, and from pages that didn't ask.
    */
   stepsOmitted?: boolean;
+  /** The engine it ran on ("Claude Code"), as the Mac started it. Older Macs omit it. */
+  engine?: string;
+  /** The account it ran on, by the name it is shown by. */
+  account?: string;
+  /** The model, only as the engine reported it; absent when it didn't say. */
+  model?: string;
 }
 
 export interface Agent {

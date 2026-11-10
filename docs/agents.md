@@ -969,6 +969,34 @@ steps has no line.
   ["work.live"]`); others get the status without `work`, and the overview
   never carries it (it goes out on every registry change).
 
+#### Under the hood, desk only (`agents/work/detail.rs`, `agents/briefing.rs`, `commands/agents_desk.rs`)
+
+For people who live in a terminal and want to see what ran:
+
+- **Ran on**: beside the folded line, "Claude Code · sam@acme.com ·
+  claude-opus-4-6". The engine and account are the ones the runner started
+  the turn on (`work::on_ran_on`; the last try's, when a limit moved it).
+  The model is only what the engine said: Claude Code's `system/init`
+  event, Codex's `thread/start` result (`Step::Model`). Absent when it
+  didn't say; nothing is inferred from the agent's settings.
+- **Show exact command**: under a step, the command line (or the tool and
+  its input) exactly as it ran. It is kept beside the timeline in
+  `<home>/turn-detail/<message-id>.json`, never on the step (which carries
+  only `hasExact`), so the status, the phone and notifications never see it.
+  It passes the Keychain redaction and `work::scrub` line by line before it
+  is written, the redaction again as `agents_step_exact` reads it, and is
+  clipped to 4,000 characters. Pruned with its timeline.
+- **What it was told**: the system prompt the turn was given (the app's own
+  sections: voice, work, independence, policy, secrets it has *by name*,
+  access, the outside-text note) split at its `## ` headings, plus the
+  agent's CLAUDE.md as the engine read it. Read-only, from "What it was
+  told" under a turn's steps or the … menu (the newest). Stored once by a
+  hash of its text (`<home>/briefings/<key>.json`; turns point at their key),
+  redacted as kept and as read, and dropped when no kept timeline points at it.
+
+None of these is a phone or Remote Access surface; only the desk's commands
+read them.
+
 ## Tools agents get (`src-tauri/src/agents/mcp.rs`)
 
 Served by the existing loopback agent bridge at `/mcp/agent`. The path names
@@ -4115,6 +4143,17 @@ That line goes through `runner::record` as a `MessageKind::wants_user()` kind,
 the same predicate as replies, and is recorded after the wake starts, so it
 falls inside the turn. Notifications use the same predicate, so a check-in
 and its answer post one notification per turn.
+
+### Every routine at once (`agents/routines_bulk.rs`, `AgentsRoutinesView`)
+
+The sidebar's Routines row and ⌘K "Routines" open one list of every agent's
+routines: the agent's key, the note, how it runs in words, its next run, its
+last run's outcome, and an on/off switch. **Pause all routines…** and
+**Resume all routines…** (the list's buttons, or ⌘K) ask first. Resume all
+is the exact undo of Pause all: it wakes only routines marked
+`pausedByBulk`, never one paused by hand, by an admin (`pausedByAdmin`) or by
+an import for review. Changing a routine by hand clears the mark
+(`schedule::set_paused`).
 
 ### Routines in steps, with your OK in the middle (`src-tauri/src/agents/routine_steps.rs`)
 

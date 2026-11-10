@@ -32,8 +32,21 @@ import {
   ChevronRightIcon,
   CollaboratorsIcon,
   PinIcon,
+  RoutineIcon,
 } from '@/components/icons';
-import { ContextMenu, ContextMenuContent, ContextMenuTrigger } from '../primitives/ContextMenu';
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuSeparator,
+  ContextMenuTrigger,
+} from '../primitives/ContextMenu';
+import {
+  AgentGroupSection,
+  MoveToGroupItems,
+  NewGroupField,
+  startAgentDrag,
+} from './AgentGroupParts';
+import { sectionAgents, useAgentGroups, type AgentGroup } from '../../lib/agentGroups';
 import { Button } from '../primitives/Button';
 import { IconButton } from '../primitives/IconButton';
 import { StatusPill } from '../primitives/StatusPill';
@@ -58,6 +71,7 @@ import {
   needsYou,
   usageLimited,
   roleWithoutPath,
+  folderName,
   type Agent,
   type AgentMessage,
   type SearchHit,
@@ -88,6 +102,10 @@ interface AgentsSidebarProps {
   rooms: { room: Room; members: Agent[] }[];
   roomActions: RoomActions;
   onNewRoom: () => void;
+  /** Routines, every agent's in one list. */
+  onOpenRoutines?: () => void;
+  /** Routines is the view on screen. */
+  routinesOpen?: boolean;
 }
 
 function subtitle(agent: Agent): ReactNode {
@@ -292,7 +310,11 @@ export function AgentsSidebar({
   rooms,
   roomActions,
   onNewRoom,
+  onOpenRoutines,
+  routinesOpen,
 }: AgentsSidebarProps) {
+  // Optional groups (by project, or your own), off by default.
+  const grouping = useAgentGroups();
   const searching = query.trim().length > 0;
   // By attention (waiting on you, working, recent), held still while the
   // list is in use so a row never moves under the pointer, and re-sorted at
@@ -320,6 +342,7 @@ export function AgentsSidebar({
   // The one row in the Tab order: the open one, else the first.
   const tabStop = shown.some((a) => a.id === selectedId) ? selectedId : shown[0]?.id;
 
+  const custom = grouping.mode === 'custom';
   const row = (agent: Agent) => (
     <AgentRow
       key={agent.id}
@@ -329,8 +352,15 @@ export function AgentsSidebar({
       arrived={isNew(agent.id)}
       onSelect={onSelect}
       actions={actions}
+      groups={custom ? grouping.groups : undefined}
+      group={custom ? grouping.assign[agent.id] : undefined}
     />
   );
+  const team = visible.filter((a) => !a.isMain);
+  const sections =
+    grouping.mode === 'off'
+      ? null
+      : sectionAgents(team, grouping, (path) => folderName(path) || path);
 
   return (
     <div
@@ -354,7 +384,21 @@ export function AgentsSidebar({
               How many wait is said once, on the bell (`InFlightBell`); each
               waiting row says it once more, in its own pill. */}
           {visible.filter((a) => a.isMain).map(row)}
-          {visible.filter((a) => !a.isMain).map(row)}
+          {sections
+            ? sections
+                .filter((section) => custom || section.agents.length > 0)
+                .map((section) => (
+                  <AgentGroupSection
+                    key={section.key}
+                    section={section}
+                    collapsed={grouping.collapsed.includes(section.key)}
+                    droppable={custom}
+                  >
+                    {section.agents.map(row)}
+                  </AgentGroupSection>
+                ))
+            : team.map(row)}
+          {custom && grouping.naming && <NewGroupField />}
           {/* Rooms right after the agents, before the hidden ones (as on the
               phone), so they're seen without scrolling past the hidden list. */}
           {rooms.length > 0 && (
@@ -396,6 +440,18 @@ export function AgentsSidebar({
               <AddIcon size={16} />
               <span>New agent</span>
             </Button>
+            {onOpenRoutines && (
+              <Button
+                variant="ghost"
+                width="fill"
+                className={`workspace-sidebar-add-project agents-list__routines${routinesOpen ? ' is-active' : ''}`}
+                aria-current={routinesOpen ? 'page' : undefined}
+                onClick={onOpenRoutines}
+              >
+                <RoutineIcon size={16} />
+                <span>Routines</span>
+              </Button>
+            )}
             {/* A room needs two agents to talk to. */}
             {agents.length >= 2 && (
               <Button
@@ -423,6 +479,8 @@ const AgentRow = memo(function AgentRow({
   arrived,
   onSelect,
   actions,
+  groups,
+  group,
 }: {
   agent: Agent;
   current: boolean;
@@ -431,6 +489,10 @@ const AgentRow = memo(function AgentRow({
   arrived: boolean;
   onSelect: (agentId: string) => void;
   actions: AgentActions;
+  /** Your own groups, when the list is grouped by them: the row drags into one. */
+  groups?: AgentGroup[];
+  /** The group it's in. */
+  group?: string;
 }) {
   // Its loaded lines, only while it's waiting: the row says what it's asking.
   const lines = useAgentsSelector((s) => (needsYou(agent) ? s.messages[agent.id] : undefined));
@@ -454,6 +516,8 @@ const AgentRow = memo(function AgentRow({
           aria-current={current ? 'true' : undefined}
           onPointerEnter={tooltipIfTruncated}
           onClick={() => onSelect(agent.id)}
+          draggable={groups ? true : undefined}
+          onDragStart={groups ? (e) => startAgentDrag(e, agent.id) : undefined}
         >
           <AgentKey
             id={agent.id}
@@ -502,6 +566,12 @@ const AgentRow = memo(function AgentRow({
       </ContextMenuTrigger>
       <ContextMenuContent aria-label={`Actions for ${agent.name}`}>
         <AgentActionItems agent={agent} kind="context" {...actions} />
+        {groups && groups.length > 0 && (
+          <>
+            <ContextMenuSeparator />
+            <MoveToGroupItems agentId={agent.id} groups={groups} current={group} />
+          </>
+        )}
       </ContextMenuContent>
     </ContextMenu>
   );

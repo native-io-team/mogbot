@@ -118,6 +118,11 @@ pub struct WorkStep {
     /// ([`output::tail`]). Kept on the stored timeline only, never live.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub output: Vec<String>,
+    /// Its exact command or tool input is kept, for the desk's "Show exact
+    /// command" (`agents_step_exact`). The text itself never rides here, so
+    /// it never reaches the phone or a notification.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub has_exact: bool,
 }
 
 impl WorkStep {
@@ -132,6 +137,7 @@ impl WorkStep {
             ended_at: None,
             summary: None,
             output: Vec::new(),
+            has_exact: false,
         }
     }
 }
@@ -211,6 +217,16 @@ pub struct TurnWork {
     /// asked keeps getting the steps inline.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub steps_omitted: bool,
+    /// The engine the turn ran on ("Claude Code"), as the runner started it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub engine: Option<String>,
+    /// The account it ran on, by the name it is shown by (`wallet::labelled`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+    /// The model, only as the engine itself reported it (Claude Code's
+    /// `init` event, Codex's `thread/start`). Absent when it didn't say.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
 }
 
 impl TurnWork {
@@ -250,6 +266,10 @@ pub struct Action {
     /// The command line itself, for finding its process ("Stop this step",
     /// the CPU check). Held in memory while it runs; never shown or kept.
     pub command: Option<String>,
+    /// What it ran, exactly: a command line, or the tool and its input, as
+    /// the engine sent it. Raw here; [`detail::exact`] redacts and scrubs it
+    /// before it is kept, and only the desk's "Show exact command" reads it.
+    pub exact: Option<String>,
 }
 
 /// What became of a call, as the engine reported it.
@@ -399,6 +419,12 @@ const HIDDEN: [&str; 12] = [
 /// item) in plain words. `None` for a call with no name, and for the
 /// engine's own bookkeeping ([`HIDDEN`]), which isn't work done.
 pub fn describe_tool(name: &str, input: Option<&Value>) -> Option<Action> {
+    let mut action = describe_call(name, input)?;
+    action.exact = detail::exact_of(name, input);
+    Some(action)
+}
+
+fn describe_call(name: &str, input: Option<&Value>) -> Option<Action> {
     if name.is_empty() || HIDDEN.contains(&name) {
         return None;
     }
@@ -602,6 +628,7 @@ fn act(
         project: None,
         slow: None,
         command: None,
+        exact: None,
     }
 }
 
@@ -1623,6 +1650,10 @@ struct Live {
     quiet_since: Option<i64>,
     /// Something shown live changed since the status was last sent.
     dirty: bool,
+    /// Each step's exact command, cleaned (`detail::exact`), by its index.
+    exacts: HashMap<u32, String>,
+    /// The briefing this turn was given (`super::briefing`), by its key.
+    briefing: Option<String>,
 }
 
 /// The settings tools whose call may end as a card the user hasn't answered
@@ -1659,6 +1690,18 @@ fn settings_outcome(
 }
 
 impl Live {
+    /// A step's exact command, kept for as long as the step itself is.
+    fn keep_exact(&mut self, n: u32, exact: Option<String>) {
+        if let Some(exact) = exact {
+            self.exacts.insert(n, exact);
+        }
+        let first = self
+            .work
+            .step_count
+            .saturating_sub(self.work.steps.len() as u32);
+        self.exacts.retain(|&k, _| k >= first);
+    }
+
     fn push(&mut self, step: WorkStep) -> u32 {
         let n = self.work.step_count;
         self.work.step_count = self.work.step_count.saturating_add(1);
@@ -1691,17 +1734,20 @@ impl Live {
     fn action(&mut self, action: Action, now: i64) {
         let label = clean(&action.label);
         let doing = clean(&action.doing);
+        let exact = action.exact.as_deref().and_then(detail::exact);
         let Some(id) = action.id else {
             // Nothing can come back for a call without an id, so its edits
             // are never counted: only an observed success is.
-            self.push(WorkStep {
+            let n = self.push(WorkStep {
                 at: now,
                 kind: action.kind,
                 label,
                 outcome: None,
                 image: None,
+                has_exact: exact.is_some(),
                 ..WorkStep::blank()
             });
+            self.keep_exact(n, exact);
             self.running = None;
             self.doing = None;
             self.current = None;
@@ -1720,7 +1766,9 @@ impl Live {
             let n = call.step;
             if let Some(step) = self.step_mut(n) {
                 step.label = label;
+                step.has_exact |= exact.is_some();
             }
+            self.keep_exact(n, exact);
             return;
         }
         let n = self.push(WorkStep {
@@ -1729,8 +1777,10 @@ impl Live {
             label,
             outcome: None,
             image: None,
+            has_exact: exact.is_some(),
             ..WorkStep::blank()
         });
+        self.keep_exact(n, exact);
         self.calls.insert(
             id.clone(),
             Call {
@@ -1991,6 +2041,31 @@ pub fn on_step(agent_id: &str, kind: StepKind, label: &str, now: i64) {
     });
 }
 
+/// What the turn runs on: the engine and the account the runner started
+/// it with (the last try's, when a limit moved it to another account).
+pub fn on_ran_on(agent_id: &str, engine: &str, account: &str) {
+    with_live(agent_id, |live| {
+        live.work.engine = Some(engine.to_string());
+        live.work.account = Some(account.trim().to_string()).filter(|a| !a.is_empty());
+        // A new try on another account: its engine says its model again.
+        live.work.model = None;
+    });
+}
+
+/// The model, as the engine reported it.
+pub fn on_model(agent_id: &str, model: &str) {
+    let model = clip(model.trim(), 60);
+    if model.is_empty() {
+        return;
+    }
+    with_live(agent_id, |live| live.work.model = Some(model));
+}
+
+/// The briefing the turn was given, by its key (`super::briefing::keep`).
+pub fn on_briefing(agent_id: &str, key: String) {
+    with_live(agent_id, |live| live.briefing = Some(key));
+}
+
 /// What came back for a call the turn made.
 pub fn on_result(agent_id: &str, result: CallResult) {
     with_live(agent_id, |live| live.result(result));
@@ -2071,6 +2146,9 @@ pub fn live(agent_id: &str) -> Option<TurnWork> {
             project: None,
             own_browser: false,
             steps_omitted: false,
+            engine: live.work.engine.clone(),
+            account: live.work.account.clone(),
+            model: live.work.model.clone(),
         }
     })
     .filter(|w| w.step_count > 0 || w.current.is_some() || w.quiet_since.is_some())
@@ -2134,6 +2212,10 @@ pub fn finish(app: &AppHandle, agent_id: &str, now: i64) {
     else {
         return;
     };
+    let kept = detail::Kept {
+        exacts: live.exacts.clone().into_iter().collect(),
+        briefing: live.briefing.clone(),
+    };
     let Some((message, work)) = settle(live, now) else {
         return;
     };
@@ -2141,6 +2223,7 @@ pub fn finish(app: &AppHandle, agent_id: &str, now: i64) {
         tracing::warn!("[Agents] couldn't keep the timeline for {agent_id}: {e}");
         return;
     }
+    detail::save(agent_id, &message.id, &kept);
     prune(agent_id);
     let mut message = message;
     message.work = Some(work);
@@ -2230,6 +2313,7 @@ fn prune_at(agent_id: &str, now: std::time::SystemTime) {
             let _ = std::fs::remove_file(path);
         }
     }
+    detail::prune(agent_id);
 }
 
 /// A chat page without what each turn's steps were: the folded lines need
@@ -2298,6 +2382,7 @@ pub fn apply(agent_id: &str, page: &mut [AgentMessage]) {
     }
 }
 
+pub mod detail;
 mod liveness;
 pub mod output;
 pub use liveness::*;

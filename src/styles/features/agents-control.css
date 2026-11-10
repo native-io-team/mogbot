@@ -598,3 +598,30 @@
   line-height: var(--line-height-help);
   color: var(--text-muted);
 }
+
+/* A and D on a focused approval card (components/agents/approvalKeys.ts):
+   the hint shows only while the card has focus, so it never says a key
+   works where it doesn't. */
+.agent-approval__key {
+  display: none;
+  margin-left: var(--spacing-xs);
+  padding: 0 var(--spacing-2xs);
+  border: var(--border-width-default) solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  font-family: inherit;
+  font-size: var(--font-size-caption);
+  line-height: var(--line-height-compact);
+  color: var(--text-muted);
+}
+
+.agent-chat__row--card[data-keys]:focus-within .agent-approval__key {
+  display: inline-block;
+}
+
+.agent-chat__row--card[data-keys]:focus {
+  outline: none;
+}
+
+.agent-chat__row--card[data-keys]:focus .agent-approval {
+  box-shadow: 0 0 0 var(--focus-ring-width) var(--focus-ring);
+}

@@ -1015,3 +1015,53 @@ fn a_settings_call_that_only_asked_says_it_asked() {
         )
     );
 }
+
+/// "What it did" says what ran the turn only as recorded: the model from
+/// Claude Code's own `init` event, never guessed.
+#[test]
+fn the_model_comes_from_the_engines_init_event_only() {
+    use super::super::stream::{claude_steps, Step};
+    let init = json!({ "type": "system", "subtype": "init", "session_id": "s", "model": "claude-opus-4-6" });
+    assert!(claude_steps(&init, 1).contains(&Step::Model("claude-opus-4-6".into())));
+    let other = json!({ "type": "system", "subtype": "compact_boundary", "model": "x" });
+    assert!(!claude_steps(&other, 1)
+        .iter()
+        .any(|s| matches!(s, Step::Model(_))));
+}
+
+/// A step's exact command is kept beside it, cleaned, and never on the step.
+#[test]
+fn a_steps_exact_command_is_kept_cleaned_and_off_the_timeline() {
+    let mut live = Live::default();
+    let input = json!({ "command": "curl -H 'Authorization: Bearer abcdefghijklmnopqrstuvwxyz012345' https://api.example.com/x" });
+    let mut action = describe_tool("Bash", Some(&input)).unwrap();
+    action.id = Some("c1".into());
+    live.action(action, 1);
+    assert!(live.work.steps[0].has_exact);
+    let kept = live.exacts.get(&0).unwrap();
+    assert!(kept.starts_with("curl"), "{kept}");
+    assert!(!kept.contains("abcdefghijklmnopqrstuvwxyz012345"), "{kept}");
+    // The step itself carries only the flag.
+    let shown = serde_json::to_string(&live.work.steps[0]).unwrap();
+    assert!(!shown.contains("curl -H"), "{shown}");
+    assert!(shown.contains("\"hasExact\":true"), "{shown}");
+}
+
+/// Steps that fall off the front take their exact commands with them.
+#[test]
+fn exact_commands_go_when_their_steps_do() {
+    let mut live = Live::default();
+    for n in 0..(MAX_STEPS + 5) {
+        let input = json!({ "command": format!("echo {n}") });
+        let mut action = describe_tool("Bash", Some(&input)).unwrap();
+        action.id = Some(format!("c{n}"));
+        live.action(action, n as i64);
+    }
+    assert_eq!(live.exacts.len(), MAX_STEPS);
+    assert!(!live.exacts.contains_key(&0));
+    let last = (MAX_STEPS + 4) as u32;
+    assert_eq!(
+        live.exacts.get(&last).cloned(),
+        Some(format!("echo {last}"))
+    );
+}

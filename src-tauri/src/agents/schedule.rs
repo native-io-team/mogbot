@@ -1778,6 +1778,9 @@ pub fn set_paused(agent_id: &str, id: &str, paused: bool) -> Result<(), CommandE
             }
             c.paused = paused;
             c.paused_on_import = false;
+            // Switched by hand (or by the bulk switch itself, which marks
+            // it again after): a later "Resume all" isn't its to undo.
+            c.extra.remove(super::routines_bulk::PAUSED_BY_BULK);
         }
     })?;
     if found {
