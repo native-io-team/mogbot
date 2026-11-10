@@ -22,7 +22,8 @@ import { KeyboardChatScrollView, KeyboardStickyView } from 'react-native-keyboar
 import Animated, { FadeIn, FadeInDown, FadeOut, LinearTransition } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useShallow } from 'zustand/react/shallow';
-import { AccentProvider, agentTint, useAccent } from '../lib/accent';
+import { keyLookFor } from '@shipstudio/companion-protocol';
+import { AccentProvider, useAccent } from '../lib/accent';
 import { announce } from '../lib/a11y';
 import { mentionQuery } from '../lib/composer';
 import { clearComposer, liveMentions, setComposer, useComposerDraft } from '../lib/drafts';
@@ -54,12 +55,13 @@ import {
   chromeScale,
   fonts,
   iconSize,
+  keyColorways,
   radius,
   space,
   speakerInk,
   tapSlop,
 } from '../lib/theme';
-import { makeStyles, useAppearance, useColors } from '../lib/appearance';
+import { makeStyles, useColors } from '../lib/appearance';
 import { Spinner } from './agent';
 import { AgentKey } from './AgentKey';
 import { DaySeparator, DraftRow, MessageRow, PendingRow, SendRise, WorkingRow } from './chat';
@@ -73,17 +75,24 @@ import { GalleryContext, chatGallery } from '../lib/gallery';
 
 const NONE: never[] = [];
 
-/** A member's name in its own colour, readable on either surface (as its badge's initials). */
-function useNameColor(color: string) {
+/**
+ * A member's name in its key's colourway (the face), readable on either
+ * surface: the key beside it and the name are one hue, never the older
+ * avatar colour (a Sage key's name was success green). As the desk's
+ * `--agents-ink-*`.
+ */
+const keyFace = (agent: Pick<Agent, 'name' | 'color' | 'colorway' | 'isMain'>) =>
+  keyColorways[keyLookFor(agent).colorway]?.face ?? keyColorways.putty.face;
+
+function useNameColor(agent: Agent) {
   const colors = useColors();
-  const appearance = useAppearance();
-  return speakerInk(agentTint(color, appearance), colors.textPrimary, colors.surfaceApp);
+  return speakerInk(keyFace(agent), colors.textPrimary, colors.surfaceApp);
 }
 
 /** A member's name and badge over the first of its lines in a run. */
 function Speaker({ agent }: { agent: Agent }) {
   const styles = useStyles();
-  const color = useNameColor(agent.color);
+  const color = useNameColor(agent);
   return (
     <View style={styles.speaker}>
       <AgentKey id={agent.id} name={agent.name} color={agent.color} size={keySize.sm} />
@@ -159,14 +168,13 @@ function RoomChat({ id }: { id: string }) {
   );
   const byId = useMemo(() => new Map(agents.map((a) => [a.id, a])), [agents]);
   // A member's @mention of another in its reply is drawn in that member's colour.
-  const appearance = useAppearance();
   const mentionColors = useMemo(
     () =>
       members.map((m) => ({
         name: m.name,
-        color: speakerInk(agentTint(m.color, appearance), colors.textPrimary, colors.surfaceApp),
+        color: speakerInk(keyFace(m), colors.textPrimary, colors.surfaceApp),
       })),
-    [members, appearance, colors.textPrimary, colors.surfaceApp]
+    [members, colors.textPrimary, colors.surfaceApp]
   );
   // As in each member's own chat: the newest card for its open copy offers
   // Keep / Discard, and each result's newest version is drawn in full.
