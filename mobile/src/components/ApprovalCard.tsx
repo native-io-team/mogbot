@@ -396,7 +396,7 @@ export function ApprovalCard({
             disabled={off}
             focusable={armed}
             onPress={() => void answer(true, true)}
-            accessibilityHint="Carry on with the other AI app (Claude Code or Codex) whenever this happens. Change it on your Mac in Settings → Agents → Usage."
+            accessibilityHint="Carry on with the other AI app (Claude Code or Codex) whenever this happens. Change it on your Mac in Settings → Accounts & usage."
             style={share}
           />
         </>
@@ -1180,8 +1180,12 @@ export const useCardStyles = makeStyles((colors) => ({
   showAll: { paddingHorizontal: space.md, paddingBottom: space.sm },
   /** "Details" under a summary: on the text's edge, not a field's inset. */
   detailsToggle: { alignSelf: 'flex-start' as const },
-  /** ⋯ · Deny · Allow: one row, the affirmative last. */
-  answers: { flexDirection: 'row', flexWrap: 'wrap', flexGrow: 1, gap: space.sm },
+  /**
+   * ⋯ · Deny · Allow: one row, the affirmative last. The card's whole width:
+   * sized to its content, three answers a row each (Wait · Just this time ·
+   * Always) measured wider than the card and hung off its left edge.
+   */
+  answers: { flexDirection: 'row', flexWrap: 'wrap', flexGrow: 1, width: '100%', gap: space.sm },
   /** A task's own menu: each option a full row, then the pair. */
   choices: { flexGrow: 1, flexBasis: '100%', gap: space.sm },
   more: {
