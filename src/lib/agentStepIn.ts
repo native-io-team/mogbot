@@ -58,7 +58,11 @@ export {
 } from '../../packages/companion-protocol/src/cardWords';
 
 /** The card's note while someone is in the tab: here, or from a phone. */
-export function stepInNowNote(onPhone?: string): string {
+export function stepInNowNote(onPhone?: string, barShown = false): string {
+  if (barShown)
+    return onPhone
+      ? `${onPhone} is in its browser now. Hand back there, or from the bar below.`
+      : 'You’re in its browser now. Hand back from the bar below when you’re done.';
   return onPhone
     ? `${onPhone} is in its browser now. Hand back there, or here.`
     : 'You’re in its browser now. Hand back when you’re done.';
