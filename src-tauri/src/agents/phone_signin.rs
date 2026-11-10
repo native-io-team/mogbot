@@ -992,8 +992,7 @@ pub async fn begin_step_in(
         return Err(refused(other));
     }
     let (a, r) = (agent_id.to_string(), request_id.to_string());
-    let mut job =
-        tokio::spawn(async move { super::step_in::begin_from_phone(&a, &r).await });
+    let mut job = tokio::spawn(async move { super::step_in::begin_from_phone(&a, &r).await });
     let (card, svc, tab) = match tokio::time::timeout(BEGIN_TIMEOUT, &mut job).await {
         Ok(Ok(Ok(v))) => v,
         Ok(Ok(Err(e))) => return Err(e),

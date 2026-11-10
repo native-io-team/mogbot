@@ -326,7 +326,10 @@ pub async fn begin_from_phone(
     .await
     .map_err(super::err_other)?
     .map_err(CommandError::expected)?;
-    tracing::info!(agent = agent_id, "[StepIn] the user stepped in from the phone");
+    tracing::info!(
+        agent = agent_id,
+        "[StepIn] the user stepped in from the phone"
+    );
     Ok((card, svc, t))
 }
 

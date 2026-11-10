@@ -250,8 +250,9 @@ fn the_phone_holds_the_tab_without_bringing_its_window_forward() {
         AT_THE_MAC
     );
 
-    let win = crate::agent_browser::signin::SigninWindow::borrow("req_p", a, svc.clone(), t.clone())
-        .unwrap();
+    let win =
+        crate::agent_browser::signin::SigninWindow::borrow("req_p", a, svc.clone(), t.clone())
+            .unwrap();
     assert!(win.borrowed());
     assert!(!win.gone());
     // The agent's other calls aren't kept out (only the held tab is).
@@ -261,7 +262,10 @@ fn the_phone_holds_the_tab_without_bringing_its_window_forward() {
     let n = fake.calls.lock().unwrap().len();
     win.close();
     let calls = fake.calls.lock().unwrap()[n..].to_vec();
-    assert!(calls.iter().any(|c| c == "Page.stopScreencast"), "{calls:?}");
+    assert!(
+        calls.iter().any(|c| c == "Page.stopScreencast"),
+        "{calls:?}"
+    );
     assert!(
         !calls.iter().any(|c| c == "Target.closeTarget"),
         "the agent's tab was closed: {calls:?}"

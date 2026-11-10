@@ -498,7 +498,10 @@ fn a_step_in_says_so_on_the_wire_and_hands_back() {
         step_in: true,
     };
     assert_eq!(serde_json::to_value(&b).unwrap()["stepIn"], true);
-    let sign_in = Begun { step_in: false, ..b };
+    let sign_in = Begun {
+        step_in: false,
+        ..b
+    };
     assert!(serde_json::to_value(&sign_in)
         .unwrap()
         .get("stepIn")
@@ -558,8 +561,7 @@ fn every_end_of_a_phone_step_in_hands_back_once() {
         let s = &src[src.find(name).unwrap()..];
         s[..s.find("\n}\n").unwrap()].to_string()
     };
-    assert!(body("fn spawn_reaper")
-        .contains("finish_live(&app, l, \"timed out\", How::TimedOut)"));
+    assert!(body("fn spawn_reaper").contains("finish_live(&app, l, \"timed out\", How::TimedOut)"));
     assert!(body("pub async fn stop(").contains("finish_live("));
     assert!(body("pub async fn stop_from_desk").contains("finish_live("));
     let done = body("pub async fn done(");
