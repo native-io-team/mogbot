@@ -4,6 +4,7 @@
  * draft re-renders the bubble that shows it and nothing else.
  */
 
+import type { Conversations } from '@shipstudio/companion-protocol';
 import type {
   LinkState,
   PushStatus,
@@ -48,6 +49,10 @@ export interface AppState extends SyncState {
   push: PushStatus | null;
   /** "Setting up your team", as the Mac last answered it; null when there's none. */
   teamSetup: TeamSetupView | null;
+  /** Each agent's conversations, as the Mac last answered (`agents.conversations`). */
+  conversations: Record<string, Conversations>;
+  /** The conversation on screen in each agent's chat on this phone. */
+  viewing: Record<string, string>;
 }
 
 export interface Served {
@@ -82,6 +87,8 @@ export const useApp = create<AppState>(() => ({
   highContrast: false,
   push: null,
   teamSetup: null,
+  conversations: {},
+  viewing: {},
 }));
 
 export const setApp = useApp.setState;

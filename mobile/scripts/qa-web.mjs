@@ -1374,6 +1374,40 @@ const LIVE = [
     },
   },
   {
+    name: 'conversations-sheet',
+    route: '/conversations?id=site',
+    ready: 'Update the winter opening hours',
+    check:
+      'Conversations sheet: one line on shared memory, New conversation with a plus, a search field, then Rebuild the Acme site (a check) and Update the winter opening hours (“1d ago”), then Rename this conversation',
+  },
+  {
+    name: 'chat-conversation',
+    route: '/chat/site',
+    ready: 'Acme Site',
+    act: async (page) => {
+      await page.goto(`${WEB}/conversations?id=site`);
+      await page.waitFor(
+        `document.body.innerText.includes('Update the winter opening hours')`,
+        20_000,
+        'the list'
+      );
+      await page.clickText('Update the winter opening hours');
+      await sleep(1800);
+    },
+    check:
+      'Acme Site’s chat on its second conversation: a slim bar under the header saying “Update the winter opening hours” with a chevron; only the two opening-hours lines in the chat',
+    after: async (page) => {
+      await page.goto(`${WEB}/conversations?id=site`);
+      await page.waitFor(
+        `document.body.innerText.includes('Rebuild the Acme site')`,
+        20_000,
+        'the list'
+      );
+      await page.clickText('Rebuild the Acme site');
+      await sleep(800);
+    },
+  },
+  {
     name: 'diff',
     route: '/chat/site',
     ready: 'Acme Site',
@@ -1536,7 +1570,8 @@ const LIVE = [
       await page.clickLabel('Read only').catch(() => {});
       await sleep(800);
     },
-    check: 'After Read only on Gmail: the Gmail row is gone (the Mac answered with the narrowed view); everything else as before',
+    check:
+      'After Read only on Gmail: the Gmail row is gone (the Mac answered with the narrowed view); everything else as before',
   },
   {
     name: 'on-its-own-team',
@@ -1550,7 +1585,8 @@ const LIVE = [
     name: 'agent-sheet-on-its-own-row',
     route: '/agent/fin',
     ready: 'Finance',
-    check: 'Finance’s sheet: “What it does on its own” with a shield, among Instructions, Memory and Files',
+    check:
+      'Finance’s sheet: “What it does on its own” with a shield, among Instructions, Memory and Files',
   },
   {
     name: 'settings-apps',

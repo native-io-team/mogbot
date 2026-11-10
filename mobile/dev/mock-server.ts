@@ -58,6 +58,8 @@ import {
   type AppConnectFlow,
   type AppConnection,
   type AppGrant,
+  type Conversations,
+  type ConversationView,
   type Device,
   type JournaledEvent,
   type MacStatus,
@@ -1889,21 +1891,21 @@ export function createMockServer(opts: MockOptions = {}) {
 
   /** What an agent can reach: its connected login cards, its browser, its secrets. */
   /** What the phone took away, per agent (`TEAM_KEY`: the team's rules). */
-const TEAM_KEY = 'team';
-const onItsOwnTaken = new Map<string, string[]>();
-const takenFrom = (id: string) => onItsOwnTaken.get(id) ?? [];
-function onItsOwnOf(id: string, name?: string): OnItsOwn {
-  const view: OnItsOwn = structuredClone(real.agentsOnItsOwn);
-  view.agentId = id;
-  view.agentName = name ?? view.agentName;
-  view.items = view.items
-    .filter((i) => !takenFrom(id).includes(i.key) && !takenFrom(TEAM_KEY).includes(i.key))
-    // The fixture's plan ended long ago: a live one has most of its hour left.
-    .map((i) => (i.endsAt ? { ...i, endsAt: Date.now() + 42 * 60_000 } : i));
-  return view;
-}
+  const TEAM_KEY = 'team';
+  const onItsOwnTaken = new Map<string, string[]>();
+  const takenFrom = (id: string) => onItsOwnTaken.get(id) ?? [];
+  function onItsOwnOf(id: string, name?: string): OnItsOwn {
+    const view: OnItsOwn = structuredClone(real.agentsOnItsOwn);
+    view.agentId = id;
+    view.agentName = name ?? view.agentName;
+    view.items = view.items
+      .filter((i) => !takenFrom(id).includes(i.key) && !takenFrom(TEAM_KEY).includes(i.key))
+      // The fixture's plan ended long ago: a live one has most of its hour left.
+      .map((i) => (i.endsAt ? { ...i, endsAt: Date.now() + 42 * 60_000 } : i));
+    return view;
+  }
 
-function reachOf(agentId: string): AgentReach {
+  function reachOf(agentId: string): AgentReach {
     const a = agent(agentId);
     const answered = (messages.get(agentId) ?? []).filter(
       (m) => m.approval?.login && m.approval.status === 'allowed'
@@ -2117,7 +2119,102 @@ function reachOf(agentId: string): AgentReach {
           out: false,
         },
       ];
+  // Conversations (`agents/conversations.rs`): every agent has its first;
+  // Acme Site also has a second, about the opening hours, its own lines in it.
+  const convs = new Map<string, { current: string; items: ConversationView[] }>();
+  function convsOf(agentId: string) {
+    let c = convs.get(agentId);
+    if (c) return c;
+    const t = Date.now();
+    const item = (id: string, title: string, ago: number): ConversationView => ({
+      id,
+      title,
+      named: false,
+      createdAt: t - ago - 3_600_000,
+      lastActivityAt: t - ago,
+      current: false,
+      loaded: id === 'first',
+      waiting: 0,
+    });
+    c = { current: 'first', items: [item('first', '', 0)] };
+    if (agentId === 'site') {
+      c.items = [
+        item('first', 'Rebuild the Acme site', 0),
+        item('c-hours', 'Update the winter opening hours', 26 * 3_600_000),
+      ];
+      const lines = messages.get('site') ?? [];
+      const said = (
+        id: string,
+        kind: 'user' | 'agent',
+        text: string,
+        ago: number
+      ): AgentMessage => ({
+        id,
+        agentId: 'site',
+        ts: t - ago,
+        kind,
+        text,
+        conversation: 'c-hours',
+      });
+      lines.unshift(
+        said(
+          'hours_1',
+          'user',
+          'Update the winter opening hours: closed Mondays, 8–4 the rest.',
+          27 * 3_600_000
+        ),
+        said(
+          'hours_2',
+          'agent',
+          'Done on the Visit page and the footer. Mondays now say “Closed”.',
+          26 * 3_600_000
+        )
+      );
+      messages.set('site', lines);
+    }
+    convs.set(agentId, c);
+    return c;
+  }
+  function convList(agentId: string): Conversations {
+    const c = convsOf(agentId);
+    const items = c.items
+      .map((i) => ({ ...i, current: i.id === c.current }))
+      .sort((a, b) => b.lastActivityAt - a.lastActivityAt);
+    return { agentId, current: c.current, items, routines: {} };
+  }
   const methods: Partial<Record<MethodName, Handler>> = {
+    'agents.conversations': (p) => convList(String(p.agentId)),
+    'agents.conversationSelect': (p) => {
+      const c = convsOf(String(p.agentId));
+      if (!c.items.some((i) => i.id === p.conversationId))
+        return fail({ type: 'Other', message: 'That conversation isn’t there any more.' });
+      c.current = String(p.conversationId);
+      return convList(String(p.agentId));
+    },
+    'agents.conversationNew': (p) => {
+      const c = convsOf(String(p.agentId));
+      const id = `c-${randomUUID().slice(0, 6)}`;
+      c.items.push({
+        id,
+        title: '',
+        named: false,
+        createdAt: Date.now(),
+        lastActivityAt: Date.now(),
+        current: true,
+        loaded: false,
+        waiting: 0,
+      });
+      c.current = id;
+      return convList(String(p.agentId));
+    },
+    'agents.conversationRename': (p) => {
+      const c = convsOf(String(p.agentId));
+      const item = c.items.find((i) => i.id === p.conversationId);
+      if (!item) return fail({ type: 'Other', message: 'That conversation isn’t there any more.' });
+      item.title = String(p.title).trim();
+      item.named = !!item.title;
+      return convList(String(p.agentId));
+    },
     'system.status': () => status,
     'devices.self': (_, c) => devices.get(c.deviceId)!.device,
     'devices.unpairSelf': (_, c) => {
@@ -2186,7 +2283,12 @@ function reachOf(agentId: string): AgentReach {
     'agents.messages': (p) => {
       if (!agent(String(p.agentId)))
         return fail({ type: 'Other', message: 'That agent no longer exists.' });
-      const list = messages.get(String(p.agentId)) ?? [];
+      if (p.conversation) convsOf(String(p.agentId));
+      const all = messages.get(String(p.agentId)) ?? [];
+      // One conversation's lines when it's named, as the Mac reads them.
+      const list = p.conversation
+        ? all.filter((m) => (m.conversation || 'first') === p.conversation)
+        : all;
       const limit = Number(p.limit ?? 50);
       const end = p.before ? list.findIndex((m) => m.id === p.before) : list.length;
       const stop = end === -1 ? 0 : end;
@@ -2250,6 +2352,7 @@ function reachOf(agentId: string): AgentReach {
         kind: 'user',
         text,
         clientId,
+        ...(typeof p.conversation === "string" ? { conversation: p.conversation } : {}),
         ...(staged.length
           ? { attachments: staged.map((b) => attach(agentId, id, b.name, b.mime, b.bytes)) }
           : {}),
@@ -2539,10 +2642,7 @@ function reachOf(agentId: string): AgentReach {
       if (sheet) {
         appSheets.delete(String(p.flowId));
         const url = typeof p.callbackUrl === 'string' ? p.callbackUrl : '';
-        if (
-          !url.startsWith('mogbot-companion://oauth?') ||
-          !url.includes(`state=${sheet.state}`)
-        ) {
+        if (!url.startsWith('mogbot-companion://oauth?') || !url.includes(`state=${sheet.state}`)) {
           appFlows.set(sheet.service, {
             service: sheet.service,
             flow: {

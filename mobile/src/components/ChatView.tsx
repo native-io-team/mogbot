@@ -10,6 +10,7 @@
 
 import { headerSubtitle, headerSubtitleParts, roleCutPastReading } from '../lib/accountsView';
 import {
+  FIRST_CONVERSATION,
   newestResults,
   foldResultReplies,
   showsStarters,
@@ -67,6 +68,7 @@ import { haptic } from '../lib/haptics';
 import {
   canCall,
   describeError,
+  ensureViewing,
   fetchPath,
   loadLatest,
   loadOlder,
@@ -75,6 +77,8 @@ import {
   setOpenChat,
 } from '../lib/session';
 import { useAccent } from '../lib/accent';
+import { chatKeyFor, conversationsOffered } from '../lib/conversations';
+import { ConversationSwitch } from './ConversationSwitch';
 import { useApp } from '../lib/store';
 import { SETUP_KEY, chatItems, isRowFor, sentAt, withSetupCard, type Item } from '../lib/timeline';
 import { setupAnchor, shows as showsSetup } from '../lib/teamSetup';
@@ -220,8 +224,18 @@ export function ChatView({
   const { quotas, now: quotaNow } = useQuotas();
   const ring = agent ? ringPercent(quotas, agent.engine, quotaNow) : null;
   const hasOverview = useApp((s) => !!s.overview);
-  const chat = useApp((s) => s.chats[id]);
-  const draft = useApp((s) => s.drafts[id]);
+  // The conversation on screen (`lib/conversations`): its own chat, on a
+  // Mac that keeps several; the agent's one chat on an older one.
+  const offered = useApp((s) => conversationsOffered(s.welcome));
+  const viewing = useApp((s) => s.viewing[id]);
+  const conversations = useApp((s) => s.conversations[id]);
+  const chatKey = chatKeyFor(id, viewing, offered);
+  const chat = useApp((s) => (chatKey ? s.chats[chatKey] : undefined));
+  // A reply streaming in another of its conversations is that one's.
+  const elsewhere =
+    offered && !!viewing && (agent?.conversations?.loaded ?? FIRST_CONVERSATION) !== viewing;
+  const liveDraft = useApp((s) => s.drafts[id]);
+  const draft = elsewhere ? undefined : liveDraft;
   const pending = useApp((s) => s.pending[id] ?? NONE);
   const connected = useApp((s) => s.link.kind === 'connected');
   const macName = useApp((s) => s.credentials?.name ?? 'your Mac');
@@ -274,11 +288,17 @@ export function ChatView({
     return () => clearTimeout(timer);
   }, [notice]);
 
+  // Which conversation it opens on: where the user last was.
+  useEffect(() => {
+    if (connected && offered && !viewing)
+      ensureViewing(id).catch((e: unknown) => showError(describeError(e)));
+  }, [connected, offered, viewing, id, showError]);
+
   // First open, or after a snapshot made the cached copy stale.
   useEffect(() => {
-    if (connected && agent && !chat?.loaded)
-      loadLatest(id).catch((e: unknown) => showError(describeError(e)));
-  }, [connected, chat?.loaded, id, showError, agent]);
+    if (connected && agent && chatKey && !chat?.loaded)
+      loadLatest(chatKey).catch((e: unknown) => showError(describeError(e)));
+  }, [connected, chat?.loaded, chatKey, showError, agent]);
 
   const stored = chat?.messages ?? NONE;
   // A card that repeats the reply above it keeps the words; the reply shrinks to a line.
@@ -434,10 +454,10 @@ export function ChatView({
   const older = useCallback(() => {
     if (!chat?.loaded || !chat.more || loadingOlder || !connected) return;
     setLoadingOlder(true);
-    loadOlder(id)
+    loadOlder(chatKey ?? id)
       .catch((e: unknown) => showError(describeError(e)))
       .finally(() => setLoadingOlder(false));
-  }, [chat, loadingOlder, connected, id, showError]);
+  }, [chat, loadingOlder, connected, id, chatKey, showError]);
 
   // The bar's Continue: to the card where it was posted (paging back to it
   // if it's older than what's loaded), lit once.
@@ -534,6 +554,10 @@ export function ChatView({
   const header = <Header agent={agent} />;
   const openSheet = () => router.push({ pathname: '/agent/[id]', params: { id } });
   const openUsage = () => router.push({ pathname: '/usage', params: { id } });
+  const openConversations = () => router.push({ pathname: '/conversations', params: { id } });
+  const conversationsButton = offered && (
+    <IconButton name="bubble.left" label="Conversations" onPress={openConversations} />
+  );
   const usageRing = ring && (
     <UsageRing percent={ring.percent} tone={ring.tone} onPress={openUsage} />
   );
@@ -555,6 +579,7 @@ export function ChatView({
             {header}
           </Pressable>
           {usageRing}
+          {conversationsButton}
           <IconButton name="info.circle" label={`About ${agent.name}`} onPress={openSheet} />
         </View>
       ) : (
@@ -580,6 +605,7 @@ export function ChatView({
                   headerRight: () => (
                     <View style={styles.headerRight}>
                       {usageRing}
+                      {conversationsButton}
                       <IconButton
                         name="info.circle"
                         label={`About ${agent.name}`}
@@ -599,12 +625,26 @@ export function ChatView({
             {usageRing || <View />}
           </Stack.Toolbar.View>
           <Stack.Toolbar.Button
+            hidden={!offered}
+            icon="bubble.left"
+            accessibilityLabel="Conversations"
+            tintColor={accent.accent}
+            onPress={openConversations}
+          />
+          <Stack.Toolbar.Button
             icon="info.circle"
             accessibilityLabel={`About ${agent.name}`}
             tintColor={accent.accent}
             onPress={openSheet}
           />
         </Stack.Toolbar>
+      )}
+      {offered && conversations && conversations.items.length > 1 && (
+        <ConversationSwitch
+          list={conversations}
+          viewing={viewing ?? conversations.current}
+          onPress={openConversations}
+        />
       )}
       <View style={{ flex: 1 }} onLayout={(e) => setRoomHeight(e.nativeEvent.layout.height)}>
         {pinQuestion && card?.approval && (
@@ -996,7 +1036,9 @@ function Header({ agent }: { agent: Agent }) {
   const [cutAt, setCutAt] = useState<string | null>(null);
   const roleCut = cutAt === fit;
   const parts = roleCut ? headerSubtitleParts({ role: '', ranOn: agent.ranOn }) : whole;
-  const subtitle = roleCut ? headerSubtitle({ role: '', ranOn: agent.ranOn }) : headerSubtitle(agent);
+  const subtitle = roleCut
+    ? headerSubtitle({ role: '', ranOn: agent.ranOn })
+    : headerSubtitle(agent);
   return (
     <View style={[styles.header, { maxWidth: Math.min(260, width - HEADER_RESERVED) }]}>
       <AgentAvatar
