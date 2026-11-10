@@ -61,7 +61,6 @@ import { sessionRegistry } from '../lib/sessionRegistry';
 import { assignActiveWorkspaceToNewProject } from '../lib/accounts';
 import { getDefaultAgentId } from '../lib/agent';
 import {
-  setWindowTitle,
   getWindowLabel,
   findAndReservePort,
   getProjectWindow,
@@ -85,7 +84,6 @@ import { basename } from '../lib/paths';
 
 import type { AppView } from '../lib/types';
 import { preferredPortForProject } from '../lib/ports';
-import { BRAND } from '../lib/brand';
 import {
   devServerConsentStore,
   getDevServerConsent,
@@ -569,10 +567,7 @@ export function useProjectLifecycle({
     const storageKey = `ship-studio-project-loaded-${windowLabel}`;
     sessionStorage.setItem(storageKey, project.path);
 
-    // Set window title to include project name
-    void setWindowTitle(`${BRAND.name} - ${project.name}`).catch((error) => {
-      logger.error('Failed to set window title', { error });
-    });
+    // The window's title follows the view (hooks/useNativeMenu).
 
     // ─── ASYNC: Cleanup, register, reserve port, then start server ───
 
@@ -1123,9 +1118,6 @@ export function useProjectLifecycle({
     setView('projects');
     openingProjectPathRef.current = null;
     currentProjectPathRef.current = null;
-
-    // Reset window title now that no project is focused.
-    void setWindowTitle(BRAND.name).catch(console.error);
 
     // The leaving project's session stays 'active' in the registry —
     // its processes keep running, sidebar dot stays green. No suspend.

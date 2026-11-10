@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { listen } from '@tauri-apps/api/event';
+import { menuNumber, menuOwnsShortcuts, onMenuAction } from '../lib/nativeMenu';
 import type { Account } from '../lib/accounts';
 
 function digitFromEvent(event: KeyboardEvent): number | null {
@@ -62,10 +62,11 @@ export function useWorkspaceNumberShortcuts({
     };
 
     const handler = (event: KeyboardEvent) => {
-      // macOS registers this accelerator with the native menu so it also works
-      // from the cross-origin preview iframe. Keep the browser fallback too:
-      // Option-number key events can expose a symbol as `key`, while `code`
-      // still identifies the physical number row key.
+      // The macOS menu owns ⌥1…⌥9 (Go → Workspace), so it also works from
+      // the cross-origin preview iframe. Elsewhere: Option-number key events
+      // can expose a symbol as `key`, while `code` still identifies the
+      // physical number row key.
+      if (menuOwnsShortcuts()) return;
       if (event.metaKey || event.ctrlKey || event.shiftKey || !event.altKey) return;
       const digit = digitFromEvent(event);
       if (digit === null) return;
@@ -92,14 +93,15 @@ export function useWorkspaceNumberShortcuts({
 
     window.addEventListener('keydown', handler, { capture: true });
     window.addEventListener('message', handlePreviewMessage);
-    const unlisten = listen<number>('switch-workspace-shortcut', ({ payload }) => {
-      switchWorkspace(payload - 1);
+    const offMenu = onMenuAction((action) => {
+      const n = menuNumber(action, 'switch_workspace');
+      if (n !== null) switchWorkspace(n - 1);
     });
 
     return () => {
       window.removeEventListener('keydown', handler, { capture: true });
       window.removeEventListener('message', handlePreviewMessage);
-      void unlisten.then((fn) => fn());
+      offMenu();
     };
   }, []);
 }

@@ -46,7 +46,7 @@ describe('useWorkspaceNumberShortcuts', () => {
       })
     );
 
-    nativeListeners.get('switch-workspace-shortcut')?.({ payload: 2 });
+    nativeListeners.get('menu://action')?.({ payload: 'switch_workspace_2' });
 
     expect(handleSelectWorkspace).toHaveBeenCalledWith(accounts[1]);
   });

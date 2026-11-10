@@ -28,7 +28,7 @@ describe('useProjectNumberShortcuts', () => {
   });
 
   it('uses the latest pinned order when Cmd+number selects a project', async () => {
-    let switchProject!: EventCallback<number>;
+    let switchProject!: EventCallback<string>;
     vi.mocked(listen).mockImplementation((_event, callback) => {
       switchProject = callback;
       return Promise.resolve(vi.fn());
@@ -44,7 +44,7 @@ describe('useProjectNumberShortcuts', () => {
     );
 
     await waitFor(() => expect(switchProject).toBeTypeOf('function'));
-    act(() => switchProject({ event: 'switch-project-shortcut', id: 1, payload: 1 }));
+    act(() => switchProject({ event: 'menu://action', id: 1, payload: 'go_to_1' }));
     expect(handleSelectProject).toHaveBeenLastCalledWith({
       name: 'alpha',
       path: '/projects/alpha',
@@ -52,7 +52,7 @@ describe('useProjectNumberShortcuts', () => {
     });
 
     rerender({ pinnedPaths: ['/projects/beta', '/projects/alpha'] });
-    act(() => switchProject({ event: 'switch-project-shortcut', id: 2, payload: 1 }));
+    act(() => switchProject({ event: 'menu://action', id: 2, payload: 'go_to_1' }));
     expect(handleSelectProject).toHaveBeenLastCalledWith({
       name: 'beta',
       path: '/projects/beta',
@@ -65,7 +65,7 @@ describe('useProjectNumberShortcuts', () => {
     const commitResponse = deferred<string[]>();
     mockInvokeResponse('reorder_pins', () => commitResponse.promise);
 
-    let switchProject!: EventCallback<number>;
+    let switchProject!: EventCallback<string>;
     vi.mocked(listen).mockImplementation((_event, callback) => {
       switchProject = callback;
       return Promise.resolve(vi.fn());
@@ -100,7 +100,7 @@ describe('useProjectNumberShortcuts', () => {
     );
     expect(result.current.confirmedPaths).toEqual(['/projects/alpha', '/projects/beta']);
 
-    act(() => switchProject({ event: 'switch-project-shortcut', id: 1, payload: 1 }));
+    act(() => switchProject({ event: 'menu://action', id: 1, payload: 'go_to_1' }));
     expect(handleSelectProject).toHaveBeenLastCalledWith({
       name: 'alpha',
       path: '/projects/alpha',
@@ -111,7 +111,7 @@ describe('useProjectNumberShortcuts', () => {
       commitResponse.resolve(['/projects/beta', '/projects/alpha']);
       await commit;
     });
-    act(() => switchProject({ event: 'switch-project-shortcut', id: 1, payload: 1 }));
+    act(() => switchProject({ event: 'menu://action', id: 1, payload: 'go_to_1' }));
     expect(handleSelectProject).toHaveBeenLastCalledWith({
       name: 'beta',
       path: '/projects/beta',
@@ -124,7 +124,7 @@ describe('useProjectNumberShortcuts', () => {
     sessionRegistry.getOrCreate('/projects/beta-active');
     setActiveProjectOrder(['/projects/beta-active', '/projects/alpha-active']);
 
-    let switchProject!: EventCallback<number>;
+    let switchProject!: EventCallback<string>;
     vi.mocked(listen).mockImplementation((_event, callback) => {
       switchProject = callback;
       return Promise.resolve(vi.fn());
@@ -135,7 +135,7 @@ describe('useProjectNumberShortcuts', () => {
     });
 
     await waitFor(() => expect(switchProject).toBeTypeOf('function'));
-    act(() => switchProject({ event: 'switch-project-shortcut', id: 1, payload: 1 }));
+    act(() => switchProject({ event: 'menu://action', id: 1, payload: 'go_to_1' }));
     expect(handleSelectProject).toHaveBeenLastCalledWith({
       name: 'beta-active',
       path: '/projects/beta-active',

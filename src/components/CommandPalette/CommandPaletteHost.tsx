@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { useModal } from '../../contexts/ModalContext';
 import { CommandPalette } from './CommandPalette';
 import { useOpenPalette, usePaletteContext } from './paletteContext';
+import { menuOwnsShortcuts, onMenuAction } from '../../lib/nativeMenu';
 
 /**
  * App-level host: owns global palette shortcuts and renders the palette.
@@ -12,6 +13,9 @@ import { useOpenPalette, usePaletteContext } from './paletteContext';
  * Shortcuts owned here:
  *  - Cmd/Ctrl+K → toggle palette (All tab)
  *  - Cmd/Ctrl+O → open palette on the Projects tab (former project picker)
+ *
+ * On macOS the menu bar owns both (View → Command Palette…, File → Open
+ * Project…), so they work with the preview focused and act once.
  */
 export function CommandPaletteHost() {
   const palette = useModal('commandPalette');
@@ -20,6 +24,7 @@ export function CommandPaletteHost() {
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
+      if (menuOwnsShortcuts()) return;
       const mod = e.metaKey || e.ctrlKey;
       if (!mod) return;
       // Capture-phase + stopPropagation so view-local listeners
@@ -35,7 +40,14 @@ export function CommandPaletteHost() {
       }
     };
     window.addEventListener('keydown', handler, { capture: true });
-    return () => window.removeEventListener('keydown', handler, { capture: true });
+    const offMenu = onMenuAction((action) => {
+      if (action === 'palette') palette.toggle();
+      else if (action === 'open_project') openPalette({ tab: 'project' });
+    });
+    return () => {
+      window.removeEventListener('keydown', handler, { capture: true });
+      offMenu();
+    };
   }, [palette, openPalette]);
 
   // Don't surface the palette in pre-app states (loading / onboarding). The
