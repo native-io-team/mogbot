@@ -172,9 +172,9 @@ const SITE_HANDED_BACK = [
 export const agentsFirstWinScenarios: Scenario[] = [
   {
     id: 'agents-first-win-morning-brief',
-    title: 'Agents — first run: “Brief me every morning…”',
+    title: 'Agents — first run: “Brief me every morning”',
     looksRightWhen:
-      'The greeting with its starters still under it (Brief me every morning…, Run an inbox triage crew…, Run my launch as a team…, all neutral outline buttons, then a quieter More ideas…), and the composer holding the whole brief, “Every weekday at 8am, have a researcher read what’s new … My topics: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
+      'The greeting with its starters still under it (Brief me every morning, Run an inbox triage crew, Run my launch as a team, left-aligned under the greeting, all neutral outline buttons, then a quieter More ideas…), and the composer holding the whole brief, “Every weekday at 8am, have a researcher read what’s new … My topics: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
     command: 'agents.open',
     steps: [{ click: '.agent-chat__starters > [data-idea="morning-brief"]' }],
     requires: '.agent-chat__messages > .agent-chat__starters',
@@ -182,7 +182,7 @@ export const agentsFirstWinScenarios: Scenario[] = [
   },
   {
     id: 'agents-first-win-launch',
-    title: 'Agents — first run: “Run my launch as a team…”',
+    title: 'Agents — first run: “Run my launch as a team”',
     looksRightWhen:
       'The composer holds the whole brief, “Run my launch as a team: create a strategist, a writer and a builder … The launch: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
     command: 'agents.open',
@@ -192,7 +192,7 @@ export const agentsFirstWinScenarios: Scenario[] = [
   },
   {
     id: 'agents-first-win-inbox',
-    title: 'Agents — first run: “Run an inbox triage crew…”',
+    title: 'Agents — first run: “Run an inbox triage crew”',
     looksRightWhen:
       'The composer holds the whole brief, “Set up an inbox crew: through the day, one agent sorts my new email … My email is in: ”, with the caret after it, ready for the one blank. Nothing has been sent.',
     command: 'agents.open',
@@ -221,7 +221,7 @@ export const agentsFirstWinScenarios: Scenario[] = [
   },
   {
     id: 'agents-ideas-errors',
-    title: 'Agents — gallery: picking “Babysit my errors…”',
+    title: 'Agents — gallery: picking “Babysit my errors”',
     looksRightWhen:
       'The dialog has closed, and the Chief’s composer holds the whole brief (“Every hour, check this project for new errors … The project: ”). Nothing has been sent.',
     command: 'agents.open',

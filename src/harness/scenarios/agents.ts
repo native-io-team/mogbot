@@ -2693,7 +2693,7 @@ export const agentsScenarios: Scenario[] = [
     id: 'agents-first-run',
     title: 'Agents — first open: the Chief of Staff says hello',
     looksRightWhen:
-      'The Chief’s chat opens on its greeting, centred on the page as an empty state: the greeting text block, its timestamp and the starters share one centre line. Under it, centred, three starters (Build me a team…, Brief me every morning…, Make me a one-page site…), all neutral outline buttons, then a quieter borderless More ideas…. No power-management note and no import pitch in the sidebar yet. The composer is ready.',
+      'The Chief’s chat opens on its greeting, laid out as the Chief’s first message like any other (left-aligned, where the conversation starts, under its timestamp). Under it, at the same left edge, three starters with no trailing “…” (Brief me every morning, Run an inbox triage crew, Run my launch as a team), all neutral outline buttons, then a quieter borderless More ideas…. No power-management note and no import pitch in the sidebar yet. The composer is ready.',
     command: 'agents.open',
     requires: '.agent-chat__messages > .agent-chat__starters',
     commands: {},

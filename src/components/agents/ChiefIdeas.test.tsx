@@ -20,7 +20,8 @@ describe('the Chief’s ideas: the catalogue', () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(ideaGroups().flatMap((g) => g.ideas)).toHaveLength(CHIEF_IDEAS.length);
     for (const idea of CHIEF_IDEAS) {
-      expect(idea.label.endsWith('…')).toBe(true);
+      // A plain starter chip, never a truncated-looking one.
+      expect(idea.label.endsWith('…')).toBe(false);
       expect(idea.text.length).toBeGreaterThan(80);
       // The blank: the brief ends on a colon and a space, for the user's words.
       expect(idea.text.endsWith(': ')).toBe(true);
@@ -94,7 +95,7 @@ describe('ChiefIdeasModal', () => {
         <Opened onPick={onPick} />
       </ModalProvider>
     );
-    fireEvent.click(screen.getByText('Babysit my errors…'));
+    fireEvent.click(screen.getByText('Babysit my errors'));
     expect(onPick).toHaveBeenCalledWith(expect.objectContaining({ id: 'errors' }));
     expect(screen.getByTestId('ideas')).toHaveTextContent('ideas closed');
   });
