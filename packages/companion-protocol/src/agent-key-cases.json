@@ -24,9 +24,28 @@
     { "name": "Agent 3", "taken": "AGENT", "key": "3" },
     { "name": "???", "taken": "", "key": "A" }
   ],
+  "find": [
+    { "query": "money", "icon": "money" },
+    { "query": "invoice", "icon": "lucide:receipt" },
+    { "query": "Invoices", "icon": "lucide:receipt" },
+    { "query": "reciept", "icon": "lucide:receipt" },
+    { "query": "mail", "icon": "lucide:mail" },
+    { "query": "car", "icon": "car" },
+    { "query": "house", "icon": "lucide:house" },
+    { "query": "code", "icon": "code" },
+    { "query": "calendar", "icon": "calendar" },
+    { "query": "wallet", "icon": "lucide:wallet" },
+    { "query": "dog", "icon": "lucide:dog" },
+    { "query": "credit card", "icon": "lucide:credit-card" },
+    { "query": "kids", "icon": "lucide:baby" },
+    { "query": "bank", "icon": "lucide:piggy-bank" },
+    { "query": "writing", "icon": "pen" },
+    { "query": "zzqx", "icon": null }
+  ],
   "colors": [
     { "color": "white", "colorway": "putty" },
-    { "color": "purple", "colorway": "blue" },
+    { "color": "purple", "colorway": "plum" },
+    { "color": "red", "colorway": "brick" },
     { "color": "gray", "colorway": "graphite" },
     { "color": "sage", "colorway": "sage" },
     { "color": "mauve", "colorway": "blue" }

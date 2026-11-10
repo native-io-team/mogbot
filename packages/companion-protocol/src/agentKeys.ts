@@ -17,9 +17,20 @@
 
 import data from './agent-keys.json';
 import { KEY_ICON_DRAWINGS, type KeyIconDrawing } from './agentKeyIcons';
+import { isPackIconId, packDrawing, packIconName } from './agentKeyPack';
 import type { AgentIndependence } from './model';
 
 export { KEY_ICON_DRAWINGS, KEY_ICON_GRID, type KeyIconDrawing } from './agentKeyIcons';
+export {
+  PACK_INFO,
+  PACK_PREFIX,
+  isPackIconId,
+  loadAllPackDrawings,
+  loadPackIndex,
+  packDrawingsVersion,
+  packIconName,
+  subscribePackDrawings,
+} from './agentKeyPack';
 
 export interface Colorway {
   id: string;
@@ -80,18 +91,36 @@ export const KEY_PIP_COUNT = 4;
 
 export const isColorway = (v: unknown): v is string =>
   typeof v === 'string' && COLORWAY_IDS.includes(v);
+/** A featured legend, or a pack id (`lucide:wallet`; which exist is the Mac's to say). */
 export const isKeyIcon = (v: unknown): v is string =>
-  typeof v === 'string' && KEY_ICON_IDS.includes(v);
+  (typeof v === 'string' && KEY_ICON_IDS.includes(v)) || isPackIconId(v);
 
 export function colorwayOf(id: string | null | undefined): Colorway {
   return COLORWAYS.find((c) => c.id === id) ?? COLORWAYS[0];
 }
 
 export function iconDrawing(id: string | null | undefined): KeyIconDrawing {
-  return KEY_ICON_DRAWINGS[id ?? ''] ?? KEY_ICON_DRAWINGS[DEFAULT_ICON];
+  return legendDrawing(id) ?? KEY_ICON_DRAWINGS[DEFAULT_ICON];
 }
 
-export const iconName = (id: string) => KEY_ICONS.find((i) => i.id === id)?.name ?? id;
+/**
+ * What a key prints: a featured legend, a pack icon once its drawings file
+ * has arrived (`null` until then, which starts loading it; a client re-draws
+ * on `subscribePackDrawings`), else the default legend.
+ */
+export function legendDrawing(id: string | null | undefined): KeyIconDrawing | null {
+  const own = KEY_ICON_DRAWINGS[id ?? ''];
+  if (own) return own;
+  if (isPackIconId(id)) {
+    const d = packDrawing(id);
+    if (d === undefined) return null;
+    if (d) return d;
+  }
+  return KEY_ICON_DRAWINGS[DEFAULT_ICON];
+}
+
+export const iconName = (id: string) =>
+  KEY_ICONS.find((i) => i.id === id)?.name ?? (isPackIconId(id) ? packIconName(id) : id);
 export const colorwayName = (id: string) => COLORWAYS.find((c) => c.id === id)?.name ?? id;
 
 /** The nearest colourway to an old avatar colour key (blue for one it doesn't know). */
