@@ -80,7 +80,7 @@ describe('the result card on the phone', () => {
     expect(screen.getByText(OFFLINE_NOTE)).toBeTruthy();
   });
 
-  it('reads the Mac’s card: not verified up front, files, links, checks', async () => {
+  it('reads the Mac’s card: the work, then one Checks box with what it didn’t verify', async () => {
     const ask = jest.fn();
     useApp.setState({ link: { kind: 'connected', route: 'tailscale' } as never });
     await show(v1, { onAskForChanges: ask });
@@ -104,14 +104,28 @@ describe('the result card on the phone', () => {
   it('shows version 2 with what changed, and a before and after', async () => {
     await show(v2);
     expect(screen.getByText('v2')).toBeTruthy();
+    // What changed, as its own block above the summary: a heading and the agent's line.
+    expect(screen.getByText('Changes since v1')).toBeTruthy();
+    expect(screen.getByText("EUR invoices use the rate on each invoice's date")).toBeTruthy();
     expect(
-      screen.getByText("Changes since v1: EUR invoices use the rate on each invoice's date")
+      screen.getByLabelText("Changes since v1: EUR invoices use the rate on each invoice's date")
     ).toBeTruthy();
     // One page, both sides: the compare, captioned.
     expect(screen.getByText('Before · After')).toBeTruthy();
     // The agent listed nothing it didn't verify this time: no box.
     expect(screen.queryByText('Not verified')).toBeNull();
     expect(screen.queryByText('Ask for changes')).toBeNull();
+  });
+
+  it('puts the checks after the work, the claims above the caveats', async () => {
+    await show(v1);
+    const text = JSON.stringify(screen.toJSON());
+    const link = text.indexOf('Source sheet');
+    const checked = text.indexOf('It says it checked');
+    const unverified = text.indexOf('Not verified');
+    expect(link).toBeGreaterThan(-1);
+    expect(checked).toBeGreaterThan(link);
+    expect(unverified).toBeGreaterThan(checked);
   });
 
   it('folds an older version to a line', async () => {
