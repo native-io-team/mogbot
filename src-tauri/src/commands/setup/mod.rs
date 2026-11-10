@@ -430,7 +430,9 @@ fn mock_failure(mock: bool, value: Option<String>) -> Option<String> {
     if !mock {
         return None;
     }
-    value.map(|v| v.trim().to_ascii_lowercase()).filter(|v| !v.is_empty())
+    value
+        .map(|v| v.trim().to_ascii_lowercase())
+        .filter(|v| !v.is_empty())
 }
 
 #[tauri::command]
@@ -497,7 +499,10 @@ mod tests {
     #[test]
     fn a_mock_failure_is_only_ever_played_in_mock_mode() {
         assert_eq!(mock_failure(false, Some("network".into())), None);
-        assert_eq!(mock_failure(true, Some(" Disk ".into())), Some("disk".into()));
+        assert_eq!(
+            mock_failure(true, Some(" Disk ".into())),
+            Some("disk".into())
+        );
         assert_eq!(mock_failure(true, Some("  ".into())), None);
         assert_eq!(mock_failure(true, None), None);
     }

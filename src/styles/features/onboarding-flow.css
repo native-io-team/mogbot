@@ -332,6 +332,7 @@
 
 .install-ask__row {
   display: flex;
+  align-items: stretch;
   gap: var(--spacing-sm);
   margin-top: var(--spacing-xs);
 }
@@ -351,24 +352,19 @@
   color: var(--text-secondary);
 }
 
-.install-progress__foot {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--spacing-sm);
-}
-
-.install-progress__foot > .install-details {
-  flex: 1;
-  min-width: 0;
-}
-
 /* "Show details": the real output, for whoever wants it. */
 .install-details {
   display: flex;
   flex-direction: column;
-  align-items: flex-start;
   gap: var(--spacing-xs);
+}
+
+/* The toggle on the left, Cancel (when there is one) on the right. */
+.install-details__row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--spacing-sm);
 }
 
 .install-details__chevron {

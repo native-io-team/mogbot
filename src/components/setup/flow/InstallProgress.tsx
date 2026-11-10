@@ -39,25 +39,37 @@ interface InstallDetailsProps {
   empty?: string;
   open: boolean;
   onToggle: () => void;
+  /** On the toggle's row, at the far end (Cancel). */
+  aside?: ReactNode;
 }
 
 /** "Show details": the real output, for whoever wants it. */
-export function InstallDetails({ output, terminal, empty, open, onToggle }: InstallDetailsProps) {
+export function InstallDetails({
+  output,
+  terminal,
+  empty,
+  open,
+  onToggle,
+  aside,
+}: InstallDetailsProps) {
   const id = useId();
   const lines = toVisibleLines(output).slice(-LOG_LINES);
   return (
     <div className="install-details">
-      <Button
-        variant="ghost"
-        size="compact"
-        rightIcon={<ChevronIcon size={12} className="install-details__chevron" />}
-        aria-expanded={open}
-        aria-controls={id}
-        onClick={onToggle}
-        data-install-details-toggle
-      >
-        {open ? 'Hide details' : 'Show details'}
-      </Button>
+      <div className="install-details__row">
+        <Button
+          variant="ghost"
+          size="compact"
+          rightIcon={<ChevronIcon size={12} className="install-details__chevron" />}
+          aria-expanded={open}
+          aria-controls={id}
+          onClick={onToggle}
+          data-install-details-toggle
+        >
+          {open ? 'Hide details' : 'Show details'}
+        </Button>
+        {aside}
+      </div>
       <div
         id={id}
         className="install-details__panel"
@@ -205,9 +217,7 @@ export function InstallProgress({
 
       {signInUrl && (
         <div className="install-signin">
-          <span className="install-signin__line">
-            Finish in your browser. This screen notices when you’re done.
-          </span>
+          <span className="install-signin__line">No sign-in page, or closed it by mistake?</span>
           <Button
             variant="secondary"
             rightIcon={<ExternalLinkIcon size={12} />}
@@ -219,24 +229,24 @@ export function InstallProgress({
         </div>
       )}
 
-      <div className="install-progress__foot">
-        <InstallDetails
-          output={output}
-          terminal={terminal}
-          empty={
-            QUIET_ITEMS.has(itemId)
-              ? `Homebrew prints nothing while it installs ${name}. If it fails, what it said shows here.`
-              : undefined
-          }
-          open={open}
-          onToggle={() => setUserOpen(!open)}
-        />
-        {phase !== 'check' && (
-          <Button variant="ghost" size="compact" onClick={onCancel} data-install-cancel>
-            Cancel
-          </Button>
-        )}
-      </div>
+      <InstallDetails
+        output={output}
+        terminal={terminal}
+        empty={
+          QUIET_ITEMS.has(itemId)
+            ? `Homebrew prints nothing while it installs ${name}. If it fails, what it said shows here.`
+            : undefined
+        }
+        open={open}
+        onToggle={() => setUserOpen(!open)}
+        aside={
+          phase !== 'check' && (
+            <Button variant="ghost" size="compact" onClick={onCancel} data-install-cancel>
+              Cancel
+            </Button>
+          )
+        }
+      />
     </div>
   );
 }
