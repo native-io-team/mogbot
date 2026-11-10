@@ -11,12 +11,12 @@ import { Pressable, ScrollView, View } from 'react-native';
 import Animated, { FadeIn } from 'react-native-reanimated';
 import { Spinner } from '../components/agent';
 import { DiffLines } from '../components/diff';
-import { Icon, T, SheetPage, InsetDivider } from '../components/ui';
+import { Icon, T, SheetPage, InsetDivider, groupSurface } from '../components/ui';
 import { SheetTitle } from '../components/SheetTitle';
 import { folderName } from '../lib/agents';
 import { changeDiff, describeError } from '../lib/session';
 import { useApp } from '../lib/store';
-import { iconSize, radius, space } from '../lib/theme';
+import { iconSize, space } from '../lib/theme';
 import { makeStyles, useColors } from '../lib/appearance';
 
 type Loaded = { diff: FileDiff } | { error: string } | 'loading';
@@ -148,7 +148,7 @@ export default function Diff() {
 const useStyles = makeStyles((colors) => ({
   content: { padding: space.lg, paddingTop: space.xl, gap: space.md, paddingBottom: space['2xl'] },
   note: { padding: space.xl, textAlign: 'center' },
-  group: { backgroundColor: colors.surfaceGroup, borderRadius: radius.card, overflow: 'hidden' },
+  group: groupSurface(colors),
   count: { fontVariant: ['tabular-nums'] },
   fileHead: {
     flexDirection: 'row',

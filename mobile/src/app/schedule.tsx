@@ -46,7 +46,7 @@ import { useNow } from '../components/ConnectionPill';
 import { Chip, ChipRow } from '../components/pickers';
 import { StepsEditor } from '../components/stepsEditor';
 import { choose } from '../components/menu';
-import { Button, T, SheetPage } from '../components/ui';
+import { Button, T, SheetPage, groupSurface } from '../components/ui';
 import { SheetTitle } from '../components/SheetTitle';
 import { describeError, schedule } from '../lib/session';
 import { useApp } from '../lib/store';
@@ -577,7 +577,7 @@ const useStyles = makeStyles((colors) => ({
   },
   actions: { flexDirection: 'row', gap: space.sm },
   heading: { marginLeft: space.lg, letterSpacing: 0.4 },
-  list: { backgroundColor: colors.surfaceGroup, borderRadius: radius.card, overflow: 'hidden' },
+  list: groupSurface(colors),
   run: { paddingHorizontal: space.lg, paddingVertical: space.sm + 2, gap: space['2xs'] },
   divider: { borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: colors.borderDefault },
 }));

@@ -46,10 +46,10 @@ import {
 } from '../lib/logins';
 import { describeError } from '../lib/session';
 import { useApp, useServed } from '../lib/store';
-import { CARD_TITLE_SCALE, fonts, lineHeight, radius, space, type } from '../lib/theme';
+import { CARD_TITLE_SCALE, fonts, lineHeight, space, type } from '../lib/theme';
 import { ACTION_ROW, CardActions, Line, TextAction } from './surfaces';
 import { DeclineReceiptLine, useDeclineReceipt, useRecheckWhenBack } from './loginExtras';
-import { Button, T } from './ui';
+import { Button, T, groupSurface } from './ui';
 
 /** How often the list is read again while a sign-in runs on the Mac. */
 const LIVE_MS = 2500;
@@ -494,12 +494,7 @@ const useStyles = makeStyles((colors) => ({
   root: { gap: space.md },
   header: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   // On a sheet the rows are one grouped surface, divided, as Settings is.
-  group: {
-    backgroundColor: colors.surfaceGroup,
-    borderRadius: radius.card,
-    paddingHorizontal: space.lg,
-    overflow: 'hidden',
-  },
+  group: { ...groupSurface(colors), paddingHorizontal: space.lg },
   loading: { padding: space.xl, alignItems: 'center' },
   cards: { gap: space['2xs'] },
   cardRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 44 },

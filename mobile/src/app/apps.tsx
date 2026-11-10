@@ -25,7 +25,7 @@ import { choose } from '../components/menu';
 import { SheetTitle } from '../components/SheetTitle';
 import { CardActions, ACTION, TextAction } from '../components/surfaces';
 import { NeedRow } from '../components/teamLogins';
-import { Button, Icon, Segmented, SheetPage, T, tap } from '../components/ui';
+import { Button, Icon, Segmented, SheetPage, T, tap, groupSurface } from '../components/ui';
 import { makeStyles, useColors } from '../lib/appearance';
 import {
   ACCESS_CHOICES,
@@ -612,12 +612,7 @@ const useStyles = makeStyles((colors) => ({
   loading: { padding: space.xl, alignItems: 'center' },
   section: { gap: space.sm, marginTop: space.sm },
   heading: { marginLeft: space.lg },
-  group: {
-    backgroundColor: colors.surfaceGroup,
-    borderRadius: radius.card,
-    paddingHorizontal: space.lg,
-    overflow: 'hidden',
-  },
+  group: { ...groupSurface(colors), paddingHorizontal: space.lg },
   picker: { gap: space.sm },
   agents: { gap: space['2xs'] },
   agent: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 44 },

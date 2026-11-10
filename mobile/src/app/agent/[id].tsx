@@ -43,7 +43,17 @@ import { WhatItCanReach } from '../../components/reach';
 import { WhatItCanDo } from '../../components/policy';
 import { AgentLevelRow } from '../../components/IndependenceSetting';
 import { ColorSwatches, KeyChoices } from '../../components/pickers';
-import { Button, Icon, InsetDivider, Row, SectionTitle, SheetPage, T } from '../../components/ui';
+import {
+  Button,
+  Icon,
+  InsetDivider,
+  Row,
+  SectionTitle,
+  SheetPage,
+  T,
+  groupSurface,
+  pageRhythm,
+} from '../../components/ui';
 import { SheetTitle } from '../../components/SheetTitle';
 import {
   describeScope,
@@ -75,7 +85,7 @@ import {
 import { useApp } from '../../lib/store';
 import { useSwitchColors } from '../../lib/accent';
 import { withAgentAccent } from '../../lib/accentScreen';
-import { iconSize, keySize, radius, space } from '../../lib/theme';
+import { iconSize, keySize, space } from '../../lib/theme';
 import { makeStyles, useColors } from '../../lib/appearance';
 
 // Its key (colourway, which also moves its chat's accent, legend and bound key)
@@ -351,7 +361,7 @@ function AgentSheet() {
         <WhatItCanReach agentId={agent.id} />
 
         <View style={styles.sectionHead}>
-          <SectionTitle title="Routines" style={styles.sectionTitle} />
+          <SectionTitle title="Routines" style={styles.headTitle} />
           {canSchedule && (
             <Button
               title="Add"
@@ -404,7 +414,7 @@ function AgentSheet() {
                 />
               ))}
             </View>
-            <T variant="caption" color={colors.textMuted} style={styles.none}>
+            <T variant="caption" color={colors.textMuted} style={styles.note}>
               Set up and changed on your Mac.
             </T>
           </>
@@ -868,17 +878,22 @@ function Usage({ usage, onPlan }: { usage: UsageSummary; onPlan: boolean }) {
   );
 }
 
+const RHYTHM = pageRhythm(space.md);
+
 const useStyles = makeStyles((colors) => ({
   content: { padding: space.lg, paddingTop: space.xl, gap: space.md, paddingBottom: space['2xl'] },
   who: { flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.sm },
+  // A title with its action (Routines · Add): the rhythm's air above, and the
+  // compact button's own height standing in for the title's space below.
   sectionHead: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginTop: space.sm,
+    marginTop: RHYTHM.title.marginTop,
+    marginBottom: -space.xs,
   },
-  // SectionTitle's own inset; the page's gap does the spacing below it.
-  sectionTitle: { marginBottom: 0 },
+  sectionTitle: RHYTHM.title,
+  headTitle: { marginBottom: 0 },
   error: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -886,9 +901,9 @@ const useStyles = makeStyles((colors) => ({
     paddingHorizontal: space.lg,
   },
   look: { gap: space.sm },
-  list: { backgroundColor: colors.surfaceGroup, borderRadius: radius.card, overflow: 'hidden' },
+  list: groupSurface(colors),
   none: { padding: space.lg },
-  note: { marginHorizontal: space.lg },
+  note: { marginHorizontal: space.lg, ...RHYTHM.note },
   row: {
     flexDirection: 'row',
     alignItems: 'center',

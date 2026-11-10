@@ -13,6 +13,9 @@ import { IconButton, T } from './ui';
 /** How far a sheet's title follows Dynamic Type: past this it crowds out the sheet. */
 const SHEET_TITLE_SCALE = 1.6;
 
+/** An IconButton's touch target. */
+const TARGET = 44;
+
 /**
  * A sheet's title: a header to VoiceOver, capped for Dynamic Type, and a ✕
  * that closes the sheet (the grabber's swipe is a gesture VoiceOver users
@@ -39,6 +42,7 @@ export function SheetTitle({
   // A step over a card's title, as the site's sheets set theirs: what the
   // sheet is reads first, over the groups' small capitals and their rows.
   const size = type.heading;
+  const line = lineHeight(size, 1.25);
   return (
     <View style={styles.row}>
       {leading}
@@ -51,7 +55,7 @@ export function SheetTitle({
         style={{
           flex: 1,
           fontSize: size,
-          lineHeight: lineHeight(size, 1.25),
+          lineHeight: line,
           letterSpacing: track(size, tracking.title),
         }}
       >
@@ -59,13 +63,19 @@ export function SheetTitle({
       </T>
       {trailing}
       {close && (
-        <IconButton
-          name="xmark"
-          label="Close"
-          size={iconSize.body}
-          fallback="×"
-          onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
-        />
+        // The ✕ keeps its 44pt target but not its height: it overhangs the
+        // title's line above and below, so the row is the title's own height
+        // and what follows sits the page's one gap under the words. A 44pt row
+        // round a 25pt title left twice that gap under every sheet's title.
+        <View style={{ marginVertical: -Math.max(0, (TARGET - line) / 2) }}>
+          <IconButton
+            name="xmark"
+            label="Close"
+            size={iconSize.body}
+            fallback="×"
+            onPress={() => (router.canGoBack() ? router.back() : router.replace('/'))}
+          />
+        </View>
       )}
     </View>
   );

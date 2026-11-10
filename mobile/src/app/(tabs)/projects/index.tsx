@@ -364,7 +364,8 @@ const useStyles = makeStyles((colors) => ({
     paddingBottom: space.xs,
   },
   meta: { maxWidth: '55%' },
-  empty: { paddingHorizontal: space.lg, paddingBottom: space.md },
+  // The same 16 under the name as a task row's words, not 4.
+  empty: { paddingHorizontal: space.lg, paddingTop: space.md, paddingBottom: space.md },
   session: {
     flexDirection: 'row',
     alignItems: 'center',

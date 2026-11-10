@@ -668,6 +668,35 @@ export function Segmented<V extends string>({
   );
 }
 
+/**
+ * A grouped list's surface: the one fill, corner, hairline and lift every
+ * group on a sheet shares (Settings, the agent sheet, Conversations, Memory,
+ * a routine's runs). Without the hairline a group in light (1.04:1 on the
+ * panel) went soft while Settings' groups stayed crisp beside it.
+ */
+export const groupSurface = (colors: Palette) =>
+  ({
+    backgroundColor: colors.surfaceGroup,
+    borderRadius: radius.card,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: colors.cardBorder,
+    boxShadow: depthOf(colors).card,
+    overflow: 'hidden',
+  }) as const;
+
+/**
+ * The rhythm of a page whose children sit `gap` apart (a sheet's column):
+ * a group's title gets a section's air above it (`xl`) and sits close over
+ * the group it names (`sm`); a note under a group sits as close under it.
+ * One gap for everything left each title floating halfway between the group
+ * before and its own, and a footnote as far from its group as the next one.
+ */
+export const pageRhythm = (gap: number) =>
+  ({
+    title: { marginTop: space.xl - gap, marginBottom: space.sm - gap },
+    note: { marginTop: space.sm - gap },
+  }) as const;
+
 const useStyles = makeStyles((colors) => ({
   // The site's tray and keycap, as the desk's segmented tabs: a recessed
   // tray, and the choice in force a raised key on it. Neutral, never the accent.
@@ -718,14 +747,7 @@ const useStyles = makeStyles((colors) => ({
   sectionTitle: { marginLeft: space.lg, marginBottom: space.sm },
   // Groups sit on a sheet or a grouped screen (surfacePanel): a fill and the
   // card's hairline, which in light is the site's ring around a white card.
-  sectionBody: {
-    backgroundColor: colors.surfaceGroup,
-    borderRadius: radius.card,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: colors.cardBorder,
-    boxShadow: depthOf(colors).card,
-    overflow: 'hidden',
-  },
+  sectionBody: groupSurface(colors),
   sectionFooter: { marginHorizontal: space.lg, marginTop: space.sm },
   row: {
     minHeight: 48,
