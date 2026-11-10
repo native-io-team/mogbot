@@ -107,7 +107,7 @@ fn the_preamble_names_home_paths_imports_projects_logins_and_tools() {
     });
     assert!(text.starts_with(HEADING));
     for want in [
-        "on Claude Code or Codex",
+        "on Claude Code, Codex or OpenCode",
         "not in Grok Bot's sandbox",
         "`/Users/j/Library/Application Support/Mogbot/agents/abc`",
         "/workspace/garden-redesign/ is `garden-redesign/` there",

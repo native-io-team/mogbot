@@ -99,7 +99,7 @@ pub fn mark_noted(agent_id: &str) {
 }
 
 pub const UPGRADE_LINE: &str =
-    "I can now handle your team's requests — change this in Settings → Agents.";
+    "I can now handle your team's requests — change this in Settings → Independence.";
 
 /// An existing Chief from before admins: it is one now, and says so once.
 /// Returns whether the line was written.
