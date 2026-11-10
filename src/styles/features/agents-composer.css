@@ -73,7 +73,9 @@
   min-height: calc(var(--agent-composer-line) + (var(--spacing-xs) * 2));
   max-height: calc((var(--agent-composer-line) * 8) + (var(--spacing-xs) * 2));
   padding: var(--spacing-xs) var(--spacing-xs);
-  font-size: var(--font-size-subhead);
+  /* The size the message will be once it's sent: what you type is what
+     lands in the bubble, not a point smaller. */
+  font-size: var(--font-size-subhead-lg);
   line-height: var(--agent-composer-line);
   color: var(--text-primary);
   resize: none;
