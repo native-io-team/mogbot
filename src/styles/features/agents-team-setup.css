@@ -267,3 +267,12 @@
   width: 100%;
   max-width: none;
 }
+
+/* In the dialog the dialog is the card: the card's own sheet and shadow sat
+   flush against its scrolling body, which cut the shadow off in a hard line
+   along the foot and both sides. */
+.browser-setup-modal .browser-setup.agent-card {
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
