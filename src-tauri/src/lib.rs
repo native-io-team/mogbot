@@ -1023,6 +1023,7 @@ pub fn run() {
             commands::companion_install::companion_install_android_status,
             commands::companion_install::companion_install_android_app,
             commands::companion_install::companion_install_remind,
+            commands::companion_install::companion_install_build_log,
             commands::companion::companion_set_enabled,
             commands::companion::companion_set_push,
             commands::companion::companion_retry_tailscale,

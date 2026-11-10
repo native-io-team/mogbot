@@ -233,6 +233,16 @@
   color: var(--text-secondary);
 }
 
+.phone-install__ended[data-build-ended='failed'] {
+  color: var(--text-primary);
+}
+
+.phone-install__ended-actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: var(--spacing-sm);
+}
+
 /* ---- Before the agent starts ---------------------------------------------- */
 
 .phone-install-start,
