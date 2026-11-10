@@ -203,7 +203,13 @@ export function KeyChoices({
             on={c.id === colorway}
             onPress={() => onColorway(c.id)}
           >
-            <AgentKey name={name} colorway={c.id} icon={icon} size={keySize.md} />
+            <AgentKey
+              name={name}
+              colorway={c.id}
+              icon={icon}
+              size={keySize.md}
+              pressed={c.id === colorway}
+            />
           </LookChoice>
         ))}
       </View>
@@ -214,12 +220,18 @@ export function KeyChoices({
         {/* One from the pack leads the row, so the pick is always in sight. */}
         {!featured && (
           <LookChoice label={iconName(icon)} on onPress={() => setSearching(true)}>
-            <AgentKey name={name} colorway={colorway} icon={icon} size={keySize.md} />
+            <AgentKey name={name} colorway={colorway} icon={icon} size={keySize.md} pressed />
           </LookChoice>
         )}
         {KEY_ICONS.map((i) => (
           <LookChoice key={i.id} label={i.name} on={i.id === icon} onPress={() => onIcon(i.id)}>
-            <AgentKey name={name} colorway={colorway} icon={i.id} size={keySize.md} />
+            <AgentKey
+              name={name}
+              colorway={colorway}
+              icon={i.id}
+              size={keySize.md}
+              pressed={i.id === icon}
+            />
           </LookChoice>
         ))}
       </View>
@@ -276,7 +288,6 @@ function LookChoice({
   onPress: () => void;
   children: ReactNode;
 }) {
-  const colors = useColors();
   const styles = useStyles();
   return (
     <Pressable
@@ -289,16 +300,45 @@ function LookChoice({
       }}
       style={styles.swatchTarget}
     >
-      {/* The pick: a neutral ring, as the colour swatches have. */}
-      <View style={[styles.lookRing, on && { borderColor: colors.textStrong }]}>{children}</View>
+      {/* The pick is told as a keyboard tells it: the key held down (the
+          caller presses it) and a small neutral check on its corner, never a
+          box round it. The rest wait a little quieter. */}
+      <View style={[styles.lookChoice, !on && styles.lookQuiet]}>
+        {children}
+        {on && <PickCheck />}
+      </View>
     </Pressable>
+  );
+}
+
+/**
+ * The pick's mark on a key choice (here and in the icon sheet): a neutral
+ * disc with a check on the key's top-right corner, cut out of the key by a
+ * rim of the sheet's own surface. Neutral, never the accent: answers are
+ * neutral (the desk's `.agent-look__check`).
+ */
+export function PickCheck() {
+  const colors = useColors();
+  const styles = useStyles();
+  return (
+    <Animated.View
+      entering={FadeIn.duration(120)}
+      style={[styles.check, { backgroundColor: colors.textStrong, borderColor: colors.surfacePanel }]}
+      pointerEvents="none"
+      importantForAccessibility="no-hide-descendants"
+    >
+      <Icon name="checkmark" size={iconSize.micro} color={colors.surfacePanel} />
+    </Animated.View>
   );
 }
 
 const SWATCH = 28;
 const RING = SWATCH + 8;
-/** A key choice's ring: the small key and its depth, with room round it. */
+/** A key choice: the small key and its depth, with room for the check on its corner. */
 const KEY_RING = keySize.md + 10;
+/** The check's disc, and the rim that cuts it out of the key. */
+const CHECK = 16;
+const CHECK_RIM = 2;
 
 const useStyles = makeStyles((colors) => ({
   row: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
@@ -318,12 +358,21 @@ const useStyles = makeStyles((colors) => ({
   swatchTarget: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   look: { gap: space.xs },
   more: { alignSelf: 'flex-start' },
-  lookRing: {
+  lookChoice: {
     width: KEY_RING,
     height: KEY_RING,
-    borderRadius: radius.control,
-    borderWidth: 2,
-    borderColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  lookQuiet: { opacity: 0.78 },
+  check: {
+    position: 'absolute',
+    top: 0,
+    right: 0,
+    width: CHECK,
+    height: CHECK,
+    borderRadius: radius.pill,
+    borderWidth: CHECK_RIM,
     alignItems: 'center',
     justifyContent: 'center',
   },

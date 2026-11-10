@@ -35,7 +35,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { makeStyles, useColors } from '../lib/appearance';
 import { fonts, keySize, lineHeight, radius, space, type } from '../lib/theme';
 import { AgentKey } from './AgentKey';
-import { Chip } from './pickers';
+import { Chip, PickCheck } from './pickers';
 import { Button, T, tap } from './ui';
 
 /** A tile: the small key with room round it for its ring, a 44pt target. */
@@ -118,8 +118,10 @@ export function KeyIconSheet({
         onPress={() => pick(id)}
         style={styles.tile}
       >
-        <View style={[styles.ring, on && { borderColor: colors.textStrong }]}>
-          <AgentKey name={name} colorway={colorway} icon={id} size={keySize.md} />
+        {/* The pick: held down, with the neutral check (pickers.tsx). */}
+        <View style={[styles.ring, !on && styles.quiet]}>
+          <AgentKey name={name} colorway={colorway} icon={id} size={keySize.md} pressed={on} />
+          {on && <PickCheck />}
         </View>
       </Pressable>
     );
@@ -262,10 +264,8 @@ const useStyles = makeStyles((colors) => ({
   ring: {
     width: TILE - 2,
     height: TILE - 2,
-    borderRadius: radius.control,
-    borderWidth: 2,
-    borderColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
+  quiet: { opacity: 0.78 },
 }));
