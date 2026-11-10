@@ -76,7 +76,9 @@ describe('AgentBlocks', () => {
       },
     ]);
     expect(screen.getByText('Here it is.')).toBeTruthy();
-    expect(screen.getByRole('img', { name: 'Revenue (line chart, Jan to Mar)' })).toBeTruthy();
+    const img = screen.getByRole('img', { name: /^Revenue \(line chart, Jan to Mar\)\. / });
+    // The numbers in words too, not only the title (the phone says the same).
+    expect(img.getAttribute('aria-label')).toContain('$1,000');
     // One series: no legend box.
     expect(screen.queryByLabelText('Legend')).toBeNull();
     fireEvent.click(screen.getByRole('button', { name: 'Show the numbers' }));
