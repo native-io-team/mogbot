@@ -36,8 +36,11 @@ over a screenshot of the Describe box: the agent-keys picker had no visual cover
 
 **Fixed.** A step's target and `requires` must be *drawn* (a layout box, or a drawn child of a
 `display: contents` wrapper), and a hidden target fails the run as "in the page, but hidden". The
-four scenarios now click "fill it in yourself" or require the editor view. Every scenario was
-re-captured light and dark under the stricter rule; nothing else was hiding.
+four scenarios now click "fill it in yourself" or require the editor view. All 653 scenarios were
+re-captured light and dark under the stricter rule: only those four failed, plus the
+`settings-agents-user-chrome*` pair, whose `requires` is a `display: contents` wrapper (the rule
+now looks through those; both pass). `layout-repairs-nonsense` failed once in light under load and
+passes on a re-run.
 
 ## 2. Recipes: the key you share is not the key you review, and the two readbacks disagree
 
