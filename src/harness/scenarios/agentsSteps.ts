@@ -132,7 +132,7 @@ export const agentsStepsScenarios: Scenario[] = [
     requires: '.agent-draft__routines',
     clipSelector: '.agent-editor',
     steps: [
-      { click: '.workspace-sidebar-add-project' },
+      { click: '.agents-list__new' },
       { fill: '#agent-describe-text', value: DESCRIPTION },
       { click: '.agent-describe__actions button' },
     ],

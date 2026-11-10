@@ -2995,7 +2995,7 @@ export const agentsScenarios: Scenario[] = [
     openSelector: AGENTS_TAB,
     requires: '[aria-label="Runs on"] button[disabled]',
     clipSelector: '.agent-editor',
-    steps: [{ click: '.workspace-sidebar-add-project' }],
+    steps: [{ click: '.agents-list__new' }],
     commands: {
       agents_overview: {
         ...overview(),
@@ -3013,7 +3013,7 @@ export const agentsScenarios: Scenario[] = [
     requires: '.agent-editor [data-testid="agent-engine-protections"]',
     clipSelector: '.agent-editor',
     steps: [
-      { click: '.workspace-sidebar-add-project' },
+      { click: '.agents-list__new' },
       { click: '.agent-editor__fill-in' },
       { click: '.agent-editor__advanced > .agent-editor__more' },
     ],
