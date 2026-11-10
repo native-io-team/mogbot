@@ -5193,27 +5193,6 @@ function seedMessages(a: Agent, now: number): AgentMessage[] {
       },
     });
   } else if (a.id === 'fin') {
-    add({ ts: now - 4 * 3_600_000, kind: 'user', text: 'Reconcile October’s payouts against the ledger.' });
-    add({
-      ts: now - 4 * 3_600_000 + 60_000,
-      kind: 'approval',
-      text: '',
-      approval: {
-        requestId: 'req_skill',
-        title: 'Save “Reconcile Stripe payouts” as a skill?',
-        detail: SKILL_STEPS,
-        summary: 'When to use it: When the user asks to reconcile last month’s payouts against the ledger',
-        status: 'pending',
-        risk: 'low',
-        skill: {
-          slug: 'reconcile-stripe-payouts',
-          name: 'Reconcile Stripe payouts',
-          when: 'When the user asks to reconcile last month’s payouts against the ledger',
-          steps: SKILL_STEPS,
-          removed: 1,
-        },
-      },
-    });
     add({ ts: now - 3 * 3_600_000, kind: 'user', text: 'Summarise October spend.' });
     add({
       ts: now - 3 * 3_600_000 + 5000,
@@ -5250,6 +5229,27 @@ function seedMessages(a: Agent, now: number): AgentMessage[] {
         detail: 'Read the invoices that arrive by email',
         status: 'pending',
         login: loginCard(a.name, 'gmail', { askedAs: 'gmail work' }),
+      },
+    });
+    add({ ts: now - 31 * 60_000, kind: 'user', text: 'Reconcile October’s payouts against the ledger.' });
+    add({
+      ts: now - 30 * 60_000,
+      kind: 'approval',
+      text: '',
+      approval: {
+        requestId: 'req_skill',
+        title: 'Save “Reconcile Stripe payouts” as a skill?',
+        detail: SKILL_STEPS,
+        summary: 'When to use it: When the user asks to reconcile last month’s payouts against the ledger',
+        status: 'pending',
+        risk: 'low',
+        skill: {
+          slug: 'reconcile-stripe-payouts',
+          name: 'Reconcile Stripe payouts',
+          when: 'When the user asks to reconcile last month’s payouts against the ledger',
+          steps: SKILL_STEPS,
+          removed: 1,
+        },
       },
     });
   } else {

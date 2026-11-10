@@ -1695,8 +1695,7 @@ const LIVE = [
   {
     name: 'chat-skill-card',
     route: '/chat/fin',
-    ready: 'as a skill?',
-    act: scrollToText('Reconcile Stripe payouts'),
+    ready: 'Not now',
     check:
       'Finance’s “Save “Reconcile Stripe payouts” as a skill?” card: a graduation-cap icon, when to use it, the numbered steps, a quiet “1 personal detail or secret removed.”, and Not now · Save (Save the neutral answer, no ⋯)',
   },

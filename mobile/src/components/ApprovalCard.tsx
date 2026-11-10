@@ -508,12 +508,11 @@ export function ApprovalCard({
             <T color={colors.textBody}>{approval.summary}</T>
           ) : skill ? (
             // When to use it, then the steps as they'd be saved.
-            <>
-              {!!skill.when && <T color={colors.textBody}>{skill.when}</T>}
-              <T variant="small" color={colors.textSecondary}>
-                {skill.steps}
-              </T>
-            </>
+            <T color={colors.textBody}>
+              {skill.when ? `${skill.when}
+
+${skill.steps}` : skill.steps}
+            </T>
           ) : consent ? (
             // Consent asks in sentences, not a command: prose that wraps.
             <T color={colors.textBody}>{approval.detail}</T>
