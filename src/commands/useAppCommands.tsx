@@ -316,7 +316,7 @@ export function useAppCommands({
       },
       {
         id: 'settings.changelog',
-        title: "What's new",
+        title: 'What’s new',
         icon: <SettingsIcon size={14} />,
         category: 'settings',
         keywords: ['changelog', 'release'],
@@ -579,29 +579,8 @@ export function useAppCommands({
           openModal('settings');
         },
       },
-      {
-        id: 'agents.accounts',
-        title: 'Usage accounts…',
-        icon: <SettingsIcon size={14} />,
-        category: 'settings',
-        keywords: [
-          'accounts',
-          'usage limit',
-          'subscription',
-          'switch account',
-          'claude',
-          'codex',
-          'chatgpt',
-        ],
-        // The one home for usage and accounts: the Usage view when Agents
-        // shows it; else Settings → Accounts & usage, which is the same panel.
-        run: () => {
-          if (requestSwitcher('open')) return;
-          requestAccountsOnOpen('show');
-          requestSettingsTabOnOpen('agents');
-          openModal('settings');
-        },
-      },
+      // (A third row, "Usage accounts…", ran exactly what "Switch account…"
+      // runs; one idea, one row: its words are that row's keywords now.)
       {
         id: 'agents.usage',
         title: 'Usage and accounts…',
@@ -650,6 +629,8 @@ export function useAppCommands({
         keywords: [
           'account',
           'use this account',
+          'accounts',
+          'usage accounts',
           'swap',
           'change account',
           'usage limit',
@@ -784,7 +765,8 @@ export function useAppCommands({
     const cmds = [
       {
         id: 'nav.home',
-        title: 'Go to Home',
+        title: 'All projects',
+        keywords: ['home', 'dashboard', 'back', 'projects'],
         icon: <HomeIcon size={14} />,
         category: 'navigation' as const,
         when: 'project' as const,

@@ -5,7 +5,7 @@ vi.mock('../lib/errorReporting', () => ({
   reportError: vi.fn(),
 }));
 
-import { useToasts } from './useToasts';
+import { toastDuration, useToasts } from './useToasts';
 import { reportError } from '../lib/errorReporting';
 
 describe('useToasts', () => {
@@ -290,5 +290,46 @@ describe('useToasts', () => {
       message: 'Real failure',
       source: 'toast',
     });
+  });
+
+  it('counts the same message on its toast instead of stacking a copy, and restarts its clock', () => {
+    const { result } = renderHook(() => useToasts());
+    act(() => result.current.showToast('Saved'));
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+    act(() => result.current.showToast('Saved'));
+    expect(result.current.toasts).toHaveLength(1);
+    expect(result.current.toasts[0].count).toBe(2);
+    act(() => {
+      vi.advanceTimersByTime(3000);
+    });
+    expect(result.current.toasts).toHaveLength(1);
+    act(() => {
+      vi.advanceTimersByTime(1000);
+    });
+    expect(result.current.toasts).toHaveLength(0);
+  });
+
+  it('holds a pointed-at toast and gives it its whole time again after', () => {
+    const { result } = renderHook(() => useToasts());
+    act(() => result.current.showToast('Saved'));
+    const id = result.current.toasts[0].id;
+    act(() => result.current.holdToast?.(id, true));
+    act(() => {
+      vi.advanceTimersByTime(20000);
+    });
+    expect(result.current.toasts).toHaveLength(1);
+    act(() => result.current.holdToast?.(id, false));
+    act(() => {
+      vi.advanceTimersByTime(4000);
+    });
+    expect(result.current.toasts).toHaveLength(0);
+  });
+
+  it('gives a long toast longer, up to 10 s', () => {
+    expect(toastDuration('Short')).toBe(4000);
+    expect(toastDuration('x'.repeat(110))).toBe(6000);
+    expect(toastDuration('x'.repeat(1000))).toBe(10000);
   });
 });

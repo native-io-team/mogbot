@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { ModalFrame } from '../primitives/ModalFrame';
 import { Tabs, TabsList, TabsPanel, TabsTab } from '../primitives/Tabs';
+import { TextButton } from '../primitives/TextButton';
 import { CommandPlaceholderIcon, SearchIcon } from '@/components/icons';
 import { useConsumePendingTab, type PaletteContextKind } from './paletteContext';
-import { useRankedCommands, type RankedCommand } from '../../commands/useRankedCommands';
+import { useRankedCommands } from '../../commands/useRankedCommands';
 import { recordRun } from '../../commands/frecency';
-import type { CommandCategory } from '../../commands/types';
+import { layoutPalette, tabsFor, type PaletteRow, type TabId } from './paletteLayout';
 import { logger } from '../../lib/logger';
 import { asCommandError, formatCommandError } from '../../lib/errors';
 import { useOptionalToast } from '../../contexts/ToastContext';
@@ -18,48 +19,22 @@ interface CommandPaletteProps {
   currentProjectName: string | null;
 }
 
-type TabId = 'all' | CommandCategory;
-
-const HOME_TABS: { id: TabId; label: string }[] = [
-  { id: 'all', label: 'All results' },
-  { id: 'project', label: 'Projects' },
-  { id: 'action', label: 'Actions' },
-  { id: 'settings', label: 'Settings' },
-];
-
-const PROJECT_TABS: { id: TabId; label: string }[] = [
-  { id: 'all', label: 'All results' },
-  { id: 'project', label: 'Projects' },
-  { id: 'action', label: 'Actions' },
-  { id: 'branch', label: 'Branches' },
-  { id: 'extension', label: 'Skills & MCP' },
-  { id: 'settings', label: 'Settings' },
-];
-
-const GROUP_ORDER: CommandCategory[] = [
-  'navigation',
-  'project',
-  'action',
-  'branch',
-  'extension',
-  'settings',
-];
-
-const GROUP_LABEL: Record<CommandCategory, string> = {
-  navigation: 'Navigate',
-  project: 'Projects',
-  action: 'Actions',
-  branch: 'Branches',
-  extension: 'Skills & MCP',
-  settings: 'Settings',
-};
+/**
+ * Rows drawn in the frame the palette opens in; the rest follow one frame
+ * later. Measured with ~170 commands (22 agents) at 4× CPU throttle: opening
+ * took ~115 ms with every row drawn at once and ~60 ms with ten, so the first
+ * paint draws what fits on screen and nothing a person could reach yet.
+ */
+const FIRST_PAINT_ROWS = 24;
 
 function placeholderFor(ctx: PaletteContextKind, projectName: string | null) {
   if (ctx === 'project') {
     return projectName ? `Search actions in ${projectName}…` : 'Search actions…';
   }
-  return 'Search projects, actions, settings…';
+  return 'Search agents, projects, settings…';
 }
+
+const optionId = (index: number) => `command-palette-option-${index}`;
 
 export function CommandPalette({
   isOpen,
@@ -69,136 +44,147 @@ export function CommandPalette({
 }: CommandPaletteProps) {
   const { showToast } = useOptionalToast();
   const [query, setQuery] = useState('');
-  const [activeTab, setActiveTabRaw] = useState<TabId>('all');
+  const [activeTab, setActiveTab] = useState<TabId>('all');
   const [selectedIdx, setSelectedIdx] = useState(0);
+  const [rowLimit, setRowLimit] = useState(FIRST_PAINT_ROWS);
   const inputRef = useRef<HTMLInputElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const consumePendingTab = useConsumePendingTab();
 
-  // Analytics: track open duration and dismissal reason. The reason ref is set
-  // by runSelected before it calls onClose so the close-side effect knows the
-  // user invoked a command vs. dismissed via esc / click-outside.
+  // A fresh object every render would re-rank every command on every arrow
+  // key and every hover.
+  const ctx = useMemo(() => ({ kind: context, currentProjectName }), [context, currentProjectName]);
+  const { ranked, fallbacks } = useRankedCommands(ctx, query);
+  const tabs = tabsFor(context);
 
-  const ranked = useRankedCommands({ kind: context, currentProjectName }, query);
-
-  const filtered = useMemo(
-    () => (activeTab === 'all' ? ranked : ranked.filter((c) => c.category === activeTab)),
-    [ranked, activeTab]
+  const layout = useMemo(
+    () => layoutPalette({ ranked, fallbacks, tab: activeTab, context, query }),
+    [ranked, fallbacks, activeTab, context, query]
   );
-
-  // Grouped layout for the "All" tab; flat list for every other tab.
-  const grouped = useMemo(() => {
-    if (activeTab !== 'all') return null;
-    const buckets = new Map<CommandCategory, RankedCommand[]>();
-    for (const cmd of filtered) {
-      const list = buckets.get(cmd.category) ?? [];
-      list.push(cmd);
-      buckets.set(cmd.category, list);
-    }
-    return GROUP_ORDER.filter((cat) => (buckets.get(cat)?.length ?? 0) > 0).map((cat) => ({
-      category: cat,
-      rows: buckets.get(cat)!,
-    }));
-  }, [activeTab, filtered]);
+  const { rows } = layout;
 
   useEffect(() => {
     if (isOpen) {
       const pending = consumePendingTab();
-      setActiveTabRaw(pending ?? 'all');
+      setActiveTab(pending ?? 'all');
       inputRef.current?.focus();
       void trackEvent('palette_opened', {
         context,
         initial_tab: pending ?? 'all',
       });
-    } else {
-      setQuery('');
-      setActiveTabRaw('all');
-      setSelectedIdx(0);
+      // The rest of the rows, once the first frame is on screen.
+      const raf = requestAnimationFrame(() => setRowLimit(Infinity));
+      return () => cancelAnimationFrame(raf);
     }
+    setQuery('');
+    setActiveTab('all');
+    setSelectedIdx(0);
+    setRowLimit(FIRST_PAINT_ROWS);
+    return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- consumePendingTab is stable, context is captured in handlers
   }, [isOpen]);
 
-  // Clamp selection when the filtered list changes length.
+  // A tab this context doesn't have (asked for elsewhere) falls back to All.
   useEffect(() => {
-    setSelectedIdx((i) => Math.min(i, Math.max(0, filtered.length - 1)));
-  }, [filtered.length]);
+    if (!tabs.some((t) => t.id === activeTab)) setActiveTab('all');
+  }, [tabs, activeTab]);
 
   useEffect(() => {
     setSelectedIdx(0);
   }, [query, activeTab, context]);
 
+  // Clamp selection when the list changes length.
   useEffect(() => {
-    const el = listRef.current?.querySelector<HTMLElement>('[data-selected="true"]');
-    el?.scrollIntoView({ block: 'nearest' });
+    setSelectedIdx((i) => Math.min(i, Math.max(0, rows.length - 1)));
+  }, [rows.length]);
+
+  useEffect(() => {
+    listRef.current
+      ?.querySelector<HTMLElement>(`#${optionId(selectedIdx)}`)
+      ?.scrollIntoView({ block: 'nearest' });
   }, [selectedIdx]);
 
-  const tabs = context === 'project' ? PROJECT_TABS : HOME_TABS;
+  // Read through a ref so the row callbacks stay stable and the rows memoize.
+  const latest = useRef({ rows, query, activeTab, context });
+  useLayoutEffect(() => {
+    latest.current = { rows, query, activeTab, context };
+  });
 
-  const setActiveTab = (next: TabId, _cause: 'click' | 'keyboard') => {
-    setActiveTabRaw(next);
-  };
-
-  const runSelected = (cmd: RankedCommand, position: number) => {
-    const trimmedQuery = query.trim();
-    void trackEvent('palette_command_run', {
-      command_id: cmd.id,
-      category: cmd.category,
-      // `position` is the index in the *currently filtered* list; pair it
-      // with `total_results` so the metric is interpretable across queries.
-      position,
-      total_results: filtered.length,
-      query_length: trimmedQuery.length,
-      had_query: trimmedQuery.length > 0,
-      tab: activeTab,
-      context,
-    });
-    // Close first so the UI doesn't block on long-running handlers.
-    onClose();
-    recordRun(cmd.id);
-    // Surface failures — a silently-failing palette command kills trust in
-    // the palette. The toast carries the command title plus the real error.
-    const reportFailure = (kind: 'failed' | 'threw', err: unknown) => {
-      const detail = formatCommandError(asCommandError(err));
-      logger.error(`[CommandPalette] command ${kind}`, { id: cmd.id, error: detail });
-      showToast(`"${cmd.title}" failed: ${detail}`, 'error');
-    };
-    try {
-      const result = cmd.run();
-      if (result && typeof (result as Promise<unknown>).then === 'function') {
-        (result as Promise<unknown>).catch((err) => reportFailure('failed', err));
+  const runRow = useCallback(
+    (index: number) => {
+      const { rows: current, query: typed, activeTab: tab, context: where } = latest.current;
+      const row = current[index];
+      if (!row) return;
+      const { cmd } = row;
+      const trimmedQuery = typed.trim();
+      void trackEvent('palette_command_run', {
+        command_id: cmd.id,
+        category: cmd.category,
+        // `position` is the index in the list as shown; pair it with
+        // `total_results` so the metric is interpretable across queries.
+        position: index,
+        total_results: current.length,
+        query_length: trimmedQuery.length,
+        had_query: trimmedQuery.length > 0,
+        tab,
+        context: where,
+      });
+      // Close first so the UI doesn't block on long-running handlers.
+      onClose();
+      if (!cmd.fallback) recordRun(cmd.id);
+      // A silently failing palette command kills trust in the palette: the
+      // toast names the command and carries the real error.
+      const reportFailure = (kind: 'failed' | 'threw', err: unknown) => {
+        const detail = formatCommandError(asCommandError(err));
+        logger.error(`[CommandPalette] command ${kind}`, { id: cmd.id, error: detail });
+        showToast(`“${cmd.title}” didn’t work: ${detail}`, 'error');
+      };
+      try {
+        const result = cmd.run(row.query);
+        if (result && typeof (result as Promise<unknown>).then === 'function') {
+          (result as Promise<unknown>).catch((err) => reportFailure('failed', err));
+        }
+      } catch (err) {
+        reportFailure('threw', err);
       }
-    } catch (err) {
-      reportFailure('threw', err);
-    }
-  };
+    },
+    [onClose, showToast]
+  );
+
+  // Only a moving pointer selects: a list scrolled by the arrow keys under a
+  // still pointer must not hand the selection to whatever row arrives there.
+  const pointAt = useCallback((index: number) => {
+    setSelectedIdx((i) => (i === index ? i : index));
+  }, []);
 
   const cycleTab = (direction: 1 | -1) => {
     const currentIdx = tabs.findIndex((t) => t.id === activeTab);
     const nextIdx = (currentIdx + direction + tabs.length) % tabs.length;
-    setActiveTab(tabs[nextIdx].id, 'keyboard');
+    setActiveTab(tabs[nextIdx].id);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'ArrowDown') {
+    const count = rows.length;
+    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
       e.preventDefault();
-      setSelectedIdx((i) => Math.min(i + 1, Math.max(0, filtered.length - 1)));
-    } else if (e.key === 'ArrowUp') {
+      if (count === 0) return;
+      const step = e.key === 'ArrowDown' ? 1 : -1;
+      // Wraps, so the last command is one ↑ away from the first.
+      setSelectedIdx((i) => (i + step + count) % count);
+    } else if (e.key === 'Tab') {
       e.preventDefault();
-      setSelectedIdx((i) => Math.max(i - 1, 0));
-    } else if (e.key === 'ArrowRight' || (e.key === 'Tab' && !e.shiftKey)) {
+      cycleTab(e.shiftKey ? -1 : 1);
+    } else if ((e.key === 'ArrowRight' || e.key === 'ArrowLeft') && query === '') {
+      // With text in the field these move the caret, as in any text field.
       e.preventDefault();
-      cycleTab(1);
-    } else if (e.key === 'ArrowLeft' || (e.key === 'Tab' && e.shiftKey)) {
-      e.preventDefault();
-      cycleTab(-1);
+      cycleTab(e.key === 'ArrowRight' ? 1 : -1);
     } else if (e.key === 'Enter') {
       e.preventDefault();
-      const cmd = filtered[selectedIdx];
-      if (cmd) runSelected(cmd, selectedIdx);
+      runRow(selectedIdx);
     }
   };
 
-  let flatIdx = 0; // running index across groups so arrow-nav maps to flat order.
+  const activeLabel = tabs.find((t) => t.id === activeTab)?.label ?? '';
 
   return (
     <ModalFrame
@@ -223,6 +209,10 @@ export function CommandPalette({
           autoCorrect="off"
           autoCapitalize="off"
           spellCheck={false}
+          role="combobox"
+          aria-expanded="true"
+          aria-controls="command-palette-list"
+          aria-activedescendant={rows.length ? optionId(selectedIdx) : undefined}
           aria-label="Search commands"
         />
       </div>
@@ -234,7 +224,7 @@ export function CommandPalette({
         </div>
       )}
 
-      <Tabs value={activeTab} onValueChange={(next) => setActiveTab(next as TabId, 'click')}>
+      <Tabs value={activeTab} onValueChange={(next) => setActiveTab(next as TabId)}>
         <TabsList
           variant="stretch"
           appearance="underline"
@@ -248,58 +238,74 @@ export function CommandPalette({
           ))}
         </TabsList>
         <TabsPanel value={activeTab} className="command-palette-list-panel">
-          <div className="command-palette-list" role="listbox" aria-label="Commands" ref={listRef}>
-            {filtered.length === 0 ? (
-              <div className="command-palette-empty">
-                {query ? `No matches for "${query}"` : 'No commands available here yet'}
+          <div
+            className="command-palette-list"
+            id="command-palette-list"
+            role="listbox"
+            aria-label="Commands"
+            ref={listRef}
+          >
+            {layout.empty && (
+              <div className="command-palette-empty" role="status">
+                {layout.empty.kind === 'nothing' ? (
+                  'Nothing to run here yet.'
+                ) : layout.empty.elsewhere > 0 ? (
+                  <>
+                    <span>
+                      Nothing in {activeLabel} matches “{layout.empty.query}”.
+                    </span>
+                    <TextButton variant="strong" onClick={() => setActiveTab('all')}>
+                      Show {layout.empty.elsewhere}{' '}
+                      {layout.empty.elsewhere === 1 ? 'result' : 'results'} in All
+                    </TextButton>
+                  </>
+                ) : (
+                  <span>Nothing here matches “{layout.empty.query}”.</span>
+                )}
               </div>
-            ) : grouped ? (
-              grouped.map((group) => (
-                <div key={group.category} className="command-palette-group">
-                  <div className="command-palette-group-header">{GROUP_LABEL[group.category]}</div>
-                  {group.rows.map((cmd) => {
-                    const idx = flatIdx++;
-                    return (
-                      <CommandRow
-                        key={cmd.id}
-                        cmd={cmd}
-                        selected={idx === selectedIdx}
-                        onMouseEnter={() => setSelectedIdx(idx)}
-                        onClick={() => runSelected(cmd, idx)}
-                      />
-                    );
-                  })}
-                </div>
-              ))
-            ) : (
-              filtered.map((cmd, idx) => (
-                <CommandRow
-                  key={cmd.id}
-                  cmd={cmd}
-                  selected={idx === selectedIdx}
-                  onMouseEnter={() => setSelectedIdx(idx)}
-                  onClick={() => runSelected(cmd, idx)}
-                />
-              ))
             )}
+            {layout.sections.map((section) => (
+              <div
+                key={section.group}
+                className="command-palette-group"
+                role="group"
+                aria-label={section.label ?? undefined}
+              >
+                {section.label && (
+                  <div className="command-palette-group-header" aria-hidden="true">
+                    {section.label}
+                  </div>
+                )}
+                {section.rows.map((row) =>
+                  row.index < rowLimit ? (
+                    <CommandRow
+                      key={row.cmd.id}
+                      row={row}
+                      selected={row.index === selectedIdx}
+                      onPoint={pointAt}
+                      onRun={runRow}
+                    />
+                  ) : null
+                )}
+              </div>
+            ))}
           </div>
         </TabsPanel>
       </Tabs>
 
-      <div className="command-palette-footer">
+      <div className="command-palette-footer" aria-hidden="true">
         <span className="command-palette-hint">
           <kbd className="command-palette-kbd">↑</kbd>
           <kbd className="command-palette-kbd">↓</kbd>
-          <span>navigate</span>
+          <span>move</span>
         </span>
         <span className="command-palette-hint">
-          <kbd className="command-palette-kbd">←</kbd>
-          <kbd className="command-palette-kbd">→</kbd>
-          <span>tabs</span>
+          <kbd className="command-palette-kbd">tab</kbd>
+          <span>switch tab</span>
         </span>
         <span className="command-palette-hint">
           <kbd className="command-palette-kbd">↵</kbd>
-          <span>select</span>
+          <span>run</span>
         </span>
         <span className="command-palette-hint">
           <kbd className="command-palette-kbd">esc</kbd>
@@ -311,39 +317,44 @@ export function CommandPalette({
 }
 
 interface RowProps {
-  cmd: RankedCommand;
+  row: PaletteRow;
   selected: boolean;
-  onMouseEnter: () => void;
-  onClick: () => void;
+  onPoint: (index: number) => void;
+  onRun: (index: number) => void;
 }
 
-function CommandRow({ cmd, selected, onMouseEnter, onClick }: RowProps) {
+/**
+ * Memoized, with stable callbacks: moving the selection re-renders the two
+ * rows that changed, not all of them.
+ */
+const CommandRow = memo(function CommandRow({ row, selected, onPoint, onRun }: RowProps) {
+  const { cmd, index, query } = row;
+  // A fallback says what it will be handed: the text typed.
+  const subtitle = query !== undefined ? `“${query}”` : cmd.subtitle;
   return (
     <button
       type="button"
       role="option"
+      id={optionId(index)}
+      tabIndex={-1}
       aria-selected={selected}
       data-selected={selected}
-      className={`command-palette-row ${selected ? 'is-selected' : ''}`}
-      onMouseEnter={onMouseEnter}
-      onClick={onClick}
+      className={`command-palette-row${selected ? ' is-selected' : ''}`}
+      onMouseMove={() => onPoint(index)}
+      onClick={() => onRun(index)}
     >
       <span className="command-palette-row-icon" aria-hidden="true">
-        {cmd.icon ?? <DefaultIcon />}
+        {cmd.icon ?? <CommandPlaceholderIcon />}
       </span>
       <span className="command-palette-row-text">
         <span className="command-palette-row-title">{cmd.title}</span>
-        {cmd.subtitle && <span className="command-palette-row-subtitle">{cmd.subtitle}</span>}
+        {subtitle && <span className="command-palette-row-subtitle">{subtitle}</span>}
       </span>
       {cmd.shortcut && (
         <span className="command-palette-row-meta">
-          <kbd className="workspace-sidebar-filter-shortcut">{cmd.shortcut}</kbd>
+          <kbd className="command-palette-kbd">{cmd.shortcut}</kbd>
         </span>
       )}
     </button>
   );
-}
-
-function DefaultIcon(): ReactNode {
-  return <CommandPlaceholderIcon />;
-}
+});

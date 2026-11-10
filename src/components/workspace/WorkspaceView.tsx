@@ -270,7 +270,7 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
 
   const { isEducationMode, closeEducation } = modals;
 
-  const { toasts: toastList, showToast, dismissToast } = toasts;
+  const { showToast } = toasts;
 
   // Worktrees of the current project's repository (state, create-modal
   // trigger, post-create open + auto-install). Logic lives in the hook.
@@ -513,12 +513,6 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
   useWorkspacePanelCommands({
     isAgentPanelHidden,
     toggleAgentPanel,
-    agentPanelDocked,
-    toggleAgentPanelDocked,
-    elementTreeDocked,
-    toggleElementTreeDocked,
-    variablesPanelDocked,
-    toggleVariablesPanelDocked,
     isWebProject,
     variablesPanelOpen: variables.open,
     toggleVariablesPanel: variables.toggle,
@@ -1056,7 +1050,6 @@ const WorkspaceViewInner = memo(function WorkspaceViewInner({
             onBackupCreatePR: (branchName) => setShowSubmitReview(branchName),
           }}
           education={{ isEducationMode, onCloseEducation: closeEducation }}
-          toasts={{ toasts: toastList, dismissToast }}
           screenshots={{
             screenshotPreviewPath,
             showScreenshotModal,

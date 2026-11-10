@@ -4742,7 +4742,7 @@ in `clock_phrase` for the Mac's own sentences.
 Answers: **when one subscription runs out, can the agents keep going on
 another?** Each engine has an ordered list of accounts (Settings → Agents →
 Accounts; the account row at the foot of the Agents sidebar; ⌘K "Switch
-account…", "Add an account…", "Usage accounts…"). One of them is always
+account…", "Add an account…"). One of them is always
 **this Mac's own sign-in**: the `claude` / `codex` login already on the
 machine (`id: "default"`), which every turn used before wallets and still
 uses while it is the only one. It can be renamed and moved down, not
