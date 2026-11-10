@@ -396,6 +396,17 @@ export const answerableHere = (approval: Pick<Approval, 'connector'>, reviewHere
 const pendingCard = (m: AgentMessage): Approval | null =>
   m.kind === 'approval' && m.approval?.status === 'pending' ? m.approval : null;
 
+/** Every card still waiting that the phone can answer, oldest first (ids). */
+export function pendingApprovalIds(messages: AgentMessage[] | undefined): string[] {
+  if (!messages) return [];
+  return messages
+    .filter((m) => {
+      const card = pendingCard(m);
+      return !!card && answerableHere(card);
+    })
+    .map((m) => m.id);
+}
+
 /**
  * An agent's approval still waiting that the phone can answer, as far as
  * this phone's copy of its chat shows. A review card isn't one.

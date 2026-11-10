@@ -3013,6 +3013,16 @@ const scrollChatToEnd = async (page) => {
   await page.eval('window.__qaScroller && (window.__qaScroller.scrollTop = 0)');
   await sleep(500);
 };
+/** Scroll back through an inverted chat until a text is drawn (or 20 screens, then give up). */
+const scrollBackTo = async (page, text) => {
+  await page.eval(FIND_SCROLLER);
+  for (let i = 0; i < 20; i++) {
+    const [n] = await countIn(page, [text]);
+    if (n > 0) return;
+    await page.eval('window.__qaScroller && (window.__qaScroller.scrollTop += 600)');
+    await sleep(350);
+  }
+};
 /** Where on screen a text is drawn (the inverted list's DOM order is newest first). */
 const topOf = (page, text) =>
   page.eval(`(() => {
@@ -3160,7 +3170,13 @@ const TORTURE = [
       await startMock('--torture');
       await sleep(6000);
       await scrollChatToEnd(page);
-      await expectCounts(page, ['Got both.', 'Plan for the week?'], [1, 1]);
+      await expectCounts(page, ['Got both.'], [1]);
+      // Older lines sit further back than the list draws ahead (`windowSize`),
+      // more so after torture-events added a burst and a long reply: a count
+      // taken at the newest end saw 0 of them now and then without anything
+      // missing. Read back to it, then count.
+      await scrollBackTo(page, 'Plan for the week?');
+      await expectCounts(page, ['Plan for the week?'], [1]);
     },
     check:
       'After the Mac restarts mid-chat: reconnected, every line once, nothing stale or doubled',

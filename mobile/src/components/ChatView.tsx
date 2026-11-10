@@ -64,7 +64,14 @@ import Animated, {
   withTiming,
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { agentKeyState, askingLine, isQueued, needsYouHere, pendingApproval } from '../lib/agents';
+import {
+  agentKeyState,
+  askingLine,
+  isQueued,
+  needsYouHere,
+  pendingApproval,
+  pendingApprovalIds,
+} from '../lib/agents';
 import { messageActions, plainText, type MessageAction } from '../lib/actions';
 import { canReadAloud, readAloud, stopReading, useReading } from '../lib/readAloud';
 import { announce } from '../lib/a11y';
@@ -116,6 +123,7 @@ import {
   pillFor,
   revealsCard,
   scrolled,
+  seeCards,
   toEnd,
   type Follow,
 } from '../lib/follow';
@@ -495,13 +503,15 @@ export function ChatView({
   useLayoutEffect(() => {
     itemsRef.current = items;
   }, [items]);
-  const seenCard = useRef<string | null | undefined>(undefined);
+  const seenCards = useRef<ReadonlySet<string> | undefined>(undefined);
   const cardId = card?.id ?? null;
+  // Every card waiting, so one that was already there never counts as new.
+  const waitingKey = useMemo(() => pendingApprovalIds(messages).join(' '), [messages]);
   const loaded = !!chat?.loaded;
   useEffect(() => {
     if (!loaded) return;
-    const before = seenCard.current;
-    seenCard.current = cardId;
+    const before = seenCards.current;
+    seenCards.current = seeCards(before, waitingKey ? waitingKey.split(' ') : []);
     if (at || !revealsCard(before, cardId, distance.current)) return;
     const index = itemsRef.current.findIndex((i) => i.key === cardId);
     if (index < 0) return;
@@ -510,7 +520,7 @@ export function ChatView({
       80
     );
     return () => clearTimeout(timer);
-  }, [cardId, loaded, at]);
+  }, [cardId, loaded, at, waitingKey]);
 
   const targetIndex = target ? items.findIndex((i) => isRowFor(i, target)) : -1;
   useEffect(() => {
@@ -1308,7 +1318,6 @@ const ChatHeader = memo(function ChatHeader({
     </>
   );
 });
-
 
 function Header({ agent }: { agent: Agent }) {
   const colors = useColors();
