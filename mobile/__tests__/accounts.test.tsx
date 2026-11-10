@@ -13,6 +13,8 @@ import {
 import * as real from '../../packages/companion-protocol/src/fixtures.gen';
 import { setApp } from '../src/lib/store';
 
+// An agent's key is drawn with Reanimated; here only the words matter.
+jest.mock('../src/components/AgentKey', () => ({ AgentKey: () => null }));
 jest.mock('../src/lib/session', () => ({
   call: jest.fn(),
   canCall: () => true,

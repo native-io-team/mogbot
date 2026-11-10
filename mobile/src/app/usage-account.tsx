@@ -1,9 +1,11 @@
 /**
  * One account's usage, opened from a row or a segment of the total on the
- * Usage screen (or Settings → Accounts): "Usage › Work", then its card
- * (components/usageStack.tsx `KeyCard`): its limits against pace, who used
- * it this week and where its usage went. Only what the Mac served
- * (`usageGlance`, as the desk's account page says it).
+ * Usage screen (or Settings → Accounts): "‹ Usage", its name as the title,
+ * then the desk's account page (components/usageStack.tsx `KeyCard`): its
+ * place and state with "Use this one now" and its place in the order, its
+ * limits each against pace or who used it this week (Limits | Tokens), and
+ * where its usage went. Only what the Mac served (`usageGlance`, as the
+ * desk's account page says it).
  */
 
 import { usageGlance, type UsageInventory } from '@shipstudio/companion-protocol';
@@ -11,9 +13,9 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { useCallback, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { SheetTitle } from '../components/SheetTitle';
-import { KeyCard } from '../components/usageStack';
+import { KeyCard, type KeyActions } from '../components/usageStack';
 import { Icon, SheetPage, T } from '../components/ui';
-import { useAccounts } from '../lib/accounts';
+import { idsOf, useAccounts } from '../lib/accounts';
 import { makeStyles, useColors } from '../lib/appearance';
 import { call, canCall } from '../lib/session';
 import { iconSize, PRESSED, space } from '../lib/theme';
@@ -34,7 +36,8 @@ export default function UsageAccount() {
     }
   }, [serves]);
   usePolling(read, 60_000);
-  const { accounts } = useAccounts({ room: false });
+  const state = useAccounts({ room: false });
+  const { accounts } = state;
   const glance = useMemo(
     () => (accounts && inventory ? usageGlance(accounts, inventory) : null),
     [accounts, inventory]
@@ -47,12 +50,27 @@ export default function UsageAccount() {
       )
     : [];
 
+  // What the desk's page offers, where the Mac takes it from the phone.
+  const actions = useMemo((): KeyActions => {
+    if (!key || !accounts) return {};
+    const ids = idsOf(accounts, key.engine);
+    const i = ids.indexOf(key.id);
+    const order = state.canReorder && ids.length > 1 && i >= 0;
+    return {
+      onUse: key.canUse && state.canSwap ? () => void state.swapTo(key.engine, key.id) : undefined,
+      onMoveUp: order && i > 0 ? () => void state.move(key.engine, i, -1) : undefined,
+      onMoveDown: order && i < ids.length - 1 ? () => void state.move(key.engine, i, 1) : undefined,
+      busy: state.busy,
+    };
+  }, [key, accounts, state]);
+
   return (
     <SheetPage>
       <ScrollView contentContainerStyle={styles.page}>
         <Pressable
           accessibilityRole="button"
           accessibilityLabel="Back to Usage"
+          hitSlop={space.sm}
           onPress={() => router.back()}
           style={({ pressed }) => [styles.crumbs, pressed && PRESSED]}
         >
@@ -64,7 +82,7 @@ export default function UsageAccount() {
         <SheetTitle numberOfLines={1}>{key?.name ?? 'Account'}</SheetTitle>
         {key ? (
           <>
-            <KeyCard k={key} titled={false} all={glance?.keys ?? []} />
+            <KeyCard k={key} actions={actions} all={glance?.keys ?? []} />
             {maybe.map((n) => (
               <T key={n} variant="small" color={colors.textSecondary}>
                 {n}
@@ -74,6 +92,11 @@ export default function UsageAccount() {
         ) : (
           <T color={colors.textSecondary}>
             {inventory ? 'This account isn’t on your Mac anymore.' : 'Reading it from your Mac…'}
+          </T>
+        )}
+        {state.error && (
+          <T variant="small" color={colors.accentErrorLight}>
+            {state.error}
           </T>
         )}
         <View style={styles.foot}>
@@ -87,8 +110,14 @@ export default function UsageAccount() {
 }
 
 const useStyles = makeStyles(() => ({
-  page: { padding: space.lg, gap: space.md },
-  crumbs: { flexDirection: 'row', alignItems: 'center', gap: space.xs, alignSelf: 'flex-start' },
+  page: { padding: space.lg, gap: space.md, paddingBottom: space['2xl'] },
+  crumbs: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.xs,
+    alignSelf: 'flex-start',
+    minHeight: space['2xl'],
+  },
   foot: { paddingTop: space.sm },
 }));
 
