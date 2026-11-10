@@ -205,6 +205,19 @@ If it's a private repo and the clone asks for a password, **HUMAN:** *"The
 repo is private. Please sign in to GitHub with `gh auth login` (I can run it
 for you; it opens your browser), or give me the repo as a zip."*
 
+**Then check the checkout is this app, not a copy from before a rename**
+
+```bash
+node -p "require('./brand.json').name" && node -p "require('./brand.json').companion.bundleId"
+```
+
+Expected: `Mogbot`, then `io.native.mogbot.companion` (the phone app from the
+App Store or TestFlight). Anything else (an older name, such as the one in
+`brand.json`'s `previous`) means this branch is from before the rename: the
+app would show the old name everywhere and the phone app couldn't read its
+pairing code. Stop and tell the human which branch you cloned and what it
+printed; don't build it.
+
 ### Step 7. Install dependencies
 
 **Run**

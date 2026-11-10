@@ -100,6 +100,13 @@ export const APP_NAME = ${JSON.stringify(brand.name)};
 /** The pairing link's custom URL scheme (\`<scheme>://pair?d=…\`). */
 export const PAIRING_SCHEME = ${JSON.stringify(companion.scheme)};
 
+/**
+ * The pairing scheme before the last rename (\`previous.companionScheme\`), or
+ * null. A code from a Mac still on the old build is recognised, so the phone
+ * says to update that app instead of "that isn't a pairing code".
+ */
+export const PREVIOUS_PAIRING_SCHEME: string | null = ${JSON.stringify(brand.previous?.companionScheme ?? null)};
+
 /** The HTTPS port \`tailscale serve\` publishes the Mac's companion server on. */
 export const TAILNET_HTTPS_PORT = ${companion.tailnetPort};
 
@@ -109,6 +116,17 @@ export const SOURCE_URL: string | null = ${JSON.stringify(brand.repository ?? nu
 if (write) writeFileSync(join(root, GEN_PATH), gen);
 else if (read(GEN_PATH) !== gen)
   fail(`${GEN_PATH} is stale — run node scripts/check-brand.mjs --write`);
+
+// --- checked: the install runbook's "is this the renamed app" step ----------
+// A new user built a checkout from before the rename and saw the old name on
+// the Mac while the phone app (the current one) couldn't read its pairing
+// code. docs/INSTALL.md has the agent check the clone first; keep its
+// expected values this brand's.
+{
+  const want = `Expected: \`${brand.name}\`, then \`${companion.bundleId}\``;
+  if (!read('docs/INSTALL.md').includes(want))
+    fail(`docs/INSTALL.md: the clone check must say ${want}`);
+}
 
 // --- generated: index.html ---------------------------------------------------
 {

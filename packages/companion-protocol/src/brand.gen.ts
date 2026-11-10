@@ -10,6 +10,13 @@ export const APP_NAME = "Mogbot";
 /** The pairing link's custom URL scheme (`<scheme>://pair?d=…`). */
 export const PAIRING_SCHEME = "mogbot-companion";
 
+/**
+ * The pairing scheme before the last rename (`previous.companionScheme`), or
+ * null. A code from a Mac still on the old build is recognised, so the phone
+ * says to update that app instead of "that isn't a pairing code".
+ */
+export const PREVIOUS_PAIRING_SCHEME: string | null = "dashbot-companion";
+
 /** The HTTPS port `tailscale serve` publishes the Mac's companion server on. */
 export const TAILNET_HTTPS_PORT = 47463;
 

@@ -168,7 +168,7 @@ export const phoneScenarios: Scenario[] = [
   phone(
     'phone-code',
     'Phone — a pairing code on screen',
-    'A crisp black-on-white QR code on the left (it scans to a shipstudio-companion:// link), ' +
+    'A crisp black-on-white QR code on the left (it scans to this app’s pairing link), ' +
       'four numbered steps on the right, the first in bold: “Install Tailscale on your phone and ' +
       'sign in as julian@example.com.”, why, and “App Store ↗” / “Google Play ↗” links under it. ' +
       'Then open the app, tap Scan the code, then Pair, and Allow here. "Works once, for 5:00" (or just under) and ' +
