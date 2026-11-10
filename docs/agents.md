@@ -5195,10 +5195,47 @@ or the Chief's `set_usage_mode`, which always asks on a card first):
   use and which account it runs on, then goes ahead.
 - **Save my limits**: ask before heavy work (`usage_plan::ask_first`: a
   forecast of a tenth of a window or more, or a fan-out with no forecast),
-  and send light work to agents on lighter models or engines.
+  and send light work to agents on lighter models or engines. It also
+  **holds routines** (`agents/saver.rs`): a repeating routine that comes due
+  while every account its agent could run on is past 90% (`HOLD_PERCENT`) of
+  a 5-hour or weekly limit waits for the first of them to reset, then runs
+  once, late. Said once per hold: a line in the agent's chat and a run row
+  "Waiting for the reset" (`runs::Outcome::Held`, `usage_plan::first_hold`).
+  Run now still runs; "When…" routines aren't held; an account with no
+  reading is never held for.
+- **In any mode, an account out until a known reset is waited for, not
+  tried** (persona review 2026-11-09, the Adversary): a routine due while
+  every account the agent runs on is out until a reset the engine reported is
+  held the same way, unless its agent would carry on with the other engine
+  (`crossover` not Wait and the other engine ready, as last looked; unknown
+  counts as ready). A turn on a lone (or pinned) account that is out until a
+  known reset ends before the try (`wallet::pinned_and_out`), and a routine
+  that ends on a usage limit whose reset is too far off to retry at is
+  `Held`, not `Failed`. A background read that shows room on an account
+  marked out clears the mark (and its twins'), when it names the window that
+  was out or both kinds (`wallet::back_by_reading`).
+- **One warning per window** (`saver::warn_now`, from the minute tick at
+  most every 3 minutes): the first time the account turns run on next is past
+  90% of a limit, or its pace (an estimate) runs out at least an hour before
+  the reset, one notification in the Chief's name (desk; the phone when away
+  from the desk) and a line in the Chief's chat, with "Switch to Save my
+  limits" outside Save. Recorded before it is said (`usage_plan::first_warning`,
+  30 minutes of reset slack): never repeated for that window. Not in "Use it
+  all before reset".
+- **A model per routine** (`CheckIn::model`; the routine editor's "Runs on",
+  `agents_schedule_model`; the Chief's `set_routine_model`): like its other
+  routines (`Agent::routine_model`, the default), the agent's own (`same`),
+  or one of its engine's. The turn finds it through its tickets
+  (`runs::routine_model`), only when every routine in that turn agrees.
 - **Use it all before reset**: the user's standing OK to spend capacity that
-  would otherwise expire. When a window on the account turns would run on
-  next is near its reset (within a fifth of its length, at most a day:
+  would otherwise expire. **Any account's** expiring room counts: the
+  account turns run on next first; with none spare there, the soonest spare
+  window on another account, and turns on that engine then start on it until
+  that window resets (`wallet::spend_first`, applied in `wallet::candidates`;
+  pinned agents stay on theirs; leaving the mode clears it). The phone changes
+  the mode, adds to the list and presses "Give agents something to do"
+  (`agents.usage.setMode`, `agents.spare.add`, `agents.spare.spendNow`,
+  audited). When a window on such an account is near its reset (within a fifth of its length, at most a day:
   `five_hour` → last hour, `seven_day` → last day; Codex's own
   `windowDurationMins`; a window we can't size is never spare) with at least
   `SPARE_MIN_PERCENT` (25) points unused (and the account's other 5-hour or
@@ -5253,9 +5290,18 @@ older Mac doesn't list it in `welcome.methods`). Wording lives once in
   account no turn has run on. Those accounts say "No reading yet".
 - Opencode and local models aren't agent engines here; they're listed, not
   used.
-- Choosing *accounts* by reset time isn't done: the wallet's order is the
-  user's, and failover keeps it. Agents choose between *engines* (an agent on
-  Codex vs one on Claude Code) by what resets sooner.
+- Choosing *accounts* by reset time is done only for "Use it all before
+  reset" (`spend_first`, until that window resets); otherwise the wallet's
+  order is the user's, and failover keeps it. Agents choose between *engines*
+  (an agent on Codex vs one on Claude Code) by what resets sooner.
+- **"These may be the same account"** (`agents/lockstep.rs`,
+  `AccountLine.maybe_same_as`): asked, never counted, when two accounts'
+  weekly readings, paired within 15 minutes, share a reset to the second and
+  a figure (within half a point) across 3+ pairs, moved at least a point, and
+  one of them ran no turn of ours in that span. One line under the meter
+  (`sameNotes`, words in `sameAccount.ts`); totals, failover and spare
+  capacity still count both. The phone numbers accounts by engine when both
+  engines are listed ("Claude 2", "Codex 1": `placeLabel`).
 - "Route light work to cheaper models" is an instruction to the Chief
   (delegate to agents on lighter models); nothing reclassifies a turn
   automatically.

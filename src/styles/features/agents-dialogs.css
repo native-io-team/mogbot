@@ -272,6 +272,19 @@ p.agent-schedule__place {
   padding: 0 var(--spacing-xs) var(--spacing-sm);
 }
 
+/* One routine's model, in its editor: a label and the choice, one line. */
+.agent-schedule__model {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+  padding: 0 var(--spacing-xs) var(--spacing-sm);
+}
+
+.agent-schedule__model-label {
+  font-size: var(--font-size-body-sm);
+  color: var(--text-muted);
+}
+
 .agent-schedule__item[data-paused] .agent-schedule__note {
   color: var(--text-muted);
 }
